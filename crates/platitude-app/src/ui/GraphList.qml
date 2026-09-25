@@ -5,54 +5,45 @@ import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
-// The history itself: the rows, the viewport arithmetic every mover in the pane goes through (`clampY`, which every
-// list has from `AppListView` / `firstVisibleRow` / `rowOnScreen`), where the keyboard goes, and the state the
-// delegates read back off `ListView.view` — that state is held here, since the delegate is recycled the moment its row
-// scrolls off. Everything outside reaches it through this component's root, which is the list (`GraphPane.view`).
+// The history list: the rows, the viewport arithmetic every mover in the pane goes through (`clampY` from
+// `AppListView`, `firstVisibleRow`, `rowOnScreen`), where the keyboard goes, and the per-row state the delegates read
+// off `ListView.view` — held here because a delegate is recycled the moment its row scrolls off. Outside reaches it as
+// `GraphPane.view`.
 AppListView {
     id: graphList
 
     required property var graphModel
-    // The uncommitted row's tallies ride on the list for the delegate.
     required property var workTree
-    /// The three columns' arithmetic (`GraphColumnMetrics`), which the rows are laid out against.
+    /// The three columns' arithmetic (`GraphColumnMetrics`).
     required property var columns
 
     model: graphList.graphModel
-    // The middle button is the pane's: its hand goes sideways over the lanes as well (`GraphPane`).
+    // The middle button is the pane's, whose hand also pans the lanes sideways (`GraphPane`).
     ownsHand: false
-    // Nothing but the pane's own functions move the view — the chase is off in `AppListView`, and the arrow keys
-    // move it themselves by as little as will do (`revealStep`).
-    //
-    // The arrows are answered by the pane, where the page hears about where they landed (規約 §矢印で履歴を辿る):
-    // Qt's own key navigation moves `currentIndex` and tells nobody, so the highlight would walk off screen — the
-    // chase above is off — while the panes on the right went on showing the commit it set off from.
+    // The arrows are the pane's (`GraphRowWalk.stepRow`, 規約 §矢印で履歴を辿る): Qt's own key navigation moves
+    // `currentIndex` and tells nobody, so the highlight would walk off screen (the chase is off in `AppListView`)
+    // while the right panes kept showing the old commit.
     keyNavigationEnabled: false
-    /// Where the keyboard goes when a press lands in this pane. Every way in comes through here — a row click, a
-    /// press on the lanes, the find card closing, the headless hook — so there is one answer to "what does a press
-    /// do to the keyboard".
+    /// Where the keyboard goes when a press lands in this pane; every way in (row, lanes, find card closing, headless
+    /// hook) comes through here.
     function takeKeyboard() {
         graphList.forceActiveFocus()
     }
-    /// And gives it up when this pane is taken off the screen. Qt leaves active focus on an item it has just made
-    /// invisible, and the keys go on arriving there (measured with qmltestrunner, a StackLayout child swapped away
-    /// reports `visible=false activeFocus=true`, and the next Down still fires; `focus = false` is what lets go).
-    /// Opening a diff over the graph did exactly that: the arrows walked the selection behind the diff, and moving
-    /// the selection closes the diff — so the screen was pulled back to the graph.
+    /// Gives the keyboard up when the pane leaves the screen: Qt keeps active focus on an item it made invisible and
+    /// keys keep arriving (only `focus = false` lets go) — with a diff open over the graph, the arrows would walk the
+    /// selection behind it and so close the diff.
     onVisibleChanged: {
         if (!graphList.visible)
             graphList.focus = false
     }
     flickDeceleration: 8000
     maximumFlickVelocity: 9000
-    // The graph is the one pane with no header band; this sliver of margin drops the first row so its bottom line
-    // meets the neighbouring bands' bottom edge when scrolled to the top.
+    // No header band here: this sliver drops the first row so its bottom line meets the neighbouring bands' bottom
+    // edge when scrolled to the top.
     topMargin: Theme.headerHeight - Theme.graphRowHeight
-    // A sliver of run-out at the end: without it the oldest row sits flush on the pane edge and reads as clipped
-    // rather than as the end of what is loaded. Just enough to see the break — and the lanes' bar's own strip beneath
-    // that whenever the lanes have somewhere sideways to go, so the last row ends above the bar.
+    // A run-out so the oldest row does not read as clipped, plus the lane bar's strip while the lanes overflow, so the
+    // last row ends above the bar.
     bottomMargin: Theme.spaceSm + (graphList.columns.graphXMax > 0 ? graphList.columns.laneBarRoom : 0)
-    // Bridge into the delegate (GraphRowDelegate reads its column geometry off ListView.view).
     property real labelWidth: graphList.columns.labelW
     property real graphColWidth: graphList.columns.graphColW
     property real graphFullWidth: graphList.columns.graphFullW
@@ -63,48 +54,30 @@ AppListView {
     property int wipRenamed: graphList.workTree.wipRenamed
     property int wipCopied: graphList.workTree.wipCopied
     property int wipConflicted: graphList.workTree.conflictCount
-    // Which row's chip column is a name box, and what has been typed into it. Held here: the
-    // delegate is recycled the moment its row scrolls off.
+    // Which row's chip column is a name box, and what has been typed into it.
     property string namingOid: ""
     property string namingText: ""
-    // Which of the three the box is asking for ("branch" / "tag" / "rename"). The field is the same one for all of
-    // them — what is typed is a ref name either way — and the question it stands there holding is the whole of what
-    // tells them apart.
+    // Which of the three the box is asking for ("branch" / "tag" / "rename").
     property string namingMode: "branch"
-    // What a rename box is naming, in the word the page's `renameRow` branches on ("branch" / "remote" / "tag"), so
-    // the frame can say which kind is being typed (規約 §ref の種別: 枠 = 種別). Empty for the two boxes that
-    // make a name.
+    // What a rename box is naming ("branch" / "remote" / "tag", as `renameRow` takes it), so the frame says the kind
+    // (規約 §ref の種別: 枠 = 種別); empty for the two boxes that make a name.
     property string namingKind: ""
-    // Whether what is in the box can be accepted at all, and the one line that says why not. Decided by the page,
-    // which is where the models that answer it are (`RepoPage.graphNameRefusedWhy`) — the row only draws the answer.
+    // Whether the box's text can be accepted, and why not — decided by the page (`RepoPage.graphNameRefusedWhy`).
     property bool namingRefused: false
     property string namingRefusedWhy: ""
-    // The two clicks the rows answer with one gesture (デザイン規約 §グラフ行のダブルクリック).
-    //
-    // **One for the whole graph — and the card a chip unfolds into shares it** (`RefListPopup` takes
-    // it through `GraphPane.noteRowClick`). Two reasons, and both are things that go wrong without it:
-    //
-    // - the delegate is pooled the moment its row scrolls off, so a wait carried by the row is either dropped or
-    //   comes back on whatever commit the recycled row is now showing;
-    // - **the card opens on the chip's own seat after a rest**, so the reader's two clicks at one spot land on two
-    //   different surfaces — the row, then the card. Separate memories make the second one a first click, and the
-    //   gesture reads as "sometimes it does nothing".
-    //
-    // The key is what the reader is pointing at — the ref's kind and name (`encode::Chip::key`), which is the same
-    // string on both surfaces and does not change when a background pass rewrites the chip's marks.
+    // The two clicks the rows answer with one gesture (デザイン規約 §グラフ行のダブルクリック). One for the whole graph,
+    // shared with the chip's card (via `GraphPane.noteRowClick`): a pooled delegate would drop or misplace the wait,
+    // and the card opens on the chip's seat, so a second click landing on it must still count as the second.
+    // Keyed by the ref's kind and name (`encode::Chip::key`) — the same on both surfaces and stable across repaints.
     ReclickGesture {
         id: reclick
         onRenameAsked: (key, names) => graphList.rowRenameRequested(names.oid, names.chip)
     }
-    /// A row was left-pressed: answers whether it is a press of its own (see the gesture), and takes the wait with it.
-    /// `chip` is the chip's first one, read now — when the wait ends the row may be showing
-    /// something else, or be another row altogether; null where the row draws no ref.
+    /// A row was left-pressed: answers whether it is a press of its own (`ReclickGesture.click`). `chip` is the chip's
+    /// first ref, read now (the row may show something else when the wait ends); null where the row draws no ref.
     function noteClick(oidHex, chip) {
-        // **A standing box is what this gesture turns into**, so a click
-        // while one is up is the reader walking away from it — and the row's own click takes it down
-        // (`RepoPage.activateRow`). Armed here, the box on the row just clicked would close and come straight back,
-        // which reads as a blink. The click still says which target it landed on, so the next
-        // one is a second click in the ordinary way.
+        // While a box stands, a click only takes it down (`RepoPage.activateRow`); arming a rename here would reopen it
+        // a beat later. The key still counts, so the next click is an ordinary second one.
         const nameable = chip !== null && graphList.namingOid === ""
         return reclick.click(chip === null ? "" : chip.key,
                              nameable ? { "oid": oidHex, "chip": chip } : null)
@@ -112,58 +85,49 @@ AppListView {
     function dropRename() {
         reclick.drop()
     }
-    /// The rest of a gesture made on something standing over these rows lands here — a card, the stand-in — see the
-    /// gesture (`ReclickGesture.hush`).
+    /// The rest of a gesture begun on something over these rows (a card, the stand-in) lands here
+    /// (`ReclickGesture.hush`).
     function hushClicks() {
         reclick.hush()
     }
     readonly property alias clicksHushed: reclick.hushed
-    /// The rows moved under a hand that did not move, and nothing opens under it until it does
-    /// (`GraphPane.settleUnderHand`, which also lets it go). Held here, since a row can only see the view.
+    /// The rows moved under a still hand; nothing opens under it until it moves (`GraphPane.settleUnderHand`).
     property bool handHeld: false
-    /// The box this gesture opens has been taken down: the gesture is spent with it, so the click that took it down
-    /// cannot come up as a second one (`GraphPane.stopNaming`).
+    /// The box was taken down: the gesture is spent, so the click that took it down is no second click
+    /// (`GraphPane.stopNaming`).
     function forgetClicks() {
         reclick.forget()
     }
-    /// Which target the last left click landed on, and the gesture's own state for the runs that photograph it.
+    /// For the runs: which target the last left click landed on, and the gesture's state.
     readonly property alias clickedKey: reclick.activeKey
     readonly property alias clickGuarded: reclick.guarded
-    /// A second click is waiting out the double-click window. **The rows hold what they are showing still while it
-    /// runs** (`GraphRowDelegate.settlePointed`): the wait is a beat the reader is already watching one thing through,
-    /// and a card opening or closing in it answers a question nobody asked.
+    /// A second click is waiting out the double-click window; meanwhile the rows open and close nothing
+    /// (`GraphRowDelegate.settlePointed`).
     readonly property alias renameWaiting: reclick.armed
     function renameArmed(chip) {
         return chip !== null && reclick.armedFor(chip.key)
     }
-    // Which row the standing question is about, and in which tone — held here for the same recycling reason. The
-    // words are on the bar; the row only marks itself.
+    // Which row the standing question is about, and in which tone; the words are on the bar.
     property string askOid: ""
     property bool askDanger: false
-    // Mirrored for the delegates, which can only see the view: rows dim while a search is on. Written by the pane,
-    // which is where the find card is.
+    // Rows dim while a search is on; written by the pane, which owns the find card.
     property bool findOn: false
-    // Which row the working tree stands on, mirrored for the delegates the same way: that row writes its message in
-    // the branch's blue, wherever it is read (規約 §グラフの中で HEAD を見失わない).
+    // The row the working tree stands on writes its message in the branch's blue (規約 §グラフの中で HEAD を見失わない).
     readonly property int headRow: graphList.graphModel.headRow
-    /// The commits the page is holding, as a set of ids, and how many are in it — mirrored for the delegates the same
-    /// way, since a row can only see the view (デザイン規約 §複数のコミットを選ぶ). Empty while the working tree's row is what
-    /// is shown: that row is not a commit and never joins a choice, so the rows fall back to the current one there.
+    /// The commits the page is holding, as a set of ids, and their count (デザイン規約 §複数のコミットを選ぶ). Empty while
+    /// the working tree's row is shown — it is no commit and never joins a choice.
     property var chosenOids: ({})
     property int chosenCount: 0
-    /// A row was clicked, and what the hand was holding down as it landed. **The row number travels with the commit**:
-    /// the page has to place the selection, and looking a row up is a walk over every loaded one
-    /// (`RepoPage.activateRow`). The modifiers decide whether the click moves what is read or only what is chosen.
+    /// A row was clicked, with the modifiers held and the row it sits on (`RepoPage.activateRow`).
     signal rowSelected(string oidHex, int atRow, int modifiers)
-    /// A row was right-clicked, anywhere along it. `chip` is the name its chip draws (`encode::Chip`), null
-    /// where it draws none — what the menu's cards are aimed at (デザイン規約 §グラフ行の右クリック).
+    /// A row was right-clicked. `chip` is the name its chip draws (`encode::Chip`), null where it draws none
+    /// (デザイン規約 §グラフ行の右クリック).
     signal rowMenuRequested(string oidHex, var chip)
     signal rowSwitchRequested(string oidHex, var chip)
-    /// Another working copy's uncommitted row was opened: that copy is to be shown in a tab of its own, which is where
-    /// its changes are read and staged.
+    /// Another working copy's uncommitted row was opened: the repository's tab moves onto that copy
+    /// (`tabs::strip::landing_for`).
     signal carriedOpenRequested(string path)
-    /// A row was clicked a second time, late enough that the double-click has been ruled out: the name on its chip is
-    /// being changed. `chip` is the chip's first one, whatever kind it names.
+    /// A second click, late enough to rule out a double-click: rename the chip's first ref, whatever its kind.
     signal rowRenameRequested(string oidHex, var chip)
     signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)
     signal chipCollapseRequested()
@@ -172,8 +136,7 @@ AppListView {
     property string rowCardOid: ""
     signal namingSubmitted(string oidHex, string name, string mode)
     signal namingCancelled()
-    /// The wheel asked for the lanes sideways. The pane owns how far they may go, so it is
-    /// given the turn.
+    /// The wheel asked for the lanes sideways; the pane owns how far they may go.
     signal wheelPanned(real delta)
     delegate: GraphRowDelegate {}
     footer: GraphTailFooter {
@@ -185,25 +148,22 @@ AppListView {
         graphFullWidth: graphList.graphFullWidth
         findOn: graphList.findOn
     }
-    /// Topmost row with any of itself on screen; 0 while the view is in its own top margin, where there is no row
-    /// to be over.
+    /// Topmost row with any of itself on screen; 0 while the view is in its own top margin.
     function firstVisibleRow() {
         const row = graphList.indexAt(0, graphList.contentY + 1)
         return row >= 0 ? row : 0
     }
-    /// Whether all of `row` is on screen. A row below the last one drawn reports no index at all, which is what a
-    /// list shorter than its viewport answers for its whole lower half — there, nothing is out of sight.
+    /// Whether all of `row` is on screen. No index at the bottom means a list shorter than its viewport, where nothing
+    /// is out of sight.
     function rowOnScreen(row) {
         const bottom = graphList.indexAt(0, graphList.contentY + graphList.height - Theme.graphRowHeight)
         return row >= graphList.firstVisibleRow() && (bottom < 0 || row <= bottom)
     }
-    /// One notch, sent. **The way in for a run as well**: a wheel cannot be injected any more than a hover can, so
-    /// what a run drives is this wiring rather than a copy of it (verify-ui スキル).
+    /// One notch, sent — also a run's way in, since a wheel cannot be injected (verify-ui スキル).
     function sendRows(pixels) {
         wheelGlide.sendTo(graphList.clampY(wheelGlide.at - pixels))
     }
-    /// Something else is moving the view — an arrow key, a reveal, a restored position. The notch in flight loses it
-    /// (`WheelGlide.halt`), or it drags the reader back off the row they were just sent to.
+    /// Something else is moving the view: the notch in flight stops (`WheelGlide.halt`), or it drags the view back.
     function haltGlide() {
         wheelGlide.halt()
     }

@@ -4,15 +4,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-/// What each of the band's state badges would like to be drawn at, measured off labels that are never drawn.
-///
-/// **The cap is measured here, off items nothing lays out.** A `RowLayout` that is not being laid out
-/// reports the width it had when it last was, and the row of badges goes away the moment the group folds — so a cap
-/// read from there makes the fold one that nothing comes back from (measured, `cap=32` with a 1440-wide window,
-/// and no width would bring the words back).
-///
-/// One of the measuring components the window is settled with (`TabMetrics` / `BandWidest` / `DiffTextMetrics`),
-/// and for the same reason: a width read off the thing being laid out is a width that has already given way.
+/// What each of the band's state badges would like to be drawn at, measured off labels nothing lays out: the badge
+/// row stops being laid out when the group folds, and a width read from it then would never let the words back.
 Item {
     id: metrics
 
@@ -20,19 +13,15 @@ Item {
 
     /// The working tree of the tab in front, which is where the operation's own words come from. Null while no tab is.
     required property var stateWt
-    /// Whether the operation has a second word and a step count beside its own — both are drawn inside the one badge,
-    /// so both are counted into its width.
+    /// Whether the operation also has a second word and a step count, both drawn inside its badge.
     required property bool hasAlso
     required property bool hasStep
-    /// The narrowest a badge is drawn before the group gives up on words, in characters (規約 §ウィンドウの縁) — the
-    /// same count costs a different number of pixels in each platform's UI font.
+    /// The words' floor, in characters (規約 §ウィンドウの縁).
     required property int minChars
 
-    /// Whole pixels, for the reason the tab names are settled in them (規約 §ウィンドウの縁): a word asks for a
-    /// fractional width, a box is laid out on a whole one, and a ceiling summed from the fractions is a few pixels
-    /// under what the same widths add up to when each is rounded — so the group is handed exactly its natural width
-    /// and the share-out still finds itself short, and every word elides in a band with room to spare (measured, on
-    /// Linux: `cap=103` with `groupW=270`, which was the natural width).
+    /// Whole pixels: boxes are laid out on whole ones, and a ceiling summed from the fractions comes out under what
+    /// the rounded widths add up to — the share-out then finds itself short at exactly the natural width, and every
+    /// word elides in a band with room to spare.
     readonly property int opW: Math.ceil(mOpText.implicitWidth
                                           + (metrics.hasAlso
                                              ? 2 * Theme.spaceXs + mDot.implicitWidth + mOpAlso.implicitWidth : 0)
@@ -43,15 +32,9 @@ Item {
     readonly property int oldGitW: Math.ceil(mOldGit.implicitWidth) + 2 * Theme.spaceXs
     readonly property int staleW: Math.ceil(mStale.implicitWidth) + 2 * Theme.spaceXs
 
-    /// The narrowest a badge is drawn with words in it. Settled by `settleMinW`: `advanceWidth` is a
-    /// method and takes no binding dependency, so a binding on it holds whatever the *default* font measured
-    /// (app-ui.md 「FontMetrics.advanceWidth も同じ側」).
-    ///
-    /// Counted in `n`s (`TabMetrics.titleMinW` and `GraphColumnMetrics.chipNameMinW`
-    /// for the same reason): `averageCharacterWidth` is the **font's** average, and every family named for this UI
-    /// carries Japanese, so it answers with a full-width figure no operation is spelled in — and a different one per
-    /// platform (rules-refs/app-ui.md carries the measurement). A floor read off it moves with the font,
-    /// and where it runs wide it folds the words away in a band that still had room for them.
+    /// The narrowest a badge is drawn with words in it. Settled by `settleMinW`: `advanceWidth` is a method, so a
+    /// binding on it holds the default font's answer (rules-refs/app-ui.md「`FontMetrics.advanceWidth()` も同じ側」).
+    /// Counted in `n`s, not `averageCharacterWidth` (rules-refs/app-ui.md「字数の床の値付けは実測の字送り」).
     property real minW: 0
     function settleMinW() {
         metrics.minW = Math.ceil(stateFont.advanceWidth("…") + metrics.minChars * stateFont.advanceWidth("n"))
@@ -63,9 +46,7 @@ Item {
         font.family: Theme.uiFamily
         font.pixelSize: Theme.fontSm
         font.weight: Font.DemiBold
-        // On the metrics' own change signal, so the ellipsis is measured
-        // in the settled font — the initial evaluation still sees the
-        // default one.
+        // On the font's change too: the initial evaluation still sees the default font.
         onFontChanged: metrics.settleMinW()
         Component.onCompleted: metrics.settleMinW()
     }

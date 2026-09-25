@@ -4,15 +4,8 @@ import QtQuick
 import platitude
 import platitude.ui
 
-// What happens on the remote after a name is changed here (デザイン規約 §手元の改名の後のリモート).
-//
-// **A question, because git has no answer.** A branch renamed here goes on being measured against the name it was
-// renamed away from, and a tag renamed here leaves the remote's copy under the old spelling — and which of those the
-// reader wanted is not something the repository knows. The three answers are the three things that can be done over
-// there, and the one thing git cannot do is a rename: what the first of them runs is a create and a delete, which is
-// why no word here says otherwise.
-//
-// Sized to the page: nothing is drawn here, and the bar belongs to the graph.
+// What happens on the remote after a name is changed here — a question, since which the reader wanted is not the
+// repository's to know (デザイン規約 §手元の改名の後のリモート). Draws nothing: the bar belongs to the graph.
 Item {
     id: carryFlow
 
@@ -21,10 +14,9 @@ Item {
     /// it).
     required property GraphPane graphPane
 
-    /// Raise the standing question with this form in it. The page owns the bar — every other question in the window
-    /// goes up the same way.
+    /// Raise the standing question with this form in it; the page owns the bar.
     signal askRequested(string oidHex, string label, string accept, var run, var form)
-    /// Automation: the question was raised, and the two names it is between (app-ui.md).
+    /// Automation: the question was raised, and the two names it is between.
     signal carryAsked(string kind, string from, string to)
 
     /// Whether this question is the one standing, which is what its bindings on the bar hang off.
@@ -34,10 +26,8 @@ Item {
     property string remote: ""
     property string from: ""
     property string to: ""
-    /// Which answer is picked. **The question opens on the one that takes nothing away**:
-    /// a name made over there can be taken off again by the row that deletes it, while a name deleted is gone with
-    /// whatever hung off it — so the answer standing in the box when the reader arrives is the one they can walk
-    /// back from. It also means the pill is live from the first frame, which is what the reader is agreeing to.
+    /// Which answer is picked. The question opens on the one that takes nothing away, so the pill is live from the
+    /// first frame (デザイン規約 §手元の改名の後のリモート).
     property int choice: carryFlow.keepsBoth
 
     /// The name the remote carries now, and the one it would carry. A branch's live under `<remote>/`; a tag's have
@@ -47,13 +37,8 @@ Item {
     readonly property string newSide:
         carryFlow.kind === "branch" ? carryFlow.remote + "/" + carryFlow.to : carryFlow.to
 
-    /// The three answers, in the words they are picked by.
-    ///
-    /// **The first says the delete first, and runs it last** (CLAUDE.md
-    /// 「内部コマンドと UI 表記は分ける」). The row is read before it is picked, and what the reader is agreeing to
-    /// there is the half that cannot be walked back: a name going off the remote leads. What runs puts the push
-    /// first for the opposite reason — a pair that stops half-way has then made a name rather than lost one
-    /// (`remote::replace_remote_branch`). The hold's own words say the running order (`askTip` below).
+    /// The three answers, in the words they are picked by. The first names the delete first but runs it last
+    /// (`remote::replace_remote_branch`; デザイン規約 §手元の改名の後のリモート「行は削除を先に言い、走るのは push が先」).
     readonly property var choices: carryFlow.kind === ""
         ? []
         : [
@@ -70,22 +55,19 @@ Item {
             qsTr("Do nothing"),
         ]
 
-    /// Where each answer stands in the chooser. Named, because two of them are read back as a state of the bar and
-    /// one of them is where the question opens.
     readonly property int replacesIt: 0
     readonly property int keepsBoth: 1
     readonly property int leavesAlone: 2
     /// The answer that cannot be taken back: a name goes from the remote, and whatever hung off it stays behind
     /// (デザイン規約 §長押し).
     readonly property bool takesAway: carryFlow.choice === carryFlow.replacesIt
-    /// …and the one that writes nothing at all, which is the only one this bar has no warning to give about.
+    /// …and the one that writes nothing at all.
     readonly property bool leavesIt: carryFlow.choice === carryFlow.leavesAlone
 
     anchors.fill: parent
 
-    /// Opens the question. `oidHex` is the commit the bar marks — **taken by the caller before the write**, since a
-    /// rename moves the name and never the object and the rows are rebuilt behind the answer that raises this
-    /// (`RepoPage.armRenameTagRemote`).
+    /// Opens the question. `oidHex` is the commit the bar marks, taken by the caller before the rename: the rows are
+    /// rebuilt behind the answer that raises this (`RepoPage.armRenameTagRemote`).
     function startAsk(kind, remote, from, to, oidHex) {
         carryFlow.kind = kind
         carryFlow.remote = remote
@@ -114,11 +96,8 @@ Item {
         carryFlow.choice = index
     }
 
-    /// The word on the pill, which is the picked answer's own — **not one word standing for all three**
-    /// (デザイン規約 §手元の改名の後のリモート). A pill that named the act it was about to run would otherwise be
-    /// the one part of this bar that did not, and "do nothing" is not a change. It moves with the chooser, and where
-    /// it moves to `Replace` the gesture becomes a hold — the pair the publish question already makes when its own
-    /// word turns (§はじめてリモートへ送る).
+    /// The picked answer's own word for the pill; at `Replace` the gesture becomes a hold
+    /// (デザイン規約 §手元の改名の後のリモート).
     function pillWord() {
         if (carryFlow.takesAway)
             //: The pill answering a standing question: the old name goes off the remote and the new one goes up.
@@ -145,11 +124,9 @@ Item {
         // The third answer runs nothing: the bar coming down is the whole of it.
     }
 
-    // The bar's own state follows what has been picked into it, which is why these are bindings: the question changes
-    // what it is saying — and what its pill costs — while it stands. **Nothing is put back when they let go**, for
-    // the reason the other questions of this kind spell out (`UpstreamFlow`): letting go happens at the press that
-    // walks away, and the bar is still on screen for the 200ms after it.
-    // **The heading stays the plain ink** while the rest of the bar turns with the answer picked (`AskBar.plainWords`).
+    // Bindings, since the bar changes with the pick while it stands. `RestoreNone`: letting go happens at the press
+    // that walks away, with the bar still on screen (`PublishFlow`). The heading stays plain ink
+    // (`AskBar.plainWords`).
     Binding {
         target: carryFlow.graphPane
         property: "askPlainWords"
@@ -164,8 +141,6 @@ Item {
         when: carryFlow.asking
         restoreMode: Binding.RestoreNone
     }
-    // Only the answer that takes a name off the remote is held down. The other two are a click: one adds a name over
-    // there and one writes nothing (デザイン規約 §長押し).
     Binding {
         target: carryFlow.graphPane
         property: "askHold"
@@ -173,11 +148,7 @@ Item {
         when: carryFlow.asking
         restoreMode: Binding.RestoreNone
     }
-    // And the colour: **the warning is for the answer that takes something away**, not for reaching the remote at all
-    // (the same reading the tag menu's rows already carry: a plain `push` adds a name over
-    // there and takes nothing, so it is an ordinary row, and the warning belongs to the half that destroys,
-    // デザイン規約 §タグを作る・送る). So the answer that makes a name beside the old one is plain information, and so
-    // is the one that writes nothing.
+    // The warning is for taking away, not for reaching the remote (デザイン規約 §手元の改名の後のリモート).
     Binding {
         target: carryFlow.graphPane
         property: "askNeutral"
@@ -185,11 +156,7 @@ Item {
         when: carryFlow.asking
         restoreMode: Binding.RestoreNone
     }
-    // What the hold is for, said where a hold says it (デザイン規約 §長押し). Empty for the two answers that are a
-    // click, since a pill nobody holds has nothing to explain.
-    //
-    // **And this is where the running order is said**: the row leads with the delete because that is what is being
-    // agreed to, while what runs pushes first so a pair that stops half-way has made a name rather than lost one.
+    // The hold's tooltip, which says the running order (デザイン規約 §長押し); empty for the two click answers.
     Binding {
         target: carryFlow.graphPane
         property: "askTip"

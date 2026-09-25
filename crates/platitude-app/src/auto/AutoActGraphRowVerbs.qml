@@ -6,20 +6,13 @@ import platitude.ui
 
 /// The graph's rows: the card a row puts out, the chips' own list, and the parts a row is made of. The gesture that
 /// names one has a family of its own (`AutoActGraphReclickVerbs`).
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are
-/// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+// `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
 
-    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is
-    /// the file that builds this one.
+    /// `var`: typing it `AutoActDriver` would be circular — that file builds this one.
     required property var driver
 
-    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var workTree: driver.workTree
     readonly property var graphModel: driver.graphModel
@@ -34,9 +27,8 @@ Item {
     readonly property var detailsPane: driver.detailsPane
     readonly property var diffPane: driver.diffPane
 
-    /// How many rows draw themselves chosen — **the output side** of a press that moves the choice. Counted from the
-    /// top to past `last`, the last row the run pressed or stood on, so a row lit that should not be is counted with
-    /// the ones that should.
+    /// How many rows draw themselves chosen, counted to a little past `last` (the last row pressed or stood on) so a
+    /// row lit that should not be is counted too.
     function litRowsTo(last) {
         let lit = 0
         for (let i = 0; i < Math.min(graphModel.rowTotal, last + 3); i++) {
@@ -47,12 +39,10 @@ Item {
         return lit
     }
 
-    /// Whether the card a chip unfolds into covers the chip still drawn under it, read off the two boxes as the scene
-    /// has them — the card's face and `front`, the chip's front card. **Not off the numbers the card was sized by**:
-    /// the chip moves as its sheets go down under the card, and a check built from the sizing would agree with
-    /// itself. `over=` is how far the chip stands past the card's far edge — the side a card sized to its own rows
-    /// falls short on, since it is placed at the chip's near one. The other three sides follow it, each the same way
-    /// round: how far the chip stands outside the card, so a negative number is inside.
+    /// Whether the card a chip unfolds into covers `front` (the chip's front card), read off both boxes in the scene —
+    /// not off the numbers the card was sized by, which a check would only agree with. Each side is how far the chip
+    /// stands outside the card (negative = inside); `over=`, the far edge, is the one a card sized to its rows falls
+    /// short on.
     function coverOf(front) {
         const face = refList.background
         const card = face.mapToItem(null, 0, 0)
@@ -65,62 +55,51 @@ Item {
         return "covers=" + covers + " over=" + over + " left=" + left + " top=" + top + " foot=" + foot
     }
 
-    /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
+    /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
         if (act === "row-part") {
-            // Where the row divides, asked at a point along it. Hover cannot be injected, so this writes the one
-            // property a real pointer writes (`GraphRowDelegate.pointerRowX`) and leaves every decision after that to
-            // the row — **the point of the verb is the decision**, so reaching past it to `chipExpandRequested` (which
-            // is what `ref-list` does) would prove nothing about the boundary. The probe runs from the sampler, so an
-            // early `itemAtIndex` miss retries.
+            // Hover cannot be injected, so this writes what a real pointer writes (`GraphRowDelegate.pointerRowX`) and
+            // leaves the decision to the row — the decision is what the verb tests, so `chipExpandRequested` (as
+            // `ref-list` does) would prove nothing about the boundary.
             const parts = arg.split(":")
             rowPartReport.row = Number(parts[0])
             rowPartReport.want = parts[2]
             rowPartReport.x = Number(parts[1])
             rowPartTimer.start()
         } else if (act === "list-menu") {
-            // The stacked list, and then the right-click on one of its rows: the row's own menu, aimed at the name
-            // that was pressed (デザイン規約 §グラフ行の右クリック). The
-            // argument is `<行>[:<カードの行>]`, the same shape `graph-reclick-list` takes.
+            // The right-click on a row of the stacked list (デザイン規約 §グラフ行の右クリック). The argument is
+            // `<行>[:<カードの行>]`.
             const at = arg.split(":")
             refListOpenTimer.row = at[0] === "" ? 0 : Number(at[0])
             refListOpenTimer.cards = false
             refListOpenTimer.menuRow = at.length > 1 ? Number(at[1]) : 0
             refListOpenTimer.start()
         } else if (act === "ref-list" || act === "ref-list-card") {
-            // Hover cannot be injected, so this enters where the hover timer would — from the sampler, so an early
-            // `itemAtIndex` miss retries. `-card` walks row → card → chip → asked again from under the list: both
-            // card closes have to hold, and either failing leaves `open=true`. **No row given is HEAD's row**, the
-            // one commit every repository has a chip on: row 0 is the uncommitted row on a dirty preset, and a card
-            // opened on a row with no chip is an empty one that says nothing about covering.
+            // Entered where the hover timer would (hover cannot be injected). `-card` walks row → card → chip → asked
+            // again from under the list: both card closes have to hold, and either failing leaves `open=true`. No row
+            // given is HEAD's, the one commit sure to have a chip (row 0 is the uncommitted row on a dirty preset).
             refListOpenTimer.row = arg === "" ? -1 : Number(arg)
             refListOpenTimer.cards = act === "ref-list-card"
             refListOpenTimer.start()
         } else if (act === "graph-head-list") {
-            // The stand-in's chip under a pointer. Hover cannot be injected, so this writes the one property the
-            // pointer writes on the stand-in (`GraphHeadPin.pointerX`) and leaves the rest to it — **whether the
-            // stand-in asks at all is the point**, so going to `chipExpandRequested` directly would prove nothing.
-            // `click` goes on to press the card's first row, which is the stand-in's press: the row it stands for comes
-            // on screen and is the one read.
+            // Written where the pointer writes on the stand-in (`GraphHeadPin.pointerX`): whether the stand-in asks at
+            // all is the point, so `chipExpandRequested` directly would prove nothing. `click` then presses the card's
+            // first row — the stand-in's press.
             headListTimer.pointed = false
             headListTimer.click = arg === "click"
             headListTimer.pressed = false
             headListTimer.movedOff = false
             headListTimer.start()
         } else if (act === "ref-list-lit") {
-            // The stacked list with the pointer resting on one of its rows. The hand that walked down off the chip is
-            // the only way a reader ever reads these names, so the wash it brings is part of the card's own picture.
-            // The argument is `<行>[:<カードの行>]`, the same shape `list-menu` takes.
+            // The pointer resting on a row of the stacked list. The argument is `<行>[:<カードの行>]`.
             const lit = arg.split(":")
             refListOpenTimer.row = lit[0] === "" ? 0 : Number(lit[0])
             refListOpenTimer.cards = false
             refListOpenTimer.litRow = lit.length > 1 ? Number(lit[1]) : 0
             refListOpenTimer.start()
         } else if (act === "ref-list-follow" || act === "ref-list-follow-lit") {
-            // The name a row of that list opens under itself, pressed — the reader going to where that name is
-            // (デザイン規約 §グラフ行のダブルクリック) — or, `-lit`, the pointer resting on it. The argument is
-            // `<行>[:<カードの行>]`, the shape `ref-list-lit` takes; no row given is HEAD's.
+            // The name a row of that list opens under itself, pressed (デザイン規約 §グラフ行のダブルクリック) or,
+            // `-lit`, rested on. The argument is `<行>[:<カードの行>]`; no row given is HEAD's.
             const follow = arg.split(":")
             refListOpenTimer.row = follow[0] === "" ? -1 : Number(follow[0])
             refListOpenTimer.cards = false
@@ -128,19 +107,17 @@ Item {
             listFollowTimer.lit = act === "ref-list-follow-lit"
             refListOpenTimer.start()
         } else if (act === "ref-list-choose") {
-            // A held click put in at a row of that list: the card's rows are the graph's row, so Ctrl there moves the
-            // choice the way the row does and never reaches the name box or the switch (デザイン規約 §複数のコミットを
-            // 選ぶ). The argument is `<行>[:<カードの行>]`, the same shape `ref-list-lit` takes; the row has to be
-            // a commit other than the one read — a held press on that one takes nothing out of a choice of one.
+            // A Ctrl click at a row of that list moves the choice as the graph row's would
+            // (デザイン規約 §複数のコミットを選ぶ). The argument is `<行>[:<カードの行>]`; the row defaults to 1 because it
+            // has to be a commit other than the one read — a held press there takes nothing out of a choice of one.
             const held = arg.split(":")
             refListOpenTimer.row = held[0] === "" ? 1 : Number(held[0])
             refListOpenTimer.cards = false
             refListOpenTimer.chooseRow = held.length > 1 ? Number(held[1]) : 0
             refListOpenTimer.start()
         } else if (act === "row-card" || act === "card-sweep") {
-            // Hover cannot be injected, so this enters where the row's delay timer would. **The sweep's own default is
-            // row 1**: the presets it runs on carry a dirty working tree, whose row stands at the top and
-            // opens a card with no commit in it (measured — `subject` empty, the stamp `1970-01-01`).
+            // Entered where the row's delay timer would. The sweep defaults to row 1: its presets have a dirty tree,
+            // whose top row opens a card with no commit in it.
             const at = act === "card-sweep" && arg === "" ? 1 : Number(arg)
             const hovered = graphPane.view.itemAtIndex(at)
             if (hovered)
@@ -154,32 +131,24 @@ Item {
                 rowCardTimer.start()
             }
         } else if (act === "row-card-return") {
-            // The hand that walked down into the card and came back to the row it came off. **Entered at the row's
-            // own pointer property**, which is the one thing a real pointer writes here (`onPositionChanged` /
-            // `onContainsMouseChanged` write nothing else), so the run goes through `settlePointed`
-            // — the door `row-card` uses is one step further in and cannot see this at all.
-            // **Row 1 by default**: the presets this runs on carry a dirty working tree, whose row stands
-            // at the top and has no card at all (`GraphRowDelegate.partAt` answers nothing for it).
+            // Entered at the row's own pointer property, the one thing a real pointer writes here, so the run goes
+            // through `settlePointed` — `row-card`'s door is one step further in and cannot see this. Row 1 by
+            // default: the dirty tree's top row has no card (`GraphRowDelegate.partAt` answers nothing for it).
             cardReturnTimer.row = arg === "" ? 1 : Number(arg)
             cardReturnTimer.start()
         } else if (act === "card-message" || act === "card-message-esc") {
-            // The note under a message the card had to stop, pressed where a hand presses it
-            // (`CommitHoverCard.askMessage` is the click handler's own body). The card is opened the way `row-card`
-            // opens it, and the press waits for the note to be there — the note only stands under a cut message, and
-            // a card fills its fields in after it is opened.
+            // The note under a cut message, pressed at `CommitHoverCard.askMessage` (the click handler's own body).
             cardMessageTimer.row = arg === "" ? 0 : Number(arg)
             cardMessageTimer.escapes = act === "card-message-esc"
             cardMessageTimer.asked = false
             cardMessageTimer.start()
         } else if (act === "card-note-lit") {
-            // The same note with the hand resting on it. Written at the property a real pointer writes —
-            // hover cannot be injected (verify-ui スキル §hover の絵の撮り方) — and read back off the paint.
+            // The same note rested on, written where a real pointer writes (verify-ui スキル §hover の絵の撮り方).
             cardNoteTimer.row = arg === "" ? 0 : Number(arg)
             cardNoteTimer.pointed = false
             cardNoteTimer.start()
         } else if (act === "menu-hover") {
-            // Same row and same default as `commit-menu`: the menu goes up, and then the row it is standing on is
-            // asked for its hover card.
+            // Same row and default as `commit-menu`; the row under the menu is then asked for its card.
             let hoverOid = arg
             if (hoverOid === "")
                 hoverOid = graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
@@ -188,10 +157,9 @@ Item {
             menuHoverTimer.asked = false
             menuHoverTimer.start()
         } else if (act === "graph-choose-dbl") {
-            // **The gesture a choice tells apart.** Toggling a row out of the choice and back in, quickly, is
-            // two presses at one spot — which Qt hands over as a double-click, modifier and all (measured,
-            // `tst_moddblclick`). On the other side of the plain double-click is `switch`, so the row has to tell the
-            // two apart (デザイン規約 §複数のコミットを選ぶ). The argument is the rows, as `graph-choose` takes them.
+            // Toggling a row out of the choice and back in, quickly, arrives as a double-click, modifier and all
+            // (`tst_moddblclick`), and the plain double-click is `switch` (デザイン規約 §複数のコミットを選ぶ). The
+            // argument is the rows, as `graph-choose` takes them.
             const dblRows = arg === "" ? [] : arg.split(":").map(Number)
             chooseTimer.sweeps = false
             chooseTimer.rows = dblRows.length >= 2 ? dblRows : [1, 3, 5]
@@ -200,9 +168,9 @@ Item {
             chooseTimer.after = "dbl"
             chooseTimer.start()
         } else if (act === "graph-choose-diff") {
-            // What a row of the merged file list opens: **each chosen commit's own patch of that file,
-            // stacked** (デザイン規約 §複数のコミットを選ぶ). The argument is the path, the rows being
-            // fixed at three that share one file (`--preset basic`'s `src/topic.txt`, touched by two of them).
+            // A row of the merged file list opens each chosen commit's own patch of it, stacked
+            // (デザイン規約 §複数のコミットを選ぶ). The argument is the path; the rows are fixed at three of
+            // `--preset basic`, two of which touch `src/topic.txt`.
             chooseTimer.sweeps = false
             chooseTimer.rows = [3, 5, 6]
             chooseTimer.step = 0
@@ -211,8 +179,8 @@ Item {
             chooseTimer.diffPath = arg === "" ? "src/topic.txt" : arg
             chooseTimer.start()
         } else if (act === "graph-choose-drop") {
-            // A commit taken back out from the list that shows what is held — the same Ctrl the graph takes one out
-            // with (デザイン規約 §複数のコミットを選ぶ). The argument is the rows, as `graph-choose` takes them.
+            // A commit taken back out of the chosen list with Ctrl (デザイン規約 §複数のコミットを選ぶ). The argument
+            // is the rows, as `graph-choose` takes them.
             const kept = arg === "" ? [] : arg.split(":").map(Number)
             chooseTimer.sweeps = false
             chooseTimer.rows = kept.length >= 2 ? kept : [1, 3, 5]
@@ -221,9 +189,8 @@ Item {
             chooseTimer.after = "drop"
             chooseTimer.start()
         } else if (act === "graph-choose-said" || act === "graph-choose-sweep") {
-            // The two things a row of that list is for, once the choice is standing: saying the whole of what the
-            // commit says, and letting a reader drag the words away (デザイン規約 §複数のコミットを選ぶ). The choice is
-            // built by the same presses `graph-choose` makes, so the argument is the same rows.
+            // A row of the chosen list: its card saying the whole message (`said`), or its words dragged away
+            // (`sweep`). The argument is the rows, as `graph-choose` takes them.
             const held = arg === "" ? [] : arg.split(":").map(Number)
             chooseTimer.sweeps = false
             chooseTimer.rows = held.length >= 2 ? held : [1, 3, 5]
@@ -232,10 +199,9 @@ Item {
             chooseTimer.after = act === "graph-choose-said" ? "said" : "sweep"
             chooseTimer.start()
         } else if (act === "graph-choose" || act === "graph-choose-range") {
-            // The choice several commits are held in (デザイン規約 §複数のコミットを選ぶ). The first press is plain and
-            // settles both the choice and what is read; the ones after it are held, and move only the choice. The
-            // argument is the rows, `:`-separated — `graph-choose` takes them one at a time with Ctrl, and
-            // `-range` sweeps from the first to the last with one Shift press, so that one wants exactly two.
+            // The first press is plain; the held ones after it move only the choice (デザイン規約 §複数のコミットを選ぶ).
+            // The argument is the rows, `:`-separated — Ctrl one at a time, or `-range`'s one Shift press from the
+            // first to the last, so that one wants exactly two.
             const picked = arg === "" ? [] : arg.split(":").map(Number)
             chooseTimer.sweeps = act === "graph-choose-range"
             chooseTimer.rows = picked.length >= 2 ? picked : (chooseTimer.sweeps ? [1, 5] : [1, 3, 5])
@@ -248,24 +214,19 @@ Item {
         }
         return true
     }
-    // The presses that build a choice, put in at the row's own click function (`GraphRowDelegate.leftClick`) — what a
-    // held modifier does to a click is decided there and in the page, and a run that wrote the choice itself would say
-    // nothing about either.
+    // Pressed at the row's own click (`GraphRowDelegate.leftClick`): what a held modifier does is decided there and in
+    // the page, so writing the choice directly would test neither.
     SampleTimer {
         id: chooseTimer
-        /// The rows pressed, in order. The first press is the plain one.
         property var rows: []
         /// Whether the presses after the first sweep a range (Shift) or take one row each (Ctrl).
         property bool sweeps: false
         property int step: 0
-        /// The commit the plain press landed on, so the report can say what is read stayed on it while the choice grew.
+        /// The commit the plain press landed on, for the report's `read=`.
         property string readOid: ""
-        /// What to do once the choice is standing, all of it handed to `chosenRowTimer`: `said` rests on a row of the
-        /// list the pane put up, `sweep` drags a value out of one, `drop` takes a commit back out of the choice from
-        /// there, `diff` opens a file of the merged list, `dbl` tries the gesture a choice tells apart. `""`
+        /// What `chosenRowTimer` goes on to once the choice stands (`said` / `sweep` / `drop` / `diff` / `dbl`); `""`
         /// stops at the choice itself.
         property string after: ""
-        /// The file `graph-choose-diff` opens out of the merged list.
         property string diffPath: ""
         /// How many commits the presses should end up holding.
         function wanted() {
@@ -273,7 +234,6 @@ Item {
                 return chooseTimer.rows.length
             return Math.abs(chooseTimer.rows[chooseTimer.rows.length - 1] - chooseTimer.rows[0]) + 1
         }
-        /// How many rows draw themselves chosen, counted to past the last row this run pressed (`litRowsTo`).
         function litRows() {
             let last = 0
             for (const row of chooseTimer.rows)
@@ -284,9 +244,7 @@ Item {
             if (chooseTimer.step < chooseTimer.rows.length) {
                 const want = chooseTimer.rows[chooseTimer.step]
                 const item = graphPane.view.itemAtIndex(want)
-                // A row the view has not laid out yet is not a row that was pressed (`graph-reclick`) — and a row far
-                // down the history has no delegate at all until the view is over it, which is what a hand does before
-                // it presses one. Sent there and retried on the next tick, the layout being a frame behind.
+                // A row far down has no delegate until the view is over it: sent there, and pressed on a later tick.
                 if (!item) {
                     graphPane.view.positionViewAtIndex(want, ListView.Contain)
                     return
@@ -300,19 +258,14 @@ Item {
                 chooseTimer.step++
                 return
             }
-            // Every press is in. **Four things have to land, and each is on the output side**: the page's tally, the
-            // highlight the rows drew of it (a choice nothing draws is a number in a property), the pane on the right
-            // having answered *for this choice* — `selectionLoaded`, because a read that
-            // failed also stops loading and leaves an empty list, which is the same shape as a choice of commits that
-            // changed nothing — and the list of commits having laid its rows out, since what is asked about that
-            // list below is a measurement and an unlaid-out view answers 0 to every one (規約 §UI 自動化).
+            // Every press is in; four things have to land: the tally, the rows' highlight of it, the pane having
+            // answered for this choice — `selectionLoaded`, since a failed read also stops loading and leaves the
+            // empty list a no-change choice has — and the commit list laid out, since an unlaid-out view measures 0.
             const lit = chooseTimer.litRows()
             if (page.chosenCount !== chooseTimer.wanted() || lit !== chooseTimer.wanted()
                     || !detailsModel.selectionLoaded || !detailsPane.chosenListDrawn)
                 return
             chooseTimer.stop()
-            // The choice is standing and the pane has answered for it. Two verbs go on from here into the list it put
-            // up; the rest report the choice itself.
             if (chooseTimer.after !== "") {
                 chosenRowTimer.start()
                 return
@@ -321,9 +274,8 @@ Item {
                               + " lit=" + lit
                               + " read=" + (page.selectedOid === chooseTimer.readOid)
                               + " wip=" + page.wipShown
-                              // How far the commit list runs past the view it stands in, the view's own margins
-                              // counted. A choice this small fits, so anything but 0 is a list that scrolls to
-                              // reach nothing.
+                              // How far the commit list runs past its view, margins counted: a choice this small
+                              // fits, so anything but 0 scrolls to reach nothing.
                               + " spare=" + detailsPane.chosenListSpare
                               + " compared=" + detailsModel.comparing
                               + " files=" + detailsModel.fileTotal
@@ -331,24 +283,17 @@ Item {
             driver.complete()
         }
     }
-    // Everything that goes on from a standing choice (`chooseTimer.after`): the card a rest opens over one of the
-    // listed commits, the drag a reader takes its words away with, the press that drops one, the file the merged list
-    // opens, and the gesture the graph's rows have to turn down. Each goes in at the thing that answers it — the row's
-    // own functions, the pad under its words, the page's diff opener.
+    // Everything that goes on from a standing choice (`chooseTimer.after`), each put in at the thing that answers it.
     SampleTimer {
         id: chosenRowTimer
-        /// How far the drop has got: the plain press, the held one, then the wait for the pane to answer for what is
-        /// left. Latched, because both presses are made once and the sampler goes on firing around them.
+        /// How far the drop has got: plain press, held press, then the pane's answer. Latched: each press goes in once.
         property int dropStep: 0
         /// The commit the presses land on, and what the row said about a press without the modifier.
         property string dropOid: ""
         property bool dropTakes: true
-        /// How many commits were held after the plain press — the half of the claim that says the words below still
-        /// have their press.
+        /// Commits held after the plain press — unchanged means the words underneath kept their press.
         property int dropKept: -1
-        /// **Two presses on one row of the list, and only the second is the row's.** The first is plain, and a choice
-        /// that came back one commit smaller after it would mean the words underneath had lost their press to this
-        /// hand. Both go in at the row's own functions, where the two are told apart.
+        /// Two presses at the row's own functions; only the held second one is the row's, the plain first the words'.
         function dropOne(row) {
             if (chosenRowTimer.dropStep === 0) {
                 chosenRowTimer.dropOid = row.oid_hex
@@ -363,8 +308,6 @@ Item {
                 chosenRowTimer.dropStep = 2
                 return
             }
-            // The choice is one smaller and the pane has answered for what is left —
-            // `selectionLoaded`, the same readiness the presses themselves waited on (規約 §UI 自動化).
             if (page.chosenCount !== chooseTimer.wanted() - 1 || !detailsModel.selectionLoaded)
                 return
             chosenRowTimer.stop()
@@ -378,18 +321,15 @@ Item {
         }
         onTriggered: {
             if (chooseTimer.after === "dbl") {
-                // The pair as the area delivers it: two clicks, then the double the second one is also reported as.
-                // Put in at the row's own functions, which is where the two are told apart.
+                // As the area delivers the pair: two clicks, then the double the second is also reported as.
                 const at = graphPane.view.itemAtIndex(chooseTimer.rows[chooseTimer.rows.length - 1])
                 if (!at)
                     return
                 chosenRowTimer.stop()
                 at.leftClick(Qt.ControlModifier)
                 const led = at.doubleClick(Qt.ControlModifier)
-                // **`switch` is what the plain double-click leads to**, and it lands ticks later — so the branch on
-                // screen at the moment of the press says nothing either way. What the row answered is the decision
-                // itself, read back off the same function a hand goes through. `movable=` is the other half: a row
-                // that leads nowhere turns the gesture down for a reason of its own, and this one does lead somewhere.
+                // `led=` is the row's own answer: a `switch` would land ticks later, so the branch on screen says
+                // nothing yet. `movable=` rules out a row that turns the gesture down for leading nowhere.
                 Harness.report("chosen_dbl led=" + led
                                   + " movable=" + at.movable
                                   + " naming=" + (graphPane.namingOid !== "")
@@ -398,8 +338,8 @@ Item {
                 return
             }
             if (chooseTimer.after === "diff") {
-                // Through the page's own opener, the one a press on a file row goes to (`graph-step-diff` enters the
-                // same way). The stack is the shot, so the run waits for the rows to be laid out under it.
+                // Through the page's own opener, the one a file row's press goes to; the stack is the shot, so its rows
+                // are waited for.
                 if (!page.diffShown) {
                     page.toggleDiff("commit", chooseTimer.diffPath, "")
                     return
@@ -414,7 +354,6 @@ Item {
                 return
             }
             const row = detailsPane.chosenRowAt(0)
-            // A row the list has not built or laid out yet is not a row anybody is reading.
             if (!row || !row.rowReady())
                 return
             if (chooseTimer.after === "drop") {
@@ -422,17 +361,14 @@ Item {
                 return
             }
             if (chooseTimer.after === "said") {
-                // The card the row's own rest opens, entered where that rest would (hover cannot be injected).
+                // Entered where the row's rest would open its card (hover cannot be injected).
                 if (!rowCard.opened) {
                     row.askCard()
                     return
                 }
                 chosenRowTimer.stop()
-                // **The row cuts and the card does not** — the two halves of the same claim, and neither is a thing a
-                // picture answers: a mark is a few pixels wide, so a row that dropped the tail of a summary frames the
-                // same as one that did not, and a card that held its body back frames as a shorter card.
-                // **`held=` last of the four**: the wall's own run asks for the three in front of it and nothing
-                // about this one, and a judgement is a run of words that touch (verify-ui).
+                // `held=` stays right after `lit=`: the wall's run is judged on the three before it, and `must_say`
+                // reads one unbroken stretch of the line.
                 Harness.report("chosen_said open=" + rowCard.opened
                                   + " door=" + rowCard.asksForMore
                                   + " lit=" + (row.cardOid === row.oid_hex)
@@ -442,9 +378,6 @@ Item {
                 return
             }
             chosenRowTimer.stop()
-            // **From every corner of the row's air.** A reach that works from the middle
-            // and nowhere else is the fault this kind of row ships with, and the pad says the whole of it in one line
-            // (`SweepPad.sweepAir` — the same sentence `card-sweep` reads).
             Harness.report("chosen_sweep " + row.sweep.sweepAir(9, ""))
             driver.complete()
         }
@@ -492,17 +425,15 @@ Item {
                 refListShownTimer.start()
         }
     }
-    // The name under a row of that list, pressed or rested on once the list is actually up, and — pressed — the graph
-    // having gone to the commit it names. **The landing is read off the graph**: the page's selection is the press's
-    // own bookkeeping, so what says the reader arrived is the graph's row for that commit lit and laid out (the
-    // witness `nav-jump` takes), with the card gone from over the row it was opened on.
+    // The name under a row of that list, pressed or rested on once the list is up. The landing is read off the graph —
+    // the selection is the press's own bookkeeping — as the graph's row for that commit lit and laid out (`nav-jump`).
     SampleTimer {
         id: listFollowTimer
         property bool lit: false
         property bool pressed: false
         property var to: null
-        /// Whether the rows under the card were told the rest of the gesture is not theirs, read at the press — the
-        /// hush lasts one double-click window, and the landing is read later than that on a busy machine.
+        /// Whether the rows under the card were told the rest of the gesture is not theirs, read at the press: the
+        /// hush lasts one double-click window, and a busy machine reads the landing later.
         property bool hushed: false
         onTriggered: {
             const at = refListOpenTimer.followRow
@@ -515,7 +446,7 @@ Item {
                 listFollowTimer.to = refList.mateTo(at)
                 const said = " row=" + refListOpenTimer.row + " card=" + at
                 if (listFollowTimer.to === null) {
-                    // Nothing under that name to press: the answer, with the picture of what was there.
+                    // Nothing under that name to press: that is the answer.
                     listFollowTimer.stop()
                     Harness.report((listFollowTimer.lit ? "ref_list_follow_lit" : "ref_list_follow") + said
                                       + " followed=false list=" + refList.opened)
@@ -523,8 +454,7 @@ Item {
                     return
                 }
                 if (listFollowTimer.lit) {
-                    // The hand on the name is on the row it is in as well, and a real one lights both: the band is
-                    // judged against the wash it stands in.
+                    // A real hand on the name is on its row too and lights both; the band is judged against that wash.
                     refList.pointRow(at)
                     refList.pointMate(at)
                     listFollowTimer.stop()
@@ -556,12 +486,11 @@ Item {
             driver.complete()
         }
     }
-    // The held click on a row of that list, put in once the list is actually up, and the choice read back once the
-    // rows draw it: the rows draw a choice a tick behind the press, the wait `graph-choose` takes.
+    // The held click on a row of that list once it is up; the rows draw the choice a tick behind the press.
     SampleTimer {
         id: listChooseTimer
         property bool pressed: false
-        /// The commit that was being read before the press, so the report can say the held press left it alone.
+        /// The commit read before the press, for the report's `read=`.
         property string readOid: ""
         onTriggered: {
             if (!refList.opened)
@@ -573,15 +502,11 @@ Item {
                 listChooseTimer.pressed = true
                 return
             }
-            // The choice and the highlight the rows drew of it, counted to past the row the card stands on, and the
-            // pane having answered for this choice (`selectionLoaded`, for the reason `graph-choose` gives).
+            // `selectionLoaded` for the reason `chooseTimer` gives.
             const lit = acts.litRowsTo(refListOpenTimer.row)
             if (page.chosenCount !== 2 || lit !== 2 || !detailsModel.selectionLoaded)
                 return
             listChooseTimer.stop()
-            // `read=` is what is read having stayed where it was — the held press moved the choice and nothing else
-            // — and `list=` the card the press was made in still standing under the hand: a press that closed it
-            // would have been the plain one.
             Harness.report("ref_list_choose chosen=" + page.chosenCount
                               + " lit=" + lit
                               + " read=" + (page.selectedOid === listChooseTimer.readOid)
@@ -590,8 +515,7 @@ Item {
             driver.complete()
         }
     }
-    // The right-click on a row of that list, put in once the list is actually up — the rows are the popup's own, and
-    // an unopened popup has none to press.
+    // The right-click on a row of that list, once it is up (an unopened popup has no rows).
     SampleTimer {
         id: listMenuTimer
         onTriggered: {
@@ -600,10 +524,8 @@ Item {
             if (!refList.menuRow(refListOpenTimer.menuRow))
                 return
             listMenuTimer.stop()
-            // **`list=` is read after the menu is up**: the card the press was made on has to still be standing under
-            // it, or what the reader named goes out from under the hand that named it (デザイン規約 §メニュー の
-            // 例外). `branch=` / `tag=` are the cards themselves — which one the naming brought up is the whole of
-            // what this gesture decides.
+            // `list=` is read with the menu up: the card has to still stand under it (デザイン規約 §メニュー の例外).
+            // `branch=` / `tag=`: which card the named row brought up is what this gesture decides.
             Harness.report("list_menu list=" + refList.opened
                               + " menu=" + commitMenu.opened
                               + " branch=" + commitBranchCard.applies
@@ -612,8 +534,6 @@ Item {
             driver.complete()
         }
     }
-    // The pointer coming to rest on one of that list's rows, put in once the list is actually up — the rows are the
-    // popup's own, and an unopened popup has none to rest on.
     SampleTimer {
         id: listLitTimer
         onTriggered: {
@@ -622,10 +542,8 @@ Item {
             if (!refList.pointRow(refListOpenTimer.litRow))
                 return
             listLitTimer.stop()
-            // **`lit=` is read back off the row**: the wash is one shade over the
-            // card's own ground, so a row that never took the answer frames the same as one that did. `nowhere=` is
-            // the half that says which kind of row this was — a row with nowhere to go is the one whose wash the
-            // colour of its name cannot stand in for, so a picture of a row that leads somewhere proves nothing.
+            // `lit=` is read off the row: the wash is one shade over the card's ground. `nowhere=`: only a row with
+            // nowhere to go has no name colour to stand in for its wash.
             Harness.report("ref_list_lit row=" + refListOpenTimer.litRow
                               + " list=" + refList.opened
                               + " lit=" + refList.rowLit(refListOpenTimer.litRow)
@@ -647,22 +565,20 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // The stand-in has to be up on the top edge before its chip can be pointed at, so the view is sent to its end until
-    // it is (the ask `graph-head` repeats, for the same reason); then the pointer goes onto the chip and the card is
-    // waited for — on that chip, since a card on a row's chip is up too.
+    // The view is sent to its end until the stand-in is up on the top edge (as `graph-head` does); then the pointer
+    // goes onto its chip and the card is waited for on that chip, since a card on a row's chip is up too.
     SampleTimer {
         id: headListTimer
         property bool pointed: false
         property bool click: false
         property bool pressed: false
         property bool movedOff: false
-        /// Whether the rows under the card were told the rest of the gesture is not theirs, read at the press.
+        /// As `listFollowTimer.hushed`.
         property bool hushed: false
         property string want: ""
         onTriggered: {
             const pin = graphPane.headPin
-            // Pressed: the landing is read off the graph — the stand-in's row on screen, laid out and lit, the card
-            // gone and the stand-in with it (it stands only while its row is off screen).
+            // Pressed: the landing is read off the graph — the stand-in's row laid out and lit, the card gone.
             if (headListTimer.pressed) {
                 const at = graphModel.headRow
                 const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
@@ -670,10 +586,9 @@ Item {
                     return
                 headListTimer.stop()
                 const listAfter = refList.opened
-                // **The row that came under the hand the press left where it was**: the row now standing where the
-                // stand-in stood is told the pointer is on its chip — what a still pointer's hover tells it as the
-                // rows go by under it — and it must open nothing (`GraphPane.settleUnderHand`). The chip's own half
-                // of the row is where a card opens at once, so it is the half that can go wrong.
+                // The row now where the stand-in stood is told the still pointer is on its chip and must open nothing
+                // (`GraphPane.settleUnderHand`) — the chip's half, where a card opens at once, is the one that can go
+                // wrong.
                 // The first row in view: at the head of the list `contentY` sits in the top margin, above row 0.
                 const underAt = graphPane.view.indexAt(1, Math.max(0, graphPane.view.contentY) + 1)
                 const under = underAt >= 0 ? graphPane.view.itemAtIndex(underAt) : null
@@ -692,8 +607,7 @@ Item {
                                   + " hushed=" + headListTimer.hushed
                                   + " held=" + held
                                   + " at=" + at
-                                  // Which row came under the hand, which half of it was pointed at and what opened —
-                                  // the three `held=` is made of, for a reader of a red one.
+                                  // What `held=` is made of, for a reader of a red run.
                                   + " under=" + underAt + " part=" + part + " opened=" + opened
                                   + " holding=" + graphPane.rowHandHeld)
                 driver.complete()
@@ -701,8 +615,7 @@ Item {
             }
             if (graphModel.loading || graphModel.rowTotal === 0 || !pin.wanted)
                 return
-            // **The reading moves off HEAD first**, once: a page opens on HEAD, and a press that picked nothing would
-            // leave the selection standing where the landing is read — green with the press gone astray.
+            // Off HEAD first, once: the page opens on HEAD, so a press that picked nothing would still read green.
             if (headListTimer.click && !headListTimer.movedOff) {
                 const off = graphModel.headRow + 1
                 if (off >= graphModel.rowTotal)
@@ -733,8 +646,7 @@ Item {
                 return
             }
             headListTimer.stop()
-            // `on=` is the stand-in's own answer to "is the card on me" — what takes its sheets down and holds its
-            // ground lit — and `covers=` is read off the front card where it stands once they are down.
+            // `on=` is the stand-in's own "is the card on me", which takes its sheets down; `covers=` is read after.
             Harness.report("graph_head_list shown=" + pin.visible
                               + " list=" + refList.opened
                               + " on=" + pin.listOnThisChip
@@ -744,15 +656,13 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // The rest the row opens its card after is `tipDelayMs` away, so this samples until the card is up and then makes
-    // the return in one turn.
+    // Samples until the card is up (`tipDelayMs` after the rest), then makes the return in one turn.
     SampleTimer {
         id: cardReturnTimer
         /// The row the hand rests on, leaves and comes back to.
         property int row: 0
-        /// Where the card stood the first time, and the pointer that put it there. The second rest is made at a
-        /// different x on purpose: the seat is the pointer's, so a card that is opened again moves,
-        /// and a run that came back to the same x could not tell the two apart.
+        /// Where the card stood the first time, and the pointer x that put it there. The return is at another x: the
+        /// seat follows the pointer, so only then would a reopened card move.
         property real seat: 0
         property real firstX: 0
         onTriggered: {
@@ -767,10 +677,9 @@ Item {
             }
             cardReturnTimer.stop()
             cardReturnTimer.seat = rowCard.x
-            // The hand walks off the row into the card, and back onto the row a little further along. **Read in the
-            // same turn as the return**: everything from the pointer to the hold is one synchronous stretch, so what
-            // the beat would have done to a card nobody re-held is not something this has to wait to find out — the
-            // hold is either back before the beat can start or it is not (規約 §前提条件は入力を出す枝で読む).
+            // Off the row into the card and back a little further along, read in the same turn: pointer to hold is one
+            // synchronous stretch, so the hold is back before the beat can start or not at all
+            // (rules-refs/app-ui.md「動詞の前提条件は入力を出す枝で読む」).
             at.pointerRowX = -1
             at.pointerRowX = cardReturnTimer.firstX * 2
             Harness.report(
@@ -784,14 +693,12 @@ Item {
     // The card is opened synchronously; this just lets the layout settle before it is measured and photographed.
     SampleTimer {
         id: rowCardTimer
-        /// The commit the card was asked of, so the report can ask its row back whether it is still lit. Read off the
-        /// row — the whole point is that the row got the answer. **By the commit, the way the row answers**
-        /// (`GraphRowDelegate.cardOnThisRow`): another copy's rows are read on a pass of their own and can land
-        /// between the hover and this read, and the number the hover was made at is then another commit's row.
+        /// The commit the card was asked of, so its row can be asked back whether it is lit — by commit, as the row
+        /// answers (`GraphRowDelegate.cardOnThisRow`): another copy's rows land on a pass of their own and can shift
+        /// the row number between the hover and this read.
         property string oidHex: ""
-        /// And the number the hover was made at, which is what a row with no commit of its own is read back by
-        /// (`byNumber`): the working tree's row and every other copy's carry the one all-zero id, which names none
-        /// of them.
+        /// The row number instead, for a row with no commit of its own (`byNumber`): the working tree's and every
+        /// copy's row share the all-zero id.
         property int row: 0
         property bool byNumber: false
         onTriggered: {
@@ -804,8 +711,7 @@ Item {
                 return
             rowCardTimer.stop()
             Harness.report(
-            // `lit=` sits next to `open=`: the pair is what the run is judged on, and the judge reads one unbroken
-            // stretch of the line (`verify::verbs::must_say`).
+            // `lit=` next to `open=`: the pair is judged as one unbroken stretch (`verify::verbs::must_say`).
             "row_card open=" + rowCard.opened
             + " lit=" + (asked ? asked.lit : false)
             + " credit=" + Math.round(rowCard.creditWidth)
@@ -816,16 +722,13 @@ Item {
             driver.complete()
         }
     }
-    // The press on that card's note, and where it leaves the reader. Two beats: the card has to be up and holding a
-    // message it had to cut before the note is anywhere on screen, and the pane it sends them to answers a request
-    // that goes out at the press — so the picture is of the arrival.
+    // The press on that card's note, and where it leaves the reader; the shot is of the arrival.
     SampleTimer {
         id: cardMessageTimer
         property int row: 0
         property bool asked: false
-        /// Whether the run carries on and puts the mark away again with Escape. **Entered where the key handler's
-        /// own body is** (`RepoPage.escapePressed`); that the key reaches that handler at all is Qt's business and
-        /// is held by `tests/qml/tst_escape.qml`.
+        /// Whether the run goes on to put the mark away with Escape, entered at the key handler's body
+        /// (`RepoPage.escapePressed`); the key reaching it is held by `tests/qml/tst_escape.qml`.
         property bool escapes: false
         /// Which commit the press was of, kept because the card takes its own copy down with it.
         property string oidHex: ""
@@ -835,8 +738,8 @@ Item {
                 if (!hovered)
                     return
                 graphPane.view.rowHoverRequested(hovered, true)
-                // **The note is what is being pressed**, so a card without one is not this verb's card: a message
-                // that fits says so by not offering anywhere further to go (規約 §hover のツールチップ).
+                // The note stands only under a cut message (規約 §hover のツールチップ), and a card fills its fields in
+                // after it opens.
                 if (!rowCard.opened || !rowCard.messageCut)
                     return
                 cardMessageTimer.oidHex = hovered.oid_hex
@@ -844,14 +747,12 @@ Item {
                 cardMessageTimer.asked = true
                 return
             }
-            // The arrival: the card is gone, the row it was of is the page's selection, and the pane holds that
-            // commit's own message. **`details` is asked for at the press**, so waiting on it is waiting on the very
-            // thing the note promised — a shot taken before it frames the message of whatever was open before.
+            // The arrival: the card gone and the pane holding that commit's message — a shot before it frames whatever
+            // was open before.
             if (rowCard.opened || detailsPane.details.shaHex !== cardMessageTimer.oidHex)
                 return
             cardMessageTimer.stop()
-            // The mark put away again, for the run that carries on that far. **Its own sentence**, because the two
-            // are judged on opposite answers and the judge reads one unbroken stretch of a line.
+            // Its own sentence: the two runs are judged on opposite answers, each as one unbroken stretch of a line.
             if (cardMessageTimer.escapes) {
                 const took = page.escapePressed()
                 Harness.report(
@@ -870,9 +771,8 @@ Item {
             driver.complete()
         }
     }
-    // The hand resting on that note. **Two beats for the same reason the press has one**: the
-    // note only stands under a message the card had to cut, and a card fills its fields in after it is opened — so the
-    // rest goes in once the note is there, and the answer is read on a later sample, off the paint.
+    // The hand resting on that note: put in once the note is there (as the press waits), read a sample later off the
+    // paint.
     SampleTimer {
         id: cardNoteTimer
         property int row: 0
@@ -883,8 +783,6 @@ Item {
                 if (!hovered)
                     return
                 graphPane.view.rowHoverRequested(hovered, true)
-                // A card whose message fits offers nowhere further to go, so there is no note to rest on: this verb's
-                // card is the one that had to stop (規約 §hover のツールチップ).
                 if (!rowCard.opened || !rowCard.messageCut)
                     return
                 rowCard.notePointedAt = true
@@ -892,9 +790,8 @@ Item {
                 return
             }
             cardNoteTimer.stop()
-            // **`lit=` is the rule's own sentence read off the paint** — the line under the words is the words'
-            // colour — and `word=` is what this note's step is: the pair apart, a note whose word stayed at the
-            // dimmest text there is would say `lit=true` just as loudly (規約 §hover のツールチップ).
+            // `lit=` is the rule (the line under the words is the words' colour); `word=` pins the step, which `lit=`
+            // alone cannot (規約 §hover のツールチップ).
             Harness.report(
                 "card_note lit=" + Qt.colorEqual(rowCard.noteRuleColor, rowCard.noteWordColor)
                 + " word=" + rowCard.noteWordColor
@@ -902,42 +799,28 @@ Item {
             driver.complete()
         }
     }
-    // ...and the same card's words taken from the air around them: the padding band, the step between two lines, the
-    // room beside a short one (規約 §hover のツールチップ). The card is the graph row's, because it is the one with
-    // several lines in it and a badge row beside them — a card with one sentence proves the padding band and nothing
-    // else.
-    //
-    // **The starts are the air itself, sampled** (`SweepPad.airPoints`), for the reason `tip-sweep` carries: a grid
-    // over the card with the points standing on a field dropped is exactly what a real press could reach the pad at,
-    // and a run that pressed the middle would be pressing on the words.
+    // The same card's words taken from the air around them (規約 §hover のツールチップ); the starts are the air itself,
+    // sampled (`SweepPad.airPoints`).
     SampleTimer {
         id: cardSweepTimer
-        /// The card's geometry at the previous sample, for the settle below.
         property string lastGeom: ""
         onTriggered: {
-            // **The commit's own words have to be in it first.** A card opens the frame it is asked for and fills in
-            // afterwards, and one swept before that hands back `1970-01-01` — a stamp of a commit nobody made
-            // (measured).
+            // The commit's words first: a card fills in after it opens, and one swept before hands back `1970-01-01`.
             if (!rowCard.opened || rowCard.subject === "")
                 return
-            // **And it has to have stopped laying out**, for the reason `details-sweep` waits: a card mid-layout has
-            // its fields at some other width, and the air a run samples is the air of a frame nobody sees.
+            // And stopped laying out: mid-layout its fields are at some other width (the wait `details-sweep` takes).
             const geom = Math.round(rowCard.width) + "x" + Math.round(rowCard.height)
             if (geom !== cardSweepTimer.lastGeom) {
                 cardSweepTimer.lastGeom = geom
                 return
             }
             cardSweepTimer.stop()
-            // The whole of the sweep is the pad's own sentence now (`SweepPad.sweepAir`) — eight surfaces carry this
-            // hand and were each asking it the same four things. `open=` is this verb's own half and goes in where it
-            // always stood.
             Harness.report("card_sweep "
                 + rowCard.background.pad.sweepAir(9, "open=" + rowCard.opened))
             driver.complete()
         }
     }
-    // What the row was asked and what it answered, kept for the report — the ask is a point along the row and the
-    // answer is which of the two cards came out of it.
+    // The point asked along the row and the card expected of it, for the report.
     QtObject {
         id: rowPartReport
         property int row: 0
@@ -945,8 +828,7 @@ Item {
         property real x: 0
         property bool probed: false
     }
-    // Waits for either card: a boundary that moved opens the other, and waiting for the right
-    // answer would spend the watchdog finding that out. The verb is judged on `agrees`.
+    // Waits for either card: a moved boundary opens the other, and waiting for the right one would run to the watchdog.
     SampleTimer {
         id: rowPartTimer
         onTriggered: {
@@ -973,13 +855,8 @@ Item {
             driver.complete()
         }
     }
-    // The row under a standing menu, asked for its card the way its own delay timer would ask (hover cannot be
-    // injected — verify-ui スキル §hover の絵の撮り方). Read as a pair with `row-card`, which proves that same input does
-    // open the card: on its own, a card that stayed shut says nothing about why.
-    //
-    // The request goes in only once the menu is actually up — before that there is nothing for the card to be behind —
-    // and the answer is read a sampler turn later, since a card that was going to open opens synchronously
-    // (`rowCardTimer`).
+    // The row under a standing menu, asked for its card where its delay timer would ask. Asked once the menu is up,
+    // read a turn later: a card that was going to open opens synchronously.
     SampleTimer {
         id: menuHoverTimer
         property string oidHex: ""
@@ -989,8 +866,7 @@ Item {
                 return
             if (!menuHoverTimer.asked) {
                 const row = graphPane.view.itemAtIndex(graphModel.rowOf(menuHoverTimer.oidHex))
-                // A row the view has not laid out yet is not a row that was asked: latching here would wait for an
-                // answer to a question nobody put (app-ui.md §UI 自動化).
+                // Not laid out yet: latching here would wait for an answer to a question nobody put.
                 if (!row)
                     return
                 menuHoverTimer.asked = true

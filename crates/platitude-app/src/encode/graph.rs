@@ -6,17 +6,16 @@ use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::wire::{Fields, Listed, Record, field};
 
-/// The segments a row's lane cell draws, as it draws them: one record
-/// per segment — `kind` (`through` / `into` / `out`), `lane`, `color`
-/// and whether it is `dashed` (the WIP leash).
+/// The segments a row's lane cell draws, one record each (`dashed` = the
+/// WIP leash).
 pub type Lanes = Listed<Segment>;
 
 pub fn lanes_of(segments: &[Segment]) -> Lanes {
     Listed::new(segments.to_vec())
 }
 
-/// The word a segment's kind goes out under. **The list itself** — the
-/// canvas branches on these three words (`GraphLaneCell`).
+/// The word a segment's kind goes out under; `GraphLaneCell` branches on
+/// these three.
 fn kind_word(kind: SegmentKind) -> &'static str {
     match kind {
         SegmentKind::Through => "through",
@@ -54,11 +53,10 @@ impl Record for Segment {
     }
 }
 
-/// The segments spelled as one line, for the smoke hooks: a lane is a
-/// stroke a couple of pixels wide, and whether one of them is dotted is
-/// not a question a screenshot answers. `t` / `i` / `o` for the kind,
-/// uppercase where dashed, then `<lane>.<color>`, `;` between segments.
-/// Nothing draws from this — the delegate takes the records.
+/// The segments spelled as one line for the smoke hooks — whether a thin
+/// stroke is dotted is not something a screenshot answers. `t` / `i` / `o`
+/// for the kind, uppercase where dashed, then `<lane>.<color>`, `;`
+/// between segments. Nothing draws from this.
 pub fn spell_lanes(segments: &[Segment]) -> String {
     let mut out = String::with_capacity(segments.len() * 6);
     for (i, s) in segments.iter().enumerate() {
@@ -82,8 +80,7 @@ pub fn spell_lanes(segments: &[Segment]) -> String {
     out
 }
 
-/// FNV-1a 32-bit. Stands in for randomness wherever a name has to pick
-/// something arbitrary but has to pick the *same* thing every time.
+/// FNV-1a 32-bit: a stable pick off a name.
 fn fnv1a(text: &str) -> u32 {
     let mut hash: u32 = 0x811c_9dc5;
     for b in text.as_bytes() {
@@ -93,9 +90,7 @@ fn fnv1a(text: &str) -> u32 {
     hash
 }
 
-/// Deterministic identicon code for an author (GitHub-style 5x5 pattern,
-/// generated locally — git's own commands are the only network this
-/// app has).
+/// Deterministic identicon code for an author (a GitHub-style 5x5 pattern).
 ///
 /// Layout: bits 0..15 = left 3 columns of a 5x5 grid (row-major, mirrored
 /// to the right by the renderer), bits 15..18 = palette index (0..8).
@@ -110,14 +105,12 @@ pub fn avatar_code(author: &str) -> i32 {
 }
 
 /// The palette indices a conflict's two sides are drawn with, given what
-/// the graph could lend (`-1` = nothing) and what each side is called.
+/// the graph could lend (`-1` = nothing) and each side's name.
 ///
-/// The two always come out apart. The graph's answer is kept wherever it
-/// has one; a side it has none for takes a stable colour off its own name,
-/// so the same conflict reopens in the same colours. If the two still land
-/// together, ours keeps its colour and theirs moves on by one (during a
-/// rebase ours is the upstream — `conflict::sides()` has already sorted
-/// out which is which).
+/// The two always come out apart: the graph's answer is kept where it has
+/// one, a side without takes a stable colour off its name, and on a clash
+/// theirs moves on by one (`conflict::sides()` has already decided which
+/// is ours).
 pub fn conflict_side_colors(ours: (i32, &str), theirs: (i32, &str)) -> (i32, i32) {
     let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap_or(8);
     let borrowed_or_named = |(color, name): (i32, &str)| -> i32 {
@@ -135,12 +128,10 @@ pub fn conflict_side_colors(ours: (i32, &str), theirs: (i32, &str)) -> (i32, i32
     (ours, theirs)
 }
 
-/// Lanes that touch the bottom edge of a row: `through` segments plus
-/// `out` targets, each as a `through` on its lane, one per lane. Used by
-/// the truncation footer to draw the lanes running off the end of the
-/// window. A leash does reach here: with many starting refs the walk can
-/// emit thousands of commits before it gets to HEAD, and the WIP row
-/// waits on that lane the whole way (measured on JetBrains/kotlin).
+/// Lanes that touch the bottom edge of a row — `through` segments plus
+/// `out` targets, each as a `through`, one per lane — for the truncation
+/// footer. A leash does reach here: the walk can emit thousands of
+/// commits before HEAD, and the WIP row waits on that lane the whole way.
 pub fn tail_lanes(segments: &[Segment]) -> Lanes {
     let mut out: Vec<Segment> = Vec::new();
     for s in segments {

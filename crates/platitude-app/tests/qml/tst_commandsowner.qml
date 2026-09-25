@@ -3,14 +3,10 @@ import QtTest
 import platitude.ui
 
 // Who the standing command log belongs to, walked through the orders the news can arrive in (`CommandsOwner`).
+// Order is the whole rule and none of it is on screen, so no photograph tells the paths apart.
 //
-// **Order is the whole of this rule and none of it is on screen.** A failure that came before the fetch's and one
-// that comes after it leave the same panel standing with the same red mark in the corner, and the reader's own press
-// leaves no mark at all — so no photograph tells the paths apart, and a headless run pins one path per run at a
-// window's worth of cost. The rule was lifted out of the page for this: here every path is a line.
-//
-// The verbs still own the wiring (`fetch-recover` / `fetch-recover-held`): that a press reaches `readerTakes` and a
-// landing reaches `landingTakesItDown` is a fact about the page, and this file cannot see the page.
+// The page's wiring (a press reaching `readerTakes`, a landing reaching `landingTakesItDown`) is the verbs'
+// (`fetch-recover` / `fetch-recover-held`).
 Item {
     id: root
     width: 200
@@ -62,8 +58,7 @@ Item {
             verify(!owner.landingTakesItDown(0, false), "the panel is saying something else as well")
         }
 
-        // The path the product was asked for by name: a failure, the reader shutting it, a fetch failure on top of
-        // the red mark that failure left, and then the network coming back.
+        // A failure, the reader shutting it, a fetch failure on top of the red mark it left, then the network back.
         function test_news_that_came_before_the_fetch_is_not_in_this_panel() {
             owner.newsTakes()
             owner.readerTakes()
@@ -111,10 +106,8 @@ Item {
 
         // ---- and every order of them ----------------------------------
         //
-        // The cases above are the paths a reader can describe; this is the rest of them. The events are walked to a
-        // depth of three and each sequence is judged against the rule said the other way round — **the panel goes
-        // down if, and only if, the last thing to touch it was a failure raising one that was shut** — so an
-        // implementation that drifted into some longer order has to disagree with that sentence to pass.
+        // Every sequence of three, judged against the rule said the other way round: the panel goes down if, and
+        // only if, the last thing to touch it was a failure raising one that was shut.
 
         readonly property var moves: ["fetch-shut", "fetch-open", "reader", "news"]
 
@@ -133,9 +126,7 @@ Item {
             }
         }
 
-        /// The rule said as a sentence: a panel is the fetch's while the last move that could have taken
-        /// it is a failure that found it shut. `fetch-open` leaves the hold exactly as it found it,
-        /// held or free.
+        /// `fetch-open` leaves the hold as it found it.
         function shouldComeDown(sequence) {
             let held = false
             for (let i = 0; i < sequence.length; i++) {

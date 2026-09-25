@@ -6,62 +6,49 @@ import QtQuick.Window
 import platitude
 import platitude.ui
 
-// The window's body, and the whole of what a headless picture is of (`AutoShotDriver.grabApp` grabs this item, so
-// anything drawn outside it is drawn outside every screenshot). Almost all of it is the column below; the rest
-// is the one mark that answers the pointer.
-//
-// Where this item sits inside the window, and whether there is a body at all, stay at the seat (`Main`): the inset
-// it reaches back over is the window's to know.
+// The window's body: the band, the pages, and the mark beside the pointer. `AutoShotDriver.grabApp` grabs this
+// item, so anything drawn outside it is outside every screenshot. Where it sits in the window stays with `Main`.
 Item {
     id: mainUi
 
-    /// The window this body fills. The rows below reach back through it for the shape it is in and for the doors
-    /// only the window has (`Main`).
+    /// The window this body fills, for its shape and the doors only it has (`Main`).
     required property var window
-    /// The two seats beside this one the band and the pages send their presses to (`WindowChrome` /
-    /// `WindowDialogSeat`), and the strip of tabs the column below is a view of.
+    /// Where the band's and the pages' presses go (`WindowChrome` / `WindowDialogSeat`), and the tabs shown below.
     required property var chrome
     required property var dialogSeat
     required property TabsModel tabsModel
 
-    /// The RepoPage of the active tab (the toolbar's right-side controls act on it). Only that tab has one
-    /// (`RepoPageStack`). The window carries the same name for everybody else (`Main.curPage`).
+    /// The active tab's RepoPage — the only tab with one (`RepoPageStack`). Everybody else reads `Main.curPage`.
     readonly property var curPage: pages.curPage
-    /// What the window hands on from here: the band (`WindowChrome` and the harness), the tabs' pages (the harness),
-    /// where the pointer is (`SharedToolTip`) and the mark that stands beside it (`Main.holdWaitHand`).
+    /// Handed on by the window (to `WindowChrome`, `SharedToolTip`, `Main.holdWaitHand` and the harness).
     readonly property alias topBar: topBar
     readonly property alias pageRepeater: pages.seats
     readonly property alias hand: hand
     readonly property alias waitRing: waitRingSeat
 
     // ---- the floor the window may not be dragged under --------------------
-    // Both halves of it are below — the band's and the page's — so the three numbers are measured here. What the
-    // window does with them is the window's (`Main.minimumWidth` / `WindowShape.holdFloor`).
-    /// The page the floor is read off. `curPage` is null with no tab open, while the window is showing the
-    /// blank page, which has the same three panes with the same minimums.
+    // Measured here, where both halves (band and page) are; the window applies it (`Main.minimumWidth` /
+    // `WindowShape.holdFloor`).
+    /// The page the floor is read off: the blank page with no tab open (same panes, same minimums).
     readonly property var floorPage: mainUi.curPage !== null ? mainUi.curPage : blankPage.item
     readonly property real floorWidth:
         Math.max(topBar.floorWidth, mainUi.floorPage !== null ? mainUi.floorPage.floorWidth : 0)
-    /// The same floor with the left list open whether or not it is — the width the band's three actions have finished
-    /// giving their words up at (`TopBar.actionCap`). Folding the list lowers the real floor, and a schedule read off
-    /// that would put the words back as the rail took the list's place (規約 §窓の床).
+    /// The floor as if the left list were open — where the band's actions finish giving up their words
+    /// (`TopBar.actionCap`). Read off the real floor, folding the list would put the words back (規約 §窓の床).
     readonly property real openFloorWidth:
         Math.max(topBar.floorWidth, mainUi.floorPage !== null ? mainUi.floorPage.openFloorWidth : 0)
     readonly property real floorHeight:
-        // The chrome's two rows and the line the window's bottom edge is drawn as — the rows of `bodyColumn` that are
-        // not the page (they carry their own heights; the page's is its own floor).
+        // `bodyColumn`'s rows other than the page: the chrome's two rows and the bottom edge's line.
         Theme.toolbarHeight + Theme.opsBarHeight + Theme.borderWidth
         + (mainUi.floorPage !== null ? mainUi.floorPage.floorHeight : 0)
 
-    // Where the hand is, for whoever has to open something beside it. Declared here, on the parent of the whole
-    // content, because that is the one place a window-wide handler costs the rows nothing (`PointerWatch`).
+    // Where the pointer is. On the parent of all content: the one place a window-wide handler leaves the rows'
+    // hover alone (`PointerWatch`).
     PointerWatch {
         id: hand
     }
 
-    // ---- the wait the hand is given ----------------------------------
-    // The mark that stands beside the pointer while a write replays history (`WindowWaitRing`). Over everything
-    // and belonging to no pane, so its z and its fill are written here.
+    // The ring beside the pointer during a replay (`WindowWaitRing`); over every pane, so its z and fill are here.
     WindowWaitRing {
         id: waitRingSeat
         anchors.fill: parent
@@ -82,9 +69,7 @@ Item {
             curPage: mainUi.curPage
             captionMerged: mainUi.window.captionMerged
             windowMaximized: mainUi.window.visibility === Window.Maximized
-            // Standing on the floor is the one width with nothing left to share out, and the band's state
-            // group gives up its words there (`TopBar.windowAtFloor`). Read here: the floor is the larger of
-            // band's and page's.
+            // Read here: the floor is the larger of band's and page's (`TopBar.windowAtFloor`).
             windowAtFloor: mainUi.window.width <= Math.ceil(mainUi.floorWidth)
             onOpenRepositoryRequested: mainUi.window.openRepositoryPicker()
             onCloneRepositoryRequested: mainUi.window.startClone()
@@ -95,11 +80,9 @@ Item {
             onCloseRequested: mainUi.window.close()
             onCaptionStripMoved: mainUi.chrome.reportCaptionStrip()
         }
-        // No divider under the chrome. The pane splitters' 4px band was what separated a toolbar from the content
-        // under it; the panel has its own ground now (`TopBar`), and a band of the very ink that ground is drawn in
-        // adds four pixels to the panel's own depth instead of parting anything from it.
+        // No divider under the chrome (デザイン規約 §ウィンドウの縁).
 
-        // Nothing open: the blank page. Built only while needed, so an app that starts with tabs never pays for it.
+        // Nothing open: the blank page.
         Loader {
             id: blankPage
             Layout.fillWidth: true
@@ -128,13 +111,10 @@ Item {
             onOpenRepositoryPicker: mainUi.window.openRepositoryPicker()
             onSettingsDialogRequested: mainUi.dialogSeat.openSettingsAt("app")
             onGitSettingsRequested: mainUi.dialogSeat.openSettingsAt("git")
-            // The same card, told whom it was opened on before it opens (デザイン規約 §アバターを与える).
             onAvatarSettingsRequested: (name, email) => mainUi.dialogSeat.openAvatarSettings(name, email)
         }
 
-        // The window's floor, and — while the edge above is drawn — its bottom side as well: one line in
-        // borderDefault doing both. Drawn while the window fills the screen too: this side still has the
-        // taskbar under it.
+        // The window's bottom edge, drawn maximised too: this side still has the taskbar under it.
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: Theme.borderWidth

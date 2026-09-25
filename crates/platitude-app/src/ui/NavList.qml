@@ -10,66 +10,42 @@ AppListView {
     property var sectionModel
     property bool expanded: true
     property string kindHint: "branch"
-    /// REMOTES only: the configured remote names (`RepoTab.remoteNames`), which of them this repository sends
-    /// pushes to, and which of them both origin keys name (`RepoTab.markedOrigin`). Held here — the rows are
-    /// recycled, so none of the answers can be theirs to keep (デザイン規約 §その他の操作).
+    /// REMOTES only: the remote names (`RepoTab.remoteNames`), the one pushes go to, and the one both origin keys
+    /// name (`RepoTab.markedOrigin`). Held here, since rows are recycled (デザイン規約 §リモートを書き留める).
     property var remoteNames: []
     property string markedRemote: ""
     property string originRemote: ""
-    /// This list holds whatever height the panel it is in has over its rows. Only the one section the folded rail
-    /// opens beside itself wants that — it is alone in its panel, so the spare height has nowhere else to go. In the
-    /// sidebar proper the ground at the foot of the column takes it, and no section stretches
-    /// (SidebarPane).
+    /// Take the panel's spare height. Only the rail's peek wants it, alone in its panel; in the sidebar the ground
+    /// at the column's foot takes it (SidebarPane).
     property bool stretch: false
-    /// The sidebar, which owns the row gestures: which row was clicked last and which is being typed into outlive both
-    /// the delegates and this list, and only one row at a time is either, whichever section it sits in. A list with
-    /// none (the WIP file list) simply has no gestures — every call below is skipped.
+    /// The sidebar's row gestures, which outlive the delegates and span sections. Null (the WIP file list): no
+    /// gestures, and every call below is skipped.
     property var gestures: null
-    /// Whether this list's rows open their facts under themselves on a rest (`NavRowFacts`), and the section that
-    /// knows which working copy has a branch out (`worktreeHolding`). **The two are asked for separately**: the
-    /// working copies' own list opens its rows and has nothing to ask that section, since a row of it *is* a copy.
-    /// Off and null in the lists whose rows do not open — the refs a section holds answer by opening, and the
-    /// working tree's file lists hold no refs.
+    /// Whether rows open their facts under themselves (`NavRowFacts`), and the section that knows which working copy
+    /// has a branch out (`worktreeHolding`). Separate, since the WORKTREES list opens rows but has nothing to ask it.
     property bool offersFacts: false
     property var worktreesModel: null
-    /// The branches' own section, for the rows that open on somebody else's branch: a working copy's row says of the
-    /// branch it holds what that branch's own row would (デザイン規約 §左メニューの所作), and a remote-tracking row
-    /// asks it where the branch reading it stands, which is where a press on that name takes the graph. Null
-    /// everywhere else.
+    /// BRANCHES, for rows that speak of another's branch: a working copy's held branch, and the local branch reading
+    /// a remote-tracking one (デザイン規約 §左メニューの所作). Null elsewhere.
     property var branchesModel: null
-    /// TAGS only: the remote this window's tag rows act on (`RepoTab.defaultRemote`) — **the reading the others
-    /// are read against** in what a tag's row opens on, since sending a tag and taking one off a remote both go
-    /// there and nowhere else (デザイン規約 §左メニューの所作 の TAGS の段). Empty in every other list.
+    /// TAGS only: the remote tag rows act on (`RepoTab.defaultRemote`), which an open tag row reads the others
+    /// against (デザイン規約 §左メニューの所作 の TAGS の段).
     property string pushRemote: ""
-    /// The row that is holding a seat under itself for something standing over this list, or -1 for none: the row of
-    /// the folded folder the current branch is behind, which is where its stand-in belongs (`HeadPinRow.seatedUnder`
-    /// / `NavSections`). The row grows by that much at its foot, so the rows below it move down and the stand-in has
-    /// the line under the folder that is holding it. Off in every other list here — only BRANCHES has a stand-in.
+    /// The row holding a seat under itself for the current branch's stand-in — the folded folder it is behind
+    /// (`HeadPinRow.seatedUnder`) — or -1. BRANCHES only.
     property int pinSeatRow: -1
-    /// Stands in for the pointer where headless cannot put one, so a row's tooltip — or the absence of one — can be
-    /// photographed (PGG_AUTO_ACT=nav-tip). -1 points at no row. The file lists carry the same property on their own
-    /// panes (`WipPane` / `DetailsPane`).
+    /// The pointer's stand-in for headless (PGG_AUTO_ACT=nav-tip); -1 points at no row.
     property int pointedTipRow: -1
-    /// Where a row's open name box is drawn — outside this list, which clips, because the box is allowed past the
-    /// pane's edge when what is in it does not fit (`NavItemDelegate`).
-    ///
-    /// **Two out.** One out is the column the sections are laid out in, and a layout lays out whatever is parented
-    /// into it — a box put there is given the column's own next row (measured: it landed at the foot of the pane).
-    /// Two out is what that column fills, which lays nothing out and clips nothing.
-    ///
-    /// A list whose rows cannot be typed into is left with none: the working tree's file lists have no gestures, so
-    /// no row of theirs ever opens a box, and naming a layer for them would only say where a box that never comes
-    /// would have gone. Settable, for a surface where the box is better off staying in its seat.
+    /// Where a row's open name box is drawn: outside this list, which clips, so the box can pass the pane's edge.
+    /// Two out, not one — the sections' column is a layout and would give a box parented into it a row of its own.
+    /// None without gestures (no box ever opens); settable to keep the box in its seat.
     property Item boxLayer:
         navList.gestures && navList.parent ? navList.parent.parent : null
-    /// Where this list's rows begin in that layer: its own place in the column, and the column's in the layer.
+    /// Where this list's rows begin in that layer.
     readonly property real boxRowsX: (navList.parent ? navList.parent.x : 0) + navList.x
     readonly property real boxRowsTop: (navList.parent ? navList.parent.y : 0) + navList.y
-    /// Where a row's ink begins, and how far each fold of the names steps it in (`NavItemDelegate.rowInset` /
-    /// `nestStep` — デザイン規約 §余白 の左メニューの行の項). **The names begin in the band's mark column**: the band
-    /// sets its section mark after its inner margin, the fold's `iconSm` seat and a step (`NavHeader`), and a row
-    /// sets its name after its own `iconXs` seat and the same step (`NameCell`), so the row starts that seat's
-    /// difference further in than the band. Read by the stand-in as well, which has no row of its own to ask.
+    /// Where a row's ink begins and how far each fold steps it in, so names begin in the band's mark column
+    /// (デザイン規約 §余白 の左メニューの行の項): the band's seat is `iconSm`, a row's `iconXs`. The stand-in reads these too.
     readonly property int rowInset: Theme.spaceXs + Theme.iconSm - Theme.iconXs
     readonly property int nestStep: Theme.spaceSm
 
@@ -79,17 +55,13 @@ AppListView {
     /// Right-click on the row a remote itself stands on.
     signal remoteMenuRequested(string name)
 
-    /// What identifies a row across sections and rebuilds. A colon cannot appear in a ref name, and the section prefix
-    /// keeps two sections' equal names apart.
+    /// A row's key across sections and rebuilds: the section keeps equal names apart, and no ref name holds a colon.
     function keyOf(full, name) {
         return navList.kindHint + ":" + (full !== "" ? full : name)
     }
 
-    /// The box has opened on a row: if it is one of this section's, bring it into view. A row can be typed into
-    /// without having been clicked — the current branch's sticky row raises the same menu while the real row is
-    /// scrolled off (`HeadPinRow`) — and a name changing itself somewhere off screen is a name nobody agreed to.
-    /// Watched: only the gestures know when a box opens, and every list they reach is one of these. A row opening
-    /// under itself is watched from the same place, for the same reason (`keepOpenRowInView`).
+    /// Bring this section's row into view when its box or its facts open: a row can be typed into while scrolled
+    /// off (the sticky `HeadPinRow` raises the same menu), and a name changing off screen is one nobody agreed to.
     Connections {
         target: navList.gestures
         function onOpenKeyChanged() {
@@ -100,38 +72,32 @@ AppListView {
             const head = navList.kindHint + ":"
             if (!key.startsWith(head))
                 return
-            // What is on show, so a row behind a filter or a closed folder answers -1.
+            // Rows on show only: one behind a filter or a closed folder answers -1.
             const row = navList.sectionModel.rowOfName(key.substring(head.length))
             if (row >= 0)
                 navList.positionViewAtIndex(row, ListView.Contain)
         }
     }
 
-    /// The room the open row grew by, which this section asks for on top of its rows (`Layout.maximumHeight`). Zero
-    /// with nothing open — a section is as tall as the rows it holds, and one row of them is taller while it is open.
+    /// The room the open row grew by, asked for on top of the rows (`Layout.maximumHeight`); zero with nothing open.
     readonly property real openRoom: {
         const row = navList.openRow()
         return row === null ? 0 : Math.max(0, row.height - Theme.rowHeight)
     }
-    /// Which row that is, -1 with nothing open — what something standing among the rows has to weigh its own place
-    /// against, since the room above it is room its place moved by (`NavSections` hands it to `HeadPinRow`). **One
-    /// row is open at a time** (`SidebarRowGestures.openKey`), so one number answers for the whole list.
+    /// Which row that is, or -1: `HeadPinRow` counts the room opened above it (via `NavSections`). One row is open at
+    /// a time (`SidebarRowGestures.openKey`).
     readonly property int openIndex: {
         const row = navList.openRow()
         return row === null ? -1 : row.index
     }
-    /// Where this list was standing when the row opened, and whether it is holding that place. **A row at the foot
-    /// opens past the bottom edge**, and what the list gives up to show its lines is the top — the part the reader
-    /// has already left behind (デザイン規約 §左メニューの所作). Closing puts it back here, whatever the list did in
-    /// between.
+    /// Where the list stood when the row opened, put back on close: a row at the foot scrolls the list to show its
+    /// lines (デザイン規約 §左メニューの所作).
     property real openRestY: 0
     property bool openHeld: false
     function keepOpenRowInView() {
         if (navList.gestures === null)
             return
-        // Put back what the last open row took, whichever way the key moved: it goes from one row straight to the
-        // next when a hand crosses between them, and a place left standing would be given back against a row that
-        // never took it.
+        // Restore first: the key can move straight from one row to the next.
         if (navList.openHeld)
             navList.contentY = navList.openRestY
         navList.openHeld = false
@@ -141,12 +107,9 @@ AppListView {
         navList.openHeld = true
         navList.revealOpenRow()
     }
-    /// Stand where the open row's lines are in view — **asked again every time either side of that can have moved**,
-    /// because neither is settled when the key arrives: the lines are measured on a layout, so the row grows on the
-    /// pass after the one that built them, and the section's own height answers to that growth in turn
-    /// (`openRoom`). Written as the place to stand rather than as a scroll to add, so an answer read too early is
-    /// corrected rather than kept: a section that was given the room its row grew by gives the scroll back by
-    /// itself, and a run of these never adds up to more than one.
+    /// Scroll the open row's lines into view. Re-asked whenever the row or the section's height moves — neither is
+    /// settled when the key arrives — and written as a place, not a delta, so an early answer is corrected rather
+    /// than added to.
     function revealOpenRow() {
         if (!navList.openHeld)
             return
@@ -159,10 +122,8 @@ AppListView {
     onOpenRoomChanged: navList.revealOpenRow()
     onHeightChanged: navList.revealOpenRow()
 
-    /// Smoke hooks (PGG_AUTO_ACT=nav-reclick): a left click on one row, and what that row made of it. Clicks cannot be
-    /// injected (verify-ui スキル), so they go in at the row's own answer. `clickRow` says false when the view has not
-    /// built that row yet — the delegate arrives on the layout after the model got the rows, and a run that counted
-    /// the miss as a press would wait for a gesture nobody made (app-ui.md §UI 自動化の因果性).
+    /// Smoke hooks (PGG_AUTO_ACT=nav-reclick): a left click on one row, and what that row made of it. `clickRow` is
+    /// false while the view has not built the row, so a run does not count the miss as a press.
     function clickRow(index) {
         const row = navList.itemAtIndex(index)
         if (!row)
@@ -171,26 +132,21 @@ AppListView {
         row.leftClick(Qt.NoModifier)
         return true
     }
-    /// Smoke hook (PGG_AUTO_ACT=nav-drag-open): a press on one **closed** row's own line that starts to move — the
-    /// gesture that brings the lines out at once and carries straight on into them. It enters the row's own
-    /// handlers, so a run cannot go green with that hand-over cut (verify-ui §注入はハンドラ本体そのものへ入れる).
-    /// The drag runs along the row's own line to its far side, which is where the name it opened ends. False when
-    /// the view has not built that row yet — the same miss `clickRow` reports.
+    /// Smoke hook (PGG_AUTO_ACT=nav-drag-open): press a closed row's line and drag along it to the far side, through
+    /// the row's own handlers (verify-ui implement.md「注入はハンドラ本体そのものへ入れる」). False as `clickRow`.
     function dragRow(index) {
         const row = navList.itemAtIndex(index)
         if (!row)
             return false
         const line = Theme.rowHeight / 2
-        // The row's own left edge: left of the name in every section, including the two whose names have no seat
-        // in front of them (`NavRowBody.seated`).
+        // x 0 is left of the name in every section, seated or not (`NavRowBody.seated`).
         row.linePressed(Qt.LeftButton, 0, line)
         row.lineDragged(row.width, line)
         row.lineReleased()
         row.lineClicked(Qt.LeftButton, Qt.NoModifier)
         return true
     }
-    /// What a drag over that row's name came away with, and whether the keyboard went with it — read off the field
-    /// the open row shows (PGG_AUTO_ACT=nav-drag-open).
+    /// What a drag over the open row's name took, and whether the keyboard went with it (PGG_AUTO_ACT=nav-drag-open).
     function rowNameTook(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.nameTook : ""
@@ -211,9 +167,8 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editFocused : false
     }
-    /// The box on one row, as drawn and as the question on it wants to be drawn (PGG_AUTO_ACT=nav-branch-box). Neither
-    /// is anything a picture answers: an elided placeholder frames like a shorter question. A row the view has not
-    /// built answers 0 — the same miss `clickRow` reports as false.
+    /// The box on one row, as drawn and as its question wants (PGG_AUTO_ACT=nav-branch-box) — a picture cannot tell
+    /// an elided placeholder from a shorter question. 0 on an unbuilt row.
     function rowBoxWidth(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.editBoxWidth : 0
@@ -234,17 +189,13 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editBoxAt : ""
     }
-    /// Whether the shared tooltip is standing on that row's box (PGG_AUTO_ACT=rename-tag-box). A row the view has not
-    /// built answers false — the same miss the rest of these report.
+    /// Whether the shared tooltip stands on that row's box (PGG_AUTO_ACT=rename-tag-box).
     function rowTipShown(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.editTipShown : false
     }
-    /// What the pointed row itself would say, and what it is called (PGG_AUTO_ACT=nav-tip). The row decides and the
-    /// shared instance shows, so the two are read apart: a row with nothing to say never reaches the instance. Read
-    /// off `hoverText` — **the attached `ToolTip.visible` reads back the instance's own state**, so during the delay
-    /// a row that does speak answers false. An empty name says the view has not built that row yet — the same miss
-    /// `clickRow` reports as false.
+    /// What the pointed row would say, and its name (PGG_AUTO_ACT=nav-tip). Read off `hoverText`: the attached
+    /// `ToolTip.visible` reads back the shared instance, false during the delay. An empty name: the row is unbuilt.
     function rowTipWords(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.hoverText : ""
@@ -253,22 +204,19 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.name : ""
     }
-    /// What commit that row names, read off the row itself (PGG_AUTO_ACT=nav-jump): where a click on it leads is the
-    /// row's own answer, and a run that worked the commit out from the model instead would be asking the question the
-    /// click is supposed to answer. Empty on a row the view has not built — and on the one row here that names no
-    /// commit, a bare worktree entry.
+    /// The commit a click on that row leads to, read off the row rather than the model (PGG_AUTO_ACT=nav-jump).
+    /// Empty on an unbuilt row, a folder, and a bare worktree entry.
     function rowOidAt(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.oid_hex : ""
     }
-    /// The row that has its facts open in this list, and what they say (PGG_AUTO_ACT=nav-open) — read off the row
-    /// itself, so a run cannot go green with the wiring cut. Null and empty where the open row is not in this list.
+    /// The row with its facts open in this list, and what they say (PGG_AUTO_ACT=nav-open); null / empty when the
+    /// open row is elsewhere.
     function openRow() {
-        // A list with no section behind it is one the rail closed (`SectionPeekPopup`): it holds no rows to open.
+        // No section: the rail's peek has closed (`SectionPeekPopup`).
         if (navList.gestures === null || navList.sectionModel === null)
             return null
-        // The key carries the section it was opened in (`keyOf`), so a list asked about another's key answers
-        // with nothing rather than with a row of its own that happens to share the name.
+        // The key names its section (`keyOf`), so another list's key finds nothing here.
         const key = navList.gestures.openKey
         const head = navList.kindHint + ":"
         if (!key.startsWith(head))
@@ -278,12 +226,9 @@ AppListView {
     }
     function openWords() {
         const row = navList.openRow()
-        // **The name the open row shows leads** — the whole of what git knows it by everywhere but WORKTREES, where
-        // the row is named by its folder and the path is a line of its own (`path=`). **The two free fields come
-        // last**, in this order: what somebody typed when they took a lock, then a path off this machine. A claim is
-        // read as one substring (`verify/verbs/nav.rs`), so everything judged has to stand ahead of them.
-        // `track=` is the pair the open lines draw, which on a working copy's row is the branch it holds and not
-        // the row's own roles (`NavItemDelegate.factsAhead`).
+        // The free fields (`why=` lock reason, then `path=`) come last: a claim is read as one substring
+        // (`verify/verbs/nav.rs`), so everything judged stands ahead of them. `track=` is what the lines draw — on
+        // a working copy's row, the branch it holds (`NavItemDelegate.factsAhead`).
         return row === null ? ""
              : row.factsName + " local=" + row.factsLocal
                + " track=" + (row.factsBranch !== "" ? row.factsAhead : row.ahead)
@@ -291,16 +236,13 @@ AppListView {
                + " held=" + row.factsHeldBy + " up=" + row.factsUpstream + " gone=" + row.factsGone
                + " branch=" + row.factsBranch
                + " state=" + row.factsState
-               // The carriers of a tag's name, the reading they are read against and which of them stand apart from
-               // it — comma-separated lists, so they sit with the judged fields: a remote is a ref path component
-               // and holds neither a space nor a comma (git refuses both).
+               // A tag's carriers: comma lists, safe among the judged fields since git refuses a space or comma in
+               // a remote's name.
                + " remotes=" + row.factsRemotes
                + " against=" + row.factsAgainst + " apart=" + row.factsApart
                + " why=" + row.factsWhy + " path=" + row.factsPath
     }
-    /// Where the open row and its lines actually landed, for a run that has to see the list make room rather than
-    /// take the layout's word for it (PGG_AUTO_ACT=nav-open). `view=` is what the list is showing while they are
-    /// there — the pair a row opening at the foot is judged on.
+    /// Where the open row and its lines landed (PGG_AUTO_ACT=nav-open); `view=` is the list's visible span.
     function openGeom() {
         const row = navList.openRow()
         if (row === null)
@@ -312,9 +254,8 @@ AppListView {
              + " view=" + Math.round(navList.contentY) + "+" + Math.round(navList.height)
              + " room=" + Math.round(navList.openRoom)
     }
-    /// Whether the whole of the open row — its own line and the lines under it — is inside what this list shows
-    /// (PGG_AUTO_ACT=nav-open-foot). Read off the two geometries rather than off the scroll that was asked for: a
-    /// list that recorded a move it never made would answer for itself otherwise. False with nothing open.
+    /// Whether the whole open row is inside what the list shows (PGG_AUTO_ACT=nav-open-foot) — read off geometry,
+    /// not the scroll asked for.
     function openShown() {
         const row = navList.openRow()
         if (row === null)
@@ -322,24 +263,19 @@ AppListView {
         return Math.round(row.y) >= Math.round(navList.contentY)
             && Math.round(row.y + row.height) <= Math.round(navList.contentY + navList.height)
     }
-    /// The lines themselves, where a sweep takes words from and a press that never moved goes
-    /// (PGG_AUTO_ACT=nav-open-then: `NavRowFacts` is what the hand is driven into).
+    /// The open lines (`NavRowFacts`) a run drives the hand into (PGG_AUTO_ACT=nav-open-then).
     function openFactsItem() {
         const row = navList.openRow()
         return row === null ? null : row.factsItem
     }
-    /// Whether one row is painted as the one under the hand (PGG_AUTO_ACT=nav-open-then): the wash goes out with the
-    /// pointer, and covers the whole of a row that has its facts open (`NavItemDelegate.washLit`).
+    /// Whether a row wears the hover wash (PGG_AUTO_ACT=nav-open-then; `NavItemDelegate.washLit`).
     function rowWashLit(index) {
         const row = navList.itemAtIndex(index)
         return !!row && row.washLit
     }
-    /// Where the list has actually scrolled to, and how a run puts a row out of sight to begin with. Read off
-    /// `contentY`: a row scrolled away has no delegate, and "there is no delegate" is also what a list that has not
-    /// been built yet says.
+    /// Where the list has scrolled to, and how a run puts a row out of sight. Read off `contentY`, not a delegate:
+    /// a scrolled-away row and an unbuilt list both have none.
     function rowInView(index) {
-        // The rows above this one, plus the seat any of them is holding for something standing over the list
-        // (`pinSeatRow`) — that seat is a row's worth of ground the rows under it begin after.
         const seat = navList.pinSeatRow >= 0 && navList.pinSeatRow < index ? Theme.rowHeight : 0
         const top = index * Theme.rowHeight + seat
         return top >= navList.contentY && top + Theme.rowHeight <= navList.contentY + navList.height
@@ -347,9 +283,8 @@ AppListView {
     function scrollToEnd() {
         navList.contentY = Math.max(0, navList.contentHeight - navList.height)
     }
-    /// A few rows on, which is how a run puts a row just out of sight (PGG_AUTO_ACT=nav-branch-box:away). A few,
-    /// because past the view's own cache the delegate is gone, and a box that went with it proves nothing about the
-    /// one rule being read — that a box whose row has left the list goes with it.
+    /// A few rows on (PGG_AUTO_ACT=nav-branch-box:away) — within the view's cache, so the delegate survives and its
+    /// box has to hide by its own rule.
     function scrollRows(rows) {
         navList.contentY = Math.min(Math.max(0, navList.contentHeight - navList.height),
                                     navList.contentY + rows * Theme.rowHeight)
@@ -358,26 +293,18 @@ AppListView {
     visible: expanded
     Layout.fillWidth: true
     Layout.fillHeight: expanded
-    // A section closes on a hairline of ground — just enough to keep its last row off the next header band. Anything
-    // thicker reads as a blank row belonging to the section. A top margin is a seat given to something standing over
-    // the rows, so the section asks for it on top of them (`NavSections` / `HeadPinRow`); every other list here has
-    // none and adds nothing.
-    // **A row that opened asks for the room it grew by** — the ceiling is counted in whole rows, so without it the
-    // section keeps the height it had and the lines it opened push its own row up under the sticky stand-in
-    // (measured: the name went behind it and only the lines showed). A row holding a seat for the stand-in asks for
-    // it the same way, and for the same reason: the seat is a row's worth the ceiling does not count.
+    // The rows plus what they do not count: the open row's growth and the stand-in's seat (without them the lines
+    // push the row up under the sticky stand-in), the top margin, and a hairline (thicker reads as a blank row).
     Layout.maximumHeight: !expanded ? 0
                           : stretch ? Number.POSITIVE_INFINITY
                           : count * Theme.rowHeight + navList.openRoom
                             + (navList.pinSeatRow >= 0 ? Theme.rowHeight : 0)
                             + navList.topMargin + Theme.borderWidth
     model: sectionModel
-    // The pane's own bar, in place of the style's one that `AppListView` hands the graph, the diff and the log.
     verticalBar: PaneScrollBar {}
     delegate: NavItemDelegate {
         id: row
         listWidth: navList.width
-        // The card, and the two sections its answers come off.
         opensFacts: navList.offersFacts
         openKey: navList.gestures ? navList.gestures.openKey : ""
         sectionModel: navList.sectionModel
@@ -386,12 +313,9 @@ AppListView {
         pushRemote: navList.pushRemote
         rowInset: navList.rowInset
         nestStep: navList.nestStep
-        // The seat this row holds under itself for the stand-in, on the one row that holds one.
-        // **`>= 0` first**: a delegate the view has put back in its reuse pool reports `index` -1, which is also
-        // "no row is holding a seat" — without the guard every pooled row of every list here grows by one
-        // (the reading `tipPointedAt` already makes of the same -1).
+        // `>= 0` first: a pooled delegate reports `index` -1, and every pooled row would grow by a seat.
         pinSeat: navList.pinSeatRow >= 0 && navList.pinSeatRow === row.index ? Theme.rowHeight : 0
-        // The list's own place in that layer, so a scroll carries the box along with the row it belongs to.
+        // So a scroll carries the box with its row.
         boxLayer: navList.boxLayer
         boxRowsX: navList.boxRowsX
         boxRowsY: navList.boxRowsTop - navList.contentY
@@ -404,12 +328,10 @@ AppListView {
         pointedTipRow: navList.pointedTipRow
         rowKey: navList.gestures ? navList.keyOf(full, name) : ""
         activeKey: navList.gestures ? navList.gestures.activeKey : ""
-        // The gesture itself: the wait a second click opens has to outlive this row, and a list whose rows cannot be
-        // typed into has none (`ReclickGesture`).
+        // The gestures' own: the wait for a second click outlives this row (`ReclickGesture`).
         reclick: navList.gestures ? navList.gestures.reclick : null
-        // How often the hand itself has moved, and whether anybody is counting: these rows grow where they stand, so
-        // the light is read again on a hand that moved and never on a layout that did
-        // (`NavItemDelegate.syncHover`). The working tree's list hands down neither.
+        // Hover is re-read when the hand moves, never when the layout does — these rows grow in place
+        // (`NavItemDelegate.syncHover`).
         handCounted: navList.gestures !== null
         handMoves: navList.gestures ? navList.gestures.handMoves : 0
         editKey: navList.gestures ? navList.gestures.editKey : ""
@@ -430,8 +352,6 @@ AppListView {
         onFactsAsked: (open, at) => {
             if (!navList.gestures)
                 return
-            // Named the way a click is remembered (`keyOf`): the section is part of it, or one name carried on
-            // both sides of a fetch would open a row in each list.
             if (open)
                 navList.gestures.openFacts(row.rowKey, at)
             else

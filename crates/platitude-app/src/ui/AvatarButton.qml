@@ -2,26 +2,20 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The one place a picture is reached from. A pointer resting on the face raises a badge saying so; pressing it opens
-// the settings card with this author already named (デザイン規約 §アバターを与える).
-//
-// The pen that assigns a picture rides the bottom right corner. The other one is empty unless the caller fills it:
-// the commit editor's phrase has a face but no name to hang a signature off, so there the mark rides the top right
-// (§署名の表示). A row that shows the name says it there instead, and leaves this corner alone.
+// A face that opens the avatar settings for its author (デザイン規約 §アバターを与える): a pen badge bottom right under
+// the pointer, and top right the signature mark where the caller has no name to hang it off (§署名の表示).
 Item {
     id: avatarBox
 
     /// The identicon code, and the assigned image ("" for none).
     property string face: ""
     property string faceUrl: ""
-    /// Whom the badge would be about. "" disables the whole affordance: nothing to assign a picture to on a row with no
-    /// author — the working tree's own row, and a commit not read yet.
+    /// Whom the badge would be about; "" (no author — the working tree's row, a commit not read yet) disables it.
     property string email: ""
     /// Stands in for the pointer where headless cannot put one, so the badge can be photographed
     /// (PGG_AUTO_ACT=avatar-hover).
     property bool pointedAt: false
-    /// What rides the other corner (`SignatureMark`): whether the commit being written will be signed. Empty
-    /// `signatureKind` puts nothing there, which is what a face standing beside its own name hands in.
+    /// The top-right mark (`SignatureMark`); an empty `signatureKind` puts nothing there.
     property string signatureKind: ""
     property string signatureCode: ""
     property string signatureSigner: ""
@@ -29,23 +23,17 @@ Item {
     /// The sentence the mark's own tooltip carries. Left alone it reads git's verdict code; the editor's badge is a
     /// setting and hands its own in.
     property alias signatureTip: sigMark.tip
-    /// The ink both corner badges are drawn at. `iconSm` on the details pane's 40px face; a face smaller than that
-    /// hands in `iconXs`, since the badge's share of what it covers is the only lever there is (§アバターを与える).
+    /// The ink both corner badges are drawn at; a face smaller than the details pane's hands in `iconXs`
+    /// (§アバターを与える).
     property int badgeInk: Theme.iconSm
-    /// How far the signature mark's **ink** is to stand past the face's square, up and to the right. The round face
-    /// leaves that corner empty, so the mark lands on the pane's own ground — and how
-    /// far it may go is set by what stands next to it, which only the pane knows (§署名の表示). Two numbers, because
-    /// the air above the face and the air beside it are rarely the same.
-    ///
-    /// Ink: the mark's own square holds air past its tick, and this adds that back (`SignatureMark.inkAir*`),
-    /// so what the pane asks for is the distance it can actually see.
+    /// How far the signature mark's ink stands past the face's square, up and to the right — set by the caller, which
+    /// knows what stands next to it (§署名の表示). The mark's own air is added back (`SignatureMark.inkAir*`).
     property real badgeTopOut: 0
     property real badgeRightOut: 0
 
     readonly property bool editable: avatarBox.email !== ""
     readonly property bool showBadge: avatarBox.editable && (avatarHover.hovered || avatarBox.pointedAt)
-    /// What the mark made of it, for whatever stands beside the face and has to agree with it — the one word a broken
-    /// signature spends is the only thing that does (規約 §署名の表示).
+    /// What the mark made of it, for a caller drawing the broken-signature word beside the face (規約 §署名の表示).
     readonly property bool signatureBroken: sigMark.broken
     readonly property color signatureTone: sigMark.tone
     readonly property bool signatureTipShown: sigMark.tipShown
@@ -59,8 +47,7 @@ Item {
         code: avatarBox.face
         imageUrl: avatarBox.faceUrl
     }
-    // Pushed as far into the lower-right as the icon's own square allows — flush with its right and bottom edges, so
-    // the least of the face is covered and the layout beside it never moves (デザイン規約 §アバターを与える).
+    // Flush in the lower-right of the face's square (デザイン規約 §アバターを与える).
     Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -79,8 +66,7 @@ Item {
             height: avatarBox.badgeInk
         }
     }
-    // The other corner, pushed out of it by however much the pane says. Always out when there is a signature to speak
-    // of, since it is a state of the commit.
+    // Shown without hover: a signature is a state of the commit.
     SignatureMark {
         id: sigMark
         anchors.right: parent.right
@@ -96,8 +82,7 @@ Item {
         width: sigMark.implicitWidth
         height: sigMark.implicitHeight
     }
-    // Clicks only. Hover is a handler's, because handlers are passive: a hoverEnabled MouseArea over the whole face
-    // takes the hover from everything under it, and the mark in the corner would never say why it is the colour it is
+    // Clicks only; hover is the handler's — a hover MouseArea over the face would take it from the corner mark
     // (rules-refs/app-ui.md 「行を覆う MouseArea」).
     MouseArea {
         id: avatarArea
@@ -106,12 +91,10 @@ Item {
         onClicked: avatarBox.clicked()
     }
     HoverHandler { id: avatarHover }
-    // One pointer opens one thing (規約 §hover のツールチップ): on the mark's own corner the verdict is what was
-    // reached for, so the face's sentence stands down while it is there.
+    // One pointer opens one thing (規約 §hover のツールチップ): the face's tip stands down over the mark.
     ToolTip.visible: avatarBox.showBadge && !sigMark.pointed
     ToolTip.delay: Metrics.tipDelayMs
-    // The one word the whole feature goes by (デザイン規約 §アバターを与える). The article is what splits the two states:
-    // the one being changed is the face under the pointer, the one being chosen does not exist yet (§長さ).
+    // The articles differ on purpose (デザイン規約 §アバターを与える).
     ToolTip.text: avatarBox.faceUrl !== "" ? qsTr("Change the avatar for %1").arg(avatarBox.email)
                   : qsTr("Choose avatar for %1").arg(avatarBox.email)
 }

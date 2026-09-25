@@ -2,12 +2,11 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// One half of a view toggle: a mark that is lit while its view is the one showing, and a step down in the same hue
-// while it is the way to the other (デザイン規約 §暗く落とした段 / §無効 — the muted colour would read as unavailable).
+// One half of a view toggle: the mark is lit while its view shows, and a step down in the same hue otherwise — not
+// the muted colour, which reads as unavailable (デザイン規約 §暗く落とした段 / §無効).
 //
-// The depth comes from the band the toggle stands in; the mark and the wash stay square inside it. Both are written
-// as padding and inset — a `Control` stretches its `contentItem` over whatever the
-// padding leaves, so a width written on the mark is gone on the next layout.
+// Square inside the band's depth by padding and inset: a `Control` stretches its `contentItem` over what the
+// padding leaves, so a width written on the mark is lost on the next layout.
 HoverToolButton {
     id: viewButton
 

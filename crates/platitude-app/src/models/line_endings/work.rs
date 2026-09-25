@@ -5,9 +5,8 @@ use platitude_core::eol::setting::{self, AutoCrlf, ConfigScope};
 use super::*;
 
 impl LineEndingsModel {
-    /// Attaches the feed on the first question: a window whose reader
-    /// never opens this chapter never has one to hear (the same shape
-    /// `RepoConfigModel` uses).
+    /// Attaches the feed on the first question, so a window that never
+    /// opens this chapter never holds one.
     fn listen(&mut self) {
         if self.attached {
             return;
@@ -16,31 +15,24 @@ impl LineEndingsModel {
         self.attached = true;
     }
 
-    /// Shows `path`, from the top: whatever the field was holding belonged
-    /// to another repository.
+    /// Shows `path`, from the top.
     pub(super) fn read_at(&mut self, path: String) {
         self.repo_path = path;
         self.state = "reading".into();
         self.error = String::new();
-        // Emptied: this is another repository's value, and a field still
-        // holding it would be offering to write one repository's setting
-        // into another.
+        // Emptied: the old repository's value in the field would offer to
+        // write it into this one.
         self.held = String::new();
         self.effective = String::new();
-        // A write still out belongs to that repository too — its answer
-        // will be dropped by the path check, so waiting for it here would
-        // wait forever, with every later save refused.
+        // A write still out is the old repository's: the path check drops
+        // its answer, so waiting for it would refuse every later save.
         self.busy = false;
         self.changed();
         self.ask();
     }
 
-    /// Asks git again without saying the screen is starting over: what a
-    /// pick just landed is still worth showing, and the field has a value
-    /// to keep standing while the answer is out.
-    ///
-    /// Nothing to ask before the screen has named a repository: `"idle"`
-    /// is a model no chapter has looked at yet.
+    /// Asks git again without starting the screen over — the field keeps
+    /// its value while the answer is out. Nothing to ask while `"idle"`.
     pub(super) fn refresh(&mut self) {
         if self.state != "idle" {
             self.ask();
@@ -48,13 +40,8 @@ impl LineEndingsModel {
     }
 
     /// Asks git what that repository's own file sets, and what git would
-    /// use there.
-    ///
-    /// Two reads: the effective level cannot say which of its records
-    /// came out of that repository's own file (`config::get_regexp_at`),
-    /// and both halves of the chapter need an answer — the field holds
-    /// the override, the line under it names what git is doing right
-    /// now.
+    /// use there — two reads, since the effective level cannot say which
+    /// of its records came from that file.
     fn ask(&mut self) {
         self.listen();
         let feed = Arc::clone(&self.feed);
@@ -94,8 +81,7 @@ impl LineEndingsModel {
         }
     }
 
-    /// Writes `value` into that repository's own file, where an empty
-    /// value asks for the key to be taken out (`eol::setting::set`).
+    /// `save`'s body (`eol::setting::set`).
     pub(super) fn write_value(&mut self, value: String) {
         if self.busy {
             return;
@@ -118,9 +104,8 @@ impl LineEndingsModel {
                 let written =
                     setting::set(&executor, &workdir, ConfigScope::Local, wanted, &cancel).await;
                 let msg = match written {
-                    // What git answers: the write reads itself
-                    // back, so a value that did not land shows
-                    // here.
+                    // The write reads itself back, so a value that did
+                    // not land shows here.
                     Ok(written) => EolMsg::Written {
                         path,
                         error: written.message,
@@ -145,10 +130,8 @@ impl LineEndingsModel {
     pub(super) fn take_feed(&mut self) {
         let mut reread = false;
         for msg in self.feed.drain() {
-            // An answer for a repository the reader has already moved off
-            // is not this chapter's any more: the field is showing another
-            // repository's file, and filling it from this would be
-            // offering to write one repository's setting into another.
+            // An answer for a repository the reader has moved off is
+            // dropped, for the reason `read_at` empties the field.
             match msg {
                 EolMsg::Read {
                     path,
@@ -158,12 +141,9 @@ impl LineEndingsModel {
                     if path != self.repo_path {
                         continue;
                     }
-                    // Only a read the screen asked for takes the last
-                    // words down with it. **A read after a pick keeps
-                    // them**: that one is this model's own doing
-                    // (`refresh`), and the words standing are git's account
-                    // of why the pick did not land (the shape
-                    // `RepoConfigModel` keeps for the identity pair).
+                    // Only a read the screen asked for clears `error`; a
+                    // read after a pick (`refresh`) keeps git's account of
+                    // why the pick did not land.
                     let asked_for = self.state == "reading";
                     self.held = held;
                     self.effective = effective;
@@ -185,9 +165,8 @@ impl LineEndingsModel {
                     }
                     self.busy = false;
                     self.error = error;
-                    // What the field should now say is what git holds, and
-                    // a write that did not take is exactly the case where
-                    // those two differ.
+                    // Re-read: a write that did not take leaves the field
+                    // saying other than git holds.
                     reread = true;
                 }
             }
@@ -199,9 +178,8 @@ impl LineEndingsModel {
     }
 }
 
-/// git's own spelling, or empty for a repository that sets nothing of its
-/// own — which is the same thing the empty row asks for, so the field and
-/// the write agree on one vocabulary.
+/// git's own spelling, or empty where nothing is set — the value the empty
+/// row writes, so the field and the write share one vocabulary.
 fn spelled(value: Option<AutoCrlf>) -> String {
     value.map(AutoCrlf::spelled).unwrap_or_default().to_string()
 }

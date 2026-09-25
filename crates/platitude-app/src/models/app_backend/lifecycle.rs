@@ -39,23 +39,16 @@ impl AppBackend {
 
     /// Asks one candidate git for its version, without touching the git
     /// this run is already on (`version::probe` builds its own executor).
-    ///
-    /// The screen runs this as it opens and again whenever the box is
-    /// finished with, so every path is shown with an answer beside it —
-    /// and a path that has been fixed on disk since it was typed answers
-    /// differently the next time the screen is opened.
     pub(super) fn begin_git_path_check(&mut self, path: String) {
         self.git_path_state = "checking".into();
         self.git_path_version.clear();
         self.git_path_error.clear();
-        // Nothing is offered while the answer is out: a button that kept
-        // the last path's offer would be one the reader could hold over a
-        // path git has not been asked about.
+        // Withdraw the offer until this path answers: a kept offer could be
+        // held over a path nobody has asked.
         self.settle_restart_offer();
         self.git_path_changed();
         let feed = Arc::clone(&self.check_feed);
-        // An empty box means the git `PATH` resolves, and a reader who
-        // picks the very one this run spawns has picked no other.
+        // An empty box means the git `PATH` resolves.
         let wanted = if path.is_empty() {
             self.git_path_on_path.clone()
         } else {
@@ -69,9 +62,8 @@ impl AppBackend {
             handle.spawn(async move {
                 let cancel = tokio_util::sync::CancellationToken::new();
                 let probe = version::probe(&path, &cancel).await;
-                // Off the runtime's own threads as well: the compare is a
-                // handful of filesystem reads, and a name that resolves
-                // against a server blocks for as long as that takes.
+                // Blocking: the compare reads the filesystem, and a path on
+                // a server that is not answering blocks as long as it does.
                 let names_the_run = tokio::task::spawn_blocking(move || {
                     platitude_core::process::same_program(
                         std::path::Path::new(&wanted),
@@ -134,13 +126,11 @@ impl AppBackend {
         self.identity_unsaved = false;
         self.identity_changed();
         let feed = Arc::clone(&self.check_feed);
-        // Held by the hub: the screen can go and the window cannot close
-        // over a `git config` half way through its pair
-        // (`hub::saves`).
+        // Held by the hub, so the window cannot close between the pair's
+        // two `git config` writes (`hub::saves`).
         let spawned = Hub::with(|hub| {
-            // On the save's handle: a `git config` is a local write, and
-            // a local write is waited out to its end
-            // (`Hub::save_executor`).
+            // Not the read executor: its timeout would kill a slow
+            // `git config` and leave one half written (`Hub::save_executor`).
             let executor = hub.save_executor();
             hub.spawn_save(async move {
                 use platitude_core::identity::{self, ConfigScope};
@@ -190,8 +180,8 @@ impl AppBackend {
                     self.read_identity(name, email);
                 }
                 AppMsg::IdentityUnknown { message } => {
-                    // A state of its own: git could not answer, so the
-                    // setup screen stays out of the way.
+                    // Not "missing": git could not answer, so the setup
+                    // screen stays away.
                     tracing::warn!(error = %message, "could not read the author identity");
                     self.identity_state = "error".into();
                     self.identity_error = message;
@@ -201,9 +191,7 @@ impl AppBackend {
                     probe,
                     names_the_run,
                 } => {
-                    // An answer about a path the box has moved past says
-                    // nothing about the one it holds now, and the run
-                    // that replaced it has its own answer coming.
+                    // Stale: the box moved on, and its own answer is coming.
                     if path != self.git_path {
                         continue;
                     }
@@ -221,22 +209,13 @@ impl AppBackend {
                         }
                     }
                     .into();
-                    // **The version read is what offers the restart.** A
-                    // path that answers is one the window can come back
-                    // on; one that does not would come back on the git
-                    // from `PATH` (`Hub::resolve_git`), and the reader
-                    // would find that out only after losing the
-                    // window. An old git answers and so is offered — the
-                    // rules make only a missing git a gate
-                    // (規約 §git が無い時・古い時), and the band's badge
-                    // says the rest.
+                    // The answer is what offers the restart, an old git's
+                    // too (デザイン規約 §設定の画面).
                     self.settle_restart_offer();
                 }
                 AppMsg::IdentitySaved(written) => {
                     self.finish_identity(written);
-                    // A write that only half landed still changed the
-                    // configuration, so the open repositories re-read it
-                    // whichever way this one went.
+                    // Even a half-landed write changed the configuration.
                     wrote = true;
                 }
             }

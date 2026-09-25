@@ -6,29 +6,22 @@ import platitude.ui
 
 /// What the page's own wiring says it did, written out as report lines.
 ///
-/// Each of these is an **edge**: the question bar carries no name to read the branch back off, the row
-/// that is being stood in for looks the same as one nothing was asked about, and git's answer to a write is one
-/// message wide. None of them can be recovered by reading the page a moment later, so the page says so with a
-/// signal apiece and the line is written from here — where the whole of it can be left out of a build. The held
-/// delete is the exception: git's refusal is an answer on the tab, read here the way the card reads it.
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given: the same guard every one of these
-/// lines carried when the page still wrote them itself.
+/// Each is an edge a later read of the page cannot recover, so the page raises a signal apiece and the line is
+/// written here, where the whole of it stays out of a build. The held delete is the exception: git's refusal is an
+/// answer on the tab, read here the way the card reads it.
 // An `Item` only because that is what the driver's children are; it is a sizeless holder.
 Item {
     id: reports
 
-    /// The driver these belong to. `var` because naming its type here would be a circle: it is the file that builds
-    /// this one.
+    /// `var` because naming the driver's type here would be a circle: it is the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so the handlers below can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var fileRowMenu: driver.fileRowMenu
     readonly property var diffRowMenu: driver.diffRowMenu
-    /// The branch whose plain delete git has just refused — the answer the standing card turns its row on
-    /// (`RefBranchMenu`), cleared as the next plain delete is asked, so each refusal is its own edge here.
+    /// The branch whose plain delete git just refused (`RefBranchMenu` turns its row on it). Cleared as the next plain
+    /// delete is asked, so each refusal is its own edge.
     readonly property string refusedDelete: reports.repoTab.branchDeleteRefused
 
     onRefusedDeleteChanged: {
@@ -36,10 +29,9 @@ Item {
             Harness.report("force_delete_offered branch=" + reports.refusedDelete)
     }
 
-    /// A row is being stood in for while git is asked to delete it, and which one — read off what the window is
-    /// actually drawing without (`ops::StandIn`, through `RepoTab`), so the line says a row
-    /// left the screen. One name per list, and a delete touches at most
-    /// one of each, so a row is named once.
+    /// The row stood in for while git deletes it, per list — read off what the window actually draws without
+    /// (`ops::StandIn`), so the line says a row left the screen. A delete touches at most one per list, so each row is
+    /// named once.
     readonly property string goneBranch: reports.repoTab.goneBranch
     readonly property string goneRemote: reports.repoTab.goneRemote
     readonly property string goneTag: reports.repoTab.goneTag
@@ -64,8 +56,8 @@ Item {
         function onReplaceRemoteAsked(from, to) {
             Harness.report("replace_remote_asked from=" + from + " to=" + to)
         }
-        // What the write was about rides the signal: a report belongs to the answer that carried it, and one drain
-        // can bring several (`RepoTab.writeAnswerReportKind`).
+        // What the write was about rides the signal: one drain can bring several answers
+        // (`RepoTab.writeAnswerReportKind`).
         function onWriteReported(kind, remote, name) {
             Harness.report("write_reported kind=" + kind + " ref=" + remote + "/" + name)
         }
@@ -81,9 +73,8 @@ Item {
 
     Connections {
         target: reports.diffRowMenu
-        // `shown` is the card's own answer: a card that refused to open because it had
-        // nothing to put in it is the one failure a picture of an empty overlay cannot tell from a card nobody asked
-        // for.
+        // `shown` is the card's own answer: one that refused to open for want of rows photographs like one nobody
+        // asked for.
         function onOffered(shown) {
             Harness.report("diff_menu open=" + shown
                               + " rows=" + reports.diffRowMenu.menu.offeredRows

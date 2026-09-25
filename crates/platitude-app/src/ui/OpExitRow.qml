@@ -3,11 +3,8 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// One row of the stopped operation's card: `AppMenuItem`'s row, standing in a pane.
-//
-// The vocabulary has to be the menu's exactly — the chip in git's own spelling, the sentence saying what it costs, the
-// mark ahead of a row that is held (デザイン規約 §git 用語のコード表記, §長押し). A person who has learnt the reset submenu reads this
-// card without being taught it twice. What it cannot borrow is `MenuItem` itself, which only lays out inside a Menu.
+// One row of the stopped operation's card: `AppMenuItem`'s row standing in a pane — the menu's chip, sentence and hold
+// mark exactly, so the menu's reader reads it untaught. Not `MenuItem` itself, which only lays out inside a Menu.
 Item {
     id: opRow
 
@@ -15,33 +12,29 @@ Item {
     property string code: ""
     /// What the flag does, in words.
     property string text: ""
-    /// A short tag said after the words, the way a menu row says one (`AppMenuItem.note`). The row still runs — this is
-    /// what it costs, or in the one case here what it does not.
+    /// A short tag after the words, as `AppMenuItem.note`: what running the row costs, or that it costs nothing.
     property string note: ""
     /// Held, for a row that takes something away. Zero is an ordinary row.
     property int holdMs: 0
     /// How far into the hold the press has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
-    /// **The length the press under way was given** (`HoldDriver.armedMs`), which is the live one while no press is
-    /// under way. A card whose tag is worked out from the same answer the length is reads this too, so the row keeps
-    /// its wording under a hand that is already on it (デザイン規約 §長押し).
+    /// The length the press under way was given, else the live one (`HoldDriver.armedMs`). A tag worked out from the
+    /// same answer reads this, so the wording holds under a hand already on the row.
     readonly property alias armedMs: holdDrive.armedMs
     property color holdTone: Theme.danger
     property bool enabled: true
     /// The width this row's chip asks the card's shared column to hold, so every sentence starts on the same x.
     readonly property real codeColSeat: codeLabel.implicitWidth
-    /// The column the card settled on, set by the card.
+    /// The column the card settled on.
     property real codeColW: 0
-    /// How far the words are pushed in to leave room for the mark — the same on every row, held or not, so the card
-    /// reads down one column of first letters.
+    /// How far the words are pushed in to leave room for the mark — the same on every row, held or not.
     property real holdIndent: 0
 
     /// Run, whichever gesture this row takes.
     signal picked()
 
-    /// Automation: run the row to its end without a press behind it — the hold where there is one, and the plain press
-    /// where there is not. **`HoldDriver.begin()` is a no-op on a row with no hold** (holdMs 0 disarms it), so a run
-    /// that only called it waited out the watchdog in silence on `--continue`, `--quit` and the free `--skip`.
+    /// Automation: run the row to its end — the hold where there is one, the plain press where not
+    /// (`HoldDriver.begin()` does nothing at `holdMs` 0).
     function completeHold() {
         if (opRow.holdMs <= 0) {
             opRow.picked()
@@ -54,14 +47,13 @@ Item {
     implicitHeight: opRow.visible ? Theme.rowHeight : 0
     Accessible.description: opRow.holdMs > 0 ? Words.holdToActivate : ""
 
-    // A row says its whole line when the pane has narrowed enough to cut it, the way a menu row does — the elision is
-    // the pane running out of width (`AppMenuItem`).
+    // The whole line where the pane has cut it, as a menu row (`AppMenuItem`).
     ToolTip.visible: rowHover.containsMouse && rowLabel.truncated
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: opRow.code + " " + opRow.text
 
-    // One colour for every word in the row, so the chip cannot disagree with the sentence it sits in. A held row wears
-    // its cost before it is touched (デザイン規約 §状態).
+    // One colour for every word, so the chip cannot disagree with its sentence; a held row wears its cost before it is
+    // touched (デザイン規約 §状態).
     readonly property color wordColor: !opRow.enabled ? Theme.textMuted
                                      : opRow.holding ? Theme.textOnAccent
                                      : opRow.armedMs > 0 ? opRow.holdTone
@@ -77,8 +69,7 @@ Item {
         }
     }
 
-    // At the row's own left edge, the way a menu row's mark stands (`AppMenuItem`): the card's padding is to its left,
-    // and it overhangs the seat the words leave for it on both sides.
+    // At the row's own left edge, overhanging the seat the words leave for it, as a menu row's mark (`AppMenuItem`).
     HoldIcon {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
@@ -88,8 +79,7 @@ Item {
         visible: opRow.armedMs > 0
     }
 
-    // The menu row's own padding (`AppMenuItem` padding: spaceSm), so the card's rows and a menu's read as the same
-    // row.
+    // `AppMenuItem`'s padding, so the card's rows and a menu's read alike.
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceSm + opRow.holdIndent
@@ -144,10 +134,8 @@ Item {
         // Released anywhere, or dragged off the row: both call it off. A plain row runs on the release that lands on
         // it.
         onReleased: mouse => {
-            // Against the length **this press** was given, and nothing at all where what decided it has moved since
-            // (`HoldDriver.armedMs` / `stale`): the free `--skip` and the one that takes a commit away are the same
-            // row with two gestures, and git answering mid-press leaves the gesture as it began
-            // (デザイン規約 §長押し).
+            // Against the length **this press** was given, and nothing where that has moved since
+            // (`HoldDriver.armedMs` / `stale`): git answering mid-press must not change the gesture (デザイン規約 §長押し).
             const plain = holdDrive.armedMs <= 0 && !holdDrive.stale
                     && mouse.x >= 0 && mouse.y >= 0 && mouse.x <= width && mouse.y <= height
             holdDrive.letUp()
@@ -157,8 +145,7 @@ Item {
         onCanceled: holdDrive.letUp()
         onPositionChanged: if (!containsMouse) holdDrive.letUp()
     }
-    // The same row from the keyboard, the one alternative a hold has anywhere in this app: focus it, then hold Space or
-    // Enter (`HoldDriver.pressKey`).
+    // Keyboard: focus it, then hold Space or Enter (`HoldDriver.pressKey`).
     activeFocusOnTab: opRow.enabled
     Keys.onPressed: event => {
         if (holdDrive.pressKey(event))

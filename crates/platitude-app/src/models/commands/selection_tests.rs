@@ -58,8 +58,7 @@ fn log(rows: Vec<CommandItem>) -> CommandsModel {
     model
 }
 
-/// The whole of every row, which is what a drag from the first character
-/// to the last leaves behind.
+/// A drag from the first character to the last.
 fn take_all(model: &mut CommandsModel) {
     let last = model.rows.len() - 1;
     let end = model.line_at(last).map_or(0, |line| line.len());
@@ -78,8 +77,7 @@ fn the_clock_is_read_in_the_zone_the_display_side_named() {
 
 #[test]
 fn a_day_that_wraps_backwards_is_still_a_time_of_day() {
-    // 00:30Z read five hours west is half past seven the evening before,
-    // which is a negative day-of-year the arithmetic folds back in.
+    // 00:30Z read five hours west is 19:30 the day before.
     assert_eq!(
         clock_of(
             1_787_876_000_000 - 1_787_876_000_000 % 86_400_000 + 1_800_000,
@@ -124,21 +122,18 @@ fn a_press_lands_on_the_byte_it_is_over() {
     // The command column starts after the clock and its tab.
     assert_eq!(model.hit(0, AT_CMD, 0), 9);
     assert_eq!(model.hit(0, AT_CMD, 4), 13);
-    // The two gaps hold one tab each, and which of its two ends the press
-    // was on is the whole answer.
+    // A gap's two places are the two sides of its tab.
     assert_eq!(model.hit(0, AT_GAP_CMD, 0), 8);
     assert_eq!(model.hit(0, AT_GAP_CMD, 1), 9);
     assert_eq!(model.hit(0, AT_GAP_OUT, 0), 26);
     assert_eq!(model.hit(0, AT_GAP_OUT, 1), 27);
-    // And past the end of the outcome, the line's own length.
+    // Past the end of the outcome: the line's length.
     assert_eq!(model.hit(0, AT_OUT, 999), 32);
 }
 
 #[test]
 fn the_pane_is_handed_the_column_it_has_to_lay_out() {
-    // The three the row draws, which is what goes on the ruler
-    // (`CommandsTextSelect.hit`). A gap holds a tab and nothing to lay
-    // out, so it is handed nothing.
+    // A gap has nothing to lay out, so it is handed nothing.
     let model = log(vec![row("switch -- 3.2", "ok", "exit 1", "29 ms", "")]);
     assert_eq!(model.column(0, AT_CLOCK), "12:03:17");
     assert_eq!(model.column(0, AT_CMD), "git switch -- 3.2");
@@ -149,11 +144,8 @@ fn the_pane_is_handed_the_column_it_has_to_lay_out() {
 
 #[test]
 fn a_place_of_a_column_is_a_character_of_it() {
-    // A path in kanji is three places and nine bytes, and a press on the
-    // second of them is the byte that character starts at. **How wide any
-    // of them is drawn is the row's own question** — the walk that
-    // answered it in columns put the press beside the character the
-    // reader had pressed on.
+    // Each kanji is one place and three bytes. How wide it is drawn is the
+    // row's question: counting columns here would misplace the press.
     let model = log(vec![row("add -- 日本語.txt", "ok", "", "5 ms", "")]);
     let at_cmd = 9;
     assert_eq!(model.hit(0, AT_CMD, 11), at_cmd + 11);
@@ -163,8 +155,7 @@ fn a_place_of_a_column_is_a_character_of_it() {
 
 #[test]
 fn a_press_below_the_line_is_the_end_of_it() {
-    // The block of words under a failure cannot be pointed into, so a
-    // press there is the line it belongs to, taken to its end.
+    // The words under a failure cannot be pointed into.
     let model = log(vec![row(
         "switch nope",
         "failed",
@@ -223,8 +214,6 @@ fn a_line_taken_whole_brings_gits_own_words_with_it() {
 
 #[test]
 fn a_line_taken_in_part_leaves_them_behind() {
-    // There is no way on screen to point at part of the block, so it
-    // comes with a line taken end to end.
     let mut model = log(vec![row(
         "switch nope",
         "failed",
@@ -252,9 +241,7 @@ fn a_successful_command_never_brings_its_stderr() {
 
 #[test]
 fn a_hand_that_ran_off_the_end_stops_at_it() {
-    // The end names a byte past the line, which is what a drag out to the
-    // right of the panel says. Uncut it addresses nothing and the whole
-    // selection reads as empty (measured).
+    // A drag out past the panel's right edge names a byte past the line.
     let mut model = log(vec![row("add --all", "ok", "", "23 ms", "")]);
     model.start_select(0, 0);
     model.drag_select(0, 9999);
@@ -279,13 +266,9 @@ fn each_row_is_told_where_the_wash_falls_on_it() {
     model.drag_select(1, 15);
     model.respell_row(0);
     model.respell_row(1);
-    // The first row keeps its clock out of it and runs to the end, so its
-    // command and outcome columns both carry a run and the line is not
-    // whole. A run is the places of that column the wash covers, and the
-    // pane asks the column itself where those are drawn.
+    // Row 0 runs from mid-command to its end: no clock, not whole.
     assert_eq!(said(&model.rows[0].sel), wash("", "4:9", "0:5", false));
-    // The second starts at its first character, so the clock carries one
-    // too -- and it stops inside the command, so nothing is on the third.
+    // Row 1 runs from its start to mid-command: no outcome.
     assert_eq!(said(&model.rows[1].sel), wash("0:8", "0:6", "", false));
 }
 
@@ -305,9 +288,7 @@ fn a_row_the_selection_does_not_reach_is_told_nothing() {
 
 #[test]
 fn a_wash_names_places_and_leaves_the_pixels_to_the_row() {
-    // A path in kanji is three places of the command column, whatever the
-    // family drawing it advances them by: the row is asked where they are
-    // (`LineRuler`), and nothing here counts a column.
+    // Runs are in places, whatever the font advances them by (`LineRuler`).
     let mut model = log(vec![row("add -- 日本語.txt", "ok", "", "5 ms", "")]);
     let end = model.line_at(0).unwrap().len();
     model.start_select(0, 9);

@@ -1,5 +1,4 @@
-//! The changed files as a tree: the shape the flat entries are folded
-//! into, and the one call that rebuilds the display rows from them.
+//! The CHANGES list as a tree, and the rebuild of the display rows.
 
 use super::*;
 
@@ -12,8 +11,8 @@ fn build_file_tree(raw: &[FileItem], overrides: &HashMap<String, bool>) -> Vec<F
         root.insert(&entry.path, |cut| {
             let mut leaf = entry.clone();
             leaf.name = entry.path[cut..].to_string();
-            // The folders above the row spell this much of its path; a
-            // rename's source gives up the same prefix when it had one.
+            // A rename's source gives up the same folder prefix, when it
+            // has it.
             leaf.orig_name =
                 crate::encode::rename_source(&entry.orig_path, &entry.path, cut).to_string();
             leaf
@@ -53,7 +52,6 @@ fn build_file_tree(raw: &[FileItem], overrides: &HashMap<String, bool>) -> Vec<F
 }
 
 impl DetailsModel {
-    /// Rebuilds display rows from the raw entries for the current view.
     pub(super) fn rebuild_rows(&mut self) {
         self.files = if self.tree_view {
             build_file_tree(&self.raw_files, &self.folder_overrides)

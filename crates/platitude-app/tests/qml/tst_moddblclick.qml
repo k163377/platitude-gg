@@ -1,13 +1,9 @@
 import QtQuick
 import QtTest
 
-// What Qt does with a double-click that had a modifier held down — the question behind "may a row
-// take its default action while the hand is building a choice" (デザイン規約 §複数のコミットを選ぶ).
-//
-// **The area is handed the double whatever the hand was holding**, and the modifiers ride along. So
-// nothing in the framework separates "the reader is picking commits" from "the reader is going
-// there": a surface whose double-click leads to a write has to read the modifiers itself, which is
-// what `GraphRowDelegate.doubleClick` does.
+// What Qt does with a double-click that had a modifier held down (デザイン規約 §複数のコミットを選ぶ): the area is
+// handed the double whatever was held, modifiers riding along, so a surface whose double-click leads to a write has
+// to read the modifiers itself (`GraphRowDelegate.doubleClick`).
 Item {
     id: root
     width: 200
@@ -34,8 +30,7 @@ Item {
         when: windowShown
 
         function test_an_area_is_handed_the_double_whatever_was_held() {
-            // Two presses at one spot with Ctrl down — what toggling a row out of a choice and back
-            // in looks like when the hand is quick about it.
+            // A quick hand toggling a row out of a choice and back in with Ctrl.
             mouseDoubleClickSequence(area, 20, 20, Qt.LeftButton, Qt.ControlModifier)
             compare(root.heldDoubles, 1, "Qt delivers the double even with the modifier held")
             verify((root.lastModifiers & Qt.ControlModifier) !== 0,

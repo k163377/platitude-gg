@@ -2,13 +2,10 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// The escape that puts a ref name in a sentence (`Words.nameInSentence`), held against the engine that draws it.
-//
-// **Only a laid-out line can answer this.** The two things the escape owes are opposite: a run of spaces has to
-// survive a fold rich text takes from HTML, and a single space has to stay a place the line may break — one of the
-// fields this is drawn in wraps (`NoticeLine`), and a sentence pinned at every space breaks through the middle
-// of a word. Neither is visible in the markup itself, and no headless verb photographs the empty column at the
-// width where it wraps, so both are read off the same rich-text engine the fields use.
+// The escape that puts a ref name in a sentence (`Words.nameInSentence`), held against the rich-text engine that
+// draws it. It owes two opposite things: a run of spaces survives rich text's HTML fold, and a single space stays a
+// place the line may break (`NoticeLine` wraps, and a sentence pinned at every space breaks mid-word). Neither shows
+// in the markup, so both are read off laid-out lines.
 Item {
     id: root
     width: 400
@@ -17,7 +14,7 @@ Item {
     readonly property string sentence: "The first commit will start %1"
     readonly property string spaced: "The first  commit will start %1"
 
-    // The width is the measurement: wide enough to hold most of the sentence, too narrow to hold all of it.
+    // Wide enough for most of the sentence, too narrow for all of it.
     TextEdit {
         id: coloured
         width: 130
@@ -32,8 +29,7 @@ Item {
         textFormat: TextEdit.PlainText
         text: root.sentence.arg("main")
     }
-    // The pair the fold is read from, both unwrapped: what the sentence asks for with its two spaces kept, and what
-    // the same sentence asks for with one.
+    // Unwrapped: the escaped sentence with its two spaces, and the same markup unescaped, which folds them to one.
     TextEdit {
         id: runKept
         wrapMode: Text.NoWrap
@@ -57,8 +53,8 @@ Item {
             return field.getText(0, field.positionAt(0, step * 1.5))
         }
 
-        // How many lines it takes is the machine's answer — this runs on a font database that is not the window's
-        // (verify-ui §Windows の罠), so what is asked is where the break landed.
+        // The line count is the machine's — the font database is not the window's (verify-ui windows.md
+        // §Windows での実行・デバッグの罠) — so what is asked is where the break landed.
         function test_the_coloured_line_breaks_where_the_plain_one_does() {
             verify(coloured.lineCount > 1)
             compare(firstLineOf(coloured), firstLineOf(plain))
@@ -78,9 +74,8 @@ Item {
             compare(Words.nameInSentence("nothing to name here", "main", "#60A5FA"), "")
         }
 
-        /// The avatar refusals, whose words live in `Words` and not in the Rust `#[error]` strings
-        /// (app-ui.md「Rust に文言を置かない」). The numbers come with the kind and have to land in the right seats —
-        /// a wrong index reads as `undefined` in the card, which nothing else would catch.
+        /// The numbers come with the kind (rules-refs/app-ui.md「Rust に文言を置かない」) and must land in the right
+        /// seats — a wrong index reads as `undefined` in the card, which nothing else catches.
         function test_an_avatar_refusal_takes_its_numbers_in_the_order_it_was_given_them() {
             compare(Words.avatarFailure("too-large", ["10"], ""), "This file is larger than 10 MB.")
             compare(Words.avatarFailure("too-many-pixels", ["8000x6000", "32"], ""),
@@ -89,8 +84,8 @@ Item {
             compare(Words.avatarFailure("", [], ""), "")
         }
 
-        /// **The two the operating system made carry its own line, under ours.** The rest quote nobody, which is how
-        /// the card tells the two apart — the same division a report makes (デザイン規約 §長さ).
+        /// What the operating system said goes on its own line under ours; the rest quote nobody — the same division a
+        /// report makes (デザイン規約 §長さ).
         function test_the_failures_the_system_made_quote_it_and_the_rest_do_not() {
             const said = Words.avatarFailure("read", [], "The system cannot find the file specified. (os error 2)")
             verify(said.indexOf("could not be read") >= 0, said)

@@ -4,24 +4,16 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// Where a press leaves the reader, once everything it set off has settled.
-///
-/// A file of their own because they are the one wait behind the write barrier: core answers a write before it
-/// publishes the status and the refs that write invalidated (`session::write::run_write`), so the landing is a
-/// message or two later than the answer, and each of these has a report of its own to make about it. The barriers
-/// on `AutoActDriver` say a write happened; these say where it put somebody.
-///
-/// Built by that driver, which `RepoPage` builds only when a verb was given. What they act on hangs off it.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+/// Where a press leaves the reader, once everything it set off has settled. Core answers a write before it
+/// publishes the status and refs that write invalidated (`session::write::run_write`), so these wait past the write
+/// barriers on `AutoActDriver`, which builds this file.
+// An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: landings
 
-    /// The driver these landings belong to. `var` because naming its type here would be a circle: it is the file that
-    /// builds this one.
+    /// `var` because naming its type would be a circle: the driver is the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so the waits below can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
@@ -41,19 +33,10 @@ Item {
         opExitLandTimer.start()
     }
 
-    // Where the press left the reader, once the graph the row went out of has settled. The selection is the whole
-    // subject, so it is waited for on the far side of the rebuild and read the way the reader would: the pane that was
-    // describing the working tree is gone, the commit under it is the one the branch points at, the details pane has
-    // caught up to that commit, and the row is on screen.
-    //
-    // **The oid says which row it is** — a highlight left on an index the working-tree row vacated lights whatever
-    // slid into it, and in this run that is the entry the press just made. `follows=` is the identity the picture
-    // cannot hold: two rows a couple of lines apart look alike at this width.
-    //
-    // **Waited out on the pane**, so a build that never lands still answers: the tree is empty and
-    // whatever is on the right has caught up with the page — the working tree's own pane, which needs
-    // nothing fetched, or a commit whose details have arrived. Both are states the application rests
-    // in, and the run says which one it reached.
+    // Where the stash press left the reader. `follows=` is by oid: a highlight left on the index the working-tree row
+    // vacated lights whatever slid into it (here, the new entry), and two rows a few lines apart look alike in the
+    // picture. Waited out on the pane, so a build that never lands still answers: the tree is empty and the right side
+    // has caught up — the working tree's pane or a settled commit card; `wip=` says which.
     SampleTimer {
         id: stashLandTimer
         onTriggered: {
@@ -70,26 +53,17 @@ Item {
                               + " head=" + workTree.headOid.substring(0, 8)
                               + " selected=" + page.selectedOid.substring(0, 8)
                               + " row=" + row + " rows=" + graphModel.rowTotal
-                              // What the entry ended up called, last because it is the one field with spaces in it.
-                              // The other half of the same press: a box filled by the merge that was standing
-                              // (`absorbOpMessage`) holds the merge's own words, and an entry wearing it would be
-                              // promising a merge it does not hold (`WipPane.stashName`).
+                              // Last because it has spaces. A box filled by a standing merge (`absorbOpMessage`)
+                              // holds the merge's words, which must not name the entry (`WipPane.stashName`).
                               + " entry=" + stashesModel.nameAt(0))
             renderedBarrier.begin()
         }
     }
-    /// Where putting a stopped operation down leaves the reader — the far end of every exit-card row, and of the same
-    /// row pressed in a terminal.
-    ///
-    /// **The status is what ends this.** Core answers the continuation before it publishes the status that says the
-    /// operation is gone, and the page leaves the WIP face off that status (`RepoPage.leaveWipWhenDone`) — so a barrier
-    /// on the write photographs the face still standing, which is what a build that never leaves it photographs too.
-    ///
-    /// Waited out on the states the application rests in, for `stashLandTimer`'s reason: a build
-    /// that keeps the reader on the face rests there just as firmly, and the run says which of the
-    /// two it reached. The face it would be left on is an empty pane over a clean tree with no
-    /// card on it — the same picture as an ordinary WIP face with nothing in it, which is why
-    /// `wip=` is a report.
+    /// Where putting a stopped operation down leaves the reader — from every exit-card row, or the same command run in
+    /// a terminal. Ended by the status, not the write: the page leaves the WIP face off the status that says the
+    /// operation is gone (`RepoPage.leaveWipWhenDone`), published after the answer. Waited out on resting states, as
+    /// `stashLandTimer` is; `wip=` is a report because the face left over a clean tree pictures the same as an
+    /// ordinary empty WIP face.
     SampleTimer {
         id: opExitLandTimer
         onTriggered: {
@@ -98,11 +72,8 @@ Item {
             if (!page.wipShown) {
                 if (!driver.cardSettled)
                     return
-                // The graph is rebuilt after the status that ends the operation, so the row the operation was holding
-                // open — the working tree's, drawn over a clean tree because something was running — is still there
-                // when the landing is decided. Waited out so the picture is of the history the reader is left
-                // reading. **Only on a clean tree**: an abort that brings uncommitted work back keeps that row for
-                // a reason of its own, and there is nothing to wait for.
+                // The graph rebuilds after the status, so the working-tree row the operation held open over a clean
+                // tree is still drawn; waited out. Only on a clean tree: an abort that brings work back keeps that row.
                 if (worktreeModel.total === 0 && driver.graphTopKind() === "wip")
                     return
             }

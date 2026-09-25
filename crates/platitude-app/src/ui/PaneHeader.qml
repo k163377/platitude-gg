@@ -7,9 +7,7 @@ import platitude.ui
 Rectangle {
     id: band
     property alias text: headerLabel.text
-    /// A tally beside the caption, at the caption's own step — the way every heading band in this window carries one
-    /// (`DetailsChangesBand`, NavHeader, WipBucketHeader; 規約 §タイポグラフィ says the weight and the colour are what
-    /// make it read as a count). -1 for the bands that count nothing, which is most of them.
+    /// A tally beside the caption, at the caption's step (規約 §タイポグラフィ「数えは語と同じ段」). -1 counts nothing.
     property int count: -1
     Layout.fillWidth: true
     implicitHeight: Theme.headerHeight

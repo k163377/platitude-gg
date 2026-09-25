@@ -3,26 +3,19 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// What a sidebar row holds, left to right: the shared name cell, the seat an open name box takes its slack from, and
-// the right-aligned columns (a worktree's branch, the head's ahead/behind, the remote/PR badge, the push mark).
+// A sidebar row's ink, left to right: the name cell, the seat an open name box takes, and the right-aligned columns
+// (a worktree's branch, a branch's ahead/behind, the remote/PR badge, the push mark). The row (`NavItemDelegate`)
+// keeps the gestures, washes and box, and is handed in whole rather than copied into bindings paid on every reuse.
 //
-// The row itself (`NavItemDelegate`) keeps the gestures, the washes and the box: this is only the ink. It is handed
-// the whole row — the row is recycled with its delegate, so there is nothing
-// here to keep, and a second copy of every binding would be paid on every reuse.
-//
-// **Every column past the name is built only on the rows that wear it.** A delegate is built per row on screen, and
-// a column built and hidden on every row is heap the rows are measured by (rules-refs/app-ui.md, the Loader rule).
-// Each of those loaders is invisible while inactive as well: a layout skips an invisible item, and an empty loader
-// would still take the spacing. The marks name their size to the layout outright — a canvas has no implicit size for
-// a loader to pass on.
+// Columns past the name are Loaders built only where worn (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」),
+// invisible while inactive since an empty loader still takes the spacing. The marks give the layout their size: a
+// canvas has no implicit size for a loader to pass on.
 RowLayout {
     id: body
 
-    /// The row being drawn (`NavItemDelegate`) — every column reads it.
     required property Item row
-    /// Where the box stands, and the slack it takes off the row while it is open. The box itself is drawn outside
-    /// this layout (`NavNameBox`) — it is allowed to be wider than the seat, and a seat that grew with it would push
-    /// the row's own columns sideways.
+    /// Where the box stands while open. The box is drawn outside this layout (`NavNameBox`), so growing past the
+    /// seat does not push the row's columns.
     readonly property alias boxSeat: boxSeat
     /// Where this row draws its name (`CutName`) — what a caller measuring the column reads.
     readonly property Item nameInk: nameCell.nameInk
@@ -30,46 +23,31 @@ RowLayout {
     /// below the row's own line (`NameCell.whole`).
     readonly property Item nameWhole: nameCell.wholeField
     readonly property real nameWholeOver: nameCell.wholeOver
-    /// The repository's own working copy — the row every linked one hangs off (`models::nav::MAIN`). **It is named
-    /// by the branch it has out, not by its folder**, and the house in the seat is what tells the row apart.
+    /// The repository's own working copy (`models::nav::item::MAIN`): named by its branch, told apart by the house.
     readonly property bool homeCopy: body.row.kindHint === "worktree" && body.row.change === "MAIN"
-    /// The branch that row is named by — **empty while that copy is on no branch at all**, which the repository's
-    /// own can be like any other (a detached HEAD in the main checkout: a bisect, a rebase stopped, a commit read
-    /// out). git lists it with no `branch` line and the slot comes through empty. **The folder name comes back
-    /// there**: this row draws nothing else, so without it the reader is left with a house and a blank line.
+    /// The branch that row is named by. Empty when detached (git lists no `branch` line), and the folder name stands
+    /// instead — else the row is a house and a blank.
     readonly property string homeName: body.homeCopy ? body.row.bucket : ""
-    /// The colour a row wears where this window is standing. A branch says it in the link colour everywhere a name
-    /// of it is drawn (デザイン規約 §ref の種別), and the main working copy keeps that colour — it is the one row
-    /// that answers with a branch. **A linked copy says it in the WORKTREES section's green, a step brighter**
-    /// (`textHereTree`): the two are the two kinds of place a reader can be standing in, and the colour is what tells
-    /// them apart without reading a word — the hue is the section this row belongs to, and the brightness is what
-    /// says the reader is standing on this one (デザイン規約 §ref の種別 の名前の色).
+    /// The colour of "this window stands here": `textLink` as for a branch (the main copy is named by one), and a
+    /// linked copy's `textHereTree` (デザイン規約 §ref の種別).
     readonly property color hereTone:
         body.row.kindHint === "worktree" && !body.homeCopy ? Theme.textHereTree : Theme.textLink
-    /// Whether this row's section ever puts anything in the mark seat. **STASHES and TAGS never do** — flat lists of
-    /// names, no folder to fold and no state a copy is in — so their names begin where the row does
-    /// (`NavList.rowInset`, デザイン規約 §余白 の左メニューの行の項; `AppMenu.seatWorn` reads a card the same way).
+    /// Whether this section has a mark seat — not STASHES / TAGS (デザイン規約 §余白「印の立たないセクションは席を取らない」).
     readonly property bool seated: body.row.kindHint !== "stash" && body.row.kindHint !== "tag"
 
     spacing: Theme.spaceXs
-    // The mark and the name, in the part both file lists share (`NameCell`): the slot every row opens with — a
-    // folder's fold arrow, a worktree file's change icon, and later the mark for a hidden branch — and the name
-    // after it. A ref row has nothing to put in the slot and it stays open all the same, which is what keeps every
-    // name at a given depth beginning in one column — in every section whose rows can wear something there (`seated`).
+    // The seat and the name (`NameCell`, shared with the file lists). The seat stays open when empty, so names at one
+    // depth begin in one column (`seated`).
     NameCell {
         id: nameCell
-        // With no seat and the name gone into the box there is nothing left in this cell, and an empty cell still
-        // takes the spacing after it — the box would open a step right of where the name was.
+        // Unseated and editing, the cell is empty but would still take the spacing and push the box right.
         visible: body.seated || !body.row.editing
-        // The box below takes the row's slack while it is open, and the slot stays where it is: a name going into a
-        // box leaves the columns beside it where they are.
+        // While editing, the box seat takes the slack instead.
         Layout.fillWidth: !body.row.editing
         showName: !body.row.editing
         seated: body.seated
-        // **While the row is open its name is shown whole, in its own place** — the arrangement the reader was
-        // looking at does not move, and what could not be said on one line wraps downward (`NameCell.whole`).
-        // **Whichever name the row is drawing**: the main copy's row is named by its branch, so that is the one
-        // the field carries too (below).
+        // Open, the name shows whole in its place and wraps down (`NameCell.whole`) — the name this row draws, so the
+        // main copy's branch.
         whole: !body.row.factsOpen ? ""
              : body.homeName !== "" ? body.homeName : body.row.factsName
         folder: body.row.folder
@@ -77,76 +55,42 @@ RowLayout {
         // A sidebar folder keeps its fold state in the change slot it has no change code for (`models::nav::item`).
         folded: body.row.change === "FOLDED"
         showChange: body.row.kindHint === "wt"
-        // A worktree row has no change code, so the seat carries the state of the checkout instead — the same
-        // shared slot a folder keeps its fold state in (`models::nav::item`). A lock is somebody's choice and stays
-        // in the quiet colour; a folder git can no longer find is a warning.
-        //
-        // A branch row uses the same slot for the one question it shares with those rows: whether a move can land
-        // here. Its mark is the WORKTREES section's own (`tree`) — where the branch actually is. **The padlock**
-        // is spoken for by `git worktree lock`; a mark cannot mean two things in one window.
-        //
-        // **Which of them goes while the row is open is which of them the lines say again.** A branch row's tree
-        // mark stands for another working copy, and the line that opens names that copy — two of the same answer,
-        // so the mark goes. **A working copy's own state stays**: the lock is about this row, the line under it
-        // only says what the lock was taken for, and a row whose state came and went as a hand passed over it
-        // would answer "is this one locked" differently depending on where the pointer is. The seat stays open
-        // either way, so no name moves.
-        //
-        // **The house is the third tenant of that seat** — the repository's own working
-        // copy, in the place a linked one wears its padlock. It never contends for the seat: git refuses
-        // `worktree lock` on the main working tree, and `worktree prune` only ever looks at the linked ones.
+        // A worktree's state rides the change slot (`models::nav::item`): lock, prunable `!`, or the main copy's house
+        // (git never locks or prunes the main one, so they never contend). A branch another copy holds wears `tree`,
+        // not the padlock, which means `git worktree lock`. Open, `tree` goes (the lines name that copy) but a copy's
+        // own state stays, so it does not flicker under the pointer.
         seatMark: body.row.kindHint === "branch"
                     ? (body.row.change === "HELD" && !body.row.factsOpen ? "tree" : "")
                 : body.row.kindHint !== "worktree" ? ""
                 : body.row.change === "LOCKED" ? "lock"
                 : body.row.change === "PRUNABLE" ? "bang"
                 : body.row.change === "MAIN" ? "home" : ""
-        // **The tree mark wears the WORKTREES section's own colour** — the mark and that section say one thing, and
-        // a mark that says it in the quiet colour every other mark takes says it more faintly than the section it
-        // points at (規約 §ref の種別).
+        // Prunable warns; `tree` wears the WORKTREES colour it points at (規約 §ref の種別); a lock stays quiet.
         seatTint: body.row.change === "PRUNABLE" ? Theme.warning
                 : nameCell.seatMark === "tree" ? Theme.success
                 : Theme.textSecondary
-        // **The main working copy is named by its branch** — the folder it stands in is the tab's name and the
-        // window title's, so a row repeating it spends its own line on what the window already says. The branch
-        // goes in the name's own place rather than the column at the far end (`branchSeat`, which this row leaves
-        // empty): every other name in this panel begins in this column, and a row whose only word sat at the other
-        // edge read as a row with no name and a note beside it. **Its folder is what is left when it holds no
-        // branch** (`homeName`).
+        // The main copy is named by its branch, in the name's place (デザイン規約 §左メニューの所作; `homeName`).
         name: body.homeName !== "" ? body.homeName : body.row.name
-        // Where a renamed file came from, said the same way the commit's own file list says it: a rename is two
-        // names, and a row that shows only the new one leaves the reader to work out what moved. Empty on
-        // everything else — the model fills it for staged files alone, which is the only side git names a source
-        // on, and a folder row keeps its own path in the slot beside it (`orig_path`, which this is not).
+        // A staged rename's source, as the commit's file list shows it. Not `orig_path`, which a folder row uses for
+        // its own path.
         origPath: body.row.orig_name
-        // The name says where the ref is, the way a chip's does: grey for one this repository does not hold (デザイン規約
-        // §ref の種別), and the colour of the place the reader is standing in where this is that place
-        // (`body.hereTone`).
+        // Where the ref is, as a chip says it: grey when only remote, `hereTone` where the reader stands
+        // (デザイン規約 §ref の種別).
         tone: body.row.is_head ? body.hereTone
             : body.row.only_remote ? Theme.textSecondary : Theme.textPrimary
         weight: body.row.is_head ? Font.DemiBold : Font.Normal
-        // A pending file whose change says something about its line endings wears the mark on the name's shoulder.
-        // What it is about is the row's hover; the sentence in full is the diff pane's.
+        // A pending file's line-ending mark; the row's hover says what, the diff pane in full.
         marked: body.row.kindHint === "wt" && body.row.eol_mark
     }
-    // Where the box stands, and the slack it takes off the row while it is open (see `boxSeat` above).
     Item {
         id: boxSeat
         visible: body.row.editing
         Layout.fillWidth: true
         Layout.fillHeight: true
     }
-    // Worktree rows: checked-out branch on the right. Cut in the part that keeps the column's edges (`CutName`) — this
-    // one is the row's right-aligned column, so a cut that stopped short of the gutter left the branch names hanging
-    // a different distance from the edge on every row.
-    //
-    // **It gives way to the line that names the same branch** while the row is open (`NavRowFacts`): one fact, said
-    // once. **A copy on no branch shows nothing here** — a word in this column reads as a branch's name, since
-    // every other row in it holds one, and the column is no place to say that there is none
+    // A linked worktree's branch, right-aligned; `CutName` keeps the column's edge. Not while the open lines name it,
+    // not on a detached copy (a word here reads as a branch), and not on the main copy, already named by it
     // (デザイン規約 §左メニューの所作).
-    //
-    // **The main copy's row leaves it empty** — that row is named by the branch already (`homeCopy`, above), and a
-    // second copy of the name at the far edge would be the one fact this row has, said twice.
     Loader {
         id: branchSeat
         active: !body.row.folder && body.row.kindHint === "worktree" && body.row.bucket !== "" && !body.homeCopy
@@ -159,12 +103,8 @@ RowLayout {
             pixelSize: Theme.fontSm
         }
     }
-    // How far this branch stands from its upstream, left of the state icon. **Every branch that has something to say
-    // says it** — the counts ride each row out of the listing (`models::nav` の
-    // `Role::Ahead`), so a branch the remote moved past is legible without switching to it.
-    //
-    // The seat is empty wherever there is nothing to count: level with the upstream, or no upstream to measure
-    // against. Neither is a zero worth a column (デザイン規約 §左メニューの所作).
+    // Every branch's distance from its upstream (`models::nav` の `Role::Ahead` rides each row); none when level or
+    // untracked (デザイン規約 §左メニューの所作).
     Loader {
         id: trackSeat
         active: !body.row.folder && body.row.kindHint === "branch" && (body.row.ahead > 0 || body.row.behind > 0)
@@ -175,21 +115,15 @@ RowLayout {
             behind: body.row.behind
         }
     }
-    // Branch remote state: nothing = local only, remote icon = has a remote, PR icon = has a PR (real data in Phase
-    // 4; PGG_FAKE_PR previews the look). Remote-branch and worktree rows show the PR state too. A tag reads the same
-    // way — the badge answers "is this only here?" whatever it is on, and the fetch carries the bit for it
-    // (`ls-remote --tags`). **Both marks wear one colour**: the mark itself is the answer, and a colour on top of it
-    // would be a second one (デザイン規約 §ref の種別).
+    // Nothing = local only, cloud = on a remote, PR mark = has a PR (fake until Phase 4: PGG_FAKE_PR). Tags too
+    // (`ls-remote --tags`); remote-branch and worktree rows show only the PR. One colour for both
+    // (デザイン規約 §ref の種別).
     Loader {
         id: remoteSeat
-        /// The upstream this branch is measured against and cannot reach, carried on the row itself
-        /// (`models::nav::field` の `Role::Bucket`): the badge goes on wearing the state, since **the far side
-        /// deleting the ref takes the badge's own reason away** — no remote-tracking ref is left for `has_remote`,
-        /// and a row that answered by dropping the mark would read as a branch that never tracked anything.
+        /// An upstream that is gone (`models::nav::field` の `Role::Bucket`), kept as a badge: `has_remote` is false
+        /// once the far side deleted the ref.
         readonly property bool gone: body.row.kindHint === "branch" && body.row.bucket !== ""
-        // **This one stays while the row has it open underneath**, unlike the mark in the seat at the other end:
-        // it is the last thing in the row, and the counts beside it are measured from it — a badge that came and
-        // went would carry `↑1 ↓1` sideways under the reader's hand every time a row opened (デザイン規約
+        // Stays while the row is open, unlike the seat mark: the counts beside it would shift (デザイン規約
         // §左メニューの所作).
         active: !body.row.folder
                 && (remoteSeat.gone
@@ -198,7 +132,7 @@ RowLayout {
                         && (body.row.has_remote || body.row.has_pr))
                     || ((body.row.kindHint === "remote" || body.row.kindHint === "worktree") && body.row.has_pr))
         visible: remoteSeat.active
-        // The size the graph's chips wear the same badge at: one question, one mark, one size (デザイン規約 §寸法).
+        // The graph chips' size for the same badge (デザイン規約 §寸法).
         Layout.preferredWidth: Theme.iconSm
         Layout.preferredHeight: Theme.iconSm
         sourceComponent: GoneBadge {
@@ -206,9 +140,8 @@ RowLayout {
             gone: remoteSeat.gone
         }
     }
-    // The remote this repository sends pushes to. The toolbar's own push mark, in the seat the badge above holds
-    // on every other row — one question, one mark, one size. `accent` because what it answers is which of the rows
-    // is the one in effect (デザイン規約 §色 アクセント: 選択インジケータ).
+    // On the remote pushes go to: the toolbar's push mark in the badge's seat, in `accent` as the one in effect
+    // (デザイン規約 §アクセント).
     Loader {
         id: pushSeat
         active: body.row.pushesHere

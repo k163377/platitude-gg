@@ -1,14 +1,10 @@
-//! The hub's own life: installing it into the main thread, reaching it,
-//! and taking it down — plus the two handles everything else asks for a
-//! runtime and a git with.
+//! The hub's own life: install, access, shutdown — plus the runtime and
+//! git handles everything else asks for.
 
 use super::*;
 
 impl Hub {
     /// Installs the hub into the main thread. Call once before `QApp::run`.
-    ///
-    /// A run that was turned away from the settings files is handed an
-    /// empty store and `held_elsewhere` names the directory it did not get.
     pub fn install(runtime: tokio::runtime::Runtime, store: Store, held_elsewhere: String) {
         let settings = store.load_settings();
         let state = store.load_state();
@@ -18,10 +14,8 @@ impl Hub {
             "settings store"
         );
         let chosen = resolve_git(&runtime, &settings.defaults.git_path);
-        // The one set of slots this process runs git in, installed on
-        // the handle before anything clones it: every session, screen
-        // and dialog spawns through a clone of this executor, so the cap
-        // the settings name is the whole application's
+        // Installed before anything clones the executor: every spawn goes
+        // through a clone, so the cap is application-wide
         // (`platitude_core::process::Slots`).
         let slots = Arc::new(platitude_core::process::Slots::new(
             platitude_core::process::Limits::of(settings.defaults.git_concurrency),
@@ -47,8 +41,7 @@ impl Hub {
         Hub::with(Hub::forget_missing_avatars);
     }
 
-    /// Runs `f` with the hub; logs and returns `None` when uninstalled
-    /// (only possible before `install`, i.e. never during normal slots).
+    /// Runs `f` with the hub; `None` (logged) before `install`.
     pub fn with<R>(f: impl FnOnce(&mut Hub) -> R) -> Option<R> {
         HUB.with(|h| {
             let mut guard = h.borrow_mut();
@@ -66,17 +59,14 @@ impl Hub {
     pub fn shutdown() {
         let hub = HUB.with(|h| h.borrow_mut().take());
         if let Some(mut hub) = hub {
-            // The ending is past the event loop, so the run's own watchdog
-            // cannot reach any of it: these are what says which step a
-            // process that stopped answering here was on
+            // Past the event loop the run's watchdog cannot see: the
+            // stations name the step a hung shutdown was on
             // (`harness::deadline`).
             crate::harness::station(crate::harness::Station::SettingsFlush);
             hub.flush_state();
             crate::harness::station(crate::harness::Station::TabsClosing);
             let mut writes = std::mem::take(&mut hub.parked_writes);
-            // The identity saves beside the sessions' writes: a `git
-            // config` half way through its pair is the one thing worse
-            // than either whole (`hub::saves`).
+            // Joined with the sessions' writes (`hub::saves`).
             let saves = hub.saves.take_all();
             let saves_joined = saves.len();
             writes.extend(saves);
@@ -89,11 +79,9 @@ impl Hub {
                 }
             }
             if let Some(rt) = hub.runtime.take() {
-                // A local write in flight is waited out — `kill_on_drop`
-                // would end git itself, mid-write. Normally instant: the
-                // window does not close while one is pending
-                // (`Hub::writes_settled`), so what is joined here has
-                // already ended.
+                // Waited out: `kill_on_drop` would end git mid-write.
+                // Normally already over — the window does not close while
+                // one is pending (`Hub::writes_settled`).
                 crate::harness::station(crate::harness::Station::WritesJoining);
                 rt.block_on(async {
                     for write in writes {
@@ -102,15 +90,13 @@ impl Hub {
                         }
                     }
                 });
-                // For the run that holds a save on purpose to read this
-                // (`quit-save-held`): the join is over, and so are they.
+                // Read by the `quit-save-held` run.
                 crate::harness::said(&format!("writes_joined saves={saves_joined}"));
                 crate::harness::station(crate::harness::Station::RuntimeStopping);
                 rt.shutdown_timeout(std::time::Duration::from_secs(2));
             }
-            // Every session is gone with the runtime, and each took its
-            // own picture files with it; this is the run's directory
-            // itself, and whatever a read cut short left in it.
+            // Sessions took their own picture files; this is the run's
+            // directory and whatever a cut-short read left in it.
             crate::harness::station(crate::harness::Station::RunDirClearing);
             platitude_core::preview::remove_run_dir();
         }
@@ -120,10 +106,8 @@ impl Hub {
         self.runtime.as_ref().map(|r| r.handle().clone())
     }
 
-    /// Runs `save` — a configuration write the application asked for
-    /// outside any session — and holds it until it ends, so the screen
-    /// that asked can go and the window cannot close over it
-    /// (`hub::saves`). `false` where there is no runtime to run it on.
+    /// Runs `save` — a configuration write outside any session — and holds
+    /// it until it ends (`hub::saves`). `false` with no runtime.
     pub fn spawn_save(
         &mut self,
         save: impl std::future::Future<Output = ()> + Send + 'static,
@@ -131,8 +115,7 @@ impl Hub {
         let Some(handle) = self.runtime_handle() else {
             return false;
         };
-        // Where a run asked for the saves to be held, this is the hold
-        // (`harness::held_save`); every other build goes straight on.
+        // Holds only where a run asked for it (`harness::held_save`).
         self.saves.hold(handle.spawn(async move {
             crate::harness::held_save().await;
             save.await;
@@ -144,34 +127,27 @@ impl Hub {
         self.executor.clone()
     }
 
-    /// The handle a configuration save runs on: the application's git
-    /// with the stock time budget lifted, which is the local write
-    /// lane's own rule (`operation::Lane::Local`) — a `git config` is a
-    /// local write, waited out, since the one thing worse than either
-    /// half of the pair is one half landed
-    /// (`hub::saves`).
+    /// The handle a configuration save runs on: the application's git with
+    /// no stock time budget, as the local write lane (`hub::saves`).
     pub fn save_executor(&self) -> GitExecutor {
         saves::executor_for(&self.executor)
     }
 
-    /// Where the git this run spawns actually is. The settings screen
-    /// shows it behind an empty box, which is the one place "the git on
-    /// `PATH`" can be said as something a reader could go and look at.
+    /// Where the git this run spawns is — what the settings screen shows
+    /// behind an empty box.
     pub fn git_program(&self) -> &str {
         &self.git_program
     }
 
-    /// Where an empty box points: the git `PATH` resolves, which is what
-    /// the next start would spawn if the settings named nothing.
+    /// The git an empty box means: what the next start would spawn with
+    /// no path set.
     pub fn path_program(&self) -> String {
         path_program()
     }
 
-    /// Says that this run is to be replaced by one on the git that has
-    /// just been chosen. Only ever set: a restart asked for is a restart
-    /// that happens, because what asked for it is a settings file already
-    /// written — a window that came back on the old binary would disagree
-    /// with its own settings screen.
+    /// Marks this run for replacement by one on the newly chosen git.
+    /// Never unset: the settings file is already written, and a window
+    /// left on the old binary would disagree with its own settings screen.
     pub fn want_restart(&mut self) {
         self.restart_wanted = true;
     }
@@ -181,8 +157,7 @@ impl Hub {
     }
 }
 
-/// What the settings' `git_path` came to: the handle everything spawns
-/// through, and where that binary is.
+/// What the settings' `git_path` came to: the handle, and its binary.
 struct GitChoice {
     executor: GitExecutor,
     program: String,
@@ -197,49 +172,35 @@ impl GitChoice {
     }
 }
 
-/// Where the git this app would spawn with no path named is — the one
-/// `PATH` resolves, or the one behind the launcher standing on it
-/// (`process::default_program_path`).
-///
-/// **Asked even when the settings name a binary**, because the settings
-/// screen has to be able to tell an emptied box from a chosen one: empty
-/// means this, and a reader who picks the very git already running is
-/// told that it is the one running.
+/// The git spawned with no path named — `PATH`'s, or the one behind the
+/// launcher there (`process::default_program_path`). Asked even when the
+/// settings name a binary: the settings screen compares an emptied box
+/// against it.
 fn path_program() -> String {
     platitude_core::process::default_program_path()
         .to_string_lossy()
         .into_owned()
 }
 
-/// Which git this run spawns, settled once — before the hub exists, so
-/// nothing can ever hold a handle to a different one (`Hub::executor` is
-/// cloned by every session, and the first tab is opened from the same
-/// handler that starts the version check).
+/// Which git this run spawns, settled once before the hub exists, so
+/// nothing can hold a handle to a different one (`Hub::executor` is
+/// cloned by every session).
 ///
-/// **A named git that does not answer is fallen back on.** Obeying it
-/// would put the window behind the missing-git gate, which has no way
-/// into the settings screen — the reader would be locked out of the one
-/// box that could fix the path, by the value in that box. The fallback
-/// is the same reading the rules already take of an old git: only a git
-/// that is nowhere at all is a gate (規約 §git が無い時・古い時).
-/// Nothing on screen says it happened: what does is the settings screen
-/// asking that same path again as it opens, and answering in red under
-/// the box that holds it.
+/// A named git that does not answer falls back to `PATH`'s (デザイン規約
+/// §設定の画面): obeying it would put the window behind the missing-git
+/// gate, which has no way to the settings box that could fix the path.
 fn resolve_git(runtime: &tokio::runtime::Runtime, git_path: &str) -> GitChoice {
     if git_path.is_empty() {
         return GitChoice::on_path();
     }
-    // One `git --version`, and only for a run whose settings name a git:
-    // the window is not up yet, so this is startup time being spent
-    // (CLAUDE.md §性能予算).
+    // Startup time (CLAUDE.md §性能予算): one `git --version`, only when
+    // the settings name a git.
     let cancel = tokio_util::sync::CancellationToken::new();
     let probe = runtime.block_on(platitude_core::version::probe(git_path, &cancel));
     if probe.answered() {
-        // Recorded as what is spawned for the path: a chooser
-        // opened on a Git for Windows install lands on the
-        // launcher, and the executor spawns the git behind it
-        // (`process::spawnable`), so the screen shows that one
-        // as the git this run is on.
+        // Recorded as what is actually spawned: a Git for Windows
+        // launcher resolves to the git behind it (`process::spawnable`),
+        // and that is what the screen shows.
         let program = platitude_core::process::spawnable(std::path::Path::new(git_path));
         let program = program.to_string_lossy().into_owned();
         tracing::info!(

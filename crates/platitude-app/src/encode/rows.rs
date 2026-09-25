@@ -10,9 +10,6 @@ use super::markup::{Runs, spelled_ranges, styled};
 use super::wire::{Fields, Record, field};
 
 /// One flattened row of the diff pane.
-///
-/// `Default` is the empty side of a split row (`pair_rows`): no kind, no
-/// number, no line — the seat a change left nothing in.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DiffRow {
     /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` — and `""` for
@@ -21,64 +18,41 @@ pub struct DiffRow {
     /// -1 when the side has no line number.
     pub old_no: i32,
     pub new_no: i32,
-    /// What the row draws: the line marked up for `Text.StyledText`
-    /// (`markup::styled`), whatever the theme had to say about it — a
-    /// heading, a line of a language nobody has rules for and a coloured
-    /// line are all one format, so a row's format never changes under it
-    /// and every walk of the line stops in the same columns. Only the
-    /// markup is kept: the source is where a copy comes from
+    /// What the row draws: the line as `markup::styled` marks it up,
+    /// coloured or not. Only the markup is kept: a copy reads the source
     /// (`models::diff::selection`), and holding both doubles what a long
     /// diff costs.
     pub text: String,
-    /// Where what changed inside this row falls in the line as the row
-    /// spells it — runs of places in the UTF-16 units a place is counted
-    /// in, none where nothing is emphasised
-    /// (`platitude_core::intraline`, laid out by [`spelled_ranges`]). The
-    /// pane asks the row's own layout where those places are drawn
-    /// (`LineRuler`) and lays the stronger wash there
-    /// (デザイン規約 §シンタックスハイライト). **Places**: a column is not a
-    /// width, since the fallback carrying a wide glyph is not monospaced,
-    /// and a combining mark is a place the layout counts and draws
-    /// nothing for.
+    /// What changed inside this row (`platitude_core::intraline`), as runs
+    /// of places in the line as spelled ([`spelled_ranges`]); the pane
+    /// lays the stronger wash there (デザイン規約 §シンタックスハイライト).
     pub emph: Runs,
     /// One of git's conflict fences (`<<<<<<<` / `|||||||` / `=======` /
     /// `>>>>>>>`); the pane drops its voice for these
     /// (デザイン規約 §シンタックスハイライト).
     pub fence: bool,
-    /// This line is the last of its side and ends without a newline —
-    /// git's `\ No newline at end of file`, folded onto the row it is
-    /// about and drawn as a mark at the end of it
-    /// (デザイン規約 §行末の改行が無いこと). The note is never on both
-    /// sides of one line at once: git prints one per side, after that
-    /// side's own last line, so the row it lands on already says which
-    /// side is being talked about.
+    /// The line ends its side without a newline — git's
+    /// `\ No newline at end of file`, folded onto this row
+    /// (デザイン規約 §行末の改行が無いこと). git prints one note per side,
+    /// so the row it lands on says which side.
     pub no_newline: bool,
-    /// Which hunk of the file this row belongs to, and which line of that
-    /// hunk it is (-1 on the hunk header). These are the same indices
-    /// [`platitude_core::patch::HunkSelect`] addresses, so a row can be
-    /// staged straight from what the pane is showing.
+    /// The hunk and the line within it (-1 on the hunk header) — the
+    /// indices [`platitude_core::patch::HunkSelect`] addresses.
     pub hunk: i32,
     pub line: i32,
-    /// Which of the read's patches the two above are counted within (-1
-    /// where they name nothing). Hunks are numbered from zero inside each
-    /// patch, so this is what makes the pair above an address: the
-    /// selection reads a row's own source line back off
-    /// `patches[patch].hunks[hunk].lines[line]`
-    /// (`DiffModel::source_line`).
+    /// Which of the read's patches the two above count within (-1 where
+    /// they name nothing); together, the address
+    /// `patches[patch].hunks[hunk].lines[line]` (`DiffModel::source_line`).
     pub patch: i32,
     /// One marker column per side of a combined diff (`" +"`, `"++"`,
     /// `"- "`), empty on every ordinary row. Which side a line came from
-    /// is in here and nowhere else: the colour cannot carry it, since git
-    /// paints our side and theirs the same green.
+    /// is here only: git paints both sides the same green.
     pub markers: String,
 }
 
-/// The small facts about one line, as the row reads them: one of git's
-/// conflict fences, a line that ends the file without a newline
-/// (デザイン規約 §行末の改行が無いこと), and the side of a conflict it came
-/// from — `ours` / `theirs` / `""`, by the parser's own rule
-/// (`side_of_markers`), so the rows and the tally cannot come to read
-/// the marker columns two ways.
+/// One line's marks as the row reads them. `side` is `ours` / `theirs` /
+/// `""` by the parser's own rule (`side_of_markers`), so the rows and the
+/// tally cannot read the marker columns two ways.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct LineMarks {
     pub fence: bool,
@@ -152,52 +126,41 @@ impl platitude_core::mem::Footprint for Marks {
     }
 }
 
-/// Whether the patch has a new side and no old one — a file the repository
-/// is seeing for the first time (untracked, or newly added to the index).
+/// Whether the patch has a new side and no old one (untracked, or newly
+/// added to the index); the pane drops piecemeal staging for it
+/// (デザイン規約 §diff の中のステージ).
 ///
-/// The pane reads this to drop the piecemeal staging it would otherwise
-/// offer (デザイン規約 §diff の中のステージ). A deleted file is not one
-/// of these — its lines still exist on the old side, and a part of them
-/// can still be staged.
-///
-/// The new side has to be named: a patch that carries no `diff --git`
-/// header at all parses with both sides empty
-/// ([`platitude_core::parse::diff::parse_patch`] synthesizes the file
-/// entry), and a diff of unknown shape is a different thing from one
-/// known to be new.
+/// The new side has to be named: a headerless patch parses with both
+/// sides empty ([`platitude_core::parse::diff::parse_patch`]), and
+/// unknown is not new.
 pub fn is_new_file(patches: &[FilePatch]) -> bool {
     !patches.is_empty()
         && patches.iter().all(|p| {
-            // A conflicted path is never one of these: `AA` — both
-            // branches invented the file — has no old side by
-            // construction, and an unmerged entry has neither side
-            // because git printed no patch at all.
+            // Never a conflicted path: `AA` has no old side by
+            // construction, and an unmerged entry has no patch at all.
             !p.is_combined && !p.unmerged && p.old_path.is_none() && p.new_path.is_some()
         })
 }
 
-/// Whether the diff compares its file against **more than one** side —
-/// the form git prints for a conflicted path. Nothing in it can be staged
-/// or thrown away piecemeal (`platitude_core::patch::is_combined` is the
-/// floor under that), and its rows carry [`DiffRow::markers`].
+/// Whether the diff compares its file against more than one side (a
+/// conflicted path). Nothing in it is staged or discarded piecemeal
+/// (`platitude_core::patch::is_combined` is the floor), and its rows
+/// carry [`DiffRow::markers`].
 pub fn is_combined(patches: &[FilePatch]) -> bool {
     patches.iter().any(|p| p.is_combined)
 }
 
-/// Whether git named the path as unmerged and printed no patch for it:
-/// one of the two sides does not exist, so there is nothing to compare
-/// (`DU` / `UD` / `AU` / `UA`). The pane has no rows to show and says what
-/// the two sides did instead.
+/// Whether git named the path unmerged and printed no patch
+/// (`DU` / `UD` / `AU` / `UA`: one side does not exist). The pane says
+/// what the two sides did instead.
 pub fn is_unmerged_only(patches: &[FilePatch]) -> bool {
     !patches.is_empty() && patches.iter().all(|p| p.unmerged)
 }
 
-/// Flattens parsed patches into displayable rows (hunk headers inline).
-/// `binary_note` inserts the "(binary file)" meta row; the caller turns it
-/// off when a preview (image / size summary) already covers that file.
-/// `marks` is `None` on the repaint that lays colours over rows already
-/// on screen — that pass keeps every row's `emph` as it is, so working
-/// the columns out again would be thrown away.
+/// Flattens parsed patches into rows (hunk headers inline).
+/// `binary_note` adds the "(binary file)" row — off where a preview
+/// covers the file. `marks` is `None` on the colour repaint, which keeps
+/// every row's `emph`.
 pub fn flatten_patches(
     patches: &[FilePatch],
     binary_note: bool,
@@ -206,11 +169,9 @@ pub fn flatten_patches(
 ) -> Vec<DiffRow> {
     let mut rows = Vec::new();
     for (patch_index, patch) in patches.iter().enumerate() {
-        // Several commits' patches of one file stand one after another, so
-        // each says which commit it is of — without it the second block
-        // reads as more of the first (デザイン規約 §複数のコミットを選ぶ).
-        // **Above everything the patch turns out to be**, the binary note
-        // included: what the band names is the whole of what follows.
+        // Each of several commits' patches of one file names its commit
+        // (デザイン規約 §複数のコミットを選ぶ), above everything — the
+        // binary note included.
         if !patch.from_commit.is_empty() {
             rows.push(DiffRow {
                 kind: "commit",
@@ -271,11 +232,8 @@ pub fn flatten_patches(
                 markers: String::new(),
             });
             for (line_index, line) in hunk.lines.iter().enumerate() {
-                // git's note about the line above it, so it rides
-                // that row (デザイン規約 §行末の改行が無いこと). A
-                // note with no line in front of it is git talking
-                // about nothing: there is no row to carry it and
-                // none is invented.
+                // The note rides the row above (デザイン規約 §行末の改行が無いこと);
+                // after a hunk header there is none, and none is invented.
                 if line.kind == DiffLineKind::NoNewline {
                     if let Some(row) = rows.last_mut()
                         && row.kind != "hunk"
@@ -316,17 +274,12 @@ pub fn flatten_patches(
     rows
 }
 
-/// One row of a diff read side by side: the old side's line on the left,
-/// the new side's on the right (デザイン規約 §diff を 2 列で読む).
+/// One row of a diff read side by side (デザイン規約 §diff を 2 列で読む).
 ///
-/// A context line is on both sides at once. A removed line has nothing
-/// on its right, an added one nothing on its left — unless the two stand
-/// where a run of removals is followed by a run of additions, in which
-/// case the k-th of each is read against the k-th of the other, which is
-/// the pairing the emphasis inside the lines was already worked out by
-/// (`platitude_core::intraline::hunk_marks`). The tail of the longer
-/// run stands alone. Rows that are not lines — a hunk's heading, a
-/// commit's band, the binary note — keep the left and have no right.
+/// A run of removals followed by a run of additions pairs k-th with k-th —
+/// the pairing the in-line emphasis was worked out by
+/// (`platitude_core::intraline::hunk_marks`); the longer run's tail stands
+/// alone. Rows that are not lines keep the left and have no right.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SplitRow {
     /// The old side, or `kind == ""` for nothing there.
@@ -336,11 +289,9 @@ pub struct SplitRow {
     pub right: Option<DiffRow>,
 }
 
-/// Lays the flattened rows out side by side.
-///
-/// A row's `hunk` and `patch` are shared across its two sides, since the
-/// pairing never crosses a heading; each side keeps its own `line`, which
-/// is what a press on that side's mark stages.
+/// Lays the flattened rows out side by side. A row's two sides share
+/// `hunk` and `patch` (the pairing never crosses a heading); each keeps
+/// its own `line`, which a press on its mark stages.
 pub fn pair_rows(rows: Vec<DiffRow>) -> Vec<SplitRow> {
     let mut out = Vec::with_capacity(rows.len());
     let mut rows = rows.into_iter().peekable();

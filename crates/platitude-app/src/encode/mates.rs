@@ -1,5 +1,4 @@
-//! The people a commit message credits beside its author, as QML draws
-//! them: a name, an address and the identicon the name picks.
+//! The people a commit message credits beside its author, as QML draws them.
 
 use platitude_core::details::CoAuthor;
 use qtbridge::qtbridge_type_lib::QVariantMap;
@@ -13,8 +12,8 @@ pub struct Mate {
     pub name: String,
     /// Empty when the trailer had none.
     pub email: String,
-    /// The identicon code off the name — the same one the graph rows
-    /// draw for an author (`avatar_code`), so one person wears one face.
+    /// The identicon code off the name (`avatar_code`, as the graph rows
+    /// draw an author), so one person wears one face.
     pub face: i32,
 }
 

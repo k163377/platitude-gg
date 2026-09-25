@@ -1,44 +1,27 @@
 //! The reader's own selection of the diff's text: where it runs, what
 //! each row draws of it, and what it hands the clipboard
-//! (デザイン規約 §diff の中身をコピーする).
+//! (デザイン規約 §diff の中身をコピーする). It lives here because only
+//! `shown` holds the file's own bytes (rules-refs/app-ui.md
+//! 「本文の選択とコピー」).
 //!
-//! **It lives here** for one reason: which bytes of a line the
-//! clipboard should get is a question about the file's own text — and
-//! the file's own text is here, on `shown`. The pane hands over a
-//! column, a row and a place along it; everything after that is read
-//! off the patches.
+//! **Column**: `0` is the rows' own lines (the only one as one column, the
+//! old side when split), `1` the new side of a split row; a drag is of one
+//! column (デザイン規約 §diff を 2 列で読む). Its wash goes on `sel` /
+//! `pair_sel`.
 //!
-//! **A column.** Read as one column, the diff has one: `0`, the rows'
-//! own lines. Read side by side it has two, and a drag is of one of
-//! them — the old side (`0`) or the new (`1`) — since what it selects is
-//! that side's file (デザイン規約 §diff を 2 列で読む). Which column a
-//! row's wash goes on follows: `sel` for `0`, `pair_sel` for `1`.
+//! **Place**: a position in the line as the row spells it, asked of the
+//! row's own layout (`LineRuler`) and turned into a byte and back here
+//! (`encode::markup::source_byte` / `spelled_ranges`) — no font measuring,
+//! no column counting.
 //!
-//! **A place.** Where a line's characters are drawn is known only to the
-//! layout that drew them, so the pane asks the row itself (`LineRuler`)
-//! and brings back a place in the line as the row spells it; this side
-//! turns that into a byte and back (`encode::markup::source_byte` /
-//! `spelled_ranges`). Nothing here measures a font, and no count of
-//! columns stands in for one.
-//!
-//! Two more things follow and are worth saying once:
-//!
-//!  - **the copy comes from the file's bytes.** A coloured row's `text`
-//!    is markup whose spaces are `&nbsp;` and whose tabs have already been
-//!    spelled out as the columns they reach (`encode::markup`), so a copy
-//!    taken off the screen would paste indentation made of spaces and
-//!    break the Makefile it came from.
-//!  - **the wash is the answer.** A row is washed exactly where the plain
-//!    `Copy` takes it, so the lines of the other side and the hunk
-//!    headings inside a selection carry none — and what the reader can
-//!    see they are getting is what they get.
+//! **The copy comes from the file's bytes**: a coloured row's `text` has
+//! its tabs spelled out as `&nbsp;` (`encode::markup`), so a copy off the
+//! screen would paste spaces.
 
 use super::*;
 
-/// What one row's share of the selection looks like, before it is spelled
-/// out. Kept apart from the spelling so that the rows a drag sweeps over
-/// — which is every row between the two ends, on every mouse move — can be
-/// found unchanged without building a string to compare.
+/// One row's share of the selection before it is spelled out — so the rows
+/// a drag sweeps on every move compare without building strings.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Wash {
     /// Not in the selection, or in it but not a line the plain copy takes.
@@ -56,9 +39,8 @@ type Span = (usize, usize);
 const RIGHT: i32 = 1;
 
 impl DiffModel {
-    /// The source line one side of row `row` draws — the file's own
-    /// bytes. `side` is the column: the rows' own lines, or the new side
-    /// of a split row.
+    /// The source line (the file's own bytes) column `side` of row `row`
+    /// draws.
     pub(super) fn source_line(&self, side: i32, row: usize) -> Option<&str> {
         let item = self.lines.get(row)?;
         let patch = usize::try_from(item.patch).ok()?;
@@ -87,11 +69,9 @@ impl DiffModel {
     }
 
     /// Whether the plain `Copy` takes this side of this row: the lines of
-    /// the file that column is. Read as one column, that is the new
-    /// side — the unchanged and added lines; read side by side, the old
-    /// column is the old file (unchanged and removed) and the new column
-    /// the new one. A hunk heading and git's own `\ No newline` note are
-    /// not the file talking at all.
+    /// that column's file — ctx + add as one column or on the new side,
+    /// ctx + del on the old side. Headings and git's `\ No newline` note
+    /// are not the file.
     fn takes(&self, side: i32, row: usize) -> bool {
         let kind = self.kind_of(side, row);
         let own = if self.split && side != RIGHT {
@@ -102,10 +82,6 @@ impl DiffModel {
         kind == "ctx" || kind == own
     }
 
-    /// Which byte of a row's line the place `at` of it stands on. The pane
-    /// asks the row's own layout which place the pointer is over
-    /// (`LineRuler`) and brings that here; nothing about pixels
-    /// crosses this line.
     pub(super) fn byte_at(&self, side: i32, row: i32, at: i32) -> i32 {
         let at = usize::try_from(at).unwrap_or(0);
         let byte = usize::try_from(row)
@@ -116,9 +92,7 @@ impl DiffModel {
     }
 
     /// The two ends in reading order, or nothing where no selection
-    /// stands. The pair is stored in the order the hand made it — the
-    /// press first, the pointer second — so a drag upwards is as ordinary
-    /// as one downwards, and this is the one place that sorts it.
+    /// stands — the one place that sorts them.
     fn taken(&self) -> Option<(usize, usize, usize, usize)> {
         if !self.sel_active {
             return None;
@@ -142,10 +116,6 @@ impl DiffModel {
         (first <= end).then(|| (first, last.min(end)))
     }
 
-    /// Whether a point of the text is inside the selection — what a
-    /// right-click asks before deciding whether to take the row it landed
-    /// on instead (デザイン規約 §diff の中身をコピーする). A point in the
-    /// other column is outside it whatever its row.
     pub(super) fn holds(&self, side: i32, row: i32, at: i32) -> bool {
         let Some((first_row, first_at, last_row, last_at)) = self.taken() else {
             return false;
@@ -159,15 +129,12 @@ impl DiffModel {
         (first_row, first_at) <= (row, at) && (row, at) <= (last_row, last_at)
     }
 
-    /// A press: the selection starts here and is empty until the hand
-    /// moves.
     pub(super) fn start_select(&mut self, side: i32, row: i32, at: i32) -> bool {
         self.move_ends(side, row, at, row, at, true)
     }
 
-    /// The hand has moved: the far end follows it and the near one stays
-    /// where it was pressed. A drag is of one column — the press's — so
-    /// `side` is read only where no selection stands to extend.
+    /// The far end follows the pointer; the pressed end and its column
+    /// stay — `side` is read only where no selection stands to extend.
     pub(super) fn drag_select(&mut self, side: i32, row: i32, at: i32) -> bool {
         if !self.sel_active {
             return self.start_select(side, row, at);
@@ -176,10 +143,6 @@ impl DiffModel {
         self.move_ends(side, from_row, from_at, row, at, true)
     }
 
-    /// One whole row becomes the selection — a right-click that landed
-    /// outside whatever was selected, which is the rule the file list
-    /// already reads by (デザイン規約 §バケツごとの一覧: メニューは常に
-    /// 光っている行に効く).
     pub(super) fn select_whole_row(&mut self, side: i32, row: i32) -> bool {
         let end = usize::try_from(row)
             .ok()
@@ -188,14 +151,12 @@ impl DiffModel {
         self.move_ends(side, row, 0, row, i32::try_from(end).unwrap_or(0), true)
     }
 
-    /// Nothing is selected any more: a plain click, or a pane the reader
-    /// pressed in with nothing under the press.
+    /// Nothing is selected any more (a plain click, or a press on nothing).
     pub(super) fn drop_selection(&mut self) -> bool {
         self.move_ends(0, 0, 0, 0, 0, false)
     }
 
-    /// The same, for the moment the rows themselves are going: no wash is
-    /// written back, because there is nothing left to write it on.
+    /// The same while the rows themselves go: no wash is written back.
     pub(super) fn forget_selection(&mut self) {
         self.sel_from_row = 0;
         self.sel_from_at = 0;
@@ -207,11 +168,9 @@ impl DiffModel {
         self.sel_removed = 0;
     }
 
-    /// Moves the two ends and brings the rows and the counts along. Says
-    /// whether anything moved: the drag calls this on every mouse move,
-    /// and the three published counts ride the model's one signal
-    /// (`changed`), which the slot above only fires when there is
-    /// something to fire it about.
+    /// Moves the two ends and brings the rows and the counts along. Returns
+    /// whether anything moved — the slots fire `changed` only then, so a
+    /// drag that stays on one character costs no signal.
     fn move_ends(
         &mut self,
         side: i32,
@@ -243,22 +202,15 @@ impl DiffModel {
         {
             return false;
         }
-        // A selection that changed column takes every row it stood on
-        // with it, not only the ends: the rows inside both spans are the
-        // ones whose wash moves from one side to the other.
         self.lay_wash(before, after, was.0 != side);
         self.settle_counts();
         true
     }
 
-    /// Rewrites the wash wherever it can have changed, and tells the view
-    /// about exactly those rows.
-    ///
-    /// **Only the ends are revisited when both spans stand.** A row inside
-    /// both the old selection and the new one is washed end to end in each,
-    /// so a drag across six thousand rows walks only the two moving
-    /// edges — unless the column changed (`whole`), which every row in
-    /// either span has to hear about.
+    /// Rewrites the wash where it can have changed and notifies exactly
+    /// those rows. With both spans standing only the moving edges are
+    /// revisited — a row inside both is whole in each — unless the column
+    /// changed (`whole`), when every row of either span moves side.
     fn lay_wash(&mut self, before: Option<Span>, after: Option<Span>, whole: bool) {
         let mut ranges = match (before, after) {
             (None, None) => return,
@@ -268,9 +220,8 @@ impl DiffModel {
         };
         ranges.sort_unstable();
         let mut runs = Vec::new();
-        // Where the two edges have met — a short selection, or one whose
-        // ends moved past each other — the ranges overlap; a row is
-        // written once either way.
+        // The ranges overlap where the edges met or crossed; each row is
+        // written once.
         let mut done: Option<usize> = None;
         for (first, last) in ranges {
             let first = done.map_or(first, |last_done| first.max(last_done + 1));
@@ -287,10 +238,7 @@ impl DiffModel {
         self.notify_runs(runs);
     }
 
-    /// Writes one row's two washes, and says whether either changed. The
-    /// shape is worked out first so that the two that need no runs —
-    /// nothing, and the whole line — walk no line on the rows a drag
-    /// sweeps past.
+    /// Writes one row's two washes; says whether either changed.
     fn settle_row(&mut self, row: usize) -> bool {
         let own = self.spelled(0, row);
         let pair = self.spelled(RIGHT, row);
@@ -317,9 +265,7 @@ impl DiffModel {
         }
     }
 
-    /// What this side of this row gives the plain `Copy`, which is also
-    /// what it wears. The other column wears nothing: a selection is of
-    /// one.
+    /// What this side of this row gives the plain `Copy` — and wears.
     fn wash_of(&self, side: i32, row: usize) -> Wash {
         if side != self.sel_side || !self.takes(side, row) {
             return Wash::None;
@@ -359,10 +305,8 @@ impl DiffModel {
         }
     }
 
-    /// Whether the removed lines the selection reaches over are ones the
-    /// menu's second word has to offer: only where the plain `Copy` is
-    /// not already taking them — which it is, in the old column of a
-    /// split diff.
+    /// Whether `Copy removed lines` has anything to offer: not in a split
+    /// diff's old column, where the plain `Copy` already takes them.
     fn removed_offered(&self) -> bool {
         !(self.split && self.sel_side != RIGHT)
     }
@@ -386,24 +330,19 @@ impl DiffModel {
                         inked |= b > a;
                     }
                 }
-                // The removed lines are in the rows' own column either way
-                // round: as one column they are rows of their own, side by
-                // side they stand on the left of a row whose right may
-                // well be washed.
+                // Removed lines are always in column 0, even on a row
+                // whose right side is washed.
                 if self.removed_offered() && self.kind_of(0, row) == "del" {
                     removed += 1;
                 }
             }
         }
-        // One line with nothing in it is a selection that would put an
-        // empty string on the clipboard; two are a newline, which is
-        // something a reader can have meant.
+        // One empty line would copy ""; two copy a newline, which can be
+        // meant.
         self.sel_has_new = inked || takes > 1;
         self.sel_removed = i32::try_from(removed).unwrap_or(i32::MAX);
     }
 
-    /// The selection's own column: the lines the plain `Copy` takes, cut
-    /// at the two ends, in the file's own bytes.
     pub(super) fn copied_new(&self) -> String {
         let mut out = String::new();
         let mut first_line = true;
@@ -427,12 +366,10 @@ impl DiffModel {
         out
     }
 
-    /// The removed lines the selection reaches over, whole.
-    ///
-    /// Whole: they carry no wash, so there is nothing on screen that
-    /// could say which part of one was meant — the same answer GitKraken
-    /// gives (デザイン規約 §diff の中身をコピーする). Nothing where the
-    /// plain `Copy` is already taking them (`removed_offered`).
+    /// The removed lines the selection reaches over, whole — they carry no
+    /// wash to say which part was meant (デザイン規約 §diff の中身をコピーする).
+    /// Nothing where the plain `Copy` already takes them
+    /// (`removed_offered`).
     pub(super) fn copied_removed(&self) -> String {
         let mut out = String::new();
         let mut first_line = true;

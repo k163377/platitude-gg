@@ -1,9 +1,8 @@
 import QtQuick
 import platitude.ui
 
-// Change-kind icon (pen = edit, + / − = add / delete, → = rename, stacked squares = copy, ! = conflict). All of these
-// are kinds, so they come from the status tokens -- even where the
-// value is the same amber or red (デザイン規約 §git / diff 専用).
+// Change-kind icon. Kinds take the status tokens, even where the value is the same amber or red
+// (デザイン規約 §git / diff 専用).
 NavIcon {
     id: changeIcon
     property string change: ""

@@ -1,11 +1,9 @@
 use super::*;
 
 impl NavSectionModel {
-    /// What one row answers for one role.
-    ///
-    /// **The only place a row's fields are worked out.** The view reads
-    /// it through `data`, and the slots below read it directly, so no row
-    /// can show the delegate one thing and tell automation another.
+    /// What one row answers for one role — the only place a row's fields
+    /// are worked out. `data` and the slots both read it, so the delegate
+    /// and automation cannot be told different things.
     #[expect(clippy::too_many_lines)]
     pub(super) fn field<'a>(&self, row: Row<'a>, role: Role) -> Value<'a> {
         let (of, depth, from) = match row {
@@ -28,8 +26,7 @@ impl NavSectionModel {
                     Role::EolMark => Value::Flag(item.eol_mark),
                     Role::Depth => Value::Number(item.depth),
                     Role::Folder => Value::Flag(item.folder),
-                    // A folder stands for the rows under it, and no two
-                    // of those are measured against one upstream.
+                    // A folder is measured against no upstream.
                     Role::Ahead | Role::Behind => Value::Number(0),
                 };
             }
@@ -50,27 +47,21 @@ impl NavSectionModel {
                 // The commit makes the row clickable: the details pane
                 // then shows the stashed changes.
                 Entry::Stash(stash) => Value::Spelled(stash.oid.to_hex()),
-                // Where that checkout is standing, which is what a click
-                // on the row jumps to — the same answer a branch row
-                // gives, off the HEAD git listed with the entry. Empty
-                // on a bare entry, which has no commit out.
+                // Where that checkout stands — what a click on the row
+                // jumps to. Empty on a bare entry.
                 Entry::Worktree { entry, .. } => {
                     Value::Said(entry.head_hex.as_deref().unwrap_or(""))
                 }
                 Entry::File { .. } => Value::Said(""),
             },
             Role::IsHead => Value::Flag(match of {
-                // By the name the one record reports (`head_name`), not
-                // the snapshot's own marker: the two agree on a quiet
-                // repository and differ exactly where it matters — a
-                // status read that landed after the listing was taken.
+                // By the record's `head_name`, not the snapshot's own
+                // marker (why: `head_name`).
                 Entry::Local(branch) => {
                     !self.head_name.is_empty() && branch.short.as_str() == self.head_name
                 }
-                // A remote-tracking ref is never what HEAD is on.
                 Entry::Remote(_) => false,
-                // The working copy this window shows is marked the way the
-                // current branch is.
+                // The working copy this window shows.
                 Entry::Worktree { entry, current } => {
                     entry.path.replace('\\', "/").to_lowercase() == current
                 }
@@ -78,9 +69,8 @@ impl NavSectionModel {
             }),
             Role::HasRemote => Value::Flag(match of {
                 Entry::Local(branch) | Entry::Remote(branch) => branch.has_remote,
-                // Same badge as a branch: nothing means this tag is only
-                // here. The bit comes off `ls-remote --tags`, which the
-                // fetch carries.
+                // Same badge as a branch, off the fetch's
+                // `ls-remote --tags`.
                 Entry::Tag(tag) => tag.has_remote,
                 Entry::Stash(_) | Entry::Worktree { .. } | Entry::File { .. } => false,
             }),
@@ -96,14 +86,10 @@ impl NavSectionModel {
             }),
             Role::Change => match of {
                 Entry::File { item, bucket } => Value::Spelled(letters_of(item, bucket)),
-                // A branch another working copy has out keeps the state
-                // in the same shared slot a worktree row does, and the
-                // mark it draws comes out of the same seat — one question
-                // (`can a move go here`), one answer, wherever it is met.
+                // Shares the worktree rows' slot and seat (`item::HELD`).
                 Entry::Local(branch) if branch.held_elsewhere => Value::Said(HELD),
-                // A worktree row has no change code, so it keeps the
-                // state of the checkout in the same shared slot — the
-                // mark the row opens with (`item::LOCKED`).
+                // The checkout's state, in the shared slot
+                // (`item::LOCKED`).
                 Entry::Worktree { entry, .. } => Value::Said(if entry.locked {
                     LOCKED
                 } else if entry.prunable {
@@ -121,12 +107,10 @@ impl NavSectionModel {
                 // detached), which is what the row shows on its right.
                 Entry::Worktree { entry, .. } => entry.branch.as_deref().unwrap_or(""),
                 // A local branch has no bucket, so the slot carries the
-                // upstream this branch is measured against and cannot
-                // reach — git's own `[gone]`. **A name, not a flag**: it
-                // is what the row says when it opens, and the row draws
-                // the state of it from the same answer, so a badge and
-                // the line under it cannot disagree. Empty on every
-                // branch whose upstream is here, or that tracks none.
+                // upstream it cannot reach — git's `[gone]`. A name, not a
+                // flag: the line the row opens says it and the badge draws
+                // its state from it, so the two cannot disagree. Empty
+                // where the upstream is here or there is none.
                 Entry::Local(branch) => branch.upstream_gone.as_str(),
                 _ => "",
             }),
@@ -141,12 +125,9 @@ impl NavSectionModel {
                     item: platitude_core::status::StatusItem::Tracked { orig_path, .. },
                     bucket: Bucket::Staged,
                 } => orig_path.as_deref().unwrap_or(""),
-                // A worktree row's words for the state in the slot
-                // beside it: what the lock was given as its reason, or
-                // git's own sentence for why it would be pruned. Empty
-                // on an ordinary checkout — **and on a lock taken
-                // without a reason**, which is a state of its own (the
-                // row then says `Locked` and nothing after it).
+                // A worktree row's words for its state: the lock's reason,
+                // or git's sentence for why it would be pruned. Empty on
+                // an ordinary checkout and on a lock given no reason.
                 Entry::Worktree { entry, .. } => {
                     if entry.locked {
                         &entry.lock_reason
@@ -158,10 +139,9 @@ impl NavSectionModel {
                 }
                 _ => "",
             }),
-            // The same source, written the way this row writes names: the
-            // tree has already spelled `from` bytes of the new path in the
-            // folders above, and a source that shared them gives them up
-            // too (`encode::rename_source`). The flat view cuts nothing.
+            // The same source, cut the way this row cuts its name: the
+            // folders above spell `from` bytes of the new path, and a
+            // source sharing them drops them too (`encode::rename_source`).
             Role::OrigName => Value::Said(match of {
                 Entry::File {
                     item: platitude_core::status::StatusItem::Tracked { orig_path, .. },
@@ -175,11 +155,9 @@ impl NavSectionModel {
             }),
             Role::EolMark => Value::Flag(matches!(of, Entry::File { item, .. }
                 if self.eol_marks.iter().any(|mark| mark.path == item.path()))),
-            // **One measurement, read from either end.** A local branch
-            // carries its own; a remote-tracking ref carries the one made
-            // against it (`BranchItem::tracked_by`) — which its own line
-            // does not draw, the line naming that branch does
-            // (`NavRowFacts`).
+            // A local branch carries its own pair; a remote-tracking ref
+            // carries the one made against it (`BranchItem::tracked_by`),
+            // drawn by the line naming that branch (`NavRowFacts`).
             Role::Ahead => Value::Number(match of {
                 Entry::Local(branch) | Entry::Remote(branch) => counted(branch.ahead),
                 _ => 0,
@@ -192,9 +170,7 @@ impl NavSectionModel {
     }
 }
 
-/// A count as the role table carries it. Roles are `i32`, so a branch
-/// standing further from its upstream than that draws the largest number
-/// there is.
+/// A count as the `i32` role table carries it, saturating.
 pub(super) fn counted(commits: u32) -> i32 {
     i32::try_from(commits).unwrap_or(i32::MAX)
 }

@@ -8,15 +8,10 @@ use super::*;
 const TPM_RETURNCMD: u32 = 0x0100;
 const TPM_RIGHTBUTTON: u32 = 0x0002;
 
-/// Whether the window covers the whole work area, which is what this
-/// window's "maximised" now looks like from the outside.
-///
-/// The question is the rectangle. A frameless window Qt
-/// puts at the maximised size is not zoomed (measured:
-/// window, client and work area all 0,0..1920,1032 with
-/// `IsZoomed` false), and what the resize edges have to
-/// know is whether there is anywhere left to drag an
-/// edge *to*.
+/// Whether the window covers the whole work area — this window's
+/// "maximised". Not `IsZoomed`: a frameless window Qt maximises is not
+/// zoomed, and the resize edges only need to know whether there is
+/// anywhere left to drag an edge to.
 fn fills_work_area(window: *mut c_void) -> bool {
     let mut rect = Rect::default();
     let mut info = MonitorInfo {
@@ -42,8 +37,7 @@ fn fills_work_area(window: *mut c_void) -> bool {
 
 const WM_NCHITTEST: u32 = 0x0084;
 const WM_NCRBUTTONUP: u32 = 0x00A5;
-/// The hit-test answers this window hands out (winuser.h). Client,
-/// caption, and the eight resize edges; nothing else exists here.
+/// The hit-test answers this window hands out (winuser.h).
 const HTCLIENT: isize = 1;
 const HTCAPTION: isize = 2;
 const HTLEFT: isize = 10;
@@ -54,18 +48,15 @@ const HTTOPRIGHT: isize = 14;
 const HTBOTTOM: isize = 15;
 const HTBOTTOMLEFT: isize = 16;
 const HTBOTTOMRIGHT: isize = 17;
-/// `SM_CXSIZEFRAME` + `SM_CXPADDEDBORDER` (winuser.h) is how wide
-/// the invisible resize border actually is — the first alone is the
-/// pre-Vista number.
+/// `SM_CXSIZEFRAME` + `SM_CXPADDEDBORDER` (winuser.h) is the invisible
+/// resize border's width; the first alone is the pre-Vista number.
 const SM_CXSIZEFRAME: i32 = 32;
 const SM_CXPADDEDBORDER: i32 = 92;
 const FRAME_SUBCLASS_ID: usize = 7;
 
 thread_local! {
-    /// The grab-run strips, in logical scene pixels: a left and a right
-    /// edge each, and the one bottom they all reach down to. Scene x0 is
-    /// client x0, so the DPI scale is all that is owed, taken fresh per
-    /// hit test.
+    /// The strips as `set_caption_strips` reports them. Scene x0 is
+    /// client x0, so only the DPI scale is owed, taken fresh per hit test.
     static STRIPS: Cell<([(f64, f64); CAPTION_RUNS], f64)> =
         const { Cell::new(([(0.0, 0.0); CAPTION_RUNS], 0.0)) };
 }
@@ -94,9 +85,6 @@ extern "system" fn claim_one(window: *mut c_void, _param: isize) -> i32 {
     1
 }
 
-/// Answers `WM_NCHITTEST` itself (the point of the whole exercise —
-/// see `take_frame_hit_test`), opens the window menu on a right-click
-/// in the strip, and forwards everything else.
 extern "system" fn frame_proc(
     window: *mut c_void,
     message: u32,
@@ -113,13 +101,10 @@ extern "system" fn frame_proc(
         open_system_menu(window, x, y);
         return 0;
     }
-    // Windows would maximise onto the monitor's own rectangle,
-    // inflated by the resize border on every side; `clamp_maximized`
-    // pins it to the work area (measured: the frame was -8..1928
-    // across a 0..1920 screen, and those 8 columns hid the
-    // neighbour's window). Asked after whoever ran before us has
-    // filled the rest in, so only the two fields this is about are
-    // touched.
+    // Windows would maximise onto the monitor's rectangle inflated by the
+    // resize border, spilling onto the neighbouring monitor;
+    // `clamp_maximized` pins it to the work area. Passed on first, so
+    // only the two fields this is about change.
     if message == WM_GETMINMAXINFO {
         // SAFETY: passing the message on is what a subclass does.
         let passed = unsafe { DefSubclassProc(window, message, wparam, lparam) };
@@ -131,8 +116,7 @@ extern "system" fn frame_proc(
 }
 
 /// Writes the work area into the `MINMAXINFO` a maximise is about to
-/// be made from: its size, and its origin in the monitor's own
-/// coordinates, which is what that structure uses.
+/// be made from; the origin is in the monitor's own coordinates.
 fn clamp_maximized(window: *mut c_void, lparam: isize) {
     let mut info = MonitorInfo {
         size: size_of::<MonitorInfo>() as u32,
@@ -170,9 +154,8 @@ fn screen_point(lparam: isize) -> (i32, i32) {
     (x, y)
 }
 
-/// Resize borders first, then the strip, then client. The borders
-/// mirror what Qt would have answered: gone while maximised, and
-/// measured at the window's own DPI while not.
+/// The borders mirror what Qt would have answered: gone while
+/// maximised, at the window's own DPI otherwise.
 fn hit_test(window: *mut c_void, lparam: isize) -> isize {
     let (x, y) = screen_point(lparam);
     let mut rect = Rect::default();
@@ -233,10 +216,8 @@ fn hit_test(window: *mut c_void, lparam: isize) -> isize {
     HTCLIENT
 }
 
-/// The window menu — move, size, minimise, maximise, close —
-/// where the pointer is. Tracked here, so it shows on a
-/// window whose frame has no `WS_CAPTION` for
-/// `DefWindowProc` to hang it on.
+/// The window menu at the pointer, tracked here: the frame has no
+/// `WS_CAPTION` for `DefWindowProc` to hang it on.
 fn open_system_menu(window: *mut c_void, x: i32, y: i32) {
     // SAFETY: each call takes plain integers or a handle Windows just
     // handed back, and none of them takes ownership of anything.
@@ -245,8 +226,8 @@ fn open_system_menu(window: *mut c_void, x: i32, y: i32) {
         if menu.is_null() {
             return;
         }
-        // The menu closes when the window it belongs to loses the
-        // foreground, so the window takes it and the menu can close.
+        // The menu closes when its window loses the foreground, which
+        // it can only do once it has it.
         SetForegroundWindow(window);
         let chosen = TrackPopupMenu(
             menu,

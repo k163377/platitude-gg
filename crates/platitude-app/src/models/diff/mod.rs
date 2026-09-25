@@ -26,25 +26,17 @@ mod selection;
 mod selection_tests;
 
 use rows::bucket_target;
-/// Filed here because the test beside `models` names it: a `pub(super)`
-/// written in `rows` would only reach as far as this module (structure.md).
+/// Re-exported for `models::diff_tests` (`rows` is private).
 pub(super) use rows::wanted;
 
-// ---------------------------------------------------------------------------
-// DiffModel: the diff's lines for one file, as one column or as two
-// ---------------------------------------------------------------------------
-
-/// One row of the pane. Read as one column, a row is one line of the diff
-/// and the `pair_*` roles are empty. Read side by side (`split`), a row
-/// holds the old side's line in the plain roles and the new side's in the
-/// `pair_*` ones, either of which can be nothing (`encode::pair_rows`);
-/// `hunk` and `patch` are the row's, and `new_no` is the right side's
+/// One row of the pane. As one column, a row is one line of the diff and
+/// the `pair_*` roles are empty; side by side (`split`), the old side's
+/// line is in the plain roles and the new side's in `pair_*`, either
+/// possibly nothing (`encode::pair_rows`). `new_no` is the right side's
 /// number in both readings.
 ///
-/// **Fifteen roles, and all of them taken** (`QModelItem` holds no more).
-/// That is why the three small facts about a line — fence, no newline,
-/// which side of a conflict — are spelled together in `marks` rather
-/// than as a role each: two sides of them would be six.
+/// Fifteen roles, all taken (`QModelItem` holds no more) — a new fact
+/// about a line goes into `marks`, not a role.
 #[derive(QModelItem, Default, Clone)]
 pub struct DiffLineItem {
     /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` — and `""` on a
@@ -52,13 +44,11 @@ pub struct DiffLineItem {
     kind: String,
     old_no: i32,
     new_no: i32,
-    /// What the row draws: the line marked up for `Text.StyledText`,
-    /// coloured or not (see `encode::DiffRow`). One format for every row,
-    /// so the pane never has to say which this one is — and so a row is
-    /// never measured in a format it is not about to be drawn in.
+    /// The line as `Text.StyledText` markup, coloured or not
+    /// (`encode::DiffRow`) — one format for every row, so a row is measured
+    /// in the format it is drawn in.
     text: String,
-    /// The runs of what changed inside this row, none where nothing is
-    /// emphasised (see `encode::DiffRow`).
+    /// The runs of what changed inside this row (`encode::DiffRow`).
     emph: Runs,
     /// The small facts about the line — a fence, a missing final newline,
     /// the side of a conflict — and on a split row the right side's as
@@ -67,37 +57,26 @@ pub struct DiffLineItem {
     /// Where this row sits in the patch, so staging it needs no lookup.
     hunk: i32,
     line: i32,
-    /// Which of the read's patches the two above are counted within (-1
-    /// where they name nothing) — hunks are numbered from zero inside
-    /// each one, so it takes all three to reach a line. What the copy
-    /// reads a row's own source text back off, with the drawn line the
-    /// only one kept (`selection`).
+    /// Which of the read's patches `hunk` / `line` count within (-1 for
+    /// none) — hunks restart at zero in each. The copy reads the row's
+    /// source text back through all three (`selection`).
     patch: i32,
-    /// What the reader's own selection covers on this row ([`Washed`]):
-    /// the row from end to end, which is the shape almost every selected
-    /// row has and the one the pane can draw without being told any
-    /// places at all, or the runs of it a drag cut through.
-    ///
-    /// Nothing on every row the plain `Copy` does not take: outside the
-    /// selection, and on the removed lines and hunk headings inside it.
-    /// **The wash is the answer** — what is washed is what is copied
-    /// (デザイン規約 §diff の中身をコピーする).
+    /// What the reader's selection covers on this row ([`Washed`]). None
+    /// on every row the plain `Copy` does not take — what is washed is
+    /// what is copied (デザイン規約 §diff の中身をコピーする).
     sel: Optional<Washed>,
-    /// The new side of a split row — the same roles again, for the line
-    /// on the right (デザイン規約 §diff を 2 列で読む). `pair_kind` is
-    /// `ctx` / `add`, or `""` where the right has nothing: a removed line
-    /// nothing replaced, and every row that is not a line at all. Empty
-    /// throughout while the diff is read as one column.
+    /// The `pair_*` roles: the new side of a split row (デザイン規約
+    /// §diff を 2 列で読む). `pair_kind` is `ctx` / `add`, or `""` where the
+    /// right has nothing (a removed line nothing replaced, a row that is
+    /// not a line). Empty throughout as one column.
     pair_kind: String,
     pair_text: String,
     pair_emph: Runs,
-    /// The right side's line of the hunk, -1 for none. Its own: the
-    /// two sides of a paired row are two lines of the hunk, and a press
-    /// on the right's mark stages this one.
+    /// The right side's line of the hunk, -1 for none — a paired row is
+    /// two lines of the hunk, and the right mark stages this one.
     pair_line: i32,
-    /// The wash on the right side, the shape `sel` is. A selection is of
-    /// one column (`selection`), so at most one of the two is ever
-    /// written.
+    /// The right side's wash. A selection is of one column, so at most one
+    /// of `sel` / `pair_sel` is set.
     pair_sel: Optional<Washed>,
 }
 
@@ -162,76 +141,57 @@ impl platitude_core::mem::Footprint for Washed {
 #[derive(Default)]
 pub struct DiffModel {
     lines: Vec<DiffLineItem>,
-    /// The largest line number the rows carry, on either side. The gutter
-    /// is as wide as the widest number it will hold, so counting it is a
-    /// fact about the rows.
+    /// The largest line number the rows carry on either side; the gutter
+    /// is sized to it.
     widest_no: i32,
-    /// The lines the pane measures for a first answer to how far sideways
-    /// the code may be sent (`encode::widest_lines`). Lines: the pane
-    /// owns the font, and on the fallback a Latin-only mono family hands
-    /// a wide glyph to there is no arithmetic over columns that arrives
-    /// at what is drawn. Empty is a diff with nowhere to go.
+    /// Lines the pane measures for a first answer to how far sideways the
+    /// code may go (`encode::widest_lines`) — lines, not a width: no column
+    /// arithmetic survives the font fallback (rules-refs/app-ui.md
+    /// 「diff は横へ送る」). Empty = nowhere to go.
     widest_lines: Candidates,
-    /// Which reading of the rows the ones on screen are from — one up
-    /// every time they are laid out again. The pane files a width per row
-    /// as the rows are drawn (`DiffReach`), and a width measured on a
-    /// line that is gone is not an answer about this diff: this is how it
-    /// knows which reading it is holding. The rows changing in place —
-    /// the colours arriving, a mark going out — is not a new reading:
-    /// same lines, same widths.
+    /// Which layout of the rows is on screen: bumped by every
+    /// `lay_out_rows`, not by an in-place change (colours, marks) — same
+    /// lines, same widths. `DiffReach` drops widths filed against an older
+    /// one.
     rows_gen: i32,
-    /// How many commits this reading stacked, each with a band of its own
-    /// above its patch (デザイン規約 §複数のコミットを選ぶ). 0 for every
-    /// diff that is of one thing, which is all the others.
+    /// How many commits this reading stacked, a band each (デザイン規約
+    /// §複数のコミットを選ぶ); 0 for a diff of one thing.
     commit_bands: i32,
-    /// Whether the rows are laid out side by side — the old side on the
-    /// left, the new on the right — rather than as one column
-    /// (デザイン規約 §diff を 2 列で読む). Set from the machine's saved
-    /// choice as the page opens, and by the band's toggle after that; the
-    /// rows are laid out again from `shown` on every change, so nothing
-    /// is read twice for it.
+    /// Whether the rows are laid out side by side (デザイン規約
+    /// §diff を 2 列で読む).
     split: bool,
     title: String,
     is_binary: bool,
-    /// The file has no old side: everything in the diff was added by it
-    /// being there at all (see `encode::is_new_file`).
+    /// The file has no old side (`encode::is_new_file`).
     is_new_file: bool,
-    /// The diff is the combined form git prints for a conflicted path: it
-    /// compares the working tree against both stages at once, its rows
-    /// carry marker columns, and none of it can be staged in pieces.
+    /// git's combined diff of a conflicted path — none of it can be
+    /// staged in pieces.
     is_combined: bool,
-    /// git named the path unmerged and printed nothing else — one of the
-    /// two sides is gone, so there is no third thing to compare. There are
-    /// no rows, and the absence is the answer.
+    /// git named the path unmerged and printed nothing else (one side is
+    /// gone): no rows, and that is the answer.
     unmerged: bool,
-    /// The path is a repository of its own sitting in the working copy.
-    /// git will not open it, so there are no rows and never will be; what
-    /// the pane says instead is what a stage of it would record
+    /// The path is a repository of its own in the working copy: never any
+    /// rows; the pane says what a stage of it would record
     /// (`platitude_core::details::embedded`).
     embedded: bool,
-    /// The commit that stage would point at, as the 8 characters every
-    /// other hash on screen is shown by. Empty where the repository has
-    /// no commit yet — which is also the case `git add` refuses.
+    /// The commit that stage would point at, 8 characters. Empty where the
+    /// repository has no commit yet (the case `git add` refuses).
     embedded_sha8: String,
     loading: bool,
-    /// Whether the colours for the rows on screen have arrived and been
-    /// laid over them. False from the moment a file is asked for, and it
-    /// stays false for a language the set has no rules for — nothing was
-    /// coming. Nothing in the pane is drawn from it: it is how a headless
-    /// run can wait for the second half of a diff (`colour-place`).
+    /// Whether the settled colours have been laid over the rows on screen;
+    /// stays false for a language with no rules. Nothing is drawn from it —
+    /// it is what a headless run waits on (`colour-place`).
     coloured: bool,
     /// "" (text diff only) / "image" / "binary".
     preview_kind: String,
     /// `file:` URLs for the image sides ("" = no renderable image there):
-    /// the working-tree file itself, or the file core wrote the blob to
+    /// the working-tree file, or the file core wrote the blob to
     /// (`platitude_core::preview::PreviewFiles`), stamped with the read
-    /// they were made at (`rows::apply_preview`).
+    /// (`rows::apply_preview`).
     preview_old_url: String,
     preview_new_url: String,
-    /// Whether the previewed image is a vector one (`image/svg+xml`).
-    /// Which smoothing an upscale gets is the cell's choice, but what the
-    /// file is is the preview's own fact, said here once for the cell
-    /// to read.
+    /// Whether the previewed image is a vector one (`image/svg+xml`); the
+    /// cell picks its upscale smoothing by it.
     preview_vector: bool,
     /// Human-readable sizes ("" = the side does not exist).
     preview_old_size: String,
@@ -240,12 +200,9 @@ pub struct DiffModel {
     /// cannot hold a u64). Empty while loading — a selection made against
     /// no diff has nothing valid to address.
     fingerprint: String,
-    /// What the diff said about line endings, taken apart into the pieces
-    /// one sentence needs: which of the four it is (`""` = nothing to
-    /// say), the two endings in the order the sentence names them, how
-    /// many lines it is about, and how far the sample behind it reached.
-    /// The sentence itself is `Words.lineEndings` — the pieces are here
-    /// because working them out is not QML's job.
+    /// The line-ending notice taken apart for `Words.lineEndings`: which of
+    /// the four (`""` = nothing to say), the two endings in the sentence's
+    /// order, how many lines, and how far the sample reached.
     ending_kind: String,
     ending_from: String,
     ending_to: String,
@@ -254,60 +211,42 @@ pub struct DiffModel {
     ending_ext: String,
     current_key: String,
     /// Which working copy the open diff was read from, empty for this
-    /// window's own tree. Beside the key, because the two are asked
-    /// different questions: the key says which file an answer is about
-    /// (and a copy's file is the same file by that name), this says whose
-    /// it is — which is what settles a re-read's aim and what the pane
-    /// refuses every write over.
+    /// window's own tree — whose file it is, which the key does not say
+    /// (`begin_request_in`). It aims a re-read, and the pane refuses every
+    /// write while it is set.
     current_at: String,
-    /// The rows of the diff on screen, kept so the colours — which arrive
-    /// behind them — can be laid over the same lines without another read
-    /// (`DiffMsg::Coloured`). Rebuilding all of them costs orders of
-    /// magnitude less than colouring them did
-    /// (ci/baseline/code-costs-windows-x64.md §着色), which is why the
-    /// colours can afford to redo the whole list, every row of it, in
-    /// one pass.
+    /// The patches on screen, kept so the colours (`DiffMsg::Coloured`) and
+    /// a re-lay rebuild the rows without a read — rebuilding every row is
+    /// orders cheaper than colouring (ci/baseline/code-costs-windows-x64.md
+    /// §着色).
     shown: Option<Arc<Vec<FilePatch>>>,
     /// What changed inside each shown row (`intraline`), kept beside
     /// `shown` for the same rebuilds.
     shown_marks: Arc<platitude_core::intraline::IntraMarks>,
-    /// The colours laid over the rows on screen, kept for the one rebuild
-    /// that is neither a read nor a repaint: the rows laid out the other
-    /// way round (`set_split`). Plain until the second message arrives.
+    /// The colours laid over the rows on screen, kept for a re-lay
+    /// (`relay_rows`); plain until they arrive.
     shown_colors: platitude_core::highlight::DiffColors,
-    /// Whether the diff on screen is one a picture stands in for, which is
-    /// the other half of what `flatten_patches` is told.
+    /// Whether a picture stands in for the diff on screen — the other half
+    /// of what `flatten_patches` is told.
     shown_has_preview: bool,
-    /// The two ends of the reader's own selection of the text: a row and
-    /// a byte offset into that row's source line. `from` is where the
-    /// press landed and `to` is where the pointer has reached, so the
-    /// pair is in the order it was made — `taken()` sorts it into
-    /// reading order. Whether the four mean anything at all is
-    /// `sel_active`'s to say: a fresh model reads 0,0,0,0, which is a
-    /// perfectly good empty selection on row 0 and no selection at all.
+    /// The selection's two ends, each a row and a byte offset into its
+    /// source line: `from` the press, `to` the pointer, in the order made
+    /// (`taken()` sorts). Meaningless unless `sel_active` — 0,0,0,0 is also
+    /// a valid empty selection.
     sel_from_row: i32,
     sel_from_at: i32,
     sel_to_row: i32,
     sel_to_at: i32,
-    /// Which column the selection is of: 0 for the rows' own lines —
-    /// the only column while the diff is one — and 1 for the new side of
-    /// a split row (`selection`). A drag is of one column, so its two
-    /// ends share this.
+    /// Which column the selection is of (`selection`).
     sel_side: i32,
-    /// What the selection holds, published so the menu can leave out a
-    /// row that would copy nothing (デザイン規約 §メニュー: 選べない行は消す).
-    /// Read off the rows as the selection settles — the menu decides
-    /// what it offers once, as it opens, and these are what it decides
-    /// from.
+    /// What the selection holds, so the menu can leave out a row that
+    /// would copy nothing (デザイン規約 §メニュー「選べない行は消す」);
+    /// settled with the selection, read once as the menu opens.
     sel_active: bool,
     sel_has_new: bool,
     sel_removed: i32,
-    /// When the file on screen was asked for, for the two numbers the
-    /// frame the pane draws cannot give: how much of the wait was the
-    /// read, how much was building the model, and what is left is the
-    /// drawing (`perf`, ci/baseline/perf-windows-x64.md §操作 1 点の内訳).
-    /// Taken by the rows arriving, so a re-read that finds nothing moved
-    /// and the colours behind a diff report nothing.
+    /// When the file on screen was asked for, for the read / apply marks
+    /// (ci/baseline/perf-windows-x64.md §操作 1 点の内訳).
     requested_at: Option<Instant>,
     feed: Option<Arc<Feed<crate::hub::DiffMsg>>>,
     tab_id: i32,

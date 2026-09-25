@@ -5,15 +5,9 @@ import platitude
 import platitude.ui
 
 /// The dialogs' half of the window's PGG_AUTO_ACT harness: the platform picker, the clone box, the identity
-/// question, and the two roads out of a folder that turned out not to be a repository.
-///
-/// The settings screen's own verbs are `WindowSettingsActs` — they reach into one dialog and nothing else,
-/// which is what makes them a file of their own.
-///
-/// Built by `WindowAutoActDriver`, which is what `Main` builds when a verb was given; what these verbs act
-/// on is handed down below, one property per part of the window they reach into.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+/// question, and the two roads out of a folder that turned out not to be a repository. The settings screen's own
+/// verbs are `WindowSettingsActs`.
+// An `Item` only because `QtObject` has no default property to hold the timers; it is sizeless.
 Item {
     id: acts
 
@@ -30,8 +24,7 @@ Item {
     required property var settingsDialog
     required property QuitWaitDialog quitWaitDialog
 
-    // The picker completes once its dialog is up, and `visible` is the property that says so: `FolderDialog` is
-    // `QtQuick.Dialogs`' own type, so the `opened` the dialogs around it answer to is undefined here.
+    // `visible`, not `opened`: `FolderDialog` is `QtQuick.Dialogs`' own type and has no `opened`.
     SampleTimer {
         running: Harness.autoAct === "open-picker"
         onTriggered: {
@@ -42,19 +35,10 @@ Item {
             window.finishAutoAct()
         }
     }
-    /// Where the picker was pointed, and the one reading of it a run can be judged on.
-    ///
-    /// **The folder itself names this machine**, so the line carries `beside_copy=` beside it: whether the picker
-    /// came up in the folder the **copy** the tab is standing in sits in. A tab standing in the repository's own
-    /// copy answers `true` — the two folders are one there — and a tab standing in a linked copy answers `false`,
-    /// which is the picker following the repository and not the copy (`RepoTab.picker_folder_url`). The verb's
-    /// argument is which of the two the fixture stands in (`open-picker copy`).
-    ///
-    /// Both sides are paths on this machine, so the URL is put back into one by the same door the screens use
-    /// (`GitFacts.pickedPath`) rather than compared as text — a folder whose name has a space reaches here
-    /// percent-encoded. The copy is the page's own `repoPath`, which is the folder git runs in, and both are
-    /// spelled with `/` (規約 §パスの区切り). A window with no page has no copy to be beside, which is the `false`
-    /// the road below it answers with (the picker a refused folder reopens).
+    /// `folder=` names this machine, so `beside_copy=` is what is judged: whether the picker came up in the folder
+    /// holding the copy the tab stands in (`RepoTab.picker_folder_url`; the cases are verbs.md `open-picker`).
+    /// Compared as paths through `GitFacts.pickedPath`, not as text — a space arrives percent-encoded — both spelled
+    /// with `/` (規約 §パスの区切り). No page, no copy: `false`.
     function pickerLine() {
         return "picker beside_copy=" + acts.pickerIsBesideCopy()
                 + " folder=" + folderDialog.currentFolder
@@ -69,8 +53,7 @@ Item {
             return false
         return GitFacts.pickedPath(folderDialog.currentFolder.toString()) === copy.substring(0, cut)
     }
-    // Every *other* verb that happens to put the picker up says where it was pointed, which nothing on this side of
-    // the platform's own box says afterwards. The verb above reports where its own wait ended.
+    // Every other verb that puts the picker up says where it was pointed; nothing else says so afterwards.
     Connections {
         target: acts.window
         enabled: Harness.autoAct !== "open-picker"
@@ -79,18 +62,12 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=clone-dialog / clone-go / clone-refused: the box that fetches a repository, entered through the ☰'s
-    // own row (`TabStrip.clickCloneRow`) so the two signal relays between the row and the window are part of what runs.
-    //
-    // **The far side is the repository this run opened.** A folder on this machine is a URL git takes, so no remote has
-    // to be built for these and the same verb works on both operating systems (the avatar family's problem —
-    // an argument that is a path cannot be handed to both). Which of the two answers comes back is decided by the
-    // folder name alone: a name of its own lands beside the source, the source's own name lands **on** it, and git
-    // refuses that one for the destination being taken.
+    // PGG_AUTO_ACT=clone-dialog / clone-go / clone-refused: entered through the ☰'s row (`TabStrip.clickCloneRow`) so
+    // the relays from the row to the window run too. The source is the repository this run opened — a path works on
+    // both OSes with no remote built. The folder name decides which: its own lands beside, the source's is refused.
     readonly property bool cloneAct: Harness.autoAct === "clone-dialog"
                                      || Harness.autoAct === "clone-go"
                                      || Harness.autoAct === "clone-refused"
-    /// What to fetch from: whatever the verb was given, or the repository already open.
     readonly property string cloneFrom: Harness.autoActArg !== ""
                                         ? Harness.autoActArg
                                         : Harness.autoOpen.split(";")[0]
@@ -99,8 +76,7 @@ Item {
         running: acts.cloneAct
         /// The row has been pressed; nothing re-reads what had to be true before it.
         property bool opened: false
-        /// The clone has been asked for, and what the strip held when it was — the half the picture cannot hold,
-        /// since a window with one more tab looks like a window that always had it.
+        /// The clone was asked for, and the strip's count then — a picture cannot show that a tab is new.
         property bool asked: false
         property int tabsBefore: -1
         onTriggered: {
@@ -121,8 +97,6 @@ Item {
                     window.finishAutoAct()
                     return
                 }
-                // The name is typed: one of these two has to land where the
-                // source is not, and the other exactly on it.
                 cloneDialog.setFields(acts.cloneFrom,
                                       act === "clone-go"
                                       ? "cloned-here" : GitFacts.cloneFolderName(acts.cloneFrom))
@@ -135,8 +109,7 @@ Item {
             }
             if (cloneModel.cloning)
                 return
-            // git's answer, whichever it was: the line that quotes it, or the tab the clone became — and, for the
-            // tab, the page finished reading it, since that is what the picture is of.
+            // git's answer: the refusal line, or the new tab with its page open (what the picture is of).
             if (act === "clone-refused"
                 ? cloneDialog.refusal === ""
                 : (pageRepeater.count <= cloneTimer.tabsBefore
@@ -147,12 +120,7 @@ Item {
             window.finishAutoAct()
         }
     }
-    /// What the clone verbs have to show for themselves. `dialog=` is the box's own `opened` — up for the two that
-    /// stay, down for the one that landed — `said=` is git's line standing in it, and `grew=` is the strip gaining the
-    /// tab the clone became.
-    ///
-    /// **The four the table judges are written first and in one run**: `must_say` matches a run of the line, so
-    /// the judged fields stand together (verbs.md).
+    /// The judged fields lead, together: `must_say` matches a run of the line (verbs.md).
     function reportClone() {
         Harness.report("clone dialog=" + cloneDialog.opened
                           + " said=" + (cloneDialog.refusal !== "")
@@ -164,8 +132,8 @@ Item {
                           + " name=" + cloneDialog.wantedName)
     }
 
-    // Smoke hooks (PGG_AUTO_ACT=open-not-a-repo / open-bare and the two ways back out). The picker is the platform's own
-    // window, so the run enters where its answer lands — the path it accepted.
+    // PGG_AUTO_ACT=open-not-a-repo / open-bare and the two ways back out. The picker is the platform's own window, so
+    // the run enters where its answer lands — the path it accepted.
     readonly property bool pickAct: Harness.autoAct === "open-not-a-repo"
                                     || Harness.autoAct === "open-bare"
                                     || Harness.autoAct === "open-not-a-repo-retry"
@@ -182,7 +150,6 @@ Item {
             pickAnswerTimer.start()
         }
     }
-    // Poll the dialog's observable answer. The 25ms cadence is sampling only.
     SampleTimer {
         id: pickAnswerTimer
         onTriggered: {
@@ -190,10 +157,8 @@ Item {
                 return
             if (Harness.autoAct === "open-dialog-sweep") {
                 pickAnswerTimer.stop()
-                // The one failure with nothing behind it: a modal window carries no seat for the command log, so the
-                // folder it names and git's own answer are the whole of what a reader can take away from here
-                // (規約 §右のペインの字は掴める). `kind=` is what the sweep had to land on — a dialog raised on `plain`
-                // has no line from git at all, and a run that swept one would be claiming less than it looked.
+                // A modal has no seat for the command log, so its words are all a reader can take away
+                // (規約 §右のペインの字は掴める). `kind=`: a dialog raised on `plain` has no line from git to sweep.
                 Harness.report("open_dialog_sweep "
                     + openFailedDialog.background.pad.sweepAir(7, "kind=" + openFailedDialog.kind))
                 window.finishAutoAct()
@@ -224,9 +189,8 @@ Item {
         }
     }
 
-    // Smoke hooks (PGG_AUTO_ACT=open-fail-tab / -bare / -log): the road that keeps its tab. Nothing checks the folder
-    // first there, so the page itself is what says so (`kind=` reports which). The `-log` half goes on to open the
-    // command log the way the `>_` at the foot of that screen does.
+    // PGG_AUTO_ACT=open-fail-tab / -bare / -log / open-fail-sweep: the road that keeps its tab. Nothing checks the
+    // folder first, so the page says what failed (`kind=`). `-log` then opens the command log as the `>_` there does.
     SampleTimer {
         id: failTabActTimer
         running: Harness.autoAct === "open-fail-tab"
@@ -258,10 +222,8 @@ Item {
                 }
             failTabTimer.stop()
             if (Harness.autoAct === "open-fail-sweep") {
-                // The tab's own failure screen, swept. This one *does* carry the log's seat at
-                // its foot, so git's answer is reachable there — but the folder is not, and it is the half a reader
-                // needs to paste back into a shell (規約 §右のペインの字は掴める). `kind=` says which of the three
-                // screens the sweep landed on, since only one of them has a line from git in it at all.
+                // The log's seat is here but the folder is not, and a reader pastes it into a shell
+                // (規約 §右のペインの字は掴める). `kind=`: only one of the three screens has a line from git.
                 Harness.report("open_fail_sweep "
                     + window.curPage.openFailedHand.sweepAir(7, "kind=" + window.curPage.pageTab.errorKind))
                 window.finishAutoAct()
@@ -275,9 +237,8 @@ Item {
             window.finishAutoAct()
         }
     }
-    /// What the run has to show for itself. `dialog=` is the dialog's own `opened` (reporting what was asked of it
-    /// would go on passing with the binding cut), and `tabs=` says the refused folder never became one — which is the
-    /// whole of what this verb is about.
+    /// `dialog=` is the dialog's own `opened` — what was asked of it would pass with the binding cut. `tabs=` says the
+    /// refused folder never became a tab.
     function reportPick() {
         Harness.report("open_failed kind=" + openFailedDialog.kind
                           + " dialog=" + openFailedDialog.opened
@@ -285,8 +246,8 @@ Item {
                           + " active=" + tabsModel.currentIndex
                           + " near=" + openFailedDialog.near)
     }
-    // PGG_AUTO_ACT=identity / identity-half: "which half landed" is a pair of booleans, and a dialog that stayed open
-    // because the save did not take looks exactly like one nobody has answered yet. Read the two verbs as a pair.
+    // PGG_AUTO_ACT=identity / identity-half: which half landed is a pair of booleans — a dialog left open because the
+    // save did not take looks like one nobody has answered.
     SampleTimer {
         running: Harness.autoAct === "identity" || Harness.autoAct === "identity-half"
         onTriggered: {
@@ -312,21 +273,12 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer cannot go. `tip=` is the card's own `opened`;
-    // `badge=` is the group in whichever shape the width left it — reading the mark alone would fail a band that is
-    // saying exactly what it should. Dismissal waits on `identityUnsaved` — the save's answer.
+    // PGG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer cannot go. `badge=` is the group in
+    // whichever shape the width left it — the mark alone would fail a band saying what it should. Dismissal waits on
+    // `identityUnsaved`, the save's answer.
     //
-    // **Three hops, and each says so as it is taken** (`step=`). The verb is three samplers in a row, and a run that
-    // stops answering leaves the same silence whichever of them it stopped in: no line at all is a question that was
-    // never asked or a save that never half-landed, `dismissed` alone is a dialog that would not go, `pointed` alone
-    // is a card that would not come up. They also move the clock the app's own account measures its silence against
-    // (`harness::report`), which is what a run at the ceiling is read by.
-    //
-    // **A field that can only print the guard it has just passed says nothing**, so what each line
-    // carries is what could have come out the other way.
-    //
-    // **`step=` stands on lines of its own**: `must_say` matches a run of the last
-    // line (verbs.md), so the four the table reads stay together in theirs.
+    // Three samplers, each naming its hop (`step=`) so a run that stalls says where; a line carries only what could
+    // have come out the other way. `step=` lines stand apart: `must_say` matches a run of the last line (verbs.md).
     SampleTimer {
         running: Harness.autoAct === "identity-tip"
         onTriggered: {
@@ -334,8 +286,7 @@ Item {
                 return
             window.dismissIdentity()
             stop()
-            // Whether the answer took the dialog down in the same call, which is the one thing here that could have
-            // gone either way — the two the guard read cannot have changed since it read them.
+            // Whether the answer took the dialog down in the same call; the guard's two cannot have changed.
             Harness.report("identity_tip step=dismissed dialog=" + identityDialog.opened)
             identityTipTimer.start()
         }
@@ -347,26 +298,22 @@ Item {
                 return
             topBar.statePointedAt = true
             stop()
-            // The other two thirds of what the card is waiting on, read where the pointer has just been stood in:
-            // the group is standing, and the row has placed it (`BandStateGroup.standInAsking`).
+            // The rest of what the card waits on: the group standing, and placed (`BandStateGroup.standInAsking`).
             Harness.report("identity_tip step=pointed"
                 + " badge=" + (topBar.stateWordsShown || topBar.stateMarkShown)
                 + " placed=" + topBar.statePlaced)
             identityTipReport.start()
         }
     }
-    // The attached card intentionally has a visual tip delay. Completion is gated by its opened
-    // property.
+    // The card opens after its tip delay.
     SampleTimer {
         id: identityTipReport
         onTriggered: {
             if (!topBar.stateCardOpen)
                 return
             stop()
-            // `opened` is the guard, so what this one has to say is the other half of the card: whether its rows have
-            // settled into it yet. The line below reads `rows=` without waiting for that, which is the frame
-            // `badges-hover` does wait out (verbs.md) — one row cannot come out in the wrong order, so what is at
-            // stake here is only whether the picture has the card at its full height.
+            // `rows=` is read without waiting for the card's layout (unlike `badges-hover`): one row cannot come out of
+            // order, so `laidOut=` only says whether the picture has the card at full height.
             Harness.report("identity_tip step=carded laidOut=" + topBar.stateCardLaidOut)
             Harness.report(
                 "identity_tip unsaved=" + AppBackend.identityUnsaved
@@ -377,25 +324,17 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=quit-waits / quit-locked: the close that arrives while git is still writing. The commit is held by
-    // the repository's own pre-commit hook (`--preset slowhook` — it sleeps), so the write is provably in flight when
-    // the close lands: the gate turns the close away and stands the wait dialog up. `quit-waits` photographs that
-    // state; `quit-locked` tries the door a second time and then watches the held write land anyway — the wait takes
-    // no answer, and the write finishes.
+    // PGG_AUTO_ACT=quit-waits / quit-locked: the close while git is still writing — the commit is held by the sleeping
+    // pre-commit hook of `--preset slowhook`, so the gate turns the close away and stands the wait dialog up.
+    // `quit-waits` photographs that; `quit-locked` closes again, then watches the held write land anyway.
     //
-    // The window is closed through `window.close()`, the same call the band's ✕ and the ☰'s Exit make — and, once the
-    // lock stands, **the only road left**: the modal seals both the pointer and the window's own `Shortcut`s
-    // (measured, qmltestrunner — rules-refs/app-ui.md §close ゲート), while a close request still reaches `onClosing`
-    // the way Alt+F4 does. That is why the second press is the honest test of a lock with no way out, and why the
-    // verbs here stop at the door: a handler called from QML would run whatever the modal is covering, and reporting
-    // that it did not would be a claim about a road this harness cannot drive.
-    //
-    // Both defer: the commit deliberately has not landed when `quit-waits` photographs, and
-    // `quit-locked` waits the landing out in its own sampler (`AutoActCompletion`).
+    // Closed through `window.close()`, as the ✕ and Exit are: once the modal stands it is the only road left (the
+    // modal seals the pointer and `Shortcut`s — rules-refs/app-ui.md「アプリ終了の close ゲートは 1 本」). A handler
+    // called from QML would run whatever the modal covers.
     SampleTimer {
         id: quitTimer
         running: Harness.autoAct === "quit-waits" || Harness.autoAct === "quit-locked"
-        /// The steps already taken, so nothing re-reads what had to be true before each of them.
+        /// Steps taken, so nothing re-reads what had to be true before each.
         property bool committed: false
         property bool closed: false
         property bool retried: false
@@ -413,9 +352,8 @@ Item {
                 return
             }
             if (!quitTimer.closed) {
-                // Pressed only while the hook provably holds the write: the preset's hook sleeps for longer than
-                // the beat between this tick and the close below, so a busy count that has risen cannot have
-                // fallen by the time the close lands.
+                // Only while the hook holds the write: it sleeps longer than a beat, so a risen busy count is still up
+                // when the close lands.
                 if (tab.busyCount === 0)
                     return
                 quitTimer.closed = true
@@ -433,25 +371,19 @@ Item {
                 return
             }
             if (!quitTimer.retried) {
-                // The same guard as the first press, for the same reason: a close that arrived after the hook let
-                // go would be let through, and the gate would be right to let it. The write has to still be out for
-                // the refusal to mean anything.
+                // The same guard: a close after the hook let go is rightly let through.
                 if (!quitWaitDialog.opened || tab.busyCount === 0)
                     return
                 quitTimer.retried = true
                 window.close()
                 return
             }
-            // The lock never let go, the window stayed, and the write the quit was asked over still landed: the
-            // sequence moving past the armed one is the write's answer being absorbed, busy falling is the queue
+            // The held write landed under the lock: `writeSeq` past `seqBefore` is its answer, busy at zero the queue
             // done with it.
             if (!quitWaitDialog.opened || tab.busyCount !== 0 || tab.writeSeq <= quitTimer.seqBefore)
                 return
-            // And the landing has reached the screen. The answer comes before the status it invalidated is read
-            // again (`session::write::run_write`), and this commit takes the working tree's row off the graph: a run
-            // that ended on the answer alone was walked with that row still standing as often as not, and
-            // `WipTallyRow` — the one component that stands with it — moved under the gate. So the run waits for the
-            // status that no longer stands the row, and for the page to have stopped arriving on it (`PageSettled`).
+            // And reached the screen: the answer comes before the status is read again (`session::write::run_write`),
+            // and this commit takes the working-tree row off: ending on the answer flips `WipTallyRow` in the census.
             const page = window.curPage
             if (page.pageWt.wipRowStands || !PageSettled.settled(page))
                 return
@@ -465,23 +397,17 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=quit-save-held: the close that arrives while a configuration save the application itself asked
-    // for is out — the identity the dialog just took (typed and submitted by `WindowIdentityActs`), held by the run
-    // (`--fault-hold-save`, armed for this verb by xtask) until the shutdown joins it. The save goes through no
-    // session, so what turns the close away here is the quit gate's own clause for the hub's saves
-    // (`Hub::writes_settled`), and the picture is the wait dialog over a window with nothing else running.
-    //
-    // The verb ends on that picture. What follows is the run's own exit through the gate's yield (`WindowQuitGate`):
-    // the shutdown reaches `writes-joining` with the save still held, the hold lets go at that station, the two
-    // `git config` writes land, the join returns and the process ends — which xtask reads off the run's own
-    // gitconfig afterwards (`verify::outcome`), the one witness that stands outside the app.
+    // PGG_AUTO_ACT=quit-save-held: the close while the app's own config save is out — the identity
+    // `WindowIdentityActs` submitted, held by `--fault-hold-save` until the shutdown joins it. No session carries it,
+    // so the gate's clause for the hub's saves turns the close away (`Hub::writes_settled`). After the picture the
+    // run exits through the gate's yield (`WindowQuitGate`), the hold lets go at `writes-joining`, and xtask reads
+    // the run's gitconfig afterwards (`verify::outcome`).
     SampleTimer {
         id: quitSaveTimer
         running: Harness.autoAct === "quit-save-held"
         property bool closed: false
         onTriggered: {
             if (!quitSaveTimer.closed) {
-                // Pressed only once the save stands at the hold, so the close lands on a save provably out.
                 if (!AppBackend.identityBusy || Harness.heldSaves() === 0)
                     return
                 quitSaveTimer.closed = true
@@ -500,14 +426,9 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=gate-sweep: the same screen `solo` photographs, with its words taken from the air around them
-    // (規約 §右のペインの字は掴める). **This is the surface with no way out to the log** — the gate stands before any
-    // repository is open, so git's own answer and the path of the build already holding the settings are the whole of
-    // what there is to take away, and a reader who cannot drag them retypes them.
-    //
-    // The path is only there while another build holds the store, which is the state the harness makes for `solo` (it
-    // takes the real lock before starting this process), so the sweep is run in that one: the other way the gate comes
-    // up — a git that would not answer — has no verb, since it needs a PATH without git on it.
+    // PGG_AUTO_ACT=gate-sweep: the `solo` screen, its words taken from the air (規約 §右のペインの字は掴める) — before
+    // any repository opens there is no log to reach. Run in `solo`'s state (the harness holds the real lock), the one
+    // where the path shows; the other gate, a git that will not answer, needs a PATH without git and has no verb.
     SampleTimer {
         id: gateSweepTimer
         running: Harness.autoAct === "gate-sweep"
@@ -515,8 +436,7 @@ Item {
             if (!AppBackend.alreadyRunning || !gate.visible || AppBackend.heldElsewhere === "")
                 return
             stop()
-            // `held=` is what the sweep had to land on: an empty gate has air and no fields, and a run that swept one
-            // would be reporting on a screen the reader never sees.
+            // `held=`: an empty gate has air and no fields.
             Harness.report("gate_sweep "
                 + gate.pad.sweepAir(7, "held=" + (AppBackend.heldElsewhere !== "")))
             window.finishAutoAct()

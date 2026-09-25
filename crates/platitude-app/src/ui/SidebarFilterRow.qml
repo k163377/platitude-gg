@@ -5,17 +5,12 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The sidebar's header band: a frameless filter that takes all the
-// width left over, and the fold control at the end of it. It is the band
-// the other panes' headers line up with, so it takes the header height,
-// and the hairline that closes it is the band's
-// (it runs on under the button).
+// The sidebar's header band: a frameless filter and the fold control, at the header height the other panes' headers
+// line up with. The band's hairline runs on under the button.
 Item {
     id: filterRow
 
-    /// What is typed into the band. The sections read it back, and the
-    /// smoke hook writes it — into the field itself, so what they are
-    /// asked is what a typist asks them.
+    /// What is typed into the band. Automation writes it into the field itself, as a typist would.
     property alias text: field.text
 
     signal foldRequested()
@@ -29,10 +24,7 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             font.pixelSize: Theme.fontMd
-            // The pane's own inset, which is what every other box holds its words at (`SlimField`) — and here the two
-            // measures are the same one, since the band has no frame of its own and what stands to the left of the
-            // word is the pane's edge. The rows below went out to `spaceSm` to balance the gutter their bar takes
-            // (デザイン規約 §余白 の左メニューの行); this band has neither, so it stays at the inset with the section headers.
+            // At the section headers' x, not the rows' (デザイン規約 §余白).
             leftPadding: Theme.spaceXs
             rightPadding: Theme.spaceXs
             topPadding: 0
@@ -40,9 +32,7 @@ Item {
             placeholderText: qsTr("Filter")
             background: null
         }
-        // The whole block is the button: the reach is the band's
-        // full height. The rail's band is the same block with the
-        // mark pointing back.
+        // The whole block is the button, the band's full height.
         FoldBlock {
             Layout.fillHeight: true
             Layout.preferredWidth: Theme.headerHeight

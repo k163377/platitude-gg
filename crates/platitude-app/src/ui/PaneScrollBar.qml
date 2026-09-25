@@ -2,48 +2,19 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-/// The bar a pane owns: a slab of ink held against the pane's inner edge, opaque, and running the whole height of the
-/// view it belongs to (デザイン規約 §QML 実装ルール の摘みの項). The left panel's lists and the right panel's — its two file
-/// lists and the block the message boxes sit in — all wear it.
-///
-/// The style's own bar stays where the reader is over the words themselves: the graph, the diff, and the text boxes
-/// inside the right panel. **A box being typed into keeps the style's bar** — it is the one place a bar is inside the
-/// content.
-///
-/// **Its three states climb the palette from the ground it stands on**: `bgElevated` idle over a pane, the one
-/// step there is between a pane's ground and the lines it divides itself with; `borderDefault` while the view is being
-/// sent, the ink a frame is drawn in; `borderStrong` under a held thumb. The style's see-through bar lands on the same
-/// three over a pane's ground by carrying that much of its one ink, so the two families read alike by two routes — and
-/// this one, opaque on purpose (below), cannot say a step by carrying less, so it names the colours (`dimsItself`).
-/// **Only the idle step is the ground's to move** (`idleColor`): the other two are frames, and a frame is the same
-/// ink wherever it is drawn.
-///
-/// Three things it settles its own way:
-///
-///  - **it meets the edge.** The style's handle stops a step short of the edge, which leaves it reading as part of the
-///    content it is drawn over.
-///  - **it is opaque.** The colour the eye reads through a translucent thumb is a blend with whatever passes
-///    underneath, so it changes as the view scrolls — measured over the pane's ground, over a selected row and over
-///    body text, one thumb read as three colours. The gutter already keeps ink from under this bar, so there is
-///    nothing to read through it, and what it paints is a named colour, flat.
-///  - **it runs to the ends.** The style keeps a step of padding at both ends of the track, so a view scrolled hard
-///    against its top frame left the slab hanging a step below it. Only the far side keeps its step, where it is
-///    grabbing room: the box stays wider than the ink.
+/// The bar a pane owns: an opaque slab flush to the pane's inner edge and to both ends of the view
+/// (デザイン規約 §QML 実装ルール「左メニューと右パネルのバーは張り付くバー」). Its three states are named colours, not
+/// less ink (`dimsItself: false`; デザイン規約 §ペインのスクロールバー).
 AutoScrollBar {
     id: paneBar
 
-    /// The idle step, which is **the one step above whatever ground this bar stands on** — the rest of the climb
-    /// (`borderDefault`, `borderStrong`) is the same wherever it stands. A pane's ground is `bgSurface`, so the
-    /// default is the step above that; the settings screen's ground is `bgElevated` itself, where this colour would
-    /// be the ground exactly and the resting bar would not be there at all (measured: the edge's 5px reads
-    /// `#0F172A`). That screen hands in the next step up instead (デザイン規約 §ペインのスクロールバー).
+    /// The idle step — the one above the ground this bar stands on. On a ground that is `bgElevated` itself (the
+    /// settings screen) the default vanishes, so that screen hands in the next step up (デザイン規約 §ペインのスクロールバー).
     property color idleColor: Theme.bgElevated
 
-    // Named colours (above).
     dimsItself: false
 
-    /// What the slab is painting, for a run to read back — the painted side, so a cut binding cannot read as green
-    /// (verify-ui).
+    /// What the slab is painting, for a run to read back — the painted side, so a cut binding cannot read as green.
     readonly property alias slabColor: slab.color
 
     rightPadding: 0
@@ -53,13 +24,11 @@ AutoScrollBar {
         id: slab
         implicitWidth: Theme.navBarReach
         implicitHeight: Theme.navBarReach
-        // Round on the free side only: a slab rounded on all four corners reads as floating over the pane, and
-        // the ends have to meet the frames square to sit against them.
+        // Round on the free side only: the ends meet the frames square.
         radius: Theme.radiusSm
         topRightRadius: 0
         bottomRightRadius: 0
-        // Idle a step under the ramp, and on it while the view is being sent. Up at once, down over 400ms — the two
-        // halves every bar in the window shares (規約 §QML 実装ルール のバーの明るさ).
+        // Up at once, down over 400ms (規約 §QML 実装ルール のバーの明るさ).
         color: paneBar.idleColor
         states: [
             State { name: "gone"; when: !paneBar.visible },

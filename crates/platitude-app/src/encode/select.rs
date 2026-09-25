@@ -44,8 +44,7 @@ pub fn diff_key(target: &DiffTarget) -> String {
         DiffTarget::Range { from, to, path, .. } => {
             format!("range:{}:{}:{path}", from.to_hex(), to.to_hex())
         }
-        // Every commit in it, for the same reason: the stack is of these,
-        // and a choice that gained or lost one is a different reading.
+        // Every commit in it, for the same reason.
         DiffTarget::Choice { oids, path, .. } => {
             let held: Vec<String> = oids.iter().map(platitude_core::Oid::to_hex).collect();
             format!("choice:{}:{path}", held.join(","))
@@ -68,8 +67,7 @@ mod tests {
 
     #[test]
     fn a_row_with_no_hunk_selects_nothing() {
-        // Rows outside any hunk (the binary-file note) carry -1, and
-        // staging one of those selects nothing.
+        // Rows outside any hunk (the binary-file note) carry -1.
         assert!(hunk_selection(-1, -1).is_empty());
         assert!(hunk_selection(-1, 2).is_empty());
     }

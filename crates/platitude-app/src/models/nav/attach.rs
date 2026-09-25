@@ -41,13 +41,10 @@ impl NavSectionModel {
     }
 
     /// The list that shows another working copy's changes
-    /// ([`crate::hub::CarriedStatusMsg`]).
-    ///
-    /// **One list, where this window's own tree is three**
-    /// ([`super::Bucket::Whole`]): the split the three stand for is the
-    /// index's, and nothing here can move that copy's index. A separate
-    /// instance from them all the same — the two stand for different
-    /// trees and both are fed while the pane is showing either.
+    /// ([`crate::hub::CarriedStatusMsg`]). One list where this window's
+    /// tree has three ([`super::Bucket::Whole`]): the three split by the
+    /// index, and nothing here moves that copy's index. A separate instance
+    /// all the same — both trees are fed while the pane shows either.
     pub(super) fn attach_carried_feed(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
         self.section = "worktree".to_string();

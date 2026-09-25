@@ -1,12 +1,6 @@
 //! Which answer the repository screen shows, with the answers fed in the
-//! orders git can return them: a reader who went A → B → A, two reads of
-//! one repository landing the other way round, and a save's answer
-//! arriving late.
-//!
-//! No Qt and no repository: whose answer this is, is the screen's own
-//! question, and this is the whole of what decides it. The spawns and the
-//! `changed()` signals are the thin wrap the slots call (`work`); what is
-//! driven here is the numbering and the drain.
+//! orders they can arrive — the numbering and the drain alone, without Qt
+//! or a repository (`work`).
 
 use super::work::ReadTicket;
 use super::*;
@@ -37,9 +31,6 @@ fn looking_at(model: &mut RepoConfigModel, path: &str) -> ReadTicket {
     model.look_at(path.into()).expect("a path was named")
 }
 
-// A → B → A is three asks about two paths. The first one's answer,
-// arriving last, is a picture of A from before B; only the third ask's
-// answer is the screen's.
 #[test]
 fn a_read_answers_the_ask_it_came_from_when_the_screen_went_a_b_a() {
     let mut model = RepoConfigModel::default();
@@ -67,8 +58,6 @@ fn a_read_answers_the_ask_it_came_from_when_the_screen_went_a_b_a() {
     assert_eq!(model.repo_path, "A");
 }
 
-// Two reads of one repository can land the other way round. The one the
-// screen is waiting on is the later ask, whichever answers first.
 #[test]
 fn the_later_ask_about_one_repository_stands_whichever_answers_last() {
     let mut model = RepoConfigModel::default();
@@ -86,8 +75,6 @@ fn the_later_ask_about_one_repository_stands_whichever_answers_last() {
     assert_eq!(model.state, "ready");
 }
 
-// The ask after a read ends it: a read still waiting for a slot spawns
-// nothing, one already running stops. The ask standing keeps its token.
 #[test]
 fn the_ask_after_a_read_cancels_that_read_and_only_that_one() {
     let mut model = RepoConfigModel::default();
@@ -103,9 +90,6 @@ fn the_ask_after_a_read_cancels_that_read_and_only_that_one() {
     assert!(!third.cancel.is_cancelled());
 }
 
-// A save's answer is the save's: one from a number the screen is not
-// waiting on — an earlier save, or a stranger's — changes nothing, and
-// the one that is out is answered whole or half, with git's words.
 #[test]
 fn a_save_is_answered_by_number_and_a_half_landing_is_shown_as_one() {
     let mut model = RepoConfigModel::default();
@@ -137,10 +121,6 @@ fn a_save_is_answered_by_number_and_a_half_landing_is_shown_as_one() {
     assert_eq!(model.error, "error: cannot overwrite multiple values");
 }
 
-// The read that follows a landed save is a new ask: a read from before
-// the save — one still in flight when the save landed — cannot put the
-// boxes back to what they said before it, and the words git left are
-// kept through the re-read the screen asked for itself.
 #[test]
 fn a_read_from_before_a_save_cannot_land_on_the_boxes_the_save_changed() {
     let mut model = RepoConfigModel::default();
@@ -179,10 +159,8 @@ fn a_read_from_before_a_save_cannot_land_on_the_boxes_the_save_changed() {
     );
 }
 
-// The read from before the save can answer in the very drain the save
-// answers in, behind it — where nothing has numbered a re-read yet. The
-// save's answer ends that read: a failure it brings cannot replace git's
-// words about the save, and a reading cannot put the boxes back.
+// Behind the save's answer, before any re-read is numbered: neither the
+// stale read's failure nor its reading may land.
 #[test]
 fn a_read_from_before_a_save_answering_in_the_saves_own_drain_is_refused() {
     let mut model = RepoConfigModel::default();
@@ -225,9 +203,6 @@ fn a_read_from_before_a_save_answering_in_the_saves_own_drain_is_refused() {
     );
 }
 
-// A save out when the screen turns to another repository is about the
-// repository being left: its answer is nobody's, and the new screen is
-// not held busy by it.
 #[test]
 fn a_save_out_when_the_screen_turns_away_is_nobodys() {
     let mut model = RepoConfigModel::default();

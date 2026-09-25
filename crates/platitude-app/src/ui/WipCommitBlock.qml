@@ -6,18 +6,10 @@ import QtQuick.Layouts
 import platitude.ui
 
 // Everything under the WIP pane's file list, pinned to the pane's bottom: the message pair, the amend row, the
-// button that writes the commit, and the way out of an operation git stopped in.
+// commit button, and the way out of a stopped operation.
 //
-// A surface of its own that scrolls when the pane is too short to hold it. What is in here keeps its height by
-// construction — the editor, the commit button, the exit card a stopped operation puts up — so the list was the
-// only thing that could give, and past zero the rest was simply laid out below the pane's own edge (measured
-// Observed: in a 320px window a stopped rebase drew `--continue` and `--skip` and left `--quit` and `--abort`
-// under the window, with nothing to scroll to reach them). The window's floor cannot answer that on its own: the
-// card comes and goes with what git is in the middle of, and a window that grew itself because a rebase stopped
-// would be a stranger thing than a pane that scrolls (規約 §窓の床).
-//
-// The root is the `Flickable` it was inside the pane, so the layout attachments stay where they were and the item
-// tree is the same depth it was (rules-refs/structure.md).
+// Scrolls on its own when the pane is too short: its contents keep their height, so past the list's zero they would
+// be laid out below the pane's edge, and the window's floor cannot grow with a card git puts up (規約 §窓の床).
 Flickable {
     id: block
 
@@ -35,8 +27,8 @@ Flickable {
     required property real blockRoom
     required property real listHeight
 
-    /// Back up to the pane: the tick, the press, and the moment the button's own warning could have changed
-    /// (the card it opens is placed from the pane, which is the one thing that knows where the rows are).
+    /// Up to the pane: the amend tick, the press, and the moment the button's warning card may need settling (the
+    /// pane places it).
     signal amendToggled(bool on)
     signal commitClicked()
     signal cardAsked()
@@ -61,11 +53,9 @@ Flickable {
     readonly property alias descListRows: msgEditor.descListRows
     readonly property alias blockScrolls: msgEditor.blockScrolls
     readonly property alias descKeeps: msgEditor.descKeeps
-    /// Whether the amend box is ticked, and whether the author box is — the two the page sets and reads.
     readonly property alias amendChecked: amendBox.checked
     readonly property alias resetAuthor: authorBox.checked
-    /// The commit button's own two, for the card the pane places on it: whether it is warning at all, and
-    /// whether a pointer is on it. `commitSeat` is the button itself, which the pane measures from.
+    /// For the card the pane places on the commit button; `commitSeat` is the button, which the pane measures from.
     readonly property alias commitWarned: commitButton.eolWarned
     readonly property alias commitPointed: commitHover.containsMouse
     readonly property alias commitSeat: commitButton
@@ -86,14 +76,11 @@ Flickable {
     function pullDescriptionPast(down) { msgEditor.pullDescriptionPast(down) }
     function completeOpExit(code) { return opExitCard.completeOpExit(code) }
     function offersOpExit(code) { return opExitCard.offersOpExit(code) }
-    /// Moves the block by a wheel a box on it could not use. The boxes cover most of the block, so without this
-    /// the surface they stand on has no way to be reached by wheel at all (observed: the
-    /// description box's own scrolling swallowed it and the block would not go down).
+    /// Moves the block by a wheel a box on it could not use — the boxes cover most of the block, which would
+    /// otherwise never scroll by wheel.
     function rollBlock(pixels) {
         const max = Math.max(0, block.contentHeight - block.height)
-        // Taken away: `pixels` is how far the wheel wanted the content to travel, and content
-        // travels against `contentY` — the same subtraction the box makes on its own text. Added, the block
-        // went the other way, which is a wheel that scrolls up and drags the surface down under it.
+        // Subtracted: `pixels` is how far the content travels, and content travels against `contentY`.
         block.contentY = Math.max(0, Math.min(max, block.contentY - pixels))
     }
 
@@ -103,8 +90,7 @@ Flickable {
     // Hard stop at the ends, as everywhere else that scrolls (デザイン規約 §QML 実装ルール).
     boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: PaneScrollBar {}
-    // The middle button's hand, over the block and standing while it has somewhere to go — the same one the details
-    // pane's block carries (`DetailsMessageBlock`), and letting a press on a box with a hand of its own go to that one.
+    // The middle button's hand, as `DetailsMessageBlock` carries; a box with a hand of its own takes the press.
     MiddleAutoScroll {
         id: hand
         parent: block
@@ -118,17 +104,14 @@ Flickable {
         width: block.width
         spacing: 0
 
-        // Message editor — identical shape in commit details, amend and new-commit creation, inset
-        // the same way (see DetailsPane) so switching modes doesn't move the box.
+        // Inset as in DetailsPane, so switching between the two doesn't move the message box.
         ColumnLayout {
             Layout.fillWidth: true
             Layout.margins: Theme.spaceXs
-            // The gutter this block's scroll bar is drawn in — see DetailsPane, which insets the same pair the
-            // same way.
+            // The scroll bar's gutter.
             Layout.rightMargin: Theme.navBarGutter
             spacing: Theme.spaceXs
-            // The pair is one block of one height, in the same component the details pane reads messages in (デザイン規約
-            // §コミットメッセージの 2 つの枠).
+            // The pair, one block of one height (デザイン規約 §コミットメッセージの 2 つの枠).
             MessageEditor {
                 id: msgEditor
                 Layout.fillWidth: true
@@ -140,13 +123,10 @@ Flickable {
                 blockHeight: blockCol.implicitHeight
                 onWheelPastEnd: pixels => block.rollBlock(pixels)
             }
-            // Amend replaces the newest commit, so it starts from that commit's
-            // message.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
-                // Nothing to amend before the first commit: the row goes, since a
-                // repository with no history has no "last commit" the reader is being kept from.
+                // Nothing to amend before the first commit.
                 visible: block.workTree.headOid !== ""
                 AppCheckBox {
                     id: amendBox
@@ -155,8 +135,7 @@ Flickable {
                     onToggled: block.amendToggled(checked)
                 }
                 Item { Layout.fillWidth: true }
-                // Said: rewriting a pushed commit is undone by a switch or a reset, so the amend goes
-                // ahead and this tag is all the warning it gets.
+                // A tag, not a confirmation: rewriting a pushed commit is undone by a switch or a reset.
                 Label {
                     visible: block.amending && block.headPublished
                     text: qsTr("already pushed")
@@ -173,15 +152,9 @@ Flickable {
                     }
                 }
             }
-            // git records who committed, but leaves the author alone: an amend of someone else's commit — or of
-            // one's own made under a different name — keeps the name it had. Offered only where the two
-            // identities actually differ, and unchecked again whenever it goes away.
-            //
-            // **On its own line, under the box it depends on.** Beside it there is no room: the three words the
-            // amend row can be carrying at once want about 392px between them, which is past the 400 this pane
-            // opens at and well past the 300 it can be dragged to — and none of the three elides, so what went
-            // over came off the tag at the end. Stacking is also how a dependent option reads: one under the box
-            // it hangs off, at this spacing and with no indent.
+            // An amend keeps the commit's author; offered only where that identity differs from the user's, and
+            // unchecked whenever it goes away. On its own line: beside the amend box, the row's three labels do not
+            // fit the pane and none elides.
             AppCheckBox {
                 id: authorBox
                 visible: block.amending && block.repoTab.headAuthorDiffers
@@ -194,65 +167,45 @@ Flickable {
                               .arg(block.repoTab.headAuthorName)
                               .arg(block.repoTab.headAuthorEmail)
             }
-            // The framed button the rest of the app uses, at the size this pane needs. Its frame, its tone and its `!`
-            // are the ones the toolbar's buttons already wear, so the state this button can be in is said in the
-            // vocabulary someone has read elsewhere.
+            // The toolbar's framed button, so its frame, tone and `!` say its state in a vocabulary already read.
             ActionButton {
                 id: commitButton
                 Layout.fillWidth: true
-                // **The one button in the pane that is the pane's own action**, and the only one told to fill a
-                // width — so it is measured at the step above the controls beside it (`fontLg`, the size a
-                // commit's summary is typed at) in the band the toolbar's own row stands at. A control-height
-                // box around this wording read as a strip rather than as the thing being reached for.
+                // The pane's own action, filling the width: a step up (`fontLg`, the summary's size) at the
+                // toolbar's height — at control height it reads as a strip.
                 font.pixelSize: Theme.fontLg
                 implicitHeight: Theme.toolbarHeight
-                /// Something staged says its line endings changed, so the commit is about to carry it. **Only
-                /// the index counts** — a file marked on its working-tree side is not in this commit
-                /// (`session::EolMark::staged`).
+                /// A staged file's line endings changed. Only the index counts — a working-tree mark is not in this
+                /// commit (`session::EolMark::staged`).
                 readonly property bool eolWarned:
                     block.workTree.eolStagedCount > 0 && commitButton.enabled
-                // The other side a resting pointer's card can change under: the frame and the `!` are bindings and
-                // follow this on their own, the card has to be asked (`settleCommitCard`).
+                // The frame and the `!` follow as bindings; the card has to be asked (`settleCommitCard`).
                 onEolWarnedChanged: block.cardAsked()
-                // **The word alone.** The label already names the command and the branch it lands on,
-                // which is two things to read; a tick in front of them says nothing a reader did not already
-                // have, and the one mark this button does need — the `!` — has to stand out from it.
+                // No icon: the `!` is the one mark this button needs, and has to stand out.
                 centred: true
-                // **The word stays plain in both states.** A coloured word is what `Remove` and a stopped fetch
-                // wear, and both of those are held rather than clicked; this one is a click either way, and
-                // borrowing their colour for the word would borrow the gesture with it. The frame and the mark
-                // carry the state.
+                // Plain words in both states: a coloured word means a hold (`Remove`, a stopped fetch), and this
+                // is a click. The frame and the mark carry the state.
                 tone: Theme.textPrimary
-                // **The frame goes with the words.** A toolbar button is measured to its content, so a frame
-                // left bright around dimmed words still reads as a small live thing; one this wide reads as a
-                // live button with grey words in it.
+                // Disabled, the frame dims with the words: one this wide left bright reads as a live button with
+                // grey words.
                 frameColor: !commitButton.enabled ? Theme.borderDefault
                             : commitButton.eolWarned ? Theme.warning : Theme.accent
-                // The mark the button family already puts at the end of its own word when the thing it does
-                // needs reading first.
                 alert: commitButton.eolWarned
                 alertTone: Theme.warning
                 alertTight: true
-                // **The command, and where it lands.** Both ends of the phrase are things git spells, so both
-                // wear the chip that says so (デザイン規約 §git 用語のコード表記); the words between them are
-                // the app's own and stay plain and translatable. The branch takes the accent, because the one
-                // thing a reader can be wrong about here is which branch they are on — it is a switch away
-                // from being another.
+                // Command and branch are git's spelling, so both wear the chip (デザイン規約 §git 用語のコード表記);
+                // the words between are translatable. The branch takes the accent: which branch one is on is the
+                // thing to get wrong here.
                 phraseHead: block.amending ? "commit --amend" : "commit"
                 phraseTail: block.commitTarget
                 phraseTailTint: commitButton.enabled ? Theme.accent : Theme.textMuted
-                // **And whom it will be attributed to.** The face ends the sentence the button is: the command,
-                // what goes, where it lands, by whom — which is the whole of what a commit records, and the
-                // one question the editor has no row of its own for (デザイン規約 §アバターを与える).
-                // `+N` when the message credits others, the same mark the details pane's credit line uses; it follows
-                // the text being typed, so it appears as the trailer is written.
+                // Whom it is attributed to (デザイン規約 §アバターを与える), with `+N` for co-authors the message
+                // credits as it is typed.
                 phraseFace: block.repoTab.authorAvatar
                 phraseFaceUrl: block.repoTab.authorAvatarUrl
                 phraseMates: block.mateCount
-                // A tick on that face when signing is on, in the quiet ink: green is git's word that a
-                // signature held, and nothing has been signed yet (規約 §署名の表示). What it is worth saying
-                // is that a press may put a passphrase prompt on screen — the passphrase is the agent's, and a
-                // commit that stops there has no reason on screen for having stopped.
+                // A quiet-ink tick when signing is on — not green, which says a signature held (規約 §署名の表示).
+                // It warns that a press may raise the agent's passphrase prompt.
                 phraseSignature: block.repoTab.signsCommits ? "signed" : ""
                 phraseSignaturePointedAt: block.signingPointedAt
                 phraseSignatureTip: block.repoTab.signingFormat === "ssh"
@@ -260,44 +213,27 @@ Flickable {
                                     : block.repoTab.signingFormat === "x509"
                                       ? qsTr("Signed with your x509 certificate")
                                       : qsTr("Signed with your gpg key")
-                // **What goes, and where it lands.** The count is of files:
-                // it is the number the list above is showing, so the button and the list agree
-                // without the reader converting between them. An amend with nothing staged is a message-only
-                // rewrite and says so by naming no count at all.
-                // The count stands apart from the words so the words can give way without taking it: how many
-                // files go is the one number here, and it costs nothing to keep.
+                // Files, as the list above counts them; none for a message-only amend. Apart from the words, so
+                // they can give way without taking it.
                 phraseCount: block.workTree.stagedCount === 0
                              ? "" : block.workTree.stagedCount.toString()
-                // With no count there is no noun for it to count: a message-only amend and a merge whose
-                // resolution records nothing both press with nothing staged, and `commit files to main` names a
-                // quantity that is not there.
+                // No count, no noun: `commit files to main` would name a quantity that is not there.
                 text: block.workTree.stagedCount === 0 ? qsTr("to")
                       : block.workTree.stagedCount === 1 ? qsTr("file to") : qsTr("files to")
-                // An amend can stand on its own (message only); a new commit needs staged content and a
-                // summary, and git needs an identity to attribute either one to.
-                //
-                // A file still waiting on a decision stops it: git will not write a commit over an index that
-                // holds unmerged paths, whatever is staged beside them (デザイン規約 §可否・警告の出し場所).
-                //
-                // **A stopped merge presses on its own.** It carries its own message, so an
-                // empty box is not an empty commit message; and a merge whose resolution records nothing at
-                // all still has to be finished, so nothing staged is not nothing to do — git writes the empty
-                // merge commit either way (measured, 2.55). This seat is the whole way out of a merge
-                // (§進行中の操作から出る), and a way out that will not press is not one.
+                // Unmerged paths stop it: git will not commit over them (デザイン規約 §可否・警告の出し場所). A stopped
+                // merge presses on its own, with an empty box and nothing staged — git writes the merge commit
+                // either way, and this seat is the whole way out of a merge (§進行中の操作から出る).
                 enabled: block.repoTab.busyCount === 0 && block.repoTab.identityReady
                          && block.workTree.conflictCount === 0
                          && (block.onStandingMessage
                              || (msgEditor.subjectText.trim() !== ""
                                  && (block.amending || block.workTree.stagedCount > 0
                                      || block.standingSubject !== "")))
-                // **Still one click.** Committing is a daily operation and a confirmation on a daily operation
-                // becomes something people press without reading, which spends the effect where it is really
-                // needed (デザイン規約 §可否・警告の出し場所). The frame, the mark and the hover say what is in
-                // it; the decision stays the reader's.
+                // One click even when warning: a confirmation on a daily operation gets pressed unread (デザイン規約
+                // §可否・警告の出し場所).
                 onActivated: block.commitClicked()
-                // Why it cannot be pressed. The other thing this button has to say — that the index carries a
-                // line-ending change — is said by the card `settleCommitCard` opens, and the two cannot
-                // both be true: the warning wants a button that can be pressed.
+                // Why it cannot be pressed. The line-ending warning is the card's (`settleCommitCard`), and only
+                // on a button that can be pressed.
                 ToolTip.visible: commitHover.containsMouse && !enabled
                 ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: !block.repoTab.identityReady
@@ -315,8 +251,7 @@ Flickable {
                     onContainsMouseChanged: block.cardAsked()
                 }
             }
-            // The way out of a stopped operation, under the button that finishes things (`OpExitCard`) — the file
-            // list moves down to make room for it.
+            // The way out of a stopped operation (`OpExitCard`), under the button that finishes things.
             OpExitCard {
                 id: opExitCard
                 Layout.fillWidth: true

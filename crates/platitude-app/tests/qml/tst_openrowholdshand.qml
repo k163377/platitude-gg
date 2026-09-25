@@ -3,27 +3,22 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// A row of the left panel with its lines open under it is one row, lines included: the hand walking down from the
-// row's own line into what it opened has not left the row, so the row stays lit and the lines stay out under the
-// hand reaching for them (デザイン規約 §左メニューの所作, 規約 §hover のツールチップ「出したものは持ち帰れる」).
+// A row with its lines open is one row, lines included: a hand walking down into them has not left it, so the row
+// stays lit and the lines stay out (デザイン規約 §左メニューの所作, 規約 §hover のツールチップ「hover が出した字は選べて、コピーできる」).
 //
-// **Measured with the real row, in a panel that counts the hand the way the sidebar does** (`SidebarPane.handWatch`
-// → `SidebarRowGestures.handMoves` → `NavItemDelegate.syncHover`). The lines take hover of their own — the block's,
-// for a working copy's path; a noted line's; the words' (`CardText`) — and a hover-taking subtree stacked as a
-// sibling over the row's own handler takes the pointer off that handler (rules-refs/app-ui.md 「奪うのは覆う
-// `MouseArea` の子孫でない hover 持ちだけ」). So the row reads its lines' hover as its own, and this is what holds
-// it to that.
+// The real row, in a panel that counts the hand the way the sidebar does (`SidebarPane.handWatch` →
+// `SidebarRowGestures.handMoves` → `NavItemDelegate.syncHover`). The lines take hover of their own (`CardText` among
+// them), and stacked as a sibling over the row's handler they take the pointer off it (rules-refs/app-ui.md
+// 「奪うのは覆う `MouseArea` の子孫でない hover 持ちだけ」) — so the row has to read its lines' hover as its own.
 Item {
     id: root
     width: 320
     height: 240
 
-    /// Where the reading stands — empty leaves the line going nowhere, a commit makes it a way there
-    /// (`NavFacts.place`), which is what lays the band and the hand reader over the lines.
+    /// Empty leaves the line going nowhere; a commit makes it a target (`NavFacts.place`), which lays a band over it.
     property string readingAt: ""
 
-    // The row's section, answering with the one reading a branch row opens a line for. The table and the ink are
-    // read in `tst_navfacts.qml`; here the stand-in only has to give the row a line to walk into.
+    // Stand-ins that give the row one line to walk into; the table itself is read in `tst_navfacts.qml`.
     QtObject {
         id: sections
         function upstreamOf(name) { return "origin/feature/topic-a" }
@@ -46,8 +41,6 @@ Item {
         function headOfCopy(path) { return "" }
     }
 
-    /// The panel the row stands in, counting the hand by the place it was last seen in — the sidebar's own reading
-    /// (`SidebarPane`), so the row reads its hover exactly when the product's rows do.
     Item {
         id: panel
         anchors.fill: parent
@@ -100,8 +93,7 @@ Item {
             // The panel counts the hand for this row, as the sidebar's lists do (`NavList`).
             handCounted: true
             handMoves: panel.handMoves
-            // The one gesture the sidebar keeps for these rows, cut to what the row asks of it: the key the row
-            // hands up is the open one (`SidebarRowGestures.openFacts` / `closeFacts`).
+            // `SidebarRowGestures.openFacts` / `closeFacts`, cut down: the key the row hands up becomes the open one.
             onFactsAsked: (open, at) => row.openKey = open ? row.rowKey : ""
         }
     }
@@ -111,8 +103,8 @@ Item {
         name: "OpenRowHoldsTheHand"
         when: windowShown
 
-        /// The row under test, built fresh for each case and taken down however the case ended — one left standing
-        /// is what the next case's hand would land on.
+        /// Built per case and taken down however the case ended — a leftover row is what the next case's hand would
+        /// land on.
         property Item row: null
         function init() {
             root.readingAt = ""
@@ -123,10 +115,9 @@ Item {
             testCase.row = null
         }
 
-        /// The turn the row reads its hover in has passed. The row reads a turn after the hand moved
-        /// (`NavItemDelegate.onHandMovesChanged` → `Qt.callLater`), and a call queued after the move runs after the
-        /// row's own, so waiting on it is waiting on that read. **Not a frame**: a still offscreen scene need not
-        /// draw one (`waitForRendering` came back false in the container with the read long done).
+        /// The row reads its hover a turn after the hand moved (`NavItemDelegate.onHandMovesChanged` →
+        /// `Qt.callLater`); a call queued after the move runs after the row's, so waiting on it waits on that read.
+        /// Not a frame: a still offscreen scene need not draw one, and `waitForRendering` then returns false.
         property int turns: 0
         function turnDone() {
             testCase.turns++
@@ -139,34 +130,30 @@ Item {
 
         function test_the_hand_walking_into_the_lines_is_still_on_the_row() {
             const row = testCase.row
-            // The hand comes to rest on the row's own line, and the row opens after the rest every supplement
-            // waits (`Metrics.tipDelayMs`).
+            // The row opens after the usual rest (`Metrics.tipDelayMs`).
             mouseMove(panel, panel.width / 2, Theme.rowHeight / 2)
             tryCompare(row, "pointed", true, undefined, "the row is under the hand")
             tryCompare(row, "factsOpen", true, undefined, "and opens its lines under itself")
             tryVerify(() => row.factsItem !== null && row.factsItem.height > 0, undefined,
                       "the lines are built and stand under the row's own line")
 
-            // The hand walks down into the lines — onto the words, which is where a reader goes. **Two witnesses
-            // outside the row's own answer**: the panel heard the hand move (so the row was asked to read its hover
-            // again), and the lines saw it arrive (so the hand is on them, not still on the row's line).
+            // Down onto the words. Two witnesses outside the row's own answer: the panel heard the move (so the row
+            // was asked to read again), and the lines saw the hand arrive.
             const heard = panel.handMoves
             mouseMove(panel, panel.width / 2, Theme.rowHeight + row.factsItem.height / 2)
             verify(panel.handMoves > heard, "the panel hears the hand move into the lines")
             verify(row.factsItem.pointed, "and the lines see the hand on them")
-            // The row reads its hover a turn after the hand moved (`syncHover`): let that turn pass.
             testCase.turnPassed()
             compare(row.pointed, true, "the hand on the lines is the hand on the row")
             compare(row.factsOpen, true, "so the lines stay out under it")
 
-            // Out of the row altogether, and it lets go: what holds it is the hand, not the test.
+            // What holds the row open is the hand, not the test.
             mouseMove(panel, panel.width / 2, row.height + Theme.rowHeight)
             tryCompare(row, "factsOpen", false, undefined, "the row closes once the hand is off it")
         }
 
-        /// The same walk down onto a line that goes somewhere (`NavRowFacts.aimRow`): the band is the line's and
-        /// nobody else's — **not lit from the row's own line** above it — and the hand arriving on it is still on the
-        /// row.
+        /// Onto a line that goes somewhere (`NavRowFacts.aimRow`): its band lights from the line alone, never from the
+        /// row's own line above, and the hand on it is still on the row.
         function test_the_hand_walking_onto_a_line_that_goes_lights_that_line_alone() {
             root.readingAt = "abc"
             const row = testCase.row
@@ -174,7 +161,7 @@ Item {
             tryCompare(row, "factsOpen", true, undefined, "the row opens under the hand")
             tryVerify(() => row.factsItem !== null && row.factsItem.height > 0, undefined, "and its lines stand")
             compare(row.factsLines[0].to.oid, "abc", "the line goes somewhere")
-            // Every height on the row's own line, its foot included: the band is under the lines and not over it.
+            // Every height of the row's own line, its foot included — the band must not reach up into it.
             for (let y = 1; y < Theme.rowHeight; y += 2) {
                 mouseMove(panel, panel.width / 2, y)
                 testCase.turnPassed()

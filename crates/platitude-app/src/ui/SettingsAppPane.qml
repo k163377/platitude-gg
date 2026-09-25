@@ -4,17 +4,15 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// The settings screen's `Application` category: everything Platitude GG keeps in its own settings file, and the
-// sentence that says so (規約 §設定の画面). A file of its own for the reason the other two categories have one — a
-// category is one place values are stored, and this one's place is that file.
+// The settings screen's `Application` category: what Platitude GG keeps in its own settings file (規約 §設定の画面).
+// One file per category, since a category is one place values are stored.
 ColumnLayout {
     id: pane
 
-    /// The tab the avatar candidates are read off: the authors of the repository being looked at. The settings
-    /// themselves are the application's, but "whose commits are these" is read where the person is.
+    /// The page the avatar candidates are read off (its repository's authors).
     property var curPage: null
 
-    /// The author an avatar's badge was pressed on, handed down by the screen — which is where the entry puts it.
+    /// The author an avatar's badge was pressed on, handed down by the screen for the entry.
     property string prefillName: ""
     property string prefillEmail: ""
 
@@ -24,18 +22,13 @@ ColumnLayout {
     /// Stands in for the pointer on one row's Remove, which headless cannot inject.
     property int pointedAtRow: -1
 
-    /// What the avatar verbs wait on, and the two moves they have no hand to make. The screen is the window's, so
-    /// those verbs are finished by `WindowAutoActDriver`; everything here is the list's own output side — the rows the
-    /// store answered the filing with, the picture inside the first of them, that row's `lit`, and the candidate
-    /// list's own `opened`.
+    /// What the avatar verbs (finished by `WindowAutoActDriver`) wait on — the list's output side.
     readonly property int autoAvatarRows: avatarRepeater.count
     readonly property bool autoAvatarComboOpen: avatarWho.popup.opened
-    /// Which chapters this category is actually showing, for the verb that presses the rail — the screen's `category`
-    /// is the input side, and a run that read it back would be reporting its own press.
+    /// Whether this category is showing, for the verb that presses the rail — reading back the screen's `category`
+    /// would report the run's own press.
     readonly property bool autoAppShown: fetchField.visible
-    /// The version git printed is in a field, so a reader can drag over it and take it away — **the one chip in this
-    /// window that is a value** (`CodeChip.grabbable`). A picture cannot say it: a chip that answers a press is drawn
-    /// exactly like one that does not.
+    /// The version chip can be grabbed (`CodeChip.grabbable`), which a picture cannot show.
     readonly property bool autoVersionGrabbed: gitVersionChip.grabbed
     function autoAvatarRowLit(at) {
         const row = avatarRepeater.itemAt(at)
@@ -45,15 +38,12 @@ ColumnLayout {
         const row = avatarRepeater.itemAt(at)
         return !!row && row.pictureReady()
     }
-    /// The door a press uses, so the list comes down the way it does under a hand — including the turn of the loop the
-    /// field puts between the press and the list (`AppCombo.pressField`).
+    /// Through the press's own door (`AppCombo.pressField`), including its turn of the loop before the list.
     function autoAvatarOfferCombo() {
         avatarWho.pressField()
     }
-    /// The name put into that box, and Enter in it. Neither key nor letter reaches the box on the offscreen
-    /// platform: the text is written where typing writes it (`AppCombo.wanted`, the way [`focusPrefill`] fills the
-    /// box), and the Enter is the box's own `accepted` — the signal Qt raises on the key (`tst_appcombo`), and the
-    /// door [`openAvatarPicker`] hangs off.
+    /// Typing into that box and Enter, which the offscreen platform does not deliver: the text goes where typing
+    /// writes it (`AppCombo.wanted`, as `focusPrefill` does), and Enter is the box's own `accepted` (`tst_appcombo`).
     function autoTypeAvatarWho(who) {
         avatarWho.wanted = who
         avatarWho.editText = who
@@ -61,9 +51,7 @@ ColumnLayout {
     function autoEnterAvatarWho() {
         avatarWho.accepted()
     }
-    /// Whether the picker this screen files a picture from is standing. **`visible`, not `opened`** — a `FileDialog`
-    /// is the platform's window and not a `Popup`, so it has no `opened` of its own (`open-picker` reads the
-    /// repository picker the same way), and it is in neither PNG.
+    /// `visible`, not `opened`: a `FileDialog` is a platform window, not a `Popup` — and it is in neither PNG.
     readonly property bool autoAvatarPickerOpen: avatarPicker.visible
     /// Runs the row's hold to its end. False where the list has no such row yet, or its button takes no press yet,
     /// so the caller waits for it.
@@ -80,29 +68,23 @@ ColumnLayout {
         url: assignment.url
     }))
 
-    /// Who the entry offers: the authors of the repository being looked
-    /// at. Read when the screen opens, because the graph
-    /// keeps moving and a list that reordered itself under an open popup
-    /// would be answering a question nobody asked.
+    /// Who the entry offers, read once as the screen opens — bound, it would reorder under an open popup as the
+    /// graph moves.
     property var authorChoices: []
     function readAuthorChoices() {
-        // The model dedupes, sorts and formats (`GraphModel.author_choices`); the prefill rides along so its address
-        // shows once. With no page there are no rows to offer — the prefill still leads the list.
+        // `GraphModel.author_choices` dedupes, sorts and formats, with the prefill so its address shows once.
         pane.authorChoices = pane.curPage
                            ? pane.curPage.pageGraph.authorChoices(pane.prefillName, pane.prefillEmail)
                            : pane.prefillEmail !== ""
                              ? [pane.prefillName + " <" + pane.prefillEmail + ">"] : []
     }
 
-    /// The address the picker will file under, pulled back out of what the
-    /// entry is showing. The list writes `Name <address>`; a person typing
-    /// their own may write either half, and an address is the one with an
-    /// `@` in it (`platitude_core::trailers::split_identity`).
+    /// The address and name the picker files under, split out of the entry: `Name <address>`, or either half typed
+    /// alone (`platitude_core::trailers::split_identity`).
     readonly property string chosenEmail: GitFacts.identityEmailOf(avatarWho.wanted)
     readonly property string chosenName: GitFacts.identityNameOf(avatarWho.wanted)
-    /// Find the file for whoever the box names. **The one body both ways in enter** — the button and the box's own
-    /// Enter — so what "choose" means cannot come to differ between them; and the same guard the button wears, since
-    /// a picker opened over nobody would file its answer against an empty address.
+    /// The one body the button and the box's Enter share, guarded as the button is: a picker opened over nobody
+    /// would file against an empty address.
     function openAvatarPicker() {
         if (pane.chosenEmail === "")
             return
@@ -110,23 +92,16 @@ ColumnLayout {
     }
 
     /// The version git printed, in git's own spelling — the chip at the head of the line. Empty where git printed
-    /// none, which is every answer that is not a version.
+    /// none.
     readonly property string gitPathChip:
         AppBackend.gitPathState === "ok" || AppBackend.gitPathState === "old"
         ? "git " + AppBackend.gitPathVersion : ""
-    /// What the git at the path said, as one sentence — empty where the chip above says the whole of it. The words
-    /// are here (app-ui.md「Rust に文言を置かない」): what comes across is which of the four
-    /// answers it was (`version::Probe`), and the only string passed through is git's or the OS's own.
-    ///
-    /// **The two `missing` sentences are different questions.** An empty box means the git on PATH, and "not on
-    /// PATH" is what the startup gate says about it in those words; a path that was written down is a file that is
-    /// not there, and telling the reader about PATH would send them to fix the wrong thing.
+    /// What the git at the path said, as one sentence — empty where the chip says it all. The words live here
+    /// (rules-refs/app-ui.md「Rust に文言を置かない」); `version::Probe` sends which answer it was. The two `missing`
+    /// sentences differ: an empty box means the git on PATH, a written path is a file that is not there.
     readonly property string gitPathWord: {
-        // **The warning takes the version in.** A chip alone above a paragraph reads
-        // as a lead-in nobody finished; the version is the subject of what the warning has to say, so it is the
-        // subject of the sentence. Two whole wordings, the way the line-ending
-        // rows are written (規約 §設定の画面) — the old one has a second fact to carry and a joined-on clause reads
-        // as an afterthought.
+        // The version chip is the warning's subject. Two whole wordings rather than a joined-on clause
+        // (規約 §設定の画面).
         if (AppBackend.gitPathOffersRestart) {
             return AppBackend.gitPathState === "old"
                  ? qsTr("is older than the %1 this app is built for — restart to use it anyway.")
@@ -137,13 +112,10 @@ ColumnLayout {
         case "checking":
             return qsTr("Asking for the version…")
         case "ok":
-            // Nothing beside the chip: with nothing else on the line the version is the whole answer, and a
-            // sentence built round it would be saying "that git is" about the only thing there.
+            // The chip alone is the whole answer.
             return ""
         case "old":
-            // What the `OLD GIT` badge's card says, less the version the chip is already carrying
-            // (規約 §git が無い時・古い時). One spelling for the one fact, so a reader who has seen the badge reads
-            // this line as the same thing said again.
+            // The `OLD GIT` badge's words, less the version the chip carries (規約 §git が無い時・古い時).
             return qsTr("is older than the %1 this app is built for.").arg(AppBackend.minimumGit)
         case "missing":
             return AppBackend.gitPath === "" ? qsTr("git was not found on PATH.")
@@ -153,10 +125,8 @@ ColumnLayout {
         }
         return ""
     }
-    /// `warning` while the line is the one that costs the window it is read in, and for a git that answers and is
-    /// old (nothing is stopped); `danger` for one that did not answer at all; and the help text's own ink for the
-    /// rest — a version that came back is ordinary (規約 §状態: the state colours are for "this is not a state you
-    /// can work in", and a settings screen is otherwise all ordinary).
+    /// `warning` while a restart is offered or git is old; `danger` where git did not answer; otherwise the help
+    /// text's ink — a version that came back is ordinary (規約 §状態).
     readonly property color gitPathInk: {
         if (AppBackend.gitPathOffersRestart)
             return Theme.warning
@@ -170,25 +140,16 @@ ColumnLayout {
         return Theme.textSecondary
     }
 
-    /// Whether the button stands, frozen for the length of a press (規約 §フル interactive rebase, and the standing
-    /// list of buttons that do not freeze: P3-確認事項 §app).
-    ///
-    /// **The offer moves on git's clock.** A version comes back, or a second one is asked for, and
-    /// the offer can fall under a hand already holding — which would take the button out from under it mid-hold, and
-    /// `ActionButton` reads `holdMs` again at the release besides. Frozen, the press finishes on the button it began
-    /// on and `restart_now` decides whether it still means anything.
-    ///
-    /// Declared with the live value so it reads right from the start; the `Binding` is what keeps it, dropped while a
-    /// press is under way with nothing put back after (`RestoreNone`) — which is the freeze itself.
+    /// Whether the button stands, frozen for the length of a press (規約 §設定の画面「姿は押した瞬間に凍る」): the
+    /// offer moves on git's clock and could take the button from under a hand mid-hold; frozen, the press finishes and
+    /// `restart_now` decides whether it still means anything. The `Binding` below keeps it live and lets go during a
+    /// press (`RestoreNone` is the freeze).
     property bool gitButtonRestarts: AppBackend.gitPathOffersRestart
-    /// What the button wears: `warning` for a git that answers, `danger` where that git is below the supported
-    /// minimum. **The button alone goes red** — the line above it stays `warning`, because being old is a fact about
-    /// the git. Read off the frozen shape, so the button stays put under a hand
-    /// already holding it.
+    /// `warning` for a git that answers, `danger` where it is below the supported minimum — the button alone goes
+    /// red; the line stays `warning`, being old a fact about the git.
     readonly property color gitButtonTone:
         AppBackend.gitPathState === "old" ? Theme.danger : Theme.warning
-    /// A gesture is under way. The pointer's is `down`; the keyboard's is the climbing fill — an armed hold
-    /// takes Space itself (`HoldDriver.pressKey`), which is what puts it there.
+    /// A press is under way: the pointer's `down`, or the keyboard's climbing fill (`HoldDriver.pressKey`).
     readonly property bool gitButtonPressing: gitButton.down || gitButton.holdProgress > 0
     Binding {
         target: pane
@@ -198,15 +159,11 @@ ColumnLayout {
         restoreMode: Binding.RestoreNone
     }
 
-    /// Everything the git box is holding, in one reading: what it would write, what the store has, and what the
-    /// binary at the end of it said. **None of it can be read off a picture** — a path is drawn the same whether or
-    /// not anything is at the end of it, and the answer arrives a subprocess after the box does. An automation-only
-    /// exposure, the same one `GraphPane.view` is (app-ui.md).
+    /// The git box's state in one reading — shown, stored, and what the binary said — none of it readable off a
+    /// picture. Automation-only, the same exposure as `GraphPane.view` (rules-refs/app-ui.md).
     function gitPathTally() {
-        // **The four flags run together, ahead of the state.** Each row of the verb table claims a run of them and a
-        // row's line is one substring (`verify::verbs`), so a `state=` in the middle would cut every claim in two.
-        // Which of the two answers a version was is the machine's business anyway — a container on the supported
-        // minimum and a desk on the newest both say `answered=true`.
+        // The four flags stay together, ahead of `state=`: each verb-table row claims a run of them as one substring
+        // (`verify::verbs`). `answered` folds `ok` and `old` so the supported minimum and the newest git read alike.
         return "shown=" + gitPathField.text + " stored=" + AppBackend.gitPath
              + " answered=" + (AppBackend.gitPathState === "ok" || AppBackend.gitPathState === "old")
              + " offers=" + AppBackend.gitPathOffersRestart
@@ -216,8 +173,8 @@ ColumnLayout {
              + " version=" + AppBackend.gitPathVersion
              + " inUse=" + AppBackend.gitPathInUse
     }
-    /// Opens the chooser where a git already is (`gitPicker`). The path in the box wins, because that is the one the
-    /// reader is working on; with the box empty it is the placeholder's, which is the git this run spawns.
+    /// Opens the chooser beside a git — on a machine with several, the nearest useful start: the box's path, or with
+    /// the box empty the git this run spawns.
     function openGitPicker() {
         const near = GitFacts.folderUrlOf(gitPathField.text !== "" ? gitPathField.text
                                                                   : AppBackend.gitPathInUse)
@@ -226,24 +183,22 @@ ColumnLayout {
         gitPicker.open()
     }
 
-    /// The door a run types through, so the box is written the way a hand leaves it: the text, then the edit being
-    /// finished with. Writing `AppBackend.gitPath` straight would photograph the wiring cut (規約 §UI 自動化の因果性).
+    /// Types the way a hand leaves the box: the text, then the edit finished. Writing `AppBackend.gitPath` straight
+    /// would pass with the wiring cut (app-ui.md §UI 自動化).
     function autoTypeGitPath(path) {
         gitPathField.text = path
         pane.applyGitPath()
     }
 
-    /// The door a run types the process chapter through: both boxes, each the way a hand leaves it — the text, then
-    /// the edit being finished with. Either half empty is what an emptied box means: the default, and off.
+    /// Both process boxes, each typed as `autoTypeGitPath` does. An empty half is an emptied box: the default / off.
     function autoTypeProcesses(concurrency, copiesSecs) {
         concurrencyField.text = concurrency
         pane.applyConcurrency()
         copiesField.text = copiesSecs
         pane.applyCopies()
     }
-    /// What the store holds for that chapter, as the run reports it: the count the slots are set to and whether it is
-    /// this machine's default (the number itself is the machine's — a third of its threads), and the interval in both
-    /// units, since the tick reads the milliseconds and the box the seconds.
+    /// What the store holds for that chapter: the count and whether it is this machine's default (the number itself
+    /// varies by machine), and the interval in both units — the tick reads milliseconds, the box seconds.
     function processesTally() {
         return "concurrency=" + AppBackend.gitConcurrency
                + " default=" + (AppBackend.gitConcurrency === AppBackend.gitConcurrencyDefault)
@@ -258,16 +213,12 @@ ColumnLayout {
         wholeHistoryBox.checked = AppBackend.initialCommits === 0
         commitsField.text = AppBackend.initialCommits > 0 ? String(AppBackend.initialCommits) : ""
         gitPathField.text = AppBackend.gitPath
-        // The screen is open: the path is asked for its version, and nothing said here counts as a way out until it
-        // closes. One `git --version`, which is the cheapest read this app makes (the eight-second one lives in the
-        // other category, and asks only from the chapter that shows it).
+        // One `git --version` for the path shown.
         AppBackend.openGitPathScreen()
         pane.readAuthorChoices()
     }
-    /// Opened from an avatar, the first thing left to do is name the
-    /// picture, so the caret goes there. **The only caret this screen
-    /// places as it opens** (`SettingsDialog.onOpened`) — a category is
-    /// read before it is answered, so the caret belongs to this door.
+    /// Opened from an avatar, the entry is filled and focus goes to choosing the picture — the only focus this
+    /// screen places as it opens (`SettingsDialog.onOpened`).
     function focusPrefill() {
         if (pane.prefillEmail === "") {
             avatarWho.wanted = ""
@@ -280,39 +231,32 @@ ColumnLayout {
         chooseAvatar.forceActiveFocus()
     }
 
-    // An empty field is the off switch — nothing to type is the
-    // clearest way to say "off".
+    // Empty is off.
     function applyFetch() {
         AppBackend.setAutoFetchMinutes(fetchField.text === "" ? 0 : Number(fetchField.text))
     }
-    // An empty field is the default here — zero git at once is meaningless — and
-    // the placeholder is that number. Written from here for the reason the interval is: a validator with a floor
-    // calls an empty string unacceptable, so `onEditingFinished` never fires for one.
+    // Empty is the default (zero at once is meaningless). Also written from `applyFields`: a validator with a floor
+    // rejects an empty string, so `onEditingFinished` never fires for an emptied field.
     function applyConcurrency() {
         AppBackend.setGitConcurrency(concurrencyField.text === "" ? 0 : Number(concurrencyField.text))
     }
-    // The same off switch the fetch interval has: empty is never.
+    // Empty is never.
     function applyCopies() {
         AppBackend.setCopiesIntervalSecs(copiesField.text === "" ? 0 : Number(copiesField.text))
     }
-    // Two controls, one value: the box asks for no window at all (core's `0`), and the field answers only while the
-    // box is clear. Written from here for the same reason the interval is — a validator with a floor calls an empty
-    // string unacceptable, so `onEditingFinished` never fires for one, and an emptied field would otherwise never be
-    // written back. Empty is the default; the placeholder is that number.
+    // Two controls, one value: the box asks for no window at all (core's `0`); the field answers only while the box
+    // is clear, empty being the default. Written from `applyFields` too, as `applyConcurrency` is.
     function applyCommits() {
         AppBackend.setInitialCommits(wholeHistoryBox.checked ? 0
                                      : commitsField.text === "" ? AppBackend.initialCommitsDefault
                                      : Number(commitsField.text))
     }
-    // The path is written as it is finished with, and asking the binary is part of writing it: the reader is told
-    // what is at the end of what they just typed, in the same breath. Empty is an answer — whichever git `PATH`
-    // resolves — so there is nothing to guard against here.
+    // Writing the path also asks the binary. Empty is an answer (the git `PATH` resolves), so nothing is guarded.
     function applyGitPath() {
         AppBackend.setGitPath(gitPathField.text)
     }
-    /// All of this category's fields, for the way out of the screen. The git path is written like the rest of them —
-    /// **putting it in force is the button's own errand** (`AppBackend.applyGitPathNow`): a window that went down
-    /// because somebody closed a settings screen would be a restart nobody pressed.
+    /// Writes every field, for the way out of the screen. The git path is only written — putting it in force is the
+    /// button's errand (`AppBackend.applyGitPathNow`): closing a settings screen must not restart the window.
     function applyFields() {
         pane.applyFetch()
         pane.applyConcurrency()
@@ -324,17 +268,11 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Theme.spaceXl
 
-    // Where this category's values live, said before the chapters. The other two
-    // categories say the same about themselves in their own files, and between them those sentences are the whole of
-    // the difference between the categories.
     HelpText {
         text: qsTr("Kept by Platitude GG in its own settings file. Nothing here is written to your git configuration.")
     }
 
-    // First of this category's chapters, because it is the one every other thing on the screen runs through: which
-    // binary answers is upstream of how often it is asked and how much it is asked for. It also stands where the
-    // category's own sentence has just said "nothing here is written to your git configuration" — which is exactly
-    // what tells this chapter apart from the `Git` category next door (規約 §設定の画面).
+    // First, because every other chapter runs through which binary answers (規約 §設定の画面).
     SettingsSection {
         caption: qsTr("GIT EXECUTABLE")
         HelpText {
@@ -344,57 +282,38 @@ ColumnLayout {
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceSm
-            // **The box is the chooser.** The answer to "which git" is a file the reader can point at: typed, one
-            // letter wrong names a binary that is not there. Pressing it opens the
-            // dialog — and it keeps the ground a typing box has, which is the one exception to §選ぶ欄と打つ欄 this
-            // screen carries: bare between two grounded boxes it read as disabled.
-            //
-            // As wide as the chapter gives it: a path has no fixed length, and an input only takes a fixed width
-            // when its content does (デザイン規約 §レイアウト初期値).
+            // The box is the chooser — a typed path one letter wrong names nothing. It keeps a typing box's ground,
+            // this screen's one exception to §選ぶ欄と打つ欄: bare between two grounded boxes it read as disabled.
+            // Full width: a path has no fixed length (デザイン規約 §レイアウト初期値).
             FormField {
                 id: gitPathField
                 Layout.fillWidth: true
                 choosing: true
-                // What an empty box will be read as, shown — the same job the commit count's
-                // placeholder does with its number. **The resolved path**: "the git on PATH"
-                // is not somewhere a reader can go and look, and the whole point of this chapter is that a machine
-                // may hold several (規約 §設定の画面).
+                // What an empty box is read as: the resolved path, since "the git on PATH" is nowhere a reader can
+                // look (規約 §設定の画面).
                 placeholderText: AppBackend.gitPathInUse
                 onPicking: pane.openGitPicker()
             }
-            // **The one button here is the way to put a git in force**, and it stands only while there is one to
-            // put — choosing is the box's own errand, and a button that opened the same dialog beside it would
-            // be a second door to one room. `warning`, and held, because the press costs the
-            // window it is made in (規約 §設定の画面 / §長押し). The word carries the colour as well as the frame,
-            // the way `push -f` does: what changes is what the press costs.
+            // The one button puts a git in force, standing only while there is one to put — choosing is the box's
+            // errand. `warning` and held: the press costs the window (規約 §設定の画面 / §長押し).
             ActionButton {
                 id: gitButton
                 visible: pane.gitButtonRestarts
                 implicitHeight: Theme.controlHeight
                 text: qsTr("Restart to apply")
                 tone: pane.gitButtonTone
-                // Framed, for the reason the avatar chooser is: it stands in a form row beside a
-                // framed box (規約 §肯定側のボタン). The frame takes the word's own colour, which is what says the
-                // press costs something.
+                // Framed beside a framed box (rules-refs/app-ui.md「肯定側のボタンは枠で名乗り」), in the word's
+                // colour to say the press costs something.
                 frameColor: pane.gitButtonTone
                 holdMs: Metrics.holdMs
                 activeFocusOnTab: true
                 onHeld: AppBackend.applyGitPathNow()
             }
         }
-        // What the git at that path said, in the slot the identity chapter says "a commit made there now would be
-        // attributed to …" in: the explanation goes above the box, what is true now goes below it
-        // (規約 §設定の画面). **A path cannot be checked by looking at it** — this line is the whole of the
-        // difference between a box that works and a box with a typo in it.
-        //
-        // **The version wears the chip** (規約 §git 用語のコード表記): what git printed is git's own spelling, and
-        // a line that opens with a lowercase `git` and nothing to mark it reads as a sentence with a typo at the
-        // front. The rest of the sentence is ordinary text beside it.
-        //
-        // **Only ever one line's worth of it.** A chip and a wrapping paragraph in one row hang the second and third
-        // lines off the chip's right edge, and a chip cannot flow inside wrapping
-        // text without giving up its dress (its ground is measured from the word's step
-        // — 同 §). So what stands beside the chip is one sentence, and anything more is the paragraph below.
+        // What the git at that path said, below the box: the explanation above, what is true now below
+        // (規約 §設定の画面). The version wears the chip (規約 §git 用語のコード表記) — a bare lowercase `git` opening a
+        // line reads as a typo. One sentence beside the chip, since a chip cannot flow inside wrapping text (同 §);
+        // anything more goes below.
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
@@ -404,10 +323,7 @@ ColumnLayout {
                 visible: pane.gitPathChip !== ""
                 word: pane.gitPathChip
                 tint: pane.gitPathInk
-                // The one chip in this window that is a value rather than a dress: it is git's own spelling of the
-                // version the chosen binary answered with, and it is what a reader copies into a bug report
-                // (規約 §設定の画面). Nothing else wants the press here — the sentence beside it is a field of its
-                // own and the chapter's controls are elsewhere.
+                // The one chip in this window that is a value: what a reader copies into a bug report (規約 §設定の画面).
                 grabbable: true
                 // On the first line — the tail may wrap to two.
                 Layout.alignment: Qt.AlignTop
@@ -421,10 +337,7 @@ ColumnLayout {
                 text: pane.gitPathWord
             }
         }
-        // The one thing the line above cannot carry, at the column's own margin: what a restart costs. Being told to
-        // restart with nowhere to leave to, a reader's question is what they lose — and the answer is nothing, so it
-        // is one short line (the chip cannot flow inside wrapping text, so the sentence it heads is kept to one line
-        // and anything more comes here). Comes and goes with the button.
+        // What a restart costs (nothing), kept off the chip's one-sentence line. Comes and goes with the button.
         CardText {
             Layout.fillWidth: true
             visible: AppBackend.gitPathOffersRestart
@@ -436,17 +349,9 @@ ColumnLayout {
         FileDialog {
             id: gitPicker
             title: qsTr("Choose git")
-            // Where the chooser opens. **Beside a git**: on a
-            // machine with more than one git installed — which is the whole premise of this chapter — the nearest
-            // useful place to start is where the one already in hand lives. The box's own path if it holds one,
-            // otherwise the one behind the placeholder, which is the git this run spawns.
-            //
-            // Set on the way in, the same shape the repository chooser uses
-            // (`Main.qml.openRepositoryPicker`): a dialog that re-homed itself while somebody was walking a tree
-            // would take the folder they had got to away from them.
-            // Every file is offered: a git is an `.exe` on one of the three platforms and has no extension on the
-            // other two, and a wrapper script is a normal thing to point at. The version this writes back says
-            // whether the choice was a git — filtering by name would only be guessing at it.
+            // The folder is set on the way in (`openGitPicker`), not bound: a dialog re-homing itself mid-walk would
+            // take the reader's place away. No name filter: git has no extension off Windows, a wrapper script is fine,
+            // and the version written back says whether the choice was a git.
             onAccepted: {
                 gitPathField.text = GitFacts.pickedPath(selectedFile.toString())
                 pane.applyGitPath()
@@ -454,16 +359,11 @@ ColumnLayout {
         }
     }
 
-    // **The rest of the category is held while a git waits to be applied** (規約 §設定の画面). The screen lets go
-    // once the reader answers the box above; letting them go on setting other things meanwhile would be
-    // offering work whose window is about to be replaced — and one of them (the graph's window) is read by the very
-    // session that is going. `enabled` reaches the whole chapter, so the words go to the disabled step with the
-    // boxes (§無効).
+    // The rest of the category is held while a git waits to be applied (規約 §設定の画面): work set now would go with
+    // the window being replaced. `enabled` takes the chapter's words to the disabled step with its boxes (§無効).
     SettingsSection {
         enabled: !AppBackend.gitPathOffersRestart
         caption: qsTr("AUTOMATIC FETCH")
-        // Over the field: a sentence about what a chapter does belongs before the thing it describes,
-        // which is the shape the group and category sentences already keep (規約 §設定の画面).
         HelpText {
             text: qsTr("Runs git fetch --prune on every open repository, at most once per interval. Empty means off; %1 minutes is the longest interval.")
                   .arg(AppBackend.autoFetchMaxMinutes)
@@ -482,9 +382,7 @@ ColumnLayout {
                         bottom: 1
                         top: AppBackend.autoFetchMaxMinutes
                     }
-                    // Written when the field is done with — on Enter, and
-                    // on the focus leaving it. Per keystroke,
-                    // it would run through "1" on the way to "10".
+                    // On Enter or focus out — per keystroke would pass through "1" on the way to "10".
                     onEditingFinished: pane.applyFetch()
                     onAccepted: pane.accepted()
                 }
@@ -497,10 +395,7 @@ ColumnLayout {
         }
     }
 
-    // What the machine is asked to do at once and in the background: how many git commands may run together, and how
-    // often the other working copies of a repository are read for uncommitted work. Beside the fetch interval because
-    // they are the same kind of answer — about this machine and the person at it
-    // (規約 §設定の画面).
+    // Beside the fetch interval: the same kind of answer, about this machine (規約 §設定の画面).
     SettingsSection {
         enabled: !AppBackend.gitPathOffersRestart
         caption: qsTr("GIT PROCESSES")
@@ -516,7 +411,6 @@ ColumnLayout {
                 FormField {
                     id: concurrencyField
                     implicitWidth: 160
-                    // What an empty field will be read as, shown.
                     placeholderText: String(AppBackend.gitConcurrencyDefault)
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
@@ -578,14 +472,11 @@ ColumnLayout {
                 FormField {
                     id: commitsField
                     implicitWidth: 160
-                    // The number does not apply while the whole history is asked for, and §無効 is how that is said.
-                    // The text stays put, so unchecking gives the reader their own number back.
+                    // Disabled, not cleared, under the whole history (§無効): unchecking gives the number back.
                     enabled: !wholeHistoryBox.checked
-                    // What an empty field will be read as, shown.
                     placeholderText: String(AppBackend.initialCommitsDefault)
                     inputMethodHints: Qt.ImhDigitsOnly
-                    // The only ceiling is the property's own type (`session::log_limit`), so a number a person
-                    // typed on purpose is one the walk answers.
+                    // No top: the only ceiling is the property's own type (`session::log_limit`).
                     validator: IntValidator {
                         bottom: AppBackend.initialCommitsMin
                     }
@@ -599,9 +490,7 @@ ColumnLayout {
                 Item { Layout.fillWidth: true }
             }
         }
-        // The other answer a count of commits can have, and it is a yes or no — so it wears a box. An
-        // empty field would have had to carry it, and an empty field already means "the default" in the box right
-        // above (規約 §設定の画面).
+        // A yes or no, so a box — an empty field already means the default (規約 §設定の画面).
         AppCheckBox {
             id: wholeHistoryBox
             text: qsTr("Load the whole history")
@@ -617,15 +506,9 @@ ColumnLayout {
         }
         Repeater {
             id: avatarRepeater
-            /// The one column every row's name is laid into, as wide
-            /// as the widest of them, so the address beside it starts
-            /// on the same x down the whole list and the chapter reads
-            /// as a table. The
-            /// same shape `AppMenu.codeColW` uses for its chips.
-            ///
-            /// Settled by the rows' own seat changes:
-            /// the binding form only re-ran on `count`, and a same-size
-            /// reassignment replaces every row without moving it.
+            /// The widest row's name, so every address starts on the same x (as `AppMenu.codeColW`). Settled by the
+            /// rows' own seat changes: a binding re-runs only on `count`, and a same-size reassignment replaces every
+            /// row.
             property real nameColW: 0
             function settleNameColW() {
                 let widest = 0
@@ -638,8 +521,6 @@ ColumnLayout {
             }
             onItemRemoved: settleNameColW()
             model: pane.assigned
-            // One row per assignment (`AvatarAssignRow`); the shared name column and the pointer stand-in
-            // are handed down, the rest the row reads off its own record.
             delegate: AvatarAssignRow {
                 Layout.fillWidth: true
                 nameColW: avatarRepeater.nameColW
@@ -655,27 +536,17 @@ ColumnLayout {
                 Layout.fillWidth: true
                 placeholder: qsTr("name or email")
                 model: pane.authorChoices
-                // A finished name is somebody to give a picture to, and the only thing left to do with them is find
-                // the file — the same one press the box beside it makes (デザイン規約 §アバターを与える). The git
-                // box at the head of this screen already answers its own Enter with the picker it opens
-                // (`FormField.answerKey`); this is that rule where the box also takes typing.
+                // Enter opens the picker, as the button beside it does (デザイン規約 §アバターを与える) — the git box's
+                // Enter rule (`FormField.answerKey`) for a box that also takes typing.
                 onSubmitted: pane.openAvatarPicker()
             }
             ActionButton {
                 id: chooseAvatar
                 implicitHeight: Theme.controlHeight
-                // One word for the whole feature, and it is the word
-                // this shelf already uses (デザイン規約 §アバターを
-                // 与える). Bare noun: the row names a kind about to be
-                // chosen (§長さ).
+                // The feature's one word (デザイン規約 §アバターを与える); a bare noun for a kind about to be chosen
+                // (§長さ).
                 text: qsTr("Choose avatar…")
-                // A plain frame: bare is for the
-                // answer standing beside a framed one, read as the
-                // pair it is in, and this one stands in a form row
-                // next to a combo (規約 §肯定側のボタン). Opened from
-                // an avatar, what says which errand this is is the
-                // combo beside it, already
-                // carrying that name.
+                // A plain frame in a form row next to a combo (rules-refs/app-ui.md「肯定側のボタンは枠で名乗り」).
                 frameColor: Theme.borderDefault
                 activeFocusOnTab: true
                 enabled: pane.chosenEmail !== ""
@@ -687,8 +558,7 @@ ColumnLayout {
             visible: AppBackend.avatarErrorKind !== ""
             color: Theme.danger
             pixelSize: Theme.fontSm
-            // The words are this side's, off the kind core answered with — the numbers it takes come with it, and
-            // the two failures the operating system made carry its own line under ours (`Words.avatarFailure`).
+            // Our words off core's kind and facts; an OS failure adds its own line under ours (`Words.avatarFailure`).
             text: Words.avatarFailure(AppBackend.avatarErrorKind,
                                       AppBackend.avatarErrorFacts,
                                       AppBackend.avatarErrorSaid)
@@ -698,14 +568,9 @@ ColumnLayout {
     FileDialog {
         id: avatarPicker
         title: qsTr("Choose avatar")
-        // The patterns come from the store so the dialog and the store
-        // cannot drift apart; the words in front of them are ours, so
-        // they live here (CLAUDE.md 文言規約). They
-        // name the two formats, because every
-        // category word for a file is a second name for the avatar
-        // (デザイン規約 §アバターを与える) — and the formats are pinned
-        // by that same section, so `avatar::EXTENSIONS` cannot grow one
-        // this line does not know about without the rules moving first.
+        // Patterns from the store so the two cannot drift; the words are ours (rules-refs/app-ui.md「Rust に文言を置かない」).
+        // They name the two formats — a category word would be a second name for the avatar — and the formats are
+        // pinned by デザイン規約 §アバターを与える, so `avatar::EXTENSIONS` cannot grow without the rules moving first.
         nameFilters: [qsTr("PNG and JPEG (%1)").arg(AppBackend.avatarPatterns)]
         onAccepted: AppBackend.assignAvatar(pane.chosenEmail, pane.chosenName, selectedFile.toString())
     }

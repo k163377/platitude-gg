@@ -2,15 +2,9 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The hidden measurements behind the band's shared button box: the four candidate wordings, each drawn (invisibly)
-// exactly as a button would draw it. The band ranks them once and hands the winner to all three buttons
-// (`TopBar.widestAction`).
-//
-// `push` is inside `push -f`, fetch says the command in every shape but the stopped one, and stash has the one
-// wording, so four cover all seven states. `stash` never wins — five monospaced cells is what `fetch` already is —
-// but it is measured all the same, so re-wording any of them cannot leave the box short. Labels:
-// TextMetrics reports a few pixels tighter than a Label — the set could be ranked on one
-// measure and sized by another, and the loser could then be the wider of them.
+// The band's shared button box, measured: the four wordings that cover all seven states, each drawn invisibly as a
+// button draws it; the band hands the widest to all three (`TopBar.widestAction`). `stash` never wins but is measured,
+// so a re-wording cannot leave the box short. Labels, not `TextMetrics`, which reads a few pixels tighter.
 Item {
     id: bandWidest
 
@@ -19,19 +13,10 @@ Item {
     readonly property alias pushCodeWidest: pushCodeWidest
     readonly property alias stashCodeWidest: stashCodeWidest
 
-    /// The narrowest a wording is drawn before the button gives it up altogether: two characters and the mark a cut
-    /// leaves — counted in characters, for the reason the state badges' floor is (規約 §ウィンドウの縁:
-    /// the same count costs a different number of pixels in each platform's font).
-    ///
-    /// **Drawn, as a wording is.** The two other ways go wrong, and both silently. Counted in the family's *average*
-    /// character — which is what the tab names and the state badges count in — the floor comes out **above the box**
-    /// on Linux (58 against a box of 52) and the wordings are never drawn at all: an average that counts a family's
-    /// full-width glyphs is twice a mono advance, which is harmless where the box is a whole badge word and fatal
-    /// where it is one short command. Summed from the parts, it comes out a hair under what the same three glyphs are
-    /// laid out at, and the cut meant to leave two characters leaves one (`p…`). Both measured.
-    ///
-    /// In the command family, whichever wording happens to be the widest: what this band says is commands, `Resume`
-    /// being the one exception and the state a stopped timer leaves.
+    /// The narrowest a wording is drawn before the button gives it up: two characters and a cut's `…`, in the command
+    /// family whichever wording wins the box (規約 §ウィンドウの縁). Drawn, as a wording is: a family's average
+    /// character runs wide (a floor above the box on Linux), and a sum of advances comes out under the laid-out run
+    /// (`p…`).
     readonly property real wordFloor: floorWidest.implicitWidth
 
     component Widest: Label {
@@ -60,7 +45,6 @@ Item {
         code: true
         text: "stash"
     }
-    // Two characters and the mark a cut leaves, drawn the way a cut wording is drawn (`wordFloor`).
     Widest {
         id: floorWidest
         code: true

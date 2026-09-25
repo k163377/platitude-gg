@@ -2,29 +2,26 @@
 //! marks it left, the parenthood the lanes only picture, and the index
 //! a row is found by.
 //!
-//! **Beside the rows.** `GraphRowItem` is at the fifteen fields
-//! `#[derive(QModelItem)]` allows, and nothing here is a role — it is
-//! asked for when a menu opens, the way the stash selector is
-//! (`publishedAt` / `rebaseRewritesPublished` / `reaches`). Kept in step
-//! with the rows at the three places they move: cleared in
-//! `reset_unnotified`, extended in `take_chunk`, rebuilt whole in
-//! `replace_walk`.
+//! Beside the rows: `GraphRowItem` is at the fifteen fields
+//! `#[derive(QModelItem)]` allows, and none of this is a role — menus ask
+//! for it as they open (`publishedAt` / `rebaseRewritesPublished` /
+//! `branchDeleteMerged`). Kept in step with the rows at the three places
+//! they move: cleared in `reset_unnotified`, extended in `take_chunk`,
+//! rebuilt whole in `replace_walk`.
 
 use platitude_core::publish::WalkedRow;
 
 use super::*;
 
-/// One row's share of that: its id, whether a remote already has it, and
-/// where its parents end in [`GraphModel::parent_oids`].
+/// One row's share: its id, whether a remote already has it, and where
+/// its parents end in [`GraphModel::parent_oids`].
 #[derive(Clone, Copy)]
 pub(super) struct RowMark {
     oid: Oid,
     published: bool,
     /// One past this row's last parent; the row before says where they
-    /// start, and the first row starts at zero. **A span** — the window
-    /// is two allocations this way and two thousand with a list per row,
-    /// and this is the part of the graph's cost that grows with what
-    /// somebody asks to see.
+    /// start (zero for the first). A span, not a list per row: two
+    /// allocations for the whole window instead of one per row.
     parents_end: u32,
 }
 
@@ -45,14 +42,13 @@ impl GraphModel {
         self.marks.reserve(rows.len());
         self.index.reserve(rows.len());
         for row in rows {
-            // `oid_hex` is `Oid::to_hex` on the way in, so this reads
-            // back. A row that somehow arrived with an id that does not
-            // is answered as the nowhere id the WIP row carries: no range
-            // ends on it and nothing names it as a parent.
+            // `oid_hex` came from `Oid::to_hex`; one that does not parse
+            // becomes the WIP row's zero id, which no range ends on and no
+            // row names as a parent.
             let oid = Oid::from_hex_str(&row.oid_hex).unwrap_or_else(|_| Oid::zero_unsized());
-            // The rows another copy draws, filed by the index the delegate
-            // will ask with. All six written whatever they are: nothing is
-            // what says a row is not one of theirs (`carried_tally`).
+            // Filed by the index the delegate asks with. All six written
+            // even when zero: none at all is what says a row is not a
+            // copy's (`carried_tally`).
             if let Some(carried) = &row.carried {
                 let k = &carried.kinds;
                 self.carried.insert(
@@ -80,12 +76,9 @@ impl GraphModel {
                 parents_end: self.parent_oids.len() as u32,
             });
         }
-        // Sorted once per chunk: the walk lands in a
-        // handful of chunks, and sorting a window is nothing
-        // beside turning its rows into items. The stable sort,
-        // because it finds the runs already in order —
-        // everything before this chunk — and merges the chunk
-        // in.
+        // Once per chunk (a handful per walk). The stable sort: it finds
+        // everything before this chunk already in order and merges the
+        // chunk in.
         self.index.sort();
     }
 
@@ -130,18 +123,16 @@ impl GraphModel {
             .map(|(_, row)| *row as usize)
     }
 
-    /// The same for an id given as hex — `None` for a string that is no
-    /// id at all, which no row can be drawn for.
+    /// The same for an id given as hex; `None` for a string that is no id.
     pub(super) fn row_of_hex(&self, oid_hex: &str) -> Option<usize> {
         let oid = Oid::from_hex_str(oid_hex).ok()?;
         self.row_at(&oid)
     }
 
     /// Whether `from` reaches `to` off the drawn rows, or `None` where the
-    /// window cannot say (`publish::reaches`). Both ends have to be drawn
-    /// for the rows to say anything, and the index answers that before
-    /// the rows are walked — the branch older than the window, which is
-    /// the one git is then asked about, costs no walk.
+    /// window cannot say. Both ends must be drawn; the index checks that
+    /// first, so an end older than the window (git's to answer then) costs
+    /// no walk.
     pub(super) fn reaches_between(&self, from: Oid, to: Oid) -> Option<bool> {
         if from != to && (self.row_at(&from).is_none() || self.row_at(&to).is_none()) {
             return None;

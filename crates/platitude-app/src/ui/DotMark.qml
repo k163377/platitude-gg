@@ -1,12 +1,9 @@
 import QtQuick
 import platitude.ui
 
-/// The separator between two short facts on one line, drawn.
-///
-/// `·` is East Asian Ambiguous, so the CJK families this app names hold it in a full-width cell: what reads as the
-/// space either side of the dot is that cell's leftover — the row cannot spend `spaceXs` there
-/// because the glyph has already spent whatever its family decided (規約 §余白「印が自分で持っている余白は、隣の詰めに数える」). Drawn, the seat
-/// is the ink and the gap is the spacing the row was already going to pay.
+/// The separator between two short facts on one line, drawn: `·` is East Asian Ambiguous, so the CJK families this app
+/// names hold it in a full-width cell whose leftover the row cannot control
+/// (規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
 Item {
     id: mark
     property color tint: Theme.textMuted
@@ -15,8 +12,8 @@ Item {
     Rectangle {
         id: dot
         anchors.centerIn: parent
-        /// Twice the hairline: a rule of `borderWidth` is what the drawn flag dash takes, and a round mark of that one
-        /// pixel would disappear beside 12px text (規約 §git 用語のコード表記).
+        /// Twice the hairline the drawn flag dash takes (規約 §git 用語のコード表記): a round mark of one pixel would
+        /// disappear beside 12px text.
         width: Theme.borderWidth * 2
         height: dot.width
         radius: dot.width / 2

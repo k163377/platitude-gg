@@ -4,69 +4,51 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// The state badges give way in the two steps the tab names do (規約 §ウィンドウの縁): whole words, then narrowed *together* to
-// one width, then a single mark. The card the pointer opens carries the whole of it at every step, so nothing is ever
-// only in the band.
+// The state badges, giving way as the tab names do (規約 §ウィンドウの縁): whole words, narrowed together, one mark.
+// The card the pointer opens carries all of it at every step.
 Item {
     id: stateGroup
 
     /// The RepoPage of the active tab (null while no tab is open).
     property var curPage: null
-    /// Whether the window is standing on its floor. Handed in, because the floor is the larger of the band's and the
-    /// page's and only `Main` has both. The group gives up its words there whatever else is true.
+    /// Whether the window stands on its floor (only `Main` knows); the group folds there whatever else is true.
     property bool windowAtFloor: false
-    /// Stands in for the pointer where headless cannot put one, so the card can be photographed (`badges-hover` /
-    /// `identity-tip`). The real hover writes this same one property — hover is the input that cannot be injected, so
-    /// the card has to be answering a single question or the headless run proves nothing about it.
+    /// Stands in for the pointer where headless cannot put one (`badges-hover` / `identity-tip`). It meets the real
+    /// hover in `stateKeep`, so the card answers one question either way.
     property bool pointedAt: false
-    /// What the tab strip made of its own run. The group folds off the strip's width as well as its own, and the two do
-    /// not always change in the same frame.
+    /// What the tab strip made of its own run — the group folds off the strip's width as well as its own, and the two
+    /// do not always change in the same frame.
     property real tabContentWidth: 0
     property real tabRunAvail: 0
     property int tabCount: 0
-    /// The padding and the height of the buttons this group stands between — what sets how big a target is here is the
-    /// padding a Fusion `ToolButton` keeps around its content, a number the theme does not have. Handed in,
-    /// so the group can be laid out beside anything.
+    /// The padding and height of the neighbouring buttons, handed in: the theme has no number for a Fusion
+    /// `ToolButton`'s padding.
     property real controlPadding: 0
     property real controlHeight: 0
-    /// The buttons beside this group have given their words up and stand in the band's own end cells now
-    /// (`TopBar.actionsFolded`). The mark goes with them: what it is drawn at is «the same box as its neighbours»
-    /// (規約 §ウィンドウの縁「その 2 つは 1 つの箱の高さに揃える」), and a mark left at the box a *word*
-    /// stood in would be the one low target in a row of marks.
+    /// The neighbouring buttons have folded into the band's end cells (`TopBar.actionsFolded`), and the mark follows
+    /// them (規約 §ウィンドウの縁「その 2 つは 1 つの箱の高さに揃える」).
     property bool cellFolded: false
 
-    /// The four things that can be the matter here, folded into one mark and opened as a card (`BandStateCard`). One
-    /// expression each, read by the mark and by the card: written twice, the two could disagree about whether there is
-    /// anything here to open.
+    /// What can be the matter here, one expression each, read by both the mark and the card (`BandStateCard`) so the
+    /// two cannot disagree about whether there is anything to open.
     readonly property var stateWt: stateGroup.curPage !== null ? stateGroup.curPage.pageWt : null
     readonly property bool opBadgeShown: stateGroup.stateWt !== null && stateGroup.stateWt.opText !== ""
     readonly property bool conflictBadgeShown: stateGroup.stateWt !== null && stateGroup.stateWt.hasConflicts
-    /// A save whose halves did not both land leaves an identity that *is* set and not the one that was asked for, so
-    /// nothing else on screen would mention it.
+    /// Also a save whose halves did not both land: the identity is then set, but not as asked.
     readonly property bool identityBadgeShown: AppBackend.identityState === "missing" || AppBackend.identityUnsaved
         || (stateGroup.curPage !== null && !stateGroup.curPage.pageTab.identityReady)
     readonly property bool oldGitBadgeShown: AppBackend.gitUnsupported
-    /// The graph and the repository disagree.
-    ///
-    /// **Two ways in, one badge.** The walk gave up part-way, so rows are missing (`failed`); or every row is drawn
-    /// and the rebuild that would have refreshed them did not land, so none of them is current (`stale`). Told apart
-    /// on the card's line and nowhere else — from where the reader stands the two are one position, because neither
-    /// picture may be acted on as though it were this repository's.
-    ///
-    /// **The only place it is said**: one state told in two places is two places to keep in step for no gain, and a
-    /// badge is in view wherever the reader happens to be standing — which the middle of the graph column is not.
+    /// The graph and the repository disagree, either way (`failed` / `stale`): one badge, the card tells them apart,
+    /// and nowhere else says it (デザイン規約 §ウィンドウの縁).
     readonly property bool staleBadgeShown: stateGroup.curPage !== null
                                             && (stateGroup.curPage.pageGraph.failed
                                                 || stateGroup.curPage.pageGraph.stale)
     readonly property bool stateShown: stateGroup.opBadgeShown || stateGroup.conflictBadgeShown
                                        || stateGroup.identityBadgeShown || stateGroup.oldGitBadgeShown
                                        || stateGroup.staleBadgeShown
-    /// The narrowest a badge is drawn before the group gives up on words. Counted in characters (規約
-    /// §ウィンドウの縁) — the same count costs a different number of pixels in each platform's UI font. Two, where the tab
-    /// names keep three.
+    /// The narrowest a badge is drawn before the group gives up on words, in characters (規約 §ウィンドウの縁).
     readonly property int stateMinChars: 2
-    /// Settled where it is measured
-    /// (`BandStateMetrics`).
+    /// Settled where it is measured (`BandStateMetrics`).
     readonly property real stateBadgeMinW: badgeMetrics.minW
     readonly property bool stateHasAlso: stateGroup.stateWt !== null && stateGroup.stateWt.opAlso !== ""
     readonly property bool stateHasStep: stateGroup.stateWt !== null && stateGroup.stateWt.opSteps > 0
@@ -77,14 +59,12 @@ Item {
     readonly property int oldGitBadgeW: badgeMetrics.oldGitW
     readonly property int staleBadgeW: badgeMetrics.staleW
 
-    /// Automation: which of the group's three shapes is on screen, what the badges were narrowed to, and what the card
-    /// came back with. The conditions above are what asks for a state; these are what the band made of it
-    /// (`PGG_AUTO_ACT=badges` / `badges-hover`).
+    /// Automation: which of the three shapes is on screen, what the badges were narrowed to, and the card — what the
+    /// band made of the state (`PGG_AUTO_ACT=badges` / `badges-hover`).
     readonly property bool stateWordsShown: badgeRow.visible
     readonly property bool stateMarkShown: stateToggle.visible
-    /// What the mark was actually painted with — the heaviest state's colour (規約 §状態). Read off the group,
-    /// for the reason `commandsMarkColor` is: what is being checked is that the rule reached the paint, and
-    /// a second copy of the rule cannot say so.
+    /// The colour the mark was painted with, read off the paint so a check sees the rule reach it (as
+    /// `commandsMarkColor`).
     readonly property color stateMarkColor: stateGroup.tint
     readonly property int stateCapW: stateGroup.cap === Number.MAX_VALUE ? -1 : Math.round(stateGroup.cap)
     readonly property int stateGroupW: Math.round(stateGroup.width)
@@ -93,9 +73,7 @@ Item {
     readonly property string stateCardSize: stateCard.laidOutSize
     readonly property bool stateCardLaidOut: stateCard.laidOut
 
-    /// Which colour the mark takes once the words are gone. The two that stop work win whenever they are among them
-    /// (規約 §状態): a conflict, and a graph that disagrees with the repository — **either way it came to be
-    /// so**, since a picture that cannot be acted on is one state whether rows are missing from it or merely old.
+    /// The folded mark's colour: `danger` when a conflict or a stale graph is among them (規約 §ウィンドウの縁 / §状態).
     readonly property color tint: stateGroup.conflictBadgeShown || stateGroup.staleBadgeShown
                                   ? Theme.danger : Theme.warning
     /// The group's ceiling; `foldedWidth` below is its floor, and the window's floor is costed at the mark
@@ -108,22 +86,16 @@ Item {
         - Theme.spaceXs
     readonly property real foldedWidth: stateGroup.cellFolded
         ? Theme.railWidth : stateMark.implicitWidth + 2 * stateGroup.controlPadding
-    /// What each badge's box is drawn at, once they have given way together. `Number.MAX_VALUE` is "nothing is
-    /// narrowed". Settled by hand (`settleCap`), since it is read off a list of measurements.
+    /// Each badge box's ceiling once they give way together; `Number.MAX_VALUE` is "nothing is narrowed". Settled by
+    /// hand (`settleCap`).
     property real cap: Number.MAX_VALUE
-    /// The room the words are narrowed into — **what the band would hand the group while it keeps them**, which is its
-    /// own width until it folds (`TopBar`'s `bandAsked`). Folded, the group is laid out at its mark and nothing more,
-    /// so its own width is no longer the room the words would have; reading it would keep a group folded for want of
-    /// room folded however wide the window grew.
+    /// The room the words are narrowed into: what the band would hand the group with its words (`TopBar`'s
+    /// `bandAsked`). Not the group's own width once folded — that would keep it folded however wide the window grew.
     property real room: stateGroup.width
-    /// Automation: whether the mark, where it is what the group draws, is the whole of the group's width — a folded
-    /// group that kept the room its words asked for stands a stretch of empty band beside its mark, which reads in a
-    /// picture as a fat grab run and not as the group's (`old-git-fold`).
+    /// Automation: whether a folded group is exactly its mark's width (`old-git-fold`).
     readonly property bool markFitted: !stateGroup.folded || Math.abs(stateGroup.width - stateToggle.width) < 1
-    /// Whether the words have been given up altogether. Bound, because two of the three
-    /// conditions can change without the group's own width moving, and an assignment made in `settleCap` would never be
-    /// asked for again. **Every input is read in the expression itself**, so the binding takes its dependency on each
-    /// one — a read made inside the share's own body would be on an object this binding never touched.
+    /// Whether the words are given up. Bound, not settled: two of the conditions change without the width moving.
+    /// Every input is read here in the expression — a read inside the share's body takes no dependency.
     readonly property bool folded: share.folded(stateGroup.cap, stateGroup.tabContentWidth,
                                                 stateGroup.tabRunAvail, stateGroup.tabCount,
                                                 stateGroup.windowAtFloor)
@@ -132,24 +104,10 @@ Item {
     /// standing in for either.
     readonly property alias stateLit: stateKeep.lit
 
-    /// Whether the band has ever placed this group.
-    ///
-    /// **A cell the band skipped is still at the origin.** A row leaves out a child that is not visible, and this
-    /// group stands only once a badge does — so the frame it first stands in, it is still at (0, 0) at its implicit
-    /// size, which is where the pointer is until a hand moves one. The hover taken there is the group arriving under
-    /// the hand, and it opens the card over a band nobody has touched; the
-    /// row then places the group, the hover falls, and the card shuts itself a beat later — which is a picture that
-    /// differs from run to run (measured 2026-09-05: the card stood in 6 headless runs of `file-menu-conflict` in 10,
-    /// and offscreen is where the hand never moves off the origin at all). So the card waits for the row's answer,
-    /// after which the hover is about where the group actually is.
-    ///
-    /// A hand already resting where the group lands keeps its card until it moves, which is the same rule read the
-    /// other way: this card answers a hand that comes to the mark.
-    ///
-    /// **Said once and kept**: the row leaves a cell it stops laying out where it put it, so a group that
-    /// stops standing and stands again is already where it belongs. This group is never the row's first cell — the
-    /// tab strip stands in front of it carrying a floor width — so the origin is the unplaced position and no other.
-    /// A band that put this group first would leave the card unable to open at all, which `badges-hover` is what says.
+    /// Whether the band has ever placed this group; the card waits for it. A cell the row has not laid out yet is
+    /// still at (0, 0), where the offscreen pointer sits (rules-refs/app-ui.md「初めて立つセルはまだ原点に居る」).
+    /// Kept once said: the row leaves a cell where it put it. Never make this group the row's first cell — the card
+    /// would never open (`badges-hover`).
     property bool placed: false
     onXChanged: stateGroup.placed = true
 
@@ -182,19 +140,9 @@ Item {
         stateGroup.cap = share.cap(want, stateGroup.room)
     }
 
-    /// The stand-in pointer is down on a group that can answer it: standing, and placed.
-    ///
-    /// **The beat is a level, and `stateLit` alone is one edge too few for a pointer that cannot move.** A hand raises
-    /// the beat by arriving and drops it by leaving, so every answer it is owed comes with an edge of its own; the
-    /// stand-in is written once and stays. Written while the beat is already up — which is what the group standing
-    /// unplaced under the origin does (`placed` above) — it changes nothing anybody is watching, and neither does the
-    /// row placing the group a frame later. The card then waits out the watchdog with the pointer on it
-    /// (`badges-hover`).
-    ///
-    /// **The hand keeps its own rule**: a hover the group arrived under is answered
-    /// when it next moves, and until then there is deliberately no card (`placed`). So this watches the stand-in and
-    /// nothing else — the two roads to the card differ in exactly this, and the verbs that stand a pointer in
-    /// (`graph-stale` / `old-git-card` / `identity-tip`) all take this one.
+    /// The stand-in pointer is down on a group that can answer it: standing, and placed. `stateLit` alone is one edge
+    /// too few for a pointer that cannot move — written before `placed`, it would never ask again. A real hand is not
+    /// watched here: it gets no card until it next moves (`placed`).
     readonly property bool standInAsking: stateGroup.pointedAt && stateGroup.placed && stateGroup.stateShown
 
     onStateLitChanged: stateGroup.settleStateCard()
@@ -204,11 +152,8 @@ Item {
 
     visible: stateGroup.stateShown
     implicitHeight: stateGroup.controlHeight
-    // The row hands its leftover out in proportion to what each filling item asked for, so **what is asked for is what
-    // decides who gives way** — asking for the mark got this group a sliver, asking with a stretch of 100 got it
-    // everything (both measured). Asking for the words and no more puts the strip and this group in
-    // proportion. **Folded, it asks for the mark**: the words are not drawn, and the width they asked for would stand
-    // empty between the strip's grab run and the mark.
+    // The row shares out in proportion to what each item asks for, so ask for the words — and folded, for the mark
+    // alone, or the words' width stands empty beside it (デザイン規約 §ウィンドウの縁「タブと群は同時に譲る」).
     implicitWidth: stateGroup.folded ? stateGroup.foldedWidth : stateGroup.naturalWidth
 
     HoverCardHost {
@@ -224,22 +169,20 @@ Item {
         hasStep: stateGroup.stateHasStep
         minChars: stateGroup.stateMinChars
     }
-    /// The share-out itself, which owns no measurement of its own (`BandStateShare`). The floor comes across as a
-    /// binding on the metrics' own property — that one *is* settled by an assignment, so it notifies.
+    /// The share-out (`BandStateShare`). Its floor is bound to the metrics' property, which is settled by assignment
+    /// and so notifies.
     BandStateShare {
         id: share
         gap: Theme.spaceXs
         badgeMinW: badgeMetrics.minW
     }
 
-    // A handler: it is passive, so the identity badge under it still takes its own press
-    // (app-ui.md).
+    // A handler: it is passive, so the identity badge under it still takes its own press.
     HoverHandler {
         id: groupHover
     }
 
-    // Right-aligned: the group grows and shrinks against the tabs on its left, and what has to stay put is its edge
-    // with `>_`.
+    // Right-aligned: the edge by `>_` stays put while the group gives way to the tabs.
     Row {
         id: badgeRow
         visible: !stateGroup.folded
@@ -260,9 +203,7 @@ Item {
                 // The one part of this badge that gives: the count and the second operation mean nothing cut in half.
                 elide: Text.ElideRight
                 Layout.fillWidth: true
-                // Rounded up, the way the badge's own width above is: the layout hands an item the whole pixel below a
-                // fractional ceiling, and a ceiling one hair under the word's own width elides it
-                // (app-ui.md §自然幅の上限は切り上げる). The three badges below cap themselves the same way.
+                // Rounded up, here and below (rules-refs/app-ui.md「自然幅の上限は切り上げる」).
                 Layout.maximumWidth: Math.ceil(implicitWidth)
             }
             // Drawn — a typed middle dot would put a full-width cell in the badge (規約 §余白).
@@ -320,15 +261,7 @@ Item {
                 Layout.maximumWidth: Math.ceil(implicitWidth)
             }
         }
-        // `danger`, where the two outlined ones beside it are `warning`: the graph on screen disagrees with the
-        // repository and nothing is going to settle it on its own (規約 §状態「今止まっている・失敗した」). **Outlined**
-        // — the fill is `CONFLICTS`, the one state with files waiting on the reader; this one is read.
-        // Whatever was said about it is in the card behind this badge, which is where every one of
-        // these keeps its sentence.
-        //
-        // **Ahead of `OLD GIT`, which is a state of the machine** (規約
-        // §ウィンドウの縁): every badge before that one is a mark that somebody is in the middle of something, and this is
-        // one of them — the next read that lands takes it down, where an old git stands until the machine's is replaced.
+        // Outlined `danger`, and ahead of `OLD GIT` (規約 §ウィンドウの縁).
         StateBadge {
             id: staleBadge
             visible: stateGroup.staleBadgeShown
@@ -362,10 +295,8 @@ Item {
         }
     }
 
-    // `…` typed: the ellipsis is what Qt spends on its own eliding and it measured the same on both
-    // OSes (764c362). The same box the command log's mark takes (規約 §ウィンドウの縁). `Theme.buttonMinWidth` does not reach it
-    // — that floor is for a box put round a *word*, and given it the mark came out 80 wide with 26px of air at either
-    // end of three dots.
+    // `…` typed — the same glyph and width on both OSes (規約 §ウィンドウの縁). Outside `Theme.buttonMinWidth`, which
+    // is for a box round a word.
     Rectangle {
         id: stateToggle
         visible: stateGroup.folded
@@ -378,8 +309,7 @@ Item {
         color: stateMouse.containsMouse ? Theme.bgHover : "transparent"
         Accessible.role: Accessible.Button
         Accessible.name: qsTr("What needs attention here")
-        // The frame keeps the height its neighbours' boxes have even where the cell fills the band, for the reason
-        // theirs do: a line along the band's top edge is a box glued to the window (`ActionButton.frameInset`).
+        // The frame keeps the neighbours' box height inside a full-height cell (`ActionButton.frameInset`).
         Rectangle {
             anchors.fill: parent
             anchors.topMargin: stateGroup.cellFolded
@@ -409,12 +339,8 @@ Item {
 
     BandStateCard {
         id: stateCard
-        // Under the group and flush with its right-hand edge: the group sits at the band's right-hand end, and a card
-        // centred on it would open past the window.
-        //
-        // **Flush under it as well**, with nothing between: the words in here are read and copied, and a gap is a
-        // band the pointer crosses while touching neither the card nor the mark that opened it (規約 §hover の
-        // ツールチップ — the rule the co-author card and the ref list already keep).
+        // Flush under the group's right edge: centred, it would open past the window; a gap would be a band the
+        // pointer crosses touching neither card nor mark (規約 §hover のツールチップ).
         x: stateGroup.width - width
         y: stateGroup.height
         opText: stateGroup.stateWt !== null ? stateGroup.stateWt.opText : ""

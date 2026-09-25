@@ -4,10 +4,8 @@ use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::wire::{Fields, Optional, Record, field};
 
-/// The file row a step of the arrows lands on: which row of the list it
-/// is (what the view is asked to bring on screen), the bucket the file
-/// sits in — empty for a commit's changed files, which sit in none — and
-/// the path it names.
+/// The file row a step of the arrows lands on. `bucket` is empty for a
+/// commit's changed files, which sit in none.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Landing {
     pub row: i32,
@@ -15,8 +13,8 @@ pub struct Landing {
     pub path: String,
 }
 
-/// A landing, or nowhere left to go — which is how the arrows stop at
-/// the ends, and how a walk goes past a bucket holding no files.
+/// A landing, or nowhere left to go — how the arrows stop at the ends
+/// and pass a bucket holding no files.
 pub type Landed = Optional<Landing>;
 
 impl Record for Landing {

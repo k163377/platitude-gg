@@ -58,10 +58,8 @@ fn an_untouched_plan_is_not_dirty_and_a_real_request_makes_it_so() {
     assert!(model.is_dirty(), "a typed reword is a request");
 }
 
-/// The verb on its own is not one. `todo_steps` folds a reword with an
-/// empty pair back into `pick`, so a plan holding nothing else would run
-/// the very todo an untouched plan writes — and the run button, which
-/// reads `dirty`, stays shut.
+/// `todo_steps` folds a reword with an empty pair back into `pick`, so the
+/// verb alone must leave the run button shut.
 #[test]
 fn a_reword_is_a_request_only_once_something_is_typed() {
     let mut model = fresh();
@@ -81,7 +79,6 @@ fn a_reword_is_a_request_only_once_something_is_typed() {
     model.steps[0].msg_subject = "n".to_string();
     assert!(model.is_dirty(), "one character is a request");
 
-    // The description carries a reword just as far as the summary does.
     model.steps[0].msg_subject = String::new();
     model.steps[0].msg_body = "n".to_string();
     assert!(
@@ -90,9 +87,7 @@ fn a_reword_is_a_request_only_once_something_is_typed() {
     );
 }
 
-/// The button binds to the `dirty` *property*, which only [`settle`]
-/// moves — so the answer has to survive the trip out of `is_dirty`, not
-/// just be right inside it.
+/// The button binds to the `dirty` property, which only [`settle`] moves.
 ///
 /// [`settle`]: RebasePlanModel::settle
 #[test]
@@ -107,10 +102,9 @@ fn settle_carries_the_reword_rule_out_to_the_property() {
     assert!(model.dirty, "the typing opens it");
 }
 
-/// Every verb that is not `pick` is a request on its own — only `reword`
-/// waits for a message. Pinned per verb because they now share one
-/// mapping (`RebasePlanModel::todo_action_of`), where a guard written
-/// for `reword` could reach the others.
+/// Pinned per verb: they share one mapping
+/// (`RebasePlanModel::todo_action_of`), where a guard written for `reword`
+/// could reach the others.
 #[test]
 fn every_other_verb_is_a_request_without_a_message() {
     for action in ["edit", "squash", "fixup", "drop"] {
@@ -190,8 +184,6 @@ fn a_demoted_fold_is_itself_a_landing_for_the_fold_above() {
     assert_eq!(model.steps[1].action, "pick");
 }
 
-/// A reorder that stands on its own holds the fold rule the moment it
-/// lands — the row it stranded is `pick` before anything else is asked.
 #[test]
 fn a_reorder_on_its_own_demotes_where_it_lands() {
     let mut model = fresh();
@@ -203,11 +195,9 @@ fn a_reorder_on_its_own_demotes_where_it_lands() {
     );
 }
 
-/// The drag reports every row it crosses, so the rule cannot be walked
-/// per crossing: a `squash` carried down past the oldest row and back
-/// would come out `pick` under the hand that never dropped it there, and
-/// with the order restored the plan would read all-pick and shut its run
-/// button on a fold its author is still looking at.
+/// The drag reports every row it crosses; walked per crossing, the rule
+/// would turn this `squash` into `pick` on the way through, and the
+/// restored order would then read all-pick.
 #[test]
 fn a_fold_carried_past_the_oldest_row_and_back_survives_the_trip() {
     let mut model = fresh();
@@ -237,9 +227,6 @@ fn a_fold_carried_past_the_oldest_row_and_back_survives_the_trip() {
     assert!(model.dirty, "and the fold is still what the run would ask");
 }
 
-/// The other end of the same trip: a fold the hand actually *leaves* on
-/// the oldest row is demoted at the release, visibly on the row
-/// (デザイン規約 §フル interactive rebase).
 #[test]
 fn a_fold_dropped_on_the_oldest_row_is_demoted_at_the_release() {
     let mut model = fresh();
@@ -285,11 +272,8 @@ fn settle_carries_the_selected_rows_stored_reword_out() {
     );
 }
 
-/// What the entrance does with a second right-click while the first
-/// answer is still out (`RebasePlanModel::open`): the same commit is the
-/// same question and spends nothing twice, another commit is a question
-/// of its own however long the one before it is taking, and a plan that
-/// is already open asks again — the answer for it is not out.
+/// The guard `RebasePlanModel::open` puts on a second right-click while
+/// the first answer is out.
 #[test]
 fn a_second_click_only_stands_down_for_the_commit_already_asked() {
     let mut model = RebasePlanModel::default();
@@ -313,10 +297,8 @@ fn the_shown_subject_follows_the_typed_reword_and_falls_back() {
     assert_eq!(shown(typed("reword", "typed", "", "own")), "typed");
     assert_eq!(shown(typed("reword", "  ", "", "own")), "own");
     assert_eq!(shown(typed("pick", "typed", "", "own")), "own");
-    // The description box carries a reword as far as the summary does, so
-    // the row has to say so too: git takes the message's first line as
-    // the subject, and the row showing the commit's old one would be the
-    // plan telling the reader something the run then contradicts.
+    // Typed into the description alone: git takes the message's first
+    // line as the subject.
     assert_eq!(
         shown(typed("reword", "", "from the body\n\nand more", "own")),
         "from the body"
@@ -328,9 +310,8 @@ fn the_shown_subject_follows_the_typed_reword_and_falls_back() {
     );
 }
 
-/// The rule the row is drawn by and the rule the todo is written by are
-/// the one mapping ([`RebasePlanModel::todo_action_of`]): whatever the
-/// two boxes hold, what the row shows is the subject that message leaves.
+/// Whatever the two boxes hold, the row and the todo read one mapping
+/// ([`RebasePlanModel::todo_action_of`]).
 #[test]
 fn the_row_shows_the_subject_the_todo_would_write() {
     for (msg_subject, msg_body) in [

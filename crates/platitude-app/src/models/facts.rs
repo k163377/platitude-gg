@@ -1,8 +1,6 @@
-//! Pure rules QML asks by value: stateless slots over platitude-core and
-//! this crate's wire formats. Every slot reads only its arguments, so a
-//! binding that passes its own properties re-evaluates exactly when they
-//! change — the qproperty rule (.claude/rules/app-ui.md) is about slots
-//! that read state QML cannot see, and there is none here to read.
+//! Pure rules QML asks by value: every slot reads only its arguments (the
+//! exception app-ui.md grants the `GitFacts` singleton), so a slot that
+//! reads state has no place here.
 
 use qtbridge::qobject;
 
@@ -10,47 +8,38 @@ use super::qml_register;
 use crate::encode::{Chips, Mates};
 
 /// The singleton every QML file can ask a rule of without wiring a model
-/// through: which id is the synthetic WIP row's, which chips a gone set
-/// leaves standing, what a remote ref or a typed identity splits into,
-/// what a push can do, which names git would take, what a stash line
-/// was called.
+/// through.
 #[derive(Default)]
 pub struct GitFacts;
 
 #[qobject(ConvertToCamelCase, NoQmlElement)]
 impl GitFacts {
-    /// Whether a hex id is the synthetic uncommitted-changes row's
-    /// all-zero sentinel (`Oid::zero_like`). Empty is "no id at all".
+    /// Whether a hex id is the WIP row's all-zero sentinel
+    /// (`Oid::zero_like`). Empty is "no id at all".
     #[qslot]
     fn wip_oid(&self, hex: String) -> bool {
         platitude_core::oid::Oid::hex_is_zero(&hex)
     }
 
-    /// The chips still standing once the page's gone set has spoken
-    /// (`encode::chips_shown`): `chips` as the row carries them, less the
-    /// ones `gone` names by key.
+    /// `chips` less the ones `gone` names by key.
     #[qslot]
     fn chips_shown(&self, chips: Chips, gone: Vec<String>) -> Chips {
         crate::encode::chips_shown(&chips, &gone)
     }
 
-    /// The kind a chip's word names as a ref the menus can act on
-    /// (`encode::ref_kind_word`): `branch` / `remote` / `tag`, and `""`
-    /// for the two markers, which name nothing to act on.
+    /// The ref kind a chip's word names: `branch` / `remote` / `tag`, or
+    /// `""` for the two markers, which name nothing to act on.
     #[qslot]
     fn ref_kind(&self, kind: String) -> String {
         crate::encode::ref_kind_word(&kind).to_string()
     }
 
-    /// The remote half of a remote-tracking name (`origin/main`), read
-    /// against the configured names (`RepoTab.remoteNames`): the longest
-    /// configured name wins — a remote's own name may contain `/` — and
+    /// The remote half of a remote-tracking name (`origin/main`): the
+    /// longest of `remote_names` wins (a remote's name may contain `/`);
     /// where none owns the ref the first slash answers, so the gesture
-    /// still acts and git gets to refuse loudly
-    /// (`refs::split_remote_ref_or_first_slash` — the list may still be
-    /// loading, or the remote may be gone from configuration while its
-    /// refs remain). `""` only where there is no slash at all: that name
-    /// is not a remote branch.
+    /// still acts and git refuses loudly — the list may still be loading,
+    /// or the remote gone while its refs remain. `""` only where there is
+    /// no slash at all.
     #[qslot]
     fn remote_of_ref(&self, full: String, remote_names: Vec<String>) -> String {
         platitude_core::refs::split_remote_ref_or_first_slash(&full, names(&remote_names))
@@ -58,8 +47,8 @@ impl GitFacts {
             .unwrap_or_default()
     }
 
-    /// The branch half of the same cut. A name no slash divides is all
-    /// branch — the shape a rename box is typed in.
+    /// The branch half of the same cut; a name no slash divides is all
+    /// branch (the shape a rename box is typed in).
     #[qslot]
     fn branch_of_ref(&self, full: String, remote_names: Vec<String>) -> String {
         match platitude_core::refs::split_remote_ref_or_first_slash(&full, names(&remote_names)) {
@@ -68,11 +57,9 @@ impl GitFacts {
         }
     }
 
-    /// What a push of the current branch can do
-    /// (`platitude_core::remote::push_standing`), in the word
-    /// `PublishFlow.pushState` branches on. The tab-lifecycle half of
-    /// "closed" stays the caller's: this answers for the repository
-    /// alone.
+    /// What a push of the current branch can do, in the word
+    /// `PublishFlow.pushState` branches on. A closed tab is the caller's to
+    /// add: this answers for the repository alone.
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn push_standing(
@@ -104,15 +91,11 @@ impl GitFacts {
         .to_string()
     }
 
-    /// Where the toolbar's push button would send this branch
-    /// (`platitude_core::remote::push_target`), spelled as the label shows
-    /// it. Empty where there is no branch to send or nowhere to send it.
-    ///
-    /// Asked of core: the order the two marks and the upstream are
-    /// weighed in is git's, and the send (`remote::plan_current_push`)
-    /// reads it off the same table. A second spelling of it in a binding
-    /// is how the label came to name the remote a branch tracks while
-    /// the push went to the one it marks.
+    /// Where the toolbar's push button would send this branch, spelled as
+    /// the label shows it; empty where there is no branch or nowhere to
+    /// send it. Asked of core because the send (`remote::plan_current_push`)
+    /// reads the same table: a second spelling in a binding lets the label
+    /// name another remote than the push goes to.
     #[qslot]
     fn push_target(
         &self,
@@ -133,13 +116,9 @@ impl GitFacts {
         )
     }
 
-    /// What the right-click menu on a ref may offer
-    /// (`platitude_core::offers::ref_menu`), as the words the opening
-    /// function reads (`RefRowMenu.offerOn`) — asked once as the menu
-    /// opens, so the answers freeze while it stands (app-ui.md §メニュー).
-    /// The lookups behind `held_by_worktree` / `remote_counterpart` /
-    /// `remote_drifted` stay the models'; this only weighs what they
-    /// answered.
+    /// What the right-click menu on a ref may offer, as the words
+    /// `RefRowMenu.offerOn` reads — asked once as the menu opens
+    /// (app-ui.md「メニューは `AppMenu` 系で書く」).
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn ref_menu_offers(
@@ -186,9 +165,8 @@ impl GitFacts {
         .collect()
     }
 
-    /// What the right-click menu on a commit row may offer
-    /// (`platitude_core::offers::commit_menu`), the same words and the
-    /// same freeze-at-open contract (`CommitMenuState.openRowMenu`).
+    /// What the right-click menu on a commit row may offer, the same way
+    /// (`CommitMenuState.openRowMenu`).
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn commit_menu_offers(
@@ -218,16 +196,13 @@ impl GitFacts {
         .collect()
     }
 
-    /// What the details pane's message boxes do with the commit on
-    /// screen (`platitude_core::offers::message_edit`), in the word
-    /// `RepoPage.messageEdit` branches on: `amend` where typing lands,
-    /// `stash` / `not-head` / `standing` where it does not and the box
-    /// has a reason to give, `""` where there is no message on screen.
-    /// **Asked as a binding, live** — the boxes stand open while the
-    /// repository moves under them, so a commit that stops being HEAD's
-    /// has to stop taking typing.
-    // The parameter row mirrors the core rule one-for-one; folding it
-    // into a struct would put a QML-invisible shape between the two.
+    /// What the details pane's message boxes do with the commit on screen,
+    /// in the word `RepoPage.messageEdit` branches on: `amend` where typing
+    /// lands, `stash` / `not-head` / `standing` where it does not, `""` with
+    /// no message on screen. Asked as a live binding, not at open: the
+    /// boxes stay open while HEAD moves, and must stop taking typing then.
+    // The parameters mirror the core rule one-for-one; a struct between the
+    // two would be a shape QML cannot see.
     #[qslot]
     fn message_edit(
         &self,
@@ -245,11 +220,10 @@ impl GitFacts {
         .to_string()
     }
 
-    /// The move a press on a ref adds up to
-    /// (`platitude_core::offers::switch_action`), in the word
+    /// The move a press on a ref adds up to, in the word
     /// `RepoPage.switchToRef` branches on: `switch` / `materialize` /
-    /// `move` / `holder`, `""` for a ref nothing moves onto. `kind` is
-    /// the chip's word (`branch` / `remote`; any other moves nothing).
+    /// `move` / `holder`, or `""` — also for any `kind` but the chip words
+    /// `branch` / `remote`.
     #[qslot]
     fn switch_action(
         &self,
@@ -270,31 +244,26 @@ impl GitFacts {
         .to_string()
     }
 
-    /// Whether the move a press already sent has reached the screen
-    /// (`platitude_core::offers::move_landed`) — what `RepoPage` holds
-    /// the next press behind, so a chip pressed twice does not send the
-    /// same command twice.
+    /// Whether the move a press already sent has reached the screen —
+    /// `RepoPage` holds the next press until it has, so a double press
+    /// sends one command.
     #[qslot]
     fn move_landed(&self, landing: String, current_branch: String, landing_oid: String) -> bool {
         platitude_core::offers::move_landed(&landing, &current_branch, &landing_oid)
     }
 
-    /// What to call the folder a clone of `url` would land in
-    /// (`platitude_core::remote::folder_name_for`) — the name the box is
-    /// offered before anybody types one. `""` where the URL carries none,
-    /// which is what leaves the accept button refusing.
+    /// The folder name a clone of `url` would land in, offered before
+    /// anybody types one; `""` where the URL carries none, which leaves the
+    /// accept button refusing.
     #[qslot]
     fn clone_folder_name(&self, url: String) -> String {
         platitude_core::remote::folder_name_for(&url)
     }
 
-    /// The folder a path sits in, as a `file:` URL — where a chooser
-    /// opened on that path should start (`urlpath::file_url`). Empty
-    /// where the path has no folder above it, and for the empty path.
-    ///
-    /// The other direction of [`Self::picked_path`], and here for the
-    /// same reason: separators, drive letters and percent-encoding are
-    /// the one part of a path QML has no business spelling out.
+    /// The folder a path sits in, as a `file:` URL for a chooser to start
+    /// in; empty where there is no folder above it. The reverse of
+    /// [`Self::picked_path`]: separators, drive letters and percent-encoding
+    /// are not QML's to spell.
     #[qslot]
     fn folder_url_of(&self, path: String) -> String {
         let path = path.trim();
@@ -308,11 +277,9 @@ impl GitFacts {
             .unwrap_or_default()
     }
 
-    /// Whether two spellings name one folder
-    /// (`session::same_path_key`) — git prints a worktree path its
-    /// own way and a session holds the platform's, and the two differ in
-    /// separator on Windows and in case on both Windows and macOS. Two
-    /// empty paths are not the same folder: neither of them is a folder.
+    /// Whether two spellings name one folder: git's worktree paths and a
+    /// session's differ in separator on Windows and in case on Windows and
+    /// macOS. Two empty paths are not the same folder.
     #[qslot]
     fn same_path(&self, one: String, other: String) -> bool {
         !one.is_empty()
@@ -320,11 +287,8 @@ impl GitFacts {
                 == platitude_core::session::same_path_key(&other)
     }
 
-    /// The local path a `file://` URL names
-    /// (`urlpath::file_url_to_path`) — what a box shows once the
-    /// platform's chooser has answered with one. Folder or file: the
-    /// chooser answers in URLs either way, and a path is what every box
-    /// this reaches is holding.
+    /// The local path a `file://` URL names — what a box shows once the
+    /// platform's chooser answers, for a folder or a file alike.
     #[qslot]
     fn picked_path(&self, url: String) -> String {
         crate::urlpath::file_url_to_path(&url)
@@ -332,9 +296,8 @@ impl GitFacts {
             .into_owned()
     }
 
-    /// The address half of a typed identity
-    /// (`platitude_core::trailers::split_identity`); `""` where nothing
-    /// in the text reads as one.
+    /// The address half of a typed identity; `""` where nothing in the
+    /// text reads as one.
     #[qslot]
     fn identity_email_of(&self, text: String) -> String {
         platitude_core::trailers::split_identity(&text).1
@@ -347,17 +310,15 @@ impl GitFacts {
         platitude_core::trailers::split_identity(&text).0
     }
 
-    /// The last segment of a path, whichever separator wrote it — the
-    /// name a working copy's folder is shown by (`urlpath::path_leaf`).
+    /// The last segment of a path, whichever separator wrote it.
     #[qslot]
     fn path_leaf(&self, path: String) -> String {
         crate::urlpath::path_leaf(&path).to_string()
     }
 
-    /// Whoever a message being typed credits, in the same records a
-    /// commit's own trailers reach the details pane as
-    /// (`encode::mates_of`). Whether a line counts is
-    /// `platitude_core::trailers` — the one place that rule is written.
+    /// Whoever a message being typed credits, in the records a commit's
+    /// own trailers reach the details pane as. Which lines count is
+    /// `platitude_core::trailers`' alone.
     #[qslot]
     fn co_authors_of(&self, body: String) -> Mates {
         crate::encode::mates_of(&platitude_core::trailers::co_authors_in(&body))
@@ -370,23 +331,21 @@ impl GitFacts {
         platitude_core::tag::is_valid_name(&name)
     }
 
-    /// The same question for a stash's label, which is free text on one
-    /// line of its own.
+    /// The same for a stash's label: free text on one line.
     #[qslot]
     fn valid_stash_message(&self, message: String) -> bool {
         platitude_core::stash::is_valid_message(&message)
     }
 
-    /// What somebody called a stash, out of the line the list shows —
-    /// empty where the whole line is git's own (`WIP on …`). Asked
-    /// before a pop, which is the last moment the entry is there to ask.
+    /// What somebody called a stash, out of the line the list shows; empty
+    /// where the whole line is git's own (`WIP on …`). Asked before a pop,
+    /// the last moment the entry is there.
     #[qslot]
     fn stash_label(&self, message: String) -> String {
         platitude_core::stash::label_in(&message).to_string()
     }
 }
 
-/// The configured names as core reads them.
 fn names(remote_names: &[String]) -> impl Iterator<Item = &str> {
     remote_names.iter().map(String::as_str)
 }

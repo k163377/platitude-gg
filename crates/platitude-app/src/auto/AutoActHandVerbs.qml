@@ -5,23 +5,17 @@ import platitude
 import platitude.ui
 
 /// PGG_AUTO_ACT=middle-hand <surface>: the middle button's hand, pressed on one surface that scrolls and left drifting
-/// for the shot (デザイン規約 §中クリックの自動スクロール). Every surface that scrolls carries a hand of its own, seated
-/// on its own terms — on a list's own frame, over a box's words, at the pane over the log's text picker — so a
-/// picture of one says nothing about the next, and each is pressed where it stands.
+/// for the shot (デザイン規約 §中クリックの自動スクロール). Each surface seats its own hand on its own terms (a list's
+/// frame, a box's words, the pane over the log's text picker), so a picture of one says nothing about the next and
+/// each is pressed where it stands.
 ///
-/// The press goes in at the hand's own `press`, the one line its handler is, and the pointer is then put a little past
-/// the dead zone towards wherever the surface has room to go. **What the run waits for is the surface having moved**:
-/// a hand that started and a surface that went are two claims, and the second is the gesture. The hand is left
-/// running, so the anchor's ring is in the picture.
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on hangs off
-/// that driver; the names it owns are read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timer below; it is a sizeless holder.
+/// The run waits for the surface having moved — a hand that started is not yet the gesture. The hand is left running,
+/// so the anchor's ring is in the picture.
+// `Item` because `QtObject` has no default property to hold the timer below.
 Item {
     id: acts
 
-    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is the file that
-    /// builds this one.
+    /// `var`: typing it `AutoActDriver` would be circular — that file builds this one.
     required property var driver
 
     readonly property var page: driver.page
@@ -35,18 +29,16 @@ Item {
     readonly property var planPane: driver.planPane
     readonly property var navProbe: driver.navProbe
 
-    /// Where the pointer is put, from the anchor: out of the dead zone on the one axis the surface goes along, and far
-    /// enough that the drift is pixels a tick and the surface moves inside a second.
+    /// How far from the anchor the pointer is put: out of the dead zone, and far enough that the surface moves within
+    /// a second.
     readonly property real reach: Metrics.middleScrollDeadZone + 64
     /// How far the surface has to have gone to have gone at all — past a rounding, short of a row.
     readonly property real moved: 8
-    /// The row of `edges` whose subject is two thousand characters long and whose body runs past its box (`text-bar`
-    /// reads the same row). **A commit nobody can rewrite from here**, so both its boxes are read-only and the answer
-    /// is one on every platform — a box that can be written in hands a middle click to the paste where the platform
-    /// has one, and the working tree's two are where that side is read (`wip-description` / `wip-summary`).
+    /// The row of `edges` whose subject and body both run past their boxes. A commit, so both boxes are read-only and
+    /// the answer is the same on every platform — a writable box hands a middle click to the paste where the platform
+    /// has one (that side is `wip-description` / `wip-summary`).
     readonly property int longMessageRow: 7
-    /// The commits the `chosen` surface holds: the plain press on the first and the held one on the last. Thirty of
-    /// `spread`'s commits run past the share of the pane their list is given, whatever the window.
+    /// The `chosen` surface's range: thirty of `spread`'s commits overrun their list's share of the pane at any window.
     readonly property int chosenFrom: 1
     readonly property int chosenTo: 30
     /// Where `plan` opens from: that many commits under the tip of `spread`, a plan longer than its pane.
@@ -61,12 +53,10 @@ Item {
     }
 
     // ---- the surfaces ------------------------------------------------------------------------------------------
-    /// The surface an argument names, once it stands with more in it than it has room for: its hand, how far it has
-    /// gone (`at`), and which way it has room to go (`down`). Until then, what it is waiting for (`wait`), which the
-    /// timer names as it changes. **Every request made on the way can be made again** — a commit put in the pane, a
-    /// pane put on screen, the window taken to its floor — and it is made again on every tick until its effect shows
-    /// (規約 §UI 自動化: 効果を待つ要求は撃ち直す). The two presses a choice is made of are made once each, off the
-    /// timer's own count.
+    /// The surface an argument names, once it holds more than it has room for: its hand, how far it has gone (`at`)
+    /// and which way it has room (`down`); until then `wait`, what it waits for. The requests on the way are made again
+    /// every tick until their effect shows (rules/app-ui.md §UI 自動化), except the choice's two presses, made once
+    /// each off the timer's count.
     function seat(name) {
         if (name === "files" || name === "block")
             return acts.detailsSeat(name, workTree.headOid)
@@ -93,7 +83,6 @@ Item {
     function waiting(what) {
         return { wait: what }
     }
-    /// A list with more rows than room, sent by its own hand.
     function listSeat(view) {
         if (!view || !view.visible || view.count === 0)
             return acts.waiting("rows")
@@ -105,7 +94,6 @@ Item {
             down: view.contentY < view.clampY(Number.MAX_VALUE) - 1
         }
     }
-    /// A block that scrolls as one piece: its content taller than its frame.
     function flickSeat(hand, flick) {
         if (!flick.visible || flick.contentHeight <= flick.height + 1)
             return acts.waiting("a block taller than its pane")
@@ -115,18 +103,16 @@ Item {
             down: flick.contentY < flick.contentHeight - flick.height - 1
         }
     }
-    /// A box whose words run past it. Its hand is on screen exactly then (`DescriptionBox`), so that is the wait; the
-    /// words open at their first line (`pinnedTop`), so the room is below. **Pressed on its words** whatever claims
-    /// them (`pressPoint`): where they are being written and the platform pastes, the claim is what the run is about.
+    /// A box whose words run past it: its hand shows exactly then (`DescriptionBox`), and the words open at their first
+    /// line (`pinnedTop`), so the room is below. Pressed on its words even when they claim the press — where the
+    /// platform pastes, that claim is what the run is about.
     function boxSeat(hand, at) {
         if (!hand.visible)
             return acts.waiting("words past the box")
         return { hand: hand, at: at, down: true, words: true }
     }
-    /// Where the run presses: the middle of the hand's frame — or, on a surface with boxes of words standing on it, the
-    /// first point in a few down its middle and along its edge that nothing under the hand claims
-    /// (`MiddleAutoScroll.claimedAt`: a box with a hand of its own, or words being written where the platform pastes).
-    /// What those claims do is read on the boxes themselves; here the surface's own hand is.
+    /// Where the run presses: a box's middle, or elsewhere the first of a few points down the middle and along the
+    /// edge that nothing under the hand claims (`MiddleAutoScroll.claimedAt`) — the surface's own hand is what is read.
     function pressPoint(seat) {
         const hand = seat.hand
         const middle = Qt.point(hand.width / 2, hand.height / 2)
@@ -142,8 +128,7 @@ Item {
         }
         return middle
     }
-    /// The pane's own window, taken down to its floor: the blocks scroll only once the pane is too short to hold them
-    /// (規約 §窓の床), and the floor is the shortest a reader can make it.
+    /// The window taken down to its floor (規約 §窓の床): the blocks scroll only once the pane is too short for them.
     function toFloor() {
         const window = page.Window.window
         const floor = Math.ceil(window.floorHeight)
@@ -151,9 +136,8 @@ Item {
             window.height = floor
     }
 
-    /// The right pane on one commit. **A page opened on a dirty tree is showing the working tree** (`RepoPage.
-    /// trySelectDefault`), so the commit is put in the pane through the page's own door (`pane-bar` goes in the same
-    /// way) and read before anything is asked of it.
+    /// The right pane on one commit, put there through the page's own door: a page on a dirty tree opens on the
+    /// working tree (`RepoPage.trySelectDefault`).
     function detailsSeat(name, oid) {
         if (oid === "")
             return acts.waiting("the commit's row")
@@ -173,8 +157,6 @@ Item {
         acts.toFloor()
         return acts.flickSeat(block.hand, block)
     }
-    /// The working tree's face: its buckets, its block, and the two boxes — the boxes typed into first, past their
-    /// own room, the way their own hook types (`WipPane.setMessage`).
     function wipSeat(name) {
         if (!page.wipShown) {
             page.showWip()
@@ -204,7 +186,6 @@ Item {
         }
         return acts.waiting("a surface of the working tree's this verb knows")
     }
-    /// A body longer than its box and a subject longer than its cap.
     function longBody() {
         let lines = []
         for (let n = 1; n <= 40; n++)
@@ -215,9 +196,7 @@ Item {
         return "A summary pasted in whole, long past the one line a summary is meant to be, ".repeat(24)
     }
 
-    /// The choice of commits: the plain press on one row, then the held press on the last, each through the row's own
-    /// click (`graph-choose-range` makes the same two). A row the view has not laid out is sent into view and pressed
-    /// on a later tick.
+    /// The choice of commits, made as `graph-choose-range` makes it: a plain press, then Shift on the last.
     function chosenSeat() {
         if (handTimer.pressedChoice < 2) {
             const want = handTimer.pressedChoice === 0 ? acts.chosenFrom : acts.chosenTo
@@ -235,9 +214,8 @@ Item {
             return acts.waiting("the choice read")
         return acts.listSeat(detailsPane.chosenView)
     }
-    /// The TAGS section the folded rail opens beside itself, on `manytags`' two thousand. The rest on the cell and the
-    /// hand walked down into what it opened are the one state that keeps a peek standing with no pointer to hold it
-    /// (`NavProbe.peekInto`).
+    /// The TAGS peek beside the folded rail, on `manytags`. A rest and then the walk into it is the one state that
+    /// keeps a peek standing with no pointer (`NavProbe.peekInto`).
     function peekSeat() {
         if (!page.sidebarCollapsed) {
             page.foldByHand(true)
@@ -264,9 +242,8 @@ Item {
         }
         return acts.listSeat(card.list)
     }
-    /// The log, raised and filled past its panel. The reads a window makes on its own are what a log fills with here,
-    /// so the panel is told to keep them and the page is asked to read again whenever the last reading has landed —
-    /// one at a time, off the log's own count, so the asks never outrun the rows.
+    /// The log, filled past its panel with background reads it is told to keep — asked one at a time off the log's
+    /// count, so the asks never outrun the rows.
     function commandsSeat() {
         if (!page.commandsOpen) {
             page.raiseCommands()
@@ -292,8 +269,8 @@ Item {
             down: view.contentY < view.clampY(Number.MAX_VALUE) - 1
         }
     }
-    /// Another copy's files: its row in the graph pressed through the row itself (`carried-read` presses the same),
-    /// and the pane it opens holding more files than it has room for (`carried-many`).
+    /// Another copy's files, opened by pressing its graph row (as `carried-read` does); preset `carried-many` overfills
+    /// the pane.
     function carriedSeat() {
         if (page.carriedPath === "") {
             const row = driver.rowOfCopy("here")
@@ -326,21 +303,19 @@ Item {
     SampleTimer {
         id: handTimer
         property string surface: ""
-        /// What the surface was last seen waiting for, said once each time it changes — a run that stops at the
-        /// ceiling says where (規約 §UI 自動化: 段を持つドライバは段が変わるたびに名乗る).
+        /// What the surface was last seen waiting for, reported when it changes (rules/app-ui.md §UI 自動化).
         property string waitingFor: ""
         property var standing: null
         property real fromAt: 0
         property bool took: false
-        /// Whether something under the hand claimed the point pressed, read before the press — the hand steps aside
-        /// exactly then, and nothing else says why a press started nothing.
+        /// Whether something under the hand claimed the point, read before the press: the hand steps aside then, and
+        /// nothing else says why a press started nothing.
         property bool claimed: false
         /// How many of the choice's two presses have gone in, and the log's row count the last read was asked at.
         property int pressedChoice: 0
         property int readAt: -1
-        /// The frame the hand stood in on the last tick. **Pressed once it has stood still for one**: a box grows to
-        /// its words a layout after they land, and a press made before that anchors the ring where the box's middle
-        /// was going to be.
+        /// The hand's frame on the last tick; pressed once it has stood still for one — a box grows to its words a
+        /// layout after they land, and an earlier press anchors the ring off the box's middle.
         property string seatSize: ""
         function begin(name) {
             handTimer.surface = name
@@ -380,8 +355,7 @@ Item {
             }
             const hand = handTimer.standing.hand
             const went = Math.abs(handTimer.standing.at() - handTimer.fromAt) > acts.moved
-            // A hand that stepped aside has nothing to wait for: the press went on to what claimed it, and whether it
-            // started anything is already said. One that took it is waited out until the surface has gone.
+            // A hand that stepped aside has nothing to wait for; one that took the press waits for the surface to go.
             if (handTimer.took && (!went || hand.ticks < 2))
                 return
             handTimer.stop()

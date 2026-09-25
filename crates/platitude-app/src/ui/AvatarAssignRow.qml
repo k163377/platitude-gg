@@ -3,9 +3,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// One assigned avatar, as the settings card lists them: the picture, the name in the shared column, the address, and
-// the Remove the row is held down by. The row writes as it is worked (`AppBackend.removeAvatar`) — the card has no
-// Save to wait for.
+// One assigned avatar in the settings list — picture, name, address, held Remove (デザイン規約 §アバターを与える).
 RowLayout {
     id: avatarRow
 
@@ -19,19 +17,11 @@ RowLayout {
     property int pointedAtRow: -1
 
     spacing: Theme.spaceSm
-    /// The hand is on this row's Remove: the pointer on the
-    /// button itself, the keyboard's focus (the hold's other
-    /// hand — デザイン規約 §長押し), or headless having put it
-    /// there for a shot.
-    ///
-    /// The button itself: red says
-    /// what the hand is about to lose, and a word that
-    /// reddens while the pointer is still three columns of
-    /// data away is about none of them (observed).
+    /// The hand is on this row's Remove: the pointer, keyboard focus (デザイン規約 §長押し) or the headless stand-in.
+    /// The button's own hover, not the row's — a word that reddens three columns away is about none of them.
     readonly property bool lit: unsetButton.hovered || unsetButton.activeFocus
         || avatarRow.pointedAtRow === avatarRow.index
-    /// Automation reads and works the row through these two: the
-    /// picture the list is photographed for, and the hold it has no hand to make.
+    /// Automation: the picture the list is photographed for, and the hold it has no hand to make.
     function pictureReady() {
         return rowFace.pictureReady()
     }
@@ -46,14 +36,10 @@ RowLayout {
         Layout.preferredWidth: Theme.iconLg
         Layout.preferredHeight: Theme.iconLg
     }
-    /// The width this row asks the shared name column to
-    /// hold — its own glyphs, and nothing for the column's
-    /// spare width, which stays air.
+    /// The width this row asks of the shared name column — its own glyphs only.
     readonly property real nameSeat: nameLabel.implicitWidth
-    // **Fields, and cut by clipping** (`LineText`, 規約 §右のペインの字は掴める): a name and an address are values
-    // the reader takes away, and a value put through an `elide` hands over `Yuki Tana…` when it is dragged over. The
-    // whole of each stays in its field, the width cuts what is on screen, and the mark stands on the screen's own
-    // ground (`bgElevated` — this row is drawn on the settings screen's face, not on a pane's).
+    // Fields cut by clipping, so a drag takes the whole value (`LineText`, 規約 §右のペインの字は掴める). The cut mark
+    // stands on the settings screen's own ground, `bgElevated`.
     LineText {
         id: nameLabel
         text: avatarRow.modelData.name
@@ -62,8 +48,7 @@ RowLayout {
         ground: Theme.bgElevated
         Layout.preferredWidth: avatarRow.nameColW
     }
-    // The address beside the name is supporting information, which is `textSecondary` — `textMuted` is
-    // what a row nobody may touch looks like (デザイン規約 §テキスト / §無効).
+    // `textSecondary`, not `textMuted` — muted is the disabled look (デザイン規約 §テキスト / §無効).
     LineText {
         Layout.fillWidth: true
         text: avatarRow.modelData.email
@@ -71,23 +56,7 @@ RowLayout {
         pixelSize: Theme.fontSm
         ground: Theme.bgElevated
     }
-    // Held: this card writes as it is worked, so the
-    // gesture is the only thing standing between a stray
-    // click and a picture that has to be found again
-    // (デザイン規約 §長押し).
-    //
-    // Red only where the hand is (デザイン規約 §状態): a
-    // standing state colour is for saying that the usual
-    // move is not available, and everything a settings card
-    // does is the usual move — a red word per row says
-    // nothing and thins out the warnings that mean it. The
-    // frame is what carries "this is a control" at rest:
-    // the other three columns are data, and a bare word
-    // among them reads as a fourth one. `*Dim` belongs on
-    // that frame, which is the one use §暗く落とした段
-    // allows for it. Kept in the layout either way, so the
-    // address beside it does not re-elide as the pointer
-    // crosses the list.
+    // Held, red only under the hand, framed at rest, and always laid out (デザイン規約 §アバターを与える).
     ActionButton {
         id: unsetButton
         text: qsTr("Remove")

@@ -4,13 +4,10 @@ use platitude_core::stage::DiscardSide;
 
 use super::*;
 
-/// One chosen row, as the bridge hands it over: `<bucket>:<path>` — the
-/// key the pane's choice already speaks (`WipPane.chosenKeys`). The
-/// bucket names which row was chosen, which status alone cannot answer:
-/// a file changed on both sides has a row in each bucket. A conflicted
-/// row rides along untouched and unparsed — git refuses to restore a
-/// conflicted path until told how it was resolved — and a key without a
-/// known bucket is a caller's bug.
+/// One chosen row as `<bucket>:<path>` (`WipPane.chosenKeys`) — the
+/// bucket says which row, since a file changed on both sides has one in
+/// each. A conflicted row is skipped: git refuses to restore it until told
+/// how it was resolved. An unknown bucket is a caller's bug.
 fn chosen_row(key: &str) -> Option<(String, DiscardSide)> {
     let Some((bucket, path)) = key.split_once(':') else {
         tracing::warn!(key, "a chosen row without a bucket");
@@ -30,12 +27,8 @@ fn chosen_row(key: &str) -> Option<(String, DiscardSide)> {
 }
 
 impl RepoTab {
-    /// The gathered-path writes share one shape: take the set, skip an
-    /// empty ask, hand the batch to the session.
-    ///
-    /// `send` answers with the id its ask was given, like every other
-    /// write this tab makes — the door keeps it for whoever is waiting on
-    /// that write ([`RepoTab::ask_session`]).
+    /// `send` returns the id its ask was given, which the door keeps for
+    /// whoever waits on that write ([`RepoTab::ask_session`]).
     pub(super) fn drain_paths(
         &mut self,
         send: impl FnOnce(
@@ -50,14 +43,9 @@ impl RepoTab {
         self.ask_session(move |s| send(s, paths));
     }
 
-    /// Works out what a discard of the gathered rows would take, before
-    /// anything is written: `discardCount` — how many rows it would
-    /// touch — and `discardOnly`, the bucket of the one chosen row when
-    /// there is exactly one, which picks the tag the menu row wears
-    /// (デザイン規約 §その他の操作). Consumes the gathered set the way
-    /// every write does, so an abandoned plan cannot be spent later.
-    /// The caller raises `changed` (a signal wants an attached object,
-    /// and the tests here have none).
+    /// Fills `discard_count` / `discard_only` from the gathered rows,
+    /// consuming them like every write does. The caller raises `changed`
+    /// (a signal needs an attached object, which the tests here lack).
     pub(super) fn plan_discard_rows(&mut self) {
         let keys = std::mem::take(&mut self.pending_paths);
         let mut count = 0;
@@ -78,27 +66,23 @@ impl RepoTab {
         };
     }
 
-    /// Discards the gathered rows (destructive). The keys are parsed
-    /// here; the sorting into commands is core's
-    /// (`RepoSession::discard_chosen`), and a set that boils down to
-    /// nothing — conflicted rows only — sends nothing.
+    /// Discards the gathered rows (destructive); core sorts them into
+    /// commands (`RepoSession::discard_chosen`).
     pub(super) fn discard_chosen_rows(&mut self) {
         self.drain_paths(|s, keys| {
             let chosen: Vec<(String, DiscardSide)> =
                 keys.iter().filter_map(|key| chosen_row(key)).collect();
-            // Nothing to send, so nothing is asked for and no id comes
-            // back — which is what a reader waiting on this press has to
-            // be told apart from a write it will get an answer to.
+            // Conflicted rows only: no ask, so no id — a waiting reader
+            // must not expect an answer.
             (!chosen.is_empty())
                 .then(|| s.discard_chosen(chosen))
                 .flatten()
         });
     }
 
-    /// Answers whether a write went out. The pane arms a wait the write's
-    /// own answer puts down, so a request turned away here — no worktree
-    /// target, nothing selected, no fingerprint yet — must say so: armed
-    /// with no answer coming, the wait would hold the marks for good.
+    /// Answers whether a write went out: the pane arms a wait only the
+    /// write's answer puts down, so a request turned away here must say so
+    /// or the marks are held for good.
     pub(super) fn stage_chosen(
         &mut self,
         kind: String,

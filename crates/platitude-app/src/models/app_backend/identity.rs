@@ -16,9 +16,8 @@ impl AppBackend {
         self.identity_email = email;
     }
 
-    /// The readback cannot wake QML ahead of its save verdict. In
-    /// particular, a half-save can read as a complete identity while the
-    /// gate must stay open to explain the half that did not land.
+    /// Readback and verdict land together: a half-save reads as a complete
+    /// identity, which alone would close the gate still owed an explanation.
     pub(super) fn finish_identity(&mut self, written: Result<IdentityWrite, String>) {
         self.identity_busy = false;
         match written {
@@ -73,8 +72,7 @@ mod tests {
         let mut app = waiting();
         let feed = Feed::default();
         feed.push(AppMsg::IdentitySaved(Ok(answer(true, false))));
-        // Drain immediately after publication, before the producer can
-        // publish anything else. There is no second half to wait for.
+        // Drained at once: the verdict must already be in this one message.
         let batch = feed.drain();
         assert_eq!(batch.len(), 1);
         let AppMsg::IdentitySaved(written) = batch.into_iter().next().unwrap() else {

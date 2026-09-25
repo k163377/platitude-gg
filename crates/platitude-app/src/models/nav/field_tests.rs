@@ -1,5 +1,4 @@
-//! Tests of the sidebar row's field answers, in a file of their own
-//! (structure.md: a file whose bulk is tests lifts them to a sibling).
+//! Tests of the sidebar row's field answers.
 
 use super::testkit::*;
 use super::*;
@@ -28,10 +27,9 @@ fn a_tag_row_reads_out_of_the_snapshot() {
     assert_eq!(depth_of(&model, 1), 0);
 }
 
-/// What decides the shape of the tag menu's push row, asked the way the
-/// menu asks it: by name **and by the remote the push is going to**. A
-/// name two remotes disagree about has one answer per remote, and the
-/// destination is the only one that bears on the push.
+/// Asked by name **and by the push's destination**: a name two remotes
+/// disagree about has one answer per remote, and only the destination's
+/// bears on the tag menu's push row.
 #[test]
 fn a_drifted_tag_answers_for_the_remote_the_push_would_go_to() {
     let mut model = section(
@@ -74,8 +72,8 @@ fn a_drifted_tag_answers_for_the_remote_the_push_would_go_to() {
     assert_eq!(model.remote_tag_drift(String::new(), "origin".into()), "");
 }
 
-/// A section that holds no readings answers nothing — the branches and
-/// the stashes are asked the same question by the same shared row.
+/// The branches and stashes are asked the same question by the same
+/// shared row.
 #[test]
 fn only_the_tags_section_answers_for_a_drift() {
     let mut model = section("branches", Source::Locals(snapshot(Vec::new(), Vec::new())));
@@ -85,11 +83,9 @@ fn only_the_tags_section_answers_for_a_drift() {
     assert!(model.tag_remotes("v1.0".into(), "origin".into()).is_empty());
 }
 
-/// The remotes a tag's row opens on, in name order and each with whether
-/// it stands where the one this window's tag rows act on has the tag
-/// (デザイン規約 §左メニューの所作 の TAGS の段). **The mark is about that
-/// reading and not about the copy here**: which of them is the one is not
-/// a question the commits answer.
+/// Each carrier is marked against the remote this window's tag rows act
+/// on, not the copy here — which reading is right is not a question the
+/// commits answer (デザイン規約 §左メニューの所作 の TAGS の段).
 #[test]
 fn a_tag_row_opens_on_its_carriers_and_says_which_stand_apart() {
     let mut model = section(
@@ -104,12 +100,10 @@ fn a_tag_row_opens_on_its_carriers_and_says_which_stand_apart() {
             ],
             Vec::new(),
             vec![
-                // Both remotes on the one commit the testkit gives a
-                // reading, so nobody stands apart…
+                // Both remotes on one commit: nobody stands apart…
                 ("v-agreed", "fork", "a"),
                 ("v-agreed", "origin", "a"),
-                // …and here the fork has it somewhere else than the
-                // reference does.
+                // …and here the fork stands apart from the reference.
                 ("v-apart", "fork", "b"),
                 ("v-apart", "origin", "a"),
                 ("v-fork", "fork", "b"),
@@ -142,9 +136,8 @@ fn a_tag_row_opens_on_its_carriers_and_says_which_stand_apart() {
         "fork:0",
         "nobody stands apart from a reading the reference has not got"
     );
-    // **Empty, not a list of one empty record**: a tag nobody out there
-    // has opens on nothing at all, which is what the row with no lines
-    // under it is drawn from.
+    // Empty, not one empty record: the row with no lines under it is
+    // drawn from that.
     assert!(
         model
             .tag_remotes("v-here".into(), "origin".into())
@@ -178,9 +171,8 @@ fn a_tag_row_says_which_sides_its_name_stands_on() {
     assert_eq!(model.tag_sides("v-here".into()), "here");
     assert_eq!(model.tag_sides("v-both".into()), "both");
     assert_eq!(model.tag_sides("v-theirs".into()), "remote");
-    // **Empty.** A name no row carries has to be told from one that is
-    // only local, or a section still loading would offer the everyday
-    // delete on a tag nobody has (`tag_named` answers `None`).
+    // Empty, not `here`, or a section still loading would offer the
+    // everyday delete on a tag nobody has.
     assert_eq!(model.tag_sides("v-nobody".into()), "");
     assert_eq!(model.tag_sides(String::new()), "");
 }
@@ -243,8 +235,7 @@ fn a_file_row_reads_out_of_the_status() {
         )
     );
     assert_eq!(says(&model, 3, Role::OrigPath), "old.txt");
-    // The unstaged half is what a path asked for by name answers with,
-    // as it did when the rows were built.
+    // A path asked for by name answers with its unstaged half.
     assert_eq!(model.change_of("src/b.txt".to_string()), "M");
     assert_eq!(model.change_of("a.txt".to_string()), "UU");
 }
@@ -277,9 +268,7 @@ fn the_short_sections_read_out_of_what_arrived() {
             lock_reason: String::new(),
             prunable: false,
             prune_reason: String::new(),
-            // git opens the listing with the repository's own copy, so
-            // a fixture where none of them is it could not be read off
-            // a real one.
+            // A real listing always opens with the repository's own copy.
             main: path.ends_with("repo"),
         }
     };
@@ -302,17 +291,15 @@ fn the_short_sections_read_out_of_what_arrived() {
     // The one this window is showing is marked, however git spelled it.
     assert!(flags(&model, 1, Role::IsHead));
     assert_eq!(model.head_row, 1);
-    // Where a click on the row lands: the commit that checkout is
-    // standing on, the same slot a branch row answers a jump out of
-    // (デザイン規約 §左メニューの所作).
+    // Where a click on the row lands (デザイン規約 §左メニューの所作).
     assert_eq!(says(&model, 0, Role::OidHex), oid("a").to_hex());
     assert_eq!(says(&model, 1, Role::OidHex), oid("b").to_hex());
     assert_eq!(says(&model, 2, Role::OidHex), "");
 }
 
-/// The seat a worktree row opens with, and the words behind it — both
-/// out of slots the row shares with the other kinds, so a change to
-/// either would draw the wrong mark (`item::LOCKED`).
+/// The mark and the words both come out of slots shared with the other
+/// kinds, so a change to either would draw the wrong mark
+/// (`item::LOCKED`).
 #[test]
 fn a_worktree_row_wears_the_state_of_its_checkout() {
     let entry = |path: &str, locked: bool, reason: &str, prunable: bool| {
@@ -342,25 +329,21 @@ fn a_worktree_row_wears_the_state_of_its_checkout() {
                 entry("C:\\work\\held", true, "release run", false),
                 entry("C:\\work\\quiet", true, "", false),
                 entry("C:\\work\\gone", false, "", true),
-                // git reports both on one entry; the lock is the one
-                // somebody chose, so it is the one the seat shows.
+                // git can report both; the lock wins (`item::LOCKED`).
                 entry("C:\\work\\both", true, "release run", true),
             ],
             current: String::new(),
         },
     );
     model.arrange();
-    // The repository's own working copy, which wears the house — and
-    // has no words behind it: being the main copy is not a state
-    // somebody took, so there is nothing to explain.
+    // The main copy wears the house and has no words: nobody took it.
     assert_eq!(says(&model, 0, Role::Change), "MAIN");
     assert_eq!(says(&model, 0, Role::OrigPath), "");
     assert_eq!(says(&model, 1, Role::Change), "");
     assert_eq!(says(&model, 1, Role::OrigPath), "");
     assert_eq!(says(&model, 2, Role::Change), "LOCKED");
     assert_eq!(says(&model, 2, Role::OrigPath), "release run");
-    // A lock taken without a reason is still a lock: the mark comes
-    // out and there is nothing to say beside it.
+    // A lock given no reason is still a lock.
     assert_eq!(says(&model, 3, Role::Change), "LOCKED");
     assert_eq!(says(&model, 3, Role::OrigPath), "");
     assert_eq!(says(&model, 4, Role::Change), "PRUNABLE");
@@ -372,11 +355,8 @@ fn a_worktree_row_wears_the_state_of_its_checkout() {
     assert_eq!(says(&model, 5, Role::OrigPath), "release run");
 }
 
-/// One measurement, answered from either end: a branch row carries its
-/// own, and the reading it names carries the same pair back — which is
-/// what the line naming that branch draws beside it
-/// (`NavRowFacts`, デザイン規約 §左メニューの所作). A reading nothing
-/// here names has no measurement to report.
+/// The reading a branch names carries the branch's pair back, for the
+/// line naming that branch (`NavRowFacts`, デザイン規約 §左メニューの所作).
 #[test]
 fn a_branch_and_the_reading_it_names_answer_the_same_pair() {
     let mut ours = local("main", true);
@@ -397,9 +377,8 @@ fn a_branch_and_the_reading_it_names_answer_the_same_pair() {
         // are a binary search over it (`RefsSnapshot::remote_named`).
         Source::Remotes(snapshot(vec![remote("fork/main"), read], Vec::new())),
     );
-    // Filtered, so each reading stands right under its remote's own row
-    // (`build_remote_groups`) and the rows addressed here are the
-    // readings and not the folders of their names.
+    // Filtered, so each reading sits right under its remote's row
+    // (`build_remote_groups`) rather than under name folders.
     theirs.filter = "main".to_string();
     theirs.arrange();
     assert_eq!(says(&theirs, 0, Role::Name), "fork");
@@ -422,9 +401,7 @@ fn a_branch_and_the_reading_it_names_answer_the_same_pair() {
     );
 }
 
-/// A branch row wears the state in the same slot the worktree rows
-/// use, so the seat draws one mark from one field whichever section
-/// the row is in (`item::HELD`).
+/// One field, one mark, whichever section the row is in (`item::HELD`).
 #[test]
 fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
     let local = |short: &str, held: bool| platitude_core::session::BranchItem {
@@ -466,10 +443,7 @@ fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
     assert_eq!(model.told(Role::Name, "main", Role::Change), "");
 }
 
-/// The upstream a branch is measured against and cannot reach rides
-/// the row in the slot a local branch has no bucket for, as the name
-/// rather than a flag: the row draws the badge's state from it and the
-/// line it opens says it, so the two cannot disagree
+/// By name, not flag, so the badge and the line it opens cannot disagree
 /// (デザイン規約 §左メニューの所作).
 #[test]
 fn a_branch_carries_the_upstream_that_is_not_here_in_the_shared_slot() {
@@ -477,8 +451,7 @@ fn a_branch_carries_the_upstream_that_is_not_here_in_the_shared_slot() {
         short: short.into(),
         full: format!("refs/heads/{short}").into(),
         oid: oid("a"),
-        // The far side deleted it, so no remote-tracking ref is left to
-        // set this — which is the whole reason the row cannot say it.
+        // The far side deleted it, so no remote-tracking ref sets this.
         has_remote: false,
         is_head: false,
         upstream: "".into(),
@@ -513,14 +486,13 @@ fn a_branch_carries_the_upstream_that_is_not_here_in_the_shared_slot() {
         model.told(Role::Name, "release-1.2", Role::Bucket),
         "origin/release-1.2"
     );
-    // A branch whose upstream is here leaves the slot empty — the badge
-    // it wears is the ordinary one, drawn off `has_remote`.
+    // An upstream that is here leaves it empty; the ordinary badge comes
+    // off `has_remote`.
     assert_eq!(model.told(Role::Name, "main", Role::Bucket), "");
 }
 
-/// What the rows that would run `switch` or `branch --delete` ask
-/// before offering: git refuses both for a branch another worktree
-/// holds, and answers nothing about the copy this window is in.
+/// What the `switch` / `branch --delete` rows ask before offering
+/// (`worktree_holding`).
 #[test]
 fn the_worktree_holding_a_branch_answers_for_every_other_copy() {
     let entry = |path: &str, branch: Option<&str>| platitude_core::worktrees::WorktreeEntry {
@@ -555,7 +527,6 @@ fn the_worktree_holding_a_branch_answers_for_every_other_copy() {
     // branch it already has out is a no-op.
     assert_eq!(model.worktree_holding("main".to_string()), "");
     assert_eq!(model.worktree_holding("nobody".to_string()), "");
-    // A detached row names no branch, and the empty string finds
-    // nothing.
+    // A detached row names no branch; the empty string finds nothing.
     assert_eq!(model.worktree_holding(String::new()), "");
 }

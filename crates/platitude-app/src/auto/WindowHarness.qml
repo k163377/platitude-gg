@@ -4,19 +4,15 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The whole of the window's harness in one part, which the window's own QML loads by name and nothing else names
-/// (`HarnessSeat`). Everything the verbs and the measurements act on is handed over here: a file of its own cannot see
-/// `Main.qml`'s ids, and one list of them is what says how far the harness reaches into the window.
-///
-/// The three ways in the window itself calls — `begin`, `claimPageAct`, `finish` — are forwarded from here, so the
-/// window holds one null check apiece.
+/// The whole of the window's harness in one part, loaded by name through `HarnessSeat`. Everything the verbs and the
+/// measurements act on is handed over here, since a file of its own cannot see `Main.qml`'s ids; the window's calls
+/// in — `begin`, `claimPageAct`, `finish` — are forwarded from here.
 Item {
     id: harness
 
     anchors.fill: parent
 
-    /// The window, and the parts of it the verbs read back or leave standing for the shot. An automation-only
-    /// exposure, the same one `GraphPane.view` is (app-ui.md).
+    /// Automation-only exposures, as `GraphPane.view` is (rules-refs/app-ui.md).
     required property var window
     required property var tabsModel
     required property var pageRepeater
@@ -29,24 +25,19 @@ Item {
     required property var openFailedDialog
     required property var identityGate
     required property var identityDialog
-    /// The seat the two biggest screens are built in: neither exists until somebody asks
-    /// for it, and asking is this file's ([`screensUp`]).
+    /// The seat the two biggest screens are built in, only once asked for — this file asks ([`screensUp`]).
     required property var dialogSeat
     required property var folderDialog
     required property var quitWaitDialog
 
-    /// The tab in front. The one seat that moves under the harness, so the window keeps writing it
-    /// (`Main.qml`'s `Binding`).
+    /// The tab in front — the one seat that moves, so the window keeps writing it (`Main.qml`'s `Binding`).
     property var page: null
 
-    /// The screens have been asked for, so the verbs that read them may be built. **Two phases**: the order
-    /// two siblings finish being built in is Qt's to choose, and this whole part is built inside the
-    /// window's own completion handler, so both phases are over before the window reaches its next line
-    /// (`HarnessSeat`).
+    /// The screens have been asked for, so the verbs that read them may be built. Two phases, because the order two
+    /// siblings finish building in is Qt's; both end inside the window's own completion handler (`HarnessSeat`).
     property bool screensUp: false
-    /// The window said the verbs may start, and whether they have (`begin`). **One way** — the strip goes on
-    /// filling as verbs open tabs of their own, and a gate that closed again would take the running verb down
-    /// with it.
+    /// The window said the verbs may start, and whether they have (`begin`). One way: verbs open tabs of their own,
+    /// and a gate that closed again would take the running verb down.
     property bool beginAsked: false
     property bool begun: false
     readonly property var cloneModel: harness.dialogSeat.cloneModel
@@ -54,35 +45,27 @@ Item {
     readonly property var settingsDialog: harness.dialogSeat.settingsDialog
 
     Component.onCompleted: {
-        // A verb reads a screen's properties before opening it, and a null there is a dead run. Only where a verb
-        // or the identity hook is going to want one: holding the two ready costs the bare window a working set it
-        // leaves idle (`WindowDialogSeat`).
+        // Only for a verb or the identity hook, which read a screen before opening it (`WindowDialogSeat`).
         harness.dialogSeat.keepBuilt = Harness.autoAct !== "" || Harness.autoIdentity !== ""
         // The offscreen platform reports an 800x800 screen, which would cut every picture down to fit.
         harness.windowShape.keepSavedSize = Harness.automated
-        // **A run has no hand.** It cannot inject a pointer, so what it means to light it lights through a stand-in
-        // (`HoverToolButton.pointedAt`) — and yet the offscreen platform keeps a cursor at the screen's own origin,
-        // which the window comes up on, so whatever the window's top left corner holds is handed that pointer and
-        // washes in every picture (measured: the ☰'s cell came out `bgHover` over the band, in the cell's exact
-        // bounds). **Nothing here can take it back afterwards**: `hovered` is read-only to QML, no leave ever follows
-        // because nothing moves that cursor, and the window is already up when this runs, so a place given to it now
-        // is a place the enter was not decided from (all three measured).
+        // A run has no hand, yet the offscreen cursor rests on the window's top-left cell and cannot be taken back
+        // (rules-refs/app-ui.md「ヘッドレスの窓には手が乗っている」).
         Hand.away = Harness.automated
         // A turning ring photographs differently every time.
         Motion.stilled = Harness.shotDir !== ""
         harness.screensUp = true
     }
 
-    // A run has no pointer to rest anywhere, and a tip that opens beside the hand has to be told where one would have
-    // been. A quarter across the target, so the picture says which of the two the seat was read from.
+    // A tip that opens beside the hand is told where a run's would be: a quarter across the target, so the picture
+    // says which of the two the seat was read from.
     Binding {
         target: harness.sharedToolTip
         property: "handAcross"
         value: Harness.autoAct !== "" ? 0.25 : -1
     }
-    // The photograph is of the wait itself, and a seeded write can land while the shot pipeline is still grabbing —
-    // the close the dialog would fire takes the window, and the PNGs, down with it (`finishAutoAct` ends the run
-    // alone).
+    // A seeded write can land while the shot is still grabbing the wait, and the dialog's own close would take the
+    // window and the PNGs down (`finishAutoAct` ends the run alone).
     Binding {
         target: harness.quitWaitDialog
         property: "selfCloses"
@@ -103,16 +86,10 @@ Item {
         }
     }
 
-    /// The window is up: the verbs may start, and the shot clock with them.
-    ///
-    /// **Held until the strip holds every folder the run named.** Where a folder opens is git's answer
-    /// (デザイン規約 §タブの所作), so the tabs asked for above arrive over the frames after this call — and a verb
-    /// that read the strip in between would be reading a strip still filling (measured: `tab-widths` reported one
-    /// tab of sixteen). **One gate for every window verb**: the alternative is this precondition written into each
-    /// of them, where the next one written forgets it.
-    ///
-    /// The verbs are *built* by it rather than told to start, because a `SampleTimer` runs off its own `running`
-    /// and not off this call — a verb held by a word it never reads is a verb that is not held.
+    /// The window is up: the verbs may start, and the shot clock with them — once the strip holds every folder the
+    /// run named, since the tabs arrive over later frames (デザイン規約 §タブの所作). One gate for every window verb,
+    /// so none has to remember it. The verbs are built here, not told to start: a `SampleTimer` runs off its own
+    /// `running`.
     function begin() {
         harness.beginAsked = true
         harness.beginOnceTheStripStands()
@@ -122,8 +99,7 @@ Item {
     function beginOnceTheStripStands() {
         if (harness.begun || !harness.beginAsked || harness.tabsModel.opening)
             return
-        // The window's verbs are built on this edge (`actsLoader`), so the item exists by the line below: a
-        // loader with no reason to wait hands its item over inside the write.
+        // `actsLoader` builds inside this write, so its item exists by the line below.
         harness.begun = true
         if (actsLoader.item)
             actsLoader.item.begin()
@@ -135,22 +111,19 @@ Item {
             harness.beginOnceTheStripStands()
         }
     }
-    /// One run has one owner of the page-level act (app-ui.md §UI 自動化の因果性).
+    /// One run has one owner of the page-level act (rules/app-ui.md §UI 自動化).
     function claimPageAct() {
         return shotDriver.claimPageAct()
     }
-    /// Where the page's own write barrier stands, kept for the line the ceiling leaves. Forwarded like the three
-    /// above: the ceiling lives on the shot driver and the page cannot reach it (`AutoActDriver.noteWrite`).
+    /// The page's write barrier, for the ceiling's line: the ceiling lives on the shot driver, out of the page's reach
+    /// (`AutoActDriver.noteWrite`).
     function noteWriteState(state) {
         shotDriver.writeState = state
     }
-    /// One run has one ending. The picture calls for the census (`AutoShotDriver.appPictured`), and it walks once the
-    /// window has stopped arriving, which the ending waits for.
+    /// One run has one ending, and it waits for the census walk (`AutoShotDriver.appPictured`).
     function finish() {
-        // …and a run ordered to hold its act has none (`PGG_FAULT_HOLD_ACT`): the verb did its work, the loop goes on
-        // turning, and the only thing left to end the run is the ceiling. That is a shape `cargo xtask wedge-check`
-        // has to be able to read back, and the one shape it cannot wait for — so it is ordered here
-        // (`xtask::verify::faults`).
+        // A run ordered to hold its act has none (`PGG_FAULT_HOLD_ACT`): only the ceiling ends it — the shape
+        // `cargo xtask wedge-check` reads back (`xtask::verify::faults`).
         if (Harness.faultHoldAct)
             return
         shotDriver.finish()
@@ -167,8 +140,7 @@ Item {
         page: harness.page
     }
 
-    // The two grabbable stand-ins a headless shot is taken from, behind everything the window draws — the seat this
-    // part is built into carries the `z` that puts them there.
+    // The stand-ins a headless shot is grabbed from, behind everything the window draws (the seat carries the `z`).
     WindowShotMirrors {
         id: shotMirrors
         anchors.fill: parent
@@ -184,13 +156,11 @@ Item {
         sceneMirror: shotMirrors.sceneMirror
         mainUi: harness.mainUi
         gate: harness.gate
-        // `armed` is a frame asked for and not yet polished — a run that ends there had the window's word withheld.
+        // `armed`: a run that ends there had its frame withheld.
         censusState: census.armed ? "armed" : census.waiting ? "waiting" : census.settled ? "settled" : "arriving"
         onAppPictured: census.report()
     }
 
-    // Built only when a verb was given, and only once the strip holds what the run asked for (`begin`): a run that
-    // is only being measured or photographed carries none of the verbs.
     Loader {
         id: actsLoader
         active: harness.screensUp && harness.begun && Harness.autoAct !== ""
@@ -212,8 +182,7 @@ Item {
         }
     }
 
-    // The identity hooks run with no verb at all (`PGG_AUTO_IDENTITY`), so they are built off their
-    // own knob.
+    // Off its own knob: the identity hooks run with no verb (`WindowIdentityActs`).
     Loader {
         active: harness.screensUp && Harness.autoIdentity !== ""
         sourceComponent: WindowIdentityActs {

@@ -1,5 +1,4 @@
-//! Tests of the tab strip's move arithmetic, in a file of their own
-//! (structure.md §分割: テストだけ巨大なら同ディレクトリの専用ファイルへ).
+//! Tests of the tab strip's move arithmetic (`tabs::index_after_move`).
 
 use super::tabs::index_after_move;
 
@@ -11,11 +10,10 @@ fn the_tab_being_carried_lands_where_it_was_put_down() {
 
 #[test]
 fn a_tab_carried_past_the_one_in_front_pushes_it_the_other_way() {
-    // Carried rightwards from its left: everything it passed shifts
-    // left to fill the gap.
+    // Carried rightwards: the rows it passed shift left.
     assert_eq!(index_after_move(1, 0, 3), 0);
     assert_eq!(index_after_move(3, 0, 3), 2);
-    // And leftwards from its right: they shift right.
+    // Leftwards: they shift right.
     assert_eq!(index_after_move(1, 3, 0), 2);
     assert_eq!(index_after_move(0, 3, 0), 1);
 }

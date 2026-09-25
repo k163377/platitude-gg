@@ -15,45 +15,38 @@ Rectangle {
     /// whether a write is running (`DiffPane`).
     required property bool fromWorkTree
     required property bool staged
-    /// Whether the file is this window's own to write (`DiffPane.writable`). **The word stands where it can
-    /// write** — a file read out of another working copy is read the way a commit's file is, and a commit's diff has
-    /// no whole-file word either (デザイン規約 §別の作業コピーを読む).
+    /// Whether the file is this window's own to write (`DiffPane.writable`); the stage word stands only then
+    /// (デザイン規約 §別の作業コピーを読む).
     required property bool writable
-    /// The copy the file belongs to, where it is not this window's. **Said after the path**: this band is the
-    /// only thing on screen while a diff is open that can say whose file is being read, and the pane that named the
-    /// copy is behind the diff — but the path is what the band is for, so it leads and the copy follows it in the
-    /// phrase the window names a copy with everywhere else (デザイン規約 §別の作業コピーを読む).
+    /// The copy the file belongs to, where it is not this window's — said after the path, which leads
+    /// (デザイン規約 §別の作業コピーを読む).
     required property string copyName
     required property bool conflicted
     required property bool busy
-    /// Whether the rows are read as two columns (`DiffModel.split`) — what the band's toggle shows, and the one
-    /// thing in this band that is not about the file (デザイン規約 §diff を 2 列で読む).
+    /// Whether the rows are read as two columns (`DiffModel.split`) — what the toggle shows
+    /// (デザイン規約 §diff を 2 列で読む).
     required property bool split
 
-    /// The hand the path is dragged over from the band's own air, named so a run can enter it (the way a card is
-    /// reached at `<card>.background.pad`).
+    /// The band's sweep hand, named so a run can enter it (as a card's is at `<card>.background.pad`).
     property alias pad: headerHand
     /// Automation: the toggle itself, so a run flips the view where a press does (`PGG_AUTO_ACT=diff-split`).
     readonly property alias viewToggle: viewToggle
-    /// Whether the band ran out of room for the path and is showing the tail of it. The output side, and the half a
-    /// picture of a wide pane cannot answer.
+    /// Whether the path is cut — the output side, which a picture of a wide pane cannot answer.
     readonly property alias cut: titleField.clipped
-    /// Automation: whether the file's own word is there to press, read off the button
-    /// — a report built from `writable` would go green with the button unwired (app-ui.md §UI 自動化の因果性).
+    /// Automation: whether the stage word is there to press, read off the button — `writable` would go green with
+    /// the button unwired.
     readonly property bool stageOffered: stageFileButton.visible && stageFileButton.enabled
 
     signal stageFileRequested()
     signal closeRequested()
-    /// The reader wants the rows the other way round.
     signal splitChosen(bool split)
 
     implicitHeight: Theme.headerHeight
     color: Theme.bgElevated
-    // This is the band the hairline was written for: the row under it is a hunk heading of the same colour.
+    // The row under it can be a hunk heading of the same colour (デザイン規約 §diff の中のステージ).
     BandRule { z: 1 }
-    // The hand the path is dragged over from the band's own air (規約 §右のペインの字は掴める): the inset at the near
-    // end, the step either side of the words, the room beside a short path. Under the row, so the
-    // word that stages the file and the way out keep every press they had.
+    // The band's air hands presses to the path (規約 §右のペインの字は掴める). Under the row, so the buttons keep
+    // their presses.
     SweepPad {
         id: headerHand
         anchors.fill: parent
@@ -65,9 +58,7 @@ Rectangle {
         anchors.leftMargin: Theme.spaceSm
         anchors.rightMargin: Theme.spaceSm
         spacing: Theme.spaceSm
-        // The word and the file, with nothing between them but the row's own gap: the word is what the band is
-        // called and the path is what it is showing, which is a caption and its subject rather than two facts to
-        // separate. The one separator in the band is the dash in front of the copy, below.
+        // Caption and path with no separator between them; the band's one separator is the dash before the copy.
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
@@ -77,21 +68,11 @@ Rectangle {
                 font.weight: Font.DemiBold
                 color: Theme.textSecondary
             }
-            // The file, in a field the reader can take away with them (規約 §右のペインの字は掴める): this band is
-            // where the eye already is while the diff is being read, and the path here is the same one the list's
-            // own row hands over from its hover.
-            //
-            // **Cut in the middle** (`LineText.cutAt`): a path is told apart by both of its ends — the leaf names the
-            // file and the first folders say which tree it is in — and this band has nothing beside it to carry
-            // either. A field has no `elide`, so the field itself is held against the far edge and the head is
-            // painted onto the mark's ground beside the `…`; the whole path stays in the field, so a drag and
-            // `Ctrl+A` both come away with all of it and never with a `…`.
+            // The path, in a field the reader can copy from (規約 §右のペインの字は掴める), cut in the middle: both
+            // ends tell a path apart, and the field keeps the whole path, so a copy never carries the `…`.
             LineText {
                 id: titleField
-                // Takes the slack, so the pair above stays put (FileRowDelegate learned this the hard way) — **and
-                // no more than the path itself is**: the phrase naming the copy stands after this field, and a field
-                // that grew into the band's spare room would leave it stranded against the far edge instead of
-                // beside the file it is about. What is left over is the band's air, which nothing draws in.
+                // Takes the slack but no more than the path, or the copy's name after it strands at the far edge.
                 Layout.fillWidth: true
                 Layout.maximumWidth: titleField.implicitWidth
                 text: header.title
@@ -101,26 +82,18 @@ Rectangle {
                 cutAt: "middle"
                 ground: Theme.bgElevated
             }
-            // Whose file, where it is not this window's — **the same phrase as the pane behind the diff and the
-            // graph's own row**: a dash, then the mark against the name (デザイン規約 §別の作業コピーを読む). The dash
-            // is a character, and it is the band's only separator: what stands in front of the path is the band's
-            // own name, which needs no mark between it and what it is naming.
-            //
-            // **Outside the field**: the path is a value the reader takes away (`titleField`), and a copy's name
-            // pasted with it would be a path nothing can open.
+            // Whose file: a dash, then the mark and the name, as everywhere a copy is named (デザイン規約
+            // §別の作業コピーを読む). Outside the field, so a copied path stays a path.
             Label {
                 visible: header.copyName !== ""
                 text: "—"
                 font.pixelSize: Theme.fontMd
                 color: Theme.textSecondary
             }
-            // **A quarter of the band at most**, because the path is what the band is for: a copy can be named
-            // anything, and left to take what it asks for it would push the file it is about off the end. Its own
-            // cut, so a long name loses its own middle.
+            // A quarter of the band at most, so a long copy name cannot push the path off; it cuts its own middle.
             RowLayout {
                 visible: header.copyName !== ""
-                // The slack is the path's (`titleField`); a layout inside a layout fills by default, and this pair
-                // taking a share of it would cut the file the band is about to make room for a name.
+                // A nested layout fills by default; the slack is the path's.
                 Layout.fillWidth: false
                 Layout.maximumWidth: header.width / 4
                 spacing: 0
@@ -143,24 +116,14 @@ Rectangle {
                     text: header.copyName
                     pixelSize: Theme.fontMd
                     weight: Font.DemiBold
-                    // The band's own colour: every word in it names the one thing on screen, and a name set a step
-                    // quieter than the rest reads as an aside rather than as part of the phrase.
+                    // The band's colour, not a step quieter: the name is part of the phrase, not an aside.
                     color: Theme.textSecondary
                 }
             }
         }
-        // How the rows are read — one column or two — ahead of the word that acts on the file. The same seat the
-        // file lists give their own view toggle: at the end of the band's air, in front of whatever acts
-        // (デザイン規約 §diff を 2 列で読む). It stands on every diff, pictures included: the choice is the
-        // machine's and outlives the file, and a band that gained and lost a control as files were opened would
-        // move everything to its right (§窓の床「誰も頼んでいないものが画面上で動く」).
-        //
-        // **The band's spare room goes here, and nowhere else.** The group above stops at the path's own width
-        // (`titleField`'s cap), and a layout with room left over that nothing can take *spreads it between its
-        // items* — the toggle stood a third of the way along the band and `Stage file` centred in the next third
-        // (measured, before this spacer). The file lists' bands hold their toggle at the end the same way
-        // (`DetailsChangesBand`, `WipBucketHeader`), and the three after this say `fillWidth: false` out loud: a
-        // layout inside a layout fills by default, and a control that grew would centre its word in the growth.
+        // The band's spare room goes to this spacer: a layout with room nothing takes spreads it between its items.
+        // The three after it say `fillWidth: false`, since a nested layout fills by default. The toggle stands on every
+        // diff (デザイン規約 §diff を 2 列で読む).
         Item { Layout.fillWidth: true }
         DiffViewToggle {
             id: viewToggle
@@ -168,16 +131,12 @@ Rectangle {
             split: header.split
             onChosen: split => header.splitChosen(split)
         }
-        // The file's own word, and the loudest thing in the pane: the pair colour the hunks and the file rows use, a
-        // step up in size, and lit whether or not the pointer is near (デザイン規約 §diff の中のステージ). It is the only standing
-        // colour word in the view — the hunks' wait for the pointer — which is what puts the scopes back in order:
-        // staging a file is the larger of the two.
+        // The pane's one standing colour word (デザイン規約 §diff の中のステージ).
         ActionButton {
             id: stageFileButton
             Layout.fillWidth: false
             visible: header.fromWorkTree && header.writable
-            // The same `git add` on a conflicted file is how git is told the conflict has
-            // been dealt with, so the word says that (デザイン規約 §diff の中のステージ).
+            // On a conflicted file the same `git add` marks it resolved (デザイン規約 §diff の中のステージ).
             text: header.conflicted ? qsTr("Mark resolved")
                   : header.staged ? qsTr("Unstage file") : qsTr("Stage file")
             tone: header.staged ? Theme.diffRemovedFg : Theme.diffAddedFg
@@ -186,11 +145,8 @@ Rectangle {
                  ? qsTr("Unstage the whole file at once") : qsTr("Stage the whole file at once")
             onActivated: header.stageFileRequested()
         }
-        // The way out, seated as the third of the three at the band's end (規約 §diff を 2 列で読む): the same
-        // `iconXl` width, the same band-tall reach and the same `iconXl` box for the mark as the pair beside it, so
-        // a hand coming along the end of the band meets three targets of one size and three marks of one family.
-        // The `✕` is drawn inset in its box (`NavIcon` `close`, 7 of the 16), so its ink stays the lighter of the
-        // three; the wash stays the disc every `✕` wears.
+        // The third of the band's end trio: the toggle pair's `iconXl` seat, band-tall reach and mark box
+        // (規約 §diff を 2 列で読む).
         CloseToolButton {
             Layout.fillWidth: false
             Layout.fillHeight: true

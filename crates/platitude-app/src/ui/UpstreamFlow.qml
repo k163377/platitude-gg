@@ -5,14 +5,7 @@ import platitude
 import platitude.ui
 
 // Which remote branch a local one is measured against, from the row that asks to git's write (デザイン規約
-// §ブランチが測られる相手を決める).
-//
-// **A question**, because nothing here knows the answer: a branch may belong with a name
-// unlike its own, on any of several remotes, and the same-named one is a guess. The two halves are answered in the
-// one bar every other question stands in (§立っている質問は 1 か所で聞く).
-//
-// **Information** — the setting is this repository's own config and takes nothing away, so the bar is
-// the neutral colour and a click answers it (§はじめてリモートへ送る, the other question of this kind).
+// §ブランチが測られる相手を決める), asked in the one question bar (§立っている質問は 1 か所で聞く).
 //
 // Sized to the page: nothing is drawn here, and the bar belongs to the graph.
 Item {
@@ -25,8 +18,7 @@ Item {
     /// it).
     required property GraphPane graphPane
 
-    /// Raise the standing question with this form in it. The page owns the bar — every other question in the window
-    /// goes up the same way.
+    /// Raise the standing question with this form in it; the page owns the bar.
     signal askRequested(string oidHex, string label, string accept, var run, var form)
 
     /// Whether this question is the one standing, which is what its bindings on the bar hang off.
@@ -35,22 +27,16 @@ Item {
     property string branch: ""
     property string remote: ""
     property string branchName: ""
-    /// Whether that pair names a remote-tracking branch this repository holds. **Not a refusal** — a name not here is
-    /// a branch the next push makes (デザイン規約 §ブランチが測られる相手を決める) — but it is what the counts hang
-    /// off, so the bar's line says which of the two was answered.
+    /// Whether that pair names a remote-tracking branch held here. Not a refusal (a name not here is one the next
+    /// push makes) — it only picks the bar's line.
     property bool targetIsThere: false
 
     readonly property var remotes: upstreamFlow.repoTab.remoteNames
-    /// What the chosen remote already carries here, for the name box to offer past typing one. **`total` is touched
-    /// on purpose**: what answers is a slot call, and a slot call is not something a binding follows
-    /// (`PublishFlow.remoteBranchAsked` — the same shape), so the count that moves with every refs read is what asks
-    /// again.
+    /// What the chosen remote already carries here, the name box's suggestions. `total` is read so every refs read
+    /// asks again (a binding does not follow a slot call).
     ///
-    /// **And only while the question stands.** A binding is evaluated whenever what it reads moves, whether or not
-    /// anything is reading it back — so without this the remote's whole branch list was built again on every refs
-    /// read for as long as the tab was open, which is work in the number of refs on the path a click takes
-    /// (CLAUDE.md §性能予算). The list lands a frame after the bar does, which is the arrangement `AppCombo` keeps
-    /// the typed name apart from its model for (`AppCombo.wanted`).
+    /// Only while the question stands: the binding re-runs on every refs read, and the list costs the number of refs
+    /// (CLAUDE.md §性能予算). Landing a frame after the bar is fine (`AppCombo.wanted`).
     readonly property var branches: {
         upstreamFlow.remotesModel.total
         return upstreamFlow.asking
@@ -62,8 +48,7 @@ Item {
 
     anchors.fill: parent
 
-    /// Opens the question on this branch. `counterpart` is the remote branch it already speaks for, empty where it
-    /// speaks for none — where it does, that is where the question opens, so changing one half is one gesture.
+    /// Opens the question on this branch, at `counterpart` — the remote branch it already tracks, or empty.
     function startAsk(branch, oidHex, counterpart) {
         upstreamFlow.branch = branch
         // The cut is the configured remote name where one owns the ref — a remote's own name may contain `/`
@@ -94,8 +79,7 @@ Item {
         upstreamFlow.settleTarget()
     }
 
-    /// Typing into the name box, and where the automation writes too — no injected key reaches the box on the
-    /// offscreen platform.
+    /// The name box's edits; automation writes here too (no injected key reaches the box offscreen).
     function setBranchName(name) {
         upstreamFlow.branchName = name
         upstreamFlow.settleTarget()
@@ -112,10 +96,8 @@ Item {
             upstreamFlow.branch, upstreamFlow.remote, upstreamFlow.branchName)
     }
 
-    // The bar's own state follows what has been answered into it, which is why these are bindings:
-    // the question changes what it is saying while it stands. **Nothing is put back when they let go**, for
-    // the reason the other question of this kind spells out (`PublishFlow`): letting go happens at the press that
-    // walks away, and the bar is still on screen for the 200ms after it.
+    // Bindings, since the question changes while it stands. `RestoreNone`: letting go happens at the press that
+    // walks away, with the bar still on screen (`PublishFlow`).
     Binding {
         target: upstreamFlow.graphPane
         property: "askAnswerable"
@@ -145,8 +127,8 @@ Item {
         restoreMode: Binding.RestoreNone
     }
 
-    /// Automation: the name box's list, which no injected click can reach. The same door a press uses
-    /// (`AppCombo.pressField`), so what answers is the wiring.
+    /// Automation: opens the name box's list (no injected click reaches it) through a press's door
+    /// (`AppCombo.pressField`).
     function openBranches() {
         const form = upstreamFlow.graphPane.askForm
         if (!form || !form.branchPick)
@@ -159,10 +141,8 @@ Item {
         const form = upstreamFlow.graphPane.askForm
         return Boolean(form && form.branchPick && form.branchPick.popup.visible)
     }
-    /// Automation: Enter in the name box. No key reaches the box on the offscreen platform, so what is raised is the
-    /// box's own `accepted` — the signal Qt raises on Enter, and the door everything downstream of it hangs off
-    /// (`AppCombo.submitted`). **That Enter is what raises it is fixed in `tst_appcombo`**, where a real keystroke
-    /// can be injected; from here on, this is the wiring a hand goes through.
+    /// Automation: Enter in the name box. No key reaches the box offscreen, so this raises the box's own `accepted`,
+    /// which `AppCombo.submitted` hangs off; that Enter raises it is fixed in `tst_appcombo`.
     function enterBranch() {
         const form = upstreamFlow.graphPane.askForm
         if (!form || !form.branchPick)

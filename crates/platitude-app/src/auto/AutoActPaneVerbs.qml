@@ -6,20 +6,13 @@ import platitude.ui
 
 /// The furniture around the panes: the bar between columns, the lane bar, the head pin, the tail footer, and the
 /// box a name is typed into.
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are
-/// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+// `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
 
-    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is
-    /// the file that builds this one.
+    /// `var`: typing it `AutoActDriver` would be circular — that file builds this one.
     required property var driver
 
-    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var workTree: driver.workTree
     readonly property var graphModel: driver.graphModel
@@ -27,13 +20,11 @@ Item {
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
 
-    /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
+    /// Runs `act` if it is this family's and says whether it was; `AutoActDriver` asks each family in turn.
     function run(act, arg) {
         if (act === "name-box") {
-            // The argument is `<行>[:<列幅>]`. The width is what a hand would drag the chip column's divider to, and
-            // the box is drawn against it — `0` asks for the column's own floor, since the metrics clamp what a drag
-            // asks for. Without one the column is left wherever it was, which is the default width.
+            // The argument is `<行>[:<列幅>]`: the chip column dragged to that width (`0` = its floor, since the
+            // metrics clamp a drag), or left at its default.
             const boxCut = arg.indexOf(":")
             const boxRow = Number(boxCut < 0 ? arg : arg.substring(0, boxCut))
             if (boxCut >= 0)
@@ -44,10 +35,9 @@ Item {
                               + " label_w=" + Math.round(graphPane.labelW)
                               + " box_w=" + (boxItem ? Math.round(boxItem.nameBoxWidth) : -1))
         } else if (act === "name-box-drop") {
-            // The same box, and the press that lands somewhere else while it stands. The argument is `<行>[:<打つ名前>]`
-            // — with nothing typed the box goes with the press, with a name in it it stays. What is typed goes in the
-            // way a recycled delegate puts it back (`GraphRowDelegate.takeNamingFocus`), so the box on screen holds
-            // what the run says it holds.
+            // The same box, and a press landing elsewhere while it stands; argument `<行>[:<打つ名前>]`. Empty, the
+            // box goes with the press; with a name in it, it stays. The name goes in the way a recycled delegate puts
+            // it back (`GraphRowDelegate.takeNamingFocus`), so the box on screen holds what the run says.
             const nameCut = arg.indexOf(":")
             const nameRow = Number(nameCut < 0 ? arg : arg.substring(0, nameCut))
             const nameTyped = nameCut < 0 ? "" : arg.substring(nameCut + 1)
@@ -74,20 +64,19 @@ Item {
             middleExitTimer.begin()
         } else if (act === "graph-bar" || act === "graph-bar-away"
                    || act === "middle-scroll") {
-            // Both want lanes that do not fit their column, and no demo repository has that many — the divider is
-            // pulled in the way a person would.
+            // Both want lanes overflowing their column, and no demo repository has that many — so the divider is
+            // pulled in.
             page.setGraphColumns(graphPane.labelWManual,
                                  Metrics.laneInset + 2 * Metrics.laneW)
             graphPanTimer.begin()
         } else if (act === "pane-bar" || act === "pane-bar-away") {
-            // The bar this verb lights is the details pane's, and a page that opened on a dirty working tree is not
-            // showing that pane at all (`RepoPage.trySelectDefault`). HEAD's own commit is what `--preset long` puts
-            // the eighty files in, which is the only list here with anywhere to scroll.
+            // The details pane's bar, which a page opened on a dirty tree is not showing (`RepoPage.trySelectDefault`);
+            // HEAD is the commit `--preset long` gives its eighty files.
             page.activateRow(workTree.headOid)
             paneBarTimer.begin()
         } else if (act === "text-bar" || act === "text-bar-away") {
-            // The argument picks a commit whose body runs past the box — one that fits has no bar to raise, which the
-            // report says.
+            // The argument picks a commit whose body runs past the box — one that fits never moves, and the run waits
+            // out its watchdog.
             page.activateRow(graphModel.oidAt(Number(arg)))
             textBarTimer.begin()
         } else if (act === "graph-min") {
@@ -110,36 +99,29 @@ Item {
         }
         return true
     }
-    // The window cut: the walk stops at a round number of commits and the footer is the only thing that says so — its
-    // lanes carry on for one more commit's worth and its line names the count.
-    //
-    // Each wait is on a state. The walk has to have answered before `truncated` means anything (the initial false is
-    // "not asked yet" — app-ui.md §UI 自動化の因果性), the footer has to have been given a height, and the view has to have
-    // actually arrived at the end: `atYEnd` is the output, `positionViewAtEnd()` only the ask.
+    // The window cut: the walk stops at a round number of commits and only the footer says so. Waits: the walk having
+    // answered (`truncated` starts false = "not asked yet" — app-ui.md §UI 自動化), the footer having a height, and the
+    // view having arrived — read off the footer's own place, since `positionViewAtEnd()` is only the ask.
     SampleTimer {
         id: graphTailTimer
         onTriggered: {
             if (graphModel.loading || graphModel.rowTotal === 0)
                 return
-            // The footer lives at the far end of two thousand rows, and a ListView builds what is near its viewport —
-            // so it is asked for and then looked for.
+            // A ListView builds only near its viewport, so the far-end footer is asked for, then looked for.
             const tail = graphPane.view.footerItem
             if (tail === null || tail.height <= 0) {
                 graphPane.view.positionViewAtEnd()
                 return
             }
-            // On screen whole, read off where it sits: `positionViewAtEnd`
-            // puts the last *row* against the edge, and this pane keeps a run-out below it, so being told to go is not
-            // the same as having arrived.
+            // On screen whole: `positionViewAtEnd` puts the last *row* at the edge, and the pane keeps a run-out below.
             const bottom = graphPane.view.contentY + graphPane.view.height
             if (tail.y + tail.height > bottom + 0.5) {
                 graphPane.view.positionViewAtEnd()
                 return
             }
             graphTailTimer.stop()
-            // The verdict leads, and its two halves are neighbours: a graph that never cut and one whose footer failed
-            // to draw frame the same way — the end of a history and the end of what was loaded are the same picture
-            // without the line.
+            // The verdict leads with its two halves adjacent: a graph that never cut and a footer that failed to draw
+            // frame alike.
             Harness.report(
                 "graph_tail truncated=" + graphModel.truncated
                 + " shown=" + tail.visible
@@ -150,16 +132,9 @@ Item {
             driver.complete()
         }
     }
-    // The press on that cut: the footer loads the next step of history (`GraphTailFooter.loadMore`).
-    //
-    // What it has to prove is that they arrived **under the ones being read**. So
-    // the run holds on to where the view was and how many times the model had been reset before the press, and the
-    // report leads with the pair: a window that grew by starting the stream over would land the same row count with
-    // `restarted=true`, and it is the same picture.
-    //
-    // The press goes in at the footer's own function — the one line the MouseArea's handler is (verify-ui スキル
-    // 「注入はハンドラ本体そのものへ入れる」). The walk answers by taking `growing`
-    // back off, and only then is the count worth reading.
+    // The press on that cut (`GraphTailFooter.loadMore`, the MouseArea handler's one line — verify-ui スキル
+    // 「注入はハンドラ本体そのものへ入れる」). The new rows must arrive under the ones being read: a window regrown by
+    // restarting the stream lands the same count, so `restarted=` / `held=` compare with the state before the press.
     property int tailWalkedBefore: -1
     property int tailResetsBefore: -1
     property int tailRowBefore: -1
@@ -167,15 +142,12 @@ Item {
     SampleTimer {
         id: tailMoreTimer
         onTriggered: {
-            // **The footer is read up to the press.** The step this preset loads reaches the end of the
-            // history, so the footer answers by going — and a wait that kept asking for its height would sit out the
-            // watchdog on the very run that worked (measured).
+            // The footer is read only up to the press: this preset's step reaches the end of history, so it goes.
             if (acts.tailWalkedBefore < 0) {
                 if (!tailMoreTimer.press())
                     return
             }
-            // The wider walk lands as one replacement, so both halves of it — the rows and the footer's own number —
-            // are here on the same frame the wait comes off.
+            // The wider walk lands as one replacement: rows and the footer's number arrive as `growing` comes off.
             if (graphModel.growing || graphModel.walkedTotal === acts.tailWalkedBefore)
                 return
             tailMoreTimer.stop()
@@ -191,13 +163,12 @@ Item {
                 + " rows=" + graphPane.view.count)
             driver.complete()
         }
-        /// Gets the cut on screen and presses it, and says whether the press is now out. Everything the press needs
-        /// to be compared against is taken here, on the frame it goes in.
+        /// Gets the cut on screen and presses it; says whether the press is out. The before-values are taken on the
+        /// press's own frame.
         function press() {
             if (graphModel.loading || graphModel.rowTotal === 0)
                 return false
-            // The footer lives at the far end of two thousand rows, and a ListView builds what is near its viewport —
-            // so it is asked for and then looked for (`graph-tail`).
+            // Asked for, then looked for (as in `graph-tail`).
             const tail = graphPane.view.footerItem
             if (tail === null || tail.height <= 0) {
                 graphPane.view.positionViewAtEnd()
@@ -212,8 +183,7 @@ Item {
             acts.tailResetsBefore = graphModel.resetCount
             acts.tailRowBefore = graphPane.view.firstVisibleRow()
             if (tail.loadMore()) {
-                // The ring, read off the ring itself on the frame the press went in — the only place it can be read.
-                // It is gone by the time this run is photographed, and on this preset so is the footer under it.
+                // The ring, read on the press's frame: it and the footer are gone by the time of the picture.
                 acts.tailWaiting = tail.waiting
                 return true
             }
@@ -223,49 +193,36 @@ Item {
             return false
         }
     }
-    // The stand-in for a HEAD scrolled off the graph (`GraphHeadPin`). It only exists where the row does not, so each
-    // of these sends the view to an edge first — and then reads the stand-in itself, because
-    // "told to go" and "arrived" are not the same thing (the same reason `graph-tail` reads `atYEnd`).
-    //
-    // The walk has to have answered (`headRow` is -1 until it has), and the chips arrive a
-    // pass behind the rows, so the row is found before it can say its own name.
+    // The stand-in for a HEAD scrolled off the graph (`GraphHeadPin`): each run sends the view to an edge, then reads
+    // the stand-in itself. `headRow` is -1 until the walk answers, and the chips arrive a pass behind the rows.
     SampleTimer {
         id: graphHeadTimer
-        /// Whether the second move — the press, or the scroll back — has been made. The first one repeats: a
-        /// view told to go to its end before it has laid two thousand rows out goes to the end it knows about and stays
-        /// there, so the ask is repeated until the stand-in itself says it arrived (measured — one ask, and the
-        /// run waited out its watchdog at the top of the graph).
+        /// Whether the second move (the press, or the scroll back) has been made. The first repeats: a view told to go
+        /// to its end before laying its rows out stops at the end it knows.
         property bool answered: false
-        /// Whether this run has been moved off HEAD's own row. The stand-in wears the selection's ground while HEAD
-        /// is the selected row (`picked=`), and a row wearing it does not light under the pointer — so the three runs
-        /// that photograph the stand-in standing for somebody who is reading elsewhere take the newest commit first,
-        /// the way a reader who clicked the top of the graph did. The page itself opens on the commit HEAD stands on
-        /// (`RepoPage.trySelectDefault`), which on `--preset deep-detached` is 806 rows down.
+        /// Whether this run has been moved off HEAD's row. While HEAD is selected the stand-in wears the selection's
+        /// ground (`picked=`) and does not light under the pointer, so the runs about a reader elsewhere select the
+        /// newest commit first — the page opens on HEAD's (`RepoPage.trySelectDefault`).
         property bool stoodAside: false
         readonly property bool below: Harness.autoAct === "graph-head-below"
         function report() {
             const row = graphModel.headRow
-            // The judged answers first and in one run, because a
-            // `must_say` catches neighbours only (`verify/verbs.rs`) —
-            // and in the order the longest of them reads, so the runs
-            // that judge fewer stop short of the rest.
+            // The judged answers lead, adjacent and in the longest `must_say`'s order, so shorter ones are its
+            // prefixes (a `must_say` is one substring — `verify/verbs.rs`).
             Harness.report(
                 "graph_head shown=" + graphPane.headPin.visible
                 + " above=" + graphPane.headPin.rowAbove
                 + " onScreen=" + graphPane.view.rowOnScreen(row)
                 + " lit=" + graphPane.headPin.lit
                 + " landed=" + (graphPane.view.currentIndex === row)
-                // Whether the stand-in is carrying the selection, read off the ground itself: `landed=` beside it is
-                // the same condition asked of the list, so the two together are the wiring between them.
+                // The stand-in carrying the selection, read off its ground; with `landed=` it checks the wiring.
                 + " picked=" + graphPane.headPin.picked
-                // And how much of the list's own top sliver it keeps above itself. Four pixels of empty ground on a
-                // ground of the same colour: a picture answers it only against the bands either side of the graph,
-                // and only if the reader knows to look there.
+                // The list's top sliver it keeps above itself — same-coloured ground a picture barely shows.
                 + " room=" + Math.round(graphPane.headPin.topRoom)
                 + " row=" + row
                 + " at=" + graphPane.view.currentIndex
-                // What it leaves the list's own scroll bar. A picture cannot answer it — the band is drawn over the
-                // trough either way — and a zero would mean the trough behind it answers with a jump to HEAD.
+                // What it leaves the list's scroll bar (a picture cannot say); zero would make the trough answer
+                // with a jump to HEAD.
                 + " bar=" + Math.round(graphPane.headPin.barRoom))
             driver.complete()
         }
@@ -284,11 +241,8 @@ Item {
                 }
             }
             if (!graphHeadTimer.answered) {
-                // The stand-in has to have come up **on the edge this run is about** before anything is asked of it:
-                // the two runs below are about what takes it away again, and a run that never saw it would call an
-                // empty band a success. The edge is part of that — a preset whose HEAD starts off the bottom hands
-                // the other runs a stand-in nobody scrolled for, and `-lit` needs one that is not carrying the
-                // selection, which is a preset where HEAD is not the row the page opened on (`GraphHeadPin`).
+                // The stand-in has to be up on this run's edge first: the runs about it going would call an empty band
+                // a success, and a preset whose HEAD starts off the bottom hands the others one nobody scrolled for.
                 if (!graphPane.headPin.visible || graphPane.headPin.rowAbove === graphHeadTimer.below) {
                     if (graphHeadTimer.below)
                         graphPane.view.positionViewAtBeginning()
@@ -311,8 +265,7 @@ Item {
                 graphHeadTimer.report()
                 return
             }
-            // What the press and the scroll back are both judged on: the row is on screen, so the stand-in has stepped
-            // aside. A press is judged on where the selection went as well.
+            // Both are judged on the row being on screen (the stand-in stepped aside); a press also on the selection.
             if (graphPane.headPin.visible || !graphPane.view.rowOnScreen(graphModel.headRow))
                 return
             if (act === "graph-head-go" && graphPane.view.currentIndex !== graphModel.headRow)
@@ -324,8 +277,7 @@ Item {
     // The lane column has to have taken its narrower width before there is anywhere to pan to, or a bar worth wanting.
     SampleTimer {
         id: graphPanTimer
-        /// The lanes have been sent. Latched, so the tick after it can read the ink
-        /// (app-ui.md §UI 自動化の因果性).
+        /// The lanes have been sent; latched so a later tick reads the ink.
         property bool sent: false
         function begin() {
             graphPanTimer.sent = false
@@ -334,15 +286,12 @@ Item {
         onTriggered: {
             if (graphPane.graphXMax <= 0)
                 return
-            // Where the pointer is, which is the whole of what puts this bar on screen (デザイン規約 §グラフを横へ送る).
-            // `-away` walks it back out again: a bar that comes when the pointer does proves nothing on its own unless
-            // it also goes when the pointer goes.
+            // The pointer is what puts this bar on screen (デザイン規約 §グラフを横へ送る); `-away` checks it goes too.
             graphPane.restPointer(true)
             if (Harness.autoAct === "middle-scroll") {
                 graphPanTimer.stop()
-                // The middle click, then the pointer drifting sideways off it. The argument says which column the click
-                // landed in, which is the whole question — only the lanes take the sideways drift
-                // (デザイン規約 §グラフを横へ送る).
+                // The middle click, then a sideways drift. The argument is the column clicked — only the lanes take the
+                // drift (デザイン規約 §グラフを横へ送る).
                 const y = graphPane.height / 2
                 const x = Harness.autoActArg === "message"
                         ? graphPane.labelW + graphPane.graphColW + Theme.spaceXl : graphPane.labelW + Theme.spaceSm
@@ -351,15 +300,13 @@ Item {
                 middleScrollTimer.start()
                 return
             }
-            // The pointer puts the bar on screen; sending the lanes is what brings it up to full ink
-            // (§QML 実装ルール のバーの明るさ). Both halves are wanted on the side that photographs it.
+            // Sending the lanes brings the bar to full ink (デザイン規約 §QML 実装ルール のバーの明るさ).
             if (!graphPanTimer.sent) {
                 graphPanTimer.sent = true
                 graphPane.graphX = graphPane.graphXMax / 2
                 return
             }
-            // The rise takes 200ms, so reading on the tick the send landed would report the way
-            // there.
+            // The rise is animated, so the tick the send landed on would report the way there.
             if (Harness.autoAct === "graph-bar" && graphPane.laneBarInk < 1)
                 return
             if (Harness.autoAct === "graph-bar-away")
@@ -372,16 +319,12 @@ Item {
             driver.complete()
         }
     }
-    // The panels' own bar (`PaneScrollBar`): the pane's ink while the reader is sending the list, and the pane's own
-    // divider ink once they have left it (デザイン規約 §QML 実装ルール のバーの明るさ). **The pair is the whole claim** —
-    // either state alone reads as "it always looks like that", and the two are what changed.
-    //
-    // The list is sent by assigning `contentY`: what is being proven here is the
-    // bar (`changes-step` owns the arrows), and a bar lit by a send of any kind is the claim.
+    // The panels' own bar (`PaneScrollBar`): bright while the reader sends the list, back to the divider ink once they
+    // leave (デザイン規約 §QML 実装ルール のバーの明るさ) — the pair is the claim. The send is a plain `contentY` write
+    // (`changes-step` owns the arrows).
     SampleTimer {
         id: paneBarTimer
-        /// The list has been sent, and the slab has been seen at full ink because of it. Latched in order: a slab that
-        /// dims without ever having been bright proves nothing (app-ui.md §UI 自動化の因果性).
+        /// Latched in order — sent, then seen at full ink: a slab that dims without having been bright proves nothing.
         property bool sent: false
         property bool wasLit: false
         function begin() {
@@ -392,15 +335,14 @@ Item {
         onTriggered: {
             const view = detailsPane.filesWalk.view
             const bar = detailsPane.filesBar
-            // Laid out, and with somewhere to go. A list still measuring itself has no bar to light, and one that fits
-            // has none to light either — both would go green on a run that photographs nothing.
+            // Laid out and with somewhere to go, or the run would go green on no bar at all.
             if (!view || view.count <= 0 || view.height <= 0
                     || view.contentHeight <= view.height + 1)
                 return
             if (!paneBarTimer.sent) {
                 paneBarTimer.sent = true
-                // Brightness wants both halves: the reader inside the range, and the range being sent. Hover cannot be
-                // injected, so the first goes to the property a real pointer writes (`AutoScrollBar.inArea`).
+                // Brightness wants the reader inside and the range sent; hover cannot be injected, so the property a
+                // real pointer writes is set (`AutoScrollBar.inArea`).
                 bar.inArea = true
                 view.contentY = (view.contentHeight - view.height) / 2
                 return
@@ -409,8 +351,7 @@ Item {
                 if (!Qt.colorEqual(bar.slabColor, Theme.borderDefault))
                     return
                 paneBarTimer.wasLit = true
-                // The reader leaves, which is the only thing that puts the slab back down (the bar answers
-                // the reader).
+                // Only the reader leaving puts the slab back down.
                 if (Harness.autoAct === "pane-bar-away")
                     bar.inArea = false
             }
@@ -423,13 +364,9 @@ Item {
             driver.complete()
         }
     }
-    // The bar inside the description box, which is the style's see-through one: a box is
-    // the content's own place (デザイン規約 §色 スクロールバー). **Read as a pair** — the two steps of
-    // ink are a quarter apart, which a picture answers badly on a 6px thumb.
-    //
-    // This is the one bar the window hands a `ScrollView`, whose flickable is not interactive and never calls itself
-    // moving — a box scrolled by the wheel was showing no bar at all until it was told to watch the text instead. So
-    // the notch goes in the way a notch does (`DescriptionBox.rollBy`), and the bar answers for itself.
+    // The description box's see-through bar (デザイン規約 §色 スクロールバー), read as a pair: the two ink steps are a
+    // quarter apart, which a picture answers badly. The box is a `ScrollView` whose flickable never calls itself
+    // moving, so the notch goes in the way the wheel's does (`DescriptionBox.rollBy`).
     SampleTimer {
         id: textBarTimer
         property bool rolled: false
@@ -440,12 +377,11 @@ Item {
             textBarTimer.start()
         }
         onTriggered: {
-            // The commit has to have arrived, or the box holds no text and there is nothing to send.
+            // The commit has to have arrived, or the box holds no text.
             if (detailsModel.loading || detailsModel.shaHex !== page.selectedOid)
                 return
             if (!textBarTimer.rolled) {
-                // The reader in the box, then one notch down. A box that fits swallows the notch and stands where it
-                // was, which the report says.
+                // The reader in the box, then one notch down, repeated until the box has moved.
                 detailsPane.holdDescriptionBar(true)
                 detailsPane.rollDescription(-120)
                 if (detailsPane.descriptionAt <= 0)
@@ -457,12 +393,12 @@ Item {
                 if (detailsPane.descriptionBarInk < 1)
                     return
                 textBarTimer.wasLit = true
-                // The reader leaves the box, which is the only thing that puts the ink back down.
+                // Only the reader leaving puts the ink back down.
                 if (Harness.autoAct === "text-bar-away")
                     detailsPane.holdDescriptionBar(false)
             }
-            // All the way down to the idle step (three tenths — 規約 §QML 実装ルール のバーの明るさ):
-            // the fall takes 400ms, and a tick inside it reports the descent.
+            // All the way down to the idle step (0.3 — デザイン規約 §QML 実装ルール のバーの明るさ); a tick inside the
+            // fall reports the descent.
             if (Harness.autoAct === "text-bar-away" && detailsPane.descriptionBarInk > 0.305)
                 return
             textBarTimer.stop()
@@ -471,24 +407,10 @@ Item {
             driver.complete()
         }
     }
-    // Where the lanes ended up is the whole question, so that is what is waited for — a pan that ran and a pan that was
-    // refused read differently in the report.
-    //
-    // A gesture that carries the lanes runs until they have nowhere left to go: the pointer was put a whole pane's
-    // width out, so the ticker saturates the clamp and `graphX` stops at its own maximum. One that does not carry them
-    // has already answered by starting without the carry — `panning` is settled in `start()` by where the click landed
-    // — and no tick will ever move them.
-    //
-    // The flag is kept for the whole gesture (デザイン規約 §グラフを横へ送る), and nothing here ends the gesture, so a wait on
-    // `autoPanning` going false never completed for the lane column's own case (measured, watchdog on both systems,
-    // `message` passing beside it because that one never pans).
-    // **The two ways a middle-click gesture ends**, which is what a browser's does and what this one did not
-    // (デザイン規約 §グラフを横へ送る). Both go in at the pane's own three entries — the press, the pointer moving, and
-    // the button coming up — so what the run drives is the wiring and not a copy of it.
-    //
-    // The argument is the hand: `held` pulls out of the dead zone before letting go (the drift ends with the hand),
-    // `click` never leaves it (the drift stays for the next press to take down, and nothing has moved). **The ticker
-    // has to have run** before either can be read — an absence of movement cannot say whether anything asked.
+    // PGG_AUTO_ACT=middle-scroll-exit: the two ways a middle-click gesture ends (デザイン規約 §グラフを横へ送る), put in at
+    // the pane's own press / move / release. `held` leaves the dead zone before letting go (the drift ends with the
+    // hand); `click` never leaves it (the drift stays for the next press). The ticker has to have run before either
+    // is read — no movement cannot say whether anything asked.
     SampleTimer {
         id: middleExitTimer
         property int step: 0
@@ -503,8 +425,7 @@ Item {
                 if (graphPane.view.count === 0)
                     return
                 const y = graphPane.height / 2
-                // The subject column: this verb is about how the gesture ends, and a press on the lanes would carry
-                // the sideways drift into the answer as well.
+                // The subject column: a press on the lanes would mix the sideways drift into the answer.
                 const x = graphPane.labelW + graphPane.graphColW + Theme.spaceXl
                 middleExitTimer.fromY = graphPane.view.contentY
                 graphPane.startAutoScroll(x, y)
@@ -532,6 +453,9 @@ Item {
             driver.complete()
         }
     }
+    // Waits on where the lanes ended up: a carrying gesture runs `graphX` to its maximum (the pointer is a pane's width
+    // out), one that does not carry has `autoPanning` false from `MiddleAutoScroll.start`. The flag holds for the whole
+    // gesture (デザイン規約 §グラフを横へ送る), so a wait for it to fall never ends.
     SampleTimer {
         id: middleScrollTimer
         onTriggered: {

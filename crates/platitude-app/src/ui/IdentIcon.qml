@@ -1,21 +1,16 @@
 import QtQuick
 import platitude.ui
 
-// The face beside an author: the picture they were given, or — far more often — a 5x5 mirrored pattern generated from
-// their name.
-//
-// Both wear the same circle and the same ring, so a list of authors reads as one column of faces whether or not anybody
-// has been given a picture. The pattern is what stands in for the avatar services this application cannot use
-// (CLAUDE.md 絶対制約: git is the only network there is).
+// The face beside an author: the picture they were given, or a 5x5 mirrored pattern generated from their name, both in
+// the same circle and ring. The pattern stands in for avatar services this app cannot use (CLAUDE.md 絶対制約).
 Item {
     id: ident
     property int code: 0
     /// A `file:` URL from the store, empty for the generated pattern.
     property string imageUrl: ""
 
-    /// Whether the circle has in hand what it will paint. The canvas reads a `file:` URL off disk asynchronously, and
-    /// until it lands the ring is drawn around nothing — so a shot of a list of faces waits on this. A function:
-    /// `isImageLoaded` is a call, and a binding on it would never be re-evaluated.
+    /// The picture has loaded (the canvas reads it asynchronously), so a shot can wait on it. A function: a binding on
+    /// the `isImageLoaded` call would never re-evaluate.
     function pictureReady() {
         return ident.imageUrl === "" || pattern.isImageLoaded(ident.imageUrl)
     }
@@ -69,10 +64,8 @@ Item {
             ctx.stroke()
         }
     }
-    // A picture is cut to the circle by the canvas's own clip, so nothing outside it is painted: a node in the graph
-    // has lane curves running in behind it, and anything opaque in the corners would take bites out of them. The
-    // alternative, masking an Image with a shader, draws nothing at all on the offscreen platform (measured) — which
-    // would mean a feature that works but cannot be photographed.
+    // Pictures are cut by the canvas clip, not painted corners or a shader mask
+    // (rules-refs/app-ui.md「顔は `IdentIcon` の 1 つが両方描き」).
     Connections {
         target: ident
         function onCodeChanged() { pattern.requestPaint() }

@@ -1,21 +1,17 @@
 import QtQuick
 import QtTest
 
-// What Qt hands a list row for the two presses of a double-click, and what a Flickable takes away from a row that
-// lets go of the drag — the three facts the graph's rows answer their presses on
-// (デザイン規約 §グラフ行のダブルクリック).
+// What Qt hands a list row for the two presses of a double-click, and what a Flickable takes from a row that lets go
+// of the drag — the facts the graph's rows answer their presses on (デザイン規約 §グラフ行のダブルクリック).
 //
-// **The second click of a double-click arrives as a press and never as a click**, so a surface that answers on the
-// press sees both halves and a surface that answers on the release sees only the first. That is why the gesture's
-// guard sits on the press path (`ReclickGesture.click`): without it the second press would select again and arm the
-// name box under a reader who is going somewhere.
+// The second click of a double-click arrives as a press, never as a click, so the gesture's guard sits on the press
+// path (`ReclickGesture.click`); without it the second press would select again and arm the name box.
 Item {
     id: root
     width: 300
     height: 300
 
     property var log: []
-    /// Whether the row keeps the drag it was handed.
     property bool rowHolds: false
 
     Flickable {

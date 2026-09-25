@@ -1,17 +1,13 @@
 use super::*;
 
-/// One row of the shaped list.
+/// One row of the shaped list: an index into the source (sixteen bytes,
+/// against a `NavItem`'s two hundred), or a folder row — the one thing no
+/// source holds — carried whole behind a box so the indexed rows stay
+/// small.
 ///
-/// Sixteen bytes where a row of the source can be pointed at, against the
-/// two hundred a `NavItem` costs; a folder row is the one thing no source
-/// holds, so it is the one thing carried whole (behind a box, so the
-/// pointed-at rows are not all widened to hold one).
-///
-/// `from` is where in the whole name the segment this row shows begins —
-/// worked out by whichever tree placed the row, because the two do not
-/// agree on it: the refs tree indents one folder per `/`, while the
-/// working tree's compacts a chain of single-child folders into one row
-/// and leaves the file showing only its last segment.
+/// `from` is where in the whole name the shown segment begins, written by
+/// whichever tree placed the row: the refs tree (one folder per `/`) and
+/// the working tree's (single-child chains compacted) disagree on it.
 pub(super) enum Arranged {
     At { at: u32, depth: i32, from: u32 },
     Made(Box<NavItem>),
@@ -79,18 +75,14 @@ impl Value<'_> {
     }
 }
 
-/// The roles a delegate reads a row by — **this model's own table**, put
-/// on the wire by its `role_names()` and dispatched by its `data()`
-/// (`qmodel.rs`). Qt is handed this one, so the roles **run past
-/// `#[derive(QModelItem)]`'s fifteen fields**: that derive binds what a
-/// folder row carries whole, and a role past the end of those fields is
-/// answered for a made row without one.
+/// The roles a delegate reads a row by — this model's own table, put on
+/// the wire by `role_names()` and dispatched by `data()` (`qmodel.rs`), so
+/// it runs past `NavItem`'s fifteen derived fields.
 ///
-/// The numbers are the order declared below, and `NavItem`'s fields come
-/// first so the derive covers the head of the table. The test at the foot
-/// of this file holds the two together: **a role answered under a name
-/// the delegate does not ask for draws nothing at all**, and says nothing
-/// about it — no warning, no error, an empty row.
+/// The numbers are the declared order, `NavItem`'s fields first. The test
+/// at the foot of this file holds the two together: **a role answered
+/// under a name the delegate does not ask for draws an empty row**, with
+/// no warning.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Role {
     Name,
@@ -108,22 +100,17 @@ pub(super) enum Role {
     EolMark,
     Depth,
     Folder,
-    /// How far a local branch stands from its upstream. **Past the end of
-    /// `NavItem`**: no folder row is measured against anything, so these
-    /// two are the roles that carry no field (see the head of this file).
+    /// How far a local branch stands from its upstream. Past the end of
+    /// `NavItem`: no folder row is measured, so these carry no field.
     Ahead,
     Behind,
 }
 
 impl Role {
-    /// Every role the view is handed, in the order their numbers run —
-    /// `NavItem`'s fields first, one for one, then the roles no folder
-    /// row carries a field for (the test at the foot of this file holds
-    /// that head of the table together).
+    /// Every role the view is handed, in number order.
     ///
-    /// A branch's upstream is read by name: no delegate asks for it, and
-    /// the menus that do (`upstream_of` / `upstream_drifted`) read the
-    /// snapshot's own row through its index.
+    /// No upstream role: no delegate asks for it, and the menus that do
+    /// read it by name (`upstream_of` / `upstream_drifted`).
     pub(super) const ALL: [Self; 17] = [
         Self::Name,
         Self::Full,
@@ -179,12 +166,8 @@ impl Role {
 mod tests {
     use super::*;
 
-    /// The names the delegate asks by and the numbers `data` is called
-    /// with come from two places; a role that answers under the wrong one
-    /// draws an empty row and reports nothing, so they are pinned here.
-    /// `NavItem` covers the head of the table — a role no folder row has
-    /// a field for is answered without one — so the two are held together
-    /// as far as the fields run.
+    /// The derive's names and `Role`'s come from two places; they are held
+    /// together as far as `NavItem`'s fields run.
     #[test]
     fn every_field_of_a_made_row_is_the_role_of_the_same_number() {
         let handed = <NavItem as QModelItem>::role_names();
@@ -206,9 +189,8 @@ mod tests {
         }
     }
 
-    /// Two roles spelled the same put one name on the wire twice, and the
-    /// delegate reads whichever `role_names()` kept — with nothing said
-    /// about the one it lost.
+    /// Two roles spelled alike put one name on the wire twice; the
+    /// delegate silently reads whichever `role_names()` kept.
     #[test]
     fn no_two_roles_answer_under_one_name() {
         let mut spellings: Vec<&str> = Role::ALL.iter().map(|role| role.spelling()).collect();

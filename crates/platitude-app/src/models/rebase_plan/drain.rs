@@ -1,20 +1,13 @@
 //! What the plan does with what its feed hands it, and the two moves
-//! that reset the rows.
-//!
-//! A plain `impl`: the Qt-facing face has to be one file
-//! (app-ui.md), and what it does does not
-//! (structure.md §分割 Qt).
+//! that reset the rows — a plain `impl` beside the one-file `#[qobject]`
+//! (structure.md §分割).
 
 use super::*;
 
-/// The name the page reads a refused preview under, and the whole of
-/// what it has to write both its lines from: git was never asked and
-/// nobody outside said anything, so a refusal arriving as its
-/// neighbour's tells a reader whose history is fine to switch branches.
-///
-/// **The spellings are the row menu's** (`repo_tab::drain`), so the one
-/// `Words.rewriteRefusedWhy` answers both doors without a table in
-/// between.
+/// The name the page reads a refused preview under — all it has to write
+/// both lines from, since git was never asked. The spellings are the row
+/// menu's (`repo_tab::drain`), so one `Words.rewriteRefusedWhy` answers
+/// both doors.
 pub(in crate::models) fn refusal_kind(
     refusal: platitude_core::rebase_plan::PlanRefusal,
 ) -> &'static str {
@@ -63,10 +56,9 @@ impl RebasePlanModel {
                     .first()
                     .map(|s| s.oid_hex.clone())
                     .unwrap_or_default();
-                // The very range the rebase replays, spelled by core once
-                // — the rewrite warning's count is about this string, so
-                // it cannot drift from what the run touches — and the
-                // count itself, taken in the same read.
+                // The range the rebase replays, spelled once by core, and
+                // its published count from the same read — so the rewrite
+                // warning counts exactly what the run touches.
                 self.publish_range = preview.range;
                 self.pushed_count = i32::try_from(preview.published).unwrap_or(i32::MAX);
                 let onto = preview.onto.unwrap_or_default();
@@ -77,18 +69,15 @@ impl RebasePlanModel {
                 self.onto_email = onto.author_email;
                 self.onto_ref = preview.onto_ref;
                 self.loading = false;
-                // An empty range cannot arise from a click on a commit
-                // (the row itself is in it), but an answer is an answer.
-                // The one question both lines below answer, so a plan
-                // cannot stand with nothing selected or a selection be
-                // left standing in a plan that never opened.
+                // A click cannot bring an empty range (its row is in it),
+                // but an answer is an answer. One answer for both lines
+                // below: no open plan without a selection, no selection
+                // without a plan.
                 let has_rows = count > 0;
-                // An open plan already has its newest row selected, and
-                // the model is where that is set: every property here
-                // notifies on the one `changed()`, so selecting from the
-                // page's `planActive` handler would fire `active`'s own
-                // notify inside the binding that is still delivering it —
-                // a binding loop Qt reports and refuses to re-evaluate.
+                // Selected here, not in the page's `planActive` handler:
+                // every property notifies on the one `changed()`, and
+                // selecting there re-fires `active`'s notify inside its own
+                // binding — a loop Qt refuses to re-evaluate.
                 self.selected_row = if has_rows { 0 } else { -1 };
                 self.head_suspect = false;
                 self.active = has_rows;
@@ -102,9 +91,8 @@ impl RebasePlanModel {
                 self.changed();
                 self.refused_plan(kind.to_string());
             }
-            // The read failed; the error itself is on the shared surface
-            // already, and this puts the waiting state down so nothing
-            // keys on `loading` forever.
+            // The error is already on the shared surface; this only puts
+            // `loading` down.
             PlanMsg::Failed { from } => {
                 if !self.loading || from != self.asked_from {
                     return;
@@ -113,10 +101,8 @@ impl RebasePlanModel {
                 self.asked_from = String::new();
                 self.changed();
             }
-            // The count asked again after the refs moved (`refreshPushed`).
-            // Matched by range: a plan put away and another opened since
-            // is a different range, and the old answer is dropped on the
-            // name.
+            // The count re-asked after the refs moved (`refreshPushed`),
+            // matched by range so an answer for a replaced plan drops.
             PlanMsg::Published { range, published } => {
                 if !self.active || range != self.publish_range || published == self.pushed_count {
                     return;
@@ -127,14 +113,10 @@ impl RebasePlanModel {
         }
     }
 
-    /// A preview that came back turned down: the waiting state goes down
-    /// and the answer is what the page is to be told it was, or nothing
-    /// at all where this is the answer to a click the screen has already
-    /// left behind (`asked_from`).
-    ///
-    /// **Everything the refusal does to the model is here**, and the arm
-    /// above is left holding the two signals — which only a real QObject
-    /// can carry, and which say nothing back.
+    /// A refused preview: puts `loading` down and names the refusal for
+    /// the page, or `None` for a click the screen has left behind
+    /// (`asked_from`). All the model's side is here, testable without a
+    /// QObject; the arm above only emits the signals.
     pub(super) fn refused(
         &mut self,
         from: &str,
@@ -147,12 +129,9 @@ impl RebasePlanModel {
         Some(refusal_kind(refusal))
     }
 
-    /// Replaces every row under one model reset: the plan opens whole
-    /// (`QListModelBase::reset` installs what
-    /// `reset_unnotified` finds staged).
-    ///
-    /// Every delegate goes with the reset, one under a hand included, so
-    /// no release is coming for it — the drag is put down here
+    /// Replaces every row under one model reset (`QListModelBase::reset`
+    /// installs what `reset_unnotified` finds staged). The dragged
+    /// delegate goes too and no release will come, so the drag ends here
     /// (`end_move`).
     fn reset_rows(&mut self, rows: Vec<PlanStepItem>) {
         self.dragging = false;

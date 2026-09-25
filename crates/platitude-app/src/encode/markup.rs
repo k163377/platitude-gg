@@ -1,15 +1,12 @@
-//! The theme's runs laid over one line as the markup
-//! `Text.StyledText` reads, and — either side of that — where a byte of a
-//! line stands in the line the row was laid out from, and back.
+//! The theme's runs laid over one line as the markup `Text.StyledText`
+//! reads, and where a byte of a line stands in the row as spelled, and
+//! back.
 //!
-//! **Places throughout.** Two panes read a press and place a wash on
-//! their rows, and both ask the row's own layout where a place is drawn
-//! (`LineRuler`); what crosses into here is the place. Which places a line
-//! has depends only on how the row spells it, so there are two rules and
-//! they differ over exactly one character: a diff row is markup and spells
-//! a tab as the `&nbsp;` that reach its stop ([`spelled_ranges`] /
-//! [`source_byte`]), a command log row is the characters themselves and
-//! draws a tab at one stop of its own ([`plain_ranges`] / [`plain_byte`]).
+//! **Places, never pixels**: the panes ask the row's own layout where a
+//! place is drawn (`LineRuler`). Two rules, one character apart — a diff
+//! row spells a tab as the `&nbsp;` that reach its stop ([`spelled_ranges`]
+//! / [`source_byte`]); a command log row is the characters themselves, a
+//! tab one place ([`plain_ranges`] / [`plain_byte`]).
 
 use platitude_core::highlight::Span;
 use qtbridge::qtbridge_type_lib::QVariantMap;
@@ -20,24 +17,16 @@ use super::wire::{Fields, Listed, Record, field};
 /// One line as `Text.StyledText` reads it: the theme's runs where there
 /// are any, and the line escaped either way.
 ///
-/// **Every row goes through here, coloured or not** — the rows are set in
-/// one format, so nothing about a row changes when the colours arrive an
-/// instant later except which colour its letters are. Two things came of
-/// the rows being two formats: a row was measured with its own `<font …>`
-/// tags counted as text in the turn the markup landed and the format had
-/// not caught up (the widths that come off the rows are read by
-/// `DiffReach`), and an uncoloured row drew its tabs at Qt's own stop
-/// while every other walk of the line stepped them at
-/// [`super::columns::TAB_WIDTH`]. Neither can be spelled out of a single
-/// format.
+/// **Every row goes through here, coloured or not**: one format, so only
+/// the colours change when they arrive — with two, a row is measured with
+/// its `<font>` tags as text in the turn the markup lands (`DiffReach`).
 pub(super) fn styled(text: &str, spans: &[Span]) -> String {
     let mut out = String::with_capacity(text.len() * 2);
     let mut at = 0;
     let mut col = 0usize;
     for span in spans {
         let end = (at + span.len).min(text.len());
-        // The runs are byte offsets into this same string; one that cuts
-        // inside a character sends the rest of the line out plain.
+        // A run that cuts inside a character sends the rest out plain.
         let Some(piece) = text.get(at..end) else {
             break;
         };
@@ -58,18 +47,12 @@ pub(super) fn styled(text: &str, spans: &[Span]) -> String {
     out
 }
 
-/// What `Text.StyledText` would otherwise read as markup, plus the
-/// whitespace it would otherwise fold away.
-///
-/// Rich text folds whitespace runs exactly as HTML does, so escaped
-/// spaces are what keep indentation. `<pre>` would turn the folding off,
-/// but Qt renders what is inside it in a substituted font: thinner
-/// strokes, washed-out colours next to the window's own words
-/// (measured).
+/// Escapes what `Text.StyledText` would read as markup, and the
+/// whitespace it would fold as HTML does. (`<pre>` stops the folding but
+/// renders in a substituted font.)
 ///
 /// `col` is the column the next character is drawn at, carried across the
-/// calls one line is spelled in; [`step_of`] moves it, so a tab is spelled
-/// as exactly the `&nbsp;` that reach its stop.
+/// calls one line is spelled in; [`step_of`] moves it.
 fn push_escaped(out: &mut String, text: &str, col: &mut usize) {
     for ch in text.chars() {
         let step = step_of(ch, *col);
@@ -95,11 +78,9 @@ fn push_hex(out: &mut String, byte: u8) {
     }
 }
 
-/// How many UTF-16 units one character is spelled in — the units the row's
-/// own layout counts a place in (`LineRuler`). A tab is spelled as the
-/// `&nbsp;` that reach its stop, so it is worth as many units as the
-/// columns it takes; everything else is worth what the character itself is
-/// held as, which is two for an astral glyph.
+/// How many UTF-16 units — the layout's places — one character is spelled
+/// in: a tab, the `&nbsp;` that reach its stop; anything else, the
+/// character itself.
 fn spelled_units(ch: char, col: usize) -> usize {
     if ch == '\t' {
         step_of(ch, col)
@@ -108,18 +89,14 @@ fn spelled_units(ch: char, col: usize) -> usize {
     }
 }
 
-/// The same count for a line drawn as itself: the command log's three
-/// columns are the characters they hold, set in a plain `Label`
-/// (`CommandRowDelegate`), so **a tab there is one character and one
-/// place** — the layout draws it at its own stop and the ruler reading
-/// that layout counts it once. Nothing about a line is escaped on the way
-/// to a plain row, so nothing here has a column to carry.
+/// The same count for a line drawn as itself (the command log's plain
+/// `Label`s, `CommandRowDelegate`): **a tab is one place** — the layout
+/// draws it at its own stop.
 fn plain_units(ch: char, _col: usize) -> usize {
     ch.len_utf16()
 }
 
-/// One run of places along a line as the row spells it: where it starts
-/// and how many places it covers, in the UTF-16 units a layout counts.
+/// One run of places along a line as the row spells it, in UTF-16 units.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Run {
     pub from: i32,
@@ -152,23 +129,15 @@ impl platitude_core::mem::Footprint for Run {
 }
 
 /// Where byte ranges of the source line (`platitude_core::intraline`, the
-/// reader's own selection) fall in the line as the row spells it: runs
-/// of places in UTF-16 units, none where there is nothing.
-///
-/// **Places, and places alone.** What turns a place into an x is the row's
-/// own layout and only that — a column is not a width and no arithmetic
-/// makes it one (`DiffTextMetrics`), and a combining mark is a character
-/// this walk counts and a glyph the font draws nothing for. The pane asks
-/// the layout where these places are drawn (`LineRuler`), which is the
-/// same layout the reader's press is read against, so the wash and the hit
-/// cannot disagree.
+/// reader's own selection) fall in the line as the row spells it. Places
+/// only (see the module): the wash and the press are read against the
+/// same layout, so they cannot disagree.
 pub fn spelled_ranges(text: &str, ranges: &[(usize, usize)]) -> Runs {
     places_of(text, ranges, spelled_units)
 }
 
-/// The same answer for a row drawn as the characters themselves — the
-/// command log's three columns (`CommandsModel::spell`). One rule apart
-/// from [`spelled_ranges`], and it is the tab: see [`plain_units`].
+/// [`spelled_ranges`] for a row drawn as the characters themselves
+/// (`CommandsModel::spell`); the tab is the difference ([`plain_units`]).
 pub fn plain_ranges(text: &str, ranges: &[(usize, usize)]) -> Runs {
     places_of(text, ranges, plain_units)
 }
@@ -221,22 +190,18 @@ fn push_span(out: &mut Vec<Run>, from: usize, to: usize) {
 }
 
 /// Which byte of the source line the place `at` in the spelled line stands
-/// at — the inverse of [`spelled_ranges`], and the second half of reading a
-/// press: the layout says which place of the row the pointer is over
-/// (`LineRuler`), and this says which byte of the file that is.
+/// at — the inverse of [`spelled_ranges`].
 ///
-/// The answer is a **boundary** between two characters. A place inside what
-/// one character is spelled in — a tab's spaces, the two units an astral
-/// glyph is held as — belongs to the nearer of its ends, ties going right,
-/// the way the layout itself decides between two glyphs. Past the end of
-/// the line it is the line's length.
+/// The answer is a **boundary**: a place inside one character's spelling (a
+/// tab's spaces, an astral glyph's two units) goes to the nearer end, ties
+/// right, as the layout decides between glyphs. Past the end of the line
+/// it is the line's length.
 pub fn source_byte(text: &str, at: usize) -> usize {
     byte_of(text, at, spelled_units)
 }
 
-/// The same answer for a row drawn as the characters themselves — the
-/// command log's three columns (`CommandsModel::hit`). One rule apart from
-/// [`source_byte`], and it is the tab: see [`plain_units`].
+/// [`source_byte`] for a row drawn as the characters themselves
+/// (`CommandsModel::hit`); the tab is the difference ([`plain_units`]).
 pub fn plain_byte(text: &str, at: usize) -> usize {
     byte_of(text, at, plain_units)
 }
@@ -276,8 +241,6 @@ mod tests {
 
     #[test]
     fn a_line_without_runs_is_still_escaped() {
-        // Nothing to colour is still a row to draw: escaped, in the one
-        // format every row is read in (see the note above).
         assert_eq!(
             styled("a plain <line>", &[]),
             "a&nbsp;plain&nbsp;&lt;line&gt;"
@@ -312,22 +275,19 @@ mod tests {
 
     #[test]
     fn a_tab_behind_a_wide_glyph_spells_only_what_is_left_of_its_stop() {
-        // 日 is drawn two columns wide, so two `&nbsp;` reach the stop at
-        // 4 and `x` stands on it. Three would carry `x` past it.
+        // 日 takes two columns, so two `&nbsp;` reach the stop at 4.
         let out = styled("日\tx", &[run(5, 0, 0, 0)]);
         assert_eq!(out, "<font color=\"#000000\">日&nbsp;&nbsp;x</font>");
     }
 
-    /// The runs as `(from, len)` pairs, which is how a test reads them.
     fn places(runs: &Runs) -> Vec<(i32, i32)> {
         runs.iter().map(|r| (r.from, r.len)).collect()
     }
 
     #[test]
     fn a_run_is_where_the_row_spells_it() {
-        // "日\tab": the tab reaches the stop at 4, so the row spells it as
-        // two `&nbsp;` — 日 on 0..1, the tab on 1..3, ab on 3..5 of the
-        // line as spelled. Byte ranges 0..3, 3..4 and 4..6 of the source.
+        // The tab is two `&nbsp;` to the stop at 4: 日 on places 0..1, the
+        // tab 1..3, ab 3..5; bytes 0..3, 3..4 and 4..6 of the source.
         let text = "日\tab";
         assert_eq!(places(&spelled_ranges(text, &[(0, 3)])), [(0, 1)]);
         assert_eq!(places(&spelled_ranges(text, &[(3, 1)])), [(1, 2)]);
@@ -338,7 +298,6 @@ mod tests {
             [(0, 1), (3, 1)]
         );
         assert!(spelled_ranges(text, &[]).is_empty());
-        // And the runs go over as the records the ruler reads.
         let runs = spelled_ranges(text, &[(0, 3), (4, 1)]);
         assert_eq!(
             Runs::try_from(&qtbridge::qtbridge_type_lib::QVariant::from(&runs)),
@@ -348,17 +307,13 @@ mod tests {
 
     #[test]
     fn an_astral_glyph_is_two_of_the_units_a_place_is_counted_in() {
-        // What QML holds a string in, and so what the row's layout counts
-        // its places in: one character, two units.
         assert_eq!(places(&spelled_ranges("a\u{1f600}b", &[(1, 4)])), [(1, 2)]);
         assert_eq!(places(&spelled_ranges("a\u{1f600}b", &[(5, 1)])), [(3, 1)]);
     }
 
     #[test]
     fn a_combining_mark_is_a_place_of_its_own() {
-        // The font draws nothing extra for it, but the string holds it and
-        // the layout counts it — which is exactly why a walk of columns
-        // could never place it (`encode::columns`).
+        // The font draws nothing for it, but the layout counts it.
         assert_eq!(places(&spelled_ranges("e\u{301}x", &[(0, 3)])), [(0, 2)]);
         assert_eq!(source_byte("e\u{301}x", 1), 1);
         assert_eq!(source_byte("e\u{301}x", 2), 3);
@@ -371,16 +326,14 @@ mod tests {
         assert_eq!(source_byte(text, 1), 3);
         assert_eq!(source_byte(text, 3), 4);
         assert_eq!(source_byte(text, 5), 6);
-        // Past the end of the line is the end of the line.
         assert_eq!(source_byte(text, 400), 6);
         assert_eq!(source_byte("", 400), 0);
     }
 
     #[test]
     fn a_place_inside_a_tab_belongs_to_the_nearer_end_of_it() {
-        // The tab is spelled as four spaces, so places 0..4 stand in it and
-        // the two halves go to its two ends — the same rule the layout
-        // itself decides between two glyphs by.
+        // Places 0..4 stand in the tab's four spaces; each half goes to its
+        // nearer end.
         let text = "\tab";
         assert_eq!(source_byte(text, 0), 0);
         assert_eq!(source_byte(text, 1), 0);
@@ -413,31 +366,25 @@ mod tests {
 
     #[test]
     fn a_row_drawn_as_itself_counts_a_tab_once() {
-        // The one rule the log's columns do not share with a diff row:
-        // nothing spells the tab out for them, so it is one character in
-        // the string the `Label` was handed and one place to stop at.
         let text = "a\tb";
         assert_eq!(places(&plain_ranges(text, &[(0, 3)])), [(0, 3)]);
         assert_eq!(places(&plain_ranges(text, &[(1, 1)])), [(1, 1)]);
         assert_eq!(plain_byte(text, 1), 1);
         assert_eq!(plain_byte(text, 2), 2);
-        // …where a diff row spells the same tab as the three `&nbsp;` that
-        // reach the stop at four, and counts every one of them.
+        // A diff row spells the same tab as three `&nbsp;` to the stop at 4.
         assert_eq!(places(&spelled_ranges(text, &[(0, 3)])), [(0, 5)]);
         assert_eq!(source_byte(text, 4), 2);
     }
 
     #[test]
     fn a_wide_glyph_is_one_place_of_a_row_drawn_as_itself() {
-        // Columns are gone from both walks: 日本語 stands three places,
-        // one a character, and where those three are drawn is a question
-        // for the row (`LineRuler`).
+        // 日本語 is three places, one per character.
         let text = "日本語.txt";
         assert_eq!(places(&plain_ranges(text, &[(0, 9)])), [(0, 3)]);
         assert_eq!(places(&plain_ranges(text, &[(9, 4)])), [(3, 4)]);
         assert_eq!(plain_byte(text, 1), 3);
         assert_eq!(plain_byte(text, 3), 9);
-        // An astral glyph is still the two units it is held as.
+        // An astral glyph is still two units.
         assert_eq!(places(&plain_ranges("a\u{1f600}b", &[(1, 4)])), [(1, 2)]);
         assert_eq!(plain_byte("a\u{1f600}b", 3), 5);
     }

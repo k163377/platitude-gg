@@ -2,31 +2,20 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// The real `BandStateGroup`, driven by its own inputs: **the wiring between the share-out and what the band draws**
-// (デザイン規約 §ウィンドウの縁 の譲る順).
+// The real `BandStateGroup`, driven by its own inputs: the wiring between the share-out and what the band draws
+// (デザイン規約 §ウィンドウの縁 の譲る順). Why `tst_bandshare.qml` alone is not enough: rules-refs/app-ui.md
+// 「単体だけでは足りない」.
 //
-// `tst_bandshare.qml` asks the arithmetic, and asks it of a `BandStateShare` it sets up itself — so it says nothing
-// about whether the group hands that object the floor it measured, or reads the answer back into anything visible.
-// Cut the group's `badgeMinW` wiring to a constant 0 and that file stays green; so do the two headless runs left,
-// which both stand in a band with room for every word, and so does `old-git-fold`, which folds through
-// `windowAtFloor` and never asks the cap at all.
-//
-// **So this file drives the product component and reads the product's own display properties.** Nothing here
-// recomputes a cap or a floor: the numbers come off the group, the flip is required to sit on the floor the group
-// reports, and the floor the group reports is required to be a real measurement — a second `BandStateMetrics`,
-// standing outside the group, is the witness for that.
+// Nothing here recomputes a cap or a floor: the numbers come off the group, and a second `BandStateMetrics` outside
+// it witnesses that the floor it reports is a real measurement.
 Item {
     id: root
     width: 600
     height: 100
 
-    /// A stopped merge with conflicts under it, which is what puts two badges in the group. Written as the page's own
-    /// shape because that is what the group reads (`curPage.pageWt` / `pageGraph` / `pageTab`).
-    ///
-    /// **Two badges and no more.** The identity and old-git conditions read `AppBackend`, which is the application's
-    /// own Rust-backed module and is staged empty for these runs (`xtask::qmltest`) — their bindings answer false
-    /// here, and nothing below asks them to be anything else. What is under test is the share-out reaching the
-    /// drawing, and two badges narrowing together is the whole of that.
+    /// A stopped merge with conflicts: two badges, in the page's shape the group reads (`curPage.pageWt` / …).
+    /// The identity and old-git badges read `AppBackend`, staged empty for these runs (`xtask::qmltest`), so they
+    /// stay down.
     QtObject {
         id: workTree
         property string opText: "MERGING"
@@ -54,8 +43,7 @@ Item {
     BandStateGroup {
         id: group
         curPage: page
-        // Both of the other two ways into the fold are held open, so what is left to close it is the cap
-        // (規約 §ウィンドウの縁). The strip wants a quarter of the run it has, which is no crowd at any width below.
+        // The floor and the strip's crowd held off (the strip wants a quarter of its run), so only the cap can fold.
         windowAtFloor: false
         tabContentWidth: 100
         tabRunAvail: 400
@@ -67,9 +55,8 @@ Item {
         height: 24
     }
 
-    /// The floor, measured again outside the group. **The witness is the product's own measurer**, not a second copy
-    /// of what it works out: a group that handed its share-out some other number would still report that number as
-    /// its own, and a flip checked against it alone would sit exactly where it was told to.
+    /// The floor measured again outside the group: a group handing its share-out some other number would report
+    /// that number as its own.
     BandStateMetrics {
         id: witness
         stateWt: workTree
@@ -82,8 +69,7 @@ Item {
         name: "BandGroup"
         when: windowShown
 
-        /// Every input back where it started, the page's included: the cases share one group, and a case that
-        /// fails part-way would otherwise hand the next one the state it stopped in.
+        /// The page's inputs too: a case failing part-way would hand the next the state it stopped in.
         function init() {
             group.width = 400
             group.room = Qt.binding(() => group.width)
@@ -97,8 +83,6 @@ Item {
             graph.stale = false
         }
 
-        /// The widths of the badges the band is actually drawing, found by what they are rather than by name: the
-        /// boxes carrying a natural width, inside whichever child of the group is standing.
         function badgesDrawn() {
             for (let i = 0; i < group.children.length; i++) {
                 const row = group.children[i]
@@ -116,8 +100,8 @@ Item {
             return []
         }
 
-        /// The widest window at which the group has given its words up, swept for rather than worked out — what the
-        /// boundary is in pixels is the platform font's answer, and this file is not the place that knows it.
+        /// The widest width at which the group has folded — swept, since the boundary in pixels is the platform
+        /// font's.
         function widestFolded() {
             for (let w = 400; w >= 16; w--) {
                 group.width = w
@@ -127,16 +111,13 @@ Item {
             return -1
         }
 
-        /// **The floor the group acts on is the one it measured.** The reported floor first — a group whose own
-        /// property had drifted from the measurement would let every case below agree with itself.
+        /// The reported floor first: had it drifted from the measurement, every case below would agree with itself.
         function test_the_floor_the_group_reports_is_a_real_measurement() {
             verify(witness.minW > 0, "the measurer answered")
             compare(group.stateBadgeMinW, witness.minW)
         }
 
-        /// **Where the words go and the mark comes, in the real group.** Both sides of the boundary, and the boundary
-        /// required to sit on the floor the group reports: a narrowing that never reached the floor, or one that
-        /// reached some other number, lands one of these two.
+        /// Both sides of the boundary, which has to sit on the floor the group reports.
         function test_the_words_go_where_the_measured_floor_is() {
             const folded = widestFolded()
             verify(folded > 0, "the group never gave its words up at any width down to 16")
@@ -157,29 +138,24 @@ Item {
                    + group.stateCapW + " against " + group.stateBadgeMinW)
         }
 
-        /// **The cap reaches the boxes, not just the report.** At a width that narrows them, every badge standing is
-        /// drawn at the cap — which is the whole point of narrowing them *together* (同§), and the half the two
-        /// booleans above cannot carry.
+        /// The cap reaches the boxes, not just the report.
         function test_the_narrowed_badges_are_drawn_at_the_cap() {
             const folded = widestFolded()
-            // Wide enough to keep the words, narrow enough to have cut them: one pixel over the fold.
+            // One pixel over the fold: the words kept, the badges cut.
             group.width = folded + 1
             const drawn = badgesDrawn()
             compare(drawn.length, 2, "the stopped operation and its conflicts")
             for (const w of drawn)
                 compare(w, group.stateCapW, "every badge comes down to the one width")
 
-            // And with room to spare none of them is cut: `-1` is the group saying it narrowed nothing, and the
-            // boxes are then at the widths the measurer gave them.
+            // With room to spare nothing is cut (`-1`), and the boxes are at their measured widths.
             group.width = 400
             compare(group.stateCapW, -1)
             compare(badgesDrawn(), [group.opBadgeW, group.conflictBadgeW])
         }
 
-        /// **The fold is read off the room the group is handed, not the width it is drawn at.** Folded, the band lays
-        /// the group out at its mark and nothing more (`TopBar`), so its own width then says nothing about whether the
-        /// words would fit again: a group that read it would stay folded however wide the window grew — and one that
-        /// kept the words' width to avoid that stands empty band beside its mark.
+        /// Folded, the group is laid out at its mark alone (`TopBar`), so a fold read off its own width would never
+        /// come undone (rules-refs/app-ui.md「畳んだ群は印のセルだけを取る」).
         function test_the_fold_reads_the_room_handed_in_not_the_width_drawn() {
             const folded = widestFolded()
             verify(folded > 0, "the group never gave its words up at any width down to 16")
@@ -193,9 +169,6 @@ Item {
             verify(!group.stateMarkShown)
         }
 
-        /// **The strip's crowd reaches the group without the window moving.** The width stays where it was and the
-        /// group folds anyway, which is the second of the three ways in and the one that arrives from outside
-        /// (規約 §ウィンドウの縁). A group whose fold read only its own width would sit here with its words showing.
         function test_a_crowd_on_the_strip_folds_the_group_at_a_width_that_was_not_short() {
             compare(group.width, 400)
             verify(group.stateWordsShown, "room for every word")
@@ -217,13 +190,8 @@ Item {
             verify(!group.stateMarkShown)
         }
 
-        /// **Which badge stands is the model's value, and it is an input.** Three of the five conditions read the
-        /// page in front (`curPage.pageWt` / `pageGraph`), so they are answered here by handing the group a
-        /// different page state — no git, no window. What a headless run is still for is the other half: that a real
-        /// repository's state reaches the model at all.
-        ///
-        /// The remaining two (identity and old-git) read `AppBackend` rather than the page, so they cannot be handed
-        /// in — that is the shape of the wiring, not a debt to real git.
+        /// Three of the five badges read the page in front, so a page state handed in answers them; that a real
+        /// repository's state reaches the model is the headless runs' half.
         function test_which_badge_stands_is_the_page_state_handed_in() {
             verify(group.opBadgeShown, "a stopped operation")
             verify(group.conflictBadgeShown, "and the conflicts under it")
@@ -246,8 +214,6 @@ Item {
             verify(!group.visible)
         }
 
-        /// The floor takes them whatever else is true, which is the third way in and the one `old-git-fold`
-        /// photographs (規約 §ウィンドウの縁).
         function test_the_window_on_its_floor_takes_the_words() {
             verify(group.stateWordsShown)
             group.windowAtFloor = true

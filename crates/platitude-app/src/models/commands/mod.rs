@@ -19,11 +19,8 @@ mod selection_tests;
 use selection::clock_of;
 
 // ---------------------------------------------------------------------------
-// CommandsModel: the git invocations this tab made, newest last.
-//
-// Nothing is written to disk and nothing survives the tab: this is the
-// record of what the app just did, kept only while there is someone to
-// read it (P3-確認事項「コマンドログに保存が無い」).
+// CommandsModel: the git invocations this tab made, newest last. In memory
+// only (P3-確認事項「コマンドログに保存が無い」).
 // ---------------------------------------------------------------------------
 
 /// Rows kept per tab. The oldest fall off the end.
@@ -31,14 +28,12 @@ const KEEP: usize = 500;
 
 #[derive(QModelItem, Default, Clone)]
 pub struct CommandItem {
-    /// The time of day this went out, `HH:mm:ss`, already in the reader's
-    /// own zone (`selection::clock_of`). Made here, so the clock the
-    /// reader copies and the clock they are looking at are the one
-    /// time.
+    /// When this went out, `HH:mm:ss` in the reader's zone
+    /// (`selection::clock_of`) — made here so the copied clock is the one
+    /// on screen.
     clock: String,
-    /// Everything after the program name (`push origin main`). The row
-    /// draws `git` itself: it never varies, and what does is what the
-    /// eye should land on.
+    /// Everything after the program name (`push origin main`); the row
+    /// draws `git` itself.
     args: String,
     /// The same command with everything that is always applied spelled
     /// out, so copying it gives back what actually ran.
@@ -52,17 +47,15 @@ pub struct CommandItem {
     duration: String,
     /// git's own parting words. Only failures show it.
     output: String,
-    /// Where the reader's own selection falls on this row, for the wash
-    /// the delegate lays down (`selection::spell`). Nothing on a row it
-    /// does not reach.
+    /// This row's share of the reader's selection (`selection::spell`);
+    /// none on a row it does not reach.
     sel: Optional<CommandWash>,
 }
 
 /// One row's share of the reader's selection, as the delegate reads it:
-/// the runs of each of the three columns the wash is laid over
-/// (`encode::plain_ranges`, none where the column holds none of the
-/// selection), and whether the line is taken end to end — which is what
-/// brings git's own words with it.
+/// each column's runs (`encode::plain_ranges`, empty where the column holds
+/// none of it), and whether the line is taken end to end — which brings
+/// git's own words with it.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CommandWash {
     pub clock: Runs,
@@ -98,16 +91,9 @@ impl platitude_core::mem::Footprint for CommandWash {
 }
 
 /// A row's invocation: the id its end arrives under, and whether the
-/// reader is the one who asked for it. A fetch nobody asked for reaches
-/// the log only when git said no, and its row says so without raising
-/// anything (デザイン規約 §git が言ったことを読む場所).
-///
-/// **The id is the session's, so the session is part of it.** This log
-/// outlives one: a tab standing in another working copy keeps its rows
-/// and opens a session over the same feed, and that one numbers its
-/// commands from one as well (`CommandMsg`). Matched by the id alone,
-/// the first command of the copy arrived at would end the row the first
-/// command of the copy left began.
+/// reader asked for it (an unasked fetch's row raises nothing —
+/// デザイン規約 §git が言ったことを読む場所). `run` is part of the key
+/// because the log outlives a session (`CommandMsg`).
 struct Invocation {
     run: u64,
     id: u64,
@@ -117,22 +103,17 @@ struct Invocation {
 #[derive(Default)]
 pub struct CommandsModel {
     rows: Vec<CommandItem>,
-    /// One per row: what a `Finished` message finds its row by, and
-    /// whose doing the row is. Kept beside the rows — QML has no use for
-    /// either.
+    /// One per row, beside the rows because QML has no use for them.
     ids: Vec<Invocation>,
-    /// Whether a command is in flight right now.
     running: bool,
-    /// Whether the last command that ended failed. Cleared by the next
-    /// one that does not.
+    /// Whether the last command the reader asked for failed.
     failed: bool,
     background_reads: bool,
-    /// Minutes to add to local time to reach UTC, as the display side
-    /// reads it off the machine (`Date.getTimezoneOffset()`). What stamps
-    /// the rows that arrive from here on.
+    /// Minutes to add to local time to reach UTC
+    /// (`Date.getTimezoneOffset()`); stamps the rows that arrive from here on.
     zone_minutes: i32,
-    /// Whether the reader is holding a selection at all. The four numbers
-    /// below are the two ends, in the order the hand made them.
+    /// Whether a selection stands; the four below are its two ends, press
+    /// first.
     sel_active: bool,
     sel_from_row: i32,
     sel_from_at: i32,
@@ -175,8 +156,7 @@ impl QListModel for CommandsModel {
 
 impl_notify_runs!(CommandsModel);
 
-/// Milliseconds in the unit they read best in. Sub-second work is what
-/// most of this log is, and "1420 ms" hides how long 1.42 s felt.
+/// Milliseconds in the unit they read best in.
 fn humanize(ms: i64) -> String {
     if ms < 1000 {
         format!("{ms} ms")
@@ -185,12 +165,9 @@ fn humanize(ms: i64) -> String {
     }
 }
 
-/// What a row shows for time: what the process took and, where the
-/// command waited for a slot first, that wait beside it. Two numbers
-/// because they blame two different things — a slow git, or an
-/// application busy with everything else — and read as one they would
-/// blame the wrong one. A command that waited for nothing says only
-/// what it took, which is most rows.
+/// What a row shows for time: the run, and any wait for a slot beside it —
+/// kept apart because they blame different things (a slow git, a busy
+/// application).
 fn spent(elapsed_ms: i64, waited_ms: i64) -> String {
     if waited_ms > 0 {
         format!("{} (queued {})", humanize(elapsed_ms), humanize(waited_ms))
@@ -215,13 +192,11 @@ impl CommandsModel {
     /// A command the user asked for failed; a background read failing
     /// stays quiet (デザイン規約 §git が言ったことを読む場所).
     ///
-    /// **The panel is not raised on this.** Every command the reader
-    /// asks for runs inside a write, and whether the *operation* failed
-    /// is a question only its own answer can settle — which arrives on
-    /// the tab's feed, not this one, and the two drain in no fixed
-    /// order (`RepoPage`). What this is read for is the panel putting
-    /// the newest row back in view (`CommandsPane`) and the mark a
-    /// report has already answered (`note_answered`).
+    /// Do not raise the panel on this: whether the operation failed is its
+    /// own answer's to say, on the tab's feed, which drains in no fixed
+    /// order with this one (`RepoPage`). Read for bringing the newest row
+    /// into view (`CommandsPane`) and re-quieting an answered mark
+    /// (`note_answered`).
     #[qsignal]
     fn failure(&mut self);
 
@@ -239,21 +214,14 @@ impl CommandsModel {
         self.reset();
         self.running = false;
         self.failed = false;
-        // The rows the selection named are gone, so the selection is too:
-        // left standing it would name rows that arrive later.
+        // Left standing, the selection would name rows that arrive later.
         self.forget_selection();
         self.changed();
     }
 
-    /// The last failure has been answered somewhere else on screen: the
-    /// far side turned a write down under a rule of its own, and the page
-    /// brought its words down in a report (デザイン規約 §可否・警告の出し場所).
-    ///
-    /// **Only the mark goes quiet.** It is the one thing here that
-    /// fetches somebody — a failure nothing else has said — and there is
-    /// nothing left for it to fetch them to. The row keeps git's words
-    /// and its red edge: that is the record, and the record is what the
-    /// panel is for.
+    /// The last failure was answered elsewhere on screen, by a report of a
+    /// refused write (デザイン規約 §可否・警告の出し場所). Only the mark goes
+    /// quiet; the row keeps git's words and its red edge as the record.
     #[qslot]
     fn note_answered(&mut self) {
         if !self.failed {
@@ -263,41 +231,31 @@ impl CommandsModel {
         self.changed();
     }
 
-    /// How many rows the log is holding, for the automation that has to
-    /// weigh what a copy handed out against what it was made from
-    /// (`PGG_AUTO_ACT=commands-copy`). The panel's own count is the view's
-    /// (`ListView.count`), which is not the same number in the frame a
-    /// press lands in — measured: 1 there against 4 commands on
-    /// the clipboard, read microseconds apart in one tick.
+    /// How many rows the log holds, for the automation
+    /// (`PGG_AUTO_ACT=commands-copy`): `ListView.count` lags the model in
+    /// the frame a press lands in.
     #[qslot]
     fn rows_held(&self) -> i32 {
         i32::try_from(self.rows.len()).unwrap_or(i32::MAX)
     }
 
-    /// The machine's offset from UTC, which is the one thing about the
-    /// clock this side cannot work out for itself (`selection::clock_of`).
-    /// Asked for when the tab attaches and again whenever the panel comes
-    /// up, so a session carried across a change of offset stamps what
-    /// arrives afterwards with the new one.
+    /// The machine's UTC offset (`selection::clock_of`), sent when the tab
+    /// attaches and whenever the panel comes up, so a change of offset
+    /// reaches the rows that arrive afterwards.
     #[qslot]
     fn set_zone_minutes(&mut self, minutes: i32) {
         self.zone_minutes = minutes;
     }
 
     /// The text of one of a row's three columns, for the pane to lay out
-    /// and read a place off (`LineRuler`). The line those columns are cut
-    /// from is here, and where their characters are drawn is there
-    /// (デザイン規約 §git が言ったことを読む場所).
+    /// (`LineRuler`).
     #[qslot]
     fn column_text(&self, row: i32, at: i32) -> String {
         self.column(row, at)
     }
 
-    /// Which byte of a row's line a press landed on: the pane says which
-    /// column it was in and which place of that column the row laid the
-    /// pointer over. Pixels stop at the pane — only the column that was
-    /// laid out knows where its characters are drawn, and only the line is
-    /// here (デザイン規約 §git が言ったことを読む場所).
+    /// Which byte of a row's line a press landed on, given the column and
+    /// the place in it the pane measured; pixels stop at the pane.
     #[qslot]
     fn hit_at(&self, row: i32, at: i32, place: i32) -> i32 {
         self.hit(row, at, place)
@@ -369,9 +327,6 @@ impl CommandsModel {
                         self.remove(0);
                         gone += 1;
                     }
-                    // The rows under the selection's two ends have moved
-                    // (`shift_selection`); a wash left on its old numbers
-                    // would name commands nobody picked.
                     if gone > 0 {
                         self.shift_selection(gone);
                     }
@@ -400,11 +355,7 @@ impl CommandsModel {
                     elapsed_ms,
                     message,
                 } => {
-                    // Newest first: the command that just ended is nearly
-                    // always the last row. Found by the session as well
-                    // as the id (see `Invocation`) — a write the copy
-                    // being left was still running ends here long after
-                    // the tab moved on.
+                    // From the end: it is nearly always the last row.
                     let Some(index) = self
                         .ids
                         .iter()
@@ -416,8 +367,7 @@ impl CommandsModel {
                         continue;
                     };
                     // A command asked to answer by its exit code has not
-                    // failed by answering: the row keeps the code it
-                    // returned, and the log stays where the reader put it.
+                    // failed by answering.
                     let ok = answered || code == Some(0);
                     self.set(
                         index,
@@ -433,10 +383,8 @@ impl CommandsModel {
                             ..row
                         },
                     );
-                    // The line just grew the two words about how it went,
-                    // so a selection standing on this row reaches further
-                    // than the wash it was last spelled with. Told again
-                    // afterwards: the `set` above carried the old one.
+                    // The line grew its outcome, so re-spell the wash; the
+                    // `set` above carried the old one.
                     if self.respell_row(index) {
                         self.notify_runs([(index, index)]);
                     }
@@ -444,11 +392,8 @@ impl CommandsModel {
                     // can outlive the write that started it.
                     self.running = self.rows.iter().any(|r| r.state == "running");
                     touched = true;
-                    // A command nobody asked for leaves its row and
-                    // nothing else. The mark and the panel answer for
-                    // what the reader did, and the one thing an unasked
-                    // fetch is entitled to — the first failure of a run —
-                    // is the tab's to raise, once (`fetch_settled`).
+                    // An unasked command leaves its row only; its run's
+                    // first failure is the tab's to raise (`fetch_settled`).
                     if !self.ids[index].asked {
                         continue;
                     }

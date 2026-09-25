@@ -3,35 +3,32 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// One draggable boundary between two of the graph's columns: a strip a splitter wide that says where the pointer is on
-// it and how far a drag has carried it. The pane owns the widths — this only reports.
+// One draggable boundary between two of the graph's columns. The pane owns the widths — this only reports.
 MouseArea {
     id: divider
 
-    /// The item a drag's landing place is reported in: the pane whose columns this boundary sits between.
+    /// The pane whose columns this boundary sits between; drags are reported in its coordinates.
     required property Item frame
 
     /// The pointer arrived on the boundary, or left it.
     signal pointedInto(bool inside)
-    /// Where the pointer is on it, in **scene coordinates** — the badge a refused drag wears is drawn a frame up from
-    /// the pane, by the page.
+    /// Where the pointer is, in scene coordinates — the page draws the refusal badge a frame up from the pane.
     signal pointedAt(point at)
-    /// A drag asked for this much, in `frame`'s coordinates. Unclamped: what the hand wanted is the only thing that can
-    /// tell a refusal from a rest.
+    /// A drag asked for this much, in `frame`'s coordinates. Unclamped: only what the hand wanted tells a refusal from
+    /// a rest.
     signal dragged(real x)
 
     width: Theme.splitterWidth
     height: parent.height
     z: 2
     hoverEnabled: true
-    // The cursor is the platform's splitter shape in both states, and a column that will not move
-    // says so with the badge (規約 §グラフ列は最も広い所のレーンまで). Swapping in a drawn arrow made the refusal read as a
-    // different tool from the divider one column over.
+    // The splitter cursor in both states; a column that will not move says so with the badge
+    // (規約 §グラフ列は最も広い所のレーンまで).
     cursorShape: Qt.SplitHCursor
     preventStealing: true
     onContainsMouseChanged: {
         divider.pointedInto(divider.containsMouse)
-        // Entering does not always bring a move with it, and the mark is drawn where this says the hand is.
+        // Entering does not always bring a move with it.
         if (divider.containsMouse)
             divider.pointedAt(divider.mapToItem(null, divider.mouseX, divider.mouseY))
     }

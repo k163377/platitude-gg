@@ -1,40 +1,28 @@
-//! What the process is holding on to, and where.
+//! What the process is holding on to, and where. Two halves, read
+//! together:
 //!
-//! Built to answer the memory budget's question without guessing, so it has
-//! two halves that are read together:
-//!
-//! * **the counting allocator** is ground truth for how many bytes of Rust
-//!   heap are live. Qt allocates through C++ `operator new` and never
-//!   through Rust's `GlobalAlloc`, so the line between "the data this
-//!   application built" and "the toolkit under it" falls out of this
-//!   number exactly;
+//! * **the counting allocator** is ground truth for live Rust heap. Qt
+//!   allocates through C++ `operator new`, never through Rust's
+//!   `GlobalAlloc`, so this number splits "the data this application
+//!   built" from "the toolkit under it" exactly;
 //! * **the registry** attributes bytes *inside* that number to the models
-//!   holding them. Each model reports its own footprint as it changes;
-//!   the report sums them, and prints what is left over as a signed
+//!   holding them; the report prints what is left over as a signed
 //!   remainder.
 //!
-//! Off unless asked for, and a shipped build cannot be asked. The counting
-//! is behind the `memprobe` feature, and the per-model walks need that
-//! feature *and* `PGG_MEM_REPORT=1` (`harness::knobs`, the crate's only
-//! reader of one) — they are O(rows), so a normal run's drains pay
-//! nothing for them.
+//! The counting is behind the `memprobe` feature; the per-model walks,
+//! O(rows), also need `PGG_MEM_REPORT=1` ([`enabled`]).
 //!
-//! The process's allocator is chosen here too, because there is only one
+//! The process's allocator is chosen here too: there is one
 //! `#[global_allocator]` slot and the counter has to sit in front of
 //! whatever fills it.
 //!
-//! **The report half is reached from one place** — the slot on
-//! `harness::singleton::Harness` — and that type is not compiled into a
-//! build without the harness, so nothing there calls any of it. `allow`
-//! here: the test at the foot keeps some of the same names live whenever
-//! tests are compiled, and an expectation that goes unfulfilled is a
-//! warning of its own.
+//! The report half's one caller is `harness::singleton::Harness`, not
+//! compiled without the harness. `allow`, not `expect`: the test keeps
+//! some of the names live, which would leave the expectation unfulfilled.
 #![cfg_attr(not(feature = "automation"), allow(dead_code))]
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
-// Only the counting half reads a counter, so the import is behind the
-// same feature.
 #[cfg(feature = "memprobe")]
 use std::sync::atomic::Ordering;
 
@@ -44,16 +32,9 @@ use platitude_core::mem::{Footprint, Part};
 // The allocator
 // ---------------------------------------------------------------------------
 
-/// What every allocation actually goes to.
-///
-/// **The platform's own, measured against the alternative.** mimalloc was
-/// tried here and is worse for this workload — the numbers and the reason
-/// are in `ci/baseline/perf-windows-x64.md`, so the next reader does not
-/// have to re-run it.
-///
-/// A shipped build links it straight into the `#[global_allocator]` slot
-/// below; a measuring build has the counter in front of it, so both are
-/// reporting the same allocator.
+/// What every allocation goes to: the platform's own
+/// (rules-refs/core.md「mimalloc は不採用」). A measuring build puts the
+/// counter in front of the same one.
 type Base = std::alloc::System;
 const BASE: Base = std::alloc::System;
 
@@ -71,24 +52,19 @@ mod counting {
     pub(super) static LIVE: AtomicUsize = AtomicUsize::new(0);
     pub(super) static PEAK: AtomicUsize = AtomicUsize::new(0);
 
-    /// Live bytes by size class (bucket *n* = allocations of 2^n bytes and
-    /// up, to 2^(n+1)).
-    ///
-    /// What it is for: when the named parts do not add up to the live
-    /// total, the shape of the remainder narrows the search before any
-    /// code is read. A remainder made of millions of 32-byte allocations
-    /// is a collection of small nodes; one made of a handful of megabyte
-    /// blocks is a buffer somebody is holding.
+    /// Live bytes by size class (bucket *n* = allocations under 2^n bytes
+    /// and at least 2^(n-1)). When the named parts do not add up to the
+    /// live total, the shape of the remainder narrows the search: millions
+    /// of small allocations are a collection of nodes, a handful of
+    /// megabyte blocks a buffer somebody is holding.
     pub(super) static CLASSES: [AtomicUsize; 32] = [const { AtomicUsize::new(0) }; 32];
 
-    /// Live allocations by the same size class. Bytes alone cannot tell a
-    /// single thirty-megabyte buffer from thirty thousand small nodes, and
-    /// those two lead to opposite places.
+    /// Live allocations by the same size class: bytes alone cannot tell one
+    /// big buffer from thousands of small nodes.
     pub(super) static COUNTS: [AtomicUsize; 32] = [const { AtomicUsize::new(0) }; 32];
 
     pub(super) fn class_of(size: usize) -> usize {
-        // Saturated: a 2^31-byte-and-up allocation is filed in the top
-        // bucket, with the rest of the big ones.
+        // Saturated: 2^30 bytes and up are all filed in the top bucket.
         ((usize::BITS - size.leading_zeros()) as usize).min(31)
     }
 
@@ -213,25 +189,17 @@ pub fn size_classes() -> String {
 // The registry
 // ---------------------------------------------------------------------------
 
-/// Whether the per-model walks run at all.
-///
-/// Two things, and both have to hold: the counting allocator has to be in
-/// this build, because attributed parts with no counted total to hold them
-/// against are half a report; and the run has to have asked
-/// (`PGG_MEM_REPORT=1`, through `harness::knobs`, which is the only place
-/// in the crate that reads one). A shipped build has neither, and the
-/// `cfg!` is what takes the walk out of it, gone before the
-/// process starts.
+/// Whether the per-model walks run at all: only with the counting
+/// allocator (parts with no counted total are half a report) and
+/// `PGG_MEM_REPORT=1`. The `cfg!` takes the walk out of a shipped build
+/// at compile time.
 pub fn enabled() -> bool {
     cfg!(feature = "memprobe") && super::knobs().mem_report
 }
 
-/// What each model last reported, keyed by kind and tab. Sorted, so two
-/// reports of the same shape read the same way down the line.
-///
-/// A value, so a test can file into a registry of its own; the process
-/// keeps one ([`REGISTRY`]) for the real models, reached through the
-/// free functions below.
+/// What each model last reported, keyed by kind and tab; sorted, so two
+/// reports of the same shape line up. A value, so a test can file into a
+/// registry of its own; the process's is [`REGISTRY`].
 pub struct Registry(Mutex<BTreeMap<(String, i32), (usize, usize)>>);
 
 impl Registry {
@@ -248,10 +216,9 @@ impl Registry {
         }
     }
 
-    /// Files a collection's footprint under `kind` for tab `tab`.
-    ///
-    /// Call it where the collection settles — the end of a drain — and
-    /// only under [`enabled`]. Costs one walk of the items.
+    /// Files a collection's footprint under `kind` for tab `tab`. Call it
+    /// where the collection settles — the end of a drain — and only under
+    /// [`enabled`]: it walks the items.
     pub fn note<T: Footprint>(&self, kind: &str, tab: i32, items: &Vec<T>) {
         self.note_bytes(kind, tab, items.heap_bytes(), items.len());
     }
@@ -302,12 +269,8 @@ pub fn model_parts() -> Vec<(String, usize, usize)> {
 // The report
 // ---------------------------------------------------------------------------
 
-/// One report line for where the run has got to, gathered and written.
-///
-/// The hub is read here: the slot's whole part in this is being on the
-/// Qt main thread, which is where the sessions live, so the moment is
-/// the slot's business and the reading is this function's
-/// (`AppBackend::note_memory`). Off unless the run asked for it.
+/// One report line for where the run has got to. Called on the Qt main
+/// thread, where the sessions live (`Harness::note_memory`).
 pub(crate) fn note_now(label: &str) {
     if !enabled() {
         return;
@@ -326,10 +289,7 @@ pub(crate) fn note_now(label: &str) {
 }
 
 /// Writes one report line: the live heap, the named parts, and what is
-/// left.
-///
-/// `session_parts` is the core side (see `RepoSession::heap_report`), which
-/// the caller fetches because only it can reach the open sessions.
+/// left. `session_parts` is the core side (`RepoSession::heap_report`).
 pub fn report(label: &str, session_parts: &[Part], waiting: &str) {
     let models = model_parts();
     let named: usize = models.iter().map(|(_, b, _)| *b).sum::<usize>()
@@ -346,10 +306,9 @@ pub fn report(label: &str, session_parts: &[Part], waiting: &str) {
         rust_peak = peak_bytes().unwrap_or(0),
         counted = live.is_some(),
         named,
-        // Negative when the same `Arc` is counted on both sides — the refs
-        // snapshot is held by the session and by every sidebar section —
-        // so it is a signed remainder: under zero is the double count,
-        // over it is what nothing named.
+        // Signed: under zero is an `Arc` counted on both sides (the refs
+        // snapshot, held by the session and every sidebar section), over
+        // it is what nothing named.
         unattributed = live.map_or(0i64, |l| l as i64 - named as i64),
         models = rendered_models,
         session = platitude_core::mem::render(session_parts),

@@ -1,8 +1,5 @@
-//! Everything QML sees of the tab strip: the properties it binds to, the
-//! acts it calls for, and the news it is told back.
-//!
-//! One `#[qobject]` block, and it cannot be split further — QMetaInfo is
-//! built per file (app-ui.md).
+//! Everything QML sees of the tab strip — one `#[qobject]` block, which
+//! cannot be split (structure.md §分割).
 
 use super::*;
 
@@ -13,16 +10,15 @@ impl TabsModel {
         Member = current_index,
         Notify = current_index_changed
     );
-    // Same signal as the row it is derived from: the two are settled
-    // together (`settle_current`), so a reader that watches one has
-    // already been told about the other.
+    // Shares the row's signal: both are settled together
+    // (`settle_current`).
     qproperty!(
         "currentTabId",
         Member = current_tab_id,
         Notify = current_index_changed
     );
-    // The two names of the tab in front. Their own signal: a tab stood
-    // in another copy changes them with the same tab still in front.
+    // Their own signal: standing the front tab in another copy changes
+    // them without moving the front.
     qproperty!(
         "currentRepoName",
         Member = current_repo_name,
@@ -34,23 +30,17 @@ impl TabsModel {
         Notify = front_names_changed
     );
 
-    // Every tab, one record each — see the member. Its own signal: this changes
-    // on a name settling and on a carry across the strip, neither of
-    // which moves the tab in front.
+    // Its own signal: a name settling or a carry changes it without moving
+    // the front.
     qproperty!(
         "openRepos",
         Member = open_repos,
         Notify = open_repos_changed
     );
 
-    // A folder somebody asked for is still being placed: git has been
-    // asked where it opens and has not answered yet (`TabsModel::asking`).
-    //
-    // **What "the strip is what was asked for" is read from.** Tabs
-    // arrive over the frames after they are asked for now, so anything
-    // reading the whole strip — a headless run measuring it, a picture
-    // of it — waits for this to go false, or reads a strip that is
-    // still filling (measured: a run photographed one tab of sixteen).
+    // True while an asked-for folder waits on git (`TabsModel::asking`).
+    // Tabs arrive over later frames, so whatever reads the whole strip (a
+    // headless run, a picture) waits for this to go false.
     qproperty!("opening", Member = opening, Notify = opening_changed);
 
     #[qsignal]
@@ -67,46 +57,34 @@ impl TabsModel {
 
     /// The row at `index` is about to stop being the one in front.
     ///
-    /// Emitted *before* `currentIndex` moves, which is the whole point of
-    /// having it: the page being left has to hand over the layout the next
-    /// one is laid out at and the words typed into its commit editor, and
-    /// by the time `currentIndex` has moved every binding that watches it
-    /// has already taken that page down. Nothing is emitted when the front
-    /// tab does not change — a tab closed to the left of it renumbers the
-    /// strip without the reader leaving anything.
+    /// Emitted *before* `currentIndex` moves: the page being left hands
+    /// over its layout and its commit editor's words, and once
+    /// `currentIndex` has moved the bindings have already taken that page
+    /// down. Not emitted when the front tab stays.
     #[qsignal]
     pub(super) fn leaving_tab(&mut self, index: i32);
 
-    /// The row at `index` is about to stand in another working copy of
-    /// the repository it is showing, and its page is staying
-    /// (`TabsModel::switch_copy`).
+    /// The row at `index` is about to stand in another working copy, its
+    /// page staying (`TabsModel::switch_copy`).
     ///
-    /// Emitted *before* the hub is pointed at that copy, for the reason
-    /// [`TabsModel::leaving_tab`] is emitted before the index moves: the
-    /// words in the commit editor are filed under the copy they were
-    /// written in, and after the hub has moved they would be filed under
-    /// the copy they are not about. Everything the page has that belongs
-    /// to the copy being left goes here too — the graph and the panes
-    /// around it are the repository's and stay.
-    ///
-    /// [`TabsModel::leaving_tab`]: TabsModel::leaving_tab
+    /// Emitted *before* the hub moves: the commit editor's words are filed
+    /// under the copy they were written in. Whatever else the page holds
+    /// for the copy being left goes here too; the graph and panes are the
+    /// repository's and stay.
     #[qsignal]
     pub(super) fn leaving_copy(&mut self, index: i32);
 
-    /// …and the other side of it: the tab at `index` is standing in the
-    /// copy that was asked for, and the session reading it is opening.
+    /// The other side of `leaving_copy`: the tab at `index` now stands in
+    /// the asked-for copy, and its session is opening.
     #[qsignal]
     pub(super) fn stood_copy(&mut self, index: i32);
 
     /// Somebody asked to be shown the repository now in front, so the band
     /// travels to that tab's seat (デザイン規約 §タブの所作).
     ///
-    /// Its own signal: `current_index_changed` is moved by the strip's
-    /// own gestures too — a press, a carry putting the row somewhere
-    /// else — and those are the reader putting the band where it
-    /// stands, which this leaves alone. Emitted after the index has
-    /// moved, so the strip reads a model that has already
-    /// answered.
+    /// Not `current_index_changed`: a press or a carry moves that too, and
+    /// there the reader has put the band where it is. Emitted after the
+    /// index has moved, so the strip reads a model that has answered.
     #[qsignal]
     pub(super) fn front_tab_asked(&mut self);
 
@@ -135,11 +113,9 @@ impl TabsModel {
         self.ask(path, true);
     }
 
-    /// Opens a plain filesystem path — a worktree row, the pill naming
-    /// the copy holding a branch, `PGG_AUTO_OPEN`. A refusal here is
-    /// shown on the tab's own failure screen, because nobody is standing
-    /// in a picker to be sent back to
-    /// (デザイン規約 §可否・警告の出し場所).
+    /// Opens a plain filesystem path (a worktree row, the pill naming the
+    /// copy holding a branch, `PGG_AUTO_OPEN`); a refusal shows on the
+    /// tab's failure screen (`Ask::picked`).
     #[qslot]
     fn open_repository_path(&mut self, path: String) {
         self.ask(path, false);
@@ -148,53 +124,44 @@ impl TabsModel {
     #[qslot]
     fn drain(&mut self) {
         for msg in self.asks.drain() {
-            // One folder is asked about at a time, so the answer is the
-            // one at the front (`TabsModel::asking`).
+            // One ask is out at a time (`TabsModel::asking`).
             let Some(ask) = self.asking.pop_front() else {
                 continue;
             };
             self.land(&ask, msg);
         }
         self.start_asking();
-        // After the next one is out, so a queue that still has folders
-        // in it never reads as settled between two of them.
+        // After the next ask is out, so a non-empty queue never reads as
+        // settled between two.
         self.settle_opening();
     }
 
     /// Puts back the tabs the last session had open.
     ///
-    /// Only the active one gets a session here: restoring a window of tabs
-    /// would otherwise spend one `git` startup per tab against the three
-    /// second budget, for repositories nobody has looked at yet. The rest
-    /// open when they are first selected.
+    /// Tabs are reserved, not opened: a `git` startup per tab would spend
+    /// the startup budget on repositories nobody has looked at. Each opens
+    /// when first selected.
     ///
-    /// A path that is no longer a directory is dropped — it is not
-    /// something the reader did. One that is still there but is no longer
-    /// a repository keeps its tab and reports itself the usual way,
-    /// because that one is worth seeing.
+    /// A path no longer a directory is dropped; one still there but no
+    /// longer a repository keeps its tab and shows its failure.
     #[qslot]
     fn restore_tabs(&mut self) {
         let Some(saved) = Hub::with(|hub| hub.state().tabs.clone()) else {
             return;
         };
         let mut wanted = saved.active;
-        // Where the active one landed when it turned out to be a second
-        // copy: the tab already holding that repository, whatever the
-        // shifting below does to the count.
+        // Set when the active one was already held: that tab's row, which
+        // the shifting of `wanted` below does not touch.
         let mut wanted_held: Option<usize> = None;
         for (position, saved_tab) in saved.tabs.iter().enumerate() {
-            // Spelled for the screen on the way in, the same as the road
-            // the picker takes (`TabsModel::ask`): the file is written
-            // with `/` but nothing stops a hand from writing one that is
-            // not, and the hover reads out whatever the tab kept.
+            // Spelled for the screen as `TabsModel::ask` does: a
+            // hand-edited file may not use `/`, and the hover reads what
+            // the tab keeps.
             let copy = crate::urlpath::shown_path(&saved_tab.path);
             let repo = crate::urlpath::shown_path(&saved_tab.repo);
-            // A linked copy that has gone stands the tab back in the
-            // repository's own, the same fall this tab would take on
-            // being looked at (デザイン規約 §タブの所作
-            // 「立てない所へは立たない」). The tab is for the
-            // repository, so only a repository that has gone too is
-            // one the reader is not left holding.
+            // A linked copy that has gone falls back to the repository's
+            // own (デザイン規約 §タブの所作「立てない所へは立たない」);
+            // only a gone repository drops the tab.
             let copy = if std::path::Path::new(&copy).is_dir() {
                 copy
             } else {
@@ -203,20 +170,15 @@ impl TabsModel {
             let copy_buf = std::path::PathBuf::from(&copy);
             if !copy_buf.is_dir() {
                 tracing::info!(path = %copy, "restored tab dropped: not there any more");
-                // Everything after it shifts left, and the active one with
-                // it if it was to the right.
                 if position < saved.active {
                     wanted = wanted.saturating_sub(1);
                 }
                 continue;
             }
-            // A file can name one repository twice — written before the
-            // strip refused duplicates, or spelling one folder two ways,
-            // or naming two working copies of one repository. Putting
-            // both back would restore the very thing opening now
-            // declines to make, and git is not asked here: what the file
-            // says is what a run wrote when it did ask
-            // (`settings::TabRecord`).
+            // A file can name one repository twice (one folder spelled two
+            // ways, or two copies of it); only the first is put back, as
+            // opening would. git is not asked: the file holds what a run
+            // wrote when it did ask (`settings::TabRecord`).
             if let Landing::Show(held) | Landing::Switch(held) =
                 landing_for(&self.items, &copy, &repo)
             {
@@ -236,9 +198,8 @@ impl TabsModel {
             };
             self.push(TabItem::standing(tab_id, title, repo, copy));
         }
-        // Once, with the whole strip standing: a name settled against
-        // half of it would be settled against tabs that are still to
-        // arrive.
+        // Once the whole strip stands: a name settled against half of it
+        // misses namesakes still to arrive.
         self.settle_titles();
         if self.items.is_empty() {
             return;
@@ -250,12 +211,9 @@ impl TabsModel {
     }
 
     /// A tab's copy would not open, so it is stood back in the
-    /// repository's own one (`TabsModel::stand_home`).
-    ///
-    /// Asked by the page that could not open — it is the one that
-    /// hears git refuse, and it asks **before** it says anything about
-    /// the refusal, so the reader is shown one screen and not a failure
-    /// that is taken away again (`RepoTab::stand_home_asked`).
+    /// repository's own (`TabsModel::stand_home`). The page asks before
+    /// showing the refusal, so no failure screen flashes
+    /// (`RepoTab::stand_home_asked`).
     #[qslot]
     fn stand_tab_home(&mut self, tab_id: i32) {
         self.stand_home(tab_id);
@@ -264,21 +222,18 @@ impl TabsModel {
     #[qslot]
     fn close_tab(&mut self, tab_id: i32) {
         let closing = self.items.iter().position(|t| t.tab_id == tab_id);
-        // The tab in front is being taken away along with its page, so it
-        // says its goodbyes first — and before the hub closes the session,
-        // so the page is still whole while it does (`leaving_tab`).
+        // The front tab says its goodbyes (`leaving_tab`) before the hub
+        // closes its session, while the page is still whole.
         if closing.is_some() && closing == usize::try_from(self.current_index).ok() {
             self.leave_front();
         }
         Hub::with(|hub| hub.close_tab(tab_id));
         if let Some(pos) = closing {
             self.remove(pos);
-            // The namesake that made a tab spell out its parent may be
-            // the one that just went, and the name goes back with it.
+            // The closed tab may have been another's namesake.
             self.settle_titles();
-            // Closing a tab left of the active one shifts the active row
-            // down; the index has to follow it, or the visible repository
-            // silently becomes its right-hand neighbour.
+            // A close to the left shifts the active row down; the index
+            // follows, or the front silently becomes its right neighbour.
             if (pos as i32) < self.current_index {
                 self.current_index -= 1;
             }
@@ -291,13 +246,9 @@ impl TabsModel {
         }
     }
 
-    /// Takes the tab at `from` out of the strip and puts it down at `to`,
-    /// where a hand carried it (デザイン規約 §タブの所作).
-    ///
-    /// The strip settles the order one neighbour at a time, so the two
-    /// are next to each other every time a drag asks — but the whole
-    /// distance is one call away, and that is the road the headless run
-    /// carries a tab across the strip on.
+    /// Takes the tab at `from` out of the strip and puts it down at `to`
+    /// (デザイン規約 §タブの所作). A drag asks one neighbour at a time;
+    /// the headless run carries the whole distance in one call.
     #[qslot]
     fn move_tab(&mut self, from: i32, to: i32) {
         let (Ok(from), Ok(to)) = (usize::try_from(from), usize::try_from(to)) else {
@@ -307,10 +258,8 @@ impl TabsModel {
             return;
         }
         self.move_notified(from, to);
-        // The tab being carried is the one in front (the press moves to
-        // it before the drag begins), but the rows it was carried across
-        // moved too, and each of them has to keep showing the repository
-        // it was showing.
+        // The rows the tab was carried across moved too, and the front
+        // follows its own row.
         let landed = index_after_move(self.current_index, from, to);
         let moved = landed != self.current_index;
         self.current_index = landed;

@@ -2,17 +2,10 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The numbers a diff's rows are laid out from: how wide a line number is, how
-// wide the gutter that holds two of them is, how wide one column of the mono
-// font comes out, and how far the longest line is drawn. Rulers that are never
-// drawn, and the numbers read off them.
+// The numbers a diff's rows are laid out from — line number, gutter, one mono column, the longest line — read off
+// rulers that are never drawn. Whole lines only: where a character stands is the laid-out line's (`LineRuler`).
 //
-// **Whole lines only.** Where a character stands is a question for the line
-// that was laid out (`LineRuler`), and the rulers below hold whole lines
-// or nothing to do with the text at all.
-//
-// An `Item`: the rulers are Labels, and a `QtObject` has
-// nowhere to put a child (rules-refs/structure.md).
+// An `Item`: the rulers are Labels, and a `QtObject` has nowhere to put a child (rules-refs/structure.md).
 Item {
     id: metrics
 
@@ -20,19 +13,12 @@ Item {
     /// Whether the rows carry a per-line mark — the seat between the two
     /// numbers is that mark's, and a step of air where there is none.
     required property bool partial
-    /// Whether the rows are read as two columns, each with one number and
-    /// its own seat (デザイン規約 §diff を 2 列で読む). One column unless
-    /// told otherwise — the reading a diff opens in, and the one the rulers
-    /// are measured for on their own (`tst_diffreach.qml`).
+    /// Whether the rows are read as two columns (デザイン規約 §diff を 2 列で読む); one column unless told otherwise.
     property bool split: false
 
-    /// How wide a line number is: the widest one this diff carries (デザイン規約 §レイアウト初期値). The columns are cut to it,
-    /// so the row reads `gap 140 gap 153 gap }`; a fixed column leaves the slack of the numbers it
-    /// is *not* holding between the two numbers, while the code — which has none — sits one gap away.
-    ///
-    /// Measured with a Label that is never drawn, the way `ActionButton` and `TopBar` measure: `TextMetrics` reports a
-    /// few pixels tighter than the Label the number is actually set in. Whole pixels — two columns and the code's run
-    /// are laid out from this one number.
+    /// How wide a line number is: the widest one this diff carries (デザイン規約 §レイアウト初期値). Measured with a
+    /// never-drawn Label: `TextMetrics` reports a few pixels tighter than the Label the number is set in. Whole
+    /// pixels — the columns and the code are laid out from this one number.
     readonly property int numberW: Math.ceil(numberMeasure.implicitWidth)
     Label {
         id: numberMeasure
@@ -42,35 +28,20 @@ Item {
         font.pixelSize: Theme.fontSm
     }
 
-    /// The room between the two numbers where a changed line puts its mark out, and the whole gutter that room sits in.
-    /// Worked out once here: the rows lay themselves out from it, and the pane subtracts it to know how much shows.
-    ///
-    /// **The gutter is the column's.** As one column it holds both numbers with the seat between them; as two, each
-    /// column holds its one number and the seat after it, so the code stands the same step from its number either
-    /// way round (デザイン規約 §diff を 2 列で読む).
+    /// The mark's seat between the two numbers, and the gutter it sits in — per column: as two columns each holds
+    /// one number and the seat after it (デザイン規約 §diff を 2 列で読む).
     readonly property int seatW: metrics.partial ? Theme.iconMd + 2 * Theme.borderWidth : Theme.spaceXs
     readonly property int gutterW: metrics.split
                                    ? Theme.spaceXs + metrics.numberW + metrics.seatW
                                    : 2 * (Theme.spaceXs + metrics.numberW) + metrics.seatW
-    /// How wide the longest of the lines the model picked is drawn — **measured**, and **0 while none of
-    /// them has been laid out**, which means "nothing measured yet": what reads this holds the
-    /// reader's place through that gap (`DiffReach`).
+    /// How wide the longest of the lines the model picked is drawn — **measured** (not columns times `charW`, see
+    /// there), and **0 while none of them has been laid out** ("nothing measured yet"). A head start the rows correct
+    /// as they are laid out (`DiffReach`).
     ///
-    /// A head start: the pick is by column count and the rows correct it as they are laid
-    /// out (`DiffReach`). The rulers below set each line the way a row sets it — same family, size, weight and text
-    /// format, on the row's own markup — so what comes back is the row's width.
-    ///
-    /// **A width comes from a layout.** A wide glyph counts as two columns and is drawn at
-    /// whatever carries it — and the fallback a Latin-only mono family hands it to is not monospaced at all (measured
-    /// on Windows at `fontCode`, against 8px for the font's own columns: `日` 13, `の` 11, `。` 9, `「` 7, an emoji
-    /// 18). Columns times `charW` ran a diff of this repository's own documents nearly four screens past the end of
-    /// its longest line; charging every wide glyph the one difference measured off `日` still left a screenful.
-    ///
-    /// Pushed by `settleReach`: a width read off a laid-out item is a measurement, and a binding
-    /// takes it once, before the font arrives (app-ui.md).
+    /// Pushed by `settleReach`: a binding takes a laid-out width once, before the font arrives (app-ui.md).
     property real codeW: 0
 
-    /// Takes the widest of the rulers. Called by each of them as it settles, and by the Repeater as the set changes.
+    /// Takes the widest of the rulers.
     function settleReach() {
         let reach = 0
         for (let i = 0; i < reachRulers.count; i++) {
@@ -81,9 +52,7 @@ Item {
         metrics.codeW = reach
     }
 
-    /// One never-drawn Label per line the reach could come from (`DiffModel.widestLines` — `{bold, line}`), in the
-    /// font and the weight that line is drawn in — the same instrument the number column is measured with, for the
-    /// same reason (`TabStrip.settleTitleCap`).
+    /// One never-drawn Label per line the reach could come from (`DiffModel.widestLines` — `{bold, line}`).
     Repeater {
         id: reachRulers
         model: metrics.diffModel.widestLines
@@ -93,26 +62,20 @@ Item {
 
             visible: false
             text: modelData.line
-            // The row's own settings, all four of them: a ruler that read the same line in another format or another
-            // weight is measuring a line this pane never draws. Left to itself a `Label` reads `AutoText` and decides
-            // for itself whether a line of source is markup — which is the guess the rows were taken off (`DiffRow`).
+            // The row's own format, family, size and weight: a ruler that reads the line any other way measures a
+            // line this pane never draws. Left to itself a `Label` reads `AutoText` and guesses whether source is
+            // markup.
             textFormat: Text.StyledText
             font.family: Theme.monoFamily
             font.pixelSize: Theme.fontCode
-            // A changed line is set bold (`DiffRowDelegate`), and a bold face need not advance like its regular.
             font.bold: modelData.bold
             onImplicitWidthChanged: metrics.settleReach()
             Component.onCompleted: metrics.settleReach()
         }
     }
-    /// One measured column of the mono font. The divisor is however many characters `charMeasure` holds, so the two
-    /// cannot drift apart.
-    ///
-    /// **What it is for is the wash on an empty line** (`DiffRowDelegate`) — the one place a width is wanted where
-    /// there are no characters to ask about. Where a line's characters are drawn is a question for that line's own
-    /// layout (`LineRuler`), because a width comes from a layout and a column is something else: the fallback a
-    /// Latin-only mono family hands a wide glyph to is not monospaced, and a combining mark takes a column and no
-    /// room at all.
+    /// One measured column of the mono font — only for the wash on an empty line (`DiffRowDelegate`). Where a line's
+    /// characters are drawn is that line's layout (`LineRuler`): a column is not a width — the fallback a Latin-only
+    /// mono family hands a wide glyph to is not monospaced, and a combining mark takes a column and no room.
     readonly property real charW: charMeasure.implicitWidth / charMeasure.text.length
     Label {
         id: charMeasure

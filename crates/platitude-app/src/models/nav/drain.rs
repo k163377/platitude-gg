@@ -1,45 +1,32 @@
 //! One section's feeds, drained into the rows and properties QML reads.
-//!
-//! Six feeds land here, and only the one this section was attached to
-//! ever holds anything — a list is wired to exactly one of them
-//! (`attach::attach_section_feed` / `attach::attach_worktree_feed` /
-//! `attach::attach_carried_feed`).
+//! A list is wired to exactly one of them (`attach`); the rest stay empty.
 
 use super::*;
 
 impl NavSectionModel {
     pub(super) fn take_feeds(&mut self) {
-        // Every push queues its own `drain`, so a second call can find the
-        // queue already emptied by the first. Nothing arrived means
-        // nothing to rebuild.
+        // Every push queues its own `drain`, so a call can find the queue
+        // already emptied by the one before.
         let mut arrived = false;
-        // Whether refs were published at all, which is a different
-        // question from whether they moved (see `refs_settled`).
+        // Refs published at all, as against moved (`refs_settled`).
         let mut settled = false;
         let mut moved = false;
         if let Some(feed) = self.refs_feed.clone() {
             let mut head_moved = false;
-            // In the order the session said them: a snapshot and the
-            // report of where HEAD stands can land in one drain, and
-            // the row the stand-in follows is worked out once both are
-            // in.
+            // A snapshot and the HEAD report can land in one drain; the
+            // stand-in's marks are settled once both are in.
             for msg in feed.drain() {
                 match msg {
                     RefsMsg::Snapshot { snapshot, looked } => {
                         settled = true;
-                        // **Said at the moment this list applies it**,
-                        // and said with the stamp of the read: whoever
-                        // is holding rows off the screen for a write has
-                        // to tell a listing that saw what the write left
-                        // from one that was already in flight when it
-                        // ended, and the two reach here down separate
-                        // feeds in no fixed order
+                        // Said as this list applies it, with the read's
+                        // stamp: a listing that saw a write's result has
+                        // to be told from one already in flight, and the
+                        // two arrive on separate feeds in no fixed order
                         // (`ops::StandIn`).
                         crate::hub::listing_applied(self.tab_id, &self.section, looked);
-                        // The first snapshot is news whatever it holds:
-                        // the default selection is waiting on
-                        // `refsLoaded`, and a section that is legitimately
-                        // empty would otherwise never say so.
+                        // The first snapshot is news even when empty: the
+                        // default selection waits on `refsLoaded`.
                         arrived |= !self.refs_loaded;
                         self.refs_loaded = true;
                         let fresh = !self
@@ -57,9 +44,7 @@ impl NavSectionModel {
                         }
                     }
                     // Only the branches section is handed this
-                    // (`hub::sink`): the row it highlights and
-                    // the stand-in above it are the
-                    // record's.
+                    // (`hub::sink`).
                     RefsMsg::Head(head) => {
                         if self.head_name != head.branch || self.head_oid != head.oid_hex {
                             self.head_name = head.branch;
@@ -70,9 +55,8 @@ impl NavSectionModel {
                 }
             }
             if head_moved || moved {
-                // A HEAD that moved is another row highlighted, which is
-                // an arrangement of its own; the marks the stand-in wears
-                // follow either side moving.
+                // A moved HEAD highlights another row: a rearrangement
+                // of its own.
                 arrived |= self.settle_head_marks() || head_moved;
             }
         }
@@ -81,9 +65,8 @@ impl NavSectionModel {
                 status, eol_marks, ..
             }) = feed.drain().pop()
         {
-            // The marks are the other half of what a file row shows, and
-            // they can move on their own — a line-ending answer arrives
-            // after the status it is about.
+            // The marks can move on their own — a line-ending answer
+            // arrives after the status it is about.
             let marked = self.eol_marks != eol_marks;
             self.eol_marks = eol_marks;
             arrived |= self.take(Source::files(status)) || marked;
@@ -91,9 +74,9 @@ impl NavSectionModel {
         if let Some(feed) = self.carried_feed.clone()
             && let Some(CarriedStatusMsg { at, name, status }) = feed.drain().pop()
         {
-            // No line-ending marks come with these. They are about what
-            // the next `git add` in this window would record, and this
-            // window adds nothing over there (規約 §行末の改行コード).
+            // No line-ending marks: they are about what this window's
+            // next `git add` would record, and it adds nothing over there
+            // (デザイン規約 §改行コードの警告).
             let moved = self.carried_at != at || self.carried_name != name;
             self.carried_at = at;
             self.carried_name = name;
@@ -115,14 +98,14 @@ impl NavSectionModel {
             && let Some(list) = feed.drain().pop()
         {
             stashes_arrived = true;
-            // The same, for the listing a dropped row waits on — its own
-            // read, with its own stamp (see the refs above).
+            // The same stamp, for the listing a dropped stash waits on
+            // (see the refs above).
             crate::hub::listing_applied(self.tab_id, &self.section, list.looked);
             arrived |= self.take(Source::Stashes(list.entries));
         }
         if arrived {
-            // `total` is settled by the arrange below, which is the one
-            // place that knows how many rows are being shown as gone.
+            // `total` is settled by the arrange below — the one place
+            // that knows how many rows are shown as gone.
             self.reshape();
             self.changed();
         }
@@ -140,17 +123,15 @@ impl NavSectionModel {
         }
     }
 
-    /// What the current branch's own row wears — the marks and the
-    /// counts, read off the snapshot by name so the stand-in draws what
-    /// the row it stands for draws. Nothing while the branch is not in
-    /// the snapshot yet (a HEAD reported ahead of the first listing, or a
-    /// branch made since it). Answers whether any of them moved.
+    /// What the current branch's own row wears — the marks and the counts,
+    /// read off the snapshot by name so the stand-in draws what its row
+    /// draws. Nothing while the branch is not in the snapshot yet (a HEAD
+    /// reported ahead of the first listing, or a branch made since).
+    /// Answers whether any of them moved.
     ///
-    /// **The counts are read here** (`view::arrange`, where
-    /// `head_depth` comes from): a filter or a folded folder leaves the
-    /// branch with no row at all, and that is exactly when the stand-in
-    /// takes a seat of its own (`HeadPinRow.seated`) and still has its
-    /// pair to draw.
+    /// Off the snapshot, not the arranged rows (`view::arrange`): a filter
+    /// or a fold leaves the branch no row, which is exactly when the
+    /// stand-in takes a seat of its own (`HeadPinRow.seated`).
     pub(super) fn settle_head_marks(&mut self) -> bool {
         let branch = if self.head_name.is_empty() {
             None

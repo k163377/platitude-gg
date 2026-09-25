@@ -3,26 +3,18 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The way out of a stopped operation, built into the working-tree pane under the button that finishes things.
-//
-// The commit button's seat is already "conclude this": during a merge `--continue` is literally the commit. Standing
-// in the pane — while an operation is stopped this is the pane's business, and the file list moves
-// down to make room for it.
+// The way out of a stopped operation, in the working-tree pane under the commit button (whose seat already means
+// "conclude this"); the file list moves down for it.
 Rectangle {
     id: opExitCard
 
     required property var repoTab
     required property var workTree
 
-    // The chip column and the mark's seat, kept on every row whether or not that row is a held one, so the sentences
-    // start on one x and the card reads down its first letters — what `AppMenu` does for a menu's rows. The seat is the
-    // menu's exactly: narrower than the mark, which overhangs it into the row padding on one side and the word gap on
-    // the other (デザイン規約 §長押し — 語が払う字下げは印 1 個分より小さい).
+    // The mark's seat on every row, held or not, as `AppMenu.holdIndent`
+    // (デザイン規約 §長押し「メニューでは印の席を全行が空ける」).
     readonly property real holdIndent: Theme.iconMd - 2 * Theme.spaceXs
-    /// Whether leaving the stopped commit out costs nothing — the stop is on a commit that came out empty, which a
-    /// clean tree under a stopped operation is what tells. The rule, its measurement and why a clean tree alone
-    /// cannot answer it (an `edit` stop is exactly as clean, and git's own mark overrules the tree) are core's
-    /// (offers::skip_is_free).
+    /// Whether leaving the stopped commit out costs nothing — core's rule (`offers::skip_is_free`).
     readonly property bool skipIsFree: opExitCard.workTree.opSkipFree
     readonly property real codeColW: {
         let widest = 0
@@ -34,8 +26,8 @@ Rectangle {
         return widest
     }
 
-    /// Automation: whether the card offers a row at all. A row that is not there and a row that is there and down
-    /// crop to the same picture (the card sizes itself to what it holds).
+    /// Automation: whether the card offers a row — the picture cannot say, since the card sizes itself to what it
+    /// holds.
     function offersOpExit(code) {
         if (code === "--abort" && abortButton.visible)
             return true
@@ -61,12 +53,8 @@ Rectangle {
         return false
     }
 
-    /// A stopped merge has no card left — it is one button, and the button is the whole of it.
-    ///
-    /// **A card is what holds a column together**: the frame gathers the rows, and the heading says which operation
-    /// they belong to. One button gathers nothing, and its own chip already names the operation, so both would only
-    /// draw a box around a box and say `MERGING` twice (the toolbar badge says it first — デザイン規約 §長さ).
-    /// What is left is a red button standing under the one that finishes things, which is what it is.
+    /// A stopped merge has no card: it is one button, and a frame and heading around one button would draw a box
+    /// around a box (rules-refs/app-ui.md「止まった merge の出口は `ActionButton` 1 個で、カードごと消える」).
     readonly property bool bare: opExitCard.workTree.opMerging
 
     visible: opExitCard.workTree.opText !== ""
@@ -78,8 +66,7 @@ Rectangle {
     ColumnLayout {
         id: opExitCol
         anchors.fill: parent
-        // Nothing of its own to inset by when the button is all there is: it lines up with the commit button above,
-        // which is the pane's own column and pays its own margins.
+        // Bare, the button lines up with the commit button above.
         anchors.margins: opExitCard.bare ? 0 : Theme.spaceXs
         spacing: 0
         RowLayout {
@@ -107,8 +94,8 @@ Rectangle {
                 font.weight: Font.DemiBold
                 color: Theme.warning
             }
-            // How far it got. The count is the half a stopped rebase cannot say without it. The dash stays a dash: it
-            // is a sentence here, and it measured the same on both OSes.
+            // How far it got. The dash stays a character, not a drawn mark: it is part of a sentence, and renders
+            // alike on both OSes.
             Label {
                 visible: opExitCard.workTree.opSteps > 0
                 text: qsTr("— %1 of %2")
@@ -118,12 +105,12 @@ Rectangle {
                 font.weight: Font.DemiBold
                 color: Theme.warning
             }
-            // Someone takes the slack, or the engine centres what it cannot fill.
+            // Takes the slack, or the layout centres what it cannot fill.
             Item { Layout.fillWidth: true }
         }
-        // The stop that was asked for: the plan's own `edit` step. Its tree is as clean as the emptied-commit stop's,
-        // so without this line the card cannot say why it is standing — and here `--skip` takes the commit out, which
-        // is why the row above went back to a hold (offers::skip_is_free, P3-確認事項 §A).
+        // The plan's own `edit` stop: its tree is as clean as an emptied commit's, so without this line the card cannot
+        // say why it stands — and `--skip` below is a hold again (`offers::skip_is_free`,
+        // デザイン規約 §フル interactive rebase).
         RowLayout {
             visible: opExitCard.workTree.opEditing
             Layout.fillWidth: true
@@ -138,8 +125,8 @@ Rectangle {
             }
             Label {
                 Layout.fillWidth: true
-                // The oid is abbreviated as git wrote it (`rebase-merge/stopped-sha`); HEAD sits on that commit, so
-                // the boxes above are already the tool (offers::message_edit の edit 停止の免除).
+                // HEAD sits on that commit, so the message boxes above are the tool
+                // (`offers::message_edit` の edit 停止の免除).
                 text: opExitCard.workTree.opEditOid !== ""
                       ? qsTr("Stopped on purpose at %1 — amend it above, then continue")
                             .arg(opExitCard.workTree.opEditOid.substring(0, 8))
@@ -149,10 +136,8 @@ Rectangle {
                 color: Theme.textSecondary
             }
         }
-        // **A merge uses the button.** `--continue` there *is* the commit — same tree, same two parents, same
-        // message, same hooks as pressing the button above this card (measured, 2.55) — so the card would be offering a
-        // second door onto the seat it is standing under, and the one with no message box attached. Everything else
-        // here steps, and continuing a step is not a commit anybody is composing (デザイン規約 §進行中の操作から出る).
+        // **Not for a merge**: its `--continue` *is* the commit the button above makes, and a row here would be a
+        // second door onto it with no message box (デザイン規約 §進行中の操作から出る).
         OpExitRow {
             Layout.fillWidth: true
             codeColW: opExitCard.codeColW
@@ -172,14 +157,12 @@ Rectangle {
             holdIndent: opExitCard.holdIndent
             code: "--skip"
             text: qsTr("Leave this commit out")
-            // What the skip costs, said where a menu row says it — off the length the press under way was given, so
-            // the tag and the gesture cannot disagree while a hand is on the row (`OpExitRow.armedMs`).
+            // Off the length the press under way was given, so tag and gesture agree under a hand
+            // (`OpExitRow.armedMs`).
             note: skipRow.armedMs <= 0 ? qsTr("nothing in it") : ""
             visible: opExitCard.workTree.opStepping
             enabled: opExitCard.repoTab.busyCount === 0
-            // The mark is what says a row takes something away (デザイン規約 §長押し), so it goes when the row does not: git
-            // stops on a commit that came out empty and names `--skip` itself, and leaving that one out loses nothing.
-            // Everywhere else the commit is real and only the reflog holds it afterwards.
+            // Held only where a real commit is lost (デザイン規約 §長押し); an emptied commit's stop loses nothing.
             holdMs: opExitCard.skipIsFree ? 0 : Metrics.holdMs
             onPicked: opExitCard.repoTab.resolveOperation("skip")
         }
@@ -189,10 +172,8 @@ Rectangle {
             holdIndent: opExitCard.holdIndent
             code: "--quit"
             text: qsTr("Stop stepping, keep the tree")
-            // **The tree it keeps is the conflicted one.** git drops the operation and leaves every unmerged path
-            // exactly where it stood (measured, 2.55), so the badge and this card go while the files still wait on a
-            // decision — and a move out of here is refused all over again, in git's other wording. Said in the seat
-            // `--skip` says its own cost from (デザイン規約 §進行中の操作から出る).
+            // **The tree it keeps is the conflicted one**: git drops the operation but leaves every unmerged path, so
+            // this card goes while the files still wait (デザイン規約 §進行中の操作から出る).
             note: opExitCard.workTree.conflictCount > 0 ? qsTr("conflicts stay") : ""
             visible: opExitCard.workTree.opStepping
             enabled: opExitCard.repoTab.busyCount === 0
@@ -209,16 +190,9 @@ Rectangle {
             holdMs: Metrics.holdMs
             onPicked: opExitCard.repoTab.resolveOperation("abort")
         }
-        // **A merge's only way out is a button.** A column of rows is what the other three are — the hand
-        // that learned the reset submenu reads them down their first letters, and the chip column is what lines those
-        // letters up. One row has no column and nothing to line up with (デザイン規約 §進行中の操作から出る).
-        //
-        // **The shape is the commit button's, in red**: a frame of its own, the phrase centred inside it, the hold
-        // filling the frame it drew. The two then read as the pair they are — the one that finishes the merge and the
-        // one that puts it back — and each is a box of its own.
-        //
-        // **The word is red because the gesture is a hold.** Colour on a word is this application's mark of a press
-        // that has to be held (§長押し), and taking the hold away would take the colour with it.
+        // A merge's only way out (`bare`): the commit button's shape in red, so the two read as the pair that finishes
+        // the merge and the one that puts it back (デザイン規約 §進行中の操作から出る). The word is red because the
+        // gesture is a hold (§長押し).
         ActionButton {
             id: abortButton
             Layout.fillWidth: true
@@ -227,13 +201,9 @@ Rectangle {
             tone: Theme.danger
             frameColor: Theme.danger
             holdMs: Metrics.holdMs
-            // The command in git's own spelling, whole: the chip is the row's only name
-            // now, and `merge --abort` is what a terminal would be told (§git 用語のコード表記 — the same shape the
-            // commit button's `commit --amend` takes).
+            // The whole command in git's spelling (§git 用語のコード表記), as the commit button's `commit --amend`.
             phraseHead: "merge --abort"
-            // **What happens.** The hold's mark already says something goes; the words
-            // say where it lands, and that landing is the whole of the answer — nothing done since the merge began
-            // survives it.
+            // Where it lands: nothing done since the merge began survives it.
             text: qsTr("Back to before it started")
             enabled: opExitCard.repoTab.busyCount === 0
             onHeld: opExitCard.repoTab.resolveOperation("abort")

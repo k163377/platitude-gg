@@ -2,63 +2,45 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The seat that opens the git commands this tab ran, at the foot of the left menu (デザイン規約 §git が言ったことを読む場所).
-//
-// It wears whatever the pane it stands in wears: one of the sections' own bands while the list is open, the fold
-// control's own block at the other end of the rail while the list is folded, and the left end of the log's header band
-// once the panel is up — where that band is this same row, run the width of the window. One control, so the mark says
-// the same thing in the same words wherever the pane put it.
-//
-// It takes the ground those three seats are on (`bgElevated`) and answers the pointer with the wash they answer with,
-// and that is the whole of its dress. What says the state is the mark
-// (デザイン規約 §git が言ったことを読む場所 — 通常 / 実行中 / 直近が失敗 / 開いている間).
+// The seat that opens the git commands this tab ran, at the foot of the left menu. One control in three seats — a
+// section band, the folded rail's end block, the head of the log panel's band — dressed by `captioned` / `ruled` /
+// `markSize` (デザイン規約 §git が言ったことを読む場所).
 Rectangle {
     id: toggle
 
     /// The RepoPage this seat belongs to (null while no tab is open).
     property var curPage: null
-    /// Whether the seat carries the log's name beside the mark. False in the one seat with no room for it — the folded
-    /// rail, where no section carries a name either.
+    /// Whether the log's name stands beside the mark. False in the folded rail, which has no room for it.
     property bool captioned: false
-    /// Whether the seat closes itself off from what stands above it — the hairline the rail's own head block draws
-    /// under itself. False in the panel's band, where the seat is part of that band.
+    /// Whether a hairline closes the seat off from what is above it. False in the panel's band, which it belongs to.
     property bool ruled: true
-    /// The step the mark is drawn at, which is the one whatever it stands among is drawn at: the sections' own marks
-    /// where it stands beside a name (`iconMd`), and the fold control's where it stands alone at the end of the rail
-    /// (`iconLg` — that block is what this one is read against down there, by design. デザイン規約 §寸法).
+    /// The mark's size, matching what it stands among: `iconMd` beside a name like the sections' marks, `iconLg`
+    /// alone at the rail's end like the fold control.
     property real markSize: Theme.iconMd
 
-    /// The log this tab is filling. Asked of the log: closing a tab takes the page's models
-    /// down while the page itself is still standing, so `curPage !== null` is true for a beat after there is nothing
-    /// left to read off it.
+    /// The log this tab is filling. Test this, not `curPage`: closing a tab takes the page's models down a beat
+    /// before the page itself.
     readonly property var log: toggle.curPage !== null ? toggle.curPage.pageCommands : null
-    /// The last command failed, or the tab is carrying an error line — one mark for both. The page keeps that rule,
-    /// since the mark moves seats and the rule does not.
+    /// The last command failed, or the tab carries an error line — one mark for both. The rule is the page's, since
+    /// this mark moves between seats.
     readonly property bool wrong: toggle.curPage !== null && toggle.curPage.commandsWrong
-    /// Whether the panel is up.
     readonly property bool open: toggle.curPage !== null && toggle.curPage.commandsOpen
-    /// Automation: the colour the mark actually painted, which is what says the page's news reached it
+    /// Automation: the colour the mark actually painted — proof the page's state reached it
     /// (`PGG_AUTO_ACT=commands-clear`).
     readonly property alias markColor: commandsMark.tint
 
-    /// Where the mark stands and where the name begins — a section's row without the fold arrow's column, which is
-    /// what this row has no use for. Written as the sum of the
-    /// steps, so the row moves with the pane's own inset when that moves.
+    /// Where the mark stands and the name begins: a section's row without the fold arrow's column.
     readonly property real markX: Theme.spaceXs
     readonly property real captionX: toggle.markX + Theme.iconMd + Theme.spaceXs
 
     visible: toggle.curPage !== null
-    // Its name's own run when it carries one — the log's band seats it in a row of controls, where a seat asking for
-    // the pane's width would push the rest of them off the end. It stops at the name so that what follows sits the
-    // band's own step away, the way a section's count sits from its caption.
+    // As wide as its name when captioned: the log's band seats it in a row of controls, and a pane-wide seat would
+    // push them off the end.
     implicitWidth: toggle.captioned ? toggle.captionX + commandsName.implicitWidth : Theme.railWidth
     implicitHeight: toggle.captioned ? Theme.rowHeight : Theme.headerHeight
-    // A band's ground, which is what all three of its seats stand on: the sections' headers, the fold control's block
-    // and the log's own band are `bgElevated`, and this row is read against them. In the
-    // log's band it repaints the value that band already carries, so the row reads the same there with no case for it.
+    // The ground of all three seats, so none of them needs a case.
     color: Theme.bgElevated
-    // The wash goes over that ground — `bgHover` is a white at 8% and has nothing of its own
-    // to sit on (`NavHeader` layers the same two).
+    // `bgHover` is translucent, so it is layered over that ground rather than replacing it.
     Rectangle {
         anchors.fill: parent
         color: Theme.bgHover
@@ -75,8 +57,6 @@ Rectangle {
     NavIcon {
         id: commandsMark
         kind: "terminal"
-        // In the sections' mark column when the name is beside it; in the middle of the rail's width when it stands
-        // alone, which is where the fold control and every cell between them put theirs.
         width: toggle.markSize
         height: toggle.markSize
         x: toggle.captioned ? toggle.markX + (Theme.iconMd - toggle.markSize) / 2
@@ -87,9 +67,7 @@ Rectangle {
               : toggle.open ? Theme.textPrimary
               : Theme.textMuted
     }
-    // The same name the panel's own band carries, so the two doors into the log name it alike. It goes
-    // red with the mark: a section's band moves its mark and its caption together,
-    // and one red glyph in a column of words is not what a failure looks like here (規約 §無効 is the same shape).
+    // Goes red with the mark (デザイン規約 §git が言ったことを読む場所).
     Label {
         id: commandsName
         visible: toggle.captioned
@@ -105,8 +83,7 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         onClicked: toggle.curPage.toggleCommands()
-        // Only where the mark stands alone: a seat that says its own name has nothing left for a tooltip to add
-        // (規約 §hover のツールチップ).
+        // Only where the mark stands alone — a captioned seat already says it (規約 §hover のツールチップ).
         ToolTip.visible: containsMouse && !toggle.captioned
         ToolTip.delay: Metrics.tipDelayMs
         ToolTip.text: toggle.open

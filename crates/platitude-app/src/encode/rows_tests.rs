@@ -1,5 +1,4 @@
-//! The cases for `rows`, in a file of their own
-//! (.claude/rules/structure.md §分割).
+//! The cases for `rows`.
 
 use platitude_core::highlight::DiffColors;
 
@@ -35,10 +34,8 @@ diff --git a/src/a.rs b/src/a.rs
 
 #[test]
 fn a_row_is_markup_whether_or_not_the_theme_had_anything_to_say() {
-    // One format for every row (`markup::styled`): a row's format never
-    // changes under it, so it is never measured in one it is not drawn
-    // in, and its tabs stand in the columns every other walk of the line
-    // steps in. What the theme had to say only decides the colours.
+    // One format for every row (`markup::styled`); the theme only decides
+    // the colours.
     let patch = "\
 --- a/notes.txt
 +++ b/notes.txt
@@ -115,12 +112,11 @@ fn flattened_rows_carry_the_indices_that_address_them() {
     assert_eq!((rows[5].kind, rows[5].hunk, rows[5].line), ("ctx", 1, 1));
 }
 
-// The shapes below are `git diff` output as it stands, taken off git
-// 2.55 in a throwaway repository. An untracked file read the way
-// `details::file_diff` reads one (`--no-index` against `/dev/null`)
-// and the same file once added come out **byte for byte the same** —
-// git labels the old side `a/fresh.txt` in the header either way and
-// only `---` tells the truth about it — so one constant covers both.
+// Real `git diff` output (git 2.55). An untracked file read as
+// `details::file_diff` reads it (`--no-index` against `/dev/null`) and
+// the same file once added are byte for byte the same — the header
+// names `a/fresh.txt` either way, only `---` tells the truth — so one
+// constant covers both.
 const ADDED: &str = "\
 diff --git a/fresh.txt b/fresh.txt
 new file mode 100644
@@ -155,7 +151,6 @@ index bd43ee2..0000000
 fn a_file_with_only_a_new_side_is_a_new_file() {
     let patches = parse_patch(ADDED.as_bytes());
     assert!(is_new_file(&patches));
-    // The header names the old side too; `---` is what takes it away.
     assert_eq!(patches[0].new_path.as_deref(), Some("fresh.txt"));
     assert_eq!(patches[0].old_path, None);
 }
@@ -301,8 +296,7 @@ fn a_unified_hunk_heading_is_unchanged_by_the_combined_form() {
 
 #[test]
 fn a_no_newline_note_rides_the_line_above_it_instead_of_taking_a_row() {
-    // What the old side lacked, the new side gained: git says so between
-    // the two, and the note is about the one it follows.
+    // The note between the two is about the line it follows.
     let patch = "\
 --- a/f
 +++ b/f
@@ -328,8 +322,8 @@ fn a_no_newline_note_rides_the_line_above_it_instead_of_taking_a_row() {
 
 #[test]
 fn a_note_on_each_side_marks_each_side() {
-    // Both sides end without a newline, and the line changed — so git
-    // prints the note twice, once after each side's own last line.
+    // Both sides lack the newline: git prints the note after each side's
+    // last line.
     let patch = "\
 --- a/f
 +++ b/f
@@ -354,8 +348,8 @@ fn a_note_on_each_side_marks_each_side() {
 
 #[test]
 fn a_note_after_an_unchanged_line_marks_that_line() {
-    // Neither side gained or lost the newline, so the note follows a
-    // context line and belongs to it on both sides.
+    // Neither side gained or lost the newline: the note follows a
+    // context line and belongs to it.
     let patch = "\
 --- a/f
 +++ b/f
@@ -379,7 +373,6 @@ fn a_note_after_an_unchanged_line_marks_that_line() {
     assert!(rows[1..3].iter().all(|r| !r.no_newline));
 }
 
-/// The two sides of every split row, as `(left kind, right kind)`.
 fn sides(rows: &[SplitRow]) -> Vec<(&str, &str)> {
     rows.iter()
         .map(|r| (r.left.kind, r.right.as_ref().map_or("", |s| s.kind)))
@@ -407,23 +400,19 @@ fn a_removal_and_the_addition_that_replaced_it_share_a_split_row() {
         sides(&rows),
         [("hunk", ""), ("ctx", "ctx"), ("del", "add"), ("ctx", "ctx")]
     );
-    // Each side keeps its own line of the hunk — what a press on that
-    // side's mark stages — and the row's hunk is one number.
+    // Each side keeps its own line of the hunk; the row's hunk is one number.
     let paired = &rows[2];
     assert_eq!((paired.left.line, paired.left.old_no), (1, 2));
     let right = paired.right.as_ref().unwrap();
     assert_eq!((right.line, right.new_no), (2, 2));
     assert_eq!((paired.left.hunk, right.hunk), (0, 0));
-    // A context line is on both sides, with the same line of the hunk.
     let ctx = &rows[1];
     assert_eq!(ctx.right.as_ref().unwrap().line, ctx.left.line);
 }
 
 #[test]
 fn the_tail_of_the_longer_run_stands_alone() {
-    // Three removed against one added: the first pair is read across,
-    // the other two removals have nothing on their right. Then an
-    // addition nothing was removed for, which has nothing on its left.
+    // Three removed against one added, then a lone addition.
     let patch = "\
 --- a/f
 +++ b/f
@@ -463,8 +452,8 @@ fn the_tail_of_the_longer_run_stands_alone() {
 
 #[test]
 fn the_pairing_reads_runs_the_way_the_emphasis_does() {
-    // Two removed, two added, in one run: paired by order. Then a lone
-    // addition after a context line starts a run of its own.
+    // Two removed, two added: paired by order. The lone addition after a
+    // context line starts a run of its own.
     let patch = "\
 --- a/f
 +++ b/f
@@ -503,8 +492,8 @@ fn the_pairing_reads_runs_the_way_the_emphasis_does() {
     );
 }
 
-/// The marks round-trip with and without a right side, and a right side
-/// that is there but does not read is a refusal, not a row with one line.
+/// A right side that is there but does not read is a refusal, not a row
+/// with one line.
 #[test]
 fn the_marks_round_trip_with_and_without_a_right_side() {
     use qtbridge::qtbridge_type_lib::{QString, QVariant};

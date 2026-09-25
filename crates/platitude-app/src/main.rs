@@ -1,7 +1,6 @@
 //! platitude-gg entry point: tokio runtime + hub + QML application.
 
-// Hide the console window of the GUI subsystem build on Windows (debug runs
-// from a terminal still show logs on stderr).
+// Release only: debug runs keep the console for their stderr logs.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod encode;
@@ -27,21 +26,16 @@ use qtbridge::QApp;
 fn main() {
     harness::start_clock();
     init_tracing();
-    // Before anything that can wedge, and only ever a thread in a run that
-    // was handed a ceiling: what a process that stops answering leaves
-    // behind, the QML watchdog being unable to fire once the event loop
-    // stops turning or is left (`harness::deadline`).
+    // Before anything that can wedge: the QML watchdog cannot fire once the
+    // event loop stops turning or is left (`harness::deadline`).
     harness::watch_deadline();
-    // Before any repository is opened, so the opening's own walk is one
-    // of the passes that carries no row of this window's working tree —
-    // which is the arrangement the landings on it are answerable for and
-    // the one nothing can be built into (`harness::faults`).
+    // Before any repository is opened, so the opening's own walk is already
+    // a pass without the working tree's row (`harness::faults`).
     if harness::knobs().fault_hold_wip_row {
         harness::hold_the_working_tree_row();
     }
-    // Said once, before anything else can fail: a run whose window never
-    // comes up, or whose stderr is all a verify-ui report keeps, still
-    // names the tree it was built from (CLAUDE.md ビルド・テスト).
+    // Before anything else can fail, so a run whose window never comes up
+    // still names the tree it was built from.
     let tree = models::build_tree();
     tracing::info!(
         tree = if tree.is_empty() { "-" } else { tree.as_str() },
@@ -59,30 +53,23 @@ fn main() {
             std::process::exit(1);
         }
     };
-    // Sole use of the two files, held for the length of the run. What the
-    // taskbar's own launch entry starts lands here and goes no further:
-    // two processes writing one `state.toml` overwrite each other's tabs
-    // and window shape, last one out winning.
+    // Sole use of the settings files for the whole run: two processes
+    // writing one `state.toml` overwrite each other's tabs and window shape.
     let (store, held_elsewhere, lock) = claim_store(Build {
         tree: &tree,
         debug: cfg!(debug_assertions),
-        // Asked of the harness: a build without one is never driven, so
-        // no `PGG_*` variable left in somebody's shell can take their
-        // settings away.
+        // From the harness: a build without one is never driven, so a stray
+        // `PGG_*` in somebody's shell cannot take their settings away.
         driven: harness::knobs().automated,
     });
     Hub::install(runtime, store, held_elsewhere);
 
     let mut app = QApp::new();
-    // The slug: nothing shows this to a person (the window title is
-    // QML's, and the one Qt-built dialog names itself), while two
-    // machines read it verbatim — QStandardPaths joins it into
-    // `~/.cache/<name>/`, and the xcb plugin makes it the WM_CLASS
-    // class. A name with a space in it there buys nothing and costs a
-    // desktop-file match.
+    // The slug, not a display name: QStandardPaths joins it into
+    // `~/.cache/<name>/` and xcb makes it the WM_CLASS class, where a space
+    // costs a desktop-file match.
     app.application_name("platitude-gg");
-    // Embed the QML module (singletons + components + Main) as qrc
-    // resources. Every file listed in ui/qmldir must be embedded here.
+    // Every file listed in ui/qmldir must be embedded here.
     qrc::embed!("ui/qmldir");
     qrc::embed!("ui/Theme.qml");
     qrc::embed!("ui/Metrics.qml");
@@ -333,61 +320,39 @@ fn main() {
         .run();
 
     harness::station(harness::Station::LeftEventLoop);
-    // Asked before the hub is taken down, because taking it down is what
-    // consumes it.
+    // Read first: shutting the hub down consumes it.
     let restart = Hub::with(|hub| hub.restart_wanted()).unwrap_or(false);
     Hub::shutdown();
     harness::station(harness::Station::HubDown);
-    // Qt is taken down here, on this thread, with every thread of its
-    // own still running to answer: the engine first — the window, the
-    // scene graph and its render thread, every QML object — then the
-    // application, with the platform plugin and the graphics device.
-    // After the hub, so that nothing is left pushing at the objects as
-    // they go. `exit` would leave all of it standing, and on Windows
-    // `ExitProcess` ends every other thread where it stands before the
-    // loaded libraries are given their detach: Qt's own static teardown
-    // would then run against a render thread ended mid-frame, and a
-    // lock that thread died holding is waited on for good, by a process
-    // with nothing left running to say so (`harness::deadline`,
-    // internal-docs/ハング調査.md).
+    // Qt is dropped here, after the hub (nothing left pushing at its
+    // objects) and never left to `exit`: on Windows `ExitProcess` ends every
+    // other thread before the libraries' detach, so Qt's static teardown
+    // would run against a render thread ended mid-frame and wait for good on
+    // a lock it died holding (`harness::deadline`, internal-docs/ハング調査.md).
     harness::station(harness::Station::QtTearingDown);
     drop(app);
     if restart {
-        // **The lock goes first, by name.** It is held for the length of
-        // the run and `std::process::exit` runs no destructor, so a
-        // successor started over a live one would be turned away and come
-        // up as the screen that says another process has the files
-        // (`claim_store`). Dropping it here leaves nothing between the two.
+        // The lock goes first: `std::process::exit` runs no destructor, so
+        // the successor would be turned away as "already running"
+        // (`claim_store`).
         drop(lock);
         start_again();
     }
-    // The last thing said, because it is the last thing that can be: the
-    // exit ends every other thread before the loaded libraries are given
-    // their detach, so a process that hangs in one of those has nothing
-    // left running to report it and only the trail names this step
-    // (`harness::deadline`). What the detach finds is a process with Qt
-    // already gone, above.
+    // Last: a hang in the libraries' detach after `exit` has nothing left
+    // running to report it, so only this station names the step
+    // (`harness::deadline`).
     harness::station(harness::Station::Exiting);
     std::process::exit(code);
 }
 
-/// Starts this same build again and leaves it running.
-///
-/// The one thing a process can do about a setting that is read once at
-/// startup: the window has already gone and the files have been let go of
-/// (`main`), so what comes up reads the settings the last window wrote —
-/// including which git to spawn, which is what asked for this.
-///
-/// The same arguments, because they are what this run was asked for. A
-/// failure is reported and nothing else: the reader is left with no
-/// window, which is worse than the restart not happening, but there is
-/// nothing on screen left to say it to.
+/// Starts this same build again, with the same arguments, and leaves it
+/// running — how a setting read once at startup (which git to spawn) takes
+/// effect. Called after the window and the files are let go of (`main`).
+/// A failure is only logged: no window is left to say it on.
 fn start_again() {
-    // **Undriven runs only.** A driven run inherits its own automation
-    // in the environment it would hand on (.claude/rules/app-ui.md §UI
-    // 自動化 — a harness does not pass its state to a child), so
-    // the successor would replay the verb, hold the run's own settings
-    // directory, and outlive the parent that was supposed to bound it.
+    // Undriven runs only: the successor would inherit the run's automation
+    // environment, replay the verb, hold the run's settings directory and
+    // outlive the parent that was supposed to bound it.
     if crate::harness::knobs().automated {
         tracing::info!("a restart was asked for; a driven run does not start one");
         return;
@@ -409,17 +374,12 @@ fn start_again() {
 /// The store this run may use, the directory it was refused if it was, and
 /// the lock to hold on to until the process ends.
 ///
-/// Three ways it can go, and the third is the one worth spelling out:
-///
-/// * nobody else has the files — the run gets them, and the lock rides in
-///   `main`'s frame so the kernel releases it however the process ends;
-/// * somebody does — the run is handed an *empty* store, so a window that
-///   is about to say "already running" cannot write a thing on its way out,
-///   and the window says which directory it did not get;
-/// * the lock could not be asked for at all (a redirected profile, a
-///   network share, a filesystem that does not answer) — the run carries
-///   on with the files, and the window opens on them as it always
-///   does.
+/// * ours — the lock rides in `main`'s frame so the kernel releases it
+///   however the process ends;
+/// * taken — an *empty* store, so a window about to say "already running"
+///   cannot write a thing on its way out;
+/// * the lock could not be asked for (a redirected profile, a network
+///   share) — the run carries on with the files.
 fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings::Lock>) {
     let store = Store::discover(build);
     match store.claim() {
@@ -429,10 +389,8 @@ fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings:
                 .lock_path()
                 .as_deref()
                 .and_then(std::path::Path::parent)
-                // Spelled for the screen: the gate prints this one so a
-                // reader can tell two builds apart, and a directory the
-                // OS handed over is the last road a native separator
-                // reaches the window by (デザイン規約 §パスの区切り).
+                // Shown on screen, and a directory from the OS carries
+                // native separators (デザイン規約 §パスの区切り).
                 .map(|dir| crate::urlpath::shown_path(&dir.display().to_string()))
                 .unwrap_or_default();
             tracing::warn!(store = %held, "another platitude-gg is using these settings");
@@ -447,25 +405,14 @@ fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings:
 
 /// stderr logging; level via `PGG_LOG` (error/warn/info/debug/trace).
 ///
-/// **Plain text.** This stream is read by machines — `xtask perf`
-/// takes the interaction and startup numbers out of it, `xtask verify-ui`
-/// decides pass or fail on it — and the escapes go around the field name
-/// and the `=`, so `first_chunk_ms=317` reaches a reader as
-/// `first_chunk_ms\e[0m\e[2m=\e[0m317` and no substring search finds it.
-/// The trap hides in a terminal, where the colouring is invisible: only
-/// a pipe gets the escapes, so a run that looks clean under a shell
-/// redirect still loses its numbers when xtask spawns it.
+/// Plain text: `xtask perf` and `xtask verify-ui` substring-search this
+/// stream, and colour escapes split `key=value`
+/// (`first_chunk_ms\e[0m\e[2m=\e[0m317`) — invisibly in a terminal.
 ///
-/// **A log line nobody can receive leaves the process running.**
-/// Which is the whole of why the stream is [`logsink`]: the writer
-/// there answers `Ok` however the write went, so the subscriber
-/// never reaches for the `eprintln!` that panics on a stderr that
-/// has just failed.
-///
-/// `log_internal_errors` is off for the same hazard by a second road —
-/// nothing can reach those `eprintln!`s through a writer that does not
-/// fail, and this is what still stands between them and a window if the
-/// writer above is ever put back to a bare stream.
+/// The writer is [`logsink`], which answers `Ok` however the write went, so
+/// the subscriber never reaches the `eprintln!` that panics on a failed
+/// stderr. `log_internal_errors(false)` guards those `eprintln!`s again
+/// should the writer ever go back to a bare stream.
 fn init_tracing() {
     let level = match std::env::var("PGG_LOG").as_deref() {
         Ok("error") => tracing::Level::ERROR,
@@ -482,10 +429,9 @@ fn init_tracing() {
         .init();
 }
 
-/// Embeds the verification harness's QML module (`src/auto`, `platitude.auto`)
-/// — the verb files, the drivers and the shot stand-ins. Nothing in a
-/// shipped build, where the seats that would load them stay empty
-/// (`ui/HarnessSeat.qml`).
+/// Embeds the verification harness's QML module (`src/auto`, `platitude.auto`).
+/// A shipped build embeds nothing, and the seats that would load it stay
+/// empty (`ui/HarnessSeat.qml`).
 #[cfg(feature = "automation")]
 fn embed_harness_qml() {
     qrc::embed!("auto/AutoActCompletion.qml");

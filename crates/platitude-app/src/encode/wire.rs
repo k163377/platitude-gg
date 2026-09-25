@@ -2,56 +2,38 @@
 //!
 //! One record is a `QVariantMap` of named fields — a JS object on the
 //! other side — and a list of them is a `QVariantList`, a JS array. The
-//! struct stays the struct on this side; the map is built and read in
-//! exactly one place per type (its [`Record`] impl), so a field that is
-//! added, renamed or retyped is a compile error here and a named key
-//! there, never a seat counted by hand.
+//! map is built and read in exactly one place per type (its [`Record`]
+//! impl), so a field added, renamed or retyped is a compile error here
+//! and a named key there.
 //!
 //! **The Qt value is built when it is read**, not held beside the Rust
-//! value. A read is bounded by the delegates on screen — a row's roles
-//! are asked for when its delegate is made or reused, not per frame —
-//! so what building costs is a few maps per visible row. Holding the Qt
-//! value instead was measured and refused: on the benchmark corpus it
-//! stood the whole window's lanes and chips on Qt's heap, past the
-//! memory budget, for no frame gained
-//! (ci/baseline/code-costs-windows-x64.md §メモリの形).
+//! value: a read is bounded by the delegates on screen, while holding it
+//! stands the whole window's lanes and chips on Qt's heap, past the
+//! memory budget (ci/baseline/code-costs-windows-x64.md §メモリの形).
 //!
-//! Three wrappers, one for each shape a value takes, and each of them is
-//! a model role (`QVariantConvertible`) and a `#[qslot]` argument or
-//! answer (`QMetaCallArg`); the two that are always something are a
-//! `qproperty!` member too (`QPropertyMember`) — qtbridge implements
-//! those three for its own containers only:
-//! - [`Listed<T>`]: a list of records, a JS array of objects.
-//! - [`One<T>`]: one record, a JS object.
-//! - [`Optional<T>`]: one record or nothing — the JS object, or
-//!   `undefined`. **Nothing is falsy** on the other side: a reader asks
-//!   `if (!x)` and never compares against `""` or `null`.
+//! Three wrappers — [`Listed<T>`], [`One<T>`], [`Optional<T>`] — each a
+//! model role (`QVariantConvertible`) and a `#[qslot]` argument or answer
+//! (`QMetaCallArg`); the two that are always something are a `qproperty!`
+//! member too (`QPropertyMember`). qtbridge implements those three for
+//! its own containers only.
 //!
-//! Plain lists of strings and numbers need none of this: `Vec<String>`
-//! and `Vec<i32>` are qtbridge's own and arrive as JS arrays.
-//!
-//! No bare `QList<QVariant>` is held or copied on this side: the type
-//! lib's copy of one (`QList_Clone`, `return { src }`) comes back under
-//! GCC as a list of one element holding the whole list — measured in the
-//! Linux container, where every chip read as `undefined`; MSVC copies it.
-//! A list is built, handed to Qt, and dropped.
+//! No bare `QList<QVariant>` is held or copied on this side: under GCC the
+//! type lib's copy (`QList_Clone`) comes back as a one-element list holding
+//! the original. A list is built, handed to Qt, and dropped.
 
 use qtbridge::qtbridge_type_lib::{
     QMetaType, QMetaTypeGet, QString, QVariant, QVariantList, QVariantMap,
 };
 use qtbridge::{QMetaCallArg, QObjectHolder, QPropertyMember};
 
-/// A record with a JS object's shape: named fields, each a value QML
-/// reads as its own type (`string` / `int` / `bool` / a nested record or
-/// list).
+/// A record with a JS object's shape: named fields, each read by QML as
+/// its own type.
 pub trait Record: Sized {
     fn to_map(&self) -> QVariantMap;
-    /// The inverse, for a value QML hands back (a slot argument) and for
-    /// the round-trip tests. A missing or mistyped field is `Err`.
+    /// The inverse. A missing or mistyped field is `Err`.
     fn from_map(map: &QVariantMap) -> Result<Self, ()>;
 }
 
-/// The fields of one record, built in the order they are named.
 pub(crate) struct Fields(QVariantMap);
 
 impl Fields {
@@ -59,9 +41,6 @@ impl Fields {
         Self(QVariantMap::default())
     }
 
-    /// One named field. `str`, `String`, the integers, `bool`, a
-    /// `Vec<String>`, and the three wrappers all convert; a type that
-    /// does not is a compile error at the call.
     pub(crate) fn put<V: ?Sized>(mut self, key: &str, value: &V) -> Self
     where
         for<'a> QVariant: From<&'a V>,
@@ -75,8 +54,8 @@ impl Fields {
     }
 }
 
-/// One named field read back, as the type the reader names. A field that
-/// is absent reads as an invalid `QVariant`, which no conversion accepts.
+/// One named field read back. An absent one is `Err` (an invalid
+/// `QVariant`, which no conversion accepts).
 pub(crate) fn field<T>(map: &QVariantMap, key: &str) -> Result<T, ()>
 where
     for<'a> T: TryFrom<&'a QVariant, Error = ()>,
@@ -105,7 +84,7 @@ impl<T> Listed<T> {
 }
 
 impl<T: Record> Listed<T> {
-    /// The list as Qt takes it, built for this read (see the module).
+    /// Built for this read (see the module).
     fn to_list(&self) -> QVariantList {
         let mut list = QVariantList::default();
         list.reserve(self.items.len());
@@ -115,8 +94,7 @@ impl<T: Record> Listed<T> {
         list
     }
 
-    /// The items read back out of a list QML handed over. A missing or
-    /// mistyped field in any element is `Err`.
+    /// A missing or mistyped field in any element is `Err`.
     fn read(list: &QVariantList) -> Result<Vec<T>, ()> {
         let mut out = Vec::with_capacity(list.len());
         for i in 0..list.len() {
@@ -173,10 +151,8 @@ impl<T: Record> QMetaCallArg for Listed<T> {
         self.to_list()
     }
 
-    /// A list QML hands back is one this side handed out, so an element
-    /// that does not read is not a shape this program produces; it is
-    /// left out rather than taking the call down with it, and said out
-    /// loud so a chip that went missing has a line in the log.
+    /// An element that does not read is no shape this side hands out: it
+    /// is logged and left out rather than taking the call down.
     fn from_wire(wire: &QVariantList) -> Self {
         let mut out = Vec::with_capacity(wire.len());
         for i in 0..wire.len() {
@@ -267,9 +243,8 @@ impl<T: Record + Default> QMetaCallArg for One<T> {
         self.value.to_map()
     }
 
-    /// A record QML hands back is one this side handed out (the note on
-    /// [`Listed`]): one that does not read is logged and answered as the
-    /// record's default.
+    /// A record that does not read is logged and answered as the default
+    /// (as for [`Listed`]).
     fn from_wire(wire: &QVariantMap) -> Self {
         T::from_map(wire).map_or_else(
             |()| {
@@ -299,14 +274,11 @@ impl<T: platitude_core::mem::Footprint> platitude_core::mem::Footprint for One<T
 /// One record or nothing: the JS object, or `undefined` (an invalid
 /// `QVariant`). The reader tests it for truth and nothing else.
 ///
-/// **A role or a slot's answer, never a property.** Both hand the
-/// `QVariant` to Qt as it is, and an invalid one reads as `undefined`. A
-/// property is read through `QMetaType::convert` against the metatype it
-/// was declared with (`dynamicmetaobjectdata.cpp`,
-/// `handleMetaCallReadProperty`), and an invalid value converts to
-/// nothing at all — the process ends with "Property type mismatch". So
-/// this type has no [`QPropertyMember`], and a property that may hold
-/// nothing is a revision property beside a slot that answers with this
+/// **A role or a slot's answer, never a property**: a property read
+/// converts to its declared metatype (`handleMetaCallReadProperty`), and
+/// an invalid value ends the process with "Property type mismatch". So no
+/// [`QPropertyMember`]; a property that may hold nothing is a revision
+/// property beside a slot answering this
 /// (`RepoTab.remoteBranchRevision` / `remoteBranchAsked()`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Optional<T> {
@@ -434,9 +406,7 @@ mod tests {
         ]
     }
 
-    /// The witness outside the bookkeeping: what went into Qt's own
-    /// containers comes back out of them equal, through the same
-    /// conversions the bridge runs for a role, a property and a slot.
+    /// By the same conversions the bridge runs for a role, a property and a slot.
     #[test]
     fn a_list_of_records_round_trips_through_qt_containers() {
         let listed = Listed::new(probes());
@@ -471,8 +441,6 @@ mod tests {
         );
         assert!(some.is_some());
         let none = Optional::<Probe>::none();
-        // Nothing goes over as an invalid variant — `undefined` on the
-        // other side — and comes back as nothing.
         assert!(!QVariant::from(&none).is_valid());
         assert_eq!(
             Optional::<Probe>::try_from(&QVariant::from(&none)),

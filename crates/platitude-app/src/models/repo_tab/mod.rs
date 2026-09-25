@@ -11,8 +11,7 @@ use crate::urlpath::picker_folder_url;
 
 use super::qml_register;
 
-/// The name a remote was asked about (`checkRemoteBranch`): which
-/// remote, and the branch name over there.
+/// The name a remote was asked about (`checkRemoteBranch`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteBranch {
     pub remote: String,
@@ -57,7 +56,7 @@ mod write_watch;
 use write_watch::WriteWatch;
 
 /// Failed fetches in a row before the timer is stopped — more than one,
-/// so a brief offline blip (a lid closed on a train) does not stop it.
+/// so a brief offline blip does not stop it.
 const FETCH_FAILURES_BEFORE_STOP: i32 = 3;
 
 pub struct RepoTab {
@@ -65,16 +64,12 @@ pub struct RepoTab {
     state: String,
     title: String,
     repo_path: String,
-    /// Where the picker opens: the folder this repository sits in, as
-    /// a URL — repositories are kept side by side far more often than
-    /// inside one another. **The repository's own working copy is what
-    /// it is read off** (`Hub::home_copy`), so a tab standing in a
-    /// linked copy opens the picker where the repositories are and not
-    /// where that repository's copies are.
+    /// Where the picker opens, as a URL: the folder holding the
+    /// repository's own working copy (`Hub::home_copy`), not a linked
+    /// copy's — repositories sit side by side.
     picker_folder_url: String,
-    /// Why the repository would not open: git's own words. Read only on
-    /// the `other` kind — for the two the application can name itself,
-    /// the heading says it and this would only repeat it in lower case.
+    /// Why the repository would not open, in git's words. Read only on
+    /// the `other` kind — the heading names the other two.
     error: String,
     /// Which of the three the failure was (`plain` / `bare` / `other`),
     /// the same word the picker's dialog branches on.
@@ -82,150 +77,108 @@ pub struct RepoTab {
     /// The folder that would not open, for the line under the heading.
     error_path: String,
     last_error: String,
-    /// Whether `last_error` is fetch news. Only that line is taken down
-    /// by a later fetch that lands — the state it described is over. A
-    /// background read's line has no such ending and waits for a reader.
+    /// Whether `last_error` is fetch news — only that line is taken down
+    /// by a later fetch that lands.
     last_error_from_fetch: bool,
     tags_shown: bool,
     /// Write commands currently in flight (they are serialized per session,
     /// but requests can queue up).
     busy_count: i32,
     busy_op: String,
-    /// The tab is standing in another working copy of the repository it
-    /// is showing, and the session reading it has not said where it is
-    /// yet (`Hub::restand_tab`).
+    /// The tab moved to another working copy and the new session has not
+    /// said where it is yet (`Hub::restand_tab`).
     ///
-    /// **Counted in `busy_count` while it lasts**, which is what makes
-    /// everything else wait: a write asked in that gap reaches a
-    /// session with no repository open yet and is refused with words of
-    /// its own (`RepoSession::run_write`), and every door this page
-    /// offers is already gated on a command being in flight. Held
-    /// beside the count so that putting it down is this one thing
-    /// ending, not a write's answer.
+    /// Counted in `busy_count` while it lasts, so every door waits: a
+    /// write asked in the gap reaches a session with no repository open
+    /// and is refused (`RepoSession::run_write`). Held apart from the
+    /// count so putting it down is not a write's answer.
     standing: bool,
-    /// Whether the write in flight is one that replays history a commit
-    /// at a time — the kind's own answer, carried across the bridge
-    /// (`TabMsg::WriteState::replays`), so the page holds its write
-    /// doors down off that answer alone
-    /// (app-ui.md「QML は表示とインタラクションだけ」).
+    /// Whether the write in flight replays history a commit at a time
+    /// (`OperationKind::replays_history`); the page holds its write doors
+    /// down off this alone.
     replaying: bool,
-    /// Merge tool names the settings field can offer. Empty means none to
-    /// offer, which is a working state — the field takes a typed name
-    /// either way.
+    /// Merge tool names the settings field can offer; empty is a working
+    /// state (the field takes a typed name).
     merge_tools: Vec<String>,
-    /// A candidate read is out. Asking git what is installed takes about
-    /// eight seconds on Windows, so the field says so while the read
-    /// runs.
+    /// A candidate read is out. Asking git what is installed takes
+    /// seconds, so the field says so while it runs.
     merge_tools_loading: bool,
-    /// Configured remote names, so the publish question can offer them
-    /// from one property (`remoteAt` answers one at a time, and a slot is
-    /// not something a binding can follow).
+    /// Configured remote names as one property, for the publish question
+    /// to bind to (`remoteAt` is a slot).
     remote_names: Vec<String>,
-    /// The name the last answer to `checkRemoteBranch` was about
-    /// (`RemoteBranch`). Nothing while a read is out — the question the
-    /// answer belongs to has to be checked, because the box may have moved
-    /// on to another name.
+    /// The name the last answer to `checkRemoteBranch` was about; none
+    /// while a read is out. Readers check it — the box may have moved on.
     remote_branch_asked: Optional<RemoteBranch>,
-    /// Moves with every answer and every question, so a binding on it reads
-    /// `remoteBranchAsked()` again — the pair crosses through a slot, since
-    /// a property cannot hold nothing (`encode::Optional`).
+    /// Moves with every answer and every question, so a binding on it
+    /// re-reads `remoteBranchAsked()`.
     remote_branch_revision: i32,
-    /// What a push under that name would meet over there
-    /// (`platitude_core::remote::RemoteBranchState`): `free` /
-    /// `fast-forward` / `refused` / `unknown` / `unreachable`. One
-    /// string — the five are exclusive, and the two that ask the
-    /// question to hold back are not the same two that ask it
-    /// to warn.
+    /// What a push under that name would meet over there, as the wire
+    /// name of `platitude_core::remote::RemoteBranchState` — one string,
+    /// since the five are exclusive.
     remote_branch_state: String,
-    /// The commit that remote advertised for the name, hex. What an
-    /// overwrite leases against — the question shows this state, so this is
-    /// the commit it showed.
+    /// The commit that remote advertised for the name, hex — what an
+    /// overwrite leases against, being the one the question showed.
     remote_branch_tip: String,
     /// How many commits that tip has that this branch does not: what an
     /// overwrite would take off it.
     remote_branch_theirs: i32,
     /// Last answer to `checkBranchDelete`: the branch asked about, and
     /// whether it is merged into what `branch --delete` measures against
-    /// (its upstream, or HEAD without one). Empty branch means nothing
-    /// asked; the menu that reads it checks the echo, because it may be
+    /// (its upstream, else HEAD). The menu checks the echo — it may be
     /// open over another row by now.
     ///
-    /// The answer is `"yes"` / `"no"` / `"unknown"`, the same three the
-    /// rows give (`GraphModel::branch_delete_merged`), and empty until
-    /// one lands. **Only `"no"` dresses the row**: a delete nobody has
-    /// shown to be refused is offered plain, so unknown draws like merged
-    /// and git answers the press.
+    /// `"yes"` / `"no"` / `"unknown"` as the rows give it
+    /// (`GraphModel::branch_delete_merged`), empty until one lands. Only
+    /// `"no"` dresses the row: unknown draws like merged and git answers
+    /// the press.
     branch_delete_asked: String,
     branch_delete_merged: String,
     /// The plain `branch --delete` out for git's answer — the one press
-    /// that leaves its menu standing, because git may refuse it and the
-    /// refusal has to land on the row that asked (`AppMenuItem.staysOpen`).
-    /// Only the plain form: `-D` and `Delete both` stand for nothing.
-    ///
-    /// **The name and the id its write was accepted under, written down
-    /// together by the press** (`ops::BranchDeleteOut`, plain Rust whose
-    /// transitions run under `cargo test`): a drain can carry several
-    /// answers, and which of them this card's name belongs to is a thing
-    /// only the press still knows.
+    /// whose menu stays up, so a refusal lands on the row that asked
+    /// (`AppMenuItem.staysOpen`); `-D` and `Delete both` stand for
+    /// nothing. The press writes the name down with its write's id
+    /// (`ops::BranchDeleteOut`): a drain can carry several answers, and
+    /// only the id tells which is this card's.
     branch_delete_out: crate::ops::BranchDeleteOut,
-    /// How git answered it: the branch whose plain delete git took, and
-    /// the one it turned down — the picture QML is handed, the way the
-    /// four `gone_*` are the delete's. The card that stayed up reads its
-    /// own name here and either goes or turns its row into `-D`
-    /// (`RefBranchMenu`) — whichever menu raised it, so nothing above the
-    /// card has to know which one is standing. **Kept until the next
-    /// plain delete is asked**, like the check's answer above and unlike
-    /// the write group below: the card reads it as an edge and may not
-    /// have been drawn yet when it arrives.
+    /// How git answered it: the branch whose plain delete it took, and the
+    /// one it turned down. The card reads its own name here and goes or
+    /// turns its row into `-D` (`RefBranchMenu`). Kept until the next
+    /// plain delete is asked, unlike the write group: the card reads it
+    /// as an edge and may not have been drawn yet.
     branch_delete_landed: String,
     branch_delete_refused: String,
     /// Where that card's own answer stands in `write_answers`, or -1
-    /// where this notify carried none of it — how the page tells the
-    /// answer in hand from the one standing above, which no count of
-    /// answers could (`RepoPage.absorbBranchDelete`).
+    /// where this notify carried none — how the page tells the answer in
+    /// hand from the one standing above (`RepoPage.absorbBranchDelete`).
     branch_delete_answer: i32,
-    /// The rows a delete is standing in for, one name per list — what the
-    /// sidebar's sections and the graph's chips are drawn without
-    /// (デザイン規約 §消す操作は先に画面から消す).
+    /// The rows a delete is standing in for, one name per list, which the
+    /// sidebar and the graph draw without (デザイン規約 §消す操作は先に画面から消す).
     ///
-    /// **A copy, and the machine is elsewhere.** When they go and when
-    /// they come back is decided by `ops::StandIn`, which the hub holds
-    /// per tab so a write outlives the page drawing it; these four are
-    /// the picture it leaves, kept here so a QML binding reads a
-    /// plain member (`ops_delete`).
+    /// A copy: `ops::StandIn` decides, held by the hub per tab so a write
+    /// outlives the page; kept here so a binding reads a plain member
+    /// (`ops_delete`).
     gone_branch: String,
     gone_remote: String,
     gone_tag: String,
     gone_stash: String,
-    /// The commit the standing `checkSignature` is about — **the
-    /// question, where `signature_oid` and its three are the answer**.
+    /// The commit the standing `checkSignature` is about — the question,
+    /// where `signature_oid` and its three are the answer.
     ///
-    /// It is asked on every selection and runs a git of its own, so two
-    /// selections in quick succession leave two reads racing, and the one
-    /// about the row already left behind can win. It answers a question
-    /// nobody is asking any more, and there is one seat for every answer,
-    /// so letting it land throws away the answer the pane was waiting
-    /// for — which reads on screen as no answer at all, and
-    /// nothing asks a third time (observed: a verified
-    /// commit whose tick never came). Dropped here, which is what
-    /// デザイン規約 §署名の表示 asks for: 答えはその選択限り — 選択が動けば
-    /// 捨て、同じ行へ戻ってくれば投げ直す.
+    /// Two quick selections leave two reads racing; the stale one landing
+    /// would take the one seat and the pane's own answer would never show.
+    /// Dropped here (デザイン規約 §署名の表示「答えはその選択限り」).
     ///
-    /// A plain member: QML compares the answer with what it has selected
-    /// (`RepoPage.signatureIsForSelection`), and that is a different
-    /// question — the selection can move without this tab being asked
-    /// anything.
+    /// A plain member: QML matches the answer against its own selection
+    /// (`RepoPage.signatureIsForSelection`).
     signature_wanted: String,
     /// Author identity; `identityReady` false means git cannot commit yet
     /// and the UI should ask for a name and address.
     author_name: String,
     author_email: String,
     identity_ready: bool,
-    /// The same face the identity wears everywhere else: the identicon
-    /// its name packs to, and the picture assigned to its address if
-    /// there is one (デザイン規約 §アバターを与える). Held here
-    /// because the commit editor's badge is a binding, and a
-    /// binding only re-reads a property.
+    /// The identity's face: its identicon, and the picture assigned to its
+    /// address if any (デザイン規約 §アバターを与える). Properties because
+    /// the commit editor's badge is a binding.
     author_avatar: i32,
     author_avatar_url: String,
     /// Whether new commits here get signed, and with what kind of key.
@@ -237,42 +190,34 @@ pub struct RepoTab {
     signature_kind: String,
     signature_code: String,
     signature_signer: String,
-    /// Paths gathered for the next write over several files at once, one
-    /// call at a time: a git path may hold any byte but NUL, so there is no
-    /// separator safe enough to pack a list into one string
-    /// (デザイン規約 §その他の操作). Emptied by whichever write consumes it, so a set
-    /// left behind by an abandoned question cannot be spent later.
+    /// Paths gathered one call at a time for the next multi-file write: a
+    /// git path may hold any byte but NUL, so no separator can pack a list
+    /// into one string. Emptied by whichever write consumes it, so a set
+    /// an abandoned question left cannot be spent later.
     pending_paths: Vec<String>,
     /// What the file menu's discard row would take, worked out as the menu
-    /// opens (`planDiscard` over the gathered rows): how many rows it
-    /// would touch — a conflicted row rides along untouched and uncounted
-    /// — and, when that is exactly one, the bucket that row was on, which
-    /// picks the tag the menu row wears (デザイン規約 §その他の操作).
+    /// opens (`planDiscard`): how many rows (conflicted ones uncounted),
+    /// and the bucket when exactly one, which picks the row's tag
+    /// (デザイン規約 §その他の操作).
     discard_count: i32,
     discard_only: String,
-    /// Configured remote names — where a branch with no upstream can go —
-    /// and their fetch URLs in the same order, which is what the form that
-    /// corrects one opens with.
+    /// Configured remote names, and their fetch URLs in the same order
+    /// (what the form that corrects one opens with).
     remotes: Vec<String>,
     remote_urls: Vec<String>,
-    /// Derived from `remotes` on arrival: QML bindings only
-    /// re-evaluate on a property change, so anything a binding reads
-    /// has to be a property.
+    /// Derived from `remotes` on arrival, for bindings.
     remote_count: i32,
     default_remote: String,
-    /// The remote this repository sends pushes to (`remote.pushDefault`),
-    /// empty where none is marked, and whether the mark is this
-    /// repository's own to clear. `default_remote` is what actually
-    /// decides a destination and falls back to a remote called `origin`;
-    /// this is the push's key itself, which is what the sidebar's badge
-    /// draws and whether the dialog's box can be cleared.
+    /// `remote.pushDefault` (empty where unset), and whether it is this
+    /// repository's own to clear. The key itself, for the sidebar's badge
+    /// and the dialog's box; `default_remote` is the resolved destination
+    /// (falls back to `origin`).
     push_default: String,
     push_default_local: bool,
     /// The remote both keys `Mark as origin` writes name
     /// (`remote.pushDefault` and `checkout.defaultRemote`), empty where
-    /// they part or neither is set. What the menu row, the form's box and
-    /// the row's hover read: a remote only one key names still has the
-    /// mark to finish.
+    /// they part or neither is set — a remote only one names still has
+    /// the mark to finish.
     marked_origin: String,
     /// HEAD's message split into the editor's two fields, filled on
     /// request so an amend starts from it.
@@ -288,178 +233,120 @@ pub struct RepoTab {
     /// can tell "not loaded yet" from "loaded, and it is empty".
     head_commit_seq: i32,
     /// The most recently finished write: git's message (empty on success)
-    /// and a counter QML compares against to spot a new one. A signal
-    /// with arguments would be the natural shape, but the bridge only
-    /// carries parameterless ones.
-    ///
-    /// The message stays raw data over there — the push flow shows it.
-    /// What an answer *means* is the classified group below: the page
-    /// reads meanings alone (app-ui.md).
+    /// and a counter QML compares to spot a new one — the bridge carries
+    /// only parameterless signals. Shown raw; what an answer means is the
+    /// group below.
     last_write_error: String,
-    /// git stopped part-way through the write in flight and left the
-    /// operation standing. Raised by the message before that write's
-    /// answer and read by the answer itself, which is where it becomes
-    /// the answer's own (`WriteAnswer::stopped`): a third answer beside
-    /// a refusal and a landing, each sending the screen elsewhere.
+    /// git stopped part-way through the write in flight. Raised by the
+    /// message before that write's answer, which takes it as its own
+    /// (`WriteAnswer::stopped`).
     last_write_stopped: bool,
     write_seq: i32,
-    /// **The one write a run is waiting for**, kept by the id its own ask
-    /// was given and asked about by equality alone (`write_watch`).
+    /// The one write a run is waiting for, by the id its ask was given,
+    /// compared by equality alone (`write_watch`).
     write_watch: WriteWatch,
-    /// That answer, classified where the op names are known
-    /// (`drain::settle_write`).
-    ///
-    /// **What is left over.** Every one of these describes the last
-    /// answer of this notify that **nobody was waiting for by name**, and
-    /// each such answer rewrites the whole group, so nothing stays armed
-    /// for a later write to trip over. An answer that went to an owner is
-    /// left out of it entirely (`ops::Press`): the page acts on it
-    /// where the owner hands it over, and a copy here would have the page
-    /// act on the same answer a second time. The group is emptied at the
-    /// top of every drain like the answers beside it, so a notify that
-    /// carried nothing for it says so, and the last drain's
-    /// classification went down with it.
+    /// The last answer of this notify that no press named, classified
+    /// (`drain::fold_into_group`); each such answer rewrites the whole
+    /// group. An answer that went to an owner is left out (`ops::Press`) —
+    /// a copy here would have the page act on it twice. Emptied at the top
+    /// of every drain.
     ///
     /// git would not do it, or could not reach the far side to;
     /// `last_write_error` holds its words.
     write_refused: bool,
-    /// The shown diff is a picture of a file that is gone: a landed
-    /// stage / unstage / discard / commit / stash moved what the two
-    /// sides hold, and a refused stage / unstage / discard was refused
-    /// *because* the rows on screen drifted. Either way the answer is
-    /// the fresh file.
+    /// The shown diff is stale: a landed stage / unstage / discard /
+    /// commit / stash moved it, and a refused stage / unstage / discard
+    /// was refused because the rows on screen drifted.
     write_stale_diff: bool,
     /// HEAD moved (a checkout or a reset landed), so the working tree
     /// under an open diff was rewritten.
     write_moved_head: bool,
     /// A reword landed: the saved message is on its commit.
     write_reworded: bool,
-    /// The answer was about a branch (create / delete / rename),
-    /// whichever way it went: what the page armed for one — a refusal to
-    /// wear `-D`, the question a rename raises about the remote — reads
-    /// this beside its own state.
+    /// The answer was about a branch (create / delete / rename), whichever
+    /// way it went; what the page armed for one reads this beside its own
+    /// state.
     write_branch_op: bool,
-    /// The answer was about a tag (create / delete / rename), whichever
-    /// way it went — the same reading as `write_branch_op`, for the half
-    /// of the page armed on a tag: a rename whose question about the
-    /// remote is waiting reads this beside its own state.
+    /// The same as `write_branch_op`, for a tag.
     write_tag_op: bool,
-    /// The answer was a fetch, landed or not. A fetch that could not
-    /// reach the far side has already said so in the tab's own terms —
-    /// the button's count, the header's line, the panel raised once for
-    /// the run — so the page reads this to tell that news from another
-    /// report landing in the same panel (`CommandsOwner`).
+    /// The answer was a fetch, landed or not. A failed fetch has said so
+    /// already (count, header line, panel), so the page tells that news
+    /// from another report in the same panel (`CommandsOwner`).
     write_fetched: bool,
-    /// The write answers *this* notify carried, oldest first — the group
-    /// above says only what the last of them was.
+    /// The write answers this notify carried, oldest first; the group
+    /// above says only what the last was.
     ///
     /// One drain empties the whole queue and notifies once
-    /// (`drain::absorb`), so a run's own answer and the fetch that came
-    /// back behind it reach QML as one `changed`. Everything read off the
-    /// group is then the fetch's: a reader waiting for its own write by
-    /// name never sees the name, and a stop the run left standing is
-    /// taken back down by the fetch *starting* — both measured as
-    /// silence, and both correlated with how loaded the machine is.
-    /// So the answers are kept as they came, and what waits for one
-    /// of them looks here.
+    /// (`drain::absorb`), so a run's answer and the fetch behind it reach
+    /// QML as one `changed`: read off the group, the run's answer and its
+    /// stop are lost to the fetch. What waits for one answer looks here.
     ///
-    /// Emptied at the top of every drain: a notify raised from anywhere
-    /// else (a slot that writes a setting) carries no answers, and the
-    /// list left standing would be read a second time. `seq` is what
-    /// tells an answer already counted from this one's own; `id` is what
-    /// a reader that was handed one at the press looks for.
+    /// Emptied at the top of every drain, or a notify raised elsewhere
+    /// would have the list read a second time.
     write_answers: Vec<WriteAnswer>,
     /// The commit the editor sent, waiting for the answer that empties
-    /// its boxes — **the id it was accepted under, written down by the
-    /// press itself** (`state::commit_from_fields`), so every reader
-    /// finds its own answer by that id, whatever order the
-    /// answers arrive in.
-    ///
-    /// **A copy of what it says is beside it.** The owner is plain Rust
-    /// and knows neither Qt nor git (`ops::Press`, whose transitions
-    /// run under `cargo test`); `commit_answer` is the picture QML is
-    /// handed, the way the four `gone_*` are the delete's.
+    /// its boxes — by the id the press wrote down
+    /// (`state::commit_from_fields`), whatever order the answers arrive
+    /// in (`ops::Press`).
     commit_out: crate::ops::Press,
     /// Where the editor's own answer stands in `write_answers`, or -1
-    /// where this notify carried none of it — which is most notifies.
-    /// What git said about it is read off that answer, like every other
-    /// reader that waits for one write by name.
+    /// where this notify carried none.
     commit_answer: i32,
     /// The open diff read again where a write answered, waiting for the
-    /// status that write publishes behind it (`ops::DiffReread`).
-    ///
-    /// **Asked for, the way the stash's landing is:** the question
-    /// has an answer only at the moment a status is being
+    /// status that write publishes behind it (`ops::DiffReread`). A slot,
+    /// not a property: it has an answer only while a status is being
     /// read, and asking spends it (`takeDiffRead`).
     diff_reread: crate::ops::DiffReread,
     /// The working tree as the page last put it on screen: the report of
-    /// HEAD its counts stood beside, and whether they left nothing in it
+    /// HEAD its counts stood beside, and whether they left it empty
     /// (`noteTreeRead`).
     ///
-    /// **Kept here, once.** It describes the screen, and both of the
-    /// waits above are answered against it — held twice, the two could
-    /// disagree about the same status. Written down whether or not
-    /// anything is waiting: a status and the answer it belongs beside
-    /// are drained apart, so this is regularly the half that arrived
-    /// first.
+    /// Kept once: `diff_reread` and `stash_out` are both answered against
+    /// it, and two copies could disagree. Written whether or not anything
+    /// waits — status and answer are drained apart, and this often
+    /// arrives first.
     tree_seen: u64,
     tree_emptied: bool,
     /// The stash this window pressed to take the working tree away,
-    /// waiting for the reading where that tree turns out to be empty
+    /// waiting for the reading that finds the tree empty
     /// (`ops::StashOut`).
     ///
-    /// **Two waits, and only one of them is a property.** Where its
-    /// answer stands is `stash_answer` below; whether the tree in front
-    /// of the page is the one that press emptied is asked for once, at
-    /// the moment the page acts on a tree, and asking spends it
-    /// (`takeStashLanding`) — a binding would read an answer that is
-    /// gone by the time anything is drawn from it.
+    /// Whether that tree is the one on screen is asked once, when the page
+    /// acts on a tree, and asking spends it (`takeStashLanding`) — a
+    /// binding would read an answer already gone.
     stash_out: crate::ops::StashOut,
     /// Where that press's own answer stands in `write_answers`, or -1
-    /// where this notify carried none of it. What the page does with it
-    /// is the same as with any other answer it was waiting for: read the
-    /// open file again, or say what git refused.
+    /// where this notify carried none.
     stash_answer: i32,
-    /// The toolbar's push — plain, leased, or the first push the
-    /// question took — waiting for the answer to its own press, with the
-    /// branch it was sent for (`ops::PushOut`). A remote branch's replace
-    /// and delete answer under the same word, and the fetch behind the
-    /// press comes back in the same drain, so the word `push` on an
-    /// answer says nothing about whose it was: the id does.
+    /// The toolbar's push — plain, leased, or the question's first push —
+    /// waiting for its own answer, with the branch it was sent for
+    /// (`ops::PushOut`). A remote branch's replace and delete answer as
+    /// `push` too, beside a fetch in the same drain; only the id says
+    /// whose it was.
     push_out: crate::ops::PushOut,
     /// Where that press's own answer stands in `write_answers`, or -1
-    /// where this notify carried none of it — and the branch it was
-    /// about, which is what a refusal is remembered against
-    /// (デザイン規約 §リモートへ送る). The picture QML is handed, the
-    /// way `commit_answer` is the editor's.
+    /// where this notify carried none, and the branch a refusal is
+    /// remembered against (デザイン規約 §リモートへ送る).
     push_answer: i32,
     push_answer_branch: String,
-    /// The pushes a **ref row** sends — the two `push --delete`s and the
-    /// replace git has no command for, and the two pairs that reach over
-    /// there after doing something here. The same arrangement as the
-    /// toolbar's one door along, and for the same reason: they answer
-    /// under the word `push` like everything else that reaches a remote,
-    /// so a fetch coming back in the same drain took the group over and
-    /// the refusal was never said at all (P3-確認事項, observed —
-    /// `drain::fold_into_group` describes whichever ownerless answer
-    /// finished last).
+    /// The pushes a ref row sends — the two `push --delete`s, the replace
+    /// git has no command for, and the two pairs that reach over there
+    /// after doing something here. Owned for the toolbar's reason: in the
+    /// group, a fetch in the same drain would take the refusal over
+    /// (`drain::fold_into_group`).
     ref_push_out: crate::ops::PushOut,
     /// Where that press's own answer stands in `write_answers`, or -1
     /// where this notify carried none of it, and the row it was about.
     ref_push_answer: i32,
     ref_push_target: String,
     /// That write did not happen, and something outside this application
-    /// said so — a protected branch, a repository rule, a hook over there
-    /// or here, a remote this end had only an older picture of.
-    /// Nothing here can put it right and nothing was half done,
-    /// so the page reports it
-    /// (デザイン規約 §答えの要らない報せ).
+    /// said so — a protected branch, a rule, a hook, a stale picture of
+    /// the remote (デザイン規約 §答えの要らない報せ).
     ///
-    /// `kind` is which report this is (`delete` / `update` / `outdated` /
-    /// `commit`), which is what the sentence turns on; `remote` and
-    /// `name` are what it is written about, and the words are whoever
-    /// said no, shown as they came. Empty `kind` is "no report in this
-    /// answer" — the whole group is rewritten by every answer.
+    /// `kind` (`delete` / `update` / `outdated` / `commit`) is what the
+    /// sentence turns on; `remote` and `name` are what it is about, and
+    /// the reason is shown as it came. Empty `kind` is "no report in this
+    /// answer".
     write_report_kind: String,
     write_report_remote: String,
     write_report_name: String,
@@ -486,51 +373,36 @@ pub struct RepoTab {
     feed: Option<Arc<Feed<TabMsg>>>,
 }
 
-/// One write's answer as it arrived, for the readers that wait on a
-/// particular one (`RepoTab::write_answers`).
-///
-/// Carries what the group properties would say about it and no more:
-/// which write answered, whether git stopped part-way, whether it was
-/// refused, and whether it left a commit at the tip — **the meanings are
-/// named on this side of the bridge**, the same way `settle_write` names
-/// them for the group (app-ui.md: no business logic in QML). `id` is the
-/// one the queue handed back at the press (`platitude_core::OperationId`),
-/// which is how a reader that holds one finds its answer whatever came
-/// in between; `seq` is the number `write_seq` counted it at, so a run
-/// that holds no id tells its own answer from one already counted before
-/// it pressed; `head_seq` is the number the session named for the first
-/// report of HEAD after the write (`TabMsg::WriteState::head_seq`), which
-/// a landing on its tip arms on.
-/// Whether anybody asked for that write, or it is one of the fetches the
-/// page makes on its own — the interval's and the one an opening fires.
-/// **The set is named in core**, where the queue's own lane already
-/// draws it (`OperationKind::asked_for`), so this side and the queue
-/// always agree about which writes have somebody waiting.
+/// Whether anybody asked for a write of this kind, or it is one of the
+/// page's own fetches (the interval's, an opening's). Named in core
+/// (`OperationKind::asked_for`) so this side and the queue agree.
 pub(super) fn asked_for(kind: OperationKind) -> bool {
     kind.asked_for()
 }
 
+/// One write's answer as it arrived, for the readers that wait on a
+/// particular one (`RepoTab::write_answers`), its meanings named on this
+/// side of the bridge as `settle_write` names them for the group. `id` is
+/// the one the queue handed back at the press; `seq` is where `write_seq`
+/// counted it, so a run holding no id tells its answer from one counted
+/// before it pressed; `head_seq` is the first report of HEAD after the
+/// write (`TabMsg::WriteState::head_seq`), which a tip landing arms on.
 struct WriteAnswer {
     id: u64,
     seq: i32,
-    /// Which write, as the queue named it — the type itself, so what an
-    /// answer means is matched on it and the word QML reads is made
-    /// from it at the slot (`writeAnswerOp`).
+    /// Which write — the type itself; the word QML reads is made at the
+    /// slot (`writeAnswerOp`).
     kind: OperationKind,
     stopped: bool,
     failed: bool,
-    /// git's own words where it was refused, empty where it landed —
-    /// **on the answer** (`last_write_error` is whichever answer came
-    /// last): a reader waiting for one write by name reads the words
-    /// of that one.
+    /// git's own words where it was refused, empty where it landed — per
+    /// answer, unlike `last_write_error`.
     error: String,
     at_tip: bool,
     head_seq: u64,
-    /// What the far side, a hook, or this end itself said about refusing
-    /// it — **carried on the answer**, because a report is the
-    /// answer's and a drain can bring several.
-    /// Empty `kind` is "this one came with nothing to report", which is
-    /// git's plain refusal and the command log's news
+    /// What the far side, a hook, or this end said about refusing it — per
+    /// answer, since a drain can bring several. Empty `kind` is git's
+    /// plain refusal, the command log's news
     /// (デザイン規約 §答えの要らない報せ).
     report_kind: String,
     report_remote: String,
@@ -538,10 +410,9 @@ struct WriteAnswer {
     report_reason: String,
 }
 
-/// One of a session's running numbers as the bridge carries it (`i32`)
-/// — the id a write was accepted under, or the report of HEAD an answer
-/// names. A process counts both from one and neither reaches the top of
-/// the range, so the saturation is a formality.
+/// A session's running number (a write's id, a HEAD report's) as the
+/// bridge carries it. Both count from one and never reach `i32::MAX`, so
+/// the saturation is a formality.
 fn bridge_id(number: u64) -> i32 {
     i32::try_from(number).unwrap_or(i32::MAX)
 }

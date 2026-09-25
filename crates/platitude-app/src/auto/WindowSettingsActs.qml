@@ -4,38 +4,28 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The settings screen's half of the window's PGG_AUTO_ACT harness: the merge editor's list, the repository group,
-/// the rail between the categories, and the avatar card.
-///
-/// A file of its own because these are the verbs that reach into one dialog and nothing else — every one of them
-/// wants `settingsDialog` and none of them wants a tab, a page or the band. Built by `WindowAutoActDriver` beside
-/// `WindowDialogActs`, which keeps the ones that reach into the rest of the window.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+/// The settings screen's half of the window's PGG_AUTO_ACT harness: the verbs that reach into `settingsDialog` and
+/// nothing else (no tab, page or band). The rest of the window's dialog verbs are `WindowDialogActs`.
+// `Item`, not `QtObject`: rules-refs/app-ui.md「ドライバの root は `Item`」.
 Item {
     id: acts
 
     required property var window
     required property var settingsDialog
 
-    /// The three panes the screen is made of, named once here. The screen
-    /// hands over the two it holds and the git one hands over the third
-    /// (`SettingsDialog`).
     readonly property var appPane: acts.settingsDialog.autoAppPane
     readonly property var gitPane: acts.settingsDialog.autoGitPane
     readonly property var repoPane: acts.settingsDialog.autoGitPane.autoRepoPane
 
-    /// Headless has no pointer to put on an avatar row's Remove, and the lit button is what the dim/bright pair is
-    /// photographed by (`SettingsAppPane.pointedAtRow`).
+    /// Stands in for the pointer on an avatar row's Remove, which headless lacks (`SettingsAppPane.pointedAtRow`).
     Binding {
         target: acts.appPane
         property: "pointedAtRow"
         value: Harness.autoAct === "avatar-row-lit" ? 0 : -1
     }
 
-    /// The real loading edge, kept alive until the picture has been grabbed. Raised off the moment git was asked
-    /// (`SettingsGitPane.toolsAsked`) and off the model's own change, because the read can already be out by the
-    /// first and can start after it; the box is told to hold its indicator up, and the screen closing puts that down.
+    /// The real loading edge, raised off both `SettingsGitPane.toolsAsked` and the model's own change (the read can be
+    /// out by the first, or start after it); the box holds its indicator up until the screen closes.
     property bool toolLoadingSeen: false
     function noteToolLoading() {
         if (Harness.autoAct !== "settings-tools-loading" || !acts.window.curPage)
@@ -50,8 +40,7 @@ Item {
         function onToolsAsked() {
             acts.noteToolLoading()
         }
-        // The candidates arrive in two waves and the configured name in a third, so the value has three chances to be
-        // knocked out by something that is not a person — report it at each.
+        // Candidates arrive in two waves and the configured name in a third; each can knock the value out.
         function onToolChoicesChanged() {
             acts.reportTool()
         }
@@ -59,11 +48,8 @@ Item {
             acts.reportTool()
         }
     }
-    /// Whether this machine's stock-take of merge editors has been made — the read went out, and it came back.
-    ///
-    /// **Latched off the flag's own edges, because the flag reads false on both sides of the read** and an empty
-    /// list means opposite things there: before it, nobody has asked yet; after it, this machine has none. Only the
-    /// second is an answer, and it is the one that ends the two verbs below.
+    /// Whether this machine's stock-take of merge editors went out and came back. Latched off the flag's edges: it
+    /// reads false on both sides of the read, and an empty list is an answer ("none") only after it.
     property bool toolsWentOut: false
     property bool toolsCameBack: false
     function noteToolsFlight() {
@@ -85,8 +71,6 @@ Item {
         if (Harness.autoAct === "settings-tools" || Harness.autoAct === "settings-tools-loading")
             Harness.report("merge_editor " + acts.gitPane.toolTally())
     }
-    /// Whether every chapter can be got to: they fit, or the bar that sends them is standing. The claim is the
-    /// harness's; the three lengths it is made of are the screen's (`SettingsDialog.chaptersContent`).
     function reportFit() {
         Harness.report("settings_fit reach="
                           + (settingsDialog.chaptersContent <= settingsDialog.chaptersView
@@ -96,9 +80,8 @@ Item {
                           + " bar=" + settingsDialog.chaptersBarShown)
     }
 
-    // The tools popup has two separately latched output states: a real loading edge and the populated, settled
-    // choices. The chapter it stands in is the settings screen's git one, so the screen is opened on that category —
-    // the same door the menu entry uses, told on the way in to bring the list down with it.
+    // PGG_AUTO_ACT=settings-tools / settings-tools-loading: two separately latched outputs, the real loading edge and
+    // the settled choices. Opened on the git category by the menu entry's door, told to bring the list down with it.
     SampleTimer {
         running: Harness.autoAct === "settings-tools"
                  || Harness.autoAct === "settings-tools-loading"
@@ -108,13 +91,8 @@ Item {
                 settingsDialog.openAt("git")
                 return
             }
-            // **An inventory that named nothing is an answer, and it is the end of both of these.** The candidates'
-            // second wave is a stock-take of the machine (`git mergetool --tool-help`), so a machine with no merge
-            // editor on it answers with an empty list — and an empty list is a card with nothing to drop, which
-            // closes itself (`AppCombo.hasList`). Neither the `opened` the settled verb waits for nor the loading
-            // edge behind it can come after that, so a run that went on waiting would spend the whole watchdog in
-            // silence and be read as a wedge. Said and finished: the run fails on its own report line in
-            // the seconds the stock-take takes, naming the machine.
+            // A stock-take that named nothing ends both verbs: an empty list is a card with nothing to drop, which
+            // closes itself (`AppCombo.hasList`), so neither `opened` nor the loading edge can follow.
             if (acts.toolsCameBack && acts.gitPane.toolChoices.length === 0) {
                 stop()
                 acts.reportTool()
@@ -135,13 +113,9 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-repo / settings-repo-pick: the git category's `REPOSITORY OVERRIDE` group, landed on the
-    // repository the reader is looking at, and with the chooser's list down. The argument picks a row of the strip for
-    // the run that wants a repository other than the front one — through the same call a pick from the list makes
-    // (規約 §UI 自動化の因果性).
-    //
-    // Waited on: the read git answers with (`state === "ready"`), and the list's own `opened`. The category is what
-    // the run set on the way in.
+    // PGG_AUTO_ACT=settings-repo / settings-repo-pick: the git category's `REPOSITORY OVERRIDE` group, with the
+    // chooser's list down for `-pick`. The argument picks a strip row other than the front one, through the same call
+    // a pick from the list makes (verify-ui implement.md §壊れない動詞の実装と反復).
     SampleTimer {
         id: repoSettingsTimer
         running: Harness.autoAct === "settings-repo" || Harness.autoAct === "settings-repo-pick"
@@ -153,14 +127,11 @@ Item {
                 return
             }
             if (!repoSettingsTimer.acted) {
-                // A repository has to be there to pick before anything is asked of it, and the strip's rows arrive
-                // with the window.
+                // The strip's rows arrive with the window.
                 if (acts.repoPane.autoRepoRows === 0)
                     return
-                // **The screen has to be showing one repository before another is picked.** The screen lands on the
-                // one the reader is in as it opens (`SettingsDialog.onOpened`), and waiting for that read makes the
-                // argument below a *switch* — boxes already carrying values, replaced by another
-                // repository's.
+                // Wait for the front repository's read (`SettingsDialog.onOpened`) so the pick below is a switch:
+                // boxes already carrying values, replaced by another repository's.
                 if (!acts.repoPane.autoRepoReady)
                     return
                 if (Harness.autoActArg !== ""
@@ -182,22 +153,17 @@ Item {
     }
 
     // PGG_AUTO_ACT=settings-git-path: the application category's `GIT EXECUTABLE` chapter, with the git at the path
-    // having answered. The argument is the path to write, or none for the resting state — an empty box, which is
-    // "whichever git PATH resolves" and is what a fresh settings directory comes up holding.
+    // having answered. The argument is the path to write, or none for the resting (empty) box.
     //
-    // **The picture cannot judge this one.** A path is drawn the same whether or not there is a binary at the end of
-    // it, and the sentence under the box arrives a subprocess after the box does — so a run that photographed the
-    // moment it typed would frame `Asking for the version…` and read as green. What is waited on is the answer
-    // itself, and the line says which of the four it was.
+    // The picture cannot judge this: the sentence under the box arrives a subprocess after the box, so a shot at the
+    // typing would frame `Asking for the version…` and read green. The answer itself is waited on and reported.
     //
-    // Typed through the box's own door (`SettingsAppPane.autoTypeGitPath` = text, then the edit being finished with),
-    // so the wiring is in the picture (規約 §UI 自動化の因果性). Writing
-    // the settings file is this run's to do: `verify::run` gives every run a config directory of its own, so what is
-    // written here is the harness's own value (同 §).
+    // Writing the settings file is safe: every run has its own config directory
+    // (rules/app-ui.md §UI 自動化「run は自分の環境と状態を建てる」).
     SampleTimer {
         id: gitPathTimer
         running: Harness.autoAct === "settings-git-path"
-        /// The path has been typed. The run with no argument photographs what the screen opened on.
+        /// The path has been typed (with no argument, nothing is).
         property bool acted: false
         onTriggered: {
             if (!settingsDialog.opened) {
@@ -205,10 +171,8 @@ Item {
                 return
             }
             if (!gitPathTimer.acted) {
-                // `in-use` is the path this run is already spawning — the box holding it is a box holding the git
-                // already running, which is the one thing that does *not* offer a restart. `other` is the second git
-                // the run was staged with (`--other-git`), which is what does: a git that answers and is not this
-                // one, on either OS, without the argument naming a path.
+                // `in-use`: the git already running, the one path that does not offer a restart. `other`: the second
+                // git the run was staged with (`--other-git`), which does — on either OS, without naming a path.
                 if (Harness.autoActArg === "in-use")
                     acts.appPane.autoTypeGitPath(AppBackend.gitPathInUse)
                 else if (Harness.autoActArg === "other")
@@ -218,8 +182,7 @@ Item {
                 gitPathTimer.acted = true
                 return
             }
-            // The screen asks as it opens, so there is an answer coming either way; the run that typed has a second
-            // one after it, and this is the state of whichever ask is outstanding.
+            // The screen asks as it opens, so an answer is coming either way; after typing, this is the later ask's.
             if (AppBackend.gitPathState === "" || AppBackend.gitPathState === "checking")
                 return
             gitPathTimer.stop()
@@ -228,15 +191,9 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-processes: the application category's `GIT PROCESSES` chapter, with both boxes typed. The
-    // argument is `<commands>:<seconds>`, either half empty for what an emptied box means (the default, and never).
-    //
-    // **The picture cannot judge this one either.** A box holding `8` and a box whose edit was never applied frame
-    // the same, and what the page's tick reads is the interval in milliseconds, which no box shows — so the store's
-    // own answer is reported, in both units, and the line is what is judged.
-    //
-    // Typed through the pane's own door (`SettingsAppPane.autoTypeProcesses` = text, then the edit being finished
-    // with), so the wiring is in the picture (規約 §UI 自動化の因果性).
+    // PGG_AUTO_ACT=settings-processes <commands>:<seconds>: the application category's `GIT PROCESSES` chapter, both
+    // boxes typed through the pane's own door (`SettingsAppPane.autoTypeProcesses`); an empty half is an emptied box
+    // (the default, and never). An unapplied edit frames the same, so the store's own answer is the line judged.
     SampleTimer {
         id: processesTimer
         running: Harness.autoAct === "settings-processes"
@@ -259,12 +216,9 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-git-leave: the way out taken over a git waiting to be applied, and turned down. The path
-    // typed is the second git this run was staged with (`--other-git`), which is what the way out has to run into.
-    //
-    // **Both halves are said.** A screen that stayed is drawn exactly like one nobody asked to close, and the
-    // `✕` turning is a shape a run has to be told about — so the line says that the way out was taken, that the
-    // screen is still up, and that what is holding it is the offer.
+    // PGG_AUTO_ACT=settings-git-leave: the way out taken over a git waiting to be applied (`--other-git`), and
+    // turned down. A screen that stayed frames like one nobody asked to close, so the line says the way out was taken,
+    // the screen is still up, and the offer is what holds it.
     SampleTimer {
         id: gitLeaveTimer
         running: Harness.autoAct === "settings-git-leave"
@@ -281,7 +235,7 @@ Item {
                 gitLeaveTimer.typed = true
                 return
             }
-            // The offer is what the way out has to run into, and it arrives a subprocess after the typing.
+            // The offer arrives a subprocess after the typing.
             if (!AppBackend.gitPathOffersRestart)
                 return
             if (!gitLeaveTimer.left) {
@@ -299,17 +253,12 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-eol: the `REPOSITORY OVERRIDE` group's line-ending chapter, picked. The argument is the
-    // row, in git's own spelling (`true` / `input` / `false`) or `inherited` for the row that writes nothing.
+    // PGG_AUTO_ACT=settings-eol <true|input|false|inherited>: the `REPOSITORY OVERRIDE` group's line-ending chapter,
+    // picked (`inherited` writes nothing). `core.autocrlf` is written only into the picked repository (規約 §設定の画面),
+    // the only file a run may write anyway.
     //
-    // **It is the only level there is.** The screen writes `core.autocrlf` into the repository somebody picked and
-    // nowhere else (規約 §設定の画面), which happens to be the only file a run may write anyway — the machine's own
-    // configuration belongs to whoever is sitting at it
-    // (規約 §UI 自動化の因果性 「harness の環境は … 所有する値だけを設定する」).
-    //
-    // Waited on: the read that fills the chooser (a pick before it would be picking against an empty field), then the
-    // read that *follows* the write — the write's own `busy` falls before that one lands, so a run that stopped at it
-    // would photograph the value it had just replaced.
+    // Waited on: the read that fills the chooser, then the read that follows the write — the write's own `busy` falls
+    // before that read lands, so stopping at it photographs the replaced value.
     SampleTimer {
         id: endingsTimer
         running: Harness.autoAct === "settings-eol"
@@ -323,8 +272,6 @@ Item {
                 return
             }
             if (!endingsTimer.acted) {
-                // A repository has to be there to write into, and the strip's rows arrive with the
-                // window.
                 if (acts.repoPane.autoRepoRows === 0 || !acts.repoPane.autoEndingsReady)
                     return
                 if (!acts.repoPane.autoPickEnding(endingsTimer.wanted))
@@ -342,17 +289,15 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-switch: the rail, which is the one way between the categories from inside the screen.
-    // Opened on the application category and pressed onto the other through the row's own handler
-    // (`SettingsDialog.autoTapCategory`), because every other settings verb sets the category before the screen is up
-    // and would leave a dead rail green. What the report reads back is the chapters — `category` is
-    // the input side, and a run that read it would be reporting its own press.
+    // PGG_AUTO_ACT=settings-switch: the rail, pressed from the application category onto git through the row's own
+    // handler (`SettingsDialog.autoTapCategory`) — every other settings verb sets the category before the screen is
+    // up and would leave a dead rail green. The report reads the panes, not `category` (that is the press itself).
     SampleTimer {
         id: categorySwitchTimer
         running: Harness.autoAct === "settings-switch"
-        /// The press has been made, so what had to be true before it is not read again.
+        /// The press has been made.
         property bool acted: false
-        /// The application category was standing first — half the claim, and the half the picture cannot hold.
+        /// The application category was standing first — the half the picture cannot hold.
         property bool wasApp: false
         onTriggered: {
             if (!categorySwitchTimer.acted) {
@@ -377,13 +322,9 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-escape: the way out the screen owns, taken through the same function the `✕` and the
-    // Escape shortcut are one line onto (`SettingsDialog.escapeOut`). **A picture cannot answer this one** — a
-    // window with no settings screen over it is drawn exactly like one where the screen never opened — so what is
-    // judged is the pair of states in the report.
-    //
-    // It proves the road is there and ends where it says it does. The key reaching the shortcut is beyond a
-    // harness with no keyboard (規約 §UI 自動化の因果性).
+    // PGG_AUTO_ACT=settings-escape: the way out, through the function the `✕` and the Escape shortcut both call
+    // (`SettingsDialog.escapeOut`). A closed screen frames like one that never opened, so the report's pair of states
+    // is judged. The key reaching the shortcut is beyond a harness with no keyboard.
     SampleTimer {
         id: escapeTimer
         running: Harness.autoAct === "settings-escape"
@@ -392,13 +333,11 @@ Item {
         onTriggered: {
             if (!escapeTimer.wasOpen) {
                 if (!settingsDialog.opened) {
-                    // The argument names the category, because the way out is a different road from each: the git
-                    // one has the two chapters a Save stands in front of, and its reads land after the screen is up.
+                    // The argument names the category: the git one's way out passes the chapters a Save guards.
                     settingsDialog.openAt(Harness.autoActArg === "" ? "app" : Harness.autoActArg)
                     return
                 }
-                // Unsaved is counted only after git has answered for the boxes — a run that pressed the
-                // way out mid-read would be photographing the read.
+                // Unsaved is counted only after git has answered for the boxes, or the run photographs the read.
                 if (settingsDialog.category === "git" && !acts.repoPane.autoRepoReady)
                     return
                 escapeTimer.wasOpen = true
@@ -408,10 +347,8 @@ Item {
             if (settingsDialog.opened)
                 return
             escapeTimer.stop()
-            // The two halves of `unsaved` are named apart: a way out that stopped says nothing about *which* of the
-            // two chapters thought it was holding an edit, and they are read out of different files. `save=` is the
-            // global chapter's Save, read off the button: boxes nobody typed in hold what git holds, and a Save lit
-            // over them would be offering to hand git its own answer.
+            // `global=` / `repo=` name which chapter thought it held an edit. `save=` is the global chapter's Save,
+            // off the button: lit over untouched boxes, it would offer git its own answer.
             Harness.report("settings_escape unsaved=" + settingsDialog.unsavedIdentities
                               + " global=" + acts.gitPane.unsavedIsGlobal
                               + " repo=" + acts.gitPane.unsavedIsRepo
@@ -422,13 +359,9 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-leave: the way out, taken while an identity chapter is holding an edit git has not been
-    // given. The run types into the box the way a keystroke does, then presses the same way out the `✕` and Escape
-    // press — and what has to be true afterwards is that the screen is **still there**, with the question standing
-    // in its foot.
-    //
-    // **Both halves are said.** A screen that stayed is drawn like one that was never asked to go, and a foot
-    // carrying the question is drawn like a foot carrying anything else until it is read.
+    // PGG_AUTO_ACT=settings-leave: the way out taken while an identity chapter holds an edit git has not been given;
+    // the screen must still be there, with the question in its foot. Both halves are said: a screen that stayed
+    // frames like one never asked to go.
     SampleTimer {
         id: leaveTimer
         running: Harness.autoAct === "settings-leave"
@@ -440,11 +373,8 @@ Item {
                     settingsDialog.openAt("git")
                     return
                 }
-                // The boxes have to be holding git's answer before one of them is changed, or the "edit" is only
-                // the read that had not landed yet — and boxes typed into stop following it, so the address
-                // would stay empty and the Save dark over a name git was never going to be given (observed:
-                // `save=false` with the address box showing its placeholder). Both reads, because the count
-                // below is over both chapters.
+                // Both chapters' reads land before a box is changed: a typed box stops following the read, so the
+                // address would stay empty and the Save dark.
                 if (AppBackend.identityState !== "ready" || !acts.repoPane.autoRepoReady)
                     return
                 if (settingsDialog.unsavedIdentities !== 0)
@@ -458,8 +388,7 @@ Item {
             if (!settingsDialog.askingLeave)
                 return
             leaveTimer.stop()
-            // `save=` is the other half of the edit: the typing that stops the way out is the typing that lights
-            // the Save, and the button is what the reader is being sent to.
+            // `save=`: the typing that stops the way out must also light the Save the reader is sent to.
             Harness.report("settings_leave unsaved=" + settingsDialog.unsavedIdentities
                               + " save=" + acts.gitPane.autoSaveOffered
                               + " asked=" + settingsDialog.askingLeave
@@ -468,22 +397,14 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-sweep: this screen's own words, taken from the air around them — the step between two
-    // lines, the room beside a short one, the air the column leaves to the right of itself
-    // (規約 §右のペインの字は掴める). The argument names the category, because the two carry different words and only
-    // one of them is on screen at a time.
-    //
-    // **Waited on the category's own answer, not on the screen opening.** The lines here are written out of what git
-    // said — the version the chosen binary printed, the identity a commit made there would carry — and a run that
-    // sampled the air before those landed would be sampling a column about to grow lines.
+    // PGG_AUTO_ACT=settings-sweep [app|git]: this screen's words, taken from the air around them
+    // (規約 §右のペインの字は掴める); one category per run, as only one is on screen. Waited on the category's own git
+    // reads, not the screen opening: sampled before them, the column is about to grow lines.
     SampleTimer {
         id: sweepTimer
         running: Harness.autoAct === "settings-sweep"
-        /// The category asked for, and the one the screen is opened on.
         readonly property string cat: Harness.autoActArg === "" ? "app" : Harness.autoActArg
-        /// That category is the one showing. **The setup's own side**: `SweepPad` steps over a hidden item, so a
-        /// sweep of the category that is not on screen would walk an empty column — and an empty column is not a
-        /// green run, it is a run with nothing in it.
+        /// That category is showing: `SweepPad` steps over a hidden item, so the other would walk an empty column.
         readonly property bool shown: sweepTimer.cat === "git" ? acts.gitPane.visible
                                                                : acts.appPane.autoAppShown
         onTriggered: {
@@ -493,23 +414,15 @@ Item {
             }
             if (!sweepTimer.shown)
                 return
-            // The git category's own two reads — the repository group's identity and its line endings, which is the
-            // one that grows a line when it lands; the application category's is the version probe, which stands as
-            // a sentence of its own until it answers.
+            // git: the repository group's identity and line endings (the latter grows a line); app: the version probe.
             if (sweepTimer.cat === "git"
                 ? (!acts.repoPane.autoRepoReady || !acts.repoPane.autoEndingsReady)
                 : AppBackend.gitPathState === "checking")
                 return
             sweepTimer.stop()
-            // `release=` is the other hand on this screen: the one that hands the keyboard back when a press lands
-            // where nothing takes it. **A picture cannot say it** — a field that kept its blue through every press
-            // after the drag is drawn exactly like one that was just swept — and neither can a run, which has no
-            // pointer to press with. What is said here is that the hand is standing; that a press reaches it is
-            // Qt's to answer, and `tests/qml/tst_fieldrelease.qml` asks with a real one.
-            // `version=` is the one word on this screen that is not a sentence and not a box: git's own spelling of
-            // the version the chosen binary answered with, worn as a chip. A chip that answers a press is drawn
-            // exactly like one that does not, so the field behind it is said here (`CodeChip.grabbed`). Only the
-            // application category has one.
+            // `release=`: the hand that gives the keyboard back when a press lands where nothing takes it is standing
+            // (no picture can say it; that a press reaches it is `tests/qml/tst_fieldrelease.qml`'s). `version=`: the
+            // app category's version chip has its grabbable field behind it (`CodeChip.grabbed`).
             Harness.report("settings_sweep "
                 + settingsDialog.autoChapterHand.sweepAir(7, "cat=" + sweepTimer.cat
                                                              + " shown=" + sweepTimer.shown
@@ -519,20 +432,18 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-tools-enter: **what Enter in the merge editor's box does on each side of its own list**
-    // (デザイン規約 §立っている質問は 1 か所で聞く の一覧が降りている間の Enter). Both halves are pressed in the one
-    // run, and the second is what ends it: under the list the key is the list's and the screen has to stand, with
-    // the list shut it is the answer and the screen goes. Either half alone passes for a build that never leaves
-    // and for one that always does.
+    // PGG_AUTO_ACT=settings-tools-enter: Enter in the merge editor's box on each side of its list
+    // (デザイン規約 §選ぶ欄と打つ欄「ただし一覧が降りている間の Enter は一覧のもの」): under the list the screen stands,
+    // with the list shut it goes. Both in one run — either alone passes a build that never or always leaves.
     SampleTimer {
         id: toolEnterTimer
         running: Harness.autoAct === "settings-tools-enter"
-        /// The screen is up, the stock-take is in, and the list is down. Latched, because what this run presses can
-        /// take the screen away and a precondition read every tick would put it straight back up.
+        /// The screen is up and the list is down. Latched: this run's presses can take the screen away, and a
+        /// precondition read every tick would put it back up.
         property bool arrived: false
         property bool pressedUnderList: false
-        /// Whether the screen was still standing after that press — read on the tick after it, since the way out
-        /// this press must not take closes the screen where it stands (`SettingsDialog.escapeOut`).
+        /// Whether the screen still stood after that press — read a tick later, as the wrong way out closes it where
+        /// it stands (`SettingsDialog.escapeOut`).
         property bool stood: false
         property bool pressedShut: false
         onTriggered: {
@@ -541,13 +452,9 @@ Item {
                     settingsDialog.openAt("git")
                     return
                 }
-                // **A card with a ring in it is a list standing in front of the box**, and standing is the whole of
-                // what decides whose key an Enter is — so this run takes the one the box has while the stock-take
-                // is still out, and owes that read nothing (`AppCombo.hasList`: a field with a read out has
-                // something to open). Waiting for the rows instead ties the run to
-                // `git mergetool --tool-help`, which is eight seconds on a quiet machine and was killed at its
-                // timeout on a loaded one — leaving a box with nothing to drop and a run with nothing to press
-                // (observed).
+                // A card with a loading ring is a list standing in front of the box, which alone decides whose Enter
+                // it is — so no rows are needed (`AppCombo.hasList`). Waiting for them would tie the run to
+                // `git mergetool --tool-help`, which can hit its timeout on a loaded machine.
                 if (acts.gitPane.toolsSettled && acts.gitPane.toolChoices.length === 0)
                     return
                 // Asked again while it is shut, for the turn of the loop the field puts between the press and the
@@ -578,14 +485,12 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=avatar-enter: **Enter in the candidate box finds the file**, which is the one thing left to do
-    // with the name it holds (デザイン規約 §アバターを与える). The picker is the platform's window and is in
-    // neither PNG, so the report line is the whole of it — the same reading `open-picker` takes.
+    // PGG_AUTO_ACT=avatar-enter: Enter in the candidate box opens the file picker (デザイン規約 §アバターを与える).
+    // The picker is the platform's window and in neither PNG, so the report line is the whole verdict.
     SampleTimer {
         id: avatarEnterTimer
         running: Harness.autoAct === "avatar-enter"
-        /// A name has been put in the box. The candidates come with the page, so the run waits for one rather than
-        /// spelling a name this repository may not carry.
+        /// A candidate's name has been put in the box (a spelled one may not be in this repository).
         property bool typed: false
         onTriggered: {
             if (!settingsDialog.opened)
@@ -608,35 +513,32 @@ Item {
         }
     }
 
-    // The same card's avatar half, whose four shots the page opens and this finishes. Each waits on what its own verb
-    // produced: the row the store answered the filing with and the picture inside it, that row's `lit`, the candidate
-    // list's `opened`, and — for the removal — the row leaving the store on the far side of a hold that runs at its own
-    // length (`Metrics.holdMs`). Each wait is on a state.
+    // The avatar card's four verbs: the page opens them, this finishes each on its own output — the filed row and its
+    // picture, that row's `lit`, the candidate list's `opened`, and the row gone after the hold.
     SampleTimer {
         id: avatarCardTimer
         running: Harness.autoAct === "avatar-settings" || Harness.autoAct === "avatar-row-lit"
                  || Harness.autoAct === "avatar-combo" || Harness.autoAct === "avatar-remove"
-        /// Raised once this verb's own move has been made, so nothing after it re-reads what had to be true before it.
-        /// The removal's answer is a row going away, and a gate still wanting that row would never let go of it (the
-        /// wait `middle-close` describes).
+        /// This verb's move has been made; its preconditions are not read again — the removal's answer is the row
+        /// going away (the wait `middle-close` describes).
         property bool acted: false
-        /// How many rows the hold was made against, read in the branch that presses and nowhere else.
+        /// Rows before the hold, read only in the branch that presses.
         property int rowsBefore: -1
         onTriggered: {
             const act = Harness.autoAct
             if (!avatarCardTimer.acted) {
                 if (!settingsDialog.opened)
                     return
-                // A run that filed a picture on its way in has to have it in the list before any of this means
-                // anything; one that filed nothing — the round-trip read — has whatever the store gave it.
+                // A run that filed a picture on its way in waits for its row; one that filed nothing (the round-trip
+                // read) takes what the store has.
                 if (Harness.autoActArg !== "" && !acts.appPane.autoAvatarRowPainted(0))
                     return
                 if (act === "avatar-row-lit") {
                     if (!acts.appPane.autoAvatarRowLit(0))
                         return
                 } else if (act === "avatar-combo") {
-                    // Asked again while it is still shut: the field defers the list by a turn of the loop, and a list
-                    // taken back down under an unwinding grab has to be asked for a second time (`AppCombo.pressField`).
+                    // Asked again while shut: the field defers the list by a turn of the loop, and a list taken back
+                    // down under an unwinding grab needs a second ask (`AppCombo.pressField`).
                     if (!acts.appPane.autoAvatarComboOpen) {
                         acts.appPane.autoAvatarOfferCombo()
                         return
@@ -648,16 +550,12 @@ Item {
                 }
                 avatarCardTimer.acted = true
             }
-            // The hold is the one move whose answer arrives after it: the store has to have let the row go.
+            // The removal's answer arrives after the hold: the store letting the row go.
             if (act === "avatar-remove" && acts.appPane.autoAvatarRows >= avatarCardTimer.rowsBefore)
                 return
             avatarCardTimer.stop()
-            // Last, so the picture holds the chapter these verbs are about. `AVATARS` is the foot of this category
-            // and the window does not reach it from where the screen opens, so a run that photographed the resting
-            // position photographed the chapters above the list — the same thing `settings-eol` scrolls for.
-            //
-            // **Not for the candidate list.** Its popup is placed where the field stood when it opened, and sending
-            // the chapters out from under it would leave the list hanging off its own box.
+            // Last, so the picture holds `AVATARS`, the category's foot, out of the resting view's reach. Not for the
+            // candidate list: its popup stays where the field stood, and scrolling would leave it off its box.
             if (act !== "avatar-combo")
                 settingsDialog.autoShowChapterFoot()
             Harness.report("avatar_card rows=" + acts.appPane.autoAvatarRows
@@ -669,22 +567,19 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-hand <chapters|tools>: the middle button's hand on the two surfaces this screen scrolls —
-    // the chapters, and the merge editor's card — pressed at its own `press` and left drifting for the shot. The page's
-    // `middle-hand` is the same claim on the page's surfaces and says why each is pressed where it stands; what is
-    // waited for is the surface having gone. **`tools` wants `--preset mergetools`**: the card holds eight rows, and
-    // the stock-take a machine makes of its own merge editors names fewer than that on most of them.
+    // PGG_AUTO_ACT=settings-hand <chapters|tools>: the middle button's hand on the chapters or the merge editor's card,
+    // pressed and left drifting for the shot (the page's `middle-hand` on this screen); waited for is the surface
+    // having gone. `tools` wants `--preset mergetools`: most machines name fewer editors than the card's eight rows.
     SampleTimer {
         id: handTimer
         running: Harness.autoAct === "settings-hand"
-        /// What the surface was last seen waiting for, named once each time it changes, and then the press — a run
-        /// that stops at the ceiling says where (規約 §UI 自動化: 段を持つドライバは段が変わるたびに名乗る).
+        /// What the surface was last seen waiting for, named each time it changes.
         property string waitingFor: ""
         property bool pressed: false
         property real fromAt: 0
         property bool took: false
-        /// The frame the hand stood in on the last tick — pressed once it has stood still for one, so the ring is
-        /// anchored in the card that is there and not in the one still opening (`middle-hand` waits the same).
+        /// The hand's frame on the last tick: pressed once it has stood still for one, so the ring anchors in the
+        /// card that is there, not one still opening.
         property string seatSize: ""
         readonly property bool tools: Harness.autoActArg === "tools"
         function hand() {
@@ -693,11 +588,11 @@ Item {
         function at() {
             return handTimer.tools ? acts.gitPane.toolListAt : settingsDialog.chaptersAt
         }
-        /// What the surface is still waiting for, or "" once it stands with more in it than room. The card's list is
-        /// the hand's own parent — the hand is laid on the list's frame (`AppCombo`).
+        /// What the surface still waits for, or "" once it holds more than room. The card's list is the hand's
+        /// parent (`AppCombo`).
         function waitingOn() {
-            // The door the menu entry uses, re-asked until the screen stands; told on the way in to bring the card
-            // down with it where the card is the surface (`settings-tools` opens it the same way).
+            // Re-asked until the screen stands; told to bring the card down where it is the surface (as
+            // `settings-tools`).
             if (!settingsDialog.opened) {
                 settingsDialog.pressToolOnOpen = handTimer.tools
                 settingsDialog.openAt("git")
@@ -727,9 +622,8 @@ Item {
                     return
                 }
                 handTimer.fromAt = handTimer.at()
-                // Down the middle of the frame to the first point nothing under the hand claims — a box on the
-                // chapters keeps the middle press where the platform pastes with it (`MiddleAutoScroll.claimedAt`),
-                // and that claim is the page's `middle-hand` runs' to read.
+                // The first point down the middle nothing claims: a box on the chapters keeps the middle press where
+                // the platform pastes with it (`MiddleAutoScroll.claimedAt`).
                 let x = hand.width / 2
                 let y = hand.height / 2
                 for (const fy of [0.5, 0.25, 0.75, 0.1, 0.9]) {

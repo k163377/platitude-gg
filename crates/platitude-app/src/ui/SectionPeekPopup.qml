@@ -5,10 +5,8 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The folded sidebar's one open section, and the bookkeeping that says
-// when it is open. Which one it is, and whether it still has the
-// pointer, are held here: the cell is left behind
-// the moment the pointer walks into what it opened.
+// The folded sidebar's one open section and when it is open. Which one, and whether it still has the pointer, are
+// held here, not in the rail cell: the pointer leaves the cell the moment it walks into the section.
 AppCard {
     id: peek
 
@@ -18,14 +16,12 @@ AppCard {
     required property var rail
     /// Who the rows report their gestures to (`NavList.gestures`).
     required property var gestures
-    /// The pane this comes out of — the panel opens flush against its
-    /// edge and stops inside it — and the width the list goes back to.
+    /// The pane this opens flush against and stays inside, and the list's width.
     required property real paneW
     required property real paneH
     required property real listW
-    /// What holds it open with the pointer elsewhere: a menu raised from
-    /// one of its rows is standing over it, and taking the row away from
-    /// under an open menu reads as the row having gone.
+    /// Holds it open with the pointer elsewhere: a menu raised from one of its rows stands over it, and taking the
+    /// row from under an open menu reads as the row having gone.
     required property bool pinned
     /// The `+` on the band above these rows is held (`SidebarPane.doorsHeld`) — the same band, so the same answer.
     property bool addHeld: false
@@ -35,8 +31,8 @@ AppCard {
     property real top: 0
     /// The pointer is still on that cell.
     property bool wanted: false
-    /// The place this section last saw the hand in, in its own coordinates — what tells a hand that moved from a
-    /// layout that moved under it (`SidebarPane`, and the handler below).
+    /// Where this section last saw the hand, in its own coordinates — tells a hand that moved from a layout that
+    /// moved under it (`SidebarPane`, and the handler below).
     property point handAt: Qt.point(-1, -1)
 
     signal refActivated(string oidHex)
@@ -46,8 +42,7 @@ AppCard {
     signal addRemoteRequested()
 
     readonly property var sectionModel: peek.kind === "" ? null : peek.rail.modelOf(peek.kind)
-    // The section headers' own words, said again for the one section the
-    // folded list shows: the rail has only an icon to name it with.
+    // The section headers' words: the rail names a section only by icon.
     readonly property string caption:
         peek.kind === "branch" ? qsTr("BRANCHES")
         : peek.kind === "remote" ? qsTr("REMOTES")
@@ -61,23 +56,18 @@ AppCard {
         peek.wanted = true
         peek.open()
     }
-    /// A click landed on the cell the pointer is resting on. The section
-    /// standing beside the rail goes away, and a second click brings it
-    /// back — the hover cannot, because the pointer has not moved and so
-    /// nothing about it has changed.
+    /// A click on the cell under the pointer toggles the section — the hover cannot bring it back, as the pointer
+    /// has not moved.
     function toggleAt(kind, top) {
-        // Asked of `kind`: on the way out the popup is
-        // still visible, and a click that arrived then would close what it
-        // was meant to open.
+        // By `kind`, not `visible`: the popup is still visible on the way out, and a click then would close what it
+        // meant to open.
         if (peek.kind === kind)
             peek.shut()
         else
             peek.openAt(kind, top)
     }
-    /// The pointer left a cell. Only the cell whose section is open can
-    /// take it away — the one being left on the way to another has
-    /// already been replaced by the time this runs, in whichever order
-    /// the two arrive.
+    /// The pointer left a cell. Only the open section's cell can take it away — a cell left for another has already
+    /// been replaced, whichever order the two arrive in.
     function leaveAt(kind) {
         if (peek.kind === kind)
             peek.wanted = false
@@ -91,33 +81,20 @@ AppCard {
     function shut() {
         peek.close()
     }
-    // What the section leaves behind, whichever way it went: the beat
-    // running out, a click on the cell that opened it, Escape from
-    // inside it.
-    //
-    // `aboutToHide`: `kind` has to be clear before
-    // the next click can arrive, and the popup is still visible for as
-    // long as it takes to go — `toggleAt` reads `kind` for exactly that
-    // reason.
+    // Cleanup for every way out (the beat, a click on the cell, Escape). In `aboutToHide`: `kind` must be clear
+    // before the next click, while the popup is still visible (`toggleAt`).
     onAboutToHide: {
-        // The mark on the row a click last landed on goes with the rows
-        // it was on: the rename gesture's second click has to be aimed
-        // at a mark that stayed on screen (デザイン規約 §左メニューの所作),
-        // and this list comes and goes with the pointer. Kept, it makes
-        // the first click of a later peek a second one, which puts the
-        // whole list back over the diff the fold was made for. `gestures`
-        // is asked for because closing a tab takes the page's pieces down
-        // before this popup.
+        // The last-click mark goes with these rows: kept, a later peek's first click would count as the rename
+        // gesture's second (デザイン規約 §左メニューの所作). `gestures` is checked because closing a tab takes it
+        // down before this popup.
         if (peek.kind !== "" && peek.gestures)
             peek.gestures.forgetClicks()
         peek.kind = ""
         peek.wanted = false
-        // The list it was in has gone, so the pointer is not in it
-        // whatever the last hover said.
+        // The list has gone, whatever the last hover said.
         peek.contentPointed = false
     }
-    /// Smoke hooks (PGG_AUTO_ACT=nav-reclick): the three the open list
-    /// answers, for the section standing beside the folded rail.
+    /// Smoke hooks (PGG_AUTO_ACT=nav-reclick): the open list's, for the section beside the folded rail.
     function clickRow(index) {
         return peekList.clickRow(index)
     }
@@ -133,16 +110,14 @@ AppCard {
     function rowInView(index) {
         return peekList.rowInView(index)
     }
-    /// Rest the pointer on one of these rows (PGG_AUTO_ACT=nav-peek-open). The same `pointedTipRow` the sections'
-    /// own lists carry, written on the list standing beside the rail.
+    /// Rest the pointer on one of these rows (PGG_AUTO_ACT=nav-peek-open), through the list's `pointedTipRow`.
     function pointTipAt(index) {
         peekList.pointedTipRow = index
     }
     function rowNameAt(index) {
         return peekList.rowNameAt(index)
     }
-    /// What the open row in here is saying, and the row itself — the same two the sections answer with, for the runs
-    /// that read a row opened beside the folded rail.
+    /// The open row's words and the row itself, as the sections answer them.
     function openWords() {
         return peekList.openWords()
     }
@@ -157,12 +132,6 @@ AppCard {
     }
     /// Automation only: the list itself, for a run that sends it by its own hand and reads where it went.
     readonly property alias list: peekList
-    // The section opens flush against the rail, so walking into it takes
-    // the pointer off the cell, and walking back out puts it on again —
-    // the beat between the two is the same one every hover card in the
-    // app waits (`HoverCardHost`, デザイン規約 §hover のツールチップ). What
-    // holds it up is the cell, the menu standing over it, or the pointer
-    // being down in the section itself (`pointerInside`).
     HoverCardHost {
         id: peekKeeper
         card: peek
@@ -170,46 +139,27 @@ AppCard {
         grace: peek.pinned
     }
 
-    // Flush against the rail, with nothing in between for the pointer
-    // to fall through, and starting level with the cell that opened
-    // it. It only ever grows downwards from there: a section with more
-    // rows than the pane can hold would otherwise be laid out from the
-    // top edge of the pane, nowhere near the cell it came out of
-    // (a repository with 45,000 tags puts every peek up there —
-    // observed). The rows that do not fit scroll.
+    // Flush against the rail, level with the cell that opened it, and only growing downwards — a section taller than
+    // the pane would otherwise be laid out from the pane's top, away from its cell. Rows that do not fit scroll.
     x: peek.paneW
     y: peek.top
     width: peek.listW
-    // As tall as it has rows, at most to the foot of the pane it
-    // comes out of. It always has rows — a cell
-    // holding a zero does not open (NavRail). The band is a
-    // `NavHeader`, which is `rowHeight` wherever it stands, and the two
-    // lines are the frame's.
+    // Header band (`NavHeader`, `rowHeight`) + rows + the frame's two lines, at most to the pane's foot. Never
+    // empty: a cell holding a zero does not open (NavRail).
     height: Math.min(Theme.rowHeight + peekList.count * Theme.rowHeight + 2 * Theme.borderWidth,
                      Math.max(0, peek.paneH - peek.top))
-    // The frame's own two lines, kept out from under the content: a
-    // `Popup` lays its content over the whole face, and the band at the
-    // head of this one is opaque, so at zero it painted the frame out —
-    // the top edge entirely, and `rowHeight` of each side with it
-    // (observed: the panel met the graph above it with no line at all).
+    // Keeps the frame out from under the content: `Popup` lays content over the whole face, and at zero the opaque
+    // header band paints the frame out.
     padding: Theme.borderWidth
     margins: 0
-    // That padding is one line wide and the hand walking in off the
-    // rail crosses it, where the content's own handler cannot see it.
-    // Nothing is allowed to lie between the cell and this list
-    // (デザイン規約 §左メニューを畳む), so the face reports it too — a
-    // hand come to rest on that line would otherwise take the section
-    // down under itself.
+    // The hand walking in off the rail crosses that padding, which the content's handler cannot see; a hand resting
+    // on it would otherwise close the section (デザイン規約 §左メニューを畳む).
     tracksPointer: true
-    // Leaving it is what closes it (above). Escape is for the reader
-    // whose pointer is already inside it.
+    // Leaving closes it (above); Escape is for a pointer already inside.
     closePolicy: Popup.CloseOnEscape
 
-    // It keeps the list's own ground: what is in
-    // it is the sidebar, and the header band would be lost against
-    // `bgElevated`. The frame is what floats it (規約 §メニュー), and
-    // a panel that starts flush against the rail keeps square
-    // corners.
+    // The sidebar's own ground (the header band would be lost on `bgElevated`); the frame floats it (規約 §メニュー),
+    // and square corners since it starts flush against the rail.
     faceColor: Theme.bgSurface
     faceRadius: 0
 
@@ -217,27 +167,17 @@ AppCard {
         spacing: 0
         HoverHandler {
             id: peekHover
-            // The other half of leaving. The cells can only see the
-            // way back over themselves; walking out of the list the
-            // other way — right into the diff or the graph, or off
-            // its top or bottom edge — is an exit no cell is told
-            // about, and without this it raises no event at all.
-            //
-            // The card's own `contentPointed`, written:
-            // the smoke hooks write the same one, so a headless
-            // run and a real pointer come to a single answer (the same
-            // shape as the diff's hunk hover — 規約 §diff の中のステージ).
+            // The other half of leaving: an exit to the right or off the top or bottom edge passes no cell. Writes the
+            // card's `contentPointed`, as the smoke hooks do, so headless and a real pointer agree.
             onHoveredChanged: {
                 peek.contentPointed = peekHover.hovered
-                // The hand itself, heard for the rows standing in here: they read their own hover again on every
-                // move of it and never in between (`NavItemDelegate.syncHover`). **This section is its own item
-                // tree** — a popup stands outside the panel, so the panel's watch never sees the pointer in here.
+                // Heard for the rows in here, which re-read their hover only on a move of the hand
+                // (`NavItemDelegate.syncHover`): a popup stands outside the panel, whose watch never sees in here.
                 peek.handAt = Qt.point(-1, -1)
                 if (peek.gestures !== null)
                     peek.gestures.handStirred()
             }
-            // **The place, not the telling** — the same weighing the panel makes, and for the same reason: a row
-            // growing in here is handed to this handler as a fresh point (`SidebarPane`).
+            // By position, not notification, as `SidebarPane` weighs it: a row growing in here reports a fresh point.
             onPointChanged: {
                 if (peekHover.point.position.x === peek.handAt.x
                         && peekHover.point.position.y === peek.handAt.y)
@@ -247,12 +187,8 @@ AppCard {
                     peek.gestures.handStirred()
             }
         }
-        // The open list's own band, carrying what that section carries
-        // wherever it stands — the tags eye, the `+` that writes a remote
-        // down. The one thing it drops is the fold arrow: this list is
-        // the only thing on screen, so there is nothing to fold away to,
-        // and a mark that answers nothing is worse than no mark
-        // (デザイン規約 §長押し).
+        // The section's own band (the tags eye, the remote `+`) without the fold arrow: there is nothing to fold away
+        // to here (デザイン規約 §左メニューの所作).
         NavHeader {
             caption: peek.caption
             iconKind: peek.rail.sectionOf(peek.kind).icon
@@ -272,14 +208,13 @@ AppCard {
             expanded: true
             kindHint: peek.kind
             gestures: peek.gestures
-            // The rows in here open under themselves the way the sections' own do, and the working copies are read
-            // off the section that holds them whichever list the row is standing in. **BRANCHES, REMOTES, WORKTREES
-            // and TAGS**: those rows open, and the one section left (STASHES) still answers with the tooltip.
+            // Rows open under themselves as in the sections — all but STASHES, which keeps the tooltip. Working copies
+            // are read off their own section whichever list the row is in.
             offersFacts: peek.kind === "branch" || peek.kind === "remote" || peek.kind === "worktree"
                          || peek.kind === "tag"
             worktreesModel: peek.rail !== null ? peek.rail.modelOf("worktree") : null
-            // The branches' own, for REMOTES: where the branch reading a remote-tracking row stands is that section's
-            // answer, and a press on its name goes there — the same one the sections hand theirs (`NavSections`).
+            // For REMOTES: where the branch reading a remote-tracking row stands, as the sections hand it
+            // (`NavSections`).
             branchesModel: peek.rail !== null && peek.kind === "remote" ? peek.rail.modelOf("branch") : null
             pushRemote: peek.repoTab.defaultRemote
             stretch: true

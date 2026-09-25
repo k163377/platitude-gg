@@ -9,22 +9,17 @@ import platitude.ui
 /// its tab strip, the state file it comes back to — and for the picker, which is the platform's own window and can
 /// only be entered where its answer lands.
 ///
-/// `Main` builds this only when a verb was given, so an ordinary run carries none of it. What the verbs act on is
-/// handed in below: a file of its own cannot see the window's ids, and naming them in one list is what says how far the
-/// harness reaches into the window.
+/// Built by `WindowHarness` only when a verb was given. What the verbs act on is handed in below: a file of its own
+/// cannot see the window's ids, and the one list says how far the harness reaches into the window.
 ///
-/// The verbs themselves are grouped by the part of the window they answer for and live in the five items at the foot of
-/// this file. Each of those gates itself on `Harness.autoAct`, so the grouping is only ever about where a verb is
-/// read: nothing here hands one its turn. The two that stay are the two that cannot — they read the change signals
-/// latched just below, which have to be connected before the verb they belong to starts.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+/// The verbs live in the items at the foot, grouped by the part of the window they answer for; each gates itself on
+/// `Harness.autoAct` (rules-refs/structure.md「窓側の自動化は動詞が自分で `running:` に立つ」). The two that stay
+/// here read the change signals latched just below, which have to be connected before their verb starts.
+// An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: driver
 
-    /// The window these verbs act on, and the parts of it they read back or leave standing for the shot. An
-    /// automation-only exposure, the same one `GraphPane.view` is (app-ui.md). `var` because `Main` is the file
-    /// the engine loads.
+    /// `var` because `Main` is the file the engine loads.
     property var window
 
     property TabsModel tabsModel
@@ -40,8 +35,7 @@ Item {
     property var folderDialog
     property var settingsDialog
     property QuitWaitDialog quitWaitDialog
-    // Negative/error states can be shorter than a polling cadence when a later background command also finishes.
-    // Observe their change signals synchronously, then carry that proof into the recovery report.
+    // Latched off the change signals: a failure can clear within one poll when a later command finishes.
     property bool commandsWrongSeen: false
     property bool errorLineSeen: false
     Connections {
@@ -59,22 +53,15 @@ Item {
         }
     }
 
-    /// Kicked off by the window once its tabs are open: a verb that ran before them would answer for a window holding
-    /// nothing. The verbs missing from this list start themselves — theirs is a `running:` that is true from the moment
-    /// this is built.
+    /// Called once the tabs are open, which is also when this is built (`WindowHarness.begun`) — so every verb here
+    /// starts itself off its own `running:`, and this has nothing to do.
     function begin() {
-        // All timers below are state polls. Each one stops only after the
-        // property/event it reports is observable. The parent watchdog is the sole
-        // hang ceiling.
     }
 
-    // PGG_AUTO_ACT=commands-clear. The band is where the answer is — the rows and the line both feed one mark, and
-    // clearing only the rows left it red over an empty panel, which is why this verb lives up here. The
-    // same mark is read on both sides of the press: `was=` is the half the picture cannot hold.
-    //
-    // The panel the press takes down with them is the other half. Which is why the standing-panel half of the
-    // preconditions is read in the branch that presses and nowhere else (規約 §UI 自動化の因果性): every tick, it would be
-    // this verb's own answer — the panel gone — barring the way to the report.
+    // PGG_AUTO_ACT=commands-clear. Answered at the band: the rows and the line both feed one mark, read on both sides
+    // of the press (`was=` is the half the picture cannot hold). The standing panel is a precondition read only in
+    // the branch that presses (rules-refs/app-ui.md「動詞の前提条件は入力を出す枝で読む」): the press takes it down, so a
+    // check every tick would bar the report.
     SampleTimer {
         id: commandsClearActTimer
         running: Harness.autoAct === "commands-clear"
@@ -105,23 +92,15 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=fetch-recover: recovery is what retires fetch news. This waits for the refusal to reach the band
-    // and raise the panel, reads the mark, fires the fetch that can land, and reads both again — the picture can
-    // only hold the quiet half.
+    // PGG_AUTO_ACT=fetch-recover: recovery is what retires fetch news. Waits for the refusal to raise the panel, reads
+    // the mark, fires a fetch that can land, and reads both again — the picture only holds the quiet half.
     //
-    // **`-held` is the same run over a panel the reader put up first** (the page opened it before the failing fetch),
-    // and the two are one timer because what they do is one thing: the answer they part on is the last `open=`, which
-    // is the panel going down for one and staying up for the other. The close happens inside the drain that zeroes
-    // the count, so a tick that sees the count zeroed is reading a decision already made — no wait of its own.
+    // `-held` is the same run over a panel the reader put up first; the two part only on the last `open=` (down for
+    // one, up for the other). The close happens inside the drain that zeroes the count, so it needs no wait of its own.
     //
-    // The standing panel is a precondition of the branch that fetches and is read nowhere else (規約 §UI 自動化の因果性):
-    // for `fetch-recover` it would otherwise be this verb's own answer — the panel gone — barring the way to the
-    // report.
-    //
-    // **Both halves of the failure are waited for before the recovery goes.** The mark on the band and the line under
-    // it come down separate paths in no fixed order — the command's own row and the write's answer — and the report
-    // claims both (`was=` / `hadline=`). Over a panel that is already standing (`-held`) nothing else holds the branch
-    // back, so going on the first of them reads the other as `false` on a run that is right.
+    // The standing panel is read only in the branch that fetches, as in `commands-clear`. Both halves of the failure
+    // — the mark and the line, which arrive in no fixed order — are latched before the fetch goes, since the report
+    // claims both (rules-refs/app-ui.md「報告行が主張する到着は、前提条件でも全部待つ」).
     SampleTimer {
         id: fetchRecoverActTimer
         running: Harness.autoAct === "fetch-recover" || Harness.autoAct === "fetch-recover-held"
@@ -140,8 +119,7 @@ Item {
                 fetchRecoverActTimer.wasOpen = window.curPage.commandsShown
                 fetchRecoverActTimer.fetchRequested = true
                 window.curPage.pageTab.fetch("")
-                // The one step between the two readings, said as it is taken: a run that ends at the ceiling after
-                // this line stopped waiting for the recovery to take the news down.
+                // A run that ends at the ceiling after this line was waiting for the recovery to take the news down.
                 Harness.report("fetch_recover step=fetched")
                 return
             }
@@ -179,8 +157,7 @@ Item {
         topBar: driver.topBar
         tabProbe: tabProbe
     }
-    /// What the strip's own items came out as, read here: reading tabs back is the harness's business, and the
-    /// strip's part in it is the one name it hands over (`TabStrip.tabsView`).
+    /// Reads the strip's items through the one name the strip hands over (`TabStrip.tabsView`).
     TabProbe {
         id: tabProbe
         view: driver.topBar.tabsView

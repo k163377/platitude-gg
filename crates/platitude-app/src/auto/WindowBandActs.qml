@@ -7,11 +7,7 @@ import platitude.ui
 
 /// The band's half of the window's PGG_AUTO_ACT harness: the row itself, the ☰ menu, and the three actions giving
 /// their words up as the window narrows. The state badges are the other half (`WindowBadgeActs`).
-///
-/// Built by `WindowAutoActDriver`, which is what `Main` builds when a verb was given; what these verbs act
-/// on is handed down below, one property per part of the window they reach into.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+// An `Item` only because `QtObject` has no default property to hold the timers; it is sizeless.
 Item {
     id: acts
 
@@ -21,10 +17,8 @@ Item {
     required property Item mainUi
     required property IdentityDialog identityDialog
 
-    // Capture the communication ring from a real busy edge: the tab has to have entered the operation, so a fast
-    // child cannot clear it before the image callback runs. Latched here — the edge is often
-    // shorter than a sampler's beat, and a run that missed it would wait out its watchdog on a band that had already
-    // been through what it was there to photograph.
+    // The ring is latched on the real busy edge, which is often shorter than a sampler's beat; the hold keeps a fast
+    // child from clearing it before the image callback runs.
     Connections {
         target: acts.topBar.curPage ? acts.topBar.curPage.pageTab : null
         function onBusyOpChanged() {
@@ -37,16 +31,13 @@ Item {
                 acts.topBar.holdFetchBusy = true
         }
     }
-    /// The standing the push went out from, taken on the same edge. Read later it is the answer the push brought
-    /// back: a push that lands within a beat has the branch level with its remote before the sampler reports
-    /// (measured in the container: `mode=clean`).
+    /// The push mode on the busy edge. Read at report time it is already the push's answer: a fast push has levelled
+    /// the branch with its remote.
     property string pushModeAtBusy: ""
 
-    // The hold is pressed the way a hand presses it, and a press the button blanked is made again. **A hold can be
-    // lost under the hand**: the fetch the tab runs as it opens takes git, the button goes deaf, and the fill blanks
-    // with nothing sent (`ActionButton.onLiveChanged`), and a run that pressed only once would wait out its ceiling on
-    // an edge that cannot come. A press that ran out keeps its gesture standing until the push it sent raises the
-    // edge above, so nothing is pressed twice.
+    // Pressed again when the button blanked the hold: the tab's opening fetch takes git, the button goes deaf and the
+    // fill blanks with nothing sent (`ActionButton.onLiveChanged`). A completed press stands until its edge above, so
+    // nothing is pressed twice.
     SampleTimer {
         running: Harness.autoAct === "force-push-hold"
         onTriggered: {
@@ -69,8 +60,7 @@ Item {
         }
     }
 
-    // The same edge on the button the wait is drawn for: bare, unframed, and the one a timer can start on its own. The
-    // fetch itself is fired by the page's driver; all this waits for is the edge above.
+    // PGG_AUTO_ACT=fetch-busy: the same latch on fetch. The page's driver fires the fetch; this waits for the edge.
     SampleTimer {
         running: Harness.autoAct === "fetch-busy"
         onTriggered: {
@@ -83,18 +73,13 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=fetch-tip: what the fetch button offers a pointer, on each side of the one thing that decides it.
-    // The argument names which side this run is — `off` is the repository with no remote (`--preset noremote`), where
-    // the button is dim and says nothing, and `on` is any repository that has one. Neither run proves anything alone.
-    //
-    // The two wait for different things because "not pressable" has two reasons and only one of them is the subject:
-    // the live side waits for the button itself, the dim side for a repository that has finished landing with nothing
-    // running on it, so a band read before the remotes arrived cannot pass for either.
+    // PGG_AUTO_ACT=fetch-tip on|off: the fetch button's tip with and without a remote (`off` = `--preset noremote`).
+    // The dim side waits for a landed, idle repository rather than the button, so a band read before the remotes
+    // arrived cannot pass for either.
     SampleTimer {
         running: Harness.autoAct === "fetch-tip"
         onTriggered: {
-            // The graph as well as the refs, for the picture: the band settles first, and a
-            // half-drawn page under a settled band is a worse photograph of it.
+            // The graph too: the band settles first, and the picture is not to have a half-drawn page under it.
             if (window.curPage === null
                     || !window.curPage.pageRefsLoaded
                     || window.curPage.pageGraph.rowTotal < 1)
@@ -117,18 +102,12 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=stash-state: which of the working tree's four answers the Stash button settled on. The argument names
-    // the one this repository is meant to give (`ready` / `clean` / `conflicts` / `unborn`), and the run waits for the
-    // band to say it — the reading is built out of a HEAD and four counts that land over several drains, so a band read
-    // too early would answer `unborn` for every repository on its way open.
-    //
-    // Four runs, because a dim button frames the same whichever refusal put it there: only the set says that the
-    // conditions are told apart at all (デザイン規約 §変更を退避する).
+    // PGG_AUTO_ACT=stash-state ready|clean|conflicts|unborn: waits for the Stash button to say the argument — its
+    // reading lands over several drains, and read early it is `unborn` everywhere (デザイン規約 §変更を退避する).
     SampleTimer {
         running: Harness.autoAct === "stash-state"
         onTriggered: {
-            // The graph as well, for the picture — the same reason `fetch-tip` waits on it.
-            // `empty` has no rows at all, so that repository is judged settled on its working tree alone.
+            // Not the graph, unlike `fetch-tip`: `empty` has no rows, so it is judged on its working tree alone.
             if (window.curPage === null || !window.curPage.pageWt.loaded)
                 return
             const tab = window.curPage.pageTab
@@ -144,14 +123,13 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=band: numbers say it — the headless platform draws no window buttons of its own, so
-    // a band that lost the grab run or pushed its buttons off the end looks fine in the picture.
+    // PGG_AUTO_ACT=band: numbers, because the headless platform draws no window buttons — a band that lost its grab
+    // run or pushed its buttons off the end looks fine in the picture.
     SampleTimer {
         id: bandActTimer
         running: Harness.autoAct === "band"
         onTriggered: {
-            // No tabs is a valid laid-out band. Read readiness from the window and bar
-            // themselves, then let `tabsW=0` describe the empty output.
+            // No tabs is a valid band: readiness is the window and the bar, and `tabsW=0` says the rest.
             if (!window.visible || mainUi.width <= 0 || topBar.width <= 0)
                 return
             stop()
@@ -163,22 +141,15 @@ Item {
                 + " width=" + topBar.width
                 + " tabsW=" + topBar.bandTabsWidth
                 + " rightMargin=" + topBar.bandRightMargin
-                // The panel's three names and the upstream in brackets after the branch. A photograph cannot be read
-                // for either: a name cut at both ends looks like a short name, and an empty bracket looks like no
-                // bracket.
+                // A picture cannot tell a name cut at both ends from a short one, or an empty bracket from none.
                 + " names=" + topBar.opsNames + " upstream=" + topBar.branchUpstream)
             window.finishAutoAct()
         }
     }
 
-    // PGG_AUTO_ACT=ops-panel: the panel standing, once the repository it names has landed — the verb the state
-    // matrix is photographed with, run once per repository shape and once per width. An argument that parses as a
-    // number is a width to stand the window at; the window's own floor may refuse it, which is why the width the
-    // run came out at rides back in the line.
-    //
-    // **Everything a picture cannot be read for comes back in the line**: a name cut at both ends looks like a short
-    // name, a button that gave its word up looks like a narrow band, and a badge that never stood looks like a
-    // window with nothing the matter.
+    // PGG_AUTO_ACT=ops-panel [<width>]: the panel once its repository has landed (the state matrix's verb). The floor
+    // may refuse the width, so the width the run came out at rides back in the line, with everything else a picture
+    // cannot be read for.
     SampleTimer {
         id: opsPanelTimer
         running: Harness.autoAct === "ops-panel"
@@ -187,8 +158,6 @@ Item {
         onTriggered: {
             if (!acts.opsPanelLoaded())
                 return
-            // Asked for again until it takes or is refused: the width is the window's to allow, and the panel is
-            // laid out again after it moves.
             const wanted = parseInt(Harness.autoActArg)
             if (!isNaN(wanted) && wanted > 0 && Math.round(window.width) !== wanted
                     && wanted >= Math.ceil(window.floorWidth)) {
@@ -197,12 +166,9 @@ Item {
             }
             if (topBar.width !== mainUi.width || opsPanelTimer.drawing)
                 return
-            // **Read off a drawn frame, not off the tick that saw the readings land**: where the counts stand is
-            // where the row's layout put them, and a layout places its items on the way to a frame — read on the
-            // tick, the counts' seat was the one before the last reading arrived (`track=off` on a loaded machine).
-            // The grab's callback is that boundary (rules/app-ui.md §UI 自動化). **And the frame has to be of what is
-            // read**: the callback is posted, so a reading that lands after the frame was drawn and before it runs
-            // is said beside the frame before it — such a frame is let go and the next one asked for.
+            // Read off a drawn frame (the grab's callback, rules/app-ui.md §UI 自動化): the layout places the counts
+            // on the way to a frame, so on the tick they still sit where the previous reading put them. The callback
+            // is posted, so a frame whose readings moved before it ran is let go and the next one asked for.
             const drawnFor = acts.opsPanelKey()
             opsPanelTimer.drawing = topBar.grabToImage(() => {
                 opsPanelTimer.drawing = false
@@ -212,13 +178,11 @@ Item {
             })
         }
     }
-    /// What the panel's picture is of: the names, the upstream and the counts it writes, at the width it has.
     function opsPanelKey() {
         const wt = window.curPage === null ? null : window.curPage.pageWt
         return topBar.opsNames + "|" + topBar.branchUpstream + "|" + (wt === null ? "" : wt.ahead + "/" + wt.behind)
             + "|" + topBar.width
     }
-    /// Whether the panel has everything it names: the repository landed and nothing running on it.
     function opsPanelLoaded() {
         if (!window.visible || topBar.width <= 0 || window.curPage === null
                 || !window.curPage.pageRefsLoaded || !window.curPage.pageWt.loaded)
@@ -230,10 +194,7 @@ Item {
         opsPanelTimer.stop()
         Harness.report(
             "ops_panel settled=true"
-            // None is in the picture as a claim: a lit name frames like a name under a pointer, a button shorter
-            // than its two lines frames like a style of its own, the line before the find a pixel onto a frame reads
-            // as that frame's edge, and counts a pixel off the end of the upstream read as set against it. Said beside
-            // the claim they are judged with.
+            // The next four cannot be judged off the picture: each frames like something else.
             + " lit=" + (topBar.repoNameLit || topBar.branchNameLit)
             + " boxed=" + topBar.actionsBoxed
             + " rule=" + topBar.findRuled
@@ -252,16 +213,9 @@ Item {
     }
 
     // PGG_AUTO_ACT=ops-stand / ops-stand-repos / ops-stand-copies [<filter>] / ops-branch / ops-branch-folder <path>:
-    // the panel's own two doors — the one the repository's name opens, either tier of it, and the one the branch's
-    // name opens, with a folder of it where the argument names one.
-    //
-    // **The rows are counted as well as photographed.** Each card is assembled from a listing that arrives after the
-    // tab does, and a card holding nothing looks in a picture exactly like a card holding rows that were all left
-    // out (`AppMenu.offeredRows`). A run waits for the listing rather than for a beat: the refs and the copies come
-    // back on separate reads, and which of them is last is the machine's business, not the verb's.
-    //
-    // **And the name that opened it is read too** — whether it is still lit with its chevron turned, which a picture
-    // of a name under the hand that pressed it shows the same whether or not the card is what keeps it lit.
+    // the cards the repository's and the branch's names open. Rows are counted, since an empty card looks like one
+    // whose rows were all left out (`AppMenu.offeredRows`), and the opening name's lit / turned is read, since under
+    // the hand that pressed it the name looks the same whether or not the card keeps it lit.
     SampleTimer {
         id: opsDoorTimer
         running: Harness.autoAct === "ops-stand" || Harness.autoAct === "ops-stand-repos"
@@ -272,24 +226,21 @@ Item {
         /// Whether a folder of the branch card was there to be opened (`ops-branch-folder`).
         property bool folderAsked: false
         onTriggered: {
-            // **Both listings, not a beat**: the refs and the copies come back on separate reads, and a card asked
-            // for between them is a card with rows still missing. Every repository has its own copy in the second
-            // of them, so a zero there is a listing that has not landed rather than a repository without one.
+            // Both listings, not a beat: they land on separate reads. Every repository lists its own copy, so zero
+            // worktrees is a listing not yet landed.
             if (!window.visible || topBar.width <= 0 || window.curPage === null
                     || !window.curPage.pageRefsLoaded
                     || window.curPage.pageWorktrees.total <= 0)
                 return
             const branchDoor = Harness.autoAct === "ops-branch" || Harness.autoAct === "ops-branch-folder"
             if (opsDoorTimer.opened === 0) {
-                // `ops-stand-copies <filter>`: the left menu filtered first, written into its field the way a typist
-                // writes it (`NavProbe.typeFilter`) — what the reader filtered out of sight there is still a copy
-                // the card offers.
+                // The left menu filtered first (as `NavProbe.typeFilter` does): a copy filtered out of sight there is
+                // still one the card offers.
                 if (Harness.autoAct === "ops-stand-copies" && Harness.autoActArg !== "")
                     window.curPage.pageSidebar.autoSections.filterText = Harness.autoActArg
                 opsDoorTimer.opened = 1
-                // **Asked for once, and reported however it went.** `offerHere` turns away a card with nothing in
-                // it, which is the right answer for a repository that has nowhere else to stand — and a run that
-                // kept asking would sit out its watchdog on a window that was never going to open one (observed).
+                // Asked for once, and reported however it went: `offerHere` turns away an empty card, so re-asking
+                // would sit out the watchdog.
                 if (branchDoor)
                     topBar.openBranchMenu()
                 else
@@ -308,23 +259,21 @@ Item {
                 Harness.report("ops_door step=folder asked=" + opsDoorTimer.folderAsked)
                 return
             }
-            // The folder's card says it is up on its own `opened` (`OpsBranchMenu.folderStanding`), which is a turn
-            // behind the ask. One that was never asked for — no such folder on the card — is reported now.
+            // The folder's card is up a turn behind the ask (`OpsBranchMenu.folderStanding`); a folder the card did
+            // not have is reported now.
             if (opsDoorTimer.opened === 2 && opsDoorTimer.folderAsked && topBar.branchFolderOpen === "")
                 return
             stop()
             Harness.report(
                 "ops_door open=" + (branchDoor ? topBar.branchMenuOpen : topBar.standMenuOpen)
                 + " tier=" + topBar.standDoor
-                // The name the card hangs off: still lit, and its chevron turned down.
                 + " lit=" + (branchDoor ? topBar.branchNameLit : topBar.repoNameLit)
                 + " turned=" + (branchDoor ? topBar.branchNameTurned : topBar.repoNameTurned)
-                // The band's grab runs handed back to the scene while the card stands, so a press on them closes it
-                // the way a press anywhere else does (`WindowChrome.captionYielded`) — nothing in the picture says so.
+                // Grab runs handed back, so a press on them closes the card (`WindowChrome.captionYielded`).
                 + " yield=" + chrome.captionYielded
                 + " folder=" + topBar.branchFolderOpen
                 + " repos=" + topBar.standRepoRows
-                // The copies the left menu is showing beside the card — the other half of `copies=` under a filter.
+                // The copies the left menu shows — the other half of `copies=` under a filter.
                 + " listed=" + window.curPage.pageWorktrees.shown()
                 + " copies=" + topBar.standCopyRows
                 + " branches=" + topBar.branchMenuRows)
@@ -332,18 +281,13 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=app-menu / app-menu-reclick: the ☰ pressed once and left standing, or pressed twice.
-    //
-    // Numbers as well as the card's picture, because the two things that were reported broken are both invisible to
-    // it: a second press that reopens the card frames exactly like one that never closed it, and which side of the
-    // band owns the grab run is not drawn at all. `strip=none` is the run handed back to the scene, which is what
-    // makes a press on the band's empty stretch reach the card (`WindowChrome.captionYielded`) — on a build where the
-    // band is not the window's title bar there is no strip either way, and `merged=` says which run this was.
+    // PGG_AUTO_ACT=app-menu / app-menu-reclick: the ☰ pressed once and left standing, or pressed twice. Numbers too:
+    // a reopened card frames like one never closed, and who owns the grab run is not drawn. `strip=none` is the run
+    // handed back to the scene (`WindowChrome.captionYielded`); with no merged title bar there is no strip either way.
     SampleTimer {
         id: appMenuActTimer
         running: Harness.autoAct === "app-menu" || Harness.autoAct === "app-menu-reclick"
-        /// How many presses have gone in. The second one has to land on a card that was observed standing, or the
-        /// gesture being reported is not the one a hand makes.
+        /// Presses gone in. The second lands only on a card observed standing, as a hand's would.
         property int pressed: 0
         onTriggered: {
             if (!window.visible || topBar.width <= 0)
@@ -375,19 +319,16 @@ Item {
         }
     }
 
-    /// Whether the run of failures that stops the timer is over, asking for one more if it is not.
+    /// Whether the run of failures that stops the timer is over, asking for one more if it is not. Needs a remote git
+    /// cannot reach (`--preset unreachable`).
     ///
-    /// **One at a time, and each waited out.** A fetch is answered a drain after it is asked for, so three fired in a
-    /// row are counted as one — the seq the timer holds is the write this verb's last fetch was asked at. The remote
-    /// has to be one git cannot reach (`--preset unreachable`), or this never comes true.
+    /// One at a time, each waited out: fetches fired in a row are answered as one, so `timer.askSeq` holds the write
+    /// the last one was asked at.
     function stoppedYet(tab, timer) {
         if (tab.autoFetchSuspended)
             return true
-        // **Not before the repository is open.** A fetch asked of a tab still opening is refused by core before git
-        // is reached ("no repository is open"), and that refusal suspends the fetches like any other — so the panel
-        // the verb then opens holds no row at all, which is a different picture from the one it is about (measured
-        // under a 16-wide gate: `fetch-tip-link` photographed an empty panel and moved its census line). The same
-        // reading the page makes before it asks anything of the tab (`repoTab.state`).
+        // Not before the repository is open: core refuses the fetch without reaching git, that refusal suspends the
+        // fetches too, and the panel the verb then opens holds no row.
         if (tab.state !== "open")
             return false
         if (timer.askSeq >= 0 && tab.writeSeq <= timer.askSeq)
@@ -397,11 +338,8 @@ Item {
         return false
     }
 
-    // PGG_AUTO_ACT=fetch-tip-link: the word inside the fetch button's tip that is a place to go, pressed — and the
-    // panel it names coming up marked (デザイン規約 §hover のツールチップ — 送った先は名乗る).
-    //
-    // The failures come first; then the hand goes on the button and the tip is waited out, because a tip that is not
-    // standing has no word in it to press.
+    // PGG_AUTO_ACT=fetch-tip-link: the link in the fetch button's tip pressed, and the panel it names coming up marked
+    // (デザイン規約 §hover のツールチップ「送った先は名乗る」).
     SampleTimer {
         id: tipLinkTimer
         running: Harness.autoAct === "fetch-tip-link"
@@ -417,9 +355,8 @@ Item {
                 return
             if (!acts.stoppedYet(tab, tipLinkTimer))
                 return
-            // The failures raised the panel on the way here (§git が言ったことを読む場所), and a press that finds it
-            // already up proves only half of what this verb is about. So it goes down first, by the reader's own
-            // hand — which is the state the link is worth having: somebody who put it away and was then sent back.
+            // The failures raised the panel (デザイン規約 §git が言ったことを読む場所), and a press that finds it up
+            // proves half the verb, so it is shut first.
             if (!tipLinkTimer.shut) {
                 tipLinkTimer.shut = true
                 if (page.commandsOpen)
@@ -435,8 +372,7 @@ Item {
                 tipLinkTimer.pressed = true
                 return
             }
-            // The panel is built into its seat as it is raised (`RepoPage.commandsSeat`), so what says the press
-            // arrived is the panel standing and wearing the mark.
+            // The panel is built as it is raised (`RepoPage.commandsSeat`), so wait for it to exist.
             if (!page.commandsOpen || page.commandsPane === null)
                 return
             tipLinkTimer.stop()
@@ -447,9 +383,9 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=band-actions / band-actions-fold: the band's three actions giving their words up as the window
-    // narrows (規約 §ウィンドウの縁). The width the run asks for is a *shape*, because which pixel
-    // brings on which shape is a question about the installed fonts; the band's own arithmetic names the width.
+    // PGG_AUTO_ACT=band-actions*: the band's three actions giving their words up as the window narrows (規約 §ウィンドウの縁).
+    // The run asks for a *shape* and the band's own arithmetic names its width — which pixel is which shape depends on
+    // the installed fonts.
     SampleTimer {
         id: actionsActTimer
         running: Harness.autoAct === "band-actions"
@@ -460,22 +396,15 @@ Item {
         property bool pushRequested: false
         property int askSeq: -1
         onTriggered: {
-            // The box the set shares is settled once the band has loaded (`TopBar.widestAction`), and every width
-            // here is measured off it — asked for before that, the run would size the window against a box of zero.
-            //
-            // The working tree as well: what push says is read off it (`publish` before the first status is in, and
-            // `push -f` after, on a branch that has diverged), and the wordings are what is being cut here. A band
-            // shot before that photographs the shape of a wording nobody will see.
+            // Every width is measured off the set's shared box (`TopBar.widestAction`), zero until the band has
+            // loaded — and off push's wording, which the working tree decides (`publish` until the first status,
+            // `push -f` after on a diverged branch).
             if (topBar.bandTabsWidth <= 0 || topBar.actionNaturalW <= Theme.railWidth
                     || window.curPage === null || !window.curPage.pageWt.loaded)
                 return
-            // The `!` before the window is sized: it stands on a go that came back refused, and a band shot before
-            // that answer landed frames a band with nothing the matter — which is what an ordinary band looks like.
-            //
-            // The refusal is a real one, from git: `--preset diverged` is a branch git will not fast-forward, and the
-            // plain push is the road to hearing so (`push-retry` の仕込み). Sent through the page, because in this
-            // state the button is a **hold** — its plain press is not wired to anything, and force is the go that
-            // lands.
+            // The `!` before the window is sized: a real refusal from git (`--preset longnames` will not fast-forward,
+            // as `push-retry` sets up). Sent through the page, because in this state the button is a hold and its
+            // plain press is wired to nothing.
             if (Harness.autoAct === "band-actions-alert") {
                 if (!actionsActTimer.pushRequested) {
                     window.curPage.pushNow()
@@ -485,8 +414,7 @@ Item {
                 if (!topBar.actionAlertShown)
                     return
             }
-            // The same corner on the other button. Fetch has no go to be refused — what puts a mark there is a run of
-            // failures, and the third of them stops the timer (`stoppedYet`).
+            // The same corner on fetch, which is marked by the run of failures that stops its timer (`stoppedYet`).
             if (Harness.autoAct === "band-actions-stopped") {
                 const tab = window.curPage.pageTab
                 if (tab.busyCount !== 0 || tab.autoFetchRunning)
@@ -494,12 +422,8 @@ Item {
                 if (!acts.stoppedYet(tab, actionsActTimer))
                     return
             }
-            // Asked for again on every tick. **What the shape is worth is measured off the wording
-            // the button is saying**, and push's wording arrives with the readings that decide it — a width settled
-            // on the tick the working tree loaded is one measured for `push`, and the band it lands on is saying
-            // `push -f` (measured, the run came out a whole step further down than it asked for). Re-asking
-            // costs nothing and closes no ring: the target is read off the wordings and the floor, neither of which
-            // the window's width moves.
+            // Re-asked on every tick: push's wording can still change after the working tree loads, and the width is
+            // measured off it. The target does not move with the window's width, so this closes no ring.
             const wanted = acts.actionsWidthFor(
                 Harness.autoAct === "band-actions" ? Harness.autoActArg
                 : Harness.autoAct === "band-actions-none" ? "whole" : "fold")
@@ -511,9 +435,7 @@ Item {
             if (topBar.width !== mainUi.width)
                 return
             stop()
-            // Which button the corner mark belongs to. The band's own `alert=` is the pair or-ed together
-            // (`TopBar.actionAlertShown`), so on its own it cannot tell this run from the one that photographs the
-            // refused push — and the two put their mark on different corners of different marks.
+            // Which button the mark is on: `alert=` is the pair or-ed (`TopBar.actionAlertShown`).
             if (Harness.autoAct === "band-actions-stopped")
                 Harness.report("band_stopped suspended=" + window.curPage.pageTab.autoFetchSuspended
                                   + " turned=" + topBar.fetchFrameTurned
@@ -521,50 +443,36 @@ Item {
             acts.reportBandActions()
         }
     }
-    /// The width a shape sits at. `fold` is the floor the words are finished by — the window's own, measured with the
-    /// left list open — and the default is the middle of the cap's travel, which is the one
-    /// stretch where every wording is cut and none is given up. A number passed through is somebody naming a pixel.
+    /// The width a shape sits at: a number is a pixel, `fold` the widest panel that has given every wording up,
+    /// `whole` the narrowest that says all three in full, and the default the narrowest cell still holding a word.
     function actionsWidthFor(arg) {
         const wanted = parseInt(arg)
         if (!isNaN(wanted) && wanted > 0)
             return wanted
-        // The two ends, and the step between them, are the panel's own arithmetic — asked for rather than worked out
-        // again here, so a run cannot pass a build whose schedule has moved (`TopBar.actionsWholeAt`).
-        //
-        // `fold` is the widest panel that has given every wording up; `whole` the narrowest that still says all three
-        // in full. A band that folded early photographs as a band that is merely narrow, and no other width can tell
-        // the two apart.
+        // The panel's own arithmetic, not worked out again here, so a build whose schedule moved cannot pass
+        // (`TopBar.actionsWholeAt`).
         if (arg === "fold")
             return topBar.actionsFoldAt
-        // Never under the window's own floor: with a panel this wide the wordings are whole there already, and a run
-        // that asked for less would photograph a window no hand can make.
+        // Never under the window's floor: less would photograph a window no hand can make.
         if (arg === "whole")
             return Math.max(topBar.actionsWholeAt, Math.ceil(window.floorWidth))
-        // The default: the narrowest cell that still has a word in it — the last step before the marks.
-        //
-        // **How long the stretch where the wordings are cut is depends on the installed
-        // fonts, and for a four-letter command it can be nothing at all** (measured, Linux: `push` and
-        // `…` + two characters measure the same 27px, so `push -f` goes from whole to given up with no cut in
-        // between). Landing on the last labelled cell is a shape that exists on every machine, and `cut=` rides along
-        // to say whether this one had a cut in it.
+        // The cut stretch can be empty for a four-letter command (Linux: `push` and `…` + two characters are both
+        // 27px); the last labelled cell exists on every machine, and `cut=` says whether this one had a cut.
         return topBar.actionsFoldAt + 1
     }
-    /// What the three came out as. `cut=` and `folded=` are the two the picture cannot answer on its own: a wording
-    /// that ends in `…` of its own reads like an elided one, and a band photographed at one width says nothing about
-    /// the width the shape was supposed to change at.
+    /// `cut=` and `folded=` are what the picture cannot answer: a wording ending in its own `…` reads as elided, and
+    /// one width says nothing of where the shape changes.
     function reportBandActions() {
         Harness.report(
             "band_actions fits=" + (window.width >= Math.ceil(window.floorWidth))
-            // The four that are judged lead and stand together: only neighbours can be caught in one substring.
+            // The four judged lead together: `must_say` catches only neighbours in one substring.
             + " folded=" + topBar.actionsFolded
             + " cut=" + topBar.actionWordCut
             + " alert=" + topBar.actionAlertShown
             + " cap=" + topBar.actionCapW
             + " natural=" + topBar.actionNaturalW
             + " foldAt=" + topBar.actionFoldW
-            // How long the stretch where the wordings are cut is on this machine: the cell at which the widest
-            // wording on the band starts being cut, against the one at which the set gives up. They can be the same
-            // number (規約 §ウィンドウの縁「省略の段は短い」), and no picture says so.
+            // The cut stretch on this machine, against `foldAt=`; it can be empty (規約 §ウィンドウの縁「省略の段は短い」).
             + " cutAt=" + topBar.actionCutW
             + " want=" + topBar.actionWantW
             + " cellW=" + topBar.actionCellW + " cellH=" + topBar.actionCellH

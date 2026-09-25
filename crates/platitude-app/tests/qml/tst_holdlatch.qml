@@ -2,13 +2,9 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// Whether a press keeps the meaning it was made with (デザイン規約 §長押し「長押しか否かは押した瞬間に確定」).
-//
-// **The condition moves on its own**: a fetch answering, a reachability walk coming back, git refusing the press
-// before it. Read live, a hold begun on a red button comes back as a click and runs the plain command, and a click
-// begun on a plain one is dropped when the button turns into a hold under the hand. Neither is something a picture
-// or a headless run can be made to show — the flip has to happen *between* a press and its release, which is a
-// stretch nothing outside the control can stand in.
+// Whether a press keeps the meaning it was made with (rules-refs/app-ui.md「長押しか否かは押した瞬間に確定する」).
+// The state deciding it flips on its own, and the flip has to land between a press and its release — a stretch no
+// picture or headless run can stand in.
 Item {
     id: root
     width: 200
@@ -45,14 +41,13 @@ Item {
         signalName: "held"
     }
 
-    /// A tab, as much of one as the band's push button reads. Two of them, both behind their remote — which is what
-    /// makes the pair the case the length cannot see: the same 500ms is armed either way.
+    /// As much of a tab as the band's push button reads. Both are behind their remote, so the length cannot tell them
+    /// apart.
     component Tab: QtObject {
         id: tab
         property int tab_id: 0
         property string pushTargetLabel: ""
-        /// The branch the working tree is on — **what a push actually sends**, which the destination does not say:
-        /// two local branches can track one remote one (`PublishFlow.forcePush`).
+        /// The branch the working tree is on — what a push actually sends.
         property string branch: ""
         property int sent: 0
         /// Which branch went, read back the way the page would send it.
@@ -110,7 +105,6 @@ Item {
             tryVerify(() => !band.gesturing)
         }
 
-        /// The length the fill is drawing out is the one the press was given, and it says so about itself.
         function test_the_length_is_taken_at_the_press_and_kept() {
             compare(drive.armedMs, root.hold)
             drive.begin()
@@ -125,11 +119,8 @@ Item {
             verify(!drive.stale, "which is the press")
         }
 
-        /// The other direction, which is the one that can drop a press altogether: a plain press whose row turns
-        /// into a held one before the release.
-        /// **The premise holds the target as well.** What a press is aimed at can be swapped out while the
-        /// length stays exactly where it was, and a fill that ran out over the new target would answer a question
-        /// nobody asked.
+        /// The premise holds the target as well: it can be swapped while the length stays put, and a fill run out over
+        /// the new target would answer a question nobody asked.
         function test_a_hold_whose_target_went_raises_nothing() {
             drive.premise = "here"
             drive.begin()
@@ -139,15 +130,13 @@ Item {
             compare(finishes.count, 0, "so the fill ran out and said nothing")
         }
 
-        /// **The band outlives the page it points at.** A hand on `push -f` with a tab switched under it is the case
-        /// the length is blind to: both tabs are behind their remotes, so the same 500ms is armed either way, and
-        /// before the premise the release overwrote the branch of a repository the hand never pointed at
-        /// (repro: qmltestrunner, `first=0 second=1`).
+        /// The band outlives the page it points at, and the length is the same for both tabs: only the premise keeps
+        /// the release from overwriting a repository the hand never pointed at.
         function test_a_band_hold_does_not_follow_the_tab_that_replaced_it() {
             band.forceActiveFocus()
             keyPress(Qt.Key_Space)
-            // **The fill has to be climbing before the tab is swapped** — `gesturing` rises on the press itself, and a
-            // swap made in front of the first frame leaves nothing for the rest of this to be about.
+            // Wait for the fill, not `gesturing` (which rises on the press itself): a swap before the first frame
+            // tests nothing.
             tryVerify(() => band.holdProgress > 0)
             elsewhere.forceActiveFocus()
             band.curPage = root.there
@@ -158,9 +147,8 @@ Item {
             compare(root.here.sent, 0, "and neither is the one it left, the press having been let go of elsewhere")
         }
 
-        /// **The push sends the branch.** Two local branches can track one remote one, so a switch between
-        /// them under the hand leaves `origin/main` on the button either way while the history about to be overwritten
-        /// is another branch's (`PublishFlow.forcePush` sends `workTree.branch`).
+        /// Two local branches can track one remote one: a switch between them leaves `origin/main` on the button while
+        /// `PublishFlow.forcePush` would send the other branch (`workTree.branch`).
         function test_a_band_hold_does_not_follow_a_branch_that_replaced_it() {
             band.forceActiveFocus()
             keyPress(Qt.Key_Space)
@@ -172,8 +160,8 @@ Item {
                     "the branch under the hand went, so nothing is sent: " + root.here.sentBranch)
         }
 
-        /// **A key is answered wherever the focus is when it comes up.** Move it and the release lands elsewhere,
-        /// leaving the fill to run out on a button nobody is still holding.
+        /// A key is answered wherever the focus is when it comes up: move it and the fill runs out on a button nobody
+        /// is holding.
         function test_a_band_hold_dies_when_the_focus_leaves_before_the_key_comes_up() {
             band.forceActiveFocus()
             keyPress(Qt.Key_Space)
@@ -184,9 +172,8 @@ Item {
             compare(root.here.sent, 0, "nothing was sent: " + root.here.sentBranch)
         }
 
-        /// **What was lost stays lost.** Read as a comparison with what is true now, a target that went and came back
-        /// put the gesture back in business — the tab switched away from and switched back to answered the press as
-        /// though nothing had happened.
+        /// `stale` is a latch: compared with what is true now, a target that went and came back would revive the
+        /// gesture.
         function test_a_target_that_comes_back_does_not_revive_the_gesture() {
             band.forceActiveFocus()
             keyPress(Qt.Key_Space)
@@ -199,8 +186,7 @@ Item {
             compare(root.there.sent, 0)
         }
 
-        /// And the ordinary hold on that same button goes through **once**, to the tab it was made on — without which
-        /// the test above passes on a button that sends nothing at all.
+        /// The control: the band tests above would also pass on a button that sends nothing.
         function test_a_band_hold_nothing_moved_under_sends_its_own_tab_once() {
             band.forceActiveFocus()
             keyPress(Qt.Key_Space)
@@ -211,9 +197,8 @@ Item {
             compare(root.there.sent, 0)
         }
 
-        /// **A gesture lasts past the release.** A press that stopped short slides its fill back out, and an owner
-        /// latching something other than the length on `gesturing` has to hold through that slide — a row re-wording
-        /// itself as the hand lifts is the same disagreement, half a beat later.
+        /// An owner latching on `gesturing` has to hold through the fill sliding back, or a row re-words itself as the
+        /// hand lifts.
         function test_a_gesture_lasts_past_the_release_while_the_fill_slides_back() {
             drive.begin()
             verify(drive.gesturing, "the press itself")
@@ -232,28 +217,24 @@ Item {
             verify(drive.stale)
         }
 
-        /// **Nothing is raised for a premise that has gone.** The fill runs out under a hand that was holding for one
-        /// command and would be answered with another, so the gesture ends silently.
+        /// The hand was holding for one command and would be answered with another, so the gesture ends silently.
         function test_a_hold_whose_answer_went_raises_nothing() {
             drive.holdMs = 20
             drive.begin()
             drive.holdMs = 0
-            // The fill running out is the event, waited for by the animation's own end
-            // (規約 §非同期・並行テスト).
+            // Waited for by the animation's own end (core.md §非同期・並行テスト).
             tryVerify(() => !drive.fill.running)
             compare(finishes.count, 0, "the hold ran out and said nothing")
         }
 
-        /// And the same fill with its answer intact still fires, so the test above is not passing on a driver that
-        /// never fires at all.
+        /// The control: the test above would also pass on a driver that never fires.
         function test_a_hold_that_kept_its_answer_still_fires() {
             drive.holdMs = 20
             drive.begin()
             tryVerify(() => finishes.count === 1)
         }
 
-        /// The button end of it, pressed and released the way a hand does. **A hold begun on it reports no click** —
-        /// a release that read the length again would find zero and let the press fall through to the plain command.
+        /// A release that read the length again would find zero and let the hold fall through to the plain command.
         function test_a_button_held_when_the_answer_goes_reports_no_click() {
             mousePress(button, 10, 10)
             button.holdMs = 0
@@ -262,10 +243,8 @@ Item {
             compare(holds.count, 0, "and the hold it was is not fired either, its answer having gone")
         }
 
-        /// And the other way round. The press is dropped because the answer it was made under has gone, which is the
-        /// same thing the hold above is dropped for. A release that read the new length would drop it **silently and
-        /// for the wrong reason** — finding a hold and letting the click go — and the button would run the plain
-        /// command had the flip landed a frame later.
+        /// The other way round: the plain press is dropped because the answer it was made under went — not, as a
+        /// release reading the new length would, for finding a hold.
         function test_a_button_whose_answer_goes_mid_press_runs_nothing() {
             button.holdMs = 0
             mousePress(button, 10, 10)
@@ -276,7 +255,7 @@ Item {
                     "the premise went, so the plain press is dropped rather than answered with the hold's command")
         }
 
-        /// The ordinary press, which everything above is measured against.
+        /// The control the button tests above are measured against.
         function test_a_plain_button_nothing_moved_under_answers_its_click() {
             button.holdMs = 0
             mousePress(button, 10, 10)
@@ -285,9 +264,8 @@ Item {
             compare(holds.count, 0)
         }
 
-        /// And a hold that runs all the way through is answered **once**. The release still comes, and the same latch
-        /// is what keeps it from falling through to the plain command beside the one the hold just ran — the reason
-        /// the click is judged from what the press was given (`ActionButton.clickWanted`).
+        /// The release still comes; the latch keeps it from also running the plain command
+        /// (`ActionButton.clickWanted`).
         function test_a_hold_run_to_the_end_is_answered_once() {
             mousePress(button, 10, 10)
             tryVerify(() => holds.count === 1)
@@ -296,10 +274,8 @@ Item {
             compare(clicks.count, 0, "and the release it ended under raised no click beside it")
         }
 
-        /// **The hold's other hand** (デザイン規約 §長押し): focus the control and hold Space. The key is taken at
-        /// the press against the live length and answered at the release against the one the press was given — a
-        /// release judged by the new length would fall through to the control underneath, which reads it as a plain
-        /// press and runs the command the hold stood in for.
+        /// The hold's other hand, Space on the focused control (デザイン規約 §長押し): a release judged by the new length
+        /// would fall through to the control underneath as a plain press.
         function test_a_key_held_when_the_answer_goes_reports_nothing() {
             button.holdMs = root.hold
             button.forceActiveFocus()
@@ -310,7 +286,7 @@ Item {
             compare(clicks.count, 0, "and the release is not let through as a click either")
         }
 
-        /// And the ordinary one, so the test above is not passing against a key nothing ever hears.
+        /// The control: the test above would also pass against a key nothing hears.
         function test_a_key_held_to_the_end_fires_the_hold() {
             button.holdMs = 20
             button.forceActiveFocus()
@@ -320,10 +296,8 @@ Item {
             compare(clicks.count, 0)
         }
 
-        /// **A `clicked()` raised with no press behind it still answers.** The band's own doors do exactly that,
-        /// so that a run presses what a hand presses (`TopBar.stashNow` / `fetchNow`,
-        /// verify-ui §壊れない動詞の実装) — and a latch that only ever reads a press answers none of them, which
-        /// took the stash verb's press out of the build entirely.
+        /// The band's doors raise `clicked()` with no press so a run presses what a hand does (`TopBar.stashNow` /
+        /// `fetchNow`); a latch that only reads a press would answer none of them.
         function test_a_click_raised_with_no_press_behind_it_still_answers() {
             button.holdMs = 0
             button.clicked()

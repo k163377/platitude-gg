@@ -7,46 +7,37 @@ use super::Press;
 /// turned down, and the refusal has to land on the row that asked for
 /// it (`AppMenuItem.staysOpen`).
 ///
-/// **What the press writes down is the name and the id together.** The
-/// card goes, or turns its row into the held `-D`, off the name it asked
-/// with — and which answer that name belongs to is a thing only the
-/// press still knows: a drain empties the whole queue and notifies once,
-/// so the fetch running behind the press answers in the same batch and
-/// looks exactly like an answer to this.
+/// The press writes down the name with the id: only the id tells this
+/// answer from the fetch's in the same drain ([`Press`]).
 ///
-/// **The answer stands until the next plain delete is asked**, because
-/// the card reads it as an edge and may not have been drawn yet when it
-/// arrives. Where in this notify it answered is the drain's — that is
-/// [`Self::answer`], put down at the top of every drain, and it is how
-/// the page tells the answer in hand from one standing over from before.
+/// The answer stands until the next plain delete is asked: the card reads
+/// it as an edge and may not have been drawn yet. [`Self::answer`] is put
+/// down at the top of every drain — how the page tells this notify's answer
+/// from one standing over.
 ///
-/// Only the plain form writes here. `-D` and `Delete both` were already
-/// the answer to a refusal and their menus go at the press, so they
-/// stand for nothing.
+/// Only the plain form writes here: `-D` and `Delete both` close their
+/// menus at the press.
 #[derive(Debug, Default)]
 pub struct BranchDeleteOut {
-    /// The write the card is waiting on, by the id the queue accepted it
-    /// under — and where its answer stood in the notify that carried it.
+    /// The write the card waits on, and where its answer stood in this
+    /// notify.
     press: Press,
-    /// The branch the standing card asked about, held until that answer
-    /// turns it into one of the two below.
+    /// The branch asked about, until the answer moves it to one of the two
+    /// below.
     name: String,
-    /// git's answer by that name: the branch it took, and the one it
-    /// turned down. At most one of them is ever set.
+    /// git's answer: the branch it took, or the one it turned down. At most
+    /// one is set.
     landed: String,
     refused: String,
 }
 
 impl BranchDeleteOut {
-    /// The press: a plain delete of `name` went to the queue and came
-    /// back with this id.
+    /// A plain delete of `name` went to the queue under `accepted`.
     ///
-    /// The last answer goes with it, so a delete of a re-made branch
-    /// of the same name reads its own answer as a change. Where the
-    /// queue accepted nothing (the session is closed) the last answer
-    /// still goes — it is over either way — but nothing is waited for:
-    /// no answer is coming, and one arriving under some other press's
-    /// id is not this card's.
+    /// Clears the last answer, so a delete of a re-made branch of the same
+    /// name reads its own answer as a change — also where the queue
+    /// accepted nothing (`None`: the session is closed), and then nothing
+    /// is waited for.
     pub fn asked(&mut self, name: &str, accepted: Option<u64>) {
         self.landed = String::new();
         self.refused = String::new();
@@ -54,9 +45,7 @@ impl BranchDeleteOut {
         self.press.asked(accepted);
     }
 
-    /// Puts down where the last notify's answer stood: this drain
-    /// answers for itself. What git said is left standing — the card
-    /// reads that as an edge, and may not have been drawn yet.
+    /// Puts down where the last notify's answer stood; what git said stays.
     pub fn new_notify(&mut self) {
         self.press.new_notify();
     }
@@ -64,11 +53,9 @@ impl BranchDeleteOut {
     /// git answered a write, standing at `at` in this notify's answers.
     /// Says whether it was this card's.
     ///
-    /// `reported` is whether the refusal came with something to
-    /// report — the far side keeping the branch. **That one goes to
-    /// the page's notice bar**: the refusal is the far side's, so
-    /// the card has nothing to morph into and the row stays as it
-    /// is (デザイン規約 §答えの要らない報せ).
+    /// A `reported` refusal (the far side keeping the branch) sets neither
+    /// name: it goes to the page's notice bar and the row stays as it is
+    /// (デザイン規約 §答えの要らない報せ).
     pub fn answered(&mut self, id: u64, at: usize, failed: bool, reported: bool) -> bool {
         if !self.press.answered(id, at) {
             return false;

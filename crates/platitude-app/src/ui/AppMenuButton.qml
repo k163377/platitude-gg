@@ -4,30 +4,26 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// App menu; most entries are placeholders until their phases land. Sized as the head of the folded sidebar's
-// column — `railWidth` wide, the rail cells' wash, and this band's own full height (`NavRail.cellHeight`). The
-// mark inside is a step under theirs: this one stands alone in a band, theirs are the cells (デザイン規約 §寸法).
+// The ☰ app menu, sized as the head of the folded sidebar's column: `railWidth` wide, the rail cells' wash, the band's
+// full height (`NavRail.cellHeight`). Its mark is a step under the cells': it stands alone in a band (デザイン規約 §寸法).
 ToolButton {
     id: menuButton
 
-    /// The RepoPage of the active tab (null while no tab is open). The one live entry below is the only thing here
-    /// that asks anything of it.
+    /// The active tab's RepoPage; null while no tab is open.
     property var curPage: null
 
-    /// Whether the ☰'s card is standing. The grab run gives up being the window's caption while it is, so that a
-    /// press on the band's empty run reaches the scene and takes the card down (`WindowChrome.captionYielded`).
+    /// The card is standing: the band's grab run stops being the caption meanwhile, so a press there reaches the scene
+    /// and closes it (`WindowChrome.captionYielded`).
     readonly property bool menuOpen: appMenu.opened
 
     signal openRepositoryRequested()
     signal cloneRepositoryRequested()
     signal settingsRequested()
-    /// The ☰'s Exit row. It means what the band's ✕ means, and it takes the same road (`TabStrip` and then `TopBar`
-    /// fold it into `closeRequested`), so the close gate that waits a write out (`Main.qml`) has one door to stand at.
+    /// Exit takes the band's ✕ road (`TabStrip` → `TopBar.closeRequested`), so the close gate that waits a write out
+    /// (`Main.qml`) has one door.
     signal exitRequested()
 
-    /// Automation: the ☰'s `Clone repository…` row (`PGG_AUTO_ACT=clone-*`). The row's own `triggered` — the signal a
-    /// press on it emits — so the handler that runs is the row's, and everything it reaches from there is the wiring a
-    /// hand goes through.
+    /// Automation (`PGG_AUTO_ACT=clone-*`): emits the row's own `triggered`, so a run goes through the hand's wiring.
     function clickCloneRow() {
         cloneRow.triggered()
     }
@@ -36,10 +32,8 @@ ToolButton {
     padding: 0
     hoverEnabled: true
     Accessible.name: qsTr("Application menu")
-    // Written out here: an open menu keeps the wash, which no hover of its own can
-    // say — what is on screen has to say which mark put it there (`NavRail`). The hand is asked for the same way the
-    // tool buttons ask (`HoverToolButton.lit`): this cell stands in the window's own corner, which is where a headless
-    // run's platform leaves a pointer nobody put there (`Hand`).
+    // The wash stays while the menu is open. `Hand.away`: headless, a pointer nobody put rests on this corner cell
+    // (rules-refs/app-ui.md「ヘッドレスの窓には手が乗っている」).
     background: Rectangle {
         color: (menuButton.hovered && !Hand.away) || appMenu.opened ? Theme.bgHover : "transparent"
     }
@@ -52,16 +46,10 @@ ToolButton {
             tint: Theme.textPrimary
         }
     }
-    // The mark is the way in and the way out: a press on it while the card stands takes the card down, the way a
-    // press anywhere else in the window does. Written as a toggle — `open()` on a card
-    // already up does nothing, which reads as a mark that can never be pressed a second time.
+    // A toggle, paired with the close policy below (rules-refs/app-ui.md「`ToolButton` + `Menu` の押し直し」).
     onClicked: appMenu.opened ? appMenu.close() : appMenu.open()
     AppMenu {
         id: appMenu
-        // Outside the ☰ itself. The default policy calls the mark's own press "outside" and
-        // closes on it — and the click that follows the same press opens the card again, so the second press never
-        // shuts anything (`AppCombo.popup` was written from the same reading). Every press elsewhere in the window
-        // still takes the card down, the band's own empty run included (`WindowChrome.captionYielded`).
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         // A full-height cell ends where the band does, so the card would otherwise open on top of the divider.
         y: menuButton.height + Theme.splitterWidth
@@ -82,9 +70,7 @@ ToolButton {
             onTriggered: menuButton.curPage.pageTab.refreshAll()
         }
         AppMenuSeparator {}
-        // One row, because there is one screen. A second entry naming a category of it would be a menu telling
-        // the reader about the inside of the thing it opens (observed — the two rows read as a
-        // duplicate).
+        // One row for the one screen: a row per category reads as a duplicate.
         AppMenuItem {
             text: qsTr("Settings…")
             onTriggered: menuButton.settingsRequested()
@@ -96,9 +82,6 @@ ToolButton {
         AppMenuSeparator {}
         AppMenuItem {
             text: qsTr("Exit")
-            // Up to the window: quitting is a close of the window, and one named road
-            // (`TopBar.closeRequested` → `root.close()`) is what keeps the close gate that waits a running
-            // write out from having a second spelling (`Main.qml` onClosing).
             onTriggered: menuButton.exitRequested()
         }
     }

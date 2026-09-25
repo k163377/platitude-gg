@@ -4,11 +4,8 @@ import platitude.ui
 
 // The one gesture the hash plate's two rows tell apart: a press that lets go where it landed is the control's, and a
 // press that travels belongs to the words under it (デザイン規約 §右のペインの字は掴める).
-//
-// **Only a real pointer can answer this.** The headless verbs enter the hand's own functions, so they say nothing
-// about who Qt hands the press to — and Qt hands it to the `TextEdit` the digits are drawn in, `selectByMouse: false`
-// and all, which is how a click on the digits stopped reaching the button at all while the icon beside them kept
-// working.
+// Only a real pointer can answer: the headless verbs enter the hand's own functions, and Qt hands the press to the
+// `TextEdit` the digits are drawn in (`selectByMouse: false` and all), where it would never reach the button.
 Item {
     id: root
     width: 400
@@ -50,12 +47,9 @@ Item {
             return f.mapToItem(root, f.width * fx, f.height / 2)
         }
 
-        // The press answers with the control's one word. **First in the file on purpose**: the answer stands until
-        // the pointer leaves the plate, and this platform delivers no `hovered` to a `Control` at all, so nothing
-        // here can put the offer back once a press has taken it.
-        //
-        // **Only the words are asked here.** What a pointer would have seen — the open tip taking the new words —
-        // is asked in the app, where a tip can be raised without one (verify-ui, `hash-tip`).
+        // First in the file on purpose: the answer stands until the pointer leaves the plate, and this platform
+        // delivers no `hovered` to a `Control`, so nothing here can put the offer back once a press has taken it.
+        // The open tip taking the new words is asked in the app (verify-ui, `hash-tip`).
         function test_a0_the_press_changes_what_the_control_offers() {
             const p = pointIn("hash", 0.5)
             compare(plate.tipWords(), "Copy full hash", "before the press it offers")
@@ -91,8 +85,8 @@ Item {
             compare(root.copies, 0, "a drag is not a click")
         }
 
-        // Jitter inside the platform's own drag distance is still a click, or the plate would answer a shaky hand
-        // with a selection where it asked for the copy.
+        // Jitter inside the platform's drag distance is still a click, or a shaky hand would get a selection instead
+        // of the copy.
         function test_d_a_press_that_barely_moves_is_still_a_click() {
             const p = pointIn("hash", 0.5)
             mousePress(root, p.x, p.y)
@@ -121,8 +115,8 @@ Item {
             compare(root.visits, 0, "a drag is not a click")
         }
 
-        // A press lets the last gesture's selection go, whichever this one turns out to be — otherwise the copy is
-        // taken under words still washed by the drag before it, and the plate looks like it is still being dragged.
+        // A press lets the last gesture's selection go whichever this one turns out to be, or the copy is taken under
+        // words still washed by the drag before it.
         function test_g_a_click_after_a_drag_lets_the_selection_go() {
             const from = pointIn("hash", 0)
             const to = pointIn("hash", 1)
@@ -135,8 +129,7 @@ Item {
             compare(plate.shaSelected, "", "and the drag's selection is gone")
         }
 
-        // The same on the row below, and across the two: the plate is one thing, so a press anywhere on it clears
-        // whichever of its two rows was holding a selection.
+        // The plate is one thing: a press anywhere on it clears whichever row was holding a selection.
         function test_h_a_press_on_one_row_clears_the_other() {
             const from = pointIn("hash", 0)
             const to = pointIn("hash", 1)
@@ -150,9 +143,6 @@ Item {
             compare(plate.shaSelected, "", "and the hash let its selection go")
         }
 
-        // The one word the copy control has says what the press did. **The tip is already up when the press lands**,
-        // so the words have to reach the shared instance while it is open — a run in the app cannot ask this at all,
-        // because hover is the one thing it cannot inject (verify-ui).
         // One selection in the window: the second drag takes the first field's away with the caret.
         function test_j_a_second_drag_takes_the_first_selection_away() {
             const from = pointIn("hash", 0)

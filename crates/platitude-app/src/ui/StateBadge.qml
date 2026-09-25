@@ -2,24 +2,21 @@ import QtQuick
 import QtQuick.Layouts
 import platitude.ui
 
-// One badge's box in the band's state group: natural width until the
-// group hands down a cap, and the word elides into whatever is left.
+// One badge's box in the band's state group: natural width until the group hands down a cap, and the word elides into
+// whatever is left.
 Rectangle {
     id: badge
     property bool filled: false
-    /// Which state this badge is standing for (規約 §状態). **The frame is what carries it**
-    /// (規約 §進行中・長押しの定数「警告の色は枠と印が持つ」) — a badge whose word is one colour and whose frame is
-    /// another says two things at once, and the frame is the half a reader takes in first.
+    /// The state this badge stands for (規約 §状態), carried by the frame
+    /// (規約 §進行中・長押しの定数「警告の色は枠と印が持つ」).
     property color tint: Theme.warning
-    /// What this badge is drawn at with nothing narrowed. Handed in from
-    /// the hidden measurement: that
-    /// row is not laid out while the group is folded (`BadgeWord`).
+    /// This badge's width with nothing narrowed, handed in from the hidden measurement (`BadgeWord`) — this row is
+    /// not laid out while the group is folded.
     property real naturalW: 0
-    /// What the group narrowed all of its badges to, together.
-    /// `Number.MAX_VALUE` is "nothing is narrowed" (`BandStateGroup.cap`).
+    /// What the group narrowed all of its badges to; `Number.MAX_VALUE` is "nothing narrowed" (`BandStateGroup.cap`).
     property real cap: Number.MAX_VALUE
-    /// Whether this badge is also a way somewhere. Only
-    /// the identity one is, narrowed or not (規約 §identity).
+    /// Whether this badge is also a way somewhere. Only the identity one is, narrowed or not
+    /// (デザイン規約 §ウィンドウの縁「押せる行は identity だけ」).
     property bool pressable: false
     signal pressed()
     default property alias content: badgeRowInner.data
@@ -37,10 +34,8 @@ Rectangle {
         anchors.leftMargin: Theme.spaceXs
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
-        // Handlers: an `Item` handed to
-        // a layout is given a seat in it, and the word
-        // beside it loses that much room (measured here as
-        // `SET IDENT…` in a window with 800px going spare).
+        // Handlers: an `Item` handed to a layout is given a seat in it, and the word beside it loses that room
+        // (rules-refs/app-ui.md「`Layout` の子の hover は `HoverHandler`」).
         HoverHandler {
             id: badgeHover
             enabled: badge.pressable

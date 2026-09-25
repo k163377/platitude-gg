@@ -16,7 +16,7 @@
 
 // The file's icon: what Explorer shows for it, what a pinned shortcut
 // carries, and what the taskbar falls back to before the window is up. The
-// running window sets its own separately (src/winframe.rs).
+// running window sets its own separately (`winframe::set_icon`).
 //
 // Resource id 1 is deliberate: Windows shows the numerically lowest ICON
 // resource as the file's icon, so this has to stay the lowest one here.

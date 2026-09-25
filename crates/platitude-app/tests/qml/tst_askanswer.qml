@@ -2,12 +2,9 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// **Who answers a standing question from the keyboard** (デザイン規約 §立っている質問は 1 か所で聞く). A question the
-// pill alone answers hands it the focus as the bar opens; a question with a form leaves the focus in the box being
-// typed into, so the form's own Enter has to be the answer — and it has to cost exactly what the pill costs.
-//
-// **Fixed here because only a real keystroke can say it.** Nothing in the application can press a key: the headless
-// runs raise the field's `accepted` themselves, which is the wiring below this line and not the key above it.
+// Who answers a standing question from the keyboard (デザイン規約 §立っている質問は 1 か所で聞く): with a form, the
+// box's Enter, at exactly what the pill costs. Only a real keystroke can fix this — the headless runs raise the
+// field's `accepted` themselves.
 Item {
     id: root
     width: 400
@@ -32,8 +29,7 @@ Item {
         }
     }
 
-    /// The other form the one bar carries, whose name box also offers a list — the half of the rule that belongs to
-    /// the box (`AppCombo.submitted`), read here through the bar it answers.
+    /// A form whose name box also offers a list (`AppCombo.submitted`).
     AskBar {
         id: listBar
         width: root.width
@@ -70,15 +66,12 @@ Item {
             bar.hold = false
         }
 
-        /// The box the question is typed into is the box it is answered from.
         function test_return_in_the_name_box_answers_the_question() {
             bar.formItem.branchField.forceActiveFocus()
             keyClick(Qt.Key_Return)
             compare(tc.confirms, 1)
         }
 
-        /// **What the pill cannot do, the key cannot do.** A question with nothing to send yet has a dark pill, and
-        /// an Enter that went through anyway would answer a question the screen says is unanswered.
         function test_an_unanswerable_question_is_not_answered_by_the_key() {
             bar.answerable = false
             bar.formItem.branchField.forceActiveFocus()
@@ -86,8 +79,6 @@ Item {
             compare(tc.confirms, 0)
         }
 
-        /// And a question that asks to be held is the pill's alone (§進行中・長押しの定数): the gesture is the
-        /// intent, and a keystroke is not one.
         function test_a_held_question_is_not_answered_by_the_key() {
             bar.hold = true
             bar.formItem.branchField.forceActiveFocus()
@@ -95,7 +86,6 @@ Item {
             compare(tc.confirms, 0)
         }
 
-        /// The name box that offers a list answers the same way while the list is not standing in front of it.
         function test_return_in_a_name_box_with_a_list_answers_the_question() {
             listBar.formItem.branchPick.popup.close()
             listBar.formItem.branchPick.contentItem.forceActiveFocus()
@@ -103,8 +93,8 @@ Item {
             compare(tc.listConfirms, 1)
         }
 
-        /// **Under the open list the key is the list's** — the row is picked, and the question stands. Answering
-        /// there would answer it with the name the pick is about to replace (`AppCombo.submitted`).
+        /// Under the open list the key picks the row: answering there would carry the name the pick replaces
+        /// (`AppCombo.submitted`).
         function test_return_under_the_open_list_picks_instead_of_answering() {
             const box = listBar.formItem.branchPick
             box.contentItem.forceActiveFocus()

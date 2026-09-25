@@ -1,14 +1,11 @@
 //! Telling a Qt list model what changed underneath it.
 //!
 //! qtbridge has no batch insert, no ranged `dataChanged` and no move, so
-//! all three are spelled out through the public proxy API — the same
-//! pattern `QListModelBase::push` uses, and the reason these are the only
-//! places in `models` that say `unsafe`
-//! (see .claude/rules/app-ui.md "Qt Bridges の要点(罠)").
+//! all three are spelled out through the proxy API the way
+//! `QListModelBase::push` does it — hence the `unsafe`.
 //!
-//! Everything here runs on the Qt main thread inside one slot: the rows
-//! are already written when the notification goes out, and nothing of
-//! Qt's runs in between.
+//! Everything here runs on the Qt main thread inside one slot, so nothing
+//! of Qt's runs between writing the rows and notifying.
 
 /// Batch append with one begin/endInsertRows pair.
 macro_rules! impl_extend_notified {
@@ -43,18 +40,13 @@ macro_rules! impl_extend_notified {
 }
 pub(crate) use impl_extend_notified;
 
-/// One row changing places, with one begin/endMoveRows pair around it.
+/// One row changing places, with one begin/endMoveRows pair around it —
+/// not remove + insert, which rebuilds the delegate under the hand
+/// (`TabStrip`).
 ///
-/// A move leaves the item standing and only tells the view where it
-/// went. A remove followed by an insert takes the view's delegate down
-/// and builds another one, and the row being moved is the one under the
-/// hand (`TabStrip`).
-///
-/// `to` is where the row ends up once it has left `from` — the ordinary
-/// reading of a move, and the one the caller can check against its own
-/// list afterwards. Qt asks for the row the item is inserted
-/// **before** while the list still holds it in both places, which is one
-/// further along when the row travels right.
+/// `to` is the row's final index. Qt wants the row to insert *before*
+/// while the list still holds it in both places: one further along when
+/// moving right.
 macro_rules! impl_move_notified {
     ($ty:ty, $field:ident) => {
         impl $ty {
@@ -70,8 +62,7 @@ macro_rules! impl_move_notified {
                 };
                 let root = qtbridge::qtbridge_type_lib::QModelIndex::default();
                 let before = if to > from { to + 1 } else { to };
-                // A row Qt cannot be handed an index for is a list past
-                // two billion rows, which no strip of tabs reaches.
+                // No list moved here nears i32::MAX rows.
                 let (Ok(first), Ok(before)) = (i32::try_from(from), i32::try_from(before)) else {
                     return;
                 };
@@ -90,12 +81,10 @@ macro_rules! impl_move_notified {
 }
 pub(crate) use impl_move_notified;
 
-/// One ranged `dataChanged` per run of rows that were rewritten in place.
-///
-/// Nothing here changes the list's length, so the view keeps its place and
-/// QML's own bindings on those rows re-read themselves. Runs are inclusive
-/// `(first, last)` row indices — [`push_run`] is what builds them — and a
-/// model whose QObject side is not attached has nobody to tell.
+/// One ranged `dataChanged` per inclusive `(first, last)` run of rows
+/// rewritten in place (built by [`push_run`]). The length does not change,
+/// so the view keeps its place. A model whose QObject side is not attached
+/// has nobody to tell.
 macro_rules! impl_notify_runs {
     ($ty:ty) => {
         impl $ty {
@@ -106,9 +95,7 @@ macro_rules! impl_notify_runs {
                 };
                 let root = qtbridge::qtbridge_type_lib::QModelIndex::default();
                 for (first, last) in runs {
-                    // A row Qt cannot be handed an index for is a list
-                    // past two billion rows, which is past the memory
-                    // budget by orders of magnitude.
+                    // i32::MAX rows is far outside the memory budget.
                     let (Ok(first), Ok(last)) = (i32::try_from(first), i32::try_from(last)) else {
                         continue;
                     };
@@ -127,13 +114,8 @@ macro_rules! impl_notify_runs {
 }
 pub(crate) use impl_notify_runs;
 
-/// Adds row `i` to the run being built if it carries on from the last one,
-/// and opens a new run otherwise.
-///
-/// Callers walk their rows in ascending order, so a run is one unbroken
-/// stretch of changed rows and costs one `dataChanged`: a list where every
-/// row moved is one notification, and one where every other row moved is
-/// one per island.
+/// Extends the last run with row `i` if it follows on, else opens a new
+/// one. Callers walk their rows in ascending order.
 pub(crate) fn push_run(runs: &mut Vec<(usize, usize)>, i: usize) {
     match runs.last_mut() {
         Some((_, last)) if *last + 1 == i => *last = i,

@@ -2,24 +2,15 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// Who takes a caret out of a field, and who leaves it lit. **QML never drops a text field's focus on its own**
-// (`FocusRelease`), so on a surface whose words are read every press target has to be asked which of the two it is:
-// a field still wearing its blue after the reader has moved on is the screen saying it is holding something
-// (規約 §右のペインの字は掴める「選択は窓に 1 つだけ」).
-//
-// **Only a real pointer can answer this.** The headless verbs enter the hand's own functions, so they say nothing
-// about who Qt hands a press to.
-//
-// The shape is a dialog's: the watcher stands on the face, behind everything the screen draws, and the targets are
-// laid over it (`AppDialog`). Three of them take the focus themselves and two do not — and it is the two that this
-// file exists for, because they are the ones that would keep a selection lit through every press that follows it.
+// Who takes a caret out of a field, and who leaves it lit (規約 §右のペインの字は掴める「選択は窓に 1 つだけ」). QML never
+// drops a text field's focus on its own (`FocusRelease`), so every press target on a reading surface has to be asked.
+// Only a real pointer can answer: the headless verbs enter the hand's own functions, not Qt's delivery.
+// The shape is a dialog's (`AppDialog`): the watcher stands on the face behind everything, the targets over it.
 Item {
     id: root
     width: 520
     height: 320
 
-    // The dialog's face. What accepts a press above this either takes the focus itself or is a reading surface's own
-    // hand, so the only presses that reach the watcher are the ones that would otherwise leave a caret standing.
     Rectangle {
         id: face
         anchors.fill: parent
@@ -73,7 +64,7 @@ Item {
             y: 200
             width: 200
         }
-        // The band's air and the margins outside the block: nothing is drawn there and nothing answers a press.
+        // Air: nothing is drawn there and nothing answers a press.
         Item {
             id: air
             x: 0
@@ -83,8 +74,7 @@ Item {
         }
     }
 
-    // The way out of a screen whose words are read. **A field is a `TextEdit`**, and a screen that put its Escape
-    // behind one would be a screen a reader could shut themselves out of by dragging over a sentence
+    // A screen whose Escape a field could swallow would shut in a reader who dragged over a sentence
     // (`SettingsDialog`).
     property int escapes: 0
     Shortcut {
@@ -96,9 +86,8 @@ Item {
         name: "FieldRelease"
         when: windowShown
 
-        /// The state a reader is in after a drag over the words: the field holds the keyboard and a selection.
-        /// Made the way the hand makes it — `forceActiveFocus()` on this part would put the focus on the `Item`
-        /// and leave the `TextEdit` inside it holding nothing.
+        /// A drag over the words, made the way the hand makes it — `forceActiveFocus()` on this part would focus the
+        /// `Item` and leave the `TextEdit` inside holding nothing.
         function grab() {
             words.anchorFrom(root, 0, 5)
             words.extendFrom(root, 300, 5)
@@ -106,13 +95,12 @@ Item {
             verify(words.selected !== "")
         }
 
-        /// What the field is holding, as one line, so a failure says which half survived.
+        /// One line, so a failure says which half survived.
         function held() {
             return "caret=" + words.hasCaret + " selected=" + (words.selected !== "")
         }
 
-        // The two the watcher is for. A row that answers with its own handler never asks for the focus, and the
-        // plain air answers nothing at all — so before the watcher stood there, both left the selection lit.
+        // The two the watcher is for: neither a row's own handler nor the air asks for the focus.
         function test_a_press_on_a_rail_row_drops_it() {
             grab()
             mouseClick(railRow, 10, 10)
@@ -127,8 +115,8 @@ Item {
             compare(held(), "caret=false selected=false")
         }
 
-        // The three that answer for themselves. Kept because "it takes the focus" is a property of the control, not
-        // of this window: a tick or a button that stopped taking it would put the selection back where it was.
+        // The three that take the focus themselves — a property of the control, so one that stopped would leave the
+        // selection lit.
         function test_a_press_on_a_tick_drops_it() {
             grab()
             mouseClick(tick, 10, 10)
@@ -147,8 +135,7 @@ Item {
             compare(held(), "caret=false selected=false")
         }
 
-        // The words hold the caret and the way out still answers: a read-only field takes the arrows and `Ctrl+C`,
-        // and lets the key that shuts the screen through.
+        // A read-only field takes the arrows and `Ctrl+C` but lets Escape through.
         function test_the_words_do_not_swallow_the_way_out() {
             grab()
             const before = root.escapes

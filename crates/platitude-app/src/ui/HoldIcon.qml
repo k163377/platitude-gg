@@ -1,28 +1,18 @@
 import QtQuick
 import platitude.ui
 
-// The mark every held control wears, on the same 16px grid NavIcon draws to: a ring with the sector's leading edge
-// standing at twelve o'clock — a gauge sitting at zero — that fills clockwise for as long as the press lasts (デザイン規約
-// §長押し).
-//
-// It is what lets the words go back to naming the operation and nothing else: the row says `Delete`, and the mark ahead
-// of it says how.
-//
-// Its own component: NavIcon repaints only when its kind or its tint changes, and this
-// one is repainted some thirty times over a single press.
+// The mark every held control wears (デザイン規約 §長押し), on NavIcon's 16px grid. Its own component because it repaints
+// every frame of a press, where NavIcon repaints only on a kind or tint change.
 InkCanvas {
     id: holdIcon
 
     /// How far into the hold the press has got, 0 to 1.
     property real progress: 0
-    /// Drawn in the colour of the words it stands next to, so the mark and the sentence cannot disagree — including the
-    /// lift to `textOnAccent` while the fill runs under both of them.
+    /// The colour of the words beside it, including the lift to `textOnAccent` over the fill.
     property color tint: Theme.textPrimary
 
-    // Smaller than the words it stands next to, and drawn at the same weight relative to its own box as NavIcon is to a
-    // full-sized one — the stroke is scaled with the grid; at its absolute width it would at this size
-    // read as a bold ring around a small hole. The sector loses detail at the small end; that is the trade for a
-    // mark that sits in a sentence without shouting over it.
+    // The stroke scales with the grid, unlike NavIcon's: at `iconSm` its absolute width reads as a bold ring
+    // (デザイン規約 §長押し).
     width: Theme.iconSm
     height: Theme.iconSm
     onProgressChanged: requestPaint()
@@ -39,21 +29,18 @@ InkCanvas {
         ctx.fillStyle = holdIcon.tint
         ctx.lineWidth = Metrics.iconStroke * s
         ctx.lineCap = "round"
-        // The ring is the whole of the gesture, drawn whether or not any of it has been done yet.
         ctx.beginPath()
         ctx.arc(cx, cy, r, 0, 2 * Math.PI)
         ctx.stroke()
         if (holdIcon.progress <= 0) {
-            // At rest, the sector's leading edge on its own. A bare ring reads as a full stop; a ring with a hand on it
-            // reads as something with somewhere to go.
+            // At rest, the leading edge alone: a bare ring reads as a full stop.
             ctx.beginPath()
             ctx.moveTo(cx, cy)
             ctx.lineTo(cx, cy - r)
             ctx.stroke()
             return
         }
-        // Filled from twelve o'clock, clockwise. Proportional from zero: the frame beside it starts at
-        // `holdFillMin`, so there is no moment here that has to carry the report alone (デザイン規約 §進行中・長押しの定数).
+        // Proportional from zero, unlike the fill beside it (デザイン規約 §長押し).
         ctx.beginPath()
         ctx.moveTo(cx, cy)
         ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(holdIcon.progress, 1))

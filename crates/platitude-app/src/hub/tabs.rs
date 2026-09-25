@@ -8,8 +8,8 @@ use super::*;
 /// behind it is let go ([`Hub::let_go_of_session`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PageAfter {
-    /// It goes with the session: the tab is off the front or closed,
-    /// and every model it held is destroyed with it (`RepoPageStack`).
+    /// It goes with the session: the tab left the front, and its models
+    /// are destroyed (`RepoPageStack`).
     TakenDown,
     /// It stays and reads the next session on this tab — the tab
     /// standing in another working copy (`Hub::restand_tab`).
@@ -18,25 +18,12 @@ enum PageAfter {
 
 impl Hub {
     /// Asks where `path` opens, without opening anything: the working
-    /// copy the folder is in, and the repository that copy hangs off
-    /// ([`platitude_core::repo::place`]).
+    /// copy the folder is in, and its repository
+    /// ([`platitude_core::repo::place`]). Every road in asks this, and no
+    /// tab is shown until it answers (デザイン規約 §タブの所作
+    /// 「判定は 1 か所に置く」).
     ///
-    /// **Every road in asks this** — the picker, a worktree row, the
-    /// pill naming the copy holding a branch, `PGG_AUTO_OPEN` — because
-    /// the strip's one question ("is this repository already open?")
-    /// cannot be answered from the path alone: a folder deeper in a tree
-    /// and a linked working copy are both spelled unlike anything in the
-    /// strip, and both belong to a repository that may already be in it
-    /// (デザイン規約 §タブの所作).
-    ///
-    /// Two processes, and nothing is shown while they run: opening the
-    /// tab first and taking it away again would flash a tab for a frame
-    /// or two, and the folder that opens is about to have a whole
-    /// repository read for it anyway
-    /// (ci/baseline/code-costs-windows-x64.md).
-    ///
-    /// Answers `false` where there is no runtime to ask on, which leaves
-    /// nothing that will ever answer the ask.
+    /// `false` with no runtime: nothing will ever answer.
     pub fn place_repo(&self, path: PathBuf, feed: Arc<Feed<OpenMsg>>) -> bool {
         let Some(handle) = self.runtime_handle() else {
             return false;
@@ -66,17 +53,12 @@ impl Hub {
         true
     }
 
-    /// Fetches a repository into `into`, which becomes a tab once it is
-    /// there. Answers with the token that stops it, or `None` where there
-    /// is no runtime to run it on.
+    /// Clones `url` into `into`, which becomes a tab once it is there.
+    /// Answers with the token that stops it, or `None` with no runtime.
     ///
-    /// Outside every session, because there is no repository yet to have
-    /// one: the dialog that asked is the whole of what is on screen about
-    /// this, and it stands until the answer comes back
-    /// (デザイン規約 §リポジトリを取り寄せる). The budget is the same one
-    /// every other network command is given, so a clone over a slow line
-    /// is raised in the same place as a slow fetch (the settings screen's
-    /// network timeout).
+    /// Outside every session, since there is no repository yet
+    /// (デザイン規約 §リポジトリを取り寄せる). The budget is the settings'
+    /// network timeout, as for a fetch.
     pub fn clone_repo(
         &self,
         url: String,
@@ -93,9 +75,7 @@ impl Hub {
                 .await
             {
                 Ok(()) => CloneMsg::Done { path: into },
-                // A clone the reader stopped answers nowhere: the dialog
-                // it was asked in has gone with the press that stopped
-                // it.
+                // Stopped by the reader: the dialog went with the press.
                 Err(e) if e.is_cancelled() => return,
                 Err(e) => CloneMsg::Failed {
                     message: git_said(&e),
@@ -140,54 +120,27 @@ impl Hub {
     }
 
     /// Where a tab whose copy would not open is stood back: the
-    /// repository's own working copy, and `None` for a tab already
-    /// standing in it (デザイン規約 §タブの所作
-    /// 「立てない所へは立たない」).
+    /// repository's own working copy, `None` for a tab already in it
+    /// (デザイン規約 §タブの所作「立てない所へは立たない」).
     ///
-    /// **Asked before the refusal is shown**, so the page that is about
-    /// to say a copy would not open can tell whether anything is going
-    /// to be tried instead of saying it (`RepoTab` drain). The strip
-    /// holds both paths as well, but it holds them for the row — this
-    /// answers for the tab id the page has, which is the one thing a
-    /// page knows about itself.
-    ///
-    /// **And asked on every opening**, for the folder the picker comes
-    /// up in (`RepoTab::picker_folder_url`): the next repository a
-    /// reader opens sits beside the repository, not beside the copy
-    /// this tab is standing in.
+    /// Asked by the `RepoTab` drain before a refusal is shown, by tab id —
+    /// the one thing a page knows about itself; and on every opening, for
+    /// the picker's folder (`RepoTab::picker_folder_url`).
     pub fn home_copy(&self, id: i32) -> Option<String> {
         let tab = self.tabs.get(&id)?;
         (tab.home != tab.path).then(|| tab.home.to_string_lossy().into_owned())
     }
 
-    /// Stands a tab in another working copy of the repository it is
-    /// already showing: the same tab id, pointed at `path`, with the
-    /// repository behind it read again from there
-    /// (`TabsModel::switch_copy`). Answers whether the tab is this
-    /// hub's.
+    /// Stands a tab in another working copy of the repository it shows:
+    /// the same tab id, pointed at `path` and read again from there
+    /// (`TabsModel::switch_copy`). Answers whether the tab is this hub's.
     ///
-    /// **The tab id is what the page is built on** (`RepoPageStack`), so
-    /// keeping it is what keeps the page: the reader's graph, their
-    /// place in it and the panes around it stand while the session
-    /// under them is swapped, and the walk that the new one starts
-    /// replaces the graph in one go rather than emptying it first
-    /// ([`FirstPass::Swapped`]). What the copy being left owned — its
-    /// status, its uncommitted files — the page drops for itself
-    /// (`RepoPage.leaveCopy`).
-    ///
-    /// The unsent words stay where they are: they are filed under the
-    /// copy they were written in (`Tab::drafts`), and this tab keeps the
-    /// lot of them — the reader comes back to the copy they were left in.
-    ///
-    /// **Only a tab somebody is looking at is opened again here.** A tab
-    /// off the front holds no session (`Hub::release_tab`), and the copy
-    /// it now stands in is read when it comes to the front, the same as
-    /// any other tab nobody has looked at yet.
-    ///
-    /// **The repository behind it does not move**, so `Tab::home` is
-    /// left where it is: every copy of one repository hangs off the same
-    /// one, and that is what a copy which will not open is stood back
-    /// in (`Hub::home_copy`).
+    /// Keeping the id keeps the page (`RepoPageStack`): the new session's
+    /// first walk replaces the graph in one go ([`FirstPass::Swapped`]),
+    /// and the page drops what the copy owned itself (`RepoPage.leaveCopy`).
+    /// Drafts stay, filed per copy (`Tab::drafts`); `Tab::home` stays, as
+    /// the repository does not move. A tab off the front holds no session
+    /// and is read when it comes to the front.
     pub fn restand_tab(&mut self, id: i32, path: PathBuf) -> bool {
         if !self.tabs.contains_key(&id) {
             return false;
@@ -209,10 +162,8 @@ impl Hub {
         self.open_session(id, FirstPass::Streamed);
     }
 
-    /// The opening itself, with what its first graph pass does about a
-    /// graph already on screen ([`FirstPass`]) — the one thing that
-    /// differs between a tab being looked at for the first time and one
-    /// whose reader is standing in front of the repository already.
+    /// The opening itself; `first_pass` says what the first graph pass
+    /// does about a graph already on screen ([`FirstPass`]).
     fn open_session(&mut self, id: i32, first_pass: FirstPass) {
         let Some(handle) = self.runtime_handle() else {
             return;
@@ -226,22 +177,15 @@ impl Hub {
         }
         tab.runs += 1;
         let run = tab.runs;
-        // Taken whichever opening this is: a graph left behind by a
-        // page that has gone down is not this one's to carry, and
-        // nothing else ever puts one here (`Hub::let_go_of_session`).
+        // Taken on every opening, so none outlives it
+        // (`Hub::let_go_of_session` is the only writer).
         let drawn = tab.drawn.take();
         let path = tab.path.clone();
-        // Nothing queued here can be about the session about to be opened,
-        // because there is no session yet — so anything waiting came from
-        // one that has been released, pushed by a task that had already
-        // worked out its answer when cancellation reached it. Read as the
-        // new session's, one such message is enough to leave the graph
-        // holding a generation the new stream never reaches
-        // (`Feed::clear_queued`).
-        //
-        // **The command log keeps what it is holding**: those messages
-        // name the session that made them and are the record of what
-        // this window ran, which the next session does not replace
+        // Anything queued came from a released session (a task that had
+        // its answer when cancellation reached it); read as the new
+        // session's, one message can leave the graph on a generation the
+        // new stream never reaches (`Feed::clear_queued`). The command log
+        // keeps its messages: they name their session
         // (`Feeds::clear_queued_reads`).
         tab.feeds.clear_queued_reads();
         let feeds = Arc::clone(&tab.feeds);
@@ -262,14 +206,10 @@ impl Hub {
             ),
         };
         apply_repo_settings(&session, &applied);
-        // The saved tags flag takes the same door the settings do: the
-        // page's restore runs before this session exists, so its
-        // `setTagsShown` cannot be the write that lands here — without
-        // this the eye read "hidden" while the walk drew every tag.
+        // The saved tags flag, here because the page's restoring
+        // `setTagsShown` runs before this session exists.
         session.set_include_tags(self.state.layout.tags_shown);
-        // Straight after the settings, because they are the permission:
-        // the session holds this until it knows where the repository is,
-        // and fetches before it reads anything (`fetch_on_open`).
+        // After the settings: they are its permission (`fetch_on_open`).
         session.fetch_on_open();
         if let Some(tab) = self.tabs.get_mut(&id) {
             tab.session = Some(session);
@@ -284,9 +224,7 @@ impl Hub {
         );
     }
 
-    /// Puts the settings in force on every open tab. One set of values, so
-    /// every tab is left saying the same thing about the network as the
-    /// settings screen does.
+    /// Puts the settings in force on every open tab.
     pub(super) fn reapply_settings(&self) {
         for tab in self.tabs.values() {
             let Some(session) = &tab.session else {
@@ -296,31 +234,17 @@ impl Hub {
         }
     }
 
-    /// Lets go of everything a tab read while it was in front, leaving the
-    /// tab itself in the strip.
+    /// Lets go of everything a tab read while in front, leaving it in the
+    /// strip in the state [`Hub::reserve_tab`] leaves one: a path, empty
+    /// feeds, no session. Selecting it again ([`Hub::ensure_open`]) reads
+    /// the repository from the start.
     ///
-    /// What is left afterwards is a tab in exactly the state
-    /// [`Hub::reserve_tab`] leaves one in: a path, empty feeds, and no
-    /// session. Selecting it again runs [`Hub::ensure_open`], which opens
-    /// a new session and reads the repository from the start — so this
-    /// is only ever a matter of memory, and all of it comes back to
-    /// the reader.
+    /// The rows handed to QML go with the page (`RepoPageStack`), which
+    /// is why the memory report forgets this tab's models. What the
+    /// session read goes even with a write still running
+    /// (`RepoSession::close`).
     ///
-    /// **The models are the other half.** This releases what the *hub*
-    /// holds; the rows already handed to QML are released by the page
-    /// being taken down with the tab (`Main.qml`), which is also why the
-    /// memory report is told to forget this tab's models — their last
-    /// reported footprints describe objects that no longer exist.
-    ///
-    /// **What it held goes even with a write still running.** The close
-    /// keeps the session alive to the end of that write, but the session
-    /// lets go of what it had drawn as it closes and reads nothing behind
-    /// the write — the graph and the refs of a repository this size are
-    /// the largest things in the process, and there is no page left to
-    /// publish them to (`RepoSession::close`).
-    ///
-    /// Does nothing to a tab that has no session, which is the normal
-    /// case for a tab nobody has looked at yet.
+    /// Does nothing to a tab with no session.
     pub fn release_tab(&mut self, id: i32) {
         if !self.let_go_of_session(id, PageAfter::TakenDown) {
             return;
@@ -330,12 +254,8 @@ impl Hub {
     }
 
     /// Lets go of the session behind a tab and answers whether there was
-    /// one — the half [`Hub::release_tab`] and [`Hub::restand_tab`]
-    /// share, and the two roads a session is ever swapped on.
-    ///
-    /// `page` is the whole of the difference: a page going down takes
-    /// the consumers with it, and one left standing reads the next
-    /// session through the very same feeds.
+    /// one — shared by [`Hub::release_tab`] and [`Hub::restand_tab`];
+    /// `page` is the whole difference.
     fn let_go_of_session(&mut self, id: i32, page: PageAfter) -> bool {
         let Some(tab) = self.tabs.get_mut(&id) else {
             return false;
@@ -343,25 +263,17 @@ impl Hub {
         let Some(session) = tab.session.take() else {
             return false;
         };
-        // The sink first, and before the close: a write the close lets
-        // run on answers late, and the next session on this tab
-        // attaches to the same feeds — retiring it here is what keeps
-        // that answer out of the page, and what makes the record taken
-        // below the last word about what is on screen.
-        //
-        // **A page that is staying keeps the log's half of it.** The
-        // rows that write put on screen are still there saying it is
-        // running, and this is what lets it say how it ended
-        // (`BridgeSink::retire_reads`).
+        // The sink first, before the close: it keeps a late write's
+        // answer out of the next session's page, and makes the graph
+        // taken below the last word on what is on screen. A staying page
+        // keeps the log's half (`BridgeSink::retire_reads`).
         if let Some(sink) = tab.sink.take() {
             match page {
                 PageAfter::TakenDown => sink.retire(),
                 PageAfter::Standing => sink.retire_reads(),
             }
         }
-        // The graph the page is showing, for the session taking this
-        // one's place — before the close, which is what throws it away
-        // (`DrawnGraph`). A page going down has no use for it.
+        // Taken before the close, which throws it away (`DrawnGraph`).
         tab.drawn = match page {
             PageAfter::TakenDown => None,
             PageAfter::Standing => Some(session.take_drawn_graph()),
@@ -369,34 +281,23 @@ impl Hub {
         session.close();
         match page {
             PageAfter::TakenDown => tab.feeds.release_all(),
-            // The invokers name QML objects that are still there and
-            // about to read the next session: letting them go would
-            // leave a live page attached to nothing, with no second
-            // `attach` coming (the page attaches once, when it is
-            // built). What the queues hold about a repository is the
-            // copy being left's; what they hold about a command is the
-            // log's, and the log is staying.
+            // The invokers stay: the page attaches once, when built, and
+            // would be left attached to nothing. Queued reads are the old
+            // copy's; the log's messages stay.
             PageAfter::Standing => tab.feeds.clear_queued_reads(),
         }
-        // The rows a delete took off the screen go back with it, and so
-        // do the readings the lists had drawn: the answer that would have
-        // put the rows back is this session's, a retired sink is exactly
-        // what keeps it out of the next page, and the numbers those
-        // readings were stamped with are this session's own count
-        // (`ops::StandIn::session_gone`). What the next session reads is
-        // the truth either way.
+        // Rows a delete took off go back and the lists' drawn readings
+        // are dropped: the answer that would put the rows back is this
+        // session's, kept out by the retired sink, and the readings carry
+        // this session's stamps (`ops::StandIn::session_gone`).
         tab.stand_in.session_gone();
         self.park_writes_of(&session);
         true
     }
 
-    /// Puts the words typed into a tab's commit editor somewhere that
-    /// outlives its page (see [`Draft`]) — filed under the working copy
-    /// they were written in, which is the one they are about.
-    ///
-    /// An empty draft is filed too: it is the answer for a message the
-    /// reader cleared, and leaving the last one standing would put words
-    /// back that were deleted.
+    /// Files a tab's commit editor words under the copy it stands in (see
+    /// [`Draft`]). An empty draft is filed too — otherwise a cleared
+    /// message would come back.
     pub fn hold_draft(&mut self, id: i32, draft: Draft) {
         if let Some(tab) = self.tabs.get_mut(&id) {
             let copy = tab.path.to_string_lossy().into_owned();
@@ -404,10 +305,8 @@ impl Hub {
         }
     }
 
-    /// What was typed in the copy this tab is standing in, for the page
-    /// that comes back. Empty for a copy nobody has written in — which is
-    /// also what an unknown tab answers, since there is nothing to put
-    /// back either way.
+    /// What was typed in the copy this tab stands in; empty for none, or
+    /// for an unknown tab.
     pub fn draft(&self, id: i32) -> Draft {
         self.tabs
             .get(&id)
@@ -431,23 +330,14 @@ impl Hub {
         }
     }
 
-    /// Keeps hold of a closed session's write loop while it still has a
-    /// local write to finish — the write outlives the close on purpose
-    /// (`RepoSession::close`), and this handle is how [`Hub::writes_settled`]
-    /// and [`Hub::shutdown`] still see it.
+    /// Keeps a closed session's write loop while it has a local write to
+    /// finish (`RepoSession::close`), so [`Hub::writes_settled`] and
+    /// [`Hub::shutdown`] still see it. Call after the close: no new write
+    /// can start then, so zero pending means the queue is done.
     ///
-    /// Read after the close on purpose: once the cancel has landed no new
-    /// write can start, so a count of zero here means the queue is done —
-    /// a loop with nothing left ends on its own and needs no watching.
-    ///
-    /// **Only the waiting is the hub's.** What that tail means for the
-    /// next session on the same repository is the working tree's: it
-    /// holds the order its writes run in, and the session a reselected
-    /// tab opens joins it by the directory git named
-    /// (`platitude_core::session::write_order`). So a reopen queues
-    /// behind this write wherever it was opened from, a second tab on
-    /// another repository waits for none of it, and a hub holding no
-    /// handle at all would still get the order right.
+    /// Only the waiting is the hub's: a reopened session queues behind
+    /// this write through the working tree's order
+    /// (`platitude_core::session::write_order`), not through this handle.
     fn park_writes_of(&mut self, session: &Arc<RepoSession>) {
         if session.local_writes_pending() == 0 {
             return;
@@ -457,13 +347,11 @@ impl Hub {
         }
     }
 
-    /// Whether every write git was asked for is done: no open tab has a
-    /// local write queued or running, every write a closed tab left
-    /// running has ended, and every identity save the application asked
-    /// for has answered (`hub::saves`). The quit gate
-    /// reads this — the window stays until it answers true (`Main.qml`),
-    /// so the join in [`Hub::shutdown`] normally has nothing left to
-    /// wait for.
+    /// Whether every write git was asked for is done: open tabs' local
+    /// writes, the parked writes of closed tabs, and the saves
+    /// (`hub::saves`). The quit gate (`WindowQuitGate`) keeps the window
+    /// until this is true, so the join in [`Hub::shutdown`] normally waits
+    /// for nothing.
     pub fn writes_settled(&mut self) -> bool {
         self.parked_writes.retain(|write| !write.is_finished());
         self.parked_writes.is_empty()
@@ -475,9 +363,8 @@ impl Hub {
             })
     }
 
-    /// Re-reads the author configuration of every open tab. Each session
-    /// caches what it read when the repository opened, so a write made
-    /// outside them (the app-level identity screen) leaves them stale.
+    /// Re-reads every open tab's author configuration: sessions cache it,
+    /// so a write from the app-level identity screen leaves them stale.
     pub fn refresh_authors(&self) {
         for tab in self.tabs.values() {
             if let Some(session) = &tab.session {
@@ -494,11 +381,8 @@ impl Hub {
         self.tabs.get(&id).map(|t| Arc::clone(&t.feeds))
     }
 
-    /// How many messages are waiting in each tab's feeds, as
-    /// `<name>#<tab>:<depth>` for the ones holding anything. The feeds
-    /// walked are the one list `Feeds::each` carries — a copy kept by
-    /// hand here once under-reported exactly the queue this report exists
-    /// to catch.
+    /// Messages waiting in each tab's feeds, as `<name>#<tab>:<depth>` for
+    /// the non-empty ones. Walks `Feeds::each`, never a hand-kept list.
     pub fn feed_depths(&self) -> String {
         let mut waiting: Vec<String> = Vec::new();
         for (id, tab) in &self.tabs {
@@ -526,13 +410,10 @@ impl Hub {
     }
 }
 
-/// What git said, without the command line this application built around
-/// it — the half a screen quotes (デザイン規約: 赤は git の文言だけ).
-///
-/// The `Display` of a failed command spells the whole invocation out
-/// first, which belongs in the command log. Where git itself said
-/// nothing (it never started, or it was killed by the budget), the
-/// error's own words are all there is.
+/// What git said, without the command line around it — the half a screen
+/// quotes (デザイン規約 §リポジトリを取り寄せる「赤は git の文言だけ」).
+/// The error's `Display` where git said nothing (never started, or killed
+/// by the budget).
 fn git_said(e: &platitude_core::GitError) -> String {
     let stderr = match e {
         platitude_core::GitError::Failed { stderr, .. }
@@ -546,42 +427,26 @@ fn git_said(e: &platitude_core::GitError) -> String {
     }
 }
 
-/// Asks a tab's session something, or answers `None` because there is no
-/// session to ask: a tab that has been closed, or one nobody has looked at
-/// yet ([`Hub::ensure_open`] is what opens one).
+/// Asks a tab's session something, or `None` with no session: a closed
+/// tab, or one not yet opened ([`Hub::ensure_open`]).
 pub fn from_session<R>(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>) -> R) -> Option<R> {
     let session = Hub::with(|hub| hub.session(tab_id))??;
     Some(f(&session))
 }
 
-/// The same for telling it to do something, where there being no session
-/// means there is nothing to do. What the session answers — the id of a
-/// write it accepted — is let go here; a slot that has to hand that id
-/// back to the page asks through [`from_session`].
+/// The same, dropping the answer — a slot that must hand a write's id
+/// back to the page uses [`from_session`].
 pub fn with_session<R>(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>) -> R) {
     from_session(tab_id, f);
 }
 
-/// Moves a tab's delete along and answers with the rows it leaves showing
-/// as gone (`ops::StandIn`) — none at all for a tab this hub does not
-/// have, which is also the right picture for one.
+/// The sidebar section `section` has applied a listing to its rows,
+/// stamped `at` as the read was taken (`session::Standing::stamp`).
 ///
-/// **The caller is handed the rows**: the borrow is over before this
-/// returns, so the copy a property is read from is taken with the hub
-/// free (the re-entrant borrow the bridge panics on —
-/// 規約 §Qt Bridges の要点).
-/// The sidebar section called `section` has **applied** a listing to its
-/// rows, stamped as the read that made it was taken
-/// (`session::Standing::stamp`).
-///
-/// **Recorded, and only for that section's own rows.**
-/// Which write it answers for — if any — is the stand-in's to decide when
-/// the page says a list has drawn (`ops::StandIn::look_again`); all this
-/// says is what one list is now showing, which is the only thing a
-/// section can speak for. The three refs sections are handed the same
-/// read and draw it on three separate turns, so each is written down
-/// under its own row (`ops::Row::drawn_by`) and a section that stands
-/// nothing in is not written down at all.
+/// Recorded for that section's own row only (`ops::Row::drawn_by`): the
+/// three refs sections draw the same read on separate turns, and a section
+/// that stands nothing in is not recorded. Which write it answers is the
+/// stand-in's to decide (`ops::StandIn::look_again`).
 pub fn listing_applied(tab_id: i32, section: &str, at: u64) {
     let Some(row) = crate::ops::Row::drawn_by(section) else {
         return;
@@ -589,6 +454,13 @@ pub fn listing_applied(tab_id: i32, section: &str, at: u64) {
     stand_in(tab_id, |gone| gone.listing_applied(row, at));
 }
 
+/// Moves a tab's delete along and answers with the rows it leaves showing
+/// as gone (`ops::StandIn`) — none for a tab this hub does not have.
+///
+/// The caller is handed the rows: the borrow is over before this returns,
+/// so the copy a property is read from is taken with the hub free (the
+/// re-entrant borrow the bridge panics on — rules/app-ui.md
+/// §Qt Bridges・QML の不変条件).
 pub fn stand_in(tab_id: i32, f: impl FnOnce(&mut crate::ops::StandIn)) -> crate::ops::Rows {
     Hub::with(|hub| match hub.tabs.get_mut(&tab_id) {
         Some(tab) => {
@@ -604,19 +476,16 @@ fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {
     (minutes > 0).then(|| std::time::Duration::from_secs(u64::from(minutes) * 60))
 }
 
-/// Puts the settings in force on one session. Every value the settings file
-/// holds passes through here, so a key that is written but never applied
-/// cannot go unnoticed.
+/// Puts the settings in force on one session — every settings value passes
+/// through here, so none is written but never applied.
 fn apply_repo_settings(session: &Arc<RepoSession>, applied: &platitude_core::settings::Defaults) {
     session.set_auto_fetch(minutes_to_interval(applied.auto_fetch_minutes));
     session.set_network_timeout(std::time::Duration::from_secs(applied.network_timeout_secs));
-    // The interval itself is the page's tick's to read (`RepoPage`);
-    // what the session takes is whether the other copies are read at
-    // all, so "never" holds for an opening and a focus too.
+    // The interval is the page's tick's (`RepoPage`); the session takes
+    // only whether other copies are read at all, so "never" also holds
+    // for an opening and a focus.
     session.set_copies_read(applied.copies_interval_secs > 0);
-    // Restarts the walk when it changes something, and on the way in it
-    // changes nothing that has to be walked twice: a session this new has
-    // no workdir yet, so the restart returns without a pass and the
-    // opening's own `restart_log` is the one that reads this.
+    // Walks nothing twice on a new session: with no workdir yet the
+    // restart returns, and the opening's own `restart_log` reads this.
     session.set_log_limit(applied.initial_commits);
 }

@@ -7,10 +7,9 @@ use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::wire::{Fields, Listed, Record, field};
 
-/// Branch names wearing the PR badge. Real PR data joins in Phase 4; until
-/// then the only thing that ever fills this is the harness, so the design
-/// can be reviewed (`harness::Knobs::fake_pr`) — and a build without the
-/// harness has an empty set here and no way to be handed a full one.
+/// Branch names wearing the PR badge. Until PR data joins (Phase 4) only
+/// the harness fills it (`harness::Knobs::fake_pr`); without the harness
+/// it is empty.
 pub(crate) fn pr_set() -> &'static std::collections::HashSet<String> {
     &crate::harness::knobs().fake_pr
 }
@@ -32,7 +31,7 @@ pub struct Chip {
     /// branch, and for a tag only a remote has.
     pub here: bool,
     /// Another working copy has this branch checked out — the green
-    /// frame, and why git refuses a `switch` onto it (measured).
+    /// frame, and why git refuses a `switch` onto it.
     pub held: bool,
     /// `git worktree lock` is on that copy — the padlock beside the name.
     pub locked: bool,
@@ -41,14 +40,12 @@ pub struct Chip {
     pub remote: String,
 }
 
-/// The chips of one row, in the order core sorted them: HEAD's marker
-/// or branch first, then locals, remotes, the working-copy markers and
-/// tags. The row's one card shows the first of them.
+/// The chips of one row in core's order (HEAD first, tags last); the
+/// row's one card shows the first.
 pub type Chips = Listed<Chip>;
 
-/// The word a chip's kind goes out under, and the word every rule on the
-/// other side of the bridge branches on. **The list itself** — a kind
-/// added here is a word added to `RefChip.kindKeyOf` and the menus.
+/// The word a chip's kind goes out under. A kind added here is a word to
+/// add to `RefChip.kindKeyOf` and the menus.
 pub fn kind_word(kind: LabelKind) -> &'static str {
     match kind {
         LabelKind::Head => "head",
@@ -72,9 +69,8 @@ pub fn kind_from_word(word: &str) -> Option<LabelKind> {
 
 /// The kind a chip's word names *as a ref the menus can act on*: the
 /// same word for a branch, a remote branch and a tag, and `""` for the
-/// two markers — the detached HEAD and a working copy standing on the
-/// commit with no branch out — which name no ref, so there is nothing
-/// to switch to, rename or delete (a copy is opened from its own row).
+/// two markers (the detached HEAD, a working copy with no branch out),
+/// which name no ref.
 pub fn ref_kind_word(word: &str) -> &'static str {
     match kind_from_word(word) {
         Some(LabelKind::LocalBranch) => "branch",
@@ -85,13 +81,11 @@ pub fn ref_kind_word(word: &str) -> &'static str {
 }
 
 impl Chip {
-    /// What this chip answers to across the two places it is drawn: its
-    /// kind and its name, and nothing of how it is drawn. A background
-    /// pass that learns the branch now has a remote rewrites the chip
-    /// and would lose a gesture keyed on the whole of it, and the row
-    /// and the card its chip unfolds into have to agree on what "the
-    /// same target" means (デザイン規約 §グラフ行のダブルクリック). A tag may
-    /// share a name with a branch, so the kind stays part of it.
+    /// What this chip answers to on the row and on the card alike: kind
+    /// and name, nothing of how it is drawn — a background pass that
+    /// learns of a remote rewrites the chip, and would lose a gesture
+    /// keyed on the whole (デザイン規約 §グラフ行のダブルクリック). The kind
+    /// stays: a tag may share a branch's name.
     pub fn key(&self) -> String {
         chip_key(kind_word(self.kind), &self.name)
     }
@@ -103,9 +97,8 @@ pub fn chip_key(kind: &str, name: &str) -> String {
     format!("{kind}:{name}")
 }
 
-/// Labels → chips. `pr` names the branches wearing the PR badge (the
-/// callers pass [`pr_set`], the preview until Phase 4); only a local
-/// branch wears it.
+/// Labels → chips. `pr` names the branches wearing the PR badge
+/// ([`pr_set`]); only a local branch wears it.
 pub fn chips_of(labels: &[RefLabel], pr: &std::collections::HashSet<String>) -> Chips {
     Listed::new(
         labels
@@ -125,10 +118,8 @@ pub fn chips_of(labels: &[RefLabel], pr: &std::collections::HashSet<String>) -> 
     )
 }
 
-/// The gone set: the keys of the chips the window is already showing as
-/// gone while git is still being asked to delete the refs they name —
-/// at most one per kind, since a delete touches at most one of each,
-/// empty halves left out.
+/// The gone set: the keys of chips shown as gone while git is still
+/// deleting their refs — one per kind at most, empty halves left out.
 pub fn gone_keys(branch: &str, remote: &str, tag: &str) -> Vec<String> {
     [("branch", branch), ("remote", remote), ("tag", tag)]
         .into_iter()
@@ -137,10 +128,7 @@ pub fn gone_keys(branch: &str, remote: &str, tag: &str) -> Vec<String> {
         .collect()
 }
 
-/// The chips still standing once the gone set has spoken. The window
-/// says a deleted ref's chip is gone before the walk that follows the
-/// delete lands (デザイン規約 §消す操作は先に画面から消す), and this is
-/// where that word is applied.
+/// The chips less the gone set (デザイン規約 §消す操作は先に画面から消す).
 pub fn chips_shown(chips: &Chips, gone: &[String]) -> Chips {
     if gone.is_empty() {
         return chips.clone();
@@ -209,8 +197,6 @@ mod tests {
         }
     }
 
-    /// [`chips_of`] with no branch wearing the PR badge — what every
-    /// test here means when the set is not its subject.
     fn chips_no_pr(labels: &[RefLabel]) -> Chips {
         chips_of(labels, &Default::default())
     }
@@ -257,15 +243,13 @@ mod tests {
         assert!(chips[1].held && chips[1].locked);
         assert!(!chips[2].here);
         assert_eq!(chips[2].remote, "origin, fork");
-        // The marker for a copy with no branch out carries the padlock on
-        // its own: it names no branch, so `held` stays down and the kind
-        // is what puts the frame on it.
+        // A branchless copy's marker carries the padlock alone: it names
+        // no branch, so `held` stays down (the kind puts the frame on it).
         assert!(chips[3].locked && !chips[3].held);
         assert_eq!(Chips::try_from(&QVariant::from(&chips)), Ok(chips));
     }
 
-    /// The words the other side branches on, spelled out whole: a kind
-    /// that moves is a test that fails.
+    /// Spelled out whole: a word that moves is a test that fails.
     #[test]
     fn a_chip_goes_out_under_the_words_the_other_side_reads() {
         let chip = chips_no_pr(&[RefLabel {
@@ -297,9 +281,7 @@ mod tests {
         assert_eq!(kind_from_word(""), None);
     }
 
-    /// The PR badge answers the set the caller passed — only a local
-    /// branch wears it, and only when named. The set is an argument, so
-    /// this test is a fact about its inputs alone.
+    /// The set is an argument, so this test is a fact about its inputs alone.
     #[test]
     fn the_pr_badge_answers_the_named_branches() {
         let labels = [

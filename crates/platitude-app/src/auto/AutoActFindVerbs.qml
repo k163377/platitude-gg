@@ -1,25 +1,18 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-// For the attached types alone — `ToolTip.toolTip` is how the badge's own sentence is read back
-// (rules-refs/app-ui.md carries what an unimported one answers).
+// For the attached `ToolTip.toolTip` alone (rules-refs/app-ui.md「attached 型は宣言元モジュールを import しないと」).
 import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
 /// The things that stand over a page: the find bar, the command log, the settings dialog and
 /// the avatar store.
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are
-/// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+// `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
 
-    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is
-    /// the file that builds this one.
+    /// `var`: typing it `AutoActDriver` would be circular — that file builds this one.
     required property var driver
 
     // The driver's own names, read once so the verbs can name them bare.
@@ -31,8 +24,7 @@ Item {
     readonly property var detailsPane: driver.detailsPane
     readonly property var renderedBarrier: driver.barrierRendered
 
-    /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
+    /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
         if (act === "open-picker") {
             page.openRepositoryPicker()
@@ -55,18 +47,15 @@ Item {
             } else if (act === "avatar-tip") {
                 avatarTipTimer.start()
             } else {
-                // The picture is of the details pane, which arrives a git
-                // subprocess later — the same wait avatar-badge takes; a
-                // shot at the ask frames a loading pane.
+                // The details pane arrives a git subprocess later; a shot at the ask frames it loading.
                 avatarShownTimer.hovers = act === "avatar-hover"
                 avatarShownTimer.start()
             }
         } else if (act === "avatar-settings" || act === "avatar-combo"
                    || act === "avatar-row-lit" || act === "avatar-remove"
                    || act === "avatar-enter") {
-            // Each run starts with an empty store, so a picture to look at has to be filed first — the argument is the
-            // one to file. The card the four of them are about is the window's, and so is their completion
-            // (`WindowAutoActDriver`); all that happens here is the filing and the asking.
+            // The store starts empty each run, so the argument is filed first. The card and its completion are the
+            // window's (`WindowAutoActDriver`).
             page.activateRow(graphModel.oidAt(1))
             if (arg !== "")
                 avatarSeedTimer.start()
@@ -81,8 +70,7 @@ Item {
                 graphPane.findNext()
             else if (act === "find-prev")
                 graphPane.findPrevious()
-            // `width` and `cap` are the two halves of the rule the long queries are here to check: the card may grow,
-            // and stops at a subject's first character.
+            // `width` / `cap`: the card may grow, but stops at a subject's first character.
             Harness.report("find open=" + graphPane.findCard.open
                               + " query=" + graphPane.findCard.query
                               + " matches=" + graphPane.findCard.matches
@@ -94,28 +82,22 @@ Item {
                               + " clears=" + graphPane.findCard.findClears)
             findSettled.restart()
         } else if (act === "find-scroll") {
-            // The search drawn, and then the list sent on by a screen — the order a reader scrolling through a search
-            // makes. `find` never reaches it: the query and the jump land in one call, so every row it shows is drawn
-            // once. Here the rows the scroll brings in are drawn by delegates handed on from rows just drawn dimmed or
-            // lit, which is where a row's ink can carry over into the next row's.
+            // The search drawn, then the list scrolled: rows come in on delegates handed on from rows just drawn
+            // dimmed or lit, where one row's ink can carry into the next. `find` draws each row only once.
             page.startFind()
             graphPane.findCard.query = arg
             findScrolled.start()
         } else if (act === "band-find") {
-            // The panel's own mark, pressed (`TopBar.findNow`). Put in at the button, so what answers is the panel's
-            // real wiring — the key and the mark meet at `RepoPage.startFind`, and a run that called that would pass
-            // a build where the mark reaches nothing. **Answers whether the press went in**: the mark is down while a
-            // plan stands over the graph, and a shot fired at nothing is not one to latch.
+            // Pressed at the mark itself (`TopBar.findNow`), not `RepoPage.startFind`, so a mark wired to nothing
+            // fails. The mark is down while a plan stands over the graph: no press, nothing to latch.
             if (!driver.inputWent(page.pageBand.findNow()))
                 return
             Harness.report("band_find open=" + graphPane.findCard.open)
             findSettled.restart()
         } else if (act === "find-drop") {
-            // The card standing while a press lands somewhere else. Presses cannot be injected (verify-ui スキル), so
-            // this enters where `FocusRelease.pressedAway` enters and gives the press no place of its own — which is
-            // "it landed on none of ours", the answer that matters here. The argument is what is typed in first:
-            // nothing, and the card goes with the press; a query, and the card stays because the query is what there
-            // would be to lose (規約 §コミットを探す).
+            // A press landing elsewhere, entered where `FocusRelease.pressedAway` enters, with no place of its own
+            // (= on none of ours). The argument is typed first: empty, the card goes with the press; a query, it
+            // stays (規約 §コミットを探す).
             page.startFind()
             if (arg !== "")
                 graphPane.findCard.query = arg
@@ -133,9 +115,7 @@ Item {
                 commandsPickTimer.start()
         } else if (act === "commands-fail" || act === "commands-clear" || act === "commands-fail-shut"
                    || act === "commands-escape") {
-            // A real refusal in git's own words, raising the panel by itself. The clearing verb starts from the same
-            // failure (`Main` waits for it, presses Clear, and reads the band); the shutting one takes the panel back
-            // down with the `>_`, which leaves the error line standing and the mark red.
+            // A real refusal in git's own words, which raises the panel by itself.
             if (act === "commands-fail-shut" && arg === "fold")
                 page.foldByHand(true)
             repoTab.checkoutBranch("pgg-no-such-branch", false)
@@ -148,8 +128,7 @@ Item {
         }
         return true
     }
-    // The details pane the resting/hovered face sits in, waited to settle before the shot; the hover mark
-    // goes on once the face it marks is there.
+    // The hover mark goes on once the face it marks is there.
     SampleTimer {
         id: avatarShownTimer
         property bool hovers: false
@@ -162,11 +141,8 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // The badge's own sentence, which the pointer raises after `Metrics.tipDelayMs` and no picture of the badge
-    // carries: the shot is taken the frame the act ends, and the tip is not up yet. Read off the shared instance
-    // itself — the one thing that can also say the words on it, which is what this verb is here to read: the address
-    // the sentence names is handed over late (`%1`), and a run that only saw the box could not tell a filled sentence
-    // from an empty one.
+    // The badge's sentence, up only after `Metrics.tipDelayMs`. Read off the shared instance: the address it names
+    // arrives late (`%1`), and a picture cannot tell a filled sentence from an empty one.
     SampleTimer {
         id: avatarTipTimer
         onTriggered: {
@@ -191,8 +167,7 @@ Item {
             driver.complete()
         }
     }
-    // Automation: the details have to land before the author card can be worked, since it is that author the picture is
-    // filed against.
+    // The picture is filed against the details' author, so the details land first.
     SampleTimer {
         id: avatarAssignTimer
         onTriggered: {
@@ -215,13 +190,9 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // What the graph did about the find bar, read after it finished doing it. The step down out from under the card is
-    // animated, so the value in the same call stack as the verb is always the one before it moved — reporting that
-    // would be reporting the intent, which the line above already carries as `clears=`.
-    //
-    // `pin=` is HEAD's stand-in as drawn, once the jump has sent HEAD's own row off: `none`, or whether its words are
-    // at full strength (`lit`) or went down with a row the search passed over (`dim`). A stand-in that stayed lit
-    // photographs as a highlighted row at the edge of the pane, which is exactly what a match looks like.
+    // Read a tick after the verb: the step out from under the card is animated, and the value in the verb's own call
+    // is the one before it moved. `pin=` is HEAD's stand-in once the jump sent HEAD's row off — `none`, `lit` or
+    // `dim`; one left lit photographs exactly like a match.
     SampleTimer {
         id: findSettled
         onTriggered: {
@@ -234,14 +205,10 @@ Item {
             driver.complete()
         }
     }
-    // PGG_AUTO_ACT=find-scroll: the scroll waits for the frame that drew the search — a grab's callback is that frame
-    // (verify-ui: the render boundary is the grab's callback) — and the picture is of the screen the scroll brought
-    // in. `grabbed=` says the wait happened: without it the scroll lands in the same turn as the query and the run is
-    // `find` again. `pin=` is read the way `find_settled` reads it; the scroll sends HEAD's row off the top.
-    //
-    // **Two screens, not one.** A jump builds the rows it brings in before it lets go of the ones it leaves, so the
-    // first screen is drawn by new delegates and the drawn ones only go to the pool; the second screen is where they
-    // are handed on (measured: one screen showed the pre-fix lanes whole, two showed them striped).
+    // PGG_AUTO_ACT=find-scroll: the scroll waits for the grab callback of the frame that drew the search
+    // (rules/app-ui.md §UI 自動化). `grabbed=` says it did — otherwise the scroll lands in the same turn as the query
+    // and the run is `find` again. Two screens: a jump builds the incoming rows before letting go of the outgoing
+    // ones, so drawn delegates are handed on only on the second.
     SampleTimer {
         id: findScrolled
         property string stage: "wait"
@@ -275,8 +242,7 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // The card fades in and out, so both halves of `find-drop` are photographed at one end of that fade or the other:
-    // caught in between, the card that stayed and the card that went away frame the same.
+    // Shot at one end of the card's fade: caught in between, the card that stayed and the one leaving frame the same.
     SampleTimer {
         id: findDropSettled
         onTriggered: {
@@ -289,7 +255,6 @@ Item {
             driver.complete()
         }
     }
-    // The store starts empty in every run, so the card's own verbs put a picture in it before opening on it.
     SampleTimer {
         id: avatarSeedTimer
         onTriggered: {
@@ -302,8 +267,7 @@ Item {
             page.settingsDialogRequested()
         }
     }
-    // The picture is read off disk asynchronously, so what the shot wants is a beat after the
-    // write.
+    // The picture is read off disk asynchronously, a beat after the write.
     SampleTimer {
         id: avatarReportTimer
         onTriggered: {
@@ -318,16 +282,13 @@ Item {
             driver.complete()
         }
     }
-    // PGG_AUTO_ACT=commands-fail-shut: the mark's red with the panel out of the way, which is the state no other verb
-    // can photograph — `commands-fail` leaves the panel standing over it and `commands-clear` takes the red away with
-    // the rows. The press goes in at the `>_`'s own function, so a build where that
-    // press stopped reaching the page waits here.
+    // PGG_AUTO_ACT=commands-fail-shut: the red mark with the panel out of the way, which no other verb photographs.
+    // Pressed at the `>_`'s own function, so a build where that press stopped reaching the page waits here.
     SampleTimer {
         id: commandsShutTimer
         property bool pressed: false
         onTriggered: {
-            // Both halves are the refusal landing: red mark, panel raised by it. Read again after the press, the
-            // panel's going away would bar the way to the report (規約 §UI 自動化の因果性).
+            // Read only before the press: the panel going away is this verb's own answer (rules/app-ui.md §UI 自動化).
             if (!commandsShutTimer.pressed) {
                 if (!page.commandsWrong || !page.commandsShown)
                     return
@@ -345,11 +306,9 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // PGG_AUTO_ACT=commands-escape: the key on the one panel nothing else takes down. It starts from the same refusal
-    // `commands-fail` does, because that is the panel the fourth door is for — one the reader never asked for and the
-    // next success will not clear (デザイン規約 §git が言ったことを読む場所). Entered at `escapePressed`, where
-    // `Keys.onEscapePressed` enters: a keystroke cannot be injected (verify-ui スキル). **`took=` is the claim** — the
-    // page has to say the key was its own, or a press that fell through to nobody would frame exactly like this one.
+    // PGG_AUTO_ACT=commands-escape: Esc on the panel a refusal raised (デザイン規約 §git が言ったことを読む場所),
+    // entered at `escapePressed` where `Keys.onEscapePressed` enters. **`took=` is the claim**: a key that fell
+    // through to nobody would frame exactly like this.
     SampleTimer {
         id: commandsEscapeTimer
         property bool took: false
@@ -365,8 +324,7 @@ Item {
             if (page.commandsShown)
                 return
             commandsEscapeTimer.stop()
-            // The mark goes with the panel it was on, so the run says both — a red left behind on a panel that is no
-            // longer there is the half a picture of the shut window cannot answer for.
+            // The mark goes with its panel; a red left behind is what a picture of the shut window cannot show.
             Harness.report("commands_escape took=" + commandsEscapeTimer.took
                               + " open=" + page.commandsShown
                               + " wrong=" + page.commandsWrong
@@ -374,41 +332,28 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // PGG_AUTO_ACT=commands-select / commands-copy: a drag over the log, and the key that takes what it picked. The
-    // drag runs from the head of the first row to the end of the last, which is the stretch that reaches all three of
-    // a row's columns and more than one row — a drag inside one column would prove a fraction of the rule and read as
-    // a pass.
+    // PGG_AUTO_ACT=commands-select / commands-copy: a drag from the head of the first row to the end of the last —
+    // all three columns and more than one row — then, for `-copy`, Ctrl+C. **`perRow=` is the claim**: one clipboard
+    // line per row. Tab-led lines are not counted: they are git's words under a failure, and which commands fail is
+    // not the run's (a container reading the tree's real working copy gets `not a git repository`).
     //
-    // `commands-select` stops with the wash standing (the picture is the deliverable); `commands-copy` presses Ctrl+C
-    // and reads back what went out, since the clipboard will not answer a headless run
-    // (`ClipboardHelper.lastCopied`). **`perRow=` is the claim**: one line on the clipboard for every row in the
-    // panel. Lines that begin with a tab are not counted — a failure brings git's own words down under it, and no run
-    // owns which of its commands fail (reading a repository from inside a container answers `not a git repository` for
-    // the working copy the tree really lives in, and that one refusal is three more lines: measured).
-    //
-    // The write barrier is in front of these (the same wait `dispatchFinished` makes for a
-    // plain write act): the two writes that give the log something to hold are still queued when this starts, and a
-    // tick that arrives before them drags over whatever a background read happened to leave. All of it is read in the
-    // branch that acts and nowhere else (規約 §UI 自動化の因果性).
+    // Behind the write barrier: the two writes that fill the log are still queued when this starts. Everything is
+    // read in the branch that acts (rules/app-ui.md §UI 自動化).
     SampleTimer {
         id: commandsPickTimer
         onTriggered: {
             if (!driver.wroteAndSettled())
                 return
-            // Two rows, because the fixture makes two writes and the drag is about crossing from one row to another:
-            // the write barrier alone lets a tick through while an opening read is the only thing in the log, and a
-            // drag inside one row proves the smaller half of the rule (measured — `rows=1` on both OS).
+            // Two rows: the write barrier alone can let a tick through while an opening read is the only row.
             if (!page.commandsShown || page.pageCommands.running || page.pageCommands.rowsHeld() < 2)
                 return
             commandsPickTimer.stop()
-            // The model's own count — the panel's `(N)` is the view's, and the view is a frame behind
-            // the rows in the tick a press lands in (measured, 1 against 4 commands on the clipboard).
+            // The model's count: the panel's `(N)` is the view's, a frame behind in the tick a press lands in.
             const rows = page.pageCommands.rowsHeld()
             page.pickCommandText(0, 0, rows - 1, driver.pastLineEnd)
             if (Harness.autoAct === "commands-select") {
-                // Two halves, because either one alone passes a broken run: `holds=` is the selection the model is
-                // keeping, `worn=` is the rectangle every row is drawing of it. A log that holds one and wears none
-                // photographs exactly like a log nobody dragged over (`CommandsPane.washTally`).
+                // `holds=` is the model's selection, `worn=` what the rows draw of it (`CommandsPane.washTally`) —
+                // either alone passes a broken run.
                 Harness.report("commands_pick holds=" + (page.pageCommands.selectionText() !== "")
                                   + " " + page.commandWashTally() + " held=" + rows)
                 renderedBarrier.begin()
@@ -423,14 +368,9 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // PGG_AUTO_ACT=commands-sweep: the same text, started on the ground under the last row — the
-    // one place inside the panel's own frame that no row is under
-    // (規約 §git が言ったことを読む場所). The waits are `commands-select`'s, and the sweep is `details-sweep`'s:
-    //
-    // **Nine starts.** A reach that worked from a single place in the ground is exactly the fault the right
-    // pane's values shipped with, and the middle is the one place that hides it. Each start
-    // is judged on its own, over a board cleared first — a run that read the selection once at the end would report
-    // the last try and call the other eight green.
+    // PGG_AUTO_ACT=commands-sweep: the same drag, started on the ground under the last row
+    // (規約 §git が言ったことを読む場所). Nine starts, each judged over a cleared selection: a reach that works from one
+    // spot hides at the middle, and one read at the end would report only the last try.
     SampleTimer {
         id: commandsSweepTimer
         /// Where the ground began at the previous sample, for the settle below.
@@ -440,8 +380,8 @@ Item {
                 return
             if (!page.commandsShown || page.pageCommands.running || page.pageCommands.rowsHeld() < 2)
                 return
-            // **And the panel has to have stopped laying out.** The rows arrive a frame ahead of the view that draws
-            // them, and a sweep aimed at ground that is about to be a row lands on neither.
+            // The layout has to be still: rows arrive a frame ahead of the view, and a sweep aimed at ground about
+            // to be a row lands on neither.
             const geom = Math.round(page.commandsGroundTop) + "," + page.pageCommands.rowsHeld()
             if (geom !== commandsSweepTimer.lastGeom) {
                 commandsSweepTimer.lastGeom = geom
@@ -461,8 +401,7 @@ Item {
                         reach++
                 }
             }
-            // `ground=` is the run's own honesty: a panel whose log fills it has nowhere to sweep from, and a
-            // `reach=0/9` off one is a fixture that stopped saying anything.
+            // `ground=false`: the log fills the panel, and `reach=0/9` then says nothing.
             Harness.report("commands_sweep reach=" + reach + "/" + tries
                               + " ground=" + page.commandsHasGround
                               + " rows=" + page.pageCommands.rowsHeld())

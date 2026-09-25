@@ -5,36 +5,26 @@ import platitude.ui
 
 // The hand that carries a tab: which tab is in it, where it has got to, and what the strip's order does about that
 // (デザイン規約 §タブの所作). The strip owns the tabs and says what a press means; this owns the gesture between the
-// taking up and the setting down.
-//
-// Its own file for the reason `MiddleAutoScroll` has one: the hand and the thing it moves are
-// separate questions, and only one of them is about how a tab is drawn.
-//
-// An `Item` because the drift below is a `Timer` and needs somewhere to stand; it draws
-// nothing and is never given a size.
+// taking up and the setting down. An `Item` only so the drift `Timer` has somewhere to stand; it draws nothing.
 Item {
     id: carry
 
-    /// The strip's own list, and the model under it. Both are the strip's — a carry reads where the tabs sit and asks
-    /// the model to change their order, and owns neither.
+    /// The strip's list and model: a carry reads where the tabs sit and asks the model to reorder them, and owns
+    /// neither.
     required property ListView view
     required property var tabsModel
 
-    /// The tab in hand: which one it is, where inside it the hand took hold, and where its left edge has been carried
-    /// to in the strip's own coordinates. Held by id — the order changes under a drag, and the
-    /// row the hand is on is the one thing about it that does not (デザイン規約 §タブの所作).
+    /// The tab in hand — by id, since the order changes under a drag — where inside it the hand took hold, and where
+    /// its left edge has been carried to in the strip's coordinates.
     property int heldId: -1
     property real heldGrabX: 0
     property real heldX: 0
-    /// Where the hand last reported in the scene, and how far past the run it is asking for. A hand that has run out of
-    /// strip is still asking, and the distance it asks by is what the strip travels at (デザイン規約 §タブの所作 —— the
-    /// sensitivity is the one the app's other autoscroll reads, §グラフを横へ送る).
+    /// Where the hand last reported in the scene, and how far past the run it is asking — the distance the strip
+    /// travels at (デザイン規約 §タブの所作).
     property real heldSceneX: 0
     property real heldPush: 0
 
-    /// The tab at `index`, taken up: the hand has carried it past the platform's threshold and is now holding it.
-    /// `grabX` is where inside the tab it took hold, which is what keeps that same point of the tab under the hand
-    /// however far it travels.
+    /// The tab at `index`, taken up past the platform's threshold; `grabX` keeps that point of the tab under the hand.
     function takeTab(index, grabX) {
         const tab = carry.view.itemAtIndex(index)
         if (!tab)
@@ -44,12 +34,9 @@ Item {
         carry.heldX = tab.x
     }
 
-    /// The hand, moved to `sceneX` with a tab in it. Scene coordinates in, the strip's own out: the tab is drawn
-    /// where the hand is, so its own coordinates cannot say where the pointer got to.
-    ///
-    /// The run — what is on screen — is as far as a tab can be put. Past either end of it the tab stays at the edge and
-    /// the strip travels underneath (`driftRun`), which is the only way a tab reaches a place that is not on
-    /// screen when the carry starts.
+    /// The hand, moved to `sceneX` with a tab in it — scene coordinates, since the tab moves with the hand. A tab is
+    /// put no further than the run on screen; past either end it stays at the edge and the strip travels under it
+    /// (`driftRun`).
     function carryTab(index, sceneX) {
         const tab = carry.view.itemAtIndex(index)
         if (!tab)
@@ -79,8 +66,7 @@ Item {
         carry.carryTab(at, carry.heldSceneX)
     }
 
-    /// Where the tab in hand sits right now, or -1 with nothing in hand. Walked: the carry is
-    /// what changes it.
+    /// Where the tab in hand sits right now, or -1 with nothing in hand. Walked: the carry is what changes it.
     function heldIndex() {
         for (let i = 0; i < carry.view.count; i++) {
             const tab = carry.view.itemAtIndex(i)
@@ -90,37 +76,32 @@ Item {
         return -1
     }
 
-    /// The one place a carried tab is put anywhere: where it is drawn, and — for as long as it keeps passing them —
-    /// which neighbours it has changed places with. The hand comes through `carryTab` and the smoke hooks through the
-    /// strip's own, so neither can reach an order the other cannot.
+    /// The one place a carried tab is put: where it is drawn, and which neighbours it has passed. The hand (`carryTab`)
+    /// and the smoke hooks (the strip's) both come through here, so neither can reach an order the other cannot.
     function carryTo(index, left) {
         const tab = carry.view.itemAtIndex(index)
         if (!tab)
             return index
-        // The strip is the whole of the run: a tab carried past either end stops there, the way everything else that
-        // scrolls here stops (デザイン規約 §QML 実装ルール). A tab stays in the strip.
+        // A tab carried past either end of the strip stops there, as everything that scrolls here does
+        // (デザイン規約 §QML 実装ルール).
         const origin = carry.view.originX
         carry.heldX = Math.max(origin, Math.min(left, origin + carry.view.contentWidth - tab.width))
         let at = index
-        // Bounded by the strip itself: each step passes one tab, so nothing can be passed more often than there are
-        // tabs to pass.
+        // Each step passes one tab, so the tab count bounds the loop.
         for (let step = 0; step < carry.view.count; step++) {
             const next = carry.stepOrder(at)
             if (next === at)
                 break
             at = next
-            // That step changed the order, so the places the next comparison reads have to be the ones the view
-            // has just given the tabs.
+            // The order changed: the next comparison has to read the places the view has just given the tabs.
             carry.view.forceLayout()
         }
         return at
     }
 
-    /// One neighbour, passed or not: the carried tab changes places with whichever side it has taken half of.
-    ///
-    /// The leading edge against the neighbour's middle. Tabs are of different widths
-    /// — middles agree only where they are of one width, and a wide tab held against the end of the strip never reaches
-    /// a narrow last tab's middle at all, which would leave the last place unreachable by hand.
+    /// One neighbour, passed or not: the carried tab's leading edge against the neighbour's middle. Middle against
+    /// middle fails for tabs of different widths — a wide tab held at the strip's end never reaches a narrow last tab's
+    /// middle.
     function stepOrder(at) {
         const tab = carry.view.itemAtIndex(at)
         if (!tab)
@@ -138,18 +119,15 @@ Item {
         return at
     }
 
-    /// Set down. The order is already what it is going to be — the tab only stops being drawn away from its own row,
-    /// and the strip stops travelling with it.
+    /// Set down: the order is already final, so the tab only returns to its row and the strip stops travelling.
     function dropTab() {
         carry.heldId = -1
         carry.heldPush = 0
     }
 
-    // The strip travels while a tab is held past the end of the run. One frame a tick and the curve the app's other
-    // autoscroll reads (`Metrics.handSent`, デザイン規約 §グラフを横へ送る): the two are the same gesture seen
-    // from different ends — a hand asking for somewhere it cannot reach, and the distance saying how badly. **The
-    // dead zone comes with it**: the first pixels past the edge are a hand steadying a tab on the last place, not
-    // asking for the next one.
+    // The strip travels while a tab is held past the end of the run: one frame a tick, on the app's other autoscroll
+    // curve (`Metrics.handSent`, デザイン規約 §グラフを横へ送る), dead zone included — the first pixels past the edge
+    // are a hand steadying a tab on the last place.
     Timer {
         id: run
         interval: 16

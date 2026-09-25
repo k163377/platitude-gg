@@ -2,72 +2,51 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// Everything uncommitted, set aside in one entry, on the press (デザイン規約 §変更を退避する). It stands on the band:
-// what it sets aside is the working tree, which is there whichever pane is
-// open, and the pane that could otherwise host it is one row's selection away most of the time.
+// Everything uncommitted, set aside in one entry, on the press (デザイン規約 §変更を退避する).
 ActionButton {
     id: stashButton
 
     /// The RepoPage of the active tab (null while no tab is open).
     property var curPage: null
-    /// What the working tree lets this button do (デザイン規約 §変更を退避する). The refusals are read where they
-    /// were measured (`platitude_core::stash::standing` — unborn / conflicts / clean / ready); `closed` is
-    /// this band's own half: nothing open here to read a working tree off.
+    /// What the working tree lets this button do (`platitude_core::stash::standing`), or `closed` with nothing open.
     readonly property string mode:
         stashButton.curPage === null || stashButton.curPage.pageTab.state !== "open"
             || !stashButton.curPage.pageWt.loaded
         ? "closed" : stashButton.curPage.pageWt.stashStanding
 
     kind: "stash"
-    // The label is the command, like both buttons beside it (デザイン規約 §git 用語のコード表記). One wording in every
-    // state: nothing here changes what the press costs, so there is no second shape to say.
     text: "stash"
     code: true
-    // The panel's resting frame, like the two beside it (`BandFetchButton`), and never any other colour: a stash
-    // destroys nothing, so nothing here ever turns it.
+    // The resting frame, like the two beside it (`BandFetchButton`); a stash destroys nothing, so it never turns.
     frameColor: Theme.borderStrong
     // The canvas inside the frame, like the two beside it (`BandFetchButton`).
     faceColor: Theme.bgSurface
-    // Nothing worn on top of that: a stash destroys nothing, so no `!` and no hold (デザイン規約
-    // §変更を退避する). No ring either — the ring names a wait on the network and this write is local (§進行中・
-    // 長押しの定数); while it runs the band is busy and the button is down, like the commit button beside its
-    // own write.
-    // Held down with the sidebar while a rebase plan is being composed: the one write that runs then is the plan's
-    // own button, and fetch is the only other door left open.
-    // And held down while the pane is reading another working copy: this is the one button outside that pane that
-    // acts on the very changes it is listing, and a press here would set aside *this* window's changes
+    // No `!`, hold or ring (デザイン規約 §変更を退避する). Down while a rebase plan is composed (its run button is the one
+    // write), and while the pane reads another working copy — a press would set aside *this* window's changes
     // (P3-確認事項 §別 worktree の未コミット行).
     enabled: stashButton.mode === "ready" && stashButton.curPage.pageTab.busyCount === 0
              && !stashButton.curPage.planShown && stashButton.curPage.wipWritable
     tip: {
-        // Nothing open, or another git command already out. Neither is about stashing, and both are said on
-        // this band already (デザイン規約 §無効). Said out loud because a disabled control still takes hover and
-        // still opens its attached ToolTip (measured, rules-refs/app-ui.md §hover).
+        // Silent where the band already says why (デザイン規約 §変更を退避する), emptied by hand: a disabled control
+        // still opens its ToolTip (rules-refs/app-ui.md「押せないボタンを黙らせる」).
         if (stashButton.mode === "closed" || stashButton.curPage.pageTab.busyCount > 0)
             return ""
         // The freeze names itself: a tree that could be stashed looks no different while a plan stands over it.
         if (stashButton.curPage.planShown)
             return qsTr("A rebase plan is being composed — until it closes, the only write is its run button")
-        // The pane names the copy it is reading, but not what this button would have done — and the files on screen
-        // are exactly the ones a reader would expect a press here to reach.
+        // The files on screen are the ones a reader would expect a press here to reach.
         if (!stashButton.curPage.wipWritable)
             return qsTr("Reading another working copy — this sets aside this window's changes")
-        // The three that *are* about the working tree each name what is missing (デザイン規約 §hover のツールチップ).
-        // They speak where the fetch button's refusals stay silent, because the reason is not on screen the way
-        // `REMOTES 0` is: a tree with conflicts in it looks exactly like one that could be stashed, and the
-        // band's own conflict badge says the repository has them — not that they are what is holding this
-        // button down.
+        // These speak though disabled: the reason is not on screen (デザイン規約 §変更を退避する).
         if (stashButton.mode === "unborn")
             return qsTr("No commits yet — git cannot stash before the first one")
         if (stashButton.mode === "conflicts")
             return qsTr("Settle the conflicts first — git will not stash an unmerged file")
         if (stashButton.mode === "clean")
             return qsTr("Nothing to stash — the working tree is clean")
-        // The breadth is what the label has no room for, and with no card to read it is the only place it is
-        // said (デザイン規約 §hover のツールチップ).
+        // The breadth is said only here (デザイン規約 §変更を退避する).
         return qsTr("Set these changes aside, files git is not tracking yet included")
     }
-    // The name comes from the page: a summary already written for these
-    // changes is the name the reader would have given them anyway (デザイン規約 §変更を退避する).
+    // Named from the page's summary where one is written (デザイン規約 §変更を退避する).
     onActivated: stashButton.curPage.pageTab.pushStash(stashButton.curPage.pageStashName)
 }

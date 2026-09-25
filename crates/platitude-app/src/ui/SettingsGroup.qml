@@ -2,32 +2,22 @@ import QtQuick
 import QtQuick.Layouts
 import platitude.ui
 
-// One group of a settings category: the word that names how far its values reach, the rule under that word, and the
-// chapters the caller lays out below (規約 §設定の画面).
-//
-// **The word is a field**, the same as the chapter heading under it (`SettingsSection`).
-//
-// The level above `SettingsSection`, ranked at the same step: both are `fontMd` + `DemiBold` + upper case +
-// `textPrimary`, because a heading is made by weight, colour and case
-// (規約 §タイポグラフィ 「重み・色・大文字が作る」) and both of these are headings. What ranks them is the rule and
-// the inset — the group's is `borderDefault` and the chapter's `borderSubtle`, and the chapters are inset, so the
-// group's rule runs past theirs on the left and the nesting is legible at a glance. **The ink is the same**:
-// a screen whose skeleton was one step down read as the faintest thing on itself (`SettingsSection`).
+// One group of a settings category: the word that names how far its values reach, its rule, and the chapters below.
+// Same heading step and ink as `SettingsSection`; only the `borderDefault` rule and the chapters' inset rank it above
+// them (規約 §設定の画面).
 ColumnLayout {
     id: group
 
     /// The word above, written in the case it is shown in.
     property string caption: ""
 
-    /// What the caller lays out below the rule. Aliased to `body`: the inset is the group's to apply and a caller
-    /// cannot be trusted to repeat it.
+    /// What the caller lays out below the rule, inset by the group itself.
     default property alias content: body.data
 
     Layout.fillWidth: true
     spacing: Theme.spaceMd
 
-    // The word and its rule are one thing, so they stand closer to each other than to what they head — the same
-    // shape `SettingsSection` keeps.
+    // The word and its rule stand closer to each other than to what they head.
     ColumnLayout {
         Layout.fillWidth: true
         spacing: Theme.spaceXs

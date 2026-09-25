@@ -42,55 +42,30 @@ impl platitude_core::mem::Footprint for Candidate {
 /// Columns a tab stands for (デザイン規約 §シンタックスハイライト).
 pub(super) const TAB_WIDTH: usize = 4;
 
-/// How many lines the pane is handed. Every one of them costs a text
-/// layout when a file is opened, so this is how far ahead of the rows the
-/// pane is willing to read.
+/// How many lines the pane is handed; each costs a text layout when a
+/// file opens.
 const MOST_CANDIDATES: usize = 8;
 
 /// The lines worth measuring before the rows that hold them are laid out,
-/// one [`Candidate`] each. Empty where there is nothing to send.
+/// one [`Candidate`] each; empty where there is nothing to send
+/// (デザイン規約 §diff を横へ送る, rules-refs/app-ui.md「diff は横へ送る・溝は動かない」).
 ///
-/// What it is for: the pane draws the code without eliding it and lets the
-/// reader send it sideways, so it wants to know how far sideways there is
-/// to go before the reader has scrolled through the file
-/// (デザイン規約 §diff を横へ送る). **Lines, because a column is not a
-/// width and no arithmetic here can make it one**: a wide glyph is counted
-/// as two columns, and the fallback a Latin-only mono family hands it to
-/// is not monospaced at all — measured on Windows at `fontCode`, against
-/// 8px for the font's own columns:
-/// `日` 13, `の` 11, `。` 9, `「` 7, an emoji 18. And it cuts the other
-/// way as often: a combining mark is a character this walk counts and a
-/// glyph the font draws nothing extra for, so `e`+U+0301 four hundred
-/// times counts 800 columns and is drawn in 400. What leaves here is the
-/// text to measure.
+/// **Lines, because a column is not a width**: the fallback a Latin-only
+/// mono family hands a wide glyph to is not monospaced, and a combining
+/// mark is a column counted and nothing drawn.
 ///
-/// **A head start.** Which line is drawn furthest cannot be known here, so
-/// this hands over the longest few by column count and nothing is decided
-/// by leaving a line out: what settles the reach is the width of the rows
-/// as they are laid out (`DiffReach`), and a line no record named is
-/// measured when its row reaches the screen. Ranking by columns is a
-/// guess; dropping a line on one was a bug — a line beaten on both counts
-/// a walk of columns knows about (`0` seven hundred times against those
-/// four hundred combining pairs) is drawn 2,400px further.
-///
-/// The text is the row's own (`markup::styled`): escaped, its tabs spelled
-/// as the spaces the row draws them as, and read in one format. Handing
-/// over the source line instead measured a row's `<b>` as markup and its
-/// tabs at Qt's own stop.
-///
-/// Hunk headings are not among them: they stand at the viewport's own left
-/// edge and never travel, so a long `@@` line is not something to scroll
-/// to the end of.
+/// **A head start**: the column ranking is a guess, so nothing is decided
+/// by leaving a line out — the rows' laid-out widths settle the reach
+/// (`DiffReach`). The text is the row's own (`markup::styled`); the
+/// source line would measure `<b>` as markup and tabs at Qt's own stop.
+/// Hunk headings are left out: they never travel.
 pub fn widest_lines(patches: &[FilePatch], colors: &DiffColors) -> Candidates {
     let mut lines: Vec<(usize, usize, usize, usize)> = Vec::new();
     for (patch_index, patch) in patches.iter().enumerate() {
         for (hunk_index, hunk) in patch.hunks.iter().enumerate() {
             for (line_index, line) in hunk.lines.iter().enumerate() {
-                // Every line here is a row on screen, and only those:
-                // git's no-newline note is not one — the rows carry it as
-                // a mark at the end of the line it is about
-                // (`encode::rows`), so its own words are never drawn and
-                // are not something to reach the end of.
+                // Rows only: the no-newline note rides its line as a mark
+                // (`encode::rows`), so its words are never drawn.
                 if line.kind == DiffLineKind::NoNewline {
                     continue;
                 }
@@ -115,16 +90,14 @@ pub fn widest_lines(patches: &[FilePatch], colors: &DiffColors) -> Candidates {
     )
 }
 
-/// The two kinds the rows set in bold (`DiffRowDelegate`). A conflict
-/// fence is the exception there only: git's `<<<<<<<` is seven characters
-/// and reaches past nothing.
+/// The two kinds the rows set in bold (`DiffRowDelegate`). Its exception
+/// for a conflict fence is left out: a fence reaches past nothing.
 fn is_bold(line: &DiffLine) -> bool {
     matches!(line.kind, DiffLineKind::Addition | DiffLineKind::Deletion)
 }
 
-/// How many columns one line stands in — the ranking above, and nothing
-/// else: it is a count of what a walk of the text can see, which is not
-/// what the font draws (see [`widest_lines`]).
+/// How many columns one line stands in — for the ranking only (see
+/// [`widest_lines`]).
 fn columns_of(text: &str) -> usize {
     let mut cols = 0usize;
     for ch in text.chars() {
@@ -134,15 +107,13 @@ fn columns_of(text: &str) -> usize {
 }
 
 /// How far one character carries a line that has already reached `col`: a
-/// tab reaches the next stop, a glyph the East Asian blocks draw full
-/// width takes two columns, everything else takes one.
+/// tab reaches the next stop, a wide glyph takes two columns, anything
+/// else one.
 ///
-/// The single rule for it, and it takes no stop of its own, because every
-/// walk of a line has to arrive at the same columns: [`columns_of`] ranks
-/// the lines worth measuring, `markup::push_escaped` spells a tab as that
-/// many `&nbsp;`, and `markup::spelled_ranges` counts the places those
-/// `&nbsp;` stand in. A tab spelled by one rule and counted by another puts
-/// every place after it out by the difference.
+/// The one rule every walk of a line steps by ([`columns_of`],
+/// `markup::push_escaped`, `markup::spelled_ranges`): a tab spelled by one
+/// rule and counted by another puts every place after it out by the
+/// difference.
 pub(super) fn step_of(ch: char, col: usize) -> usize {
     if ch == '\t' {
         TAB_WIDTH - (col % TAB_WIDTH)
@@ -151,15 +122,10 @@ pub(super) fn step_of(ch: char, col: usize) -> usize {
     }
 }
 
-/// Whether the glyph is one a mono font draws two columns wide. The ranges
-/// are the East Asian Wide and Fullwidth blocks plus the emoji that share
-/// their advance — read off Unicode's own table, so the list is what it
-/// is.
-///
-/// Only [`step_of`] asks, and only so that a line reaches the same tab
-/// stops everywhere it is walked. **This stays a count**: where a glyph is
-/// drawn is a question for the row's own layout (`LineRuler`), which needs
-/// no count of anything.
+/// Whether the glyph is East Asian Wide / Fullwidth, or an emoji sharing
+/// that advance (off Unicode's table). Only [`step_of`] asks: **this stays
+/// a count** — where a glyph is drawn is the row's own layout's question
+/// (`LineRuler`).
 pub(super) fn is_wide(ch: char) -> bool {
     matches!(u32::from(ch),
         0x1100..=0x115F
@@ -184,8 +150,6 @@ mod tests {
     use platitude_core::highlight::DiffColors;
     use platitude_core::parse::diff::parse_patch;
 
-    /// The candidates as the pane reads them: whether each is bold, and
-    /// its text.
     fn records(candidates: &Candidates) -> Vec<(bool, String)> {
         candidates
             .iter()
@@ -193,9 +157,7 @@ mod tests {
             .collect()
     }
 
-    /// The candidates, and the rows they are supposed to be — read out of
-    /// one patch, so a difference between the two shows up here as a
-    /// failure.
+    /// The candidates and the rows, read out of one patch.
     fn picked(patch: &str) -> (Vec<(bool, String)>, Vec<String>) {
         let patches = parse_patch(patch.as_bytes());
         let colors = DiffColors::default();
@@ -217,8 +179,7 @@ mod tests {
 +the longest line in this patch
 ";
         let (picked, _) = picked(patch);
-        // Longest first, and the heading is not among them: it stands at
-        // the pane's own left edge and never travels.
+        // Longest first; the heading never travels, so it is not among them.
         assert_eq!(
             picked,
             [
@@ -234,12 +195,9 @@ mod tests {
 
     #[test]
     fn a_line_is_not_dropped_for_standing_in_fewer_columns() {
-        // The one on top counts 800 columns and is drawn in 400 — a
-        // combining mark is a character this walk counts and a glyph the
-        // font draws nothing extra for. The one below counts 700 and is
-        // drawn in 700. Ranking by columns puts them the wrong way round,
-        // which is why nothing is decided by the ranking: **both go
-        // over**, and what settles the reach is the rows (`DiffReach`).
+        // The top line counts 6 columns and is drawn in 3 (combining
+        // marks); the one below counts 4 and is drawn in 4. The ranking has
+        // them the wrong way round, so it decides nothing: both go over.
         let patch = "\
 --- a/f
 +++ b/f
@@ -259,10 +217,7 @@ mod tests {
 
     #[test]
     fn what_goes_over_is_what_the_row_draws() {
-        // The row and the ruler read one string in one format. Handing
-        // over the source line instead had a `Label` reading `<b>` as
-        // markup and a tab at Qt's own stop — two ways to measure a line
-        // this pane never draws.
+        // The row and the ruler read one string in one format.
         let patch = "\
 --- a/f
 +++ b/f
@@ -280,10 +235,8 @@ mod tests {
 
     #[test]
     fn the_note_about_a_missing_newline_is_not_a_line_to_reach_the_end_of() {
-        // git says it in a line of its own and the rows carry it as a
-        // mark on the line it is about (`encode::rows`), so its words are
-        // drawn nowhere — and they are longer than anything else here,
-        // which is what makes the difference visible.
+        // Its words are drawn nowhere (`encode::rows`), and are longer than
+        // anything else here, so a slip shows.
         let patch = "\
 --- a/f
 +++ b/f
@@ -301,8 +254,6 @@ mod tests {
 
     #[test]
     fn a_line_goes_over_whole_whatever_it_holds() {
-        // An astral glyph, a colon and a digit: nothing in the text is
-        // anything the record is parted by, because nothing parts it.
         let patch = "\
 --- a/f
 +++ b/f
@@ -332,8 +283,6 @@ mod tests {
 
     #[test]
     fn a_tab_is_two_columns_wide_without_being_a_wide_glyph() {
-        // `step_of(..) == 2` is a different question from `is_wide`: a tab
-        // reaches its stop in two columns as well.
         assert_eq!(step_of('\t', 2), 2);
         assert!(!is_wide('\t'));
         assert!(is_wide('日'));

@@ -68,9 +68,6 @@ mod walk_tests;
 
 use card::CardRows;
 use copy_card::CopyRows;
-//
-// The folded marker is written through `fold_state` and read back where
-// a fold has to be told from an open folder (`view::folded_over_head`).
 use item::{FOLDED, HELD, LOCKED, MAIN, NavItem, PRUNABLE, fold_state};
 use role::{Arranged, Role, Row, Value};
 use source::{Bucket, Entry, Source, letters_of, pr_key};
@@ -79,118 +76,88 @@ use source::{Bucket, Entry, Source, letters_of, pr_key};
 pub struct NavSectionModel {
     section: String,
     /// Worktree sections only: the one bucket run this list shows —
-    /// `conflicts` / `unstaged` / `staged`. Each run is a list of its own
-    /// in the WIP pane, and every one of them holds the whole status, so
-    /// this narrows what is **shown** and nothing else: the answers a page
-    /// asks about a file (`told` / `holds` / `beside`) come out of the
-    /// source and are the whole tree's, whichever list is asked.
+    /// `conflicts` / `unstaged` / `staged`. It narrows what is **shown**
+    /// and nothing else: every run's list holds the whole status, so the
+    /// answers a page asks about a file (`told` / `holds` / `beside`) are
+    /// the whole tree's, whichever list is asked.
     run: String,
     all: Source,
     /// The rows as shown — indented, folded, filtered — or `None` when
-    /// they are the source's rows in its own order.
-    ///
-    /// `None` is an optimisation of an identical list: a section with no
-    /// tree and no filter (tags, stashes) shows the source exactly, and
-    /// an index per row would say only that the rows are where they
-    /// already are.
+    /// they are the source's rows in its own order (a section with no
+    /// tree and no filter, e.g. tags, skips an index per row).
     arranged: Option<Vec<Arranged>>,
     /// Whether a tree placed these rows — the one thing that gives a
-    /// **ref** row a full name (a branch arrives knowing only what it is
-    /// called; every other kind of row arrived with both). A filtered
-    /// list stands in no tree, so its refs have no full name.
+    /// **ref** row a full name (every other kind of row arrives with
+    /// one). A filtered list stands in no tree, so its refs have none.
     tree_named: bool,
     filter: String,
     /// Rows this list is already showing as gone, while git is still
     /// being asked to delete them (デザイン規約 §消す操作は先に画面から消す).
-    /// Keyed the way `Row::Full`-carrying rows are named to git — a
-    /// stash by its selector, a ref by its short name.
+    /// Keyed by what git is asked about — a stash by its selector, a ref
+    /// by its short name (`Source::is_named`).
     ///
-    /// One of these is shown as though the delete had already
-    /// landed, `total` included, where a filtered-out row is still
-    /// one of the section's rows and is still counted. A name goes
-    /// in when the write goes out and comes back out when that
-    /// write is refused or the reading it invalidated has arrived —
-    /// which of the two, and for which write, is decided away from
-    /// here (`ops::StandIn`); the page only hands over what it was
-    /// told to draw without.
+    /// Shown as though the delete had landed, `total` included (a
+    /// filtered-out row is still counted). When a name comes back out is
+    /// decided by `ops::StandIn`; the page only hands over what to draw
+    /// without.
     hidden: Vec<String>,
     total: i32,
     /// Rows on screen — what filtering, folding and the run leave shown.
-    /// A property, because the pane's share of room is worked out from
-    /// it, and a binding follows properties
-    /// (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
+    /// A property because the pane's share of room is bound to it.
     shown_total: i32,
     /// Worktree sections only: files in this list's bucket run — the
-    /// number its heading wears. Untracked files count as unstaged
-    /// because the run does (`Bucket::run`), which is what keeps the
-    /// heading's number and the rows under it one rule.
+    /// number its heading wears, counted by the rule the rows follow
+    /// (`Bucket::run`: untracked as unstaged).
     run_files: i32,
     /// Current branch (branches section only), as the one record has it
-    /// (`RefsMsg::Head`, the report every consumer at HEAD is handed —
-    /// `hub::sink`). What the highlighted row is found by
-    /// (`Role::IsHead`), and what the sticky row that stands in for it
-    /// while its own row is scrolled off says. **The record has it**:
-    /// the snapshot is one refs read's picture, and a status read that
-    /// landed since may already have moved HEAD.
+    /// (`RefsMsg::Head`) and not the snapshot: a status read that landed
+    /// since the refs read may already have moved HEAD. Finds the
+    /// highlighted row (`Role::IsHead`) and names the sticky stand-in.
     head_name: String,
     head_oid: String,
     /// What that branch's own row wears, read off the snapshot by name
     /// once both are in hand (`drain::settle_head_marks`).
     head_has_remote: bool,
     head_has_pr: bool,
-    /// The upstream that branch is measured against and cannot reach,
-    /// off the same lookup — the name, because the stand-in draws the
-    /// badge's state from it and says it in the line it opens, the way
-    /// the rows read one answer out of one slot (`field::Role::Bucket`).
+    /// The upstream that branch is measured against and cannot reach, off
+    /// the same lookup — a name, not a flag, as the rows carry it
+    /// (`models::nav::field` の `Role::Bucket`).
     head_upstream_gone: String,
-    /// How far that branch stands from its upstream, off the same lookup
-    /// — the pair the stand-in draws, so it and the row it stands for
-    /// cannot say different numbers. **Drawn while the status read's
-    /// pair** (`WorkTreeModel.ahead`) is held back: the counts are not
-    /// yet about the branch HEAD is on, which is the moment after a
-    /// switch when this stand-in is the one on screen.
+    /// How far that branch stands from its upstream, off the same lookup,
+    /// so the stand-in and its row cannot say different numbers. Drawn
+    /// while the status read's pair (`WorkTreeModel.ahead`) is held back
+    /// after a switch, not yet being about the branch HEAD is on.
     head_ahead: i32,
     head_behind: i32,
     /// Visible row of the current entry, or -1 when it has none (a
-    /// filter or a collapsed folder hides it, or HEAD is detached). The
-    /// sticky row needs it to tell whether the real row is on screen.
+    /// filter or a collapsed folder hides it, or HEAD is detached).
     head_row: i32,
-    /// What the stand-in's own line says, which is the whole name
-    /// everywhere but under a fold: there it begins at the folder that
-    /// closed, since the folders above that one are rows on screen
-    /// (`view::arrange`). The whole name is still what it opens with and
-    /// what it answers to — this is the cut line alone.
+    /// What the stand-in's own line says: the whole name, except under a
+    /// fold, where it begins at the folder that closed (the folders above
+    /// are rows on screen — `view::arrange`). Display only; it still opens
+    /// with and answers to the whole name.
     head_shown: String,
-    /// The folded row the current entry is behind, when a fold is what
-    /// took its row away; -1 in every other case, the filter's included.
-    /// **The stand-in sits under this row** (`HeadPinRow.seatedUnder`),
-    /// which is where opening that folder brings the branch back — a
-    /// stand-in at the head of the list instead would say the branch is
-    /// somewhere the reader can see it is not. A filter leaves nothing
-    /// to sit under, so that half keeps the head of the list.
+    /// The folded row the current entry is behind, when a fold took its
+    /// row away; -1 otherwise, a filter included. The stand-in sits under
+    /// this row (`HeadPinRow.seatedUnder`), where opening the folder
+    /// brings the branch back; a filter leaves it at the head of the list.
     head_under_row: i32,
-    /// How far that row is folded in — what the sticky row steps itself
-    /// in by, so the stand-in's name begins in the same column as the
-    /// row it is reading against: its own where it has one, and the
-    /// folder holding it where a fold took that row. 0 where a filter
-    /// took it: the stand-in then takes a seat at the head of the list
-    /// (`HeadPinRow.seated`), where nothing is nesting it.
+    /// The indent the sticky row steps in by, so the stand-in's name lines
+    /// up with its row — or with the folder holding it where a fold took
+    /// that row. 0 where a filter took it (seated at the head of the list,
+    /// `HeadPinRow.seated`).
     head_depth: i32,
     /// True once a refs snapshot arrived (distinguishes "no head yet"
     /// from "detached / no local branches" for the default selection).
     refs_loaded: bool,
     /// Worktree section only: tree vs flat-path display. The page's
-    /// restore is the sole writer and `attach_*` a reader
-    /// (`PageLayout.applySavedLayout` → `set_tree_view`, before anything
-    /// shows — the saved default is the tree; the derive-`Default` false
-    /// here is never on screen). An attach after the restore once put
-    /// the saved flat view back to a tree and then wrote the tree over
-    /// the saved flag.
+    /// restore (`PageLayout.applySavedLayout` → `set_tree_view`) is the
+    /// sole writer — rules-refs/app-ui.md「保存フラグの復元は 1 書き手」;
+    /// the derive-`Default` false is never on screen.
     tree_view: bool,
-    /// Which row the pointer is on; the notice follows, taken apart into
-    /// the pieces its sentence needs. Kept once here — one row wears it
-    /// at a time (see `NavItem::eol_mark`). Flat because `qproperty!`
-    /// names one member.
+    /// The row the pointer is on and its notice, in the pieces its
+    /// sentence needs — kept once here, since one row wears it at a time.
+    /// Flat because `qproperty!` names one member.
     pointed_eol_path: String,
     pointed_eol_kind: String,
     pointed_eol_from: String,
@@ -205,18 +172,15 @@ pub struct NavSectionModel {
     /// absent uses the section default.
     folder_overrides: HashMap<String, bool>,
     /// The snapshot this section last built its rows from. A poll tick
-    /// that found nothing moved republishes the very same one, so this
-    /// pointer is the whole check — the rows are not rebuilt to discover
-    /// they are identical.
+    /// that found nothing moved republishes the same `Arc`, so pointer
+    /// equality is the whole check.
     last_refs: Option<Arc<platitude_core::session::RefsSnapshot>>,
     refs_feed: Option<Arc<Feed<RefsMsg>>>,
     status_feed: Option<Arc<Feed<StatusMsg>>>,
     carried_feed: Option<Arc<Feed<CarriedStatusMsg>>>,
     /// Which copy the rows came from, empty for this window's own tree.
-    /// **The page's own answer, read back**: a list showing one copy is
-    /// handed another copy's rows only by being told to, and this is what
-    /// says the telling has landed — so a pane about to refuse every write
-    /// is refusing them over the files it is actually showing.
+    /// Read back by the page as proof its switch of copy has landed, so a
+    /// pane refusing writes refuses them over the files it actually shows.
     carried_at: String,
     /// That copy's name, as the band says it.
     carried_name: String,

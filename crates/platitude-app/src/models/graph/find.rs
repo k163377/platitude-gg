@@ -4,12 +4,9 @@
 use super::*;
 
 impl GraphModel {
-    /// Whether the query — if there is one — is somewhere in this row.
-    ///
-    /// The search sees names and addresses and never the marks beside
-    /// them: a credit's identicon code is a number, and a reader that
-    /// searched the whole record would answer a typed `12345` with
-    /// somebody's face.
+    /// Whether the query is somewhere in this row. Names and addresses,
+    /// never the marks beside them: an identicon code is a number, and
+    /// searching the whole record would answer `12345` with somebody's face.
     pub(super) fn hits(query: &Query, item: &GraphRowItem) -> bool {
         let mut people: Vec<&str> = vec![item.author.as_str()];
         let mut addresses: Vec<&str> = vec![item.author_email.as_str()];
@@ -18,10 +15,7 @@ impl GraphModel {
             addresses.push(&mate.email);
         }
         let tokens: Vec<&str> = item.labels.iter().map(|c| c.name.as_str()).collect();
-        // Two of the row's fields are withheld, each for its own reason
-        // (`platitude-core::find`): `body` is the hover card's and does
-        // not stand on the row, and `stash_ref` is the handle `apply`
-        // and `pop` are run on and is not drawn on any row at all.
+        // `body` and `stash_ref` are withheld (`platitude-core::find`).
         query.matches(&Row {
             oid_hex: &item.oid_hex,
             subject: &item.subject,
@@ -31,12 +25,10 @@ impl GraphModel {
         })
     }
 
-    /// Sets `matched` on the rows already in the model and counts them.
-    ///
-    /// Written in place: [`Self::splice_notified`] takes a whole new
-    /// `Vec`, and cloning every row's strings on every keystroke is
-    /// exactly the work this search exists to avoid. Only the runs that
-    /// actually changed are notified.
+    /// Sets `matched` on the rows already in the model and counts them,
+    /// notifying only the runs that changed. In place, not through
+    /// [`Self::splice_notified`], which takes a whole new `Vec` — a clone of
+    /// every row per keystroke.
     pub(super) fn remark_notified(&mut self) {
         let mut ranges: Vec<(usize, usize)> = Vec::new();
         let mut count = 0;
@@ -59,12 +51,8 @@ impl GraphModel {
         self.notify_runs(ranges);
     }
 
-    /// Marks rows on their way in, before anyone sees them.
-    ///
-    /// A row arriving under a standing query has to arrive already lit:
-    /// marking it afterwards would notify a change on a row nobody has
-    /// drawn yet, and a chunk streaming in mid-search would flicker dark
-    /// for a frame.
+    /// Marks rows on their way in, so a chunk arriving under a standing
+    /// query arrives lit — marked afterwards, it flickers dark for a frame.
     pub(super) fn mark_incoming(&self, items: &mut [GraphRowItem]) {
         let Some(query) = &self.query else {
             return;
@@ -108,15 +96,13 @@ mod tests {
             ..GraphRowItem::default()
         };
         assert!(hits("login refactor", &row), "the row is its message");
-        // The selector is drawn nowhere: the pane's band says `STASH`,
-        // and the list on the left shows the message.
+        // The selector is drawn nowhere.
         assert!(!hits("stash@{0}", &row));
         assert!(!hits("stash@", &row));
     }
 
-    /// The stand-in for HEAD's row reads its mark off the model, not off
-    /// a delegate — the row is off screen whenever the stand-in is up —
-    /// so a search that re-marks the rows has to re-mark that answer too.
+    /// The stand-in reads HEAD's mark off the model (its row is off screen
+    /// whenever the stand-in is up), so a re-marking re-marks that too.
     #[test]
     fn a_search_marks_the_head_row_for_its_stand_in() {
         let head = "a1".repeat(20);

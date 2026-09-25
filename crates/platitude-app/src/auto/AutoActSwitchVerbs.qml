@@ -5,21 +5,14 @@ import platitude
 import platitude.ui
 
 /// Moving HEAD, and what a branch is measured against: switching to a ref, the questions a switch can stop on,
-/// and setting an upstream.
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are
-/// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+/// and setting an upstream. Built by `AutoActDriver` only when a verb was given.
+// An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
 
-    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is
-    /// the file that builds this one.
+    /// `var`, because naming the driver's type would be a circle: it is the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
@@ -34,67 +27,50 @@ Item {
     readonly property var upstreamFlow: driver.upstreamFlow
     readonly property var writeBarrier: driver.barrierWrite
 
-    /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
+    /// Runs `act` if it is this family's and says whether it was; each verb belongs to one family (`AutoActDriver`).
     function run(act, arg) {
         if (act === "switch") {
             page.switchTo("branch", arg, arg)
         } else if (act === "move-ask") {
-            // The other question a move can raise: landing on a remote branch whose local one holds commits of its
-            // own. `move-branch` is the same road past this bar; this one stops on it. Waited on at `AskBar.settled`
-            // for the reason `switch-stopped` is — `dbl-remote` completes before the bar has finished opening and
-            // photographs a marked row under no bar at all (observed).
+            // The question a move raises landing on a remote branch whose local one holds commits of its own
+            // (`move-branch` is the same road past the bar). Waited on at `AskBar.settled` like `switch-stopped`:
+            // `dbl-remote` completes before the bar has opened.
             page.switchToRef("remote", arg)
             moveAskTimer.start()
         } else if (act === "ask-over-notice") {
-            // **The two bars standing at the same time**, which is the one arrangement where Escape has to belong to
-            // one of them (デザイン規約 §答えの要らない報せ). The report goes up first because that is the
-            // order a hand reaches it in: raising a question leaves a standing report exactly where it is
-            // (`RepoPage.startRowAsk`). Raised through the page's own door the way `report-tone` is — **which** report
-            // it is proves nothing here and the thirteen report verbs prove it already; the pair is the subject.
+            // Both bars standing at once, the one arrangement where Escape has to pick one
+            // (デザイン規約 §答えの要らない報せ). The report goes up first, the order a hand meets them in
+            // (`RepoPage.startRowAsk` leaves a standing report where it is); which report it is does not matter.
             page.showReport("update", "origin", "main", "")
             askOverNoticeTimer.ref = arg === "" ? "origin/main" : arg
             askOverNoticeTimer.start()
         } else if (act === "ask-sweep") {
-            // The same question `move-ask` raises, swept: what a bar names is a branch, a
-            // remote or the folder another working copy is holding, and while it stands over the list it is the only
-            // place any of those is written (規約 §右のペインの字は掴める). Raised down the road a hand takes for the
-            // reason that verb gives, and waited on at `AskBar.settled` for the same one — a bar still on its way down
-            // has its words at some other width, and the air a run samples is the air of a frame nobody sees.
+            // The `move-ask` question, swept: while the bar stands over the list it is the only place its branch,
+            // remote or folder is written (規約 §右のペインの字は掴める).
             page.switchToRef("remote", arg === "" ? "origin/main" : arg)
             askSweepTimer.start()
         } else if (act === "switch-lands") {
-            // A move photographed where it comes to rest. **`switch` cannot do this** — it ends on the write barrier,
-            // and core answers a write before the rebuild it asks for (`AfterWrite::Graph`), so that verb's picture is
-            // of the branch being left and of the stash count before the carry touched it.
-            //
-            // The argument is `<branch>[:<stashes>]`, and the count is there because **the stash list is the last
-            // to arrive**: it is read on its own after the move, so a run that stopped at the branch
-            // photographed a carry whose entry was not in the list yet (observed — the row reached the graph after
-            // the shot had been taken).
+            // A move photographed where it comes to rest. `switch` ends on the write barrier, which core answers
+            // before the rebuild it asks for (`AfterWrite::Graph`), so its picture is of the branch being left.
+            // The argument is `<branch>[:<stashes>]`: the stash list is read on its own after the move and arrives
+            // last, so its count is waited for too.
             const landing = arg.split(":")
             switchLandsTimer.branch = landing[0]
             switchLandsTimer.stashes = landing.length > 1 ? Number(landing[1]) : -1
             page.switchToRef("branch", landing[0])
             switchLandsTimer.start()
         } else if (act === "switch-held") {
-            // **The press that is not a move.** A branch another working copy holds is somewhere else, and the way
-            // to it is that copy — so this press stands the tab there and raises nothing
-            // (offers::SwitchAction::OpenHolder). The argument is the branch; the copy is read **before** the press,
-            // because after it this page is reading that copy and would answer the question with itself.
-            //
-            // Entered by the ref row's own road (`switchToRef`), the same one the two shapes above take: the whole
-            // claim is that this road does not end in a bar.
+            // A branch another working copy holds: the press stands the tab in that copy and raises nothing
+            // (`offers::SwitchAction::OpenHolder`). The copy is read before the press — after it this page is that
+            // copy and would answer with itself. Entered by `switchToRef`: the claim is that this road ends in no bar.
             switchHeldTimer.wanted = sidebarPane.worktreesModel.worktreeHolding(arg)
             page.switchToRef("branch", arg)
             switchHeldTimer.start()
         } else if (act === "switch-stopped" || act === "switch-stopped-go"
                    || act === "switch-conflicted" || act === "switch-conflicted-go") {
-            // The question a move raises when something is in its way, and the gesture that answers it. **One road for
-            // both shapes** — an operation standing and an unmerged index with none — because the press is the same
-            // press; only the bar differs, and the verbs are separate so each shape can be claimed on its own.
-            // Entered by the ref row's own road (`switchToRef`), so the run proves the gate sits where a hand
-            // arrives. The argument is `<branch>[:<stashes>]`, the count meaning what it does for `switch-lands`.
+            // The question a move raises when something is in its way (an operation standing, or an unmerged index),
+            // and with "-go" the gesture that answers it; only the bar differs. Entered by `switchToRef`, where a
+            // hand arrives. The argument is `<branch>[:<stashes>]`, as for `switch-lands`.
             const leave = arg.split(":")
             switchStoppedTimer.go = act.endsWith("-go")
             switchStoppedLandedTimer.stashes = leave.length > 1 ? Number(leave[1]) : -1
@@ -103,32 +79,24 @@ Item {
         } else if (act === "switch-remote") {
             page.switchToRef("remote", arg)
         } else if (act === "switch-remote-twice") {
-            // The same chip pressed twice, which is what the report was: both `switch --create` left in the same
-            // second and git refused the second one, because the first had already made the branch (observed). **The
-            // two presses go out in one turn** — `busyCount` only rises when the queue starts the write, so a run
-            // that waited even a tick between them would be answered by the gate the old build had.
+            // The same chip pressed twice: ungated, the second `switch --create` is refused (the branch exists).
+            // Both presses go out in one turn — `busyCount` only rises once the queue starts the write, so a tick
+            // between them would be turned away by the busy gate and prove nothing.
             switchTwiceTimer.branch = repoTab.localNameFor(arg)
             switchTwiceTimer.writesBefore = repoTab.writeSeq
             page.switchToRef("remote", arg)
-            // The road's own answer to the second press: `switchToRef` says whether the
-            // press did anything, and a build with no gate says it did.
+            // `switchToRef` answers whether the press did anything; an ungated build says it did.
             switchTwiceTimer.held = page.switchToRef("remote", arg) === false
             switchTwiceTimer.start()
         } else if (act === "rename-local-upstream" || act === "rename-local-upstream-go"
                    || act === "rename-local-upstream-tip") {
-            // The question about what the remote does with the new name, which comes back only when git says the
-            // local rename landed — the write's own answer is what raises the bar, so the completion is the bar
-            // settling (a shot at the write barrier catches a bar whose words are written and whose height is still
-            // nothing). The argument is `<新しい名前>[:<選ぶ答え>]`, the answer being `replace` / `add` / `leave`;
-            // without one the bar stands as it comes down, on the answer it opens with. "-go" answers it.
+            // What the remote does with the new name. The bar comes down once git says the local rename landed, so
+            // the run completes on the bar settling — at the write barrier its height is still nothing.
+            // Argument `<新しい名前>[:<選ぶ答え>]` (`replace` / `add` / `leave`; none = as it opens). "-go" answers it.
             const want = arg.split(":")
             const goes = act.endsWith("-go")
-            // `add` is what "-go" takes where the argument names no answer: the branch this verb renames is the one
-            // the working tree is on, whose upstream is the remote's own HEAD — and git refuses to delete that
-            // (`replace-remote-go` の同項), so `replace` cannot be answered for real down this road. The write behind
-            // it is the same one `replace-remote-go` runs.
-            // "-tip" puts a hand on the pill instead of answering, and only the answer that takes a name away has
-            // anything to say there — so it is the one picked, whatever the argument names.
+            // "-go" with no answer named takes `add`: `replace` would delete the remote's HEAD branch, which git
+            // refuses (verbs.md `rename-local-upstream`). "-tip" points at the pill instead; only `replace` has a tip.
             const points = act.endsWith("-tip")
             localUpstreamAskTimer.pick = points ? "replace" : want.length > 1 ? want[1] : (goes ? "add" : "")
             localUpstreamAskTimer.answers = goes
@@ -140,32 +108,27 @@ Item {
             localUpstreamAskTimer.start()
         } else if (act === "set-upstream" || act === "set-upstream-go" || act === "set-upstream-list"
                    || act === "set-upstream-enter") {
-            // `<branch>[:<name to answer with>]` — `:` cannot be in a ref name (`check-ref-format`), so it separates
-            // the two without ambiguity. Without the second half the question stands as it opened, on whatever the
-            // branch already speaks for.
+            // `<branch>[:<name to answer with>]` (`:` cannot be in a ref name); without a name the question stands
+            // as it opened.
             const want = arg.split(":")
             const on = want[0]
             upstreamAskTimer.wantName = want.length > 1 ? want[1] : ""
             upstreamAskTimer.answers = act === "set-upstream-go" || act === "set-upstream-enter"
-            // Which door the answer goes through: the pill's, or Enter in the name box.
             upstreamAskTimer.byKey = act === "set-upstream-enter"
             upstreamAskTimer.lists = act === "set-upstream-list"
             upstreamAskTimer.typed = false
             upstreamAskTimer.dropped = false
-            // Through the row itself, so a build where that row stopped reaching the
-            // question waits here.
+            // Through the row itself, so a build whose row stopped reaching the question stalls here.
             page.openRefMenu("branch", on, on, branchesModel.oidOfName(on))
             refMenu.openSub(refBranchCard)
             refUpstreamItem.triggered()
             upstreamAskTimer.start()
         } else if (act === "switch-mark") {
-            // The mark the `switch` row wears when the press ahead of it raises a question. The
-            // argument is `<branch>:asks` or `<branch>:plain` — **the row is the same row either way**, and a 16px
-            // mark in a full window is not something the picture answers (verify-ui §目視).
+            // The mark the `switch` row wears when its press would raise a question. Argument `<branch>:asks|plain`;
+            // the report judges it — a 16px mark in a full window is not for the picture (verify-ui「目視は等倍以上で」).
             const want = arg.split(":")
             switchMarkTimer.want = want.length > 1 ? want[1] : ""
-            // The sidebar's row, which is where this menu lives — the graph's own `switch` row is a row of the
-            // commit menu, and `chip-menu` says whether it was offered there.
+            // The sidebar's menu; the graph's `switch` row belongs to the commit menu (`chip-menu`).
             page.openRefMenu("branch", want[0], want[0], branchesModel.oidOfName(want[0]))
             switchMarkTimer.start()
         } else if (act === "dbl-local" || act === "dbl-remote") {
@@ -182,23 +145,16 @@ Item {
             if (!graphPane.askCard.settled)
                 return
             moveAskTimer.stop()
-            // No chip on this one — git has no single word for moving a branch onto a ref, so the pill answers in the
-            // ordinary voice (規約 §git 用語のコード表記). `code=` being empty is part of the claim.
+            // `code=` empty is part of the claim: git has no single word for this move (規約 §git 用語のコード表記).
             Harness.report("move_ask hold=" + graphPane.askHold
                               + " code=" + graphPane.askCode
                               + " branch=" + workTree.branch)
             driver.complete()
         }
     }
-    /// PGG_AUTO_ACT=ask-over-notice: the report and the question standing together, and which of the two Escape is
-    /// then handed to. **Three beats, and every one of them is a bar that has stopped moving**: the report all the
-    /// way down before the question is raised over it (a bar on its way has no shortcut behind it yet — `open` is
-    /// what enables one, so the pair would be read a frame before it exists), the question all the way down for the
-    /// reason `move-ask` waits, and both of them stopped again after the press.
-    ///
-    /// **The picture answers none of it.** Two bars with two live Escapes frame exactly like two bars with one, and
-    /// a window where Escape does nothing frames like a window where it does the right thing — so all four claims
-    /// are in the line, and what the shot is left showing is only the outcome (`ask_over_notice`).
+    /// Three beats, each on bars that have stopped moving: the report settled before the question is raised (a bar
+    /// on its way has no Escape shortcut yet — `open` enables it), the question settled, and both after the press.
+    /// The picture cannot tell one live Escape from two, so all four claims are in the line.
     SampleTimer {
         id: askOverNoticeTimer
         /// The remote ref the question is raised on, as `move-ask` takes it.
@@ -210,19 +166,16 @@ Item {
         property string holds: ""
         property bool askStood: false
         property bool noticeStood: false
-        /// Which of the two a pair of answers names — said once so all four halves of the line are spelt the same.
         function naming(ask, notice) {
             return ask && notice ? "both" : ask ? "question" : notice ? "notice" : "none"
         }
-        /// A bar between its two ends: neither all the way down nor all the way back up. A bar is read at
-        /// one of its ends — a run that read one mid-flight would be reading a frame nobody sees.
+        /// A bar is read only at one of its ends; mid-flight is a frame nobody sees.
         function moving(card) {
             return !card.settled && !card.shut
         }
         onTriggered: {
-            // **Each bar is waited for inside the beat that needs it standing, and nowhere else** (規約 §UI 自動化の因果性):
-            // the press below is what takes one of the two away, so a `settled` read every tick would be broken by
-            // this verb's own answer and the run would wait out the watchdog with the work already done (measured).
+            // Each bar is waited for only inside the beat that needs it (app-ui.md §UI 自動化): the press takes one
+            // away, so a `settled` read on every tick would wait out the watchdog.
             if (!askOverNoticeTimer.asked) {
                 if (!page.noticeCard.settled)
                     return
@@ -241,9 +194,8 @@ Item {
                 const askEsc = graphPane.askCard.escapes
                 const noticeEsc = page.noticeCard.escapes
                 askOverNoticeTimer.holds = askOverNoticeTimer.naming(askEsc, noticeEsc)
-                // Through the body Escape itself runs, and through **whichever bar is holding it**: a build that
-                // handed Escape to the other bar has to be judged on what that
-                // bar then did. A build that handed it to neither presses nothing, and the two below say so.
+                // What Escape itself runs, on whichever bar holds it: a build that handed it to the wrong bar is
+                // judged on what that bar did, and one that handed it to neither presses nothing.
                 if (askEsc)
                     graphPane.askCard.dismiss()
                 else if (noticeEsc)
@@ -262,22 +214,18 @@ Item {
             driver.complete()
         }
     }
-    // The carry-the-upstream question, waited on the way every ask is: the bar has to have finished coming down
-    // before its words — or its height — mean anything.
+    // The carry-the-upstream question, read once the bar has settled.
     SampleTimer {
         id: localUpstreamAskTimer
         /// Which of the three answers the run picks, empty for the bar as it comes down.
         property string pick: ""
         /// Whether the picked answer is then given to the bar.
         property bool answers: false
-        /// Whether it has been picked already: the chooser is answered once, and the beats after it are the bar
-        /// re-dressing itself around the choice.
+        /// The chooser is answered once; the beats after it are the bar re-dressing around the choice.
         property bool picked: false
-        /// Whether the line has gone out. Past it this timer is waiting on one thing only — the bar going back up
-        /// after the answer that writes nothing, which has no write barrier to stand on.
+        /// Whether the report line has gone out.
         property bool said: false
-        /// Whether a hand goes on the pill once the pick has dressed the bar (`rename-local-upstream-tip`) — a beat
-        /// after the pick, so the tip places itself against the pill wearing the picked answer's word.
+        /// Whether a hand goes on the pill (`-tip`) — a beat after the pick, so the tip sits against the picked word.
         property bool points: false
         /// Whether it has gone on — said as it is taken.
         property bool pointed: false
@@ -286,9 +234,8 @@ Item {
                 if (!graphPane.askCard.settled)
                     return
                 if (localUpstreamAskTimer.pick !== "" && !localUpstreamAskTimer.picked) {
-                    // Through the field's own door, since no injected click opens a popup on the offscreen platform
-                    // (`RenameCarryFlow.pickChoice`). Re-applied until it takes: the form is built by a `Loader` a
-                    // frame behind the bar.
+                    // Through the field's own door (`RenameCarryFlow.pickChoice` — no injected click opens a popup
+                    // offscreen), re-applied until it takes: the form's `Loader` is a frame behind the bar.
                     if (!page.pickCarryChoice(driver.carryChoiceIndex(localUpstreamAskTimer.pick)))
                         return
                     localUpstreamAskTimer.picked = true
@@ -299,8 +246,7 @@ Item {
                     graphPane.askCard.pointedAt = true
                     if (!localUpstreamAskTimer.pointed) {
                         localUpstreamAskTimer.pointed = true
-                        // A run that ends at the ceiling after this line stopped at the tip: `pill=` is the answer
-                        // the bar is wearing, `words=` whether it has a tip to open at all.
+                        // For a run that stalls at the tip: `pill=` is the answer worn, `words=` whether it has a tip.
                         Harness.report("rename_carry step=pointed pill=" + graphPane.askCard.accept
                                        + " words=" + (graphPane.askCard.tip !== ""))
                     }
@@ -314,13 +260,11 @@ Item {
                     driver.complete()
                     return
                 }
-                // Held where the picked answer takes a name off the remote, clicked where it does not — the bar
-                // says which, and the run answers it the way a hand would (`AutoActDriver.holdToEnd`).
+                // Held or clicked, as the bar asks.
                 if (graphPane.askHold) {
                     driver.holdToEnd(graphPane)
                 } else if (localUpstreamAskTimer.pick === "leave") {
-                    // The one answer that writes nothing. The bar going back up is the whole of it, so the beats
-                    // below are what this run waits on instead of a barrier that would never be reached.
+                    // `leave` writes nothing: the beats below wait for the bar to go back up, not for a barrier.
                     page.answerRowAsk()
                     return
                 } else {
@@ -336,11 +280,8 @@ Item {
             driver.complete()
         }
     }
-    // ...and the same bar's words taken from the air around them: the band inside the bar's own inset, the step
-    // between the heading and the line under it, the room beside a short one (規約 §右のペインの字は掴める). Waited on
-    // at `settled` for the reason `move-ask` waits — the bar spends 200ms coming down and a run that sampled the air
-    // of a half-open one would be reporting on a frame nobody sees. `words=` is what the bar is saying while it is
-    // swept, so a green run on an empty bar cannot pass for a green run on a question.
+    // Swept only once settled — on its way down the bar's words are at another width. `words=` keeps a green run
+    // on an empty bar from passing for one on a question.
     SampleTimer {
         id: askSweepTimer
         onTriggered: {
@@ -362,10 +303,8 @@ Item {
             if (switchLandsTimer.stashes >= 0 && stashesModel.total !== switchLandsTimer.stashes)
                 return
             switchLandsTimer.stop()
-            // `log=` on all three of these: a move that git refused would raise the command log
-            // (§git が言ったことを読む場所), and a red panel under a press that had a way out on screen is the thing
-            // this whole road exists to stop. A shut panel and a panel that was never
-            // raised are the same picture, which is why it is said.
+            // `log=`: a refused move raises the command log (デザイン規約 §git が言ったことを読む場所), and a shut
+            // panel frames like one never raised.
             Harness.report("switch_landed branch=" + workTree.branch
                               + " stashes=" + stashesModel.total
                               + " wanted=" + switchLandsTimer.stashes
@@ -374,9 +313,7 @@ Item {
             driver.complete()
         }
     }
-    // The same landing, reached by two presses. **The claim is `held=`** — the second press turned
-    // away — because the two builds frame alike: the branch is the branch either way, and what the ungated one adds
-    // is a refused `switch --create` in a panel nobody opened.
+    // The claim is `held=` (the second press turned away): gated and ungated builds frame alike.
     SampleTimer {
         id: switchTwiceTimer
         property string branch: ""
@@ -386,8 +323,7 @@ Item {
             if (repoTab.busyCount !== 0 || workTree.branch !== switchTwiceTimer.branch)
                 return
             switchTwiceTimer.stop()
-            // `writes=` is the same claim counted from the other side: one press, one answer. It is read after the
-            // tree has settled, so a second write would have been counted by now.
+            // `writes=` counts the same claim from the write side, read once the tree has settled.
             Harness.report("switch_twice held=" + switchTwiceTimer.held
                               + " writes=" + (repoTab.writeSeq - switchTwiceTimer.writesBefore)
                               + " branch=" + workTree.branch
@@ -395,12 +331,8 @@ Item {
             driver.complete()
         }
     }
-    // Where the held branch's press lands: this tab, standing in the copy that has it out. **The page stays** —
-    // that is what the landing is (`Hub::restand_tab`) — so it is this very driver that reads the answer.
-    //
-    // **Either end ends the run**: a build that raised a bar instead would leave the tab where it was, and a run
-    // waiting only for the copy would sit there until the ceiling and say nothing about why. So the bar is watched
-    // too, and `bar=` is the half of the report that a return to the old road would fail on.
+    // The page stays through the restand (`Hub::restand_tab`), so this driver reads the answer. Either end ends the
+    // run: a build that raised a bar instead never moves the tab, and `bar=` is what it fails on.
     SampleTimer {
         id: switchHeldTimer
         property string wanted: ""
@@ -418,9 +350,7 @@ Item {
             driver.complete()
         }
     }
-    // The bar that stops the move — waited on all the way down (`AskBar.settled`):
-    // the 200ms opening is 200ms of red line with no words in it, and that is what the first run of
-    // this verb photographed.
+    // Waited on all the way down (`AskBar.settled`): while it opens, the bar is a red line with no words in it.
     SampleTimer {
         id: switchStoppedTimer
         property bool go: false
@@ -439,8 +369,8 @@ Item {
                 driver.complete()
                 return
             }
-            // Whichever gesture this shape of the question takes — a held pill reports no click, and a click pill has
-            // no hold to run to its end. The bar itself says which it is, and each way in arms its own watch.
+            // Held or clicked, as the bar asks — a held pill ignores a click, a click pill has no hold. Each way in
+            // arms its own watch.
             if (graphPane.askHold)
                 driver.holdToEnd(graphPane)
             else
@@ -451,10 +381,7 @@ Item {
             switchStoppedLandedTimer.start()
         }
     }
-    // Where the answer put the reader, and what it left in the stash list. **The edge is past the write's answer**
-    // — it lands before the rebuild it asks for (core `AfterWrite::Graph`), so a run that read the branch there would
-    // photograph the one it was leaving; and the stash list is read after that again (`switch-lands`), which is why
-    // the count comes from the argument and is waited for.
+    // Where the answer put the reader: past the write's answer, and the stash count waited for (`switch-lands`).
     SampleTimer {
         id: switchStoppedLandedTimer
         property int stashes: -1
@@ -482,8 +409,7 @@ Item {
             if (!refMenu.opened)
                 return
             switchMarkTimer.stop()
-            // `indent=` is the other half: the mark is drawn inside the padding the whole menu carries for it, so a
-            // menu that forgot to open that column would draw the `!` over its own edge (`AppMenu.holdIndent`).
+            // `indent=`: without the menu's hold column the `!` draws over the menu's edge (`AppMenu.holdIndent`).
             Harness.report("switch_mark offered=" + refSwitchItem.offered
                               + " asks=" + refSwitchItem.asks
                               + " want=" + switchMarkTimer.want
@@ -491,19 +417,16 @@ Item {
             driver.complete()
         }
     }
-    /// PGG_AUTO_ACT=set-upstream…: the question about what a branch is measured against (`UpstreamFlow`). The bar has
-    /// to be all the way down before there is a box to answer into — the form is loaded as the bar opens — and that
-    /// is the picture's own moment as well (`AskBar.settled`).
+    /// `set-upstream…` (`UpstreamFlow`): the form loads as the bar opens, so nothing is answered before
+    /// `AskBar.settled`.
     SampleTimer {
         id: upstreamAskTimer
-        /// Whether this run answers the question or only photographs it.
         property bool answers: false
-        /// And whether it answers from the name box instead of the pill (`UpstreamFlow.enterBranch`).
+        /// Answers with Enter in the name box instead of the pill (`UpstreamFlow.enterBranch`).
         property bool byKey: false
-        /// Whether it drops the name box's list first — no injected click can reach a popup on the offscreen
-        /// platform, so the same door a press uses is called instead (`UpstreamFlow.openBranches`).
+        /// Drops the name box's list first, through the press's own door (`UpstreamFlow.openBranches`) — no
+        /// injected click reaches a popup offscreen.
         property bool lists: false
-        /// Whether that door has been through: the press is made once, and the card comes down after it.
         property bool dropped: false
         property string wantName: ""
         property bool typed: false
@@ -517,23 +440,20 @@ Item {
             }
             if (upstreamAskTimer.lists) {
                 if (!upstreamAskTimer.dropped) {
-                    // Only where the door was there to go through: a form with no name box in it is asked again on
-                    // the next tick, where marking it done would wait out the watchdog instead.
+                    // Marked only if the door was there; a form without its name box yet is asked again next tick.
                     upstreamAskTimer.dropped = upstreamFlow.openBranches()
                     return
                 }
-                // The popup opens a turn of the loop after the press (`AppCombo.pressField`), so the run reads the
-                // popup itself rather than the call that asked for it.
+                // The popup opens a turn after the press (`AppCombo.pressField`), so the popup itself is read.
                 if (!upstreamFlow.branchesOpen())
                     return
             }
             if (upstreamAskTimer.answers && !graphPane.askAnswerable)
                 return
             upstreamAskTimer.stop()
-            // `there=` is whether this repository actually holds what was answered — **not what decides the pill**
-            // (a name not here is an answer: デザイン規約 §ブランチが測られる相手を決める), but what the bar's line
-            // says, which a full-window picture does not settle. `rows=` is the list the box offers past typing one,
-            // and `open=` whether it came down: a list with nothing in it and a list nothing plumbed frame alike.
+            // `there=` is whether the answered name exists here — it drives the bar's line, not the pill (a name not
+            // here is an answer: デザイン規約 §ブランチが測られる相手を決める). `rows=` / `open=`: an empty list and
+            // an unplumbed one frame alike.
             Harness.report("upstream branch=" + upstreamFlow.branch
                               + " remote=" + upstreamFlow.remote
                               + " name=" + upstreamFlow.branchName

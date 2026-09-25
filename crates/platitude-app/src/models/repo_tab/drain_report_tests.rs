@@ -5,9 +5,7 @@
 use super::*;
 use platitude_core::OperationKind as K;
 
-/// The far side keeping a branch is a report — the page reads these
-/// four and says so in its own words
-/// (`Words.writeReported`).
+/// The page words these four itself (`Words.writeReported`).
 #[test]
 fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
     let mut tab = RepoTab::default();
@@ -37,8 +35,6 @@ fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
     assert_eq!(tab.write_report_reason, "");
 }
 
-/// A push that was sending says so, since that is the whole of what
-/// the sentence turns on.
 #[test]
 fn a_refused_send_is_told_apart_from_a_refused_delete() {
     let mut tab = RepoTab::default();
@@ -58,9 +54,6 @@ fn a_refused_send_is_told_apart_from_a_refused_delete() {
     assert_eq!(tab.write_report_kind, "update");
 }
 
-/// The other two reports reach the same four properties: nobody over
-/// there said anything about either, and the page still has to tell them
-/// apart to pick its sentence.
 #[test]
 fn a_stale_push_and_a_refused_commit_name_themselves_too() {
     let mut tab = RepoTab::default();
@@ -104,23 +97,15 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
     assert_eq!(tab.write_report_reason, "lint found 1 problem");
 }
 
-/// **The five shapes a history is turned down for, each reaching the page
-/// under its own name.** git was never asked and nobody outside said
-/// anything, so the kind is the whole of what the screen has to write
-/// both of its lines from (`Words.rewriteRefusedWhy`): a refusal
-/// arriving as its neighbour's tells a reader whose history is fine to
-/// switch branches, or to deepen a clone that is whole.
-///
-/// **Read off the producers themselves** (`platitude_core::report`), not
-/// a list of kinds written out again on this side: the claim is that
-/// what core withholds a rewrite with is what the page names it, and two
-/// hand-written tables stay green while they drift apart.
+/// The kind is all the page writes both lines from
+/// (`Words.rewriteRefusedWhy`). Read off core's producers
+/// (`platitude_core::report`), not a second hand-written list — two
+/// tables stay green while they drift apart.
 #[test]
 fn every_withheld_rewrite_reaches_the_page_under_its_own_name() {
     use platitude_core::report;
-    // Four of them are asked for through a fold and the fifth through a
-    // drop; the id is the row the press was on, which only the sentence
-    // the log keeps ever spells.
+    // Four refused through a fold, one through a drop; the id only
+    // reaches the log's sentence.
     let refused = [
         (K::Squash, report::rewrite_across_merge(), "across-merge"),
         (
@@ -164,15 +149,10 @@ fn every_withheld_rewrite_reaches_the_page_under_its_own_name() {
     }
 }
 
-/// **The three of them the plan door turns down too, named the same way
-/// there.** One page table answers both doors with the sentence under
-/// the heading (`Words.rewriteRefusedWhy`), so a spelling that drifts on
-/// either side leaves that door's bar with a heading and nothing under
-/// it — and two hand-written tables stay green while they part.
-///
-/// Written as a `match` over the preview's refusals, so a fourth added
-/// to core stops the build here rather than reaching the page under a
-/// name nobody wrote a sentence for.
+/// One `Words.rewriteRefusedWhy` answers both doors, so a spelling that
+/// drifts on either side leaves that door's bar without its second line.
+/// A `match` over the refusals, so a fourth added to core stops the build
+/// here.
 #[test]
 fn the_plan_door_names_the_same_refused_history_the_same_way() {
     use platitude_core::rebase_plan::PlanRefusal;
@@ -182,8 +162,8 @@ fn the_plan_door_names_the_same_refused_history_the_same_way() {
         PlanRefusal::OffBranch,
         PlanRefusal::UnfetchedBase,
     ] {
-        // This door's own answer for the same history, taken from the
-        // producer core withholds with.
+        // The row menu's answer for the same history, from core's
+        // producer.
         let withheld = match refusal {
             PlanRefusal::AcrossMerge => platitude_core::report::rewrite_across_merge(),
             PlanRefusal::OffBranch => platitude_core::report::rewrite_off_branch("9f4a21c0"),

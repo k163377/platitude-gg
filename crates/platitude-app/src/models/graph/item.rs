@@ -9,32 +9,26 @@ use crate::encode::{Chips, Fields, Lanes, Listed, Mates, Record, field};
 
 use super::*;
 
-// Kept lean: one instance per commit in the window. The short sha is
-// derived in QML from `oid_hex` (mechanical substring); `avatar` is a
-// local identicon code, one integer (see encode::avatar_code). PartialEq
-// feeds the in-place replacement: unchanged rows emit no dataChanged.
+// Kept lean: one instance per commit in the window. PartialEq feeds the
+// in-place replacement: unchanged rows emit no dataChanged.
 //
-// **Fifteen fields is the ceiling** — `#[derive(QModelItem)]` refuses a
-// sixteenth. Anything the rows need that QML never reads belongs on the
-// way in: the lane count each row needs is taken off the `LogRow` while
-// the item is built (`max_lanes`). The three list fields go over as JS
-// arrays of objects (`encode::Listed`); the delegate reads them by name.
+// Fifteen fields is the ceiling — `#[derive(QModelItem)]` refuses a
+// sixteenth. What QML never reads is taken off the `LogRow` on the way in
+// (`max_lanes`).
 #[derive(QModelItem, Default, Clone, PartialEq)]
 pub struct GraphRowItem {
     pub(super) oid_hex: String,
     pub(super) author: String,
-    /// The address the picture is filed under — already folded and read
-    /// through mailmap by the log parser. Kept on the row so re-reading
-    /// the assignments needs no second pass over git.
+    /// The address the picture is filed under (mailmapped and folded by
+    /// the log parser), kept so re-reading the assignments needs no git.
     pub(super) author_email: String,
     pub(super) atime: i64,
     pub(super) subject: String,
     pub(super) node_lane: i32,
     pub(super) node_color: i32,
     pub(super) avatar: i32,
-    /// A `file:` URL when this author has a picture, empty otherwise —
-    /// resolved here, so a delegate coming back from the reuse pool has
-    /// the answer already in its row.
+    /// A `file:` URL when this author has a picture, else empty — resolved
+    /// here so a delegate back from the reuse pool has it in its row.
     pub(super) avatar_url: String,
     /// The `Co-authored-by` records — the first draws the badge on the
     /// node, all of them are named in the row's hover.
@@ -47,10 +41,9 @@ pub struct GraphRowItem {
     pub(super) labels: Chips,
     /// `stash@{n}` when the row is a stash; empty otherwise.
     pub(super) stash_ref: String,
-    /// The find bar's line is somewhere in this row. False for every row
-    /// while nothing is being searched for — the delegate dims off the
-    /// pane's own "there is a search on", so an all-false model with no
-    /// query dims nothing.
+    /// The find bar's line is in this row; false everywhere with no query.
+    /// Dimming keys off `searching`, so all-false with no query dims
+    /// nothing.
     pub(super) matched: bool,
 }
 
@@ -70,20 +63,13 @@ impl platitude_core::mem::Footprint for GraphRowItem {
 }
 
 /// The row "the newest commit" names: the first that is neither the
-/// working tree's own row nor a stash. `None` where the window holds no
-/// commit of the history at all.
-///
-/// **Written once for the three that ask it** (`GraphModel::newest_commit_row`):
-/// the page's default landing when it has only row numbers to go by, and
-/// the two automation drivers that pick a commit to photograph and to
-/// time. Three copies of "skip the working tree's row" is how all three
-/// came to keep the stash — a stash is no branch's history
-/// (デザイン規約 §変更を退避する), and its commit time is when it was
-/// written, so a fresh one stands above the branch's own tip.
+/// working tree's row nor a stash; `None` where the window holds no commit.
+/// A stash is no branch's history (デザイン規約 §変更を退避する), yet a
+/// fresh one's time stands it above the tip — so the rule is written once
+/// here, not by each asker (`GraphModel::newest_commit_row`).
 ///
 /// A scan, but of the top: only the working tree's row and the stashes
-/// can stand over the first commit, and a repository with more stashes
-/// than commits is the whole of the walk either way (CLAUDE.md §性能予算).
+/// can stand over the first commit.
 pub(super) fn newest_commit_row(rows: &[GraphRowItem]) -> Option<usize> {
     rows.iter()
         .position(|r| r.stash_ref.is_empty() && !Oid::hex_is_zero(&r.oid_hex))
@@ -109,18 +95,14 @@ pub(super) fn to_row_item(
         geometry: crate::encode::lanes_of(&row.segments),
         labels: crate::encode::chips_of(&row.labels, pr),
         stash_ref: row.stash_ref.clone(),
-        // Set by the marking pass that runs before anyone sees the row
-        // (`mark_incoming`), so a chunk arriving under a standing query
-        // arrives already lit.
+        // Set by `mark_incoming` before anyone sees the row.
         matched: false,
     }
 }
 
-/// One row of a choice of commits, as the pane on the right lists it
-/// above the changed files (デザイン規約 §複数のコミットを選ぶ): what naming
-/// the commit takes, down to the message body and the credits — which
-/// is what lets the card these rows put out be the graph's own
-/// (`CommitHoverCard`).
+/// One row of a choice of commits, as the right pane lists it above the
+/// changed files (デザイン規約 §複数のコミットを選ぶ). Carries the body and
+/// the credits so its hover card is the graph's own (`CommitHoverCard`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChosenRow {
     pub oid_hex: String,
@@ -136,8 +118,7 @@ pub struct ChosenRow {
 
 pub type ChosenRows = Listed<ChosenRow>;
 
-/// The six a working copy's uncommitted row says beside its words —
-/// added, modified, deleted, renamed, copied, conflicted — in the order
+/// The six counts a working copy's uncommitted row shows, in the order
 /// both sides draw them. A copy's row carries its own; this window's row
 /// reads the view's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

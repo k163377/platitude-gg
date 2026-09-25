@@ -1,9 +1,6 @@
 //! The working copies as the operation panel's WORKTREE card offers
-//! them: every one this section holds — **whatever the section is
-//! filtering to**. The card is a way to move, not the list somebody is
-//! reading, so a copy filtered out of the left menu is still somewhere to
-//! go (デザイン規約 §操作パネル), the way a branch is on the branches'
-//! card (`card`).
+//! them: every one this section holds, **whatever the section is
+//! filtering to** — as on the branches' card (`card`).
 
 use super::*;
 
@@ -48,10 +45,8 @@ impl Record for CopyRow {
 impl NavSectionModel {
     /// The card's rows. Empty for every section but the working copies.
     ///
-    /// **No filter, and no row the section is showing as gone** — the
-    /// copies the section's band counts (`total`). What each row says is
-    /// the section's own answer (`field`), so the card cannot name a copy
-    /// one way and the left menu another.
+    /// No filter, and no row the section is showing as gone — the copies
+    /// `total` counts — each said by the section's own `field`.
     pub(super) fn copy_rows(&self) -> Vec<CopyRow> {
         if self.section != "worktrees" {
             return Vec::new();
@@ -118,8 +113,6 @@ mod tests {
         model.copy_rows().into_iter().map(|row| row.full).collect()
     }
 
-    /// **The left menu's filter is the reader's, not the card's**: a copy
-    /// filtered out of the section is still offered.
     #[test]
     fn the_card_ignores_what_the_section_is_filtering_to() {
         let mut model = copies();
@@ -133,8 +126,6 @@ mod tests {
         assert_eq!(fulls(&model), whole);
     }
 
-    /// A copy the section is showing as gone is gone from the card too —
-    /// the card holds what the section's band counts.
     #[test]
     fn a_copy_shown_as_gone_is_off_the_card() {
         let mut model = copies();
@@ -144,8 +135,6 @@ mod tests {
         assert_eq!(fulls(&model), vec!["C:\\work\\home", "C:\\work\\held"]);
     }
 
-    /// Each row carries what the section's own row draws: the folder, the
-    /// branch it has out, and the state of the checkout.
     #[test]
     fn a_copy_row_says_what_the_sections_row_draws() {
         let rows = copies().copy_rows();
@@ -168,8 +157,6 @@ mod tests {
         );
     }
 
-    /// Only the working copies have this card: every other section
-    /// answers with nothing rather than with rows nobody asked for.
     #[test]
     fn only_the_working_copies_have_a_copy_card() {
         let model = section(

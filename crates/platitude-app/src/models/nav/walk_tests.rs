@@ -1,12 +1,9 @@
 //! The walk the arrow keys take over the file rows, and what a bucket
-//! list answers about the files it is not showing. Beside the walk, so
-//! the ceiling the walk sits under stays about the walk
-//! (.claude/rules/structure.md).
+//! list answers about the files it is not showing.
 
 use super::testkit::*;
 use super::*;
 
-/// A landing on `row`, at `path` in `bucket`.
 fn landed(row: i32, bucket: &str, path: &str) -> Landed {
     Landed::some(Landing {
         row,
@@ -15,9 +12,7 @@ fn landed(row: i32, bucket: &str, path: &str) -> Landed {
     })
 }
 
-/// A bucket list shows its own run and holds the whole status: what is on
-/// screen is one heading's files, and what it can be asked about is every
-/// file (`NavSectionModel::run`).
+/// `NavSectionModel::run` cuts what is shown, not what is answered.
 #[test]
 fn a_bucket_list_shows_one_run_and_answers_for_the_whole_tree() {
     let mut model = worktree("unstaged", Source::files(pending()));
@@ -27,17 +22,14 @@ fn a_bucket_list_shows_one_run_and_answers_for_the_whole_tree() {
     assert_eq!(model.shown_rows(), 2);
     assert_eq!(says(&model, 0, Role::Full), "c.txt");
     assert_eq!(says(&model, 1, Role::Full), "src/b.txt");
-    // The staged row of the file that is on both sides is not on screen
-    // here — and is still what this list answers about, because the page
-    // asks whichever list it is holding (`RepoPage`).
+    // The `MM` file's staged row is not on screen here, yet answered: the
+    // page asks whichever list it holds (`RepoPage`).
     assert_eq!(model.row_of_file("staged", "src/b.txt"), -1);
     assert!(model.holds("staged", "src/b.txt"));
     assert_eq!(model.told(Role::Full, "d.txt", Role::Bucket), "staged");
 }
-/// The arrows walk the rows on screen, one file per press, and stop at
-/// each end (規約 §diff のファイル一覧). A list is one bucket, so its own
-/// ends are where a step runs out — the pane carries the walk into the
-/// next list from there (`FileRowWalk`).
+/// A step runs out at its own list's ends; the pane carries the walk on
+/// (`FileRowWalk`, デザイン規約 §diff のファイル一覧).
 #[test]
 fn the_arrows_walk_one_bucket_and_stop_at_its_ends() {
     let mut model = worktree("staged", Source::files(pending()));
@@ -53,19 +45,14 @@ fn the_arrows_walk_one_bucket_and_stop_at_its_ends() {
         model.step("staged", "d.txt", 9),
         model.step("staged", "d.txt", 1)
     );
-    // Both ends of this list, and the two rows of the file that is on
-    // both sides: asked by bucket, each walks on from its own row.
+    // Both ends of this list.
     assert!(model.step("staged", "d.txt", -1).is_none());
     assert!(model.step("staged", "src/b.txt", 1).is_none());
-    // The unstaged row of the same file is not a row of this list, so it
-    // is nowhere to walk from.
+    // The `MM` file's unstaged row is not in this list: nowhere to walk from.
     assert!(model.step("unstaged", "src/b.txt", 1).is_none());
     assert!(model.step("staged", "nowhere.txt", 1).is_none());
 }
-/// Where the walk comes in when it crosses out of the bucket above or
-/// below: the row at the end of this list it is entering by, and nothing
-/// at all from a bucket holding no files (the arrows go past an empty
-/// heading).
+/// An empty bucket answers nothing, so the arrows go past it.
 #[test]
 fn a_walk_crossing_into_a_bucket_lands_at_the_end_it_comes_in_by() {
     let mut model = worktree("staged", Source::files(pending()));
@@ -79,9 +66,7 @@ fn a_walk_crossing_into_a_bucket_lands_at_the_end_it_comes_in_by() {
     assert!(empty.edge(1).is_none());
     assert!(empty.edge(-1).is_none());
 }
-/// A folder is not a file: the walk steps over its row, which has no
-/// diff behind it, and a list whose only rows are folders is one the
-/// crossing walk goes straight past.
+/// A folder row has no diff, so the walk and the crossing skip it.
 #[test]
 fn the_arrows_step_over_a_folder_row() {
     let mut model = worktree("unstaged", Source::files(pending()));
@@ -98,9 +83,7 @@ fn the_arrows_step_over_a_folder_row() {
     assert_eq!(model.edge(1), landed(1, "unstaged", "src/b.txt"));
 }
 
-/// The key a choice holds a file by: a folder row is nothing to choose,
-/// an untracked file carries its own bucket, and a row past the end is
-/// a row no write can find.
+/// An untracked file keys by its own bucket, not its heading's.
 #[test]
 fn every_file_row_answers_the_key_a_choice_holds_it_by() {
     let mut model = worktree("unstaged", Source::files(pending()));

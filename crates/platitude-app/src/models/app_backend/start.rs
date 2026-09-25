@@ -2,8 +2,8 @@ use super::*;
 
 use crate::encode::{Fields, Listed, Record, field};
 
-/// One picture filed against an address: whose it is, the name it was
-/// filed under, and the `file:` URL the picture is read from.
+/// One picture filed against an address; `url` is the `file:` URL it is
+/// read from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Assignment {
     pub(super) email: String,
@@ -65,10 +65,8 @@ pub(super) fn with_flag(pick: impl Fn(&platitude_core::settings::LayoutState) ->
     Hub::with(|hub| pick(&hub.state().layout)).unwrap_or_else(|| pick(&fallback))
 }
 
-/// Whether one sidebar section comes up open. A name nothing was saved
-/// for opens: a section added later has no line in anybody's state file,
-/// and a first sight of it should be an open
-/// one.
+/// Whether one sidebar section comes up open. An unknown name opens: a
+/// section added later is in nobody's state file.
 pub(super) fn section_open(name: &str) -> bool {
     with_flag(|l| match name {
         "branches" => l.sections.branches,
@@ -81,23 +79,15 @@ pub(super) fn section_open(name: &str) -> bool {
 }
 
 /// Directory the application's own configuration reads run in — the
-/// user's home. git resolves configuration from a directory, and outside
-/// a repository that is exactly the user's own (global + system)
-/// configuration — what a first-run prompt is about, and what the
-/// settings screen's `GLOBAL` identity chapter writes into
-/// (`AppBackend::save_identity`). The process working directory would answer
-/// the same *except* when the app is launched from a terminal standing
-/// inside a checkout, where it would quietly fold that repository's
-/// local values into the user's own.
+/// user's home, where git sees only the global + system configuration.
+/// Not the working directory: launched from inside a checkout, that would
+/// fold the repository's local values into the user's own.
 pub(crate) fn app_workdir() -> std::path::PathBuf {
     std::env::home_dir()
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| std::path::PathBuf::from("."))
 }
 
-/// The interval the settings hold for reading the other working copies,
-/// as the screen and the tick carry it. Read twice at construction —
-/// once in seconds for the box, once in milliseconds for the timer.
 fn copies_interval_secs() -> i32 {
     Hub::with(|hub| hub.settings().defaults.copies_interval_secs as i32)
         .unwrap_or(platitude_core::session::COPIES_INTERVAL_DEFAULT_SECS as i32)
@@ -105,11 +95,9 @@ fn copies_interval_secs() -> i32 {
 
 impl Default for AppBackend {
     fn default() -> Self {
-        // The one thing here a run can change is the shape the window
-        // comes up in, and it has to be known before the window exists. A
-        // build without the harness answers from an idle record and reads
-        // no environment at all (`harness::knobs`), so it comes up in the
-        // arm a person at the window gets.
+        // A run can change only the window's shape, which must be known
+        // before the window exists; a build without the harness reads no
+        // environment (`harness::knobs`).
         let harness = crate::harness::knobs();
         Self {
             git_state: "checking".into(),
@@ -148,9 +136,8 @@ impl Default for AppBackend {
             git_path_offers_restart: false,
             git_path_names_the_run: false,
             restart_wanted: false,
-            // Nothing has been asked yet. The screen asks as it opens, so
-            // the resting state is never on show for long — and a run
-            // that never opens the screen never spends the subprocess.
+            // Not asked until the screen opens, so a run that never opens
+            // it spawns no probe.
             git_path_state: String::new(),
             git_path_version: String::new(),
             git_path_error: String::new(),

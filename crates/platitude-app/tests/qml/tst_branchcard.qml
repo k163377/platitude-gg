@@ -3,18 +3,12 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// The delete table a branch's name grows, and what a press on one asks for: **the real card** (`RefBranchMenu`),
-// standing on the answers a menu carrying it would have read (`RefRowMenu.branchFacts`).
+// The real branch card (`RefBranchMenu`) standing on the answers a menu would hand it (`RefRowMenu.branchFacts`):
+// which rows it keeps, what each says, the gesture and colour each takes, and what a press asks for. Which rows a
+// state may offer is `offers::ref_menu`'s and tested there.
 //
-// **Core decides, the card draws.** Which rows a repository's state may offer is `offers::ref_menu`, said in words
-// and covered there; nothing here recomputes it. What is read back is what the card does with those words — the
-// branch's fixed table where rows stay and grey, the assembled rule the other kinds keep, which gesture each row
-// takes, the colour it wears, and the swap to the held `-D` when git's refusal lands while the card stands.
-//
-// **The sentences are the half nothing else can read.** A greyed row that greyed for the wrong reason frames exactly
-// like one that greyed for the right one, and the two the card writes itself carry an em dash — which a headless
-// run's `must_say` can never match on Windows (verify-ui §Windows での実行・デバッグの罠). So until this file they
-// were judged nowhere at all.
+// The greyed rows' sentences are judged only here: a wrong reason frames like a right one, and the em dash they
+// carry can never match a `must_say` on Windows (verify-ui §Windows での実行・デバッグの罠).
 Item {
     id: root
     width: 320
@@ -23,8 +17,7 @@ Item {
     /// What a press asked for, last one wins: the card runs nothing itself.
     property string asked: ""
 
-    /// The words core answers with, the list `offers::RefMenuOffers::words` is. **Data, not a rule** — what a
-    /// repository's state comes to is core's and is tested there.
+    /// Word lists as `offers::RefMenuOffers::words` answers them — data, not a rule.
     readonly property var free: ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream"]
     /// The branch the working tree is on: no move, no delete, and the rows say so.
     readonly property var current: ["branch-here", "integrate", "set-upstream", "current"]
@@ -46,8 +39,7 @@ Item {
             root.asked = "delete-both " + branch + " " + remoteRef + " " + forced
     }
 
-    /// The card standing on one of those answers, the way a menu hands it over. `merged` is what the drawn rows
-    /// already say (`yes` / `no`, empty for a branch only git can answer for).
+    /// `merged` is what the drawn rows already say (`yes` / `no`, empty when only git can answer).
     function standOn(fields) {
         const all = { "kind": "branch", "name": "feature/topic-a", "full": "feature/topic-a",
                       "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
@@ -70,10 +62,7 @@ Item {
         name: "BranchCard"
         when: windowShown
 
-        /// **A branch's three delete forms are a fixed table**: rows that cannot be chosen stay and grey out, so the
-        /// current branch's card opens on rows saying why rather than on nothing at all (デザイン規約 §メニュー、by
-        /// design). What each says is the point — a row out for the wrong reason frames like one out for the right
-        /// one.
+        /// A branch's three delete forms are a fixed table whose rows stay and grey (デザイン規約 §メニュー).
         function test_why_each_row_of_a_branchs_table_is_out_data() {
             return [
                 {
@@ -85,8 +74,8 @@ Item {
                     tag: "held by another working copy",
                     fields: { offers: root.held, heldByWorktree: "C:/copies/topic", holderLeaf: "topic" },
                     reason: "Checked out in another working copy — topic",
-                    // The one line of the three that names something from outside this repository, so the one that
-                    // hands the tip a word to stand the tree mark against (デザイン規約 §ref の種別).
+                    // The one reason naming something outside this repository, so the tip gets a word for the tree
+                    // mark (デザイン規約 §ref の種別).
                     marks: "topic",
                 },
                 {
@@ -107,8 +96,6 @@ Item {
             compare(card.deleteBothItem.tipMarkWord, marks)
         }
 
-        /// The reading over there is the one row with a reason of its own, and **the local delete can be pressable at
-        /// the same time** — which is the pair the two runs of `delete-blocked-tip` were a pair for.
         function test_a_drifted_reading_is_out_while_the_local_delete_is_not() {
             root.standOn({ offers: root.drifted, remoteDrifted: true })
             compare(card.deleteItem.blockedReason, "", "the branch here goes")
@@ -116,7 +103,6 @@ Item {
             compare(card.deleteBothItem.blockedReason, Words.remoteOnAnotherCommit)
         }
 
-        /// Nothing is out when nothing is in the way, and the words each row wears are the command it runs.
         function test_a_branch_nothing_holds_back_offers_all_three() {
             root.standOn({})
             for (const row of [card.deleteItem, card.deleteRemoteItem, card.deleteBothItem]) {
@@ -131,8 +117,7 @@ Item {
             compare(card.deleteBothItem.holdTone, Theme.warning, "while the local half is not a force delete")
         }
 
-        /// The setting above the table follows its own word and nothing else: it writes configuration about a branch,
-        /// which the branch the tree is on and one another copy holds both still take (offers::ref_menu).
+        /// It writes configuration, which the current branch and a held one still take (offers::ref_menu).
         function test_the_upstream_row_follows_its_own_word() {
             root.standOn({})
             verify(card.upstreamItem.offered)
@@ -142,8 +127,7 @@ Item {
             verify(!card.upstreamItem.offered, "and nothing writes while something is running")
         }
 
-        /// A remote-tracking row keeps the assembled rule instead: only the rows it can name, and its own delete is
-        /// the held one that reaches past this machine.
+        /// A remote-tracking row keeps the assembled rule; its own delete is the held one reaching past this machine.
         function test_a_remote_row_keeps_only_the_rows_it_can_name() {
             root.standOn({ kind: "remote", name: "origin/main", full: "origin/main",
                            remoteCounterpart: "", offers: ["switch", "branch-here", "integrate", "delete"] })
@@ -157,14 +141,13 @@ Item {
             verify(!card.upstreamItem.offered, "and no setting of its own either")
         }
 
-        /// A row that names no branch takes the card off the menu — the same answer from either entrance.
         function test_a_row_that_names_no_branch_has_no_card() {
             root.standOn({ kind: "tag", name: "v1.0", full: "v1.0", offers: [] })
             verify(!card.applies)
         }
 
-        /// **git's refusal lands while the card stands**, and the row it lands on turns into the held `-D` where the
-        /// hand already is (デザイン規約 §左メニューの所作). The pair follows it, note and colour together.
+        /// git's refusal lands while the card stands: the row turns into the held `-D` under the hand
+        /// (デザイン規約 §左メニューの所作), and the pair follows.
         function test_a_refusal_turns_the_row_into_the_held_force_delete() {
             root.standOn({})
             compare(card.deleteItem.code, "branch --delete")
@@ -176,14 +159,12 @@ Item {
             compare(card.deleteItem.holdTone, Theme.danger, "what goes lives nowhere else")
             compare(card.deleteBothItem.note, "not merged")
             compare(card.deleteBothItem.holdTone, Theme.danger, "so the pair is danger too")
-            // The chip and the note follow the length the press was given, which is the live one while no press is
-            // under way — so the row says what it now runs before a hand reaches it.
+            // With no press under way, the chip and the note already say what the row now runs.
             compare(card.deleteItem.code, "branch -D")
             compare(card.deleteItem.note, "not merged")
         }
 
-        /// The answer the drawn rows already hold dresses the row as the card opens, with nobody asked. Where they
-        /// cannot answer, git is — and that ask is a request like any other.
+        /// Where the drawn rows cannot answer, git is asked — by request, like any other.
         function test_the_early_answer_comes_off_the_rows_or_is_asked_of_git() {
             root.standOn({ merged: "no" })
             verify(card.deleteAnswered)
@@ -210,7 +191,6 @@ Item {
             compare(root.asked, "")
         }
 
-        /// What each press asks for, in the words the write takes.
         function test_each_row_asks_for_the_write_in_the_words_it_takes() {
             root.standOn({})
             card.deleteItem.picked()
@@ -228,7 +208,7 @@ Item {
             card.deleteBothItem.held()
             compare(root.asked, "delete-both feature/topic-a origin/feature/topic-a false")
 
-            // Once the local half goes as `-D` the pair says so, so the entrance runs the forced form.
+            // Once the local half is `-D`, the pair runs the forced form.
             root.standOn({})
             card.forceDeleteBranch = "feature/topic-a"
             card.deleteBothItem.held()

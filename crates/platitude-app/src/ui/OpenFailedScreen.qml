@@ -2,42 +2,32 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// A tab whose repository would not open, said where the panes would be.
-//
-// The same three lines the picker's dialog says, out of the same place (`Words.openFailure`): which of the three it was
-// is core's answer (`errorKind`). Which of the two screens a failure lands on is
-// decided by the road: the picker's answers go to the dialog, everything else — a restored tab, a
-// worktree row, PGG_AUTO_OPEN — comes here.
-//
-// Two components, this and that dialog: two seats (デザイン規約 §可否・警告の出し場所) that read as such — this one is centred in
-// the seat it takes over and offers the way out of a tab, the dialog is a window's left-aligned form and offers the
-// picker again. What they do share is the wording, which already lives in `Words`, and the width those same three
-// lines are set to (`Theme.textWidth` — 規約 §レイアウト初期値): a different seat reads the same amount.
+// A tab whose repository would not open, said where the panes would be. The picker's failures go to
+// `OpenFailedDialog`; everything else — a restored tab, a worktree row, PGG_AUTO_OPEN — comes here. Why two components:
+// rules-refs/app-ui.md「失敗の画面(`OpenFailedScreen`)と `OpenFailedDialog` は別部品」.
 Item {
     id: screen
 
-    /// core's answer: `plain` / `bare` / `other` (`message` is git's own words, and only that third kind has any).
+    /// core's answer (`errorKind`): `plain` / `bare` / `other` (`message` is git's own words, and only `other` has
+    /// any).
     required property string kind
     required property string path
     required property string message
-    /// How wide the page is. Measured against the page: a `SplitView` gives no width to
-    /// an item that is not on screen, and this one is off screen until the moment it is needed.
+    /// How wide the page is. Measured against the page: a `SplitView` gives no width to an item that is not on
+    /// screen, and this one is off screen until the moment it is needed.
     required property real pageWidth
-    /// The page this screen took the panes' seat on. This screen stands where the left menu would be, so the block at
-    /// the foot of that pane has to be here too — a tab that would not open still ran the command that says why, and
-    /// with nothing else on screen to say it the log is the only place it is written (デザイン規約 §git が言ったことを読む場所).
+    /// The page whose panes' seat this took: the command log's toggle has to be here too, since the log is where the
+    /// failed command's words are (デザイン規約 §git が言ったことを読む場所).
     property var commandsPage: null
 
-    /// The hand this screen's words are dragged over from the air around them, named so a run can enter it
-    /// (the way a card is reached at `<card>.background.pad`).
+    /// Automation: the sweep hand, as a card's `<card>.background.pad`.
     property alias pad: failedHand
 
     /// The "Close tab" button.
     signal closeRequested()
 
-    // The hand this screen's words are dragged over from the air around them (規約 §右のペインの字は掴める). Under the
-    // column, so it is reached only where nothing else took the press — the step between two
-    // lines, the room beside a short one — and the `Close tab` button keeps every press it had.
+    // Drags the words from the air around them (規約 §右のペインの字は掴める). Under the column, so the `Close tab`
+    // button keeps its presses.
     SweepPad {
         id: failedHand
         anchors.fill: failedColumn
@@ -56,9 +46,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             width: parent.width
         }
-        // Wrapped: a field has no `elide` to cut with, and a path put through one would
-        // hand the reader a `…` when they dragged over it (規約 §右のペインの字は掴める). Nothing stands beside this line
-        // to carry what a cut would drop, which is the same reason the sentence under it wraps.
+        // Wrapped: a cut path would hand a dragging reader a `…` (規約 §右のペインの字は掴める).
         CardText {
             text: screen.path
             color: Theme.textSecondary
@@ -79,8 +67,7 @@ Item {
         }
     }
 
-    // Named: this screen has no list for the mark to stand at the foot of, so the band it
-    // would have been read against is not here either.
+    // Captioned: there is no list here for a bare mark to be read against.
     CommandsToggle {
         id: commandsSeat
         anchors.left: parent.left

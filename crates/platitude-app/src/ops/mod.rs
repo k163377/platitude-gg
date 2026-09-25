@@ -1,31 +1,22 @@
 //! The application's own half of a write: what the screen holds from the
 //! press until the answer, and which answer puts it down.
 //!
-//! **Three owners, three questions.** What git may do with a
-//! repository is core's to decide; what this window does with a
-//! press while the answer is still out is decided here; where the
-//! focus goes and what is drawn is QML's. This module is plain
-//! Rust — `qtbridge`, the session and the repository are all
-//! elsewhere — so the transitions run under a bare `cargo test`.
+//! Plain Rust — no `qtbridge`, session or repository — so the transitions
+//! run under a bare `cargo test`.
 //!
-//! **A write is named by the id the queue accepted it under**
-//! (`platitude_core::OperationId`, as the bridge carries it: a
-//! number that is never zero, and `None` where the queue accepted
-//! nothing at all). The id is the whole of the match here — what
-//! answered in between is somebody else's.
+//! A write is named by the id the queue accepted it under
+//! (`platitude_core::OperationId` as the bridge carries it: never zero, and
+//! `None` where the queue accepted nothing). The id is the whole of the
+//! match — whatever else answered is somebody else's.
 //!
-//! **Where an owner is held is decided by what it is holding.** The rows
-//! a delete took off the screen are the tab's ([`StandIn`], kept per tab
-//! by the hub — `hub::stand_in`): a page is built for the tab in front
-//! and taken down behind it (`Main.qml`), and rows that are still gone
-//! stay gone when the thing drawing them goes away. What does end
-//! that is the session being let go, which the owner is told about
-//! ([`StandIn::session_gone`]) — a different thing from the operation
-//! ending, because what a session numbered goes with it. What is waited
-//! for on behalf of one page's own boxes is that page's ([`Press`],
-//! [`StashOut`], kept on the tab model the boxes belong to): a page that
-//! went away took the text and the pane with it, and there is nothing
-//! left to empty or to walk anybody off.
+//! Where an owner is held follows what it holds. The rows a delete took off
+//! the screen are the tab's ([`StandIn`], kept per tab by the hub —
+//! `hub::stand_in`), because a page is taken down behind the tab in front
+//! (`Main.qml`) while the rows stay gone. They end with the session
+//! ([`StandIn::session_gone`]), not the operation, since what a session
+//! numbered goes with it. What one page's own boxes wait on is that page's
+//! ([`Press`], [`StashOut`], kept on the tab model the boxes belong to): a
+//! page that went away has nothing left to empty or walk anybody off.
 
 mod branch_delete_out;
 #[cfg(test)]

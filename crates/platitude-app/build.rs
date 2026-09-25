@@ -1,16 +1,12 @@
-//! Hands the linker the Windows resource carrying what the exe says about
-//! itself to the shell: its own icon, and the name shown in its place —
-//! without the latter the shell falls back to `platitude-gg.exe`.
+//! Hands the linker the Windows resource with the exe's icon and the name
+//! the shell shows for it (without it, `platitude-gg.exe`).
 //!
-//! `assets/platitude.res` is checked in, already compiled. The resource
-//! compiler ships with the Windows SDK, and making every build find it —
-//! including on the two platforms with no use for a `.res` — buys nothing
-//! over a small file in the tree. `assets/platitude.rc` says how to
+//! `assets/platitude.res` is checked in compiled: the resource compiler
+//! comes only with the Windows SDK. `assets/platitude.rc` says how to
 //! rebuild it.
 //!
-//! The icon here is separate from the one the running window wears, which
-//! `src/winframe.rs` sets at startup: one is read off the file by the
-//! shell, the other off the window by the taskbar.
+//! The running window's icon is separate (`winframe::set_icon`): the shell
+//! reads this one off the file, the taskbar that one off the window.
 
 fn main() {
     println!("cargo:rerun-if-changed=assets/platitude.res");

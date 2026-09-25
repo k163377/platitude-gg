@@ -1,33 +1,23 @@
 //! What is driving this run, read once at startup.
 //!
-//! **This is the only place in the crate that looks up a `PGG_*` automation
-//! variable**, which is what makes the harness separable: without the
-//! `automation` feature the reader below is not compiled at all and
-//! [`knobs`] answers from [`Knobs::default`] — every string empty, every
-//! flag off — so the app takes the arm a person at the window takes and
-//! carries no other.
+//! The only place in the crate that looks up a `PGG_*` automation variable
+//! (.claude/rules/app-ui.md). Without the `automation` feature the reader
+//! is not compiled and [`knobs`] answers [`Knobs::default`] — every string
+//! empty, every flag off.
 //!
-//! Which is also why most of the record below is read by nothing there:
-//! what reads it is the QML-facing `Harness`, and that type is not
-//! compiled either (`harness::singleton`). `allow` here, because the
-//! tests at the foot read every field whenever tests are compiled
-//! and an expectation that goes unfulfilled is a warning of its
-//! own.
+//! Most fields are then read by nothing (their reader, `Harness`, is not
+//! compiled either). `allow`, not `expect`: the tests read every field,
+//! which would leave the expectation unfulfilled.
 #![cfg_attr(not(feature = "automation"), allow(dead_code))]
 
 use std::collections::HashSet;
 
-/// Everything the harness is allowed to say to the app it drives.
+/// Everything the harness is allowed to say to the app it drives, read
+/// together at startup and never written after.
 ///
-/// One record: the values are read together, held for the length of the
-/// run, and handed to the properties QML reads them off (`AppBackend`).
-/// Nothing here is ever written after startup.
-///
-/// The `perf_*` group is the one part that is not in every build: the only
-/// thing that reads it is the probe the feature brings in
-/// (`harness::perf_probe`), so a build without one carries no field for it
-/// either. Everything else is here in both, empty, because the app asks
-/// the same questions however it was compiled.
+/// The `perf_*` fields exist only with the feature: their one reader is
+/// `harness::perf_probe`. Everything else is in both builds, empty without
+/// it, because the app asks the same questions however it was compiled.
 #[derive(Default)]
 pub(crate) struct Knobs {
     /// `PGG_AUTO_ACT` — the one operation to run once the repository is
@@ -41,44 +31,37 @@ pub(crate) struct Knobs {
     /// `PGG_SHOT_DIR` — where a headless run leaves its pictures.
     /// Backslashes forward: QML takes it as a URL.
     pub shot_dir: String,
-    /// `PGG_OTHER_GIT` — a second git this run may be pointed at, staged
-    /// beside the pictures and deliberately **not** on PATH. What the
-    /// settings screen's chapter needs to be photographed at all: the one
-    /// state it grows a button for is a git that answers and is not the
-    /// one running, and a run cannot name a second installation that
-    /// exists on both a desk and a container (`--other-git`).
+    /// `PGG_OTHER_GIT` — a second git staged beside the pictures and
+    /// deliberately **not** on PATH (`--other-git`): the settings screen
+    /// grows a button only for a git that answers and is not the one
+    /// running.
     pub other_git: String,
     /// `PGG_AUTO_WATCHDOG_MS` — the deadline that keeps a broken causal run
-    /// bounded. The verb's own causality chooses the shot.
+    /// bounded.
     pub watchdog_ms: i32,
-    /// `PGG_FAULT_HANG` — the station to hold this run at for good, by the
-    /// one word the trail names it with (`harness::deadline`). The two
-    /// shapes a run that stops answering has are made to order with it,
-    /// so that what the parent reads back can be checked
-    /// (`xtask::verify::faults`).
+    /// `PGG_FAULT_HANG` — the station to hold this run at for good, by its
+    /// trail word (`harness::deadline`), so the parent's reading of a wedge
+    /// can be checked (`xtask::verify::faults`).
     pub fault_hang: String,
     /// `PGG_FAULT_NO_DEADLINE` — leave the deadline thread down, so the
-    /// run leaves no report of its own however it ends. The shape a wedge
-    /// past `exiting` has anyway, asked for where it can be arranged.
+    /// run leaves no report however it ends: the shape a wedge past
+    /// `exiting` has anyway.
     pub fault_no_deadline: bool,
     /// `PGG_FAULT_HOLD_ACT` — swallow the verb's completion, so the loop
-    /// keeps turning and nothing ever says the act is done. The third
-    /// shape (`xtask::verify::faults`): ordered, since a ceiling short
-    /// enough to beat a completion on one machine is one the completion
-    /// beats on another.
+    /// keeps turning and nothing says done (`xtask::verify::faults`).
+    /// Ordered, not raced: a ceiling short enough to beat a completion on
+    /// one machine loses to it on another.
     pub fault_hold_act: bool,
     /// `PGG_FAULT_HOLD_WIP_ROW` — walk every pass as one that began
     /// before this window's first status did, until the run says
-    /// otherwise. The arrangement the readers that land on the working
-    /// tree are answerable for and a repository cannot be built into
+    /// otherwise: an arrangement no repository can be built into
     /// (`platitude_core::session::PassHooks::holds_back_the_working_tree_row`).
     pub fault_hold_wip_row: bool,
     /// `PGG_FAULT_HOLD_SAVE` — hold every configuration save the hub
-    /// spawns until the station this names is reached
-    /// (`harness::deadline`), so a close can be photographed landing on a
-    /// save provably out and the shutdown can be read joining one
-    /// (`PGG_AUTO_ACT=quit-save-held`, `xtask::verify::child`). Empty: no
-    /// save is held.
+    /// spawns until the station this names (`harness::deadline`), so a
+    /// close lands on a save that is out and the shutdown is read joining
+    /// one (`PGG_AUTO_ACT=quit-save-held`, `xtask::verify::child`). Empty:
+    /// no save is held.
     pub fault_hold_save: String,
     /// `PGG_AUTO_SELECT` — select the newest commit and open the first
     /// changed file, so a picture has something in every pane.
@@ -103,8 +86,7 @@ pub(crate) struct Knobs {
     /// it pays nothing (`memprobe::enabled`).
     pub mem_report: bool,
     /// `PGG_PERF_SELECTION` — what the interaction measurement selects
-    /// (`none` / `first` / `head`). Empty leaves it to [`Knobs::select`],
-    /// which is what a run that only asked for a selection wants.
+    /// (`none` / `first` / `head`). Empty leaves it to [`Knobs::select`].
     #[cfg(feature = "automation")]
     pub perf_selection: String,
     /// `PGG_PERF_OID` / `PGG_PERF_FILE` — the commit it selects and the
@@ -121,11 +103,8 @@ pub(crate) struct Knobs {
     pub perf_completion: String,
     #[cfg(feature = "automation")]
     pub perf_diff_scroll: bool,
-    /// `PGG_PERF_DIFF=0` — leave the diff out of the measurement.
-    ///
-    /// Spelled as the refusal because an idle harness is every
-    /// flag off, and the diff is *in* unless a run says
-    /// otherwise.
+    /// `PGG_PERF_DIFF=0` — leave the diff out of the measurement. Negated
+    /// so the idle, all-off record keeps the diff in.
     #[cfg(feature = "automation")]
     pub perf_no_diff: bool,
     /// `PGG_PERF_TRACE_FRAMES` — log every frame interval of the scroll
@@ -134,30 +113,25 @@ pub(crate) struct Knobs {
     #[cfg(feature = "automation")]
     pub perf_trace_frames: bool,
     /// `PGG_PERF_FONT_WALK` — before `perf_done`, shape one glyph the UI
-    /// family lacks and say when, either side of an idle. What it is
-    /// for: the first such glyph makes Qt populate its whole font
-    /// database, and `cargo xtask perf` weighs that at a moment its
-    /// sampler can see (`WindowPerfDriver`,
-    /// xtask `perf::fonts`).
+    /// family lacks and say when, either side of an idle: the first such
+    /// glyph makes Qt populate its whole font database, and
+    /// `cargo xtask perf` weighs that where its sampler can see
+    /// (`WindowPerfDriver`, xtask `perf::fonts`).
     #[cfg(feature = "automation")]
     pub perf_font_walk: bool,
     /// Whether anything at all is driving this run
-    /// (`settings::Env::automated` — any `PGG_*` knob but the three that
-    /// say nothing about who is at the window). The settings store is
-    /// what reads it, and gives a driven run no files at all
+    /// (`settings::Env::automated`); a driven run gets no settings files
     /// (`settings::Build::driven`).
     pub automated: bool,
     /// `PGG_FAKE_PR` — branch names wearing the PR badge, so the design can
-    /// be reviewed before Phase 4 joins the real thing in. **The only
-    /// harness knob that reaches what a row says about a repository**, and
-    /// the reason it is here: a build without the harness has an empty set
-    /// and no way to be handed a full one.
+    /// be reviewed before Phase 4 joins the real thing in. The only knob
+    /// that reaches what a row says about a repository; here so a build
+    /// without the harness cannot be handed one.
     pub fake_pr: HashSet<String>,
 }
 
-/// What is driving this run. Read on the first call and held after that —
-/// the encode path asks per row, and an environment lookup there would be
-/// its own small cost on a path the harness is supposed to leave alone.
+/// What is driving this run. Read on the first call and held after that:
+/// the encode path asks per row.
 pub(crate) fn knobs() -> &'static Knobs {
     static KNOBS: std::sync::OnceLock<Knobs> = std::sync::OnceLock::new();
     KNOBS.get_or_init(read)
@@ -210,7 +184,6 @@ fn read() -> Knobs {
     }
 }
 
-/// Nobody is driving, and no environment was asked.
 #[cfg(not(feature = "automation"))]
 fn read() -> Knobs {
     Knobs::default()
@@ -220,9 +193,8 @@ fn read() -> Knobs {
 mod tests {
     use super::*;
 
-    /// Every field of an idle harness spelled out once: the shape a build
-    /// without one runs in, and the shape a run nobody is driving comes
-    /// out as in a build with one.
+    /// The idle record: a build without the harness, and a run nobody
+    /// drives in a build with one.
     fn assert_at_rest(knobs: &Knobs) {
         assert!(knobs.act.is_empty() && knobs.act_arg.is_empty());
         assert!(knobs.open.is_empty() && knobs.shot_dir.is_empty());
@@ -266,10 +238,9 @@ mod tests {
         assert_at_rest(&Knobs::default());
     }
 
-    /// The whole of what the feature buys. Read off [`read`] itself: this
-    /// build has no reader to hand one to, which is the property, and a
-    /// test that set a variable would be reaching for process-global
-    /// state its neighbours share (CLAUDE.md ビルド・テスト).
+    /// Read off [`read`] itself, not by setting a variable: the
+    /// environment is process-global state the parallel tests share
+    /// (.claude/rules/code.md).
     #[cfg(not(feature = "automation"))]
     #[test]
     fn a_build_without_the_harness_reads_no_environment() {

@@ -2,39 +2,22 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-/// Horizontal scroll of the lanes when the full graph is wider than its column.
+/// Horizontal scroll of the lanes when the full graph is wider than its column. Laid over the last row, so it is the
+/// one bar that comes and goes: out only while the hand is in the pane or dragging it (デザイン規約 §グラフを横へ送る).
 ///
-/// It lies over the lanes of the last row, so it comes out only while the hand is in the pane, and stays out for as long
-/// as it is being dragged, wherever that has taken the pointer (デザイン規約 §グラフを横へ送る). **This is the one bar in
-/// the window that still comes and goes** — the others are always drawn once they have somewhere to go, and say the
-/// difference in brightness (`AutoScrollBar`), but this one is laid over a row of history, so
-/// standing when nobody is sending the lanes would cost a row of the graph.
-///
-/// Within that, it keeps the same two steps of ink as every other bar: dim while the hand is merely in the pane, full
-/// once the lanes have actually been sent.
-///
-/// **The style's see-through thumb, which is what a bar with content under it wears** (デザイン規約 §色 スクロールバー):
-/// the lanes run beneath this one, so there is no gutter keeping ink off it and nothing to gain by painting it flat.
-///
-/// **The bar and nothing else.** Whether the hand is in the pane is the pane's own answer and has to stay there: a
-/// `HoverHandler` put in a wrapper item over the list **takes the hover away from every row underneath** — hover goes to
-/// the topmost item that accepts it, and an item carrying a handler accepts it for its whole area (observed with
-/// qmltestrunner, after a report of rows that would not light and cards that would not close).
+/// The bar and nothing else: "hand in the pane" stays the pane's answer — a `HoverHandler` on a wrapper over the list
+/// takes the hover from every row underneath.
 AutoScrollBar {
     id: laneBar
 
-    /// The lane column's arithmetic (`GraphColumnMetrics`): where it starts, how wide it is drawn, how wide the whole
-    /// graph is, and how far it has been sent. The last one is written back here.
+    /// `GraphColumnMetrics`; `graphX` and `laneBarRoom` are written back here.
     required property var columns
-    /// Whether the pointer is anywhere in the pane — the pane's answer, handed in. Attached to no flickable, this bar
-    /// has no view of its own to ask (`AutoScrollBar.inArea`).
+    /// Whether the pointer is in the pane — handed in, since this bar has no flickable to ask (`AutoScrollBar.inArea`).
     required property bool pointerInside
 
     inArea: laneBar.pointerInside
     visible: laneBar.columns.graphXMax > 0 && (laneBar.pointerInside || pressed)
-    // Fusion draws its handle only in the style's "active" state, which for a bar that is not attached to a Flickable
-    // means while the pointer is on the bar itself — a 6px strip on the pane's bottom edge that nobody would find. When
-    // the bar is out it is because this pane put it there, so the style stops deciding.
+    // Unattached, Fusion would draw the handle only while the pointer is on the bar itself; `visible` decides instead.
     policy: ScrollBar.AlwaysOn
     orientation: Qt.Horizontal
     x: laneBar.columns.labelW
@@ -42,17 +25,14 @@ AutoScrollBar {
     size: laneBar.columns.graphFullW > 0 ? laneBar.columns.graphColW / laneBar.columns.graphFullW : 1
     position: laneBar.columns.graphFullW > 0 ? laneBar.columns.graphX / laneBar.columns.graphFullW : 0
     onPositionChanged: {
-        // Attached to no flickable, this bar has no `contentY` to be wired to — its own position is what says the lanes
-        // have just been sent, whichever hand did it (the thumb, the wheel, the middle button, `GraphLanePan`).
+        // Unattached, its own position is what says the lanes were sent, by whichever hand.
         laneBar.moved()
         if (!pressed)
             return
         laneBar.columns.graphX = Math.max(0, Math.min(position * laneBar.columns.graphFullW,
                                                       laneBar.columns.graphXMax))
     }
-    /// **The strip this bar needs, published where the list already reads its geometry.** It is the list's run-out that
-    /// has to hold the strip, and only a bar's own size says how tall it is — so the answer goes through the column
-    /// arithmetic both of them hold, the way `graphX` does above (`GraphColumnMetrics.laneBarRoom`).
+    /// The bar's height, for the list's run-out (`GraphColumnMetrics.laneBarRoom`).
     Binding {
         target: laneBar.columns
         property: "laneBarRoom"

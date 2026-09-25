@@ -50,13 +50,10 @@ pub fn ending_words(notice: Option<&platitude_core::eol::Notice>) -> EndingWords
     out
 }
 
-/// How a rename's source is written beside the new name.
-///
-/// The old path is cut back exactly as far as the new one is: a file that
-/// moved inside its own directory shows two bare names, and one that came
-/// from somewhere else keeps the path that says where. `cut` is how many
-/// bytes of the new path its row does not have to spell — the folders
-/// above it already do (a flat list passes 0, and both names stay whole).
+/// How a rename's source is written beside the new name: cut back as far
+/// as the new one is when it shares that prefix, else whole. `cut` is how
+/// many bytes of the new path its row does not spell — the folders above
+/// do (a flat list passes 0).
 pub fn rename_source<'a>(orig_path: &'a str, path: &str, cut: usize) -> &'a str {
     if cut == 0 || orig_path.is_empty() {
         return orig_path;
@@ -118,8 +115,8 @@ mod tests {
 
     #[test]
     fn a_cut_that_lands_inside_a_character_changes_nothing() {
-        // The offset comes from the row's own name, so this cannot
-        // happen — but a panic here would take the whole list down.
+        // Cannot happen (the offset comes from the row's own name), but a
+        // panic here would take the whole list down.
         let path = "文/new.txt";
         assert_eq!(rename_source("文/old.txt", path, 1), "文/old.txt");
     }

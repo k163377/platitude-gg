@@ -2,7 +2,7 @@
 //! feed it drains, and the questions it asks of the changed files.
 //!
 //! One `#[qobject]` block, and it cannot be split further — QMetaInfo is
-//! built per file (app-ui.md).
+//! built per file (structure.md §分割).
 
 use super::*;
 
@@ -58,14 +58,11 @@ impl DetailsModel {
     #[qsignal]
     fn changed(&mut self);
 
-    /// Re-reads this author's assigned picture. Called when an assignment
-    /// changes: the commit on screen did not, so there is nothing to ask
-    /// git for.
+    /// Re-reads the author's and committer's assigned pictures after an
+    /// assignment changed — no git read, the commit did not change.
     #[qslot]
     fn refresh_avatar(&mut self) {
         let author = Hub::with(|hub| hub.avatar_url(&self.author_email)).unwrap_or_default();
-        // The committer wears a face of their own in the author card, and
-        // it comes from the same store, so an assignment reaches both.
         let committer = Hub::with(|hub| hub.avatar_url(&self.committer_email)).unwrap_or_default();
         if author != self.avatar_url || committer != self.committer_avatar_url {
             self.avatar_url = author;
@@ -81,7 +78,6 @@ impl DetailsModel {
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.details, invoker);
     }
 
-    /// Requests details of `oid_hex` (graph row selection).
     #[qslot]
     fn request(&mut self, oid_hex: String) {
         let Ok(oid) = Oid::from_hex_str(oid_hex.trim()) else {
@@ -98,14 +94,11 @@ impl DetailsModel {
         self.changed();
     }
 
-    /// Requests what a choice of several commits changed. `ids` are
-    /// theirs, **newest first** — the order the graph stands in.
-    ///
-    /// `compare` picks which question is being asked: two commits are
-    /// read as what differs between them, three or more as what all of
-    /// them changed (デザイン規約 §複数のコミットを選ぶ). The header is
-    /// settled here, so the pane turns over with the press that
-    /// asked.
+    /// Requests what a choice of several commits changed. `ids` are newest
+    /// first (graph order). `compare` reads them as what differs between
+    /// two rather than what all of them changed (デザイン規約
+    /// §複数のコミットを選ぶ). The header is settled here, so the pane
+    /// turns over on the press.
     #[qslot]
     fn request_selection(&mut self, ids: Vec<String>, compare: bool) {
         let mut oids = Vec::new();
@@ -120,14 +113,10 @@ impl DetailsModel {
             return;
         }
         self.clear_commit();
-        // **The last commit's files go with it** — and one choice's
-        // stay while another choice replaces it. Left standing, a
-        // commit's files would sit under a band naming several; emptied
-        // between two choices, the list under this one collapses and the
-        // pane below it takes the whole place for the length of a round
-        // trip, which is a flash every time a commit joins or leaves
-        // (the diff pane keeps its rows across a re-read for the same
-        // reason — `DiffModel::begin_request`).
+        // A commit's files go (they would sit under a band naming
+        // several); a choice's stay until the next choice's arrive —
+        // emptying between two choices collapses the list for a round
+        // trip, a flash every time a commit joins or leaves.
         if self.selection_count == 0 {
             self.take_files(&[]);
         }
@@ -137,14 +126,13 @@ impl DetailsModel {
         self.compare_from.clear();
         self.compare_to.clear();
         if compare {
-            // Oldest first — the side a comparison is measured from.
-            // Whole ids: what reads these is the patch behind a row of
-            // the list (`DiffModel::request_range_file`).
+            // Whole ids, oldest as `from`: they address the patch behind
+            // a row (`DiffModel::request_range_file`).
             self.compare_from = oids.last().map(Oid::to_hex).unwrap_or_default();
             self.compare_to = oids.first().map(Oid::to_hex).unwrap_or_default();
         }
-        // Named by the newest of the choice, so a failure addressed to
-        // it still finds a reader (the drain's `Failed` arm).
+        // Named by the newest, so a failure addressed to it finds a
+        // reader (the drain's `Failed` arm).
         self.requested = oids.first().map(Oid::to_hex).unwrap_or_default();
         self.requested_at = Some(Instant::now());
         let mode = if compare {
@@ -173,9 +161,8 @@ impl DetailsModel {
         }
         let details = match msg {
             crate::hub::DetailsMsg::Loaded { details, .. } => details,
-            // What a choice of several commits changed. Only the file
-            // list arrives — the header was settled by the request, the
-            // commits themselves being named by rows already on screen.
+            // A choice: only the file list arrives — the request settled
+            // the header.
             crate::hub::DetailsMsg::Selection { files, .. } => {
                 self.requested_at = None;
                 self.loading = false;
@@ -206,12 +193,10 @@ impl DetailsModel {
         if hex != self.requested {
             return; // stale response for a previous selection
         }
-        // Held for the two marks: one says when the answer arrived and
-        // the other when it is in the model, and between them is what
-        // this call costs.
+        // For the read / apply marks (ci/baseline/perf-windows-x64.md
+        // §操作 1 点の内訳).
         let asked = self.requested_at.take();
         if let Some(t0) = &asked {
-            // Data arrival only; PagePerfDriver separately observes a frame.
             tracing::info!(
                 elapsed_ms = t0.elapsed().as_millis() as u64,
                 "details request round trip"
@@ -233,11 +218,8 @@ impl DetailsModel {
         self.committer_avatar = crate::encode::avatar_code(&details.committer_name);
         self.committer_avatar_url =
             Hub::with(|hub| hub.avatar_url(&details.committer_email)).unwrap_or_default();
-        // Who wrote it and who put it here are the same person on an
-        // ordinary commit; a patch applied by somebody else, a web merge
-        // or a rebase is what makes them two. The address decides, the
-        // way it decides everywhere a person is identified here — the
-        // spellings are already mailmapped by the time they arrive.
+        // The address tells two people apart (デザイン規約 §アバターを与える);
+        // it arrives already mailmapped.
         self.committer_differs = !details
             .committer_email
             .eq_ignore_ascii_case(&details.author_email);
@@ -255,8 +237,6 @@ impl DetailsModel {
         self.take_files(&details.files);
         self.changed();
         if let Some(t0) = asked {
-            // The rows are in the model and the signals are out; what is
-            // left before the frame is the view and the painting.
             tracing::info!(
                 elapsed_ms = t0.elapsed().as_millis() as u64,
                 "details rows applied"
@@ -264,7 +244,6 @@ impl DetailsModel {
         }
     }
 
-    /// Switches the CHANGES list between tree and flat-path display.
     #[qslot]
     fn set_tree_view(&mut self, tree: bool) {
         if self.tree_view == tree {
@@ -285,20 +264,13 @@ impl DetailsModel {
         self.reset();
     }
 
-    /// The changed file `way` steps from `path` among the rows this list
-    /// shows (`encode::Landing`). Nothing where the walk has nowhere left
-    /// to go — which is how the arrows stop at the ends — and nothing
-    /// where the path is not shown at all (デザイン規約 §diff のファイル一覧).
+    /// The changed file `way` steps from `path` among the rows shown
+    /// (`encode::Landing`), over folder rows and not into closed ones.
+    /// Nothing past either end, or for a path not shown (デザイン規約
+    /// §diff のファイル一覧). Only the sign of `way` is read.
     ///
-    /// Only the sign of `way` is read: one press is one file.
-    ///
-    /// Folder rows are stepped over, since a folder has no diff to move to,
-    /// and the rows walked are the ones on screen — a folder the reader
-    /// closed is one the walk does not enter.
-    ///
-    /// The bucket is always empty here (a commit's changed files sit in no
-    /// bucket); it is in the record so that one walk reads both file
-    /// lists.
+    /// The bucket is always empty here (a commit's files sit in no
+    /// bucket); it is in the record so one walk reads both file lists.
     #[qslot]
     pub(super) fn step_file(&self, _bucket: String, path: String, way: i32) -> Landed {
         let Some(from) = self.files.iter().position(|f| !f.folder && f.path == path) else {
@@ -321,10 +293,8 @@ impl DetailsModel {
         )
     }
 
-    /// Where a renamed file came from, by path — whole, the way a diff wants
-    /// it (a rename's diff is read by naming both of its sides). The row's
-    /// own `orig_path` is the same answer; this is for the callers holding
-    /// a path.
+    /// Where a renamed file came from, whole (a rename's diff names both
+    /// sides) — for callers holding a path rather than a row.
     #[qslot]
     pub(super) fn orig_of(&self, path: String) -> String {
         self.raw_files

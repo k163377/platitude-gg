@@ -6,31 +6,23 @@ import QtQuick.Window
 import platitude
 import platitude.ui
 
-// The two grabbable stand-ins a headless shot is taken from, and nothing else.
-// Both sit behind everything the window draws, and exist for `grabToImage`,
-// which cannot be pointed at what they mirror. Built only while a shot
-// directory is set, so an ordinary run carries none of it, and refreshed at
-// shot time by `AutoShotDriver`.
-//
-// An `Item` because these are Loaders, and a `QtObject` has nowhere to put a
-// child (rules-refs/structure.md).
+// The two grabbable stand-ins a headless shot is taken from: `grabToImage` cannot be pointed at what they mirror.
+// Built only while a shot directory is set; refreshed at shot time by `AutoShotDriver`.
+// `Item`, not `QtObject`: rules-refs/structure.md「切り出した非表示のホストは `Item` にする」.
 Item {
     id: mirrors
 
     required property Window window
-    /// The two things a scene picture can be of: the content, or the screen
-    /// that stands in front of it while git has not answered.
+    /// What a scene picture is of: the content, or the gate standing in front of it while git has not answered.
     required property Item mainUi
     required property Item gate
 
-    /// The mirrors themselves — `AutoShotDriver` schedules their updates and
-    /// waits on the textures.
+    /// `AutoShotDriver` schedules their updates and waits on the textures.
     readonly property alias overlayMirror: overlayMirror
     readonly property alias sceneMirror: sceneMirror
 
-    // Popups (dialogs, menus) render in the window overlay, whose C++-created items grabToImage refuses ("no QML
-    // engine"). This QML-declared mirror of the overlay is grabbable, which is what makes popups photographable on the
-    // offscreen platform, where no OS window exists to shoot from outside.
+    // Popups render in the window overlay, whose C++-created items `grabToImage` refuses ("no QML engine"); this
+    // QML-declared mirror of it is grabbable.
     Loader {
         id: overlayMirror
         active: Harness.shotDir !== ""
@@ -41,11 +33,8 @@ Item {
             live: false
         }
     }
-    // The two laid over each other, for the one question a pair of pictures cannot answer: *where* the thing that
-    // opened stands against the thing it opened off. Two named sources: this mirror is inside the content, so a
-    // mirror of everything would be a mirror of itself. Refreshed only when the overlay was holding something —
-    // with nothing open this picture is app.png again, and a board of doubles is a
-    // board nobody reads.
+    // Content and overlay laid over each other: where a popup stands against what it opened off. Two named sources,
+    // because this mirror is inside the content. Refreshed only when the overlay holds something (else it is app.png).
     Loader {
         id: sceneMirror
         active: Harness.shotDir !== ""
@@ -53,8 +42,8 @@ Item {
         z: -10001
         sourceComponent: Item {
             id: sceneShot
-            /// How many of the two textures are still owed. The refresh is asked for once the app's own picture is
-            /// saved, so what is mirrored here is the scene that picture came out of — ink and all (`AutoShotDriver`).
+            /// Textures still owed. The refresh is asked once app.png is saved, so this mirrors the scene that picture
+            /// came from (`AutoShotDriver`).
             property int owed: 0
             signal ready()
             function refresh() {

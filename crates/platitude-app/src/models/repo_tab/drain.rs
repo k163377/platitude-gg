@@ -12,18 +12,13 @@ impl RepoTab {
     }
 
     /// Everything the feed had waiting, folded into the properties QML
-    /// reads — **one `changed()` for the lot of them**, which is why the
-    /// write answers are kept as a list beside the group they rewrite
-    /// (`write_answers`).
+    /// reads under one `changed()` — which is why the write answers are
+    /// kept as a list (`write_answers`).
     #[expect(clippy::too_many_lines)]
     pub(super) fn absorb(&mut self, batch: Vec<TabMsg>) {
-        // Whatever the last notify carried is over: this one answers for
-        // itself, and an empty list is a drain that brought no write
-        // answer at all. The owners waiting for one answer of their own
-        // are put down with it, and so is the group left over for the
-        // readers that wait for none — **a classification read a second
-        // time is a screen sequenced twice off one answer**, which is
-        // what "the editor is emptied once" rests on.
+        // The last notify's answers are over, the owners' and the group's
+        // alike: a classification read a second time sequences the screen
+        // twice off one answer.
         self.write_answers.clear();
         self.commit_out.new_notify();
         self.read_commit_out();
@@ -41,13 +36,9 @@ impl RepoTab {
                 TabMsg::Opened { title, path } => {
                     self.state = "open".into();
                     self.title = title;
-                    // **Beside the repository, not beside the copy this
-                    // tab happens to be standing in** (`Hub::home_copy`).
-                    // A reader keeps their linked copies together
-                    // somewhere of their own, and the folder they hold is
-                    // full of copies of the one repository — the next
-                    // repository to open sits beside the repository, which
-                    // is where this opens whichever copy the tab is in.
+                    // The picker opens beside the repository, not the
+                    // linked copy the tab stands in (`Hub::home_copy`) —
+                    // the copies' folder holds only copies of this one.
                     let beside = Hub::with(|hub| hub.home_copy(self.tab_id))
                         .flatten()
                         .unwrap_or_else(|| path.clone());
@@ -61,19 +52,12 @@ impl RepoTab {
                     message,
                 } => {
                     // A linked copy that would not open is stood back in
-                    // the repository's own one, and nothing is said about
-                    // this refusal (デザイン規約 §タブの所作
-                    // 「立てない所へは立たない」): the page stays as it
-                    // was until the strip takes the tab there, so the
-                    // reader is shown one screen and not a failure that
-                    // is withdrawn a frame later. Only a refusal with
-                    // nowhere left to fall reaches the screen.
-                    //
-                    // **And the tab goes on standing.** Another stand is
-                    // on its way, so the doors it is holding stay held
-                    // (`RepoTab::stood`) — let go of here they would
-                    // open for the one turn between this answer and the
-                    // next stand, on a page that is showing no copy.
+                    // the repository's own one, silently (デザイン規約
+                    // §タブの所作「立てない所へは立たない」); only a refusal
+                    // with nowhere left to fall reaches the screen. The
+                    // doors stay held (`RepoTab::stood`): let go of here,
+                    // they would open for a turn on no copy before the
+                    // next stand.
                     if Hub::with(|hub| hub.home_copy(self.tab_id))
                         .flatten()
                         .is_some()
@@ -84,9 +68,7 @@ impl RepoTab {
                         self.error_kind = kind.into();
                         self.error_path = path;
                         self.error = message;
-                        // The copy would not open, which is still an
-                        // answer: the doors are let go of and the page
-                        // says what became of the folder.
+                        // Still an answer: the doors are let go of.
                         self.stood();
                     }
                 }
@@ -122,13 +104,10 @@ impl RepoTab {
                     push_default_local,
                     checkout_default,
                 } => {
-                    // The marked remote is where pushes go. Only where
-                    // nothing is marked does the old guess stand: `origin`
-                    // when there is one, otherwise whichever remote comes
-                    // first. A mark naming a remote this repository does
-                    // not have is left out of it — git would take that
-                    // name for a URL, and this application has nothing to
-                    // point at.
+                    // The marked remote is where pushes go; unmarked,
+                    // `origin`, else the first remote. A mark naming a
+                    // missing remote is ignored — git would take that
+                    // name for a URL.
                     let marked = names.iter().find(|r| **r == push_default);
                     self.default_remote = marked
                         .or_else(|| names.iter().find(|r| *r == "origin"))
@@ -137,9 +116,9 @@ impl RepoTab {
                         .unwrap_or_default();
                     self.push_default = marked.cloned().unwrap_or_default();
                     self.push_default_local = push_default_local;
-                    // Both keys or none: `git remote rename` carries the
-                    // push's along and leaves the checkout one on the old
-                    // name, and that remote still has the mark to finish.
+                    // Both keys or none: `git remote rename` moves only the
+                    // push's key, and that remote still has the mark to
+                    // finish.
                     self.marked_origin = if self.push_default == checkout_default {
                         self.push_default.clone()
                     } else {
@@ -198,8 +177,8 @@ impl RepoTab {
                 }
                 TabMsg::MergeTools { names, settled } => {
                     self.merge_tools = names;
-                    // The fast half arrives first; the indicator keeps
-                    // turning until the slow read has had its say.
+                    // The fast half arrives first; the indicator turns
+                    // until the slow read lands.
                     if settled {
                         self.merge_tools_loading = false;
                     }
@@ -219,9 +198,6 @@ impl RepoTab {
                     if running {
                         self.busy_count += 1;
                         self.replaying = kind.replays_history();
-                        // The word the band reads (`busyOp`), made here
-                        // from the kind: the kind itself is what the
-                        // bridge carries.
                         self.busy_op = kind.label().to_string();
                         // Whatever the last write left standing, this one
                         // has not stopped yet.
@@ -230,9 +206,8 @@ impl RepoTab {
                         self.settle_write(id, kind, error, report, head_seq, reads_from);
                     }
                 }
-                // The last of the three: everything this write invalidated
-                // has been read again and published, which is what a run
-                // photographing the page a write leaves has to wait for.
+                // The last of the three boundaries: everything the write
+                // invalidated has been read again and published.
                 TabMsg::WriteSettled { id, .. } => self.write_watch.settled(id),
             }
         }
@@ -253,9 +228,8 @@ impl RepoTab {
             .and_then(|i| self.write_answers.get(i))
     }
 
-    /// What git makes of one commit's signature, for the pane to read —
-    /// **unless the question moved on while it was being answered**
-    /// (`signature_wanted`).
+    /// What git makes of one commit's signature, for the pane — dropped
+    /// if the question moved on meanwhile (`signature_wanted`).
     pub(super) fn settle_signature(
         &mut self,
         oid: String,
@@ -277,22 +251,14 @@ impl RepoTab {
         self.signature_signer = signer;
     }
 
-    /// One write's answer, **handed to whoever pressed for it**.
+    /// One write's answer, turned into meanings on this side of the bridge
+    /// (app-ui.md: no business logic in QML) and handed to whoever pressed
+    /// for it.
     ///
-    /// The op names are turned into meanings here, on this side of the
-    /// bridge, so the page sequences the screen — reload the diff, arm a
-    /// landing, put taken rows back — off meanings alone
-    /// (app-ui.md: no business logic in QML).
-    ///
-    /// **Where those meanings go is decided by the id.** A press that
-    /// wrote its id down at the time is waiting for this one answer and
-    /// no other, so the answer goes to it and stops there
-    /// (`ops::Press`, `ops::StandIn`). What is left — the answers
-    /// nobody named — is folded into the group the page reads when any
-    /// answer will do. A drain empties the whole queue and notifies once,
-    /// so that group can only ever describe one of the answers it
-    /// carried: written for all of them, it says whichever finished last
-    /// and the earlier ones are read as never having answered.
+    /// A press that wrote its id down (`ops::Press`, `ops::StandIn`) is
+    /// handed its answer; only the answers nobody named fold into the
+    /// group. One drain notifies once, so the group can describe only one
+    /// answer — written for all, it would hide the earlier ones.
     pub(super) fn settle_write(
         &mut self,
         id: u64,
@@ -307,13 +273,8 @@ impl RepoTab {
             self.busy_op = String::new();
             self.replaying = false;
         }
-        // Who said no and what about — the halves the notice is
-        // made of. **The kind is named here**, on this side of the
-        // bridge, so the page picks its sentence off meanings alone
-        // (app-ui.md: no business logic in QML). It rides the answer
-        // below: a report is the answer's own, and a drain can bring
-        // several of them, so each one carries the report it was
-        // refused with.
+        // Who said no and what about. It rides the answer below: a drain
+        // can bring several, each with its own report.
         let reported = report.is_some();
         let (report_kind, remote, name, reason) = match report {
             Some(report) => (
@@ -343,18 +304,14 @@ impl RepoTab {
             ),
             None => (String::new(), String::new(), String::new(), String::new()),
         };
-        // A fetch the user asked for counts the same way the
-        // timer's do: what the button says is about fetching,
-        // whoever asked.
+        // A fetch the user asked for counts as the timer's do.
         if kind == OperationKind::Fetch {
             self.fetch_settled(&error, true);
         }
         let landed = error.is_empty();
-        // The rows a delete took off the screen, answered by name:
-        // what answered in between is somebody else's, and this is
-        // the only thing that puts them back. `reads_from` goes
-        // with it — the listings that take the rows away for good
-        // are measured against it (`ops_delete::delete_answered`).
+        // Puts back the rows a delete took off the screen, by id;
+        // `reads_from` is what the listings that remove them for good
+        // are measured against (`ops_delete::delete_answered`).
         self.delete_answered(id, !landed, reads_from);
         // Stopped part-way answers with the working tree: there is no
         // commit at the tip to go to (`last_write_stopped`, raised by
@@ -369,13 +326,10 @@ impl RepoTab {
                     | OperationKind::Pull
             );
         self.write_seq += 1;
-        // The middle of the write's three boundaries, for whoever is
-        // waiting on this one by the id its own ask was given. Matched
-        // by equality: the ids are not a sequence (`write_watch`).
+        // The middle of the write's three boundaries. Matched by
+        // equality: the ids are not a sequence (`write_watch`).
         self.write_watch.answered(id);
-        // The answer as it came, kept whole: this is what an owner is
-        // handed and what every reader waiting for one write by name
-        // reads its meanings off (`write_answers`).
+        // Kept whole: what an owner is handed (`write_answers`).
         self.write_answers.push(WriteAnswer {
             id,
             seq: self.write_seq,
@@ -391,16 +345,9 @@ impl RepoTab {
             report_reason: reason,
         });
         let at = self.write_answers.len() - 1;
-        // Handed to whoever named this write at the press.
-        //
-        // **How much of an answer an owner takes is the owner's own.**
-        // Everything the page does with the answer to a press that named
-        // its write is that press's own — the file it left stale, the
-        // words it was refused with, the boxes or the pane it puts down —
-        // so the answer stops there, and a copy in the group below would
-        // have the page act on the one answer twice. What is left over is
-        // the answers nobody named: the fetch on its timer, the write a
-        // page that has since gone away sent.
+        // Handed to whoever named this write at the press, and stops
+        // there: a copy in the group would have the page act on the one
+        // answer twice.
         let mut answered_for = false;
         if self.commit_out.answered(id, at) {
             self.read_commit_out();
@@ -428,10 +375,8 @@ impl RepoTab {
         self.last_write_error = error;
     }
 
-    /// The picture QML is handed of what the editor's commit is waiting
-    /// for — a copy, so a binding reads a plain member
-    /// (`ops_delete::stand_in` keeps the delete's four the same
-    /// way).
+    /// What the editor's commit is waiting for, copied to a plain member
+    /// for bindings to read.
     fn read_commit_out(&mut self) {
         self.commit_answer = self
             .commit_out
@@ -440,10 +385,9 @@ impl RepoTab {
             .unwrap_or(-1);
     }
 
-    /// The same for the stash press that took the working tree away.
-    /// **The tree it is waiting for is asked for** — that answer
-    /// exists only at the moment the page acts on a tree, and asking
-    /// spends it (`takeStashLanding`).
+    /// The same for the stash press that took the working tree away. The
+    /// tree it waits for is not copied: asking spends it
+    /// (`takeStashLanding`).
     fn read_stash_out(&mut self) {
         self.stash_answer = self
             .stash_out
@@ -475,13 +419,10 @@ impl RepoTab {
     }
 
     /// One answer nobody was waiting for by name, folded into the group
-    /// the page reads when any answer will do.
-    ///
-    /// Every such answer rewrites the whole of it, so nothing stays armed
-    /// for a later write to trip over; the drain puts it down again at
-    /// its top ([`Self::clear_write_group`]), so a notify carrying
-    /// none of these says so and the last one goes down with the
-    /// drain that carried it.
+    /// the page reads when any answer will do. Each rewrites the whole
+    /// group, and the drain clears it at its top
+    /// ([`Self::clear_write_group`]), so nothing stays set for a later
+    /// write to trip over.
     fn fold_into_group(&mut self, kind: OperationKind, landed: bool, at: usize) {
         // A landed write moved what the two sides hold; a refused stage,
         // unstage or discard was refused *because* the rows on screen
@@ -496,22 +437,18 @@ impl RepoTab {
         self.write_moved_head =
             landed && matches!(kind, OperationKind::Checkout | OperationKind::Reset);
         self.write_reworded = landed && kind == OperationKind::Reword;
-        // The delete that reaches over to the remote answers as a branch
-        // op the way its label reads: the row it took was a branch's
-        // either way.
+        // A delete that reaches the remote too took a branch's row all
+        // the same.
         self.write_branch_op = matches!(
             kind,
             OperationKind::Branch | OperationKind::DeleteBranchEverywhere
         );
-        // The tag's own pair, read the same way: the row a delete that
-        // reaches over to the remote took was a tag's either way.
+        // The same for tags.
         self.write_tag_op = matches!(
             kind,
             OperationKind::Tag | OperationKind::DeleteTagEverywhere
         );
         self.write_fetched = kind == OperationKind::Fetch;
-        // The report travels on the answer; the group shows the one that
-        // came with the answer it is describing.
         let Some(answer) = self.write_answers.get(at) else {
             return;
         };
@@ -521,8 +458,7 @@ impl RepoTab {
         self.write_report_reason = answer.report_reason.clone();
     }
 
-    /// Every property of that group put down — the resting values, which
-    /// are the ones that ask the page to do nothing at all.
+    /// The group at rest — values that ask the page to do nothing.
     fn clear_write_group(&mut self) {
         self.write_refused = false;
         self.write_stale_diff = false;

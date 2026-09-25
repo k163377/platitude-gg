@@ -3,148 +3,113 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The commit message pair: a prominent summary box over a dimmer description box, the two of them one block of one
-// height (デザイン規約 §コミットメッセージの 2 つの枠). The commit editor and the commit details pane both write and read messages through
-// this same pair, so the two cannot drift apart.
+// The commit message pair: a summary box over a dimmer description box, one block of one height
+// (デザイン規約 §コミットメッセージの 2 つの枠). The commit editor and the details pane both use it, so they cannot drift.
 //
-// The pair's height is held as one number that the layout splits: the description fills what the summary leaves, so
-// the total is exact whatever the font's line height rounds to. One line of summary, the gap, and five lines of
-// description at rest; a summary that wraps takes its extra lines out of the description down to two, and past that
-// the block itself grows — the summary's own cap is what stops that.
+// The pair's height is one number the layout splits: the description fills what the summary leaves, so the total is
+// exact whatever the line height rounds to.
 //
-// What stands around the pair is the pane's business and comes in as numbers (`listHeight` / `blockRoom` /
-// `blockHeight`): only the pane knows what a file list or an author card is. The answers go back out under the names
-// the panes have always said them under — the automation hooks read the panes, and the panes forward (verify-ui スキル).
+// What stands around the pair is the pane's and comes in as numbers (`listHeight` / `blockRoom` / `blockHeight`).
+// The readouts go back out under the panes' names — automation reads the panes, and the panes forward.
 ColumnLayout {
     id: editor
 
     // ---- what the pane says about the boxes -------------------------
-    /// Whether the boxes refuse typing (the details pane on a commit that cannot be rewritten from here; the commit
-    /// editor never refuses).
+    /// Whether the boxes refuse typing (the details pane on a commit that cannot be rewritten from here).
     property bool readOnly: false
-    /// Why they refuse, in one line ("" when they do not). A box that refuses typing without saying why reads as
-    /// broken.
+    /// Why they refuse, in one line ("" when they do not).
     property string blockedTip: ""
-    /// Stands in for the pointer on the summary box, so its read-only tooltip can be photographed — hover cannot be
-    /// injected (verify-ui スキル).
+    /// Stands in for the pointer on the summary box — hover cannot be injected.
     property bool summaryPointedAt: false
-    /// What the empty boxes say when there is a message standing behind them: a stopped merge already has one, and
-    /// leaving the boxes empty commits exactly what they are showing (デザイン規約 §進行中の操作から出る). Empty falls
-    /// back to the two words the boxes are otherwise named by.
+    /// What the empty boxes say when a message stands behind them (a stopped merge): leaving them empty commits
+    /// exactly that (デザイン規約 §進行中の操作から出る). Empty falls back to the boxes' own names.
     property string standingSubject: ""
     property string standingBody: ""
 
     // ---- the mark a reader arrives at -------------------------------
-    /// A reader was sent to these boxes from somewhere that could not hold the whole message — the graph row's hover
-    /// card, whose note is the way here (デザイン規約 §hover のツールチップ). The pair says which it is until the
-    /// reader's next press: they were moved without asking, and what they were moved to has to be findable at a
-    /// glance. **Only the pane that is sent to sets it** — the commit editor is where the hand already is.
-    ///
-    /// **The mark is the frames' own colour** — both boxes already carry a border, so a resting window gains no ink
-    /// for it, and the two frames take the pair as one block.
+    /// A reader was sent here from the graph row's hover card (デザイン規約 §hover のツールチップ); the frames say so
+    /// until their next press. Only the pane that is sent to sets it.
     property bool attention: false
     function callAttention() { editor.attention = true }
     function dropAttention() { editor.attention = false }
 
     // ---- what the pane says about its own geometry ------------------
-    /// The pane's file list height. The list is the one thing under the block that gives, and two rows is where it
-    /// stops being a list — so what it has past those rows is the whole of what this pair may borrow (デザイン規約
-    /// §コミットメッセージの 2 つの枠).
+    /// The pane's file list height — the one thing under the block that gives. What it has past two rows is all this
+    /// pair may borrow (デザイン規約 §コミットメッセージの 2 つの枠).
     property real listHeight: 0
-    /// How much of the pane the block holding this pair may take. Only the pane knows what else stands in that block
-    /// and above it, so the bound is the pane's — the two panes' definitions differ.
+    /// How much of the pane the block holding this pair may take — the pane's to say; the two panes differ.
     property real blockRoom: 0
-    /// What that block is asking for (its column's implicitHeight), measured against `blockRoom` — see `descOwed`
-    /// on why a laid-out height is a ring.
+    /// What that block asks for (its column's implicitHeight); `descOwed` says why it is held against `blockRoom`.
     property real blockHeight: 0
 
     // ---- what the pair holds ----------------------------------------
     readonly property string subjectText: summaryArea.text
     readonly property string bodyText: descBox.text
-    /// The read-only tooltip is up. Reported through the ToolTip's own visible — the output side, so a cut binding
-    /// cannot read as green.
+    /// The read-only tooltip is up (the output side).
     readonly property bool summaryTipShown: summaryArea.ToolTip.visible
-    /// What the description box paints — the smoke hooks report the painted side
-    /// (app-ui.md).
+    /// What the description box paints (the output side).
     readonly property color descriptionColor: descBox.textColor
     readonly property bool descriptionFocused: descBox.focused
-    /// Whether a caret is in either box — the pane reads it as "somebody is in here writing", which is when the row
-    /// that saves has to be on screen (規約 §コミットメッセージの 2 つの枠).
+    /// A caret is in either box — when the pane keeps the row that saves on screen (規約 §コミットメッセージの 2 つの枠).
     readonly property bool anyFocused: summaryArea.activeFocus || descBox.focused
 
     // -- the message pair is one block of one height --
-    /// What the summary box needs for its own lines, capped — nothing in git bounds a summary, and one pasted paragraph
-    /// grew this box to 650px, which pushed the description off the pane and left the author row over the window's own
-    /// footer (measured at a 2,000-byte subject). Ceiled, so the box is at least as tall as the text inside it —
-    /// that is the difference between a scroll bar and no scroll bar.
+    /// What the summary box needs for its own lines, capped: nothing in git bounds a summary, and an uncapped box
+    /// pushes the description off the pane. Ceiled, so a box that fits its text shows no scroll bar.
     readonly property real summaryNeed:
         Math.min(Math.ceil(summaryArea.implicitHeight) + Theme.spaceSm,
                  Theme.messageMaxHeight)
     /// The description gives up its lines to a wrapping summary down to two, and no further.
     readonly property real descFloor: 2 * Theme.fontMdLine + Theme.spaceSm
-    /// The pair's resting height: one summary line and five description lines, with the gap between them.
+    /// At rest: one summary line and five description lines, with the gap between them.
     readonly property real pairRest:
         Theme.fontLgLine + Theme.spaceSm + Theme.spaceXs + Theme.messageMaxHeight
-    /// What the pair is laid out at. Past the point where the description has given its last line, the block itself
-    /// grows — the summary's own cap is what stops that.
+    /// What the pair is laid out at: once the description is at its floor, the block grows, up to the summary's cap.
     readonly property real pairBase:
         Math.max(editor.pairRest,
                  editor.summaryNeed + Theme.spaceXs + editor.descFloor)
-    /// What the description is allotted at rest: the rest of the block.
     readonly property real descRest:
         editor.pairBase - editor.summaryNeed - Theme.spaceXs
 
     // -- what the pane lends the description box --
-    //
-    // The box carries the pull and the grip (`DescriptionBox`); the bound is the pane's, and arrives as `listHeight`:
-    // the file list is the one thing that gives, and two rows is where it stops being a list — so what is left above
-    // that is the whole of the room.
+    // The box carries the pull and the grip (`DescriptionBox`); the bound is the pane's (`listHeight`).
     readonly property real descRoom:
         Math.max(0, editor.listHeight - 2 * Theme.rowHeight)
-    /// The far side of the same measure: how far past the bound the pane already is, which is what the hand has to give
-    /// back. The list is the only thing that gives, so it hits zero and stops answering while the block's column keeps
-    /// growing past the pane's edge — the second term is that overflow, and without it the give-back stalls at the last
-    /// 48 pixels the list still had (measured: the command log opening under a pulled-open box).
+    /// How far past the bound the pane already is — what the hand has to give back. The second term is the block's
+    /// overflow past the pane's edge: the list stops answering at zero, and without it the give-back stalls short.
     ///
-    /// Measured against the room the block is *allowed* (`blockRoom`): the block's own height follows what the box
-    /// does, so reading a laid-out height back here would put the box and the layout in a ring — the box grows, the
-    /// height it is compared to is still last frame's, the box is told it owes the difference, and it gives back
-    /// everything it just took (measured: the grip did nothing at all, `cap` never left 120).
+    /// Held against the room the block is *allowed* (`blockRoom`), not a laid-out height: that height follows the
+    /// box, so comparing with it is a ring — the box is told it owes last frame's growth and gives it all back.
     readonly property real descOwed:
         Math.max(0, 2 * Theme.rowHeight - editor.listHeight)
         + Math.max(0, editor.blockHeight - editor.blockRoom)
     /// Whether the grip is refusing a pull, and where the hand is while it does (scene coordinates). The page draws the
-    /// badge — see `RepoPage` on why it cannot be drawn in the box.
+    /// badge (`RepoPage.refusalSource`).
     readonly property alias descRefuses: descBox.gripRefused
     readonly property alias descPoint: descBox.gripPoint
     readonly property bool descGrips: descBox.grips
     readonly property real descHeight: descBox.boxHeight
     readonly property real descWants: descBox.wants
     readonly property real descCap: descBox.cap
-    /// How many rows the file list is left with, which is the bound the pull stops at. Rounded: the layout hands out
-    /// fractions and what this is about is rows.
+    /// How many rows the file list is left with — the bound the pull stops at. Rounded: the layout hands out fractions.
     readonly property int descListRows:
         Math.round(editor.listHeight / Theme.rowHeight)
-    /// Whether the block is taller than the room it was given — anything in it below the fold. What a pulled-open box
-    /// pushes past the pane's edge is exactly what the block ends up scrolling by, so this is also the answer to "has
-    /// the box given back what it owes". Said out loud because a headless run cannot see a scroll bar and the shot
-    /// frames alike either way (`PGG_AUTO_ACT=window-floor wip`).
+    /// Whether the block is taller than the room it was given — which is also "has the box given back what it owes".
+    /// A readout: a headless run cannot see a scroll bar (`PGG_AUTO_ACT=window-floor wip`).
     readonly property bool blockScrolls:
         editor.blockHeight > editor.blockRoom + 1
     readonly property bool descKeeps: !editor.blockScrolls
-    /// What the pane lays the pair out at: the block, plus whatever the grip has pulled. The pane binds this to
-    /// `Layout.preferredHeight` on the instance — a layout's own implicitHeight is the engine's to write, so a binding
-    /// there loses to the next recompute and the description box collapses to its 0 implicit height (measured).
+    /// What the pane lays the pair out at: the block plus the grip's pull. Bind it to `Layout.preferredHeight` on the
+    /// instance — the layout's own implicitHeight is the engine's: a binding there loses to the next recompute, and the
+    /// description box collapses to its 0 implicit height.
     readonly property real pairHeight: editor.pairBase + descBox.extra
 
-    /// A wheel neither box could use, in pixels. The boxes cover most of the block they stand on, so whoever owns that
-    /// block moves it by this — without it the surface under the boxes cannot be reached by wheel at all (observed).
+    /// A wheel neither box could use, in pixels — whoever owns the block moves it by this, or the block under the
+    /// boxes cannot be wheeled at all.
     signal wheelPastEnd(real pixels)
 
-    /// Swap in a different message. A pull, and a reading position, belong to the message they were made on — the next
-    /// one opens at its own rest height and its own first line. The summary box needs the same caret treatment for the
-    /// same reason (see DescriptionBox.resetForNewMessage): a subject long enough to scroll otherwise opens on its last
-    /// line.
+    /// Swap in a different message: it opens at its rest height and first line — a pull and a reading position belong
+    /// to the message they were made on (`DescriptionBox.resetForNewMessage`).
     function setMessage(subject, description) {
         summaryArea.text = subject
         descBox.text = description
@@ -153,11 +118,9 @@ ColumnLayout {
         editor.summaryToTop()
         descBox.resetForNewMessage()
     }
-    /// Held at its first line until the reader moves it, the way the description box is held
-    /// (`DescriptionBox.pinnedTop`) and for the same reason: assigning `text` leaves the caret at the end, and a
-    /// `TextArea` scrolls the flickable under it to keep the caret in view — so a subject longer than the box opens on
-    /// its **last** line. A single assignment races that scroll and loses when the layout settles late (measured on a
-    /// 2,000-character subject: the box opened on `終端`). Pinning states the intent.
+    /// The summary held at its first line until the reader moves it (`DescriptionBox.pinnedTop`, same reason): the
+    /// caret a new `text` leaves at the end scrolls a long subject to its last line, and a one-off reset loses to a
+    /// late layout.
     property bool summaryPinned: false
     function unpinSummary() {
         editor.summaryPinned = false
@@ -174,15 +137,13 @@ ColumnLayout {
                 summaryView.contentItem.contentY = 0
         }
     }
-    /// Write the texts alone — a revert, or the smoke hook that types into the boxes — the caret, the scroll and
-    /// the pull stay put.
+    /// Write the texts alone (a revert, a smoke hook): the caret, the scroll and the pull stay put.
     function setTexts(subject, description) {
         summaryArea.text = subject
         descBox.text = description
     }
-    /// Escape was pressed in one of the boxes. **The draft goes**, and nothing asks (デザイン規約 §コミットメッセージ
-    /// の 2 つの枠): Escape is the reader saying so, and the text it drops was never committed. The caret goes with it,
-    /// so the row that saves comes down too.
+    /// Escape in one of the boxes: the draft goes, and nothing asks (デザイン規約 §コミットメッセージの 2 つの枠).
+    /// The caret goes too, so the row that saves comes down.
     signal escaped()
     function leaveBoxes() {
         summaryArea.focus = false
@@ -193,10 +154,10 @@ ColumnLayout {
         if (summaryView.contentItem)
             summaryView.contentItem.contentY = 0
     }
-    /// The same two steps for the summary as the description box makes on its own text (`DescriptionBox.rollBy`): its
-    /// own scroll while a pasted paragraph past the shared cap leaves text to move, the block once there is not.
+    /// The summary's wheel, in `DescriptionBox.rollBy`'s two steps: its own text while there is text to move, then
+    /// the block.
     function rollSummary(dy) {
-        // A wheel over the box is the reader moving it: whatever the pin was holding, they have taken over.
+        // A wheel is the reader taking over from the pin.
         editor.unpinSummary()
         const flick = summaryView.contentItem
         const pixels = dy / 120 * (Metrics.wheelRows * Theme.fontMdLine)
@@ -214,12 +175,10 @@ ColumnLayout {
         id: summaryGlide
         view: summaryView.contentItem
     }
-    /// Automation only: the two boxes' middle-button hands, started and drifted without a pointer (a middle button
-    /// cannot be injected).
+    /// Automation only: the boxes' middle-button hands, driven without a pointer.
     readonly property alias summaryHand: summaryHand
     readonly property alias descriptionHand: descBox.hand
-    /// The middle button's drift over the summary, the words and nothing else (`DescriptionBox.driftText` says why the
-    /// block under the boxes is left alone).
+    /// The middle button's drift over the summary: the words only (`DescriptionBox.driftText`).
     function driftSummary(dy) {
         editor.unpinSummary()
         summaryGlide.halt()
@@ -234,13 +193,12 @@ ColumnLayout {
     function growDescription(dy) { descBox.grow(dy) }
     function pullDescriptionPast(down) { descBox.pullPast(down) }
     /// Smoke hook: the wheel over the description box, through the one door a notch comes in by
-    /// (`DescriptionBox.rollBy` — the flickable inside a `ScrollView` is not interactive, so this is the only thing
-    /// that moves this text).
+    /// (`DescriptionBox.rollBy`).
     function rollDescription(dy) { descBox.rollBy(dy) }
-    /// Smoke hook: the reader inside the box, which is what keeps its bar bright — and the one thing a headless run
-    /// cannot do, since hover is not injectable (`AutoScrollBar.inArea`, verify-ui).
+    /// Smoke hook: the hand inside the box, which keeps its bar bright — hover is not injectable
+    /// (`AutoScrollBar.inArea`).
     function holdDescriptionBar(on) { descBox.bar.inArea = on }
-    /// How much ink is on the box's own bar, and how far the text stands (verify-ui).
+    /// How much ink is on the box's own bar, and how far the text stands.
     readonly property real descriptionBarInk: descBox.bar.opacity
     readonly property real descriptionAt: descBox.textAt
     readonly property real summaryAt: summaryView.contentItem ? summaryView.contentItem.contentY : 0
@@ -254,8 +212,8 @@ ColumnLayout {
         radius: Theme.radiusMd
         border.color: editor.attention ? Theme.accent : Theme.borderDefault
         border.width: Theme.borderWidth
-        // The band the inset below leaves between this frame and the words. Declared first, so it is under the view
-        // and reaches only a press the text did not take (`SweepBand`).
+        // The band the inset leaves between frame and words. Declared first, so it is under the view and gets only a
+        // press the text did not take (`SweepBand`).
         SweepBand {
             anchors.fill: parent
             field: summaryArea
@@ -264,8 +222,7 @@ ColumnLayout {
             id: summaryView
             anchors.fill: parent
             anchors.margins: Theme.spaceXs
-            // Both boxes are inset by the one value, lay their own bar out, and refuse the sideways one — see
-            // `DescriptionBox` for why each is so.
+            // The same inset, own bar and no sideways bar as `DescriptionBox`, whose reasons are there.
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             ScrollBar.vertical: AutoScrollBar {
                 id: summaryBar
@@ -274,8 +231,8 @@ ColumnLayout {
                 y: summaryView.topPadding
                 height: summaryView.availableHeight
             }
-            // ScrollView keeps its Flickable private -- reach it once it exists. Interaction off, for the reason the
-            // description box carries: the flickable answering the same wheel as the handler moved the text twice.
+            // ScrollView keeps its Flickable private -- reach it once it exists. Not interactive: answering the same
+            // wheel as the handler moves the text twice.
             Component.onCompleted: {
                 contentItem.boundsBehavior = Flickable.StopAtBounds
                 contentItem.interactive = false
@@ -286,7 +243,7 @@ ColumnLayout {
                 placeholderText: editor.readOnly ? ""
                                  : editor.standingSubject !== "" ? editor.standingSubject
                                  : qsTr("Commit summary")
-                // A caret put in the box is the other way the reader takes it over (`DescriptionBox` does the same).
+                // A caret in the box also takes it over from the pin.
                 onActiveFocusChanged: if (summaryArea.activeFocus) editor.unpinSummary()
                 Keys.onEscapePressed: event => {
                     editor.leaveBoxes()
@@ -301,8 +258,7 @@ ColumnLayout {
                 }
             }
         }
-        // The middle button's hand over the summary's words, on the terms the description box gives its own
-        // (`DescriptionBox`): over the text, only while there is somewhere to go, and out of the way of a paste.
+        // The middle button's hand over the summary, on the terms `DescriptionBox` gives its own.
         MiddleAutoScroll {
             id: summaryHand
             anchors.fill: summaryView

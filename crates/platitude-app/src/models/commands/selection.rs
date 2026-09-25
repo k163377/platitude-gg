@@ -2,56 +2,35 @@
 //! row draws of it, and what it hands the clipboard
 //! (デザイン規約 §git が言ったことを読む場所).
 //!
-//! **A row is one line, and the line is its columns joined by tabs**
-//!: `12:03:17\tgit switch -- 3.2\t29 ms`. A tab
-//! is where the eye sees a column break and a space is where it sees one
-//! word after another, so a log pasted into anything that reads tabs comes
-//! out in the three columns it was read in.
+//! A row is one line: its columns joined by tabs
+//! (`12:03:17\tgit switch -- 3.2\t29 ms`), so a paste keeps the columns.
+//! The panel draws each column at a place of its own, so a byte is found
+//! per column: the pane lays the column ([`CommandsModel::column`]) on the
+//! row's ruler (`LineRuler`) and brings back a place, and
+//! `encode::markup::plain_byte` / `plain_ranges` turn places into bytes and
+//! back. Nothing here measures a font.
 //!
-//! **The panel draws those columns at three places of its own** — the
-//! clock at the near edge, the command after it, the outcome against the
-//! far one — so a byte of the line is not one number away from the row's
-//! start. This is where that is answered, and it is answered the same way
-//! twice: `encode::markup::plain_byte` says which byte of a column a place
-//! in it stands on, and `encode::markup::plain_ranges` says which places a
-//! byte range of it covers.
-//!
-//! **A place.** Where a column's characters are drawn is known only to
-//! the layout that drew them, so the pane puts the column on the row's
-//! own ruler (`LineRuler`) and brings back a place in it; the column
-//! itself comes from here ([`CommandsModel::column`]), because the line
-//! those columns are cut from is here. Nothing in this file measures a
-//! font, and no count of columns stands in for one.
-//!
-//! Two things follow and are worth saying once:
-//!
-//!  - **the tabs are the gaps.** One tab character stands for the whole
-//!    run of empty pixels between two columns, so a wash that covers it
-//!    covers the gap — which is what a selection reads like in a terminal,
-//!    and what was asked for.
-//!  - **git's own words come with a command line taken whole.** There is
-//!    no way on screen to point at part of the block under a failure (it
-//!    wraps, and the rows are whole commands), so pointing at the row is
-//!    pointing at all of it — the same bargain the diff makes with its
-//!    removed lines (§diff の中身をコピーする).
+//! - One tab stands for the whole gap between two columns, so a wash that
+//!   covers it covers the gap.
+//! - git's own words come only with a line taken whole: the block under a
+//!   failure cannot be pointed into (デザイン規約 §diff の中身をコピーする).
 
 use super::*;
 
-/// `HH:mm:ss`, which is the only shape the clock column is ever written
-/// in — so the byte the tab after it sits on is this, on every row.
+/// `HH:mm:ss` — the clock column's only shape, so the first tab is at
+/// this byte on every row.
 const CLOCK_LEN: usize = 8;
 
 /// The columns a press can land in, as the pane names them. The odd
-/// numbers are the two gaps: they hold one tab each, so the only places
-/// in them are its two ends.
+/// numbers are the two gaps: one tab each, so their only places are its
+/// two ends.
 pub(super) const AT_CLOCK: i32 = 0;
 pub(super) const AT_GAP_CMD: i32 = 1;
 pub(super) const AT_CMD: i32 = 2;
 pub(super) const AT_GAP_OUT: i32 = 3;
 pub(super) const AT_OUT: i32 = 4;
 
-/// One row's line, taken apart into the three columns it is drawn as and
-/// the byte each of them starts at.
+/// One row's line, as the three columns it is drawn as.
 pub(super) struct Line {
     pub(super) clock: String,
     pub(super) cmd: String,
@@ -63,11 +42,8 @@ impl Line {
         Self {
             clock: item.clock.clone(),
             cmd: format!("git {}", item.args),
-            // Two words about how it went, and a space between them
-            // because that is one thing being said: `exit 128 12 ms`.
-            // Either half can be missing -- a command that went through
-            // says only how long it took, and one still running says
-            // neither.
+            // Result and duration are one column, space-joined
+            // (`exit 128 12 ms`); either can be missing.
             out: match (item.result.as_str(), item.duration.as_str()) {
                 ("", duration) => duration.to_string(),
                 (result, "") => result.to_string(),
@@ -107,7 +83,6 @@ impl Line {
         out
     }
 
-    /// The three columns with the byte each starts at, in reading order.
     fn columns(&self) -> [(usize, &str); 3] {
         [
             (0, self.clock.as_str()),
@@ -117,14 +92,10 @@ impl Line {
     }
 }
 
-/// The clock a row is stamped with, in the reader's own time of day.
-///
-/// The offset comes from the display side (`Date.getTimezoneOffset()`, in
-/// minutes to add to local to reach UTC) because nothing else here knows
-/// it: `std::time` deals in UTC alone, and a crate that knows zones is a
-/// dependency this does not need. It is asked for again every time the
-/// panel is shown, so a session carried across a change of offset stamps
-/// the rows that arrive afterwards with the new one.
+/// The clock a row is stamped with, in the reader's own time of day. The
+/// offset comes from the display side (`Date.getTimezoneOffset()`):
+/// `std::time` knows only UTC, and a zone crate is a dependency this does
+/// not need.
 pub(super) fn clock_of(at_ms: i64, zone_minutes: i32) -> String {
     let local = at_ms - i64::from(zone_minutes) * 60_000;
     let day = local.div_euclid(1000).rem_euclid(86_400);
@@ -136,10 +107,9 @@ impl CommandsModel {
         self.rows.get(row).map(Line::of)
     }
 
-    /// The text of one of the three columns a row draws, for the pane to
-    /// put on its ruler and ask where a place in it falls
-    /// (`CommandsTextSelect` / `CommandRowDelegate`). The two gaps hold a
-    /// tab and nothing that has to be laid out, so nothing asks for them.
+    /// The text of one of the three columns a row draws, for the pane's
+    /// ruler (`CommandsTextSelect` / `CommandRowDelegate`). A gap has
+    /// nothing to lay out, so it answers empty.
     pub(super) fn column(&self, row: i32, at: i32) -> String {
         let Some(line) = usize::try_from(row).ok().and_then(|row| self.line_at(row)) else {
             return String::new();
@@ -152,10 +122,8 @@ impl CommandsModel {
         }
     }
 
-    /// Which byte of a row's line a press landed on, given the column it
-    /// landed in and which place of that column the row laid the pointer
-    /// over. A gap holds one tab, so its two places are the two sides of
-    /// it, which is all there is to say about a gap.
+    /// Which byte of a row's line a press landed on, given the column and
+    /// the place in it. A gap's two places are the two sides of its tab.
     pub(super) fn hit(&self, row: i32, at: i32, place: i32) -> i32 {
         let Some(line) = usize::try_from(row).ok().and_then(|row| self.line_at(row)) else {
             return 0;
@@ -169,9 +137,8 @@ impl CommandsModel {
             AT_GAP_OUT if place == 0 => line.cmd_end(),
             AT_GAP_OUT => line.at_out(),
             AT_OUT => line.at_out() + plain_byte(&line.out, place),
-            // Below the line: the block of words under a failure. It is
-            // taken whole or not at all, so a press in it is the end of
-            // the line it belongs to.
+            // Below the line: the words under a failure are taken whole or
+            // not at all, so a press there is the line's end.
             _ => line.len(),
         };
         i32::try_from(byte).unwrap_or(0)
@@ -179,16 +146,11 @@ impl CommandsModel {
 
     // ---- where the selection runs ------------------------------------
 
-    /// The two ends in reading order, or nothing while none stands. The
-    /// pair is kept in the order the hand made it -- the press first --
-    /// so a drag upwards is as ordinary as one downwards, and this is the
-    /// one place that sorts it.
+    /// The two ends in reading order, or nothing while none stands — the
+    /// one place that sorts the pair, which is kept press first.
     ///
-    /// **Both ends are cut to the line they are on.** A hand that has run
-    /// off the end of a row names a byte past it, and every reader of the
-    /// pair below indexes a line with it: uncut, `to` addresses nothing
-    /// and the whole selection reads as empty (measured — a drag to
-    /// the end of the last row copied nothing at all).
+    /// Both ends are cut to their line: a drag off a row's end names a byte
+    /// past it, and uncut the whole selection reads as empty.
     fn taken(&self) -> Option<(usize, usize, usize, usize)> {
         if !self.sel_active {
             return None;
@@ -247,10 +209,8 @@ impl CommandsModel {
         self.sel_to_at = 0;
     }
 
-    /// What the oldest rows falling off the end does to the ends: they are
-    /// row numbers, and the rows under them have moved. A selection whose
-    /// first end went over the edge is not the reader's selection any
-    /// more, so it goes.
+    /// Moves the ends (row numbers) up past the `gone` oldest rows that fell
+    /// off; a selection with an end over the edge is dropped.
     pub(super) fn shift_selection(&mut self, gone: i32) {
         if !self.sel_active {
             return;
@@ -265,13 +225,8 @@ impl CommandsModel {
 
     // ---- what each row draws of it -----------------------------------
 
-    /// Re-spells every row that could have changed: the ones the selection
-    /// covers now, and the ones it covered before. Answers whether any of
-    /// them actually did.
-    ///
-    /// The rows are written first and the view told afterwards, in runs —
-    /// a drag that sweeps a hundred rows is one notification
-    /// (`models::notify`).
+    /// Re-spells the rows the selection covers now or covered before, and
+    /// answers whether any changed.
     fn respell(&mut self, was: Option<(usize, usize)>) -> bool {
         let now = self.span();
         let (first, last) = match (was, now) {
@@ -292,9 +247,6 @@ impl CommandsModel {
 
     /// Writes one row's share of the selection into its `sel` role, and
     /// answers whether that changed anything — the caller tells the view.
-    /// Reached from `drain` as well: a row that has just finished draws a
-    /// different line, having grown words about how it went that it did
-    /// not have while it ran.
     pub(super) fn respell_row(&mut self, row: usize) -> bool {
         let spelled = self.spell(row);
         let Some(item) = self.rows.get_mut(row) else {
@@ -307,11 +259,7 @@ impl CommandsModel {
         true
     }
 
-    /// One row's share, as the delegate reads it (`CommandWash`): the
-    /// runs of each of the three columns the wash is laid over
-    /// (`encode::plain_ranges`), none where the column holds none of the
-    /// selection, and whether the line is taken end to end — which is
-    /// what brings git's own words with it.
+    /// One row's share, as the delegate reads it (`CommandWash`).
     fn spell(&self, row: usize) -> Optional<CommandWash> {
         let Some((first, first_at, last, last_at)) = self.taken() else {
             return Optional::none();
@@ -348,9 +296,9 @@ impl CommandsModel {
 
     // ---- what it hands the clipboard ---------------------------------
 
-    /// The selected text, cut at its two ends. Rows are lines; a line
-    /// taken whole brings the block of words under it, indented by the tab
-    /// that puts it under the command column on screen.
+    /// The selected text, cut at its two ends. A failed line taken whole
+    /// brings git's words under it, each indented by a tab so it pastes
+    /// under the command column.
     pub(super) fn copied(&self) -> String {
         let Some((first, first_at, last, last_at)) = self.taken() else {
             return String::new();

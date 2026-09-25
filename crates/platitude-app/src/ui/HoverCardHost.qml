@@ -2,43 +2,25 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The beat between a hover card and the thing it hangs off: it holds the card up while the hand walks from one into the
-// other, and takes it down once the hand is out of both.
-//
-// **A beat on a timer.** A card opens flush under what raised it, so walking in takes the pointer
-// off that thing on the way and walking back out puts it on again. The two hovers change in different frames and in no
-// fixed order, and `Qt.callLater` lands between them — the card shut under the hand that was reaching for it
-// (observed — 規約 §hover のツールチップ の罠 (3)).
-//
-// It draws nothing and is placed nowhere. The owner keeps the card, opens it where it belongs, and hands
-// it here to be closed.
+// Keeps a hover card up while the hand walks between it and what it hangs off, and closes it a beat after the hand is
+// out of both. A timer, not `Qt.callLater`: the two hovers change in different frames in no fixed order
+// (rules-refs/app-ui.md「hover で開くものの 5 つの罠」(3)). Draws nothing; the owner opens the card and hands it here.
 QtObject {
     id: keeper
 
-    /// The card being kept.
     required property AppCard card
-    /// The pointer is on the thing the card hangs off — the row, the name, the chip, the mark. The owner writes it as
-    /// the pointer comes and goes, and the headless runs write the same property, hover being the one thing that cannot
+    /// The pointer is on what the card hangs off. The owner writes it; headless runs write it too, since hover cannot
     /// be injected.
     property bool pointedAt: false
-    /// Something that is not a pointer is holding the card up: a menu standing on one of its rows, a pin. Most owners
-    /// leave it false.
+    /// Something other than a pointer holds the card up (a menu on one of its rows, a pin).
     property bool grace: false
 
-    /// The card's own ground, and through it the one shared tooltip — the attached property answers with the same
-    /// instance wherever it is read, so nothing has to be handed down from the window.
+    /// The card's ground, and through it the one shared tooltip.
     readonly property Item ground: keeper.card !== null ? keeper.card.contentItem : null
     readonly property var tip: keeper.ground !== null ? keeper.ground.ToolTip.toolTip : null
 
-    /// A row of this card raised the shared tooltip, and the tooltip is still standing.
-    ///
-    /// **The hand reading that tooltip is off this card**: a popup takes the pointer from everything under it, so a
-    /// card that watched only `pointerInside` takes itself down under the hand that reached for what it put out — and
-    /// the tooltip goes with it, because the row it hangs off is destroyed (observed: 畳んだ左メニューの
-    /// 覗きで、行のフルネームのツールチップへ手を伸ばすと覗きごと消えた). The card that raised it holds until it goes.
-    ///
-    /// Read through the tooltip's own `parent`, walked up to this card: the shared instance stands on whatever asked
-    /// for it last, and only the card it is standing *in* has any business holding it up.
+    /// A row of this card raised the shared tooltip and it is still up
+    /// (rules-refs/app-ui.md「hover で保つカードは、自分の行が出したツールチップの間も保つ」).
     readonly property bool tipHeld: keeper.tipStands()
     function tipStands() {
         if (keeper.tip === null || !keeper.tip.visible)
@@ -50,13 +32,12 @@ QtObject {
         return false
     }
 
-    /// Anything at all is asking for the card — what it hangs off, the card itself, the tooltip one of its rows put
-    /// out, or the hold. The card goes a beat after this falls.
+    /// Anything is asking for the card; it closes a beat after this falls.
     readonly property bool lit:
         keeper.pointedAt || keeper.grace || keeper.card.pointerInside || keeper.tipHeld
 
-    /// Start the beat by hand, for an owner that knows the answer has changed before `lit` can see it — a menu that has
-    /// just dismissed, a row saying the pointer left it.
+    /// Restarts the beat by hand, for an owner that knows the answer changed before `lit` can see it (a menu just
+    /// dismissed).
     function settle() {
         keep.restart()
     }

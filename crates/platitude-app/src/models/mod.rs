@@ -1,9 +1,6 @@
-//! QML-facing objects. This layer only maps platitude-core results onto Qt
-//! models/properties (thin bridge, swappable per 実装計画 §2).
+//! QML-facing objects: a thin bridge mapping platitude-core results onto Qt
+//! models and properties (swappable, 実装計画 §2).
 //!
-//! Conventions:
-//! - every object is registered under the `platitude` QML module via the
-//!   `qml_register!` macro (NoQmlElement + manual QmlRegister)
 //! - per-tab objects wire themselves with `attach(tabId)` and consume their
 //!   feed in `drain` (the only slot ever called through an invoker)
 //! - `#[derive(QModelItem)]` requires `HashMap` in scope (macro hygiene).

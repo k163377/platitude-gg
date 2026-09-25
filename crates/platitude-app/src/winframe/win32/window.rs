@@ -7,9 +7,8 @@ use super::*;
 const CORNER_PREFERENCE: u32 = 33;
 /// `DWMWCP_DONOTROUND` (dwmapi.h).
 const DO_NOT_ROUND: u32 = 1;
-/// `GWL_STYLE` and the three style bits the drawn buttons took with
-/// them, plus the `SetWindowPos` flags that mean "nothing but the
-/// frame changed" (winuser.h).
+/// `GWL_STYLE`, the style bits Qt's hints drop, and the `SetWindowPos`
+/// flags (winuser.h).
 const GWL_STYLE: i32 = -16;
 const WS_MAXIMIZEBOX: i32 = 0x0001_0000;
 const WS_MINIMIZEBOX: i32 = 0x0002_0000;
@@ -30,8 +29,7 @@ pub(crate) fn square_corners() {
     }
 }
 
-/// `SC_MAXIMIZE` / `SC_RESTORE` / `SC_MINIMIZE` (winuser.h), the three
-/// the band's double-click, its buttons and the window menu send.
+/// `SC_MAXIMIZE` / `SC_RESTORE` / `SC_MINIMIZE` (winuser.h).
 const SC_MAXIMIZE: usize = 0xF030;
 const SC_RESTORE: usize = 0xF120;
 const SC_MINIMIZE: usize = 0xF020;
@@ -44,7 +42,6 @@ pub(crate) fn minimize() {
     post_command(SC_MINIMIZE);
 }
 
-/// Hands one system command to every top-level window the thread owns.
 fn post_command(command: usize) {
     COMMAND.set(command);
     // SAFETY: as in `square_corners` — the same walk, and the callback
@@ -55,14 +52,11 @@ fn post_command(command: usize) {
 }
 
 thread_local! {
-    /// Which command the walk is carrying.
     static COMMAND: Cell<usize> = const { Cell::new(0) };
 }
 
-/// Runs for every top-level window the thread owns.
-/// Posted: this arrives from a QML slot, and the
-/// platform's own handling of it wants a turn of the
-/// message loop.
+/// Posted, not sent: this arrives from a QML slot, and the platform's
+/// handling of it wants a turn of the message loop.
 extern "system" fn command_one(window: *mut c_void, _param: isize) -> i32 {
     // SAFETY: `window` is live for the callback and both calls only
     // read it or post to it.
@@ -75,8 +69,6 @@ extern "system" fn command_one(window: *mut c_void, _param: isize) -> i32 {
     1
 }
 
-/// Fits every windowed top-level window into its monitor's work
-/// area, and says whether any of them moved.
 pub(crate) fn fit_to_work_area(screen: &str) -> bool {
     MOVED.set(false);
     HOME.set(work_area_of(screen));
@@ -89,17 +81,12 @@ pub(crate) fn fit_to_work_area(screen: &str) -> bool {
     MOVED.get()
 }
 
-/// The work area of the display device `screen` names (`\\.\DISPLAY2`,
-/// which is what Qt calls a screen on Windows), or `None` where nothing
-/// answers to it — a first run with no saved place, and a monitor
-/// unplugged since the run that wrote one.
+/// The work area of the display device `screen` names, or `None` where
+/// nothing answers to it (no saved place, or its monitor is gone).
 ///
-/// **The name is what crosses.** Qt's coordinates are its own: with
-/// two monitors at different scale factors the number a window reports
-/// is not the number Windows would take, so a point handed across would
-/// pick the wrong monitor exactly where the mixed-DPI desktop needs it
-/// most. The device name is the one spelling both sides already agree
-/// on (`QScreen::name` is `DISPLAY_DEVICE.DeviceName`).
+/// The name crosses, not a point: with monitors at different scale
+/// factors Qt's coordinates are not Windows', so a point would pick the
+/// wrong monitor. `QScreen::name` is `DISPLAY_DEVICE.DeviceName`.
 fn work_area_of(screen: &str) -> Option<Rect> {
     if screen.is_empty() {
         return None;
@@ -151,9 +138,8 @@ extern "system" fn named_one(
 }
 
 thread_local! {
-    /// Whether the fit had anything to do, for the caller to pass on:
-    /// the frame slop is measured on a window that stayed where it
-    /// was (`WindowShape.settleTimer`).
+    /// Whether the fit moved anything: the frame slop is only measured
+    /// on a window that stayed put (`WindowShape.settleTimer`).
     static MOVED: Cell<bool> = const { Cell::new(false) };
     /// The work area the walk is fitting to, or `None` to take each
     /// window's own nearest monitor.
@@ -164,9 +150,8 @@ thread_local! {
     static FOUND: Cell<Option<Rect>> = const { Cell::new(None) };
 }
 
-/// Runs for every top-level window the thread owns. A maximised
-/// one is left alone: where it sits is the platform's own
-/// arrangement.
+/// A maximised window is left alone: where it sits is the platform's
+/// own arrangement.
 extern "system" fn fit_one(window: *mut c_void, _param: isize) -> i32 {
     // SAFETY: `window` is live for the callback; both calls only read.
     let skip = unsafe { IsWindowVisible(window) == 0 || IsZoomed(window) != 0 };
@@ -184,10 +169,6 @@ extern "system" fn fit_one(window: *mut c_void, _param: isize) -> i32 {
         let monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
         GetMonitorInfoW(monitor, (&raw mut info).cast()) != 0
     };
-    // The monitor the saved place named, where it named one that is
-    // still here. Otherwise the window's own nearest, which is what a
-    // first run and an unplugged monitor both want: somewhere on
-    // the desktop.
     let work = match HOME.get() {
         Some(work) => work,
         None if known => info.work,
@@ -243,12 +224,10 @@ pub(crate) fn keep_system_gestures() {
     }
 }
 
-/// Runs for every top-level window the thread owns. Windows that
-/// already carry the bits are left alone.
 extern "system" fn allow_one(window: *mut c_void, _param: isize) -> i32 {
-    // `WS_CAPTION` is out: the window menu's Move and Size want it,
-    // but with the non-client area still there, saying the window has
-    // a caption is saying the platform may draw one over the band.
+    // Not `WS_CAPTION`: the window menu's Move and Size want it, but
+    // with the non-client area still there the platform would draw a
+    // caption over the band.
     let wanted = WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU | WS_THICKFRAME;
     // SAFETY: `window` is live for the length of this callback, and
     // both calls take and return a plain integer.
@@ -273,9 +252,8 @@ extern "system" fn allow_one(window: *mut c_void, _param: isize) -> i32 {
     1
 }
 
-/// Runs for every top-level window the thread owns — Qt keeps more of
-/// them than the one people look at, and the ones that have no frame
-/// to square just report that they refused.
+/// Qt keeps more windows than the one people look at; those with no
+/// frame to square just refuse.
 extern "system" fn square_one(window: *mut c_void, _param: isize) -> i32 {
     let wanted = DO_NOT_ROUND;
     // SAFETY: `window` is a live handle for the length of this

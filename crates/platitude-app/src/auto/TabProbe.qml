@@ -2,31 +2,24 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
-// What the headless run is allowed to ask of the strip: what the tabs came out as, and the one input a run has no
-// pointer for. Every answer is read off the items the view actually built — the output side, so a binding that came
-// apart answers with what is on screen (rules-refs/app-ui.md).
-//
-// Its own file, the way the hand's is (`TabCarry`): the strip is about laying tabs out, and this is
-// about reporting on them. A `QtObject`: nothing here draws, and nothing here needs a child.
+// What a headless run asks of the strip: what the tabs came out as, and the pointer a run does not have. Every answer
+// is read off the items the view actually built, so a binding that came apart answers with what is on screen.
 QtObject {
     id: probe
 
-    /// The strip's own list. This reads it, and lays it out only on being asked to (`settleStrip`).
+    /// The strip's own list, laid out here only on being asked to (`settleStrip`).
     required property ListView view
 
     /// Makes the strip answer for the model as it stands. A view responds to its model once per frame, so between a
-    /// row leaving the model and the next polish `itemAtIndex` still answers by the indices the items had: with row 0
-    /// gone, `count` is one and index 0 is still the item of the tab that was closed — which reads as the wrong tab
-    /// having gone, on a strip that only needed a frame (measured: `middle-close 0` on the container said
-    /// `gone=false` with the closed repository as the one still open). A reader that walks the items right after a
-    /// change asks for this first; the samplers that wait for the strip to change on its own (`tab-drag`) need not.
+    /// row leaving the model and the next polish `itemAtIndex` still answers by the old indices: with row 0 gone,
+    /// index 0 is still the closed tab's item. A reader that walks the items right after a change asks for this
+    /// first; a sampler waiting for the strip to change on its own (`tab-drag`) need not.
     function settleStrip() {
         probe.view.forceLayout()
     }
 
-    /// How many of the strip's rows have an item standing for them. `tabPaths`, `tabTitles` and `hasTabPath` walk
-    /// those items, so this is what says whether their answer is the whole strip or only the part of it the layout has
-    /// caught up with.
+    /// How many rows have an item standing for them — whether the walks below answer for the whole strip or only
+    /// the part the layout has caught up with.
     function tabItemCount() {
         let n = 0
         for (let i = 0; i < probe.view.count; i++)
@@ -35,11 +28,8 @@ QtObject {
         return n
     }
 
-    /// Whether any tab in the strip is standing in `path`. The closed tab's title cannot say it went — every demo
-    /// working tree is called the same thing — and the path is the only thing that can.
-    ///
-    /// **The copy, not the repository**: it is what the tab opens, what the hover puts out, and the one of the two
-    /// that moves when a tab is stood elsewhere (`TabItem.copy_path`).
+    /// Whether any tab is standing in `path` — titles cannot tell, as every demo working tree has the same name. The
+    /// copy, not the repository: the one that moves when a tab is stood elsewhere (`TabItem.copy_path`).
     function hasTabPath(path) {
         for (let i = 0; i < probe.view.count; i++) {
             const tab = probe.view.itemAtIndex(i)
@@ -49,8 +39,6 @@ QtObject {
         return false
     }
 
-    /// The paths — every demo repository is called the same thing, and a strip of one name
-    /// proves nothing.
     function tabPaths() {
         let paths = []
         for (let i = 0; i < probe.view.count; i++) {
@@ -61,9 +49,9 @@ QtObject {
         return paths.join(",")
     }
 
-    /// What each tab says after its name — the copy it is standing in, or nothing where that is the repository's own
-    /// (`TabItemDelegate.copy_name`). A picture cannot tell a run the strip gave up for want of run from a tab that
-    /// never had one, so the run each tab was **handed** is reported beside it (`tabTreeWidths`).
+    /// What each tab says after its name — the copy it stands in, or nothing for the repository's own
+    /// (`TabItemDelegate.copy_name`). A picture cannot tell a name dropped for want of room from none, hence
+    /// `tabTreeWidths`.
     function tabTrees() {
         let names = []
         for (let i = 0; i < probe.view.count; i++) {
@@ -73,7 +61,7 @@ QtObject {
         return names.join(",")
     }
 
-    /// How wide that run came out on each tab, in strip order — 0 where none is drawn.
+    /// How wide the copy run came out on each tab, in strip order — 0 where none is drawn.
     function tabTreeWidths() {
         let widths = []
         for (let i = 0; i < probe.view.count; i++) {
@@ -83,8 +71,7 @@ QtObject {
         return widths.join(",")
     }
 
-    /// The name each tab came out with, in the order they sit in (`PGG_AUTO_ACT=tab-name`). Read off the tabs:
-    /// what the strip settled on is only worth anything where it is what the strip is drawing.
+    /// The name each tab came out with, in strip order (`PGG_AUTO_ACT=tab-name`).
     function tabTitles() {
         let names = []
         for (let i = 0; i < probe.view.count; i++) {
@@ -100,7 +87,7 @@ QtObject {
         return tab ? tab.copy_path : ""
     }
 
-    /// Every tab's width, in the order they sit in (`PGG_AUTO_ACT=tab-widths`).
+    /// Every tab's width, in strip order (`PGG_AUTO_ACT=tab-widths`).
     function tabWidths() {
         let widths = []
         for (let i = 0; i < probe.view.count; i++) {
@@ -110,11 +97,9 @@ QtObject {
         return widths.join(",")
     }
 
-    /// How many tabs are drawing none of their own name — the mark standing where the name was
-    /// (`TabItemDelegate.nameKept`). Zero is the one layout the strip is allowed to reach: it hands the run out
-    /// down to a floor of three characters at each end and scrolls past it
-    /// (`TabStrip.settleTitleCap`). Counted, because the picture of a crushed name and the
-    /// picture of a short one are the same narrow tab with a mark in it.
+    /// How many tabs draw none of their own name (`TabItemDelegate.nameKept`). Must be zero: the strip shares out room
+    /// down to three characters at each end and scrolls past that (`TabStrip.settleTitleCap`). Counted, because a
+    /// crushed name and a short one photograph as the same narrow tab with a mark in it.
     function tabNamesCrushed() {
         let n = 0
         for (let i = 0; i < probe.view.count; i++) {
@@ -125,8 +110,7 @@ QtObject {
         return n
     }
 
-    /// The pointer, set down on the tab at `index` — the half no headless run can reach any other way
-    /// (`PGG_AUTO_ACT=tab-mark`).
+    /// The pointer, set down on the tab at `index` (`PGG_AUTO_ACT=tab-mark`).
     function pointAtTab(index) {
         const tab = probe.view.itemAtIndex(index)
         if (tab)

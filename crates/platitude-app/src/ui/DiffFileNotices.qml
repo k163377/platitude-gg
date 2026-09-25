@@ -5,17 +5,13 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// What the diff pane says about the file itself: the conflict with only one side left,
-// which branch each colour is, the line endings, the size of a binary, the diff that came back empty — and the picture
-// that stands in for a file no rows can show.
-//
-// One line each, in the same seat and the same voice (デザイン規約 §diff の中のステージ). They sit above the rows and give their
-// space back the moment they have nothing to say.
+// What the diff pane says about the file itself, above the rows — one line each, in the same seat and voice
+// (デザイン規約 §改行コードの警告) — and the picture that stands in for a file no rows can show.
 ColumnLayout {
     id: notices
 
     required property var diffModel
-    /// How many rows the list built. A diff with none and nothing else to show is the one that says so out loud.
+    /// How many rows the list built; none, with nothing else to show, is `No changes to show`.
     required property int rowCount
     /// The two stage letters git reports for a conflicted path and what each side is called (`DiffPane`).
     required property string conflictChange
@@ -28,16 +24,14 @@ ColumnLayout {
     /// How wide a branch name may run in the legend.
     required property real nameCap
     /// Automation: whether every picture the preview names has decoded or failed to, and how many are on screen
-    /// (`ImagePreviewCell.settled` / `shown`). A side with no URL has nothing to wait for.
+    /// (`ImagePreviewCell.settled` / `shown`).
     readonly property bool picturesSettled: (before.url === "" || before.settled) && (after.url === "" || after.settled)
     readonly property int picturesShown: (before.shown ? 1 : 0) + (after.shown ? 1 : 0)
 
     spacing: 0
 
-    // -- a conflict with only one side left: git has two versions of the path but not the third to compare them
-    //    against, so it prints no patch at all (`* Unmerged path`). The one thing worth saying is what the two sides
-    //    each did — and this pane is the one place that sentence is shown (デザイン規約 §conflict の種別). Which way out to take
-    //    is still the file row's right-click, unchanged.
+    // -- a conflict with only one side left: git prints no patch (`* Unmerged path`), so say what each side did
+    //    (デザイン規約 §conflict の種別).
     Label {
         visible: notices.diffModel.unmerged
         Layout.margins: Theme.spaceSm
@@ -46,11 +40,8 @@ ColumnLayout {
         text: Words.conflict(notices.conflictChange, notices.sideOurs, notices.sideTheirs)
         color: Theme.textMuted
     }
-    // -- which branch each of the two colours is. The colours are the ones the graph already gives those branches, so
-    //    this line is the whole of what has to be learned; it is only here when there are two colours to bind names to
-    //    (`sidesTold`), since otherwise it would explain a distinction the rows are not making. The names swap over
-    //    during a rebase and the model has already sorted that out (デザイン規約 §conflict の ours / theirs), so this says
-    //    whatever it is handed.
+    // -- which branch each colour is, only while the rows are told apart by colour. The rebase swap is already sorted
+    //    by the model (デザイン規約 §conflict の ours / theirs).
     ConflictSideLegend {
         visible: notices.sidesTold
         Layout.leftMargin: Theme.spaceSm
@@ -64,13 +55,9 @@ ColumnLayout {
         theirsColor: notices.theirsColor
         nameCap: notices.nameCap
     }
-    // -- line endings: one line for the file. A CR is invisible and has nowhere inside a line to sit, and the mixed
-    //    case is already saying how many lines it is about. It is a statement and nothing else — `warning` because it
-    //    is a change that carries past this machine (デザイン規約 §状態の 3 段).
+    // -- line endings: one line for the file, words only (デザイン規約 §改行コードの警告).
     Label {
         visible: notices.diffModel.endingKind !== ""
-        // The binary notice's seat, down to the margins: both are one line about the
-        // file itself.
         Layout.margins: Theme.spaceSm
         Layout.fillWidth: true
         elide: Text.ElideRight
@@ -90,11 +77,8 @@ ColumnLayout {
         oldSize: notices.diffModel.previewOldSize
         newSize: notices.diffModel.previewNewSize
     }
-    // -- a git repository of its own, sitting in the working copy. git will not open it, so there is no patch here and
-    //    never will be. The line names the thing and says which commit it stands on — the same commit staging the row
-    //    would record (core `details::embedded`). **What that costs is git's to say**: the warning and
-    //    the hint land in the command log the moment the row is staged (デザイン規約 §作業コピーの中の別リポジトリ / §長さ). The
-    //    binary notice's seat and voice, like the others here.
+    // -- an embedded git repository: no patch, ever. It names the commit staging would record (core
+    //    `details::embedded`); what staging costs is git's to say (デザイン規約 §作業コピーの中の別リポジトリ).
     Label {
         visible: notices.diffModel.embedded
         Layout.margins: Theme.spaceSm
@@ -105,12 +89,8 @@ ColumnLayout {
             : qsTr("Embedded git repository · no commits yet")
         color: Theme.textMuted
     }
-    // -- a diff whose body is empty. git prints headers and no hunks for a rename that changed nothing, for a mode-only
-    //    change and for an empty file added, and a pane that answers all three with a blank frame reads as one that
-    //    failed to load. The binary notice's seat and voice: one line about the file itself.
-    //
-    //    Said the same way for all three: what the pane knows is that there is nothing to
-    //    show, and git is not asked a second question to find out why.
+    // -- headers and no hunks (a pure rename, a mode change, an empty file added): a blank frame would read as a
+    //    failed load. One line for all three — git is not asked a second question for why.
     Label {
         visible: notices.rowCount === 0 && !notices.diffModel.loading && !notices.diffModel.isBinary
                  && !notices.diffModel.unmerged && !notices.diffModel.embedded

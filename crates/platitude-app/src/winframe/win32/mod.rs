@@ -1,6 +1,5 @@
-//! The signatures, the `#[repr(C)]` mirrors and the message numbers
-//! the three sides below share. Every `extern` block the module needs
-//! is here, and the three reach them through `use super::*`.
+//! The signatures, `#[repr(C)]` mirrors and message numbers the three
+//! submodules share through `use super::*` — every `extern` block is here.
 #![expect(
     unsafe_code,
     reason = "neither the DWM corner attribute nor WM_SETICON has a safe \
@@ -32,9 +31,8 @@ struct Rect {
     bottom: i32,
 }
 
-/// `MINMAXINFO` (winuser.h). Only the two the maximised placement is
-/// made of are read here; the rest is filled in by whoever ran before
-/// us and passed straight back.
+/// `MINMAXINFO` (winuser.h). Only the maximised placement's two fields
+/// are written; the rest is passed back as the earlier handler left it.
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct MinMaxInfo {
@@ -46,8 +44,7 @@ struct MinMaxInfo {
 }
 const WM_GETMINMAXINFO: u32 = 0x0024;
 
-/// `MONITORINFO` (winuser.h), and the flag that asks for the monitor
-/// a window is most on.
+/// `MONITORINFO` (winuser.h).
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 struct MonitorInfo {
@@ -58,12 +55,10 @@ struct MonitorInfo {
 }
 const MONITOR_DEFAULTTONEAREST: u32 = 2;
 
-/// `CCHDEVICENAME` (wingdi.h): how long a display device's name is.
+/// `CCHDEVICENAME` (wingdi.h).
 const MONITOR_NAME_LEN: usize = 32;
 
-/// `MONITORINFOEXW` (winuser.h) — `MONITORINFO` with the device name
-/// after it. Filled by the same call, which reads `size` to know which
-/// of the two it is being handed.
+/// `MONITORINFOEXW` (winuser.h).
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct MonitorInfoEx {
@@ -168,9 +163,8 @@ unsafe extern "system" {
 #[link(name = "user32")]
 unsafe extern "system" {
     fn MonitorFromWindow(window: *mut c_void, flags: u32) -> *mut c_void;
-    // Takes the wider `MONITORINFOEXW` too — which of the two it is
-    // being handed is what the struct's own `size` field says, so the
-    // pointer is cast at each call site.
+    // Also takes `MONITORINFOEXW`, told apart by its `size` field; call
+    // sites cast the pointer.
     fn GetMonitorInfoW(monitor: *mut c_void, info: *mut MonitorInfo) -> i32;
     fn EnumDisplayMonitors(
         dc: *mut c_void,

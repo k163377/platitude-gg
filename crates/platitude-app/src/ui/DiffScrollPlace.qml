@@ -3,29 +3,20 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// The view's place in a diff that is about to be rebuilt.
-//
-// A partial write ends by reading the file again, and the answer arrives as a whole new list. Without this the view
-// would come back at the top, which on a long diff loses the place being worked through — the same restore
-// `GraphPane.shiftRows` does after a graph swap, and delayed for the same reason (`contentHeight` is still the old one
-// on the frame the rows land).
+// The view's place in a diff that is about to be rebuilt: a partial write re-reads the file as a whole new list, which
+// would put the view back at the top (デザイン規約 §diff の中のステージ「diff の作り直しでも画面はその場」).
 Item {
     id: place
 
-    /// The list whose place is being kept.
     required property var view
 
     property real heldY: -1
-    /// Automation: where the restore actually put the view, and -1 until it has run at all. The whole story ends here,
-    /// so this is what a verb waits for — a rebuild that emptied the list never gets its count back above zero and so
-    /// never restores anything.
+    /// Automation: where the restore put the view, -1 until it has run — what a verb waits for. A rebuild that
+    /// empties the list never restores.
     property real landedY: -1
     function hold() {
-        // A held place outlives the swap it was taken for when the next write goes out inside the restore's own layout
-        // beat — the rows land, the marks wake, and a hand (or `line-run`) presses again before the timer below has
-        // fired. At that moment the view is standing in the reset-to-top the swap left it in, so capturing again would
-        // keep the top as "the place"; the reader's place is the one already held. The pending restore is stopped —
-        // the next swap's own restore finishes the story.
+        // A press inside the restore's beat finds the view at the reset-to-top: keep the place already held, and
+        // let the next swap's restore finish (rules-refs/app-ui.md「`DiffScrollPlace` の位置は別のファイルへ移る時に捨てる」).
         placeTimer.stop()
         if (place.heldY < 0)
             place.heldY = place.view.contentY
@@ -35,17 +26,15 @@ Item {
         if (place.heldY >= 0)
             placeTimer.restart()
     }
-    /// The pane moved to another file (or another side of the same one): what was held is the old diff's place, and
-    /// restoring it onto rows it was never read at would carry the scroll somewhere the reader has not been (規約 §diff
-    /// を横へ送る「別のファイルは左端から」— the vertical half of the same rule).
+    /// The pane moved to another file (or another side of the same one): the held place is the old diff's
+    /// (規約 §diff を横へ送る「別のファイルは左端から」— its vertical half).
     function drop() {
         placeTimer.stop()
         place.heldY = -1
         place.landedY = -1
     }
-    // The wait is the graph's (`Metrics.anchorDelayMs`, and `shiftRows` learned it the same way): on the frame the rows
-    // land the list has not laid them out yet, so `contentHeight` is still the old one and the clamp below would take
-    // the view to the top instead of back to its place.
+    // On the frame the rows land `contentHeight` is still the old one, and the clamp below would take the view to the
+    // top (rules-refs/app-ui.md「モデルリセット後の ListView は」).
     Timer {
         id: placeTimer
         interval: Metrics.anchorDelayMs
@@ -58,7 +47,7 @@ Item {
             place.landedY = place.view.contentY
         }
     }
-    /// Automation: read the view away from the top, so that a rebuild can be seen to put it back where it was.
+    /// Automation: moves the view off the top, so a rebuild can be seen to put it back.
     function scrollTo(y) {
         place.view.contentY = y
     }

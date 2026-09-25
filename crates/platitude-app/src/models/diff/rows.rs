@@ -5,27 +5,19 @@
 use super::*;
 
 impl DiffModel {
-    /// Lays the colours over the rows already on screen.
-    ///
-    /// Their words change and nothing else does — same rows, same order,
-    /// same numbers — so this rewrites the two fields that carry the
-    /// markup and says `dataChanged` over the lot. Swapping the list
-    /// instead would be no slower to build, but a `ListView` handed a new
-    /// list starts again at the top: `at=0` where the reader had scrolled
-    /// down (observed, `PGG_AUTO_ACT=colour-place`). The colours arrive a
-    /// beat after the rows do, which is exactly long enough to have
-    /// started reading.
+    /// Lays the colours over the rows on screen: rewrites only the markup
+    /// fields and says `dataChanged` over the lot. Swapping the list would
+    /// send the `ListView` back to the top under a reader who has started
+    /// scrolling (`colour-place`).
     pub(super) fn repaint_rows(&mut self, colors: &platitude_core::highlight::DiffColors) {
         let Some(patches) = self.shown.clone() else {
             return;
         };
-        // `None` for the marks: this pass rewrites the text only,
-        // so the emphasis columns it would compute go straight to waste.
+        // No marks: only the text is kept.
         let painted = line_items(&patches, !self.shown_has_preview, colors, None, self.split);
         if painted.len() != self.lines.len() {
-            // The same patches were walked both times, so this cannot
-            // happen — but addressing rows by position is only safe while
-            // it holds, and rebuilding is correct if slightly ruder.
+            // Cannot happen (same patches), but rewriting by position is
+            // only safe while it holds.
             tracing::warn!(
                 was = self.lines.len(),
                 now = painted.len(),
@@ -41,10 +33,9 @@ impl DiffModel {
         self.rows_changed();
     }
 
-    /// Lays the rows out the other way round — as two columns, or back
-    /// to one (デザイン規約 §diff を 2 列で読む). The same patches and
-    /// the same colours: nothing is read again for it. The reader's
-    /// place is kept the way a re-read keeps it (`rows_replacing`).
+    /// Re-lays the rows as one column or two from the same patches and
+    /// colours — no read; the reader's place is kept as a re-read keeps it
+    /// (`rows_replacing`).
     pub(super) fn relay_rows(&mut self, split: bool) {
         self.split = split;
         if self.shown.is_none() {
@@ -53,16 +44,14 @@ impl DiffModel {
         if !self.lines.is_empty() {
             self.rows_replacing();
         }
-        // Taken out and put back: the colours are this model's, and the
-        // layout borrows the whole of it.
+        // Taken out: `lay_out_rows` borrows all of `self`.
         let colors = std::mem::take(&mut self.shown_colors);
         self.lay_out_rows(&colors);
         self.shown_colors = colors;
     }
 
-    /// Tells the view that every row's contents have been rewritten in
-    /// place. Nothing was added or removed, so the view keeps its place,
-    /// and QML's own bindings on the rows re-read themselves.
+    /// `dataChanged` over every row — nothing added or removed, so the view
+    /// keeps its place.
     fn rows_changed(&mut self) {
         let rows = self.lines.len();
         if rows == 0 {
@@ -71,14 +60,12 @@ impl DiffModel {
         self.notify_runs([(0, rows - 1)]);
     }
 
-    /// Builds the row list from the diff on screen and the colours given.
     pub(super) fn lay_out_rows(&mut self, colors: &platitude_core::highlight::DiffColors) {
         let Some(patches) = self.shown.clone() else {
             return;
         };
-        // The rows these numbers addressed are about to go. A selection
-        // left standing would point into the new ones by position, which
-        // is a different part of a file that has just been written to.
+        // A selection left standing would point by position into the new
+        // rows.
         self.forget_selection();
         self.reset();
         let rows = line_items(
@@ -88,22 +75,16 @@ impl DiffModel {
             Some(&self.shown_marks),
             self.split,
         );
-        // Both sides at once: the two columns are laid out to one width,
-        // and a file whose old side ran further than its new one would
-        // otherwise hand the wider number to the narrower column.
+        // Both sides: the two columns share one gutter width.
         self.widest_no = rows
             .iter()
             .map(|r| r.old_no.max(r.new_no))
             .max()
             .unwrap_or(0);
-        // Read off the patches: a coloured row holds markup, and the
-        // length of `<font color="#…">` is not the length of anything
-        // on screen.
+        // From the patches: a coloured row's markup length is not its
+        // drawn length.
         self.widest_lines = widest_lines(&patches, colors);
-        // The rows on screen are of this reading now (`DiffReach`).
         self.rows_gen = self.rows_gen.wrapping_add(1);
-        // How many commits this reading stacked. Every other diff is of
-        // one thing and answers 0 (デザイン規約 §複数のコミットを選ぶ).
         self.commit_bands = patches.iter().filter(|p| !p.from_commit.is_empty()).count() as i32;
         self.extend_notified(rows);
         if crate::harness::memprobe::enabled() {
@@ -116,23 +97,16 @@ impl DiffModel {
     }
 
     /// The same, for a file in another working copy — `at` is that copy's
-    /// path and is empty for this window's own tree.
+    /// path, empty for this window's own tree.
     ///
-    /// **Part of what "the same file" means.** The path a copy's file is
-    /// named by is the path this window's own file of that name is named
-    /// by, so without the copy in it a step across from one to the other
-    /// would read as a re-read of one file: the rows already on screen
-    /// would be kept, and the reader's place in them with it
-    /// (`same_file`).
+    /// `at` is part of "the same file" (`same_file`): a copy's file shares
+    /// its path with this window's, so without it a step between them
+    /// would read as a re-read and keep the rows and the reader's place.
     pub(super) fn begin_request_in(&mut self, at: String, title: String, target: DiffTarget) {
         let key = diff_key(&target);
-        // Reading the same file again — which is what every partial
-        // write ends with — keeps the rows that are on screen until the
-        // new ones arrive. Emptying here would blank the pane for the
-        // length of the round trip and drop the view to the top, and on
-        // a diff of any size that reads as a flash. `drain` swaps the
-        // whole list inside one call, so the exchange is never seen half
-        // done.
+        // A re-read of the same file (every partial write ends with one)
+        // keeps the rows until the new ones arrive — emptying would flash
+        // the pane and drop the view to the top.
         let same_file = key == self.current_key && at == self.current_at;
         self.requested_at = Some(std::time::Instant::now());
         self.current_key = key;
@@ -140,18 +114,14 @@ impl DiffModel {
         self.title = title;
         self.is_binary = false;
         self.fingerprint = String::new();
-        // Goes with the fingerprint: it is a statement about bytes that
-        // have not been read yet, and a notice held over from the last
-        // file would be about that file.
+        // Like the fingerprint, about bytes not read yet.
         self.apply_endings(None);
         self.loading = true;
-        // Goes with the fingerprint for the same reason: the colours
-        // that are on screen are the last file's.
+        // Likewise: the colours on screen are the last read's.
         self.coloured = false;
         if !same_file {
-            // Goes down with the rows it describes: while they are still
-            // on screen the pane must keep offering — or keep withholding
-            // — exactly what they are.
+            // Kept while the rows stay: the pane offers what the rows on
+            // screen are.
             self.is_new_file = false;
             self.is_combined = false;
             self.unmerged = false;
@@ -171,8 +141,8 @@ impl DiffModel {
         }
     }
 
-    /// Takes a line-ending notice apart into the pieces its sentence needs.
-    /// `None` resets — which is also what "nothing to say" looks like.
+    /// Takes a line-ending notice apart for its sentence; `None` resets
+    /// (= nothing to say).
     pub(super) fn apply_endings(&mut self, notice: Option<&eol::Notice>) {
         let words = crate::encode::ending_words(notice);
         self.ending_kind = words.kind;
@@ -200,13 +170,9 @@ impl DiffModel {
             "binary".to_string()
         };
         self.preview_vector = p.image_mime == Some("image/svg+xml");
-        // The URL names the read as well as the file. An `Image` reloads
-        // on a source that changed and on nothing else, and the
-        // working-tree side keeps its path from one read to the next —
-        // so the fingerprint of the bytes the read was made at rides on
-        // the URL: a file that moved under the pane is decoded again, and
-        // one that did not is not. Qt reads a `file:` URL's path and
-        // leaves its query alone.
+        // The read's fingerprint rides the URL: an `Image` reloads only when
+        // its source string changes, and the working-tree side keeps its
+        // path. Qt ignores a `file:` URL's query.
         let stamp = &self.fingerprint;
         let url = |side: &Option<PreviewSide>| -> String {
             let Some(file) = side.as_ref().and_then(|s| s.file.as_deref()) else {
@@ -230,12 +196,9 @@ impl DiffModel {
     }
 }
 
-/// The rows a read's patches make, in the shape the list holds them —
-/// one line a row, or side by side (`split`).
-///
-/// Apart from [`DiffModel::lay_out_rows`] so that what a row carries can
-/// be checked without a view to hang it on: laying them out tells the
-/// QObject side, and there is none in a unit test (`selection`'s cases).
+/// The rows a read's patches make, one line a row or side by side
+/// (`split`). Apart from [`DiffModel::lay_out_rows`], which notifies the
+/// QObject side, so unit tests can build rows without one.
 pub(super) fn line_items(
     patches: &[FilePatch],
     binary_note: bool,
@@ -251,8 +214,7 @@ pub(super) fn line_items(
     }
 }
 
-/// One line as one row. The right side is empty, and `pair_line` says
-/// so the way `line` does on a heading.
+/// One line as one row; `pair_line` -1 says the right side is empty.
 fn line_item(r: DiffRow) -> DiffLineItem {
     DiffLineItem {
         kind: r.kind.to_string(),
@@ -273,8 +235,6 @@ fn line_item(r: DiffRow) -> DiffLineItem {
     }
 }
 
-/// A split row: the old side in the plain roles, the new side in the
-/// `pair_*` ones, and both sides' marks in `marks`.
 fn split_item(r: SplitRow) -> DiffLineItem {
     let mut item = line_item(r.left);
     if let Some(right) = r.right {
@@ -291,9 +251,9 @@ fn split_item(r: SplitRow) -> DiffLineItem {
     item
 }
 
-/// Which diff one of the working tree's four buckets asks for. Read by
-/// both the request a click makes and the re-read the tick makes, so the
-/// two can never address different files under one name.
+/// Which diff a working-tree bucket asks for — shared by the click's
+/// request and the tick's re-read, so they cannot address different files
+/// under one name.
 pub(super) fn bucket_target(bucket: &str, path: &str, orig_path: String) -> DiffTarget {
     match bucket {
         "staged" => DiffTarget::Staged {
@@ -310,20 +270,14 @@ pub(super) fn bucket_target(bucket: &str, path: &str, orig_path: String) -> Diff
     }
 }
 
-/// Everything about the file that is open, in arrival order.
+/// Every message about the open file, in arrival order; the rest are
+/// dropped.
 ///
-/// Every arrival for it, for two reasons. One diff now sends two
-/// messages — its rows, then its colours — and taking only the last would
-/// leave the other unread. And two diffs started a moment apart need not
-/// finish in that order: colouring a file of source can take hundreds of
-/// milliseconds where a plain one takes none (`highlight::colors`), so a
-/// slower *earlier* request can land after the one the reader is waiting
-/// for.
-///
-/// In order, so a file asked for twice — which every partial write does —
-/// ends on its latest answer, and so colours never overtake the rows they
-/// belong to. Everything else is dropped: those are answers to questions
-/// nobody is asking any more.
+/// Not just the last: a diff sends its rows, then its colours, and a
+/// slower earlier request (colouring, `highlight::colors`) can land after
+/// the one the reader waits for. In order: a file asked for twice (every
+/// partial write) ends on its latest answer, and colours never overtake
+/// their rows.
 pub(crate) fn wanted(msgs: Vec<DiffMsg>, key: &str) -> Vec<DiffMsg> {
     msgs.into_iter()
         .filter(|msg| diff_key(msg.target()) == key)

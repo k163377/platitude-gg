@@ -1,5 +1,4 @@
-//! The cases for `selection`, in a file beside it (structure.md
-//! §分割): everything here names only what `selection` publishes to `diff`.
+//! The cases for `selection`.
 
 use std::sync::Arc;
 
@@ -23,13 +22,10 @@ fn said(sel: &Optional<Washed>) -> String {
     }
 }
 
-/// `\t` written out, so the tabs these cases turn on are visible in the
-/// source of the test itself.
+/// So the tabs these cases turn on are visible in their source.
 const TAB: &str = "\t";
 
-/// The rows laid out by hand: `lay_out_rows` tells the QObject side its
-/// list was reset, and there is no QObject side here
-/// (`rows::line_items` is the half both use).
+/// The rows laid out by hand (`rows::line_items`) — no QObject side here.
 fn model(patch: &str, coloured: bool) -> DiffModel {
     let patches = parse_patch(patch.as_bytes());
     let colors = if coloured {
@@ -86,8 +82,6 @@ fn the_two_ends_are_cut_and_the_rows_between_them_are_not() {
     model.start_select(0, 1, 3);
     model.drag_select(0, 3, 7);
     assert_eq!(model.copied_new(), "main() {\n    let");
-    // The far end is a run of places along the line, cut where the drag
-    // stopped.
     assert_eq!(said(&model.lines[3].sel), "0:7");
 }
 
@@ -134,8 +128,7 @@ fn a_selection_says_which_places_it_holds() {
 
 #[test]
 fn the_rows_going_take_the_selection_with_them() {
-    // What a re-read does before it swaps the rows. No wash is written
-    // back — the rows it would go on are the ones being replaced.
+    // What a re-read does before it swaps the rows.
     let mut model = one_change();
     model.start_select(0, 1, 0);
     model.drag_select(0, 4, 1);
@@ -150,9 +143,8 @@ fn the_rows_going_take_the_selection_with_them() {
 
 #[test]
 fn a_copy_of_a_coloured_row_still_pastes_the_file_s_own_tabs() {
-    // The trap `selection` exists for: a coloured row's `text` is markup
-    // whose tabs have already been spelled out as `&nbsp;`, so a copy
-    // taken off the screen would paste spaces.
+    // The trap in `selection`'s module doc: tabs spelled as `&nbsp;` on
+    // screen.
     let mut model = model(
         &format!(
             "\
@@ -181,10 +173,8 @@ diff --git a/src/a.rs b/src/a.rs
 
 #[test]
 fn a_place_along_a_row_comes_back_as_a_byte_of_its_line() {
-    // What the pane brings back off the row's own layout, and what this
-    // side makes of it: the row spells the tab as the four spaces that
-    // reach its stop, so places 0..4 stand in it and the line's own bytes
-    // start after them.
+    // The row spells the tab as the four spaces to its stop, so places
+    // 0..4 are byte 0 and the line's other bytes start after them.
     let model = model(
         &format!(
             "\
@@ -202,19 +192,17 @@ fn a_place_along_a_row_comes_back_as_a_byte_of_its_line() {
     assert_eq!(model.byte_at(0, 3, 0), 0);
     assert_eq!(model.byte_at(0, 3, 4), 1);
     assert_eq!(model.byte_at(0, 3, 5), 2);
-    // Past the end of the line is the end of the line, however far past —
-    // the answer the blank right of a row's last character has to give.
+    // Past the end is the end — a press right of the last character.
     assert_eq!(model.byte_at(0, 3, 9999), 11);
-    // A row that names no line of any file answers about none.
+    // A heading and a missing row answer 0.
     assert_eq!(model.byte_at(0, 0, 4), 0);
     assert_eq!(model.byte_at(0, -1, 4), 0);
 }
 
 #[test]
 fn a_wash_on_a_wide_line_names_places_and_not_columns() {
-    // 日 is one place and two columns. The run says where the change
-    // starts and how far it runs in places, because the row's layout is
-    // what turns a place into an x and no count of columns can.
+    // 日 is one place and two columns; runs count places, since only the
+    // row's layout turns a place into an x.
     let mut model = model(
         "\
 --- a/f
@@ -278,9 +266,8 @@ fn sides(own: &[&str], pair: &[&str]) -> (Vec<String>, Vec<String>) {
 
 #[test]
 fn a_drag_down_the_old_column_takes_the_old_file() {
-    // The left column is the file as it was: the unchanged lines and the
-    // removed one, and the plain `Copy` takes them. Nothing is left for
-    // the menu's second word — it is already in the copy.
+    // The old column copies the old file, so `Copy removed lines` has
+    // nothing left to offer.
     let mut model = one_change_split();
     model.start_select(0, 1, 0);
     model.drag_select(0, 3, 1);
@@ -300,8 +287,7 @@ fn a_drag_down_the_new_column_takes_the_new_file_and_offers_the_removed_line_acr
     model.start_select(1, 1, 0);
     model.drag_select(1, 3, 1);
     assert_eq!(model.copied_new(), "fn main() {\n    let a = 2;\n}");
-    // The removed line stands across from the added one, and the drag
-    // reached over it: the second word has it to offer, whole.
+    // The removed line across from the added one is offered, whole.
     assert_eq!(model.sel_removed, 1);
     assert_eq!(model.copied_removed(), "    let a = 1;");
     assert_eq!(
@@ -358,9 +344,9 @@ fn a_place_on_the_right_side_is_a_byte_of_the_line_on_the_right() {
 
 #[test]
 fn an_empty_seat_takes_nothing_and_breaks_nothing() {
-    // Two removed against one added: row 2 is the pair, row 3 a removed
-    // line with an empty seat across from it. A drag down the new column
-    // over the seat copies the lines either side of it.
+    // Two removed against one added: row 1 is the pair, row 2 a removed
+    // line with an empty seat across. A drag down the new column over the
+    // seat copies the lines either side of it.
     let mut model = split_model(
         "\
 --- a/f

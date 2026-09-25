@@ -11,9 +11,9 @@ Rectangle {
     required property int index
     required property int tab_id
     required property string title
-    /// The working copy this tab is standing in: the path the hover puts out, and — where that copy is a linked one
-    /// — its own folder name, which is the run drawn after the title (デザイン規約 §タブの所作). Empty for a tab
-    /// standing in the repository's own copy, which draws no run and wears the band's ordinary blue.
+    /// The working copy this tab stands in: the path the hover puts out, and — for a linked copy — its folder name,
+    /// drawn after the title (デザイン規約 §タブの所作). The name is empty in the repository's own copy, which draws
+    /// no run and wears the band's ordinary blue.
     required property string copy_path
     required property string copy_name
     /// The strip's own model: the one question a tab asks of it, and the one thing the mark does to it.
@@ -32,9 +32,8 @@ Rectangle {
     /// The strip's shared arithmetic (`TabMetrics`): what a tab costs, the seat its mark stands in, and how a short
     /// name is eased. One object, so the strip and the tab cannot disagree.
     required property var metrics
-    /// What the tab would draw with nothing cut: the repository's name and, after it, the run naming the copy this
-    /// tab stands in (`TabTreeMark`). One number, because one cap is what the strip hands out — and the tab is what
-    /// decides how that cap is spent between the two (`nameSplit`).
+    /// The name and the copy's run (`TabTreeMark`) uncut — one number against the strip's one cap, which the tab
+    /// splits between the two (`nameSplit`).
     readonly property real nameNatW: Math.ceil(tabTitle.implicitWidth) + treeRun.naturalWidth
     /// How it is spent: the name first, the copy's run out of what is left, and that run gone whole before a letter
     /// of the name is cut (`TabShare.splitName`).
@@ -42,104 +41,79 @@ Rectangle {
         Math.ceil(tabTitle.implicitWidth), treeRun.naturalWidth, treeRun.floorWidth, tabItem.titleCap)
     readonly property real titleW: tabItem.nameSplit.titleW
     readonly property real treeW: tabItem.nameSplit.treeW
-    /// The air this name is eased with, half of what it falls short by (`TabMetrics.titleEase`). Read off what the
-    /// tab would draw whole, the two runs together — the cap is a maximum on the item and does not move it.
+    /// The air this name is eased with (`TabMetrics.titleEase`), read off both runs whole — the cap is a maximum on the
+    /// item and does not move it.
     readonly property real titleEase:
         tabItem.metrics.titleEase(tabItem.nameNatW, tabItem.titleCap, tabItem.titleEaseW)
-    /// How much of that air is set down on the mark's side (`TabMetrics.easeRight`), and — once it has all been spent —
-    /// whether the name still runs on under the mark. The second is what the fade is for and nothing else asks it.
+    /// How much of that air goes on the mark's side (`TabMetrics.easeRight`), and whether the name still runs on under
+    /// the mark (for the fade).
     readonly property real easeRight: tabItem.metrics.easeRight(tabItem.titleEase, tabItem.markRoom)
     readonly property bool nameUnderMark: tabItem.markRoom + tabItem.easeRight < tabItem.metrics.markRoomFull
-    /// The strip's height, which every tab is drawn at.
     property real stripHeight: 0
     readonly property bool current: tabItem.tabsModel.currentIndex === tabItem.index
-    /// Whether the pointer is on this tab. The real hover and the smoke hook write this one property — hover is the
-    /// input that cannot be injected, so the wash and the mark have to be answering a single question or the headless
-    /// run proves nothing about either.
-    ///
-    /// Written by the handler below: hover goes to the topmost item
-    /// that takes it, and the `✕` is a Control that takes its own, so the tab stopped being "under the hand" exactly
-    /// when the hand arrived at the mark — which dropped the mark out from under it (rules-refs/app-ui.md 「行の
-    /// hover は `HoverHandler`」; measured qmltestrunner: `pointed=false mark=0` with the pointer in the middle
-    /// of the `✕`).
+    /// Whether the pointer is on this tab — the one property both the real hover and the smoke hook write, so the
+    /// headless run proves what the wash and the mark answer.
     property bool pointed: false
-    /// Automation: whether the mark is out on this tab. Read off the mark itself — reporting what was asked of it would
-    /// go on passing after the binding that draws it had come apart.
+    /// Automation: whether the mark is out, read off the mark itself — the output side, so a cut binding cannot pass.
     readonly property real markShown: closeMark.opacity
-    /// Automation: how far this tab is drawn from the row it belongs to, read off the transform that carries it
-    /// — the same reason `markShown` is read off the mark (`PGG_AUTO_ACT=tab-hold`).
+    /// Automation: how far this tab is drawn from its row, read off the transform as `markShown` is off the mark
+    /// (`PGG_AUTO_ACT=tab-hold`).
     readonly property real shiftShown: heldShift.x
-    /// Automation: whether any of this name is still drawn — read off the halves the label came out with; the name
-    /// the tab was handed is whole however little of it reaches the strip. A tab cut down to the
-    /// mark alone is a tab whose box came out under its own name, and the picture of one is a narrow tab with a mark
-    /// in it — which is what a short name in a crowded strip looks like too (`TabProbe.tabNamesCrushed`).
+    /// Automation: whether any of this name is still drawn, read off the label's halves (the handed name is always
+    /// whole). A tab crushed to its mark looks in a picture like a short name in a crowded strip
+    /// (`TabProbe.tabNamesCrushed`).
     readonly property bool nameKept:
         tabItem.title === "" || tabTitle.headText !== "" || tabTitle.tailText !== ""
-    /// Whether this is the tab in hand, and where the hand has carried its left edge to. Both settled by the strip
-    /// (`TabStrip.carryTo`): the order changes underneath a drag, so which row is being carried is not something a row
-    /// can remember about itself.
+    /// Whether this is the tab in hand, and where its left edge has been carried to — both settled by the strip's
+    /// `TabCarry`, since the order changes under a drag.
     property bool held: false
     property real heldX: 0
     /// Pressed with a button the tab answers. Which button means what is the strip's to say, since the same rule is
     /// what the middle-click hook comes through (`TabStrip.pressTab`).
     signal tabPressed(int button)
-    /// Taken up to be carried, `grabX` being where inside the tab the hand took hold, and set down again. Between the
-    /// two the hand reports where it has got to, in **scene** coordinates: by then the tab is drawn somewhere its own
-    /// place does not say, and mapping out through this item's transform is what makes the answer the pointer's.
+    /// Taken up (`grabX` = where inside the tab the hand took hold), dragged and set down. The drag reports in scene
+    /// coordinates: by then the tab is drawn away from its own place.
     signal tabTaken(real grabX)
     signal tabDragged(real sceneX)
     signal tabDropped()
-    /// This tab has become the one in front, or has stopped being it. The strip's stand-in is drawn off whichever item
-    /// answers true (`TabPin`), and it is pushed: the item for a row the model has only just
-    /// gained arrives with the next layout, so a strip that went looking the moment the front changed would find
-    /// nothing standing there (`TabStrip.middleClickTab` carries the same note).
+    /// This tab has become the one in front, or stopped being it. Pushed, because the strip's stand-in (`TabPin`) draws
+    /// off whichever item answers true, and the item for a row just gained arrives only with the next layout (as
+    /// `TabStrip.middleClickTab` notes).
     signal frontChanged(bool front)
 
-    // The name at whatever it is capped to, the step it is set at on the near side, the room the mark stands in on the
-    // far one, and the easing a short name is given. Rounded up so this and `settleTitleCap` agree on what the tab
-    // costs, or the strip scrolls by the fractions they disagree about.
+    // Name, copy run, near step, mark room and easing. The name is rounded up so this and `settleTitleCap` agree on
+    // what a tab costs, or the strip scrolls by the fractions they disagree about.
     width: tabItem.titleW + tabItem.treeW
         + tabItem.metrics.tabPadL + tabItem.markRoom + tabItem.titleEase
     height: tabItem.stripHeight
-    // Over the tabs it is being carried past: between one neighbour's half and the next one's, the tab in hand covers
-    // the tab it has not displaced yet.
+    // Over the tabs it is carried past, which it covers until it has taken half of one.
     z: tabItem.held ? 1 : 0
-    // The tab in front paints its own ground, and which ground says which copy it is standing in
-    // (デザイン規約 §タブの所作). One step of one ramp either way, so the reader tells the
-    // tab in front from the rest by the same amount of ink whichever place it stands in.
+    // The tab in front paints its own ground, which says which copy it stands in (デザイン規約 §タブの所作).
     color: tabItem.current ? tabItem.groundColor : "transparent"
     /// What the tab in front is painted in, and the line along its bottom edge. Read by the fade over the mark and
     /// by the stand-in as well, so a strip that has scrolled says one thing (`TabPin`).
     readonly property color groundColor: tabItem.copy_name === "" ? Theme.bgSelected : Theme.bgHereTree
     readonly property color ruleColor: tabItem.copy_name === "" ? Theme.accent : Theme.textHereTree
-    // Drawn where the hand has it. A transform: the
-    // view owns a delegate's place and writes it back at every layout, and this way the two never argue — the offset is
-    // read from whatever place the row was given, so the tab stays under the hand across the very moves it is causing.
+    // Drawn where the hand has it, as a transform: the view owns a delegate's place and rewrites it at every layout,
+    // and an offset from that place keeps the tab under the hand across the very moves it is causing.
     transform: Translate {
         id: heldShift
         x: tabItem.held ? tabItem.heldX - tabItem.x : 0
     }
-    // The working copy this tab stands in, in full, under the hand (デザイン規約 §hover のツールチップ「タブも同じで、
-    // hover が必ずフルパスを言う」). **Not the repository's own copy**
-    // — the strip's name says which repository this is, and the path is the one thing that can say which of its
-    // copies the reader is looking at. Read off `pointed` like the mark, so the one property the real hover writes is
-    // what puts the words out — and the headless run reaches them the same way it reaches the mark
-    // (`TabProbe.pointAtTab`).
-    //
-    // Nothing new comes out under a hand that is carrying: by then the hand is doing something else, and a box opening
-    // beside a tab in motion is not there to be read (同§「掴んだ手の下は空のまま」). Only the new one — a tip
-    // already standing is the shared instance's to take down, and it keeps one up while the pointer is on the target
-    // it came out of (`SharedToolTip.wanted`), which a tab under a carrying hand still is (P3-確認事項).
+    // The working copy's full path under the hand
+    // (デザイン規約 §hover のツールチップ「タブも同じで、hover が必ずフルパスを言う」), read off `pointed` like the mark
+    // so the headless run reaches it the same way (`TabProbe.pointAtTab`). Nothing new opens under a carrying hand
+    // (同§「掴んだ手の下は空のまま」); a tip already up is the shared instance's to keep (`SharedToolTip.wanted`,
+    // P3-確認事項).
     ToolTip.visible: tabItem.pointed && !tabItem.held
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: tabItem.copy_path
     onCurrentChanged: tabItem.frontChanged(tabItem.current)
-    // The strip's first tab comes up already in front, and a property that was true from the start never announces
-    // itself — the stand-in would have nothing to draw from until the reader moved to some other tab and back.
+    // A tab born in front never announces `current` changing, and the stand-in would have nothing to draw from.
     Component.onCompleted: if (tabItem.current) tabItem.frontChanged(true)
-    // Which tab the hand is on (デザイン規約 §タブの所作「`✕` が出るのは前に居るタブと、手の下のタブだけ」). A handler
-    // because handlers are passive: the mark, the wash and the tab go on answering the one pointer however many
-    // children of this tab take hover of their own.
+    // Which tab the hand is on (デザイン規約 §タブの所作「`✕` が出るのは前に居るタブと、手の下のタブだけ」). A handler:
+    // the `✕` takes hover of its own, and a tab losing hover there drops the mark from under the hand
+    // (rules-refs/app-ui.md「行の hover は `HoverHandler`」).
     HoverHandler {
         id: tabHover
         onHoveredChanged: tabItem.pointed = tabHover.hovered
@@ -150,13 +124,11 @@ Rectangle {
         id: tabMouse
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-        /// Where the press landed in the scene, and whether the hand has since carried the tab off. Both the threshold
-        /// and the carrying are measured from the scene: this item moves under the hand, so its own coordinates say
-        /// less the further the drag goes.
+        /// Where the press landed in the scene — this item moves under the hand — and whether the hand has since
+        /// carried the tab off.
         property real pressSceneX: 0
         property bool carrying: false
-        /// Where inside the tab the hand took hold. Taken at the press, so the tab travels
-        /// exactly as far as the hand did.
+        /// Where inside the tab the hand took hold, at the press, so the tab travels exactly as far as the hand did.
         property real grabX: 0
         function letGo() {
             if (!tabMouse.carrying)
@@ -164,8 +136,7 @@ Rectangle {
             tabMouse.carrying = false
             tabItem.tabDropped()
         }
-        // Moving to the tab is what a press means: the drag that may follow carries the tab it is about, and a strip
-        // that waited for the release would be carrying a tab it had not moved to (デザイン規約 §タブの所作).
+        // A press moves to the tab: the drag that may follow carries it (デザイン規約 §タブの所作).
         onPressed: mouse => {
             if (mouse.button !== Qt.LeftButton)
                 return
@@ -175,14 +146,13 @@ Rectangle {
             tabMouse.carrying = false
         }
         onPositionChanged: mouse => {
-            // Hover comes through here too, and a hand with nothing in it is not carrying anything.
+            // Only the left button carries; a middle-button drag comes through here too.
             if (!(mouse.buttons & Qt.LeftButton))
                 return
             const sceneX = tabMouse.mapToItem(null, mouse.x, 0).x
             if (!tabMouse.carrying) {
-                // The platform's own threshold, the one the view would have stolen the press at (`TabStrip`). Below it
-                // the hand is holding still, and a tab that jumped at the first stray pixel would be answering a
-                // gesture nobody made.
+                // The platform's own threshold, the one the view would have stolen the press at (`TabStrip`): below
+                // it the hand is holding still.
                 if (Math.abs(sceneX - tabMouse.pressSceneX) < tabMouse.drag.threshold)
                     return
                 tabMouse.carrying = true
@@ -202,39 +172,26 @@ Rectangle {
         color: Theme.bgHover
         visible: tabItem.pointed && !tabItem.current
     }
-    // The name, set a step in from the near edge and stopping where the room kept for the mark begins. A tab is a
-    // dense row, and its step is the dense one (デザイン規約 §余白「高密度な行の内側のみ 4」; by design = the `spaceSm`
-    // step it had was read as too much air on both sides of the name).
-    //
-    // A short name's easing goes on either side of the **name**: the mark keeps its
-    // own step off the far edge whatever the name does, so what opens up is the room the name is set in (by design —
-    // the seat every short name was padded out to made a row of equal blanks). The cap the whole strip shares is
-    // already in the tab's own width, and this fills what that leaves.
-    //
-    // **Cut in the middle, through `CutName`** (デザイン規約 §タブの所作): a repository is told apart by the end of its
-    // name, and by both ends once a namesake has grown it into a path. That part is also what keeps every capped tab
-    // spending its whole cap — a bare `elide` hands back what fits and leaves the rest at the far edge, so the names
-    // would stop a different distance from their marks along a strip that is cutting them for want of run
-    // (規約 §タイポグラフィ「余りを切れ目へ入れる」).
+    // The name, a dense row's step in from the near edge (デザイン規約 §余白「高密度な行の内側のみ 4」), with a short
+    // name's easing on either side of the name — the mark keeps its own step off the far edge. Cut in the middle
+    // through `CutName` (デザイン規約 §タブの所作): a bare `elide` leaves its remainder at the far edge, so capped names
+    // would stop at different distances from their marks (規約 §寸法「余りを切れ目へ入れる」).
     CutName {
         id: tabTitle
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         anchors.leftMargin: tabItem.metrics.tabPadL + tabItem.titleEase - tabItem.easeRight
-        // What the split left the name (`nameSplit`), rather than what the two margins leave: the run naming the
-        // copy stands between this and the mark's room, and it is given its width by the same one answer.
+        // What the split left the name (`nameSplit`), not what the margins leave: the copy's run stands between this
+        // and the mark.
         width: tabItem.titleW
         text: tabItem.title
-        // The other half of the easing: a short name is set with its letters a little apart, so the air it is
-        // given belongs to the word. Off the letter count — the width is what the air
-        // is computed from (`TabMetrics.titleTracking`).
+        // The other half of the easing: a short name's letters set a little apart. Off the letter count, since the
+        // air is computed from the width (`TabMetrics.titleTracking`).
         letterSpacing: tabItem.metrics.titleTracking(tabItem.title.length)
         weight: tabItem.current ? Font.DemiBold : Font.Normal
         color: Theme.textPrimary
     }
-    // Where this tab is standing, after the name it is called by (デザイン規約 §タブの所作). Drawn on every tab that
-    // stands in a linked copy, in front or not: which copy a tab holds is what the reader left it on, and a run that
-    // only appeared on the tab in front would make the strip a different shape every time it is moved across.
+    // The linked copy this tab stands in, after its name, on every such tab in front or not (デザイン規約 §タブの所作).
     TabTreeMark {
         id: treeRun
         anchors.left: tabTitle.right
@@ -245,32 +202,25 @@ Rectangle {
         metrics: tabItem.metrics
         minNameW: tabItem.titleMinW
     }
-    // What the name does where the mark has come to stand over it (デザイン規約 §タブの所作). The strip gives the mark's
-    // room up before it cuts a single name, so past that point the name runs on underneath — and this is what says so.
-    // Drawn in the tab's own ground, the wash it wears under the hand folded in, since that is what is behind the name
-    // at this end of a tab.
-    //
-    // Declared after the name and before the underline, which are the two things it must sit between: the line is the
-    // tab's own edge and goes over everything, and the mark below is what all of this is about.
+    // The name going quiet where the mark stands over it (デザイン規約 §タブの所作), in the tab's own ground with the
+    // hover wash folded in. Declared between the name and the underline, which goes over everything.
     TabTitleFade {
         id: titleFade
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         width: tabItem.metrics.markRoomFull + tabItem.fadeW
-        // The mark's own centre and the disc its wash paints, read off the mark —
-        // the two are the same circle or the name comes back on an edge the wash has not got.
+        // The mark's centre and the disc its wash paints: the same circle, or the name comes back on an edge the wash
+        // has not got.
         markX: titleFade.width - tabItem.metrics.markGap - tabItem.metrics.markSeat / 2
         markR: tabItem.metrics.markSeat / 2
         rampW: tabItem.fadeW
         ground: tabItem.current
             ? tabItem.groundColor
             : (tabItem.pointed ? Qt.tint(tabItem.bandColor, Theme.bgHover) : tabItem.bandColor)
-        // As strongly as the mark itself stands: what quietens the name is the mark being over it, so the two arrive
-        // and leave together. Read off the mark.
         opacity: closeMark.opacity
-        // Nothing to quieten while this name still stops a whole step short of its mark — which a short one goes on
-        // doing after the strip has taken the room back, by spending its eased air on that side (`easeRight`).
+        // Nothing to quieten while the name stops a whole step short of the mark, as a short one does by spending its
+        // eased air on that side (`easeRight`).
         visible: tabItem.nameUnderMark
     }
     Rectangle {
@@ -281,36 +231,22 @@ Rectangle {
         color: tabItem.ruleColor
         visible: tabItem.current
     }
-    // Shown on the tab in front and under the pointer (デザイン規約 §タブの所作). Dimmed: an item the
-    // layout has stopped seeing takes its width with it, and the tab would change size under the hand that came to
-    // close it.
-    //
-    // Stood against the tab's far edge: the room in front of it is the first thing a
-    // crowded strip takes back (`TabStrip.settleTitleCap`), and a mark that moved with it would sit at a different
-    // distance from every tab's edge. Its two sides are seated off its ink
-    // (`TabMetrics.markGap`), so all three gaps in a tab are the one step: the name from the near edge, the ink from
-    // the tab's far one, and — where the fade above ends — the name from the ink.
+    // Shown on the tab in front and under the pointer, by opacity
+    // (rules-refs/app-ui.md「`✕` は前に居るタブと手の下のタブにだけ出す」). Against the tab's far edge, seated off its
+    // ink (`TabMetrics.markGap`): the room in front of it is the first thing a crowded strip takes back
+    // (`TabStrip.settleTitleCap`).
     CloseToolButton {
         id: closeMark
         anchors.right: parent.right
         anchors.rightMargin: tabItem.metrics.markGap
         anchors.verticalCenter: parent.verticalCenter
-        // Held to the mark's own box (デザイン規約 §寸法). A seat is air the layout cannot see past: the `iconLg` one
-        // every other closing mark stands in carries `(iconLg − markSeat) / 2` on each side, which at this step is
-        // wider than the step itself — the seat would hang over the tab beside it and eat its hover. Cut to the box,
-        // the air left over is small enough for `markGap` to spend the rest and land the ink a whole step from the
-        // tab's edge.
-        //
-        // Only the width comes in. The seat stays `iconLg` tall so a hand coming down the strip still lands on the
-        // mark, and the wash is inset back to a box on the ink — only the target grows
-        // (§当たり判定; after `TabStrip`'s `+`).
+        // Width held to the mark's own box (デザイン規約 §寸法): the usual `iconLg` seat would hang over the next tab
+        // and eat its hover. The height stays `iconLg` so a hand coming down the strip lands on it, and the wash is
+        // inset back to the ink (§当たり判定, as `TabStrip`'s `+`).
         implicitWidth: tabItem.metrics.markSeat
         topInset: (Theme.iconLg - tabItem.metrics.markSeat) / 2
         bottomInset: closeMark.topInset
-        // Sideways there is nothing to inset: this seat is already the mark's own box. Written out because the shared
-        // one carries `leftInset: topInset` for the callers whose seat is **larger** than the wash — left bound, the
-        // depth taken off the top and bottom here would come off the sides as well and leave a wash narrower than the
-        // ink it is meant to sit behind.
+        // Written out: the shared button binds `leftInset: topInset`, which here would narrow the wash below the ink.
         leftInset: 0
         rightInset: 0
         opacity: tabItem.current || tabItem.pointed ? 1 : 0

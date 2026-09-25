@@ -1,9 +1,7 @@
 //! The branches as the operation panel's card offers them: every one this
-//! section holds, filed the way the section files them — **whatever the
-//! section is folding or filtering to**. The card is a way to move, not
-//! the list somebody is reading, so a branch the reader folded away or
-//! filtered out of the left menu is still somewhere to go
-//! (デザイン規約 §操作パネル).
+//! section holds, filed the way the section files them, **whatever the
+//! section is folding or filtering to** — the card is a way to move, not
+//! the list being read (デザイン規約 §操作パネル).
 
 use super::*;
 
@@ -11,8 +9,7 @@ use super::*;
 /// own, or a branch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardRow {
-    /// What the row says — the segment under its folders, the way the
-    /// section's own row says it.
+    /// The segment under its folders, as the section's own row says it.
     pub name: String,
     /// What git knows it by: a folder's path, a branch's whole name.
     pub full: String,
@@ -20,15 +17,12 @@ pub struct CardRow {
     /// goes on.
     pub depth: i32,
     pub folder: bool,
-    /// The branch HEAD is on. **On the list and not on offer**: the card
-    /// offers what can be chosen, and a folder holding nothing else takes
-    /// its own row with it.
+    /// The branch HEAD is on — listed, not on offer.
     pub head: bool,
-    /// Whether choosing from the row gets anywhere: a branch that is not
-    /// the one HEAD is on, a folder with such a branch filed anywhere
-    /// under it. **Said of a folder before its card is made** — the card
-    /// makes a folder's rows as it opens (`OpsBranchMenu`), and a folder
-    /// with nothing to offer takes its row away before anyone opens it.
+    /// Whether choosing from the row gets anywhere: a branch other than
+    /// HEAD's, or a folder with one filed anywhere under it — said before
+    /// the folder's card is made (`OpsBranchMenu` makes it on open), so a
+    /// folder with nothing to offer drops its row unopened.
     pub offers: bool,
     /// Another working copy has it out (`item::HELD`).
     pub held: bool,
@@ -85,11 +79,9 @@ impl Record for CardRow {
 impl NavSectionModel {
     /// The card's rows. Empty for every section but the branches.
     ///
-    /// **Every folder open**, and no filter: the tree is the section's own
-    /// (`build_tree_with`), so a name is filed under the same folders on
-    /// both sides of the window. What each row says is the section's own
-    /// answer too (`field`) — the card cannot tell the left menu's row
-    /// one thing and draw another.
+    /// Every folder open and no filter, off the section's own tree
+    /// (`build_tree_with`) and answers (`field`), so the card and the left
+    /// menu cannot file or say a branch differently.
     pub(super) fn card(&self) -> Vec<CardRow> {
         if self.section != "branches" {
             return Vec::new();
@@ -99,9 +91,9 @@ impl NavSectionModel {
             .iter()
             .filter_map(|arranged| self.read_arranged(arranged))
             .map(|row| {
-                // The whole name off the row itself: the section answers
-                // a branch's `full` only while a tree named it, and a
-                // filter turns that off for its own list.
+                // Off the row itself: the section answers a branch's
+                // `full` only while a tree named it, and a filter turns
+                // that off (`tree_named`).
                 let full = match row {
                     Row::Made(item) => item.full.clone(),
                     Row::Shown { of, .. } => of.name().to_string(),
@@ -124,8 +116,7 @@ impl NavSectionModel {
                 }
             })
             .collect();
-        // A folder offers what any branch filed under it offers: every
-        // folder on the way down to a branch on offer is one that does.
+        // Every folder above a branch on offer offers.
         let offering: std::collections::HashSet<String> = rows
             .iter()
             .filter(|row| row.offers)
@@ -146,11 +137,10 @@ impl NavSectionModel {
     }
 
     /// One card of the nest: the rows filed directly under the folder at
-    /// `path`, or the top of it for an empty one. **One level at a time**
-    /// — the card makes an item for every row it is handed, so a whole tree
-    /// made on the press costs the press an item per local branch
-    /// (ci/baseline/code-costs-windows-x64.md), and a folder's rows are
-    /// made as its card opens (`OpsBranchMenu`).
+    /// `path`, or the top level for an empty one. One level at a time: the
+    /// card makes an item per row it is handed, so a whole tree would cost
+    /// the press an item per local branch
+    /// (ci/baseline/code-costs-windows-x64.md).
     pub(super) fn level_rows(&self, path: &str) -> Vec<CardRow> {
         self.card()
             .into_iter()
@@ -196,8 +186,7 @@ mod tests {
             .collect()
     }
 
-    /// The card files every branch under its folders, a folder before
-    /// what it holds — the section's own tree, one row per `/`.
+    /// One row per `/`, a folder before what it holds.
     #[test]
     fn the_card_is_the_sections_tree_with_every_folder_open() {
         let model = branches();
@@ -223,8 +212,6 @@ mod tests {
         assert_eq!(rows[5].name, "deep");
     }
 
-    /// **The left menu's folds and filter are the reader's, not the
-    /// card's**: a branch folded away or filtered out is still offered.
     #[test]
     fn the_card_ignores_what_the_section_is_folding_or_filtering_to() {
         let mut model = branches();
@@ -245,8 +232,6 @@ mod tests {
         assert_eq!(names(&model), whole);
     }
 
-    /// Each row carries what the section's own row draws — the current
-    /// branch, the copy holding one, the counts and the badge.
     #[test]
     fn a_card_row_says_what_the_sections_row_draws() {
         let rows = branches().card();
@@ -269,8 +254,6 @@ mod tests {
         assert!(!tracked.gone);
     }
 
-    /// A card of the nest is the rows filed directly under one folder,
-    /// the top of it for the empty path — nothing deeper, nothing beside.
     #[test]
     fn a_level_is_what_is_filed_directly_under_the_folder() {
         let model = branches();
@@ -287,9 +270,6 @@ mod tests {
         assert!(level("nowhere").is_empty());
     }
 
-    /// A folder offers what the branches filed anywhere under it offer —
-    /// said before its card is made, so a folder holding only the current
-    /// branch is taken off the card that holds it.
     #[test]
     fn a_folder_offers_what_the_branches_under_it_offer() {
         let mut model = section(
@@ -321,8 +301,6 @@ mod tests {
         assert!(row("rig").offers);
     }
 
-    /// Only the branches have a card: every other section answers with
-    /// nothing rather than with rows nobody asked for.
     #[test]
     fn only_the_branches_have_a_card() {
         let model = section(

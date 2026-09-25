@@ -1,11 +1,8 @@
 use super::*;
 
-/// Where a section's rows come from.
-///
-/// Every section keeps what arrived, in the shape it arrived in, and
-/// answers for a row as the view asks. Holding the refs sections as built
-/// rows instead put megabytes on the process's Rust heap, all of it a
-/// second copy of what the snapshot says
+/// Where a section's rows come from: what arrived, in the shape it
+/// arrived in, answered row by row as the view asks. Built rows would be
+/// a second copy of the snapshot on the Rust heap
 /// (ci/baseline/code-costs-windows-x64.md §メモリの形).
 #[derive(Default)]
 pub(super) enum Source {
@@ -15,16 +12,13 @@ pub(super) enum Source {
     Remotes(Arc<platitude_core::session::RefsSnapshot>),
     Tags(Arc<platitude_core::session::RefsSnapshot>),
     Stashes(Vec<platitude_core::stash::StashEntry>),
-    /// The working copies, and which of them this window is showing —
-    /// the one fact about a worktree row that is not in the entry.
+    /// The working copies, and which one this window shows (no entry says).
     Worktrees {
         list: Vec<platitude_core::worktrees::WorktreeEntry>,
         current: String,
     },
-    /// The pending changes, with the order the pane shows them in. **A
-    /// row is a bucket and an entry**: an entry with both halves changed
-    /// (`MM`) is one row under the index and another under the working
-    /// tree.
+    /// The pending changes and the pane's order. A row is a bucket and an
+    /// entry: an `MM` entry is one row under each side.
     Files {
         status: platitude_core::status::WorkTreeStatus,
         order: Vec<FileAt>,
@@ -35,8 +29,7 @@ impl platitude_core::mem::Footprint for Source {
     fn heap_bytes(&self) -> usize {
         match self {
             Self::Waiting => 0,
-            // The snapshot belongs to the session, which is where the
-            // memory report counts it.
+            // Counted under the session, which owns the snapshot.
             Self::Locals(_) | Self::Remotes(_) | Self::Tags(_) => 0,
             Self::Stashes(list) => list.heap_bytes(),
             Self::Worktrees { list, current } => list.heap_bytes() + current.heap_bytes(),
@@ -79,10 +72,8 @@ impl Source {
         }
     }
 
-    /// The branch row named `short`, through the snapshot's own index —
-    /// the two ref sections are name-ordered, so a menu's question about
-    /// a name is a binary search (`RefsSnapshot::local_named`). `None`
-    /// for every other section.
+    /// The branch row named `short`, by binary search over the
+    /// name-ordered section (`RefsSnapshot::local_named`).
     pub(super) fn branch_named(&self, short: &str) -> Option<&platitude_core::session::BranchItem> {
         match self {
             Self::Locals(snapshot) => snapshot.local_named(short),
@@ -92,16 +83,12 @@ impl Source {
     }
 
     /// The branches `remote` carries here, by the name half alone
-    /// (`main`, `feature/x`) and in the section's own name order — what
-    /// the upstream question offers to pick from (デザイン規約
-    /// §ブランチが測られる相手を決める). Empty for every other section.
+    /// (`main`, `feature/x`), in name order — what the upstream question
+    /// offers (デザイン規約 §ブランチが測られる相手を決める).
     ///
-    /// **The cut is by configured name, not by the first slash**: a
-    /// remote called `my` does not carry `my/fork/main`, and the run
-    /// under the `<remote>/` prefix holds both
-    /// ([`crate::refs::split_remote_ref`] — the same reading the rest of
-    /// the window makes). The rows are name-ordered, so that run is where
-    /// the scan starts and where it stops.
+    /// The cut is by configured name, not by the first slash: the `my/`
+    /// prefix run also holds remote `my/fork`'s `my/fork/main`
+    /// ([`platitude_core::refs::split_remote_ref`]).
     pub(super) fn branches_on<'a>(&'a self, remote: &str, remotes: &[&'a str]) -> Vec<&'a str> {
         let Self::Remotes(snapshot) = self else {
             return Vec::new();
@@ -124,8 +111,8 @@ impl Source {
             .collect()
     }
 
-    /// The tag row named `short`, the same way (`RefsSnapshot::tag_named`
-    /// — the tags keep their own order, so the index is a separate one).
+    /// The tag row named `short`, through a separate name index — tags
+    /// are not name-ordered (`RefsSnapshot::tag_named`).
     pub(super) fn tag_named(&self, short: &str) -> Option<&platitude_core::session::TagItem> {
         match self {
             Self::Tags(snapshot) => snapshot.tag_named(short),
@@ -133,10 +120,9 @@ impl Source {
         }
     }
 
-    /// The remotes carrying the tag called `name`, each said once and with
-    /// whether it stands somewhere other than where `against` has it —
-    /// what the row opens on (`RefsSnapshot::tag_remotes`). Empty for
-    /// every other section, and while nothing has read the remotes.
+    /// The remotes carrying tag `name`, once each, with whether it stands
+    /// somewhere other than `against` (`RefsSnapshot::tag_remotes`).
+    /// Empty before the remotes are read.
     pub(super) fn tag_carriers(&self, name: &str, against: &str) -> Vec<(&str, bool)> {
         match self {
             Self::Tags(snapshot) => snapshot.tag_remotes(name, against),
@@ -146,11 +132,9 @@ impl Source {
 
     /// Where `remote` carries `name` when that is not where this
     /// repository has the tag; empty when the two agree, when that remote
-    /// does not carry the name, or when nothing has read the remotes yet.
-    ///
-    /// Off the snapshot's own sorted run: a drift is listed once for the
-    /// local tag, and no row of the sidebar is the remote's reading of a
-    /// name that is here as well.
+    /// does not carry the name, or before the remotes are read. Read off
+    /// `tag_drifts`: no sidebar row is the remote's reading of a name that
+    /// is here too.
     pub(super) fn tag_drift(&self, name: &str, remote: &str) -> String {
         let Self::Tags(snapshot) = self else {
             return String::new();
@@ -169,13 +153,10 @@ impl Source {
             )
     }
 
-    /// Whether the entry at `at` is one of `names` — the names being
-    /// what git is asked about, so a stash answers to its selector and
-    /// every other row to the name it shows (the same split `Entry::full`
-    /// makes).
-    ///
-    /// What the sidebar shows a row as gone by while its delete is out
-    /// (`NavSectionModel::set_hidden`).
+    /// Whether the entry at `at` is one of `names`, read as git is asked
+    /// about it: `Entry::full` where there is one (a stash's selector),
+    /// the name otherwise. How a row shows as gone while its delete is
+    /// out (`NavSectionModel::set_hidden`).
     pub(super) fn is_named(&self, at: usize, names: &[String]) -> bool {
         self.entry(at).is_some_and(|of| {
             let full = of.full();
@@ -184,9 +165,8 @@ impl Source {
         })
     }
 
-    /// How many of this source's entries `names` covers. Zero without a
-    /// delete standing, which is what keeps the scan off every arrange of
-    /// a section holding tens of thousands of tags.
+    /// How many entries `names` covers. The early return keeps the scan
+    /// off every arrange of a tag section while no delete stands.
     pub(super) fn named_count(&self, names: &[String]) -> usize {
         if names.is_empty() {
             return 0;
@@ -196,9 +176,7 @@ impl Source {
             .count()
     }
 
-    /// The same status as one list of paths — what another working
-    /// copy's changes are shown as
-    /// ([`Bucket::Whole`]).
+    /// The same status as one list of paths ([`Bucket::Whole`]).
     pub(super) fn whole_files(status: platitude_core::status::WorkTreeStatus) -> Self {
         let mut order: Vec<FileAt> = (0..status.items.len())
             .map(|at| FileAt {
@@ -206,18 +184,14 @@ impl Source {
                 at: at as u32,
             })
             .collect();
-        // One heading, so the whole list is put in order at once — git
-        // hands its untracked entries over after its tracked ones, and
-        // left that way every new file sits at the foot of the list.
         by_path(&mut order, &status);
         Self::Files { status, order }
     }
 
     pub(super) fn files(status: platitude_core::status::WorkTreeStatus) -> Self {
         let mut order = Vec::new();
-        // The heading being filled, and where its rows began: buckets
-        // shown under one of them are one list (`Bucket::run`), and a
-        // list is put in order once it is whole.
+        // The heading being filled and where its rows began: buckets
+        // sharing a `Bucket::run` are sorted as one list once it is whole.
         let (mut run, mut from) = ("", 0);
         for bucket in Bucket::SHOWN {
             if bucket.run() != run {
@@ -238,14 +212,9 @@ impl Source {
     }
 }
 
-/// Puts one heading's rows in name order.
-///
-/// git answers with its tracked entries sorted and its untracked ones
-/// sorted after them, so the unstaged heading — which is both — arrives
-/// as two sorted lists one after the other. Left that way, every
-/// untracked file sits at the foot of the heading, and staging one moves
-/// it up among the others: the same files, listed two different ways on
-/// the two sides of the pane.
+/// Puts one heading's rows in path order. git lists untracked entries
+/// after the sorted tracked ones, so unsorted, new files sit at the foot
+/// of the unstaged heading and staging one moves it.
 fn by_path(rows: &mut [FileAt], status: &platitude_core::status::WorkTreeStatus) {
     let path_of = |row: &FileAt| {
         status
@@ -256,8 +225,7 @@ fn by_path(rows: &mut [FileAt], status: &platitude_core::status::WorkTreeStatus)
     rows.sort_by(|a, b| path_of(a).cmp(path_of(b)));
 }
 
-/// One file row: which of git's four answers it came out of, and the
-/// entry in the status it came from.
+/// One file row: its bucket and its index into the status.
 pub(super) struct FileAt {
     bucket: Bucket,
     at: u32,
@@ -270,23 +238,15 @@ pub(super) enum Bucket {
     Unstaged,
     Untracked,
     Staged,
-    /// Every changed path once, whichever sides it changed on — the one
-    /// list another working copy's changes are shown as.
-    ///
-    /// **The split is the index's, and that index belongs to the other
-    /// copy.** Told apart here, a file edited and then edited again would
-    /// stand twice under two headings that name two halves of an act
-    /// nobody reading can take part in. What is left is the question a
-    /// reader of somebody else's copy is actually asking — what has that
-    /// copy got that its last commit has not — which is one row per path
-    /// (デザイン規約 §別の作業コピーを読む).
+    /// Every changed path once, whichever sides it changed on — how
+    /// another working copy's changes are shown, since the stage split
+    /// belongs to that copy's index (デザイン規約 §別の作業コピーを読む).
     Whole,
 }
 
 impl Bucket {
-    /// GitKraken display order, which is also the order the pane's group
-    /// runs come in. Buckets sharing a heading stand next to each other,
-    /// which is what lets `files` close one off the moment `run` changes.
+    /// GitKraken display order. Buckets sharing a heading must stand next
+    /// to each other: `files` closes a heading the moment `run` changes.
     const SHOWN: [Self; 4] = [
         Self::Conflicts,
         Self::Unstaged,
@@ -294,13 +254,12 @@ impl Bucket {
         Self::Staged,
     ];
 
-    /// Whether an entry belongs in this bucket — the same test
-    /// `WorkTreeStatus` makes for its four iterators (a test at the foot
-    /// of the file holds the two together).
+    /// Whether an entry belongs in this bucket — the same test as
+    /// `WorkTreeStatus`'s four iterators (held together by the test at
+    /// the foot).
     fn holds(self, item: &platitude_core::status::StatusItem) -> bool {
         use platitude_core::status::StatusItem;
         match (self, item) {
-            // Everything git named is a change this copy is holding.
             (Self::Whole, _)
             | (Self::Conflicts, StatusItem::Unmerged { .. })
             | (Self::Untracked, StatusItem::Untracked { .. }) => true,
@@ -321,11 +280,9 @@ impl Bucket {
         }
     }
 
-    /// The same for a row that stands for a whole path: **the side that
-    /// holds the newest bytes**, which is the index where anything is
-    /// staged and the working tree otherwise. A reader opening one of
-    /// these rows is asking what the copy has, and the staged side is the
-    /// nearer answer to that.
+    /// The same for a `Whole` row: the index where anything is staged,
+    /// the working tree otherwise — the nearer answer to what the copy
+    /// has.
     pub(super) fn routing_of(self, item: &platitude_core::status::StatusItem) -> &'static str {
         use platitude_core::status::StatusItem;
         match (self, item) {
@@ -393,8 +350,8 @@ impl<'a> Entry<'a> {
     }
 }
 
-/// The last segment of a path — git prints worktree paths the platform's
-/// way, so either separator splits (`urlpath::path_leaf` is the one rule).
+/// The last segment of a worktree path, which git prints the platform's
+/// way, so either separator splits (`urlpath::path_leaf`).
 fn leaf_of(path: &str) -> &str {
     crate::urlpath::path_leaf(path)
 }
@@ -404,9 +361,7 @@ pub(super) fn pr_key(short: &str) -> &str {
     short.split_once('/').map_or(short, |(_, rest)| rest)
 }
 
-/// The letters git reports for one file row: what each side did to a
-/// conflicted file, the half of an ordinary change this row is about, or
-/// the mark for a file git has never been told about.
+/// The letters git reports for one file row.
 pub(super) fn letters_of(item: &platitude_core::status::StatusItem, bucket: Bucket) -> String {
     use platitude_core::status::StatusItem;
     match (item, bucket) {
@@ -414,10 +369,7 @@ pub(super) fn letters_of(item: &platitude_core::status::StatusItem, bucket: Buck
         (StatusItem::Tracked { unstaged, .. }, Bucket::Unstaged) => unstaged.to_string(),
         (StatusItem::Tracked { staged, .. }, Bucket::Staged) => staged.to_string(),
         (StatusItem::Untracked { .. }, _) => "?".to_string(),
-        // One letter for the whole path: **the index's where it has one**
-        // — a file added to the index and then edited again is an
-        // addition, because that is what this copy has that its last
-        // commit has not.
+        // The index's letter where it has one (デザイン規約 §別の作業コピーを読む).
         (
             StatusItem::Tracked {
                 staged, unstaged, ..
@@ -437,9 +389,8 @@ mod tests {
     use super::super::testkit::*;
     use super::*;
 
-    /// Which entries a bucket holds is git's answer, and core is where it
-    /// is written down — this list asks one entry at a time so a row can
-    /// name the bucket it came out of, and the two stay in step.
+    /// `holds` re-asks core's four iterators one entry at a time (so a row
+    /// can name its bucket); this keeps the two in step.
     #[test]
     fn a_bucket_holds_what_core_says_it_holds() {
         let status = pending();
@@ -459,14 +410,8 @@ mod tests {
         }
     }
 
-    /// The one list another working copy's changes are shown as: every
-    /// path once, however many sides it changed on, and the letter the
-    /// index gave it where it gave one.
-    ///
-    /// **The fixture's `src/b.txt` is the whole point** — it is `MM`, a
-    /// row under each heading in this window's own pane. Left split here,
-    /// a reader of somebody else's copy would be shown two halves of an
-    /// act they cannot take part in.
+    /// Another copy's list: every path once, with the index's letter where
+    /// it has one. The fixture's `MM` `src/b.txt` is the case that matters.
     #[test]
     fn a_copys_list_holds_every_path_once() {
         let status = pending();
@@ -485,11 +430,9 @@ mod tests {
                 letters_of(item, at.bucket)
             })
             .collect();
-        // In path order, which is what the one heading is sorted by:
-        // a.txt (conflicted), c.txt (untracked), d.txt (staged rename),
-        // src/b.txt (both sides — the index's letter wins).
+        // Path order: a.txt (conflicted), c.txt (untracked), d.txt
+        // (staged rename), src/b.txt (both sides — the index's letter).
         assert_eq!(letters, vec!["UU", "?", "R", "M"]);
-        // And the side each row opens is the row's own.
         let sides: Vec<&str> = order
             .iter()
             .map(|at| at.bucket.routing_of(&status.items[at.at as usize]))
@@ -501,11 +444,8 @@ mod tests {
         );
     }
 
-    /// The unstaged heading is two of git's answers at once — the tracked
-    /// entries and the untracked files — and git hands each of them over
-    /// sorted, one list after the other. Left end to end, the same three
-    /// files read one way while one of them was untracked and another way
-    /// once all three were staged.
+    /// The unstaged heading joins git's tracked and untracked lists, each
+    /// sorted on its own (`by_path`).
     #[test]
     fn a_heading_lists_its_files_by_name_whichever_bucket_they_came_from() {
         use platitude_core::status::{StatusItem, WorkTreeStatus};

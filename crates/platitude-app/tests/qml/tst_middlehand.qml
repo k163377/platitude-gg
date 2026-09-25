@@ -4,18 +4,15 @@ import QtTest
 import platitude.ui
 
 // The middle button's hand, pressed the way a hand presses it (デザイン規約 §中クリックの自動スクロール). The verbs go
-// in at `MiddleAutoScroll.press` — a run has no middle button to put down — so **whether a real press reaches the hand,
-// and what the hand leaves to what is under it, is Qt's delivery**, and that is what this file holds: a hand over the
-// rows that every row, button and word leaves the middle press to, except words being written where the platform
-// pastes and a box with a hand of its own; the gesture standing over the rows once it runs; and no hand at all on a
-// surface with nowhere to go.
+// in at `MiddleAutoScroll.press` (a run has no middle button), so whether a real press reaches the hand, and what the
+// hand leaves to what is under it, is Qt's delivery — held here.
 Item {
     id: root
     width: 700
     height: 700
 
-    // A list of the shape every pane's is: rows answering the left and right buttons, words that can be selected, and
-    // a box that can be written in (a rename box stands in a row like this).
+    // Every pane's list shape: rows answering the left and right buttons, words that can be selected, and a box that
+    // can be written in (a rename box).
     Component {
         id: listScene
         AppListView {
@@ -101,8 +98,8 @@ Item {
             lines.push("Line " + n + " of words that run past the box they are written in.")
         return lines.join("\n")
     }
-    /// A box holding more words than it shows, standing at its first line: left where the text was assigned, the
-    /// caret takes the view to the last one, and a gesture going down from there has nowhere to go.
+    /// A box holding more words than it shows, at its first line: left where the text was assigned, the caret takes
+    /// the view to the last one and a gesture going down has nowhere to go.
     function fill(box, readOnly) {
         box.readOnly = readOnly
         box.text = root.longWords()
@@ -117,8 +114,7 @@ Item {
             MiddleHand.stop()
         }
 
-        // A middle click anywhere on the rows starts the gesture, and released where it went down it stays latched,
-        // standing over the rows — the next click ends it there, and the row under it never hears that click.
+        // Released where it went down, the gesture stays latched; the click that ends it never reaches the row.
         function test_over_the_rows() {
             const list = createTemporaryObject(listScene, root)
             verify(waitForRendering(list))
@@ -134,8 +130,8 @@ Item {
             compare(list.rowPresses, 1, "a click with no gesture standing did not reach the row")
         }
 
-        // Words are the gesture's like everything else, except words being written where the middle button pastes:
-        // there the click is the paste, and the box keeps it.
+        // Words are the gesture's, except words being written where the middle button pastes: there the click is the
+        // paste.
         function test_words_and_the_paste() {
             const list = createTemporaryObject(listScene, root)
             verify(waitForRendering(list))
@@ -146,7 +142,6 @@ Item {
             compare(list.hand.scrolling, !list.hand.middlePastes)
         }
 
-        // A list that holds all of its rows has nowhere to go, and no hand: the press starts nothing.
         function test_no_hand_with_nowhere_to_go() {
             const list = createTemporaryObject(listScene, root, { rows: 3 })
             verify(waitForRendering(list))
@@ -156,8 +151,6 @@ Item {
             compare(MiddleHand.running, null)
         }
 
-        // Latched, the gesture sends the list by where the pointer went; the wheel ends it and is still the list's
-        // notch.
         function test_the_drift_and_the_wheel() {
             const list = createTemporaryObject(listScene, root)
             verify(waitForRendering(list))
@@ -170,9 +163,8 @@ Item {
             tryVerify(() => list.contentY > at + 10, undefined, "the notch never reached the list")
         }
 
-        // One gesture in the window: a hand that starts takes the place of whichever was running, and a press that
-        // lands anywhere ends the one running — looked at a turn later, so a middle press that starts another gesture
-        // is not ended by the press that started it.
+        // A press anywhere ends the running gesture, looked at a turn later so the middle press that starts another
+        // gesture is not ended by itself.
         function test_one_gesture_at_a_time() {
             const first = createTemporaryObject(listScene, root)
             const second = createTemporaryObject(listScene, root, { x: 350 })
@@ -183,8 +175,7 @@ Item {
             mouseClick(second, 70, 45, Qt.MiddleButton)
             verify(!first.hand.scrolling, "the first gesture went on beside the second")
             compare(MiddleHand.running, second.hand)
-            // The look a turn later has been taken once a later ask of the same kind has: the two are run in the
-            // order they were asked.
+            // `Qt.callLater` runs in the order asked, so once this one has run the look a turn later has too.
             let looked = false
             Qt.callLater(() => looked = true)
             tryVerify(() => looked, undefined, "the turn after the press never came")
@@ -193,8 +184,7 @@ Item {
             tryVerify(() => !second.hand.scrolling, undefined, "a press elsewhere left the gesture running")
         }
 
-        // A box's hand stands over its words, and only while they run past the box: a box that holds all of them hands
-        // the press back to the words, as it always did.
+        // A box's hand stands only while its words run past the box; one that holds them all hands the press back.
         function test_the_box_over_its_words() {
             const scene = createTemporaryObject(boxScene, root)
             const box = scene.box
@@ -213,7 +203,6 @@ Item {
             verify(box.focused, "a middle click on words that fit did not reach them")
         }
 
-        // Words being written, where the middle button pastes, keep the press: the hand steps aside rather than start.
         function test_the_box_steps_aside_for_a_paste() {
             const scene = createTemporaryObject(boxScene, root)
             const box = scene.box
@@ -223,8 +212,7 @@ Item {
             compare(box.hand.press(150, 70), !box.hand.middlePastes)
         }
 
-        // A box on a surface that scrolls: the box's words are sent by the box's own hand, which the surface's lets the
-        // press go to, and the rest of the surface by the surface's.
+        // The surface's hand lets a press on the box's words go to the box's own hand.
         function test_a_box_inside_a_block() {
             const block = createTemporaryObject(blockScene, root)
             root.fill(block.box, true)

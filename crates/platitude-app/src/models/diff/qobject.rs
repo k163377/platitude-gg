@@ -2,7 +2,7 @@
 //! file reads it asks for, and the feed it drains.
 //!
 //! One `#[qobject]` block, and it cannot be split further — QMetaInfo is
-//! built per file (app-ui.md).
+//! built per file (structure.md §分割).
 
 use super::*;
 
@@ -51,14 +51,12 @@ impl DiffModel {
     #[qsignal]
     pub(super) fn changed(&mut self);
 
-    /// The rows on screen are about to be swapped for a re-read of the
-    /// same file. Said before the first of them moves, so that whoever
-    /// keeps the reader's place takes it off a view that is still standing
-    /// where they left it (`DiffScrollPlace`).
+    /// The rows on screen are about to be swapped (a re-read of the same
+    /// file, or a re-lay) — emitted before any moves, so `DiffScrollPlace`
+    /// takes the place off a view still standing.
     ///
-    /// **Return without calling back into this model.** It goes out from
-    /// inside `drain`, which is holding the borrow — and from
-    /// `relay_rows`, which is the other swap of the same rows.
+    /// Handlers must not call back into this model: `drain` / `relay_rows`
+    /// hold the borrow while it goes out.
     #[qsignal]
     pub(super) fn rows_replacing(&mut self);
 
@@ -69,10 +67,8 @@ impl DiffModel {
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.diff, invoker);
     }
 
-    /// Reads the diff as two columns, or as one — the band's toggle, and
-    /// the machine's saved choice as the page opens
-    /// (デザイン規約 §diff を 2 列で読む). The rows on screen are laid out
-    /// again there and then; nothing is read for it.
+    /// One column or two (`relay_rows`) — the band's toggle, and the saved
+    /// choice as the page opens.
     #[qslot]
     fn set_split(&mut self, split: bool) {
         if self.split == split {
@@ -82,12 +78,10 @@ impl DiffModel {
         self.changed();
     }
 
-    /// How the split rows came out — for the smoke hook (`diff-split`):
-    /// a picture shows two columns, and not whether the removed line
-    /// and the added one that replaced it were read across from each
-    /// other rather than stacked. `pairs=` is the rows carrying a line
-    /// on both sides that are not context, `alone=` the changed lines
-    /// with an empty seat across from them, `both=` the context lines.
+    /// How the split rows came out, for `diff-split` (a picture cannot say
+    /// whether a removed line and its replacement were paired): `pairs=`
+    /// del / add rows, `alone=` changed lines with an empty seat across,
+    /// `both=` context rows.
     #[qslot]
     fn split_tally(&self) -> String {
         let mut pairs = 0;
@@ -129,9 +123,8 @@ impl DiffModel {
         self.begin_request(path, target);
     }
 
-    /// Diff of one file between two commits — the file list a choice of
-    /// exactly two puts up (デザイン規約 §複数のコミットを選ぶ). `from_hex`
-    /// is the older side, the one the comparison is measured from.
+    /// Diff of one file between two commits (a choice of exactly two —
+    /// デザイン規約 §複数のコミットを選ぶ). `from_hex` is the older side.
     #[qslot]
     fn request_range_file(
         &mut self,
@@ -156,8 +149,8 @@ impl DiffModel {
     }
 
     /// One file as each of several chosen commits changed it, stacked
-    /// (デザイン規約 §複数のコミットを選ぶ). `ids` are theirs, newest first
-    /// — the order the graph stands in.
+    /// (デザイン規約 §複数のコミットを選ぶ). `ids` are newest first (graph
+    /// order).
     #[qslot]
     fn request_choice_file(&mut self, ids: Vec<String>, path: String, orig_path: String) {
         let mut oids = Vec::new();
@@ -186,23 +179,17 @@ impl DiffModel {
         self.begin_request(path, target);
     }
 
-    /// The same file in another working copy — `at` is that copy's path.
-    /// What the read-only pane opens: the contents have to be readable,
-    /// and the only thing that made the ordinary read this window's own
-    /// was where it was aimed (`RepoSession::load_carried_diff`).
+    /// The same read aimed at another working copy — `at` is its path
+    /// (the read-only pane; `RepoSession::load_carried_diff`).
     #[qslot]
     fn request_carried(&mut self, at: String, bucket: String, path: String, orig_path: String) {
         let target = bucket_target(&bucket, &path, orig_path);
         self.begin_request_in(at, path, target);
     }
 
-    /// The re-read of that file, on the copies' own slower tick — the one
-    /// the ordinary `refresh_work_tree` is on the page's tick for.
-    ///
-    /// **Aimed where the rows came from.** Sent through the ordinary
-    /// re-read it would read *this* window's file of that name and hand
-    /// it to a pane showing somebody else's, which is the one way the two
-    /// trees can be mixed up on screen.
+    /// `refresh_work_tree` for a carried diff, on the copies' slower tick.
+    /// Aimed where the rows came from — the ordinary re-read would put this
+    /// window's file of that name in a pane showing another copy's.
     #[qslot]
     fn refresh_carried(
         &mut self,
@@ -221,23 +208,16 @@ impl DiffModel {
         crate::hub::from_session(self.tab_id, |s| s.refresh_carried_diff(at, target)).is_some()
     }
 
-    /// Asks whether the working-tree file on screen still reads the way it
-    /// did — the page's tick, while a diff of one is open.
+    /// The page's tick: asks core whether the open working-tree file
+    /// changed (`RepoSession::refresh_diff`, silent when not). Sets no
+    /// `loading` — most ticks find nothing. Ignored for another file or
+    /// while a read is out.
     ///
-    /// An ask only: nothing is put down and nothing is said to be
-    /// loading, because most ticks find the file where they left it and
-    /// core answers those with silence (`RepoSession::refresh_diff`). A
-    /// tick for some other file is not this pane's, and one that arrives
-    /// while a read is already out has nothing to add to it.
-    ///
-    /// Answers whether a read went out, which is all this side of it can
-    /// be asked: the usual answer to the read itself is silence, so the
-    /// automation reads the ask (`diff-tick`) and takes that for its
-    /// answer.
+    /// Returns whether a read went out — what `diff-tick` reads, since the
+    /// read's usual answer is silence.
     #[qslot]
     fn refresh_work_tree(&mut self, bucket: String, path: String, orig_path: String) -> bool {
-        // A diff read from another copy is re-read on the copies' tick
-        // and by their aim (`refresh_carried`).
+        // A carried diff is re-read by `refresh_carried`.
         if self.loading || !self.current_at.is_empty() {
             return false;
         }
@@ -248,15 +228,12 @@ impl DiffModel {
         crate::hub::from_session(self.tab_id, |s| s.refresh_diff(target)).is_some()
     }
 
-    /// How many rows one side is named on — `side` is the row role's own
-    /// word (`ours` / `theirs`). For the smoke hook (`conflict-sides`):
-    /// which side a line came from is drawn as a band a few pixels wide,
-    /// and a picture cannot be asked whether every band that should be
-    /// there is.
+    /// How many lines are marked `side` (`ours` / `theirs`), for
+    /// `conflict-sides` — a picture cannot say every band is there.
     #[qslot]
     pub(super) fn side_count(&self, side: String) -> i32 {
-        // Each side of a row names its side at most once, so a count over
-        // both sides of every row is a count of lines (`encode::Marks`).
+        // Each side of a row names its side at most once, so this counts
+        // lines (`encode::Marks`).
         let count = self
             .lines
             .iter()
@@ -266,31 +243,16 @@ impl DiffModel {
         i32::try_from(count).unwrap_or(i32::MAX)
     }
 
-    // ---- the reader's own selection of the text --------------------
-    // The pane brings a column, a row and a place along it; everything
-    // after that is read off the patches, because the file's own bytes
-    // are here (`selection`). The column is 0 for the rows' own lines —
-    // the only column while the diff is one — and 1 for the new side of
-    // a split row.
+    // ---- the reader's own selection of the text (`selection`) --------
 
-    /// Which byte of row `row`'s line the place `at` of it stands on —
-    /// `at` counted in the units the row's own layout counts a place in
-    /// (`LineRuler`, which is what turned the reader's press into
-    /// one). Pixels stop at the pane: only the row that was laid out
-    /// knows where its characters are drawn, and only the file's own
-    /// bytes are here.
+    /// Which byte of row `row`'s source line the place `at` (in
+    /// `LineRuler`'s units) stands on.
     #[qslot]
     fn source_byte_at(&self, side: i32, row: i32, at: i32) -> i32 {
         self.byte_at(side, row, at)
     }
 
-    /// A press landed: the selection starts here and holds nothing yet.
-    ///
-    /// The three published counts ride `changed`, the way
-    /// every other property of this model does — and it is
-    /// said here, so that the four ways in cost one signal
-    /// each and a drag that has not left the character it is
-    /// on costs none.
+    /// A press landed: the selection starts here, empty.
     #[qslot]
     fn begin_select(&mut self, side: i32, row: i32, at: i32) {
         if self.start_select(side, row, at) {
@@ -298,9 +260,7 @@ impl DiffModel {
         }
     }
 
-    /// The hand has moved to here. The column is the press's: a drag is
-    /// of one column, so this one is read only to start a selection
-    /// where none stands.
+    /// The pointer moved during a drag (`drag_select`).
     #[qslot]
     fn extend_select(&mut self, side: i32, row: i32, at: i32) {
         if self.drag_select(side, row, at) {
@@ -317,8 +277,9 @@ impl DiffModel {
         }
     }
 
-    /// Whether a place in the text is inside the selection, which is what
-    /// a right-click asks before deciding whether to take its own row.
+    /// Whether a place in the text is inside the selection — what a
+    /// right-click asks before taking its own row instead. A place in the
+    /// other column is outside it.
     #[qslot]
     fn selection_holds(&self, side: i32, row: i32, at: i32) -> bool {
         self.holds(side, row, at)
@@ -331,15 +292,15 @@ impl DiffModel {
         }
     }
 
-    /// What the plain `Copy` puts on the clipboard: the unchanged and
-    /// added lines the selection covers, cut at its two ends.
+    /// What the plain `Copy` puts on the clipboard: the lines of the
+    /// selection's column it takes (`takes`), cut at the two ends, in the
+    /// file's own bytes.
     #[qslot]
     fn selection_text(&self) -> String {
         self.copied_new()
     }
 
-    /// What `Copy removed lines` puts there: the removed lines the
-    /// selection reaches over, whole.
+    /// What `Copy removed lines` puts there (`copied_removed`).
     #[qslot]
     fn removed_text(&self) -> String {
         self.copied_removed()
@@ -360,16 +321,14 @@ impl DiffModel {
         self.loading = false;
         self.fingerprint = String::new();
         self.coloured = false;
-        // The parsed patches go with the rows — kept past here they are a
-        // closed pane still holding the whole diff's heap.
+        // Kept past here, a closed pane holds the whole diff's heap.
         self.shown = None;
         self.shown_has_preview = false;
         self.shown_marks = Default::default();
         self.shown_colors = Default::default();
         self.apply_endings(None);
         self.apply_preview(None);
-        // The picture files the read wrote go with the pane: nothing
-        // names them any more, and no next read is coming to sweep them.
+        // No next read is coming to sweep the picture files.
         crate::hub::with_session(self.tab_id, |s| s.release_preview());
         self.forget_selection();
         self.reset();
@@ -381,24 +340,16 @@ impl DiffModel {
         let Some(feed) = self.feed.clone() else {
             return;
         };
-        // Everything for the open file, in arrival order: the rows and the
-        // colours behind them are two messages about one diff, and taking
-        // only one of them would leave whichever came second unread until
-        // something else woke the slot.
         let mine = wanted(feed.drain(), &self.current_key);
         if mine.is_empty() {
             return;
         }
         let carries_rows = mine.iter().any(|m| matches!(m, DiffMsg::Loaded { .. }));
-        // Held for the two marks below: one says when the rows arrived
-        // and the other when they are in the model, and between them is
-        // what this call costs.
-        // **Only a batch carrying rows takes it** — the colours behind a
-        // diff are a second message about a read already answered.
+        // Only a batch carrying rows takes it — the colours are a second
+        // message about a read already answered.
         let asked = carries_rows.then(|| self.requested_at.take()).flatten();
-        // Before the first of them is applied, and only where there is a
-        // place to lose: rows arriving for a file with none on screen
-        // are a pane opening.
+        // Only where there is a place to lose: rows for an empty pane are
+        // a pane opening.
         if !self.lines.is_empty() && carries_rows {
             self.rows_replacing();
         }
@@ -415,8 +366,6 @@ impl DiffModel {
                 } => {
                     self.loading = false;
                     if let Some(t0) = &asked {
-                        // Data arrival only; PagePerfDriver separately
-                        // observes the frame that draws it.
                         tracing::info!(
                             elapsed_ms = t0.elapsed().as_millis() as u64,
                             "diff request round trip"
@@ -427,8 +376,6 @@ impl DiffModel {
                     self.is_combined = is_combined(&patches);
                     self.unmerged = is_unmerged_only(&patches);
                     self.embedded = embedded.is_some();
-                    // The same 8 characters every other hash on screen is
-                    // shown by; empty for a repository with no commit yet.
                     self.embedded_sha8 = match embedded {
                         Some(platitude_core::details::Embedded::On(oid)) => oid.short_hex(8),
                         _ => String::new(),
@@ -440,33 +387,24 @@ impl DiffModel {
                     self.shown = Some(patches);
                     self.shown_marks = marks;
                     self.shown_colors = Default::default();
-                    // Plain to begin with. The colours are a second
-                    // message and may never come at all — a language the
-                    // set has no rules for, a reader who has moved on.
                     self.coloured = false;
                     self.lay_out_rows(&Default::default());
                 }
                 DiffMsg::Coloured {
                     colors, settled, ..
                 } => {
-                    // Only the colours the diff ends on set the flag: a
-                    // deep diff's quick first answer is a stand-in, and
-                    // anything waiting for "the colours" waits for
-                    // these (app-ui.md §UI 自動化の因果性).
+                    // A deep diff's quick first answer is a stand-in; only
+                    // the settled colours set the flag.
                     if settled {
                         self.coloured = true;
                     }
                     self.repaint_rows(&colors);
-                    // Kept for the layout that is neither a read nor a
-                    // repaint: the rows turned round (`relay_rows`).
                     self.shown_colors = colors;
                 }
             }
         }
         self.changed();
         if let Some(t0) = asked {
-            // The rows are in the model and the signals are out; what is
-            // left before the frame is the view and the painting.
             tracing::info!(
                 elapsed_ms = t0.elapsed().as_millis() as u64,
                 "diff rows applied"

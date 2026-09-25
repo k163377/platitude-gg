@@ -1,25 +1,18 @@
 import QtQuick
 import platitude.ui
 
-// The quiet a tab's name goes into where the mark stands over it (デザイン規約 §タブの所作).
+// The quiet a tab's name goes into under its mark (デザイン規約 §タブの所作): the tab's ground painted over the name
+// in a disc on the mark, whole inside the wash and fading out over `rampW`.
 //
-// The tab's own ground, laid over the name in a **disc on the mark**: whole inside the mark's own wash, then down to
-// nothing over the run beyond it — so what the mark stands on has gone, and the name comes
-// back along the same circle the wash ends on. A band would clear the name to the tab's full height, which leaves the
-// letters returning on a straight edge the wash does not have: a line, exactly where the eye is already looking.
-//
-// **Paint over the name**: the offscreen scene renders in software, where `ShaderEffect` — and the `MultiEffect`
-// built on it — draws nothing at all, so a masked name would be missing from every headless picture, and from any
-// machine whose Qt falls back to software (rules-refs/app-ui.md carries the measurement). A `Canvas` is what draws a
-// radial gradient in every backend, which is the same reason the graph's own fades are drawn in one.
+// Painted over, not masked: offscreen renders in software, where `ShaderEffect` / `MultiEffect` draw nothing
+// (rules-refs/app-ui.md「`✕` の下に入った名前の消し方」). A `Canvas` draws a radial gradient in every backend.
 InkCanvas {
     id: fade
 
-    /// What lies under the name here: the tab's ground with whatever wash it is wearing already folded in (`Qt.tint`).
-    /// A coat of anything else leaves a rectangle of the wrong colour standing at the tab's end.
+    /// Exactly what lies under the name: the tab's ground with its wash folded in (`Qt.tint`) — anything else leaves a
+    /// wrong-coloured patch at the tab's end.
     required property color ground
-    /// Where the mark's ink stands in this item, and how far the quiet reaches around it — the wash's own disc, so the
-    /// paint the pointer lights and the run the name is missing from are the one circle.
+    /// The mark's centre in this item and the wash's radius, so the wash and the quiet are one circle.
     required property real markX
     required property real markR
     /// How far past that disc the name fades back in (`TabMetrics.fadeChars`).
@@ -36,8 +29,7 @@ InkCanvas {
         ctx.clearRect(0, 0, width, height)
         const cy = height / 2
         const quiet = ctx.createRadialGradient(fade.markX, cy, fade.markR, fade.markX, cy, fade.markR + fade.rampW)
-        // The same ground at none of itself: `transparent` is a transparent **black** and takes the
-        // ramp through a colour the tab has not got on its way out (デザイン規約 §色).
+        // The ground at zero alpha: `transparent` is black and would ramp through a colour the tab has not got.
         quiet.addColorStop(0, fade.ground)
         quiet.addColorStop(1, Qt.rgba(fade.ground.r, fade.ground.g, fade.ground.b, 0))
         ctx.fillStyle = quiet

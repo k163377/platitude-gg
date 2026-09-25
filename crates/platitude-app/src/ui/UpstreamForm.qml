@@ -4,21 +4,11 @@ import QtQuick.Layouts
 import platitude.ui
 
 // What the upstream question asks back: which remote, and which branch on it this one is measured against (デザイン規約
-// §ブランチが測られる相手を決める). It stands inside the question's bar, which is why it is built from a
-// `Component`.
-//
-// **Both halves are answered**, which is the whole reason the row asks: nothing
-// local says which of a remote's branches this one belongs with, and a wrong guess is a branch quietly measured
-// against somebody else's work.
-//
-// **The name is typed, and the list is a shortcut past typing it.** What the remote already carries is a set of
-// suggestions — a name outside it is a branch the next push makes, which is an answer this question takes
-// (デザイン規約 §ブランチが測られる相手を決める).
+// §ブランチが測られる相手を決める). Built from a `Component`, since it stands inside the question's bar.
 ColumnLayout {
     id: upstreamForm
 
-    /// The remotes this repository has. The whole set of answers — a branch cannot be measured against a remote that
-    /// is not written down — so this half only ever picks.
+    /// The remotes this repository has — the whole set of answers, so this half only picks.
     required property var remotes
     /// The branches the chosen remote carries here, by the name half alone. Suggestions, not the set of answers.
     required property var branches
@@ -28,13 +18,12 @@ ColumnLayout {
 
     signal remotePicked(int index)
     signal branchEdited(string name)
-    /// The name is finished: the question is answered from the box the keyboard is already in (デザイン規約
-    /// §立っている質問は 1 か所で聞く). The bar takes it from here — whether there is an answer to send at all is the
-    /// bar's own question, and so is what answering runs (`AskBar`).
+    /// Enter in the name box (デザイン規約 §立っている質問は 1 か所で聞く). Whether that answers, and what answering
+    /// runs, is the bar's (`AskBar`).
     signal answered()
 
-    /// Automation only: neither list can be opened by an injected click on the offscreen platform, and how the two
-    /// boxes share the row is a thing only a laid-out row can answer (`tst_askfields`).
+    /// For automation (no injected click opens either list offscreen) and `tst_askfields` (how the boxes share the
+    /// row).
     property alias remotePick: remotePick
     property alias branchPick: upstreamBranchField
 
@@ -44,14 +33,13 @@ ColumnLayout {
         id: askRow
         Layout.fillWidth: true
         spacing: Theme.spaceXs
-        /// The same two claims the publish question's row settles (`PublishForm`): what is being typed asks first,
-        /// and the destination takes what is left, down to the floor the two boxes share.
+        /// Sized as `PublishForm`'s row (デザイン規約 §レイアウト初期値): the typed name asks first, the remote takes
+        /// what is left, both down to `askFieldMinW`.
         readonly property real room: upstreamForm.width - slash.width - 2 * askRow.spacing
         readonly property real nameWidth:
             Math.min(Math.max(Metrics.askFieldMinW, upstreamBranchField.wantedWidth),
                      Math.max(Metrics.askFieldMinW, askRow.room - Metrics.askFieldMinW))
         readonly property real remoteCeiling: Math.max(Metrics.askFieldMinW, askRow.room - askRow.nameWidth)
-        // The same two boxes the publish question asks in, sized the same way (デザイン規約 §レイアウト初期値).
         AppCombo {
             id: remotePick
             pickOnly: true
@@ -69,12 +57,8 @@ ColumnLayout {
             color: Theme.textMuted
             font.pixelSize: Theme.fontMd
         }
-        // The question opens on a name: an empty box would read as though there were nothing
-        // to point at.
-        //
-        // **`wanted` is the box's own once a key lands in it** — the binding below is where the question opens, and
-        // the field takes the value over from there (`AppCombo.wanted`). A remote picked after that swaps the list
-        // and leaves the name standing, which is what the two halves being one answer means.
+        // `wanted:` is only where the question opens: the first key breaks the binding and the box owns the name
+        // (`AppCombo.wanted`), so a remote picked later swaps the list and leaves the name standing.
         AppCombo {
             id: upstreamBranchField
             Layout.minimumWidth: Metrics.askFieldMinW

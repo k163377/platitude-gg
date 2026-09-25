@@ -10,16 +10,15 @@ Item {
     property var window
     property var page
     property bool finished: false
-    // The font walk below, in the run that asked for one: begun, and then over.
+    // The font walk below: begun, then over.
     property bool walking: false
     property bool walked: false
     property int frameBefore: 0
-    // Waiting for the frame a run with no page ends on — asked for again on the beat until it arrives.
+    // Waiting for the frame a run with no page ends on.
     property bool framing: false
     readonly property bool expectsPage: Harness.autoOpen !== ""
     readonly property bool identityReady: AppBackend.identityState === "ready"
-    // ScreenInfo names can be friendly labels. The runner separately records the
-    // native window's monitor, which is where its Hz comes from.
+    // `screen.name` can be a friendly label; the runner takes Hz from the native window's monitor instead.
     readonly property string displayInfo: !Harness.autoPerf || !window || !window.screen ? "{}" : JSON.stringify({
         screen: window.screen.name, model: window.screen.model, manufacturer: window.screen.manufacturer,
         screenX: window.screen.virtualX, screenY: window.screen.virtualY,
@@ -49,7 +48,7 @@ Item {
             return
         if (driver.expectsPage || driver.page !== null)
             return
-        // Said once as it is entered, the way `PagePerfDriver` says each of its stages.
+        // Named once, on entry.
         if (!driver.framing)
             Harness.report("perf_stage window-frame")
         driver.frameBefore = window.frameCounter
@@ -61,8 +60,7 @@ Item {
     function finish() {
         if (driver.finished)
             return
-        // Frames keep arriving while the walk is under way, and each one asks again: the answer is the same until
-        // the walk has said it settled.
+        // Each frame during the walk asks again; the answer stays the same until the walk has settled.
         if (Harness.perfFontWalk && !driver.walked) {
             if (!driver.walking) {
                 driver.walking = true
@@ -89,8 +87,8 @@ Item {
         }
     }
 
-    // Asked again on the beat until the first frame arrives — a request the window took while it was not visible is
-    // spent without a swap — and not after: the font walk that may follow is read over an idle window.
+    // Re-asked on the beat until the first frame (a request taken while not visible is spent without a swap), and not
+    // after: the font walk is read over an idle window.
     SampleTimer {
         running: driver.framing && !driver.finished
         onTriggered: driver.window.update()
@@ -102,23 +100,14 @@ Item {
         function onPerfFinished() { driver.finish() }
     }
 
-    /// The font database's population, paid at a moment the memory sampler can see (`PGG_PERF_FONT_WALK=1`: the
-    /// calibration run of `cargo xtask perf`, whose budget line is read net of what this weighs — xtask
-    /// `perf::fonts`).
-    ///
-    /// The first glyph the UI family lacks makes Qt build a fallback list, and building one populates every family
-    /// the database knows — on Windows a DirectWrite face over each file, kept for the life of the process: tens of
-    /// MB once, whichever glyph asked, and nothing the product can decline (the fallback-family and emoji-family
-    /// APIs only order that list). The corpus asks during the scroll, where the walk's bytes and the bench's arrive
-    /// in the same ticks, so this asks before `perf_done`, idle either side, and says when: the parent reads
-    /// its sampler at the first mark and the last. The walk is the product's own — the same question a gitmoji
-    /// subject asks, the same fonts, the same bytes — only the moment is chosen. Offscreen there is nothing to weigh
-    /// (that platform's FreeType database holds no fonts), so `verify-ui perf font-walk` checks the three lines alone.
+    /// The font database's population, paid at a moment the memory sampler can see (`PGG_PERF_FONT_WALK=1`, the
+    /// calibration run of `cargo xtask perf`; rules-refs/app-ui.md「perf の判定行は net で読む」). The walk is the
+    /// product's own — the glyph question a gitmoji subject asks — only the moment is chosen: before `perf_done`,
+    /// idle either side, so the parent's sampler weighs it between the first mark and the last.
     Item {
         id: fontWalk
 
-        // Long enough for the sampler's 100ms ticks to have seen the process idle on either side of the walk, and
-        // the whole of what the calibration run costs beyond opening the repository.
+        // Long enough for the sampler's 100ms ticks to see the process idle either side of the walk.
         readonly property int settleMs: 2000
 
         function begin() {
@@ -137,8 +126,8 @@ Item {
             interval: fontWalk.settleMs
             onTriggered: {
                 Harness.report("perf_font_walk_begin clock_ms=" + PerfProbe.clockMs())
-                // U+1F352 CHERRIES: emoji presentation, so the run is an emoji run asking for a colour font — the
-                // question no family the product names can answer. Reading the width is what forces the layout.
+                // U+1F352 CHERRIES: emoji presentation asks for a colour font, which no family the product names has.
+                // Reading the width is what forces the layout.
                 probe.text = String.fromCodePoint(0x1F352)
                 Harness.report("perf_font_walk_done clock_ms=" + PerfProbe.clockMs()
                                   + " width=" + probe.implicitWidth)
@@ -158,8 +147,7 @@ Item {
         }
     }
 
-    // The memory sampler belongs beside the process-level owner: it keeps covering the full run, while `perf-done`
-    // gives the last causal sample.
+    // Beside the process-level owner so it covers the whole run; `perf-done` gives the last causal sample.
     // waits(paced): the cadence a sample is taken on; nothing about the run ends on one of these
     Timer {
         interval: 500

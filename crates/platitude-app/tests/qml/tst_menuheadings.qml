@@ -3,9 +3,8 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// A card of headings alone begins their words on one x (デザイン規約 §操作パネル): one heading wears the WORKTREES
-// mark and the other wears none, and the one without holds the mark's step — the shape `TopBar`'s stand card has.
-// A card that does not ask for it keeps each heading at its own step, which is every other menu in the app.
+// A card of headings alone begins their words on one x (デザイン規約 §操作パネル): the heading without the WORKTREES
+// mark holds the mark's step — the shape `TopBar`'s stand card has. Every other menu keeps each heading's own step.
 Item {
     id: root
     width: 400

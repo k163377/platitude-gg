@@ -4,13 +4,9 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The room one line of the diff is read in: the line itself, the two washes under it — what changed inside the
-// line, and what the reader has selected of it — and the mark at its end where the file ends without a newline.
-// One per row while the diff is read as one column, one per side while it is read as two (`DiffRowDelegate`).
-//
-// It is cut to the room it is given, and the line inside it is not: the text is as wide as it is and travels under
-// this window, so a long line is read by sending it (デザイン規約 §diff を横へ送る). A heading does not travel: it is
-// the pane's own words about the rows below, and elides into the room instead.
+// One line of the diff: the text, its two washes (what changed, what is selected) and the no-newline mark. One per
+// row in one column, one per side in two (`DiffRowDelegate`). The cell clips and the line travels sideways under it;
+// only a heading elides (デザイン規約 §diff を横へ送る).
 Item {
     id: cell
 
@@ -19,55 +15,44 @@ Item {
     /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` — what colour the words are, and whether they are a
     /// line of the file at all.
     required property string kind
-    /// Where what changed inside this line falls in it — runs of places a layout counts (`[{ from, len }, …]`),
-    /// empty for nothing (`encode::DiffRow.emph`). Drawn as the stronger wash under the text; the quiet parts keep
-    /// the line's own background (デザイン規約 §シンタックスハイライト).
+    /// What changed inside this line, as runs of layout places (`[{ from, len }, …]`, `encode::DiffRow.emph`).
     required property var emph
-    /// Where the reader's own selection falls on this line (`DiffModel.sel` — `{whole, runs}`): the line taken end
-    /// to end, or the same runs `emph` carries. Nothing on every line the plain `Copy` does not take —
-    /// **the wash is the answer** (デザイン規約 §diff の中身をコピーする).
+    /// The reader's selection on this line (`DiffModel.sel` — `{whole, runs}`), empty on every line `Copy` would not
+    /// take: the wash is the answer (デザイン規約 §diff の中身をコピーする).
     required property var sel
     /// One of git's conflict fences: the words drop their voice (デザイン規約 §シンタックスハイライト).
     required property bool fence
-    /// This line ends the file without a newline: git's note, said as a mark at the end of the line it was about
-    /// (デザイン規約 §行末の改行が無いこと).
+    /// This line ends the file without a newline (デザイン規約 §行末の改行が無いこと).
     required property bool noNewline
-    /// The weight this line is set in — a changed line is bold (規約 §シンタックスハイライト). Decided by the row,
-    /// because **the ruler has to be set in the weight the line is drawn in**: a family whose bold face advances
-    /// differently would otherwise put every wash and every press out by the difference.
+    /// The weight this line is set in, decided by the row: the ruler must use the same weight, or a bold face that
+    /// advances differently puts every wash and press out.
     required property bool codeBold
     /// How far the file's own text has been sent sideways (`DiffCodeScroll.offset`).
     required property real codeX
-    /// One measured column of the mono font (`DiffTextMetrics.charW`): how wide the wash on an **empty** line is,
-    /// the only place a width without characters behind it is needed.
+    /// One measured mono column (`DiffTextMetrics.charW`) — only the wash on an empty line needs it.
     required property real charW
-    /// Where the two washes go: this line, laid out, asked where each run of it is drawn (`LineRuler`). The same
-    /// ruler the hand over the rows reads a press against (`DiffTextSelect`).
+    /// Places the washes by laying this line out (`LineRuler`) — the same ruler presses are read against
+    /// (`DiffTextSelect`).
     required property var ruler
-    /// A row that names something rather than being a line of the file: the hunk's own heading, or the commit
-    /// each block is of (デザイン規約 §複数のコミットを選ぶ). It stands at the cell's own left edge and elides.
+    /// A row that names something rather than being a line of the file: the hunk's heading, or the commit each block
+    /// is of (デザイン規約 §複数のコミットを選ぶ). It stands at the cell's left edge and elides.
     required property bool banded
 
-    /// How far the line is drawn — where the blank right of it begins, and what the row files under
-    /// `rowDrawn` (`DiffReach`). Read off the Label: a `Text` answers with every glyph at the family's own advance
-    /// until the fallback carrying the wide ones is resolved, so the first number out of it is not the last.
+    /// How far the line is drawn — what the row files under `rowDrawn` (`DiffReach`). Read off the Label and
+    /// followed: the first answer comes before the font fallback resolves.
     readonly property real inkWidth: codeLine.implicitWidth
-    /// Where the line's right edge stands in `frame`'s coordinates — **asked of the item where it was placed**
-    /// (`DiffPane.codeInkRight`). A heading does not travel, so it answers 0.
+    /// The line's right edge in `frame`'s coordinates, asked of the placed item (`DiffPane.codeInkRight`); 0 for a
+    /// heading.
     function inkRightIn(frame) {
         return cell.banded ? 0 : codeLine.mapToItem(frame, codeLine.implicitWidth, 0).x
     }
 
     clip: true
 
-    /// Where this line's two washes are drawn, taken from the line laid out — `[{ x, w }, …]` in the code's own
-    /// coordinates, before the send (`LineRuler.rectsOf`). A line taken end to end says so (`sel.whole`) and needs
-    /// no ruler at all; a heading has neither wash.
+    /// The two washes as `[{ x, w }, …]` in the code's coordinates, before the send (`LineRuler.rectsOf`).
     ///
-    /// **Pushed** (the rule `DiffTextMetrics.codeW` is written under). Asking the ruler means putting this line on
-    /// it, and a binding that writes while it is being evaluated is a binding loop — Qt says so by name and then
-    /// holds whatever it had, which is a wash left on the row before it. The four properties the answer is made of
-    /// say when to ask instead.
+    /// Pushed, not bound: asking the ruler writes this line onto it, and a binding that writes is a binding loop that
+    /// keeps the previous row's wash. The handlers below say when to ask.
     property var emphRects: []
     property var selRects: []
     function settleEmph() {
@@ -80,17 +65,14 @@ Item {
         cell.settleEmph()
         cell.settleSel()
     }
-    // The line itself and the weight it is set in move both washes; each run moves its own. A delegate handed to
-    // another row (`reuseItems`) arrives through these same three.
+    // A delegate reused for another row (`reuseItems`) arrives through these same handlers.
     onTextChanged: cell.settleWashes()
     onCodeBoldChanged: cell.settleWashes()
     onEmphChanged: cell.settleEmph()
     onSelChanged: cell.settleSel()
     Component.onCompleted: cell.settleWashes()
 
-    // The stronger wash under what actually changed inside the line (`emph`), while the quiet parts keep the line's
-    // own background — the strong/weak split is these rectangles (デザイン規約 §シンタックスハイライト). Under the
-    // Label, travelling with the same send.
+    // The stronger wash under what changed (デザイン規約 §シンタックスハイライト), under the Label and sent with it.
     Repeater {
         model: cell.emphRects
         delegate: Rectangle {
@@ -101,18 +83,15 @@ Item {
             color: cell.kind === "add" ? Theme.diffAddedEmphBg : Theme.diffRemovedEmphBg
         }
     }
-    // The reader's own selection, over the emphasis and under the text — the same place the line's other wash
-    // stands, and for the same reason: the strong/weak split of a diff is rectangles
-    // (デザイン規約 §シンタックスハイライト), so a selected line keeps its syntax colours.
+    // The selection, over the emphasis and under the text, so a selected line keeps its syntax colours.
     Repeater {
         model: cell.sel && cell.sel.whole ? [{ "whole": true }] : cell.selRects
         delegate: Rectangle {
             required property var modelData
             readonly property bool whole: modelData.whole === true
             x: -cell.codeX + (whole ? 0 : modelData.x)
-            // A line taken whole is washed to its own end — the ink it was drawn in, which is the one number no
-            // walk of it can produce — and a column at least: an empty line is a line the copy takes, and a wash
-            // of no width would leave a hole in the middle of a selection.
+            // A whole line is washed to its ink, and at least one column: an empty line is copied too, and a
+            // zero-width wash would leave a hole in the selection.
             width: whole ? Math.max(codeLine.implicitWidth, cell.charW) : modelData.w
             height: parent.height
             color: Theme.bgSelected
@@ -120,73 +99,46 @@ Item {
     }
     Label {
         id: codeLine
-        // A hunk heading does not travel: it is the pane's own words about the rows below, and words that slid off
-        // the left while the code was read would take with them the only thing saying which hunk this is. It gives
-        // up the right of the row to the two buttons and elides into what is left.
         x: cell.banded ? 0 : -cell.codeX
         width: cell.banded ? cell.width : implicitWidth
         elide: cell.banded ? Text.ElideRight : Text.ElideNone
         height: cell.height
         verticalAlignment: Text.AlignVCenter
-        // A hunk heading starts at the row's own left edge: the two columns beside it are empty
-        // — a heading has no line to number — so indenting it by them lines the pane's own words up with the
-        // file's, behind a gutter that says nothing. One `spaceXs`, the same gap everything else in the gutter
-        // stands at.
+        // A heading starts at the row's left edge, not past the empty number columns (デザイン規約 §diff の中のステージ).
         leftPadding: cell.banded ? Theme.spaceXs : 0
         text: cell.text
-        // Every line is markup, coloured or not (`markup::styled`), so a line of source full of `<T>` arrives
-        // escaped and this never changes under a row (規約 §シンタックスハイライト).
+        // Every line is markup, coloured or not (`markup::styled`), so the format never changes under a row.
         textFormat: Text.StyledText
         font.family: Theme.monoFamily
-        // The weight this line is set in, said once for the Label and for the ruler both washes are placed with.
         font.bold: cell.codeBold
-        // The size an editor puts source at — `fontCode`, matched to IntelliJ's default (デザイン規約 §タイポグラフィ).
-        //
-        // The hunk heading is smaller still: it is the pane's own words, and at the file's size its `@@` line runs
-        // under the two words sitting at the right of the same row.
+        // `fontCode` for source (デザイン規約 §タイポグラフィ); a heading is smaller, or its `@@` line runs under the
+        // row's two buttons.
         font.pixelSize: cell.banded ? Theme.fontSm : Theme.fontCode
-        // Where the theme said nothing — an uncoloured language, a row past the lexer's budget, the moment before
-        // the colours land — this is still the whole of the line's colour. A changed line reads in the window's own
-        // words (規約 §シンタックスハイライト): the wash and the weight already name it, and green-on-green said the
-        // same thing twice while reading worse.
-        //
-        // A fence drops its voice: `<<<<<<<` is git's scaffolding round the two sides, and painting it the
-        // added-line green puts the loudest thing in the pane on the part nobody is reading
-        // (デザイン規約 §シンタックスハイライト). It keeps its background — it really is in the file.
+        // The whole colour of a line the theme said nothing about; a changed line stays `textPrimary` and a fence
+        // drops to muted (デザイン規約 §シンタックスハイライト).
         color: cell.fence ? Theme.textMuted
                : cell.kind === "hunk" ? Theme.diffHunkHeaderFg
-               // The band's own voice, the one every heading in this window speaks in (`PaneHeader`).
                : cell.kind === "commit" ? Theme.textSecondary
                : cell.kind === "meta" ? Theme.textMuted
                : Theme.textPrimary
     }
-    // git's `\ No newline at end of file`, said where the thing it is about is: at the end of this line
-    // (デザイン規約 §行末の改行が無いこと). As a row it stood between the removed line and the added one and parted the
-    // pair the eye reads as one change; as a mark it travels with the text, so it is at the end of the line
-    // whichever way the pane has been sent.
-    //
-    // **Built only on the line that has it.** A delegate is built per line on screen, and the mark is a canvas
-    // with a hover and a tip of its own — on every other line it would be built and hidden, which is the heap
-    // this pane is measured by (the rule the hunk tools follow; rules-refs/app-ui.md, the Loader rule).
+    // git's `\ No newline at end of file` as a mark at the line's end (デザイン規約 §行末の改行が無いこと). Built only
+    // on the line that has it (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」).
     Loader {
         id: noEolMark
         active: cell.noNewline
-        // Off the ink: the mark's square holds air past its ring, and a whole `spaceXs` on top of
-        // that would leave the last character further from this than any other pair in the row (§余白).
+        // Seated by its ink, not its square (デザイン規約 §余白).
         x: noEolMark.item
            ? codeLine.x + codeLine.implicitWidth + Theme.spaceXs - (noEolMark.item.width - noEolMark.item.inkWidth) / 2
            : 0
         anchors.verticalCenter: parent.verticalCenter
         sourceComponent: NavIcon {
             kind: "no-entry"
-            // A mark that stands at the end of a line of words (デザイン規約 §寸法), with the stroke dropped to that
-            // step so it carries the weight of the letters beside it.
             width: Theme.iconSm
             height: Theme.iconSm
             stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
             tint: Theme.danger
-            // The words a note row would carry, kept where a mark can hand them over. It takes no button:
-            // the press over the code belongs to the hand picking text out of the rows (`DiffTextSelect`).
+            // Hover only: the press over the code belongs to `DiffTextSelect`.
             ToolTip.visible: noEolHover.containsMouse
             ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: qsTr("No newline at end of file")

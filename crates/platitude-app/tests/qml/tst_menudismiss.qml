@@ -3,12 +3,9 @@ import QtTest
 import platitude.ui
 
 // What a row inside a nested card leans on when it takes the whole menu down: Qt's own `Menu.dismiss()` walks up
-// from the menu it was called on and closes every level (`QQuickMenu::dismiss`). The product's cards call it and
-// nothing else, so the fact is pinned here, where a Qt that changed it would go red before the app did
-// (app-ui.md §メニューを閉じるのは自分).
-//
-// `AppMenu` throughout: the card's title row is built by the host's `delegate`, and `openSub` is
-// the automation's own way into a card, so what is measured is the shape the app actually opens.
+// from the menu it was called on and closes every level (`QQuickMenu::dismiss`); a Qt that changed it goes red here
+// first (rules-refs/app-ui.md「メニューを閉じるのは自分」). `AppMenu` throughout, so what is measured is the shape the
+// app opens.
 Item {
     id: root
     width: 600
@@ -75,7 +72,7 @@ Item {
             tryCompare(host, "visible", false)
         }
 
-        // The other direction, which the rules also lean on: a host that closes takes its open card down.
+        // The other direction, which the rules also lean on.
         function test_closing_the_host_takes_the_open_card_with_it() {
             openHostAndCard()
             host.close()

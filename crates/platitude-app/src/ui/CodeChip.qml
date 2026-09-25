@@ -2,64 +2,46 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The dress a git command wears wherever the UI says one (デザイン規約 §git 用語のコード表記): the spelling itself, in mono, on a
-// faint ground that hangs half a gap off either end of the glyphs so the word keeps the place in the line it would have
-// had bare. Wearing this is the whole statement — a chip says "this is the command", so a word that only describes one
-// goes without.
+// The dress a git command wears wherever the UI says one (デザイン規約 §git 用語のコード表記): the spelling in mono, on a
+// faint ground hanging half a gap off either end so the word keeps its place in the line.
 //
-// The toolbar's fetch / push and the menu rows draw their own, and stay that way: each carries machinery this has no
-// business in — a box measured for the longest wording of a pair, a drawn rule for every dash, a column the rows of one
-// menu share. What is here is what a question bar needs, where one command is said twice: at the head of the question,
-// and on the pill that answers it.
+// The toolbar's fetch / push and the menu rows draw their own: each carries machinery this has no business in (a box
+// for the longest wording of a pair, a drawn rule per dash, a column shared across a menu).
 Item {
     id: chip
 
-    /// The command, spelled the way git spells it — untranslated, since what it names is the command
-    /// itself.
+    /// The command, spelled the way git spells it — untranslated.
     property string word: ""
-    /// The ink. The ground is the same everywhere; the word takes the colour of whatever is speaking, which for a
-    /// question bar is the tone that says what answering costs.
+    /// The word's ink; the ground is the same everywhere.
     property color tint: Theme.textPrimary
-    /// The weight of the run this sits in, so a chip inside a heading is not a lighter word in the middle of a heavier
-    /// sentence.
+    /// The weight and size of the run this sits in, so the chip is not a different word in its sentence.
     property int weight: Font.Normal
-    /// And its size, for the same reason: a band whose own words are `fontSm` would otherwise carry one word a step
-    /// larger than everything beside it.
     property int size: Theme.fontMd
-    /// The widest this chip may be before its word starts giving way. Zero is no bound at all, which is what every
-    /// chip on a line measured to its own content wants; a chip inside something of a fixed width (the commit button)
-    /// hands in what is left for it, because a branch name has no length git will not take.
+    /// The widest this chip may be before its word gives way; 0 = no bound. A chip in something of fixed width (the
+    /// commit button) hands in what is left, since a branch name has no length limit.
     property real cap: 0
 
-    /// Whether the word answers its own press, so a reader can drag over it and take it away
-    /// (規約 §右のペインの字は掴める). **Off by default, and it has to be**: a chip stands inside buttons as their
-    /// `contentItem` (`ActionButtonLabel` / `StashActionsBand`), and a field takes the press wherever it is drawn —
-    /// measured, and measured the hard way: a click on the hash plate's digits stopped reaching the button under
-    /// them (`tests/qml/tst_hashplate.qml`). So a chip that answered for itself everywhere would leave those
-    /// buttons unable to be pressed at all.
-    ///
-    /// **On where the chip is the value and nothing else wants the press**: the git a settings screen says it is
-    /// running, which is git's own spelling of its own version and the one line on that screen a reader takes away
-    /// to a bug report (規約 §設定の画面).
+    /// Whether the word is a field a reader can drag over (規約 §右のペインの字は掴める). Off by default, and it has
+    /// to be: a chip stands inside buttons as their `contentItem` (`ActionButtonLabel` / `StashActionsBand`), and a
+    /// field takes the press wherever it is drawn, so the button under it could not be pressed
+    /// (`tests/qml/tst_hashplate.qml`). On only where the chip is the value (規約 §設定の画面).
     property bool grabbable: false
 
-    /// What the whole word would take, cap or no cap — what a caller sharing out room has to ask for, since the width
-    /// below is already the answer to that sharing (reading it back closes a ring).
+    /// What the whole word would take, cap or no cap — what a caller sharing out room asks for, since `implicitWidth`
+    /// is already the answer to that sharing (reading it back closes a ring).
     readonly property real wantWidth: wordLabel.implicitWidth
 
     implicitWidth: chip.cap > 0 ? Math.min(wordLabel.paintedWidth, chip.cap) : wordLabel.implicitWidth
     implicitHeight: wordLabel.implicitHeight
 
     Rectangle {
-        // Drawn to the ink: an elided word paints narrower than the width it was given, and a ground
-        // stretched to that width leaves a tail of chip with nothing on it (measured).
+        // Drawn to the ink (`paintedWidth`): an elided word paints narrower than its width, which would leave an empty
+        // tail of chip.
         anchors.left: wordLabel.left
-        // The word's own step: the label's height is the mono family's line box — the one part of
-        // this dress each OS settles differently (`ActionButtonLabel` carries the measurements).
+        // Height from the word's size, not the label: the mono line box differs per OS (`ActionButtonLabel`).
         anchors.verticalCenter: wordLabel.verticalCenter
         height: chip.size + Theme.spaceXs / 2
-        // Half a gap of ground either side: it eats into the air the line already had, so the word starts where it
-        // would have started bare.
+        // Half a gap either side, eating into the line's own air so the word starts where it would without the chip.
         anchors.leftMargin: -Theme.spaceXs / 2
         width: wordLabel.paintedWidth + Theme.spaceXs
         radius: Theme.radiusSm
@@ -67,39 +49,30 @@ Item {
     }
     Label {
         id: wordLabel
-        // Hidden where the field below is drawing the word, and kept all the same: **every measurement this chip
-        // makes is read off it** — the ground's width, the chip's own implicit size, what a caller sharing out room
-        // asks for — and a `Text` lays out while invisible. An invisible item is skipped by the delivery walk
-        // outright, so the word is drawn once and answers a press once.
+        // Hidden where the field below draws the word, so it is drawn and pressed once; kept, since every measurement
+        // this chip makes is read off it and a `Text` lays out while invisible.
         visible: !chip.grabbable
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
-        // Bounded by the cap: the chip's width comes from this — reading it back closes a loop.
-        // A ref that will not fit gives way in the middle: the tail of a branch name is what tells two of them apart
-        // (`feature/…-a` and `feature/…-b`), and eliding the right would leave the reader with the half they share.
+        // A ref that will not fit gives way in the middle: the tail tells two branch names apart.
         width: chip.cap > 0 ? Math.min(implicitWidth, chip.cap) : implicitWidth
         elide: chip.cap > 0 ? Text.ElideMiddle : Text.ElideNone
         text: chip.word
         color: chip.tint
         font.family: Theme.monoFamily
-        // A command and its flag are one thing said, and a mono space is wider than the air the ground keeps at its own
-        // ends — left alone the two drift apart and the chip reads as two words on one ground (デザイン規約 §git 用語のコード表記).
+        // A mono space is wider than the air at the ground's ends, so a command and its flag would read as two words
+        // (デザイン規約 §git 用語のコード表記).
         font.wordSpacing: -Theme.spaceXs
         font.pixelSize: chip.size
         font.weight: chip.weight
     }
-    /// The word is in a field, and the field has it. **A picture cannot say it** — a chip a reader can drag over is
-    /// drawn exactly like one they cannot — so a run says it instead (`settings-sweep`). An automation-only
-    /// exposure, the same one `GraphPane.view` is (app-ui.md).
+    /// Automation only: the word is in a field — a picture cannot say it (`settings-sweep`).
     readonly property bool grabbed: wordField.item !== null && wordField.item.grabs
                                     && wordField.item.text === chip.word && chip.word !== ""
 
-    // The same word, in a field, for the chip a reader takes away (`grabbable`). **Loaded only where it is asked
-    // for**: a chip is drawn per plan row and per button in this window, and a field is six items.
-    //
-    // It is laid exactly where the word above is and spelled from the same values, so the ground measured off that
-    // word fits this one — **including the word spacing**, which is the chip's own and would otherwise leave the
-    // field four pixels wider than the ground under it.
+    // The same word in a field (`grabbable`), loaded only where asked for: a chip is drawn per plan row and button,
+    // and a field is six items. Spelled from the same values as the label, word spacing included, so the ground
+    // measured off the label fits it.
     Loader {
         id: wordField
         active: chip.grabbable
@@ -114,9 +87,8 @@ Item {
             pixelSize: chip.size
             weight: chip.weight
             wordSpacing: -Theme.spaceXs
-            // The same half the `Label` gives way in, and for the same reason.
             cutAt: "middle"
-            // The chip's own ground, so a cut mark is drawn on the chip rather than on whatever is behind it.
+            // The chip's own ground, for the cut mark.
             ground: Theme.bgHover
         }
     }

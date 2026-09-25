@@ -5,67 +5,44 @@ import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
-// A form field that also offers a list: the name is typed, and the list is only ever a shortcut past typing it.
-// Editable on purpose — what git will accept is wider than anything this app can enumerate.
-//
-// Drawn from tokens, for the reason `AppMenu` is: the built-in popup's ground is `palette.base`, the same colour as
-// the pane behind it, with no frame to read the edge by.
+// A form field that also offers a list, only ever a shortcut past typing: what git accepts is wider than anything this
+// app can enumerate. Drawn from tokens: the built-in popup's ground is `palette.base` with no frame, lost on the pane.
 ComboBox {
     id: combo
 
-    /// Stands in for the value while the field is empty. `TextInput` has no placeholder of its own, and the frame alone
-    /// cannot say whether empty means "unset" or "not read yet".
+    /// Shown while the field is empty (`TextInput` has no placeholder of its own).
     property string placeholder: ""
 
-    /// The list is the whole set of answers: nothing outside it means anything (a branch goes to a remote this
-    /// repository has, or to one the same question makes). The field stops taking text and becomes the value it shows,
-    /// and the owner keeps `wanted` — picking a row reports the choice, so a binding on `wanted` is not overwritten
-    /// from here.
+    /// The list is the whole set of answers: the field takes no text, and the owner keeps `wanted` — picking a row
+    /// reports the choice without overwriting a binding on `wanted`.
     property bool pickOnly: false
 
-    /// A read is out for the list. The seat the arrow sits in turns instead — the list can take seconds to arrive, and
-    /// an arrow over an empty list says "nothing" where "not yet" is the truth.
+    /// A read is out for the list; the arrow's seat turns instead, since an arrow over an empty list says "nothing".
     property bool loading: false
 
-    /// How wide this field would have to be for its value to stand uncut: the word, both of the input's own insets,
-    /// the control's left one, and **the width the control keeps back for the arrow whether it draws one or not**.
-    /// What a layout asks when the field is allowed to take the room it needs (`PublishForm`); nothing here reads it,
-    /// so a field nobody sizes by it is unchanged.
-    ///
-    /// **Rounded up and then one over, and that pixel is the whole point**: the elide is handed a width and cuts
-    /// anything that does not sit inside it, so a field measured to exactly its own name's width comes back cut by
-    /// the rounding — a box with room to spare beside it and a `…` in the middle of the name (observed).
+    /// The width at which the value stands uncut — the word, the input's insets, the control's left one, and the width
+    /// the control reserves for the arrow whether drawn or not (`PublishForm`). Rounded up and one over: a field
+    /// exactly its name's width comes back elided by the rounding.
     readonly property real wantedWidth: Math.ceil(input.fitWidth) + 1
                                         + input.leftPadding + input.rightPadding
                                         + combo.leftPadding + seat.width
 
-    /// The last row is the way to an answer this list does not hold yet. Set off by the line a menu separates its
-    /// groups with (デザイン規約 §メニュー): a row that acts and a row that answers cannot be told apart while both are plain
-    /// text on one ground, and the list is read before it is clicked.
+    /// The last row acts (the way to an answer the list lacks), set off by a menu's separator (デザイン規約 §メニュー).
     property bool lastRowActs: false
 
-    /// A row that wears the push mark, empty for a list with nothing to mark. The wash says which row is picked now
-    /// and the mark says which one the repository sends pushes to: two questions, two answers, one row (デザイン規約
-    /// §リモートを書き留める).
+    /// The row that wears the push mark; empty marks none (デザイン規約 §リモートを書き留める).
     property string markedRow: ""
 
-    /// What the field should say, and the value to read back.
-    ///
-    /// **`editText` follows this.** A model arriving makes ComboBox snap its `currentIndex` to the first row and
-    /// drag the text along with it, so a list that lands seconds later would quietly replace a configured name — or
-    /// one half typed — with whatever happens to sort first. Here the list is only ever a set of suggestions, so the
-    /// text is held apart from it and put back once the swap has settled. Only two things move it, and both are a
-    /// person: a row picked from the popup, and `textEdited` on the field below — which, unlike `editText` changing,
-    /// is not emitted when the text is set in code. ComboBox resets `currentIndex` *before* the QML
-    /// `onModelChanged` runs, and it holds focus the whole time its popup is up, so neither focus nor a flag set
-    /// here can tell that reset from typing.
+    /// The value; `editText` follows it. A model arriving snaps `currentIndex` to the first row and drags the text
+    /// along, so the text is held here and put back once the swap settles. Only a person moves it — a picked row, or
+    /// `textEdited` (not emitted for text set in code) (rules-refs/app-ui.md「マージツール候補の `AppCombo`」).
     property string wanted: ""
     onWantedChanged: if (!combo.pickOnly && combo.editText !== combo.wanted) combo.editText = combo.wanted
     onActivated: index => {
         if (!combo.pickOnly)
             combo.wanted = combo.textAt(index)
     }
-    // Undo the reset the swap caused, once it has finished happening.
+    // Undo the swap's reset once it has finished.
     onModelChanged: Qt.callLater(() => {
         if (!combo.pickOnly)
             combo.editText = combo.wanted
@@ -75,10 +52,7 @@ ComboBox {
     implicitHeight: Theme.controlHeight
     font.pixelSize: Theme.fontMd
 
-    // The ground says whether there is anything to type here. `bgBase` is the inside of an input (デザイン規約 §色 背景), and a
-    // chooser has no inside — it carries the value it shows and nothing can be put into it. Left bare it reads as the
-    // button it is, so where a chooser and a name box stand side by side the recessed ground belongs to exactly one of
-    // them (デザイン規約 §選ぶ欄と打つ欄).
+    // The ground says whether there is anything to type here (デザイン規約 §選ぶ欄と打つ欄).
     background: Rectangle {
         color: combo.pickOnly ? "transparent" : Theme.bgBase
         radius: Theme.radiusSm
@@ -89,37 +63,19 @@ ComboBox {
     // Own contentItem, so it does not go through palette (§無効).
     contentItem: TextInput {
         id: input
-        /// The room the word has — the box less both of its own insets — and the width the whole value would want.
-        /// **Whether to cut is decided from these two**: the elide is handed a width and
-        /// answers with what it kept, so a name that fits by a fraction comes back cut all the same and there is
-        /// nothing here to tell that from a name that really was too long (observed — a box 282 wide cutting a name
-        /// measured at 281). The same pair decides what `AppCombo.wantedWidth` asks for, so a field given that width
-        /// draws its value whole.
+        /// The word's room and the whole value's width. Whether to cut is decided from these two, not from the elide's
+        /// answer, which cuts a name that fits by a fraction too; `wantedWidth` reads the same pair.
         readonly property real room: input.width - input.leftPadding - input.rightPadding
         readonly property real fitWidth: whole.advanceWidth
-        // Picking only, the value is the owner's: ComboBox maintains `editText` only in an
-        // editable field.
-        //
-        // **And it is cut to fit, because nothing here can scroll it into view.** A `TextInput` too narrow for its
-        // text scrolls to the caret, which on a field nobody can type into means the head of the name is simply gone
-        // off the left edge with no mark saying so — a remote read as `…-a-very-long-name` where the reader needed
-        // the part in front. Cut in the middle, the way a name too long for its column is (`CutName`, which is the
-        // component where names stand in a *column* and their right edges have to line up — one field in a form has
-        // no such neighbours, so the elide's own arithmetic is enough here).
+        // Picking only, the value is the owner's (ComboBox keeps `editText` only when editable), cut in the middle: a
+        // read-only `TextInput` too narrow scrolls to the caret and loses the name's head unmarked. The elide's own
+        // arithmetic, not `CutName`: a lone field has no column edge to line up.
         text: combo.pickOnly ? (input.fitWidth > input.room ? fit.elidedText : combo.wanted) : combo.editText
         color: combo.enabled ? Theme.textPrimary : Theme.textMuted
         font: combo.font
-        // The same frame-to-word inset the plain boxes keep (`SlimField`) — this field stands beside one of them in
-        // the question bar, and two boxes a row apart holding their text at different distances read as two different
-        // kinds of box (デザイン規約 §選ぶ欄と打つ欄 already has the ground saying which is which).
+        // The plain boxes' inset (`SlimField`), which this field stands beside in the question bar.
         leftPadding: Theme.spaceXs
-        // **The arrow is what stops the word at this end.** The control reserves the indicator's own
-        // width and no more, while the seat that indicator sits in is pushed a further `spaceSm` in from the frame
-        // (`seat.x`) — so without this a name longer than the box runs on under the glyph, since a `TextInput` scrolls
-        // its text. What is added here is that gap plus the same word inset the other end keeps.
-        // Nothing to open, nothing to keep clear of: a field with no list keeps the plain inset, and the quarter
-        // of its width an arrow would take (`tst_appcombo`, which measures the laid-out
-        // geometry this arithmetic is aimed at).
+        // Stops the word short of the arrow; no list, the plain inset (rules-refs/app-ui.md「打つ欄の右で字を止めるのは山」).
         rightPadding: combo.hasList ? Theme.spaceSm + Theme.spaceXs : Theme.spaceXs
         verticalAlignment: Text.AlignVCenter
         readOnly: combo.pickOnly
@@ -128,9 +84,6 @@ ComboBox {
         selectedTextColor: Theme.textPrimary
         onTextChanged: if (!combo.pickOnly) combo.editText = text
         onTextEdited: combo.wanted = text
-        // The cut itself, against the room the word actually has — the box less both insets, the right one of which
-        // is the arrow's (below). Its own font, so the measuring and the drawing are the
-        // same metrics.
         TextMetrics {
             id: fit
             font: input.font
@@ -138,27 +91,21 @@ ComboBox {
             elide: Text.ElideMiddle
             elideWidth: Math.max(0, input.width - input.leftPadding - input.rightPadding)
         }
-        // **The whole name's width, measured by a ruler with no cut in it.** `fit` is told where to cut and answers
-        // about what it drew, so asking *it* how wide the name is would be asking the box how wide it already is —
-        // a field sized from that settles wherever it happens to land and stays cut with room to spare beside it
-        // (observed, the publish question's destination).
+        // The whole name's width, from a ruler with no cut: `fit` answers about what it drew, so a field sized from it
+        // stays cut.
         TextMetrics {
             id: whole
             font: input.font
             text: combo.wanted
         }
-        // A read-only input still takes the press, so the control it sits in would never see the click that opens its
-        // list.
+        // A read-only input still takes the press, so the control would never see the click that opens its list.
         MouseArea {
             anchors.fill: parent
             enabled: combo.pickOnly
             onClicked: combo.pressField()
         }
-        // Where the name can also be typed, Qt hands the press straight to the input and only the small mark at the
-        // right edge opens anything — so the answers this field already knows stay hidden behind a target the width of
-        // an icon. A handler, because the input still needs that press to put the caret where
-        // it was aimed; and a tap, so dragging a selection out of the text does not drop the list
-        // over what is being selected.
+        // Editable, Qt hands the press to the input and only the arrow would open the list. A handler, so the input
+        // still places the caret; a tap, so a drag-select does not drop the list over the selection.
         TapHandler {
             enabled: !combo.pickOnly
             onTapped: combo.pressField()
@@ -182,15 +129,10 @@ ComboBox {
         height: Theme.iconMd
         // Nothing to open, nothing to point at (see `hasList`).
         visible: combo.hasList
-        // The ring turns in one place at a time: here while the card is shut, inside the card once it is up — two of
-        // them a row apart would be one waiting said twice.
+        // One ring at a time: here while the card is shut, inside it once it is up.
         readonly property bool waits: combo.loading && !combo.popup.opened
-        // Two marks in one seat, because an animator **takes** the property it turns: the ring's first frame kills
-        // the binding that stands the arrow on end, and nothing puts it back when the ring stops — so one shared mark
-        // keeps whatever angle the last frame left, and the arrow that comes back points sideways at a list that comes
-        // **down** (observed — the merge editor's seat, after its `--tool-help` read lands). Invisible in headless,
-        // where the ring is held still for the camera and the binding therefore survives. Split, the arrow keeps
-        // the angle its binding gives it.
+        // Two marks, not one: an animator takes the property it turns, killing the arrow's `rotation` binding for good,
+        // so a shared mark comes back pointing sideways. Invisible in headless, where the ring is held still.
         SpinnerIcon {
             anchors.fill: parent
             spinning: seat.waits
@@ -200,18 +142,13 @@ ComboBox {
             visible: !seat.waits
             kind: "chevron"
             tint: Theme.textSecondary
-            // Drawn pointing right, stood on end here: down is where the list comes from.
+            // Drawn pointing right; down is where the list comes from.
             rotation: 90
         }
     }
 
-    /// What a press on the field means, wherever the press came from.
-    ///
-    /// Picking only, the field is a button and one press is the whole errand, so it toggles. Where the name can also
-    /// be typed, the press is asking two things at once — "let me type here" and "show me what you already know" —
-    /// and both are answered: the caret lands where it was pressed and the list comes down beside it, so nobody has
-    /// to find the mark at the right edge to learn there were answers. A second press inside the text is someone
-    /// moving that caret; the mark at the edge and Escape are what shut it.
+    /// A press on the field, wherever it came from. Picking only, it toggles; editable, the caret lands and the list
+    /// comes down, and a second press only moves the caret (rules-refs/app-ui.md「`AppCombo` は押された所から開く」).
     function pressField() {
         if (combo.pickOnly) {
             if (combo.popup.opened)
@@ -220,70 +157,46 @@ ComboBox {
                 combo.offer()
             return
         }
-        // Redundant under a real press — the input takes the caret itself — and the whole of what "was pressed" can
-        // mean to the automation verb, which has no pointer to put anywhere.
+        // For the automation verb, which has no pointer; a real press already placed the caret.
         input.forceActiveFocus()
-        // After the release. The input owns the exclusive grab of a press this handler is only a passive
-        // witness to, and a list opened while that grab is still being unwound is taken straight back down: it reads
-        // `opened` true on the next line and false a frame later, so the field answers a press by flickering and
-        // staying shut. One turn of the loop later it stands (observed, measured with an injected click —
-        // qmltestrunner, since a press cannot be put into the app itself). The chooser above wants none of this: its
-        // MouseArea holds the grab itself, so there is nothing to unwind under the list.
+        // After the release: a list opened while the input's exclusive grab is still unwinding is taken straight back
+        // down a frame later. `pickOnly`'s MouseArea holds the grab itself, so it needs no wait.
         Qt.callLater(combo.offer)
     }
 
-    /// Whether a letter typed right now would land in the field. The list comes down and the caret stays where it was,
-    /// and that is not a thing a photograph can answer.
+    /// A letter typed now would land in the field — for runs, since a photograph cannot answer it.
     readonly property bool typing: !combo.pickOnly && input.activeFocus
 
-    /// The name in this box is finished: Enter, with nothing standing in front of the box.
-    ///
-    /// **Not `accepted`, which fires under the open list and with the value the list is about to replace.** Qt raises
-    /// the input's `accepted` on the key press and picks the highlighted row on the release, in that order, so a
-    /// handler hung on `accepted` answers with the name that was in the box *before* the row the reader just chose
-    /// (measured — `tst_appcombo`). And a key pressed while something stands belongs to the thing standing, the way
-    /// Escape does (デザイン規約 §立っている質問は 1 か所で聞く): under the list, Enter picks the row, and the press
-    /// after it is the one that finishes.
+    /// Enter with nothing standing over the box. Not `accepted`: Qt raises it on the key press, before the release
+    /// picks the highlighted row, so it carries the name that row is about to replace (`tst_appcombo`). Under the list,
+    /// Enter picks the row (デザイン規約 §立っている質問は 1 か所で聞く).
     signal submitted()
     onAccepted: if (!combo.popup.visible) combo.submitted()
 
-    /// Opens the list. A read still out counts as something to open — the card says so with its own ring (see
-    /// `hasList`).
+    /// Opens the list, if `hasList`.
     function offer() {
         if (combo.hasList)
             combo.popup.open()
     }
 
-    /// Whether there is anything to open at all — rows, or a read that may still bring some.
-    ///
-    /// A read that is still out has an answer of its own, and the card is where it gets said: it
-    /// opens, and the ring inside it says the rows are not here yet (デザイン規約 §進行中・長押しの定数 — 進行中を言うのはリングの 仕事). Refusing to
-    /// open while the read is out would leave the press with no answer at all, which reads as broken.
-    ///
-    /// With neither, the field is just a box to type in and says so by dropping the seat's mark: a chevron over a list
-    /// that can never open is a lie.
+    /// Rows, or a read that may still bring some: the card opens on that with a ring, since refusing leaves the press
+    /// unanswered (デザイン規約 §進行中・長押しの定数「進行中を言うのはリングの仕事」). With neither, the arrow goes.
     readonly property bool hasList: combo.count > 0 || combo.loading
     /// Automation only: the card's middle-button hand, and how far it has sent the rows (a middle button cannot be
     /// injected).
     readonly property alias listHand: listHand
     readonly property real listAt: rows.contentY
-    // The read came back with nothing while the card was up. Nothing is an answer, and the card has no way to say it —
-    // so the card goes, and the mark goes with it.
+    // The read came back empty while the card was up: the card cannot say nothing, so it goes.
     onHasListChanged: if (!combo.hasList) combo.popup.close()
 
     popup: Popup {
         y: combo.height
         width: combo.width
         padding: Theme.spaceXs
-        // Outside the *field*: the field's own press is what opens the list, and under the
-        // default policy that same press closes it first — leaving a press that flickers the list,
-        // and a chooser whose second press could never close it at all.
+        // The default policy reads the field's own press as outside, so a second press could never close the list.
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
-        // The other way in is the control's own press, which Qt takes before anything here sees it.
-        //
-        // The arrows start from the answer as well, so the wash that says where they are does not land on a row nobody
-        // picked while the picked one sits beside it wearing another ground. Only where the list is the whole set of
-        // answers: moving `currentIndex` on an editable one drags the text with it (see `wanted`).
+        // Also reached by the control's own press. Picking only, the arrows start from the value; on an editable list
+        // moving `currentIndex` drags the text (see `wanted`).
         onAboutToShow: {
             if (!combo.hasList) {
                 combo.popup.close()
@@ -292,13 +205,10 @@ ComboBox {
             if (combo.pickOnly)
                 combo.currentIndex = combo.find(combo.wanted)
         }
-        // The padding is the popup's, so it has to be added on — a height of just the rows leaves the
-        // last one cut.
+        // Plus the popup's own padding, or the last row is cut.
         implicitHeight: Math.min(contentItem.implicitHeight, Theme.rowHeight * 8) + topPadding + bottomPadding
         background: AppCardFace {}
-        // A card with a ring in it while the rows are still being read, and the rows themselves once they land. The
-        // height is a row's worth for the ring to stand in, so the card that opens on a press is the same size as the
-        // card that answers it.
+        // A ring in a row's height while the rows are read, then the rows.
         contentItem: Item {
             implicitHeight: rows.count > 0 ? rows.contentHeight : Theme.rowHeight
             SpinnerIcon {
@@ -315,13 +225,9 @@ ComboBox {
                 implicitHeight: contentHeight
                 model: combo.delegateModel
                 currentIndex: combo.highlightedIndex
-                // The style's see-through thumb (デザイン規約 §色 スクロールバー): this bar stands inside a card and
-                // the rows run under it, which is the frame's answer. Over the card's own ground the same ink
-                // reads `#303F54`.
+                // The see-through thumb: the rows run under it (デザイン規約 §色 スクロールバー).
                 ScrollBar.vertical: AutoScrollBar {}
-                // The middle button's hand, on the list's own frame and standing while there are more rows than the
-                // card shows — the one list here that is not an `AppListView`, so it is given the hand that one
-                // carries.
+                // The hand an `AppListView` carries, since this list is not one.
                 MiddleAutoScroll {
                     id: listHand
                     parent: rows
@@ -338,21 +244,17 @@ ComboBox {
         id: row
         required property string modelData
         required property int index
-        /// This row acts — see `lastRowActs`.
         readonly property bool acts: combo.lastRowActs && row.index === combo.count - 1
-        /// What the line above it costs: the separator and the air the menu gives one on each side (デザイン規約 §メニュー).
+        /// The separator above and its air (デザイン規約 §メニュー).
         readonly property int lead: row.acts ? 2 * Theme.spaceXs + Theme.borderWidth : 0
-        /// The answer this list is already carrying. Without it the list opens with a row washed that has nothing to do
-        /// with the value — Qt puts its highlight on whatever the keyboard would move from — so the one row the reader
-        /// came to find is the one row nothing points at (デザイン規約 §選ぶ欄と打つ欄).
+        /// The row holding the value; Qt's highlight is only where the keyboard is (デザイン規約 §選ぶ欄と打つ欄).
         readonly property bool current:
             !row.acts && row.modelData !== "" && row.modelData === (combo.pickOnly ? combo.wanted : combo.editText)
         width: combo.width - 2 * Theme.spaceXs
         height: Theme.rowHeight + row.lead
         topPadding: row.lead
         highlighted: combo.highlightedIndex === row.index
-        // Two rectangles: the wash belongs to the row, and a wash drawn over the whole item would
-        // swallow the line that is there to keep the two apart.
+        // The line and the row's grounds apart: a wash over the whole item would swallow the line.
         background: Item {
             Rectangle {
                 anchors.left: parent.left
@@ -362,9 +264,7 @@ ComboBox {
                 color: Theme.borderSubtle
                 visible: row.acts
             }
-            // Two grounds, because they answer two questions: which row is the value (§色 bgSelected = 選択行) and which
-            // row the hand is on. The wash is an overlay colour, so it lies over the selected ground without either one
-            // being lost.
+            // The value's ground under the hand's wash, an overlay colour, so both read (デザイン規約 §選ぶ欄と打つ欄).
             Rectangle {
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -393,7 +293,7 @@ ComboBox {
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
             }
-            // The same mark the left menu puts on that remote's own row, at the same step and in the same colour.
+            // The left menu's push mark for that remote, at its step and colour.
             NavIcon {
                 id: mark
                 visible: !row.acts && row.modelData !== "" && row.modelData === combo.markedRow

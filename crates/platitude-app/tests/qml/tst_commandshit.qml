@@ -4,57 +4,40 @@ import QtTest
 import platitude.ui
 
 // Where a press lands in one of the command log's three columns, and where the wash on it goes (`LineRuler` as
-// `CommandsPane` sets it up).
+// `CommandsPane` sets it up) — `tst_diffhit.qml`'s questions, asked of plain columns at `fontSm` instead of markup.
 //
-// **Only a laid-out column can answer**: a column of characters is not a count of columns — the fallback a Latin-only
-// mono family hands a wide glyph to is not monospaced, and a combining mark is a character a walk counts and the font
-// draws nothing for. No Rust test reaches it (that side maps bytes to places and back, `encode::markup`), and the
-// headless screenshots cannot judge it either — a wash a few pixels off the characters it names photographs like one
-// on them.
+// Only a laid-out column can answer: wide-glyph fallbacks are not monospaced and combining marks draw nothing, and a
+// wash a few pixels off photographs like one on. Each place is held against a `TextInput` (Qt's other text path) and
+// the drawn `Label` — a ruler agreeing only with itself would pass any rule.
 //
-// **The expected place is taken from a second instrument**: the ruler is a `TextEdit` reading the column through
-// `QTextDocument`; every case here is held against a `TextInput` carrying the same characters, which is a different
-// QML type on Qt's other text path, and against the `Label` the rows are actually drawn in. A ruler that agreed
-// only with itself would pass on any rule at all.
-//
-// **The log's columns are plain and the diff's rows are markup**, which is the one thing this fixes that
-// `tst_diffhit.qml` does not: the ruler is set in `TextEdit.PlainText` at `fontSm`, and the rows name that
-// same format (`CommandRowDelegate`). The last test measures what naming it buys — the same column read
-// as markup is a different column.
-//
-// **`cargo xtask qmltest` runs this on `-platform offscreen`, where the answer is easier than the real one** —
-// offscreen resolves every full-width glyph through one font at one advance, so a run there cannot speak for how a
-// real window advances them (rules-refs/app-ui.md). So what is judged here is the *agreement*, which is a claim
-// both platforms can carry; the numbers themselves are read by running `qmltestrunner` on this file without
-// `-platform offscreen`.
+// `cargo xtask qmltest` runs offscreen, which advances every full-width glyph alike, so only the agreement is judged
+// here; real advances need `qmltestrunner` without `-platform offscreen` (rules-refs/app-ui.md).
 Item {
     id: root
     width: 600
     height: 200
 
-    /// Columns built from code points: these are rulers (`DiffTextMetrics`).
+    /// Built from code points: written as glyphs they would read like non-English wording (CLAUDE.md 絶対制約).
     readonly property string acute: String.fromCharCode(0x301)
     readonly property string kanji: String.fromCharCode(0x65e5, 0x672c, 0x8a9e)
     readonly property string cjkPath: "git add -- " + root.kanji + ".txt"
     readonly property string combining: "git commit -m 'e" + root.acute + "e" + root.acute + "e" + root.acute + "'"
     readonly property string emoji: "git commit -m '" + String.fromCodePoint(0x1f600) + " done'"
 
-    /// The one under test, wired the way `CommandsPane` wires it — the format and the size are the pane's to set, and
-    /// a ruler set in another of either is measuring a column this log never draws.
+    /// Wired as `CommandsPane` wires it: a ruler in another format or size measures a column this log never draws.
     LineRuler {
         id: ruler
         textFormat: TextEdit.PlainText
         font.pixelSize: Theme.fontSm
     }
-    /// The instrument its answers are held against: the same characters, in the family and size the rows are set in,
-    /// on Qt's other text path.
+    /// The second instrument: the rows' family and size, on Qt's other text path.
     TextInput {
         id: reference
         visible: false
         font.family: Theme.monoFamily
         font.pixelSize: Theme.fontSm
     }
-    /// And the column itself — what a row really draws, for the width the two have to end at.
+    /// What a row really draws — the width the two have to end at.
     Label {
         id: drawn
         visible: false
@@ -62,7 +45,7 @@ Item {
         font.family: Theme.monoFamily
         font.pixelSize: Theme.fontSm
     }
-    /// The same ruler set in the diff's format, for the one test that measures what naming the format buys.
+    /// The same ruler in the diff's format, for the last test.
     LineRuler {
         id: asMarkup
         textFormat: TextEdit.RichText
@@ -89,11 +72,8 @@ Item {
             ]
         }
 
-        /// Puts one column on all three and waits for them to settle on one width. **The column names the moment
-        /// it is read at**: a `Text` answers at the family's own advance until the fallback carrying the other
-        /// glyphs is resolved, and a rendered frame is not something a test window is promised
-        /// (`waitForRendering` answers false on a real platform, `tst_diffreach`). What is waited for is the two
-        /// sides agreeing, which is only true once both have settled.
+        /// Puts one column on all three and waits until two sides agree: a `Text` answers at the family's own
+        /// advance until the fallback is resolved, and `waitForRendering` answers false on a real platform.
         function shown(text) {
             drawn.text = text
             reference.text = text
@@ -104,9 +84,8 @@ Item {
 
         function test_a_place_is_drawn_where_the_column_draws_it_data() { return columns() }
 
-        /// Every place of the column, against the same place read off the other instrument. This is the whole of what
-        /// the wash stands on: `CommandRowDelegate` asks for the runs `encode::markup::plain_ranges` names and lays
-        /// its rectangle between the answers.
+        /// What the wash stands on: `CommandRowDelegate` lays its rectangle between the places of the runs
+        /// `encode::markup::plain_ranges` names.
         function test_a_place_is_drawn_where_the_column_draws_it(data) {
             shown(data.text)
             for (let at = 0; at <= data.text.length; at++)
@@ -115,8 +94,7 @@ Item {
 
         function test_a_point_along_the_column_names_the_place_under_it_data() { return columns() }
 
-        /// And the way back, at every pixel across the column: the press the reader makes
-        /// (`CommandsTextSelect.hit`).
+        /// The way back, at every pixel: the press (`CommandsTextSelect.hit`).
         function test_a_point_along_the_column_names_the_place_under_it(data) {
             shown(data.text)
             for (let x = 0; x <= drawn.implicitWidth; x++)
@@ -125,9 +103,8 @@ Item {
 
         function test_the_blank_right_of_the_column_is_its_own_end_data() { return columns() }
 
-        /// **The reported bug**: a point past the last character of the column is the column's end and no place
-        /// inside it, however far past. A walk of columns goes on counting characters that are never drawn, so read by
-        /// one, a drag out to the right of the panel selects a byte in the middle of the line.
+        /// However far past: a walk of columns counts characters never drawn, and a drag out to the right of the
+        /// panel would select a byte mid-line.
         function test_the_blank_right_of_the_column_is_its_own_end(data) {
             shown(data.text)
             const ink = drawn.implicitWidth
@@ -135,14 +112,12 @@ Item {
                 compare(ruler.placeAt(data.text, false, ink + past), data.text.length,
                         "the blank " + past + "px past the column")
             }
-            // And the end is where the column was drawn to.
             compare(ruler.xOf(data.text.length), ink)
         }
 
         function test_a_run_is_the_rectangle_between_its_two_places_data() { return columns() }
 
-        /// One run comes back as one rectangle, and it is that run's own two places — the wash the delegate lays is
-        /// the bounding box of what comes back (`CommandRowDelegate.bounds`).
+        /// The delegate's wash is the bounding box of what comes back (`CommandRowDelegate.bounds`).
         function test_a_run_is_the_rectangle_between_its_two_places(data) {
             shown(data.text)
             if (data.text.length < 2)
@@ -156,8 +131,7 @@ Item {
                                 - reference.positionToRectangle(from).x)
         }
 
-        /// A press inside spaces the command really holds is a press on them. A `-m` message ending in spaces is the
-        /// case: the blank right of the column and the blank inside it are the same colour and different places.
+        /// Trailing spaces inside the column and the blank right of it look alike and are different places.
         function test_the_spaces_a_column_really_holds_are_places_to_stop_at() {
             const text = "git commit -m 'ends   '"
             shown(text)
@@ -168,16 +142,12 @@ Item {
             verify(inside > 19 && inside < text.length, "a press between them named place " + inside)
         }
 
-        /// Nothing to wash asks nothing of the ruler.
         function test_a_column_with_no_run_has_no_rectangle() {
             compare(ruler.rectsOf("git add --all", false, []).length, 0)
         }
 
-        /// **Why the pane names the format its ruler is set in.** A command line can carry anything a shell would
-        /// quote, and the same characters read as markup are a different line: the tags are dropped and the `&`
-        /// begins an entity. The log's ruler reads them as themselves because `CommandsPane` says so — a ruler left
-        /// in the diff's format would answer about a column no row here draws, and the wash and the press would both
-        /// sit left of the characters they name.
+        /// Why the pane names its ruler's format: read as markup, a command line's tags drop and `&` begins an
+        /// entity, so the wash and the press would sit left of the characters they name.
         function test_the_format_the_ruler_is_set_in_is_the_row_s_own() {
             const text = "git commit -m '<n> & <m>'"
             shown(text)

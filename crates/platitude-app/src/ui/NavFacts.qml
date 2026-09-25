@@ -4,60 +4,43 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// What a row of the left panel opens under itself — **the three sections that open, as one table**
-/// (デザイン規約 §左メニューの所作).
+/// What a row of the left panel opens under itself: every section that opens, as one table
+/// (デザイン規約 §左メニューの所作). What each section says is here, not in the shared list, row and lines
+/// (`NavList` / `NavItemDelegate` / `NavRowFacts` / `NavFactLine`), so none of them tests which section it is in.
 ///
-/// The parts are shared: one list (`NavList`), one row (`NavItemDelegate`), one set of lines
-/// (`NavRowFacts` / `NavFactLine`). What each section *says* is here and not in them — no test in the row on which
-/// section it is in, none in the lines on which answer was filled — so a section's answer is one entry and the rest of
-/// the panel cannot tell the three apart.
-///
-/// **The relations are the same one read from different ends.** A branch names the copy holding it and the reading
-/// it is measured against; a remote-tracking ref names the branch that reads it and the copy holding *that*; a
-/// working copy names the branch it holds and says of it what that branch's own row would. So the lines are the
-/// same parts in a different order, and a section that gains one gains a line in the table below.
+/// The relations are one read from different ends — a branch names its copy and its reading, a remote-tracking ref
+/// the branch reading it and that branch's copy, a working copy its branch — so the lines are the same parts in a
+/// different order.
 QtObject {
     id: navFacts
 
-    /// What a line that goes somewhere wears under the hand, over the wash of the row it is in — the fill and the
-    /// rim of the band (`NavRowFacts.aimBand`), and of the line a stacked card's name carries (`RefChip`), which is
-    /// the same line (デザイン規約 §左メニューの所作「段の名前は、その名前が立つコミットへの道」). A rim with no alpha
-    /// draws none.
-    ///
-    /// **The row's own wash once more over it**: the line is a step up from the row it is in by the same step the row
-    /// is from the list, in the same hue — lit the same as the row, it reads as nothing having changed under the
-    /// hand.
+    /// The fill and rim of the band a line that goes somewhere wears under the hand (`NavRowFacts.aimBand`), and of
+    /// the same line on a stacked card (`RefChip`). The row's own wash once more over the row's: lit the same as the
+    /// row, nothing would change under the hand. A rim with no alpha draws none.
     readonly property color aimFill: Theme.bgHover
     readonly property color aimRim: "transparent"
 
-    /// The answers one row opens with, read as it opens (the slots below freeze in a binding — app-ui.md). Every
-    /// field is filled for every section; the ones that section does not answer stay empty, which is what decides
-    /// the lines.
-    ///
-    /// **Asked of the row**, because the row is what carries the slots and the models: its own section
-    /// (`sectionModel`), the working copies (`worktreesModel`) and the branches (`branchesModel`).
+    /// The answers one row opens with, read as it opens (slots freeze in a binding — rules/app-ui.md). Every field is
+    /// filled for every section; the ones a section does not answer stay empty, which decides the lines. Asked of the
+    /// row, which carries the models (`sectionModel` / `worktreesModel` / `branchesModel`).
     function answers(row) {
         const leaf = !row.folder
         const kind = row.kindHint
-        // The branch measured against this reading, and — on a working copy's row — the branch that copy holds.
-        // Both name a row of BRANCHES, which is why they lead the lines the same way.
+        // The branch measured against this reading, or — on a working copy's row — the branch that copy holds. Both
+        // name a BRANCHES row.
         const local = kind === "remote" && leaf && row.sectionModel !== null
                     ? row.sectionModel.trackedBy(row.fullName) : ""
         const branch = kind === "worktree" && leaf ? row.bucket : ""
-        // What that branch reads, and whether git can reach it. **A branch row carries its own state in a slot the
-        // row draws its badge from**, so the mark and the line cannot disagree (`models::nav::field` の
-        // `Role::Bucket`); a row naming somebody else's branch has to ask the section holding it.
+        // What that branch reads, and whether git can reach it. A branch row reads the slot its badge is drawn from
+        // (`Role::Bucket`), so the mark and the line cannot disagree; a row naming another's branch asks its section.
         const asked = kind === "worktree" && branch !== "" && row.branchesModel !== null ? branch : ""
         const upstream = kind === "branch" && row.sectionModel !== null
                        ? row.sectionModel.upstreamOf(row.fullName)
                        : asked !== "" ? row.branchesModel.upstreamOf(asked) : ""
         const gone = kind === "branch" ? row.bucket
                    : asked !== "" ? row.branchesModel.upstreamGoneOf(asked) : ""
-        // The remotes carrying this name, and which of them stand somewhere other than where the one this window
-        // acts on has it. **A tag has no namespace**, so one row stands for every side of the name
-        // (`NavSectionModel.tagSides`) and what it folds is the list of who out there has it — which is what it
-        // opens on. One answer for both halves, because two would be two walks of the same run and a chance for
-        // them to disagree; the record is `{remote, apart}` (`NavSectionModel.tagRemotes`).
+        // The remotes carrying this tag, each `{remote, apart}` — apart from where the remote this window acts on has
+        // it (`NavSectionModel.tagRemotes`). One call for both halves, so they cannot disagree.
         const remotes = kind === "tag" && leaf && row.sectionModel !== null
                       ? row.sectionModel.tagRemotes(row.fullName, row.pushRemote) : []
         // The copy holding the branch this row is about: its own on a BRANCHES row, the one named above on a
@@ -65,40 +48,34 @@ QtObject {
         const holds = kind === "branch" ? row.fullName : kind === "remote" ? local : ""
         const held = row.folder || holds === "" || row.worktreesModel === null ? ""
                    : row.worktreesModel.worktreeHolding(holds)
-        // **Where each name the lines say stands** — the commit, asked of the section holding it — which is where a
-        // press on its line takes the graph (デザイン規約 §左メニューの所作). A reading git cannot reach is not
-        // anywhere, and a name whose section this row was not handed has nowhere to go.
+        // The commit each named line stands on — where a press on it takes the graph. A gone reading, or a name
+        // whose section this row was not handed, goes nowhere.
         const reading = gone !== "" || upstream === "" ? ""
                       : kind === "branch" && row.sectionModel !== null ? row.sectionModel.upstreamOidOf(row.fullName)
                       : asked !== "" ? row.branchesModel.upstreamOidOf(asked) : ""
         const named = local !== "" ? local : branch
         const tip = named === "" || row.branchesModel === null ? "" : row.branchesModel.oidOfName(named)
         return {
-            // **A working copy is named by its folder and lives at a path** — two answers, and the row goes on
-            // showing the first. Every other row here is named by the whole of what git knows it by.
+            // A working copy is named by its folder and lives at a path; every other row is named by its full name.
             "name": kind === "worktree" && leaf ? row.name : row.fullName,
             "path": kind === "worktree" && leaf ? row.fullName : "",
             "remotes": remotes,
-            // The reading those are read against, which the lines name in the one place a line says why it is
-            // marked. Empty everywhere but TAGS.
+            // The remote those are read against, named in a line's note. TAGS only.
             "against": kind === "tag" ? row.pushRemote : "",
             "local": local,
             "branch": branch,
-            // The section answers with the path git prints, and the rows of that section show the folder it ends
-            // in — asked only when there is one, so this table can be read where that singleton is not
-            // (`tests/qml/tst_navrowlight.qml`).
+            // Shown as the folder the path ends in. Asked only when there is one, so this table runs where `GitFacts`
+            // is absent (`tests/qml/tst_navrowlight.qml`).
             "heldBy": held === "" ? "" : GitFacts.pathLeaf(held),
             "upstream": gone !== "" ? gone : upstream,
             "gone": gone !== "",
-            // The commit the row itself stands on — where its own click goes, and what a line going to the same
-            // place is part of (`lines`).
+            // The commit the row itself stands on — a line going there is the row's own (`joined`).
             "at": row.oid_hex,
             // Where a press on the line naming each of them goes (`place`).
             "branchTo": navFacts.place("branch", named, tip),
             "heldTo": held === "" ? null : navFacts.place("worktree", held, row.worktreesModel.headOfCopy(held)),
             "upstreamTo": navFacts.place("remote", upstream, reading),
-            // The one measure a branch draws, wherever its name is drawn. A row that names its own branch carries
-            // it as a role, because a fetch moves it; a row that names somebody else's has to ask.
+            // The branch's measure: its own row carries it as a role (a fetch moves it); a row naming another's asks.
             "ahead": asked !== "" ? row.branchesModel.aheadOf(asked) : row.ahead,
             "behind": asked !== "" ? row.branchesModel.behindOf(asked) : row.behind,
             // The state git noted on a checkout, and the words that came with it (`Role::Change` / `Role::OrigPath`).
@@ -107,30 +84,23 @@ QtObject {
         }
     }
 
-    /// Those answers as the lines they draw, in reading order — **the table**. A line nobody filled is left out, so
-    /// a row with nothing to add opens on its name alone.
+    /// Those answers as the lines they draw, in reading order — the table. A line nobody filled is left out.
     function lines(kind, a) {
         const drawn = kind === "branch" ? [navFacts.copyLine(a), navFacts.readingLine(a)]
                     : kind === "remote" ? [navFacts.branchLine(a.local, a, a.branchTo), navFacts.copyLine(a)]
-                    // **The repository's own copy names its branch on its own line**, so the line that would name
-                    // it again is left out — the row is named by that branch rather than by its folder
-                    // (`NavRowBody.homeCopy`), and a row whose one word is repeated directly under itself reads as
-                    // a stutter (observed). The measure that line carries is on the BRANCHES row for the same
-                    // branch, which draws it wherever that branch has an upstream (デザイン規約 §左メニューの所作).
+                    // The repository's own copy is already named by its branch (`NavRowBody.homeCopy`), so the line
+                    // naming it again is left out; its measure is on that branch's BRANCHES row.
                     : kind === "worktree" ? [a.state === "MAIN" ? null : navFacts.branchLine(a.branch, a, a.branchTo),
                                              navFacts.readingLine(a), navFacts.stateLine(a)]
-                    // One line to a remote — the one section whose lines are a list rather than a fixed few, because
-                    // what a tag's row folds is however many of them have the name.
+                    // One line per remote carrying the tag — the one section whose lines are a list.
                     : kind === "tag" ? a.remotes.map(carried => navFacts.carrierLine(carried, a.against))
                     : []
         return navFacts.joined(drawn.filter(line => line !== null), a.at)
     }
-    /// **Where two go to one place, they are one target** (デザイン規約 §左メニューの所作「行き先が同じなら判定は
-    /// 1 つ」): a press goes to the graph, and two targets that land it on the same commit are one question asked
-    /// twice. A line going where the row itself stands is the row's own (`to` dropped — its press is the row's
-    /// click), and a line going where the line above it goes shares that line's band (`withAbove`). **The order
-    /// the table draws in already puts every such pair side by side**: a copy stands where the branch it holds does,
-    /// and each section names the copy directly under that branch, or under the row that is it.
+    /// Two ways to one commit are one target (デザイン規約 §左メニューの所作「行き先が同じなら判定は 1 つ」): a line
+    /// going where the row stands drops its `to` (its press is the row's click), and one going where the line above
+    /// goes shares that band (`withAbove`). Only neighbours are compared — the table's order already puts every such
+    /// pair side by side.
     function joined(lines, at) {
         for (let i = 0; i < lines.length; i++) {
             if (lines[i].to && lines[i].to.oid === at)
@@ -144,31 +114,27 @@ QtObject {
         return lines
     }
 
-    /// Where a line goes when its name is pressed: **the commit it stands on**, and the row of this panel that is
-    /// that name (its key, `NavList.keyOf` — what a run reports it by). Null where there is no commit to go to,
-    /// which leaves the line the row's own to click like any other part of it.
+    /// Where a line goes when pressed: the commit, and the row of this panel that is that name (its key,
+    /// `NavList.keyOf`). Null where there is no commit — the line is then the row's own to click.
     function place(section, full, oid) {
         return full === "" || oid === "" ? null : { "key": section + ":" + full, "oid": oid }
     }
 
-    /// A branch of the BRANCHES section, named from somewhere else: that section's own mark in its own colour, and
-    /// the measure that branch's own row draws at the same right edge. `to` is where a press on the name goes
-    /// (`place`).
+    /// A BRANCHES branch named from elsewhere: that section's mark and colour, and the measure its own row draws.
     function branchLine(name, a, to) {
         return name === "" ? null
              : { "mark": "branch", "markTint": Theme.accent, "text": name, "tone": Theme.textSecondary,
                  "ahead": a.ahead, "behind": a.behind, "note": "", "to": to }
     }
-    /// The working copy holding the branch this row is about — the WORKTREES section's own mark, in that section's
-    /// own colour, the way the line above names a branch in the BRANCHES one (規約 §ref の種別).
+    /// The working copy holding the branch this row is about, in the WORKTREES section's mark and colour
+    /// (規約 §ref の種別).
     function copyLine(a) {
         return a.heldBy === "" ? null
              : { "mark": "tree", "markTint": Theme.success, "text": a.heldBy,
                  "tone": Theme.textSecondary, "ahead": 0, "behind": 0, "note": "", "to": a.heldTo }
     }
-    /// What that branch is measured against. **A reading git cannot reach wears the state whole** — git's own word
-    /// for it is `gone`, and the name leads so every line begins in the same column. That one goes nowhere: there
-    /// is no ref of that name to be at.
+    /// What that branch is measured against. One git cannot reach says so in git's word (`gone`), name first, and
+    /// goes nowhere.
     function readingLine(a) {
         if (a.upstream === "")
             return null
@@ -177,27 +143,18 @@ QtObject {
                  "text": a.gone ? qsTr("%1 is gone").arg(a.upstream) : a.upstream,
                  "tone": tint, "ahead": 0, "behind": 0, "note": "", "to": a.gone ? null : a.upstreamTo }
     }
-    /// One remote carrying this tag — the cloud the row wears, said by name. **The list is a list of names, so the
-    /// name is all the line says**: whether that remote stands where the one this window acts on has the tag is a
-    /// second question, and the line answers it with colour alone (デザイン規約 §左メニューの所作 の TAGS の段).
-    /// The reason for that colour is the supplement a rest on the line opens (`note`), which is where a sentence
-    /// belongs: the lines are a column of names and one of them growing a clause would make the column ragged.
-    ///
-    /// **The sentence names the reading it is apart from**, because that is the whole of what the colour means
-    /// here — the reference is a remote and not the copy in this repository (`NavSectionModel.tagRemotes`), so a
-    /// line saying only "another commit" would leave the reader to guess another commit than what.
-    ///
-    /// **It goes nowhere**: what it names is a remote, and a remote is not a row of this panel that the tag is on.
+    /// One remote carrying this tag, by name alone. Whether it stands where the remote this window acts on has the tag
+    /// is said by colour (デザイン規約 §左メニューの所作 の TAGS の段), and why by the note a rest opens — a clause on
+    /// one line would make the column ragged. The note names what it is apart from: a remote, not this copy
+    /// (`NavSectionModel.tagRemotes`). It goes nowhere: a remote is not a row of this panel.
     function carrierLine(carried, against) {
         const tint = carried.apart ? Theme.warning : Theme.textSecondary
         return { "mark": "remote", "markTint": tint, "text": carried.remote,
                  "tone": tint, "ahead": 0, "behind": 0,
                  "note": carried.apart ? qsTr("On another commit than %1").arg(against) : "", "to": null }
     }
-    /// And the one state a mark cannot name. **The padlock says everything a lock has to say here** — what it was
-    /// taken for is the words somebody gave `git worktree lock`, and those are theirs to keep rather than a line of
-    /// this panel's (デザイン規約 §左メニューの所作). A folder git can no longer find is the other case: `!` is a
-    /// warning and names nothing, so the words say which warning it is.
+    /// The one state a mark cannot name: a folder git can no longer find (`!` names nothing). A lock's padlock says it
+    /// all — its reason is the locker's words, not this panel's (デザイン規約 §左メニューの所作).
     function stateLine(a) {
         return a.state !== "PRUNABLE" ? null
              : { "mark": "", "markTint": Theme.warning, "text": qsTr("Folder is gone"),

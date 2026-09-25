@@ -56,9 +56,8 @@ impl<T> Feed<T> {
 
     /// Replaces the queued messages of this one's kind — its enum variant
     /// — and keeps the rest: snapshot semantics for a feed that carries
-    /// more than one kind. A status the consumer has not drained yet is a
-    /// picture nobody wants back once a newer one is here, and the HEAD
-    /// report queued beside it is not.
+    /// more than one kind (a newer status supersedes an undrained one; the
+    /// HEAD report beside it stays).
     pub fn push_coalescing(&self, item: T) {
         let kind = std::mem::discriminant(&item);
         let guard = {
@@ -71,9 +70,9 @@ impl<T> Feed<T> {
         Self::wake(guard);
     }
 
-    /// One pending answer, ordered by request. Keep the watermark after
-    /// draining so a late duplicate cannot wake the consumer or retain
-    /// stale data. A new session resets it explicitly.
+    /// One pending answer, ordered by request. The watermark outlives a
+    /// drain, so a late duplicate neither wakes the consumer nor stays
+    /// queued; [`Feed::clear_queued`] resets it for a new session.
     pub fn push_latest(&self, generation: u64, item: T) {
         let mut guard = self.lock();
         if guard.latest.is_some_and(|latest| generation <= latest) {
@@ -116,14 +115,10 @@ impl<T> Feed<T> {
     }
 
     /// Drops what is queued and lets go of the consumer — what a tab does
-    /// on its way off the front (`Hub::release_tab`).
-    ///
-    /// Both halves matter. The queue is where a snapshot of fifty
-    /// thousand refs sits waiting, and holding one for a page that has
-    /// been taken down is the very memory the release is for. The invoker
-    /// names a QML object that is about to be destroyed, so a message
-    /// racing the release would be waking something that is no longer
-    /// there; the page that comes back attaches its own.
+    /// on its way off the front (`Hub::release_tab`). Both halves matter:
+    /// a queued refs snapshot is the very memory the release is for, and
+    /// the invoker names a QML object about to be destroyed (the page that
+    /// comes back attaches its own).
     pub fn release(&self) {
         let mut s = self.lock();
         s.queue.clear();
@@ -132,14 +127,11 @@ impl<T> Feed<T> {
 
     /// Drops what is queued and keeps the consumer.
     ///
-    /// For the other end of a release: cancellation is cooperative, so a
-    /// task that had already worked out an answer can push it after
-    /// [`Feed::release`] has run, and it would then be waiting here for a
-    /// page that opens the repository *again* — a message about a session
-    /// that no longer exists, read as though it were about the new one.
-    /// The graph is where that goes worst: its generations restart with
-    /// the model, so one stale `Started` leaves it holding a number the
-    /// new stream never reaches and no chunk it sends is ever drawn.
+    /// Cancellation is cooperative, so a task can push after
+    /// [`Feed::release`], and a page opening the repository again would
+    /// read that as the new session's. Worst in the graph: its generations
+    /// restart with the model, so one stale `Started` leaves it on a number
+    /// the new stream never reaches and none of its chunks is drawn.
     pub fn clear_queued(&self) {
         let mut guard = self.lock();
         guard.queue.clear();
@@ -165,20 +157,15 @@ pub struct Feeds {
     /// counts, in the order the session said them.
     pub status: Arc<Feed<StateMsg>>,
     /// Status list consumers — one `worktree` NavSectionModel per bucket
-    /// run of the changed files the right pane's WIP view lists. Each run
-    /// is a list of its own with a share of the pane of its own, and a feed
-    /// is drained by whoever gets there first, so each run needs a feed of
-    /// its own (the refs fan out per sidebar section the same way).
+    /// run of the changed files the right pane's WIP view lists. A feed is
+    /// drained by whoever gets there first, so each run needs its own.
     pub status_nav_conflicts: Arc<Feed<StatusMsg>>,
     pub status_nav_unstaged: Arc<Feed<StatusMsg>>,
     pub status_nav_staged: Arc<Feed<StatusMsg>>,
-    /// The list of the copy the pane is showing when it is showing
-    /// somebody else's (`CarriedStatusMsg`). **One where this window's own
-    /// tree is three** — the split those three stand for is the index's,
-    /// and nothing here can move that copy's index — and **a feed of its
-    /// own** all the same: this window's status arrives on its own tick
-    /// whether or not anybody is reading another copy, and one shared feed
-    /// would take the other's rows off the screen every ten seconds.
+    /// The list of another copy the pane is showing (`CarriedStatusMsg`).
+    /// One list where this window's own tree has three — nothing here can
+    /// move that copy's index — and a feed of its own: shared, this
+    /// window's status tick would take the other's rows off the screen.
     pub carried_nav: Arc<Feed<CarriedStatusMsg>>,
     pub stash: Arc<Feed<super::StashList>>,
     pub worktrees: Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>,
@@ -189,19 +176,15 @@ pub struct Feeds {
     /// model; one pending answer, ordered by the ask the way the details
     /// feed is — `Feed::push_latest`).
     pub plan: Arc<Feed<PlanMsg>>,
-    /// How far a running replay has got, on its own. Same consumer as
-    /// `status` (the work-tree model carries the badge's fields), a
-    /// different feed because it is asked several times a second while
-    /// the snapshot is asked every ten: pushed through that one it would
-    /// be a whole `git status` per tick
+    /// How far a running replay has got. Same consumer as `status`, a feed
+    /// of its own because it is asked several times a second: through the
+    /// status snapshot it would be a whole `git status` per tick
     /// (`RepoSession::refresh_op_progress`).
     pub op_progress: Arc<Feed<OpProgressMsg>>,
 }
 
-/// One feed, seen without its message type — the three questions every
-/// walk over "all of a tab's feeds" asks. None of [`Feed`]'s answers here
-/// depend on `T`, which is what lets the list of feeds live in one plain
-/// array ([`Feeds::each`]).
+/// One feed, seen without its message type, so a tab's feeds fit one
+/// plain array ([`Feeds::each`]).
 pub trait FeedOps {
     fn release(&self);
     fn clear_queued(&self);
@@ -220,19 +203,16 @@ impl<T> FeedOps for Feed<T> {
     }
 }
 
-/// The command log's name in [`Feeds::each`] — spelled once, because
-/// one walk skips it by name ([`Feeds::clear_queued_reads`]) and a
-/// rename that missed that walk would empty the log's queue in silence.
+/// The command log's name in [`Feeds::each`] — spelled once:
+/// [`Feeds::clear_queued_reads`] skips it by name, and a rename that
+/// missed that walk would empty the log's queue in silence.
 const COMMANDS: &str = "commands";
 
 impl Feeds {
-    /// Every feed with its report name. **The list of feeds is written
-    /// once, here** — the walks below and the depth report
-    /// ([`crate::hub::Hub::feed_depths`]) all iterate this. A hand-kept
-    /// second copy is free to disagree about what a tab holds, and a feed
-    /// left out of one is a queue that goes on holding a repository
-    /// nobody is reading — or one the memory report cannot name, which is
-    /// exactly the queue that report exists to catch.
+    /// Every feed with its report name — the one list of feeds, which the
+    /// walks below and the depth report ([`crate::hub::Hub::feed_depths`])
+    /// iterate. A feed left out is a queue that goes on holding a
+    /// repository nobody is reading.
     pub fn each(&self) -> [(&'static str, &dyn FeedOps); 17] {
         [
             ("tab", &*self.tab),
@@ -262,20 +242,14 @@ impl Feeds {
         }
     }
 
-    /// Empties the queue of everything the *repository* was read into
-    /// and keeps the consumers ([`Feed::clear_queued`]), leaving the
-    /// command log's queue where it is — what a session opening over a
-    /// page that is already standing empties (`Hub::open_session`).
+    /// Empties every queue but the command log's and keeps the consumers
+    /// ([`Feed::clear_queued`]) — for a session opening over a page that
+    /// is already standing (`Hub::open_session`).
     ///
-    /// **The log is the one feed that outlives the session.** Every
-    /// other message here describes a repository read from the copy
-    /// being left, and the page is about to read another; a command
-    /// message describes what this window ran, names the session that
-    /// ran it (`CommandMsg`), and belongs to rows that are staying on
-    /// screen.
-    ///
-    /// Named off the one list every walk over the feeds takes, so a feed
-    /// added later is emptied unless it is spelled out here.
+    /// The log is the one feed that outlives the session: a command
+    /// message names the session that ran it (`CommandMsg`) and belongs to
+    /// rows staying on screen. A feed added later is emptied unless it is
+    /// spelled out here.
     pub fn clear_queued_reads(&self) {
         for (name, feed) in self.each() {
             if name != COMMANDS {
@@ -286,11 +260,8 @@ impl Feeds {
 }
 
 /// Hands `invoker` to `feed` and gives the caller its own handle on it.
-///
-/// The invoker is passed by value because it has to be: `QmlMethodInvoker`
-/// is `Send` but not `Clone`, so a consumer takes its own from
-/// `get_qml_method_invoker()`
-/// (.claude/rules/app-ui.md "Qt Bridges の要点").
+/// By value: an invoker is not `Clone` (.claude/rules/app-ui.md
+/// §Qt Bridges・QML の不変条件).
 pub fn attached<T>(feed: &Arc<Feed<T>>, invoker: QmlMethodInvoker) -> Arc<Feed<T>> {
     let feed = Arc::clone(feed);
     feed.attach(invoker);

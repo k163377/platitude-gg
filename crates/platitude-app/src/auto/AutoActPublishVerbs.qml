@@ -6,20 +6,13 @@ import platitude.ui
 
 /// The verbs that talk to a remote: the first push and the question in front of it, the push defaults, and every
 /// way a fetch lands or fails.
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are
-/// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+// `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
 
-    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is
-    /// the file that builds this one.
+    /// `var`: naming its type would be a cycle — the driver is the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
@@ -29,15 +22,13 @@ Item {
     readonly property var renderedBarrier: driver.barrierRendered
     readonly property var writeBarrier: driver.barrierWrite
 
-    /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
+    /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
         if (act === "publish" || act === "publish-taken" || act === "publish-tip"
                 || act === "publish-add" || act === "publish-go" || act === "publish-enter"
                 || act === "publish-new-go" || act === "publish-remotes"
                 || act === "publish-dismiss") {
-            // The button's own path, so the state machine in front of the question is exercised
-            // too.
+            // The button's own path, so the state machine in front of the question is exercised too.
             page.pushNow()
             if (act === "publish-taken" || act === "publish-tip")
                 publishFlow.setPublishBranch(arg === "" ? "taken" : arg)
@@ -48,7 +39,6 @@ Item {
             if (act === "publish-new-go")
                 publishNewTimer.start()
             else if (act === "publish-go" || act === "publish-enter") {
-                // Which door the answer goes through: the pill's, or Enter in the name box.
                 publishAnswerTimer.byKey = act === "publish-enter"
                 publishAnswerTimer.start()
             }
@@ -64,39 +54,31 @@ Item {
                 publishTipTimer.start()
             else
                 publishSettleTimer.start()
-            // `dialog=` / `name=` say whether the remote dialog stands and what its name box holds — the no-remote push
-            // opens it by itself, and only this line can say so headless.
+            // `dialog=` / `name=`: the no-remote push opens the remote dialog by itself, and only this line can say so
+            // headless.
             Harness.report("publish state=" + page.pushState
                               + " remote=" + publishFlow.publishRemote
                               + " branch=" + publishFlow.publishBranch
                               + " dialog=" + remoteDialog.visible
                               + " name=" + remoteDialog.wantedName)
         } else if (act === "publish-upstream") {
-            // **What a push does with an upstream the far side does not have yet.** The branch is pointed at a name
-            // nothing here answers to — the answer the upstream question takes (デザイン規約
-            // §ブランチが測られる相手を決める) — and then the toolbar's own press is made: the question it raises
-            // has to open on that name, or the answer just given is asked for again and thrown away.
-            //
-            // The write goes in at the slot the question's pill calls, not through the question: **the question is
-            // `set-upstream-go`'s subject** and this run's is the press after it.
+            // A push with an upstream the far side does not have yet (デザイン規約 §ブランチが測られる相手を決める):
+            // the question the toolbar's press raises must open on that name, or the answer just given is asked again.
+            // The upstream goes in at the slot the question's pill calls — the question is `set-upstream-go`'s subject.
             publishUpstreamTimer.want = arg === "" ? "brand-new" : arg
             repoTab.setUpstream(workTree.branch, repoTab.defaultRemote, publishUpstreamTimer.want)
             publishUpstreamTimer.start()
         } else if (act === "push-target") {
-            // The destination is a binding, and this run is about what it says once the repository
-            // it is about has finished arriving.
             pushTargetTimer.start()
         } else if (act === "push-hover") {
-            // A hand on the band's push button once the standing it speaks for has been read.
             pushHoverTimer.start()
         } else if (act === "push-default" || act === "remote-menu" || act === "remote-url"
                    || act === "publish-remotes-marked") {
-            // `<remote>`, or `<remote>:marked` to put the mark on it first. All three go in at the same doors a hand
-            // uses — the slot the menu row calls, the page's one way into the menu, the flow's one way into the form —
-            // so what answers is the wiring.
+            // `<remote>`, or `<remote>:marked` to put the mark on it first. Each goes in at the door a hand uses (the
+            // menu row's slot, the page's way into the menu, the flow's way into the form).
             const marked = arg.endsWith(":marked")
-            // The destination list has no remote of its own to name, so it takes whichever one this repository would
-            // send to — the only name a preset-agnostic run can be sure exists.
+            // The destination list names no remote, so it takes the one this repository sends to — the only name a
+            // preset-agnostic run can be sure exists.
             driver.remoteTarget = act === "publish-remotes-marked" ? repoTab.defaultRemote
                                 : marked ? arg.substring(0, arg.length - ":marked".length) : arg
             driver.markWanted = marked || act !== "remote-menu" && act !== "remote-url"
@@ -114,16 +96,13 @@ Item {
         } else if (act === "push") {
             page.pushNow()
         } else if (act === "push-outdated") {
-            // The same press, against a remote that has moved on since this end last looked (`--preset outrun`).
-            // git will not send, and **the next move is already being made** — the session fetches on this refusal —
-            // so what comes back is a report (デザイン規約 §答えの要らない報せ).
+            // Against a remote that has moved on (`--preset outrun`): git refuses and the session fetches on the
+            // refusal, so what comes back is a report (デザイン規約 §答えの要らない報せ).
             page.pushNow()
             driver.barrierNotice.start()
         } else if (act === "force-push") {
             page.forcePush()
         } else if (act === "push-retry") {
-            // A mark coming off is the absence of a thing, so the timer reports the refused state before sending the go
-            // that clears it.
             page.pushNow()
             pushRetryTimer.start()
         } else if (act === "fetch" || act === "fetch-busy") {
@@ -131,8 +110,7 @@ Item {
             // ring (`WindowAutoActDriver`).
             repoTab.fetch("")
         } else if (act === "fetch-ref-list") {
-            // What a tag says about the remote only exists after a fetch (`ls-remote --tags` carries it), so the two
-            // steps are one verb.
+            // What a tag says about the remote exists only after a fetch (`ls-remote --tags`), so the two are one verb.
             repoTab.fetch("")
             fetchedRefListTimer.start()
         } else if (act === "fetch-recover") {
@@ -140,22 +118,20 @@ Item {
             // success takes down by itself.
             repoTab.fetch("pgg-no-such-remote")
         } else if (act === "fetch-recover-held") {
-            // The same recovery over a panel the reader put up first, which the fetch leaves standing
-            // (デザイン規約 §git が言ったことを読む場所). The press goes in at the seat's own function — the `>_` calls this
-            // and nothing else — so a build where the press stopped reaching the rule ends with the panel gone.
+            // The same recovery over a log panel the reader opened, which the fetch leaves standing
+            // (デザイン規約 §git が言ったことを読む場所). Opened by the `>_`'s own function, so a build where the press
+            // stopped reaching the rule ends with the panel gone.
             page.toggleCommands()
             repoTab.fetch("pgg-no-such-remote")
         } else if (act === "fetch-fail") {
-            // The argument is how many failed fetches to run, so one verb reaches the warning shape and the stopped one
-            // alike. The fetches are asked for by `fetchFailTimer`, which is also what ends the run.
+            // The argument is how many fetches to fail, so one verb reaches the warning shape and the stopped one.
             acts.fetchFailRuns = Math.max(1, Number(arg))
             AppBackend.setAutoFetchMinutes(0)
             AppBackend.setAutoFetchMinutes(5)
             fetchFailTimer.start()
         } else if (act === "fetch-hover") {
-            // A hand on each of the button's three live shapes, and the words it opens there. The argument is how many
-            // fetches to fail first — none, one, or enough to stop the timer — so the one verb walks the same three
-            // steps `fetch` and `fetch-fail` photograph without a hand on them.
+            // A hand on the button's three live shapes: the argument is how many fetches to fail first — none, one,
+            // or enough to stop the timer.
             acts.fetchFailRuns = Math.max(0, Number(arg))
             acts.fetchPointAfter = true
             if (acts.fetchFailRuns > 0) {
@@ -175,9 +151,8 @@ Item {
         }
         return true
     }
-    /// PGG_AUTO_ACT=push-default: the mark lands on a remote and the run stops with the sidebar showing it. The write
-    /// is the barrier — `markedOrigin` only says the name once both `git config` writes have run and the refresh
-    /// behind them has republished the snapshot, so a picture taken here is of a repository that really is marked.
+    /// PGG_AUTO_ACT=push-default: stops with the sidebar showing the mark. `markedOrigin` names it only once both
+    /// `git config` writes ran and the refresh behind them republished, so the picture is of a marked repository.
     SampleTimer {
         id: pushDefaultTimer
         onTriggered: {
@@ -193,12 +168,9 @@ Item {
             driver.complete()
         }
     }
-    /// PGG_AUTO_ACT=publish-upstream: the press after an upstream nothing here answers to was recorded.
-    ///
-    /// **The status the branch is read back with is the barrier**: the write lands, the read behind it re-reads
-    /// `branch.upstream`, and only then does the button have the destination to open on. `tracked=` is the half that
-    /// says the far side is not here yet — the shape this verb is about — and `remote=` / `branch=` are what the
-    /// question opened on, which is the whole of what a picture of two boxes cannot say.
+    /// PGG_AUTO_ACT=publish-upstream. The barrier is the status read after the write (`branch.upstream`): only then
+    /// does the button have the destination to open on. `tracked=` says the far side lacks it; `remote=` / `branch=`
+    /// are what the question opened on, which a picture of two boxes cannot say.
     SampleTimer {
         id: publishUpstreamTimer
         property string want: ""
@@ -212,8 +184,7 @@ Item {
                 publishUpstreamTimer.pressed = true
                 return
             }
-            // The bar has to be all the way down before the boxes it opened on are on screen, and that is the
-            // picture's own moment as well (`AskBar.settled`).
+            // The bar all the way down, so the boxes are on screen (`AskBar.settled`).
             if (!graphPane.askCard.settled)
                 return
             publishUpstreamTimer.stop()
@@ -225,13 +196,9 @@ Item {
             driver.complete()
         }
     }
-    /// PGG_AUTO_ACT=push-target: where the toolbar says this branch's push is going, and the standing beside it. Both
-    /// come off the page the button reads (`RepoPage.pushTargetLabel` / `pushState`), so what answers is the
-    /// binding the window uses. The marks that decided it ride the same line:
-    /// the label alone cannot say **which** of them git would have followed.
-    ///
-    /// `workTree.loaded` is the barrier — before the first status lands the branch is empty and every mark reads as
-    /// unset, which is a destination of nothing.
+    /// PGG_AUTO_ACT=push-target: the toolbar's destination and standing, off the bindings the button reads
+    /// (`RepoPage.pushTargetLabel` / `pushState`), with the marks that decided it — the label cannot say which one git
+    /// followed. `workTree.loaded` is the barrier: before the first status every mark reads unset.
     SampleTimer {
         id: pushTargetTimer
         onTriggered: {
@@ -246,12 +213,9 @@ Item {
             driver.complete()
         }
     }
-    /// PGG_AUTO_ACT=push-hover: a hand on the band's push button, and the words it opens there — the one place the
-    /// count a push sends, or an overwrite drops, is said (the button's own word carries no count).
-    ///
-    /// The standing is read first, as `push-target` reads it, and the opening's fetch is waited out as well: the tip's
-    /// words go to the shared tooltip when it opens and are not taken again, so a count that moved after the hand went
-    /// on would be photographed from before.
+    /// PGG_AUTO_ACT=push-hover: the tip on the band's push button, the one place the count a push sends (or an
+    /// overwrite drops) is said. The opening's fetch is waited out first: the shared tooltip takes the words once as
+    /// it opens, so a count that moved later would be photographed stale.
     SampleTimer {
         id: pushHoverTimer
         property bool pointed: false
@@ -276,9 +240,8 @@ Item {
             driver.complete()
         }
     }
-    /// PGG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark is put on
-    /// first and waited for — the question reads the marked remote as it opens, so a list opened before the write
-    /// landed would be the one from before.
+    /// PGG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark's write is
+    /// waited out first — the question reads the marked remote as it opens.
     SampleTimer {
         id: publishMarkedTimer
         onTriggered: {
@@ -299,9 +262,8 @@ Item {
             driver.complete()
         }
     }
-    /// PGG_AUTO_ACT=remote-menu: the menu a remote's own row raises, left standing (overlay.png). `rows=` is what it is
-    /// offering — two on a remote that is not origin, one on the remote both keys already name, since a row with
-    /// nothing to do is gone (デザイン規約 §メニュー).
+    /// PGG_AUTO_ACT=remote-menu: the menu a remote's own row raises, left standing (overlay.png). `rows=`: two on a
+    /// remote that is not origin, one on the remote both keys already name (デザイン規約 §メニュー).
     SampleTimer {
         id: remoteMenuTimer
         onTriggered: {
@@ -320,7 +282,7 @@ Item {
         }
     }
     /// PGG_AUTO_ACT=remote-url: the form that holds a remote's URL, left standing (overlay.png) — the other way to the
-    /// mark. `box=` is whether the line is checked, which is the half a picture of a form cannot be trusted for.
+    /// mark. `box=` is whether the line is checked, which a picture of a form cannot be trusted for.
     SampleTimer {
         id: remoteUrlTimer
         onTriggered: {
@@ -354,8 +316,8 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // The refusal has to be back and on the button before the second go is sent, and the report is what says it ever
-    // got there — the mark is gone again by the time the screenshot is taken.
+    // The refusal must be on the button before the second go is sent, and the report is the only proof it got there —
+    // the go clears the mark before the shot.
     SampleTimer {
         id: pushRetryTimer
         onTriggered: {
@@ -371,46 +333,38 @@ Item {
             writeBarrier.start()
         }
     }
-    /// Automation: how long a run of failed fetches the verb asked for, and what to do to the button once it is
-    /// there — press the one that resumes, or stand a pointer on whichever shape the run came to rest in.
+    /// The run of failed fetches asked for, and what to do to the button at its end: press resume, or point at it.
     property int fetchFailRuns: 0
     property bool fetchResumeAfter: false
     property bool fetchPointAfter: false
-    /// Whether the word was at full before the hand went on — the half of `fetch-hover` that a picture taken with a
-    /// hand on the button cannot hold.
+    /// Whether the word was at full before the hand went on — what a picture with a hand on the button cannot hold.
     property bool fetchRestFull: false
-    /// The run reached the length it was asked for. Kept apart from the length itself because resuming clears the
-    /// count the tab keeps, and a run that read the length again would start a second one over the resumed button.
+    /// The run reached its length. Kept apart because resuming clears the tab's count, and re-reading the length would
+    /// start a second run over the resumed button.
     property bool fetchRunDone: false
-    /// The write this verb's last fetch was asked at, and the run of failures standing when it was asked.
-    ///
-    /// **A fetch is admitted a drain after it is asked for.** So between the
-    /// drain that finishes one fetch and the drain that admits the next, `busyCount` is 0 and `writeSeq` has already
-    /// moved — which reads exactly like a run that has come to rest. `writeBarrier` completed inside that window and
-    /// photographed a single failure for every length asked for (measured, `fetch-fail 3`, `fetch-fail 4` and
-    /// `fetch-resume` all came back with the warning shape). What is waited for is the answer to the
-    /// ask.
+    /// The `writeSeq` this verb's last fetch was asked at, and the failures standing then. A fetch is admitted a drain
+    /// after it is asked, so between one finishing and the next being admitted `busyCount` is 0 and `writeSeq` has
+    /// moved — which reads like a run at rest, and `writeBarrier` completes there. So the wait is for the answer to
+    /// the ask.
     property int fetchAskSeq: -1
     property int fetchAskFails: -1
-    /// The stopped button, read at the moment the press goes in. Resuming takes it down, and what `fetch-resume`
-    /// ends on is the button that came back — so the stopped half is kept here or it is lost.
+    /// The stopped button, read as the press goes in: resuming takes it down, so it is kept here or lost.
     property bool fetchStopped: false
-    /// The whole of a run of failed fetches and the resume on the end of it. Asking for the next fetch and judging
-    /// that the run is over are the same owner, so the two cannot disagree about whether it is.
+    /// A run of failed fetches and the resume at its end. Asking for the next fetch and judging the run over are one
+    /// owner, so the two cannot disagree.
     SampleTimer {
         id: fetchFailTimer
         onTriggered: {
-            // Reading waits while git is out — the fetch an opening fires comes through `autoFetchRunning`, the
-            // rest through `busyCount` — and on an ask still waiting for its answer (`fetchAskSeq`).
+            // Waits while git is out (the opening's fetch shows in `autoFetchRunning`, the rest in `busyCount`) and on
+            // an ask still waiting for its answer.
             if (repoTab.busyCount !== 0 || repoTab.autoFetchRunning)
                 return
             if (acts.fetchAskSeq >= 0 && repoTab.writeSeq <= acts.fetchAskSeq)
                 return
             if (!acts.fetchRunDone && repoTab.fetchFailures < acts.fetchFailRuns) {
-                // A fetch that came back clean is this verb's premise falling over — the remote is reachable — and
-                // asking again cannot make it fail. Say so once and let the watchdog end the run: completing here
-                // would hand back a picture of a button that never failed (verbs.md §ヘッドレスで色を確かめる時は
-                // デモリモートの URL を疑う).
+                // A clean fetch means the remote is reachable, and asking again cannot make it fail. Say so once and
+                // let the watchdog end the run — completing would photograph a button that never failed
+                // (verbs.md §ヘッドレスで色を確かめる時はデモリモートの URL を疑う).
                 if (acts.fetchAskFails >= 0 && repoTab.fetchFailures <= acts.fetchAskFails) {
                     fetchFailTimer.stop()
                     Harness.report("fetch_fail reachable=true fails=" + repoTab.fetchFailures)
@@ -426,10 +380,8 @@ Item {
                 // Read before the press, because the press is what takes them down.
                 const wasStopped = repoTab.autoFetchSuspended
                 const askedAt = repoTab.writeSeq
-                // The band's own button: the stopped button is the only thing in the product
-                // that asks for the timer back, and a run that called `resumeAutoFetch` directly would pass a build
-                // where the press stopped reaching it. It clears the run and fetches again by itself, so the ticks
-                // after this one wait for that fetch the way they waited for the rest.
+                // The band's own button: calling `resumeAutoFetch` directly would pass a build where the press
+                // stopped reaching it. It clears the run and fetches again, so later ticks wait for that fetch too.
                 if (!page.pageBand.fetchNow())
                     return
                 acts.fetchResumeAfter = false
@@ -439,18 +391,12 @@ Item {
             }
             if (Harness.autoAct === "fetch-hover") {
                 if (acts.fetchPointAfter) {
-                    // The word at rest, read on the tick the run came to rest and before the hand goes on — half of
-                    // what this verb claims is what the button looks like with nobody pointing at it, and after the
-                    // press that half is gone.
                     acts.fetchPointAfter = false
                     acts.fetchRestFull = page.pageBand.fetchWordFull
-                    // The hand goes on where a real one is read
-                    // (`HoverToolButton.pointedAt`).
                     page.pageBand.fetchPointedAt = true
                     return
                 }
-                // The tip waits out `tipDelayMs` before it stands, so the run is not over until the words are on
-                // screen. A button with nothing to say never gets here, which is `fetch-tip`'s side of the question.
+                // A button with nothing to say never gets its tip — `fetch-tip`'s side.
                 if (!page.pageBand.fetchTipStanding)
                     return
                 fetchFailTimer.stop()
@@ -464,9 +410,8 @@ Item {
             }
             fetchFailTimer.stop()
             if (Harness.autoAct === "fetch-resume")
-                // What the picture cannot hold: the button was stopped when the press went in, and a fetch ran again
-                // after it. The one it ends on is a button back at work, which is the warning shape — the same
-                // picture `fetch-fail 1` takes.
+                // What the picture cannot hold: stopped at the press, and a fetch ran after it. The picture is the
+                // warning shape, the same as `fetch-fail 1`.
                 Harness.report("fetch_resume stopped=" + acts.fetchStopped
                                   + " fetched=" + (repoTab.fetchFailures > 0)
                                   + " fails=" + repoTab.fetchFailures
@@ -490,8 +435,7 @@ Item {
             driver.complete()
         }
     }
-    /// `publish-remotes` is about the popup. The form is created asynchronously
-    /// with the ask bar.
+    /// `publish-remotes`: the popup, asked for each tick — the form is created asynchronously with the ask bar.
     SampleTimer {
         id: publishRemotesTimer
         onTriggered: {
@@ -503,14 +447,9 @@ Item {
             driver.complete()
         }
     }
-    /// `publish-dismiss` is about what the bar wears on the way back up, which no picture of this run can hold: the
-    /// 200ms it spends going is over long before the shot, and a bar that turned `warning` and empty for the whole of
-    /// it frames exactly like one that kept its question.
-    ///
-    /// The ✕ is pressed through the bar's own handler once the question is both dressed (`publishChecked` — the
-    /// remote has answered, so the frame and the pill's word are settled) and all the way down, and the line is read
-    /// in the same turn: that is the frame a reader is looking at. `shut=false` is what says the reading was taken
-    /// while the bar was still on screen — a line read after it had gone would be about nothing.
+    /// `publish-dismiss`: what the bar wears on the way back up, which no picture holds — the exit is over long before
+    /// the shot. The ✕ goes through the bar's own handler once the question is dressed (`publishChecked`) and all the
+    /// way down, and the line is read in the same turn; `shut=false` says it was read with the bar still on screen.
     SampleTimer {
         id: publishDismissTimer
         onTriggered: {
@@ -526,7 +465,7 @@ Item {
             publishGoneTimer.start()
         }
     }
-    /// …and the picture is taken once it really has gone, so the run is not photographing a bar caught half way.
+    /// …and the picture once it has really gone, not a bar caught half way.
     SampleTimer {
         id: publishGoneTimer
         onTriggered: {
@@ -536,8 +475,7 @@ Item {
             driver.complete()
         }
     }
-    /// `publish-add` stops with the real dialog on screen. A check that happens to finish behind it is
-    /// unrelated; the dialog ends the run.
+    /// `publish-add` stops with the real dialog on screen; a check finishing behind it is unrelated.
     SampleTimer {
         id: publishDialogTimer
         onTriggered: {
@@ -547,8 +485,7 @@ Item {
             driver.complete()
         }
     }
-    /// Automation: the dialog's own button, once it is both visible and valid. This is the `-go` path; an empty URL
-    /// cannot be submitted.
+    /// `publish-new-go`: the dialog's own button, once visible and valid (an empty URL cannot be submitted).
     SampleTimer {
         id: publishNewTimer
         onTriggered: {
@@ -563,7 +500,7 @@ Item {
             publishAnswerTimer.start()
         }
     }
-    /// Automation: what the far side turned out to hold, once the remote has had time to answer.
+    /// What the far side turned out to hold, once the remote has answered.
     SampleTimer {
         id: publishSettleTimer
         onTriggered: {
@@ -580,11 +517,9 @@ Item {
             driver.complete()
         }
     }
-    /// PGG_AUTO_ACT=publish-tip: the question `publish-taken` stops at, with a hand on its pill. What an overwrite
-    /// would drop is said in the pill's tip and nowhere else on the bar, so a picture of the bar alone cannot hold it.
-    ///
-    /// The hand goes on once the far side has answered and the bar has stopped moving: the tooltip places itself
-    /// against the pill as it opens, and a pill still travelling down would leave it standing where the pill was.
+    /// PGG_AUTO_ACT=publish-tip: the question `publish-taken` stops at, with a hand on its pill — the tip is the only
+    /// place that says what an overwrite would drop. The hand goes on once the bar has stopped moving: the tooltip
+    /// places itself against the pill as it opens, and would stand where a travelling pill was.
     SampleTimer {
         id: publishTipTimer
         property bool pointed: false
@@ -605,31 +540,27 @@ Item {
             driver.complete()
         }
     }
-    /// Automation: the answer, given after the remote has had time to say what it has — the pill is dead until it has.
+    /// The answer, once the remote has said what it has — the pill is dead until then.
     SampleTimer {
         id: publishAnswerTimer
-        /// Whether the answer comes from the name box instead of the pill (`PublishFlow.enterBranch`). **A held
-        /// question is never answered this way** — the key is not a gesture (`AskBar.answerFromForm`) — so the run
-        /// that asks for one waits out its watchdog, which is the rule saying so.
+        /// Whether the answer comes from the name box instead of the pill (`PublishFlow.enterBranch`). A held question
+        /// is never answered this way — the key is not a gesture (`AskBar.answerFromForm`) — so such a run waits out
+        /// its watchdog.
         property bool byKey: false
         onTriggered: {
             if (!publishFlow.publishChecked || !graphPane.askAnswerable)
                 return
             publishAnswerTimer.stop()
-            // `far` is what the far side turned out to hold — the other line's `state` is this end's own push state,
-            // and the two answer different questions.
+            // `far` is what the far side holds — not the other line's `state`, which is this end's push state.
             Harness.report("publish answering far="
                               + publishFlow.publishState
                               + " unsure=" + publishFlow.publishUnsure
                               + " answerable=" + graphPane.askAnswerable)
-            // **The push is the write this run waits out** — `publish-new-go` presses two, and only
-            // the push is the one the picture is of. Said out loud: arming over a
-            // write this run is still waiting out is a breach, and forgetting to wait looks the same from there
-            // (`repo_tab::write_watch`).
+            // The push is the write this run waits out — `publish-new-go` presses two. Said out loud: arming over a
+            // write still being waited out is a breach (`repo_tab::write_watch`).
             driver.letWriteGo()
-            // The same gesture a person is given: a hold cannot be answered by a click here either. Each way in is a
-            // press of its own and arms its own watch (`holdToEnd` / `pressWrite`) — the hold's is its end, ticks
-            // after this, and a stray answer landing inside it is not what the barrier opens on.
+            // The gesture a person is given: a hold is not answered by a click. Each way in arms its own watch
+            // (`holdToEnd` / `pressWrite`); the hold's is at its end, ticks after this.
             if (publishFlow.publishRefused)
                 driver.holdToEnd(graphPane)
             else

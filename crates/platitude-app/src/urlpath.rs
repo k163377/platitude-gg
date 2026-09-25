@@ -1,18 +1,16 @@
-//! `file://` URL ↔ local path conversion for the QML FolderDialog: its
-//! result comes back as a URL, and the folder it opens at is given as one.
+//! `file://` URL ↔ local path conversion for the QML FolderDialog, which
+//! answers with a URL and is opened at one.
 //!
-//! Kept dependency-free: only the shapes QML actually produces need to be
-//! handled (`file:///C:/dir`, `file:///home/user/dir`, percent-encoded).
+//! Dependency-free: only the shapes QML produces are handled
+//! (`file:///C:/dir`, `file:///home/user/dir`, percent-encoded).
 
 use std::path::{Path, PathBuf};
 
-/// Converts a QML `url` string to a local filesystem path.
-/// Non-`file:` inputs are returned as plain paths unchanged.
+/// A non-`file:` input is taken as a path already.
 pub fn file_url_to_path(url: &str) -> PathBuf {
     let Some(rest) = url.strip_prefix("file://") else {
         return PathBuf::from(url);
     };
-    // Strip an authority-less host part: `file:///C:/x` → `/C:/x`.
     let decoded = percent_decode(rest);
     #[cfg(windows)]
     {
@@ -23,10 +21,9 @@ pub fn file_url_to_path(url: &str) -> PathBuf {
         {
             return PathBuf::from(drive);
         }
-        // A rest that does not start at `/` names a host — `file://server/
-        // share` is the URL form of a UNC path (what `path_to_file_url`
-        // writes and the FolderDialog returns). Read as-is it would be a
-        // relative path resolving against the working directory.
+        // A rest not starting at `/` names a host (`file://server/share` is
+        // a UNC path); read as-is it would resolve against the working
+        // directory.
         if !decoded.is_empty() && !decoded.starts_with('/') {
             return PathBuf::from(format!("//{decoded}"));
         }
@@ -39,34 +36,26 @@ pub fn file_url_to_path(url: &str) -> PathBuf {
 }
 
 /// The folder the picker opens at for a repository at `path`: the one it
-/// sits in — or the repository itself when it sits at a root, where there
-/// is nothing above to go up to and the root lists like any other folder.
+/// sits in, or the repository itself when it is a root.
 pub fn picker_folder_url(path: &Path) -> String {
     path_to_file_url(path.parent().unwrap_or(path))
 }
 
-/// A `file:` URL for a file QML is to load — an assigned avatar.
+/// A `file:` URL for a file QML is to load.
 pub fn file_url(path: &Path) -> String {
     path_to_file_url(path)
 }
 
-/// The last segment of a path, whichever separator wrote it — the name a
-/// folder is shown by where the whole path would not be read (a question
-/// naming another working copy, a tooltip naming its folder).
+/// The last segment of a path, whichever separator wrote it.
 pub fn path_leaf(path: &str) -> &str {
     path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
-/// A path spelled the way the screen spells one: `/`, which is what git
-/// answers with and what the settings file is written in
+/// A path spelled with `/`, the way the screen spells one
 /// (デザイン規約 §パスの区切り).
 ///
-/// **Only Windows has anything to fold.** A backslash is a folder
-/// boundary there and an ordinary letter of a name everywhere else, so
-/// folding one on the other two platforms renames the folder. The two
-/// prefixes that mean their backslashes to Windows itself are left
-/// alone for the reason `repo_key` leaves them: rewriting `\\?\`
-/// addresses somewhere else.
+/// Folds only on Windows: elsewhere a backslash is a letter of the name.
+/// The `\\?\` / `\\.\` prefixes are left alone, as `repo_key` leaves them.
 pub fn shown_path(path: &str) -> String {
     #[cfg(windows)]
     if !path.starts_with(r"\\?\") && !path.starts_with(r"\\.\") {
@@ -75,8 +64,7 @@ pub fn shown_path(path: &str) -> String {
     path.to_string()
 }
 
-/// Converts a local path to a `file:` URL for QML. Empty for a path with
-/// no root: a dialog cannot be opened at a folder that is not one.
+/// Empty for a path with no root: a dialog cannot be opened at one.
 fn path_to_file_url(path: &Path) -> String {
     let encoded = percent_encode(&path.to_string_lossy().replace('\\', "/"));
     if encoded.starts_with("//") {
@@ -85,17 +73,15 @@ fn path_to_file_url(path: &Path) -> String {
     } else if encoded.starts_with('/') {
         format!("file://{encoded}")
     } else if encoded.as_bytes().get(1) == Some(&b':') {
-        // The URL brings its own slash: `C:/x` → `file:///C:/x`. A
-        // drive letter is a root only Windows reads.
+        // The URL brings its own slash: `C:/x` → `file:///C:/x`.
         format!("file:///{encoded}")
     } else {
         String::new()
     }
 }
 
-/// Percent-encodes a path for a `file:` URL, leaving the separators and
-/// the drive colon to be read as themselves. `#` and `?` are the ones
-/// that matter: unencoded, a folder named after either cuts the URL short.
+/// Leaves the separators and the drive colon as themselves. `#` and `?`
+/// are the ones that matter: unencoded, either cuts the URL short.
 fn percent_encode(input: &str) -> String {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let mut out = String::with_capacity(input.len());
@@ -148,8 +134,6 @@ fn hex_val(c: u8) -> Option<u8> {
 mod tests {
     use super::*;
 
-    /// The screen is handed `/` however the path arrived, so the same
-    /// repository reads the same on all three platforms.
     #[test]
     fn a_path_is_shown_with_the_separator_git_answers_with() {
         assert_eq!(shown_path("C:/Users/dev/repo"), "C:/Users/dev/repo");
@@ -162,8 +146,7 @@ mod tests {
         assert_eq!(shown_path(r"C:\Users\dev\repo"), "C:/Users/dev/repo");
     }
 
-    /// The prefix means its backslashes to Windows itself: respelling it
-    /// addresses somewhere else.
+    /// Respelling the prefix addresses somewhere else.
     #[cfg(windows)]
     #[test]
     fn a_verbatim_prefix_keeps_the_backslashes_it_is_made_of() {
@@ -171,8 +154,6 @@ mod tests {
         assert_eq!(shown_path(r"\\.\C:\repo"), r"\\.\C:\repo");
     }
 
-    /// Off Windows a backslash is a letter of the name, so folding one
-    /// would name a folder that is not there.
     #[cfg(not(windows))]
     #[test]
     fn a_backslash_is_left_where_it_is_part_of_a_name() {
@@ -247,14 +228,12 @@ mod tests {
         );
     }
 
-    // What counts as a root is the platform's own reading of the path, so
-    // the drive and UNC shapes are only roots where they mean anything.
+    // What counts as a root is the platform's reading of the path, so the
+    // drive and UNC roots are tested on Windows only.
     #[test]
     fn a_repository_at_a_root_opens_the_root() {
-        // A root is the top, so the picker stays there. An empty answer
-        // would open wherever the dialog was last left.
+        // An empty answer would open wherever the dialog was last left.
         assert_eq!(picker_folder_url(Path::new("/")), "file:///");
-        // A repository one step in still has the root to go up to.
         assert_eq!(picker_folder_url(Path::new("/repo")), "file:///");
     }
 
@@ -264,10 +243,9 @@ mod tests {
         assert_eq!(picker_folder_url(Path::new("C:/")), "file:///C:/");
         assert_eq!(picker_folder_url(Path::new(r"C:\")), "file:///C:/");
         assert_eq!(picker_folder_url(Path::new("C:/repo")), "file:///C:/");
-        // A share is a root of its own: `\\server` is not a folder. Handed
-        // back by `parent()` that root carries its separator and the URL
-        // keeps it, which is what a folder URL looks like anyway
-        // (`file:///C:/`); given as the repository itself it has none.
+        // A share is a root (`\\server` is not a folder). From `parent()`
+        // it carries a trailing separator, as `C:/` does; given as the
+        // repository itself it has none.
         assert_eq!(
             picker_folder_url(Path::new(r"\\server\share")),
             "file://server/share"

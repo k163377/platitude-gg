@@ -4,13 +4,9 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// The gate that stands on startup when git has no name and email to put on a commit. It asks for that one thing and
-// nothing else — the rest of git's configuration is not what the reader was stopped for, and it is a click away in
-// the settings screen's git chapter (`SettingsDialog`), which is where an identity that is already set is edited.
-//
-// A card: this is a question waiting for an answer. The owner decides when to open and close it (the dialog
-// reports dismissal); "Not now" leaves the app fully
-// usable — reading a repository needs no identity.
+// The startup gate when git has no identity to commit with. It asks for that pair only — the rest of git's
+// configuration is in the settings screen (`SettingsDialog`). The owner opens and closes it; "Not now" leaves the app
+// usable, since reading a repository needs no identity.
 AppDialog {
     id: identityDialog
 
@@ -18,8 +14,8 @@ AppDialog {
 
     onClosed: identityDialog.dismissed()
 
-    // A write is in flight that this dialog asked for. Only then does a finished write close it — the notification is
-    // shared with the startup check, whose answer leaves the dialog standing.
+    // A write this dialog asked for is in flight. Only its finish closes the dialog — `identityChanged` is shared with
+    // the startup check.
     property bool saving: false
 
     function submit() {
@@ -34,8 +30,7 @@ AppDialog {
         fields.focusName()
     }
 
-    /// The two boxes, written from outside. An automation-only exposure, the same one `GraphPane.view` is
-    /// (app-ui.md): a run has no keyboard, and what it is filling in is the state a person's typing leaves behind.
+    /// Automation-only: fills the two boxes (a run has no keyboard).
     function fill(name, email) {
         fields.nameText = name
         fields.emailText = email
@@ -47,8 +42,7 @@ AppDialog {
             if (!identityDialog.saving || AppBackend.identityBusy)
                 return
             identityDialog.saving = false
-            // Closing on "git raised nothing" would close over a write that only half landed — both keys are set either
-            // way, so the answer is what git reports for each of them.
+            // Not on "git raised nothing": a half-landed write raises nothing either. Close only when git reports both.
             if (AppBackend.identityNameSaved && AppBackend.identityEmailSaved)
                 identityDialog.close()
         }

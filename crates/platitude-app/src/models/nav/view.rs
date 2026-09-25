@@ -5,10 +5,8 @@ impl NavSectionModel {
     /// filtered — and finds the current entry among them.
     pub(super) fn arrange(&mut self) {
         let needle = self.filter.to_lowercase();
-        // A tree places the rows of both ref sections. Under a filter the
-        // branches stand flat by their whole names, while the remotes keep
-        // each remote as a row over its branches (`build_remote_groups`),
-        // so their refs are named by a tree either way.
+        // Filtered branches stand flat by whole name; remotes sit under a
+        // remote row either way (`build_remote_groups`).
         self.tree_named = match self.section.as_str() {
             "remotes" => true,
             "branches" => needle.is_empty(),
@@ -17,12 +15,9 @@ impl NavSectionModel {
         self.arranged = if needle.is_empty() {
             match self.section.as_str() {
                 "branches" | "remotes" => Some(self.build_tree()),
-                // The worktree holds every bucket run (conflicts → unstaged
-                // → staged) and shows one of them: the run this list is the
-                // list of, or all of them where none was named (the tests,
-                // which read the source's own order). Trees are built a run
-                // at a time, so a folder of the same name under two of them
-                // folds apart.
+                // Every bucket run is held; this list shows its own `run`,
+                // or all of them where none is named (tests). Trees are
+                // built per run (`wt_tree_into`).
                 "worktree" => {
                     let mut out = Vec::new();
                     let mut at = 0;
@@ -47,9 +42,7 @@ impl NavSectionModel {
                     }
                     Some(out)
                 }
-                // Nothing arranges these — until a row is being shown as
-                // gone, which is an order of its own and has to be written
-                // down (`hidden_at`).
+                // Read straight from the source unless a row is hidden.
                 _ if self.hidden.is_empty() => None,
                 _ => Some(
                     (0..self.all.len())
@@ -85,22 +78,12 @@ impl NavSectionModel {
         };
         self.place_head();
         self.shown_total = self.shown_rows() as i32;
-        // The count the section's band shows. **A hidden row comes off
-        // it** — the band is saying how many the repository has, and a
-        // row being shown as already deleted has to be gone from the
-        // number as well as from the list, or the band reads one more
-        // than the reader can count (デザイン規約 §消す操作は先に画面から消す).
-        // A *filtered* row still counts: that band answers "how many are
-        // there" (`set_filter`).
+        // The band's count: hidden rows come off it, filtered rows do not
+        // (デザイン規約 §消す操作は先に画面から消す).
         self.total = (self.all.len() - self.all.named_count(&self.hidden)) as i32;
-        // The bucket heading's number, counted where the rows are cut to
-        // the run — so the heading and the list under it cannot come to
-        // read the bucket rule (`Bucket::run`) two ways. Filter-
-        // independent for the same reason `total` is, and hidden rows
-        // come off it by `total`'s own rule. Sections without a run
-        // (everything but the worktree buckets) answer 0: the property
-        // is the bucket heading's, and a tags list publishing its whole
-        // row count under this name would only invite a wrong reader.
+        // The bucket heading's number, cut to the run here as the list is,
+        // so the two cannot read `Bucket::run` two ways. 0 without a run:
+        // the property is only the heading's.
         self.run_files = if self.run.is_empty() {
             0
         } else {
@@ -110,21 +93,11 @@ impl NavSectionModel {
         };
     }
 
-    /// Finds the current entry among the rows on show and settles what
-    /// stands in for it where it has none: which row it is, which folded
-    /// row is holding it, and the column and the name its stand-in takes
-    /// (`HeadPinRow`).
-    ///
-    /// **The column and the name are one reading.** A row on show is
-    /// nested by its own folders and says the segment under the last of
-    /// them; a branch a fold closed over is nested by that folder and
-    /// says its name from there down — the folders above it are rows the
-    /// reader can still see, and a name repeating them says twice what
-    /// the screen says once. The folder that closed leads the name,
-    /// because the segment under it alone would read as a name beside
-    /// that folder rather than inside it. A stand-in a filter put up cuts
-    /// nothing: the tree is flat there, so nothing on screen says any
-    /// part of the name.
+    /// Finds the current entry among the rows on show and settles its
+    /// stand-in (`HeadPinRow`): its row, the folded row holding it, and
+    /// the column and name it takes — the closed folder's column, named
+    /// from that folder down; the whole name under a filter (デザイン規約
+    /// §左メニューの所作 の張り付き行の表).
     fn place_head(&mut self) {
         let head = (0..self.shown_rows()).find(|at| {
             self.row_at(*at).is_some_and(|row| {
@@ -163,15 +136,10 @@ impl NavSectionModel {
         self.head_shown = shown;
     }
 
-    /// The shown row of the closed folder the current branch is inside,
-    /// or -1 when no folder is what took its row away.
-    ///
-    /// Asked only once the row itself is gone from the list. The folder
-    /// that swallowed it is the outermost closed one over it — the inner
-    /// ones are not emitted at all (`build_tree`) — so the one row on
-    /// screen whose fold key is a folder of the branch's name is it. A
-    /// filter answers nothing here: it flattens the tree, so there is no
-    /// folder row left to be behind.
+    /// The shown row of the closed folder hiding the current branch, or
+    /// -1. Only the outermost closed folder is emitted (`build_tree`), so
+    /// the folded row whose key prefixes the name is it. A filter
+    /// flattens the tree, so it answers -1.
     fn folded_over_head(&self) -> i32 {
         if self.head_name.is_empty() || !self.filter.is_empty() {
             return -1;
@@ -195,15 +163,14 @@ impl NavSectionModel {
         !self.hidden.is_empty() && self.all.is_named(at, &self.hidden)
     }
 
-    /// Whether a source row belongs to the run this list shows. Every row
-    /// does where no run was named — every section but the worktree.
+    /// Whether a source row belongs to the run this list shows (every row
+    /// where no run was named).
     fn in_run(&self, at: usize) -> bool {
         self.run.is_empty() || self.run_of(at) == self.run
     }
 
-    /// What the memory report files this list under. The worktree is three
-    /// lists, one per bucket run, and three lines under one name would be
-    /// read as one list that grew.
+    /// The memory report's name for this list — one per worktree run, so
+    /// three lists do not read as one that grew.
     fn named(&self) -> String {
         if self.run.is_empty() {
             self.section.clone()
@@ -212,9 +179,8 @@ impl NavSectionModel {
         }
     }
 
-    /// Shapes the rows again and tells the view its whole list changed.
-    /// The begin/end pair is written out — `QAbstractItemModel` has no
-    /// `reset` wrapper to inherit.
+    /// Re-arranges under one model reset, spelled as a begin/end pair —
+    /// `QAbstractItemModel` has no `reset` wrapper.
     pub(super) fn reshape(&mut self) {
         self.begin_reset_model();
         self.arrange();
@@ -257,10 +223,9 @@ impl NavSectionModel {
         whole.get(from..).unwrap_or(whole)
     }
 
-    /// The local name a remote-tracking ref would take, read from the
-    /// snapshot that made the remote row visible. Keeping this answer with
-    /// that snapshot avoids a separate tab-level feed racing the first
-    /// double-click on a remote row.
+    /// The local name a remote-tracking ref would take, from the snapshot
+    /// that shows the row — a separate feed would race the first
+    /// double-click.
     pub(super) fn local_name_of(&self, remote_ref: &str) -> String {
         let Source::Remotes(snapshot) = &self.all else {
             return remote_ref.to_string();
@@ -281,12 +246,9 @@ impl NavSectionModel {
             .to_string()
     }
 
-    /// What the row identified by one field answers for another.
-    ///
-    /// Asks the section's whole source, so an active filter or a
-    /// collapsed folder does not hide the answer — and asks it
-    /// undented, because a name given from outside is the whole one git
-    /// knows.
+    /// What the row identified by one field answers for another, over the
+    /// whole source (filters and folds hide nothing) and undented (a name
+    /// from outside is the whole one).
     pub(super) fn told(&self, known: Role, text: &str, wanted: Role) -> String {
         (0..self.all.len())
             .filter_map(|at| self.all.entry(at))
@@ -300,13 +262,9 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
-    /// The path of the other working copy holding `branch` — what
-    /// `worktree_holding` answers, and why it answers it, is on the slot.
-    ///
-    /// Two fields decide it, so this cannot go through `told`: the branch
-    /// a worktree row shows on its right, and the mark saying the row is
-    /// the copy this window is already in — that one is where a switch is
-    /// a no-op.
+    /// The path of the other working copy holding `branch` (contract on
+    /// the `worktree_holding` slot). Not `told`: two fields decide it — the
+    /// row's branch, and not being this window's own copy.
     pub(super) fn worktree_with(&self, branch: &str) -> String {
         if branch.is_empty() || self.section != "worktrees" {
             return String::new();
@@ -326,12 +284,8 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
-    /// Where a renamed file came from, whole — what `orig_of` answers,
-    /// and why it answers it, is on the slot.
-    ///
-    /// The first row of that path that **names a source**, which is what
-    /// keeps it off `told`: that one answers with the first row of the
-    /// path whatever the row holds.
+    /// Where a renamed file came from (contract on the `orig_of` slot).
+    /// Not `told`, which takes the path's first row whatever it holds.
     pub(super) fn orig_path_of(&self, path: &str) -> String {
         (0..self.all.len())
             .filter_map(|at| self.all.entry(at))
@@ -346,14 +300,10 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
-    /// Which of the rows on show a ref sits on, by the name git knows it
-    /// by; -1 when it is on none.
-    ///
-    /// Asked of the rows as they stand, unlike `told`: what this answers
-    /// is where to scroll, and a row behind a filter or folded into a
-    /// closed folder is nowhere the view can go. The name is read the
-    /// way the rows are keyed (`NavList.keyOf`) — the full one, or what
-    /// the row shows where there is no full one.
+    /// Which row on show a ref sits on, by the name git knows it by; -1
+    /// when none. Reads the rows on show, unlike `told` — this answers
+    /// where to scroll. Rows are keyed as `NavList.keyOf` keys them: the
+    /// full name, else the shown one.
     pub(super) fn row_of(&self, name: &str) -> i32 {
         (0..self.shown_rows())
             .find(|at| {
@@ -378,9 +328,8 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
-    /// The display run a source row sits in — what the working tree's
-    /// list is built one of at a time, so that a folder of the same name
-    /// under two of them folds apart.
+    /// The display run a source row sits in (`Bucket::run`); empty for
+    /// non-file rows.
     fn run_of(&self, at: usize) -> &'static str {
         match self.all.entry(at) {
             Some(Entry::File { bucket, .. }) => bucket.run(),
@@ -388,14 +337,10 @@ impl NavSectionModel {
         }
     }
 
-    /// Points the section at what just arrived, and answers whether the
-    /// rows it shows moved.
-    ///
-    /// A poll tick republishes refs and status whether or not they moved;
-    /// swapping identical data in would still reset the Qt model — every
-    /// delegate rebuilt, the inner list scrolled back. The entries
-    /// themselves are compared: one moved branch is not a reason for the
-    /// tag section to rebuild forty-five thousand delegates.
+    /// Points the section at what just arrived, and answers whether its
+    /// rows moved. Polls republish unchanged data, and a reset rebuilds
+    /// every delegate and scrolls the list back, so each section compares
+    /// its own entries.
     pub(super) fn take(&mut self, arrived: Source) -> bool {
         let moved = match (&self.all, &arrived) {
             (Source::Locals(held), Source::Locals(fresh)) => held.locals != fresh.locals,
@@ -421,9 +366,8 @@ impl NavSectionModel {
         moved
     }
 
-    /// Filed as two lines on purpose: `arranged` being nothing is what
-    /// says the view is reading the source directly, and a single number
-    /// would hide the day that stops being true.
+    /// Two lines on purpose: an empty `arranged` shows the view reading
+    /// the source directly, which one number would hide.
     pub(super) fn note_footprint(&self) {
         crate::harness::memprobe::note_bytes(
             &format!("nav-{}-all", self.named()),

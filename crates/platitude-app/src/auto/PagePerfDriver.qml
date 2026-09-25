@@ -38,8 +38,7 @@ Item {
                                   && graphModel.finishCount > 0 && branchesModel.refsLoaded
                                   && worktreeModel.loaded
 
-    // Every stage is taken here and said as it is taken, so a run that ends at its ceiling names the stage it stopped
-    // in (規約 §UI 自動化: 段を持つドライバは段が変わるたびに 1 行名乗る).
+    // Every stage change goes through here (rules/app-ui.md §UI 自動化「段を持つドライバは段が変わるたびに名乗る」).
     function enter(next) {
         driver.stage = next
         Harness.report("perf_stage " + next + " operation=" + driver.operation)
@@ -58,9 +57,8 @@ Item {
             diffPane.view.forceLayout()
         driver.frameBefore = driver.frames
         driver.enter(next)
-        // `update()`, not `requestUpdate()`: the offscreen run's software loop (and the basic one) swaps only for a
-        // window told to update, so a bare request over a still scene renders a frame nobody is sent
-        // (rules-refs/app-ui.md 描画境界).
+        // `update()`, not `requestUpdate()`: a bare request over a still offscreen scene swaps no frame
+        // (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
         page.Window.window.update()
     }
 
@@ -98,8 +96,7 @@ Item {
                 driver.fail("none-selected-a-commit")
                 return
             }
-            // ListView gives its first row a current index even though the
-            // page never activated a commit. Clear that visual selection too.
+            // ListView gives its first row a current index though the page never activated a commit; clear it too.
             const hadCurrent = graphPane.view.currentIndex >= 0
             graphPane.setCurrentRow(-1)
             Harness.report("perf_selection mode=none oid=none")
@@ -116,8 +113,7 @@ Item {
         if (oid !== "")
             row = graphModel.rowOf(oid)
         else if (PerfProbe.selection === "first") {
-            // The newest commit, past the working tree's row and any stash over the tip
-            // (`GraphModel.newestCommitRow` — the same rule the page's default and `PageAutoStart` ask).
+            // Past the WIP row and any stash over the tip (`GraphModel.newestCommitRow`).
             row = graphModel.newestCommitRow()
         }
         if (row < 0) {
@@ -202,8 +198,8 @@ Item {
             }
             const before = diffPane.view.contentY
             diffPane.view.positionViewAtBeginning()
-            // A static offscreen scene need not swap another frame. The caller
-            // already observed this diff's frame; only a moved viewport needs one more.
+            // A still offscreen scene swaps no further frame, and this diff's frame was already seen: wait for one
+            // only if the viewport moved.
             if (diffPane.view.contentY === before)
                 driver.beginDiffScroll()
             else
@@ -386,9 +382,7 @@ Item {
         from: driver.graphPane.view.originY
         to: from + Math.max(0, Math.min(3000 * Theme.graphRowHeight,
                                       driver.graphPane.view.contentHeight - driver.graphPane.view.height))
-        // The scroll the frame rate is read over: a window of measurement. `onFinished` reads how far
-        // the view actually travelled and whether it was on screen, and fails
-        // the run when either says no (規約 §UI 自動化の因果性: 成功条件も因果だけ).
+        // The window the frame rate is read over; `onFinished` fails the run unless the view moved while on screen.
         // waits(measured): the length of the sample, judged by what the scroll did
         duration: 12000
         onFinished: {
@@ -403,11 +397,9 @@ Item {
         }
     }
 
-    // **The predicates are read again on the beat, not only when a model says it moved.** What `tick()` reads includes
-    // inputs no signal here is wired to — the pane's size and visibility, the page's diff — and a run whose last change
-    // is one of those would otherwise stay at its stage until the watchdog. **And a stage waiting for a frame asks
-    // again on every beat until one arrives**: a request the window took while it was not visible is spent without a
-    // swap. Not over a scroll: that is the window being measured, and its animation's end is what moves it on.
+    // Re-reads the predicates on the beat — `tick()` reads inputs no signal here is wired to (the pane's size and
+    // visibility, the page's diff) — and re-asks for a frame each beat, since a request taken while the window was
+    // not visible swaps nothing. Off over a scroll: the animation's end moves that stage on.
     SampleTimer {
         running: driver.stage !== "finished" && driver.stage !== "failed" && !driver.stage.endsWith("scrolling")
         onTriggered: {

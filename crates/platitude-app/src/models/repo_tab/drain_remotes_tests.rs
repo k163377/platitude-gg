@@ -14,10 +14,8 @@ fn remotes(names: &[&str], push_default: &str, checkout_default: &str) -> TabMsg
     }
 }
 
-/// A remote is origin only where both keys name it. A rename in a
-/// terminal carries the push's key to the new name and leaves the
-/// checkout one on the old, and that remote still has the mark to
-/// finish — while its badge goes on following the push's key.
+/// A rename in a terminal moves only the push's key: the badge follows
+/// it, and the origin mark waits for both.
 #[test]
 fn only_a_remote_both_keys_name_is_marked_as_origin() {
     let mut tab = RepoTab::default();
@@ -32,9 +30,6 @@ fn only_a_remote_both_keys_name_is_marked_as_origin() {
     assert_eq!(tab.marked_origin, "");
 }
 
-/// A push key naming a remote this repository does not have is left out,
-/// and the checkout key naming the same missing remote does not bring it
-/// back as origin.
 #[test]
 fn keys_naming_a_missing_remote_mark_nothing() {
     let mut tab = RepoTab::default();

@@ -1,14 +1,11 @@
 //! What the rows come out as once a filter, a fold and a tree have had
-//! their say. Beside the view, so the ceiling the view sits under stays
-//! about the view (.claude/rules/structure.md).
+//! their say.
 
 use super::testkit::*;
 use super::*;
 
-/// The filtered REMOTES keep each remote as its own open row and lay the
-/// branches that answer flat under it by their branch names; the match
-/// is read off the whole name, and the row is named to git by it
-/// (`build_remote_groups`).
+/// The match reads the whole name, and the row is still named to git by
+/// it (`build_remote_groups`).
 #[test]
 fn a_filtered_remote_keeps_its_row_and_lays_its_branches_flat_under_it() {
     let mut model = section(
@@ -49,10 +46,8 @@ fn a_filtered_remote_keeps_its_row_and_lays_its_branches_flat_under_it() {
     assert_eq!(says(&model, 1, Role::Full), "origin/feature/one");
 }
 
-/// The cut is by configured name — `my/fork` carries `my/fork/topic` and
-/// `my` carries `my/topic` — and by the first slash where nothing
-/// configured owns the ref, so a remote gone from configuration still
-/// heads its rows.
+/// `gone` is no configured remote, so the first slash cuts it and it
+/// still heads its row.
 #[test]
 fn the_filtered_remotes_are_cut_by_configured_name_and_then_by_the_first_slash() {
     let mut model = section(
@@ -79,9 +74,7 @@ fn the_filtered_remotes_are_cut_by_configured_name_and_then_by_the_first_slash()
     assert_eq!(says(&model, 5, Role::Full), "my/topic");
 }
 
-/// A remote's row under a filter starts open whatever the tree's default
-/// for it is, folds the way the tree's rows fold, and the fold is one
-/// answer for both shapes (`folder_expanded`).
+/// The fold is one answer for both shapes (`folder_expanded`).
 #[test]
 fn a_filtered_remote_starts_open_and_folds_like_its_row_in_the_tree() {
     let mut model = section(
@@ -116,12 +109,11 @@ fn a_filtered_remote_starts_open_and_folds_like_its_row_in_the_tree() {
     assert!(!model.folder_expanded("origin", 0));
 }
 
-/// What the sticky stand-in steps itself in by (`HeadPinRow`): the folds
-/// of the row it stands for, and none at all while there is no such row.
+/// The stand-in's indent (`HeadPinRow`) is its row's, and 0 while it has
+/// none.
 #[test]
 fn the_head_row_reports_the_fold_its_stand_in_takes() {
-    // The row is the one the record names
-    // (`RefsMsg::Head`).
+    // `head_name` comes from `RefsMsg::Head`.
     let branches = |head: &str| {
         let mut model = section(
             "branches",
@@ -135,31 +127,26 @@ fn the_head_row_reports_the_fold_its_stand_in_takes() {
         model
     };
 
-    // feature / topic-a / main: a branch under a folder is one step in,
-    // and the stand-in for it takes the same step.
+    // feature / topic-a / main.
     let model = branches("feature/topic-a");
     assert_eq!(model.head_row, 1);
     assert_eq!(depth_of(&model, 1), 1);
     assert_eq!(model.head_depth, 1);
 
-    // A branch with no `/` is nested by nothing, and neither is its
-    // stand-in — the step a stand-in always took put its name in a column
-    // no row was in.
+    // No `/`: nested by nothing, nor is its stand-in.
     let mut model = branches("main");
     assert_eq!(model.head_row, 2);
     assert_eq!(depth_of(&model, 2), 0);
     assert_eq!(model.head_depth, 0);
 
-    // Filtered away: the stand-in has no row to follow and takes a seat of
-    // its own at the head of the list, where the rows themselves begin.
+    // Filtered away: no row to follow, so the head of the list.
     model.filter = "feature".to_string();
     model.arrange();
     assert_eq!(model.head_row, -1);
     assert_eq!(model.head_depth, 0);
 }
 
-/// Which row the sticky stand-in sits under once a fold has closed over
-/// the branch it stands for (`HeadPinRow.seatedUnder`).
+/// Read by `HeadPinRow.seatedUnder`.
 #[test]
 fn a_folded_head_names_the_row_it_stands_behind() {
     let mut model = section(
@@ -176,22 +163,17 @@ fn a_folded_head_names_the_row_it_stands_behind() {
     assert_eq!(model.head_row, 1);
     assert_eq!(model.head_under_row, -1);
 
-    // Closed over: the row is gone, and what took it is the folder on
-    // row 0 — where the stand-in belongs, rather than at the head of a
-    // list the branch is not at the head of.
+    // Closed over: the stand-in belongs under the folder on row 0, in its
+    // column; nothing is above that folder, so the name is whole.
     model.folder_overrides.insert("feature".to_string(), false);
     model.arrange();
     assert_eq!(model.head_row, -1);
     assert_eq!(model.head_under_row, 0);
-    // And it begins its name in the folder's own column, not the one its
-    // row had — nothing stands above that folder here, so the name it
-    // says is the whole one.
     assert_eq!(model.head_depth, 0);
     assert_eq!(model.head_shown, "feature/topic-a");
 
-    // A filter flattens the tree away, so there is no folder row left to
-    // stand behind even while one is folded — and nothing on screen says
-    // any part of the name, so the stand-in says all of it.
+    // A filter flattens the tree: no folder row to stand behind even
+    // while one is folded, and the whole name.
     model.filter = "main".to_string();
     model.arrange();
     assert_eq!(model.head_row, -1);
@@ -199,8 +181,7 @@ fn a_folded_head_names_the_row_it_stands_behind() {
     assert_eq!(model.head_shown, "feature/topic-a");
 }
 
-/// The same, with folders to spare: whichever level closes is the one
-/// the stand-in sits under, and its column is that row's.
+/// Whichever level closes, the stand-in takes that row's seat and column.
 #[test]
 fn the_stand_in_follows_whichever_fold_closed_over_it() {
     let folded = |key: &str| {
@@ -219,10 +200,8 @@ fn the_stand_in_follows_whichever_fold_closed_over_it() {
         model
     };
 
-    // main / team / team/backend / team/backend/api / …, so the folder
-    // that closed is at a different row and a different depth each time
-    // — and the name begins at that folder, the ones above it being rows
-    // the reader can still see.
+    // main / team / team/backend / team/backend/api / …; the name begins
+    // at the folder that closed.
     let model = folded("team");
     assert_eq!(model.head_under_row, 1);
     assert_eq!(model.head_depth, 0);
@@ -238,8 +217,7 @@ fn the_stand_in_follows_whichever_fold_closed_over_it() {
     assert_eq!(model.head_depth, 2);
     assert_eq!(model.head_shown, "api/fix-auth");
 
-    // A fold that does not lie over the branch leaves its row alone, and
-    // the stand-in that is not standing says the whole name.
+    // A fold not over the branch leaves its row alone.
     let model = folded("team/web");
     assert_eq!(model.head_row, 5);
     assert_eq!(model.head_under_row, -1);
@@ -247,9 +225,7 @@ fn the_stand_in_follows_whichever_fold_closed_over_it() {
     assert_eq!(model.head_shown, "team/backend/api/fix-auth");
 }
 
-/// Where to scroll for a name, in the two shapes a row is keyed by:
-/// the full one a tree gives a leaf, and the shown one a tag carries
-/// on its own.
+/// Both key shapes: a tree leaf's full name, and a tag's shown one.
 #[test]
 fn a_row_is_found_by_the_name_it_is_keyed_by() {
     let mut model = section(
@@ -259,8 +235,7 @@ fn a_row_is_found_by_the_name_it_is_keyed_by() {
             Vec::new(),
         )),
     );
-    // A remote root starts closed, and a row folded away is nowhere the
-    // view can scroll to.
+    // A remote root starts closed; a folded-away row is nowhere to scroll.
     model.arrange();
     assert_eq!(model.row_of("origin/main"), -1);
 
@@ -296,8 +271,7 @@ fn a_remote_row_derives_its_local_name_from_its_own_snapshot() {
     assert_eq!(model.local_name_of("my/fork/feature/one"), "feature/one");
     assert_eq!(model.local_name_of("unknown/feature"), "unknown/feature");
 }
-/// A snapshot that carries the same tags is not a reason to rebuild
-/// tens of thousands of delegates.
+/// Same tags, no model reset.
 #[test]
 fn a_republished_snapshot_moves_nothing() {
     let mut model = section("tags", Source::default());
@@ -315,9 +289,8 @@ fn a_republished_snapshot_moves_nothing() {
     ))));
 }
 
-/// A row the page is showing as already deleted leaves the list, the
-/// count, and — where it was the last one under it — the folder it stood
-/// in (デザイン規約 §消す操作は先に画面から消す).
+/// A hidden row also takes the folder it was the last of
+/// (デザイン規約 §消す操作は先に画面から消す).
 #[test]
 fn a_row_shown_as_gone_leaves_the_list_and_the_count() {
     let mut model = section(
@@ -337,19 +310,16 @@ fn a_row_shown_as_gone_leaves_the_list_and_the_count() {
     assert_eq!(model.shown_rows(), 5);
     assert_eq!(model.total, 3);
 
-    // One of the two under `feature`: the folder stays, opened by the
-    // sibling that is still there.
+    // One of the two under `feature`: its sibling keeps the folder.
     model.hidden = vec!["origin/feature/one".to_string()];
     model.arrange();
     assert_eq!(model.shown_rows(), 4);
     assert_eq!(says(&model, 1, Role::Name), "feature");
     assert_eq!(says(&model, 2, Role::Name), "two");
     assert_eq!(says(&model, 3, Role::Name), "main");
-    // The band counts what the repository has, and this row is being
-    // shown as no longer one of them.
     assert_eq!(model.total, 2);
 
-    // Both of them: the folder they were the whole of goes with them.
+    // Both: their folder goes too.
     model.hidden = vec![
         "origin/feature/one".to_string(),
         "origin/feature/two".to_string(),
@@ -360,17 +330,15 @@ fn a_row_shown_as_gone_leaves_the_list_and_the_count() {
     assert_eq!(says(&model, 1, Role::Name), "main");
     assert_eq!(model.total, 1);
 
-    // Taken back — a refused delete puts every one of them back where it
-    // was, folders included.
+    // A refused delete puts them all back, folders included.
     model.hidden = Vec::new();
     model.arrange();
     assert_eq!(model.shown_rows(), 5);
     assert_eq!(model.total, 3);
 }
 
-/// The sections that arrange nothing at all still have to leave a row
-/// out: with no tree and no filter their rows are the source's own, and
-/// the one being shown as gone is not among them (`arrange`).
+/// A flat section reads the source directly until a row is hidden
+/// (`arrange`).
 #[test]
 fn a_flat_section_leaves_out_the_row_shown_as_gone() {
     let mut model = section(
@@ -391,8 +359,7 @@ fn a_flat_section_leaves_out_the_row_shown_as_gone() {
     assert_eq!(model.total, 1);
 }
 
-/// A stash is named to git by its selector, and the selector is what
-/// the page hands over.
+/// The page hands over a stash's selector, not its message.
 #[test]
 fn a_stash_is_hidden_by_the_selector_git_knows_it_by() {
     let entry = |name: &str, message: &str| platitude_core::stash::StashEntry {
@@ -408,8 +375,7 @@ fn a_stash_is_hidden_by_the_selector_git_knows_it_by() {
             entry("stash@{1}", "WIP on topic"),
         ]),
     );
-    // What the row shows is not what git is asked about, so it hides
-    // nothing.
+    // The shown message hides nothing.
     model.hidden = vec!["WIP on main".to_string()];
     model.arrange();
     assert_eq!(model.shown_rows(), 2);
@@ -421,9 +387,7 @@ fn a_stash_is_hidden_by_the_selector_git_knows_it_by() {
     assert_eq!(model.total, 1);
 }
 
-/// Filtering and hiding answer different questions and a row can be
-/// caught by both: the filter says which rows match, the hidden list says
-/// which the repository is being shown as no longer having.
+/// The filter and the hidden list are separate cuts; a row can meet both.
 #[test]
 fn a_filtered_list_leaves_out_the_row_shown_as_gone_as_well() {
     let mut model = section(

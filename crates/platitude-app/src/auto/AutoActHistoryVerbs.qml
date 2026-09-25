@@ -5,21 +5,14 @@ import platitude
 import platitude.ui
 
 /// Rewriting what is already committed: squash, reword, drop, cherry-pick, revert, merge, rebase and reset —
-/// and the menus that offer them.
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are
-/// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+/// and the menus that offer them. Built by `AutoActDriver`.
+// An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
 
-    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is
-    /// the file that builds this one.
+    /// `var` because naming its type would be a circle: the driver is the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
@@ -43,28 +36,19 @@ Item {
     readonly property var renderedBarrier: driver.barrierRendered
     readonly property var writeBarrier: driver.barrierWrite
 
-    /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
+    /// Runs `act` if it is one of this family's, and says whether it was (`AutoActDriver` asks each family in turn).
     function run(act, arg) {
         if (act === "squash" || act === "fold-first-commit") {
-            // One press, two landings: the fold itself, and the one refusal a window is still asked for
-            // (`report::fold_first_commit`). **The other three shapes a history is turned down for are no
-            // window's** — which shape it is comes from real git, the name the page reads it under from
-            // `repo_tab::drain_report_tests`, and the sentence from `tst_reportdress.qml`; what is left here
-            // is the press reaching core and the bar coming back, which is the same road for all of them.
-            // The tip without an argument, and any row with one. **Opened first**: the fold is a replay over a
-            // tree that keeps its rows, and a replay takes the work into a stash while it runs — a pass that
-            // catches it half-way finds no working-tree row to keep the reader on and lands them on a commit,
-            // while a replay no pass catches leaves the reader where the page opened, on the working-tree row.
-            // Which of the two is the machine's to decide, and they are different pages. Read from the commit,
-            // both roads end on a commit's page (the one standing where it stood, `followVanishedCommit`) — the
-            // reset verbs open their commit for the same reason.
+            // The fold, and the one refusal a window is still asked for (`report::fold_first_commit`); the other
+            // refusal shapes take the same road and are held by `repo_tab::drain_report_tests` and
+            // `tst_reportdress.qml`.
+            // Opened first: the fold is a replay that stashes the work while it runs, and whether a graph pass
+            // catches it half-way (reader lands on a commit) or not (reader stays on the working-tree row) is the
+            // scheduler's. Started from the commit, both end on a commit's page (`followVanishedCommit`).
             const foldOid = driver.autoActOid(arg)
             acts.readCommit(foldOid)
             page.openRowMenu(foldOid)
             page.squashCommit(foldOid)
-            // The refusals are waited on all the way down: the answer raises the bar, and a picture taken on the
-            // answer catches one whose words are written and whose height is still nothing (`AutoActDriver`).
             if (act !== "squash")
                 driver.barrierNotice.start()
         } else if (act === "reword" || act === "edit-message"
@@ -80,16 +64,14 @@ Item {
                 graphPane.jumpToRow(pickRow)
                 page.activateRow(pickOid)
             }
-            // Two landings, one press: a copy that goes through answers at the tip, one that stops answers in the
-            // working tree (規約 §履歴を合流させる / §進行中の操作から出る).
+            // Through → answers at the tip; stopped → answers in the working tree
+            // (規約 §履歴を合流させる / §進行中の操作から出る). Revert and merge land the same way.
             if (act === "cherry-pick-stops")
                 opStoppedTimer.begin(false)
             else
                 tipLandedTimer.begin()
             repoTab.cherryPick(pickOid)
         } else if (act === "reset-soft" || act === "reset-mixed") {
-            // With nothing given, the row under HEAD's: a reset to where the branch already stands moves nothing, and
-            // an empty name would reach git as `reset ''`.
             const backTo = acts.resetTarget(arg)
             acts.readCommit(backTo)
             page.openRowMenu(backTo)
@@ -97,16 +79,13 @@ Item {
             resetLandedTimer.begin(backTo, mode)
             page.moveBranchHere(mode)
         } else if (act === "reset-hard" || act === "reset-hard-confirm") {
-            // "-confirm" stops with the held row on screen; "reset-hard" runs the hold to its end. The row resolves as
-            // reset-soft's.
+            // "-confirm" stops with the held row on screen; "reset-hard" runs the hold to its end.
             const wipeTo = acts.resetTarget(arg)
             acts.readCommit(wipeTo)
             page.openRowMenu(wipeTo)
             resetMenu.offer()
-            // What the held row is offering to take besides the commits. `tagged=` is the row's own tag read against
-            // the count it is drawn from — **the tag is there exactly when there is something to lose** — so it holds
-            // on a clean fixture as well as a dirty one, and a build that drew the tag off nothing, or dropped it
-            // over a dirty tree, says so. `note=` carries spaces, so it goes last.
+            // `tagged=`: the row's tag is there exactly when there is something to lose, so it holds on a clean
+            // fixture and a dirty one alike. `note=` carries spaces, so it goes last.
             Harness.report("reset_row tagged="
                               + ((hardResetItem.note !== "") === (workTree.hardResetTakes > 0))
                               + " files=" + workTree.hardResetTakes
@@ -118,9 +97,8 @@ Item {
             }
         } else if (act === "commit-menu" || act === "reset-menu"
                    || act === "branch-card" || act === "tag-card") {
-            // With no row named, the row under HEAD's: most of this menu is about a commit the branch is *not* already
-            // standing on, and it is counted from where HEAD actually sits — the rows above belong to whatever else the
-            // graph is showing.
+            // With no row named, the row under HEAD's: most of this menu is about a commit the branch is not on, and
+            // the rows above HEAD belong to whatever else the graph is showing.
             let menuOid = arg
             if (menuOid === "")
                 menuOid = graphModel.oidAt(
@@ -136,10 +114,8 @@ Item {
                               + " can_move=" + commitMenuState.menuCanMoveBranch)
         } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops"
                    || act === "drop-last-commit") {
-            // The plan is built by object name, the way a graph row hands one
-            // over. Opened first where a replay follows, as the fold above is and for the same reason: the drop
-            // is the same replay. The bare menu is left where the page opened — nothing runs after it that could
-            // move the reader, and a read started here would race the picture instead.
+            // Opened first where a replay follows, for the fold's reason. The bare menu stays where the page opened:
+            // nothing after it moves the reader, and a read started here would race the picture.
             const dropOid = driver.autoActOid(arg)
             if (act !== "drop-commit")
                 acts.readCommit(dropOid)
@@ -150,32 +126,28 @@ Item {
                               + " hold=" + (dropCommitItem.holdMs > 0)
                               + " reached=" + workTree.headReachedElsewhere)
             if (act !== "drop-commit") {
-                // "drop-stops" is the replay that walks into a hole and stops with the work still in the stash it
-                // took: the landing is the working tree, and the count and the stash's own row are what say where
-                // that work went (規約 §未コミット変更がある状態で履歴を書き換える の着地表).
+                // "drop-stops" stops with the work still in the stash it took (`opStoppedTimer.carried`).
                 if (act === "drop-stops")
                     opStoppedTimer.begin(true)
                 if (dropCommitItem.holdMs > 0) {
                     dropCommitItem.completeHold()
                 } else {
-                    // The item's own click takes the menu down before the write goes out (`CommitRowMenu`,
-                    // `dropCommitItem.onHeld` has the order). Fired past the item, the menu stands until something
-                    // else closes it, and whether that beats the census walk is the scheduler's — so it is taken
-                    // down here, and the completion waits for it to be gone (`AutoActDriver.menuGoing`).
+                    // The item's own click takes the menu down before the write (`CommitRowMenu`
+                    // `dropCommitItem.onHeld`); fired past it, whether the menu goes before the census walk is the
+                    // scheduler's. So it goes here, and completion waits until it is gone (`AutoActDriver.menuGoing`).
                     commitMenu.dismiss()
                     driver.menuGoing = commitMenu
                     page.dropCommit(commitMenuState.menuOid)
                 }
-                // The drop with nowhere to land comes back as a report, and the bar it comes down in is the shot.
+                // Nowhere to land: the refusal's bar is the shot.
                 if (act === "drop-last-commit")
                     driver.barrierNotice.start()
             }
         } else if (act === "wip-landing-stopped") {
-            // The landing a stopped operation owes the working tree, taken in a pass that carries every other
-            // copy's row and none of this window's — the arrangement the run is started into
-            // (`xtask::verify::child`, `harness::faults`), since which of the walk and the status gets there first
-            // is the scheduler's. **The press comes from a clean tree**: a replay is refused over uncommitted work,
-            // and the row this landing goes to is the one the stop itself leaves behind.
+            // The stop's working-tree landing, read in a pass that carries every other copy's row and none of this
+            // window's. The run is started into that arrangement (`xtask::verify::child`, `harness::faults`) because
+            // which of the walk and the status arrives first is otherwise the scheduler's. The press needs a clean
+            // tree: a replay is refused over uncommitted work.
             const clash = arg === "" ? "side/clash" : arg
             page.openRefMenu("branch", clash, clash, branchesModel.oidOfName(clash))
             stoppedLandingTimer.start()
@@ -183,30 +155,21 @@ Item {
         } else if (act === "integrate-menu") {
             acts.openIntegrateMenu(arg)
         } else if (act === "pull-go" || act === "pull-ahead") {
-            // **Through the row itself**, which is the whole of what these verbs are for: the menu goes up on the
-            // branch the working tree is on and the row's own `triggered` is emitted — the signal a click makes,
-            // running the handler a click runs (verify-ui §壊れない動詞). Everything after it is git's, and the two
-            // verbs are the two things git does with a press this row will make: bring the far side in
-            // (`--preset behind`) and answer that there is nothing to bring (`--preset basic`, where this branch is
-            // the one ahead). **The third thing git would do is not this row's** — it refuses a divergence it has no
-            // orders for, and the row is out before the press (`pull-blocked`).
-            //
-            // The press waits for a tick with nothing running, the way every press off a menu row does: the opening
-            // fetch answers on a tick of its own, and a pull queued behind it would be judged on the wrong one.
+            // Through the row's own `triggered`, the handler a click runs (verify-ui §壊れない動詞の実装と反復).
+            // `pull-go` brings the far side in (`--preset behind`); `pull-ahead` gets nothing (`--preset basic`). A
+            // divergence is not this row's: the row is out before the press (`pull-blocked`).
+            // The press waits for an idle tick: a pull queued behind the opening fetch would be judged on its answer.
             pullPressTimer.after = act
             pullPressTimer.start()
         } else if (act === "merge-branch" || act === "merge-stops" || act === "rebase-onto"
                    || act === "rebase-stops" || act === "replay-running" || act === "revert-commit"
                    || act === "revert-stops") {
-            // Through the menus a right-click opens, so the rows' own gating decides whether anything runs.
             if (act === "revert-commit" || act === "revert-stops") {
-                // The click that opens this menu selects the row too (GraphRowDelegate), so the hook takes both steps a
-                // right-click takes.
+                // A right-click selects the row too (GraphRowDelegate), so both steps are taken.
                 const oidHex = driver.autoActOid(arg)
                 graphPane.jumpToRow(graphModel.rowOf(oidHex))
                 page.activateRow(oidHex)
                 page.openRowMenu(oidHex)
-                // The undo's two landings, read like the copy's above.
                 if (act === "revert-stops")
                     opStoppedTimer.begin(false)
                 else
@@ -216,24 +179,19 @@ Item {
                 page.openRefMenu("branch", arg, arg,
                                  branchesModel.oidOfName(arg))
                 if (act === "merge-branch" || act === "merge-stops") {
-                    // Two landings, one press: a merge that goes through answers at the tip, and one that stops
-                    // answers in the working tree (規約 §履歴を合流させる / §進行中の操作から出る).
                     if (act === "merge-stops")
                         mergeStoppedTimer.start()
                     else
                         tipLandedTimer.begin()
                     repoTab.merge(arg, false, false, "")
                 } else if (act === "rebase-onto" || act === "rebase-stops" || act === "replay-running") {
-                    // A replay that stopped part-way answers in the working tree like the other three: no commit
-                    // was written, and the badge, the exit card and the conflicted rows are where the press ends
-                    // (規約 §未コミット変更がある状態で履歴を書き換える の着地表). The third of them answers nowhere: its
-                    // subject is the screen *while* git is out, so it is caught on the way.
+                    // `rebase-stops` answers in the working tree (規約 §未コミット変更がある状態で履歴を書き換える
+                    // の着地表); `replay-running` answers nowhere — its subject is the screen while git is out.
                     if (act === "rebase-stops") {
                         opStoppedTimer.begin(false)
                     } else if (act === "replay-running") {
                         replayRunningTimer.start()
-                        // What a click on the row does next, which the other two never need: their picture is a
-                        // landing the menu is long gone from, and this one is of the screen the press left behind.
+                        // What a click does next; the other two land long after the menu is gone, this one does not.
                         refMenu.close()
                     }
                     repoTab.rebase(arg, "", true)
@@ -245,12 +203,9 @@ Item {
         return true
     }
     /// The ref menu left standing on what a merge or a rebase would bring in — a branch by bare name, a tag with
-    /// `:tag` after it.
-    ///
-    /// The report is the `rebase` row's note, which the picture holds but cannot date: the note has to be on the row
-    /// as the card is measured, and one arriving a frame later reads the same in a photograph (規約 §メニュー).
-    /// **Both halves are runs of their own** — a `pushed=false` alone passes an implementation that never asks, and a
-    /// `pushed=true` alone passes one that always says so.
+    /// `:tag` after it. `pushed=` is the `rebase` row's note, which must be on the row as the card is measured; a
+    /// photograph cannot tell it from one a frame late (規約 §メニュー). Both values are runs of their own: either
+    /// alone passes an implementation that always answers the same.
     function openIntegrateMenu(arg) {
         const onTag = arg.endsWith(":tag")
         const name = onTag ? arg.substring(0, arg.length - 4) : arg
@@ -261,53 +216,39 @@ Item {
                           + " pushed=" + (refRebaseItem.note !== ""))
     }
 
-    /// Which commit the four reset verbs take the branch back to. With nothing given, the row under HEAD's: a reset
-    /// to where the branch already stands moves nothing, so the landing below would never come — and an empty name
-    /// would reach git as `reset ''`.
+    /// Which commit the reset verbs take the branch back to. With nothing given, the row under HEAD's: a reset to
+    /// where the branch already stands moves nothing, so its landing would never come.
     function resetTarget(arg) {
         return arg === "" ? graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
                           : driver.autoActOid(arg)
     }
 
-    /// Opens the commit these verbs are about, the way a reader who is about to right-click a row opens it. The page
-    /// itself opens on the working tree's own row wherever the tree has one (`RepoPage.trySelectDefault`), so a
-    /// sampler that waits on the details card (`AutoActDriver.cardSettled`) has nothing to wait for until a run says
-    /// which commit it is reading.
+    /// Opens the commit these verbs are about (rules-refs/app-ui.md「コミットの詳細を読む動詞は自分でその行を開く」).
     function readCommit(oidHex) {
         const row = graphModel.rowOf(oidHex)
         if (row >= 0)
             page.activateRow(oidHex, row)
     }
 
-    // ---- the picture of a replay that is still replaying -----------------
-    // What only exists while git is out: the badge counting the steps out of git's own file, the doors the page holds
-    // down, and the ring beside the hand. Every other rebase verb photographs a landing.
-    //
-    // **This only watches.** The page runs the count's own tick for as long as a replay is out
-    // (`Metrics.opProgressMs`), so this waits for the number the way a reader does — and a build whose tick never
-    // started, or never reached the badge, waits out the watchdog.
-    //
-    // Then the face is **held** — `RepoPage.autoReplayHeld`, the same latch `doors-held` takes, because the two runs
-    // photograph one state from two sides. The write answers before the reads it invalidated, so a run that only
-    // reported at the edge could photograph a screen the replay had already left (verify-ui スキル).
+    // `replay-running`: the screen while git is out — the step badge, the doors held down, the ring beside the hand.
+    // This only watches: the page ticks the count itself (`Metrics.opProgressMs`), so a build whose tick never
+    // reaches the badge waits out the watchdog. Then the face is held (`RepoPage.autoReplayHeld`, the latch
+    // `doors-held` takes): the write answers before the reads it invalidated, so a picture taken at the edge could
+    // show a screen the replay had already left.
     SampleTimer {
         id: replayRunningTimer
         onTriggered: {
-            // Queued is not out: the write travels a queue that can be carrying something else, and git writes
-            // nothing to count until it is actually replaying.
+            // Queued is not out: git writes nothing to count until it is actually replaying.
             if (!repoTab.replaying || workTree.opSteps === 0 || workTree.opStep === 0)
                 return
             replayRunningTimer.stop()
             page.autoReplayHeld = true
             const win = page.Window.window
-            // Where the hand would have been: over the pane the replay is rewriting, and clear of the rows' own ink
-            // — a sixteen-pixel ring laid over a subject line cannot be judged at all. Hover cannot be injected, so
-            // the run writes the one answer the mark reads (`Main.holdWaitHand`); offscreen's own hand sits at the
-            // window's origin, which is a corner.
+            // Hover cannot be injected (offscreen's hand sits at the window's corner), so the run places the hand the
+            // ring reads (`Main.holdWaitHand`): over the rewritten pane, clear of row text a ring would hide.
             const seat = graphPane.mapToItem(null, graphPane.width / 6, graphPane.height / 3)
             win.holdWaitHand(seat.x, seat.y)
-            // `counted` alone: the step is whatever git had reached, and what is being claimed is
-            // that the badge is counting a range out at all.
+            // That a range is being counted at all, not which step: the step is whatever git had reached.
             const counted = workTree.opStep > 0 && workTree.opStep <= workTree.opSteps
                             && workTree.opSteps > 1
             Harness.report("replay_running op=" + workTree.opText + " counted=" + counted
@@ -317,42 +258,34 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // The two moments of the landing a stopped operation owes, in one line because neither means anything alone:
-    // `owed=` and `early=` are the page **after a pass that beat the status was offered to the landing and turned
-    // down** — the move decided and still held, with nothing opened and nothing standing on a copy — and `wip=` is
-    // the pass that carries ours landing on this window's own tree. Every copy's row wears the same all-zero id,
-    // so a reader that took the id at row 0 for ours resolves the landing onto a copy and the press ends somewhere
-    // nobody asked for.
+    // Both moments of the stop's landing in one line, since neither means anything alone: `owed=` / `early=` are the
+    // page after a pass that beat the status was offered the landing and turned it down; `wip=` is the pass carrying
+    // ours landing on this window's tree. Every copy's row wears the same all-zero id, so taking row 0's id for ours
+    // lands the press on a copy.
     SampleTimer {
         id: stoppedLandingTimer
         property bool read: false
-        /// The passes this page had settled when the one this run asks for was asked for. **The landing is only
-        /// ever offered a pass that finishes after it was armed** (`RepoPage.onStatsChanged` →
-        /// `tryPendingWipSelect`), so a reading taken before one has is a reading of a question nobody asked yet —
-        /// and `owed=` would say the landing is still held however it reads row 0.
+        /// `finishCount` when the pass was asked for: the landing is only offered passes that finish after it was
+        /// armed (`RepoPage.onStatsChanged` → `tryPendingWipSelect`), so an earlier reading answers nothing.
         property int owedAt: -1
         property bool owed: false
         property bool early: false
         property bool earlyCopy: false
-        /// A run that was never started into the arrangement says so and stops. Both doors into it answer whether
-        /// the hold was up, so neither can read the ordinary order as this.
+        /// For a run not started with the hold up (both harness calls answer whether it was): says so and stops.
         function refuse() {
             stoppedLandingTimer.stop()
             Harness.report("wip_stop_landing held=false")
             driver.complete()
         }
         onTriggered: {
-            // The stop, named by what git left: the press has answered, an operation is standing and the status
-            // that carries its conflicted rows has arrived, and the landing it owes is armed.
+            // First the stop: answered, an operation standing with its status in, the landing armed.
             if (stoppedLandingTimer.owedAt < 0) {
                 if (repoTab.busyCount !== 0 || workTree.opText === "" || !workTree.wipRowStands
                         || graphModel.loading || !page.pageLanding)
                     return
-                // **The pass is asked for.** What ordinarily brings the next one is this
-                // window's own row appearing, and the hold is what takes that away — a stopped replay moves no
-                // branch, so nothing else asks either (measured: the run sat at the pass it opened with while the
-                // press answered, the operation stood and the landing waited). Asked here, it lands with every
-                // other copy's row and none of ours, which is the pass the landing has to turn down.
+                // Ask for the pass: under the hold nothing else brings one (our row appearing normally does, and a
+                // stopped replay moves no branch). It lands with every other copy's row and none of ours — the pass
+                // the landing has to turn down.
                 if (!graphModel.walkAgainWhileHeld()) {
                     stoppedLandingTimer.refuse()
                     return
@@ -360,10 +293,8 @@ Item {
                 stoppedLandingTimer.owedAt = graphModel.finishCount
                 return
             }
-            // That pass, named by what it left standing: it leads with **a neighbour copy's** row
-            // (`GraphModel.carriedTop` — the copy the preset stands where this replay stops, so the row it draws is
-            // the one the landing would take). A pass with no all-zero row on top puts nothing in front of the
-            // misreading, so this reads past it.
+            // Then that pass, led by a neighbour copy's row (`GraphModel.carriedTop`); a pass without one on top
+            // cannot catch the misreading, so it is read past.
             if (!stoppedLandingTimer.read) {
                 if (graphModel.loading || graphModel.finishCount <= stoppedLandingTimer.owedAt
                         || graphModel.wipRow || !graphModel.carriedTop)
@@ -385,25 +316,18 @@ Item {
                               + " wip=" + page.wipShown
                               + " copy=" + (page.carriedPath !== "")
                               + " op=" + workTree.opText
-                              // The row the landing lit: this landing moves the highlight without
-                              // activating a row (`tryPendingWipSelect`).
+                              // This landing moves the highlight without activating a row (`tryPendingWipSelect`).
                               + " lit=" + graphPane.view.currentIndex)
             driver.complete()
         }
     }
 
-    // Where an operation that answers at the tip left the reader — one report for the three of them. The write, its
-    // refresh and the beat the viewport waits out all have to be behind it, and the picture cannot answer the second
-    // half: a row can be selected and still be somewhere nobody can see.
-    /// The press behind `pull-go`: the card up on the branch the working tree is on, nothing else running, and the
-    /// row triggered from there. What it lands on is the tip, the way a merge's landing is
-    /// (`RepoTab::settle_write` — a pull answers at the tip), so `tipLandedTimer` is what finishes the run.
+    /// The press behind `pull-go` / `pull-ahead`. A pull answers at the tip (`RepoTab::settle_write`), so `pull-go`
+    /// finishes on `tipLandedTimer`.
     SampleTimer {
         id: pullPressTimer
-        /// Which of the three landings this press is for — the verb's own name.
         property string after: "pull-go"
         onTriggered: {
-            // **The precondition is read here and nowhere else** (app-ui.md §UI 自動化の因果性).
             if (repoTab.busyCount !== 0)
                 return
             const branch = workTree.branch
@@ -412,8 +336,7 @@ Item {
             if (!refMenu.opened || !refPullItem.offered)
                 return
             pullPressTimer.stop()
-            // Where the branch stood before the press: the two verbs whose subject is git *not* moving it read it
-            // back, and a picture cannot say whether a graph was redrawn or never touched.
+            // Read back as `pull-ahead`'s `moved=`: a picture cannot say whether a graph was redrawn or never touched.
             driver.headOidBefore = workTree.headOid
             if (pullPressTimer.after === "pull-go")
                 tipLandedTimer.begin()
@@ -423,15 +346,14 @@ Item {
             })
             if (pullPressTimer.after === "pull-ahead")
                 pullAheadTimer.start()
-            // The row a hand pressed takes the card down with it; this one has to be told, and the run is not
-            // complete while it is still on its way out (`menuGoing` — the census walks what is visible).
+            // A hand's press takes the card down; this one must be told, and completion waits out its exit
+            // (`menuGoing` — the census walks what is visible).
             driver.menuGoing = refMenu
             refMenu.close()
         }
     }
-    /// The branch that is ahead of its upstream: the pull lands, and what git brought back is nothing
-    /// (`Already up to date.`). **Nothing on screen changes**, which is why the panel is opened here — the row git
-    /// wrote is the only thing that says the press went anywhere at all.
+    /// `pull-ahead`: git brings nothing (`Already up to date.`) and nothing on screen changes, so the command panel is
+    /// opened — its row is the only sign the press went anywhere.
     SampleTimer {
         id: pullAheadTimer
         onTriggered: {
@@ -452,15 +374,9 @@ Item {
     }
     SampleTimer {
         id: tipLandedTimer
-        /// The name this run's own write answered by, taken from the answer that carried
-        /// it — **every** answer rewrites the group it comes from (`RepoTab::settle_write`), so a fetch
-        /// settling while the landing is still being waited out takes it away again. The counter having moved says
-        /// only that *an* answer arrived; a fetch's answer moves it too.
-        ///
-        /// Empty until that answer, and the emptiness is the arm. A press made with the selection already sitting at
-        /// the tip — a merge from a ref row, a revert of HEAD — satisfies every other reading below before git has
-        /// done anything, and the run would quit over an untouched repository (measured, a copy nobody could
-        /// see in the picture, `op=` empty in this very report, green).
+        /// The op name this run's own write answered by, latched by the `Connections` below: a fetch's answer moves
+        /// the counter too. Empty until then, and that is the arm: with the selection already at the tip (a merge from
+        /// a ref row, a revert of HEAD) every other reading below holds before git has done anything.
         property string answeredOp: ""
         function begin() {
             tipLandedTimer.answeredOp = ""
@@ -468,15 +384,9 @@ Item {
         }
         onTriggered: {
             const row = graphModel.rowOf(page.selectedOid)
-            // Then the landing that answer armed: at the barrier the refs are still the old ones, so
-            // `selected === headOid` holds vacuously until the page's own `pendingHeadSelect` has resolved onto the
-            // refreshed pair.
-            //
-            // And last the pane the landing sends for. The details of the commit that was selected *before* the press
-            // are still on the right until its own round trip comes back, and for a merge from a ref row that commit
-            // is the old tip — so the half of this the picture does hold, whose commit fills the right-hand pane,
-            // frames as the repository before the write (measured, the pane's second round trip landed after
-            // `screenshot saved=true`). Waited out the way `stashLandTimer` waits for it.
+            // `pendingHeadSelect`: right after the answer the refs are still old, so `selected === headOid` holds
+            // vacuously until it resolves. `cardSettled`: until its round trip returns, the right pane still shows the
+            // commit selected before the press — for a merge from a ref row, the old tip.
             if (tipLandedTimer.answeredOp === "" || page.pendingHeadSelect
                     || repoTab.busyCount !== 0 || row < 0
                     || !graphPane.rowOnScreen(row) || page.selectedOid !== workTree.headOid
@@ -487,8 +397,7 @@ Item {
                 "tip_landed follows="
                 + (page.selectedOid !== "" && page.selectedOid === workTree.headOid)
                 + " onscreen=" + (row >= 0 && graphPane.rowOnScreen(row))
-                // Next to the pair above because that is where the harness reads it: the name is what tells the
-                // three verbs' own writes from anything else that could have moved the counter (`must_say`).
+                // Right after the pair above: `must_say` reads the three as one string.
                 + " op=" + tipLandedTimer.answeredOp
                 + " head=" + workTree.headOid.substring(0, 8)
                 + " selected=" + page.selectedOid.substring(0, 8)
@@ -496,20 +405,11 @@ Item {
             driver.complete()
         }
     }
-    /// The answer `tipLandedTimer` waits on, taken on the notify: two answers inside
-    /// one beat would leave only the later one to be read, and it is the earlier one that says the write was this
-    /// run's (app-ui.md §UI 自動化の因果性 — 一瞬だけ立つ状態は signal で観測して latch する). The chain waits on
-    /// `writeSeqBefore`: a write that begins and ends between two looks never shows a *rise* of
-    /// `busyCount`, and requiring it wedges the run.
-    ///
-    /// **And out of the answers that notify carried**: one drain empties
-    /// the whole queue and notifies once (`RepoTab::write_answers`), so an answer arriving behind this one — the
-    /// interval's own fetch, most often — leaves the group describing itself, with the landing nowhere on it.
-    ///
-    /// `writeAnswerAtTip` is the bridge's own word for "landed, did not stop part-way, and answers at the tip" — the
-    /// op names are turned into meanings on that side of it (`RepoTab::settle_write`). A
-    /// fetch's answer, a refusal and a stop all leave the arm down, and the run walks into its
-    /// watchdog.
+    /// Latches the answers `tipLandedTimer` and `resetLandedTimer` wait on, on the notify and out of every answer it
+    /// carried: one drain notifies once for the whole queue (`RepoTab::write_answers`), and a later answer (a fetch,
+    /// most often) rewrites the group (rules-refs/app-ui.md「一瞬だけ立つ状態は signal で観測して latch する」). The
+    /// floor is `writeSeqBefore`, not a rise of `busyCount`: a write that begins and ends between two looks shows
+    /// none. `writeAnswerAtTip` is the bridge's "landed at the tip, did not stop" (`RepoTab::settle_write`).
     Connections {
         target: driver.repoTab
         function onWriteSeqChanged() {
@@ -532,25 +432,17 @@ Item {
             }
         }
     }
-    // Where taking the branch back leaves the reader. A reset writes no commit, so there is no
-    // answer "at the tip" to arm on — what it does is move the name, and **the name arriving on the commit that was
-    // asked for is the whole claim**. Waited for by identity: the write answers before the
-    // refs it invalidated are published (`session::write::run_write`), so a run that stopped at the write barrier
-    // photographs the branch where it stood — which is the picture a build that never reset takes too.
-    //
-    // Then the graph holding a row for it, and the pane on the right caught up, the way every landing here waits.
-    //
-    // `files=` is the working tree the mode chose: `--soft` and `--mixed` put the commits' own changes back into it,
-    // `--hard` writes over it — so the one report tells the three modes apart, and a `--hard` that quietly kept the
-    // tree cannot pass as one that cleared it.
+    // Where a reset leaves the reader. No commit is written, so the claim is the name arriving on the commit asked
+    // for, waited for by identity: the write answers before its refs are published (`session::write::run_write`), so
+    // the write barrier would photograph the branch where it stood. `files=` tells the modes apart: `--soft` /
+    // `--mixed` put the commits' changes back, `--hard` writes over them.
     SampleTimer {
         id: resetLandedTimer
-        /// The commit the branch was sent back to, and which flag sent it. Both are the run's own
-        /// words: what is being checked is that git did what this verb asked.
+        /// What this verb asked for, not read back from git — that git did it is what is being checked.
         property string target: ""
         property string mode: ""
-        /// The number the reset's own answer named for the first report of HEAD after it (`writeAnswerHeadSeq`),
-        /// taken on the notify the way `tipLandedTimer` takes its answer; 0 until the answer lands.
+        /// The number the reset's answer named for the first report of HEAD after it (`writeAnswerHeadSeq`),
+        /// latched on the notify; 0 until the answer lands.
         property int armed: 0
         function begin(oidHex, flag) {
             resetLandedTimer.target = oidHex
@@ -559,11 +451,9 @@ Item {
             resetLandedTimer.start()
         }
         onTriggered: {
-            // **The write's own status, by the number its answer named.** HEAD is one record, and the refs read moves
-            // it ahead of the status that follows (`session::write::run_write` joins the two) — while `--hard` is
-            // judged on the tree it left, and a reset to the very commit HEAD is on moves no name at all. So the
-            // wait is on the status's own word for which report it stands beside (`WorkTreeModel.statusSeq`), at or
-            // above what the reset's answer named: a status counted before the write cannot reach that number.
+            // The write's own status, by the number its answer named (`WorkTreeModel.statusSeq`): the refs read moves
+            // HEAD ahead of the status that follows (`session::write::run_write`), and `--hard` is judged on the tree.
+            // A status counted before the write cannot reach that number.
             if (repoTab.busyCount !== 0 || resetLandedTimer.armed === 0
                     || workTree.headOid !== resetLandedTimer.target
                     || workTree.statusSeq < resetLandedTimer.armed)
@@ -572,9 +462,7 @@ Item {
             if (row < 0 || !driver.cardSettled)
                 return
             resetLandedTimer.stop()
-            // The wait above is that claim, and a build whose reset never landed
-            // never reaches this line at all (it walks into the watchdog). A `moved=true` read back off the same
-            // condition could not be false, and a field that cannot be false is one nobody can judge on.
+            // No `moved=`: the wait above is that claim, and a field read off the same condition could never be false.
             Harness.report(
                 "reset_landed mode=" + resetLandedTimer.mode
                 + " files=" + workTree.hardResetTakes
@@ -584,9 +472,8 @@ Item {
             driver.complete()
         }
     }
-    // Where a merge that stopped on conflicts left the reader. The other half of `tipLandedTimer`: there is no commit
-    // at the tip to land on, and what the press is answered with is the working tree — so this waits for the rows the
-    // stop wrote to be on screen, and says in the same breath that nothing called it a failure.
+    // Where a merge that stopped on conflicts left the reader: the working tree, its conflicted rows on screen, and
+    // nothing calling it a failure.
     SampleTimer {
         id: mergeStoppedTimer
         onTriggered: {
@@ -598,8 +485,7 @@ Item {
                 + " conflicts=" + (workTree.conflictCount > 0)
                 + " error=" + (repoTab.lastError !== "")
                 + " log=" + page.commandsOpen
-                // The box opened holding what the merge is about to record, and the button under it
-                // keeps its one door.
+                // The box holds what the merge will record; the button under it stays the only door (`cont=false`).
                 + " msg=" + (workTree.opSubject !== "" && wipPane.subjectText === workTree.opSubject)
                 + " cont=" + wipPane.offersOpExit("--continue")
                 + " op=" + workTree.opText
@@ -607,16 +493,13 @@ Item {
             driver.complete()
         }
     }
-    // Where a cherry-pick, a revert or a rebase that stopped on conflicts left the reader. `mergeStoppedTimer`'s twin,
-    // for the four that step: the same press with no new commit at the tip to land on, answered by the working tree.
-    // What the picture cannot hold is the same pair — that nothing wrote a red line over an ordinary conflict, and
-    // that the command log stayed down — plus the row the merge does not have: these keep `--continue`, because for
-    // them it is a step onward (規約 §進行中の操作から出る).
+    // `mergeStoppedTimer`'s twin for the operations that step (cherry-pick, revert, rebase, a stopped drop): the same
+    // checks, plus the `--continue` row the merge does not have — for these it is a step onward
+    // (規約 §進行中の操作から出る).
     SampleTimer {
         id: opStoppedTimer
-        // Whether a carry is part of this landing. The stash section is refreshed *after* the graph, so reading it
-        // at the write barrier answers 0 for a tree whose work is sitting in an entry — and where the entry is the
-        // whole claim, that is the answer arriving too early.
+        // Whether the work was carried into a stash: the stash section refreshes after the graph, so it reads 0 at
+        // the write barrier and has to be waited for.
         property bool carried: false
         function begin(withStash) {
             opStoppedTimer.carried = withStash
@@ -633,25 +516,22 @@ Item {
                 + " error=" + (repoTab.lastError !== "")
                 + " log=" + page.commandsOpen
                 + " cont=" + wipPane.offersOpExit("--continue")
-                // What the carry left behind, for a rewrite that took a stash out of its own way: git's words
-                // are not raised over the stop, so the count and the graph's own row are the only things saying
-                // where the work went (規約 §未コミット変更がある状態で履歴を書き換える).
+                // Where carried work went: git's words are not raised over the stop, so only the count and the
+                // stash row say it (規約 §未コミット変更がある状態で履歴を書き換える).
                 + " stashes=" + stashesModel.total
                 + " op=" + workTree.opText
                 + " files=" + workTree.conflictCount)
             driver.complete()
         }
     }
-    // The message has to arrive before it can be typed over: `cardSettled` is that wait, and the boxes read-only until
-    // the details of the row jumped to are the ones on screen.
+    // The message has to arrive before it can be typed over; the boxes are read-only until then (`cardSettled`).
     SampleTimer {
         id: rewordTimer
         onTriggered: {
             if (!driver.cardSettled)
                 return
             rewordTimer.stop()
-            // "edit-message-focus" types nothing: the commit's own body is what the caret has to be photographed on top
-            // of, and an empty box would only show the placeholder.
+            // "edit-message-focus" types nothing: the caret is photographed over the commit's own body.
             if (Harness.autoAct === "edit-message-focus") {
                 detailsPane.focusDescription()
                 Harness.report("message_focus pane=details focused="
@@ -667,8 +547,8 @@ Item {
                     detailsPane.submitMessage()
                     return true
                 })
-            // "edit-message-leave" walks away from the unsaved text. Nothing asks — the draft goes and the
-            // next commit's own message arrives, which is what the shot is of.
+            // "edit-message-leave" walks away from the unsaved text: nothing asks, and the shot is the next commit's
+            // own message.
             else if (Harness.autoAct === "edit-message-leave")
                 page.activateRow(graphModel.oidAt(graphModel.rowOf(page.selectedOid) + 1))
             if (Harness.autoAct === "reword")

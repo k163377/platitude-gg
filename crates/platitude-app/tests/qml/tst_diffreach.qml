@@ -3,31 +3,25 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// How far a diff reaches sideways: what the picked lines measure at, and what the rows on screen make of that.
+// How far a diff reaches sideways: what the picked lines measure at, and what the rows on screen make of that
+// (rules-refs/app-ui.md「diff は横へ送る・溝は動かない」).
 //
-// **Only a laid-out Label can answer the first half**: the model counts a line in columns, and what the pane needs is
-// pixels — the fallback a Latin-only mono family hands a wide glyph to is not monospaced, and a combining mark is a
-// character the count sees and the font draws nothing for. No Rust test reaches it, and the headless screenshots
-// cannot judge it either (a diff sent to its end and one with nowhere to go photograph alike).
-//
-// **The expected width is taken from what the pane is supposed to draw**: the rulers read the row's markup as
-// `StyledText`, and every case here is held against a `PlainText` Label carrying the characters that markup
-// stands for. A ruler left on `AutoText` agrees with itself about a line of source that looks like markup; it
-// does not agree with this.
+// Only a laid-out Label can answer the first half: the model counts columns, and wide-glyph fallbacks are not
+// monospaced. Each case is held against a `PlainText` Label carrying the characters the markup stands for — a ruler
+// left on `AutoText` agrees with itself about source that looks like markup, not with this.
 Item {
     id: root
     width: 400
     height: 200
 
-    /// Lines built from code points: these are rulers (`DiffTextMetrics`).
+    /// Built from code points: written as glyphs they would read like non-English wording (CLAUDE.md 絶対制約).
     readonly property string wideLine: String.fromCharCode(0x65e5).repeat(400)
     readonly property string narrowLine: "0".repeat(700)
     readonly property string mixedLine:
         (String.fromCharCode(0x306e) + String.fromCharCode(0x65e5) + "abc"
          + String.fromCharCode(0x3002)).repeat(120)
 
-    /// What `markup::styled` writes for one line with nothing to colour, and the characters it stands for. The two
-    /// are the same row: one is how it is stored and drawn, the other is what it draws.
+    /// What `markup::styled` writes for a line with nothing to colour; `spelled` is the characters it stands for.
     function escaped(line) {
         let out = ""
         let col = 0
@@ -78,8 +72,7 @@ Item {
         partial: false
     }
 
-    /// The instrument the pane's answer is judged against: the characters themselves, in the family, size and weight
-    /// the rows are set in, read as the plain text they are.
+    /// The second instrument: the characters in the rows' family, size and weight, as plain text.
     property var shown: []
     Repeater {
         id: references
@@ -94,11 +87,8 @@ Item {
             font.bold: true
         }
     }
-    /// How far the furthest of them is drawn, as far as they have settled. **The rows name the moment they are
-    /// read at**: a `Text` answers with every glyph at the family's own advance until the fallback carrying the wide
-    /// ones is resolved, and a rendered frame is not something a test window is promised
-    /// (`waitForRendering` answers false on a real platform). What the cases below wait for is the two sides
-    /// agreeing, which is only true once both have settled.
+    /// How far the furthest of them is drawn so far. A `Text` answers at the family's own advance until the fallback
+    /// is resolved, and `waitForRendering` answers false on a real platform, so the cases wait for two sides to agree.
     function drawnWidth() {
         let widest = 0
         for (let i = 0; i < references.count; i++) {
@@ -121,9 +111,8 @@ Item {
         name: "DiffReach"
         when: windowShown
 
-        /// The pane's answer and the characters it stands for, once both have settled. Held as one condition:
-        /// neither side is finished at a moment this test can name, and a zero on both sides means two things
-        /// still to be measured.
+        /// One condition: neither side finishes at a moment the test can name, and zero on both sides is nothing
+        /// measured yet.
         function agreed() {
             return metrics.codeW > 0 && metrics.codeW === root.drawnWidth()
         }
@@ -133,11 +122,9 @@ Item {
                 { tag: "wide", line: root.wideLine },
                 { tag: "narrow", line: root.narrowLine },
                 { tag: "mixed", line: root.mixedLine },
-                // A line of source that looks like markup. Measured as the row reads it — escaped — against the
-                // characters it stands for. A ruler left to guess the format reads the tags and comes out short.
+                // Source that looks like markup: a ruler left to guess the format reads the tags and comes out short.
                 { tag: "markup", line: "<b>" + "0".repeat(100) + "</b> & <i>x</i>" },
-                // Tabs: the row spells them as the spaces that reach the stop at four, and so does the ruler. A raw
-                // tab handed to a Label is drawn at Qt's own stop, which is nowhere near.
+                // Tabs are spelled as spaces to the stop at four; a raw tab is drawn at Qt's own stop, nowhere near.
                 { tag: "tabs", line: "\ta\tbc\td" + "0".repeat(40) },
             ]
         }
@@ -155,8 +142,7 @@ Item {
             tryVerify(agreed)
         }
 
-        /// Nothing picked measures at nothing, and holding the width through that gap is `DiffReach`'s to do —
-        /// the cases below are where it is held against.
+        /// Holding the width through that gap is `DiffReach`'s (the cases below).
         function test_nothing_picked_measures_at_nothing() {
             root.shown = []
             diffModel.widestLines = []
@@ -170,8 +156,7 @@ Item {
             reach.forgetFile()
         }
 
-        /// A row that was never picked still decides the reach — the pick is by column count, and a column is not a
-        /// width. This is the whole reason the rows are read at all.
+        /// The pick is by column count, and a column is not a width — why the rows are read at all.
         function test_a_row_reaches_past_what_was_picked() {
             reach.measured = 300
             compare(reach.width, 300)
@@ -179,8 +164,8 @@ Item {
             compare(reach.width, 900)
         }
 
-        /// Filed under the row, so a second look replaces the first. A running maximum could only ever grow, and a
-        /// width measured before a fallback resolved — or before a row's text was — never came back off it.
+        /// Filed under the row, so a second look replaces the first: a running maximum would keep a width measured
+        /// before a fallback resolved.
         function test_a_row_that_came_back_narrower_takes_the_reach_with_it() {
             reach.noteRow(2, 900)
             reach.noteRow(7, 400)
@@ -191,9 +176,8 @@ Item {
             compare(reach.width, 500)
         }
 
-        /// A new reading of the rows: the widths were measured on lines that may be gone, so they go. The width
-        /// itself stays until this reading has measured something — publishing a zero would clamp the reader's place
-        /// back to the left edge of a file they are still reading.
+        /// The width stays until the new reading measures something: publishing a zero would clamp the reader's
+        /// place back to the left edge.
         function test_a_new_reading_forgets_the_rows_and_holds_the_width() {
             reach.measured = 200
             reach.noteRow(3, 800)
@@ -204,8 +188,7 @@ Item {
             compare(reach.width, 350)
         }
 
-        /// Another file starts over: its rows are not this one's, and the place along it is reset beside this
-        /// (`DiffCodeScroll.file`).
+        /// The place along it is reset beside this (`DiffCodeScroll.file`).
         function test_another_file_starts_over() {
             reach.noteRow(1, 800)
             compare(reach.width, 800)

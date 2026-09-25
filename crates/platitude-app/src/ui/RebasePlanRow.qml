@@ -3,10 +3,8 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// One row of the interactive-rebase plan, newest first: the verb it carries, whose commit it is, and the reorder under
-// the hand. Verbs and moves go straight to the plan model through the view's functions; which commit the page should
-// read rides up as a signal (app-ui.md コンポーネント配線規約). Nothing here runs git — the plan is a draft until its
-// one button is pressed (デザイン規約 §履歴を合流させる).
+// One row of the interactive-rebase plan: its verb, its commit, and the reorder under the hand. Verbs and moves go to
+// the plan model through the view's functions; the picked commit rides up to the page (rules/app-ui.md「配線」).
 Item {
     id: planRow
 
@@ -47,9 +45,7 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        // **The reorder is this row's drag, so it keeps it** (`GraphRowDelegate`, measured in `tst_pressorder`). The
-        // list took the grab at the same distance this row tells a drag from a click by, so which of the two got it
-        // was a race — and losing it left the plan sliding instead of the row moving.
+        // The reorder is this row's drag, so it keeps it (rules-refs/app-ui.md「行は渡されたドラッグを手放さない」).
         preventStealing: true
         onPressed: mouse => {
             if (mouse.button === Qt.LeftButton) {
@@ -63,20 +59,19 @@ Item {
             else if (!rowArea.dragging)
                 planRow.list.rowPicked(planRow.index, planRow.oid_hex)
         }
-        // Both ends of the drag are told to the model, because the fold rule is held at the release
-        // (RebasePlanModel::end_move). `dragging` is cleared by the next press — the click that follows a release
-        // reads it to know the press was a drag.
+        // Both ends of the drag reach the model: the fold rule is applied at the release (`RebasePlanModel::end_move`).
+        // `dragging` stays set until the next press, so the click after a release knows it was a drag.
         onReleased: mouse => {
             if (mouse.button === Qt.LeftButton && rowArea.dragging && planRow.list !== null)
                 planRow.list.moveEnded()
         }
-        // The grab was taken away (a popup, a window losing it): no release is coming, so the drag is ended here.
+        // The grab was taken away (a popup, a window losing it): no release is coming, so the drag ends here.
         onCanceled: {
             if (rowArea.dragging && planRow.list !== null)
                 planRow.list.moveEnded()
         }
-        // The reorder: past the drag threshold the row follows the pointer a row at a time. The model's move keeps
-        // this very delegate alive under the hand (impl_move_notified), so the mapping below stays anchored to it.
+        // Past the drag threshold the row follows the pointer a row at a time. The model's move keeps this delegate
+        // alive under the hand (`impl_move_notified`), so the mapping below stays anchored to it.
         onPositionChanged: mouse => {
             if (!rowArea.pressed || planRow.list === null)
                 return
@@ -138,8 +133,7 @@ Item {
                 pixelSize: Theme.fontMd
                 color: planRow.dropped ? Theme.textMuted : Theme.textPrimary
             }
-            // A dropped row stays in its place with a line through it, so the mind can be changed (Fork draws the
-            // same). CutName carries no strikeout of its own, so the line is drawn over its ink.
+            // A dropped row stays, struck through; `CutName` has no strikeout, so the line is drawn over its ink.
             Rectangle {
                 visible: planRow.dropped
                 anchors.verticalCenter: parent.verticalCenter

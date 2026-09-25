@@ -6,19 +6,14 @@ use super::Press;
 /// overwrite, the first push the question just took — and the branch it
 /// was about, until git's answer to that press and no other.
 ///
-/// **By id alone.** A remote branch's replace and delete answer under
-/// the same label, and the fetch running behind a press comes back in
-/// the same drain: a property every answer rewrote said "a push
-/// answered" about somebody else's, and the button beside it put the
-/// refusal on whichever branch was checked out by then
-/// (`PublishFlow.pushSentBranch`, before this). The press writes the
-/// id down here with the branch it was sent for, and what is handed
-/// to the page is the answer at that id and the branch beside it.
+/// By id alone: a remote branch's replace and delete answer under the same
+/// label, and the fetch running behind a press comes back in the same
+/// drain, so a property every answer rewrites reads somebody else's answer
+/// as this push's.
 ///
-/// **The branch outlives the answer**: a refusal is remembered per
-/// branch (デザイン規約 §リモートへ送る), and the page reads which branch
-/// off the same notify the answer arrived in — after which only a
-/// second press overwrites it.
+/// The branch outlives the answer: a refusal is remembered per branch
+/// (デザイン規約 §リモートへ送る), the page reads it off the notify the
+/// answer arrived in, and only a second press overwrites it.
 #[derive(Debug, Default)]
 pub struct PushOut {
     press: Press,
@@ -27,13 +22,10 @@ pub struct PushOut {
 }
 
 impl PushOut {
-    /// The press: the push went to the queue and came back with this id,
-    /// and was about `branch`.
+    /// The push for `branch` went to the queue under `accepted`.
     ///
-    /// Where the queue accepted nothing nothing is waited for — an
-    /// answer that is never coming would hold it open for good — and
-    /// the branch is still written down, so a later reader is handed
-    /// this press's own.
+    /// The branch is written down even where the queue accepted nothing,
+    /// so a later reader is handed this press's own.
     pub fn asked(&mut self, accepted: Option<u64>, branch: String) {
         self.press.asked(accepted);
         self.branch = branch;

@@ -6,29 +6,21 @@ use super::*;
 /// tokio threads, blocking only for the short feed locks.
 pub(super) struct BridgeSink {
     pub(super) feeds: Arc<Feeds>,
-    /// Which session of its tab this one speaks for, counting from one.
-    /// Stamped on the command log's messages, which are the only ones
-    /// that outlive the session that made them (`CommandMsg`).
+    /// Which session of its tab this is, stamped on the command log's
+    /// messages (`CommandMsg`).
     run: u64,
-    /// Set when the tab this sink fed was released or closed
-    /// (`Hub::release_tab` / `Hub::close_tab`). A write the close let run
-    /// on (`RepoSession::close`) answers minutes later — into a page that
-    /// no longer exists, or worse, into the fresh session a reselected
-    /// tab has opened over the same `Feeds`. Retired, the late answers
-    /// go nowhere at all.
+    /// Set when the tab was released or closed. A write the close let run
+    /// on (`RepoSession::close`) answers late, possibly into the fresh
+    /// session a reselected tab opened over the same `Feeds`; retired, it
+    /// goes nowhere.
     pub(super) retired: std::sync::atomic::AtomicBool,
-    /// The same, for a page that is *staying*: the tab has been stood in
-    /// another working copy (`Hub::restand_tab`), so everything this
-    /// session has left to say about a repository would land on a page
-    /// reading another copy of it — but the command log is the record of
-    /// what this window ran, and the write the close let run on is still
-    /// running. Its row is on screen saying so, and this is what lets it
-    /// say how it ended.
+    /// The same for a page that stays (`Hub::restand_tab`): reads about the
+    /// copy being left are dropped, but the command log still hears how a
+    /// write that ran on ended — its row is on screen.
     retired_for_reads: std::sync::atomic::AtomicBool,
-    /// The refs snapshot the tab was last told its remotes out of. A quiet
-    /// tick republishes the very same one (`session::chips`), and the tab
-    /// — every binding on it — is woken only for a snapshot it has
-    /// yet to hear. Weak, so the sink keeps nothing alive.
+    /// The refs snapshot the tab last had its remotes from. A quiet tick
+    /// republishes the same one (`session::chips`), and the tab is woken
+    /// only for a new one. Weak, so the sink keeps nothing alive.
     remotes_told: Mutex<std::sync::Weak<RefsSnapshot>>,
 }
 
@@ -43,10 +35,8 @@ impl BridgeSink {
         }
     }
 
-    /// Whether `event` is one this sink still carries. Everything is,
-    /// until the session is let go of; after that it is nothing, or —
-    /// where the page stayed and only the copy under it changed — the
-    /// command log alone (see the two members).
+    /// Whether `event` still goes through: everything until retired; after
+    /// `retire_reads`, the command log alone.
     fn carries(&self, event: &SessionEvent) -> bool {
         use std::sync::atomic::Ordering::SeqCst;
         if self.retired.load(SeqCst) {
@@ -73,16 +63,14 @@ impl BridgeSink {
         false
     }
 
-    /// No more of this session's answers reach the feeds — the page is
-    /// gone, and the feeds may already be speaking for its successor.
+    /// No more of this session's answers reach the feeds.
     pub(super) fn retire(&self) {
         self.retired
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// Nothing this session has left to say about a repository reaches
-    /// the feeds, and what it has left to say about its own commands
-    /// still does (see `retired_for_reads`).
+    /// Only the command log's messages reach the feeds from now on (see
+    /// `retired_for_reads`).
     pub(super) fn retire_reads(&self) {
         self.retired_for_reads
             .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -164,10 +152,7 @@ impl SessionSink for BridgeSink {
             SessionEvent::HeadObserved { head, seq } => {
                 let head = HeadMsg::of(&head, seq);
                 // Every consumer that draws something at HEAD, and only
-                // those: the headline, the branches section (its
-                // highlighted row and the stand-in that rides above it)
-                // and the graph (the row the pin leads to). Each holds
-                // the newest report and nothing older.
+                // those; each keeps the newest report.
                 self.feeds
                     .status
                     .push_coalescing(StateMsg::Head(head.clone()));
@@ -183,10 +168,6 @@ impl SessionSink for BridgeSink {
                 });
             }
             SessionEvent::RefsLoaded { snapshot, looked } => {
-                // The tab hears about its remotes only when the snapshot
-                // is a new one: a quiet tick republishes the same
-                // pointer, and the bindings on the tab are left where
-                // they are.
                 if !self.remotes_already_told(&snapshot) {
                     self.feeds.tab.push(TabMsg::Remotes {
                         names: snapshot.remote_names.clone(),
@@ -215,9 +196,8 @@ impl SessionSink for BridgeSink {
                     .refs_tags
                     .push_coalescing(RefsMsg::Snapshot { snapshot, looked });
             }
-            // One list and one consumer, where the window's own status is
-            // copied to three below: another copy's changes are shown as
-            // one run of paths (`models::nav::Bucket::Whole`).
+            // One consumer, unlike the three below: another copy's changes
+            // are one run of paths (`models::nav::Bucket::Whole`).
             SessionEvent::CarriedStatusLoaded { path, name, status } => {
                 self.feeds.carried_nav.push_replace(CarriedStatusMsg {
                     at: path,
@@ -237,9 +217,8 @@ impl SessionSink for BridgeSink {
                 eol_marks,
                 stop,
             } => {
-                // One copy per bucket run: each of the WIP pane's lists
-                // shows a run of its own and answers about the whole tree
-                // (`NavSectionModel::told`), so each holds the status.
+                // One copy per WIP list: each answers about the whole tree
+                // (`NavSectionModel::told`).
                 for run in [
                     &self.feeds.status_nav_conflicts,
                     &self.feeds.status_nav_unstaged,
@@ -273,9 +252,8 @@ impl SessionSink for BridgeSink {
                         stop,
                     })));
             }
-            // `push_replace`, like the snapshot it is a slice of: what the
-            // badge shows is where the replay is *now*, and a tick the GUI
-            // thread was too busy to drain is a number nobody wants back.
+            // `push_replace`: the badge shows where the replay is now, and
+            // an undrained tick is stale.
             SessionEvent::OpProgress { op_state, progress } => self
                 .feeds
                 .op_progress
@@ -324,12 +302,9 @@ impl SessionSink for BridgeSink {
                 marks,
                 embedded,
             } => {
-                // Every message kept: rows and colours are two messages
-                // of one diff, and two diffs asked for a moment apart
-                // need not finish in that order — the newest arrival is
-                // not always the wanted one. The consumer's `drain`
-                // picks by key and drops the rest, so nothing
-                // accumulates.
+                // Every message kept: rows and colours are two messages of
+                // one diff, and diffs need not finish in the order asked.
+                // `drain` picks by key and drops the rest.
                 self.feeds.diff.push(DiffMsg::Loaded {
                     target,
                     patches,
@@ -351,8 +326,8 @@ impl SessionSink for BridgeSink {
                     settled,
                 });
             }
-            // The write a command ran under is not drawn yet: the log
-            // reads its rows one command at a time.
+            // `operation` is not drawn yet: the log reads one command per
+            // row.
             SessionEvent::CommandStarted {
                 id,
                 display,
@@ -436,11 +411,10 @@ impl SessionSink for BridgeSink {
             }
             SessionEvent::SignatureChecked { oid, signature } => {
                 use platitude_core::identity::SignatureStatus;
-                // Eight verdicts, three outcomes: only `G` may read as
-                // verified (`SignatureStatus::is_trusted`), `B` is the one
-                // that says the content moved, and everything else in
-                // between is a signature nobody here can judge. The letter
-                // rides along so the tooltip can say which one it was.
+                // Only `G` reads as verified (`SignatureStatus::is_trusted`)
+                // and `B` says the content moved; the rest are signatures
+                // nobody here can judge. The letter rides along for the
+                // tooltip.
                 self.feeds.tab.push(TabMsg::Signature {
                     oid,
                     kind: match signature.status {
@@ -454,13 +428,10 @@ impl SessionSink for BridgeSink {
                     signer: signature.signer,
                 });
             }
-            // Ordered by the ask, the way the details feed is and for
-            // the same reason: two right-clicks a moment apart need not
-            // finish in that order, and a plain replace lets the *older*
-            // answer be the one waiting when the consumer drains — which
-            // the model then drops as stale (`asked_from`), leaving the
-            // newer click unanswered and the screen waiting on a plan
-            // that can no longer arrive.
+            // Ordered by the ask, like details: with a plain replace the
+            // older answer can be the one left to drain, which the model
+            // drops as stale (`asked_from`) and the screen waits forever
+            // (`hub/plan_tests.rs`).
             SessionEvent::RebasePlanLoaded {
                 generation,
                 preview,
@@ -504,9 +475,8 @@ impl SessionSink for BridgeSink {
                     author_email: head.author_email,
                 });
             }
-            // The fetches nobody asked for are the toolbar indicator's:
-            // nobody holds an id for them, and the indicator is all an
-            // offline machine shows for them.
+            // Unasked fetches go to the toolbar indicator only: nobody holds
+            // an id for them.
             SessionEvent::WriteStarted {
                 kind: kind @ (OperationKind::AutoFetch | OperationKind::OpenFetch),
                 ..
@@ -528,10 +498,6 @@ impl SessionSink for BridgeSink {
                     announce: kind == OperationKind::AutoFetch,
                 });
             }
-            // The page waits on the answer (`TabMsg::WriteState`). The
-            // run that photographs the page a write leaves waits on this
-            // one: it is what says the last of those reads has been
-            // published.
             SessionEvent::WriteSettled { id, .. } => {
                 self.feeds
                     .tab
@@ -557,12 +523,8 @@ impl SessionSink for BridgeSink {
                 head_seq,
                 reads_from,
             } => {
-                // A write that did not happen and has something to say
-                // for itself is the page's to report: it says so in
-                // words of its own, and the red line that would say
-                // "something went wrong here" is left for the failures
-                // nothing else answers
-                // (デザイン規約 §答えの要らない報せ).
+                // A reported refusal is the page's notice, not an
+                // `OpError` (デザイン規約 §答えの要らない報せ).
                 if let Some(message) = &error
                     && report.is_none()
                 {

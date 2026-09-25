@@ -5,33 +5,26 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The people a commit message credits beside its author, one to a row. The date line shows the first of them and counts
-// the rest; this is where the rest are read, along with the address that tells two people of the same name apart.
-//
-// A popup, for the same reason the ref list is one: anything declared inside the
-// card's column would be clipped by the pane and painted under the list below it.
+// The people a commit message credits beside its author, one to a row with the address that tells two of the same
+// name apart. A popup: declared inside the pane's column it would be clipped and painted under the list below.
 AppCard {
     id: mateCard
 
     /// The co-author records (`{name, email, face}` — `encode::Mates`), in the order the message lists them.
     property var records: []
-    /// How wide this card may stand — the same ceiling the author's card carries, and set the same way
-    /// (`AuthorCard.maxWidth`, `DetailsAuthorCards.takeRoom`).
+    /// How wide this card may stand, set as the author's card's is (`AuthorCard.maxWidth`,
+    /// `DetailsAuthorCards.takeRoom`).
     property real maxWidth: 0
     readonly property real rowCap: mateCard.maxWidth > 0
         ? mateCard.maxWidth - 2 * mateCard.padding - 2 * Theme.spaceSm : Number.MAX_VALUE
 
     padding: Theme.spaceXs
-    // The card sits against the underlined stretch: the pointer has to be able to walk down into it without
-    // leaving both.
+    // Against the underlined stretch, so the pointer walks down into it without leaving both.
     margins: 0
-    // The pointer walks into this one and reads it. The rows here accept no hover today; giving `AppCard` both halves
-    // is what keeps that an implementation detail.
+    // The pointer walks in to read it, so both halves (rules-refs/app-ui.md「hover で開くものの 5 つの罠」の (2)).
     tracksPointer: true
     contentPointed: contentHover.hovered
-    // Every gap in this card is a place a selection can start — the inset the rows keep, the step under a name, the
-    // room beside a short address (規約 §hover のツールチップ). The rows answer no press of their own, so nothing here
-    // loses one.
+    // Every gap in this card can start a selection (規約 §hover のツールチップ).
     textContent: cardBody
 
     contentItem: Column {
@@ -46,17 +39,9 @@ AppCard {
                 required property var modelData
                 readonly property bool hasAddress: mateRow.modelData.email !== ""
 
-                // Laid out from the start: showing the address only under the pointer changed the row's
-                // own size, so the row moved out from under the hand that asked for it and the card shut
-                // (observed). What a hover reveals keeps the size of what is being hovered.
-                //
-                // On a second line: side by side makes every row as wide as a name and an
-                // address end to end, and height is what this card has to spare — width is what it has to ask the
-                // window for.
-                //
-                // **Both wrap**, and for the same reason the height was always the side that gave:
-                // this card is where the names and addresses the date line could not fit are read in full and taken
-                // away (規約 §hover のツールチップ).
+                // Laid out from the start: an address shown only under the pointer resized the row, which moved out
+                // from under the hand and shut the card. On a second line, since height is what this card has to
+                // spare. Both wrap: this is where they are read in full (規約 §hover のツールチップ).
                 readonly property real headHeight: Math.max(Theme.rowHeight, rowContent.implicitHeight)
                 implicitWidth: Math.max(rowContent.implicitWidth,
                                         address.x - Theme.spaceSm + address.width)

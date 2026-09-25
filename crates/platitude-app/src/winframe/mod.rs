@@ -1,16 +1,9 @@
 //! What Windows has to be told about the window that Qt has no words
 //! for: square corners, the icon, the styles behind Win+Arrow, the
 //! maximise geometry of a frameless window, and the non-client hit test
-//! the merged chrome answers itself.
-//!
-//! Windows 11 rounds every top-level window and leaves the corner pixels
-//! transparent, so whatever sits behind the window shows through them.
-//! And a window that carries no icon of its own is given the shell's
-//! generic one. Qt exposes a switch for none of it, so this is the single
-//! place the app speaks Win32 directly, over the handful of signatures
-//! it declares itself.
-//!
-//! On the other two platforms nothing here runs.
+//! the merged chrome answers itself. The one place the app speaks Win32
+//! directly, over signatures it declares itself; nothing here runs on
+//! the other platforms.
 
 mod api;
 #[cfg(windows)]

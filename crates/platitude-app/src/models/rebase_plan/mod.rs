@@ -15,23 +15,17 @@ mod qobject;
 #[cfg(test)]
 mod steps_tests;
 
-/// The row menu's own spellings, reached from that door too — the two
-/// have to name one refused history one way (`drain::refusal_kind`).
-///
-/// Only that claim reads it from outside this module, and the claim is a
-/// test (`repo_tab::drain_report_tests`), so the name is one too: left
-/// standing in a shipping build it is an export nothing imports.
+/// For `repo_tab::drain_report_tests`, which holds both doors to one
+/// spelling per refused history — test-only, since nothing else imports it.
 #[cfg(test)]
 pub(in crate::models) use drain::refusal_kind;
 
-// ---------------------------------------------------------------------------
 // RebasePlanModel: the interactive-rebase screen's plan — the rows of
-// `from^..HEAD` newest-first, the verb and reword text each row carries,
-// and the run that turns them back into git's oldest-first todo.
-// ---------------------------------------------------------------------------
+// `from^..HEAD` newest-first, and the run that turns them back into git's
+// oldest-first todo.
 
-/// One row of the plan, in the screen's order (newest first — the same way
-/// the graph reads, and the reverse of the todo file).
+/// One row of the plan, in the screen's order (newest first — the reverse
+/// of the todo file).
 #[derive(QModelItem, Default, Clone)]
 pub struct PlanStepItem {
     pub(super) oid_hex: String,
@@ -39,28 +33,23 @@ pub struct PlanStepItem {
     pub(super) author_email: String,
     pub(super) avatar: i32,
     pub(super) avatar_url: String,
-    /// The commit's own subject — what the todo line carries as comment,
-    /// and what the row falls back to showing.
+    /// The commit's own subject — the todo line's comment, and what the
+    /// row falls back to showing.
     pub(super) subject: String,
-    /// What the row draws: the reword's new subject once one is typed,
-    /// the commit's own otherwise. Chosen here — which text a row shows
-    /// is a rule (app-ui.md).
+    /// What the row draws (`RebasePlanModel::shown_of`).
     pub(super) shown: String,
-    /// `pick` / `reword` / `edit` / `squash` / `fixup` / `drop`, as the
-    /// verb chip spells it (デザイン規約 §git 用語のコード表記).
+    /// One of `ACTIONS`, as the verb chip spells it.
     pub(super) action: String,
-    /// The reword's replacement message, split the way the two boxes hold
-    /// it. Empty until typed; an empty pair at run time means the commit
-    /// keeps its message, so the step goes back to a plain `pick`.
+    /// The reword's replacement message, as the two boxes hold it. An
+    /// empty pair runs as a plain `pick` (`RebasePlanModel::todo_action_of`).
     pub(super) msg_subject: String,
     pub(super) msg_body: String,
 }
 
-/// The six verbs a row can carry — the todo's own vocabulary.
+/// The verbs a row can carry — the todo's own vocabulary.
 pub(super) const ACTIONS: [&str; 6] = ["pick", "reword", "edit", "squash", "fixup", "drop"];
 
-/// The two verbs that fold into the row below (the parent). The oldest
-/// row has no row below it inside the plan, so neither stands there.
+/// The verbs that fold into the row below (the parent).
 pub(super) fn folds(action: &str) -> bool {
     action == "squash" || action == "fixup"
 }
@@ -68,14 +57,13 @@ pub(super) fn folds(action: &str) -> bool {
 #[derive(Default)]
 pub struct RebasePlanModel {
     pub(super) steps: Vec<PlanStepItem>,
-    /// Rows staged for the next model reset — `QListModelBase::reset`
-    /// calls [`QListModel::reset_unnotified`], which installs these.
+    /// Rows staged for the next model reset, installed by
+    /// [`QListModel::reset_unnotified`].
     pub(super) pending_rows: Option<Vec<PlanStepItem>>,
     /// The oids in the order the plan opened with — what `dirty` compares
     /// the current order against.
     pub(super) initial: Vec<String>,
-    /// A hand is carrying a row. The drag reports every row it
-    /// crosses, so the fold rule waits for the release
+    /// A hand is carrying a row; the fold rule waits for the release
     /// (`end_move`).
     pub(super) dragging: bool,
     pub(super) active: bool,
@@ -92,27 +80,25 @@ pub struct RebasePlanModel {
     pub(super) onto_email: String,
     pub(super) onto_avatar: i32,
     pub(super) onto_avatar_url: String,
-    /// A local branch standing on the base, said first with the id as the
-    /// fallback (デザイン規約: onto はブランチ名優先). Empty when none.
+    /// A local branch standing on the base, named in place of the id
+    /// (デザイン規約 §フル interactive rebase「onto の名はブランチ優先」).
+    /// Empty when none.
     pub(super) onto_ref: String,
     /// The branch tip the plan was composed against (= the newest row).
     /// The run pins it, and a tip that moves under the open plan closes
     /// it (`note_head`).
     pub(super) expect_head: String,
-    /// The very range the plan replays, as core spelled it — what the
-    /// rewrite warning's count is about, and what `refreshPushed` asks
-    /// about again. Empty while no plan stands.
+    /// The range the plan replays, as core spelled it — what
+    /// `refreshPushed` asks the pushed count of again. Empty while no
+    /// plan stands.
     pub(super) publish_range: String,
-    /// How many of the plan's rows a remote already has — the `rewrites
-    /// pushed commits` warning's number (`RebasePlanRunBar`). Counted
-    /// by core as the plan opens (`PlanPreview::published`) and counted
-    /// again when the refs move under the open plan
-    /// (`PlanMsg::Published`), so the plan carries its own
-    /// answer.
+    /// How many of the plan's rows a remote already has (the run bar's
+    /// warning). Counted as the plan opens (`PlanPreview::published`) and
+    /// again when the refs move (`PlanMsg::Published`).
     pub(super) pushed_count: i32,
     /// [`Self::is_dirty`] as a property, settled by every mutation — the
-    /// run button's `enabled:` has to follow it, and a binding on a slot
-    /// freezes at its first answer (app-ui.md).
+    /// run button binds to it, and bindings follow properties only
+    /// (app-ui.md).
     pub(super) dirty: bool,
     /// Rows the plan leaves out, settled the same way: with the tip held
     /// by nothing else, what makes the run a hold (§履歴を合流させる).
@@ -121,25 +107,19 @@ pub struct RebasePlanModel {
     pub(super) step_count: i32,
     /// The row the page's selection sits on (-1 = none), and its verb —
     /// what the right pane's boxes read to know a reword is on screen.
-    /// Held here so a reorder cannot leave the two disagreeing (the move
-    /// remaps it).
+    /// Held here so a reorder remaps it with the rows.
     pub(super) selected_row: i32,
     pub(super) selected_action: String,
-    /// That row's commit, so the page can refuse to route typing whose
-    /// details pane shows some other commit (a selection moved by
-    /// anything that is not a plan row click).
+    /// That row's commit, so the page can refuse to route typing while
+    /// the details pane shows another commit.
     pub(super) selected_oid: String,
     /// The selected row's stored reword, so the boxes can reopen on the
     /// draft when the row is revisited — saving over the original would
     /// silently revert it.
     pub(super) selected_msg_subject: String,
     pub(super) selected_msg_body: String,
-    /// One head report that disagreed with `expect_head` is a suspect:
-    /// a status read that began before a tip move and
-    /// landed after the plan opened carries the *older* oid, and closing
-    /// on it would discard a plan composed on exactly the tip that
-    /// exists. Reads are single-flight, so at most one stale report can
-    /// land after the open — the second strike is always fresh.
+    /// One head report disagreed with `expect_head` — the first of the two
+    /// strikes `note_head` waits for.
     pub(super) head_suspect: bool,
     pub(super) feed: Option<Arc<Feed<PlanMsg>>>,
     pub(super) tab_id: i32,
@@ -161,17 +141,10 @@ impl QListModel for RebasePlanModel {
 
 impl RebasePlanModel {
     /// Whether the plan asks for anything at all: rows out of their
-    /// original order, or a row the run would write as something other
-    /// than `pick`. The run button only opens on this — an untouched
-    /// plan replays every commit onto the parent it already sits on, and
-    /// a button that runs it would be one that visibly does nothing
-    /// (デザイン規約 §可否・警告の出し場所).
-    ///
-    /// The verb is read through [`Self::todo_action_of`], so what opens
-    /// the button is what the todo actually carries: a row turned to
-    /// `reword` with nothing typed goes to git as a plain `pick`, and
-    /// counting it here would open a run whose todo is all
-    /// picks.
+    /// original order, or a row the todo carries as something other than
+    /// `pick` ([`Self::todo_action_of`] — counting the chip's verb would
+    /// open the run button on an all-pick todo). An untouched plan would
+    /// run a rebase that visibly does nothing.
     pub(super) fn is_dirty(&self) -> bool {
         self.steps.len() != self.initial.len()
             || self
@@ -185,10 +158,8 @@ impl RebasePlanModel {
                 .any(|step| Self::todo_action_of(step).0 != TodoAction::Pick)
     }
 
-    /// Whether the answer to this very commit is already on its way, so
-    /// asking again would only spend the walk twice
-    /// (`RebasePlanModel::open`). Any other commit is a different
-    /// question, however long the one before it is taking.
+    /// Whether the answer to this very commit is already on its way
+    /// (`RebasePlanModel::open`).
     pub(super) fn already_asking(&self, from: &str) -> bool {
         self.loading && self.asked_from == from
     }
@@ -198,15 +169,10 @@ impl RebasePlanModel {
         i32::try_from(drops).unwrap_or(i32::MAX)
     }
 
-    /// What the row should show for its subject: the subject the run
-    /// would actually leave on the commit.
-    ///
-    /// Read through [`Self::todo_action_of`] for the same reason
-    /// [`Self::is_dirty`] is — the row and the todo say the same
-    /// thing. Typed into the description box alone, a `reword` still
-    /// rewrites the commit, and git's subject is that message's first
-    /// line; taking the summary box on its own would leave the row
-    /// showing the old subject while the run replaced it.
+    /// The subject the run would leave on the commit, read through
+    /// [`Self::todo_action_of`]: a reword typed into the description box
+    /// alone still rewrites, and git's subject is that message's first
+    /// line — reading the summary box alone would show the old subject.
     pub(super) fn shown_of(step: &PlanStepItem) -> String {
         let (action, message) = Self::todo_action_of(step);
         if action == TodoAction::Reword {
@@ -216,12 +182,10 @@ impl RebasePlanModel {
         }
     }
 
-    /// The todo verb one row stands for, with the message a `reword`
-    /// would carry. The single place the chips' vocabulary turns into
-    /// git's, so the todo the run writes and the button
-    /// [`Self::is_dirty`] opens cannot drift apart: reword only where a
-    /// message was actually typed (an empty box means the commit keeps
-    /// its message, which is a plain `pick`).
+    /// The todo verb one row stands for, with the message a `reword` would
+    /// carry — the one place the chips' vocabulary turns into git's, so the
+    /// run and [`Self::is_dirty`] cannot drift apart. A `reword` with
+    /// nothing typed is a plain `pick`.
     pub(super) fn todo_action_of(step: &PlanStepItem) -> (TodoAction, String) {
         let message = platitude_core::commit::join_message(&step.msg_subject, &step.msg_body);
         let action = match step.action.as_str() {
@@ -276,25 +240,19 @@ impl RebasePlanModel {
             .unwrap_or_default();
     }
 
-    /// Whether a fold may stand on `row`: something below it has to
-    /// remain in the history for it to fold into — a drop is not it, and
-    /// the oldest row has nothing below at all. What the verb menu
-    /// freezes as it opens; [`Self::demote_orphan_folds`] holds the same
-    /// line against reorders and later drops.
+    /// Whether a fold may stand on `row`: some row below it has to stay in
+    /// the history (not a drop). [`Self::demote_orphan_folds`] holds the
+    /// same line against reorders and later drops.
     pub(super) fn fold_lands(&self, row: usize) -> bool {
         self.steps
             .get(row + 1..)
             .is_some_and(|below| below.iter().any(|step| step.action != "drop"))
     }
 
-    /// Rows the fold rule holds down after any mutation: a fold folds
-    /// into the nearest row below that stays in the history, so one with
-    /// nothing but drops under it — moved there, or stranded by a later
-    /// drop — goes back to `pick` on the spot, visibly on the row itself
-    /// (git rejects such a todo into a broken stop: `cannot 'squash'
-    /// without a previous commit`, measured).
-    /// Walked bottom-up: a fold that stays is itself something a fold
-    /// above can land in.
+    /// Sends every fold with nothing but drops (or nothing) below it back
+    /// to `pick`, and answers their rows — git stops broken on such a todo
+    /// (`cannot 'squash' without a previous commit`). Walked bottom-up: a
+    /// fold that stays is itself a landing for the fold above.
     pub(super) fn demote_orphan_folds(&mut self) -> Vec<usize> {
         let mut demoted = Vec::new();
         let mut lands = false;
@@ -310,9 +268,8 @@ impl RebasePlanModel {
         demoted
     }
 
-    /// Walks [`Self::demote_orphan_folds`] over the rows and redraws the
-    /// ones it sent back to `pick`. Answers whether it moved anything, so
-    /// a caller with no other reason to notify can stand down.
+    /// [`Self::demote_orphan_folds`], with the demoted rows redrawn.
+    /// Answers whether it moved anything.
     pub(super) fn hold_fold_rule(&mut self) -> bool {
         let demoted = self.demote_orphan_folds();
         let moved = !demoted.is_empty();
@@ -324,10 +281,8 @@ impl RebasePlanModel {
     /// selection with the row it was on. One Qt move, so the delegate
     /// under the hand stays alive. Answers whether anything moved.
     ///
-    /// The fold rule is held here only when nothing is carrying the row.
-    /// A drag reports every row it crosses, and walking the rule per
-    /// crossing demotes a fold the hand is merely *passing* through the
-    /// oldest place — see `end_move`, which holds it once at the release.
+    /// The fold rule is held here only when no hand is carrying the row
+    /// (`end_move` says why).
     pub(super) fn reorder(&mut self, from: i32, to: i32) -> bool {
         let (Ok(from_i), Ok(to_i)) = (usize::try_from(from), usize::try_from(to)) else {
             return false;

@@ -3,43 +3,37 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The interactive-rebase plan, stood where the graph was: the rows of `from^..HEAD` newest-first, the verb each one
-// carries, and the base they land on as the list's own last row. Composing runs nothing — the one door out of here
-// that touches the repository is the run button standing at the right pane's foot, and `Discard` up here only puts
-// the draft away (デザイン規約 §履歴を合流させる).
+// The interactive-rebase plan in the graph's seat: the rows of `from^..HEAD` newest-first with their verbs, and the
+// base as the list's last row. Composing runs nothing — the run button at the right pane's foot is the one door to the
+// repository, and `Discard` only puts the draft away (デザイン規約 §履歴を合流させる).
 //
-// While this pane stands, the surfaces that could move the history under it are held down by the page (the sidebar,
-// find, the toolbar's writes); what cannot be held — another session, a terminal — is answered by the model putting
-// the plan away when the tip moves (`RebasePlanModel.noteHead`), and by core pinning the tip again at run time.
+// The page holds down what could move the history meanwhile; what it cannot hold (another session, a terminal) is
+// answered by the model dropping the plan when the tip moves (`RebasePlanModel.noteHead`) and by core re-pinning the
+// tip at run time.
 Rectangle {
     id: planPane
 
     required property var planModel
-    /// The commit the page's selection sits on, so the row under it reads selected the way a graph row would.
+    /// The page's selected commit; its row reads selected.
     property string selectedOid: ""
-    /// The read that opens the plan is still out. The pane takes the graph's seat at the press (`RepoPage.planShown`),
-    /// so this is the face it has until the rows land: the band's one word, the turning mark in the middle of the
-    /// column that will hold them, and nothing it does not yet know — the base has no name and no id yet, and
-    /// neither has the question of whether there is a base at all (デザイン規約 §フル interactive rebase).
+    /// The read that opens the plan is still out. The pane already stands (`RepoPage.planShown`) with the band's word
+    /// and the spinner only — nothing about the base is known yet (デザイン規約 §フル interactive rebase).
     required property bool waiting
 
     /// Which commit the reader picked, for the page to select (the details pane follows it).
     signal rowPicked(string oidHex)
 
-    /// `Discard` would take composed work away with the plan — verbs set, rows moved, a reword saved into it, or one
-    /// typed into the right pane's boxes and not yet given to it. None of that can be read back off the screen
-    /// afterwards, so the button is held (デザイン規約 §長押し). Handed in: half the answer is the right pane's, and
-    /// this pane owns nothing but the rows (`RepoPage.planDiscards`).
+    /// `Discard` would throw away composed work (verbs, moves, a reword saved or still in the right pane's boxes), so
+    /// it becomes a hold (デザイン規約 §長押し). Handed in: half the answer is the right pane's (`RepoPage.planDiscards`).
     property bool discards: false
 
-    /// The list the rows stand in, so a verb can make the same calls a hand on a row makes. An automation-only
-    /// exposure, the same one `GraphPane.view` is (app-ui.md).
+    /// Automation only: the list, so a verb makes the same calls a hand on a row makes.
     readonly property alias view: planList
 
     color: Theme.bgBase
 
-    // The widest verb decides the chip column, measured off a real chip so the resolved font is what measures it
-    // (app-ui.md — a metrics call in a binding freezes on the default font; a Label's implicitWidth does not).
+    // The widest verb sizes the chip column, measured off a real chip: a metrics method in a binding takes no
+    // dependency and stays on the default font (rules/app-ui.md).
     CodeChip {
         id: verbProbe
         visible: false
@@ -61,14 +55,8 @@ Rectangle {
                 anchors.leftMargin: Theme.spaceMd
                 anchors.rightMargin: Theme.spaceMd
                 spacing: Theme.spaceSm
-                // The mode is named from the press, before the read that would finish the sentence has landed: the
-                // band says what this face is for the whole time it is up, and the rest of the sentence arrives with
-                // the rows.
-                //
-                // **The `…` is the sentence's**: what it marks is that this phrase is cut short and will be
-                // finished — the elision mark of 規約 §ウィンドウの縁, where §進行中・長押しの定数 refuses the progress
-                // mark. Without it the band reads as a finished sentence and the name arriving rewrites it; with it
-                // the name lands where the mark already said something was missing.
+                // Named from the press; the rest of the sentence arrives with the rows. The `…` says the phrase will
+                // be finished, not that something is in progress (規約 §進行中・長押しの定数「文がまだ途中」).
                 Label {
                     text: planPane.waiting ? qsTr("Rebasing…")
                         : planPane.planModel.root ? qsTr("Rebasing back to the very first commit")
@@ -95,16 +83,10 @@ Rectangle {
                     id: cancelButton
                     //: The way out of the plan being composed. What it throws away is the draft on screen.
                     text: qsTr("Discard")
-                    // **A plain word.** Nothing has run and nothing runs from this button, so `--abort` here would
-                    // name a command git refuses on this screen (デザイン規約 §git 用語のコード表記
-                    // — 着せるのはコマンドだけ). The word takes its object from the screen it stands on, the way
-                    // the file row's own `Discard` takes its object from the row under the pointer.
-                    //
-                    // The frame carries what is about to be lost, and the word takes the colour only because this is
-                    // a hold (規約 §長押し — `RebasePlanRunBar` と同じ線). The word itself does not change: pressing
-                    // this still puts the plan away, hold or no hold. **The dressing reads the length the press was
-                    // given** (`ActionButton.armedMs`): the boxes in the right pane can empty under a hand that is
-                    // already holding, and the button would lose its frame there.
+                    // A plain word, not `--abort`: nothing has run, and git would refuse that command here
+                    // (デザイン規約 §git 用語のコード表記「着せるのはコマンドだけ」).
+                    // The dressing reads `armedMs`, not `discards`: the right pane's boxes can empty under a hand
+                    // already holding (規約 §長押し).
                     frameColor: cancelButton.armedMs > 0 ? Theme.warning : Theme.borderDefault
                     tone: cancelButton.armedMs > 0 ? Theme.warning : Theme.textPrimary
                     holdMs: planPane.discards ? Metrics.holdMs : 0
@@ -127,13 +109,8 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.topMargin: Theme.spaceXs
-            // The rows arrive once they are the plan's — the half of this face that arrives late, and what makes
-            // the wait one face of its own. **Costs nothing while the read is really out**: the model has no rows
-            // then either.
-            //
-            // The count: a hidden child leaves the column with nothing to stretch, and the band drops to the middle
-            // of the pane with the mark on top of it (observed on Linux — where the rows land before the grab does,
-            // and the report line stays green because it says what the edge saw).
+            // No rows while waiting — by the model, not by hiding the list: a hidden child leaves the column nothing
+            // to stretch, and the band drops to the pane's middle.
             model: planPane.waiting ? 0 : planPane.planModel
 
             /// What every row reads and calls (the delegate reaches the pane through its view).
@@ -158,10 +135,8 @@ Rectangle {
 
             delegate: RebasePlanRow {}
 
-            // The base the rows land on, as the row after the oldest one: what the squash arrows point at, and the
-            // one row here nothing can be done to. A list with no rows still lays its footer out, so the wait takes it
-            // down as well — the base is exactly what the read has not answered yet, and its row drawn empty would be
-            // a commit with no face, no words and no id.
+            // The base, as the row after the oldest. An empty list still lays its footer out, so waiting takes it down
+            // too.
             footer: Item {
                 width: planList.width
                 height: planPane.waiting || planPane.planModel.root ? 0 : Theme.graphRowHeight + Theme.spaceSm
@@ -183,8 +158,7 @@ Rectangle {
                     anchors.leftMargin: Theme.spaceMd
                     anchors.rightMargin: Theme.spaceXs
                     spacing: Theme.spaceSm
-                    // The base's name is said once, in the header's own sentence — this row is the commit itself,
-                    // dressed like every other row: face, subject, id.
+                    // The base's name is in the header; this row is the commit, dressed like the others.
                     Label {
                         Layout.preferredWidth: planList.verbColW
                         text: qsTr("onto")
@@ -218,12 +192,7 @@ Rectangle {
         }
     }
 
-    // The read walking the range, in the middle of the column that will hold its rows — the same mark at the same size
-    // in the same seat the graph's own first load puts one in (`GraphEmptyState`), because this pane is standing where
-    // that column was and waiting keeps its look when the seat changes hands.
-    //
-    // Centred below the head: the band is up the whole time and the rows will start under it, so the middle of what
-    // is waiting is half a head lower than the middle of the pane.
+    // The graph's first-load mark (`GraphEmptyState`), centred on the column under the head.
     SpinnerIcon {
         anchors.centerIn: parent
         anchors.verticalCenterOffset: planHead.height / 2
@@ -232,10 +201,9 @@ Rectangle {
         spinning: planPane.waiting
     }
 
-    // The verb menu: the same six words the todo file takes, chips first (デザイン規約 §git 用語のコード表記). What row
-    // it is about — and whether a fold on it has anywhere to land — is frozen as it opens (app-ui.md §メニュー), and
-    // the landing question is the model's own (`canFold`), so the menu cannot come to answer it differently from the
-    // demotion that enforces it.
+    // The todo file's six verbs, chips first (デザイン規約 §git 用語のコード表記). The row and whether a fold lands are
+    // frozen at open (デザイン規約 §メニュー「中身は開いた瞬間に決め、開いている間は凍らせる」); the landing question is
+    // the model's `canFold`, the same answer the demotion enforces.
     Item {
         anchors.fill: parent
         AppMenu {
@@ -263,9 +231,7 @@ Rectangle {
                 onTriggered: planPane.planModel.setAction(verbMenu.forRow, "edit")
             }
             AppMenuSeparator {}
-            // The two folds land in the nearest row below that stays in the history, so they are gone from a row
-            // with nothing under it but drops — or nothing at all (the model demotes what a later change strands,
-            // the same line).
+            // A fold lands in the nearest kept row below, so it is not offered with only drops (or nothing) under it.
             AppMenuItem {
                 code: "squash"
                 text: qsTr("into parent, both messages")

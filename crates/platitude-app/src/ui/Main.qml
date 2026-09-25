@@ -12,32 +12,25 @@ ApplicationWindow {
     width: 1440
     height: 900
     visible: true
-    /// Whether the tab row is the window's title bar. Decided by platform: hints are read when the window is
-    /// created, and a window that came up without a way to close it cannot be taken back. Only Windows is known to
-    /// work; everywhere else keeps the platform's own title bar above an ordinary tab row (P3-確認事項 §ウィンドウ
-    /// chrome). `AppBackend.systemTitleBar` asks for that other shape here as well, which is the one window
-    /// decision that cannot be made after the fact.
+    /// Whether the tab row is the window's title bar: fixed at creation, and named by platform — hints are read then,
+    /// and a window that came up without a way to close it cannot be taken back
+    /// (デザイン規約 §ウィンドウの縁「兼ねるかはプラットフォームを名指しで決める」).
     readonly property bool captionMerged: Qt.platform.os === "windows" && !AppBackend.systemTitleBar
 
-    // The frame goes: an expanded client area over the caption still leaves a real non-client frame — inflated past
-    // the screen when maximised, a white pixel no DWM attribute moves, a remembered size coming back too wide.
-    // `FramelessWindowHint` deletes the whole area; the edge is drawn in the scene (below) and stands in for the
-    // shadow, and the resize edges and grab run stay with the subclass (`winframe::take_frame_hit_test` — Qt 6.10's
-    // own custom-chrome answer synthesises input from a poll and loses track of it: the dead first click and the
-    // frozen hover). `keepWindowGestures` puts back the system's minimise/maximise/menu style bits, and the subclass
-    // pins a maximise to the work area (`clamp_maximized`), which Windows would otherwise take to the whole monitor.
+    // Frameless: an expanded client area still leaves a real non-client frame (past the screen when maximised, a
+    // white pixel no DWM attribute moves). The resize edges and grab run stay with the subclass
+    // (`winframe::take_frame_hit_test`) — Qt's own custom chrome synthesises input from a poll and loses track of it.
+    // `keepWindowGestures` puts back the system's minimise/maximise/menu style bits, and `clamp_maximized` pins a
+    // maximise to the work area, which Windows would otherwise take to the whole monitor.
     flags: root.captionMerged ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
     title: Words.appName
     color: Theme.bgBase
 
     // ---- the floor the window may not be dragged under --------------------
-    // Past the minimums, `SplitView` and the layouts here lay items out over their own edge, and nothing scrolls
-    // sideways to reach what went over. Read off what is on screen, because the list folding and the command log
-    // opening both move it; Qt grows a window when a floor rises under it, which is the way back from
-    // fold → shrink → unfold. `minimumWidth` alone only covers a dragged edge — `QWindow::resize` hands the size
-    // straight to the platform without reading the hints — so every size this application sets itself goes through
-    // `holdFloor` below. The numbers themselves are measured where both halves of the floor are (`WindowBody`); the
-    // names stay on the window, which is where the harness and `WindowShape` read them.
+    // Past the minimums, `SplitView` and the layouts lay items out over their own edge (デザイン規約 §窓の床).
+    // `minimumWidth` only covers a dragged edge and a rising floor — `QWindow::resize` hands a size straight to the
+    // platform without reading the hints — so every size this application sets goes through `holdFloor`. Measured in
+    // `WindowBody`; named here, where the harness and `WindowShape` read them.
     readonly property alias floorPage: body.floorPage
     readonly property alias floorWidth: body.floorWidth
     readonly property alias openFloorWidth: body.openFloorWidth
@@ -47,8 +40,7 @@ ApplicationWindow {
     onFloorWidthChanged: windowShape.holdFloor()
     onFloorHeightChanged: windowShape.holdFloor()
 
-    // The floor says how small the window may be; `WindowShape` says what it opens at, what its frame slop is, and
-    // what the next launch is told. The way in keeps its name here: the harness calls `reportState()` on the window.
+    // `reportState()` stays on the window: the harness calls it there.
     WindowShape {
         id: windowShape
         window: root
@@ -57,9 +49,7 @@ ApplicationWindow {
         windowShape.reportState()
     }
 
-    // What a title bar does, since this band is one: maximise, minimise, the grab-run's whereabouts and the
-    // window's dressing (`WindowChrome`). Only this file and the body it seats call them, so the names live on the
-    // chrome.
+    // Only this file and the body call it, so the names live on the chrome.
     WindowChrome {
         id: chrome
         window: root
@@ -70,19 +60,16 @@ ApplicationWindow {
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
 
-    // A color written here without a group lands in *all three* groups — and, being a binding, it settles after the
-    // groups' own bindings and overwrites them. So a role either never changes and is written once, or it changes
-    // and is written out in every group.
+    // A color written here without a group lands in all three groups — and, being a binding, settles after the
+    // groups' own bindings and overwrites them. So a role either never changes and is written once, or is written
+    // out in every group.
     palette {
-        // Same whatever state a control is in.
         window: Theme.bgBase
         base: Theme.bgBase
         button: Theme.bgElevated
         placeholderText: Theme.textMuted
-        // The two roles Fusion paints a scroll bar's thumb with, and in this window they paint nothing else: every
-        // other place the style reaches for `mid` (a Popup's border, a Dialog's, a SplitView's handle) is a background
-        // this app supplies itself. So they are the thumb's own colors, and they are translucent — the graph's rows
-        // run under the bar (デザイン規約 §スクロールバー).
+        // The two roles Fusion paints a scroll bar's thumb with; everywhere else the style reaches for `mid` (Popup and
+        // Dialog borders, the SplitView handle) this app draws its own background (デザイン規約 §スクロールバー).
         mid: Theme.scrollBarThumb
         dark: Theme.scrollBarThumbHeld // Fusion: a scroll bar's held handle
         light: Theme.borderDefault
@@ -95,7 +82,7 @@ ApplicationWindow {
             highlight: Theme.accent
             highlightedText: Theme.textOnAccent
         }
-        // The same colors as active: the window losing focus keeps its look.
+        // As active: the window losing focus keeps its look.
         inactive {
             windowText: Theme.textPrimary
             text: Theme.textPrimary
@@ -104,8 +91,7 @@ ApplicationWindow {
             highlight: Theme.accent
             highlightedText: Theme.textOnAccent
         }
-        // What cannot be pressed says so: labels drop to the muted text, and the accent face of a highlighted button
-        // (Commit, Save) drops with them so it stops reading as the one thing to press.
+        // A highlighted button's accent face (Commit, Save) drops too, or it still reads as the thing to press.
         disabled {
             windowText: Theme.textMuted
             text: Theme.textMuted
@@ -116,16 +102,12 @@ ApplicationWindow {
         }
     }
 
-    // Window focus is a refresh trigger (refs/status/stash only).
-    //
-    // **Only a window coming back counts.** The repository behind one arriving is being read for the first time at
-    // that very moment (`RepoSession::open` → `refresh_quick`), so counting that first activation asks the same
-    // question twice: the single flight runs the page's copy behind the opening's own the instant the first lands
-    // (`session::ReadFlight`). What that second pass costs is a whole `git status --porcelain=v2 -uall` — every
-    // tracked and ignored file lstat'd again — for an answer nothing could have changed since.
+    // Window focus is a refresh trigger (refs/status/stash only). Only a window coming back counts: the first
+    // activation lands while the repository is first being read (`RepoSession::open`), and counting it queues a second
+    // whole `git status` behind that one (`session::ReadFlight`).
     property int focusEpoch: 0
-    /// Whether the window has been away. Read off the losing of focus: that way a window that is already active
-    /// before this handler exists still counts its first real return.
+    /// Read off the losing of focus, so a window already active before this handler exists still counts its first
+    /// real return.
     property bool everAway: false
     onActiveChanged: {
         if (!root.active)
@@ -134,8 +116,7 @@ ApplicationWindow {
             root.focusEpoch++
     }
 
-    // Being on screen drives the periodic re-read: a window that only catches up when clicked hides exactly what it
-    // is kept open to show.
+    // Drives the periodic re-read.
     readonly property bool onScreen: root.visible
                                      && root.visibility !== Window.Minimized && root.visibility !== Window.Hidden
 
@@ -143,21 +124,18 @@ ApplicationWindow {
         window: root
         // Over the safe-area inset the chrome also covers, so presses on the band are heard too.
         reachUp: root.contentItem.y
-        // The page on screen, so an Escape after the caret was walked away from still reaches the one handler that
-        // puts this window's standing things away.
+        // So an Escape after the caret was walked away from still reaches the page's handler.
         home: root.curPage
         // The left menu's name box is held open by nothing but the keyboard it took, so the press that took the
-        // keyboard away is what walks away from it (デザイン規約 §左メニューの所作). Only the tab on screen has one.
+        // keyboard away walks away from it (デザイン規約 §左メニューの所作).
         onPressedAway: scenePos => {
             if (root.curPage !== null)
                 root.curPage.releasePressedAway(scenePos)
         }
         onPressedAnywhere: root.pressLandedAnywhere()
     }
-    /// A press landed, whatever it was on (`FocusRelease.pressedAnywhere` — the handler is one line onto this, so a
-    /// run enters the same road). What the window put up for the reader stands until they do the next thing: the
-    /// mark the right pane wears after a reader was sent to it (デザイン規約 §hover のツールチップ), a middle-click
-    /// gesture running anywhere in the window, and the strip's ask for the tab it brought in (`TabStrip.pressLanded`).
+    /// A press landed, whatever it was on; a run enters the same road. What the window put up for the reader stands
+    /// until their next press (デザイン規約 §hover のツールチップ).
     function pressLandedAnywhere() {
         MiddleHand.pressLanded()
         body.topBar.pressLanded()
@@ -165,15 +143,13 @@ ApplicationWindow {
             root.curPage.notePress()
     }
 
-    /// Automation (`PGG_AUTO_ACT=replay-running`): the hand stood at `x, y`, and what the mark beside it makes of
-    /// that (`WindowWaitRing`). The two keep their names here — the harness calls them on the window.
+    /// Automation (`PGG_AUTO_ACT=replay-running`), on the window because the harness calls it here.
     function holdWaitHand(x, y) {
         body.waitRing.holdWaitHand(x, y)
     }
     readonly property bool waitRingShown: body.waitRing.ringShown
 
-    // Identity: the dialog and the state that opens it live in the gate below (`IdentityGate`). The way in keeps its
-    // name on the window — the harness calls it here (`WindowAutoActDriver`).
+    // On the window because the harness calls it here (`WindowAutoActDriver`).
     function dismissIdentity() {
         identityGate.dismissIdentity()
     }
@@ -191,7 +167,7 @@ ApplicationWindow {
         onActivated: root.curPage.startFind()
     }
 
-    // Frame counter for the scroll benchmark (PGG_AUTO_SCROLL=1); the page's bench reads it through Window.window.
+    // Frames swapped, for automation (`WindowPerfDriver`, and page verbs through `Window.window`).
     property int frameCounter: 0
     onFrameSwapped: frameCounter++
     function claimAutoPageAct() {
@@ -204,8 +180,8 @@ ApplicationWindow {
         if (acts !== null)
             acts.finish()
     }
-    // What the page's own run has its write barrier holding, for the line a run that stopped answering leaves. The
-    // page cannot reach the window's harness seat itself, and the seat is where the ceiling lives.
+    // What the page's run has its write barrier holding, for the line a stalled run leaves: the ceiling lives in the
+    // window's harness seat, out of the page's reach.
     function noteAutoActWrite(state) {
         const acts = harness.ask()
         if (acts !== null)
@@ -218,9 +194,9 @@ ApplicationWindow {
             openFailedDialog.show(path, kind, message, near)
     }
 
-    // Only the picker's own answers come here: somebody there is still choosing a folder, so the way on is the picker
-    // again. Every other way a repository fails to open (a restored tab, a worktree row, PGG_AUTO_OPEN) keeps its tab
-    // and its page-sized failure screen — a modal on startup is answered before it can be read.
+    // Only the picker's own failures come here, and the way on is the picker again. Every other failed open (a
+    // restored tab, a worktree row, PGG_AUTO_OPEN) keeps its tab and its failure screen — a modal on startup is
+    // answered before it can be read.
     OpenFailedDialog {
         id: openFailedDialog
         onChooseAnother: near => root.openRepositoryPicker(near)
@@ -232,12 +208,9 @@ ApplicationWindow {
         anchors.fill: parent
     }
 
-    // A different git has been chosen and answered, so this window is done: `main` starts the successor once the
-    // window has gone and the settings files have been let go of (規約 §設定の画面).
-    //
-    // **Read here.** `root.close()` is the one road out — the close gate that waits a running write out stands on it
-    // — and a screen that reached for it would be a second spelling of that road (`AppMenuButton` exit row). The
-    // answer is data on the model; the window that owns the road reads it.
+    // A different git was chosen: this window closes, and `main` starts the successor once the settings files are let
+    // go of (規約 §設定の画面). Read here because `root.close()` is the one road out — the close gate that waits a
+    // running write out stands on it.
     Connections {
         target: AppBackend
         function onRestartWantedChanged() {
@@ -246,8 +219,7 @@ ApplicationWindow {
         }
     }
 
-    // The RepoPage of the active tab (the toolbar's right-side controls act on it). Only that tab has one
-    // (`RepoPageStack`).
+    // The RepoPage of the active tab — the only tab that has one (`RepoPageStack`).
     readonly property alias curPage: body.curPage
 
     FolderDialog {
@@ -256,8 +228,7 @@ ApplicationWindow {
         onAccepted: tabsModel.openRepositoryUrl(selectedFolder.toString())
     }
 
-    // The settings screen and the clone box, with the model and folder chooser the clone owns — one seat, filling
-    // the window because it is the popups' parent (`WindowDialogSeat`).
+    // The settings screen and the clone box — filling the window because it is the popups' parent.
     WindowDialogSeat {
         id: dialogSeat
         anchors.fill: parent
@@ -268,10 +239,8 @@ ApplicationWindow {
         dialogSeat.startClone()
     }
 
-    // Every way in goes through here so the picker opens beside the repository that is already open — left to itself
-    // the dialog reopens inside the folder it last accepted, and the next pick is always a level up from there.
-    // `nearUrl` names a folder to start at instead: a second try after a folder that was not a repository opens where
-    // that one sits, which is where the one being looked for usually is.
+    // Every way in goes through here so the picker opens beside the open repository — left to itself the dialog
+    // reopens inside the folder it last accepted. `nearUrl` overrides: a retry opens beside the refused folder.
     function openRepositoryPicker(nearUrl) {
         const near = (nearUrl !== undefined && nearUrl !== "")
                    ? nearUrl
@@ -281,15 +250,11 @@ ApplicationWindow {
         folderDialog.open()
         root.pickerOpened()
     }
-    /// Automation: the platform's folder chooser was put up, and where it was pointed. An automation-only exposure,
-    /// the same one `GraphPane.view` is (app-ui.md) — the box belongs to the platform, so nothing on this side of it
-    /// says afterwards that it opened.
+    /// Automation only: the platform's folder chooser was put up — nothing on this side can say so afterwards.
     signal pickerOpened()
     // ---- the harness -----------------------------------------------
-    // The whole of the window's verification harness, which a shipped build does not carry (`HarnessSeat`): the verbs,
-    // the measurements, and the stand-ins a headless shot is taken from. Everything they act on is handed over here —
-    // a module of its own cannot see this one's ids — and the `z` is for the stand-ins, which have to sit behind
-    // everything the window draws.
+    // Absent from a shipped build. Everything the verbs act on is handed over here — a module of its own cannot see
+    // this one's ids — and the `z` puts the headless shot's stand-ins behind everything the window draws.
     HarnessSeat {
         id: harness
         anchors.fill: parent
@@ -309,14 +274,13 @@ ApplicationWindow {
             openFailedDialog: openFailedDialog,
             identityGate: identityGate,
             identityDialog: identityGate.dialog,
-            // The seat: the two screens in it are built on being asked for, and asking is the harness's to do
-            // (`WindowDialogSeat.keepBuilt`).
+            // The seat, not its screens: they are built on being asked for (`WindowDialogSeat.keepBuilt`).
             dialogSeat: dialogSeat,
             folderDialog: folderDialog,
             quitWaitDialog: quitGate.dialog
         })
     }
-    // The tab in front is the one seat that moves under the harness, so it is written on every change.
+    // The tab in front is the one seat that moves under the harness.
     Binding {
         target: harness.driver
         property: "page"
@@ -324,8 +288,7 @@ ApplicationWindow {
         when: harness.driver !== null
     }
 
-    // While git is still writing, the close is put off (`WindowQuitGate`); a close that passes is the last chance —
-    // the timer will not come round again — so the state is reported only then.
+    // A close that passes the gate is the last chance to report the state: the timer will not come round again.
     onClosing: close => {
         quitGate.gateClose(close)
         if (close.accepted && !AppBackend.alreadyRunning)
@@ -336,19 +299,15 @@ ApplicationWindow {
         id: sharedToolTip
         host: body
         hand: body.hand
-        // One tip for the whole window, so what a press inside it means belongs to whatever is open under it — the
-        // window carries the href across and the page reads it (`RepoPage.tipLinkAsked`).
+        // One tip for the whole window, so a press inside it is the page's to answer (`RepoPage.tipLinkAsked`).
         onLinkAsked: href => {
             if (root.curPage !== null)
                 root.curPage.tipLinkAsked(href)
         }
     }
-    /// Automation: the press on the word inside the tip that is a place to go (`PGG_AUTO_ACT=fetch-tip-link`).
-    /// **Answers whether there was one**, so a run cannot pass on a tip that offered nothing to press.
-    ///
-    /// Put in at the tip's own signal: the glyphs a hand would press are the one part of this a run cannot reach at
-    /// all (verify-ui スキル), and everything after them — the window's hand-off and the page's answer — is what a
-    /// build can break.
+    /// Automation (`PGG_AUTO_ACT=fetch-tip-link`): presses the tip's link word at the tip's own signal — the glyphs are
+    /// the one part a run cannot press (verify-ui スキル). Answers whether there was a link, so a run cannot pass on a
+    /// tip that offered nothing to press.
     function pressTipLink() {
         if (sharedToolTip.tipPlace === "" || sharedToolTip.tipHref === "")
             return false
@@ -356,15 +315,14 @@ ApplicationWindow {
         return true
     }
 
-    /// Something other than the strip's own memory is opening this window's tabs, so the ones that were left stay
-    /// where they are. Answered on [`startingTabs`], which is the one moment it can be claimed in.
+    /// Something other than the strip's own memory opens this window's tabs, so the saved ones are not restored. Set
+    /// only on [`startingTabs`], the one moment it can be claimed in.
     property bool tabsClaimed: false
     /// The strip is ready for its tabs, and nothing has been put in it yet.
     signal startingTabs()
 
     Component.onCompleted: {
-        // Asked for first, because what it seeds — the shape the window comes up at, the tabs the strip opens with —
-        // is read further down this same handler (`HarnessSeat`).
+        // First: what it seeds (the window's opening shape, the strip's first tabs) is read further down.
         const acts = harness.ask()
         sharedToolTip.dressToolTip()
         chrome.decorateWindow()
@@ -380,8 +338,8 @@ ApplicationWindow {
             acts.begin()
     }
 
-    // The two ways the window has nothing to show: no git to ask, or another process already has the files. The id
-    // stays here — the shot driver and the window's harness both reach for it by name (`AutoShotDriver.gate`).
+    // No git to ask, or another process already has the files. The shot driver and the harness reach for the id by
+    // name (`AutoShotDriver.gate`).
     StartupGate {
         id: gate
         anchors.fill: parent
@@ -395,10 +353,8 @@ ApplicationWindow {
         onSettingsAtGitRequested: dialogSeat.openSettingsAt("git")
     }
 
-    // The window's own edge: a frameless window has no non-client area for the platform to put a line around, so the
-    // line the design asks for (規約 §ウィンドウの縁) is drawn in the client. Only while windowed — a line on
-    // a full screen would separate the app from nothing. The bottom side is the floor rectangle's at the end
-    // of the body's column; windowed, the two coincide and the four sides read as one outline.
+    // The window's edge (規約 §ウィンドウの縁), windowed only; its bottom side coincides with the floor line at the end
+    // of `WindowBody`'s column, which alone stays when maximised.
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
@@ -410,15 +366,11 @@ ApplicationWindow {
     }
 
     // ---- main ------------------------------------------------------------
-    // Everything the window shows, and the floor it stands on (`WindowBody`). What the rows in there reach back for
-    // is handed over here — a module of its own cannot see this one's ids.
     WindowBody {
         id: body
-        // ApplicationWindow keeps its content item inside the window's safe area, which with the client area expanded
-        // starts below the title bar (Windows: y = 31). The chrome reaches back up over that inset with a negative top
-        // margin — the content item does not clip, so both painting and input carry. Reparenting onto the window's
-        // root item leaves content outside the content item, never waking the render loop: every change waited
-        // for the next input event to be painted.
+        // ApplicationWindow keeps its content item inside the window's safe area; a negative top margin reaches back
+        // over that inset, and the content item does not clip. Not reparenting onto the window's root item: content
+        // outside the content item never wakes the render loop, so every change waits for the next input.
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
         visible: AppBackend.gitState === "ok"

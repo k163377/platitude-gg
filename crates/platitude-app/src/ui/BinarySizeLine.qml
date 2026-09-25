@@ -5,9 +5,8 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The word, then what the file weighs. Both marks are drawn for the same reason: as glyphs they sit in a full-width
-// cell whose leftover becomes the spacing, and each family draws its own arrow (規約 §寸法「印は描いて出す」). The one wording
-// without a size keeps its dash — that is a sentence, and it measured the same on both OSes.
+// The word, then what the file weighs. The dot and the arrow are drawn, not glyphs (規約 §寸法「印は描いて出す」);
+// the one wording without a size keeps its dash, since that is a sentence.
 RowLayout {
     id: binaryLine
 
@@ -55,7 +54,6 @@ RowLayout {
         text: binaryLine.newSize
         color: Theme.textMuted
     }
-    // Someone has to take the slack, or the engine centres what it cannot fill (FileRowDelegate learned this the hard
-    // way).
+    // Takes the slack; without it the layout centres what it cannot fill.
     Item { Layout.fillWidth: true }
 }

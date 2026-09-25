@@ -1,17 +1,15 @@
 use super::*;
 
 impl NavSectionModel {
-    /// Trees one group run of file rows: single-child directory chains
-    /// compact into one `a/b/c` row; fold-toggle keys are group-prefixed
-    /// so equal paths in different groups fold apart.
+    /// Trees one group run of file rows. Fold keys are group-prefixed so
+    /// equal paths in different groups fold apart.
     pub(super) fn wt_tree_into(
         &self,
         run: std::ops::Range<usize>,
         group: &str,
         out: &mut Vec<Arranged>,
     ) {
-        // The leaves are the source rows themselves: an index and where in
-        // its path the file's own name begins, so nothing is copied.
+        // Leaves are (source index, name start): nothing is copied.
         let mut root: DirNode<(u32, u32)> = DirNode::default();
         for at in run {
             let Some(of) = self.all.entry(at) else {
@@ -65,12 +63,10 @@ impl NavSectionModel {
         emit(&root, group, "", 0, &self.folder_overrides, out);
     }
 
-    /// Section default: remote roots (one per remote) start collapsed —
-    /// that is the per-repository fold — everything else starts open.
-    /// **Under a filter a remote's row starts open**: what the filter
-    /// found is what the reader asked to see (`build_remote_groups`).
-    /// The toggle reads the same default (`toggle_folder`), so the first
-    /// click on that row folds it rather than "opening" an open row.
+    /// Remote roots start collapsed except under a filter
+    /// (`build_remote_groups`); everything else starts open.
+    /// `toggle_folder` reads this same default, so the first click on an
+    /// open row folds it.
     pub(super) fn folder_expanded(&self, key: &str, depth: i32) -> bool {
         self.folder_overrides
             .get(key)
@@ -78,27 +74,12 @@ impl NavSectionModel {
             .unwrap_or(!(self.section == "remotes" && depth == 0 && self.filter.is_empty()))
     }
 
-    /// The REMOTES under a filter: every remote with a branch that
-    /// answers keeps a row of its own, open, and those branches stand
-    /// flat under it by their branch names — `feature/topic-a` under
-    /// `origin` (デザイン規約 §左メニューの所作「絞り込み中も REMOTES は remote
-    /// ごとの行を残す」). A remote is where a branch is rather than a folder
-    /// of its name: its row is what the right-click and the push mark
-    /// stand on, and no name drawn in this panel begins with it, so no
-    /// cut ever takes it out.
-    ///
-    /// The match is still read off the whole name (`origin/feat` finds
-    /// the row). The cut between the two halves is by configured name,
-    /// and by the first slash while no configured name owns the ref
-    /// (`refs::split_remote_ref_or_first_slash` — the names may not have
-    /// arrived, or the remote may be gone from configuration). A ref
-    /// with no slash at all stands flat, ahead of the groups.
-    ///
-    /// **Open by default, and foldable.** A filter that hid what it found
-    /// would answer "nothing" for "something", so the row starts open
-    /// here whatever the tree's default is; the arrow folds it the way
-    /// the tree's rows fold, and the override carries over into the tree
-    /// (`folder_expanded`).
+    /// The REMOTES under a filter: a row per remote with a match, open by
+    /// default under the tree's own fold key (`folder_expanded`), its
+    /// branches flat under it (デザイン規約 §左メニューの所作
+    /// 「絞り込み中も REMOTES は remote ごとの行を残す」). A remote is a place,
+    /// not a folder of names: no name cut takes its row out. A ref with no
+    /// slash stands flat, ahead of the groups.
     pub(super) fn build_remote_groups(&self, needle: &str) -> Vec<Arranged> {
         let Source::Remotes(snapshot) = &self.all else {
             return Vec::new();
@@ -108,10 +89,8 @@ impl NavSectionModel {
             .iter()
             .map(|name| name.as_str())
             .collect();
-        // The groups in the order their first branch is met. The rows are
-        // name-ordered, and a remote called `my` beside one called
-        // `my/fork` has its branches on both sides of the other's, so a
-        // group is looked up rather than closed when the name moves on.
+        // Groups in first-met order, looked up rather than closed when the
+        // name moves on: `my`'s branches sort on both sides of `my/fork`'s.
         let mut groups: Vec<(&str, Vec<Arranged>)> = Vec::new();
         let mut out = Vec::new();
         for at in 0..self.all.len() {
@@ -160,19 +139,15 @@ impl NavSectionModel {
         out
     }
 
-    /// Turns the flat sorted name list into an indented tree with
-    /// collapsible folder rows for every `/` level.
-    ///
-    /// The leaves are pointed at: what a row of the tree adds to the name
-    /// the source holds is its depth, and the segment it shows falls out
-    /// of that (`shown_name`).
+    /// Turns the flat sorted name list into an indented tree with a
+    /// collapsible folder row per `/` level. Leaves point at source rows;
+    /// the segment shown falls out of the depth (`shown_name`).
     pub(super) fn build_tree(&self) -> Vec<Arranged> {
         self.build_tree_with(|key, depth| self.folder_expanded(key, depth))
     }
 
-    /// The same tree, with `open` answering which folders are open — the
-    /// section's own folds (`build_tree`), or every folder at once for a
-    /// reader who is not reading this list (`card`).
+    /// The same tree, with `open` deciding the folds — the section's own
+    /// (`build_tree`), or all open (`card`).
     pub(super) fn build_tree_with(&self, open: impl Fn(&str, i32) -> bool) -> Vec<Arranged> {
         let mut out = Vec::new();
         let mut open_path: Vec<String> = Vec::new();
@@ -180,11 +155,8 @@ impl NavSectionModel {
         let mut collapsed_at: Option<usize> = None;
 
         for at in 0..self.all.len() {
-            // Skipped before its folders are opened: the rows that carry
-            // a `/` are the only thing that puts a folder row on screen,
-            // so a leaf shown as gone takes with it any folder it was the
-            // last of — and leaves the ones it shared standing, because
-            // the next leaf opens those itself.
+            // Hidden leaves are skipped before their folders open, so a
+            // folder whose every leaf is hidden goes too.
             let Some(leaf) = self.all.entry(at).filter(|_| !self.hidden_at(at)) else {
                 continue;
             };
@@ -230,8 +202,6 @@ impl NavSectionModel {
                 out.push(Arranged::At {
                     at: at as u32,
                     depth: folder_count as i32,
-                    // One folder per `/`, so the segment on show starts
-                    // after the last of them.
                     from: (name.len() - segments[folder_count].len()) as u32,
                 });
             }
@@ -311,11 +281,9 @@ mod tests {
         assert_eq!(says(&model, 2, Role::Name), "c.txt");
     }
 
-    /// git will not open a repository sitting in the working copy: what it
-    /// hands over is the one entry `vendor/nest/`, whatever it was asked
-    /// about untracked files (`status_integration`). That entry is a row —
-    /// a folder row with a nameless row under it would offer to open what
-    /// there is nothing to put in.
+    /// An embedded repository arrives as the one entry `vendor/nest/`
+    /// (`status_integration`): a leaf row, not a folder over a nameless
+    /// row.
     #[test]
     fn a_directory_git_would_not_open_is_one_row() {
         use platitude_core::status::{StatusItem, WorkTreeStatus};

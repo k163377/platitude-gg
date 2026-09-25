@@ -2,20 +2,13 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The mark a changed line puts out for the hand: `+` where a press takes the line into the staging area and `−`
-// where it takes it back out, in the pair of colours that gesture wears everywhere else (デザイン規約 §diff の中のステージ).
-// It names the *direction* of the write — an added and a deleted line are both staged by the same `+`. Unframed: a
-// box around a mark this size reads as a control that came loose from the toolbar, and the ground it needs is the
-// one the pointer brings with it.
-//
-// **It writes, there and then**, and it is the only thing in a row that takes a press at all. The row builds it
-// only on a line that can be staged on its own (`DiffRowDelegate`), and whether the pointer is on that line is what
-// shows it: the pointer moves faster than a canvas can be built and painted, so the mark waits built and hidden on
-// the lines the pointer can reach.
+// The mark a changed line puts out for the hand: `+` stages, `−` unstages — the direction of the write, not the kind
+// of line; unframed (デザイン規約 §diff の中のステージ). Hidden rather than unbuilt off the pointer: the pointer moves
+// faster than a canvas can be built and painted.
 Rectangle {
     id: mark
 
-    /// Whether the pointer is on this mark's line (the pane's answer, `DiffPane.settlePointedRow`).
+    /// Whether the pointer is on this mark's line (`DiffPane.settlePointedRow`).
     required property bool shown
     /// Which way the write goes, and whether one is running.
     required property bool staged

@@ -7,13 +7,12 @@ use crate::hub::{Feed, HeadMsg, OpProgressMsg, StateMsg, StatusMsg};
 use super::qml_register;
 
 // ---------------------------------------------------------------------------
-// WorkTreeModel: where the tree stands, as one record. HEAD and everything
-// derived from it (branch / detached / unborn / published / held elsewhere),
-// the standing operation, and the counts of the last status. **The one
-// place QML reads HEAD from**: every other model that draws something at
-// HEAD is told the same report by the session (`hub::sink`), and none of
-// them is a source (rules-refs/app-ui.md). The working-tree file list
-// itself is a NavSectionModel rendered by the right pane's WIP view.
+// WorkTreeModel: where the tree stands, as one record — HEAD and what
+// derives from it, the standing operation, and the last status's counts.
+// The one place QML reads HEAD from: other models are told the same report
+// (`hub::sink`) but are not a source
+// (rules-refs/app-ui.md「HEAD の oid の正は」). The file list itself is a
+// NavSectionModel.
 // ---------------------------------------------------------------------------
 
 #[derive(Default)]
@@ -21,9 +20,8 @@ pub struct WorkTreeModel {
     /// The first status snapshot has landed. Counts of zero mean clean only
     /// after this edge; before it they mean no answer yet.
     loaded: bool,
-    /// A read has reported where HEAD is (`head_seq` is a report's).
-    /// Before this edge `headOid` empty means "not read yet", after it
-    /// "no commits yet" (`unborn`).
+    /// A HEAD report has landed. Before this edge an empty `headOid` means
+    /// "not read yet", after it "no commits yet" (`unborn`).
     head_known: bool,
     branch: String,
     /// Commit HEAD is on, branch or not (empty before the first commit).
@@ -32,42 +30,35 @@ pub struct WorkTreeModel {
     /// A branch with no commits yet: HEAD is known and names none.
     unborn: bool,
     /// The tip of the branch HEAD is on — `head_oid` on a branch, empty
-    /// detached or unborn. What the default selection and the verbs that
-    /// walk from HEAD open on: detached, the newest row is theirs.
+    /// detached or unborn. What the default selection and HEAD-walking
+    /// verbs open on (detached: the newest row).
     branch_oid: String,
-    /// The number of the report of HEAD in hand — a move, or the first
-    /// read to land after a write (`session::standing`). What a landing
-    /// arms on: a write's answer names the first number a report after
-    /// it can carry, and a report at or above it looked after the write.
+    /// The number of the HEAD report in hand (a move, or the first read
+    /// after a write — `session::standing`). A write's answer names the
+    /// first number a later report can carry, so a report at or above it
+    /// looked after the write.
     head_seq: i32,
-    /// Whether a remote already has the commit HEAD is on — the `already
-    /// pushed` an amend wears. Read off the walk's own marks by the
-    /// session (`SessionEvent::HeadPublished`); false while the answer
-    /// in hand is about a commit HEAD is no longer on.
+    /// Whether a remote already has HEAD's commit — the `already pushed`
+    /// an amend wears (`SessionEvent::HeadPublished`). False while the
+    /// answer in hand is about a commit HEAD has left.
     head_published: bool,
-    /// The commit `head_published` was answered for, so a HEAD that moved
-    /// stops wearing the last commit's answer until the walk answers again.
+    /// The commit `head_published` answers for.
     head_published_oid: String,
-    /// Whether something other than the current branch still reaches its
-    /// tip — whether a rewrite here leaves the old commits drawn or leaves
-    /// them to the reflog. False until the session says otherwise, which
-    /// is the answer that asks more of the person doing it.
+    /// Whether something other than the current branch reaches its tip —
+    /// whether a rewrite leaves the old commits drawn or only in the
+    /// reflog. False until told: the answer that asks more of the person.
     head_reached_elsewhere: bool,
-    /// The number of the report of HEAD the last status stands beside
-    /// (`StatusMsg::head_seq`) — the status's own word for which reading
-    /// of HEAD its counts belong to. **Not where HEAD is**: that is
-    /// `head_seq`'s report, which the refs read moves ahead of the status
-    /// that follows it after a write. Read where a claim is about the
-    /// counts: the reset landing's `files=` is the tree the reset left,
-    /// and only a status numbered at or above the write's answer has
-    /// counted it.
+    /// The HEAD report number the last status's counts belong to
+    /// (`StatusMsg::head_seq`). Not where HEAD is: after a write the refs
+    /// read moves `head_seq` ahead of the status that follows. Read by
+    /// claims about the counts — only a status numbered at or above a
+    /// write's answer has counted that write's tree.
     status_seq: i32,
     /// The branch the last status read HEAD on, for `counts_settled`.
     status_branch: String,
     /// Whether `upstream` / `ahead` / `behind` are about the branch the
-    /// record names — the status they came with read HEAD on it. Between
-    /// a move of HEAD and the status behind it, the three are blank and
-    /// the push standing is closed.
+    /// record names. Between a move of HEAD and the status behind it the
+    /// three are blank and the push standing is closed.
     counts_settled: bool,
     /// What the last status said of its branch's standing, shown through
     /// the three below only while it is the branch HEAD is on (`settle`).
@@ -82,83 +73,69 @@ pub struct WorkTreeModel {
     upstream_tracked: bool,
     ahead: i32,
     behind: i32,
-    /// Whether the `pull` row is out and greyed: the two sides have grown
-    /// apart, and a divergence is brought together by choosing — the
-    /// remote branch's own `rebase` row, or its `merge`
-    /// (デザイン規約 §取り込んで合流させる). Derived from the counts
-    /// beside it, so it is shown on exactly their terms — blank between a
-    /// move of HEAD and the status behind it.
+    /// Whether the `pull` row is greyed: the two sides have diverged, which
+    /// is brought together by choosing rebase or merge
+    /// (デザイン規約 §取り込んで合流させる). Derived from the counts, so
+    /// blank whenever they are.
     pull_blocked: bool,
-    /// Where this branch's own mark sends a push
-    /// (`branch.<branch>.pushRemote`), empty where it marks none. It beats
-    /// the repository's `RepoTab.pushDefault`, so the toolbar's
-    /// destination and standing both have to read it — it rides here
-    /// because it belongs to the branch above, and arrives with
-    /// it.
+    /// This branch's own push mark (`branch.<branch>.pushRemote`), empty
+    /// where none. It beats `RepoTab.pushDefault`, so the toolbar's
+    /// destination and standing both read it; it rides with the status so
+    /// it never pairs with another branch.
     push_remote: String,
     op_text: String,
-    /// The same operation in git's own spelling (`cherry-pick`), for the
-    /// one place a pill has to say the whole command
-    /// (§git 用語のコード表記). Core answers it, so the pill
-    /// and the exit card cannot come to name two different operations.
+    /// The same operation in git's spelling (`cherry-pick`), for the pill
+    /// that says the whole command (デザイン規約 §git 用語のコード表記).
+    /// From core, so the pill and the exit card cannot name different
+    /// operations.
     op_command: String,
-    /// The second name, when bisect is running alongside something else.
-    /// Two fields: what goes between them is a mark the showing side
-    /// draws (規約 §余白), and `op_text` stays empty exactly when nothing
-    /// is running — which is what every `opText === ""` test in the UI
-    /// is asking.
+    /// The second name, when bisect runs alongside something else. A
+    /// separate field so the separator is the view's to draw (規約 §余白)
+    /// and `op_text` stays empty exactly when nothing runs — what every
+    /// `opText === ""` test asks.
     op_also: String,
     has_conflicts: bool,
     staged_count: i32,
     unstaged_count: i32,
     untracked_count: i32,
     conflict_count: i32,
-    /// How many files a `reset --hard` would take with it
-    /// (`status::Counts::hard_reset_takes`). Not the sum of the three
-    /// above: a file changed on both sides is one loss, and the untracked
-    /// ones are left where they are.
+    /// How many files a `reset --hard` would take
+    /// (`status::Counts::hard_reset_takes`) — not the sum of the three
+    /// above.
     hard_reset_takes: i32,
     /// Rebase progress; both zero when nothing is stepping. Only a rebase
     /// keeps a count — `op_stepping` is what says whether the operation
     /// steps at all.
     op_step: i32,
     op_steps: i32,
-    /// Whether the stopped operation takes `--skip` / `--quit`. A merge
-    /// steps through nothing, so it has no commit to leave out and
-    /// nowhere to stop stepping; a rebase, a cherry-pick and a revert all
-    /// do. Read from the operation itself: only a rebase writes a
-    /// progress count, and a cherry-pick that steps would look like a
-    /// merge if the count were the test.
+    /// Whether the stopped operation takes `--skip` / `--quit` (all but a
+    /// merge, which steps through nothing). Read from the operation, not
+    /// the count: only a rebase writes one, and a stepping cherry-pick
+    /// would look like a merge.
     op_stepping: bool,
-    /// Whether the stopped operation is a merge. The one the commit box
-    /// finishes, so the one whose box opens filled in — and told apart
-    /// from `op_text` because that is a word on
-    /// screen.
+    /// Whether the stopped operation is a merge — the one the commit box
+    /// finishes, so its box opens filled in. Not read off `op_text`,
+    /// which is a word on screen.
     op_merging: bool,
     /// The message that merge is about to record, split the way the two
     /// boxes hold it. Empty unless a merge is standing.
     op_subject: String,
     op_body: String,
-    /// What to call each side of a conflict. **The two swap over during a
-    /// rebase** (the commits being replayed are "theirs"), which is why
-    /// these are read from the operation.
-    /// Empty where git left nothing to name a side by.
+    /// What to call each side of a conflict — read from the operation,
+    /// because the two swap over during a rebase (the replayed commits
+    /// are "theirs"). Empty where git left nothing to name a side by.
     side_ours: String,
     side_theirs: String,
     /// The merge tool git would launch, for the menu row to name. Empty
     /// with none configured — the row becomes the way to set one. Display
-    /// only: `conflict::mergetool` resolves the tool itself at launch, so
-    /// a name that went stale between poll and click cannot start anything.
+    /// only: `conflict::mergetool` resolves the tool itself at launch.
     merge_tool: String,
     /// Staged files whose change says something about its line endings.
-    /// A commit carries the index, so the working-tree side is not counted
-    /// here — it is a warning about the next `git add`.
+    /// The working-tree side is not counted: a commit carries the index.
     eol_staged_count: i32,
-    /// How many rows of each change kind the file list holds, for the
-    /// graph's uncommitted row to name (`status::Kinds`). Rows, so the
-    /// row's tally and the list below it cannot disagree — and read off
-    /// the status this model already has, so the row costs no git of its
-    /// own. Conflicts are already counted above.
+    /// File-list rows of each change kind, for the graph's uncommitted row
+    /// (`status::Kinds`), off this status at no git of its own. Conflicts
+    /// are `conflict_count`.
     wip_added: i32,
     wip_modified: i32,
     wip_deleted: i32,
@@ -173,40 +150,34 @@ pub struct WorkTreeModel {
     /// `RepoPage.standsInTheWay` reads, less the consent already given.
     moves_blocked: bool,
     /// Whether putting the standing operation down costs anything, and
-    /// the command the question opens with — `rebase --abort` where it
-    /// does, `stash` everywhere else (`offers::leaving_undoes` /
-    /// `offers::leave_code`). The pair the blocked-move question is
-    /// shaped by.
+    /// the command the blocked-move question opens with — `rebase --abort`
+    /// where it does, `stash` elsewhere (`offers::leaving_undoes` /
+    /// `offers::leave_code`).
     leave_undoes: bool,
     leave_code: String,
     /// Whether the exit card's `--skip` loses nothing: the stop is on a
     /// commit that came out empty (`offers::skip_is_free`).
     op_skip_free: bool,
     /// Whether the standing rebase stopped on purpose at an `edit` step —
-    /// the stop whose tree is as clean as the empty one, told apart by
-    /// git's own marker (`integrate::RebaseStop`). The exit card's words
-    /// and its `--skip`'s cost both turn on it.
+    /// a stop as clean as the empty one, told apart by git's own marker
+    /// (`integrate::RebaseStop`). The exit card's words and its `--skip`'s
+    /// cost both turn on it.
     op_editing: bool,
-    /// The commit that stop left HEAD on, full hex; empty where git wrote
-    /// none. The card abbreviates it itself — it is one the reader can go
-    /// and find, which the todo's own id is not once anything ahead of the
-    /// `edit` step rewrote history (`integrate::RebaseStop::oid`).
+    /// The commit that stop left HEAD on, full hex (empty where git wrote
+    /// none). Not the todo's id, which names no findable commit once a
+    /// step before `edit` rewrote history (`integrate::RebaseStop::oid`).
     op_edit_oid: String,
     /// Bumped when a status moves any of the four bucket counts — what
-    /// "somebody moved the tree" is read off, so a status that moved no
-    /// count (the answer to this window's own poll) does not re-read an
-    /// open diff. Counts: a second line staged out of a file already on
-    /// both sides moves no row, and is exactly the change the reader of
-    /// this has to hear about.
+    /// "somebody moved the tree" is read off, so this window's own poll
+    /// answer (no count moved) does not re-read an open diff. Counts, not
+    /// rows: a second line staged out of a file already on both sides
+    /// moves no row, and is exactly the change the reader of this has to
+    /// hear about.
     tree_revision: i32,
-    /// Whether this status leaves the synthetic working-tree row standing
-    /// at the head of the graph (`platitude_core::graph::wip_row_stands`).
-    ///
-    /// The graph is walked from the same answer, one read behind: the walk
-    /// asks it of the record this status wrote, so between a status that
-    /// moves this and the pass it asks for, the rows on screen are the
-    /// previous answer's. What reads the two together is what has to know
-    /// the picture is still arriving (`GraphModel::wip_row`).
+    /// Whether this status leaves the synthetic working-tree row at the
+    /// head of the graph (`platitude_core::graph::wip_row_stands`). The
+    /// graph answers the same one read behind, so a reader comparing the
+    /// two (`GraphModel::wip_row`) can tell the picture is still arriving.
     wip_row_stands: bool,
     /// The counts `tree_revision` last spoke for; `None` before the
     /// first status, which always counts as movement.
@@ -218,11 +189,10 @@ pub struct WorkTreeModel {
     /// The last status's standing operation, kept for the same reason.
     op_state: platitude_core::opstate::OpState,
     feed: Option<Arc<Feed<StateMsg>>>,
-    /// The badge's own halves, arriving several times a second while the
-    /// feed above arrives every ten (`Feeds::op_progress`). Both wake the
-    /// one `drain` slot, which is why they are read there in the order the
-    /// screen wants them: a status snapshot carries a count of its own,
-    /// and the one it carries is the older of the two.
+    /// The badge's word and count, on a faster tick than the feed above
+    /// (`Feeds::op_progress`). Both wake the one `drain` slot, which reads
+    /// them in the order the screen wants: a status snapshot carries its
+    /// own count, the older of the two.
     progress_feed: Option<Arc<Feed<OpProgressMsg>>>,
     tab_id: i32,
 }
@@ -309,18 +279,11 @@ impl WorkTreeModel {
         self.progress_feed = crate::hub::attach_feed(tab_id, |f| &f.op_progress, invoker);
     }
 
-    /// The tab is standing in another working copy (`Hub::restand_tab`):
-    /// every answer here was that copy's.
-    ///
-    /// **All of it, back to before the first status** — where HEAD is,
-    /// what is uncommitted, what operation is standing: a working copy
-    /// is precisely the thing this model reports, and not one of these
-    /// crosses. `loaded` going down with them is what keeps the counts
-    /// from reading as "clean" in the moment before the new copy's
-    /// status lands (see the member).
-    ///
-    /// The feeds are kept, and so is the tab: the page is still
-    /// standing and the next session pushes to the very same ones.
+    /// The tab now stands in another working copy (`Hub::restand_tab`):
+    /// every answer here was the old copy's, so all of it goes back to
+    /// before the first status — `loaded` included, so the counts do not
+    /// read as clean before the new status lands. The feeds and the tab
+    /// are kept: the next session pushes to the same ones.
     #[qslot]
     fn restand(&mut self) {
         self.forget_the_copy();
@@ -344,21 +307,13 @@ impl WorkTreeModel {
 }
 
 impl WorkTreeModel {
-    /// Back to before the first read, for [`WorkTreeModel::restand`].
+    /// Back to before the first read, for [`WorkTreeModel::restand`]:
+    /// every field but the tab and the two feeds — a field added to this
+    /// model belongs here too.
     ///
-    /// **Field by field, and every field this model has is one of
-    /// them** — what is kept is only the tab and the two feeds, which
-    /// are not this copy's. A field added to this model belongs here;
-    /// left out, it would stand on the page describing a working copy
-    /// the reader has left.
-    ///
-    /// **Written out rather than assigned a fresh model**: the bridge
-    /// keys a QObject to the Rust object's own address and deletes it
-    /// when that value is dropped, so `*self = Self::default()` takes
-    /// the QML object with it — every binding on this model reads
-    /// `null` from there on, and the next slot call aborts the process
-    /// with "No proxy" (measured; qtbridge `QObjectHolder`:
-    /// "Do not move or replace the `Self`").
+    /// Written out, not `*self = Self::default()`: the bridge deletes the
+    /// QObject when the value it is keyed to is dropped, and the next slot
+    /// call aborts with "No proxy" (qtbridge `QObjectHolder`).
     fn forget_the_copy(&mut self) {
         self.loaded = false;
         self.head_known = false;
@@ -422,11 +377,10 @@ impl WorkTreeModel {
         self.op_state = platitude_core::opstate::OpState::default();
     }
 
-    /// Everything the feed had waiting, folded in — in the order the
-    /// session said it, so a status never lands ahead of the HEAD report
-    /// it was read beside. Answers whether anything arrived; the derived
-    /// answers are settled once at the end, off HEAD and the counts
-    /// together.
+    /// Folds in the feed's batch in the session's order, so a status never
+    /// lands ahead of the HEAD report it was read beside. Answers whether
+    /// anything arrived; derived answers are settled once at the end
+    /// (`settle`).
     pub(crate) fn absorb(&mut self, batch: Vec<StateMsg>) -> bool {
         let mut arrived = false;
         for msg in batch {
@@ -475,12 +429,9 @@ impl WorkTreeModel {
         self.merge_tool = merge_tool;
         self.eol_staged_count =
             i32::try_from(eol_marks.iter().filter(|m| m.staged).count()).unwrap_or(i32::MAX);
-        // HEAD itself is not read off here: the session reports it in
-        // its own message, ahead of this one where this status is what
-        // moved it (`StateMsg::Head`). What is kept is which report the
-        // counts stand beside, and which branch they were read with —
-        // they are shown only while that is the branch HEAD is on
-        // (`settle`).
+        // HEAD is not read off here — it has its own message, ahead of
+        // this one (`StateMsg::Head`). Kept: which report and branch the
+        // counts were read with (`settle`).
         self.status_seq = i32::try_from(head_seq).unwrap_or(i32::MAX);
         self.status_branch = status.branch_head.clone().unwrap_or_default();
         self.status_upstream = status.upstream.clone().unwrap_or_default();
@@ -490,10 +441,6 @@ impl WorkTreeModel {
         self.push_remote = push_remote;
         self.has_conflicts = status.has_conflicts();
         self.settle_op(&op_state, &op_message);
-        // One pass: `-uall` lists every untracked file, so the list is
-        // as long as the working tree is dirty.
-        // Same pass, same source: the kinds are the letters the file rows
-        // carry, so the graph row's tally is the list it sits above.
         let kinds = platitude_core::status::Kinds::of(&status);
         self.wip_added = kinds.added as i32;
         self.wip_modified = kinds.modified as i32;
@@ -547,24 +494,15 @@ impl WorkTreeModel {
         self.leave_undoes = platitude_core::offers::leaving_undoes(in_progress);
         self.leave_code = platitude_core::offers::leave_code(in_progress).to_string();
         self.op_skip_free = platitude_core::offers::skip_is_free(&self.counts, self.op_editing);
-        // The walk's answer is about one commit; a HEAD that has moved on
-        // wears no warning until the walk has answered for where it is.
         if self.head_published_oid != self.head_oid {
             self.head_published = false;
         }
-        // The counts are about the branch they were read with. A report
-        // that moved HEAD to another branch lands ahead of the status
-        // read behind it, and until that status the three say
-        // nothing.
         self.counts_settled = self.loaded && self.status_branch == self.branch;
         if self.counts_settled {
             self.upstream.clone_from(&self.status_upstream);
             self.upstream_tracked = self.status_upstream_tracked;
             self.ahead = self.status_ahead;
             self.behind = self.status_behind;
-            // Both sides have moved: a pull there is not one gesture but
-            // a choice, so the row is out and the menu says where the
-            // choice is made (デザイン規約 §取り込んで合流させる).
             self.pull_blocked = self.status_ahead > 0 && self.status_behind > 0;
         } else {
             self.upstream.clear();
@@ -578,22 +516,10 @@ impl WorkTreeModel {
     /// The badge, taken before the snapshot beside it. Answers whether it
     /// moved.
     ///
-    /// **Only the badge moves.** Nothing else a status carries can have
-    /// changed without a write answering for it, and the badge is the one
-    /// thing on screen counting — so this is the whole of what the short
-    /// tick pays for (`RepoSession::refresh_op_progress`).
-    ///
-    /// **The word comes with the count**, or the count would arrive at a
-    /// badge that is not up: a rebase of a few hundred commits is over
-    /// long before the ten-second tick that would have raised it, and
-    /// `opText` is what the band draws on.
-    ///
-    /// Silent when nothing arrived, and silent about "nothing standing" as
-    /// well: this tick runs only while a write that replays is out, and
-    /// the moment before git writes its first marker it would otherwise
-    /// answer "no operation" — which, taken, is the badge flickering off
-    /// at the very start of the thing it is there to announce. What ends
-    /// the badge is the status read after the write lands.
+    /// Only the badge's word and count move here
+    /// (`RepoSession::refresh_op_progress`), and "nothing standing" is
+    /// ignored — the status after the write ends the badge
+    /// (rules-refs/app-ui.md「バッジの `n/m` は進捗専用の tick が運ぶ」).
     fn drain_progress(&mut self) -> bool {
         let Some(feed) = self.progress_feed.clone() else {
             return false;
@@ -609,10 +535,8 @@ impl WorkTreeModel {
             i32::try_from(progress.current).unwrap_or(i32::MAX),
             i32::try_from(progress.total).unwrap_or(i32::MAX),
         );
-        // Both words: everything else `settle_op` writes is derived from
-        // the one operation it names, but the second name is bisect's —
-        // which runs alongside, and so can arrive while the first has
-        // not moved.
+        // Both words: bisect's second name can move while the first has
+        // not.
         let said = (self.op_text.clone(), self.op_also.clone());
         self.settle_op(&op_state, "");
         let moved = (self.op_step, self.op_steps) != (step, steps)
@@ -623,11 +547,9 @@ impl WorkTreeModel {
 
     /// The operation banner's fields, off the op state in one place.
     ///
-    /// One name: a rebase stopped on a pick writes CHERRY_PICK_HEAD
-    /// too, and joining the two said
-    /// `REBASING · CHERRY-PICKING` for what is one rebase. Core already
-    /// answers which operation is the live one — it is the same answer
-    /// the continuations act on.
+    /// One name, from `InProgress::from_state` (what the continuations act
+    /// on): a rebase stopped on a pick writes CHERRY_PICK_HEAD too, and
+    /// naming both flags would call one rebase two operations.
     fn settle_op(&mut self, op_state: &platitude_core::opstate::OpState, op_message: &str) {
         use platitude_core::integrate::InProgress;
         let mut ops: Vec<&str> = Vec::new();
@@ -643,16 +565,13 @@ impl WorkTreeModel {
                 InProgress::Revert => "REVERTING",
             });
         }
-        // Bisect runs alongside, and it is the one thing here that can
-        // share the line.
+        // Bisect alone runs alongside, and so can share the line.
         if op_state.bisecting {
             ops.push("BISECTING");
         }
         let mut named = ops.into_iter();
         self.op_text = named.next().unwrap_or_default().to_string();
         self.op_also = named.next().unwrap_or_default().to_string();
-        // A merge steps through nothing, so it takes neither skip nor
-        // quit; everything else here does.
         self.op_stepping = !matches!(
             InProgress::from_state(op_state),
             None | Some(InProgress::Merge)
@@ -749,8 +668,6 @@ mod tests {
         assert_eq!(model.stash_standing, "unborn");
     }
 
-    /// Detached, the branch has no tip of its own: what opens on the
-    /// branch's commit opens on the newest row.
     #[test]
     fn detached_names_no_branch_tip() {
         let mut model = WorkTreeModel::default();
@@ -764,9 +681,6 @@ mod tests {
         assert_eq!(model.branch_oid, "");
     }
 
-    /// The walk's answer is about the commit it names: a HEAD that has
-    /// moved on wears no `already pushed` until the walk answers again,
-    /// and the answer that then arrives for the new commit puts it back.
     #[test]
     fn the_published_answer_follows_the_commit_it_is_about() {
         let mut model = WorkTreeModel::default();
@@ -787,8 +701,8 @@ mod tests {
         assert!(model.head_published);
     }
 
-    /// The report the first read after a write sends — HEAD unmoved —
-    /// still counts: `headSeq` is what a landing arms against.
+    /// The first read after a write reports an unmoved HEAD, and it still
+    /// counts: `headSeq` is what a landing arms against.
     #[test]
     fn a_report_that_moved_nothing_still_counts() {
         let mut model = WorkTreeModel::default();
@@ -798,10 +712,8 @@ mod tests {
         assert_eq!(model.head_seq, 2);
     }
 
-    /// A status says which report of HEAD it stands beside, apart from
-    /// the report in hand: after a write the refs read moves HEAD ahead
-    /// of the status that follows, and a claim about the tree waits on
-    /// the status's own number.
+    /// `statusSeq` stays with the status, not the HEAD report in hand
+    /// (`status_seq`).
     #[test]
     fn the_counts_stand_beside_the_report_they_were_read_under() {
         let mut model = WorkTreeModel::default();
@@ -817,10 +729,6 @@ mod tests {
         assert_eq!(model.status_seq, 2);
     }
 
-    /// The counts are about the branch they were read with. A move to
-    /// another branch is reported ahead of the status behind it, and
-    /// until that status the standing is
-    /// blank.
     #[test]
     fn the_counts_are_the_branch_they_were_read_with() {
         let mut model = WorkTreeModel::default();
@@ -850,8 +758,6 @@ mod tests {
         assert_eq!(model.ahead, 0);
     }
 
-    /// The counts and HEAD settle together: a status arriving between two
-    /// HEAD reports reads the stash standing against the HEAD in hand.
     #[test]
     fn the_stash_standing_is_settled_off_head_and_the_counts_together() {
         let mut model = WorkTreeModel::default();
@@ -867,15 +773,10 @@ mod tests {
         );
     }
 
-    /// **The word the band's badge and the card's row are both drawn
-    /// from, one operation at a time.** Nothing else on screen names
-    /// which operation stopped here, so an operation reaching the badge
-    /// under its neighbour's word sends a reader to the wrong way out
-    /// of it (`BandStateGroup` / `BandStateCard`).
-    ///
-    /// Written as a `match` over the operations core can find standing,
-    /// so a fifth added there stops the build here rather than reaching
-    /// the badge with nothing in it.
+    /// The badge's word is the only thing on screen naming the stopped
+    /// operation (`BandStateGroup` / `BandStateCard`). A `match` over
+    /// `InProgress`, so a fifth operation stops the build here rather than
+    /// reaching the badge with no word.
     #[test]
     fn every_operation_that_can_stand_here_reaches_the_badge_under_its_own_word() {
         use platitude_core::integrate::InProgress;
@@ -923,11 +824,8 @@ mod tests {
         }
     }
 
-    /// Bisect is the one that runs alongside, so it is the one that can
-    /// be a second word — and on its own it is the first. The band draws
-    /// both inside one badge and costs both into its width
-    /// (`BandStateMetrics.opW`), so which of the two slots it lands in
-    /// is what the badge is measured from.
+    /// The badge is measured from which slot each word lands in
+    /// (`BandStateMetrics.opW`).
     #[test]
     fn a_bisect_takes_the_second_word_and_the_first_when_it_is_alone() {
         let mut model = WorkTreeModel::default();
@@ -957,10 +855,6 @@ mod tests {
         );
     }
 
-    /// **A rebase stopped on a pick writes `CHERRY_PICK_HEAD` too**, and
-    /// the badge is not two operations: core answers which one is live
-    /// and that is the one word (`InProgress::from_state`, the same
-    /// answer the continuations act on).
     #[test]
     fn a_rebase_that_stopped_on_a_pick_is_one_operation_not_two() {
         let mut model = WorkTreeModel::default();
@@ -977,8 +871,7 @@ mod tests {
             ("REBASING", "")
         );
 
-        // And nothing standing leaves the badge with nothing to say,
-        // which is the whole of what keeps it off the band.
+        // Nothing standing: no word, which keeps the badge off the band.
         model.settle_op(&OpState::default(), "");
         assert_eq!((model.op_text.as_str(), model.op_also.as_str()), ("", ""));
     }

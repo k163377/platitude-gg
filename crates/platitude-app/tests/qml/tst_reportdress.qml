@@ -3,24 +3,18 @@ import QtTest
 import platitude.ui
 
 // The dress a report wears: the three answers `Words` gives for one kind, and what a real `NoticeBar` does with them
-// (デザイン規約 §答えの要らない報せ).
-//
-// **A condition table and a component, and nothing between them.** Which report arrived is the page's to decide and
-// the headless verbs prove it; what is left once the kind is in hand is a switch over that kind and a bar that wears
-// its answers — both of them here, where every arm can be asked for the price of one process. A verb walking the arms
-// would raise a whole window per kind to read the same three strings back off one hairline.
+// (デザイン規約 §答えの要らない報せ). Which report arrives is the page's and the headless verbs prove it; the switch
+// over the kind is asked here, every arm in one process (rules-refs/app-ui.md「その条件表は QML 部品テストへ移し」).
 Item {
     id: root
     width: 420
     height: 200
 
-    /// A forge's whole answer, as one of them writes it: more sentences than this bar is wide, with **the rule it
-    /// enforced at the end** — which is the half a bar cut at its own width drops.
+    /// A forge's answer, wider than the bar, with the rule it enforced at the end — the part a cut bar drops.
     readonly property string longReason: "GH006: Protected branch update failed for refs/heads/main."
                                          + " Cannot force-push to a protected branch."
                                          + " Review this repository's branch protection rules."
 
-    // Raised the way `RepoPage.showReport` raises it: the three answers `Words` gives, and nothing else.
     NoticeBar {
         id: bar
         width: root.width
@@ -42,18 +36,13 @@ Item {
             bar.yieldsEscape = false
             acknowledged.clear()
             elsewhere.forceActiveFocus()
-            // All the way back up before the next case dresses it: the bar spends 200ms going, and a case that read
-            // the height on the way would read the one before it.
+            // Fully shut first: a case reading the height mid-animation would read the previous one.
             tryVerify(() => bar.shut)
         }
 
-        /// What did not happen, why where nobody outside said, and the state it is in — the three answers the page's
-        /// door hands the bar (`RepoPage.showReport`).
-        ///
-        /// **A copy of that door, and it proves nothing about it.** A door that stopped passing one of the three
-        /// would leave every case below green, so what carries that claim is the run that enters the real one
-        /// (`report-tone half-rename`). What is asked here is the two ends it joins: the answers `Words` gives, and
-        /// what the bar does wearing them.
+        /// A copy of the page's door (`RepoPage.showReport`): heading, our second line where nobody outside spoke,
+        /// tone. It proves nothing about the real door — one dropping an answer leaves every case here green; that
+        /// claim is carried by `report-tone half-rename`.
         function dress(kind, remote, name, reason) {
             bar.label = Words.writeReported(kind, remote, name)
             bar.detail = reason !== "" ? reason : Words.writeReportedWhy(kind)
@@ -61,9 +50,7 @@ Item {
             bar.open = true
         }
 
-        /// **Both arms, because either alone passes against a bar painted one colour.** A run that asked only about
-        /// the rename would pass on an implementation that painted everything `warning`, and one that asked only
-        /// about the remote's refusal would pass on the opposite.
+        /// Both arms, because either alone passes against a bar painted one colour.
         function test_the_gesture_that_is_still_going_wears_the_other_colour() {
             compare(Words.reportTone("rename"), "warning")
             compare(Words.reportTone("half-rename"), "warning")
@@ -77,8 +64,8 @@ Item {
             compare(Words.reportTone(""), "danger", "a kind nobody spelled still says so in colour")
         }
 
-        /// The heading each kind wears. **The subject is whoever decided**: the far side for the two it decided,
-        /// the thing that did not move for the rest.
+        /// The subject is whoever decided: the far side for the two it decided, the thing that did not move for the
+        /// rest.
         function test_the_heading_names_what_did_not_happen() {
             compare(Words.writeReported("delete", "origin", "v1.0"), "origin would not delete v1.0")
             compare(Words.writeReported("update", "origin", "main"), "origin would not update main")
@@ -92,9 +79,8 @@ Item {
             compare(Words.writeReported("", "", ""), "The commit was not made")
         }
 
-        /// **One heading over the seven a rewrite is turned down for**, so a reader who knows what they pressed reads
-        /// which of them it was on the line underneath. Five are the plan's own and two are the outside world moving
-        /// after the press — the same sentence for all seven is the claim.
+        /// One heading over all seven refusals (five the plan's own, two the world moving after the press); the line
+        /// underneath says which.
         function test_every_refused_rewrite_says_the_same_thing_did_not_happen() {
             const kinds = ["across-merge", "off-branch", "fold-first", "unfetched-base", "drop-all",
                            "tip-moved", "op-standing"]
@@ -102,14 +88,13 @@ Item {
                 compare(Words.writeReported(kind, "origin", "main"), "The history was not rewritten", kind)
         }
 
-        /// The second line is ours only where nobody outside wrote one, and every kind that owes one has one.
-        /// **An empty second line is an answer** — the page puts what came across there instead.
+        /// An empty second line is an answer: the page puts what came across there instead.
         function test_the_second_line_is_ours_only_where_nobody_outside_spoke() {
             const owed = ["stale-stage", "stale-unstage", "stale-discard", "conflicted-part", "half-rename",
                           "across-merge", "off-branch", "fold-first", "unfetched-base", "drop-all",
                           "tip-moved", "op-standing",
-                          // git turned this one down without the far side hearing of it, so there is nobody to
-                          // quote — and what git writes under it is advice for a terminal.
+                          // Refused by git before the far side heard it: nobody to quote, and git's own text is
+                          // terminal advice.
                           "outdated"]
             for (const kind of owed)
                 verify(Words.writeReportedWhy(kind).length > 0, kind)
@@ -119,22 +104,16 @@ Item {
             compare(Words.writeReportedWhy(""), "")
         }
 
-        /// The three the plan turns down before it opens reach the second door with the same line, which is why the
-        /// list is delegated whole rather than copied (`Words.rewriteRefusedWhy`).
+        /// The three the plan turns down reach the row menu's door with the same line: the list is delegated whole
+        /// (`Words.rewriteRefusedWhy`).
         function test_the_rewrites_say_the_same_line_at_both_doors() {
             for (const kind of ["across-merge", "off-branch", "unfetched-base"])
                 compare(Words.writeReportedWhy(kind), Words.rewriteRefusedWhy(kind), kind)
         }
 
-        /// **Which line belongs to which refusal**, one by one.
-        ///
-        /// The two cases above are satisfied by any mapping at all: swap the off-branch line with the
-        /// unfetched-base one and both stay green, while a reader short of history is told to switch branches.
-        /// The only thing that ever said which line was due was the picture each refusal's own run took — one
-        /// window per reason — and this is where that reading goes instead.
-        ///
-        /// **The expectation is the source text.** `qsTr` hands it back wherever no translator is installed and
-        /// `qmltestrunner` installs none, which is the footing the headings above are already compared on.
+        /// Which line belongs to which refusal: the cases above pass under any mapping, e.g. off-branch and
+        /// unfetched-base swapped. The expectation is the source text — `qsTr` returns it with no translator
+        /// installed, and `qmltestrunner` installs none.
         function test_each_refused_rewrite_says_its_own_reason() {
             const owed = {
                 "across-merge": "A merge sits in the history this would replay, and a replay drops merges."
@@ -150,31 +129,21 @@ Item {
             }
             for (const kind in owed) {
                 compare(Words.rewriteRefusedWhy(kind), owed[kind], kind)
-                // And through the door the row menu takes, which delegates the whole list rather than
-                // keeping a second copy — so the same table answers for both.
                 compare(Words.writeReportedWhy(kind), owed[kind], kind)
             }
             compare(Words.rewriteRefusedWhy("no-such-kind"), "", "a kind nobody spelled is owed no line")
         }
 
-        /// **The heading the plan's own door writes, one by one.** Where the row menu says the same thing over all
-        /// seven — the reader is looking at the row they pressed — the plan has no row on screen to say which
-        /// history it is, so the heading carries it (`RepoPage.onRefusedPlan`, `Words.planRefused`).
-        ///
-        /// The three ran as three headless windows until this took the reading over: one press each, one picture
-        /// each, and the only thing the three pictures said differently was these three lines.
-        ///
-        /// **The expectation is the source text**, on the same footing as the headings and reasons above.
+        /// The plan's own door names the history in its heading (`RepoPage.onRefusedPlan`, `Words.planRefused`):
+        /// unlike the row menu, it has no pressed row on screen to say which. Source text, as above.
         function test_each_refused_plan_says_which_history_stopped_it() {
             compare(Words.planRefused("across-merge"), "A merge is in the way")
             compare(Words.planRefused("off-branch"), "Not on this branch")
             compare(Words.planRefused("unfetched-base"), "The history stops here")
         }
 
-        /// **The two doors part on the heading and meet on the line.** Said as one case because either half alone is
-        /// satisfied by the wrong implementation: a plan door that fell through to the row menu's heading would pass
-        /// the line half, and one that wrote its own second line would pass the heading half — and a reader short of
-        /// history would be told to switch branches either way.
+        /// The two doors part on the heading and meet on the line — one case, because either half alone passes a
+        /// wrong implementation.
         function test_the_plan_door_parts_from_the_row_menu_on_the_heading_only() {
             for (const kind of ["across-merge", "off-branch", "unfetched-base"]) {
                 verify(Words.planRefused(kind) !== Words.writeReported(kind, "origin", "main"),
@@ -182,13 +151,12 @@ Item {
                 compare(Words.rewriteRefusedWhy(kind), Words.writeReportedWhy(kind),
                         kind + ": and one line under both")
             }
-            // What is true of every refused rewrite, for a shape nobody here has words of its own for. Nothing
-            // reaches it — `PlanRefusal` is exhaustive on both sides of the bridge — and an empty heading over a
-            // bar that has come down is the one answer worse than a general one.
+            // Unreachable (`PlanRefusal` is exhaustive on both sides of the bridge), but a general heading beats an
+            // empty one over a lowered bar.
             compare(Words.planRefused("no-such-kind"), "The history was not rewritten")
         }
 
-        /// The bar wearing them. **The hairline is the whole of the colour** — the words stay in their own.
+        /// The hairline carries the whole of the colour; the words stay in their own.
         function test_the_hairline_takes_the_tone_and_the_words_do_not() {
             dress("half-rename", "origin", "main", "")
             // All the way down, which is where the hairline is the width of the bar.
@@ -208,19 +176,13 @@ Item {
             compare(rule.color, Theme.borderSubtle, "a report in no state at all still closes with an edge")
         }
 
-        /// What came across is quoted as it came; what nobody said is ours.
         function test_the_far_sides_own_words_are_the_ones_quoted() {
             dress("update", "origin", "main", "GH006: protected branch hook declined")
             compare(bar.detail, "GH006: protected branch hook declined")
         }
 
-        /// **Quoted whole, however long it is** (デザイン規約 §答えの要らない報せ): a forge writes two or three sentences
-        /// and the rule it enforced is the last of them, so a bar cut at its own width drops the one sentence the
-        /// reader came for.
-        ///
-        /// **Both halves are the claim.** That every word is still there is `wordsCut`, read off the fields — and
-        /// that the bar took the room they need is the height, since a bar wrapping inside a height it never grew
-        /// shows exactly as much as one that elided.
+        /// Quoted whole (デザイン規約 §答えの要らない報せ). Both halves are the claim: `wordsCut` for the words, and the
+        /// height, since a bar wrapping inside a height it never grew shows as much as one that elided.
         function test_a_long_quote_wraps_and_the_bar_grows_by_it() {
             dress("update", "origin", "main", "GH006: protected branch hook declined")
             tryVerify(() => bar.settled)
@@ -228,16 +190,14 @@ Item {
             verify(!bar.wordsCut, "a quote that fits is not cut either")
 
             dress("update", "origin", "main", root.longReason)
-            // Both, because the words ask for their room a frame before the bar is given it, and the bar spends
-            // 200ms on the way there.
+            // Both: the words ask for their room a frame before the bar gets it, and the bar animates there.
             tryVerify(() => bar.openHeight > oneLine && bar.settled)
             verify(!bar.wordsCut, "and not one word of it was cut")
             compare(bar.detail, root.longReason, "with the whole of it still in the field")
         }
 
-        /// **`OK` keeps the middle of the bar** (デザイン規約 §答えの要らない報せ), which is what stops it riding the first
-        /// line while the words run on under it. Asked on a bar the words have made taller than the pill, since on
-        /// a one-line bar every rule about the pill's place answers the same.
+        /// `OK` keeps the middle of the bar (デザイン規約 §答えの要らない報せ). Asked on a bar the words made taller than the
+        /// pill: on one line, every rule about the pill's place answers the same.
         function test_the_pill_keeps_the_middle_however_many_lines_the_words_take() {
             dress("update", "origin", "main", "GH006: protected branch hook declined")
             tryVerify(() => bar.settled)
@@ -251,14 +211,12 @@ Item {
             fuzzyCompare(pillMiddle(), bar.height / 2, 1, "and it is still the middle it keeps")
         }
 
-        /// Where the pill's own middle sits in the bar.
         function pillMiddle() {
             return bar.pill.mapToItem(bar, 0, bar.pill.height / 2).y
         }
 
-        /// The one control, and the key that says the same thing. **Both walk the same body** (`dismiss`), which is
-        /// what a headless run presses — and neither takes the bar down: the write it is about is the page's to
-        /// finish with.
+        /// The pill and the key walk the same body (`dismiss`), which is what a headless run presses — and neither
+        /// lowers the bar: that is the page's.
         function test_the_pill_and_the_key_both_answer_for_the_reader() {
             dress("update", "origin", "main", "")
             // The pill is pressed where it is standing, so the bar has to be all the way down first.
@@ -273,8 +231,8 @@ Item {
             compare(acknowledged.count, 2, "the key walks the pill's own body")
         }
 
-        /// **Two enabled `StandardKey.Cancel` shortcuts in one window fire neither** (`tst_escape.qml`), so the bar
-        /// gives way where a question stands over it — and the words it is showing do not move.
+        /// Two enabled `StandardKey.Cancel` shortcuts in one window fire neither (`tst_escape.qml`), so the bar gives
+        /// way under a question, keeping its words.
         function test_a_question_standing_over_it_takes_the_key() {
             dress("update", "origin", "main", "")
             bar.yieldsEscape = true
@@ -284,8 +242,7 @@ Item {
             verify(bar.escapes)
         }
 
-        /// The hairline the bar closes with, found by what it is rather than by name: the one child drawn along the
-        /// bottom edge at the border's own thickness.
+        /// The bar's closing hairline, found by shape rather than name: the child at the border's own thickness.
         function findRule() {
             for (let i = 0; i < bar.children.length; i++) {
                 const child = bar.children[i]

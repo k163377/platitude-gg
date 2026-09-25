@@ -5,19 +5,12 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// Everything between the two bands, in a surface of its own that scrolls
-// when the pane is too short to hold it: the boxes, the author row and
-// the save row keep their heights by construction, so the file list was
-// the only thing that could give and past zero the rest ran out of the
-// pane's bottom (規約 §窓の床).
-//
-// The root is the `Flickable` it was inside the pane, so the layout attachments stay where they were and the item
-// tree is the same depth it was (rules-refs/structure.md).
+// Everything between the two bands, scrolling when the pane is too short: past a file list at zero nothing else
+// gives, and the rest would run out of the pane's bottom (規約 §窓の床). The root is that surface
+// (rules-refs/structure.md).
 Flickable {
     id: block
 
-    /// What the pane hands down: the commit being read, the room it is given, and the values the row and the
-    /// save line wear.
     required property var details
     required property real blockRoom
     required property real listHeight
@@ -35,16 +28,13 @@ Flickable {
     required property string committerFaceUrl
     required property bool signsCommits
     required property string signingTip
-    /// The pointer stand-ins, and whether a card the pane holds has the hand — the cards open in pane
-    /// coordinates, so they cannot live in here.
+    /// Pointer stand-ins, and whether the pane's cards have the pointer (the cards open in pane coordinates).
     required property bool avatarPointedAt
     required property bool signaturePointedAt
     required property bool summaryPointedAt
     required property bool mateCardInside
     required property bool authorCardInside
 
-    /// Back up to the pane: what the row raised, the two cards asking to be placed or settled, the escape out of
-    /// the boxes, and the press on the save line.
     signal avatarClicked()
     signal copyRequested(string text)
     signal parentClicked(string oidHex)
@@ -59,8 +49,7 @@ Flickable {
     readonly property real wants: blockCol.implicitHeight
 
     // -- what the pane reads back out of here --
-    /// The row that draws the commit's values, handed on whole: a dozen one-line relays would say nothing this
-    /// does not.
+    /// The row that draws the commit's values, handed on whole rather than relayed piece by piece.
     readonly property alias valueRow: authorRow
     readonly property alias coAuthorRecords: authorRow.coAuthorRecords
     readonly property alias matesClipped: authorRow.matesClipped
@@ -85,8 +74,7 @@ Flickable {
     readonly property alias descListRows: msgEditor.descListRows
     readonly property alias blockScrolls: msgEditor.blockScrolls
     readonly property alias descKeeps: msgEditor.descKeeps
-    /// Automation only: the block's own hand and the two the boxes carry, started and drifted without a pointer (a
-    /// middle button cannot be injected).
+    /// Automation only: the block's middle-button hand and the boxes' two (a middle button cannot be injected).
     readonly property alias hand: hand
     readonly property alias summaryHand: msgEditor.summaryHand
     readonly property alias descriptionHand: msgEditor.descriptionHand
@@ -105,9 +93,7 @@ Flickable {
     function holdDescriptionBar(on) { msgEditor.holdDescriptionBar(on) }
     function growDescription(dy) { msgEditor.growDescription(dy) }
     function pullDescriptionPast(down) { msgEditor.pullDescriptionPast(down) }
-    /// Moves the block by a wheel a box on it could not use: the boxes cover
-    /// most of the block, so a box that keeps the wheel at its own end
-    /// leaves the block unreachable by wheel.
+    /// Moves the block by a wheel a box on it could not use (`DescriptionBox.wheelPastEnd`).
     function rollBlock(pixels) {
         const max = Math.max(0, block.contentHeight - block.height)
         // Taken away: content travels against `contentY`.
@@ -117,20 +103,16 @@ Flickable {
     contentWidth: width
     contentHeight: blockCol.implicitHeight
     clip: true
-    // Hard stop at the ends, as everywhere else that scrolls (デザイン規約 §QML 実装ルール).
     boundsBehavior: Flickable.StopAtBounds
-    // What moves here is the block; the words inside the message boxes
-    // move under a bar of their own, and that one is the style's.
     ScrollBar.vertical: PaneScrollBar {}
-    // The middle button's hand, over the block and standing while it has somewhere to go. A message box whose words
-    // run past it has a hand of its own, and this one lets a press on it go to that one (`MiddleAutoScroll.claimedAt`).
-    // On the view's own frame, not in its content.
+    // The block's middle-button hand, on the view's frame rather than in its content. A box with a hand of its own
+    // takes the press on it (`MiddleAutoScroll.claimedAt`).
     MiddleAutoScroll {
         id: hand
         parent: block
         anchors.fill: parent
         visible: block.ScrollBar.vertical.visible
-        // `rollBlock` takes the wheel's sense — content travels against `contentY`.
+        // `rollBlock` takes the wheel's sense.
         onDrifted: dy => block.rollBlock(-dy)
     }
     ColumnLayout {
@@ -138,13 +120,8 @@ Flickable {
         width: block.width
         spacing: 0
 
-        // Inset on all four sides, one step each — the message box carries
-        // its own frame, and flush against the header band the two borders
-        // read as one welded block, so band → summary → description →
-        // author → band is one even rhythm (デザイン規約 §余白). The right
-        // is the exception: it is the gutter this
-        // block's scroll bar is drawn in, and anything short of it draws
-        // the bar over the boxes' frame and the parent hash's tail.
+        // One step on every side (デザイン規約 §余白) but the right: that is the gutter the block's bar is drawn in,
+        // and anything short of it draws the bar over the boxes' frame and the parent hash.
         ColumnLayout {
             Layout.fillWidth: true
             Layout.margins: Theme.spaceXs
@@ -152,14 +129,9 @@ Flickable {
             spacing: Theme.spaceXs
             visible: block.details.shaHex !== ""
 
-            // Who wrote it, first: avatar + name/date on the left, own
-            // hash over parent hash on the right (rows aligned). The pane
-            // reads top to bottom the way the commit itself does — whose
-            // it is, what it says, what it touched.
             CommitAuthorRow {
                 id: authorRow
-                // Said out loud: this row is an `Item`, and a plain item takes its own width and stops, which parks
-                // the hash plate against the end of the name.
+                // An `Item` does not fill by default; without this the hash plate parks against the name.
                 Layout.fillWidth: true
                 details: block.details
                 signatureKind: block.signatureKind
@@ -178,9 +150,7 @@ Flickable {
                 onOpenAuthorRequested: at => block.openAuthorRequested(at)
                 onSettleAuthorRequested: block.settleAuthorRequested()
             }
-            // Then the message: the same pair, in the same component the
-            // commit editor writes in, one block of one height
-            // (デザイン規約 §コミットメッセージの 2 つの枠).
+            // The same pair the commit editor writes in (デザイン規約 §コミットメッセージの 2 つの枠).
             MessageEditor {
                 id: msgEditor
                 Layout.fillWidth: true
@@ -192,7 +162,7 @@ Flickable {
                 blockRoom: block.blockRoom
                 blockHeight: blockCol.implicitHeight
                 onWheelPastEnd: pixels => block.rollBlock(pixels)
-                // Escape drops the draft and puts the commit's own message back, unasked — the reader said so
+                // Escape drops the draft and puts the commit's own message back, unasked
                 // (デザイン規約 §コミットメッセージの 2 つの枠).
                 onEscaped: block.escaped()
             }

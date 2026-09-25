@@ -1,10 +1,8 @@
 //! The fault the harness raises inside a graph pass — the one state of
 //! the band a demo repository cannot be walked into — and the seam it
-//! reaches the session through ([`PassHooks`]).
-//!
-//! A build without the harness hands the session nothing: the seam is
-//! answered `None`, the session holds no door, and the type below is not
-//! compiled at all.
+//! reaches the session through ([`PassHooks`]); and the held
+//! configuration saves. A build without the harness answers the seam
+//! `None`.
 
 use std::sync::Arc;
 
@@ -12,15 +10,11 @@ use platitude_core::session::PassHooks;
 #[cfg(feature = "automation")]
 use platitude_core::session::PassStep;
 
-/// The fault standing over every graph pass this process runs.
-///
-/// **One for the process.** What is driven into this is being
-/// photographed (`PGG_AUTO_ACT=graph-stale` / `graph-stopped`), and a run
-/// photographs one window on one repository; a fault raised for a tab is
-/// a fault raised for the run. It stands once raised — a fault one pass
-/// could lift would be a race, the pass already walking taking it and the
-/// pass asked for next succeeding, so the mark would go up and straight
-/// back down (`PassHooks::fault`).
+/// The fault standing over every graph pass this process runs — one for
+/// the process, since a run (`graph-stale` / `graph-stopped`) photographs
+/// one window on one repository. It stands once raised: one a pass could
+/// lift would be taken by the pass already walking and the next would
+/// succeed, so the mark would go straight back down (`PassHooks::fault`).
 #[cfg(feature = "automation")]
 #[derive(Default)]
 struct GraphFaults {
@@ -28,12 +22,11 @@ struct GraphFaults {
     /// Whether every pass must walk as one that began before the first
     /// status did ([`PassHooks::holds_back_the_working_tree_row`]).
     /// Raised before the repository is opened, so the opening's own walk
-    /// is one of them, and lowered by the run when it has read what that
-    /// pass left the page holding.
+    /// is held too; lowered by the run once it has read the page.
     holds_the_row: std::sync::atomic::AtomicBool,
     /// How many passes have reached a step, whether the last of them met
-    /// the fault standing there, and the word each one sends on the way
-    /// in — what [`fail_graph_pass`] keeps the fault's picture up by.
+    /// the fault, and the wake each one sends — what [`fail_graph_pass`]
+    /// keeps the fault's picture up by.
     reached: std::sync::atomic::AtomicU64,
     last_met: std::sync::atomic::AtomicBool,
     reaching: tokio::sync::Notify,
@@ -64,9 +57,8 @@ impl GraphFaults {
 
 #[cfg(feature = "automation")]
 impl PassHooks for GraphFaults {
-    /// Counted and said: a pass that gets this far is one that can take
-    /// the fault's picture down, until it too meets the fault
-    /// ([`fail_graph_pass`]).
+    /// A pass that gets this far can take the fault's picture down, until
+    /// it too meets the fault ([`fail_graph_pass`]).
     fn before(&self, _at: PassStep) {
         self.last_met
             .store(false, std::sync::atomic::Ordering::SeqCst);
@@ -92,8 +84,7 @@ impl PassHooks for GraphFaults {
     }
 }
 
-/// Raises the hold before anything is opened, off the run's own word
-/// (`knobs::holds_the_working_tree_row`).
+/// Raises the hold before anything is opened (`fault_hold_wip_row`).
 #[cfg(feature = "automation")]
 pub(crate) fn hold_the_working_tree_row() {
     GraphFaults::standing()
@@ -104,10 +95,9 @@ pub(crate) fn hold_the_working_tree_row() {
 #[cfg(not(feature = "automation"))]
 pub(crate) fn hold_the_working_tree_row() {}
 
-/// Lowers it again and asks the tab's session for the pass that carries
-/// the row, answering whether the hold had been up — the run reads the
-/// page on either side of this call, and the difference between the two
-/// is what it is about (`GraphModel.letTheWorkingTreeRowThrough`).
+/// Lowers it and asks the tab's session for the pass that carries the
+/// row, answering whether the hold had been up
+/// (`GraphModel.letTheWorkingTreeRowThrough`).
 #[cfg(feature = "automation")]
 pub(crate) fn let_the_working_tree_row_through(tab_id: i32) -> bool {
     let held = GraphFaults::standing()
@@ -125,14 +115,10 @@ pub(crate) fn let_the_working_tree_row_through(_tab_id: i32) -> bool {
 }
 
 /// Asks the tab's session for a pass with the hold left standing,
-/// answering whether it was up (`GraphModel.walkAgainWhileHeld`).
-///
-/// **A rebuild follows a read that moved**
-/// (`session::refresh`), and a replay that stops moves no
-/// branch — what moves is this window's own row appearing,
-/// which is the very thing the hold takes away. So the pass
-/// a landing owed by a stopped operation has to turn down is
-/// asked for here.
+/// answering whether it was up (`GraphModel.walkAgainWhileHeld`). Nothing
+/// else brings one: a rebuild follows a read that moved
+/// (`session::refresh`), a stopped replay moves no branch, and this
+/// window's row appearing is what the hold takes away.
 #[cfg(feature = "automation")]
 pub(crate) fn walk_again_while_held(tab_id: i32) -> bool {
     let held = GraphFaults::standing()
@@ -157,31 +143,23 @@ pub(crate) fn pass_hooks() -> Option<Arc<dyn PassHooks>> {
     Some(standing)
 }
 
-/// A build without the harness hands the session no door at all.
 #[cfg(not(feature = "automation"))]
 pub(crate) fn pass_hooks() -> Option<Arc<dyn PassHooks>> {
     None
 }
 
-/// Every graph pass that reaches the step `step` names fails there from
-/// here on, in place of the walk it would have made, and one is asked
-/// for of the tab's session — and asked for again, for as long as the
-/// run lasts, whenever the passes have all stopped and the last to reach
-/// a step is one the fault did not meet (`GraphModel.failGraphPass` —
-/// `swapping` for the off-screen rebuild, anything else for the stream;
-/// the words are the harness QML's, `WindowBadgeActs`).
+/// Every graph pass reaching `step` (`swapping` for the off-screen
+/// rebuild, anything else for the stream) fails there from here on, and
+/// one is asked of the tab's session — and asked again, for as long as
+/// the run lasts, whenever the passes have all stopped and the last did
+/// not meet the fault (`GraphModel.failGraphPass`).
 ///
-/// **An ask is not a pass.** Asking takes the stream over, and the page
-/// takes it back for its own reasons: a read that moved asks for a
-/// rebuild, which cancels the pass it displaces (`take_log_run`). A pass
-/// of the other kind never meets the fault, and a rebuild that finds the
-/// picture on screen says nothing at all — so nothing the window shows
-/// tells the harness QML that its ask was lost, or that a later pass
-/// took the picture down. The session's own boundary says when the
-/// passes have stopped (`RepoSession::wait_for_graph_passes`), and the
-/// passes say whether the last of them met the fault ([`GraphFaults`]).
-/// An ask no pass got anywhere with ends it: the session was closed, and
-/// asking again would be answered by the same nothing.
+/// An ask is not a pass: a read that moved asks for a rebuild, which
+/// cancels the pass it displaces (`take_log_run`), and nothing on screen
+/// tells the harness QML its ask was lost or a later pass took the
+/// picture down. So the session's boundary
+/// (`RepoSession::wait_for_graph_passes`) and [`GraphFaults`] decide. An
+/// ask no pass reached ends it: the session was closed.
 #[cfg(feature = "automation")]
 pub(crate) fn fail_graph_pass(tab_id: i32, step: &str) {
     let at = if step == "swapping" {
@@ -216,8 +194,8 @@ pub(crate) fn fail_graph_pass(tab_id: i32, step: &str) {
             if faults.reached() == reached {
                 return;
             }
-            // Held for as long as it stands: the next pass to reach a step
-            // is the one that can take it down.
+            // While it stands, only the next pass to reach a step can take
+            // it down.
             while faults.last_met() {
                 faults.reaching.notified().await;
                 let Some(watched) = session.upgrade() else {
@@ -230,14 +208,12 @@ pub(crate) fn fail_graph_pass(tab_id: i32, step: &str) {
     });
 }
 
-/// A build without the harness has no fault to raise, and raises none.
 #[cfg(not(feature = "automation"))]
 pub(crate) fn fail_graph_pass(_tab_id: i32, _step: &str) {}
 
 /// The configuration saves a run asked to be held (`PGG_FAULT_HOLD_SAVE`):
-/// every save the hub spawns waits here until the station the knob names
-/// is reached, and the count of the ones waiting is what QML reads to
-/// know the save a close is about to land on is provably out
+/// every save the hub spawns waits here until the named station, and QML
+/// reads the waiting count to know the save a close lands on is out
 /// (`PGG_AUTO_ACT=quit-save-held`).
 #[cfg(feature = "automation")]
 mod held_saves {
@@ -300,7 +276,6 @@ pub(crate) fn release_saves_at(station: super::Station) {
     held_saves::release();
 }
 
-/// A build without the harness holds no save, and has none to let go.
 #[cfg(not(feature = "automation"))]
 pub(crate) fn release_saves_at(_station: super::Station) {}
 

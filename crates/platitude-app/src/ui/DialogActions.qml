@@ -2,36 +2,24 @@ import QtQuick
 import QtQuick.Layouts
 import platitude.ui
 
-// The row a dialog ends on: the way out on the left, the thing the dialog
-// is for on the right, both against the right edge.
-//
-// The one that acts is named by a frame, and the frame is the plain one:
-// the accent is kept for the two buttons that write a commit, so a dialog
-// that only ends itself does not borrow the colour they carry. What says
-// it cannot be pressed is the word, which takes the disabled step
-// (`ActionButton.fg`). A dialog that has nothing to undo offers no way
-// out and says so by leaving `cancelText` empty; a button there would
-// promise to put something back.
+// The row a dialog ends on: the way out, then the thing the dialog is for, against the right edge. The acting button
+// wears the plain frame — the accent is kept for the two buttons that write a commit — and says it cannot be pressed
+// by its word (`ActionButton.fg`). A dialog with nothing to undo leaves `cancelText` empty: a way out would promise
+// to put something back.
 RowLayout {
     id: actions
 
     /// The word on the way out; empty draws no button at all.
     property string cancelText: ""
-    /// The word on the button that does the thing.
     property string acceptText: ""
-    /// The mark beside that word — empty for a button that is only a
-    /// word (`NavIcon.kind`).
+    /// The mark beside that word — empty for a button that is only a word (`NavIcon.kind`).
     property string acceptKind: ""
     property bool acceptEnabled: true
-    /// git is out on the network for what this button asked for: the ring
-    /// turns in the mark's own seat, the word stays and steps down, and
-    /// nothing here answers a press (`ActionButton.busy` —
-    /// デザイン規約 §進行中・長押しの定数). The way out beside it stays live:
-    /// it is what stops the call.
+    /// git is out on the network for this button: it spins and takes no press (`ActionButton.busy` — デザイン規約
+    /// §進行中・長押しの定数). The way out stays live — it is what stops the call.
     property alias busy: accept.busy
 
-    /// The acting button itself, for a dialog that opens with the focus
-    /// already on it.
+    /// The acting button, for a dialog that opens with the focus on it.
     readonly property alias acceptButton: accept
 
     signal cancelled()

@@ -1,9 +1,6 @@
-//! Filing `a/b/c.txt` paths under the directories they name, the way both
-//! file lists show them.
-//!
-//! The leaf is whatever the caller hangs on it, so the two readers keep
-//! what tells them apart: the details pane copies its rows in, and the
-//! sidebar hangs an index and points at the row it already has.
+//! Filing `a/b/c.txt` paths under the directories they name, for both
+//! file lists. The leaf is the caller's: the details pane copies its rows
+//! in, the sidebar hangs an index.
 
 use std::collections::BTreeMap;
 
@@ -13,8 +10,7 @@ pub(super) struct DirNode<T> {
     files: Vec<T>,
 }
 
-// Written out: a directory is empty whatever the leaf is, and
-// `#[derive(Default)]` would ask the leaf to have one too.
+// Not derived: `#[derive(Default)]` would require `T: Default`.
 impl<T> Default for DirNode<T> {
     fn default() -> Self {
         Self {
@@ -25,19 +21,13 @@ impl<T> Default for DirNode<T> {
 }
 
 impl<T> DirNode<T> {
-    /// Files `path` under the directories it names and leaves the leaf
-    /// `make` builds at the end of it.
+    /// Files `path` under the directories it names, with the leaf `make`
+    /// builds from the byte offset where the row's own name begins (also
+    /// how far a rename's source is cut back beside it).
     ///
-    /// `make` is handed how many bytes of the path the folders above the
-    /// row already spell — which is where the row's own name begins, and
-    /// how far a rename's source is cut back beside it.
-    ///
-    /// **A path that ends in `/` is itself the leaf.** git spells a
-    /// directory it will not open that way — a repository of its own
-    /// inside the working copy, whose files belong to that repository and
-    /// so stay one entry even under `-uall` (`status::load`). The last `/`
-    /// therefore stays on the row's own
-    /// name.
+    /// A path ending in `/` is itself the leaf and keeps its `/`: git's
+    /// spelling of an embedded repository, one entry even under `-uall`
+    /// (`status::load`).
     pub(super) fn insert(&mut self, path: &str, make: impl FnOnce(usize) -> T) {
         let mut node = self;
         let mut rest = path.strip_suffix('/').unwrap_or(path);
@@ -50,12 +40,9 @@ impl<T> DirNode<T> {
         node.files.push(make(from));
     }
 
-    /// The directories under this one in display order, each as the label
-    /// it shows and the node that label ends at.
-    ///
-    /// A chain of directories with nothing beside it compacts into one
-    /// `a/b/c` row: the rows in between would each hold a single arrow and
-    /// nothing else.
+    /// The directories under this one in display order, as (label, node
+    /// the label ends at). A chain with nothing beside it compacts into one
+    /// `a/b/c` row.
     pub(super) fn folders(&self) -> impl Iterator<Item = (String, &Self)> {
         self.dirs.iter().map(|(name, child)| {
             let mut label = name.clone();
@@ -147,9 +134,7 @@ mod tests {
 
     #[test]
     fn a_directory_git_would_not_open_is_a_row_and_not_a_shelf() {
-        // What git answers with for a repository of its own sitting in the
-        // working copy: the one entry `vendor/nest/`, beside the files of
-        // the directory it shares. The row is that directory.
+        // An embedded repository: git's one entry `vendor/nest/`.
         assert_eq!(
             drawn(&tree(&["vendor/nest/", "vendor/plain.txt"]), 0),
             vec!["vendor/", "  nest/", "  plain.txt"]

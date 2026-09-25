@@ -1,13 +1,7 @@
 /// The worktree this binary was built in, empty when it was not built in
-/// one. Parallel sessions each build their own exe and any of them may put
-/// a window on the screen, and the windows are otherwise identical — this
-/// is what the corner of the right pane says to tell them apart, beside
-/// the git version (CLAUDE.md ビルド・テスト).
-///
-/// It comes from the build path: the exe lives in the tree that built
-/// it, so the mark travels with the file however it is started, and a
-/// build from a plain checkout — every build anyone outside this
-/// repository makes — carries none at all.
+/// one — the right pane's corner names it so parallel sessions' windows
+/// can be told apart (CLAUDE.md §ビルド・テスト). Read from the build
+/// path, so a build from a plain checkout carries no mark.
 pub fn build_tree() -> String {
     tree_of(&env!("CARGO_MANIFEST_DIR").replace('\\', "/")).to_string()
 }
@@ -43,8 +37,7 @@ mod tests {
 
     #[test]
     fn leaves_every_other_build_unmarked() {
-        // The primary checkout, and the plain checkout anyone outside this
-        // repository builds from — neither carries a mark into what ships.
+        // The primary checkout, and anyone else's plain checkout.
         assert_eq!(
             tree_of("C:/Users/x/IdeaProjects/platitude-gg/crates/platitude-app"),
             ""

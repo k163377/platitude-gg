@@ -2,21 +2,19 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// The operation panel's branch card, built from a listing the way it is built from the section's own answer
-// (`NavSectionModel.cardLevel`): a folder a card of its own, opened off a row that says the folder's name, and every
-// branch a row pressed for its whole name. **The card is built as it opens, a card at a time**, so what is pinned
-// here is the build — a card whose folder rows came out empty, or whose rows reached nothing when pressed, frames in
-// a screenshot exactly like one waiting for its listing.
+// The operation panel's branch card, built from a listing shaped like `NavSectionModel.cardLevel`'s: a folder is a
+// card opened off a row saying its name, and a branch row is pressed for its whole name. The card is built as it
+// opens, one card at a time — and a card whose folder rows came out empty, or whose rows reach nothing, looks in a
+// screenshot exactly like one waiting for its listing.
 Item {
     id: root
     width: 800
     height: 600
 
-    /// The two things the card asks of a page: the section's answer, a card of the nest at a time, and nothing else.
+    /// All the card asks of a page: the section's answer, one card of the nest at a time.
     QtObject {
         id: page
         property var rows: []
-        /// How many times the card asked, and for which folders — what the press itself costs.
         property var asked: []
         readonly property QtObject pageBranches: QtObject {
             function cardLevel(path) {
@@ -29,8 +27,8 @@ Item {
         }
     }
 
-    /// A row the way the section answers it. `offers` is the section's to say — a folder's is whether anything under
-    /// it is on offer — so a fixture that needs it otherwise says so.
+    /// A row as the section answers it. `offers` is the section's to say (a folder's: whether anything under it is on
+    /// offer), so a fixture that needs it false says so.
     function row(full, depth, extra) {
         const segments = full.split("/")
         const made = {
@@ -80,8 +78,7 @@ Item {
             return null
         }
 
-        /// A folder is a row that opens the card of what is filed under it, and **says its name** — the row Qt builds
-        /// for a card is handed the title once, mid-build, and a row that wrote over it drew an empty folder.
+        /// A folder's row says its name (rules-refs/app-ui.md「`AppMenu` の delegate が作る題名行」).
         function test_a_folder_is_a_row_that_says_its_name_and_opens_its_card() {
             verify(card.offerFrom(), "the card has rows to offer")
             tryCompare(card, "opened", true)
@@ -97,8 +94,6 @@ Item {
             verify(rowCalled(deep.subMenu, "one") !== null)
         }
 
-        /// **The press makes the top card and nothing under it**: every row is an item made on the spot, and a
-        /// folder's rows are made the first time its card opens — once, however often it opens.
         function test_a_folders_rows_are_made_as_its_card_opens() {
             verify(card.offerFrom())
             tryCompare(card, "opened", true)
@@ -114,7 +109,6 @@ Item {
             compare(page.asked, ["", "feature"], "and its rows are made once")
         }
 
-        /// The branch the window stands on is on the list and not on offer; everything else is.
         function test_the_current_branch_is_not_offered() {
             verify(card.offerFrom())
             tryCompare(card, "opened", true)
@@ -123,8 +117,7 @@ Item {
             compare(card.offeredRows, 4)
         }
 
-        /// A folder holding nothing but the current branch has nothing to offer, and its row goes with it — **said
-        /// before its card is made** (`offers`), since an empty card cannot say it.
+        /// Said by `offers` before the folder's card is made, since an empty card cannot say it.
         function test_a_folder_left_with_nothing_on_offer_takes_its_row_with_it() {
             page.rows = [
                 root.row("only", 0, { "folder": true, "offers": false }),
@@ -137,7 +130,7 @@ Item {
             compare(card.offeredRows, 1)
         }
 
-        /// A row pressed is a branch picked **by its whole name** — the row says the segment under its folders.
+        /// The row shows only the segment under its folders.
         function test_a_row_is_pressed_for_the_whole_name() {
             verify(card.offerFrom())
             tryCompare(card, "opened", true)
@@ -147,7 +140,6 @@ Item {
             compare(card.picked, "topic/deep/one")
         }
 
-        /// Every row keeps the seat, and a row with a mark about itself wears it there, in the WORKTREES colour.
         function test_every_row_keeps_the_seat() {
             verify(card.offerFrom())
             tryCompare(card, "opened", true)
@@ -159,7 +151,6 @@ Item {
             compare(rowCalled(card, "feature").leftPadding, rig.leftPadding)
         }
 
-        /// …and a card with no mark on any of its rows holds no seat: its words start where every other card's do.
         function test_a_card_with_no_mark_holds_no_seat() {
             verify(card.offerFrom())
             tryCompare(card, "opened", true)
@@ -173,8 +164,8 @@ Item {
                    "the words start before the seat the card above keeps")
         }
 
-        /// Neither the card nor a folder's is held to the floor a held row needs: no row here is held, and a card
-        /// held to it keeps more air after its longest name than before its first mark.
+        /// No row here is held, so no card is held to a held row's floor — which would leave more air after the
+        /// longest name than before the first mark.
         function test_the_cards_fit_their_rows() {
             page.rows = [root.row("f", 0, { "folder": true }), root.row("f/a", 1)]
             verify(card.offerFrom())
@@ -186,7 +177,7 @@ Item {
             verify(folder.width < Metrics.menuMinW, "the folder's card fits its one short row")
         }
 
-        /// A folder's card is opened the way resting on its row opens it, every folder above it on the way.
+        /// Opened the way resting on its row opens it.
         function test_a_folder_opens_through_the_folders_above_it() {
             verify(card.offerFrom())
             tryCompare(card, "opened", true)

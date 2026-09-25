@@ -2,12 +2,10 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// What a row the search passed over dims, read off the canvas that draws it: its lanes and its node go down to
-// `dimFade`, the node without the lanes under it showing through, and a matched row's are at full strength
-// (デザイン規約 §コミットを探す) — **on every paint, whatever the paint before it drew**.
-// The 2D context outlives a paint, and the list hands the same cell from row to row as it scrolls, so a cell is always
-// painting over the state its previous row left behind. Only the canvas's own pixels answer that: a screenshot is one
-// paint, and the leak is between two.
+// What a row the search passed over dims (デザイン規約 §コミットを探す), read off the canvas: its lanes and node go down to
+// `dimFade` (the node without the lanes under it showing through), a matched row's are at full strength — on every
+// paint. The 2D context outlives a paint and the list hands a cell from row to row, so only the canvas's own pixels
+// answer: a screenshot is one paint, and the leak is between two.
 Item {
     id: root
     width: 120
@@ -90,8 +88,6 @@ Item {
             verify(Math.abs(a - 255 * Metrics.dimFade) <= 2, what + " at dimFade, alpha " + a)
         }
 
-        /// A row the search passed over dims its lanes and its node together — on its first paint and on every one
-        /// after it.
         function test_a_dimmed_row_dims_its_lanes_on_every_paint() {
             const t = cellWithSpy()
             dimmedAt(t.ink, root.laneX, root.laneY, "the lanes on the first paint")
@@ -102,8 +98,7 @@ Item {
             dimmedAt(t.ink, root.nodeX, root.nodeY, "the node on the second paint")
         }
 
-        /// A cell that drew a dimmed row and is then handed a matched one — the list's reuse as it scrolls, and the
-        /// whole graph as the search closes — draws that row lit through and through.
+        /// The list's reuse as it scrolls, and the whole graph as the search closes.
         function test_a_row_lit_after_a_dimmed_one_is_lit_whole() {
             const t = cellWithSpy()
             t.cell.dimmed = false
@@ -112,8 +107,8 @@ Item {
             compare(root.alphaAt(t.ink, root.nodeX, root.nodeY), 255, "the node")
         }
 
-        /// A dimmed face goes down by being darker, not by letting what is under it through: over the node's own lane
-        /// it reads pixel for pixel as it does over nothing. Read down the lane's own column, inside the outline.
+        /// A dimmed face is darker, not see-through: over its own lane it reads pixel for pixel as over nothing (read
+        /// down the lane's column, inside the outline).
         function test_a_dimmed_face_does_not_show_its_lane_through() {
             const over = cellWithSpy({ "geometry": root.ownLane })
             const bare = cellWithSpy({ "geometry": [] })

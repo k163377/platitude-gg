@@ -4,23 +4,15 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The interactive-rebase plan: opening one over a row, dressing its rows with verbs, running it, the
-/// stop a run asks for, and what the right pane's boxes do while a plan owns them or just after one lets
-/// go. The walks over the boxes are chains, so the dispatch below starts them by
-/// name.
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+/// The interactive-rebase plan: opening one over a row, dressing its rows with verbs, running it, the stop a run
+/// asks for, and what the right pane's boxes do while a plan owns them or just after one lets go.
+// `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
 
-    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is
-    /// the file that builds this one.
+    /// `var`: typing it `AutoActDriver` would be circular — that file builds this one.
     required property var driver
 
-    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
@@ -32,18 +24,16 @@ Item {
     readonly property var commitMenu: driver.commitMenu
     readonly property var renderedBarrier: driver.barrierRendered
 
-    /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
+    /// Runs `act` if it is this family's and says whether it was; `AutoActDriver` asks each family in turn.
     function run(act, arg) {
         if (act === "rebase-plan" || act === "rebase-plan-run" || act === "rebase-edit-stop"
             || act === "rebase-edit-stop-out" || act === "plan-reword-verb"
             || act === "plan-reword-out" || act === "plan-reword-ask" || act === "plan-loading"
             || act === "plan-details-held" || act === "plan-fold-carry"
             || act === "plan-escape" || act === "plan-escape-held") {
-            // Exercise the menu entry and its handler, then dismiss the menu as the actual click does.
-            // Each verb selects the smallest plan its result needs — the three about the right pane's boxes need
-            // only that the newest commit be a row of it, since that is the row the plan opens the selection on,
-            // and the carry needs three: one to hold the fold, the oldest to carry it over, and one above.
+            // The menu entry and its handler, then the menu dismissed as the click does. Each verb opens the smallest
+            // plan it needs: the box verbs only the newest commit (the plan selects it), the carry three rows — the
+            // fold, the oldest to carry it over, and one above.
             const back = act === "rebase-plan" || act === "plan-escape"
                          || act === "plan-escape-held" ? 3
                        : act === "rebase-plan-run" || act === "plan-fold-carry" ? 2
@@ -58,34 +48,23 @@ Item {
             else
                 planOpenTimer.begin(act)
         } else if (act === "plan-off-branch") {
-            // The same press as `rebase-plan`, on a history the preview turns down before the plan opens
-            // (`PlanRefusal`). Nothing is written and no plan comes back, so the answer is the bar in the middle
-            // and the notice barrier is the only one that can finish the run.
+            // The same press as `rebase-plan`, on a history the preview turns down (`PlanRefusal`): no plan comes
+            // back, so the notice barrier finishes the run.
             //
-            // **One run for the three shapes a preview turns down.** All three take this one road — press,
-            // preview, bar — and the only thing the three ever said differently was the heading, which
-            // `tst_reportdress.qml` reads without raising a window. The shape itself comes from real git
-            // (`integrate_integration/plan.rs`) and the name the page reads it under from
-            // `rebase_plan::drain_tests`. The one left standing is the one whose repository is smallest:
-            // `one-commit` builds a commit and a branch of one, where `rewrite-merge` builds a merge and
-            // `shallow` wants a clone.
-            //
-            // The row has to be named (`row:0`): the commit no branch of `one-commit` can see is not under the
-            // tip, and a plan opened from the tip would open perfectly well.
+            // One run covers the three refusal shapes: they share this road and differ only in the heading, which
+            // `tst_reportdress.qml` reads; the shapes are pinned by `integrate_integration/plan.rs` and
+            // `rebase_plan::drain_tests`. The row has to be named (`row:0`): the commit no branch of `one-commit`
+            // sees is not under the tip.
             const refusedOid = arg !== "" ? driver.autoActOid(arg)
                              : graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
             page.openRowMenu(refusedOid)
             page.startRebasePlan(refusedOid)
             commitMenu.close()
-            // And that no plan stands behind the bar, which the picture cannot say: a window that opened one and
-            // put it away frames exactly like one that never opened it.
+            // `plan=`: a window that opened a plan and put it away frames like one that never opened it.
             driver.barrierNotice.saysPlan = true
             driver.barrierNotice.start()
         } else if (act === "plan-amend-kept") {
-            // The one order in which a plan closing over the boxes meets text that was never the plan's: type the
-            // amend first, and open the plan from HEAD's own row so nothing moves the selection. Every other way in
-            // right-clicks a row further down, and **that** is what takes the draft — the arrows and the clicks
-            // walk off an unsaved message the same way (`graph-step-dirty`), which is not what this asks about.
+            // A half-written amend, then a plan opened from HEAD's own row (`planAmendTimer`).
             const tip = workTree.headOid
             page.jumpToRef(tip)
             planAmendTimer.begin(tip)
@@ -95,14 +74,9 @@ Item {
         return true
     }
     // ---- the face the press puts up before any of that -----------------
-    // The pane in the graph's seat with nothing in it but the mode's one word, `Discard` and the turning mark. The face
-    // is **held** from the edge that raised it (`RepoPage.planLoadHeld`): the rows arrive through the feed and can
-    // land while the asynchronous grab is still out, and the picture would then be of the
-    // plan (verify-ui スキル §中間状態は実 edge を latch する).
-    //
-    // **The edge is caught on the model's own signal.** `open()` raises `loading` inside the dispatch
-    // and the answer to a five-commit range can be back before the next tick, so a sampler looking for it would find
-    // a state that had already gone and wait out the watchdog in silence.
+    // The waiting face, held from the edge that raised it (`RepoPage.planLoadHeld`): rows can land while the grab is
+    // out (verify-ui implement.md「中間状態は実 edge を latch する」). The edge is caught on the model's own signal — a
+    // small range answers before the next tick, so a sampler would miss it.
     Connections {
         target: Harness.autoAct === "plan-loading" ? page.rebasePlan : null
         function onChanged() {
@@ -114,13 +88,11 @@ Item {
             page.planLoadHeld = true
         }
     }
-    // Completed a turn later and off the page's own answer
-    // (app-ui.md §UI 自動化の因果性). Nothing in the line can be read off the picture: an empty pane photographs the same
-    // whether a read is out, was refused, or was never asked for.
+    // Completed a turn later, off the page's own answer. The line carries what an empty pane cannot: whether a read is
+    // out, was refused, or was never asked.
     SampleTimer {
         id: planLoadingTimer
-        /// What the edge saw, kept for the report: read back afterwards these would be the *plan's* — the model goes
-        /// on filling itself while only the face is held.
+        /// What the edge saw: read later they would be the plan's, as the model keeps filling while the face is held.
         property int sawRows: -1
         property bool sawOnto: false
         onTriggered: {
@@ -133,9 +105,8 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // The plan's own three landings. First the open: rows arrive through the feed, so the verbs wait for the model
-    // to say the plan stands before touching it — and the overview also waits for the publish answer, since the
-    // pushed count is half of what its picture claims.
+    // The open: rows arrive through the feed, so the verbs wait for the plan to stand; the overview also waits for the
+    // publish answer, half of what its picture claims.
     SampleTimer {
         id: planOpenTimer
         property string act: ""
@@ -151,11 +122,9 @@ Item {
                 return
             planOpenTimer.stop()
             if (planOpenTimer.act === "rebase-plan") {
-                // One of each look: a fold leaning into its parent and a drop struck through. The selection is
-                // already on the newest row — `RebasePlanModel::take` opens it there — so the right pane is that
-                // commit's. **`selected=` is in the report because the picture cannot say it**: the row's own
-                // highlight reads `page.selectedOid`, which the `activateRow` below sets, so a model that opened
-                // with nothing selected would photograph exactly the same.
+                // One of each look: a fold and a drop. `selected=` is the model's own (`RebasePlanModel::take`): the
+                // row highlight reads `page.selectedOid`, which `activateRow` below sets, so a model that opened with
+                // nothing selected photographs the same.
                 plan.setAction(1, "squash")
                 plan.setAction(2, "drop")
                 page.activateRow(workTree.headOid)
@@ -164,10 +133,8 @@ Item {
                                   + " pushed=" + page.planPushed + " selected=" + plan.selectedRow)
                 renderedBarrier.begin()
             } else if (planOpenTimer.act === "rebase-plan-run") {
-                // Dropping a commit origin still reaches, so the *dropped row stays drawn* — the old line is
-                // origin/main's to keep (§履歴を合流させる). What this write moves is the branch's own tip: the old
-                // head's row goes to the reflog and the rewritten one takes its place, and that pair is the barrier
-                // (app-ui.md — その書き込みが動かす当のモデルの行を待つ).
+                // The barrier is the old head's row going and the new one standing, not the dropped row — origin
+                // still reaches it (rules-refs/app-ui.md「プラン実行の write barrier」).
                 plan.setAction(plan.stepCount - 1, "drop")
                 planRanTimer.begin(workTree.headOid)
                 driver.pressWrite("run-plan", () => {
@@ -175,19 +142,14 @@ Item {
                     return true
                 })
             } else if (planOpenTimer.act === "plan-details-held") {
-                // The row the plan opened on is already the selected one, and the right pane is already its
-                // commit's (`RepoPage.onPlanActiveChanged`) — the walk starts from exactly the screen a reader
-                // gets, with no verb dressed on anything.
+                // The walk starts from the screen a reader gets: the opened row selected and the right pane on it
+                // (`RepoPage.onPlanActiveChanged`), no verb dressed.
                 planHeldTimer.begin()
             } else if (planOpenTimer.act === "plan-escape"
                        || planOpenTimer.act === "plan-escape-held") {
-                // The one key that puts a standing thing away, against the one face whose way out is priced
-                // (デザイン規約 §フル interactive rebase「`Discard` は 2 状態」). With nothing composed the button takes a
-                // press, so Escape is that press; with a verb set on a row it takes a hold, and one key down is not
-                // one — `held=true` is the plan still standing, which is the whole of the claim.
-                //
-                // Entered at `escapePressed`, where `Keys.onEscapePressed` enters: a keystroke cannot be injected
-                // (verify-ui), and the handler above it is the one line that calls this.
+                // Escape against `Discard` (デザイン規約 §フル interactive rebase「`Discard` は 2 状態」): with nothing
+                // composed it is the press; with a verb set it would need a hold, so `held=true` (the plan still
+                // standing) is the claim. Entered at `escapePressed`, the one line `Keys.onEscapePressed` calls.
                 if (planOpenTimer.act === "plan-escape-held")
                     plan.setAction(1, "squash")
                 const took = page.escapePressed()
@@ -197,19 +159,11 @@ Item {
                                   + " dirty=" + plan.dirty)
                 renderedBarrier.begin()
             } else if (planOpenTimer.act === "plan-fold-carry") {
-                // The reorder as a hand makes it: a fold taken up, carried down over the oldest place — where no
-                // fold can stand — and set back down where it started. Driven through the list's own functions,
-                // which are the ones the row's `MouseArea` calls (`RebasePlanRow`), so the two brackets the fold
-                // rule waits on are under test.
-                //
-                // A move is answered inside the call, so the whole trip is one turn —
-                // and that is the point: a demotion that landed on the way through would land at a moment no
-                // sampler could catch either.
-                //
-                // The selection is put on the carried row first, so `selectedAction` *is* that row's verb for the
-                // whole trip (the reorder remaps the selection with it) — the model has no other way to be asked
-                // for one row's verb, and the picture cannot answer it: a chip redrawn as `pick` and a row that
-                // was never a fold photograph the same.
+                // A fold carried down over the oldest place (where no fold can stand) and back, through the functions
+                // the row's `MouseArea` calls (`RebasePlanRow`), so the fold rule's two brackets are under test. Moves
+                // answer inside the call, so the trip is one turn — a demotion on the way would escape a sampler too.
+                // The carried row is selected first so `selectedAction` is its verb throughout (the reorder remaps
+                // the selection); a chip redrawn as `pick` photographs like a row that was never a fold.
                 const carried = plan.stepCount - 2
                 plan.setAction(carried, "squash")
                 plan.selectRow(carried)
@@ -224,9 +178,7 @@ Item {
                                   + " dirty=" + plan.dirty)
                 renderedBarrier.begin()
             } else if (planOpenTimer.act.startsWith("plan-reword")) {
-                // The newest row is already the selected one (`RebasePlanModel::take`), and the plan already put the
-                // right pane on its commit (`RepoPage.onPlanActiveChanged`) — all that is missing is the verb that
-                // makes the boxes the row's.
+                // The newest row is already selected with the right pane on it; the verb makes the boxes the row's.
                 plan.setAction(0, "reword")
                 planRewordTimer.begin(planOpenTimer.act)
             } else {
@@ -236,17 +188,11 @@ Item {
             }
         }
     }
-    // The run's landing: the plan is away, the write answered by name, and the branch's tip rewritten — the old
-    // head's row gone to the reflog, the new one drawn. The *dropped* row is no barrier at all here: origin still
-    // reaches it, so its old line stays drawn on purpose (§履歴を合流させる).
+    // The run's landing: the plan away, the write answered by name, the old head's row gone and the new one drawn.
     SampleTimer {
         id: planRanTimer
         property string headBefore: ""
-        /// The run's own answer, picked out of the answers that notify carried the way `tipLandedTimer.answeredOp`
-        /// is — the fetch the freeze leaves running rewrites the answer group with every answer of its own, so a
-        /// beat that reads the sampled name can find a fetch's where the rebase's stood (same measured failure).
-        /// One-way and by name: only the rebase's answer sets it, whichever answered first,
-        /// and what it said about stopping and failing is taken in the same breath.
+        /// The rebase's own answer, set once by name (the `Connections` below) with its stop and failure alongside.
         property string answeredOp: ""
         property bool answeredStopped: false
         property bool answeredError: false
@@ -274,11 +220,9 @@ Item {
             renderedBarrier.begin()
         }
     }
-    /// **Read out of the answers the notify carried.** One drain empties the
-    /// whole queue and notifies once (`RepoTab::write_answers`), so the fetch coming back behind the run arrives in
-    /// the same beat and the group is left describing *it* — the name this is waiting for was never on screen for a
-    /// moment, and the run walks into its watchdog. Each answer keeps its own stop and refusal, so the two
-    /// read here are the rebase's.
+    /// Read out of the answers the notify carried (as `tipLandedTimer.answeredOp` is): one drain empties the queue and
+    /// notifies once (`RepoTab::write_answers`), and the fetch the freeze leaves running can leave the answer group
+    /// describing itself.
     Connections {
         target: driver.repoTab
         function onWriteSeqChanged() {
@@ -295,13 +239,10 @@ Item {
             }
         }
     }
-    // The stop that was asked for. Its tree is clean — nothing conflicted — so what the picture cannot hold is the
-    // reason: git's own edit marker, the skip whose cost came back with it, and the exit card's rows still standing
-    // (P3-確認事項 §A / デザイン規約 §進行中の操作から出る).
-    //
-    // The `-out` verb carries the same stop through its own `--continue`: a clean stop put down moves no row of the
-    // file list, so leaving it is the way out that nothing on that side ever announces (`RepoPage.leaveWipWhenDone`),
-    // and the reader is left on an empty face that photographs like any other.
+    // The asked-for stop, on a clean tree: the report carries what the picture cannot — git's edit marker, the skip's
+    // cost and the exit card's rows (デザイン規約 §進行中の操作から出る / P3-確認事項「クリーン停止の WIP 行は語が場面に合っていない」).
+    // `-out` continues it: a clean stop moves no file row, so nothing on that side announces the way out
+    // (`RepoPage.leaveWipWhenDone`).
     SampleTimer {
         id: planEditStopTimer
         onTriggered: {
@@ -323,26 +264,19 @@ Item {
         }
     }
 
-    // What the right pane's boxes do while a plan owns them, and after one lets go of them. A `reword` row types into
-    // the same two boxes a plain amend does — there is one place in this app to type a message — so every way the
-    // plan lets go has to hand them back, and none of those ways moves the commit on screen, which is the only cue
-    // the pane refills on by itself (`DetailsPane.syncMessage`).
-    //
-    // `plan-reword-verb` walks the row's verb out of `reword` and back into it, with the plan still standing. The
-    // other two walk the whole plan away with the typing unsaved, and read what the boxes are left holding; the
-    // second of them goes on to type into them again, for the question the closed plan was refusing to ask.
+    // The right pane's boxes under a plan: a `reword` row types into the amend's two boxes, so every way the plan lets
+    // go has to hand them back — and none moves the commit on screen, the pane's only own refill cue
+    // (`DetailsPane.syncMessage`). `-verb` walks the row's verb out of `reword` and back; `-out` / `-ask` cancel the
+    // plan with the typing unsaved, and `-ask` types again for the question the closed plan was refusing to ask.
     SampleTimer {
         id: planRewordTimer
         property string act: ""
-        /// Where in the walk this run is. Each step is entered off the state the step before it asked for — the
-        /// sampler carries only the looking (app-ui.md §UI 自動化の因果性).
         property string stage: ""
-        /// What the reword row is given, and what the boxes are asked for once more after the plan is gone: two
-        /// texts that are neither the commit's own message nor each other.
+        /// Typed into the reword row, then into the boxes after the plan is gone — neither the commit's message nor
+        /// each other.
         readonly property string typed: "planned"
         readonly property string retyped: "retyped"
-        /// Whether the boxes are resting on the commit's own message again. Read off the resting text, since the
-        /// `dirty` in the same report is what says whether the boxes themselves have moved off it.
+        /// Whether the boxes rest on the commit's own message again (`dirty=` says whether the boxes moved off it).
         readonly property bool restored: detailsPane.baseSubject === detailsModel.messageSubject
                                          && detailsPane.baseBody === detailsModel.messageBody
         function begin(which) {
@@ -353,14 +287,12 @@ Item {
         onTriggered: {
             const plan = page.rebasePlan
             if (planRewordTimer.stage === "type") {
-                // The boxes take typing once the page has routed them at the row carrying the verb
-                // (`RepoPage.planReword`), which waits on that commit's own details arriving.
+                // The boxes take typing once routed at the verb's row (`RepoPage.planReword`), after its details.
                 if (!detailsPane.editable)
                     return
                 detailsPane.setMessageText(planRewordTimer.typed, "")
-                // Only the round trip needs the plan to be holding the draft. The two that walk away leave it
-                // unsaved on purpose: an unsaved reword is the half-written message a closing plan would be
-                // handing to the amend it hands the boxes back to.
+                // Only the round trip saves the draft; the other two leave it unsaved on purpose — that is what a
+                // closing plan must not hand to the amend.
                 if (planRewordTimer.act === "plan-reword-verb") {
                     detailsPane.submitMessage()
                     planRewordTimer.stage = "held"
@@ -410,9 +342,8 @@ Item {
                     renderedBarrier.begin()
                     return
                 }
-                // Whether a remote already has this commit is HEAD's own answer, kept beside
-                // HEAD (`WorkTreeModel.headPublished`) — so the plan that stood over the boxes
-                // cannot have spent it. Type again, and read the warning back with the boxes dirty.
+                // Published-ness is HEAD's own answer (`WorkTreeModel.headPublished`), so the plan cannot have spent
+                // it; type again and read the warning with the boxes dirty.
                 detailsPane.setMessageText(planRewordTimer.retyped, "")
                 planRewordTimer.stage = "retyped"
                 return
@@ -426,32 +357,22 @@ Item {
             }
         }
     }
-    // The other text a closing plan finds in the boxes: a plain amend the reader had half written before any plan
-    // existed. The walk types it, opens a plan **from HEAD's own row** so the selection never moves, and cancels —
-    // the one order in which the plan is the only thing that could have taken the text (a right-click further down
-    // the graph moves the selection, and walking off an unsaved message drops it either way, `graph-step-dirty`).
-    //
-    // **The picture cannot answer this.** The boxes hold one message whichever way the run went, and the message
-    // they come back to is the one the reader was amending — so kept text and the commit's own text differ by their
-    // wording alone, at the size the shot is taken.
+    // A plain amend half written before any plan: typed, then a plan opened from HEAD's own row and cancelled — the one
+    // order in which only the plan could have taken the text (a right-click further down moves the selection, and
+    // walking off an unsaved message drops it either way, `graph-step-dirty`). Only the report can tell: kept text and
+    // the commit's own differ by wording alone.
     SampleTimer {
         id: planAmendTimer
-        /// The commit the boxes are about, taken once: the plan opens on the same row, so the selection is never
-        /// asked to move and `DetailsPane.syncMessage` never runs.
+        /// The commit the boxes are about; the plan opens on it, so `DetailsPane.syncMessage` never runs.
         property string tip: ""
-        /// Where in the walk this run is. Each step is entered off the state the step before it asked for — the
-        /// sampler carries only the looking (app-ui.md §UI 自動化の因果性).
         property string stage: ""
         /// What is typed into the boxes: neither the commit's own message nor anything a plan would put there.
         readonly property string typed: "typed by hand"
-        /// Whether the boxes are resting on the commit's own message, which is where the closed plan has to leave
-        /// them — that is what makes what is standing in them unsaved.
+        /// Whether the boxes rest on the commit's own message, as the closed plan must leave them (the text unsaved).
         readonly property bool restored: detailsPane.baseSubject === detailsModel.messageSubject
                                          && detailsPane.baseBody === detailsModel.messageBody
-        /// What `Discard` was wearing when it was pressed, read while the plan still stands. False is the claim: this
-        /// text is not the plan's to take, so the press costs nothing and the button says so
-        /// (`RepoPage.planDiscards`). The dressed side is a picture — `plan-fold-carry` stands on a plan with a verb
-        /// set and photographs it.
+        /// What `Discard` wore at the press (`RepoPage.planDiscards`). False is the claim: this text is not the plan's,
+        /// so the press costs nothing.
         property bool guard: false
         function begin(oidHex) {
             planAmendTimer.tip = oidHex
@@ -469,8 +390,6 @@ Item {
                 return
             }
             if (planAmendTimer.stage === "typed") {
-                // The keystroke has to have landed before the plan is asked for, or what the run photographs is
-                // whether the typing arrived at all.
                 if (detailsPane.boxSubject !== planAmendTimer.typed)
                     return
                 page.openRowMenu(planAmendTimer.tip)
@@ -501,27 +420,17 @@ Item {
             }
         }
     }
-    // The right pane's other two doors, while a plan stands. Neither is a write, so neither is what the mode's freeze
-    // is for — but both reach past the pane, and this is the one screen where reaching past it lands somewhere the
-    // reader cannot see (規約 §フル interactive rebase「右の詳細ペインがそのまま生きる」, and how far that goes).
-    //
-    // Three presses and a `Discard`: the parent hash of a commit the plan holds — a walk *down* the plan, which has to
-    // take the model's own row with it; the base's hash — a walk *out* of it, which has no row on this screen to land
-    // on; and a file row, whose diff would be read into the pane the plan is standing on.
-    //
-    // **All four are in the report.** The row highlight reads `page.selectedOid`, so a model left behind
-    // photographs exactly like one that followed; a diff opened under the plan is drawn nowhere at all; and where the
-    // middle lands after `Discard` is the whole of the last claim.
+    // The right pane's other doors while a plan stands. Neither writes, but both reach past the pane to where the
+    // reader cannot see (デザイン規約 §フル interactive rebase「右の詳細ペインがそのまま生きる」): the parent hash (a walk
+    // down the plan, which must take the model's row along), the base's hash (a walk out, with no row to land on) and
+    // a file row (a diff under the plan); then `Discard`. All four are reported — the picture shows none of them.
     SampleTimer {
         id: planHeldTimer
-        /// Where in the walk this run is — each step entered off the state the step before it asked for
-        /// (app-ui.md §UI 自動化の因果性).
         property string stage: ""
         /// The commit the in-range hash pointed at, kept so the steps after it can say the selection reached it.
         property string wantOid: ""
-        /// What each press was caught doing, read where it happened. Read back at the end they would every one of
-        /// them be the *cancelled* screen's. The resting values are the failing ones, so a walk that stops early
-        /// cannot report a pass it never reached.
+        /// What each press did, read where it happened (at the end they would be the cancelled screen's). The resting
+        /// values fail, so a walk that stops early cannot pass.
         property int sawRow: -1
         property bool sawOid: false
         property bool sawOutside: false
@@ -530,13 +439,11 @@ Item {
             planHeldTimer.stage = "parent"
             planHeldTimer.start()
         }
-        /// The pane is showing the page's own selection and has finished being told so: the parent hash it draws and
-        /// the file rows under it are both this commit's.
+        /// The pane has settled on the page's selection, so its parent hash and file rows are this commit's.
         readonly property bool paneSettled: !detailsModel.loading && page.selectedOid !== ""
                                             && detailsModel.shaHex === page.selectedOid
-        /// The first file row the list has actually built, or null — `itemAtIndex` answers null until it has, and a
-        /// press aimed at nothing latches a wait that never ends. Folder rows answer to no walk name, and every
-        /// commit of the `plan` preset puts its one file under one.
+        /// The first built file row, or null — a press aimed at nothing latches a wait that never ends. Folder rows
+        /// have no walk name, and each `plan` commit puts its one file under one.
         function fileRow() {
             const view = detailsPane.filesWalk.view
             for (let i = 0; i < view.count; i++) {
@@ -549,8 +456,7 @@ Item {
         onTriggered: {
             const plan = page.rebasePlan
             if (planHeldTimer.stage === "parent") {
-                // The plan opened on its newest row and the page is on that commit; the hash beneath its own is the
-                // parent, which the plan holds as the row below it.
+                // The parent hash is the plan's next row down.
                 if (!planHeldTimer.paneSettled || detailsModel.parentHex === "")
                     return
                 planHeldTimer.wantOid = detailsModel.parentHex
@@ -559,14 +465,12 @@ Item {
                 return
             }
             if (planHeldTimer.stage === "walked") {
-                // Both halves of the walk down, waited for: the page's half goes the
-                // long way round through `activateRow` and the details it asks for.
+                // Both halves of the walk down; the page's goes the long way, through `activateRow` and its details.
                 if (page.selectedOid !== planHeldTimer.wantOid || !planHeldTimer.paneSettled)
                     return
                 planHeldTimer.sawRow = plan.selectedRow
                 planHeldTimer.sawOid = plan.selectedOid === page.selectedOid
-                // And the walk out. The base is the row after the oldest, which is to say no row of the plan at all —
-                // refused where it stands, so what it did is readable in the same beat.
+                // The walk out: the base is no row of the plan, refused on the spot, so it reads in the same beat.
                 page.jumpToRef(plan.ontoOid)
                 planHeldTimer.sawOutside = page.selectedOid === planHeldTimer.wantOid
                 planHeldTimer.stage = "file"
@@ -576,9 +480,8 @@ Item {
                 const row = planHeldTimer.fileRow()
                 if (!row || !planHeldTimer.paneSettled)
                     return
-                // The row's own press: the door being held is at the far end of it
-                // (`RepoPage.openDiff`), and the run has to arrive through everything in between. `diffShown` is
-                // written inside that call, so an unheld door is already open by the next line.
+                // The row's own press, arriving at the held door (`RepoPage.openDiff`) the whole way round; `diffShown`
+                // is written inside the call, so an unheld door is open by the next line.
                 row.press()
                 planHeldTimer.sawDiff = page.diffShown
                 plan.cancelPlan()

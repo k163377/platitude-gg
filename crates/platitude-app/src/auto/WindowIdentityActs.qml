@@ -4,12 +4,9 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The two screenshot hooks that hang off `PGG_AUTO_IDENTITY`, and nothing else.
-///
-/// A file of its own because these are the only harness hooks with no verb: they run with no
-/// `PGG_AUTO_ACT` at all — a picture of the identity question is a picture of a window nobody has asked to do
-/// anything — so they are built off their own knob (`WindowHarness`).
-// An `Item` only because that is what the harness's children are; it is a sizeless holder.
+/// The two screenshot hooks that hang off `PGG_AUTO_IDENTITY`. A file of its own because they are the only harness
+/// hooks with no `PGG_AUTO_ACT`, so they are built off their own knob (`WindowHarness`).
+// An `Item` only because that is what the harness's children are; it is sizeless.
 Item {
     id: hooks
 
@@ -19,8 +16,7 @@ Item {
     // `"<name>|<email>"` fills the two boxes, `PGG_AUTO_IDENTITY_SAVE=1` submits them, `skip` answers "Not now" to
     // show the state behind the dialog, and `edit` leaves an identity that is already set as it is.
     //
-    // Deferred by a turn: the dialog puts the caret in the first box as it opens, and filling it in the same turn
-    // would be writing into a box that is still being focused.
+    // Deferred a turn: the dialog focuses the first box as it opens, and a fill in that turn lands mid-focus.
     Connections {
         target: hooks.identityDialog
         function onOpened() {
@@ -40,9 +36,7 @@ Item {
             hooks.identityDialog.submit()
     }
 
-    // `edit` opens the settings screen on an identity that is already set, which is otherwise a menu action. It lands
-    // where the menu entry lands, and it fires once — a menu entry is pressed once, and every later answer git gives
-    // about the identity is not a second press.
+    // `edit` opens the settings screen where the menu entry lands, once: a later identity answer is not a second press.
     property bool settingsAsked: false
     Connections {
         target: AppBackend

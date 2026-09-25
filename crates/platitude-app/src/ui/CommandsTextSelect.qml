@@ -4,26 +4,16 @@ import QtQuick
 import platitude.ui
 
 // The hand that picks the log's text out of its rows: a drag selects, a plain click puts the selection down
-// (デザイン規約 §git が言ったことを読む場所). The reader drags and presses Ctrl+C, the way a
-// terminal is read.
+// (デザイン規約 §git が言ったことを読む場所).
 //
-// **It is laid over the list**, for the two reasons that are the same reason twice: a
-// `Flickable` takes the grab away from its own children once a drag passes the threshold, and `reuseItems` builds a
-// scrolled-away row again from scratch. A hand that started on row 40 and is now dragging past the bottom of the
-// window would lose its grip both ways.
+// Laid over the list, not inside the rows: a `Flickable` takes the grab from its children once a drag passes the
+// threshold, and `reuseItems` rebuilds a scrolled-away row, so a drag held by a row loses its grip.
 //
-// It is a plain `MouseArea` with hover left to the rows underneath, which keep their own —
-// the lit ground and the one line a row has no room for (a `HoverHandler` here would take all of it, app-ui.md).
+// A plain `MouseArea`, so the rows underneath keep their own hover (a `HoverHandler` here would take all of it —
+// rules-refs/app-ui.md「行に重ねる面の `HoverHandler` は祖先が持つ」).
 //
-// **Every place in the frame that nobody else takes is a start**, the ground a log shorter than its panel leaves under
-// the last row included (`rowAt`, 規約 §git が言ったことを読む場所). Nothing stands over these rows at all, so here that
-// is the whole of the rule — except at the right edge, where the list's own bar is drawn over them and this stops
-// short of it (`barRoom`, observed against the diff's hand, which had the same shape).
-//
-// **Which byte a press landed on takes two questions, both lookups.** This knows which of the
-// row's three columns the pointer was over and how far into it in pixels; the column's own layout says which place of
-// it that is (`LineRuler`), and the model says which byte of the line that place stands on — the line those columns
-// are cut from is there, and where their characters are drawn is here.
+// Every place in the frame is a start, the ground under a short log's last row included (`rowAt`), except the
+// list's own scroll bar at the right edge (`barRoom`).
 Item {
     id: pick
 
@@ -31,11 +21,10 @@ Item {
     required property var view
     /// Where the selection lives, and where the three columns come from.
     required property var commandsModel
-    /// How much of the right edge belongs to the list's own scroll bar, which is where this frame ends
-    /// (`AppListView.barRoom`).
+    /// The list's scroll bar at the right edge, where this frame ends (`AppListView.barRoom`).
     required property real barRoom
-    /// The column's own layout, asked which place the press landed in. The same ruler the wash is placed with
-    /// (`CommandRowDelegate`), so the hit and the wash cannot disagree.
+    /// The column's layout, asked which place a press landed in — the same ruler that places the wash
+    /// (`CommandRowDelegate`), so hit and wash cannot disagree.
     required property var ruler
 
     /// A drag has reached past the frame and wants the rows sent after it.
@@ -46,8 +35,8 @@ Item {
     width: Math.max(0, pick.view.width - pick.barRoom)
     height: pick.view.height
 
-    /// Which column a press landed in, as `CommandsModel` numbers them: the three the row draws, the two tabs between
-    /// them, and one more for the block of words a failure carries below its line.
+    /// Column ids as `CommandsModel` numbers them: the three the row draws, the two tab gaps, and the block of words
+    /// a failure carries below its line.
     readonly property int atClock: 0
     readonly property int atGapCmd: 1
     readonly property int atCmd: 2
@@ -55,32 +44,26 @@ Item {
     readonly property int atOut: 4
     readonly property int atBelow: 9
 
-    /// Whether a drag is running. The press that started it is still held, so this and the area's `pressed` say the
-    /// same thing.
     property bool dragging: false
-    /// Where the hand was last seen, in this item's own coordinates. Kept because the edge below re-reads it after
-    /// every step it sends: the rows move under a pointer that is standing still.
+    /// Where the hand was last seen, in this item's coordinates (the edge ticker below re-reads it).
     property real handX: 0
     property real handY: 0
 
-    // ---- what the hand does, named so a headless run enters where it enters -------------------------------------
-    /// A press at a point of this item, in its own coordinates: true where the text took it, false where it goes down
-    /// to the list itself — which is only ever a log with no rows in it. **The `MouseArea` below and a run enter
-    /// here**, so a hand that was never wired up reports nothing (verify-ui §壊れない動詞の実装).
+    // ---- what the hand does ------------------------------------------------------------------------------------
+    /// A press at a point (own coordinates): true where the text took it, false where it goes down to the list —
+    /// only a log with no rows. The `MouseArea` below and a run both enter here, so an unwired hand reports nothing
+    /// (verify-ui §壊れない動詞の実装と反復).
     function takeAt(x, y) {
         const row = pick.rowAt(y)
         if (row < 0)
             return false
-        // The press is what puts the keys here as well, so Ctrl+C reaches the text a hand has just picked out — the
-        // panel takes focus when it opens, but a reader who has been somewhere else since comes back through this and
-        // nothing else.
+        // The press takes focus so Ctrl+C reaches the text just picked; the panel only takes it when it opens.
         pick.view.forceActiveFocus()
         pick.handX = x
         pick.handY = y
         pick.pressText(row, pick.byteAt(row, x, y))
         return true
     }
-    /// The hand has reached here. A drag that has left the rows keeps the one it can still see (`rowAt`).
     function followAt(x, y) {
         pick.handX = x
         pick.handY = y
@@ -90,17 +73,14 @@ Item {
         if (row >= 0)
             pick.dragText(row, pick.byteAt(row, x, y))
     }
-    /// A press on the text: the selection starts here and holds nothing until the hand moves.
     function pressText(row, at) {
         pick.commandsModel.beginSelect(row, at)
         pick.dragging = true
     }
-    /// The hand has reached here.
     function dragText(row, at) {
         pick.commandsModel.extendSelect(row, at)
     }
-    /// The button is up. A press that never moved selected nothing, and a selection of nothing is no selection — so
-    /// the wash the previous drag left goes down with this press.
+    /// An empty selection is cleared, so a plain click takes down the previous drag's wash.
     function releaseText() {
         pick.dragging = false
         if (pick.commandsModel.selectionText() === "")
@@ -108,31 +88,24 @@ Item {
     }
 
     // ---- pixels to rows and columns ----------------------------------------------------------------------------
-    /// Which row a point of this item is over, or -1 where the list has no rows at all. **The point is clamped
-    /// twice.** To the frame, so that a drag past either edge keeps naming the row it can still see while the edge
-    /// below carries the rows to it — and to the rows themselves (`onRows`), so that the ground a short log leaves
-    /// under its last row belongs to that row.
+    /// Which row a point is over, or -1 where the list has no rows. Clamped twice: to the frame, so a drag past an
+    /// edge keeps naming the row it can see while the ticker scrolls, and onto the rows (`onRows`).
     function rowAt(y) {
         const inside = Math.max(0, Math.min(y, pick.height - 1))
-        // One pixel in from the left: rows are as wide as the list, so any x inside it finds the same row.
+        // Rows are as wide as the list, so any x inside it finds the same row.
         return pick.view.indexAt(1, pick.onRows(pick.view.contentY + inside))
     }
-    /// A content y brought onto the band the rows themselves stand on — the whole of what makes the ground under the
-    /// last row a place a selection can start (規約 §git が言ったことを読む場所「掴めるのは、誰も取らない所すべて」).
-    /// Without it a press there reached nothing at all, which is the same dead corner the right pane's values had.
-    ///
-    /// `originY`: this list is sent to its end over rows of differing heights — a failure brings
-    /// git's words down with it — and a view that has been so moves its own origin (`AppListView.clampY`). An empty
-    /// log has no band at all — the clamp then answers above its own last row, `indexAt` finds nothing, and the press
-    /// goes down to the list as it always did.
+    /// A content y clamped onto the band the rows stand on — what makes the ground under the last row a start
+    /// (規約 §git が言ったことを読む場所「始点はパネルの枠の中で誰も press を取らない所すべて」).
+    /// From `originY`, not 0: rows of differing heights move the view's origin once it is sent to its end
+    /// (`AppListView.clampY`). An empty log has no band, so `indexAt` finds nothing and the press goes to the list.
     function onRows(y) {
         const first = pick.view.originY
         const last = first + pick.view.contentHeight - 1
         return Math.max(first, Math.min(y, last))
     }
 
-    /// Which byte of a row's line a point lands on. The row itself says where its three columns are drawn, and each
-    /// column answers for the pixels inside it; a gap holds one tab, whose only two places are its ends.
+    /// Which byte of a row's line a point lands on; a gap holds one tab, whose only two places are its ends.
     function byteAt(row, x, y) {
         const item = pick.view.itemAtIndex(row)
         if (!item)
@@ -149,27 +122,23 @@ Item {
             return pick.commandsModel.hitAt(row, pick.atGapOut, pick.sideOf(x, item.cmdEnd, item.outX))
         return pick.hit(row, pick.atOut, x - item.outX)
     }
-    /// One column: the pixels are the column's own to read (`LineRuler`), and the place that comes back is the
-    /// model's to turn into a byte of the line. **Each step is a lookup** — a column is not a width, and
-    /// the walk that treated it as one selected a byte in the middle of a line the reader had dragged past the end of.
+    /// One column: pixels to place by the column's layout (`LineRuler`), place to byte by the model. Both are
+    /// lookups — treating a column as a width lands mid-line when the drag runs past its end.
     function hit(row, at, x) {
         const text = pick.commandsModel.columnText(row, at)
         return pick.commandsModel.hitAt(row, at, pick.ruler.placeAt(text, false, x))
     }
-    /// Which side of a gap's one tab a point is on, as the two places that tab has.
     function sideOf(x, from, to) {
         return x < (from + to) / 2 ? 0 : 1
     }
 
     // ---- the ground under the last row ---------------------------------------------------------------------------
-    /// Where the ground a log shorter than its panel leaves under the last row begins, in this item's own
-    /// coordinates, and whether there is any of it at all. A sweep run against a log that fills its panel would prove
-    /// nothing, so it says so (verify-ui `commands-sweep`).
+    /// Where the ground under a short log's last row begins (own coordinates), and whether there is any: a sweep
+    /// against a log that fills its panel proves nothing, so it says so (verify-ui `commands-sweep`).
     readonly property real groundTop: Math.max(0, pick.view.originY + pick.view.contentHeight - pick.view.contentY)
     readonly property bool hasGround: pick.groundTop < pick.height - 2
-    /// Automation: the gesture as a hand makes it — a press on that ground, and a drag up into the text. It enters the
-    /// same two functions the `MouseArea` below calls, and it **starts in the ground**: an injection that began on a
-    /// row would go green with the whole of this taken back out (`SweepRoom`, the same rule).
+    /// Automation: a press on that ground and a drag up into the text, through the functions the `MouseArea` calls.
+    /// It starts in the ground: a sweep started on a row would pass with the ground rule taken out.
     function sweepFromGround(fx, fy) {
         if (!pick.hasGround)
             return false
@@ -177,8 +146,7 @@ Item {
         const y = pick.groundTop + 1 + (pick.height - pick.groundTop - 2) * fy
         if (!pick.takeAt(x, y))
             return false
-        // Up into the text at the x it started from — a drag does not jump sideways, and reading a row out at a place
-        // the reader never pressed is how a run passes while the gesture does not work.
+        // Straight up at the starting x — a sideways jump would let a run pass while the real gesture fails.
         const top = pick.view.itemAtIndex(0)
         pick.followAt(x, top ? top.y - pick.view.contentY + top.height / 2 : 1)
         pick.releaseText()
@@ -192,7 +160,6 @@ Item {
         acceptedButtons: Qt.LeftButton
         // The rows below keep their own hover (see the note at the top).
         cursorShape: Qt.IBeamCursor
-        // The two above only: what the hand does is written once, where a run enters it too.
         onPressed: mouse => { mouse.accepted = pick.takeAt(mouse.x, mouse.y) }
         onPositionChanged: mouse => pick.followAt(mouse.x, mouse.y)
         onReleased: pick.releaseText()
@@ -200,15 +167,14 @@ Item {
     }
 
     // ---- the edge ----------------------------------------------------------------------------------------------
-    /// How far past the frame the hand has reached. Zero while it is inside, which is also what stops the ticker.
+    /// How far past the frame the hand is; zero inside, which stops the ticker.
     readonly property real pastY: pick.handY < 0 ? pick.handY
                                   : pick.handY > pick.height ? pick.handY - pick.height : 0
-    // A drag that has left the frame carries the log after it, at the speed the middle-click hand travels at. The rows
-    // are re-read on every step: they move under a pointer that is standing still, so what is under it changes without
-    // the mouse saying anything.
+    // A drag past the frame scrolls the log at the middle-click hand's speed, and re-reads the row every step: the
+    // rows move under a still pointer without any mouse event.
     Timer {
         running: pick.dragging && pick.pastY !== 0
-        // A frame, the same tick every other drift in the app travels on.
+        // One frame, the tick every drift in the app uses.
         interval: 16
         repeat: true
         onTriggered: {

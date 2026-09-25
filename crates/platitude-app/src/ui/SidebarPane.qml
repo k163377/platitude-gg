@@ -3,9 +3,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// Navigation sidebar: fixed section headers, each section scrolls
-// inside its own list. Owns its filter text and per-section fold
-// state; what a click means (jump, menu, open a tab) is reported
+// Navigation sidebar. Owns its per-section fold state; what a click means (jump, menu, open a tab) is reported
 // upward.
 Rectangle {
     id: sidebar
@@ -18,108 +16,61 @@ Rectangle {
     required property var stashesModel
     required property var tagsModel
 
-    /// Folded down to the rail. Held by the page: what folds it is going
-    /// to include opening a diff, and that is the page's to know.
+    /// Folded down to the rail. Held by the page: opening a diff or a rebase plan folds it (`RepoPage.foldForDiff` /
+    /// `foldForPlan`).
     required property bool collapsed
-    /// Every door on this pane is held down, and dimmed the way disabled
-    /// things are; reading it stays free (規約 §無効).
-    ///
-    /// **This is the plan's freeze, and it is meant to be read as one.**
-    /// While a rebase is being composed the only way into a write is the
-    /// run button, and the pane is out for as long as the mode lasts — so
-    /// it says so with the disabled step over the whole of itself
-    /// (デザイン規約 §フル interactive rebase). A write that merely
-    /// replays behind the screen is the other thing entirely, and holds
-    /// the doors one at a time
-    /// (`doorsHeld`).
-    ///
-    /// **The `>_` band at the foot stands free.** It is the one
-    /// place that answers "what is git doing", which is exactly the
-    /// question a reader has while a replay they cannot interrupt is
-    /// running — so the hold is put on the list and the rail, and the
-    /// band goes on standing at full weight. Dimming
-    /// the pane whole would also have to be undone here: a band that is
-    /// pressable while painted like a disabled one is a lie about itself.
+    /// The plan's freeze: while a rebase is being composed the only way into a write is the run button, so the list and
+    /// the rail wear the disabled step whole (規約 §無効; デザイン規約 §フル interactive rebase). The `>_` band at the
+    /// foot stays pressable — it answers "what is git doing" — so dimming the pane whole would paint it as disabled.
     property bool frozen: false
-    /// The doors alone are held: a write that replays a range a commit at
-    /// a time is running behind the screen, and what the reader has to do
-    /// is wait for it (`RepoPage.doorsHeldWhy`). Held are the ways a click
-    /// here moves the history out from under it — a switch (the row's
-    /// double-click), the name box a second click or a menu row opens,
-    /// the `+` that writes a remote down, and every write row of the menus
-    /// the rows raise.
-    ///
-    /// **The pane keeps its ink and its rows.** The lock comes
-    /// off the moment git answers, so the pane has to be the same pane on
-    /// both sides of it; and everything it is read with — choosing a row
-    /// and jumping to it, scrolling, the filter, folding a section, hover
-    /// — goes on working, which is what makes `textMuted` over the rows a
-    /// lie (規約 §無効). A delete takes its row away without stopping the
-    /// pane around it for exactly this reason (デザイン規約 §消す操作は先に
-    /// 画面から消す). The two things that really cannot be pressed say so
-    /// themselves: the `+` greys, and a menu row greys and gives its line
-    /// on hover.
+    /// The doors alone are held while a write replays behind the screen (`RepoPage.doorsHeldWhy`): a switch (the row's
+    /// double-click), the name box, the REMOTES `+`, and the menus' write rows. The pane keeps its ink — everything
+    /// else goes on working, so `textMuted` over the rows would lie (規約 §無効); what cannot be pressed greys itself.
     property bool doorsHeld: false
-    /// The page whose command log the row at the foot of this pane opens
-    /// (`CommandsToggle`). Null while no tab is open — and the whole row
-    /// goes once the log is up, since from then on it is the log's own
-    /// header band (`CommandsPane`).
+    /// The page whose command log the foot row opens (`CommandsToggle`); null while no tab is open. The row goes while
+    /// the log is up, whose header band takes its place (`CommandsPane`).
     property var commandsPage: null
 
     signal refActivated(string oidHex)
-    /// Right-click on a row. `kind` is the section it came from, `name`
-    /// what the row shows and `full` what git knows it by.
+    /// Right-click on a row. `kind` is the section it came from, `name` what the row shows and `full` what git knows
+    /// it by.
     signal refMenuRequested(string kind, string name, string full, string oidHex)
     signal worktreeActivated(string path)
     /// Double-click on a branch row: `kind` is the word the page's dispatcher reads (`branch` / `remote`, the
     /// same word a chip goes out under).
     signal refSwitchRequested(string kind, string name)
-    /// A name was typed for a new branch on a tag's commit.
+    /// A name was typed for a new branch on the row's commit.
     signal branchAtRequested(string oidHex, string name)
-    /// And the same for a tag on the commit whatever row was met stands on.
+    /// The same for a new tag.
     signal tagAtRequested(string oidHex, string name)
-    /// A row was renamed. `kind` is the section ("branch" / "tag" /
-    /// "stash"), `id` what git knows the row by.
+    /// A row was renamed. `kind` is the section ("branch" / "tag" / "stash"), `id` what git knows the row by.
     signal renameSubmitted(string kind, string id, string name)
     signal foldRequested(bool collapse)
-    /// The `+` on the REMOTES band was pressed: a remote is to be written
-    /// down. Raised from the open list and from the section the folded
-    /// rail opens alike — one band, wherever it is standing.
+    /// The REMOTES `+`, past the doors' hold (`askAddRemote`).
     signal addRemoteRequested()
     /// Right-click on the row a remote itself stands on: what to do with that remote.
     signal remoteMenuRequested(string name)
 
     // ---- the row gestures ------------------------------------------
-    // Held beside the lists (`SidebarRowGestures`).
-    // The pane keeps the names its own callers already reach for: the
-    // page opens the box from the row menu, and the smoke hooks read
-    // which row has one.
+    // The pane keeps the names its callers (the page's row menu, the smoke hooks) reach for.
     SidebarRowGestures {
         id: rowGestures
         host: sidebar
-        // Only the doors' hold reaches here: the plan's freeze takes the whole list out of the input path, so there
-        // is no gesture left for these to refuse.
+        // Only the doors' hold: the plan's freeze already takes the list out of the input path.
         held: sidebar.doorsHeld
         repoTab: sidebar.repoTab
         remotesModel: sidebar.remotesModel
     }
-    /// The place this panel last saw the hand in, in its own coordinates (the handler below).
+    /// Where this panel last saw the hand, in its own coordinates.
     property point handAt: Qt.point(-1, -1)
-    // The hand itself, heard once for the whole panel: **the rows read their own hover again on every move of it
-    // and never in between**, so a list that grew or shrank under a pointer that stood still cannot hand the light
-    // to a row nobody aimed at (`NavItemDelegate.syncHover`, デザイン規約 §左メニューの所作).
-    //
-    // **Declared on the panel, which is an ancestor of every row** — a handler laid over them as a sibling takes
-    // their hover away, one on the item they stand in does not (rules-refs/app-ui.md, measured). The pointer walking
-    // out of the panel is counted as well: it is the last move the hand makes here, and the row it left would keep
-    // the light without it.
+    // The hand, heard once on the panel — an ancestor of every row, since a sibling over them takes their hover. The
+    // rows re-read their hover on its moves only, so a list moving under a still pointer cannot light a row nobody
+    // aimed at (`NavItemDelegate.syncHover`; rules-refs/app-ui.md, the 左メニューの行の重ね色 line). Walking out of
+    // the panel counts as a move, or the row it left would keep the light.
     HoverHandler {
         id: handWatch
-        // **Being told is not the hand moving.** The handler is handed its point again when the layout moves under a
-        // still pointer — a row growing where it stands, a list sending itself — so what counts is the place
-        // (measured, `tests/qml/tst_hoverunderstillhand.qml`). Counting the telling instead put the rows back on
-        // "the light follows the content": a row opened, the layout moved, every row read its hover again, the open
-        // one closed, and the whole of it began again (observed as a blink).
+        // A move is a new place, not a new telling: the point is handed again when the layout moves under a still
+        // pointer, and counting that closes an opening row in a blink (`tests/qml/tst_hoverunderstillhand.qml`).
         onPointChanged: {
             if (handWatch.point.position.x === sidebar.handAt.x
                     && handWatch.point.position.y === sidebar.handAt.y)
@@ -134,12 +85,10 @@ Rectangle {
     }
     property alias activeKey: rowGestures.activeKey
     property alias editKey: rowGestures.editKey
-    /// Whether what is typed in that box cannot be taken, and the line the box says so with — automation-only
-    /// exposures (app-ui.md), since the frame is a colour and the line is in a tooltip.
+    /// Automation only: whether the box refuses what is typed, and its line — a frame colour and a tooltip.
     readonly property bool editRefused: rowGestures.editRefused
     readonly property string editRefusedWhy: rowGestures.editRefusedWhy
-    /// A menu raised from one of the folded list's rows is standing over
-    /// it. The page's to set — the menus are its.
+    /// A menu raised from one of the folded list's rows stands over it; the page sets it, the menus being its.
     property alias menuOpen: rowGestures.menuOpen
     function stopEdit() {
         rowGestures.stopEdit()
@@ -167,59 +116,41 @@ Rectangle {
     function activateRow(kind, name, full, oidHex) {
         rowGestures.activateRow(kind, name, full, oidHex)
     }
-    /// The `+` at the end of the REMOTES band, wherever it is standing — the open list's, the folded rail's cell, the
-    /// section the rail opens beside itself. **One door, held in one place**: the bands grey their own `+` so the hand
-    /// reads the refusal before it presses (規約 §無効), and this is what makes the refusal true whatever else reaches
-    /// the signal — a smoke hook, or a fourth band added later.
+    /// The REMOTES `+`, wherever it stands, held in one place: the bands grey their own `+` (規約 §無効), and this
+    /// makes the refusal true whatever else reaches the signal.
     function askAddRemote() {
         if (!sidebar.doorsHeld)
             sidebar.addRemoteRequested()
     }
 
-    /// The three the pane is made of, handed over whole. **Automation-only exposures**, the same one
-    /// `GraphPane.view` is (app-ui.md): what a headless run does to the sidebar — typing into the filter, resting on
-    /// a cell, closing a band, reading a row's tooltip back — is composed from these by `auto/NavProbe.qml`, and a
-    /// pane that mirrored each of those would be twenty forwards that mean nothing to anyone reading it.
+    /// Automation-only exposures, like `GraphPane.view` (rules-refs/app-ui.md); `auto/NavProbe.qml` composes its runs
+    /// from these.
     readonly property alias autoRail: rail
     readonly property alias autoSections: sections
     readonly property alias autoPeek: peek
 
-    /// The pointer is on the current branch's sticky stand-in, which rides the edge its own row went out of
-    /// (`HeadPinRow`). The pane's own, because its bindings read it: hover is the input that cannot be injected, so a
-    /// headless run writes the one property a real hover writes.
+    /// The pointer is on the current branch's sticky stand-in (`HeadPinRow`). The pane's own, because its bindings
+    /// read it: a headless run writes the one property a real hover writes.
     property bool headPinPointed: false
 
-    // The width the list goes back to. Read off the pane as it folds,
-    // so one that has been widened comes back the
-    // width it was left (規約 §レイアウト初期値 is only where it starts).
+    // The width the list goes back to, read off the pane as it folds (規約 §レイアウト初期値 is only where it starts).
     property real openWidth: 260
-    /// The narrowest width a drag can leave.
     readonly property int minOpenWidth: 180
     SplitView.preferredWidth: sidebar.openWidth
     SplitView.minimumWidth: sidebar.minOpenWidth
     color: Theme.bgSurface
 
-    // Folding is a size, and a size is the splitter's business: pinning
-    // both ends to the rail's width is what takes the drag away while it
-    // is folded. Assigned — a drag writes the same
-    // attached property, and a binding here would be gone after the first
-    // one (leaving the fold with nothing to set).
+    // Assigned, not bound: a drag writes the same attached `SplitView` properties, and a binding would be gone after
+    // the first one.
     onCollapsedChanged: sidebar.applyFold()
     function applyFold() {
-        // Whichever way it goes, the one section the rail had open goes
-        // with the rail — including when what put the list back was a
-        // row in that very section (startEdit).
+        // Whichever way it goes, the rail's open section goes with the rail.
         sidebar.closePeek()
-        // And the box goes with the list it stood in: folded, one left
-        // open comes back up under the pointer on a row nobody clicked.
-        // `startEdit` puts the list back before opening its own box, so
-        // that one is never this one.
+        // And the box with the list it stood in, or it comes back up on a row nobody clicked.
+        // `SidebarRowGestures.startEdit` never moves the fold, so this never closes a box just opened.
         sidebar.stopEdit()
         if (sidebar.collapsed) {
-            // Only a width the splitter has actually handed over is worth
-            // going back to. A page built already folded — one restored
-            // from the last session — has not been laid out yet and
-            // reports 0, and folding that in would lose the width the
+            // A page restored already folded has not been laid out and reports 0, which would lose the width the
             // session was left at.
             if (sidebar.width >= sidebar.minOpenWidth)
                 sidebar.openWidth = sidebar.width
@@ -233,20 +164,16 @@ Rectangle {
         }
     }
 
-    // Section expansion (filter reveals collapsed sections). What a
-    // section is actually showing is its own band's answer
-    // (`NavHeader.showsRows`) — one with no rows stays folded whatever
-    // is written here, and the fold survives that: a repository with no
-    // remotes leaves this alone, so the next one that has some opens the
-    // way this reader left it.
+    // Section expansion (the filter reveals folded sections). What a section shows is its band's answer
+    // (`NavHeader.showsRows`): one with no rows leaves this alone, so the next repository with rows there opens the
+    // way the reader left it.
     property bool expBranches: true
     property bool expRemotes: true
     property bool expWorktree: true
     property bool expStashes: true
     property bool expTags: true
 
-    /// What a click on one of the column's header bands flips (`NavSections.sectionToggled`). Held beside the flags,
-    /// so the pane stays the one writer of its own fold state.
+    /// Beside the flags, so the pane stays the one writer of its fold state (`NavSections.sectionToggled`).
     function toggleSection(kind) {
         if (kind === "branch")
             sidebar.expBranches = !sidebar.expBranches
@@ -261,37 +188,28 @@ Rectangle {
     }
 
     // ---- the log's seat ----------------------------------------------
-    // The foot of the pane: one of the sections' own bands while the list
-    // is open, the fold control's own block at the other end of the rail
-    // while it is folded, and gone once the panel is up — from then on
-    // this row is the log's own header band, run the width of the window
-    // (デザイン規約 §git が言ったことを読む場所).
+    // The foot of the pane (デザイン規約 §git が言ったことを読む場所).
     CommandsToggle {
         id: commandsSeat
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        // Folded, it is the fold control's own block at the other end of the rail — same box, same step of mark.
-        // Open, it is one more of the sections' bands.
+        // Folded, the fold control's block at the rail's other end; open, one more of the sections' bands.
         height: sidebar.collapsed ? Theme.headerHeight : Theme.rowHeight
         captioned: !sidebar.collapsed
         markSize: sidebar.collapsed ? Theme.iconLg : Theme.iconMd
         visible: sidebar.commandsPage !== null && !commandsSeat.open
         curPage: sidebar.commandsPage
     }
-    /// Automation: the colour the `>_` painted while the panel is down
-    /// (`PGG_AUTO_ACT=commands-clear`; the page picks the standing seat).
+    /// Automation: the colour the `>_` painted while the panel is down (`PGG_AUTO_ACT=commands-clear`).
     readonly property alias commandsMarkColor: commandsSeat.markColor
-    /// What the seat leaves for the list above it.
     readonly property real footRoom: commandsSeat.visible ? commandsSeat.height : 0
 
-    /// Which row of the left panel has its facts open under it, wherever that row is standing: in the sections below,
-    /// or in the one section the folded rail has open (`SectionPeekPopup`). One row for the pane — only one pointer
-    /// is ever resting, and the row that holds the answer may be in either list (`SidebarRowGestures.openKey`).
+    /// Which row has its facts open, in the sections below or the rail's section (`SectionPeekPopup`): one row for the
+    /// pane, since only one pointer is ever resting (`SidebarRowGestures.openKey`).
     property alias openKey: rowGestures.openKey
-    /// What the open row is saying, for a headless run to read: whether one is open at all, and the answers under it.
-    /// Read off the row itself rather than off whatever asked for it, so a run cannot go green with the wiring cut
-    /// (PGG_AUTO_ACT=nav-open).
+    /// Automation: whether a row is open, and what it says — read off the row itself, so a run cannot go green with
+    /// the wiring cut (PGG_AUTO_ACT=nav-open).
     readonly property bool rowFactsOpen: sidebar.openKey !== ""
     function rowFactsWords() {
         const said = sections.openWords()
@@ -302,22 +220,17 @@ Rectangle {
     function rowFactsGeom() {
         return sections.openGeom()
     }
-    /// Whether the open row is showing whole, its lines included — the rule a row opening at the foot of a section
-    /// that scrolls is judged on (PGG_AUTO_ACT=nav-open-foot).
+    /// Whether the open row shows whole, its lines included (PGG_AUTO_ACT=nav-open-foot).
     function rowFactsShown() {
         return sections.openFactsItem() !== null ? sections.openShown() : peek.openShown()
     }
-    /// The lines that are open, for the runs that read what the hand did next (PGG_AUTO_ACT=nav-open-then) — they
-    /// are where a sweep takes words from, and where a press that never moved goes.
+    /// For the runs that read what the hand did next (PGG_AUTO_ACT=nav-open-then).
     function openFactsItem() {
         const lines = sections.openFactsItem()
         return lines !== null ? lines : peek.openFactsItem()
     }
 
     // ---- the open list ----------------------------------------------
-    // The filter band, the five sections and the ground under them, as
-    // one column (`NavSections`). The column reports upward; the pane
-    // answers with the state it owns.
     NavSections {
         id: sections
         anchors.fill: parent
@@ -371,15 +284,11 @@ Rectangle {
     }
 
     // ---- the folded list's one open section --------------------------
-    // The section itself, and the bookkeeping that says when it is open,
-    // live in SectionPeekPopup. The pane keeps the names the rail, the
-    // fold and the smoke hooks already call it by.
+    // The pane keeps the names the rail, the fold and the smoke hooks call it by.
     property alias peekKind: peek.kind
     property alias peekTop: peek.top
     property alias peekEntered: peek.contentPointed
-    /// The open section itself, for the smoke hooks alone (the shape
-    /// `GraphPane.view` already has): clicks cannot be injected, so
-    /// PGG_AUTO_ACT=nav-reclick puts one in at a row in here.
+    /// For the smoke hooks alone (like `GraphPane.view`): PGG_AUTO_ACT=nav-reclick clicks a row in here.
     readonly property var peekSection: peek
 
     function openPeek(kind, top) {
@@ -406,9 +315,8 @@ Rectangle {
         paneW: sidebar.width
         paneH: sidebar.height
         listW: sidebar.openWidth
-        // A box open on one of its rows holds it as firmly as a menu
-        // does: it has taken the keyboard, and a name half typed into a
-        // list the pointer walked away from is a name lost.
+        // A box open on one of its rows holds it as a menu does: a name half typed into a list the pointer walked away
+        // from is a name lost.
         pinned: sidebar.menuOpen || sidebar.editKey !== ""
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
         onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)

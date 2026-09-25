@@ -5,21 +5,14 @@ import platitude
 import platitude.ui
 
 /// Walking the lists with the arrow keys — the graph, the changed files, the diff — and the folds the walk runs
-/// into. Each of these reads where it arrived.
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are
-/// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+/// into. Each reads where it arrived.
+// `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
 
-    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is
-    /// the file that builds this one.
+    /// `var`: naming its type would be a cycle — the driver is the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var graphModel: driver.graphModel
     readonly property var detailsModel: driver.detailsModel
@@ -31,18 +24,12 @@ Item {
     readonly property var diffPane: driver.diffPane
     readonly property var wipPane: driver.wipPane
 
-    /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
+    /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
         if (act === "graph-step" || act === "graph-step-edge"
             || act === "graph-step-far" || act === "graph-step-named"
             || act === "graph-step-dirty" || act === "graph-step-diff") {
-            // Keystrokes cannot be injected, so the run enters at the same `stepRow` the key handler enters — and takes
-            // the keyboard first through the same call a row click makes, since a graph nobody has pressed hears no
-            // arrows at all (規約 §矢印で履歴を辿る). `-dirty` writes a half-written message and then walks anyway —
-            // nothing holds the selection for a draft. `-edge` walks off the bottom; `-far` sends the view away first
-            // so the stepped-off row is off screen. `-diff` opens a file over the graph: the pane swapped off screen
-            // has to let the keyboard go, or the arrows walk the selection behind the diff.
+            // `-edge` walks off the bottom.
             page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
             graphStepTimer.named = act === "graph-step-named"
             graphStepTimer.dirty = act === "graph-step-dirty"
@@ -53,23 +40,14 @@ Item {
                                  : act === "graph-step-diff" ? 1 : arg === "" ? 1 : Number(arg)
             graphStepTimer.start()
         } else if (act === "graph-step-hold") {
-            // The same door with the key held down: every step behind the first says the key was already down. What it
-            // proves is `reads=` — the settle cannot tell a repeat from a press on its own (`GraphRowWalk.noteStep`),
-            // and this is the run where it would get it wrong.
             page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
             graphHoldTimer.steps = arg === "" ? 6 : Number(arg)
             graphHoldTimer.start()
         } else if (act === "changes-step" || act === "changes-step-edge"
                    || act === "wip-step"
                    || act === "changes-shut" || act === "wip-shut") {
-            // The file list's arrows: one file per press, the light and the diff moving together (規約 §diff のファイル一覧).
-            // `-edge` walks further than the list is long, so the last presses are refused and it stops at the
-            // end. The argument is the file to start on — `<bucket>:<path>` for the working tree's list, where a
-            // file changed on both sides has a row under each.
-            //
-            // The two `-shut` verbs walk nowhere: they stop on the row's second click, where both lists are left
-            // lighting nothing and the arrows move no file (規約 §diff のファイル一覧). **Read as a pair** — that the two
-            // now answer alike is the claim, and one of them alone cannot say it.
+            // The argument is the file to start on — `<bucket>:<path>` for the working tree's list, where a file
+            // changed on both sides has a row under each.
             if (act === "wip-step" || act === "wip-shut") {
                 const cut = arg.indexOf(":")
                 const head = cut > 0 ? arg.substring(0, cut) : ""
@@ -89,26 +67,22 @@ Item {
             fileStepTimer.shut = act === "changes-shut" || act === "wip-shut"
             fileStepTimer.begin()
         } else if (act === "changes-fold" || act === "changes-unfold") {
-            // The commit's CHANGES tree opened and shut by its folder rows. The argument is the directory, written the
-            // way the row is keyed — a chain with nothing beside it is one row and one key (`a/b/c`) — and it has to
-            // name a row the list has actually built, since `itemAtIndex` answers for no other. The default is the
-            // first row of the list, which is also the one the picture can hold: a folder struck shut below the fold
-            // frames exactly like one left open.
+            // The argument is the directory as the row is keyed (a lone chain is one row, `a/b/c`), and must be a row
+            // the list has built (`itemAtIndex`). The default is the first row, the one a picture can hold: a folder
+            // shut below the fold frames like one left open.
             page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
-            // Said outright: the tree is the list's resting look, but a run that inherited the paths view
-            // would wait out the watchdog looking for a folder row that flat paths never put there.
+            // Said outright: a run that inherited the paths view would wait out the watchdog for a folder row.
             detailsModel.setTreeView(true)
             changesFoldTimer.path = arg === "" ? "assets/icons" : arg
             changesFoldTimer.reopen = act === "changes-unfold"
             changesFoldTimer.begin()
         } else if (act === "diff-step" || act === "diff-step-edge") {
-            // Moves the view (規約 §diff を上下に送る). Rides the 320x240 seed: no demo file's diff is longer
-            // than a default window, and even there the room below the fold is two rows (measured) — which is why
-            // the plain walk is one row.
+            // Moves the view (規約 §diff を上下に送る). Needs the 320x240 seed: no demo diff outgrows a default window,
+            // and in the seed two rows lie below the fold — so the plain walk is one row.
             page.showWip()
             page.toggleDiff("untracked", arg, "")
-            // The hand walks into the pane, through the same door the wheel comes in by: the diff does not take the
-            // keyboard by appearing (規約 §diff のファイル一覧), so without this the arrows are still the file list's.
+            // The hand walks in by the wheel's door: the diff does not take the keyboard by appearing
+            // (規約 §diff のファイル一覧), so without this the arrows are still the file list's.
             diffPane.handArrived()
             diffStepTimer.steps = act === "diff-step-edge" ? 20 : 1
             diffStepTimer.start()
@@ -117,25 +91,24 @@ Item {
         }
         return true
     }
-    // The arrow keys, which no headless run can press: the walk enters where `Keys.onDownPressed` enters
-    // (`GraphPane.stepRow`) after taking the keyboard the way a row click takes it. The selected commit's message has
-    // to have arrived before it can be typed over, which is what the wait is for — the same one the reword verbs keep.
+    // The arrow keys, which no headless run can press: the walk enters where `Keys.onDownPressed` does
+    // (`GraphPane.stepRow`) after taking the keyboard as a row click does — a graph nobody pressed hears no arrows
+    // (規約 §矢印で履歴を辿る). The wait is for the selected commit's message, which `-dirty` types over.
     SampleTimer {
         id: graphStepTimer
         /// How many rows, and which way. The refusing runs fix their own.
         property int steps: 1
-        /// The one ground a step is refused on that a run can stand up: a name box open on the row. (The other — a
-        /// question standing on the bar — is refused by the same expression, and its pill holds the keyboard anyway.)
+        /// A name box open on the row: the refusing ground a run can stand up (a question on the bar is refused by
+        /// the same expression).
         property bool named: false
-        /// A half-written message in the details pane, which refuses **nothing** — the arrows walk off it and the
-        /// draft goes, the same as a click (デザイン規約 §コミットメッセージの 2 つの枠). Here so a hold cannot come
-        /// back unnoticed.
+        /// A half-written message, which refuses nothing: the arrows walk off it and the draft goes, as with a click
+        /// (デザイン規約 §コミットメッセージの 2 つの枠). Here so a hold on a draft cannot come back unnoticed.
         property bool dirty: false
         /// The view sent away from the selection before the step, so the row stepped onto has no reading position to
         /// preserve.
         property bool away: false
-        /// The third refusing ground, and the one that was reported: a diff opened over the graph from CHANGES. The
-        /// path is the argument — the file has to be one the selected commit touched.
+        /// A diff opened over the graph from CHANGES (a file the selected commit touched): the graph, swapped off
+        /// screen, has to let the keyboard go or the arrows walk the selection behind the diff.
         property string diffPath: ""
         onTriggered: {
             if (!driver.cardSettled)
@@ -146,23 +119,21 @@ Item {
             if (graphStepTimer.named)
                 graphPane.startNaming(
                     graphModel.oidAt(graphPane.view.currentIndex))
-            // The press that says the keyboard works here comes first, because the diff below is what has to take it
-            // away again: a run that opened the diff and only then reached for the keyboard would be proving nothing
-            // (it would be pressing on a pane that is no longer on the screen).
+            // The keyboard before the diff: the diff is what must take it away, and taking it after would press a pane
+            // already off screen.
             graphPane.view.takeKeyboard()
             if (graphStepTimer.diffPath !== "")
                 page.toggleDiff("commit", graphStepTimer.diffPath, "")
             graphStepWalk.start()
         }
     }
-    // A beat between the setup and the walk: the layout swaps the graph away in its own pass, so a step taken in the
-    // same tick as the diff opened would still find the pane on screen.
+    // A beat between setup and walk: the layout swaps the graph away in its own pass, so a step in the diff's opening
+    // tick would still find the pane on screen.
     SampleTimer {
         id: graphStepWalk
         onTriggered: {
-            // The diff is what this walk is taken over, so the run waits for its rows the way `chosen_diff` does: a
-            // step taken the moment the pane arrived leaves the list still to build, and both the picture and the
-            // census then hold a diff with nothing under it.
+            // The diff's rows first, as `chosen_diff` waits: a step the moment the pane arrived leaves the picture and
+            // the census holding an empty diff.
             if (graphStepTimer.diffPath !== ""
                     && (!page.diffShown || !diffPane.diffSettled() || diffPane.view.count === 0))
                 return
@@ -173,8 +144,7 @@ Item {
             graphStepReport.refused = 0
             const way = graphStepTimer.steps < 0 ? -1 : 1
             for (let n = 0; n < Math.abs(graphStepTimer.steps); n++) {
-                // Where the view stood before each step, so what is read is how the last one landed: a walk that runs
-                // off the bottom moves the view once per row from there on.
+                // Before each step, so `landing=` reads the last one: a walk off the bottom moves the view every row.
                 graphStepReport.wasY = graphPane.view.contentY
                 if (!graphPane.stepRow(way))
                     graphStepReport.refused++
@@ -182,15 +152,10 @@ Item {
             graphStepReport.start()
         }
     }
-    // Longer than the settle behind the walk (`keyStepSettleMs`), so what is read is the reading a hand coming off the
-    // key would get: a run that moved the highlight and never landed the selection has to be told apart from one that
-    // did, and both frame alike from the waist down.
-    //
-    // Two edges, because a walk asks twice: a held arrow is read where it set off and again where it stopped
-    // (`GraphRowWalk.noteStep`), so the first row's details are still in flight when the last row's request goes out.
-    // `selected=` is the selection reaching the lit row, `card=` the pane on the right reaching the selection —
-    // waiting the first out alone photographs the highlight on the row the walk stopped on beside a card still
-    // holding one it passed through (observed on Windows), the wait `file_step` keeps on the diff side.
+    // Read once the settle behind the walk (`keyStepSettleMs`) has landed: a walk that moved the highlight but never
+    // the selection must be told apart from one that did, and both frame alike. Two edges, because a walk reads its
+    // start and end rows (`GraphRowWalk.noteStep`): `selected=` is the selection reaching the lit row, `card=` the card
+    // reaching the selection — waiting on the first alone photographs a card still holding a row passed through.
     SampleTimer {
         id: graphStepReport
         property int from: -1
@@ -218,11 +183,9 @@ Item {
             driver.complete()
         }
     }
-    // The arrow held down, which a run of steps taken inside one tick cannot be: the settle behind the opening press
-    // expires long before any OS sends its first repeat, so the run has to wait it out before the rest of the steps
-    // arrive with the key still down (`GraphRowWalk.noteStep`). `reads=` is the whole of the report — a walk asks for
-    // a commit twice, at the row it set off from and at the row it stopped on — and no picture holds it: a run that
-    // read every row it passed through frames exactly like one that read two.
+    // The arrow held down: the opening press, then the repeats once its settle has expired, as an OS's first repeat
+    // always arrives after it (`GraphRowWalk.noteStep`). `reads=` is the claim — a held walk reads two rows, its start
+    // and its end — and no picture holds it.
     SampleTimer {
         id: graphHoldTimer
         /// How many rows the run walks, the opening press included.
@@ -240,9 +203,8 @@ Item {
             graphHoldRepeat.start()
         }
     }
-    // The repeats. Waited on the settle being gone (app-ui.md §UI 自動化の因果性) —
-    // that is the edge a real keyboard's first repeat always arrives behind. They go in one tick once it has: what is
-    // being proven is that a repeat is not read.
+    // The repeats: waited on the settle being gone (app-ui.md §UI 自動化), then all in one tick — the claim is that a
+    // repeat is not read.
     SampleTimer {
         id: graphHoldRepeat
         onTriggered: {
@@ -256,8 +218,7 @@ Item {
             graphHoldReport.start()
         }
     }
-    // The hand off the key: the settle behind the last repeat has landed the selection and the card has caught up to
-    // it — the same pair `graph_step` waits out, and here also what says the run is over.
+    // The hand off the key: the selection landed and the card caught up — the pair `graph_step` waits on.
     SampleTimer {
         id: graphHoldReport
         property int from: -1
@@ -279,40 +240,31 @@ Item {
             driver.complete()
         }
     }
-    /// How many commits the walk has asked for since the hold verb set off. Taken on the signal:
-    /// the asks this verb is about are the ones that come and go inside a beat (app-ui.md §UI 自動化の因果性).
+    /// Commits the walk has asked for since the hold set off, counted on the signal: the asks come and go inside a beat
+    /// (app-ui.md §UI 自動化).
     property int holdReads: 0
     Connections {
         target: driver.graphPane
         function onRowActivated(oidHex) { acts.holdReads++ }
     }
-    // The file list's arrows: the light and the diff move together, one file per press (規約 §diff のファイル一覧). Two things
-    // have to be real for this to say anything, so both go through the door a hand goes through:
-    //
-    // - the click. The row's own signal is raised by name — the handler is where the keyboard
-    // is handed to the list, and calling past it would leave `focused=` proving nothing (the same reason `nav-peek`
-    // strikes the cell). - the step, which enters at `stepFile` where `Keys.onDownPressed`
-    // enters. A keystroke cannot be injected (verify-ui).
-    //
-    // The keyboard is left where it was, and that is the point: the diff opened without taking it, so an arrow
-    // still belongs to the list.
+    // The file list's arrows: the light and the diff move together, one file per press (規約 §diff のファイル一覧).
+    // The click goes in at the row itself — its handler hands the list the keyboard, so calling past it leaves
+    // `focused=` proving nothing — and the step at `stepFile`, where `Keys.onDownPressed` enters. The diff opens
+    // without taking the keyboard, so an arrow still belongs to the list.
     SampleTimer {
         id: fileStepTimer
-        /// Which list, `changes` or `wip`, and how far to walk. `overrun` asks for more files than the list holds,
-        /// which is how the end it stops at is reached — the count is only known once the commit's details have
-        /// arrived, so it cannot be a number set up here.
+        /// Which list (`changes` / `wip`) and how far. `overrun` (`-edge`) walks past the end: the count is only known
+        /// once the details arrive, so it cannot be set up here.
         property string pane: "changes"
         property int steps: 1
         property bool overrun: false
         /// The file clicked, and the bucket its row sits in (empty for the commit's list, whose files sit in none).
         property string bucket: ""
         property string path: ""
-        /// Whether the click has gone out, so the tick that follows is waiting for the diff.
         property bool clicked: false
         property bool stopped: false
-        /// Whether the run clicks the same row a second time and stops there, which shuts the diff it opened
-        /// (`RepoPage.toggleDiff`). What that leaves is the subject of the `-shut` pair: a list lighting nothing,
-        /// the same in both (デザイン規約 §diff のファイル一覧).
+        /// `-shut`: a second click on the same row shuts the diff (`RepoPage.toggleDiff`) and the run stops there,
+        /// both lists lighting nothing — the two verbs are read as a pair (デザイン規約 §diff のファイル一覧).
         property bool shut: false
         property bool closed: false
         function begin() {
@@ -322,7 +274,7 @@ Item {
             fileStepTimer.steps = 1
             fileStepTimer.start()
         }
-        /// The click that goes out twice in this run, by the row's own signal both times.
+        /// The click, through the row itself (twice for `-shut`).
         function strike() {
             const row = fileStepTimer.walk.rowFor(fileStepTimer.bucket, fileStepTimer.path)
             if (!row)
@@ -332,8 +284,8 @@ Item {
                                 worktreeModel.origOf(fileStepTimer.path),
                                 Qt.NoModifier)
             else
-                // The row's own press, with the row's own reading of its model in it: handed the path from beside
-                // it, this goes green on a row that reads nothing at all (verify-ui §壊れない動詞).
+                // The row's own press, with its own reading of the model: handed the path from beside it, this goes
+                // green on a row that reads nothing (verify-ui §壊れない動詞の実装と反復).
                 row.press()
             return true
         }
@@ -357,30 +309,26 @@ Item {
                 fileStepTimer.clicked = true
                 return
             }
-            // The click has to have landed before a step means anything: a walk with nothing being read is refused, and
-            // reading that as "the end" would go green on a click that never arrived.
+            // The click has to have landed: a walk with nothing being read is refused, and reading that as "the end"
+            // would go green on a click that never arrived.
             if (page.diffShown && page.diffPath === fileStepTimer.path) {
                 if (!fileStepTimer.shut) {
                     fileStepTimer.walkNow()
                     return
                 }
-                // The second click, on the row already being read. **Once the read has landed** — a diff shut
-                // while it was still coming would be a run about a race.
+                // The second click once the read has landed — shutting a diff still coming would test a race.
                 if (!fileStepTimer.closed && diffPane.diffSettled())
                     fileStepTimer.closed = fileStepTimer.strike()
                 return
             }
-            // What the shut diff left behind, which is the whole of what the `-shut` pair asks.
             if (fileStepTimer.shut && fileStepTimer.closed && !page.diffShown) {
                 fileStepTimer.stop()
                 fileShutReport.start()
             }
         }
     }
-    // What each list is left lighting with nothing being read — the two agree here
-    // (デザイン規約 §diff のファイル一覧). **`lit=` is the whole claim** and it is read off the rectangles
-    // (`litPath`), so a run whose light was only ever in the model says `lit=false`.
-    // `open=false` is what makes the answer that list's own.
+    // `lit=` is the claim, read off the rectangles (`litPath`) so a light only ever in the model says false;
+    // `open=false` makes the answer that list's own.
     SampleTimer {
         id: fileShutReport
         onTriggered: {
@@ -388,8 +336,8 @@ Item {
                 return
             fileShutReport.stop()
             const walk = fileStepTimer.walk
-            // The three the judgement reads stand together and in this order: a `must_say` is a stretch of the
-            // line (`verify::verbs`), and each list's answer is all three at once.
+            // `open` / `lit` / `focused` stay together and in this order: a `must_say` is one stretch of the line
+            // (`verify::verbs`).
             Harness.report(
                 "file_shut path=" + fileStepTimer.path
                 + " pane=" + fileStepTimer.pane
@@ -399,16 +347,13 @@ Item {
             driver.complete()
         }
     }
-    // Longer than the settle behind the walk (`keyStepSettleMs`), because what is read is the reading a hand coming off
-    // the key gets: the light runs at the key's rate and the diff catches up after it, so a run that moved the light
-    // and never moved the diff has to be told apart from one that did (規約 §diff のファイル一覧).
+    // The light runs at the key's rate and the diff catches up after the settle (`keyStepSettleMs`), so a walk that
+    // moved the light but never the diff must be told apart from one that did (規約 §diff のファイル一覧).
     SampleTimer {
         id: fileStepReport
         onTriggered: {
             const walk = fileStepTimer.walk
-            // The diff the walk landed on has been asked for, has arrived, and the row that says which file it is has
-            // been built. All three are the output; the step was the cause. The middle one is what keeps the picture
-            // worth looking at — a pane still waiting on its read photographs empty.
+            // The landed diff asked for, arrived (a pane still reading photographs empty), and its lit row built.
             if (!page.diffShown || page.diffPath === fileStepTimer.path || !diffPane.diffSettled()
                     || walk.litPath() === "")
                 return
@@ -425,29 +370,24 @@ Item {
             driver.complete()
         }
     }
-    // A folder row of the commit's CHANGES tree struck shut, and struck open again (`-unfold`). The strike is the row's
-    // own signal, where a click lands — the pane's handler is what carries it to the model, and calling past it would
-    // leave the report proving nothing.
-    //
-    // The two lists that draw a fold arrow keep the answer in different fields (`NameCell.folded`), so `turn=` is
-    // read off the icon: a run that read the flag back would go green with the arrow unwired,
-    // which is exactly the shape this verb was cut for.
+    // A folder row of CHANGES struck shut, and open again for `-unfold`, by the row's own signal — the pane's handler
+    // carries it to the model, so calling past it proves nothing. The two lists that draw a fold arrow keep the answer
+    // in different fields (`NameCell.folded`), so `turn=` is read off the icon: reading the flag back would go green
+    // with the arrow unwired.
     SampleTimer {
         id: changesFoldTimer
-        /// The directory row struck, and whether the run leaves it shut or strikes it a second time back open. **Read
-        /// as a pair** — one arrow on its own says nothing about which way it turned.
+        /// The directory row struck, and whether a second strike reopens it. Read as a pair: one arrow alone says
+        /// nothing about which way it turned.
         property string path: ""
         property bool reopen: false
-        /// How many strikes have gone out. After `n` of them the row is shut exactly when `n` is odd, which is the
-        /// wait between one strike and the next: the toggle rebuilds the list, so the row answering a later tick is a
-        /// later row.
+        /// Strikes gone out. The row is shut exactly when this is odd, which is the wait between strikes: the toggle
+        /// rebuilds the list, so a later tick's row is a new row.
         property int struck: 0
         function begin() {
             changesFoldTimer.struck = 0
             changesFoldTimer.start()
         }
-        /// The folder row for this directory, once the list has built it. Walked: `FileRowWalk.rowFor` answers by
-        /// `walkKey` — the name a folder deliberately has none of.
+        /// Walked, because `FileRowWalk.rowFor` answers by `walkKey`, which a folder deliberately lacks.
         function folderRow() {
             const view = detailsPane.filesWalk.view
             for (let i = 0; i < view.count; i++) {
@@ -465,10 +405,9 @@ Item {
             if (row.isFolded !== (changesFoldTimer.struck % 2 === 1))
                 return
             if (changesFoldTimer.struck < strikes) {
-                // The commit's own files first, and **read only here**: a read landing after a strike puts the rows
-                // back with every fold choice cleared (`DetailsModel::set_files`), so the row swings open under a wait
-                // that then never ends (observed — 1 run in a handful reached the watchdog in silence).
-                // Read every tick, and the verb's own answer would break its own precondition.
+                // The commit's own files first, read only on this branch: a read landing after a strike clears every
+                // fold choice (`DetailsModel::take_files`), and the row swings open under a wait that never ends. Read
+                // every tick, the verb's own answer would break its own precondition.
                 if (detailsModel.loading || detailsModel.shaHex !== page.selectedOid)
                     return
                 changesFoldTimer.struck++
@@ -486,20 +425,12 @@ Item {
             driver.complete()
         }
     }
-    // The diff's own arrows, which no headless run can press either: the walk enters where `Keys.onDownPressed` enters
-    // (`DiffPane.stepRows`). The hand is walked into the pane first, through the same door the wheel comes in by
-    // (`DiffPane.handArrived`) — the diff does not take the keyboard by appearing, so without that the arrows are still
-    // the file list's and `focused=` would be false for the right reason (規約 §diff を上下に送る).
-    //
-    // The wait is for the view. `diffSettled()` says the rows arrived; it says nothing about the
-    // list having laid them out, and a list whose `contentHeight` is still zero clamps every step to where it already
-    // was — the walk then reads exactly like a diff with nothing to scroll (measured, 1 run in 3 came through with
-    // `contentHeight` 0 at the step and 216 by the time it was reported). So what is waited for is the output the step
-    // consumes: a view with room to be sent, which is `atEnd` answering false over a laid-out height (app-ui.md §UI
-    // 自動化の因果性「まだ答えが無い」と値を分ける).
+    // The diff's arrows enter at `DiffPane.stepRows`, where `Keys.onDownPressed` does. The wait is for the view, not
+    // only the rows (`diffSettled()`): a list whose `contentHeight` is still 0 clamps every step, reading like a diff
+    // with nothing to scroll — so it waits for `atEnd` false over a laid-out height
+    // (rules-refs/app-ui.md「『まだ答えが無い』と値 0 / false を分ける」).
     SampleTimer {
         id: diffStepTimer
-        /// How many rows, and which way.
         property int steps: 1
         onTriggered: {
             if (!page.diffShown || !diffPane.diffSettled() || diffPane.view.height <= 0 || diffPane.atEnd)
@@ -509,9 +440,8 @@ Item {
             diffStepReport.stopped = false
             const way = diffStepTimer.steps < 0 ? -1 : 1
             for (let n = 0; n < Math.abs(diffStepTimer.steps); n++) {
-                // A step that moved nothing is the end answering. Read beside `atEnd=`: a walk that was refused every
-                // step because the pane was never on screen leaves the view at row 0, which is also where an
-                // unscrollable diff sits.
+                // A step that moved nothing is the end answering. Read beside `atEnd=`: a walk refused throughout (the
+                // pane never on screen) also leaves the view at row 0, like an unscrollable diff.
                 if (!diffPane.stepRows(way))
                     diffStepReport.stopped = true
             }
@@ -537,8 +467,7 @@ Item {
             driver.complete()
         }
     }
-    /// Where the diff's view stands, in rows — what the walk is counted in, and steadier than a pixel count to read off
-    /// a report line.
+    /// Where the diff's view stands, in rows — the walk's unit, steadier than pixels on a report line.
     function diffRow() {
         return Math.round(diffPane.view.contentY / Theme.rowHeight)
     }

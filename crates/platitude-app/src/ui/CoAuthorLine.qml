@@ -3,19 +3,11 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// Whoever a commit message credits alongside its author, in one of two forms — the same records, written for the room
-// they are written in (規約 §co-author の表示):
+// Whoever a commit message credits alongside its author, in one of two forms (規約 §co-author の表示): "◯ Name +N"
+// in the details pane's date row, or "Name, Name, Name" (`plain`) in the graph row's hover card.
 //
-//   "◯ Name +N"        the details pane's date row: a face, the first
-//                      name, the rest counted, and a rule saying the
-//                      card with everybody's address opens here.
-//   "Name, Name, Name"  the graph row's hover card: everyone written
-//                      out, comma separated, elided at the width, and
-//                      offering nothing — the pane is where a commit is
-//                      read in full.
-//
-// It draws and reports; the card that names everyone belongs to whoever owns this, because a popup cannot live inside a
-// recycled delegate.
+// It draws and reports; the card that names everyone belongs to the owner, since a popup cannot live inside a recycled
+// delegate.
 Item {
     id: line
 
@@ -23,28 +15,21 @@ Item {
     property var records: []
     /// Full weight on the rule — the owner sets this while its card is up.
     property bool lit: false
-    /// How wide the first name may run before it elides; 0 leaves it its own width. A trailer's name is whatever the
-    /// message says it is — git enforces no length — and this line reports its own width to whoever holds it, so an
-    /// unbounded name widened both holders: the hover card went from a share of the graph pane to 1,022px over it
-    /// (measured), and the details pane's date row runs past its column the same way. The owner passes its share, the
-    /// way the card passes one for the message.
+    /// How wide the first name may run before it is cut; 0 leaves it its own width. A trailer's name has no length
+    /// git enforces, and this line reports its width to its holder, so an unbounded name widens the holder.
     property real nameWidth: 0
-    /// Write them all out instead: the names alone. For a holder wide enough to name
-    /// everybody, where the addresses are a pane away.
+    /// Write out the names alone, for a holder wide enough to name everybody.
     property bool plain: false
     /// The pointer entered or left the underlined stretch.
     signal pointerChanged(bool inside)
-    /// What the cut mark is drawn on, since the names are a field that clips
-    /// (`LineText`): the pane's ground here, a card's ground where a card holds this line.
+    /// What the cut mark is drawn on (`LineText`): the pane's ground, or a card's where a card holds this line.
     property color ground: Theme.bgBase
-    /// The names did not fit what the holder gave them. Nothing is drawn differently for it — the mark already says
-    /// so — but a headless run cannot see a mark, and the width rule is the whole of the plain form.
+    /// The names did not fit — for a headless run, which cannot see the mark.
     readonly property bool clipped: names.clipped
     /// Automation: drag cannot be injected, so a run selects the field the way `Ctrl+A` does and reads it back.
     function selectNames() { names.selectAll() }
     readonly property alias namesSelected: names.selected
-    /// The one value this line draws, for a sweep over the row that holds it — empty where nobody is credited, since
-    /// a line with nothing in it is not a place to land (`SweepRoom`).
+    /// The one value this line draws, for a sweep over its row (`SweepRoom`); empty where nobody is credited.
     readonly property var valueFields: line.records.length > 0 ? [names] : []
 
     function nameAt(i) {
@@ -77,9 +62,7 @@ Item {
             height: Theme.iconMd
             Layout.alignment: Qt.AlignVCenter
         }
-        // A field: what this line credits is a person, and a person's name is something the reader
-        // takes away (規約 §右のペインの字は掴める). A field has no `elide`, so the cut is a clip with a mark on the
-        // holder's ground — the names in full are one hover away in the card either holder opens.
+        // A field, so the name can be taken away (規約 §右のペインの字は掴める).
         LineText {
             id: names
             text: line.plain ? line.allNames() : line.nameAt(0)
@@ -87,9 +70,7 @@ Item {
             pixelSize: Theme.fontSm
             ground: line.ground
             Layout.alignment: Qt.AlignVCenter
-            // Written out, the names take the room the holder gives them and stop there; as a chip, the name gives way
-            // at the share its holder passed. Either way the name is what yields when the room runs out -- the face and
-            // the count are one glyph each and have nothing to give.
+            // The name is what yields when room runs out: the face and the count have nothing to give.
             Layout.fillWidth: true
             Layout.maximumWidth: line.plain || line.nameWidth <= 0 ? Number.POSITIVE_INFINITY : line.nameWidth
         }
@@ -101,8 +82,7 @@ Item {
             Layout.alignment: Qt.AlignVCenter
         }
     }
-    // Drawn at rest one step down from the name it underlines (規約 §暗く落とした段 names borderStrong as textSecondary's step),
-    // and up to the name's own value under the pointer.
+    // At rest one step down from the name it underlines (規約 §暗く落とした段), the name's own colour when lit.
     BandRule {
         visible: !line.plain
         color: line.lit ? Theme.textSecondary : Theme.borderStrong

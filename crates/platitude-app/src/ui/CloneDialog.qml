@@ -4,33 +4,23 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// Where a repository is fetched from a host: a URL, a folder to put it in, and the name that folder takes.
-//
-// A window of its own, like the two forms beside it (`RemoteDialog` / identity): there is no repository yet, so there
-// is no list for a question bar to stand over and no tab for an answer to land in
-// (デザイン規約 §可否・警告の出し場所 — popups are for what has nowhere else to go).
-//
-// **It stays up for the whole call.** git is on the network here, and this box is the only thing on screen that the
-// operation is about: the ring turns in the accept button's own seat, the word stays and steps down
-// (§進行中・長押しの定数), and whatever git answers is read out underneath. That is also why git is the one that
-// checks — a destination that is taken and a URL nothing answers are git's to refuse, and unlike the picker's folder
-// the refusal has somewhere to be shown when it arrives (§リポジトリを取り寄せる).
+// Where a repository is cloned from: a URL, a folder to put it in, and the folder's name. A dialog, since there is no
+// repository yet for a question bar to stand over; it stays up for the whole call, and git's refusal is read out
+// underneath (デザイン規約 §リポジトリを取り寄せる).
 AppDialog {
     id: cloneDialog
 
     /// git is out fetching this clone (`TabsModel.cloning`).
     property bool cloning: false
-    /// The folder the clone is made **in** — a `file:` URL, as the platform's dialog answers with one. Empty until
-    /// something has named one, which is what leaves the accept button refusing.
+    /// The folder the clone is made in, as a `file:` URL (the platform dialog's answer). Empty refuses the accept.
     property string parentUrl: ""
-    /// What git said about the last try. Cleared by the next one; a box that kept the old answer while a new call was
-    /// out would be quoting git about something else.
+    /// What git said about the last try; cleared by the next.
     property string refusal: ""
     /// Set once somebody edits the name themselves, after which it stops following the URL.
     property bool nameTyped: false
-    /// This box is going down because the clone came. Read by `onClosed`, which
-    /// otherwise takes every close for a cancel — and a cancel here would be a slot call back into the object whose
-    /// `drain` emitted the landing, which is the re-entrant borrow the bridge panics on (.claude/rules/app-ui.md).
+    /// Closing because the clone came. `onClosed` otherwise takes every close for a cancel — here a slot call back
+    /// into the object whose `drain` emitted the landing: the re-entrant borrow the bridge panics on
+    /// (.claude/rules/app-ui.md).
     property bool landing: false
 
     readonly property string wantedUrl: urlField.text.trim()
@@ -38,17 +28,12 @@ AppDialog {
     /// The folder as a person reads it.
     readonly property string parentPath: cloneDialog.parentUrl !== ""
                                          ? GitFacts.pickedPath(cloneDialog.parentUrl) : ""
-    /// Whether there is a clone to ask for: somewhere to fetch from, somewhere to put it, and a name for it. The
-    /// accept button reads this, and so does the headless run — which needs the form's own answer to wait on
-    /// (規約 §UI 自動化の因果性).
+    /// Whether there is a clone to ask for. The accept button reads this, and so does the headless run.
     readonly property bool canSubmit: cloneDialog.wantedUrl !== "" && cloneDialog.wantedName !== ""
                                       && cloneDialog.parentUrl !== "" && !cloneDialog.cloning
 
-    /// Fetch it. The three the call takes, in the order the form asks them.
     signal submitted(string url, string parentUrl, string name)
-    /// The box is going away — whether by the button, by Escape, or by anything else that closes a dialog. A clone
-    /// still out is stopped by it: **one road out**, so every way of leaving takes the clone
-    /// with it.
+    /// The box is going away by any road (button, Escape, …); a clone still out is stopped by it.
     signal cancelled()
     /// Bring the platform's folder dialog up, starting at whatever is chosen now.
     signal chooseFolder(string near)
@@ -61,8 +46,7 @@ AppDialog {
         nameField.text = ""
         cloneDialog.open()
     }
-    /// The folder dialog answered. Its own function: the name follows the URL and
-    /// nothing else, and a caller reaching into the properties is how the two get out of step.
+    /// The folder dialog answered. Only the folder moves: the name follows the URL, not this.
     function setFolder(url) {
         cloneDialog.parentUrl = url
     }
@@ -71,7 +55,7 @@ AppDialog {
         cloneDialog.refusal = message
     }
 
-    /// The clone came down: the box goes without the press that takes it away meaning "stop".
+    /// The clone came down: close without it counting as a cancel.
     function landed() {
         cloneDialog.landing = true
         cloneDialog.close()
@@ -85,8 +69,8 @@ AppDialog {
         cloneDialog.landing = false
     }
 
-    /// Automation: typing, which no injected key reaches offscreen. An empty half leaves what `start` put there, and
-    /// the name follows the URL exactly as it does under a hand.
+    /// Automation: typing, which no injected key reaches offscreen. An empty half is left as `start` put it; the name
+    /// follows the URL as under a hand.
     function setFields(url, name) {
         if (url !== "")
             urlField.text = url
@@ -96,9 +80,7 @@ AppDialog {
         }
     }
 
-    /// What the box offers to call the folder, for as long as nobody has said otherwise. The rule is
-    /// `platitude_core::remote::folder_name_for` — asked of `GitFacts`, like every other rule
-    /// QML asks by value (.claude/rules/app-ui.md).
+    /// Offers a folder name until somebody types one (`platitude_core::remote::folder_name_for`).
     function settleName() {
         if (!cloneDialog.nameTyped)
             nameField.text = GitFacts.cloneFolderName(urlField.text)
@@ -115,7 +97,7 @@ AppDialog {
         spacing: Theme.spaceLg
 
         Label {
-            // No article: this names the kind of thing being made, and there is nothing yet to point at (§長さ).
+            // No article: it names a kind (§長さ).
             text: qsTr("Clone repository")
             font.pixelSize: Theme.fontXl
             font.weight: Font.DemiBold
@@ -133,8 +115,7 @@ AppDialog {
             }
         }
 
-        // A folder that is chosen, so it wears no sunken ground: what is shown is the whole of it and
-        // there is nothing to type into (規約 §選ぶ欄と打つ欄).
+        // Chosen, not typed, so no sunken ground (規約 §選ぶ欄と打つ欄).
         LabeledField {
             caption: qsTr("Where to put it")
             RowLayout {
@@ -147,8 +128,7 @@ AppDialog {
                     radius: Theme.radiusSm
                     border.color: Theme.borderDefault
                     border.width: Theme.borderWidth
-                    // Cut in the middle: a path is told apart by both of its ends, and the leaf is the half that says
-                    // which folder this is (`CutName`).
+                    // Cut in the middle: a path is told apart by both of its ends.
                     CutName {
                         anchors.fill: parent
                         anchors.leftMargin: Theme.spaceXs
@@ -164,7 +144,7 @@ AppDialog {
                     kind: "folder"
                     besideWord: true
                     frameColor: Theme.borderDefault
-                    // The `…` says a box opens, the way it does on every other row that asks something (§長押し の語彙).
+                    // The `…` says a box opens (§長押し の語彙).
                     text: qsTr("Choose…")
                     onActivated: cloneDialog.chooseFolder(cloneDialog.parentUrl)
                 }
@@ -177,16 +157,14 @@ AppDialog {
                 id: nameField
                 Layout.fillWidth: true
                 enabled: !cloneDialog.cloning
-                // Only a hand stops the name from following the URL: `textEdited` is the one that is not emitted for a
-                // write from here, so `settleName` cannot mark its own suggestion as somebody's choice.
+                // `textEdited`, not `textChanged`: `settleName`'s own write must not count as somebody's choice.
                 onTextEdited: cloneDialog.nameTyped = true
                 onAccepted: cloneDialog.submit()
             }
         }
 
-        // git's own words and the only red here, the way every other screen quotes them (規約 §リポジトリを開く:
-        // 赤は git の文言だけ). Wrapped: a refusal names the destination or the URL, and both are worth
-        // reading whole.
+        // git's own words, the only red here (規約 §リポジトリを開く「赤は git の文言だけ」). Wrapped: a refusal names
+        // the destination or the URL, worth reading whole.
         Label {
             Layout.fillWidth: true
             visible: cloneDialog.refusal !== ""
@@ -198,8 +176,7 @@ AppDialog {
 
         DialogActions {
             cancelText: Words.cancel
-            // The mark a fetch wears: this is the first one, and the seat it stands in is where the ring turns while
-            // git is out (§進行中・長押しの定数 — 待てるボタンには席が要る).
+            // The mark's seat is where the ring turns while git is out (§進行中・長押しの定数「待てるボタンには席が要る」).
             acceptKind: "fetch"
             acceptText: qsTr("Clone")
             busy: cloneDialog.cloning

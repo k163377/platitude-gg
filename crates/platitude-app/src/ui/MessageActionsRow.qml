@@ -3,14 +3,10 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The details editor's action row: the one button that writes the message back, and the lines that say what writing it
-// costs. It stands from the moment a caret enters either box — a button
-// that appears under the hand as the first character lands moves everything below it at the worst moment, and the way
-// out of the editor should be on screen for as long as the editor is open.
-//
-// **Two ways out, both on purpose.** Throwing away a draft is Escape, or reading another commit — and
-// neither of them asks (デザイン規約 §コミットメッセージの 2 つの枠). A button whose
-// whole job is to undo typing would be the one place in the app where a single click throws text away.
+// The details editor's action row: the button that writes the message back, and the warning of what that costs. It
+// stands from the moment a caret enters either box — appearing as the first character lands would move everything
+// below under the hand. No discard button on purpose: a draft is thrown away by Escape or by reading another commit
+// (デザイン規約 §コミットメッセージの 2 つの枠), and a one-click discard would be the only one in the app.
 ColumnLayout {
     id: actions
 
@@ -27,10 +23,8 @@ ColumnLayout {
     /// The boxes are feeding a rebase plan's `reword` row: the press stores the words in the
     /// plan and runs nothing (`RebasePlanModel.setMessage`).
     property bool intoPlan: false
-    /// Who will be recorded as the committer once this is written back. git keeps the
-    /// author and replaces the committer with whoever runs the rewrite (measured: Alice's commit amended by Bob comes
-    /// back `A=Alice C=Bob`), which is the one thing about this button a reader cannot see anywhere else on the pane —
-    /// the row above names the author.
+    /// The committer once this is written back: git keeps the author and records whoever runs the rewrite, which
+    /// nothing else on the pane shows.
     property int committerFace: -1
     property string committerFaceUrl: ""
     /// Whether that commit will be signed, and with what (`SignatureMark` / `AvatarButton`).
@@ -42,7 +36,7 @@ ColumnLayout {
     visible: actions.dirty || actions.editing
     spacing: Theme.spaceXs
 
-    // Said, like the amend editor's tag: the save still goes ahead, and this line is the warning it gets.
+    // A warning only; the save still goes ahead.
     Label {
         Layout.fillWidth: true
         visible: actions.published
@@ -51,9 +45,7 @@ ColumnLayout {
         color: Theme.warning
         font.pixelSize: Theme.fontSm
     }
-    // The same button the commit editor ends with, and for the same reason: it names the command it runs and whom the
-    // result will be attributed to. One command only — the boxes open on HEAD's own commit and nothing else
-    // (`offers::message_edit`), which is exactly what `commit --amend` reaches (デザイン規約 §git 用語のコード表記).
+    // Outside a plan, always `commit --amend`: the boxes open only on HEAD's commit (`offers::message_edit`).
     ActionButton {
         id: saveButton
         Layout.fillWidth: true
@@ -63,18 +55,16 @@ ColumnLayout {
         tone: Theme.textPrimary
         frameColor: saveButton.enabled ? Theme.accent : Theme.borderDefault
         activeFocusOnTab: true
-        // Feeding a rebase plan's `reword` row, the chip is that row's own verb: nothing runs on this press —
-        // the words go into the plan, and the plan's one button is what runs (§git 用語のコード表記 — todo 動詞は
-        // コマンドと同じに扱う).
+        // Feeding a plan's `reword` row, the chip is that row's verb and nothing runs on this press
+        // (デザイン規約 §git 用語のコード表記「interactive rebase の todo 動詞は、コマンドと同じに扱う」).
         phraseHead: actions.intoPlan ? "reword" : "commit --amend"
         text: actions.intoPlan ? qsTr("in the plan") : qsTr("the message")
         phraseFace: actions.committerFace
         phraseFaceUrl: actions.committerFaceUrl
         phraseSignature: actions.signature
         phraseSignatureTip: actions.signatureTip
-        // Live whenever there is a message to save. On `dirty` it would grey out the moment the text matches
-        // again and answer "did I change anything" with its own state, which is a question nobody asked; pressing
-        // it with nothing changed simply does nothing (`DetailsPane.submitMessage`).
+        // Not on `dirty`: it would grey out whenever the text matches again. Pressed with nothing changed, it does
+        // nothing (`DetailsPane.submitMessage`).
         enabled: !actions.busy && actions.canSave
         onActivated: actions.saveRequested()
     }

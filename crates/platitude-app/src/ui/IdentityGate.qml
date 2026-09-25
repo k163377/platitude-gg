@@ -2,46 +2,37 @@ import QtQuick
 import platitude
 import platitude.ui
 
-// The identity gate and the state that opens it: on startup, when git has no name and email to put on a commit. An
-// Item that fills the window — the dialog is a popup, and a popup measures the window through the item it was
-// declared in (rules-refs/structure.md 描かないホスト).
-//
-// Nothing else opens it. An identity that is already set is edited in the settings screen's git chapter, which the
-// app menu and the toolbar badge both lead to (`Main`); this one stands only where the reader was stopped.
-//
-// The window keeps one forward, `dismissIdentity` — the harness calls it there (`WindowAutoActDriver`).
+// The identity gate and the state that opens it — only on startup, when git has no identity to commit with; one
+// already set is edited in the settings screen. An Item filling the window, since the dialog measures the window
+// through it (rules-refs/structure.md「描かないホスト」). The window forwards `dismissIdentity` for the harness
+// (`WindowDialogActs`).
 Item {
     id: identityGate
 
-    /// The dialog itself, for the window's harness (`WindowAutoActDriver.identityDialog`).
+    /// For the window's harness (`WindowAutoActDriver.identityDialog`).
     readonly property alias dialog: identityDialog
 
-    /// The settings screen is standing. The identity is edited there too, and its save can half-land the same way —
-    /// so without this the gate would raise itself over the screen the reader is making that very write in, asking
-    /// for what is already on their screen. It stands once the screen is out of the way, which is where the reader
-    /// left it half-landed.
+    /// The settings screen is up. A half-landed save there would otherwise raise the gate over the screen making that
+    /// write; the gate stands once the screen closes.
     property bool settingsOpen: false
 
     property bool identityDismissed: false
-    // A half-landed save leaves an identity that *is* set, so `missing` alone takes the screen away at the one moment
-    // it has something to say (measured: the state flipped to `ready` on the name that did land, and this window
-    // closed the dialog out from under the answer). What holds it open is `identityUnsaved` — the flag the marks read.
+    // `identityUnsaved` too: a half-landed save leaves an identity that is set, and `missing` alone would close the
+    // gate at the one moment it has something to say.
     readonly property bool identityWanted: AppBackend.gitState === "ok"
                                            && (AppBackend.identityState === "missing"
                                                || AppBackend.identityUnsaved)
                                            && !identityDismissed && !settingsOpen
 
-    /// The settings screen, asked for at its git chapter. Where the gate itself never opens it, the screenshot hook
-    /// at the foot of this file does, and the road there belongs to the window
-    /// (`Main` → `WindowDialogSeat.openSettingsAt`).
+    /// The settings screen at its git chapter; the window opens it (`WindowDialogSeat.openSettingsAt`).
     signal settingsAtGitRequested()
 
     function dismissIdentity() {
         identityDismissed = true
     }
 
-    // Opened and closed from the state above: Escape closes a popup imperatively, which would overwrite a `visible`
-    // binding and leave the state unable to open it again. Every close answers the state, so the two stay in step.
+    // Opened and closed by hand, not a `visible` binding: Escape's close would break the binding and the state could
+    // not reopen it. Every close answers the state (`dismissed`).
     IdentityDialog {
         id: identityDialog
         onDismissed: identityGate.dismissIdentity()
@@ -56,9 +47,7 @@ Item {
         }
     }
 
-    /// Asks for the settings screen at its git chapter — where an identity that is already set is edited, and
-    /// otherwise a menu action. An automation-only exposure, the same one `GraphPane.view` is (app-ui.md): the gate
-    /// itself never opens it, and the road there belongs to the window.
+    /// Automation-only: the gate itself never asks for the settings screen.
     function askSettingsAtGit() {
         identityGate.settingsAtGitRequested()
     }

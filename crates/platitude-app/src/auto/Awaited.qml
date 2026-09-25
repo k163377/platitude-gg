@@ -2,23 +2,18 @@ pragma Singleton
 import QtQuick
 import platitude
 
-/// What the verb running now is still waiting on — said once each time that changes, and read back by the ceiling
-/// when the run never got there (`AutoShotDriver`). A sampler reads its terms on every beat and keeps none of them,
-/// so a run that ends at its watchdog says which one stayed false only through here
-/// (app-ui.md「段を持つドライバは段が変わるたびに名乗る」).
-///
-/// **Said on change, not on every beat.** A run that goes straight through says a handful of lines, and a term that
-/// comes and goes says a line each way — which is what a stall in the middle of a travel looks like.
+/// What the running verb is still waiting on, said only when it changes and read back by the ceiling
+/// (`AutoShotDriver`) — a sampler keeps none of its terms, so this is where a stalled run names the one that stayed
+/// false (app-ui.md「段を持つドライバは段が変わるたびに名乗る」).
 QtObject {
     id: awaited
 
-    /// The last line said, and when, on the run's own clock (`PerfProbe.clockMs`). Empty for a run whose verb said
-    /// nothing through here.
+    /// The last line said and when (`PerfProbe.clockMs`); empty if the verb said nothing through here.
     property string said: ""
     property real since: 0
 
-    /// Whether every term has come. `terms` maps a name to whether that part is there; the names still missing are
-    /// said under `verb`, the prefix the verb's own report carries.
+    /// Whether every term has come. `terms` maps a name to whether it is there; the missing names are said under
+    /// `verb`, the verb's report prefix.
     function all(verb, terms) {
         const missing = []
         for (const name in terms) {

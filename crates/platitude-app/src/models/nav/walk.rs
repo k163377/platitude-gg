@@ -1,27 +1,21 @@
-//! The walk the arrow keys take over the file rows: where a step from
-//! one lands, where a walk crossing in from the bucket above or below
-//! comes in, and the one spelling both answers are given in
-//! (デザイン規約 §diff のファイル一覧).
+//! The walk the arrow keys take over the file rows: a step, and where a
+//! walk crossing in from another bucket lands (デザイン規約 §diff のファイル一覧).
 
 use super::*;
 
 impl NavSectionModel {
     /// Whether this section holds `path` in `bucket`. Both halves are
-    /// needed: a file changed on both sides at once has a row under each,
-    /// and asking by path alone always answers with the first.
+    /// needed: an `MM` file has a row under each side.
     pub(super) fn holds(&self, bucket: &str, path: &str) -> bool {
         self.rows().any(|row| self.is(row, bucket, path))
     }
 
-    /// Where the reader lands when `path` leaves `bucket`: the file under
-    /// the same heading after it, or the one before it where it was the
-    /// last. Empty when that heading holds nothing else, and empty when
-    /// the path is not in it at all — the caller asks while it still is
-    /// (`RepoPage.noteDiffNeighbour`).
-    ///
-    /// The answer carries its bucket, because the heading a file sits
-    /// under is not the bucket it belongs to: untracked files are shown
-    /// among the unstaged ones (`NavItem.group`).
+    /// Where the reader lands when `path` leaves `bucket`: the next file
+    /// under the same heading, else the previous. Empty when the heading
+    /// holds nothing else or the path is not in it — the caller asks while
+    /// it still is (`RepoPage.noteDiffNeighbour`). The answer carries its
+    /// bucket: untracked files sit under the unstaged heading
+    /// (`NavItem.group`).
     pub(super) fn beside(&self, bucket: &str, path: &str) -> String {
         let rows: Vec<Row> = self.rows().collect();
         let Some(at) = rows.iter().position(|row| self.is(*row, bucket, path)) else {
@@ -37,18 +31,10 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
-    /// The file row on screen at `at`, keyed the way the pane holds its
-    /// choice — `<bucket>:<path>`. Empty for a folder row, and empty past
-    /// the end.
-    ///
-    /// **What lets a choice reach a row nobody has scrolled to.** A view
-    /// builds a delegate for the rows it is showing and no others, so a
-    /// walk over the delegates answers for the viewport: a Shift-reach
-    /// across a long bucket, or the rows a discard is about to take, would
-    /// come back cut down to what happens to be on screen — silently, since
-    /// the rows it skipped look no different from rows nobody chose. Every
-    /// row is answerable here (`data` computes by value), so the pane asks
-    /// the model.
+    /// The file row on screen at `at` as `<bucket>:<path>`; empty for a
+    /// folder row and past the end. The pane asks here, not its delegates,
+    /// which exist only for the viewport
+    /// (rules-refs/app-ui.md「WIP の選択は模型が解く」).
     pub(super) fn file_key(&self, at: usize) -> String {
         self.row_at(at)
             .filter(|row| !self.field(*row, Role::Folder).flag())
@@ -56,11 +42,8 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
-    /// One row as `<bucket>:<path>` — the one spelling of the key a pane
-    /// holds a working-tree row by, so the pane's own composing of it and
-    /// the answers here cannot drift apart. The bucket never holds a
-    /// colon, so the first one is the divide; the path may hold as many
-    /// as it likes.
+    /// One row as `<bucket>:<path>`, the one spelling of the pane's key.
+    /// The first colon divides: buckets hold none, paths may.
     fn keyed(&self, row: Row) -> String {
         format!(
             "{}:{}",
@@ -69,19 +52,13 @@ impl NavSectionModel {
         )
     }
 
-    /// The file row `way` steps from `path` in `bucket`
-    /// (`encode::Landing`). Nothing where the walk has nowhere left to go
-    /// — which is how the arrows stop at the ends — and nothing where the
-    /// path is not shown at all (デザイン規約 §diff のファイル一覧). Only the
-    /// sign of `way` is read: one press is one file.
+    /// The file row `way` steps to from `path` in `bucket`
+    /// (`encode::Landing`); only the sign of `way` is read. Nothing at
+    /// this list's ends or where the path is not shown.
     ///
-    /// **The rows on screen.** A folder the reader closed is a folder the
-    /// walk does not enter, and a file a filter hid is hidden from the
-    /// arrows too. Folder rows themselves are stepped over, since a folder
-    /// has no diff to move to. **One bucket run, because a list is one
-    /// run**: the answer runs out at this list's own end, and crossing into
-    /// the next bucket's list is the pane's step (`FileRowWalk`), which
-    /// asks that list for the row at its near end ([`Self::edge`]).
+    /// Walks the rows on screen: closed folders and filtered files are not
+    /// entered, folder rows are stepped over. Crossing into the next
+    /// bucket's list is the pane's step (`FileRowWalk` → [`Self::edge`]).
     pub(super) fn step(&self, bucket: &str, path: &str, way: i32) -> Landed {
         let shown = self.shown_rows();
         let Ok(from) = usize::try_from(self.row_of_file(bucket, path)) else {
@@ -99,11 +76,8 @@ impl NavSectionModel {
         self.landing(landed)
     }
 
-    /// Which row on screen holds `path` in `bucket`; -1 when none does.
-    /// Both halves are read for the reason [`Self::holds`] gives, and the
-    /// rows on screen for the reason [`Self::step`] gives — this is where
-    /// a walk sets off from, and a row folded away is nowhere it can
-    /// stand.
+    /// Which row on screen holds `path` in `bucket`; -1 when none does
+    /// (both halves: [`Self::holds`]; on screen: [`Self::step`]).
     pub(super) fn row_of_file(&self, bucket: &str, path: &str) -> i32 {
         (0..self.shown_rows())
             .find(|at| {
@@ -113,14 +87,9 @@ impl NavSectionModel {
             .map_or(-1, |at| at as i32)
     }
 
-    /// The file row at one end of this list — the first when `way` reads
-    /// forwards, the last when it reads back — in [`Self::step`]'s own
-    /// shape. Nothing where the list holds no file row at all, which is
-    /// how a walk goes past an empty bucket.
-    ///
-    /// This is the other half of crossing a bucket: `step` runs out at the
-    /// end of its own run, and the list the walk carries on into is asked
-    /// for the row nearest the edge it comes in by.
+    /// Where a walk crossing into this list lands: its first file row for
+    /// a forward `way`, its last for a backward one. Nothing where the
+    /// list holds no file row, so the walk passes an empty bucket.
     pub(super) fn edge(&self, way: i32) -> Landed {
         let shown = self.shown_rows();
         let file = |at: &usize| {
@@ -135,9 +104,8 @@ impl NavSectionModel {
         self.landing(landed)
     }
 
-    /// Where a walk landed — the one shape of it, so the two ways to land
-    /// (a step, and coming in at a list's edge) cannot drift apart.
-    /// Nothing for no row.
+    /// Where a walk landed, shared by `step` and `edge`. Nothing for no
+    /// row.
     fn landing(&self, at: Option<usize>) -> Landed {
         Landed::new(
             at.and_then(|at| self.row_at(at).map(|row| (at, row)))

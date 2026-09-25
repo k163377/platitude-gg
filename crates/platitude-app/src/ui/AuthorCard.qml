@@ -5,15 +5,9 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// Who this commit belongs to, read off the author's name in the details pane: the address that tells two people of the
-// same name apart, and — when the commit was not put here by the person who wrote it, or not at the moment they wrote
-// it — the second person and the two moments.
+// The card under the author's name in the details pane (デザイン規約 §author の hover).
 //
-// An ordinary commit is one block and nothing else: the same shape a co-author gets in `CoAuthorCard`, because it is
-// the same fact (a person, a face, an address). Nothing marks the ordinary case (デザイン規約 §状態).
-//
-// A popup, for the reason the ref list and the co-author card are: anything declared
-// inside the pane's column would be clipped by it and painted under the list below.
+// A popup: anything declared inside the pane's column would be clipped by it and painted under the list below.
 AppCard {
     id: authorCard
 
@@ -31,33 +25,27 @@ AppCard {
     property bool committerDiffers: false
     /// ...or they put it here at another moment than it was written.
     property bool timeDiffers: false
-    /// How wide this card may stand. Neither a name nor an address has a length worth trusting — an address may be
-    /// 254 characters — and a popup clamps its *position* to the window, never its width, so without a cap a long one
-    /// simply runs off the edge; what is over the cap wraps. **The owner measures the room against the window**
-    /// (`DetailsAuthorCards.takeRoom`).
+    /// How wide this card may stand; what is over it wraps. A popup clamps its position to the window, never its
+    /// width, so without a cap a long address runs off the edge. The owner measures it (`DetailsAuthorCards.takeRoom`).
     property real maxWidth: 0
     /// What is left of it for a row's own words, once the frame's padding and the blocks' inset are out.
     readonly property real rowCap: authorCard.maxWidth > 0
         ? authorCard.maxWidth - 2 * authorCard.padding - 2 * Theme.spaceSm : Number.MAX_VALUE
 
-    /// When the two acts are worth naming, both are named — the moment is what the second person's line is for, and a
-    /// commit written and committed in the same second still has two lines to say so.
+    /// Either difference names both acts, even in the same second (デザイン規約 §author の hover).
     readonly property bool actsShown: authorCard.committerDiffers || authorCard.timeDiffers
     readonly property string wroteWord: qsTr("authored")
     readonly property string putWord: qsTr("committed")
     readonly property var wroteAct: ({ word: authorCard.wroteWord, stamp: Words.stamp(authorCard.authoredAt) })
     readonly property var putAct: ({ word: authorCard.putWord, stamp: Words.stamp(authorCard.committedAt) })
-    /// The lines under the author's name. **The same commit, put here later by the same hand, carries both** — one
-    /// person, two moments, and nobody else to name.
+    /// The lines under the author's name — both of them when nobody else put the commit here.
     readonly property var authorActs: !authorCard.actsShown
         ? []
         : authorCard.committerDiffers ? [authorCard.wroteAct]
                                       : [authorCard.wroteAct, authorCard.putAct]
     /// ...and when somebody else put it here, the moment they did stands under *their* name.
     readonly property var committerActs: authorCard.committerDiffers ? [authorCard.putAct] : []
-    // The stamps line up under one another, so the two moments can be compared at a glance
-    // (`AppMenu.codeColW` shares a column the same way). Measured off labels — `TextMetrics` comes out
-    // a few pixels short of what a Label actually takes.
+    // Measured off hidden labels: `TextMetrics` comes out a few pixels short of what a Label takes.
     readonly property real wordColW: Math.max(wroteMetric.implicitWidth, putMetric.implicitWidth)
     CardText {
         id: wroteMetric
@@ -73,27 +61,22 @@ AppCard {
     }
 
     padding: Theme.spaceXs
-    // The card sits against the underlined name: the pointer has to be able to walk down into it without
-    // leaving both.
+    // Flush against the underlined name, so the pointer walks down into it without leaving both.
     margins: 0
-    // The pointer walks into this one and reads it. The blocks here accept no hover today; giving `AppCard` both halves
-    // is what keeps that an implementation detail.
+    // Both halves though no block takes hover yet (rules-refs/app-ui.md「中身がまだ hover を受けないカードにも置く」).
     tracksPointer: true
     contentPointed: contentHover.hovered
-    // Every gap in this card is a place a selection can start — the inset the blocks keep, the step under a name, the
-    // room beside a stamp (規約 §hover のツールチップ).
+    // Every gap in this card is a place a selection can start (規約 §hover のツールチップ).
     textContent: cardBody
 
-    /// One person: face, name, address, and when their part happened. Laid out from the start —
-    /// see `CoAuthorCard` for what moves when a hover resizes its own target.
+    /// One person: face, name, address, and when their part happened. Laid out from the start (why: `CoAuthorCard`).
     component PersonBlock: Item {
         id: block
         required property string name
         required property string address
         required property int face
         required property string faceUrl
-        /// What this person did, and when — `{ word, stamp }` to a line. An empty list drops them, which is the
-        /// ordinary commit's whole story.
+        /// What this person did, and when — `{ word, stamp }` to a line; empty for none.
         required property var acts
         required property real wordWidth
         required property real cap
@@ -102,13 +85,11 @@ AppCard {
         readonly property bool hasAct: block.acts.length > 0
         readonly property real textLeft: Theme.spaceSm + Theme.iconMd + Theme.spaceXs
         readonly property real textCap: block.cap - Theme.iconMd - Theme.spaceXs
-        /// How tall the face-and-name line came out. A row's worth ordinarily; more when a name longer than the cap
-        /// wrapped into a second line — **and it wraps**, because this card is where a name that
-        /// the pane's own row had to cut goes to be read in full and taken away (規約 §hover のツールチップ).
+        /// Over a row where a long name wrapped — it wraps: this card is where a name the pane cut is read in full
+        /// (規約 §hover のツールチップ).
         readonly property real headHeight: Math.max(Theme.rowHeight, rowContent.implicitHeight)
 
-        // Only what is drawn is measured: a column with no line in it still stands at the text inset, and letting
-        // that into the maximum makes an ordinary one-person card as wide as the act line it is not showing.
+        // Only what is drawn is measured: a hidden line still has a width, and would widen an ordinary card.
         implicitWidth: Math.max(rowContent.implicitWidth,
                                 block.hasAddress ? address.x - Theme.spaceSm + address.width : 0,
                                 block.hasAct ? actLines.x - Theme.spaceSm + actLines.width : 0)
@@ -140,7 +121,6 @@ AppCard {
                 Layout.alignment: Qt.AlignVCenter
             }
         }
-        // Under the name, indented past the face so the two read as one person.
         CardText {
             id: address
             visible: block.hasAddress
@@ -151,8 +131,7 @@ AppCard {
             color: Theme.textSecondary
             pixelSize: Theme.fontSm
         }
-        // A step under the address: the address belongs to the name over it, and the moments are their own fact.
-        // Nothing stands between the moments — two stamps are read against one another.
+        // One step under the address, none between the stamps (デザイン規約 §author の hover).
         Column {
             id: actLines
             visible: block.hasAct

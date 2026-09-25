@@ -4,100 +4,84 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The strip. Placed by hand so the leftover is measurable — it is both what the tabs may grow into
-// and where the window is taken hold of. Full geometry control is what puts the selected tab's underline
-// exactly on the band's bottom edge with no styling leftovers beneath it.
+// The strip, placed by hand: the leftover is both what the tabs may grow into and where the window is taken hold of,
+// and the selected tab's underline lands exactly on the band's bottom edge.
 Item {
     id: tabStrip
 
     required property var tabsModel
-    /// The ground the band paints behind this strip, which the band itself is the one to say (`TopBar`). A tab that is
-    /// not in front paints nothing of its own, so this is what a name has behind it — and what it goes quiet into
-    /// under its mark (`TabItemDelegate.titleFade`).
+    /// The band's ground behind the strip (`TopBar`): what a tab not in front shows behind its name, and what the name
+    /// fades into under its mark (`TabItemDelegate.titleFade`).
     required property color bandColor
     /// Whether the band this strip sits in is the window's title bar. When it is, the strip keeps a run of band clear
     /// to take hold of (`tabs.grabRun`).
     property bool captionMerged: false
-    /// The RepoPage of the active tab (null while no tab is open). The app menu's one live entry is the only thing here
-    /// that asks anything of it.
+    /// The active tab's RepoPage (null while no tab is open), for the app menu.
     property var curPage: null
-    /// The tab in front, as this strip's own list built it — pushed by that tab (`TabItemDelegate.frontChanged`),
-    /// because the item for a row the model has only just gained arrives with the next layout.
-    /// Null while no tab is open. The stand-in at the edge is drawn off it, and the travel to it is measured off it.
+    /// The tab in front, as this list built it — pushed by the tab (`TabItemDelegate.frontChanged`), since a new row's
+    /// item arrives only with the next layout. Null while no tab is open.
     property Item frontTab: null
-    /// A road outside the strip has asked to be shown the repository it has just put in front (`TabsModel`), and
-    /// whether the strip is to travel there or simply start there (`askFrontTab`). Held where it
-    /// arrives: the item for a row the model has only just gained comes with the next layout, so what is in front at
-    /// the moment of the ask is still the tab being left.
+    /// An ask from outside the strip to show the repository just put in front (`TabsModel`), and whether to travel
+    /// there or start there (`askFrontTab`). Held, because at the moment of the ask the tab in front is still the one
+    /// being left.
     property bool frontAsked: false
     property bool frontAskTravels: false
-    /// The tab the open ask is for — the model's own front at the moment it asked (`TabsModel::current_tab_id`).
-    /// **The ask stays open while that tab is in front**, and is answered again whenever what it was measured against
-    /// moves: the view settles its extent and the tabs their widths after an item has reported itself in front, and
-    /// an answer given once is left standing wherever that settling puts it — the tab off the run, the stand-in up,
-    /// nothing left to ask again (measured). It closes with the reader's hand on the strip (`takeRun`), a tab
-    /// closed, the front moving to another tab, and — once it has answered — the reader's next thing, a press
-    /// anywhere (`pressLanded`).
+    /// The tab the open ask is for (`TabsModel::current_tab_id` at the ask). The ask stays open while that tab is in
+    /// front and is answered again whenever what it was measured against moves: the view settles extent and widths
+    /// after the item reports itself, and a one-shot answer is left off the run. It closes on the reader's hand on the
+    /// strip (`takeRun`), a tab closed, the front moving, or — once answered — the next press anywhere (`pressLanded`).
     property int frontAskId: -1
-    /// The open ask has had its first answer: its tab is in, and the reader's next press ends it (`pressLanded`).
+    /// The open ask has answered once, so the next press ends it (`pressLanded`).
     property bool frontAskAnswered: false
-    /// Whether the strip has stood on a tab in front since it last stood empty — which is what a travel is read
-    /// against (デザイン規約 §タブの所作「前に出ているタブを 1 枚も持っていなかった帯は、その席で始まる」). **Not
-    /// `frontTab` at the ask**: the tab being left gives up the front before the model asks, and the one arriving
-    /// reports itself in front a layout later, so at the ask the strip can hold nobody on either side of a move.
+    /// Whether the strip has held a tab in front since it was last empty
+    /// (デザイン規約 §タブの所作「前に出ているタブを 1 枚も持っていなかった帯は、その席で始まる」). Not `frontTab` at the ask:
+    /// across a move it can be null on both sides — the old tab lets go before the ask, the new one reports a layout
+    /// later.
     property bool stood: false
     /// How many tabs the strip had when it last counted, so a drop reads as a tab closed (`tabs.onCountChanged`).
     property int tabsCounted: 0
 
-    /// Automation: the run the tabs were handed, and what they made of it. A picture cannot say which tabs gave way and
-    /// which were left alone — every strip that fits looks like every other one — so the widths themselves are the
-    /// answer (`PGG_AUTO_ACT=tab-widths`).
+    /// Automation (`tab-widths`): the run the tabs were handed and what they made of it — a picture cannot say which
+    /// tabs gave way.
     readonly property int tabCount: tabs.count
     readonly property real runAvail: tabs.runAvail
     readonly property real contentWidth: tabs.contentWidth
-    /// What the strip itself came out to. A broken term in its width expression turns it NaN, and NaN draws as "no tabs
-    /// at all" with nothing on stderr — this is the number that catches it.
+    /// A broken term in the width expression makes it NaN, which draws as no tabs with nothing on stderr — this number
+    /// catches it.
     readonly property real tabsWidth: tabs.width
     /// Band the tabs may not grow into, and the run itself for `Main` to measure in scene coordinates.
     readonly property real grabRun: tabs.grabRun
     readonly property Item grabRunItem: grabArea
-    /// Whether the ☰'s card is standing. The grab run gives up being the window's caption while it is, so that a press
-    /// on the band's empty run reaches the scene and takes the card down (`WindowChrome.captionYielded`).
+    /// Whether the ☰'s card is open: the grab run stops being caption meanwhile, so a press on it reaches the scene and
+    /// closes the card (`WindowChrome.captionYielded`).
     readonly property bool appMenuOpen: menuButton.menuOpen
 
-    /// Automation: the stand-in for the tab in front (`PGG_AUTO_ACT=tab-pin` / `tab-pin-go`) — whether it is standing,
-    /// which edge it took, whether the row it stands for is whole on screen, and whether the strip is still travelling
-    /// towards it. A picture of a scrolled strip reads the same whichever of the four is true. Read off the stand-in
-    /// itself, so a binding that came apart answers with what is drawn.
+    /// Automation (`tab-pin` / `tab-pin-go`): the stand-in's state, which a picture of a scrolled strip cannot tell
+    /// apart. Read off the stand-in itself, so a broken binding answers with what is drawn.
     readonly property bool tabPinShown: tabPin.visible
     readonly property bool tabPinRidesLeft: tabPin.rideLeft
     readonly property bool frontTabWhole: tabPin.frontWhole
     readonly property bool runTravelling: tabRun.travelling
-    /// And whether the name it is standing there with says any of itself (`TabPin.nameKept`) — the one reading of the
-    /// stand-in a photograph of it cannot be told apart from a short name in a narrow tab.
+    /// Whether its name shows any letters (`TabPin.nameKept`) — a photograph cannot tell that from a short name in a
+    /// narrow tab.
     readonly property bool tabPinNameKept: tabPin.nameKept
 
-    /// The longest a name is drawn at — a share of the run the tabs were handed, so it moves with the band
-    /// (`TabShare.ceiling`). Pushed, for `tabTitleMinW`'s reason.
+    /// The longest a name is drawn at (`TabShare.ceiling`). Pushed, like the three below.
     property int tabTitleMaxW: 0
-    /// The shortest it is cut down to, the length it stops being eased at, and the run it goes quiet over where the
-    /// mark stands on it — all three measured off the font, and so all three pushed
+    /// The floor, the easing width and the fade — measured off the font, so pushed
     /// (`TabMetrics.titleMinW` / `titleEaseFullW` / `fadeW`).
     property int tabTitleMinW: 0
     property real tabTitleEaseW: 0
     property real tabTitleFadeW: 0
-    /// What every tab's name is capped at right now, and the room every tab keeps for its mark — the strip's two
-    /// answers to how much run it was given, in the order it gives them up (`settleTitleCap`).
+    /// Every name's cap and every tab's mark room right now (`settleTitleCap`).
     property real tabTitleCap: tabStrip.tabTitleMaxW
     property real tabMarkRoom: tabMetrics.markRoomFull
-    /// Which of the two the strip is living on, said as the answer rather than left to be worked out from a tab
-    /// count: **how many tabs it takes to reach either state is a question about the run**, and the run is the
-    /// window's furniture and the platform's font (rules-refs/app-ui.md — the same count is ample on one OS and short
-    /// on the other). A headless run that named a count would be claiming a state it had not checked it reached.
+    /// Whether names are cut and marks folded, said as the answer: the tab count that reaches either depends on the
+    /// platform's font, so a run naming a count claims a state it never checked
+    /// (rules-refs/app-ui.md「枚数ではなく状態を名乗らせ」).
     readonly property bool tabNamesCut: tabStrip.tabTitleCap < tabStrip.tabTitleMaxW
     readonly property bool tabMarksFolded: tabStrip.tabMarkRoom <= tabMetrics.markRoomMin
-    /// What the strip would take with nothing cut (`settleTitleCap`), and the least it is ever laid out at. Two tabs
-    /// (規約 §ウィンドウの縁).
+    /// What the strip would take with nothing cut (`settleTitleCap`), and its floor: two tabs (規約 §ウィンドウの縁).
     property real tabsWantWidth: 0
     readonly property int tabStripFloorW:
         menuButton.width + plusButton.width + tabs.grabRun
@@ -106,51 +90,43 @@ Item {
     signal openRepositoryRequested()
     signal cloneRepositoryRequested()
     signal settingsRequested()
-    /// The ☰'s Exit row. It means what the band's ✕ means, and it takes the same road (`TopBar` folds it into
-    /// `closeRequested`), so the close gate that waits a write out (`Main.qml`) has one door to stand at.
+    /// The ☰'s Exit row: the same road as the band's ✕ (`TopBar` folds it into `closeRequested`), so the close gate
+    /// (`Main.qml`) has one door.
     signal exitRequested()
-    /// The grab-run moved or changed size in the strip's own layout. `Main` folds in the shifts this strip cannot see
-    /// from here (the maximised inset, the window resizing) and reports the strip on.
+    /// The grab run moved or resized within the strip; `Main` adds the shifts it cannot see (maximised inset, window
+    /// resize).
     signal captionStripMoved()
 
-    /// Automation: the ☰, pressed (`PGG_AUTO_ACT=app-menu`). Put in at the button, so
-    /// what answers is the band's real wiring (`TopBar.stashNow`) — the
-    /// toggle this verb is about lives on the button's own handler.
+    /// Automation (`app-menu`): the ☰ pressed at the button, whose own handler holds the toggle.
     function clickAppMenu() {
         menuButton.clicked()
     }
 
-    /// Automation: the ☰'s `Clone repository…` row (`PGG_AUTO_ACT=clone-*`). The row's own `triggered` — the signal a
-    /// press on it emits — so the handler that runs is the row's, and everything it reaches from there is the wiring a
-    /// hand goes through.
+    /// Automation (`clone-*`): the ☰'s `Clone repository…` row, through the row's own `triggered`.
     function clickCloneRow() {
         menuButton.clickCloneRow()
     }
 
-    /// The left button moves to the tab — and leaves a hand on it that may go on to carry it (`takeTab`) — the middle
-    /// one closes it (デザイン規約 §タブの所作). The real press and the smoke hook both come through here.
+    /// Left moves to the tab (a carry may follow, `takeTab`); middle closes it (デザイン規約 §タブの所作). Real presses
+    /// and automation both come through here.
     function pressTab(index, id, button) {
         if (button === Qt.MiddleButton) {
             tabStrip.tabsModel.closeTab(id)
             return
         }
-        // A press outranks whatever else is moving the strip, or about to (`takeRun`): the carry that may follow sends
-        // the strip itself (`TabCarry.driftRun`).
         tabStrip.takeRun()
         tabStrip.tabsModel.setCurrentIndex(index)
     }
 
-    /// Automation: the tab at `index`, carried to `to` and set down (`PGG_AUTO_ACT=tab-drag`). The carrying is a
-    /// pointer's, which no headless run has; everything after it is the same road a hand takes. Carried to exactly
-    /// where it comes to rest: its trailing edge on the far edge of the tab it is going to, or its leading edge on
-    /// the near one — anywhere in that place passes every tab in between and none beyond it.
+    /// Automation (`tab-drag`): the tab at `from` carried to `to` and set down; past the pointer, a hand's road.
+    /// Carried to exactly its resting place — trailing edge on the far edge of the target, or leading edge on the near
+    /// one.
     function dragTabTo(from, to) {
         const tab = tabs.itemAtIndex(from)
         const dest = tabs.itemAtIndex(to)
         if (!tab || !dest || from === to)
             return false
-        // A hand presses before it carries, and the press is what moves to the tab. A hook that let itself skip that
-        // would be proving a gesture nobody can make.
+        // Pressed first, as a hand does: the press is what moves to the tab.
         tabStrip.pressTab(from, tab.tab_id, Qt.LeftButton)
         tabCarry.takeTab(from, tab.width / 2)
         tabCarry.carryTo(from, to > from ? dest.x + dest.width - tab.width : dest.x)
@@ -158,8 +134,7 @@ Item {
         return true
     }
 
-    /// Automation: the tab at `index`, taken up and carried half its own width without being set down
-    /// (`PGG_AUTO_ACT=tab-hold`) — the one thing a settled strip cannot show.
+    /// Automation (`tab-hold`): the tab at `index` taken up and carried half its width, not set down.
     function holdTabAt(index) {
         const tab = tabs.itemAtIndex(index)
         if (!tab)
@@ -173,16 +148,16 @@ Item {
         return true
     }
 
-    /// Automation: how far the tab in hand is actually drawn from its own row (`tab-hold`). Read off that tab, so a
-    /// transform that came apart answers 0 — which is also what nothing being held answers.
+    /// Automation (`tab-hold`): how far the tab in hand is drawn from its row, read off the tab so a broken transform
+    /// answers 0.
     function heldTabShift() {
         const at = tabCarry.heldIndex()
         const tab = at < 0 ? null : tabs.itemAtIndex(at)
         return tab ? Math.round(tab.shiftShown) : 0
     }
 
-    /// Automation: the tab at `index`, carried against the far end of the run and left there (`PGG_AUTO_ACT=tab-edge`).
-    /// Held past the run — the distance is the speed, so the hook names it in tab widths.
+    /// Automation (`tab-edge`): the tab at `index` carried a tab width past the far end of the run and held there — the
+    /// distance past is the drift speed.
     function carryTabPastEnd(index) {
         const tab = tabs.itemAtIndex(index)
         if (!tab)
@@ -193,7 +168,7 @@ Item {
         return true
     }
 
-    /// Automation: where the tab in hand sits, and letting go of it — both asked of the hand that has it (`tab-edge`).
+    /// Automation (`tab-edge`): the hand's held index, and letting go.
     function heldIndex() {
         return tabCarry.heldIndex()
     }
@@ -201,15 +176,13 @@ Item {
         tabCarry.dropTab()
     }
 
-    /// The strip, travelled until the tab in front is whole on screen — what a press on the stand-in at the edge means
-    /// (デザイン規約 §タブの所作; the travel itself is `TabRun.showTab`).
+    /// What a press on the stand-in means: travel until the tab in front is whole (`TabRun.showTab`).
     function showFrontTab() {
         return tabRun.showTab(tabStrip.frontTab)
     }
 
-    /// Asked (デザイン規約 §タブの所作). Travelled to when the strip has stood on a tab before — a strip that stood
-    /// nowhere leaves the reader no distance to read, so that one starts at the seat instead (`stood`). The model has
-    /// already moved its front when it asks, so its front is the tab asked for.
+    /// An outside ask to show the tab in front (デザイン規約 §タブの所作): travelled to if the strip has stood before,
+    /// else started at (`stood`). The model has moved its front before asking, so its front is the tab asked for.
     function askFrontTab() {
         tabStrip.frontAskTravels = tabStrip.stood
         tabStrip.frontAskId = tabStrip.tabsModel.currentTabId
@@ -218,22 +191,18 @@ Item {
         Qt.callLater(tabStrip.answerFrontAsk)
     }
 
-    /// The ask, answered once the strip's own front tab is the one asked for — which is now when the ask moved
-    /// nobody, and the next layout when it did — and answered again for as long as it is open.
+    /// Answers the ask once the strip's front tab is the one asked for, and again while the ask is open.
     ///
-    /// Always a turn late (`Qt.callLater`, which folds repeat asks into one): a tab reports itself in front from its
-    /// own `Component.onCompleted`, and a view lays its items out after it has built them — read there, the newest tab
-    /// is still standing at `x: 0` and the strip travels to the wrong end of the run (measured). Asked again while a
-    /// travel is on its way to the same place, it leaves the travel be (`TabRun.showTab`).
+    /// Always a turn late (`Qt.callLater`, which also folds repeats): a tab reports itself in front from
+    /// `Component.onCompleted`, before the view lays it out, and read there it still stands at `x: 0`.
     function answerFrontAsk() {
         if (!tabStrip.frontAsked)
             return
-        // The front has moved to another tab: this ask was for the one it left.
         if (tabStrip.tabsModel.currentTabId !== tabStrip.frontAskId) {
             tabStrip.closeFrontAsk()
             return
         }
-        // The tab asked for has no item of its own in front yet: the view builds it with a later layout.
+        // Its item has not reported itself in front yet; a later layout brings it.
         const tab = tabStrip.frontTab
         if (!tab || tab.tab_id !== tabStrip.frontAskId)
             return
@@ -250,42 +219,35 @@ Item {
         tabStrip.frontAskAnswered = false
     }
 
-    /// The reader's own hand on the strip — a press, the wheel, the carry that may follow a press. It outranks a
-    /// travel in flight and an ask still waiting for its tab alike (デザイン規約 §タブの所作「帯自身の所作は頼みの外」):
-    /// two hands on `contentX` is one of them drawing over the other, and a band the reader has just put somewhere
-    /// stays there.
+    /// The reader's hand on the strip (a press, the wheel, a carry): it outranks a travel in flight and an open ask
+    /// alike (デザイン規約 §タブの所作「帯自身の所作は頼みの外」).
     function takeRun() {
         tabRun.halt()
         tabStrip.closeFrontAsk()
     }
 
-    /// A press landed somewhere in the window (`FocusRelease.pressedAnywhere`). The ask put a tab in front of the
-    /// reader, and what the window put up for them is over with the next thing they do — past it, a travel would be
-    /// the strip moving on its own under a reader who has gone on to something else. **An ask that has not answered
-    /// yet goes on**: it is still bringing its tab in.
+    /// A press landed anywhere in the window (`FocusRelease.pressedAnywhere`): an answered ask ends with the reader's
+    /// next act, or the strip would move on its own under them. An unanswered one goes on — its tab is still coming in.
     ///
-    /// **A press, and not the pointer coming onto the strip**: Qt delivers hover again whenever the scene moves under
-    /// a pointer that stands still, so a hover crossing the strip's edge is no act of the reader's, and an ask closed
-    /// on one can be an ask the strip is still answering.
+    /// A press, not hover: Qt re-delivers hover whenever the scene moves under a still pointer, so hover is no act of
+    /// the reader's.
     function pressLanded() {
         if (tabStrip.frontAskAnswered)
             tabStrip.closeFrontAsk()
     }
 
-    /// Automation: where the strip stands in its run and whether it has reached the far end (`tab-edge`), and the run
-    /// sent away from the tab in front so the stand-in has to appear (`tab-pin`). All three are the run's own
-    /// (`TabRun`); the band reaches them through the strip like everything else.
+    /// Automation: the run's own answers (`TabRun`) — offset and far end (`tab-edge`), and sending it away from the
+    /// tab in front (`tab-pin`).
     function runAtEnd() { return tabRun.atEnd() }
     function runOffset() { return tabRun.offset() }
-    /// A hand of the run's own on the strip, which outranks an ask the way a reader's does (`takeRun`).
+    /// Outranks an open ask, as a reader's hand does (`takeRun`).
     function sendRunAway() {
         tabStrip.closeFrontAsk()
         return tabRun.sendAway(tabStrip.frontTab)
     }
 
-    /// Automation: where the ask for the tab in front stands and what a travel to it is measured against, in one
-    /// line (`tab-open-go` reports it). `to=` is where the strip would be sent now; a strip at rest whose `to=` is not
-    /// its `cx=` has a tab it was not sent to.
+    /// Automation (`tab-open-go`): the ask and what a travel to it is measured against, in one line. `to=` is where
+    /// the strip would be sent now; a strip at rest whose `to=` is not its `cx=` has a tab it was not sent to.
     function frontAskAccount() {
         const tab = tabStrip.frontTab
         return "ask=" + tabStrip.frontAsked + " answered=" + tabStrip.frontAskAnswered + " for=" + tabStrip.frontAskId
@@ -296,8 +258,7 @@ Item {
             + " vw=" + Math.round(tabs.width) + " to=" + Math.round(tabRun.wholeAt(tab))
     }
 
-    /// Automation: the stand-in, pressed (`tab-pin-go`). Put in at its own signal — the press is a pointer's, which no
-    /// headless run has, and everything past it is the road a hand takes.
+    /// Automation (`tab-pin-go`): the stand-in pressed, at its own signal.
     function pressTabPin() {
         if (!tabPin.visible)
             return false
@@ -305,9 +266,8 @@ Item {
         return true
     }
 
-    /// Automation: the middle click, landed on the tab at `index` (`PGG_AUTO_ACT=middle-close`). Answers whether there
-    /// was an item under it to press: the strip is a view, and the item for a row the model has only just gained
-    /// arrives with the next layout — a caller reading the asking as a press would wait for a tab nobody touched.
+    /// Automation (`middle-close`): a middle click on the tab at `index`. Answers whether an item was there to press —
+    /// a new row's item arrives only with the next layout.
     function middleClickTab(index) {
         const tab = tabs.itemAtIndex(index)
         if (!tab)
@@ -316,17 +276,12 @@ Item {
         return true
     }
 
-    /// Automation-only exposure, the same one `GraphPane.view` is (app-ui.md): the strip's own list, which the harness
-    /// reads the laid-out tabs off (`auto/TabProbe.qml`). One name for the eight answers it gives, so what the
-    /// strip carries for a headless run is the list it was laying out anyway.
+    /// Automation-only exposure (rules-refs/app-ui.md「製品の部品はハーネスへ答える相手を丸ごと渡す」): the list, read
+    /// by `auto/TabProbe.qml`.
     readonly property alias tabsView: tabs
 
-    /// Hands the run out in the order the band gives things up (デザイン規約 §ウィンドウの縁): the room the marks stand in
-    /// first — all of it, off every tab at once — and only then the names, the longest giving way last; below
-    /// `tabTitleMinW` the strip scrolls. Settled by hand: the widths are read off a list of
-    /// items, and a binding cannot see one of those arrive. Whole pixels throughout — a strip sized off fractional
-    /// widths comes out a pixel over the run it was told to fit in, which is a strip that scrolls when nothing is out
-    /// of room.
+    /// Hands the run out (`TabMetrics.settle`). Settled by hand: the widths are read off a list of items, and a binding
+    /// cannot see one arrive.
     function settleTitleCap() {
         let nat = []
         for (let i = 0; i < titleMeasure.count; i++) {
@@ -334,19 +289,10 @@ Item {
             if (measured)
                 nat.push(Math.ceil(measured.natW))
         }
-        // What the row is asked for, so the band's leftover is shared with the state group in proportion — asking for
-        // the floor instead has the tabs down to three characters beside two whole badges. Measured off the same
-        // hidden labels the cap is, so it does not move with the run it is about to be handed. The air a short name is
-        // eased with counts here as a cost like the mark: it is spent whatever the cap comes to.
-        //
-        // Asked for at the names' own width, nothing cut and nothing capping the air either: the ceiling is a share
-        // of the run, so an ask carrying it is read out of the run that ask is about to be answered with — and an ask
-        // that moves with the run it is handed closes a loop, this width being the strip's own `implicitWidth` and
-        // the band answering it with `Layout.fillWidth`.
-        //
-        // **What is measured here and what is worked out from it are two objects** (`TabShare`): this walk owns the
-        // items and the font, and the run is handed out by arithmetic that has never seen either — which is what lets
-        // the strip's whole condition table be asked without a window (`tests/qml/tst_tabwidths.qml`).
+        // The strip asks for its natural width, not its floor, so the band shares its leftover with the state group in
+        // proportion (asking for the floor leaves tabs at three characters beside whole badges). The ask must not
+        // carry the ceiling: that is a share of the run, and this width is the strip's `implicitWidth`, which the band
+        // answers with `Layout.fillWidth` — a loop (`TabShare.settle`).
         const run = Math.floor(tabs.runAvail)
         const settled = tabMetrics.settle(nat, run)
         tabStrip.tabTitleMinW = settled.minW
@@ -360,15 +306,12 @@ Item {
     }
 
     implicitWidth: tabStrip.tabsWantWidth
-    // The layout an ask was waiting for: the tab it named has been built, and the view has put it in its row
-    // (`answerFrontAsk`). And a strip that has held a tab in front has stood somewhere (`stood`).
+    // A new front tab may be the one an open ask waits for (`answerFrontAsk`).
     onFrontTabChanged: {
         if (tabStrip.frontTab)
             tabStrip.stood = true
         Qt.callLater(tabStrip.answerFrontAsk)
     }
-    // An open ask is answered again whenever what it was measured against moves: the strip's extent and the run it is
-    // shown in, the tab's own place and width, and the end of the travel it started.
     Connections {
         target: tabStrip.frontAsked ? tabs : null
         function onContentWidthChanged() {
@@ -394,18 +337,13 @@ Item {
         }
     }
 
-    /// Declared beside `tabs`: a Flickable adopts its children into contentItem, where they travel with the scroll.
     TabMetrics {
         id: tabMetrics
     }
 
-    /// The names at their natural width, off screen: the strip's own labels are the ones being capped, so they cannot
-    /// also be what the cap is measured from. These carry the font the strip draws in, the current tab's heavier
-    /// weight included, so what comes back is the width the strip will ask for.
-    ///
-    /// **A tab standing in a linked copy asks for that run too** (`TabTreeMark`): the run is given up before any
-    /// name is cut, but it is part of what the tab would draw whole, and a strip that asked without it would hand
-    /// out a run it is about to spend more of than it counted.
+    /// The names at natural width, hidden: the strip's own labels are the ones being capped, so they cannot be what
+    /// the cap is measured from. Same font and weight as drawn, and including a linked copy's run (`TabTreeMark`) —
+    /// it is part of what the tab would draw whole.
     Repeater {
         id: titleMeasure
         model: tabStrip.tabsModel
@@ -416,7 +354,7 @@ Item {
             required property string title
             required property string copy_name
 
-            /// The two runs together, which is the one number the run is handed out by.
+            /// Both runs together: the one number the run is handed out by.
             readonly property real natW: Math.ceil(nameLabel.implicitWidth) + treeMeasure.naturalWidth
 
             visible: false
@@ -426,8 +364,7 @@ Item {
             Label {
                 id: nameLabel
                 text: measured.title
-                // The tracking a short name is set in comes into what it measures, or the strip and the tab would be
-                // reading the same name at two different widths (`TabMetrics.titleTracking`).
+                // The tab's tracking, or the strip and the tab read one name at two widths.
                 font.letterSpacing: tabMetrics.titleTracking(measured.title.length)
                 font.weight: tabStrip.tabsModel.currentIndex === measured.index ? Font.DemiBold : Font.Normal
             }
@@ -448,21 +385,18 @@ Item {
         onSettingsRequested: tabStrip.settingsRequested()
         onExitRequested: tabStrip.exitRequested()
     }
-    // As wide as the tabs it holds, up to what the strip has left; past that it scrolls. The tabs narrow before it
-    // comes to that (`settleTitleCap`), so the scrolling starts where they can give no more.
+    // As wide as its tabs, up to the strip's leftover; past that it scrolls, once the tabs can narrow no more
+    // (`settleTitleCap`).
     ListView {
         id: tabs
         x: menuButton.width
         height: tabStrip.height
-        /// Band kept clear of the tabs: the empty run past the last tab is the only place left to take hold of the
-        /// window, so it survives one more tab. One end cell plus the band's own margin —
-        /// the width Chrome keeps between its own `+` and its window buttons (52px at 100%), in this theme's tokens.
+        /// Band kept clear of the tabs to take hold of the window by (デザイン規約 §ウィンドウの縁).
         readonly property real grabRun: tabStrip.captionMerged ? Theme.railWidth + Theme.spaceMd : 0
-        /// The run the tabs share out between them; the width below and the cap both read this one expression.
+        /// The run the tabs share out; the width below and the cap both read this one expression.
         //
-        // `tabs.grabRun` stays qualified: an unqualified name here reads whatever id happens to share it — ids outrank
-        // the enclosing object's own properties — and an Item minus a number is NaN, which takes the strip's width
-        // with it (no tabs drawn, nothing said why).
+        // `tabs.grabRun` stays qualified: ids outrank the object's own properties, so a bare name can read an Item,
+        // and the NaN takes the strip's width with it (no tabs drawn, nothing said why).
         readonly property real runAvail:
             Math.max(0, tabStrip.width - menuButton.width - plusButton.width - tabs.grabRun)
         onRunAvailChanged: tabStrip.settleTitleCap()
@@ -471,15 +405,14 @@ Item {
         // Hard stop at the ends, as everywhere else that scrolls (デザイン規約 §QML 実装ルール).
         boundsBehavior: Flickable.StopAtBounds
         clip: true
-        // Wheel only. Left interactive, the view watches every press for a drag and steals the grab at the platform's
-        // threshold (4px on Windows), so a click with a little sideways motion cancels the tab's own MouseArea.
+        // Wheel only: an interactive view steals the grab at the drag threshold, cancelling the tab's own MouseArea on
+        // a click that drifts sideways.
         interactive: false
-        // Every delegate stays alive however far the strip is scrolled: the automation walks the items (`tabPaths` /
-        // `middleClickTab`), and a released delegate answers with null. Tabs are counted in ones, so this is free.
+        // Every delegate stays alive: automation walks the items (`tabPaths` / `middleClickTab`), and a released one
+        // answers null. Tabs are few, so this is free.
         cacheBuffer: 65536
-        // A tab closed ends the ask and the travel it started, whichever road closed it (the `✕`, the middle button,
-        // the model): the band stays where it stood (デザイン規約 §タブの所作「閉じた後の帯はその場に留まる」). And a
-        // strip left empty has stood nowhere again.
+        // A tab closed, by any road, ends the ask and its travel (デザイン規約 §タブの所作「閉じた後の帯はその場に留まる」);
+        // an empty strip has stood nowhere again.
         onCountChanged: {
             if (tabs.count < tabStrip.tabsCounted)
                 tabStrip.takeRun()
@@ -492,8 +425,6 @@ Item {
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
             onWheel: event => {
                 const step = event.angleDelta.x !== 0 ? event.angleDelta.x : event.angleDelta.y
-                // A hand on the wheel outranks whatever else is moving the strip, or about to (`takeRun`): the strip
-                // goes where it is being sent.
                 tabStrip.takeRun()
                 tabs.contentX = tabRun.clamp(tabs.contentX - step)
             }
@@ -508,20 +439,16 @@ Item {
             titleEaseW: tabStrip.tabTitleEaseW
             markRoom: tabStrip.tabMarkRoom
             fadeW: tabStrip.tabTitleFadeW
-            // What a tab that paints no ground of its own is read against, and so what its name goes quiet into
-            // where the mark stands over it (`TabItemDelegate.titleFade`).
             bandColor: tabStrip.bandColor
             stripHeight: tabs.height
             held: tabCarry.heldId === tabItem.tab_id
             heldX: tabCarry.heldX
             onTabPressed: button => tabStrip.pressTab(tabItem.index, tabItem.tab_id, button)
-            // `index` is read at the moment the hand reports: the row this tab sits in is
-            // what the drag has been changing all along.
+            // `index` is read when the hand reports: the drag keeps changing it.
             onTabTaken: grabX => tabCarry.takeTab(tabItem.index, grabX)
             onTabDragged: sceneX => tabCarry.carryTab(tabItem.index, sceneX)
             onTabDropped: tabCarry.dropTab()
-            // Order-free: leaving one tab and arriving at another are two answers to the same question, and the item
-            // that lost the front only takes the seat away if nobody has claimed it since.
+            // Order-free: the tab losing the front clears the seat only if nobody has claimed it since.
             onFrontChanged: front => {
                 if (front)
                     tabStrip.frontTab = tabItem
@@ -530,16 +457,14 @@ Item {
             }
         }
     }
-    // The hand between the taking up and the setting down. Declared after the list it reads: what a carry measures
-    // against is where the tabs sit, and the order it changes is the model's.
+    // The hand between the taking up and the setting down.
     TabCarry {
         id: tabCarry
         view: tabs
         tabsModel: tabStrip.tabsModel
     }
-    // The tab in front, standing at the edge its own row went out of. Beside the list: a
-    // Flickable's declared children are taken by its content item and travel with the scroll, and this is the one
-    // thing in the strip that stays put. Declared after the hand so it can ask if one is on a tab.
+    // The tab in front, standing at the edge its own row went out of — beside the list, not in it (`TabPin`), and
+    // declared after it so it and its dissolve draw over the tabs.
     TabPin {
         id: tabPin
         tabsModel: tabStrip.tabsModel
@@ -557,41 +482,25 @@ Item {
         stripHeight: tabStrip.height
         onActivated: tabStrip.showFrontTab()
     }
-    // Where the strip stands in its run, and the travel that sends it somewhere. Declared after the list it moves,
-    // for the reason the hand is.
+    // Where the strip stands in its run, and the travel that sends it somewhere.
     TabRun {
         id: tabRun
         view: tabs
     }
-    // The roads into a repository, heard in one place: opening one, arriving at the tab that already holds it, and
-    // putting back what the last session left open all mean "show me this", and the strip answers the three alike
-    // (デザイン規約 §タブの所作「判定は 1 か所に置く」). Its own signal: `currentIndex` is moved by the strip's own
-    // gestures as well — a press and a carry are the reader putting the band where it stands, and this
-    // leaves it there.
+    // Every road into a repository asks through one signal (デザイン規約 §タブの所作「判定は 1 か所に置く」). Not
+    // `currentIndex`: the strip's own press and carry move that too, and those leave the band where the reader put it.
     Connections {
         target: tabStrip.tabsModel
         function onFrontTabAsked() {
             tabStrip.askFrontTab()
         }
     }
-    // Opening one more. Drawn: a typed `+` resolves to whatever shape and line weight the platform
-    // has, where every other mark in the window holds `Metrics.iconStroke` (デザイン規約 §寸法「印は描いて出す」).
+    // Opening one more, drawn (デザイン規約 §タブの所作「揃える相手は隣の `✕`」): its ink is read off `markSeat` so it
+    // cannot come out a step apart from the tabs' `✕`. Only the hit area runs the band's depth; the wash keeps its
+    // `iconXl` box.
     //
-    // The mark is a step below its seat. The band's own marks are its two ends — the ☰ and the window buttons, each a
-    // `railWidth` cell its full height (§ウィンドウの縁) — and this one follows the last tab, so what
-    // it is level with is the `✕` standing in the tabs beside it, which is the ink the typed `+` carried anyway. Read
-    // off that mark's own seat, so the two cannot come out a step apart.
-    //
-    // The seat that ink sits in runs the band top to bottom, so a hand coming down the strip lands on the mark anywhere
-    // in the band's depth — a bare `iconLg` box has to be aimed at. The one part of that depth the scene never sees is
-    // the resize edge Windows keeps at the top of an unmaximised window, which is the band's own affair
-    // (`winframe::hit_test`). Only the hit area reaches that far: the wash keeps a square `iconXl` box of its own,
-    // since paint carried to the band's edges would read as one of the two end cells the band does own
-    // (§当たり判定「広げるのは判定だけ」).
-    //
-    // Both the ink and the wash are written as padding and inset: a `Control`
-    // stretches its `contentItem` over whatever the padding leaves and places its `background` inside the insets, so a
-    // size written on either is gone on the next layout (after `TreeViewToggle`).
+    // Ink and wash are set as padding and inset: a `Control` re-lays its `contentItem` and `background` from those, so
+    // a size written on either is lost on the next layout.
     HoverToolButton {
         id: plusButton
         x: tabs.x + tabs.width
@@ -601,13 +510,12 @@ Item {
         bottomPadding: plusButton.topPadding
         topInset: Math.round((plusButton.height - Theme.iconXl) / 2)
         bottomInset: plusButton.topInset
-        // The seat's width, held to the box exactly: three of this strip's width expressions read `plusButton` — as
-        // does `grabArea.x` — so a seat that drifts moves the run the tabs share out and the grab run with it.
+        // Held to the box exactly: three width expressions and `grabArea.x` read `plusButton.width`, so a drifting seat
+        // moves the run and the grab run.
         implicitWidth: Theme.iconXl
         implicitHeight: Theme.iconXl
-        // A ToolButton names itself by its text, and this one has none. The words the menu's own row uses, since it
-        // raises the same request — the mark is idiomatic, so it gets a name and no tip, like the ☰ and the three at
-        // the far end (デザイン規約 §hover のツールチップ).
+        // No text, so named here with the menu row's words (same request). No tip — the mark is idiomatic
+        // (デザイン規約 §hover のツールチップ).
         Accessible.name: Words.openRepository
         contentItem: NavIcon {
             kind: "plus"
@@ -615,9 +523,8 @@ Item {
         }
         onClicked: tabStrip.openRepositoryRequested()
     }
-    // The run of empty band past the last tab. The hit test answers HTCAPTION for this rectangle
-    // (`winframe::hit_test`), so a press here never reaches the scene and every gesture is the platform's own. The
-    // scene's only job is saying where the run is.
+    // The empty band past the last tab. `winframe::hit_test` answers HTCAPTION here, so presses never reach the scene;
+    // the scene only says where it is.
     Item {
         id: grabArea
         x: plusButton.x + plusButton.width

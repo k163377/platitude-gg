@@ -3,34 +3,25 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// One side of the diff pane's image preview (Before / After). Absent sides collapse (visible tracks sizeText), so an
-// added image shows a single full-width After cell and a deleted one a single Before.
-//
-// Scaling: 1:1 when the natural size fits, a fixed integer zoom for small images (zoomFor — independent of the window),
-// and fit-to-frame shrinking as the final cap, so a tiny window keeps its zoom and
-// only shrinks.
+// One side (Before / After) of the diff pane's image preview; a side with no `sizeText` collapses.
 ColumnLayout {
     id: previewCell
-    /// The side's own word — `Before` / `After`. The size stands beside it with a drawn dot between them, so this cell
-    /// composes its own line.
+    /// `Before` / `After`.
     required property string caption
-    /// A `file:` URL — the working-tree file itself, or the file core wrote the blob to — stamped with the read it was
-    /// made at, so a file that moved under the pane comes back as a source that changed (`DiffModel.previewOldUrl`).
+    /// A `file:` URL (the working-tree file, or core's copy of the blob) stamped with its read, so a file that moved
+    /// under the pane comes back as a changed source (`DiffModel.previewOldUrl`).
     required property string url
     required property string sizeText
-    /// Whether the image is a vector one — the model's word (`DiffModel.previewVector`).
-    /// SVG rasters scale smoothly, pixel rasters stay crisp.
+    /// `DiffModel.previewVector`: SVG scales smoothly, pixel rasters stay crisp.
     required property bool isVector
-    /// Automation: the decode is asynchronous, so a read that has settled is not yet a picture on screen. `settled`
-    /// is the decoder's answer either way, `shown` the picture being there.
+    /// Automation, since the decode is asynchronous: `settled` = the decoder has answered either way, `shown` = the
+    /// picture is there.
     readonly property bool settled: previewImage.status === Image.Ready || previewImage.status === Image.Error
     readonly property bool shown: previewImage.status === Image.Ready
     visible: sizeText !== ""
     spacing: Theme.spaceXs
 
-    // Image-preview zoom steps: a small image draws at a fixed integer scale picked from its natural size alone,
-    // then fit-to-frame shrinking still wins when space runs out. Small icons land in a readable 128-256px
-    // band.
+    // A whole-step zoom from the natural size alone (not the window), landing small icons in a 128-256px band.
     function zoomFor(maxSide) {
         if (maxSide <= 0)
             return 1
@@ -68,7 +59,6 @@ ColumnLayout {
         border.color: Theme.borderSubtle
         border.width: Theme.borderWidth
         clip: true
-        // Box the image may occupy.
         readonly property real innerW: width - 2 * Theme.spaceXs
         readonly property real innerH: height - 2 * Theme.spaceXs
         // Decoded size (0 until the image is ready).
@@ -88,11 +78,9 @@ ColumnLayout {
             fillMode: Image.PreserveAspectFit
             source: previewCell.url
             asynchronous: true
-            // Decoded once, held by this item alone, and let go with the URL: a closed pane keeps no picture in the
-            // pixmap cache.
+            // A closed pane keeps no picture in the pixmap cache.
             cache: false
-            // Decoded at natural size: `sourceSize` *rescales* rasters to the given size (a 16px icon came back
-            // blurry at screen width). Integer upscales stay crisp (pixel art); shrinking and vector rasters smooth.
+            // No `sourceSize`: it rescales rasters at decode, blurring small icons.
             smooth: previewFrame.displayScale < 1 || previewCell.isVector
             mipmap: true
             visible: status === Image.Ready

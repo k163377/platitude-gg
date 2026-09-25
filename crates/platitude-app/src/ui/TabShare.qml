@@ -2,72 +2,52 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
-// How a run is handed out among tab names — and nothing else. No font, no items, no window: what comes in is a list
-// of widths somebody else measured and the run they are to fit in, and what goes out is the two answers the strip
-// lays out by (デザイン規約 §ウィンドウの縁 の譲る順).
+// How a run is handed out among tab names, and nothing else: widths measured elsewhere and a run go in, the strip's
+// layout answers come out (デザイン規約 §ウィンドウの縁 の譲る順). No font and no items, so the whole condition
+// table runs in one process (`tests/qml/tst_tabwidths.qml`); `tab-widths` covers that real widths go in and the
+// answers reach the tabs.
 //
-// **Split off from the measuring for what it lets be asked.** A strip that narrowed the wrong tabs has to be caught
-// at a count where the run makes it narrow them, so through a window every case costs a window and a repository per
-// tab; here the run is a number, so the whole table — none, one, a mixture, the floor, the ceiling, either side of
-// each boundary — is asked in one process (`tests/qml/tst_tabwidths.qml`). What a window is still needed for is the
-// other half: that the widths going in are a real font's and the answers coming out reach the tabs
-// (`PGG_AUTO_ACT=tab-widths`).
-//
-// The costs are `TabMetrics`'s to measure and are pushed in, not read from here: this object owns no number of its
-// own, so the one copy of each stays where the reasoning for it is written down.
+// Owns no number: the costs are `TabMetrics`'s, pushed in.
 QtObject {
     id: tabShare
 
-    /// The shortest a name is ever cut to, and the length it stops being helped along at — both read off the font
-    /// (`TabMetrics.titleMinW` / `titleEaseFullW`), so both are **pushed** rather than bound: `advanceWidth` is a
-    /// method and a binding on one freezes at the default font's answer (rules-refs/app-ui.md §FontMetrics).
-    /// `TabMetrics.settle` is what pushes them, which is why nothing else may call [`settle`] directly.
+    /// The shortest a name is cut to and the width easing stops at. Read off the font, so pushed
+    /// (`TabMetrics.titleEaseFullW`) by `TabMetrics.settle` — production reaches [`settle`] only through it.
     property real minW: 0
     property real easeFullW: 0
-    /// What a tab spends either side of its name, and the ways the run is cut for one name's ceiling — the same
-    /// numbers `TabMetrics` holds, required so that an instance standing without them fails to load rather than
-    /// answering off a default nobody chose.
+    /// `TabMetrics`'s costs; required, so an instance without them fails to load rather than answering off a default.
     required property real padL
     required property real markRoomFull
     required property real markRoomMin
     required property int runParts
     required property real easeShare
 
-    /// The ceiling on one name: that share of the run, cut into at most one part per tab, and floored at the width a
-    /// name still says something at (`TabMetrics.titleRunParts` carries the reasoning).
+    /// The ceiling on one name: a share of the run, cut into at most one part per tab, floored at `minW`
+    /// (`TabMetrics.titleRunParts`).
     function ceiling(run, tabs) {
         const parts = Math.max(1, Math.min(tabShare.runParts, tabs))
         return Math.max(tabShare.minW, Math.floor(run / parts))
     }
 
-    /// The air a name of this width is given on top of itself — half of what it falls short by, held to the cap
-    /// (`TabMetrics.titleEase`).
+    /// The air a name of this width is given on top of itself (`TabMetrics.titleEase`).
     function ease(naturalW, cap, easeW) {
         return Math.round(Math.max(0, Math.min(easeW, cap) - naturalW) * tabShare.easeShare)
     }
 
-    /// Which side of that air is set down on the mark's (`TabMetrics.easeRight`).
+    /// How much of that air goes on the mark's side (`TabMetrics.easeRight`).
     function easeRight(air, markRoom) {
         return Math.max(air / 2, Math.min(air, tabShare.markRoomFull - markRoom))
     }
 
-    /// How one tab spends the cap between the two runs it draws: the repository's name, and the run naming the
-    /// linked copy it is standing in (`TabTreeMark`).
+    /// How one tab spends the cap between its two runs: the repository's name, then the linked copy's
+    /// (`TabTreeMark`). The name is served first (デザイン規約 §ウィンドウの縁 の譲る順), so the copy's run is gone
+    /// before a letter of the name is cut.
     ///
-    /// **The name is served first and the copy takes what is left**
-    /// (デザイン規約 §ウィンドウの縁 の譲る順): a tab is read for which repository it holds, and where
-    /// it stands is the second thing it says. So the run narrows while the name is still whole, and it is gone
-    /// before a single letter of the name is cut.
+    /// Under `treeFloor` (`TabTreeMark.floorWidth`) the run goes whole, mark and all: a copy name without its mark
+    /// reads as the repository's name carrying on.
     ///
-    /// `treeFloor` is the least that run is worth drawing at (`TabTreeMark.floorWidth`); under it the whole of it
-    /// goes, mark and all — the mark is what parts the copy's name from the repository's, so a name left standing
-    /// without it reads as the repository's own name carrying on, and the reader is still told where they are
-    /// standing by the tab's own ground and by the hover.
-    ///
-    /// **A tab that drops the run is narrower than its share by under that floor.** The strip priced it at
-    /// `min(natural, cap)`, and what it does not spend is left as band at the end of the strip. That only ever
-    /// happens while `cap` is above the name's own width — a strip cutting names gives the run nothing at all and
-    /// spends the cap to the letter — so no name is ever cut for it.
+    /// A tab that drops the run comes out narrower than its share by under that floor, left as band at the strip's
+    /// end. That only happens while `cap` is above the name's own width, so no name is cut for it.
     function splitName(titleNat, treeNat, treeFloor, cap) {
         const titleW = Math.min(titleNat, cap)
         const left = cap - titleW
@@ -75,18 +55,14 @@ QtObject {
         return { titleW: titleW, treeW: treeW }
     }
 
-    /// The whole pass, in the order the band gives things up (デザイン規約 §ウィンドウの縁): the room the marks stand
-    /// in first — all of it, off every tab at once — and only then the names, the longest giving way last; below
-    /// `minW` the strip scrolls.
+    /// The whole pass, in the order the band gives things up (デザイン規約 §ウィンドウの縁): the marks' room first, off
+    /// every tab at once, then the names, the longest giving way first; below `minW` the strip scrolls.
     ///
-    /// `nat` is every name at its natural width, in any order (this makes its own sorted copy — the caller's list is
-    /// read in the strip's own order afterwards). Whole pixels throughout: a strip sized off fractional widths comes
-    /// out a pixel over the run it was told to fit in, which is a strip that scrolls when nothing is out of room.
+    /// `nat` is every name's natural width, in any order. Whole pixels throughout: fractional widths come out a pixel
+    /// over the run, and the strip scrolls with nothing out of room.
     ///
-    /// `wantNames` is what the names would take with nothing cut and nothing capping the air either — the strip adds
-    /// its own furniture to it and asks for the sum (`TabStrip.tabsWantWidth`). Asked at the names' own width because
-    /// the ceiling is a share of the run, so an ask carrying it would be read out of the run that ask is about to be
-    /// answered with.
+    /// `wantNames` is what the names take with nothing cut and the air uncapped (`TabStrip.tabsWantWidth` adds the
+    /// furniture). Not capped: the ceiling is a share of the run, so an ask carrying it would move with its answer.
     function settle(nat, run) {
         const maxW = tabShare.ceiling(run, nat.length)
         const easeW = Math.min(tabShare.easeFullW, maxW)
@@ -111,14 +87,12 @@ QtObject {
                 wantNames: wantNames
             }
         }
-        // The room the marks stand in is what a crowded strip takes back first, and **every tab gives up the same
-        // amount of it** (同§): taking it from the tabs that are short of run would stand the marks at a different
-        // distance from each tab's edge, which is a row of marks nobody lined up.
+        // Every tab gives up the same mark room (同§): taking it only from tabs short of run stands the marks at
+        // different distances from their edges.
         const room = Math.floor((run - eased - capped - nat.length * tabShare.padL) / nat.length)
         const markRoom = Math.max(tabShare.markRoomMin, Math.min(tabShare.markRoomFull, room))
-        // What is left over once the marks have stood down as far as this run makes them. Against the room they
-        // actually got: costed at the full room while standing in less, the strip leaves the difference on every tab
-        // unspent and cuts names it had the run for (measured).
+        // Shared out against the mark room actually given: costing the full room leaves the difference unspent on every
+        // tab and cuts names the run had room for.
         const share = tabShare.widest(nat.slice().sort((a, b) => a - b), run, eased, markRoom, maxW)
         return {
             minW: tabShare.minW,
@@ -130,11 +104,9 @@ QtObject {
         }
     }
 
-    /// The widest every name may be drawn and still leave room for all of them: the max-min share of what the run has
-    /// left once each tab has its near step and `markRoom` for its mark. The longest names give way and come out
-    /// equal; the ones already under their share keep their own width (同§). `sorted` comes in ascending, and
-    /// `ceilingW` is the answer when they all fit — the ceiling is what caps the strip, or a tab whose name happens
-    /// to be short would cap the ones beside it.
+    /// The widest every name may be drawn with all of them fitting: the max-min share of the run left after the easing
+    /// and each tab's `padL` and `markRoom`. The longest give way and come out equal; shorter ones keep their width.
+    /// `sorted` is ascending; `ceilingW` answers when all fit, so short names do not set the cap for the rest.
     function widest(sorted, run, eased, markRoom, ceilingW) {
         let left = run - eased - sorted.length * (tabShare.padL + markRoom)
         for (let i = 0; i < sorted.length; i++) {

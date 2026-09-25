@@ -4,28 +4,17 @@ import QtQuick
 import platitude.ui
 
 // The hand a card's own words are dragged over from the air around them, and what it turns that drag into
-// (規約 §hover のツールチップ「出したものは持ち帰れる」).
+// (規約 §hover のツールチップ「hover が出した字は選べて、コピーできる」).
 //
-// **It lies under everything the card draws**, in the card's ground, so a press reaches
-// it only where nothing else took one — the padding band, the step between two lines, the room beside a short one, and
-// nothing else. That is what makes "no hit area changed" structural: nothing is
-// layered over anything, so a card's own rows, links and badges cannot lose a press to this (measured qmltestrunner
-// `tst_cardpad`: a press in the padding reaches this, a press on the words is the words' and never arrives here).
-//
-// **The sibling of `SweepRoom`, and different where the shape is different.** That one serves a row with two values on
-// a line, so it decides the line from the press and then demands the pointer arrive over a value's own columns — which
-// of the two the reader meant cannot be said any other way. A card stacks its lines, so here the **nearest**
-// field wins outright: vertical first, sideways to break a tie. Demanding the columns in a card would kill the whole
-// padding band, which is the one place this is for.
-//
-// **A plain `MouseArea`** — the pair measured for the pane holds here too (`SweepRoom`): a passive
-// `PointHandler` loses half a drag and a `TapHandler` never fires over a selectable field.
+// It lies under everything the card draws, so a press reaches it only where nothing else took one, and the card's own
+// rows, links and badges keep theirs. Unlike `SweepRoom`, the nearest field wins outright: a card stacks its lines,
+// and demanding a value's columns would kill the padding band (規約 §右のペインの字は掴める). A plain `MouseArea`
+// (rules-refs/app-ui.md「手の実装は素の `MouseArea`」).
 Item {
     id: pad
 
-    /// The card's content, and the subtree the fields are found in. The pad walks it on every press:
-    /// a card whose lines come and go with what it is describing would otherwise need that list kept in
-    /// step, and the one it forgot is a dead corner nobody sees.
+    /// The card's content, walked for fields on every press — a list kept in step with lines that come and go would
+    /// leave the one it forgot a dead corner.
     required property Item content
 
     /// What the gesture is holding: the field it is writing into, and whether it took the gesture at all.
@@ -33,16 +22,13 @@ Item {
     property bool taking: false
 
     /// What a run reads back off a sweep (verify-ui): the value it landed on, and whether the keyboard went with the
-    /// selection — `Ctrl+C` goes to whatever holds it, so a selection without one is not a value anybody can take away.
+    /// selection — `Ctrl+C` goes to whatever holds it.
     readonly property string endedOn: pad.field ? pad.field.text : ""
     readonly property bool caretLanded: !!pad.field && pad.field.hasCaret
 
-    /// The three the hand below calls, in this item's own coordinates — and the three a run enters, so a pad that was
-    /// never wired up reports nothing (verify-ui §壊れない動詞の実装).
-    ///
-    /// **The anchor is taken at the press**, unlike the pane's, because the nearest field is already known there: a
-    /// reader who presses in the padding and drags gets the selection running from the character nearest where they
-    /// started, which is what a press in the margin of any other text does.
+    /// The three the hand below calls, in this item's coordinates — and the three a run enters, so a pad never wired up
+    /// reports nothing (verify-ui §壊れない動詞の実装と反復). The anchor is taken at the press, unlike `SweepRoom`'s:
+    /// the nearest field is already known there.
     function pressAt(x, y) {
         pad.dropValues()
         pad.field = pad.nearestTo(x, y)
@@ -54,24 +40,22 @@ Item {
     function moveAt(x, y) {
         if (!pad.taking)
             return
-        // **One field per gesture**: changing half-way would re-anchor, which takes the caret off the first and drops
-        // the selection the reader had just made (規約 §右のペインの字は掴める, the same rule).
+        // One field per gesture (規約 §右のペインの字は掴める): changing half-way would drop the selection just made.
         pad.field.extendFrom(pad, x, y)
     }
     function releaseNow() {
         pad.taking = false
     }
 
-    /// Nothing under this card is holding a selection any more. One selection in the window, and a sweep clears the
-    /// board before it puts one anywhere.
+    /// Clears every selection under this card: one selection in the window, and a sweep clears the board first.
     function dropValues() {
         const fields = pad.fields()
         for (let i = 0; i < fields.length; i++)
             fields[i].deselect()
     }
 
-    /// The fields this card is drawing, in the order the walk finds them. A field with nothing in it, no width or no
-    /// place on screen is not one: a sweep that landed on it would come away empty and read as a hand that failed.
+    /// The fields this card is drawing, in walk order. Empty, sizeless or hidden ones are skipped: a sweep landing
+    /// there would come away empty.
     function fields() {
         return pad.gather(pad.content, [])
     }
@@ -90,10 +74,8 @@ Item {
         return out
     }
 
-    /// The field nearest a point of this pad. **Vertical first, sideways to break a tie**: a card's lines are stacked,
-    /// so the line the press is level with is the one it means, whatever it is level with it at — and where two fields
-    /// share a line (a badge's sentence beside it, a hash beside its date), the nearer of the two is the answer.
-    /// Distance is to the field's box, so a point inside one is at zero and wins outright.
+    /// The field nearest a point of this pad: vertical distance first, sideways to break a tie between fields sharing a
+    /// line. Distance is to the field's box, so a point inside one wins outright.
     function nearestTo(x, y) {
         const fields = pad.fields()
         let best = null
@@ -113,8 +95,7 @@ Item {
         return best
     }
 
-    /// The field a point of this pad is actually on, or null where it is on the card's air. What a real press can
-    /// reach this hand at is the second of those and nothing else — the words take their own.
+    /// The field a point of this pad is on, or null on the card's air — the only places a real press reaches this hand.
     function fieldAt(x, y) {
         const fields = pad.fields()
         for (let i = 0; i < fields.length; i++) {
@@ -126,14 +107,9 @@ Item {
         return null
     }
 
-    /// Automation: **every part of the card's air, sampled**. A grid is laid over the pad and the
-    /// points standing on a field are dropped, which leaves exactly the places a real press could reach this hand —
-    /// the padding band on all four sides, the step between two lines, the room beside a short one. A run that pressed
-    /// the middle of a card would be pressing on the words, which take their own press, and it would go green with the
-    /// whole of this hand taken back out (`details-sweep`: 注入は余白を経由する).
-    ///
-    /// A reach that works from only one place in the air is the fault the right pane shipped with, and any single
-    /// point is a place that hides it — so the count of what was sampled is reported beside the count that worked.
+    /// Automation: the card's air, sampled — a grid over the pad minus the points on a field, which leaves exactly the
+    /// places a real press could reach this hand. A run pressing on the words would go green with this hand taken out
+    /// (verbs.md の `details-sweep`「余白経由が要」).
     function airPoints(steps) {
         const out = []
         for (let i = 0; i < steps; i++) {
@@ -147,20 +123,15 @@ Item {
         return out
     }
 
-    /// Automation: the gesture as a hand makes it, from a point of this pad's air. It enters the same three functions
-    /// the `MouseArea` below calls. The drag runs to the far side of whatever field the press picked, **at the height
-    /// it started from** — a drag does not jump to the middle of the words, and reading a value out at a height the
-    /// reader never used is how a run passes while the gesture does not work.
+    /// Automation: the gesture as a hand makes it from a point of this pad's air, through the `MouseArea`'s three
+    /// functions. The drag stays at the height it started from: a value read out at a height the reader never used
+    /// passes while the gesture does not work.
     function sweepAt(x, y) {
         if (!pad.pressAt(x, y))
             return false
         const f = pad.field
-        // **Toward the words.** A card's fields are as wide as the card it stands in, so a press
-        // level with a short line is usually out past that line's last glyph — and the far side of the *box* is
-        // further out still, where a drag crosses nothing at all (`card_sweep miss=[98,32,236x20,a9,n9]`: a nine
-        // letter name in a 236px field, both ends of the drag on character 9). The words begin at the field's near
-        // edge, so that is where the drag goes; a press that had already landed on the head of the line goes the
-        // other way instead, which is the same gesture carried on past where it started.
+        // Toward the words: a field is as wide as the card, so a press level with a short line is usually past its
+        // last glyph, and a drag to the box's far side would cross nothing.
         const near = f.mapToItem(pad, 0, 0)
         const away = f.mapToItem(pad, f.width, 0)
         pad.moveAt(near.x, y)
@@ -169,18 +140,10 @@ Item {
         pad.releaseNow()
         return true
     }
-    /// Automation: every place in this pad's air, swept one after another, as the one line the run reports. Eight
-    /// surfaces carry this hand now and each one of them was asking the same four things, so the sentence is written
-    /// here once.
-    ///
-    /// **`all=`**, because how much air a surface has depends on the words in it and on the
-    /// machine that drew them — but the count rides along as `reach=`, because a reach that works from only one place
-    /// in the air is the fault the right pane shipped with, and a single point is a place that hides it. `miss=` is
-    /// the **first** start that came away with nothing and what the sweep saw while it did: a line reporting only its
-    /// last try is reporting the one that worked.
-    ///
-    /// `extra` is whatever else that verb has to say, and it goes in ahead of the numbers so a `must_say` naming it
-    /// reads as one run of words (`card_sweep … hand=true open=true`).
+    /// Automation: every point of this pad's air swept in turn, as the one line every surface with this hand reports.
+    /// `all=`, since how much air there is depends on the words and the machine; `reach=` beside it, since a reach that
+    /// works from one point only is what a single point hides; `miss=` is the first start that came away with nothing,
+    /// not the last try. `extra` goes ahead of the numbers so a `must_say` naming it reads as one run of words.
     function sweepAir(steps, extra) {
         const air = pad.airPoints(steps)
         let reach = 0
@@ -203,24 +166,21 @@ Item {
     function sweptText() {
         return pad.field ? pad.field.selected : ""
     }
-    /// Automation: and the numbers behind a sweep that came away with nothing — which field it landed on, how big it
-    /// is, and where the two ends of the drag ended up in it. A run that reported only its last try would call the
-    /// others green.
+    /// Automation: the numbers behind a sweep that came away with nothing — the field's size, where the drag anchored
+    /// and the text's length.
     function sweptTrace() {
         const f = pad.field
         return f ? Math.round(f.width) + "x" + Math.round(f.height) + ",a" + f.grabAnchor + ",n" + f.text.length : "-"
     }
-    /// Automation: and that there is a hand at all. A run enters the three functions above —
-    /// a pointer cannot be injected — so a pad whose `MouseArea` had been taken out, disabled or shrunk would answer
-    /// every sweep it was asked and never see a press. This is the half of the wiring a sweep cannot say for itself.
+    /// Automation: that there is a hand at all. A run enters the functions above, so a pad whose `MouseArea` was taken
+    /// out, disabled or shrunk would still answer every sweep.
     readonly property bool handStands: hand.enabled && hand.width === pad.width && hand.height === pad.height
 
     MouseArea {
         id: hand
         anchors.fill: parent
-        // Hover is theirs: the card's own words and rows report the pointer for the card that has to know when the
-        // hand has left it, and a hovering area under them would take it (app-ui.md §HoverHandler は下の hover を殺す
-        // — a plain area does not, unless it asks for hover).
+        // Hover stays with the card's own words and rows, which report the pointer for the card; a hovering area would
+        // take it (rules-refs/app-ui.md「行に重ねる面の `HoverHandler` は祖先が持つ」).
         hoverEnabled: false
         preventStealing: true
         cursorShape: Qt.IBeamCursor

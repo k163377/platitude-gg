@@ -5,18 +5,12 @@ import platitude
 import platitude.ui
 
 /// The file rows of the working tree: the menu a row opens, the whole-bucket moves, and the reads an opening
-/// fires. Every one of these has to find its row before it can act, which is what the walk below waits for.
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are
-/// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+/// fires.
+// `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
 
-    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is
-    /// the file that builds this one.
+    /// `var`: typing it `AutoActDriver` would be circular — that file builds this one.
     required property var driver
 
     // The driver's own names, read once so the verbs can name them bare.
@@ -31,21 +25,16 @@ Item {
     readonly property var fileDiscardItem: driver.fileDiscardItem
     readonly property var renderedBarrier: driver.barrierRendered
 
-    /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
+    /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
         if (act === "stage-all" || act === "unstage-all" || act === "resolve-all") {
             page.showWip()
             bucketAllTimer.begin(act === "stage-all" ? "unstaged"
                                  : act === "unstage-all" ? "staged" : "conflicts")
         } else if (driver.fileRowActs.indexOf(act) >= 0) {
-            // Rows first: every one of these names a row of the WIP lists, and the walk that
-            // resolves a name reads delegates (`fileRowsTimer`, which then runs `runFileRowAct`).
             page.showWip()
             fileRowsTimer.start()
         } else if (act === "open-fetches") {
-            // The fetch the opening fires is the whole verb, and the argument is how many rows the graph holds
-            // once it has landed.
             acts.openFetchRows = Math.max(1, Number(arg))
             openFetchTimer.start()
         } else {
@@ -53,12 +42,9 @@ Item {
         }
         return true
     }
-    // Emptying one whole bucket from its own heading, and reading back which headings the list is left with. The two
-    // directions are one verb because the claim is that they are symmetrical: a bucket that has just been emptied keeps
-    // its heading, whichever bucket it was (デザイン規約 §その他の操作).
-    //
-    // The heading itself is pressed, and what is read back is the list's own children — a band bound to nothing
-    // would still be counted by the condition that asks for it.
+    // Empties one whole bucket from its own heading and reads back which headings the list keeps
+    // (デザイン規約 §その他の操作). Read off the list's own children: a band bound to nothing would still be counted
+    // by the condition that asks for it.
     SampleTimer {
         id: bucketAllTimer
         /// Which bucket is being emptied, and whether the press went in.
@@ -82,9 +68,7 @@ Item {
             }
             if (!driver.wroteAndSettled())
                 return
-            // The bucket that was emptied has to be empty before its heading means anything: the counts are the model's
-            // answer and the headings are the list's, and reading the second before the first would report the state
-            // that was.
+            // Counts first: the headings are the list's, and trail the model's counts.
             const emptied = bucketAllTimer.from === "staged"
                           ? workTree.stagedCount
                           : bucketAllTimer.from === "conflicts"
@@ -93,11 +77,8 @@ Item {
             if (emptied !== 0)
                 return
             bucketAllTimer.stop()
-            // The three headings stand together at the front of the line, ahead of the counts: what a press claims is
-            // about the headings side by side, and the judgement reads one unbroken stretch of the line
-            // (`Outcome::must_say`) — a count in between would split the claim in two. `conflicts=` is the one that
-            // answers the opposite way: that bucket comes and goes with git's own state, so marking the whole of it
-            // resolved has to take its heading off the screen (規約 §その他の操作).
+            // Headings first and together: `must_say` matches one unbroken stretch of the line. `conflicts=` answers
+            // the other way — resolving the whole bucket takes its heading off (規約 §その他の操作).
             Harness.report("wip_heads from=" + bucketAllTimer.from
                               + " unstaged=" + wipPane.bucketHeaded("unstaged")
                               + " staged=" + wipPane.bucketHeaded("staged")
@@ -109,16 +90,14 @@ Item {
             renderedBarrier.begin()
         }
     }
-    /// The file-row acts, run once the rows they name are walkable (`fileRowsTimer` holds them
-    /// until then; `runAutoAct` has already put the WIP pane up).
+    /// The file-row acts, run once the rows they name are walkable (`fileRowsTimer`).
     function runFileRowAct(act, arg) {
         if (act === "stage-many" || act === "stage-many-go") {
             const head = wipPane.rowAt(0)
             if (head)
                 wipPane.chooseOnly(head.bucket, head.fullName)
             const mate = wipPane.rowFor(arg)
-            // Named off the row while it is still in hand: the barrier waits on a bucket and a path, and a delegate
-            // read back after the press is one the list has had a chance to take away.
+            // Named before the press: afterwards the list may have taken the delegate away.
             const moved = mate ? mate.bucket + ":" + mate.fullName : ""
             if (mate)
                 wipPane.applyClick(mate.bucket, mate.fullName, Qt.ControlModifier)
@@ -164,8 +143,8 @@ Item {
             wipPane.chooseOnly("conflicts", arg)
             page.openFileMenu("conflicts", arg)
             fileMenu.close()
-            // Read before the press, for the reason the merge editor below gives: a row that is not conflicted takes
-            // no side, and a barrier armed anyway waits on a bucket this run never wrote to.
+            // Counted before the press: a row that is not conflicted takes no side, and a barrier armed anyway waits
+            // on a bucket this run never wrote to.
             const taken = fileRowMenu.chosenConflicts().length
             fileRowMenu.takeSideNow(act === "take-side-ours" ? "ours" : "theirs")
             if (taken > 0)
@@ -176,23 +155,18 @@ Item {
             wipPane.chooseOnly("conflicts", arg)
             page.openFileMenu("conflicts", arg)
             fileMenu.close()
-            // The name comes from config and the paths from the choice, so the name alone cannot say whether
-            // anything was handed over. A file that is already resolved — a fixture a previous run consumed —
-            // chooses nothing, and `openInMergeTool` then returns without queueing a write, leaving the run to
-            // the watchdog with the tool's name reported all the same. The count is what tells the two apart.
+            // `paths=` says whether anything was handed over: a file already resolved (a fixture a previous run
+            // consumed) chooses nothing, and `openInMergeTool` then queues no write.
             const handed = fileRowMenu.chosenConflicts().length
             fileRowMenu.openInMergeTool()
             Harness.report("merge_tool " + wipPane.workTree.mergeTool + " paths=" + handed)
-            // Named only where something was actually handed over: a fixture a previous run consumed queues no write
-            // at all, and a barrier waiting for a row that left the bucket before this run began would report a
-            // landing nothing here caused.
+            // Only where something was handed over — else the barrier reports a landing nothing here caused.
             if (handed > 0)
                 driver.treeGoneRow = "conflicts:" + arg
         } else if (act === "discard-file" || act === "discard-file-go"
                    || act === "delete-file" || act === "delete-file-go"
                    || act === "discard-staged" || act === "discard-staged-go") {
-            // Which row follows the verb: "delete-file" an untracked one, "discard-staged" the staged side, otherwise
-            // the unstaged one. The plain verb leaves the menu standing for the shot; "-go" runs the hold to its end.
+            // The plain verb leaves the menu standing for the shot; "-go" runs the hold to its end.
             const bucket = act.startsWith("delete-file") ? "untracked"
                          : act.startsWith("discard-staged") ? "staged" : "unstaged"
             wipPane.chooseOnly(bucket, arg)
@@ -204,20 +178,13 @@ Item {
             }
         }
     }
-    // Every file-row act resolves the rows it names through the pane's walk — `rowAt` / `rowFor` /
-    // `chosenRows` — and the walk reads delegates, which are born a layout after the model has the
-    // rows. Fired on arrival the walk answers nothing: the choice stays empty, the menu opens over
-    // it with an empty discard row, and a "-go" with nothing to write leaves the run to the
-    // watchdog (measured, Windows wedged this way while the same build walked on Linux).
-    // So the acting waits for the row it is about to name, the way `bucketAllTimer` waits for the
-    // headings; a row that never lands leaves the run to the watchdog, which is the diagnosis.
+    // `rowAt` / `rowFor` read delegates, born a layout after the model has the rows: fired on arrival they answer
+    // nothing, and a "-go" has nothing to write. So the act waits for the row it names; a row that never lands
+    // leaves the run to the watchdog, which is the diagnosis.
     SampleTimer {
         id: fileRowsTimer
         onTriggered: {
             const act = Harness.autoAct
-            // The named row has to be walkable — and for the pairs that start from the head row,
-            // that row too. One walk answering is every walk answering: they read the same
-            // delegates.
             if (wipPane.rowFor(Harness.autoActArg) === null)
                 return
             if ((act === "stage-many" || act === "stage-many-go"
@@ -229,30 +196,21 @@ Item {
             driver.dispatchFinished()
         }
     }
-    /// Automation: how many rows the graph holds once the fetch the opening fired has landed. Its commit is one only
-    /// the remote had (`--preset behind`), so a graph that reaches this many rows without anything being pressed is
-    /// the fetch itself, said in the only place a headless run can read it.
+    /// How many rows the graph holds once the opening's fetch has landed — under `--preset behind` only that fetch
+    /// brings the last one in.
     property int openFetchRows: 0
     SampleTimer {
         id: openFetchTimer
         onTriggered: {
-            // A state to sample: rows only reach the count after the fetch has landed and the graph has been rebuilt
-            // over it, and a run where that never happens has nothing to report.
-            //
-            // The tab's own word for "the fetch is over" is waited for as well, so the count read below is the settled
-            // one and the picture holds a button at rest. Seeing it turn is optional: the fetch can be over
-            // before this page exists (§通信中(リング)と起動直後の狙い方).
-            //
-            // The refs the fetch brought back are a feed of their own and land after the rows do, so the count alone
-            // would picture a graph that has fetched beside a sidebar that has not. `headBehind` is the sidebar's end
-            // of that feed, and under `--preset behind` only the fetch can move it off zero.
+            // The rows; the fetch being over, so the count is settled and the button at rest (seeing it turn is
+            // optional — it can end before this page exists; verify-ui verbs.md §通信中(リング)と起動直後の狙い方); and
+            // `headBehind`: the refs are a feed of their own and land after the rows, and under `--preset behind`
+            // only the fetch moves it off zero.
             if (graphModel.rowTotal < acts.openFetchRows || repoTab.autoFetchRunning
                     || branchesModel.headBehind < 1)
                 return
-            // The graph is the other side of that same feed, and it is answered a pass later still: the walk that
-            // added the row the fetch brought in was drawn over the refs as they stood, so that row arrives wearing
-            // no chip at all and is given the remote name once the listing is in. Row zero is that row: the preset
-            // opens on a clean tree, so no working-tree row stands above what the fetch brought in.
+            // The fetched row arrives chipless and takes the remote name a pass later. Row zero is that row: the
+            // preset opens on a clean tree, so no working-tree row stands above it.
             const topChips = GitFacts.chipsShown(graphModel.labelsAt(0), graphModel.goneChips)
             if (topChips.length === 0)
                 return

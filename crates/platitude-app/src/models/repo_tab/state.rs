@@ -13,10 +13,9 @@ impl Default for RepoTab {
             error_path: String::new(),
             last_error: String::new(),
             last_error_from_fetch: false,
-            // Placeholder until the page's restore writes the saved flag
-            // (`PageLayout.applySavedLayout`); the session takes the same
-            // saved flag at open (`Hub::ensure_open`), so the eye and the
-            // walk start together however the two writes land.
+            // Placeholder: the page's restore writes the saved flag
+            // (`PageLayout.applySavedLayout`) and the session reads the
+            // same one at open (`Hub::ensure_open`).
             tags_shown: true,
             busy_count: 0,
             busy_op: String::new(),
@@ -112,11 +111,8 @@ impl Default for RepoTab {
 }
 impl RepoTab {
     /// Runs `f` with this tab's session, if the tab is still open.
-    ///
-    /// **Reads only.** Every write this tab asks for goes through
-    /// [`Self::ask_session`], which is where the id it is given is kept
-    /// for whoever is waiting on that write (`write_watch`); a write sent
-    /// from here would be one nothing could wait for by name.
+    /// Reads only — a write sent from here is one nothing can wait for;
+    /// writes go through [`Self::ask_session`].
     pub(super) fn with_session<R>(
         &self,
         f: impl FnOnce(&Arc<platitude_core::session::RepoSession>) -> R,
@@ -124,16 +120,12 @@ impl RepoTab {
         crate::hub::with_session(self.tab_id, f);
     }
 
-    /// **The one door a write leaves this tab by.** Asks the session and
-    /// answers with the id it was accepted under — nothing where there is
-    /// no session to ask or the session took nothing (it is closed).
+    /// The one door a write leaves this tab by. Answers with the id the
+    /// session accepted it under — nothing with no session or a closed one.
     ///
-    /// **An id is a promise of an answer**, so whoever waits for one waits
-    /// on this alone: the page holding it across the bridge
-    /// (`RepoPage.pendingPopId`), the rows a delete took off the screen
-    /// (`ops::StandIn`), and the run whose picture is of what the write
-    /// left, which the watch keeps it for (`write_watch`) — **inside this
-    /// call, which is the only moment the id is anybody's in particular**.
+    /// Every waiter on a write keys on this id (`RepoPage.pendingPopId`,
+    /// `ops::StandIn`, `write_watch`); the watch takes it inside this
+    /// call, the only moment the id is anybody's in particular.
     pub(super) fn ask_session(
         &mut self,
         f: impl FnOnce(
@@ -145,13 +137,9 @@ impl RepoTab {
         asked
     }
 
-    /// The session reading the copy this tab was stood in has answered
-    /// — where it is, or that it would not open — so the tab is no
-    /// longer standing and the count it was holding goes back
-    /// (`RepoTab::restand`).
-    ///
-    /// Guarded, because the two arms that call it are every opening's,
-    /// and an opening nobody stood for is holding no count.
+    /// The session of the copy this tab was stood in has answered (open
+    /// or not), so the count `RepoTab::restand` took goes back. Guarded:
+    /// every opening calls it, and one nobody stood for holds no count.
     pub(super) fn stood(&mut self) {
         if !self.standing {
             return;
@@ -160,15 +148,11 @@ impl RepoTab {
         self.busy_count = (self.busy_count - 1).max(0);
     }
 
-    /// The page has put a status on screen: its counts stood beside the
-    /// report of HEAD numbered `seen`, and `emptied` says whether they
-    /// left the working tree with nothing in it.
+    /// The page has put a status on screen beside HEAD report `seen`;
+    /// `emptied` is whether it left the working tree empty.
     ///
-    /// **Written down before anything asks what it means**, because a
-    /// status and the write answer it belongs beside are drained apart
-    /// and either can be the one already in hand. An older report is let
-    /// go: a report of HEAD arrives on its own as well, carrying no
-    /// counts, and the tree it would describe is one it never saw.
+    /// Written down before anything asks, because a status and its write
+    /// answer are drained apart and either can arrive first.
     pub(super) fn tree_was_read(&mut self, seen: u64, emptied: bool) {
         if seen < self.tree_seen {
             return;
@@ -177,49 +161,36 @@ impl RepoTab {
         self.tree_emptied = emptied;
     }
 
-    /// Whether this window's own stash is what emptied the tree the page
-    /// is acting on, settling that press (`ops::StashOut`). Asked from
-    /// both sides of the pair, so the half that arrives first asks and
-    /// gets nothing.
+    /// Behind `takeStashLanding` (`ops::StashOut`).
     pub(super) fn stash_landing_taken(&mut self) -> bool {
         self.stash_out.taken(self.tree_seen, self.tree_emptied)
     }
 
-    /// Whether the re-read standing for a write already answers for the
-    /// status the page is reading, spending it where it does
-    /// (`ops::DiffReread`).
+    /// Behind `takeDiffRead` (`ops::DiffReread`).
     pub(super) fn diff_reread_taken(&mut self) -> bool {
         self.diff_reread.taken(self.tree_seen)
     }
 
-    /// The open file was read again for the answers this notify carried,
-    /// so the status the last of them publishes behind it is not news.
-    /// Nothing is armed where that status has already been read.
+    /// Behind `noteDiffRead`: nothing is armed where the status the last
+    /// answer publishes has already been read.
     pub(super) fn read_diff_for_answers(&mut self) {
         let after = self.write_answers.last().map_or(0, |a| a.head_seq);
         self.diff_reread.read_after(after, self.tree_seen);
     }
 
-    /// A fetch ended, whoever asked for it. Counts the ones that failed
-    /// and stops the timer once there have been enough of them, so a
-    /// machine that has lost the network stops reaching for it every
-    /// interval. Anything that comes back clean clears the run.
+    /// A fetch ended, whoever asked for it: counts consecutive failures
+    /// and stops the timer after enough (デザイン規約 §リモートから取り込む).
     ///
     /// `announce` is whether this one may raise the command log. The
-    /// fetch an opening fires may not: it still counts — the button
-    /// speaks for fetching, whoever asked — but a machine that is
-    /// offline would otherwise have the panel thrown up at it every time
-    /// a tab opened (デザイン規約 §リモートから取り込む).
+    /// opening fetch may not — it still counts, but an offline machine
+    /// would have the panel thrown up at every tab opened.
     pub(super) fn fetch_settled(&mut self, error: &str, announce: bool) {
         if error.is_empty() {
             self.fetch_failures = 0;
             self.fetch_log_raised = false;
-            // The header line is state: a fetch that has just landed
-            // makes "fetch cannot reach the remote" untrue, and red
-            // kept up over that would contradict the button that
-            // is already back to normal (デザイン規約 §リモートから取り込む
-            // 「成功が 1 回入れば数は 0 に戻る」— its command-log side).
-            // Rows are left alone: history stays until a reader clears it.
+            // The header line is state, and a landed fetch makes it untrue
+            // (デザイン規約 §リモートから取り込む「成功が 1 回入れば数は 0 に戻る」).
+            // Rows are history and stay.
             if self.last_error_from_fetch {
                 self.last_error = String::new();
                 self.last_error_from_fetch = false;
@@ -228,10 +199,8 @@ impl RepoTab {
         }
         self.fetch_failures += 1;
         if announce && !self.fetch_log_raised {
-            // The panel reads this; the ones after it are the same news.
-            // Counted from the first failure that may speak, so a
-            // quiet opening fetch leaves the run's one telling
-            // where it is.
+            // Once per run — later failures are the same news; a quiet
+            // opening fetch does not spend it.
             self.fetch_log_raised = true;
             self.last_error = error.to_string();
             self.last_error_from_fetch = true;
@@ -240,19 +209,14 @@ impl RepoTab {
         if self.fetch_failures < FETCH_FAILURES_BEFORE_STOP || self.auto_fetch_suspended {
             return;
         }
-        // Whether there was a timer to stop is the answer to "is this a
-        // repository that fetches on its own at all": one that does not
-        // has nothing suspended, and nothing to be told about it.
+        // No timer to stop means nothing suspended and nothing to tell.
         self.auto_fetch_suspended =
             crate::hub::from_session(self.tab_id, |s| s.suspend_auto_fetch()).unwrap_or(false);
     }
 
-    /// Re-reads the face the configured identity wears: the identicon
-    /// its name packs to, and the picture assigned to its address if
-    /// there is one. Answers whether either moved, so the caller decides
-    /// whether anyone has to be told — the feed says so once at the end
-    /// of its own drain, an assignment arriving on its own has to say so
-    /// itself.
+    /// Re-reads the configured identity's identicon and assigned picture.
+    /// Answers whether either moved; the caller does the telling (the
+    /// feed once at the end of its drain).
     pub(super) fn read_author_avatar(&mut self) -> bool {
         let code = crate::encode::avatar_code(&self.author_name);
         let url = Hub::with(|hub| hub.avatar_url(&self.author_email)).unwrap_or_default();
@@ -265,11 +229,8 @@ impl RepoTab {
     }
 
     /// Whether HEAD carries someone else's name — the only case where an
-    /// amend has authorship to take over (`--reset-author`).
-    ///
-    /// git refuses to commit with an empty `user.name`, so a HEAD that is
-    /// really there always has one: an empty name is "no HEAD read
-    /// yet".
+    /// amend has authorship to take over (`--reset-author`). An empty
+    /// name is "no HEAD read yet": git refuses an empty `user.name`.
     pub(super) fn compare_head_author(&mut self) {
         self.head_author_differs = !self.head_author_name.is_empty()
             && (self.head_author_name != self.author_name
@@ -288,8 +249,7 @@ impl RepoTab {
         }
     }
 
-    /// Moves HEAD, taking uncommitted work along — through a stash when
-    /// git will not carry it itself, which needs nothing asked here.
+    /// Moves HEAD, taking uncommitted work along (`RepoSession::checkout`).
     pub(super) fn move_head(
         &mut self,
         target: platitude_core::branch::CheckoutTarget,
@@ -306,11 +266,9 @@ impl RepoTab {
 
     /// The commit slot's two fields, joined and optioned for core.
     ///
-    /// **The press writes down the id it was accepted under** — the one
-    /// thing the answer cannot say for itself is whose press it was, and
-    /// the editor is emptied by its own answer alone
-    /// (`ops::Press`). Asked and written down together, so every commit
-    /// goes out with the wait that receives it.
+    /// The press records the id it was accepted under in the same breath:
+    /// the answer cannot say whose press it was, and only its own answer
+    /// empties the editor (`ops::Press`).
     pub(super) fn commit_from_fields(
         &mut self,
         subject: String,
@@ -350,9 +308,8 @@ impl RepoTab {
 mod tests {
     use super::*;
 
-    // These stay off the first-failure branch: that one raises a Qt
-    // signal, which wants an attached object. The fetch-recover verb
-    // walks it in the real window instead.
+    // These stay off the first-failure branch: its Qt signal wants an
+    // attached object (the fetch-recover verb walks it).
 
     #[test]
     fn a_fetch_that_lands_takes_down_the_line_a_fetch_put_up() {
@@ -404,8 +361,7 @@ mod tests {
         tab.last_error_from_fetch = false;
         tab.fetch_settled("fatal: unable to access", true);
         assert_eq!(tab.fetch_failures, 2);
-        // The second failure is the same news as the first: it does not
-        // touch the line, so it cannot claim it either.
+        // Same news as the first: it neither touches nor claims the line.
         assert_eq!(tab.last_error, "fatal: bad revision");
         assert!(!tab.last_error_from_fetch);
         // And the recovery that follows respects the standing owner.

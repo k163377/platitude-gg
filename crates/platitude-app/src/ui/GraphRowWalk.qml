@@ -3,37 +3,25 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// Where the graph's selection is, and where the view stands to show it: the arrow keys walking the history (規約
-// §矢印で履歴を辿る), the jumps the page asks for, and putting the reader's place back after a background rebuild wrote new
-// rows over the old ones.
-//
-// Nothing here draws — every one of these is a write to the list's `currentIndex` or its `contentY`, and this is the
-// one place either is written from.
+// The graph's selection and where the view stands to show it: the arrow keys (規約 §矢印で履歴を辿る), the page's
+// jumps, and keeping the reader's place across a background rebuild. Draws nothing.
 Item {
     id: walk
 
-    /// The list being walked.
     required property var view
     required property var graphModel
-    /// A question is standing over a row, waiting to be answered.
+    /// A question is standing over a row.
     required property bool asking
-    /// A step came to rest on a row and it is time to read it. **The row travels with the id**, because the id does
-    /// not name the row: every working copy's uncommitted row carries git's all-zero one, and which copy the reader
-    /// walked onto is the row number's to say (`RepoPage.openWipFor`).
+    /// A step came to rest on a row: read it. The row travels with the id, since every working copy's uncommitted row
+    /// carries the all-zero one (`RepoPage.openWipFor`).
     signal activated(string oidHex, int atRow)
 
-    /// Moves the selection one row (`delta` = ∓1) and brings it into view; answers whether it moved. The keys and the
-    /// automation hook both come through here — a headless run cannot inject a keystroke, so the step has to be
-    /// callable as well as pressable (verify-ui).
+    /// Moves the selection one row (`delta` = ∓1) and brings it into view; answers whether it moved. Keys and runs
+    /// both come here. `held` = the key was already down (`KeyEvent.isAutoRepeat`), which only changes when the row
+    /// is read (`noteStep`).
     ///
-    /// `held` says the key was already down when this step arrived (`KeyEvent.isAutoRepeat`); it changes nothing about
-    /// where the selection goes, only when the row is read (`noteStep`).
-    ///
-    /// Refused while something stands over a row: a question waiting to be answered, or a name box being typed into.
-    /// The name box is the one that has to be named here: it lives inside a row, and a
-    /// single-line box does not consume Up and Down — they come up through the delegate to the list.
-    ///
-    /// Refused as well while the pane is off screen: this item is inside it, so its own visibility is the pane's.
+    /// Refused while the pane is off screen, a question stands, or a name box is open — a single-line box does not
+    /// consume Up / Down, so they reach the list through the delegate.
     function stepRow(delta, held) {
         if (!walk.visible || walk.asking
                 || walk.view.namingOid !== "" || walk.view.count === 0)
@@ -42,29 +30,22 @@ Item {
         const row = from < 0 ? 0 : Math.max(0, Math.min(from + delta, walk.view.count - 1))
         if (row === from)
             return false
-        // Asked before the move: whether there was a reading position to keep. A step off the edge is one row short of
-        // being on screen, but a selection that was nowhere in sight is nobody's place — that one is centered instead.
+        // Asked before the move: a selection that was out of sight is nobody's place, so that one is centered instead.
         const near = walk.view.rowOnScreen(from)
         walk.view.currentIndex = row
         walk.revealStep(row, near)
         walk.noteStep(held)
         return true
     }
-    /// Brings a stepped-onto row into view. `near` moves as little as will do, which is the row itself; anything else
-    /// centers.
-    ///
-    /// Row positions are worked out: `itemAtIndex` answers null for rows the view has
-    /// not built, and a walk that trusts it is cut to the viewport (P3-確認事項: the WIP list's range selection is the
-    /// standing example).
+    /// Brings a stepped-onto row into view: `near` moves as little as will do, anything else centers. Row positions
+    /// are computed, since `itemAtIndex` answers null for rows the view has not built.
     function revealStep(row, near) {
-        // A wheel notch still in flight was aimed at rows this step is walking away from (`WheelGlide.halt`).
         walk.view.haltGlide()
         if (!near) {
             walk.view.positionViewAtIndex(row, ListView.Center)
             return
         }
-        // The first row's box carries the list's top margin with it — its highlight is painted over that sliver — so
-        // stepping onto it goes the whole way to the top.
+        // The first row's highlight covers the top margin, so stepping onto it goes all the way to the top.
         const top = walk.view.originY + row * Theme.graphRowHeight
                     - (row === 0 ? walk.view.topMargin : 0)
         const bottom = walk.view.originY + (row + 1) * Theme.graphRowHeight
@@ -73,11 +54,8 @@ Item {
         else if (bottom > walk.view.contentY + walk.view.height)
             walk.view.contentY = walk.view.clampY(bottom - walk.view.height)
     }
-    /// How the last step left `row` sitting in the viewport, for the headless run: `in` when the view never moved (the
-    /// row was already there), `edge` when it came in flush against the top or the bottom (the least a step can move
-    /// the view), `center` when it was put in the middle instead. Which of the three is right is the whole of 規約
-    /// §矢印で履歴を辿る's second paragraph, and a screenshot cannot tell an edge that was reached by one row from one that was
-    /// jumped to. `wasY` is where the view stood before that step.
+    /// For the runs: how the last step left `row` in the viewport, given `wasY` from before it — `in` (the view never
+    /// moved), `edge` (flush against top or bottom), `center`, or `adrift` (規約 §矢印で履歴を辿る).
     function stepLanding(row, wasY) {
         if (Math.abs(walk.view.contentY - wasY) < 1)
             return "in"
@@ -91,16 +69,12 @@ Item {
         return "adrift"
     }
 
-    /// Books the reading of the row stepped onto. A press is read at once — a single one has to answer inside the
-    /// interaction budget — and a step taken with the key still down only pushes the settle back. So a held arrow is
-    /// read exactly twice: where it set off, and where it stopped. A selection carries three git processes with it
-    /// (`git show`, the history question, the signature question), which is not a thing to run at the keyboard's
-    /// repeat rate.
+    /// Books the reading of the row stepped onto. A press is read at once (it must answer inside the interaction
+    /// budget); a step with the key held only pushes the settle back, so a held arrow is read twice — where it set off
+    /// and where it stopped — rather than running a selection's git processes at the repeat rate.
     ///
-    /// The repeat has to say so itself (`held`), because the settle cannot tell: every OS waits longer before the
-    /// first repeat than the settle runs (250ms at the fastest Windows setting, 225ms at the shortest macOS one,
-    /// 500ms by GNOME's default), so the settle behind the opening press has always expired by the time a run gets
-    /// going — and without the flag the second row of every held arrow is read at once, like a press of its own.
+    /// The repeat must say so itself (`held`): every OS's delay before the first repeat (Windows ≥ 250ms, macOS ≥
+    /// 225ms, GNOME 500ms by default) outlasts the settle, so without it a held arrow's second row reads as a press.
     function noteStep(held) {
         if (held || stepTimer.running) {
             walk.stepPending = true
@@ -111,24 +85,19 @@ Item {
         walk.landStep()
         stepTimer.restart()
     }
-    /// Whether a step went by unread: one taken with the key down, or one that came while the settle was running.
-    /// Without it the settle behind a single press would read the same row twice.
+    /// A step went by unread; without it the settle behind a single press would read the row twice.
     property bool stepPending: false
     function landStep() {
-        // The row under the highlight as it stands: a background rebuild during the
-        // settle writes the rows in place, and what was stepped onto is whatever is there to be seen now.
+        // Read the row as it stands now: a background rebuild during the settle rewrites rows in place.
         const row = walk.view.currentIndex
         const oidHex = walk.graphModel.oidAt(row)
         if (oidHex !== "")
             walk.activated(oidHex, row)
     }
-    /// Automation: whether a settle stands between the last step and its reading (verify-ui). A headless run cannot
-    /// hold a key down, so the hold verb plays the opening press, waits here for the settle behind it to expire the
-    /// way an OS's delay before the first repeat does, and only then sends the repeats.
+    /// Automation: a settle stands between the last step and its reading. The hold verb waits for it to expire, as an
+    /// OS's first-repeat delay would, before sending the repeats.
     readonly property alias settling: stepTimer.running
-    /// A move of the view is still owed: a centering or a shift waiting out its beat (the two timers below). Read where
-    /// a sampler asks whether the page has stopped arriving (`PageSettled`) — a page that answers yes with one of these
-    /// pending moves its view a beat later, over whatever a run did to it in between.
+    /// A centering or a shift is still owed to the view (the timers below); `PageSettled` waits on it.
     readonly property bool placing: anchorTimer.running || shiftTimer.running
     Timer {
         id: stepTimer
@@ -145,20 +114,13 @@ Item {
         walk.view.currentIndex = row
         walk.view.positionViewAtIndex(row, ListView.Center)
     }
-    /// Re-centers on the current row a beat from now. Centering must outlive the ListView's own relayout: a model reset
-    /// (tag swap / reload) zeroes contentY during the polish that runs after our handlers, so the anchor is applied a
-    /// beat later.
+    /// Re-centers on the current row a beat from now: a model reset zeroes contentY in the polish after our handlers.
     function anchorSoon() {
         anchorTimer.restart()
     }
-    /// Puts the viewport back over the rows it was reading after `rows` commits arrived above them. A background
-    /// rebuild replaces the graph by writing over the rows in place, so newcomers at the top slide everything below
-    /// them down while the view stays where it is and quietly shows different commits — the further down someone is
-    /// reading, the more that costs them.
-    ///
-    /// At the top of the list there is nothing to preserve: the newest commits are exactly what belongs there, so it
-    /// stays pinned. Applied a beat later, for the same reason as the anchor above: the list has not laid the new rows
-    /// out yet, so its content is still the old height and clamping against it would swallow the correction.
+    /// Keeps the viewport over the rows it was reading after `rows` commits arrived above them (a rebuild rewrites rows
+    /// in place, so the view would silently show other commits). At the top it stays pinned to the newest. Applied a
+    /// beat later: clamping against the not-yet-relaid content height would swallow the correction.
     function shiftRows(rows) {
         if (rows === 0)
             return
@@ -167,11 +129,8 @@ Item {
         shiftTimer.pending += rows
         shiftTimer.restart()
     }
-    /// Brings `row` into view once the pass that put it there has settled, and only if it is not already on screen — a
-    /// row in sight is not worth taking the reader's place for (the same rule `goToMatch` answers to).
-    ///
-    /// Carried by the shift timer: the two write the same contentY for opposite reasons, and
-    /// whether the row is on screen is only true of the position the shift leaves behind. One timer settles the order.
+    /// Brings `row` into view once its pass has settled, unless already on screen (as `goToMatch` does). Rides the
+    /// shift timer: whether the row is on screen is only true after the shift, so one timer fixes the order.
     function showRowSoon(row) {
         shiftTimer.showRow = row
         shiftTimer.restart()

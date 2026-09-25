@@ -1,12 +1,9 @@
 use super::*;
 
-// A list model that answers by value: `data()` computes the field a
-// role asks for, where `QListModel::get` would have handed out a
-// borrow of a stored `NavItem` and so forced every row to exist.
-// Nothing here is a tree — `parent` is always invalid and rows hang
-// off the root — but `QAbstractItemModel` is the base that lets a row
-// be answered (and the one CXX-Qt expects, via
-// `QAbstractListModel`).
+// A flat list answered by value: `data()` computes the field, where
+// `QListModel::get` would lend a stored `NavItem` and force every row to
+// exist (rules-refs/app-ui.md「サイドバーの行は射影する」). Rows hang off
+// the root; `QAbstractItemModel` is the base that lets a row be answered.
 impl QAbstractItemModel for NavSectionModel {
     fn index(&self, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex {
         let out_of_list = parent.is_valid()
@@ -46,9 +43,8 @@ impl QAbstractItemModel for NavSectionModel {
         self.field(row, role).variant()
     }
 
-    /// The names QML resolves a role by. Spelled where the answers are
-    /// (`Role`), and held to the item's own derived table by the test at
-    /// the foot of `role.rs`.
+    /// The names QML resolves a role by, spelled by `Role` and held to the
+    /// item's derived table by the test in `role.rs`.
     fn role_names(&self) -> QHash<i32, QByteArray> {
         let mut names = QHash::default();
         for (number, role) in Role::ALL.iter().enumerate() {

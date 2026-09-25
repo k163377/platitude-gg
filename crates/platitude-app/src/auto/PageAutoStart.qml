@@ -4,12 +4,9 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The two things a run can be told to do to a page as it opens, neither of which is a verb: show the working tree
-/// (`PGG_AUTO_WIP=1`), and pick the newest commit and open its first changed file (`PGG_AUTO_SELECT=1`). What they are
-/// for is a picture with something in every pane, and a measurement with a selection to time.
-///
-/// Each one drives the page through the same door a hand goes through — `showWip` / `activateRow` / `toggleDiff` — so
-/// what they exercise is the page's own wiring.
+/// What a run can be told to do to a page as it opens, without a verb: show the working tree (`PGG_AUTO_WIP=1`), or
+/// pick the newest commit and open its first changed file (`PGG_AUTO_SELECT=1`). Both go through the page's own
+/// `showWip` / `activateRow` / `toggleDiff`.
 Item {
     id: start
 
@@ -20,9 +17,9 @@ Item {
     required property var worktreeModel
     required property var graphPane
 
-    /// The page's own default selection stays out of the way while one of the two below is picking: it would land
-    /// first and be photographed (`RepoPage.rowPickedElsewhere`). A `Binding`,
-    /// because the page is handed over before it has read the property once.
+    /// Keeps the page's own default selection out of the way while one of these picks — it would land first and be
+    /// photographed (`RepoPage.rowPickedElsewhere`). A `Binding`, because the page is handed over before it has read
+    /// the property once.
     Binding {
         target: start.page
         property: "rowPickedElsewhere"
@@ -41,8 +38,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_SELECT=1: select the newest commit, then open the first changed file's diff — the full pipeline, for the
-    // screenshot runs.
+    // PGG_AUTO_SELECT=1: select the newest commit, then open its first changed file's diff.
     property bool selected: false
     Connections {
         target: start.graphModel
@@ -50,12 +46,8 @@ Item {
         function onStatsChanged() {
             if (start.selected || start.graphModel.rowTotal === 0)
                 return
-            // **The newest commit.** A dirty working tree puts the WIP row on top, and selecting
-            // that one shows the pending changes — no details are asked for, so a measurement that
-            // reads the interaction budget off this hook measures nothing and says so (`xtask perf`'s `missing`). Every
-            // demo repository is dirty, and a stash written after the tip stands over it in the same way without being
-            // a commit of the history to photograph. The rule is the model's, so the page's own default and the perf
-            // driver answer it the same way (`GraphModel.newestCommitRow`).
+            // Not row 0: the WIP row (every demo repository is dirty) and a newer stash stand over the tip, and the
+            // WIP row asks for no details (`GraphModel.newestCommitRow`).
             const row = start.graphModel.newestCommitRow()
             if (row >= 0) {
                 start.selected = true

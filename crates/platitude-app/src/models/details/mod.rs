@@ -17,14 +17,6 @@ mod details_tests;
 mod qobject;
 mod tree;
 
-// ---------------------------------------------------------------------------
-// DetailsModel: commit metadata + changed files
-// ---------------------------------------------------------------------------
-
-// Every field is `pub(super)` because the rows are also what
-// `details_tests` builds a commit out of: the tests sit beside the model
-// (.claude/rules/structure.md), and `models` is as far as the widening
-// reaches.
 #[derive(QModelItem, Default, Clone)]
 pub struct FileItem {
     pub(super) change: String,
@@ -35,9 +27,9 @@ pub struct FileItem {
     /// Display text: the last segment in tree view, the full path in
     /// path view.
     pub(super) name: String,
-    /// The same for a rename's source, cut back exactly as far as `name`
-    /// is (`encode::rename_source`). `orig_path` stays whole beside it —
-    /// that one addresses a diff, this one is only read.
+    /// The rename's source, cut back as far as `name` is
+    /// (`encode::rename_source`) — display only; a diff is addressed by
+    /// the whole `orig_path`.
     pub(super) orig_name: String,
     pub(super) depth: i32,
     pub(super) folder: bool,
@@ -70,9 +62,8 @@ pub struct DetailsModel {
     author_email: String,
     author_time: i64,
     avatar: i32,
-    /// `file:` URL of this author's assigned picture, empty when they have
-    /// none. Refreshed on every details read and whenever an assignment
-    /// changes, so the card follows the settings list without a reload.
+    /// `file:` URL of this author's assigned picture, empty when none.
+    /// Refreshed on every read and on every assignment (`refresh_avatar`).
     avatar_url: String,
     /// The `Co-authored-by` trailers (`encode::mates_of`).
     co_authors: crate::encode::Mates,
@@ -80,26 +71,21 @@ pub struct DetailsModel {
     committer_email: String,
     committer_avatar: i32,
     committer_avatar_url: String,
-    /// Whether the commit was put here by somebody other than its author,
-    /// and whether that happened at another moment than it was written.
-    /// Both are answered here: the address is what tells two people
-    /// apart (デザイン規約 §アバターを与える), and that rule lives here
-    /// alone.
+    /// Whether somebody other than the author committed it, and at another
+    /// moment than it was written (decided in `drain`).
     committer_differs: bool,
     commit_time_differs: bool,
     committer_time: i64,
     message_subject: String,
     message_body: String,
     /// How many commits the choice holds, and whether the file list is
-    /// the two-commit comparison rather than what a set of them changed
-    /// (デザイン規約 §複数のコミットを選ぶ). 0 / false while one commit is
-    /// what is being read, which is every other pane in this file.
+    /// the two-commit comparison rather than what the set changed
+    /// (デザイン規約 §複数のコミットを選ぶ). 0 / false while one commit is read.
     selection_count: i32,
     comparing: bool,
-    /// Whether the files below a choice are its own answer. **Read it
-    /// before the list**: a read that failed leaves the list empty with
-    /// nothing loading, which is the same shape as a choice whose
-    /// commits changed nothing (規約 §UI 自動化の因果性).
+    /// Whether the files below a choice are its own answer. Read it before
+    /// the list: a failed read leaves it empty and not loading — the same
+    /// shape as a choice that changed nothing (app-ui.md §UI 自動化).
     selection_loaded: bool,
     /// The two ends of a comparison, oldest first — what the header
     /// names. Empty unless `comparing`.
@@ -119,7 +105,6 @@ impl Default for DetailsModel {
             files: Vec::new(),
             raw_files: Vec::new(),
             file_total: 0,
-            // Tree view is the default look of the CHANGES list.
             tree_view: true,
             folder_overrides: HashMap::new(),
             sha_hex: String::new(),
@@ -156,10 +141,8 @@ impl Default for DetailsModel {
 }
 
 impl DetailsModel {
-    /// Lays a file list into the CHANGES rows. One commit's own files
-    /// and what a choice of several changed are the same list read the
-    /// same way — the only thing that differs is which git command
-    /// answered.
+    /// Lays a file list into the CHANGES rows, a commit's or a choice's
+    /// alike.
     pub(super) fn take_files(&mut self, files: &[platitude_core::parse::name_status::FileChange]) {
         self.raw_files = files
             .iter()
@@ -168,8 +151,8 @@ impl DetailsModel {
                 path: f.path.clone(),
                 orig_path: f.orig_path.clone().unwrap_or_default(),
                 name: f.path.clone(),
-                // The flat view spells every row whole, both names with
-                // it; the tree cuts them together (`build_file_tree`).
+                // Whole in the flat view; the tree cuts both names
+                // together (`build_file_tree`).
                 orig_name: f.orig_path.clone().unwrap_or_default(),
                 ..Default::default()
             })
@@ -183,10 +166,8 @@ impl DetailsModel {
         }
     }
 
-    /// Empties everything that describes one commit. What a choice of
-    /// several holds is not a commit — it has no author, no message
-    /// and no hash — so the card above the file list goes with the
-    /// commit it described.
+    /// Empties everything that describes one commit — a choice of several
+    /// has no author, message or hash, so the card goes.
     pub(super) fn clear_commit(&mut self) {
         self.sha_hex.clear();
         self.sha8.clear();

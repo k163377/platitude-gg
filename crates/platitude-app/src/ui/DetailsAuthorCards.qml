@@ -3,25 +3,16 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-/// The two cards the commit's author row opens: the whole of who authored and who committed, and the people the
-/// message credits.
+/// The two cards the commit's author row opens: author and committer, and the co-authors the message credits. They
+/// open in the pane's coordinates, so they do not scroll with the block; the row's anchor is mapped on the way in.
 ///
-/// **They stand in the pane's coordinates.** `CommitAuthorRow` owns the hover state and raises an
-/// anchor point; the cards open here so they do not scroll away with the block the row sits on. The anchor arrives in
-/// the row's coordinates and is mapped on the way in.
-///
-/// A `QtObject` holding two popups and their keepers by name: the pane is a `ColumnLayout`, and an
-/// item declared in one is a row of it however small it is made (measured — an anchored host there draws "anchors on
-/// an item that is managed by a layout" and the pane lays out around it). A popup is not a layout child, so the two
-/// stand where they are told to; each names the pane as its `parent` so that "where" is the pane's coordinates.
+/// A `QtObject`, not an `Item`: the pane is a `ColumnLayout`, where any item is a row (rules-refs/app-ui.md).
 QtObject {
     id: cards
 
-    /// The pane the cards open in: what the anchor is mapped into, and what is left for a card's rows is measured
-    /// against.
+    /// The pane the cards open in and the anchor is mapped into.
     required property Item host
-    /// The block holding the row, for the anchor's own coordinates, the records to show, and the hover the cards are
-    /// kept open by.
+    /// The block holding the row: the anchor's coordinates, the records, and the hover that keeps the cards open.
     required property var block
     /// The commit whose two people the author card names.
     required property var details
@@ -29,20 +20,17 @@ QtObject {
     /// Whether each card is on screen — the output side, since the input side would read true with the binding cut.
     readonly property bool matesCardOpen: mateCard.opened
     readonly property bool authorCardOpen: authorCard.opened
-    /// Whether the pointer is on a card — the row asks, because the two
-    /// together are one hover.
+    /// Whether the pointer is on a card — the row asks, because the two together are one hover.
     readonly property bool matesPointerInside: mateCard.pointerInside
     readonly property bool authorPointerInside: authorCard.pointerInside
 
-    /// Where each card was raised, in the host's coordinates, and how far either may stand to the sides. Set on open
-    /// — the answer only matters at the moment it is asked, and `mapToItem` is a call, so a
-    /// binding on one would not see the splitter move.
+    /// Where each card was raised (host coordinates) and how far either may stand. Set on open: `mapToItem` is a
+    /// call, so a binding would not see the splitter move.
     property real mateAnchorX: 0
     property real authorAnchorX: 0
     property real leftStop: 0
     property real rightStop: 0
 
-    /// The row raised an anchor in its own coordinates: map it here and open.
     function openMateCard(at) {
         const records = cards.block.coAuthorRecords
         if (records.length === 0)
@@ -52,9 +40,7 @@ QtObject {
         cards.takeRoom()
         mateCard.maxWidth = cards.rightStop - cards.leftStop
         cards.mateAnchorX = p.x
-        // Flush against the underline: a gap is a band the pointer crosses
-        // while touching neither, and the card closes under it. Same rule
-        // the ref list follows.
+        // Flush against the underline: in a gap the pointer touches neither, and the card closes.
         mateCard.y = p.y
         mateCard.open()
     }
@@ -68,24 +54,17 @@ QtObject {
         authorCard.y = p.y
         authorCard.open()
     }
-    /// How far a card may reach on either side.
-    ///
-    /// **The room is the window's.** These cards float over the whole window the way a menu and the
-    /// chip's list do, and the pane they hang off is the narrowest column in it: measured from the name's shoulder
-    /// to the pane's own edge, an ordinary forge address does not fit on one line and the card wraps it with the
-    /// graph lying empty beside it. What is over the window's room still wraps — that part is the card's own rule
-    /// (規約 §hover のツールチップ).
+    /// How far a card may reach on either side — the window's room, not the pane's, which is too narrow for an
+    /// ordinary forge address (規約 §hover のツールチップ).
     function takeRoom() {
-        // `spaceXxl` short of the window on the far side, the stop every floating card in the app keeps
-        // (`AppMenu.roomForRows` / `RefListPopup.chipRoom`), and the pane's own inset on the near side, where these
-        // cards have been standing all along.
+        // `spaceXxl` short of the window on the far side, like every floating card (`AppMenu.roomForRows` /
+        // `RefListPopup.chipRoom`), and the pane's own inset on the near side.
         cards.leftStop = Theme.spaceXxl - cards.host.mapToItem(null, 0, 0).x
         cards.rightStop = cards.host.width - 2 * Theme.spaceXs
     }
-    /// Where a card of that width sits: at the shoulder of the stretch that raised it, and backed up out of the pane
-    /// when what is left of the row cannot hold it — **the seat is what gives way**, since the address is the
-    /// thing the card was opened to show. A binding: a popup does not have its
-    /// final width in the frame it is handed its rows (app-ui.md).
+    /// Where a card of that width sits: at the anchor, backed out of the pane when the row cannot hold it — the seat
+    /// gives way, not the address. Read by a binding: a popup's final width comes a frame after its rows
+    /// (rules-refs/app-ui.md).
     function seatX(anchorX, cardWidth) {
         return Math.max(cards.leftStop, Math.min(anchorX, cards.rightStop - cardWidth))
     }

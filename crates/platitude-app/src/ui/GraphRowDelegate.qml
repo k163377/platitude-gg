@@ -15,8 +15,8 @@ Item {
     required property string author
     required property double atime
     required property string subject
-    /// Everything after the subject, minus the co-author trailers. Only the hover card reads it — but the role has to
-    /// be declared here or it arrives as `undefined` and whoever touches it stops mid-way.
+    /// Everything after the subject, minus the co-author trailers. Only the hover card reads it, but an undeclared role
+    /// arrives as `undefined` and stops whatever reads it mid-way.
     required property string body
     required property int node_lane
     required property int node_color
@@ -42,10 +42,8 @@ Item {
     width: ListView.view.width
     height: Theme.graphRowHeight
 
-    /// This row is one of the commits being held (デザイン規約 §複数のコミットを選ぶ). **The choice is the whole of the
-    /// highlight wherever there is one** — the current item is only fallen back on where the choice is empty, which is
-    /// the working tree's row: that row is not a commit, so it is never in a choice, and it is where a person lands
-    /// with nothing chosen.
+    /// This row is one of the commits being held (デザイン規約 §複数のコミットを選ぶ). **A non-empty choice is the whole
+    /// highlight**; with nothing held, the current item — the working tree's row, where a person lands — is.
     readonly property bool selected: rowItem.ListView.view && rowItem.ListView.view.chosenCount > 0
         ? rowItem.ListView.view.chosenOids[rowItem.oid_hex] === true
         : rowItem.ListView.isCurrentItem
@@ -54,14 +52,12 @@ Item {
     readonly property real topBleed: index === 0 && ListView.view ? ListView.view.topMargin : 0
     // The all-zero id marks the synthetic uncommitted-changes row (the sentinel is core's — `Oid::zero_like`).
     readonly property bool isWip: GitFacts.wipOid(oid_hex)
-    // **Whose uncommitted row this is.** Every one of them carries the all-zero id — git's own "there is no object
-    // here", which is true of all of them — so what tells two apart is the working copy each is about, and the one
-    // this window is open on is the one with nothing here. Empty on every commit and on this window's own row.
+    // **Whose uncommitted row this is** — every such row carries the same all-zero id. Empty on every commit and on
+    // this window's own row.
     //
-    // **`carriedRevision` is touched on purpose** (both of these): what answers is a slot call, and a slot call is
-    // not made again because the map behind it was rewritten. Without the dependency a row spliced into a rebuilt
-    // graph keeps the answer it was given for whatever stood at its index before — observed, this window's own row
-    // wearing another copy's tallies.
+    // **`carriedRevision` is touched on purpose** (here and in `carriedTally`): a slot call is not made again when the
+    // map behind it is rewritten, so without the dependency a row spliced into a rebuilt graph keeps the answer for
+    // whatever stood at its index before.
     readonly property string carriedName: {
         const view = rowItem.ListView.view
         if (!rowItem.isWip || !view || !view.model)
@@ -69,10 +65,9 @@ Item {
         view.model.carriedRevision
         return view.model.carriedName(rowItem.index)
     }
-    // A row about a copy this window is not open on. **It selects like any other row, and what it opens is that
-    // copy, read-only** (`leftClick`): the pane stands on that copy's own status and every write control is down,
-    // because the only tree this window can write is its own (`RepoPage.wipWritable`). The door into that copy's
-    // writes is its own tab, which the row's double-click opens (P3-確認事項 §別 worktree の未コミット行).
+    // A row about a copy this window is not open on. **It selects like any other row and opens that copy read-only**
+    // (`leftClick`) — the only tree this window can write is its own (`RepoPage.wipWritable`); the copy's writes are
+    // in its own tab, which the double-click opens (デザイン規約 §別の作業コピーを読む).
     readonly property bool carried: rowItem.carriedName !== ""
     // Its six tallies (`GraphModel::carried_tally` — `{added, modified, deleted, renamed, copied, conflicted}`), and
     // nothing on every other row.
@@ -82,8 +77,7 @@ Item {
         rowItem.ListView.view.model.carriedRevision
         return rowItem.ListView.view.model.carriedTally(rowItem.index)
     }
-    // The six an uncommitted row says, whosever it is: another copy's come off its row, and this window's off the
-    // view — which holds one set, and it is this window's tree's. The same six names either way.
+    // The six counts an uncommitted row shows: another copy's off its row, this window's off the view.
     readonly property var shownTally: {
         if (rowItem.carriedTally)
             return rowItem.carriedTally
@@ -93,32 +87,27 @@ Item {
         return { "added": view.wipAdded, "modified": view.wipModified, "deleted": view.wipDeleted,
                  "renamed": view.wipRenamed, "copied": view.wipCopied, "conflicted": view.wipConflicted }
     }
-    // One card for the row, so a commit that is both a branch tip and a release shows the branch — the tag is a sheet
-    // behind it (`RefChipStack`), read whole in the hover card. A chip the window has already said is gone is left
-    // out (`encode::chips_shown` applies the set): the row still carries it, because the ref only leaves the model
-    // when the walk that follows the delete lands (デザイン規約 §消す操作は先に画面から消す). Read off the model
-    // — the same list that hands out `labels` says which names the window stands in for.
+    // A chip the window has already said is gone is left out (`encode::chips_shown`): the row still carries it until
+    // the walk that follows the delete lands (デザイン規約 §消す操作は先に画面から消す).
     readonly property var goneChips:
         rowItem.ListView.view && rowItem.ListView.view.model ? rowItem.ListView.view.model.goneChips : []
     readonly property var labelRecords: GitFacts.chipsShown(labels, rowItem.goneChips)
-    // The same reading `RepoPage.rowChipAt` uses, so the two doors to a row's branch cannot disagree: a tag is
-    // not a branch, and neither is the detached-HEAD marker.
+    // The chips a double-click can lead to (`primaryChip`).
     readonly property var branchRecords: labelRecords.filter(chip => chip.kind === "branch" || chip.kind === "remote")
     // Whether this row is somewhere HEAD could stand: the working-tree row is not a commit, and a stash sits on no
     // branch's history.
     readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === ""
-    // The commit the working tree is standing on. Asked of the row number the model settled: a detached HEAD
-    // is the same answer and says so with a different kind (`models::graph::head`).
+    // The commit the working tree is standing on, detached or not — the row number the model settled
+    // (`models::graph::head`).
     readonly property bool isHead: rowItem.ListView.view ? rowItem.ListView.view.headRow === rowItem.index : false
     // Where a double-click on this row goes: the branch chip's own first record, so what is on screen is what is moved
     // to. Null means the row shows no branch, which is the offer to put one there.
     readonly property var primaryChip:
         rowItem.movable && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : null
-    // **The name this row draws**: the chip's own first record, whatever kind it is. What the spaced second click
-    // changes, and what a right-click aims the menu's cards at — one answer, so the row cannot rename one name and
-    // offer another. **`primaryChip` is another question** — "where does this row lead", and a tag leads nowhere
-    // while still being a name that can be changed (デザイン規約 §左メニューの所作). The two markers name no ref — the
-    // detached HEAD and a working copy standing here — so they answer null.
+    // **The name this row draws**: the chip's first record, whatever kind. The spaced second click renames it and a
+    // right-click aims the menu's cards at it — one answer, so the row cannot rename one name and offer another.
+    // **Not `primaryChip`**: a tag leads nowhere but can still be renamed (デザイン規約 §左メニューの所作). The two
+    // markers (the detached HEAD, a working copy standing here) name no ref, so they answer null.
     readonly property var renameChip:
         rowItem.labelRecords.length > 0 && GitFacts.refKind(rowItem.labelRecords[0].kind) !== ""
             ? rowItem.labelRecords[0] : null
@@ -128,7 +117,7 @@ Item {
     readonly property alias chipWaiting: chipColumn.chipWaiting
     // What the name box on this row came out to (see the column — a headless run reads it off here).
     readonly property alias nameBoxWidth: chipColumn.nameBoxWidth
-    // This row's chip column is a branch-name box right now.
+    // This row's chip column is a name box right now.
     readonly property bool naming: rowItem.ListView.view ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
     // The standing question is about this row. Its words are on the bar above the graph; the row answers "which one"
     // and nothing else.
@@ -161,37 +150,24 @@ Item {
         }
     }
 
-    // A row coming back out of the reuse pool has to redraw even when none of its roles differs from the row it was
-    // last used for: what it holds is the picture it was left with, and the graph may have grown a lane meanwhile.
-    // The attached `ListView` only exists on the delegate's root, so the asking is done here.
+    // A row back from the reuse pool redraws even when no role differs: it holds the picture it was left with, and the
+    // graph may have grown a lane meanwhile. The attached `ListView` exists only on the delegate's root, hence here.
     ListView.onReused: {
         laneCell.loadFace()
         laneCell.repaintLanes()
     }
 
     readonly property real labelsW: ListView.view ? ListView.view.labelWidth : Metrics.labelColW
-    /// What a copy's uncommitted row may spend on the message column: the whole of it, less the tick with its own
-    /// margin, the counts with theirs, and the layout's spacing between the five things standing in it. **Only that
-    /// row reads it** — it is the only one with five.
-    ///
-    /// **Measured off the row, not off the column that holds them.** A layout handed more than its cell holds takes
-    /// the room from nowhere — it keeps every child at its own width and runs over the end of the pane, words and
-    /// counts together (observed on the longest folder name in `--preset carried`) — and its own `width` grows with
-    /// them, so a ceiling read off that column is a ceiling that moves out of the way of what it is capping. The
-    /// three columns' widths are the view's, and none of them is anything to do with what is written in this row.
-    /// **Every term of the message column is in it**, the way `GraphPane.subjectTextX` counts the three in front of
-    /// the words: move one of those and this moves too.
+    /// What a copy's uncommitted row may spend on its words and name (only that row reads it). **Measured off the row
+    /// and the view's column widths, not off the message column**: a layout handed more than its cell holds grows past
+    /// the pane, so a ceiling read off that column moves out of the way of what it caps. **Every term of the message
+    /// column is in it**, as in `GraphPane.subjectTextX`: move one of those and this moves too.
     readonly property real wipRoom:
         rowItem.width - rowItem.labelsW - (ListView.view ? ListView.view.graphColWidth : 0)
         - 2 * Theme.spaceSm - 2 * Theme.borderWidth - 5 * Theme.spaceXs - tallySeat.implicitWidth
-    /// And what is left of that for the copy's own name, once the words in front of it have theirs and what stands
-    /// between them has taken its seat — **the dash and the mark, measured by the row that draws them**
-    /// (`carriedSeat.item.furnitureW`). Neither is a number this file can write down: the dash is a character, so
-    /// its width is the font's, and the mark is seated to its own ink rather than to its box (規約 §余白).
-    ///
-    /// **The words never cut** — they are the same fixed phrase on every one of these rows, and a sentence
-    /// that lost its end to a folder name would stop saying what the row is (規約 §未コミット行が名乗るもの). So the
-    /// whole of the overrun is the name's, which is the one thing here that keeps both of its ends when cut.
+    /// What is left of that for the copy's name. **The dash and the mark are measured where they are drawn**
+    /// (`furnitureW`), never written down: the dash's width is the font's, the mark's seat its ink (規約 §余白).
+    /// **The words never cut**, so the whole overrun is the name's (規約 §未コミット行が名乗るもの).
     readonly property real carriedNameMax:
         rowItem.wipRoom - wordsCut.implicitWidth
         - (carriedSeat.item ? carriedSeat.item.furnitureW : 0)
@@ -241,16 +217,14 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            // Where the message stops: the pane's own inset, the same the chip column keeps on the other side
-            // (デザイン規約 §余白). Without it every row would end in ink against the frame beside it. **The bar's thumb
-            // reaches twice as far in**, and is drawn thin enough to read the tail through.
+            // Where the message stops: the pane's own inset (デザイン規約 §余白); the bar's thumb reaches further in,
+            // thin enough to read the tail through.
             Layout.rightMargin: Theme.spaceXs
             spacing: Theme.spaceXs
             // The tick goes with the message: it stands in the subject column, this row's alone.
             opacity: rowItem.dimmed ? Metrics.dimFade : 1
-            // Short colored tick before the message: separates rows visually and
-            // echoes the commit's chain color. These three steps — this margin, this width, the layout's spacing —
-            // are what `GraphPane.subjectTextX` adds up, since that is where the find bar's cap is measured from.
+            // The tick in the commit's lane color. Its margin, its width and the layout's spacing are what
+            // `GraphPane.subjectTextX` adds up (the find bar's cap is measured from there): change one, change both.
             Rectangle {
                 Layout.leftMargin: Theme.spaceSm
                 implicitWidth: 2 * Theme.borderWidth
@@ -258,50 +232,40 @@ Item {
                 radius: Theme.borderWidth
                 color: Theme.graphLane[rowItem.node_color % Theme.graphLane.length]
             }
-            // The message, cut at its end and the mark held against the column's right edge, so every row's `…` stands
-            // at one x (デザイン規約 §タイポグラフィ). **The stand-in cuts its own at the same x** (`GraphHeadPin`): one
-            // commit's message keeps its length when its row steps aside for the stand-in.
+            // The message, cut at its end with the `…` held to the column's right edge (デザイン規約 §寸法). **The
+            // stand-in cuts at the same x** (`GraphHeadPin`), so a message keeps its length when its row steps aside.
             CutName {
                 id: wordsCut
                 // The uncommitted row's words keep their own width, so the counts sit right after them and read as
                 // part of the same sentence (規約 §未コミット行が名乗るもの).
                 Layout.fillWidth: !rowItem.isWip
                 cutAt: "end"
-                // No total: the tallies beside it add up to exactly that number, and the pane's own heading says it as
-                // well (規約 §未コミット行が名乗るもの). **The same words whosever tree it is** — whose comes after
-                // them, in the seat below.
+                // No total — the tallies add up to it (規約 §未コミット行が名乗るもの). The same words whosever tree it
+                // is; whose comes after them, in the seat below.
                 text: rowItem.isWip ? qsTr("Uncommitted changes") : rowItem.subject
                 pixelSize: Theme.fontMd
-                // The commit the working tree is standing on writes its message in the branch's own blue — the same
-                // `textLink` the chip on it uses, and the same the stand-in uses while this row is scrolled off
-                // (規約 §グラフの中で HEAD を見失わない). One rule for the one commit, so nothing changes as it steps aside.
+                // HEAD's commit writes its message in `textLink`, as the stand-in does while this row is scrolled off
+                // (規約 §グラフの中で HEAD を見失わない) — one rule, so nothing changes as it steps aside.
                 color: rowItem.isWip ? Theme.textSecondary
                        : rowItem.isHead ? Theme.textLink
                        : Theme.textPrimary
             }
-            // Whose tree the words are about, on the rows that are about somebody else's
-            // (デザイン規約 §未コミット行が名乗るもの). **A dash, not a preposition** — the copy *is* that folder name,
-            // which is apposition: `in here` read as "in this place" rather than as the name of the copy called
-            // `here`. **And the mark is what says the name is a folder's**
-            // — the column of names beside it is full of refs, and a bare word in a sentence about a checkout looks
-            // like one of those (規約 §ref の種別). Same mark, same size and same phrase as the pane this
-            // row opens, so a reader meets one spelling of a working copy's name.
+            // Whose tree the words are about, on the rows about somebody else's: a dash, the tree mark, the name
+            // (デザイン規約 §未コミット行が名乗るもの).
             //
-            // Built only on the rows that wear it, for the reason the counts below are: a canvas per graph row is
-            // heap the rows are measured by (rules-refs/app-ui.md, the Loader rule).
+            // Built only on the rows that wear it: a canvas per graph row is heap the rows are measured by
+            // (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」).
             Loader {
                 id: carriedSeat
                 active: rowItem.carried
                 visible: rowItem.carried
                 sourceComponent: RowLayout {
                     spacing: Theme.spaceXs
-                    /// The dash and the mark — what the row's ceiling for the name takes off (`carriedNameMax`),
-                    /// read here because this is where the two of them are drawn.
+                    /// The dash and the mark, for `carriedNameMax`.
                     readonly property real furnitureW:
                         carriedDash.implicitWidth + Theme.spaceXs + carriedMark.inkWidth
-                    // The dash the window sets between a caption and its value, as a character: it is the one
-                    // piece of punctuation that came out the same length and in the same place on both OSes
-                    // (規約 §余白「字で出ていた記号は 5 種」).
+                    // The dash stays a character — it draws the same length in the same place on both OSes
+                    // (規約 §寸法「字で出ていた記号は 5 種」).
                     Label {
                         id: carriedDash
                         text: "—"
@@ -309,10 +273,9 @@ Item {
                         color: Theme.textSecondary
                         Layout.alignment: Qt.AlignVCenter
                     }
-                    // **The mark and the name are one word** (規約 §未コミット行が名乗るもの) — the seat is the
-                    // mark's own ink, so the air its box holds past that does not read as a gap nobody wrote
-                    // (規約 §余白「印が自分で持っている余白は、隣の詰めに数える」). A layout inside a layout fills
-                    // by default, and this pair is only ever as wide as what it holds.
+                    // The mark and the name are one word, seated on the mark's ink
+                    // (規約 §余白「印が自分で持っている余白は、隣の詰めに数える」). A nested layout fills by default;
+                    // this pair is only as wide as what it holds.
                     RowLayout {
                         Layout.fillWidth: false
                         spacing: 0
@@ -324,16 +287,13 @@ Item {
                                 id: carriedMark
                                 anchors.centerIn: parent
                                 kind: "tree"
-                                // The ink every mark in this app takes, the padlock on a chip included: what a mark
-                                // says is its shape (規約 §ref の種別).
+                                // The ink every mark takes: what a mark says is its shape (規約 §ref の種別).
                                 tint: Theme.textSecondary
                                 width: Theme.iconSm
                                 height: Theme.iconSm
                             }
                         }
-                        // Cut in the middle, the way this copy's name is cut everywhere else it is shown
-                        // (規約 §別の作業コピーを読む): a folder can be called anything, and the ends are what one is
-                        // told apart by. The whole of it is in the pane this row opens.
+                        // Cut in the middle, as this copy's name is everywhere (規約 §別の作業コピーを読む).
                         CutName {
                             Layout.maximumWidth: rowItem.carriedNameMax
                             text: rowItem.carriedName
@@ -343,14 +303,9 @@ Item {
                     }
                 }
             }
-            // **Only on the row they belong to.** A nested layout defaults to `Layout.fillWidth: true`, so left up on
-            // every commit row this takes a share of the free space even with all six counts at zero and nothing drawn
-            // (67px of a 400px row, measured), which is that much of the message cut off for a column holding nothing.
-            //
-            // **Built on the uncommitted row alone.** A delegate is built per row on screen, and the tallies are six
-            // marks — a canvas each — with a number beside every one; on a commit's row they were built and hidden,
-            // which is heap the graph's rows are measured by (rules-refs/app-ui.md, the Loader rule). Invisible while
-            // inactive as well: a layout skips an invisible item, and an empty loader would still take the spacing.
+            // **Built on the uncommitted row alone**, for the reason `carriedSeat` is. Invisible while inactive too: a
+            // layout skips only invisible items, and an empty loader would still take the spacing
+            // (rules-refs の `WipTallyRow` の行).
             Loader {
                 id: tallySeat
                 active: rowItem.isWip
@@ -384,18 +339,13 @@ Item {
 
     // ---- what the pointer is on ------------------------------------------------------------------------------------
     //
-    // **The row is divided once, and everything the pointer does on it reads that one answer** — the two things a rest
-    // opens, and the two menus a right-click opens. The division is the chip column's own edge: on that side of it is
-    // the chip, on the other side the commit. The chip's frame is the wrong line to divide on — it is drawn eighteen
-    // pixels tall in a row of twenty-eight and stops where the name stops, so the margin around it, plainly part of
-    // "the branch" to anyone looking, would answer with the commit's card. **The column's edge is a line that is
-    // actually drawn** (the divider), which is what makes it a boundary a reader can hold, and the chip is alone in
-    // that column — the exception デザイン規約 §hover のツールチップ「開けるのは的、保つのはその的が属する区画」 names.
+    // **The row is divided once, at the chip column's edge**: the chip on one side, the commit on the other. Not at the
+    // chip's frame, which stops where the name stops, so the margin a reader takes for "the branch" would answer with
+    // the commit's card (デザイン規約 §hover のツールチップ「開けるのは的、保つのはその的が属する区画」).
 
     /// Where along the row the pointer is, or -1 for "not on this row". Written by the area below.
     property real pointerRowX: -1
-    /// Which half of the row a point along it falls in: `chip`, `row`, or `""` for neither. **One place**, so a rest
-    /// and a right-click cannot disagree about where the boundary was.
+    /// Which half of the row a point along it falls in: `chip`, `row`, or `""` for neither.
     function partAt(px) {
         if (px < 0)
             return ""
@@ -418,24 +368,17 @@ Item {
     /// delegates travel, and a row that scrolled into this one's place is not the row the card is of.
     readonly property bool cardOnThisRow: rowItem.ListView.view && rowItem.oid_hex !== ""
                                           ? rowItem.ListView.view.rowCardOid === rowItem.oid_hex : false
-    /// The row wears the hover band. **The pointer being on it is only one of the ways** — what the pointer opened on
-    /// this row holds it up too, for as long as that stands: both popups are drawn over or off the row and take the
-    /// pointer off it at once (`RowHoverHost`), and a row gone dark under its own card says nothing about which it is.
-    /// **Not for a row the graph brought under a still hand** (`handHeld`) — the light is the hand's, the same as what
-    /// opens.
+    /// The row wears the hover band while the pointer is on it and while what it opened stands — both popups take the
+    /// pointer off the row (`RowHoverHost`). **Not for a row the graph brought under a still hand** (`handHeld`).
     readonly property bool lit: (rowMouse.containsMouse && !rowItem.handHeld) || rowItem.cardOnThisRow
                                 || rowItem.listOnThisChip
 
-    // **The chip's list opens at once; the row's card opens on a rest** (規約 §hover のツールチップ: 展開は即時・補足は
-    // 待つ). The chip wears the `+N` and the fan of the refs it is holding back, so the list is the chip's own inside
-    // and the hand on it has already aimed at that. The card is other facts about the commit, and a hand crossing the
-    // graph passes over every row on the way — opening that where it lands flashes one card out and back per row.
-    // **Only one of the two is ever out** (規約: 1 つのポインタが開けるものは 1 つ). Whatever the pointer has left goes now
-    // — the beat is for walking into what is open, and what is being left is not it.
+    // **The chip's list opens at once; the row's card opens on a rest** (規約 §hover のツールチップ「展開は即時に開く」
+    // 「補足は待ってから開く」), and only one of the two is ever out (「1 つのポインタが開けるものは 1 つ」). Whatever the
+    // pointer has left goes now — the beat is for walking into what is open, not out of it.
     onPointedPartChanged: rowItem.settlePointed()
-    /// A second click is waiting out its window somewhere in this graph. **Hover is held still while it
-    /// runs**: the reader has clicked and is waiting for the box, and a card that came or went in that beat is a
-    /// change they did not ask for. What the pointer did meanwhile is settled the moment the wait ends.
+    /// A second click is waiting out its window somewhere in this graph. **Hover is held still while it runs** (規約
+    /// §グラフ行のダブルクリック); what the pointer did meanwhile settles when the wait ends.
     readonly property bool renameWaiting: rowItem.ListView.view ? rowItem.ListView.view.renameWaiting : false
     onRenameWaitingChanged: if (!rowItem.renameWaiting) rowItem.settlePointed()
     /// The graph moved under a hand that stayed where it was (`GraphPane.settleUnderHand`): **this row came to the
@@ -456,16 +399,13 @@ Item {
         if (rowItem.handHeld)
             return
         if (rowItem.pointedPart === "chip") {
-            // Unfolding, so there is nothing to ask: the rest asks "did you mean to point at this", and a chip that
-            // says it is holding refs back has been pointed at on purpose (規約「展開は即時」). This is also the door
-            // a hand that walked down into the list and came back takes, and for the same reason it needs no wait —
-            // holding it now, the list never closes at `hoverKeepMs` under a hand that is reaching for it.
+            // Unfolding needs no rest (規約「展開は即時に開く」). A hand coming back out of the list takes this door
+            // too, and must: waiting here would let the list close at `hoverKeepMs` under it.
             rowItem.openPointed()
         } else if (rowItem.pointedPart === "row" && rowItem.cardOnThisRow) {
-            // The same condition one card along, and the same answer. **The card is the worse of the two to sit the
-            // rest out for**: `hoverKeepMs` is shorter than `tipDelayMs`, so it goes down and comes back — and comes
-            // back at wherever the pointer is by then, the seat being the pointer's (`RowHoverHost.openRowCard`).
-            // `cardOnThisRow` is read by the commit, so a delegate recycled onto another row does not take this door.
+            // The card already out on this commit re-opens at once too: `hoverKeepMs` is shorter than `tipDelayMs`,
+            // so waiting would take it down and bring it back wherever the pointer is by then
+            // (`RowHoverHost.openRowCard`).
             rowItem.openPointed()
         } else if (rowItem.pointedPart !== "") {
             restDelay.restart()
@@ -473,13 +413,12 @@ Item {
     }
     function openPointed() {
         const view = rowItem.ListView.view
-        // The rest that was already running when the second click landed is part of the same beat: it opens what the
-        // reader did not ask for, half a second into a wait they are watching (see `renameWaiting`). The same for a
-        // row the graph brought under a still hand (`handHeld`).
+        // A rest already running when the second click landed opens nothing (`renameWaiting`), nor one on a row the
+        // graph brought under a still hand (`handHeld`).
         if (!view || rowItem.renameWaiting || rowItem.handHeld)
             return
-        // Another copy's row has nothing behind it: the card would come up empty, with a stamp of `1970-01-01`
-        // (photographed). An empty card is worse than none (P3-確認事項 §別 worktree の未コミット行).
+        // Another copy's row has no commit behind it: its card would come up empty, stamped `1970-01-01`
+        // (規約 §hover のツールチップ「ツールチップが立つのは、足すものが在る的だけ」).
         if (rowItem.carried)
             return
         if (rowItem.pointedPart === "chip")
@@ -495,59 +434,44 @@ Item {
     }
 
     /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
-    /// counted as the other half of a double-click — what a headless run reads to put its second click in as a second
-    /// (app-ui.md §UI 自動化の因果性, PGG_AUTO_ACT=graph-reclick). Both are the list's answer: the gesture lives there,
-    /// because this delegate is pooled the moment its row scrolls off (`GraphList`).
+    /// counted as the other half of a double-click — what a headless run reads to time its second click
+    /// (PGG_AUTO_ACT=graph-reclick). Both are the list's answer: this delegate is pooled when its row scrolls off.
     readonly property bool renameArmed:
         rowItem.ListView.view ? rowItem.ListView.view.renameArmed(rowItem.renameChip) : false
     readonly property bool clickGuarded: rowItem.ListView.view ? rowItem.ListView.view.clickGuarded : false
-    /// A left press, as this row answers one — **at the press, not at the release**. The double-click on the other
-    /// side of it is measured press to press and lands the working tree somewhere else, so answering the plain one at
-    /// the release put the light half of the gesture behind the heavy one: the row sat unlit for as long as the
-    /// button was down. Named so that a run with no pointer to press with puts its press in at the row itself.
+    /// A left press, as this row answers one — **at the press, not at the release**: answered at the release, the row
+    /// sits unlit while the button is down. Named so that a run with no pointer can press the row itself.
     function leftClick(modifiers) {
-        // Another copy's row selects like any other — **what it opens is that copy, read-only** (P3-確認事項
-        // §別 worktree の未コミット行). Which copy is the row's own answer: every uncommitted row
-        // carries git's all-zero id, so the page is handed the row number (`RepoPage.openWipFor`).
-        //
-        // A modifier is not a choice here for the reason this window's own row is not one: the choice is of commits,
-        // and these rows are not commits. The plain click below is what a held one comes to.
+        // Another copy's row: the page is handed the row number, since every uncommitted row carries the same all-zero
+        // id (`RepoPage.openWipFor`). A held modifier chooses nothing — these rows are not commits.
         if (rowItem.carried) {
             rowItem.claimRow(Qt.NoModifier)
             return
         }
         const mods = modifiers === undefined ? Qt.NoModifier : modifiers
-        // **A click that is building a choice leaves the name alone.** The gesture that opens the name box is two
-        // plain clicks spaced apart (`ReclickGesture`); a held Ctrl or Shift says the hand is picking commits, and
-        // arming the box off it would put a name box on the row that a range just swept through.
+        // **A click that is building a choice leaves the name alone**: the name box opens on two plain clicks spaced
+        // apart (`ReclickGesture`), and a held Ctrl or Shift is picking commits.
         if (mods & (Qt.ControlModifier | Qt.ShiftModifier)) {
-            // And it ends one already waiting: the hand went off to pick commits, so coming back to this row later is
-            // a first click again.
+            // And it ends one already waiting: coming back to this row later is a first click again.
             rowItem.ListView.view.dropRename()
             rowItem.claimRow(mods)
             return
         }
-        // The second press of a double-click belongs to the gesture: the first one already did what a press does,
-        // and the gesture is the double.
+        // The second press of a double-click belongs to the gesture: the first one already did what a press does.
         if (!rowItem.ListView.view.noteClick(rowItem.oid_hex, rowItem.renameChip))
             return
         rowItem.claimRow(Qt.NoModifier)
     }
-    /// A double-click, as this row answers one. Named for the same reason `leftClick` is: **the lane column has a
-    /// strip of its own over the list** (`GraphLanePan`, up wherever the lanes overflow their column), and where a row
-    /// leads has to be decided in one place, or the part under that strip answers differently from the rest.
-    /// Answers whether it led anywhere — **the row's own decision, read back**. What is on the other side of it is a
-    /// write that lands ticks later, so nothing on screen says at the moment of the press whether the row took the
-    /// gesture or turned it down.
+    /// A double-click, as this row answers one — also called from the lane column's own strip over the list
+    /// (`GraphLanePan`), so where a row leads is decided in one place. Returns whether it led anywhere: the write
+    /// behind it lands ticks later, so nothing on screen says at the press whether the row took the gesture.
     function doubleClick(modifiers) {
         // The second half of a double-click begun on the card that stood here: it moves nothing
         // (`ReclickGesture.hush`).
         if (rowItem.ListView.view.clicksHushed)
             return false
-        // **Another copy's row opens that copy**, in a tab of its own — the same door the WORKTREES row is
-        // (`SidebarRowGestures.activateRow`). The changes are read where they live: this window's panes read this
-        // window's tree, and a copy's own tab is the only place its files can be staged and committed as well as
-        // read (P3-確認事項 §別 worktree の未コミット行).
+        // **Another copy's row opens that copy in a tab of its own** — the same door as the WORKTREES row
+        // (`SidebarRowGestures.activateRow`), and the only place its files can be staged and committed.
         if (rowItem.carried) {
             const path = rowItem.ListView.view.model.carriedPath(rowItem.index)
             if (path !== "")
@@ -555,27 +479,21 @@ Item {
             return true
         }
         const mods = modifiers === undefined ? Qt.NoModifier : modifiers
-        // **A held double-click is two selection presses** (デザイン規約 §複数のコミットを選ぶ).
-        // Qt hands the pair over as a double whatever the hand was holding, and the modifier with it — measured,
-        // `tst_moddblclick` — so this is the only place the two can be told apart. What is on the other side of the
-        // plain one is `switch`, which moves the working tree and takes uncommitted changes with it: toggling a row
-        // out of a choice and back in quickly leaves it alone.
+        // **A held double-click is two selection presses** (デザイン規約 §複数のコミットを選ぶ). Qt reports the pair as
+        // a double whatever is held, modifier included (`tst_moddblclick`), so this is where they are told apart —
+        // toggling a row out of a choice and back must not `switch` the working tree.
         if (mods & (Qt.ControlModifier | Qt.ShiftModifier))
             return false
-        // The second click came inside the window after all, so the gesture was the double-click.
-        // Dropped whatever the row leads to — a row that leads nowhere still has to take the box off the wait.
+        // The gesture was the double-click: the name box comes off its wait even on a row that leads nowhere.
         rowItem.ListView.view.dropRename()
         if (!rowItem.movable)
             return false
         rowItem.ListView.view.rowSwitchRequested(rowItem.oid_hex, rowItem.primaryChip)
         return true
     }
-    /// A press here says where the keyboard is working, so the arrows walk the history from the row that was just
-    /// picked (規約 §矢印で履歴を辿る). Taken by the list: the delegate is recycled when the row scrolls
-    /// off, and either button is the same claim.
-    /// **The keyboard comes here even where the read stays put.** A Ctrl click moves only the choice, but the row it
-    /// landed on is where the arrows resume and where the next Shift click measures its range from, so the current
-    /// item follows every press.
+    /// A press here says where the keyboard is working (規約 §矢印で履歴を辿る); the list takes it, since the delegate
+    /// is recycled when the row scrolls off. **The current item follows every press**, a Ctrl click's included: it is
+    /// where the arrows resume and where the next Shift click measures its range from.
     function claimRow(modifiers) {
         rowItem.ListView.view.takeKeyboard()
         rowItem.ListView.view.currentIndex = rowItem.index
@@ -587,17 +505,13 @@ Item {
         id: rowMouse
         anchors.fill: parent
         anchors.topMargin: -rowItem.topBleed
-        // While the box is open the ground it stands on belongs to it: this area is painted over everything in the
-        // row, so anything under it would never see a click of its own. **The box's own edge** — a
-        // box wider than its column reaches into the lanes, and the part of it out there takes presses like the rest
-        // of it (the column's edge is still a divider a hand can drag, which is the other way out of a narrow one).
+        // While the name box is open this area starts at the box's own edge: it lies over everything in the row, and a
+        // box wider than its column reaches into the lanes and takes presses there too.
         anchors.leftMargin: rowItem.naming ? Theme.spaceXs + chipColumn.nameBoxWidth : 0
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        // **The row keeps the drag it is handed** (measured, `tst_pressorder`). The list takes the grab at the
-        // platform's drag distance otherwise, and the press is cancelled where it stood: a click with a tremor in it
-        // chose nothing, and the history slid under the hand that made it. Desktop lists are read, not panned — the
-        // wheel and the bar are what send this one.
+        // **The row keeps the drag it is handed** (`tst_pressorder`): otherwise the list grabs at the drag distance and
+        // cancels the press, so a click with a tremor chooses nothing and slides the history.
         preventStealing: true
         // **The left button is answered here**, at the press. The right one waits for its release, which is where
         // every platform opens a context menu.
@@ -608,23 +522,15 @@ Item {
         onClicked: mouse => {
             if (mouse.button !== Qt.RightButton)
                 return
-            // **A right-click takes the choice down to this row**, whatever was held before it. Every row of the menu
-            // below is about one commit, and leaving several highlighted while the menu acts on one is the one way
-            // this pane could offer to `cherry-pick` three and pick one (デザイン規約 §複数のコミットを選ぶ).
+            // **A right-click takes the choice down to this row**: the menu acts on one commit, and several left
+            // highlighted would offer to act on all of them (デザイン規約 §複数のコミットを選ぶ).
             rowItem.claimRow(Qt.NoModifier)
-            // The synthetic WIP row is not a commit, so nothing in the commit menu applies to it.
-            //
-            // **One menu, wherever along the row the press landed**: its rows are
-            // about this commit, and the cards at its foot are about the name the chip is drawing — which is what
-            // `renameChip` already is, the first record the chip reads out (デザイン規約 §グラフ行の右クリック).
-            // The hover still reads the division (`partAt`), because the two things a rest opens are two different
-            // things; a right-click opens one, so it has nothing to divide. The names behind the card aim the same
-            // menu at one of themselves, through the right-click on the list the chip unfolds into.
+            // The WIP row is not a commit, so it has no menu. **One menu wherever along the row the press landed**:
+            // its rows are about this commit, the cards at its foot about `renameChip` (デザイン規約 §グラフ行の右クリック)
+            // — unlike a rest, a right-click has nothing to divide (`partAt`).
             if (!rowItem.isWip)
                 rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.renameChip)
         }
-        // Where the row leads: the chip it shows, or — with no branch on it — the offer to put one there. The page
-        // decides which.
         onDoubleClicked: mouse => {
             if (mouse.button !== Qt.LeftButton)
                 return
@@ -636,20 +542,18 @@ Item {
                 rowItem.pointerRowX = rowMouse.mouseX
                 return
             }
-            // The list opens *on* the chip, so this area loses the pointer the instant it is drawn — a row under a
-            // popup sees no hover at all. That leave says nothing about where the hand went, and answering it takes
-            // the list down under the hand that asked for it. **Only the row the list is standing on skips it**, and
-            // only while it stands: a hand walking off elsewhere lands on another row, which reports a real point.
+            // The list opens *on* the chip, so this area loses the pointer the instant it is drawn; answering that
+            // leave would take the list down under the hand that asked for it. **Only the row the list stands on skips
+            // it**, and only while it stands — a hand walking off lands on another row, which reports a real point.
             if (rowItem.listOnThisChip)
                 return
             rowItem.pointerRowX = -1
         }
     }
-    /// Where the pointer is along the row, so the card can open under it — a row is
-    /// the width of the pane, and its left edge is nowhere near the pointer.
+    /// Where the pointer is along the row, so the card opens under it rather than at the row's left edge.
     readonly property real pointerX: rowMouse.mouseX
 
-    // A pooled row is under no pointer, and the row it comes back as has its own names: what this one was pointed at
-    // goes with it. Clearing where the pointer was takes the rest and whatever was open down with it (`settlePointed`).
+    // A pooled row is under no pointer: clearing it takes the rest and whatever was open down with it
+    // (`settlePointed`).
     ListView.onPooled: rowItem.pointerRowX = -1
 }

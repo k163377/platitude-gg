@@ -3,13 +3,13 @@ import platitude
 import platitude.ui
 
 // The sidebar's row gestures: which row was clicked last, and which one has a name box open in it. Held beside the
-// lists — only one row at a time is either, whichever section it sits in, and both have to
-// outlive the delegates that show them (デザイン規約 §左メニューの所作).
+// lists: only one row at a time is either, in whichever section, and both outlive the delegates that show them
+// (デザイン規約 §左メニューの所作).
 QtObject {
     id: gestures
 
-    /// The pane these gestures belong to. Where a gesture leads is the pane's to raise: it is the pane the page
-    /// listens to, and a second emitter would be a second answer.
+    /// The pane these gestures belong to. Where a gesture leads is raised as the pane's signal — the page listens to
+    /// the pane, and a second emitter would be a second answer.
     required property Item host
     required property RepoTab repoTab
     required property NavSectionModel remotesModel
@@ -17,23 +17,20 @@ QtObject {
     /// A menu raised from one of the folded list's rows is standing over it. The page's to set — the menus are its.
     property bool menuOpen: false
 
-    /// The pane's write doors are held (`SidebarPane.doorsHeld`). Only the two gestures below answer for it — the ones
-    /// that move the history or open a box to move it with. A click, a fold and a scroll are how this list is read,
-    /// and they go on working (デザイン規約 §消す操作は先に画面から消す: 消すのは行だけで、周りは止めない).
+    /// The pane's write doors are held (`SidebarPane.doorsHeld`). Only the two gestures that write, or open a box to
+    /// write with, answer for it; a click, a fold and a scroll go on working
+    /// (デザイン規約 §消す操作は先に画面から消す「消すのは行だけ、周りは生きたまま」).
     property bool held: false
 
-    /// The two clicks a row answers with one gesture — one for the sidebar (`ReclickGesture`): a
-    /// delegate is recycled the moment its row scrolls off, and both the memory and the wait have to outlive it.
-    /// What the wait was aimed at is read at the click (`p`), because by the time it runs out the row may be showing
-    /// another name.
+    /// The sidebar's one `ReclickGesture` (rules-refs/app-ui.md「間を空けた 2 回目のクリック」). What the wait was
+    /// aimed at is read at the click (`p`): by the time it runs out the row may be showing another name.
     property ReclickGesture reclick: ReclickGesture {
         onRenameAsked: (key, p) => gestures.startEdit(p.kind, key, "rename", p.id, p.oid,
                                                       gestures.typedName(p.kind, p.id, p.name))
     }
     property alias activeKey: gestures.reclick.activeKey
-    /// The name this row is typed and renamed by. A stash is named by its message and known to git by its selector;
-    /// everything else answers to the name it shows. A remote branch is typed without the remote it is on —
-    /// `origin/` is where the branch lives.
+    /// The name a row is typed and renamed by: a stash's message (git knows it by its selector), a remote branch
+    /// without the remote it lives on, and the id for everything else.
     function typedName(kind, id, name) {
         return kind === "stash" ? name
              : kind === "remote" ? gestures.remoteBranchHalf(id) : id
@@ -44,31 +41,25 @@ QtObject {
     property string editId: ""
     property string editOid: ""
     property string editText: ""
-    /// The remote a row being renamed lives on (`origin`), empty for every other kind of row. The configured names
-    /// say where the cut is — a remote's own name may contain `/`; an unconfigured one cuts at the first slash, so
-    /// the duplicate-name refusal below keeps its remote to ask about (`GitFacts.remoteOfRef`).
+    /// The remote a remote row lives on (`origin`), empty for every other kind. Cut by the configured names, since a
+    /// remote's own name may contain `/`; an unconfigured one cuts at the first slash (`GitFacts.remoteOfRef`).
     readonly property string editRemote: gestures.editKind !== "remote" ? ""
         : GitFacts.remoteOfRef(gestures.editId, gestures.repoTab.remoteNames)
-    /// The name a remote row is typed and renamed by — the branch half, without the remote it lives on.
     function remoteBranchHalf(id) {
         return GitFacts.branchOfRef(id, gestures.repoTab.remoteNames)
     }
-    /// A name the remote already carries. Refused here: a plain push to a name that exists
-    /// fast-forwards it and reports success, so somebody else's branch would move instead of this one being replaced.
-    /// Only ever a rename's rule: the box for a new branch's name opens on a remote row too, and what it makes is a
-    /// local branch — a name the remote happens to carry is no answer to that.
+    /// A rename to a name the remote already carries. Refused here: a plain push to an existing name fast-forwards
+    /// it and reports success, moving somebody else's branch. Rename only — the new-branch box on a remote row makes
+    /// a local branch.
     readonly property bool editTaken: gestures.editMode === "rename" && gestures.editRemote !== ""
         && gestures.editText.trim() !== ""
         && gestures.remotesModel.oidOfName(gestures.editRemote + "/" + gestures.editText.trim()) !== ""
-    /// A box that opened empty and is still empty: the one for a new branch's name, before a word has been put in it.
-    /// **Still open.** The frame answers for what was typed (デザイン規約 §可否・警告の出し場所), and nothing has been —
-    /// a box that comes up already turned down is turning down the reader's arrival. A rename rubbed out to nothing is
-    /// the other thing: a name was there and has been taken away, which git would refuse.
+    /// A new branch / tag box still empty since it opened. Not refused: the frame answers for what was typed
+    /// (デザイン規約 §可否・警告の出し場所), and nothing has been. A rename rubbed out to nothing is refused.
     readonly property bool editUnanswered:
         (gestures.editMode === "branch" || gestures.editMode === "tag")
         && gestures.editText.trim() === ""
-    /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free
-    /// text).
+    /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free text).
     readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
         && (gestures.editTaken
             || gestures.editCaseOnly
@@ -76,20 +67,15 @@ QtObject {
             || !(gestures.editKind === "stash"
                  ? GitFacts.validStashMessage(gestures.editText)
                  : GitFacts.validRefName(gestures.editText)))
-    /// Only the letters' case differs from the name the row already carries. **git writes a ref as a file**, so on a
-    /// case-insensitive disk the new name lands on the old one's and both are gone — core refuses it outright
-    /// (`tag::rename`), and asking here is what puts the answer in the box the name was typed into
-    /// (デザイン規約 §答えの要らない報せ, by design).
-    ///
-    /// **`tag` is the kind here** — the mode says which of the box's three questions is being asked
-    /// (`rename` / `branch` / `tag`), and this is only about the one that renames something that is already there.
+    /// A tag rename that changes only the letters' case. git writes a ref as a file, so on a case-insensitive disk the
+    /// new name lands on the old one's and both are gone; core refuses it (`tag::rename`), and asking here puts the
+    /// answer in the box (デザイン規約 §答えの要らない報せ). `tag` is the row's kind — mode `tag` is the new-tag box.
     readonly property bool editCaseOnly:
         gestures.editKind === "tag" && gestures.editMode === "rename"
         && gestures.editText.trim() !== gestures.editId
         && gestures.editText.trim().toLowerCase() === gestures.editId.toLowerCase()
     readonly property string editRefusedWhy: !gestures.editRefused ? ""
-        // git's own words win: it was asked about this very name and answered, where the rest are what this end
-        // worked out before asking.
+        // git's own words win: it answered about this very name; the rest were worked out before asking.
         : gestures.editGitRefusal !== ""
           ? gestures.editGitRefusal
         : gestures.editText.trim() === ""
@@ -103,15 +89,12 @@ QtObject {
               : qsTr("git will not take this as a name")
 
     function startEdit(kind, key, mode, id, oid, text) {
-        // **The one door into the box, so the hold is asked once here** — the second click's own wait comes through,
-        // and so do the menu's three ways in (`beginRename` / `beginBranchAt` / `beginTagAt`). Every one of them ends
-        // in a write, and a box that opened while the doors are held would take a name nothing can be done with.
+        // The one door into the box (the second click and the menu's three `begin*`), so the hold is asked here: a box
+        // opened while the doors are held would take a name nothing can be done with.
         if (gestures.held)
             return
-        // The box opens where the row is — folded, that is the section standing beside the rail, and the list stays
-        // folded (デザイン規約 §左メニューを畳む: a click in a peek keeps the fold — undoing it would take the
-        // diff it was made for down). The hover that raised that section does not decide how long it stands: the box
-        // holds it open, the way a menu does (`pinned`).
+        // The box opens where the row is; folded, that is the peek beside the rail, and the list stays folded
+        // (デザイン規約 §左メニューを畳む). The box holds the peek open the way a menu does (`pinned`).
         gestures.editKind = kind
         gestures.editMode = mode
         gestures.editId = id
@@ -120,9 +103,8 @@ QtObject {
         gestures.editKey = key
     }
     function stopEdit() {
-        // **A box coming down spends the gesture that opened it** — the same rule the graph's box answers to
-        // (`GraphPane.stopNaming`). Without it a row whose box was walked away from is still the row last clicked, so
-        // the very next click on it opens the box again a window later, which reads as a blink.
+        // A box coming down spends the gesture that opened it (as `GraphPane.stopNaming` does), or the next click on
+        // the same row reopens it a window later — a blink.
         if (gestures.editKey !== "")
             gestures.forgetClicks()
         gestures.editKey = ""
@@ -131,20 +113,15 @@ QtObject {
         gestures.editWaiting = false
         gestures.editGitRefusal = ""
     }
-    // What git said is about the name it was asked about. One key on top of it and that is no longer the name in the
-    // box, so the answer goes with it.
     onEditTextChanged: gestures.editGitRefusal = ""
     function submitEdit(text) {
         const kind = gestures.editKind
         const id = gestures.editId
         const oid = gestures.editOid
         const mode = gestures.editMode
-        // Enter on a box nobody has typed in leaves it standing, the same as Enter on a refused one: it has not been
-        // answered, and closing it would be answering for the reader (`editUnanswered`).
+        // Enter on a box nobody has typed in leaves it standing, as on a refused one (`editUnanswered`).
         if ((mode === "branch" || mode === "tag") && text.trim() === "")
             return
-        // What the box opened with: a remote branch is typed without the remote it is on, so the name it answers to is
-        // not what it shows.
         const was = kind === "remote" ? gestures.remoteBranchHalf(id) : id
         if (mode === "branch") {
             gestures.stopEdit()
@@ -156,53 +133,45 @@ QtObject {
             gestures.host.tagAtRequested(oid, text.trim())
             return
         }
-        // The name it opened holding is not a rename: the box was left as it was found, so this is the way out of it.
+        // The name it opened with, unchanged: not a rename, just the way out.
         if (text.trim() === was) {
             gestures.stopEdit()
             return
         }
-        // **A rename keeps its box until git answers** (デザイン規約 §答えの要らない報せ の色の軸): git turns names down that
-        // nothing here could have known about — one that is already taken is the common one — and closing the box
-        // first throws away what was typed and leaves the answer nowhere to go but the log. The page takes it down on
-        // the landing (`RepoPage.absorbWriteResult`).
+        // A rename keeps its box until git answers (デザイン規約 §答えの要らない報せ): git turns down names nothing here
+        // could know about (one already taken), and a box closed first loses what was typed and leaves the answer
+        // nowhere but the log. The page takes it down on the landing (`RepoPage.absorbWriteResult`).
         gestures.editWaiting = true
         gestures.host.renameSubmitted(kind, id, text.trim())
     }
-    /// A rename is out and git has not answered yet. The box stays as it is, and what comes back either takes it down
-    /// or writes git's own refusal under it (`editGitRefusal`).
+    /// A rename is out and git has not answered; the answer takes the box down or writes its refusal under it
+    /// (`editGitRefusal`).
     property bool editWaiting: false
-    /// What git said about the name in the box, kept until the reader types something else — at which point it is
-    /// about a name nobody asked git about.
+    /// git's refusal of the name in the box, cleared by the next keystroke — it is about the name git was asked about.
     property string editGitRefusal: ""
-    /// The answer to that rename: it landed, so the box has done its job.
     function renameLanded() {
         if (gestures.editWaiting)
             gestures.stopEdit()
     }
-    /// …or git would not have it, and the box is where that belongs.
     function renameRefused(why) {
         if (!gestures.editWaiting)
             return
         gestures.editWaiting = false
         gestures.editGitRefusal = why
     }
-    /// Which row has its facts open under it, by the name git knows it by (`NavRowFacts`) — the hover expansion of a
-    /// BRANCHES row. Held here for the reason the two gestures above are: a delegate is recycled the moment its row
-    /// scrolls off, only one row is ever open, and the row that opens may be in the sections, in the sticky stand-in
-    /// or in the section the folded rail has open.
+    /// Which BRANCHES row has its facts open under it on hover (`NavRowFacts`), by its git name. Held here like the
+    /// gestures above: delegates are recycled, only one row is ever open, and it may be in the sections, the sticky
+    /// stand-in or the folded rail's peek.
     property string openKey: ""
-    /// The last row to open, and where the pointer was standing when it did — in the window's own coordinates.
-    /// **A row opens where the hand travelled to it, and not where the list travelled to the hand**: an open row is
-    /// taller than a closed one, so the rows under it move, and a pointer that never left its place can be left over
-    /// a row it was never aimed at. Opening that one would move the list again under a hand that asked for nothing,
-    /// and the two would go on trading places (デザイン規約 §左メニューの所作).
+    /// The last row to open and where the pointer stood when it did, in window coordinates. A row opens where the hand
+    /// travelled to it, not where the list moved under a still hand: an open row is taller, so the rows below move,
+    /// and opening whatever lands under a still pointer would have rows trading places (デザイン規約 §左メニューの所作).
     property string openedKey: ""
     property point openedAt: Qt.point(-1, -1)
     function openFacts(key, at) {
         if (gestures.editKey !== "" || gestures.menuOpen)
             return
-        // The same row coming back under the same hand is the reader pointing at it again — it is a row arriving
-        // under a hand that did not move that says nothing was asked for.
+        // Only a different row arriving under a still hand is refused; the same row coming back is pointed at again.
         if (key !== gestures.openedKey && gestures.settled(at))
             return
         gestures.openKey = key
@@ -213,38 +182,29 @@ QtObject {
         if (gestures.openKey === key)
             gestures.openKey = ""
     }
-    /// Whether the pointer is still where the last row opened under it. Half a row of slack: a hand that has moved
-    /// that far has moved on purpose, and anything less is the list having moved instead.
+    /// Less than half a row from where the last row opened is the list having moved, not the hand.
     function settled(at) {
         return Math.abs(at.x - gestures.openedAt.x) < Theme.rowHeight / 2
             && Math.abs(at.y - gestures.openedAt.y) < Theme.rowHeight / 2
     }
 
-    /// How often the hand itself has moved, counted by the panel the rows stand in (`SidebarPane`) and by the
-    /// section the folded rail opens (`SectionPeekPopup`) — **each of them weighing the place the pointer was last
-    /// seen in, not the times it was told about one**: a row growing where it stands and a list sending itself are
-    /// both handed to those handlers as fresh points (measured — `tests/qml/tst_hoverunderstillhand.qml`).
-    ///
-    /// **The rows read their own hover again on every one of these and never in between**
-    /// (`NavItemDelegate.syncHover`). An open row is taller than a closed one, so opening and closing move the rows
-    /// around them, and Qt gives the hover to whatever arrives under the pointer whether or not the pointer moved.
-    /// Reading it on the events instead is what put the light on a row several places down — and, when the row that
-    /// moved was the open one, opened and closed it over and over under a hand that was doing nothing (observed as
-    /// a blink).
+    /// How often the hand itself has moved, counted by `SidebarPane` and `SectionPeekPopup` against the point last
+    /// seen, not per event: a row growing and a list scrolling also reach those handlers as fresh points
+    /// (`tests/qml/tst_hoverunderstillhand.qml`). The rows re-read their hover only on these
+    /// (`NavItemDelegate.syncHover`) — Qt gives hover to whatever arrives under a still pointer, and opening a row
+    /// moves the rows around it.
     property int handMoves: 0
     function handStirred() {
         gestures.handMoves++
     }
 
-    /// A menu raised from the open row's own lines. **That one does not take them down** — it is about the row they
-    /// belong to, and the reader who right-clicked them is reading about that row. Every other menu does: the
-    /// pointer is over there, and what is open would be moving rows under the hand reading them.
+    /// A menu raised from the open row's own lines, which keeps them open — it is about that row. Every other menu
+    /// closes them, or they would move rows under the hand reading the menu.
     property bool menuFromFacts: false
     function noteMenuFromFacts() {
         gestures.menuFromFacts = true
     }
-    /// Nothing opens over a name box or under a menu: the box is the mode the reader has entered and the menu is the
-    /// rows they are reading, and what opens moves the rows under both (デザイン規約 §左メニューの所作).
+    /// Nothing opens over a name box or under a menu: opening moves the rows under both (デザイン規約 §左メニューの所作).
     onEditKeyChanged: if (gestures.editKey !== "") gestures.openKey = ""
     onMenuOpenChanged: {
         if (gestures.menuOpen && !gestures.menuFromFacts)
@@ -253,32 +213,30 @@ QtObject {
             gestures.menuFromFacts = false
     }
 
-    /// A click landed somewhere: any box open elsewhere is walked away from (nothing is asked — what it costs is the
-    /// typing). Which row it landed on is the gesture's own to remember — it is what tells its next click apart.
+    /// A click landed on `key`: a box open on any other row is dropped without asking, typing and all. Which row was
+    /// clicked is the gesture's own to remember (`reclick`).
     function noteClick(key) {
         if (gestures.editKey !== "" && gestures.editKey !== key)
             gestures.stopEdit()
     }
-    /// A line an open row put out was pressed where it goes somewhere of its own (`NavRowFacts`): **the graph goes
-    /// to the commit it names, and the panel stays where it is** (デザイン規約 §左メニューの所作「行き先はグラフ」).
-    /// The row the lines are under — `key`, its own (`NavList.keyOf`) — is the one last clicked, the press having
-    /// been inside it; **it arms nothing**, since what was pressed was a line and not the row's name.
+    /// A line of an open row's facts was pressed (`NavRowFacts`): the graph goes to the commit it names and the panel
+    /// stays (デザイン規約 §左メニューの所作「行き先はグラフ」). The row `key` (`NavList.keyOf`) becomes the one last
+    /// clicked but arms nothing — a line was pressed, not the row's name.
     function followLine(key, oidHex) {
         gestures.noteClick(key)
         gestures.reclick.land(key)
         gestures.host.refActivated(oidHex)
     }
     /// The rows this gesture was made on have gone (the folded rail's peek closed): the memory and the wait go with
-    /// them, or the next visit's first click comes up as a second one (app-ui.md).
+    /// them, or the next visit's first click comes up as a second one
+    /// (rules-refs/app-ui.md「それを載せている一覧と共に消える」).
     function forgetClicks() {
         gestures.reclick.forget()
     }
     /// Double-click: where the row leads (デザイン規約 §左メニューの所作).
     function activateRow(kind, name, full, oidHex) {
-        // The two of these that write: a switch, and the box a tag's row opens for a new branch's name. **A worktree
-        // row goes through** — standing this tab in another working copy writes nothing, and going somewhere else
-        // to read while a rewrite runs is exactly what the hold is meant to leave alone. The page goes with the
-        // move and the running write does not: it outlives the page that asked for it
+        // Held: a switch and the tag row's new-branch box, which write. A worktree row goes through — moving to another
+        // working copy writes nothing, and the running write outlives the page that asked for it
         // (`RepoSession::close`, デザイン規約 §左メニューの所作 の replay の段).
         if (gestures.held && kind !== "worktree")
             return
@@ -288,22 +246,19 @@ QtObject {
         else if (kind === "worktree")
             gestures.host.worktreeActivated(full)
         else if (kind === "tag")
-            // A tag is a mark: the row offers the one thing that would make it somewhere to carry on from.
+            // A tag is a mark: the row offers the branch that would make it somewhere to carry on from.
             gestures.startEdit(kind, "tag:" + id, "branch", id, oidHex, "")
         // A stash is a shelf, and a folder a heading: both stay put.
     }
-    /// The menu's way into the same box, for anyone who does not know the gesture or cannot aim two separate clicks at
-    /// one row.
+    /// The menu's way into the rename box, for anyone who cannot use the two-click gesture.
     function beginRename(kind, id, text) {
         gestures.startEdit(kind, kind + ":" + id, "rename", id, "", text)
     }
-    /// The same box on any row that names a commit, not just a tag's: a branch is most often started where another one
-    /// already stands.
+    /// The new-branch box on any row that names a commit, not just a tag's.
     function beginBranchAt(kind, id, oidHex) {
         gestures.startEdit(kind, kind + ":" + id, "branch", id, oidHex, "")
     }
-    /// And the same box again for a tag on that commit. One field, three modes: what is typed is a ref name either
-    /// way, and the placeholder is the whole of what tells them apart (`NavNameBox`).
+    /// The same box for a new tag. One field, three modes, told apart only by the placeholder (`NavNameBox`).
     function beginTagAt(kind, id, oidHex) {
         gestures.startEdit(kind, kind + ":" + id, "tag", id, oidHex, "")
     }

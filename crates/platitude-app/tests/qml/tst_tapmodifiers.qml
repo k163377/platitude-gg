@@ -1,13 +1,10 @@
 import QtQuick
 import QtTest
 
-// What a TapHandler knows about the keyboard when it reports a tap — the question behind "may the chip's card read a
-// held Ctrl or Shift off its own rows" (デザイン規約 §複数のコミットを選ぶ). A `MouseArea` hands its handler a `mouse`
-// with `modifiers` on it; a `TapHandler`'s `singleTapped(eventPoint, button)` carries none, so the card reads the
-// handler's own `point.modifiers` instead, and this holds that reading down: **it is the modifier of the press the tap
-// reports** (`RefListPopup`'s rows read the double off the same point). Only the single tap can be driven here —
-// `mouseDoubleClickSequence` reaches a `MouseArea` (`tst_moddblclick`) and not a `TapHandler`, which reports no double
-// for it (measured).
+// A `TapHandler`'s `singleTapped` carries no modifiers, so `RefListPopup`'s rows read the handler's own
+// `point.modifiers` (デザイン規約 §複数のコミットを選ぶ); this holds that it is the modifier of the press the tap
+// reports. Only the single tap can be driven: `mouseDoubleClickSequence` reaches a `MouseArea` (`tst_moddblclick`)
+// and not a `TapHandler`.
 Item {
     id: root
     width: 200

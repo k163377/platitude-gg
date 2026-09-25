@@ -1,7 +1,6 @@
-//! Pure shaping helpers: core DTOs → what the QML layer reads. A record
-//! goes over as a JS object with named fields, a list of them as a JS
-//! array, and a plain list of names as a JS array of strings
-//! (`wire`); nothing crosses the bridge as a string to be taken apart.
+//! Pure shaping helpers: core DTOs → what the QML layer reads, in the
+//! shapes `wire` defines — nothing crosses the bridge as a string to be
+//! taken apart.
 
 mod columns;
 mod graph;
@@ -30,8 +29,6 @@ pub use rows::{
 };
 pub use select::{diff_key, hunk_selection, worktree_target};
 pub(crate) use wire::{Fields, Listed, One, Optional, Record, field};
-// `EndingWords` itself is not re-exported: every caller takes it off
-// `ending_words` by inference, and a name nobody writes is an unused
-// import here (`encode` is a private module, so a `pub use` in it is not
-// a public re-export).
+// `EndingWords` is not re-exported: no caller names it, and in this private
+// module a `pub use` nobody names is an unused import.
 pub use words::{ending_words, human_size, rename_source};

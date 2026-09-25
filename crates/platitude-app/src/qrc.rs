@@ -1,33 +1,27 @@
 //! The QML modules as Qt resources that carry a modification time.
 //!
-//! **Qt keeps a compiled QML file on disk only when its source has a
-//! modification time** — a resource without one is compiled at every
-//! start and never saved (`CompilationUnit::saveToDisk`: "Missing time
-//! stamp for source file"), which is every file of `platitude.ui` and
-//! `platitude.auto`, each start. `include_bytes_qml!` writes the time as
-//! 0, so the tree is written here, in the same layout (rcc format 3, one
-//! tree per file — `qtbase/src/tools/rcc`), with the time filled in.
+//! Qt keeps a compiled QML file on disk only when its source has a
+//! modification time (`CompilationUnit::saveToDisk`: "Missing time stamp
+//! for source file"), and `include_bytes_qml!` writes 0 — so the tree is
+//! written here in the same layout (rcc format 3, one tree per file —
+//! `qtbase/src/tools/rcc`) with the time filled in.
 //!
-//! **The time is the file's content, hashed.** Qt reuses a compiled file
-//! when the time it was compiled against equals the source's (with the Qt
-//! build and the checksums of the types it depends on — `Unit::verifyHeader`,
-//! `QQmlTypeData::done`), and the cache names its entry after the path alone
-//! (`qrc:/qt/qml/platitude/ui/Main.qml` in every build). A time that moves
-//! with the content alone is what makes a changed file compile again and an
-//! unchanged one load as it was, whichever build or tree wrote the entry.
+//! The time is the file's content, hashed: Qt reuses a compiled file when
+//! the time it was compiled against equals the source's
+//! (`Unit::verifyHeader`, `QQmlTypeData::done`), and the cache names its
+//! entry after the path alone, the same in every build. A time that moves
+//! with the content alone recompiles a changed file and reuses an unchanged
+//! one, whichever build or tree wrote the entry.
 //!
-//! **Only a start that was told where to keep them carries times**
-//! (`QML_DISK_CACHE_PATH` — the runs the harness starts are given the
-//! build's own `target/<profile>/qmlcache`, `xtask::verify::child`). Every
-//! other start writes the times as 0, as `include_bytes_qml!` does: it
-//! compiles what it loads and keeps nothing, the shipped app's own
-//! behaviour, so nothing is left in a person's cache directory by a build
-//! nobody asked to cache.
+//! Only a start told where to keep them carries times
+//! (`QML_DISK_CACHE_PATH` — the harness hands its runs the build's own
+//! `target/<profile>/qmlcache`, `xtask::verify::child`). Every other start
+//! writes 0 and keeps nothing, as the shipped app does, so no build leaves
+//! anything in a person's cache directory unasked.
 //!
-//! **The untimed tree is built at compile time** ([`untimed`], a static
-//! in the image's read-only data, where `include_bytes_qml!`'s arrays
-//! stood): a tree built at start would be the whole of both modules again
-//! on the heap, for the life of the process. Only a start that keeps its
+//! The untimed tree is built at compile time ([`untimed`], a static in the
+//! image's read-only data): built at start, it would be both modules again
+//! on the heap for the life of the process. Only a start that keeps its
 //! compiled QML builds its timed copy there ([`tree`]).
 
 /// Where the modules stand in the resource tree: `qrc:/qt/qml`, the import
@@ -133,10 +127,9 @@ pub const fn tree_len(prefix: &str, path: &str, len: usize) -> usize {
     HEAD + 4 + len + 6 * names + 2 * (outer_units + inner_units) + NODE * (1 + names)
 }
 
-/// The tree [`tree`] builds with no time on it, built where it is called —
-/// a static's initializer ([`embed`]). The same bytes, a test holds it to;
-/// the file's bytes are copied once and whole, and a name outside ASCII
-/// stops the build.
+/// The tree [`tree`] builds with no time on it, byte for byte (a test holds
+/// it to that), for a static's initializer ([`embed`]). The file's bytes
+/// are copied once and whole; a name outside ASCII stops the build.
 pub const fn untimed<const N: usize>(prefix: &str, path: &str, bytes: &[u8]) -> [u8; N] {
     let mut out = [0u8; N];
     let (magic, rest) = out.split_at_mut(4);
@@ -180,8 +173,8 @@ pub const fn untimed<const N: usize>(prefix: &str, path: &str, bytes: &[u8]) -> 
                     unit += 1;
                 }
                 written += 1;
-                // Every directory holds exactly the next node, and the last
-                // node is the file: C, any territory, its data at the start.
+                // The last node is the file: C, any territory, its data at
+                // the start.
                 let words = if written == names {
                     [u32_of(offset), 0, LANGUAGE_C, 0]
                 } else {
@@ -219,8 +212,8 @@ const fn segments(name: &[u8]) -> (usize, usize) {
     (count, units)
 }
 
-/// One node of an untimed tree: the offset of its name, its flags, its two
-/// words; the time stays zero.
+/// One node of an untimed tree ([`push_node`]'s layout); the time stays
+/// zero.
 const fn put_node(out: &mut [u8], at: usize, [name, flags, first, second]: [u32; 4]) {
     put_u32(out, at, name);
     put_u16(out, at + 4, u16_of(flags as usize));
@@ -372,9 +365,6 @@ mod tests {
         assert_ne!(time(file), 0, "Qt reads a zero as no time at all");
     }
 
-    /// A start nobody told where to keep its compiled QML writes the same
-    /// tree with no time on it, so Qt keeps nothing — and the tree is the
-    /// same byte for byte otherwise.
     #[test]
     fn a_start_not_told_where_to_keep_them_carries_no_time() {
         let untimed = tree("qt/qml/platitude", "ui/Main.qml", b"Item {}\n", false);
@@ -429,9 +419,8 @@ mod tests {
         );
     }
 
-    /// The tree a static holds is the one a start would have built with no
-    /// time on it, byte for byte — a nested path, a prefix with empty
-    /// names in it, and a file of a few hundred kilobytes.
+    /// A nested path, a prefix with empty names in it, and a file of a few
+    /// hundred kilobytes.
     #[test]
     fn the_tree_built_at_compile_time_is_the_untimed_one() {
         const SMALL: &[u8] = b"import QtQuick\nItem {}\n";
@@ -462,8 +451,7 @@ mod tests {
     fn names_hash_as_qt_hashes_them() {
         // Worked out apart from this code, from `qt_hash` (qhash.cpp):
         // (0x71 << 4) + 0x74 is all inside 28 bits; the two longer ones fold
-        // the high nibble back. A wrong hash is a resource Qt cannot find —
-        // every verb's app loading nothing — so the runs say it too.
+        // the high nibble back.
         let hash = |name: &str| qt_hash(&name.encode_utf16().collect::<Vec<_>>());
         assert_eq!(hash("qt"), 0x784);
         assert_eq!(hash("platitude"), 0x08b0_55e5);

@@ -5,21 +5,15 @@ import platitude
 import platitude.ui
 
 /// The working tree's own verbs: what a commit is made of and what it is called — the message boxes, the amend
-/// row, stashing, the line-ending card, and the seat a stopped merge is finished from.
-///
-/// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
-/// hangs off that driver; the names it owns are
-/// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
-// sizeless holder.
+/// row, stashing, the line-ending card, and the seat a stopped merge is finished from. Built by `AutoActDriver`
+/// only when a verb was given.
+// An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
 
-    /// The driver these verbs belong to. `var` because naming its type here would be a circle: it is
-    /// the file that builds this one.
+    /// `var`, because naming the driver's type would be a circle: it is the file that builds this one.
     required property var driver
 
-    // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
     readonly property var workTree: driver.workTree
@@ -36,25 +30,18 @@ Item {
     readonly property var commitMenuState: driver.commitMenuState
     readonly property var stashDeleteItem: driver.stashDeleteItem
 
-    /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — each verb has one family (`AutoActDriver`).
+    /// Runs `act` if it is this family's and says whether it was; each verb belongs to one family (`AutoActDriver`).
     function run(act, arg) {
         if (act === "commit") {
-            // A message of its own when none was named: git refuses an empty one outright, and a run that asked for a
-            // commit and got a refusal is a picture of the history it did not write. Amend is the one below and needs
-            // no such fallback — there an empty message means "keep HEAD's" (`--no-edit`).
+            // A default message, as git refuses an empty one (amend needs none: empty there means `--no-edit`).
             repoTab.stageAll()
             wipPane.setMessage(arg === "" ? "chore: commit from the headless run" : arg, "")
             commitAnswer.armed = true
             page.commitNow()
         } else if (act === "commit-refused" || act === "notice-over-diff") {
-            // The same press against a repository whose `pre-commit` hook says no (`--preset hooked`). Nothing is
-            // half written and the hook runs in full, so the hook's own words come down as a report
-            // (デザイン規約 §答えの要らない報せ).
-            //
-            // `notice-over-diff` runs it **with a file open in the middle**, which is the one arrangement that tells
-            // a bar standing over the page apart from one living inside the graph: the second says nothing at all
-            // here, and the picture of a window whose middle is a diff is the same either way.
+            // Against a `pre-commit` hook that says no (`--preset hooked`): its words come down as a report
+            // (デザイン規約 §答えの要らない報せ). `notice-over-diff` has a diff open in the middle, the one
+            // arrangement where a bar over the page differs from one inside the graph.
             repoTab.stageAll()
             wipPane.setMessage("chore: something the hook will not have", "")
             if (act === "notice-over-diff")
@@ -62,19 +49,16 @@ Item {
             page.commitNow()
             driver.barrierNotice.start()
         } else if (act === "stale-part") {
-            // A part of a file that is not the file any more: the same press the diff's own marks make, carrying a
-            // fingerprint the bytes cannot match. Nothing is written and the pane reads the file again, so what comes
-            // back is a report (デザイン規約 §答えの要らない報せ). The argument is `<バケツ>:<パス>`.
+            // A stale part: the diff marks' own press with a fingerprint the bytes cannot match, answered by a report
+            // (デザイン規約 §答えの要らない報せ). The argument is `<バケツ>:<パス>`.
             const cut = arg.indexOf(":")
             stalePartTimer.bucket = arg.substring(0, cut)
             stalePartTimer.path = arg.substring(cut + 1)
             page.openDiff(stalePartTimer.bucket, stalePartTimer.path, "")
             stalePartTimer.start()
         } else if (act === "report-tone") {
-            // The page's own door (`showReport`), so the run reads the same `Words` the answer does. **Only the kind
-            // is handed in** — which report arrived is what the other verbs prove, and which dress each kind wears is
-            // a switch over that kind, asked of the real `Words` and a real bar in `tests/qml/tst_reportdress.qml`.
-            // What is left for a window is that the door carries all three of those answers through to the bar.
+            // Through the page's door (`showReport`) with only the kind: each kind's dress is proven in
+            // `tests/qml/tst_reportdress.qml`, and this proves the door carries it through to the bar.
             page.showReport(arg, "origin", "main", "")
             driver.barrierNotice.start()
         } else if (act === "amend") {
@@ -85,35 +69,20 @@ Item {
             commitAnswer.armed = true
             page.commitNow()
         } else if (act === "amend-reset-author") {
-            // Whether authorship is HEAD's to take over is only known once HEAD has been read, so this one goes the
-            // long way round: turn amend on and wait for the answer.
+            // The authorship offer needs HEAD read first, so amend is toggled and the timer waits.
             wipPane.setAmendChecked(true)
             page.amendToggled(true)
             resetAuthorTimer.start()
         } else if (act === "stash" || act === "stash-lands") {
-            // Through the band's button, which is the whole of it: nothing is asked before the write. The WIP pane is
-            // left where it is — the button stands on the window's band, so a run that opened that pane first
-            // would be proving the reach of a pane the button does not need (デザイン規約 §変更を退避する).
-            //
-            // **`stash-lands` is the one that opens it**, because where the reader is standing is its whole subject:
-            // the press empties the tree the pane is describing, and the row it is standing on leaves the graph with
-            // the highlight still on it. Pressed from the same button all the same.
-            //
-            // Everything goes, so the working-tree row goes with it and the new stash takes the lead — the row whose
-            // absence says the rebuild has landed. The one-path verb leaves the row where it is and keeps the plain
-            // write barrier.
-            //
-            // `named` leaves a summary in the commit box first, which the entry is then called after (デザイン規約
-            // §変更を退避する). The words are the driver's own, the way `wip-message` supplies its own line: a summary
-            // written for a commit has spaces and a colon in it, and the argument cannot carry either (`check --verb`
-            // splits its line on whitespace). The pane stays shut — the button does not need it, and the name
-            // is read back off the sidebar.
+            // Through the band's button with the WIP pane left alone — the button does not need it
+            // (デザイン規約 §変更を退避する). `stash-lands` opens it: where the reader stands is its subject. The
+            // working-tree row going is the rebuild's edge (`graphGoneOid`). `named` leaves a summary in the commit
+            // box to name the entry; the words are the driver's, as the argument cannot carry spaces.
             if (arg === "named") {
                 driver.stashWanted = "feat: write the summary"
                 wipPane.setMessage(driver.stashWanted, "")
             }
-            // The press is ticks away; the watch is armed here and catches the ask
-            // whenever it comes, so a fetch answering in between is not it.
+            // Armed now, ticks before the press, so a fetch answering in between is not taken for it.
             driver.beginWrite(act)
             stashPressTimer.fromWip = act === "stash-lands"
             stashPressTimer.start()
@@ -123,8 +92,7 @@ Item {
             fileRowMenu.sendPaths([arg])
             repoTab.stashPaths(wipPane.stashName)
         } else if (act === "amend-author") {
-            // The boxes live in the commit editor, which is only on screen while the uncommitted row is the selected
-            // one — without this the run photographs the details pane and says nothing about the amend row.
+            // The boxes are in the commit editor, on screen only while the uncommitted row is selected.
             page.showWip()
             wipPane.setAmendChecked(true)
             page.amendToggled(true)
@@ -135,8 +103,7 @@ Item {
             page.openRowMenu(menuOid)
             Harness.report("row_menu stash=" + commitMenuState.menuStashRef)
             if (act === "delete-stash-row" && arg === "go") {
-                // The drop takes this row off the graph — the same second
-                // barrier stash-pop-row waits on, for the same reason.
+                // The drop takes this row off the graph — the same edge stash-pop-row waits on.
                 driver.graphGoneOid = menuOid
                 stashDeleteItem.completeHold()
             }
@@ -146,18 +113,16 @@ Item {
             if (act === "stash-apply-row") {
                 repoTab.applyStash(commitMenuState.menuStashRef)
             } else {
-                // A pop drops the entry, so its row leaves the graph — the edge that says the rebuild has landed.
-                // An apply keeps it, and keeps the plain write barrier.
+                // A pop's row leaves the graph, the rebuild's edge; an apply keeps the plain write barrier.
                 driver.graphGoneOid = stashOid
-                // Through the page, which is where the entry's name is read before it goes (`popStash`) — the menu's
-                // own road. What the box has to be holding afterwards is read back at the barrier (`back=`).
+                // Through the page, the menu's road, which reads the entry's name before it goes (`popStash`);
+                // `back=` checks the box at the barrier.
                 driver.popWanted = GitFacts.stashLabel(stashesModel.nameAt(0))
                 page.popStash(commitMenuState.menuStashRef)
             }
         } else if (act === "wip-embedded") {
-            // The row of a repository of its own — the one file row whose pane answers with a sentence,
-            // because git will not open what is behind it (core `details::embedded`). The argument is the row,
-            // `<path>` with the trailing slash git spells such an entry with.
+            // An embedded repository's row, whose pane answers with a sentence (core `details::embedded`). The
+            // argument is its `<path>/`, trailing slash included.
             page.showWip()
             embeddedTimer.path = arg === "" ? "vendor/nest/" : arg
             embeddedTimer.begin()
@@ -166,16 +131,14 @@ Item {
         } else if (act === "wip-lanes") {
             wipLanesTimer.start()
         } else if (act === "carried-read") {
-            // **The argument is which copy**, because the two in the preset are different shapes: one holds an
-            // untracked file, which has no pieces to stage whoever owns it, and the other a staged edit — the one
-            // where "no hunk puts a seat out" is a claim about this pane.
+            // The argument is the copy: in one an untracked file has no pieces to stage anyway, so only the staged
+            // edit makes "no hunk puts a seat out" a claim about this pane.
             carriedReadTimer.start()
         } else if (act === "carried-stand") {
             // The same pane with nothing read yet — the argument is the copy, as above.
             carriedStandTimer.start()
         } else if (act === "wip-tally") {
-            // Read the two together: `status::Kinds` counts rows, so the kinds have to add up to `rows` — a drift means
-            // one of the two stopped reading the same status.
+            // The kinds must add up to `rows` (`status::Kinds` counts rows); a drift means two statuses were read.
             page.showWip()
             Harness.report("wip_tally added=" + graphPane.view.wipAdded
                               + " modified=" + graphPane.view.wipModified
@@ -185,13 +148,9 @@ Item {
                               + " conflicted=" + graphPane.view.wipConflicted
                               + " rows=" + worktreeModel.total)
         } else if (act === "wip-commit-half") {
-            // A commit of what is staged over a tree that keeps the rest (`--preset dirty`), which is the one shape
-            // where the uncommitted row survives its own commit: HEAD goes somewhere new and the row has to be drawn
-            // again above it, with what is left. **Staged as found** — staging everything commits the whole tree and
-            // leaves no row on the far side, so the pair would show a row going away.
-            //
-            // The argument stops it part-way: `during` is the write out and the picture not yet moved, which is what
-            // says the graph and the tree arrive together.
+            // Commits the staged half of `--preset dirty`, so the uncommitted row survives and is redrawn above the
+            // new HEAD — staged as found, as staging everything would leave no row. `during` stops with the write out
+            // and the picture not yet moved.
             page.showWip()
             wipPane.setMessage("feat: record the staged half", "")
             driver.headOidBefore = workTree.headOid
@@ -205,8 +164,7 @@ Item {
             else
                 halfSettledTimer.start()
         } else if (act === "wip-message" || act === "wip-message-focus") {
-            // A body is typed first because this editor starts empty, and an empty box has no text to take a colour.
-            // Read as a pair: the caret is the only difference between the two verbs.
+            // A body is typed because an empty box has no text to take a colour. Read the pair: only the caret differs.
             page.showWip()
             wipPane.setMessage("feat: write the summary",
                                arg === "" ? "And the description under it." : arg)
@@ -216,29 +174,22 @@ Item {
                               + wipPane.descriptionFocused
                               + " color=" + wipPane.descriptionColor)
         } else if (act === "merge-commit") {
-            // The box opens holding the merge's own message; this empties it first, because the state worth proving
-            // is the one where nothing is typed and the press still records those words
+            // Emptied first: the claim is that an empty box still records the merge's own message
             // (デザイン規約 §進行中の操作から出る).
             page.showWip()
             wipPane.clearMessage()
             mergeCommitTimer.begin()
             Harness.report("merge_commit pressed=" + wipPane.pressCommit())
         } else if (act === "op-exit" || act === "op-exit-go") {
-            // "-go" runs the row the argument names to its end — the hold where the row has one, the plain press where
-            // it has not (`OpExitRow.completeHold`).
-            //
-            // **The argument is the bare word**, dashes added here: a positional that begins with `--` is turned away
-            // by the option parser as a misspelled flag of its own (`verify::options`), so a verb that took the flag
-            // whole could not be asked for at all. **Required** — the word *is* which of the four rows to run, so a
-            // run that forgot it matches nothing and says `op_exit_held false`, which is the line it is judged on.
+            // "-go" runs the named row to its end (`OpExitRow.completeHold`). The argument is the bare word, as the
+            // option parser turns away a positional starting with `--` (`verify::options`). Required: without it
+            // nothing matches and the line says `op_exit_held false`.
             page.showWip()
             if (act === "op-exit-go")
                 Harness.report("op_exit_held " + wipPane.completeOpExit("--" + arg))
         } else if (act === "op-exit-lands") {
-            // The same press as "-go", followed all the way to where it puts the reader — which is a status later than
-            // the write's own answer (`AutoActDriver.awaitOpExitLanding`). The argument is the bare word for the same
-            // reason as above, and here it does have a default: this verb asks after one
-            // landing.
+            // "-go" followed to where it puts the reader, a status later than the write's own answer
+            // (`AutoActDriver.awaitOpExitLanding`). The bare word as above, defaulting to `continue`.
             page.showWip()
             Harness.report("op_exit_held "
                               + wipPane.completeOpExit("--" + (arg === "" ? "continue" : arg)))
@@ -247,28 +198,24 @@ Item {
             // The shot is the state before anyone decides.
             page.showWip()
             repoTab.stageAll()
-            // `amend` asks for the other wording: the two forms of this button differ in what
-            // they say, and both have to be photographable.
+            // `amend` photographs the button's other wording.
             if (arg === "amend") {
                 wipPane.setAmendChecked(true)
                 page.amending = true
             }
             wipPane.setMessage(arg === "" || arg === "amend" ? "feat: something" : arg, "")
-            // **The pointer goes on before the tree has settled**, which is what a real one does — the hand reaches the
-            // button while the index is still being written. Waiting for the warning first and pointing after would
-            // photograph the same card while leaving the ordering that actually broke it untested.
+            // The pointer goes on before the tree settles, as a real hand's does; pointing after the warning would
+            // leave that ordering untested.
             wipPane.pointAtCommit = true
             eolCommitTimer.start()
         } else if (act === "commit-face") {
-            // The signing tick on the face at the end of the commit button, with its one line out. Hover cannot be
-            // injected, so this writes the one property a real pointer writes (`AvatarButton`).
+            // The signing tick's tip on the commit button's face; writes what a real pointer writes (`AvatarButton`).
             page.showWip()
             wipPane.setMessage("feat: something", "")
             wipPane.signingPointedAt = true
             commitFaceTimer.start()
         } else if (act === "eol-hover") {
-            // Hover cannot be injected; this writes the one property a real pointer writes. The tip lands in
-            // overlay.png.
+            // Writes what a real pointer writes (hover cannot be injected); the tip lands in overlay.png.
             page.showWip()
             wipPane.pointEol(arg)
             eolHoverTimer.start()
@@ -277,17 +224,9 @@ Item {
         }
         return true
     }
-    /// The editor's own answer, latched off the edge that carries it (`RepoPage.commitAnswered`).
-    ///
-    /// **The write barrier cannot stand for this one.** The press is two writes — the staging that goes first and
-    /// the commit behind it — and the barrier is satisfied by whichever of them answers, so a run held there
-    /// photographs the pane before the commit was even sent. And the answer that matters is not on screen at all:
-    /// git answers before the reading that redraws the pane (`session::write::run_write`), so the emptied boxes and
-    /// the full ones frame identically at that moment.
-    ///
-    /// `empty=` is the claim — the answer reached the editor that sent it and the boxes were let go — and `amend=`
-    /// the row under them going down with it. Both are read off the pane: what the tab said
-    /// is the input to this, and only that.
+    /// The editor's own answer, latched off its edge (`RepoPage.commitAnswered`). Not the write barrier: the press is
+    /// two writes, staging then commit, and the barrier takes whichever answers first. `empty=` / `amend=` are read
+    /// off the pane — the boxes let go and the amend row with them.
     Connections {
         target: acts.page
         enabled: commitAnswer.armed
@@ -296,10 +235,8 @@ Item {
             Harness.report("commit_answered landed=" + landed
                               + " empty=" + (wipPane.subjectText === "" && wipPane.bodyText === "")
                               + " amend=" + page.amending)
-            // Reported at the answer, which is what the line is about, and completed behind the status that answer
-            // asks for. **Armed off this press's own answer** (`RepoTab.commitAnswer`), because the press is two
-            // writes: the staging in front of it answers first, and the status it asks for is one the commit has
-            // not been made in yet.
+            // Completed behind the status the commit's own answer asks for (`RepoTab.commitAnswer`) — the staging
+            // answers first, with a status that predates the commit.
             driver.owedStatusAt(repoTab.commitAnswer)
             driver.barrierWrite.start()
         }
@@ -308,12 +245,8 @@ Item {
         id: commitAnswer
         property bool armed: false
     }
-    // The row a repository of its own puts in the list, chosen the way a hand chooses one: the row's own signal, which
-    // is where a click lands (a pane called past it would leave the report proving nothing). Two beats, because the row
-    // is not there on the tick the pane opens — the status behind it arrives first.
-    //
-    // What is waited for is the pane having an answer about this path. A diff with no rows and none coming is settled
-    // when the model can say what stands there instead (`DiffPane.diffSettled`), and that is the whole of the picture.
+    // The row is chosen through its own signal, where a click lands — it is not there until the status arrives. Then
+    // the pane's answer about this path is waited for (`DiffPane.diffSettled`).
     SampleTimer {
         id: embeddedTimer
         property string path: ""
@@ -334,8 +267,8 @@ Item {
             if (!page.diffShown || page.diffPath !== embeddedTimer.path || !diffPane.diffSettled())
                 return
             embeddedTimer.stop()
-            // `sha8=` is the commit a stage of the row would point at, empty where that repository has no commit yet
-            // — the two sentences the pane has for this row.
+            // `sha8=`: the commit a stage would point at, empty where that repository has none — the pane's two
+            // sentences for this row.
             Harness.report("wip_embedded path=" + page.diffPath
                               + " embedded=" + diffPane.diffModel.embedded
                               + " rows=" + diffPane.view.count
@@ -343,12 +276,7 @@ Item {
             driver.complete()
         }
     }
-    // The lanes of the uncommitted row, in the tokens its delegate paints from. A lane is a stroke a couple of pixels
-    // wide and its dashes are one pixel each, so which of them are dotted is not a question the photograph answers.
-    // The row is put there by the pass behind the status read — the same read that says what a standing merge is
-    // bringing in — so the wait is for the row itself to lead the graph.
-    // The press has to land on rows that are actually on screen, so the diff has to have been read first — and the
-    // fingerprint handed in is one the bytes cannot have, which is the whole of the arrangement.
+    // The press has to land on rows that are on screen, so the diff is read first.
     SampleTimer {
         id: stalePartTimer
         property string bucket: ""
@@ -364,21 +292,15 @@ Item {
             driver.barrierNotice.start()
         }
     }
-    // Another working copy's uncommitted row, read in this window: the pane lists that copy's files and opens one of
-    // them, and every control that would write is down (P3-確認事項 §別 worktree の未コミット行).
-    //
-    // **The whole line is output side.** The two counts say the pane really is showing that copy,
-    // and each of the four verdicts is read off the control itself — the two presses are made the
-    // way a hand makes them and answer whether the button took them, and the two diff readings are the button's own
-    // `enabled` and whether a hunk puts a seat out at all. Built out of `writable`, every one of them would
-    // go green with the disabling unwired (app-ui.md §UI 自動化の因果性).
+    // Another working copy's uncommitted row read in this window, with every writing control down
+    // (P3-確認事項 §別 worktree の未コミット行). Every field is read off the output side — built from `writable`,
+    // each would go green with the disabling unwired (app-ui.md §UI 自動化).
     SampleTimer {
         id: carriedReadTimer
         property bool asked: false
         property bool opened: false
-        /// Whether the step to the next file has been made, whether it moved the pane off the file it was on, and
-        /// which file that was. A copy carrying one file is stepped and stays, and a run that waited for a move
-        /// there would wait for good.
+        /// The step to the next file: made, whether it moved, and from which file. A one-file copy steps and stays,
+        /// so no move is waited for there.
         property bool walked: false
         property bool moved: false
         property string leftPath: ""
@@ -389,7 +311,7 @@ Item {
                 const row = driver.rowOfCopy(Harness.autoActArg)
                 if (row < 0)
                     return
-                // Through the row itself, so the row's own decision is the one taken (verify-ui §壊れない動詞).
+                // Through the row itself, so the row's own decision is the one taken (verify-ui §壊れない動詞の実装と反復).
                 const item = graphPane.view.itemAtIndex(row)
                 if (item === null)
                     return
@@ -397,8 +319,7 @@ Item {
                 carriedReadTimer.asked = true
                 return
             }
-            // The copy's own files have to have arrived — until they do the lists still hold this window's, and a
-            // report taken there would be about the wrong tree.
+            // Until the copy's own files arrive the lists hold this window's.
             const files = page.wipUnstaged
             if (page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0)
                 return
@@ -410,10 +331,8 @@ Item {
                 if (key === "")
                     return
                 const cut = key.indexOf(":")
-                // **Asked of the row.** The model says which row to reach for; what is read is
-                // whatever that row makes of the model on its own — which is the half a run that carried the model's
-                // own answer to `openDiff` can never see, and the half that was empty here (verify-ui §壊れない動詞).
-                // The row answers null until the list has built it, which is this tick's whole wait.
+                // Pressed on the row, so what is read is what the row makes of the model — handing the model's answer
+                // to `openDiff` would skip that (verify-ui §壊れない動詞の実装と反復). Null until the list builds the row.
                 const row = driver.carriedPane.filesWalk.rowFor(key.substring(0, cut), key.substring(cut + 1))
                 if (row === null)
                     return
@@ -423,17 +342,13 @@ Item {
             }
             if (!driver.diffPane.diffSettled())
                 return
-            // The hover behind the name is the only place a cut one is whole, and the tooltip waits out `tipDelayMs`
-            // after the stand-in is rested — so a run on a long name waits for it, and one on a name that fits has
-            // nothing to wait for.
+            // A cut name is whole only in its hover tip, which waits out `tipDelayMs`; a name that fits has none.
             driver.carriedPane.namePointedAt = true
             if (driver.carriedPane.nameCut && !driver.carriedPane.nameTipShown)
                 return
             if (carriedReadTimer.walked) {
-                // **The run ends on the file the step below asked for.** A pane still waiting on that read
-                // photographs empty and builds no rows, so both the picture and the census would be of the race
-                // Where the step moved nothing there is no second read to wait for, and
-                // the settle above is the whole of it.
+                // The run ends on the file the step asked for — a pane still reading it photographs empty. A step
+                // that moved nothing has no second read to wait for.
                 if (carriedReadTimer.moved
                         && (!page.diffShown || page.diffPath === carriedReadTimer.leftPath))
                     return
@@ -441,29 +356,22 @@ Item {
                 driver.complete()
                 return
             }
-            // **Read before the step below**, which opens another file: the count taken after it is a pane in the
-            // middle of reading one.
+            // Read before the step below, which opens another file.
             const lines = driver.diffPane.view.count
-            // What the list is lighting while one file is open. **Both halves** — `lit=` is the same reading the file
-            // walk's own verbs make (`file_step`), and it is the first lit row of however many there are, so a list
-            // lighting all of them answers with the right name at the top (`FileRowWalk.litRows`).
+            // `lit=` is only the first lit row (as `file_step` reads it), so a list lighting every row still passes
+            // it; `litRows=` counts them (`FileRowWalk.litRows`).
             const lit = driver.carriedPane.filesWalk.litPath() === page.diffPath
             const litRows = driver.carriedPane.filesWalk.litRows()
-            // One step of the arrows, through the pane's own walk. **A row is found by the side its bytes are on**
-            // even in this one list, so a pane handed the run's name for the file's bucket walks from nowhere
-            // and answers the file it is already on (observed).
+            // One arrow step through the pane's own walk. Rows are found by the side their bytes are on even in this
+            // one list — handed the run's name for the bucket, the walk starts from nowhere and stays put.
             carriedReadTimer.leftPath = page.diffPath
             const stepped = driver.carriedPane.filesWalk.stepFile(1, false)
             carriedReadTimer.walked = true
             carriedReadTimer.moved = stepped
-            // **One list, one tally, one light, and no seat that writes.** The copy in this preset holds one path
-            // staged and then written again, so `files=1` and a `tally=` of one are the fold — counted per side they
-            // would both be two, and the row above the pane would be saying a different number from the pane.
-            // `lit=`/`litRows=` are the light the one open file is worth: the row wearing it is the file in the
-            // middle, and it is the only one wearing it. `cut=`/`tip=` are
-            // the long name's whole claim: the band cut it, and the hover behind it carries it. The diff's own line
-            // count goes last, after the part the table pins: a line pinned through it could not be written down at
-            // all (`verify::outcome` matches a substring). The tally is written in the order the row draws it.
+            // The preset's copy holds one path staged and written again, so `files=1` and a `tally=` of one are the
+            // fold (per side both would be two). `cut=`/`tip=`: the band cuts the long name, its hover carries it.
+            // `lines=` goes last, past what the table pins (`verify::outcome` matches a substring). The tally is in
+            // the order the row draws it.
             const tally = graphModel.carriedTally(page.selectedRow)
             const counts = tally ? [tally.added, tally.modified, tally.deleted,
                                     tally.renamed, tally.copied, tally.conflicted] : []
@@ -480,22 +388,13 @@ Item {
                               + " lines=" + lines)
         }
     }
-    // The same pane at rest: the copy picked, its files listed, and nothing read.
-    //
-    // **The half `carried-read` cannot photograph.** With a file open the list's one light is the reading, so a list
-    // that lights every row it has still answers with the right name at the top; with nothing open there is no name
-    // to answer with at all, and `litRows=` is the only thing that can tell the two apart (`FileRowWalk.litRows`).
-    //
-    // **The corner is claimed here** for the same reason. Which pane is under it decides whether it is offered a seat
-    // at all, and this is the pane `corner` cannot reach — that verb picks between this window's own tree and a
-    // commit of its history, and neither of those is another copy's work.
+    // The same pane at rest, nothing read: `litRows=` must be 0 here, which `carried-read` cannot show. The corner is
+    // claimed here too — `corner` cannot reach another copy's pane.
     SampleTimer {
         id: carriedStandTimer
         property bool asked: false
-        /// What the first folder row of the list calls itself, empty where the copy's paths are all at the root.
-        /// **The one name in this pane that is not the row's own path**: this model folds by `<run>:<path>` and keeps
-        /// the path in the slot beside it, so a row handed the fold key says `whole:src` everywhere it says a name —
-        /// the hover most of all, which is the only place a path is spelled out (`FileRowDelegate.foldKey`).
+        /// The first folder row's path, empty where every path is at the root. This model folds by `<run>:<path>`, so
+        /// a row handed the fold key as its path says `whole:src` (`FileRowDelegate.foldKey`).
         function folderPath() {
             const view = driver.carriedPane.view
             for (let i = 0; i < view.count; i++) {
@@ -509,7 +408,7 @@ Item {
             if (graphModel.finishCount === 0 || !workTree.loaded)
                 return
             if (!carriedStandTimer.asked) {
-                // The same road in as `carried-read`, down to the row taking its own decision (verify-ui §壊れない動詞).
+                // The same road in as `carried-read`.
                 const row = driver.rowOfCopy(Harness.autoActArg)
                 if (row < 0)
                     return
@@ -520,16 +419,14 @@ Item {
                 carriedStandTimer.asked = true
                 return
             }
-            // The copy's own files have to have arrived, and the rows be built out of them: what they light — and
-            // what they leave bare underneath — is nothing at all until they stand.
+            // The copy's own files arrived and their rows built: until then nothing is lit or bare.
             const files = page.wipUnstaged
             if (page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0)
                 return
             if (driver.carriedPane.view.count === 0 || gitCorner.width <= 0)
                 return
             carriedStandTimer.stop()
-            // `corner=` is the label's own visibility — reporting the room it was handed
-            // goes green with the binding cut (`corner`, which learned this the hard way).
+            // `corner=` is the label's own visibility; the room it was handed would go green with the binding cut.
             Harness.report("carried_stand copy=" + files.carriedName
                               + " files=" + files.total
                               + " litRows=" + driver.carriedPane.filesWalk.litRows()
@@ -551,8 +448,7 @@ Item {
             driver.complete()
         }
     }
-    // The offer to take HEAD's authorship over is only in the picture once HEAD's author has arrived, so the shot
-    // waits for it.
+    // Waits for HEAD's author; until it arrives the offer to take it over is not in the picture.
     SampleTimer {
         id: amendAuthorTimer
         onTriggered: {
@@ -567,23 +463,14 @@ Item {
     QtObject {
         id: halfWatch
         property bool duringOnly: false
-        /// Whether the pair below has been seen, and what the page was holding when it was. Kept at the edge: the
-        /// commit lands while the run is still on its way out, so a later read gives the settled page's numbers.
+        /// The pair below and what the page held, latched at the edge — a later read gives the settled page's numbers.
         property bool caught: false
         property bool sawWipRow: false
         property int sawRows: -1
     }
-    // The write out and nothing moved yet.
-    //
-    // **Both halves, or the moment is not this one.** Busy stays up past the write's own answer while the reads behind
-    // it run, so a look that beat the answer and one that missed it both find it raised — and the second is a
-    // later picture. HEAD still where it was is what tells them apart.
-    //
-    // **The pair is read on the tab's own notify** (app-ui.md §一瞬だけ立つ状態). The window
-    // is a git subprocess wide, but the loop can take the whole of it in one turn — the answer and the reads behind it
-    // drained together — and a beat that lands behind the landing finds HEAD moved at every beat after that, which is
-    // a watchdog spent in silence. This handler runs inside the turn the edge belongs to, so the window cannot close
-    // between the two reads.
+    // The write out and nothing moved: busy up and HEAD unmoved, as busy alone outlasts the write's answer. Read on
+    // the tab's notify (rules-refs/app-ui.md「一瞬だけ立つ状態は…」): the whole window can pass within one turn of
+    // the loop, which a sampler beat would miss.
     Connections {
         target: acts.repoTab
         enabled: halfWatch.duringOnly && !halfWatch.caught
@@ -595,11 +482,8 @@ Item {
             halfWatch.caught = true
         }
     }
-    // Completed a turn after the notify that carried the edge (app-ui.md §UI 自動化の因果性), and **the run ends
-    // either way**: a window that shut without one notify raising busy had no `during` in it to stop at, which is
-    // said out loud and finished the way an inventory that named nothing is (`WindowSettingsActs`). That line sits
-    // outside the lines this verb is judged on, so the run fails on it in the second it takes — and it names which
-    // of the two ways the run ended.
+    // Completed a turn after the notify that carried the edge. The run ends either way: a commit that landed with no
+    // notify raising busy had no `during` to stop at, and says so on a line outside what the verb is judged on.
     SampleTimer {
         id: halfDuringTimer
         onTriggered: {
@@ -613,17 +497,14 @@ Item {
                 return
             }
             halfDuringTimer.stop()
-            // The two flags the guard above stood on, said as what it found — the page they were read beside is the
-            // one in `halfWatch`, and reading them back here would be the settled page answering for the edge.
+            // What the latch found; the page's numbers are the latched ones, not the settled page's.
             Harness.report("wip_half stage=during busy=true moved=false"
                               + " wipRow=" + halfWatch.sawWipRow
                               + " rows=" + halfWatch.sawRows)
             driver.complete()
         }
     }
-    // The far side: the write through every boundary, the graph holding the commit HEAD went to, and the row drawn
-    // again above it with what the commit left behind. Read in that order — the last is the answer the other two are
-    // the reasons for.
+    // The far side: the write settled, the graph holding the new HEAD, and the row drawn again above it.
     SampleTimer {
         id: halfSettledTimer
         onTriggered: {
@@ -640,7 +521,7 @@ Item {
             driver.complete()
         }
     }
-    // HEAD's author has to arrive before the offer to take it over can be there to tick.
+    // Waits for HEAD's author, before which there is no offer to tick.
     SampleTimer {
         id: resetAuthorTimer
         onTriggered: {
@@ -652,9 +533,8 @@ Item {
                               + " name=" + repoTab.headAuthorName)
             wipPane.setResetAuthorChecked(true)
             wipPane.setMessage(Harness.autoActArg, "")
-            // The run is deferred, so nothing raises a barrier for it on the way out: the commit is sent from here and
-            // waited out from here. The mark is re-read on the spot — the page's own opening fetch can
-            // have answered since `prepareCompletion` read it.
+            // A deferred run: nothing raises its barrier, so the commit is sent and waited out here. HEAD is re-read
+            // now — the page's opening fetch can have answered since `prepareCompletion` read it.
             driver.headOidBefore = workTree.headOid
             driver.pressWrite("commit", () => {
                 page.commitNow()
@@ -663,19 +543,9 @@ Item {
             resetAuthorLandedTimer.start()
         }
     }
-    // The write barrier's two edges, and then the one this run is actually about: the amend answers before the rebuild
-    // it asks for is started, so stopping at the write frames the commit that was replaced — still under the name the
-    // amend was sent to take over (observed: `--preset authorship` photographed "Yuki Tanaka" on a green run).
-    //
-    // Refs answer ahead of the rebuild, so the new tip being named is not the graph holding it — the graph taking the
-    // commit in is the edge, and it is read the positive way round. The replaced one going is not the same statement
-    // and is not always true: a stash made on top of it keeps it drawn as its own parent, so `--preset basic` comes
-    // back from an amend one row *longer* than it went in, with the commit that was amended still on screen.
-    //
-    // That is also why the pane is waited for by the selection. Where the page puts the reader
-    // afterwards is its own business and it differs by repository — onto the new tip where the amended row led, back
-    // onto the same commit where the graph still holds it — but either way the shot waits for the pane
-    // to finish fetching, and `shown=` is then what says whose name the author line in the picture is.
+    // Past the write barrier: the amend answers before the rebuild, so the barrier frames the replaced commit. The
+    // edge is the graph holding the new HEAD — not the old one going, which a stash on top keeps drawn. Where the
+    // selection lands differs by repository, so the pane is waited for and `shown=` says whose author is pictured.
     SampleTimer {
         id: resetAuthorLandedTimer
         onTriggered: {
@@ -697,8 +567,7 @@ Item {
     SampleTimer {
         id: eolCommitTimer
         onTriggered: {
-            // Only the card is waited for. The pointer is already on the button, so the tree settling is what is being
-            // watched, and the card coming out is that — asking after the count first would be reading the input side.
+            // Only the card is waited for — asking after the count first would be reading the input side.
             if (!wipPane.eolCardOpen)
                 return
             eolCommitTimer.stop()
@@ -708,7 +577,7 @@ Item {
             driver.complete()
         }
     }
-    // The tick's line comes out on the shared delay, so the setting being on is not yet the line being up.
+    // The tick's tip comes out on the shared delay, so the setting being on is not yet the tip being up.
     SampleTimer {
         id: commitFaceTimer
         onTriggered: {
@@ -734,19 +603,12 @@ Item {
             driver.complete()
         }
     }
-    // The band's Stash button, offered until it takes. The button is down while the tab is busy, and the fetch a
-    // repository does on the way open outlives the baseline the verb starts on — so a single shot lands on nothing and
-    // the run waits out its watchdog on a graph nobody asked to change. What follows the press is the graph barrier
-    // (`graphGoneOid`), which is why nothing else is read here.
-    //
-    // **The row that has to go is read here.** The walk prepends the working tree's row
-    // only once the status says the tree is stacked on HEAD, and that status can arrive after the graph's first pass —
-    // a repository opened onto a stopped merge is the case where it does. Read too early, the verb waits out its
-    // watchdog on the newest *commit*, which was never going anywhere (measured, `--preset conflict-staged`).
+    // The band's Stash button, pressed until it takes: it is down while the opening fetch keeps the tab busy. The row
+    // that has to go is read here, once the working-tree row leads — it can arrive after the graph's first pass (a
+    // stopped merge), and read earlier the verb would wait on the newest commit.
     SampleTimer {
         id: stashPressTimer
-        /// Whether the press is made from the working tree's own row with the pane that describes it open — the seat
-        /// `stash-lands` is about, taken here so the row is there to sit on.
+        /// `stash-lands`: pressed from the working-tree row with its pane open, taken here so the row is there.
         property bool fromWip: false
         onTriggered: {
             if (driver.graphTopKind() !== "wip" || page.pageBand === null)
@@ -762,9 +624,8 @@ Item {
             stashPressTimer.stop()
         }
     }
-    // The merge finished from the button under the exit card, with nothing typed in the box. Two waits in one timer:
-    // the write has to land, and then HEAD's own message has to come back — the claim is that the empty box committed
-    // the merge's words, and only the commit that now exists can say so.
+    // Two waits: the write lands, then HEAD's own message comes back — only the new commit can say the empty box
+    // committed the merge's words.
     SampleTimer {
         id: mergeCommitTimer
         property string wanted: ""
@@ -774,8 +635,7 @@ Item {
         function begin() {
             mergeCommitTimer.wanted = workTree.opSubject
             mergeCommitTimer.headWas = workTree.headOid
-            // Read now: the editor is cleared by the landing, so afterwards every run says
-            // the boxes were empty.
+            // Read now: the landing clears the editor, so afterwards every run would say the boxes were empty.
             mergeCommitTimer.typed = wipPane.subjectText !== "" || wipPane.bodyText !== ""
             mergeCommitTimer.seenHead = -1
             mergeCommitTimer.start()
@@ -783,10 +643,8 @@ Item {
         onTriggered: {
             if (!driver.wroteAndSettled())
                 return
-            // The commit exists; the picture is of the graph holding it. **Against the id it moved
-            // from**: refs and the walk arrive behind the write and behind each
-            // other, so the old tip answers that question perfectly well, and the shot came back framing the branch
-            // still on it with a working-tree row above (measured).
+            // The graph holding the commit, checked against the id HEAD moved from: refs and the walk arrive behind
+            // the write and each other, so the old tip would pass.
             if (!workTree.headKnown || workTree.headOid === mergeCommitTimer.headWas
                     || graphModel.rowOf(workTree.headOid) < 0
                     || driver.graphTopKind() === "wip")

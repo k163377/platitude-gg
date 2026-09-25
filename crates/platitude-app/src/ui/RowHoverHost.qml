@@ -4,92 +4,51 @@ import QtQuick
 import platitude
 import platitude.ui
 
-// The two things a row puts under a resting pointer — the card of its own
-// message, and the refs one chip had to stack — and the beat that decides
-// when either of them goes away. The card serves two lists: the graph's
-// rows and the ones the right pane lists under a choice
-// (デザイン規約 §複数のコミットを選ぶ); the chip's list is the graph's alone.
-//
-// Held here: delegates are recycled out from under
-// an open popup (each of the two says so for itself). Held together
-// because only one of them is ever out, and that rule has to be decided
-// somewhere both can be seen (デザイン規約 §hover のツールチップ).
-//
-// Sized to the page it covers: the popups are placed in this item's
-// coordinates, and a row hands over a point in the scene's.
+// The two popups a row opens under a resting pointer — its commit's card, and the refs one chip stacked — and the
+// beats that close them. The card serves the graph's rows and a choice's rows (デザイン規約 §複数のコミットを選ぶ);
+// the chip's list is the graph's alone. Held here because delegates are recycled under an open popup; held together
+// because only one of them is ever out (デザイン規約 §hover のツールチップ).
 Item {
     id: host
 
     required property GraphPane graphPane
     /// The branch the working tree is on; that one leads nowhere.
     required property string currentBranch
-    /// The two sections that answer for a reading: which remote a branch
-    /// is measured against and how far it stands from it, and which
-    /// branch reads a remote-tracking ref. Owned by the page, and the
-    /// same pair the left panel's rows ask (`NavFacts`).
+    /// The sections `mateOf` asks.
     required property var branchesModel
     required property var remotesModel
-    /// A ref menu is standing on one of the list's rows — see the settle
-    /// timer below on why that keeps the list up.
+    /// A ref menu is standing on one of the list's rows; it keeps the list up (`refListKeep`).
     required property bool menuStanding
-    /// Any of the page's menus is standing, this pair's own included. The
-    /// row's card does not come out behind one: the hand is in the menu,
-    /// and a card opened now is drawn over it (the card opens last, so it
-    /// wins the overlay — observed).
-    ///
-    /// The chip's list is the exception, and it is `menuStanding` above
-    /// that holds it: a ref menu raised from one of its rows is standing
-    /// *on* the list.
+    /// Any of the page's menus is standing. The row's card does not come out behind one — opened last, it would be
+    /// drawn over the menu. The chip's list is exempt (`menuStanding`).
     required property bool hoverBlocked
 
-    /// The pointer is on the row, or on the chip whose list is up (or is
-    /// about to be). The graph writes the first as the pointer comes and
-    /// goes; both are what the settle beats read.
+    /// The pointer is on the row (written by `RepoPage.restOnCommit`), or on the chip whose list is up or about to
+    /// be — what the settle beats read.
     property bool rowCardWanted: false
     property bool refListWanted: false
-    /// The chip the open list hangs off (null when none). The graph's rows
-    /// read it back through `GraphPane.chipListAnchor`, so a hand that
-    /// walked down into the list and comes back to that chip re-holds it
-    /// at once; the opening rest was already served.
+    /// The chip the open list hangs off (null when none), read back through `GraphPane.chipListAnchor`: its row stays
+    /// lit, unstacks its sheets and ignores the leave the card causes (`GraphRowDelegate.listOnThisChip`).
     property var refListAnchor: null
-    /// The commit whose card is out (empty when none). The graph's rows
-    /// read it back through `GraphPane.rowCardOid`, so the row the card
-    /// came out of keeps its hover band while the card stands: the card
-    /// opens off the row's own bottom edge, so the hand that walks down
-    /// into it to read the message is off the row from that moment, and
-    /// the row went dark under a card that is still up — leaving the
-    /// message with nothing on screen saying which commit it is of.
+    /// The commit whose card is out (empty when none), read back through `GraphPane.rowCardOid`: the row keeps its
+    /// hover band while its card stands, though the hand walking down into the card has left the row.
     property string rowCardOid: ""
-    /// And which row of the graph that is, held for the reason the
-    /// chip's list holds its own (`refListRow`): a press in the card
-    /// picks the row, and looking one up is a walk over every loaded
-    /// row (CLAUDE.md §性能予算).
     property int rowCardRow: -1
-    /// The chip's list is up, or is about to be. Only one of the two is
-    /// ever out, and the chip's is the more particular
-    /// (デザイン規約 §hover のツールチップ).
+    /// The chip's list is up or about to be; it wins over the row's card.
     readonly property bool refListUp: host.refListWanted || refList.opened
 
-    /// The automation's two handles into this pair (`row-card` /
-    /// `ref-list-card`), an automation-only exposure the same as
-    /// `GraphPane.view` is (app-ui.md).
+    /// Automation-only handles (`row-card` / `ref-list-card`), the same exposure as `GraphPane.view`
+    /// (rules-refs/app-ui.md).
     readonly property alias listPopup: refList
     readonly property alias hoverCard: rowCard
 
-    /// The commit whose chip the open list belongs to. Every row in it
-    /// names a ref on that one commit, so a click in the card is a click
-    /// on that row of the graph.
+    /// The commit whose chip the open list belongs to — a click in the card is a click on that graph row.
     property string refListOid: ""
-    /// And which row of the graph it is, so a click in the card does not send the page looking for one it was handed
-    /// (`GraphModel::row_of` walks every loaded row — CLAUDE.md §性能予算).
     property int refListRow: -1
 
-    /// A stacked row was double-clicked, clicked once, or right-clicked.
-    /// The list's rows answer the same gestures the row under them does,
-    /// with no row of the graph to fall back to. **The second click,
-    /// spaced, has no signal here**: the wait it opens is the graph's own
-    /// (`GraphPane.noteRowClick`), because the card and the row it stands
-    /// on are one target.
+    /// A stacked row was double-clicked, clicked once, or right-clicked — the gestures of the graph row under it. The
+    /// spaced second click has no signal: its wait is the graph's (`GraphPane.noteRowClick`), card and row being one
+    /// target.
     signal recordActivated(var chip)
     signal recordChosen(string oidHex, int atRow)
     signal recordMenuAsked(string oidHex, var chip)
@@ -97,17 +56,12 @@ Item {
     /// (`RefListPopup.followed`).
     signal mateFollowed(string oidHex)
 
-    /// The note under a cut message was pressed in the row's card: the
-    /// reader is asking for the whole of it, and the whole of it is in
-    /// the pane one click away (デザイン規約 §hover のツールチップ).
-    /// The same pair the card's rows are chosen by — this is that click,
-    /// made from inside the card.
+    /// The note under a cut message was pressed in the row's card: the row's click, made from inside the card — the
+    /// whole message is in the pane (デザイン規約 §hover のツールチップ).
     signal messageAsked(string oidHex, int atRow)
 
     anchors.fill: parent
 
-    /// A menu went up over whatever was resting: the card goes now,
-    /// the same as when the chip's list takes over.
     onHoverBlockedChanged: {
         if (host.hoverBlocked)
             host.closeRowCard()
@@ -116,12 +70,8 @@ Item {
     function openRowCard(row) {
         if (!row || host.refListUp || host.hoverBlocked)
             return
-        // **Already out, of this very commit** — the hand walked down into the card and came back to the row it came
-        // off. What is being asked for is the hold, and the hold is the whole of what is given: the seat below comes
-        // off the pointer, so working it out again slides the card sideways under a hand that only went back where it
-        // started (P3-確認事項, observed). **By the commit and by the card**: delegates travel, and a
-        // card that has closed has no commit of its own left (`rowCard.onClosed`), so a second look at the same row
-        // after it went opens properly.
+        // Already out for this commit (the hand came back from the card): only hold it — re-seating off the pointer
+        // would slide the card sideways. By commit, since delegates travel; a closed card has cleared its commit.
         if (rowCard.opened && host.rowCardOid === row.oid_hex) {
             host.rowCardWanted = true
             return
@@ -131,32 +81,22 @@ Item {
         rowCard.author = row.author
         rowCard.atime = row.atime
         rowCard.mates = row.co_authors
-        // Under the pointer: a row is as wide as the
-        // pane, so its left edge is nowhere near the hand. **Worked out
-        // first**, since the bounds below are the room left under it.
+        // Under the pointer: a row is pane-wide.
         const at = row.mapToItem(host, row.pointerX, row.height)
         rowCard.x = at.x
         rowCard.y = at.y
-        // **What the card is for depends on what the row already showed.** A graph row carries the whole subject, so
-        // the card is a glance at the body and offers the way to the rest; a row of a choice carries one cut line, so
-        // the card is where the message is read and holds none of it back — and offers nothing, a door out of it
-        // being a door out of what the reader was picking (デザイン規約 §複数のコミットを選ぶ). Assigned:
-        // the card is one object serving two lists, and a binding would have to name both.
+        // A graph row shows the whole subject, so its card glances at the body and offers the rest; a choice's row
+        // shows one cut line, so its card holds nothing back and offers no way out (デザイン規約 §複数のコミットを選ぶ).
+        // Assigned, not bound: one card serves both lists.
         const whole = row.wholeMessage === true
-        // **Bounded by the room there is either way.** What "holds nothing back" buys is a paragraph limit lifted
-        // — uncapped, a five thousand byte body drew a slab the height of the
-        // window over the very list it was opened from (measured `--preset edges`). The room is what lies under the
-        // row, all of it: a card that stops short of the floor is holding back for no reason a reader can see. The
-        // subject takes a quarter of it and the body the rest, less the three rows the author, the date and the
-        // margins stand in.
+        // Bounded either way — an uncapped body would cover the list it opened from. The whole card gets all the room
+        // under the row: a quarter to the subject, the rest to the body less three rows for author, date and margins.
         const below = Math.max(0, host.height - at.y)
         rowCard.bodyRows = whole ? 0 : Metrics.hoverBodyRows
         rowCard.subjectHeight = whole ? below / 4 : host.graphPane.height / 4
         rowCard.bodyHeight = whole ? Math.max(0, below - below / 4 - 3 * Theme.rowHeight) : 0
         rowCard.asksForMore = !whole
         host.rowCardWanted = true
-        // Which row it is of, for the row itself to read back — the card
-        // holds no commit of its own beyond the fields copied above.
         host.rowCardOid = row.oid_hex
         host.rowCardRow = row.index
         rowCard.open()
@@ -164,77 +104,45 @@ Item {
     function settleRowCard() {
         rowCardKeep.settle()
     }
-    /// Down now: what makes way for the chip's list
-    /// has to be gone before it is drawn, or the two overlap for as long
-    /// as the wait.
+    /// Down now, not after the beat: what makes way for the chip's list must be gone before the list is drawn.
     function closeRowCard() {
         rowCard.close()
     }
 
-    /// Opens the chip's names on the chip's own seat.
-    ///
-    /// **The first row lands exactly on the chip** (規約 §グラフ行の
-    /// ダブルクリック), so the name the chip was showing is not written
-    /// out again beside itself. The sheets behind it go down as the card
-    /// comes up (`RefChipStack.unstacked`), which is what the card stands
-    /// in for. From there it always grows the one way, into the
-    /// graph: a card that picked its side by how long the names were
-    /// answered the same chip differently on different rows, and the
-    /// reason was not on screen to be read (observed —
-    /// the same condition §hover のツールチップ turns down for the file
-    /// rows). The names' heads hold still instead, which is what a name
-    /// is told apart by.
+    /// Opens the chip's names on the chip's own seat: the first row lands exactly on the chip, and the card always
+    /// grows right, into the graph (規約 §グラフ行のダブルクリック) — picking a side by name length would open the same
+    /// chip differently on different rows.
     function openRefList(oidHex, atRow, records, anchor) {
         const at = anchor.mapToItem(host, 0, 0)
         host.refListOid = oidHex
         host.refListRow = atRow
-        // The row's card opens under the pointer, which is on the chip
-        // — it would be drawn over the list the chip is opening.
+        // The row's card would be drawn over the list.
         host.closeRowCard()
         refList.records = records
         refList.mates = host.matesFor(records)
-        // What it has to cover (see the property). The anchor is the whole
-        // stack, so its width is the front card and the fan behind it —
-        // read before `refListAnchor` below takes the sheets down.
+        // The anchor is the whole stack (front card and fan) — read before `refListAnchor` below takes the sheets
+        // down.
         refList.coverWidth = anchor.width
-        // What is left of the page from the chip's own left edge, less
-        // what stands outside a row's names on the far side — the bar's
-        // own gutter, which is the wider of the two a row can end with
-        // (`RefListPopup.rightInset`; which one it takes is not known
-        // until the rows are measured, and a ceiling guessed at the
-        // narrower one would let the longest name run past it) — and the
-        // frame the card draws around the rows, and the stop every
-        // floating card in the app shares: `spaceXxl` short of the edge,
-        // the ceiling a menu's width has (規約 §メニュー). Without it the
-        // longest name takes the card flat against the window frame.
+        // The page right of the chip, less the `spaceXxl` stop every floating card keeps from the edge (規約 §メニュー),
+        // the card's frame, and the bar's gutter — the wider of the two insets a row can end with, since which one it
+        // takes is unknown until the rows are measured (`RefListPopup.rightInset`).
         refList.chipRoom = host.width - Theme.spaceXxl - at.x
                            - Theme.navBarGutter - refList.padding
-        // And how far down it may run: the page, and no further. This is
-        // the one card whose rows scroll, and one that ran past the
-        // bottom would put its lower rows where nothing can reach them
-        // (see the property).
+        // At most the page tall: its rows scroll, and rows past the bottom could not be reached.
         refList.listRoom = host.height
-        // Sized before it is shown, so it does not grow under the hand
-        // that is walking into it — see the function.
+        // Sized before it is shown, so it does not grow under the hand.
         refList.layOutRows()
         refList.x = at.x - Theme.spaceXs - refList.padding
-        // Down from the chip, and kept inside the page: a card longer
-        // than what is under the chip would otherwise be moved by
-        // `Popup` itself, which knows nothing about the seat it is
-        // keeping (it still covers the chip either way — the card is
-        // taller than one).
+        // Clamped into the page here: left to `Popup`, a card too long for the room under the chip is moved without
+        // regard to its seat.
         refList.y = Math.max(0, Math.min(at.y - refList.padding - refList.chipInset,
                                          host.height - refList.cardHeight))
         host.refListWanted = true
         host.refListAnchor = anchor
         refList.open()
     }
-    /// What each of the names on this commit reads, or is read
-    /// by — one entry per record, null where there is nothing to name.
-    ///
-    /// **Asked as the card opens** (デザイン規約 §行が読む答えはどこから
-    /// 来るか): the card is measured over its rows in that same turn, so
-    /// an answer landing after it is one the card has no room for.
+    /// Each record's second line (`mateOf`), null where there is none. Asked as the card opens: the card is measured
+    /// over its rows in that turn, so a later answer has no room (デザイン規約 §行が読む答えはどこから来るか).
     function matesFor(records) {
         const here = ({})
         for (let i = 0; i < records.length; ++i)
@@ -244,18 +152,9 @@ Item {
             out.push(host.mateOf(records[j], here))
         return out
     }
-    /// And the one line a single record opens under itself — **the same
-    /// line the left panel's rows open**, drawn from the same table
-    /// (`NavFacts`), so the two places cannot come to say one relation
-    /// two ways.
-    ///
-    /// **A counterpart this commit already carries is a row of this
-    /// card** — standing on one commit is what being level means, and a
-    /// line naming it would write the same name twice in one card.
-    ///
-    /// **The working copy holding the branch has no line here**: the
-    /// chip's own frame is already green for it (デザイン規約 §ref の種別),
-    /// where a panel row has no colour of its own to say it with.
+    /// The line one record opens under itself — the left panel's line, from the same `NavFacts`. None for a
+    /// counterpart already a row of this card (same commit = level), and none for the working copy holding the
+    /// branch: the chip's frame already says it (デザイン規約 §ref の種別).
     function mateOf(chip, here) {
         const name = chip.name
         if (chip.kind === "branch") {
@@ -264,13 +163,11 @@ Item {
                         ? gone : host.branchesModel.upstreamOf(name)
             if (reads === "" || (gone === "" && here[reads] === 1))
                 return null
-            // Where a press on the name goes: the commit that reading stands on (`NavFacts.place`).
+            // Where a press on the name goes (`NavFacts.place`).
             const line = NavFacts.readingLine(
                 { "upstream": reads, "gone": gone !== "",
                   "upstreamTo": NavFacts.place("remote", reads, host.branchesModel.upstreamOidOf(name)) })
-            // The measure is the branch's, and the branch here is the
-            // name over this line — so the chip draws it there
-            // (`RefChip.trackOnName`), the way the panel's own row does.
+            // The counts are the branch's, so the chip draws them on the name (`RefChip.trackOnName`).
             line.ahead = host.branchesModel.aheadOf(name)
             line.behind = host.branchesModel.behindOf(name)
             return line
@@ -292,10 +189,7 @@ Item {
         host.refListWanted = false
         host.settleRefList()
     }
-    /// Down now — the same as the row's card, and
-    /// for the same reason: what takes this card's place is drawn on the
-    /// ground it is standing on (the name box opens in the chip column
-    /// this covers), and the two would overlap for as long as the wait.
+    /// Down now, as `closeRowCard`: the name box that takes its place opens in the chip column this covers.
     function closeRefList() {
         host.refListWanted = false
         refList.close()
@@ -304,38 +198,27 @@ Item {
         refListKeep.settle()
     }
 
-    // The refs one chip had to stack, unstacked under it. It opens and
-    // closes with the pointer, and the pointer is over exactly one of the
-    // two things that keep it up: the chip, or the list itself.
     RefListPopup {
         id: refList
         currentBranch: host.currentBranch
-        // The rows of this card and the rows of the graph are the same targets, so a click here is answered by the row
-        // it is standing on (see the card's `rowClicks`).
+        // A click here is answered by the graph row the card stands on (`RefListPopup.rowClicks`).
         rowClicks: host.graphPane
         rowOid: host.refListOid
-        // The current branch's stand-in is the other thing a chip unfolds from, and a press on the card is then its
-        // press (`GraphPane.pinPressed`).
+        // Unfolded from the current branch's stand-in, a press on the card is the pin's (`GraphPane.pinPressed`).
         onStandIn: host.refListAnchor !== null && host.refListAnchor === host.graphPane.headPin.chipItem
         onStandInPressed: modifiers => host.graphPane.pinPressed(host.refListRow, modifiers)
         onPicked: chip => host.recordActivated(chip)
         onChose: host.recordChosen(host.refListOid, host.refListRow)
-        // The row this card stands on travels with the name: the menu it raises is that row's, aimed at the name that
-        // was pressed (デザイン規約 §グラフ行の右クリック).
+        // That row's menu, aimed at the pressed name (デザイン規約 §グラフ行の右クリック).
         onMenuAsked: chip => host.recordMenuAsked(host.refListOid, chip)
-        // The card went with the press and the graph goes somewhere under a hand that stayed: the rest of that
-        // gesture, and the row that comes under it, are not the rows' (`GraphPane.settleUnderHand`).
+        // The graph moves under a hand that stayed: the rest of that gesture is not the rows'
+        // (`GraphPane.settleUnderHand`).
         onFollowed: to => {
             host.graphPane.settleUnderHand()
             host.mateFollowed(to.oid)
         }
-        // The card is drawn over the chip that raised it, so the chip
-        // stops being able to say the hand is still on it — the row
-        // under a popup sees no hover at all. Until the card itself has
-        // the pointer, the ask that opened it is what holds it up
-        // (`refListWanted` stays on through the leave the row reports
-        // the instant this is drawn); from the moment the card has it,
-        // the card holds itself, and letting go is what closes it.
+        // The card covers its chip, whose row then sees no hover: `refListWanted` holds the card through the leave
+        // the row reports, until the card has the pointer; from then the card holds itself.
         onPointerInsideChanged: {
             if (refList.pointerInside)
                 host.refListWanted = false
@@ -345,15 +228,11 @@ Item {
             host.refListAnchor = null
             host.refListOid = ""
             host.refListRow = -1
-            // **Which row was clicked last stays remembered here.** The card is a window onto rows that stay on
-            // screen, wearing the mark a second click is aimed at — unlike the folded rail's peek, which takes its
-            // rows away with it and has to forget them (app-ui.md). The memory is the graph's, and so is the row.
+            // The last click is not forgotten here, unlike the folded rail's peek (rules-refs/app-ui.md): the memory
+            // is the graph's, and its rows stay on screen.
         }
     }
-    // A ref menu standing on one of the list's rows keeps the list up
-    // under it: the hand went into the menu, and closing the
-    // list would pull the ground out from what it right-clicked. The
-    // menu's own close settles this again (`RepoPage.onDismissed`).
+    // The menu's close settles this again (`RepoPage.onDismissed`).
     HoverCardHost {
         id: refListKeep
         card: refList
@@ -361,27 +240,16 @@ Item {
         grace: host.menuStanding
     }
     // ---- the row's own card -----------------------------------------
-    // Opened by a row once the pointer has rested on it, closed when the
-    // pointer leaves both it and the row.
     CommitHoverCard {
         id: rowCard
         textWidth: host.graphPane.width / 2
-        // A quarter of the pane to the subject, which is the only field
-        // here whose bound is the room there is — the body is held to a
-        // count of lines instead (規約 §hover のツールチップ).
-        // The subject's own bound is set when the card opens, beside the body's — the two lists want different shares
-        // and one card serves both (`openRowCard`).
-        // The band the row is holding goes with the card, and it is the
-        // card's own close that says when — the row lost the pointer a
-        // beat before that and cannot tell.
+        // The subject's and body's bounds are set in `openRowCard` — the two lists want different shares.
+        // The row's band goes with the card's own close — the row lost the pointer earlier and cannot tell.
         onClosed: {
             host.rowCardOid = ""
             host.rowCardRow = -1
         }
-        // **Read before the close**: closing is what clears
-        // the pair above, so a card that took its own commit down with it
-        // would send the page looking for nothing. Down now —
-        // what the press leads to is behind this card.
+        // Read before the close, which clears the pair. Down now: what the press leads to is behind this card.
         onMessageAsked: {
             const oidHex = host.rowCardOid
             const atRow = host.rowCardRow
@@ -396,8 +264,7 @@ Item {
     }
 
     Connections {
-        // The row it hangs off is a delegate, and delegates travel: once
-        // the graph moves under it the list is pointing at nothing.
+        // The list hangs off a delegate; once the graph scrolls, it points at nothing.
         target: host.graphPane.view
         function onContentYChanged() { refList.close() }
     }

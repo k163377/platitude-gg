@@ -2,33 +2,25 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
-// The run the strip of tabs stands in: where it has got to, what its two ends are, and the travel that sends it
-// somewhere. The strip owns the tabs and says what a press means, the hand owns the carry (`TabCarry`); this owns the
-// one thing that moves the strip with nothing in hand.
-//
-// Its own file for the reason the hand has one: laying tabs out and moving the row they are laid out in are
-// separate questions. A `QtObject` — nothing here draws, and nothing here needs a child of its own.
+// Where the strip's run has scrolled to, its two ends, and the travel that moves it with nothing in hand (the carry
+// is `TabCarry`'s).
 QtObject {
     id: tabRun
 
-    /// The strip's own list. This moves it and lays nothing out.
     required property ListView view
 
-    /// Whether the strip is still on its way somewhere.
     readonly property bool travelling: tabRun.travel.running
 
-    /// Where in the run a given offset lands. `contentX` is assigned by hand from every place that moves the strip,
-    /// and one left outside its run draws a band of nothing past the last tab. **The run starts at the list's origin,
-    /// not at 0** (`originX`): when tabs before the ones on screen change width, the list keeps the ones on screen
-    /// where they stand and moves its origin instead, and a bound read from 0 then stops a travel that far short of
-    /// the far end, with the tab it was sent for still cut.
+    /// An offset held inside the run: `contentX` is written by hand, and one outside the run draws blank band past the
+    /// last tab. The run starts at `originX`, not 0 — when tabs before the visible ones change width the list moves its
+    /// origin instead, and a bound from 0 stops a travel short with its tab still cut.
     function clamp(x) {
         const origin = tabRun.view.originX
         return Math.max(origin, Math.min(x, origin + Math.max(0, tabRun.view.contentWidth - tabRun.view.width)))
     }
 
-    /// How far the strip has travelled, and whether it has reached its far end. A strip with nothing to scroll has no
-    /// end to reach and answers false (`PGG_AUTO_ACT=tab-edge`).
+    /// Automation (`tab-edge`): how far the strip has scrolled, and whether it is at its far end — false for a strip
+    /// with nothing to scroll.
     function offset() {
         return Math.round(tabRun.view.contentX)
     }
@@ -37,15 +29,13 @@ QtObject {
             && tabRun.view.contentX >= tabRun.view.originX + tabRun.view.contentWidth - tabRun.view.width - 1
     }
 
-    /// A travel in flight, called off. Whatever else is about to move the strip outranks it: two hands on `contentX`
-    /// is one of them drawing over the other.
+    /// Calls off a travel in flight: anything else about to move the strip outranks it (two writers on `contentX` draw
+    /// over each other).
     function halt() {
         tabRun.travel.stop()
     }
 
-    /// Where the strip has to stand for `tab` to be whole in the run — the least it can move and still have all of
-    /// that tab on screen, which is the landing the sidebar's own rows are sent to (`NavList` / `ListView.Contain`).
-    /// Its own function because two arrivals go there and differ in nothing else.
+    /// Where the strip has to stand for `tab` to be whole in the run: the least move (as `ListView.Contain`).
     function wholeAt(tab) {
         let to = tabRun.view.contentX
         if (!tab)
@@ -57,10 +47,9 @@ QtObject {
         return tabRun.clamp(to)
     }
 
-    /// The strip, travelled until `tab` is whole in the run. Quick (デザイン規約 §アニメーション の
-    /// 200ms): a strip that jumps leaves the reader working out which way it went and how far, which is the question
-    /// the press was asking. Answers false when there is nowhere to go — and when a travel is already on its way
-    /// there: asked again mid-flight, a restart would begin the 200ms over from wherever the strip had got to.
+    /// Travels the strip until `tab` is whole in the run, animated rather than jumped (デザイン規約 §タブの所作).
+    /// Answers false when there is nowhere to go, or a travel is already headed there — restarting mid-flight would
+    /// begin the 200ms over.
     function showTab(tab) {
         if (!tab)
             return false
@@ -74,9 +63,8 @@ QtObject {
         return true
     }
 
-    /// The same landing, arrived at — what a strip that has stood nowhere yet does with the
-    /// tab it is handed (デザイン規約 §タブの所作). A travel is read against where the strip was, and a strip coming up
-    /// has no such place, so the 200ms would be saying nothing to nobody.
+    /// The same landing without the travel, for a strip that has stood nowhere yet (デザイン規約 §タブの所作): there is
+    /// no previous place to read the motion against.
     function landOn(tab) {
         if (!tab)
             return false
@@ -88,9 +76,8 @@ QtObject {
         return true
     }
 
-    /// Automation: the strip, sent to whichever end of the run leaves `tab` off screen (`PGG_AUTO_ACT=tab-pin`). The
-    /// far end — the near one would leave the tab standing in the run, and a stand-in that never
-    /// stood is what that verb is there to catch. A strip that fits has no end to send it to and answers false.
+    /// Automation (`tab-pin`): the strip sent to the end of the run far from `tab`, so the stand-in has to appear.
+    /// False for a strip that fits.
     function sendAway(tab) {
         const room = Math.max(0, tabRun.view.contentWidth - tabRun.view.width)
         if (room <= 0 || !tab)
@@ -101,9 +88,8 @@ QtObject {
         return true
     }
 
-    // The one place `contentX` is put back inside the run after the fact: every other hand on it clamps as it writes,
-    // where a travel is settled against a run that can move under it — a window resized in flight leaves the
-    // destination outside the bound it was chosen for.
+    // Clamped again when it stops: the run can move under a travel (a window resized mid-flight) and leave the
+    // destination outside it. Every other writer of `contentX` clamps as it writes.
     readonly property NumberAnimation travel: NumberAnimation {
         target: tabRun.view
         property: "contentX"

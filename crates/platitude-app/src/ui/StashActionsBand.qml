@@ -3,34 +3,21 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The details pane's own band while the selected row is a stash: what kind of thing the pane is showing, and the two
-// things git can do with it from here. (Delete lives on the row's menu, with the question held on the row —
-// rules-refs/app-ui.md §stash.)
-//
-// It stands *in place of* `COMMIT`, not under it. A stash is a commit in git's storage and nowhere else — nothing here
-// switches to it, nothing rewrites its message — so a band naming it as one, with a second band underneath saying what
-// it really is, spends two rows of the pane on one heading and leads with the wrong word.
-//
-// **The caption is a heading, wearing what `PaneHeader` puts on `COMMIT`** — the band this one replaces, so the two
-// read as the same row of the pane answering the same question. **The reflog selector is not written here**
-// (デザイン規約 §変更を退避する): the entry's own name is the message in the box below and the row in the list on the
-// left, and `stash@{n}` is a handle that shifts the moment the next push lands in front of it. No row is searched
-// for that spelling either (`platitude-core::find`), so no query lights a row for a word no row carries.
-//
-// The two words are the commands themselves (デザイン規約 §git 用語のコード表記), spelled and dressed the way the
-// stash row's own right-click menu spells them: one gesture, two places to reach it, one spelling.
+// The details pane's band while the selected row is a stash, standing in place of `COMMIT` and dressed like
+// `PaneHeader`: `STASH`, and the two things git can do with it from here, spelled as the stash row's menu spells them
+// (デザイン規約 §変更を退避する — also why `stash@{n}` is not drawn nor searched for, and why `drop` stays on the
+// row's menu).
 Rectangle {
     id: band
 
-    /// Reflog selector — what `apply` and `pop` are run on, and `""` hides the band. Not drawn (see above).
+    /// Reflog selector — what `apply` and `pop` are run on, and `""` hides the band. Not drawn.
     property string stashRef: ""
 
     signal applyRequested(string selector)
     signal popRequested(string selector)
 
-    /// Both words stand in the same box. They are the two answers to one question, and a pair drawn to its own word
-    /// reads as two unrelated buttons — the wash and the hover of the shorter one would be visibly the smaller target
-    /// (デザイン規約 §余白). Measured off the chips, which are what is actually drawn.
+    /// One box for both words, the two answers to one question: each sized to its own word, the shorter would be the
+    /// visibly smaller target (デザイン規約 §余白). Measured off the chips, which are what is drawn.
     readonly property real actBox: Math.max(applyChip.implicitWidth, popChip.implicitWidth)
 
     visible: band.stashRef !== ""
@@ -53,8 +40,8 @@ Rectangle {
             font.pixelSize: Theme.fontMd
             font.weight: Font.DemiBold
             color: Theme.textSecondary
-            // `PaneHeader` has nothing beside it and needs none of this; here the two buttons are in the same row, and
-            // a caption that outgrows the squeezed pane would paint over them.
+            // Unlike `PaneHeader`'s, this caption shares its row with the buttons and would paint over them when
+            // squeezed.
             elide: Text.ElideRight
             Layout.fillWidth: true
         }

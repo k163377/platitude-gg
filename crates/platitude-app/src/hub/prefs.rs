@@ -3,9 +3,8 @@
 
 use super::*;
 
-/// Addresses that have a picture, and where it is. Held by whoever is
-/// building rows so the hub is borrowed once for a whole pass — the
-/// graph draws two thousand commits at a time.
+/// Addresses that have a picture, and its URL. Taken once per row-building
+/// pass, so the hub is borrowed once rather than per row.
 #[derive(Debug, Clone, Default)]
 pub struct AvatarUrls {
     by_email: HashMap<String, String>,
@@ -42,11 +41,9 @@ impl Hub {
         &self.held_elsewhere
     }
 
-    /// Records the auto-fetch interval and puts it in force on every open
-    /// tab. Written out at once.
-    ///
-    /// Takes a number that has already been through
-    /// `session::auto_fetch_minutes`, which is where the ceiling lives.
+    /// Records the auto-fetch interval, puts it in force on every open tab
+    /// and saves. `minutes` has been through `session::auto_fetch_minutes`
+    /// (the ceiling).
     pub fn set_auto_fetch_minutes(&mut self, minutes: u32) {
         self.settings.defaults.auto_fetch_minutes = minutes;
         self.reapply_settings();
@@ -56,11 +53,9 @@ impl Hub {
     }
 
     /// Records how much history a graph opens with and puts it in force on
-    /// every open tab, which restarts each of their walks
-    /// (`RepoSession::set_log_limit`). `None` is the whole history.
-    ///
-    /// Takes a count that has already been through `session::log_limit`,
-    /// which is where the floor lives.
+    /// every open tab, restarting their walks (`RepoSession::set_log_limit`).
+    /// `None` is the whole history. `commits` has been through
+    /// `session::log_limit` (the floor).
     pub fn set_initial_commits(&mut self, commits: Option<u32>) {
         self.settings.defaults.initial_commits = commits;
         self.reapply_settings();
@@ -69,13 +64,10 @@ impl Hub {
         }
     }
 
-    /// Records how many git processes the application runs at once and
-    /// puts it in force — on the one set of slots every session shares,
-    /// so nothing has to be reapplied per tab
-    /// (`platitude_core::process::Slots`). Written out at once.
-    ///
-    /// Takes a number that has already been through
-    /// `process::concurrency`, which is where the range lives.
+    /// Records how many git processes run at once, puts it in force on the
+    /// slots every session shares (`platitude_core::process::Slots`) and
+    /// saves. `concurrency` has been through `process::concurrency` (the
+    /// range).
     pub fn set_git_concurrency(&mut self, concurrency: u32) {
         self.settings.defaults.git_concurrency = concurrency;
         self.executor
@@ -84,30 +76,20 @@ impl Hub {
         self.save_settings_now();
     }
 
-    /// Records how often the other working copies of a repository are
-    /// read for uncommitted work, and puts the one half of it the
-    /// sessions hold in force — whether they are read at all
-    /// (`RepoSession::set_copies_read`); the interval itself is the
-    /// page's tick's to read off `AppBackend` (`RepoPage`). Written out
-    /// at once.
-    ///
-    /// Takes a number that has already been through
-    /// `session::copies_interval_secs`, which is where the range lives.
+    /// Records how often other working copies are read for uncommitted
+    /// work and saves; sessions take only whether they are read at all
+    /// (`apply_repo_settings`). `secs` has been through
+    /// `session::copies_interval_secs` (the range).
     pub fn set_copies_interval_secs(&mut self, secs: u32) {
         self.settings.defaults.copies_interval_secs = secs;
         self.reapply_settings();
         self.save_settings_now();
     }
 
-    /// Records which git this computer runs. Empty is whichever one
-    /// `PATH` resolves.
-    ///
-    /// **Written down.** The executor every session spawns through was
-    /// settled at install (`resolve_git`), and a run that swapped it
-    /// mid-flight would leave the tabs already open on the old binary and
-    /// the next ones on the new — one repository, two gits, and no way to
-    /// tell from the window which of them answered. The next start reads
-    /// this file and is on one binary throughout.
+    /// Records which git to run; empty is `PATH`'s. Saved, not put in
+    /// force: swapping the executor mid-run would leave open tabs on the
+    /// old binary and new ones on the new. The next start reads it
+    /// (`resolve_git`).
     pub fn set_git_path(&mut self, path: String) {
         if self.settings.defaults.git_path == path {
             return;
@@ -135,8 +117,7 @@ impl Hub {
         &self.settings.avatars
     }
 
-    /// Every assignment resolved to a URL in one go, so a pass over the
-    /// graph asks the hub once for all of its rows.
+    /// Every assignment resolved to a URL (see [`AvatarUrls`]).
     pub fn avatar_urls(&self) -> AvatarUrls {
         let Some(dir) = self.store.avatars_dir() else {
             return AvatarUrls::default();
@@ -159,9 +140,9 @@ impl Hub {
 
     /// Files a picture against an address and writes the settings out.
     ///
-    /// Answers with the refusal as the screen is written from it, or
-    /// `None` where it worked (`avatar::AvatarRefusal` —
-    /// app-ui.md「Rust に文言を置かない」).
+    /// Answers with the refusal the screen is written from, or `None`
+    /// where it worked (`avatar::AvatarRefusal` —
+    /// rules-refs/app-ui.md「Rust に文言を置かない」).
     pub fn assign_avatar(
         &mut self,
         email: &str,
@@ -172,9 +153,8 @@ impl Hub {
             return Some(platitude_core::avatar::AvatarError::NoStore.refusal());
         };
         if let Err(error) = self.settings.avatars.assign(&dir, email, name, source) {
-            // git's own words for what happened go to the log, where
-            // every other failure's do; the screen is written from the
-            // kind beside them.
+            // The error's words go to the log; the screen is written from
+            // the kind.
             tracing::warn!(%error, "avatar not assigned");
             return Some(error.refusal());
         }
@@ -230,8 +210,8 @@ impl Hub {
         }
         match self.store.save_state(&self.state) {
             Ok(()) => self.saved_state = self.state.clone(),
-            // Left unsaved on purpose: the next tick tries again, and until
-            // one succeeds the file on disk is still the last good one.
+            // Left unsaved: the next tick retries, and the file on disk
+            // stays the last good one.
             Err(error) => tracing::warn!(%error, "state not saved"),
         }
     }

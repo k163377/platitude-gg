@@ -3,29 +3,15 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtTest
 
-// How Qt hands Escape out, which is what decides where anything in this window
-// may answer it (デザイン規約 §hover のツールチップ). Four facts, and the
-// product depends on every one of them:
-//
-//  - a `Shortcut` is matched before the key is delivered, so it beats a key
-//    handler on the focus chain;
-//  - a popup holding the focus answers for itself and keeps a window shortcut
-//    out of it;
+// How Qt hands Escape out, which decides where anything in this window may answer it
+// (デザイン規約 §hover のツールチップ). The product depends on each fact:
+//  - a `Shortcut` is matched before the key is delivered, so it beats a key handler on the focus chain;
+//  - a popup holding the focus answers for itself and keeps a window shortcut out of it;
 //  - an Escape nobody claimed reaches the handler on an ancestor;
-//  - **two enabled `StandardKey.Cancel` shortcuts in one window fire neither.**
-//
-// The last one is the trap: the ask bar and the notice bar each own one
-// already, so anything else that wants Escape takes it as a key handler
-// (`RepoPage.escapePressed`).
-//
-// And two more about the ancestor in that third fact, which is only an
-// ancestor for as long as the keyboard stays inside it:
-//
-//  - a pane swapped off the screen that lets the keyboard go drops it **out of
-//    a plain ancestor item altogether** — the window's content item takes it,
-//    and the handler is never reached again;
-//  - a `FocusScope` in that same place catches the fall and goes on hearing
-//    the key, which is why the page is one.
+//  - two enabled `StandardKey.Cancel` shortcuts in one window fire neither — the ask bar and the notice bar
+//    each own one, so anything else takes Escape as a key handler (`RepoPage.escapePressed`);
+//  - a pane swapped off screen that lets the keyboard go drops it out of a plain ancestor item (the
+//    window's content item takes it); a `FocusScope` there catches it, which is why the page is one.
 TestCase {
     id: scene
     name: "escape"
@@ -52,8 +38,7 @@ TestCase {
     Popup {
         id: card
         closePolicy: Popup.CloseOnEscape
-        // A popup only hears keys it was given: without this the key reaches
-        // neither the card nor the shortcut, and the run says nothing at all.
+        // A popup only hears keys it was given: without this Escape reaches neither the card nor the shortcut.
         focus: true
         width: 40
         height: 40
@@ -86,8 +71,6 @@ TestCase {
         compare(scene.secondFired, 0, "the disabled one does not")
     }
 
-    // **The trap.** Neither is called — a second owner puts the first one out
-    // of action along with itself.
     function test_two_at_once() {
         scene.secondOn = true
         keyClick(Qt.Key_Escape)
@@ -123,10 +106,8 @@ TestCase {
                 "with nothing claiming it, Escape reaches the ancestor's handler")
     }
 
-    // The page's own shape, twice: the panes swap in a stack, the one going off
-    // screen lets the keyboard go the way every pane here does
-    // (`GraphList.onVisibleChanged`), and what is under them is a plain item in
-    // one and a focus scope in the other.
+    // The page's shape, twice: panes swap in a stack and the one going off screen lets the keyboard go
+    // (as `GraphList.onVisibleChanged` does); under them is a plain item in one, a focus scope in the other.
     property int plainFired: 0
     property int scopeFired: 0
     Item {
@@ -170,9 +151,6 @@ TestCase {
         }
     }
 
-    // **The hole.** The pane had it, the pane is gone, and the item that was
-    // its ancestor is not on the key's way any longer — so an Escape after that
-    // swap reaches nothing at all.
     function test_six_a_plain_item_loses_the_key_with_the_pane() {
         loneShortcut.enabled = false
         plainStack.currentIndex = 1
@@ -187,7 +165,6 @@ TestCase {
                 "a plain ancestor keeps neither the focus nor the key")
     }
 
-    // And the same swap under a scope, which is what the page is made of.
     function test_seven_a_scope_catches_the_fall() {
         loneShortcut.enabled = false
         scopeStack.currentIndex = 1

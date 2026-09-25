@@ -2,9 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// Push, in whichever shape this branch's standing with its remote allows (デザイン規約 §リモートへ送る). The counts behind
-// it are from the last fetch, so they are believed only where they refuse. The band hands in the active page and its
-// own automation latch; the shared width box stays the band's to assign.
+// Push, in whichever shape this branch's standing with its remote allows (デザイン規約 §リモートへ送る). The shared
+// width box stays the band's to assign.
 ActionButton {
     id: pushButton
 
@@ -13,71 +12,51 @@ ActionButton {
     /// The waiting visual, held up by the band past the push that raised it (`TopBar.holdPushBusy`).
     property bool busyLatched: false
     readonly property string mode: pushButton.curPage !== null ? pushButton.curPage.pushState : "closed"
-    /// The last go at sending this branch came back refused. It ends there: nothing sends on its own
-    /// to be stopped (デザイン規約 §リモートへ送る).
+    /// The last push of this branch was refused.
     readonly property bool failed: pushButton.curPage !== null && pushButton.curPage.pushFailed
-    /// The standings where an overwrite is the only send there is, and so the shape the button takes. `behind` stands
-    /// here beside `diverged` for the reason that shape is allowed at all: a plain push does not stand in either, so
-    /// the one button never carries two meanings (デザイン規約 §相手の履歴を置き換える). Both have the tracking ref on
-    /// screen for the lease to pin to — `elsewhere`, which has no such read, keeps the plain shape.
+    /// The standings where an overwrite is the only send there is (デザイン規約 §リモートへ送る). `elsewhere` stays
+    /// plain: it has no tracking ref on screen for the lease to pin to.
     readonly property bool forceShape: pushButton.mode === "diverged" || pushButton.mode === "behind"
-    /// The same answer as the press under way was given it — **the shape is settled the moment the button goes down**
-    /// (デザイン規約 §長押し). `mode` follows the fetch that runs behind every press, so it moves under a hand that is
-    /// already holding: read live, the word said `push -f` and the release ran a plain `push`, or the other way
-    /// about. Everything the shape decides — the word, the two colours, the length and what the release runs — reads
-    /// this one (`ActionButton.armedMs`), and a press whose shape went is dropped
-    /// (`HoldDriver.stale`).
+    /// The shape as the press under way was given it, settled when the button goes down (デザイン規約 §長押し): `mode`
+    /// moves under a holding hand with the fetch behind every press. Everything the shape decides reads this
+    /// (`ActionButton.armedMs`); a press whose shape went is dropped (`HoldDriver.stale`).
     readonly property bool shownForce: pushButton.armedMs > 0
-    /// The frame's warning colour, for either of the two things that call for it: what an overwrite would do,
-    /// and what the last go did. The word takes it for only one of them (below).
+    /// The frame's warning: an overwrite, or the last push refused. The word takes it only for the overwrite.
     readonly property bool warned: pushButton.shownForce || pushButton.failed
 
     kind: "push"
     busy: pushButton.busyLatched
           || (pushButton.curPage !== null && pushButton.curPage.pageTab.busyOp === "push")
-    // Two fixed wordings, no counts: a number here would make the button a different width for every value it
-    // took (デザイン規約 §リモートへ送る).
+    // No counts: the label would change width with them (デザイン規約 §リモートへ送る).
     text: pushButton.shownForce ? "push -f" : "push"
     code: true
-    // Only the overwrite colours its word — it is the one that changes what the press costs
-    // (デザイン規約 §長押し — 警告の色は枠と印が持つ).
+    // Only the overwrite colours its word (デザイン規約 §長押し「警告の色は枠と印が持つ」).
     tone: pushButton.shownForce ? Theme.warning : Theme.textPrimary
-    // The ring and the frame keep the warning through the wait, a step down. The word
-    // takes the disabled step, which is the one way a word says "not now" (デザイン規約 §暗く落とした段 / §無効).
+    // Through the wait: ring and frame a step down, the word the disabled step (デザイン規約 §暗く落とした段 / §無効).
     toneDim: pushButton.warned ? Theme.warningDim : Theme.textMuted
     // Framed in every state, like the two beside it (`BandFetchButton`); what the warning owns is the colour.
     frameColor: pushButton.warned ? Theme.warning : Theme.borderStrong
     // The canvas inside the frame, like the two beside it (`BandFetchButton`).
     faceColor: Theme.bgSurface
-    // The frame's colour is worn by the diverged shape as well, so on its own it would not tell "cannot land
-    // plainly" from "did not land".
+    // The `!` tells "did not land" apart from the diverged shape, which wears the same frame.
     alert: pushButton.failed
     alertTone: Theme.warning
     holdMs: pushButton.forceShape ? Metrics.holdMs : 0
-    // **Which tab, which branch, and where that branch is going** (`HoldDriver.premise`). The band outlives the page
-    // it points at: switch tabs with a hand on this button and the length is unchanged — two tabs behind their
-    // remotes arm the same 500ms — while the press is now aimed at another repository's branch, which is what the
-    // release would overwrite (measured, `tst_holdlatch`).
-    //
-    // **The branch is named as well as the destination.** What a push sends is the branch the working tree is
-    // on (`PublishFlow.forcePush` → `workTree.branch`), and two local branches can track one remote one: switching
-    // between them leaves the destination reading `origin/main` either way, and the hold began on the other branch's
-    // history. Which of the two commands it is needs no saying here — that is the length. The joiner is a colon
-    // because git allows none in a ref name, so no pair of these can spell the same premise.
+    // Tab, branch and destination (`HoldDriver.premise`): the band outlives the page, so a tab switch under a holding
+    // hand would aim the release at another repository (`tst_holdlatch`); two local branches can track one remote
+    // branch, so the destination alone does not name what is sent. `:` cannot occur in a ref name.
     premise: pushButton.curPage === null
              ? ""
              : pushButton.curPage.tab_id + ":" + pushButton.curPage.pageWt.branch
                + ":" + pushButton.curPage.pushTargetLabel
-    // Held down while a rebase plan is being composed, like the stash button: what a push moves is the remote's
-    // story of the very commits the plan is about to rewrite.
+    // Down while a rebase plan is composed: it rewrites the very commits a push would send.
     enabled: pushButton.curPage !== null && !pushButton.curPage.planShown
              && (pushButton.curPage.canPush || (pushButton.forceShape && pushButton.curPage.canForcePush))
     onHeld: pushButton.curPage.forcePush()
     tip: {
         if (pushButton.curPage === null)
             return ""
-        // The freeze speaks for itself the way the tree-shaped refusals below do: a frozen button still takes
-        // hover, and nothing else on screen says the plan is what is holding it down.
+        // Said though disabled: nothing else on screen says the plan is what holds it down.
         if (pushButton.curPage.planShown)
             return qsTr("A rebase plan is being composed — it rewrites the very commits a push would send")
         const to = pushButton.curPage.pushTargetLabel
@@ -87,8 +66,7 @@ ActionButton {
                      ? qsTr("No commits yet — git has no branch to send")
                    : pushButton.mode === "publish"
                      ? qsTr("This branch has not been sent anywhere yet — asks where it goes")
-                   // No count: the marked remote is not the one this branch tracks, so `ahead` is the
-                   // standing with somewhere else (デザイン規約 §リモートへ送る).
+                   // No count: `ahead` is against another remote (デザイン規約 §リモートへ送る).
                    : pushButton.mode === "elsewhere"
                      ? qsTr("Push to %1").arg(to)
                    : pushButton.mode === "ready"
@@ -96,8 +74,7 @@ ActionButton {
                                        : qsTr("Push %n commits to %1", "", wt.ahead)).arg(to)
                    : pushButton.mode === "clean"
                      ? qsTr("Nothing to push — %1 is up to date").arg(to)
-                   // One sentence for both overwrite standings: what is lost is what the far side has either way,
-                   // and `behind` says the rest of itself by having no count of its own to send.
+                   // One sentence for both overwrite standings (デザイン規約 §リモートへ送る).
                    : pushButton.forceShape
                      ? (wt.behind === 1
                         ? qsTr("Hold to overwrite %1, dropping %n commit it has (as of the last fetch)", "",
@@ -105,7 +82,7 @@ ActionButton {
                         : qsTr("Hold to overwrite %1, dropping %n commits it has (as of the last fetch)", "",
                                wt.behind)).arg(to)
                    : ""
-        // What git said, under what the button would do next — this is the one place with room for why.
+        // What git said, under what the button would do next (デザイン規約 §リモートへ送る).
         const why = pushButton.curPage.pushFailReason
         if (pushButton.failed && why !== "")
             return what + "\n\n" + why

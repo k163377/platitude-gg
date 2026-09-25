@@ -3,26 +3,17 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// Where a remote is written down: a name and a URL.
-//
-// A window of its own, because this is repository configuration, the same kind of thing as
-// identity, which デザイン規約 §可否・警告の出し場所 keeps in a popup. Putting it in the bar also put a
-// remote's own name and URL on a second row while the branch name stayed on the first, which
-// grouped them backwards.
-//
-// The same form corrects a URL. Adding one and fixing one differ by which half is filled in already; the
-// typing is the same.
+// Where a remote is written down — a name and a URL — or its URL corrected (デザイン規約 §リモートを書き留める). A
+// dialog, because this is repository configuration (デザイン規約 §可否・警告の出し場所).
 AppDialog {
     id: remoteDialog
 
     /// The remote being corrected; empty means one is being made.
     property string editing: ""
-    /// Names this repository already has. git refuses a duplicate itself (`remote <name> already exists`, exit 3), but
-    /// that refusal would arrive after the dialog had closed, with nothing on screen left for it to be about.
+    /// Names this repository already has — git's own refusal of a duplicate would land after the dialog closed.
     property var taken: []
-    /// Whether this remote is origin — both keys the box writes name it (`RepoTab.markedOrigin`) — and whether that
-    /// is this repository's own to change. A mark set for every repository cannot be cleared from here — git has no
-    /// local spelling for "not set" (measured), and the only move against it is marking another remote.
+    /// Whether this remote is origin (`RepoTab.markedOrigin`), and whether that mark is this repository's own: one
+    /// set for every repository cannot be cleared here, git having no local spelling for "not set".
     property bool marked: false
     property bool markLocal: true
 
@@ -32,12 +23,9 @@ AppDialog {
         remoteDialog.editing === "" && remoteDialog.wantedName !== ""
         && remoteDialog.taken.indexOf(remoteDialog.wantedName) >= 0
 
-    /// The remote was written down. The URL goes in as typed: `git remote add` contacts nothing, so only a push
-    /// can find it wrong.
+    /// The remote was written down, the URL as typed: `git remote add` contacts nothing.
     signal submitted(string name, string url)
-    /// The box was left in a different state than it opened in. Its own signal: what it changes is config keys
-    /// rather than the remote, and a form that reported both would have the caller work out which of the two it
-    /// was being told about.
+    /// The box was left changed. Its own signal: it writes config keys, not the remote.
     signal markChanged(string name, bool marked)
 
     function start(name, url, takenNames, marked, markLocal) {
@@ -46,17 +34,12 @@ AppDialog {
         remoteDialog.marked = marked === true
         remoteDialog.markLocal = markLocal !== false
         markBox.checked = remoteDialog.marked
-        // `origin` is only offered while the repository has no remote at all: it is what a clone would have called its
-        // first one, and nothing standing there to clash with. Once anything exists the next name is not ours to guess
-        // — a prefill could only repeat a name that is taken or invent one. The word carries no standing of its own
-        // either way: whatever treats `origin` specially goes by the name a remote actually has, so editing the prefill
-        // away simply means no remote is called that.
+        // `origin` only while there is no remote at all (デザイン規約 §リモートを書き留める).
         nameField.text = name !== "" ? name : takenNames.length === 0 ? "origin" : ""
         urlField.text = url
         remoteDialog.open()
     }
-    // The URL is what there is to type once the name is settled — kept on a correction, prefilled on a first remote.
-    // Only a name this dialog could not guess puts the caret on the name instead.
+    // The caret goes to the URL, unless the name is left to type.
     onOpened: (remoteDialog.editing === "" && nameField.text === "" ? nameField : urlField).forceActiveFocus()
 
     /// Automation: typing, which no injected key reaches offscreen. An empty half leaves what `start` put there.
@@ -75,8 +58,8 @@ AppDialog {
         const marked = markBox.checked
         remoteDialog.close()
         remoteDialog.submitted(name, url)
-        // After the remote itself: on the add form the remote being marked does not exist until the line above has
-        // run, and the two go through one write queue in the order they are asked for.
+        // After `submitted`: on the add form the remote exists only once that has run, and the write queue keeps
+        // the order.
         if (markBox.offered && marked !== remoteDialog.marked)
             remoteDialog.markChanged(name, marked)
     }
@@ -93,25 +76,18 @@ AppDialog {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Theme.textSecondary
-            // The one thing the fields cannot ask for: where the URL comes from. The definite article already puts
-            // the repository over there, and nothing here could make it anyway. That the URL is untouched until the
-            // push is left unsaid; the push says it, at the moment it can be acted on. The same line has to fit a
-            // correction, where the repository plainly exists.
+            // Shared by the add and correction forms (デザイン規約 §リモートを書き留める).
             text: qsTr("Paste the URL of the repository on your host.")
         }
 
-        // A remote being corrected keeps its name: renaming one belongs to the left menu, and doing both here would
-        // make this two dialogs.
+        // A corrected remote keeps its name: renaming belongs to the left menu.
         LabeledField {
             visible: remoteDialog.editing === ""
             caption: qsTr("Name")
             FormField {
                 id: nameField
                 Layout.fillWidth: true
-                // Only while nothing is called that. The box is prefilled whenever the repository has no remote at all,
-                // so this shows in exactly the case a name already exists — and a greyed suggestion the Add button
-                // would refuse is worse than no suggestion. The box then stays empty: which name fits is the
-                // person's to know.
+                // Never a name Add would refuse (デザイン規約 §リモートを書き留める).
                 placeholderText: remoteDialog.taken.indexOf("origin") >= 0 ? "" : "origin"
                 onAccepted: remoteDialog.submit()
             }
@@ -132,13 +108,8 @@ AppDialog {
             }
         }
 
-        // Which remote is origin: where pushes go, and where a `switch` to a name several remotes carry takes it from.
-        // `origin` is the word that reaches the reader and the parenthesis says the role — the name of the remote
-        // actually holding it is this form's own heading (デザイン規約 §リモートを書き留める). The same words as the row on the
-        // left menu's menu: two ways into one operation say one sentence (§メニュー).
-        //
-        // Offered from the second remote on — the line is about taking the destination from somewhere else, and a
-        // repository's first remote is where every push goes anyway.
+        // Which remote is origin (デザイン規約 §リモートを書き留める). Not on the first remote's add form: every push
+        // goes there anyway.
         ColumnLayout {
             id: markRow
             Layout.fillWidth: true
@@ -146,13 +117,10 @@ AppDialog {
             visible: markBox.offered
             AppCheckBox {
                 id: markBox
-                /// Whether this form is asking the question at all.
                 readonly property bool offered: remoteDialog.editing !== "" || remoteDialog.taken.length > 0
                 text: qsTr("Mark as origin (default remote)")
                 enabled: remoteDialog.markLocal || !remoteDialog.marked
             }
-            // What checking it costs, and what unchecking it gives back (デザイン規約 §長さ: 見出し 1 行 + 失うもの 1 行). The third
-            // line says the one move a repository has against a mark it cannot clear.
             Label {
                 Layout.fillWidth: true
                 leftPadding: Theme.spaceXl

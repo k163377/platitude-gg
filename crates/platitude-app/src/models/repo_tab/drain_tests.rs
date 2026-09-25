@@ -10,10 +10,8 @@ fn settled(kind: K, error: &str) -> RepoTab {
     tab
 }
 
-/// Whether the answer this tab took last left a commit at the tip. Read
-/// off the answer because that is where it is kept — a landing is
-/// waited for by answer, and each keeps its own
-/// (`WriteAnswer::at_tip`).
+/// Whether the answer this tab took last left a commit at the tip — kept
+/// per answer, not in the group (`WriteAnswer::at_tip`).
 fn at_tip(tab: &RepoTab) -> bool {
     tab.write_answers.last().is_some_and(|a| a.at_tip)
 }
@@ -35,9 +33,7 @@ fn a_refused_stage_is_the_drifted_rows_own_answer() {
     );
 }
 
-// A commit nobody here pressed for — the page that sent it is gone, or
-// the queue took nothing — has no editor waiting to be emptied, so its
-// answer falls to the group like any other nobody named.
+// No editor waits: the page that sent it is gone, or the queue took nothing.
 #[test]
 fn a_commit_nobody_waits_for_falls_to_the_group() {
     let tab = settled(K::Commit, "nothing to commit, working tree clean");
@@ -54,8 +50,7 @@ fn a_commit_nobody_waits_for_falls_to_the_group() {
 fn a_merge_that_landed_answers_at_the_tip() {
     assert!(at_tip(&settled(K::Merge, "")));
     assert!(at_tip(&settled(K::CherryPick, "")));
-    // A pull lands the same way: whatever the far side brought in is on
-    // the branch now, and that is where the reader is put.
+    // A pull lands the same way: the reader is put on what it brought in.
     assert!(at_tip(&settled(K::Pull, "")));
     assert!(!at_tip(&settled(K::Merge, "fatal: refusing to merge")));
 }
@@ -83,26 +78,21 @@ fn a_tag_answer_says_so_whichever_way_it_went() {
     assert!(settled(K::Tag, "fatal: tag 'v1.0' already exists").write_tag_op);
     assert!(settled(K::DeleteTagEverywhere, "").write_tag_op);
     assert!(!settled(K::Branch, "").write_tag_op);
-    // What a rename's question sends to the remote is a push, so the
-    // pending question is not re-raised by its own answer.
+    // A rename's question sends a push, so its own answer must not
+    // re-raise it.
     assert!(!settled(K::Push, "").write_tag_op);
 }
 
 // ---- the toolbar's push ----------------------------------------------
 
-/// The button pressed: the push went to the queue under `OURS`, for
-/// `topic`.
 fn push_pressed() -> RepoTab {
     let mut tab = RepoTab::default();
     tab.push_out.asked(Some(OURS), "topic".into());
     tab
 }
 
-// A push that git turned down and the fetch that landed behind it come
-// back in one drain. The answer is handed to the press by id, with the
-// branch it was sent for and git's own words for that one — and the
-// fetch is what is left over for the group, so the page's leftover
-// branch reads a fetch that landed.
+// A refused push and the fetch that landed behind it, in one drain: the
+// fetch is what is left over for the group.
 #[test]
 fn a_push_answer_is_handed_to_the_press_that_sent_it_with_its_branch_and_words() {
     let mut tab = push_pressed();
@@ -121,11 +111,8 @@ fn a_push_answer_is_handed_to_the_press_that_sent_it_with_its_branch_and_words()
     assert!(tab.write_fetched);
 }
 
-// A push the far side turned down with a reason of its own — this end
-// was behind it — is handed to the press with that reason on the answer,
-// where the page reads it into the bar (`RepoPage.absorbPushAnswer`).
-// The group stays put: the report is the answer's own, and a copy there
-// would have the page say it twice.
+// The report rides on the answer, where the page reads it into the bar
+// (`RepoPage.absorbPushAnswer`); a copy in the group would say it twice.
 #[test]
 fn a_push_refused_with_a_report_hands_the_report_to_the_press() {
     let mut tab = push_pressed();
@@ -154,10 +141,8 @@ fn a_push_refused_with_a_report_hands_the_report_to_the_press() {
     assert_eq!(tab.write_report_kind, "");
 }
 
-// Two presses in a row — the reader switched branches and pushed again
-// before the first came back — answer in one drain. Only the press still
-// waited for is handed its answer; the other is nobody's and folds into
-// the group, and neither is handled twice or lost.
+// The reader switched branches and pushed again before the first came
+// back.
 #[test]
 fn two_pushes_in_a_row_are_answered_by_id_and_neither_twice() {
     let mut tab = push_pressed();
@@ -178,10 +163,8 @@ fn two_pushes_in_a_row_are_answered_by_id_and_neither_twice() {
     );
 }
 
-// A push nobody here pressed for — one a page that has since gone sent —
-// has no press waiting: its answer falls to the group like any other
-// nobody named. **Both owners are empty here**, which is what makes
-// this the leftover case (the ref row's own is below).
+// Sent by a page that has since gone. Both owners (toolbar and ref row)
+// are empty, which is what makes this the leftover case.
 #[test]
 fn a_push_nobody_here_pressed_for_falls_to_the_group() {
     let mut tab = RepoTab::default();
@@ -191,9 +174,7 @@ fn a_push_nobody_here_pressed_for_falls_to_the_group() {
     assert_eq!(tab.last_write_error, "! [rejected]");
 }
 
-// The answer's place is the notify's own: the drain after the one that
-// carried it says the press is not answered here, so the page cannot
-// act on the same refusal twice.
+// The next drain says -1, so the page cannot act on the same refusal twice.
 #[test]
 fn the_push_answer_is_this_notifys_own() {
     let mut tab = push_pressed();
@@ -210,18 +191,15 @@ fn the_push_answer_is_this_notifys_own() {
     );
 }
 
-/// The refused half is the one the page reads: a fetch that could not
-/// reach the far side has said so in the tab's own terms already, and
-/// the panel it raised stays the fetch's to take down again
-/// (`CommandsOwner`). A push answering the same way is somebody else's
-/// news in the same panel.
+/// The refused half is the one the page reads: a failed fetch has already
+/// raised its panel, which stays the fetch's to take down
+/// (`CommandsOwner`); a refused push is other news in the same panel.
 #[test]
 fn a_fetch_answer_says_so_whichever_way_it_went() {
     assert!(settled(K::Fetch, "").write_fetched);
     let mut tab = RepoTab::default();
-    // The run has raised its panel already, so this failure has no
-    // `fetch_first_failed` to emit — there is no proxy to emit it
-    // through here, and the refused half is what the page reads.
+    // Panel already raised, so no `fetch_first_failed` is emitted — a
+    // signal needs the proxy no unit test has.
     tab.fetch_log_raised = true;
     tab.settle_write(
         1,
@@ -253,8 +231,7 @@ fn every_answer_rewrites_the_whole_group() {
     let mut tab = RepoTab::default();
     tab.settle_write(1, K::Reword, String::new(), None, 0, 0);
     assert!(tab.write_reworded);
-    // A checkout: a failed fetch raises `fetch_first_failed`, and a
-    // signal needs the proxy no unit test has.
+    // A checkout, not a fetch: a failed fetch emits `fetch_first_failed`.
     tab.settle_write(
         1,
         K::Checkout,
@@ -271,9 +248,7 @@ fn every_answer_rewrites_the_whole_group() {
     assert_eq!(tab.write_seq, 2);
 }
 
-/// One drain carrying a whole run and the fetch behind it — what the
-/// freeze leaves running comes back while the run's landing is still
-/// being waited out, and the two answers meet in the same batch
+/// A run's answer and the fetch the freeze left running, in one drain
 /// (`take_feed` drains the queue whole and notifies once).
 fn a_run_and_the_fetch_behind_it() -> Vec<TabMsg> {
     vec![
@@ -308,11 +283,8 @@ fn a_run_and_the_fetch_behind_it() -> Vec<TabMsg> {
     ]
 }
 
-// The group properties describe the answer that came last, and a batch
-// leaves only that one to be read: a reader waiting for the run's own
-// answer by name never sees it, and the stop it left standing is taken
-// back down by the fetch *starting*. Both are read out of the list
-// instead, which keeps every answer the notify carried.
+// The group describes only the last answer: the run's own is lost there,
+// and its stop is taken down by the fetch *starting*. The list keeps both.
 #[test]
 fn every_answer_in_one_drain_is_published_not_just_the_last() {
     let mut tab = RepoTab::default();
@@ -343,8 +315,8 @@ fn the_runs_answer_keeps_the_stop_that_was_its_own() {
     );
 }
 
-/// Which answer a run is waiting for is told by the counter it read
-/// before pressing, so one already counted cannot arm it.
+/// A run tells its answer by the counter it read before pressing, so one
+/// already counted cannot arm it.
 #[test]
 fn each_answer_carries_the_seq_it_was_counted_at() {
     let mut tab = RepoTab::default();
@@ -355,8 +327,6 @@ fn each_answer_carries_the_seq_it_was_counted_at() {
     assert_eq!(seqs, [before + 1, before + 2]);
 }
 
-// The tip landing is waited for by meaning, and the answer carrying
-// it is not the one the group is left describing.
 #[test]
 fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
     let mut tab = RepoTab::default();
@@ -390,8 +360,6 @@ fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
     assert_eq!(landed, [K::Merge]);
 }
 
-// A drain that brought no write answer says so, and the last one's
-// list goes down with it.
 #[test]
 fn a_drain_with_no_write_answer_publishes_none() {
     let mut tab = RepoTab::default();
@@ -404,20 +372,17 @@ fn a_drain_with_no_write_answer_publishes_none() {
     assert!(tab.write_answers.is_empty());
 }
 
-/// A tab whose plain `branch --delete` is out and whose card is standing
-/// for its answer (`ops_delete::branch_delete` writes the name and the
-/// id down together at the press).
+/// A plain `branch --delete` out, its card standing for the answer
+/// (`ops_delete::branch_delete`).
 fn card_standing() -> RepoTab {
     let mut tab = RepoTab::default();
     tab.arm_branch_delete("feature", Some(OURS));
     tab
 }
 
-// The plain branch delete leaves its menu standing for git's answer, and
-// the card reads that answer by its own name off the tab
-// (`RefBranchMenu`): taken, the card goes; turned down, its row turns
-// into `-D`. The fetch running behind the press answers in the same
-// drain and looks exactly like an answer to this one.
+// The card reads the answer by its own name (`RefBranchMenu`): taken, it
+// goes; turned down, its row turns into `-D`. The fetch behind the press
+// answers in the same drain and looks exactly like an answer to this one.
 #[test]
 fn a_plain_delete_git_took_names_the_branch_over_the_fetch_behind_it() {
     let mut tab = card_standing();
@@ -444,13 +409,11 @@ fn a_plain_delete_git_refused_names_the_branch_for_the_row_to_turn_on() {
     )]);
     assert_eq!(tab.branch_delete_refused, "feature");
     assert_eq!(tab.branch_delete_landed, "");
-    // The row is the answer, so nothing is left over for the page to
-    // raise the command log on.
+    // The row is the answer, so nothing is left over for the command log.
     assert!(!tab.write_refused);
 }
 
-// The forced form is already the answer to a refusal, and nothing stays
-// up for it; nor does a create, a rename or `Delete both`.
+// `-D`, a create, a rename and `Delete both` leave no card standing.
 #[test]
 fn a_branch_answer_nobody_stayed_up_for_names_no_card() {
     let mut tab = RepoTab::default();
@@ -462,10 +425,8 @@ fn a_branch_answer_nobody_stayed_up_for_names_no_card() {
     );
 }
 
-// The name stands through whatever answers after it — the card reads it
-// as an edge and may not have been drawn yet — while where it answered
-// is the notify's own, which is how the page tells the answer in hand
-// from the one standing above it.
+// The name stands (the card reads it as an edge and may not be drawn
+// yet); where it answered is the notify's own.
 #[test]
 fn the_delete_answer_stands_but_says_which_notify_carried_it() {
     let mut tab = card_standing();
@@ -481,9 +442,8 @@ fn the_delete_answer_stands_but_says_which_notify_carried_it() {
     assert_eq!(tab.branch_delete_landed, "");
 }
 
-// A refusal that comes with a report is the report's to say: the page's
-// notice bar carries it, and no row turns. It is still this card's
-// answer, so the page is told where to find the words.
+// A reported refusal is the notice bar's to say; the card's answer still
+// points the page at the words.
 #[test]
 fn a_refusal_with_a_report_turns_no_row() {
     let mut tab = card_standing();
@@ -507,8 +467,7 @@ fn a_refusal_with_a_report_turns_no_row() {
     assert_eq!(answer.report_reason, "refused");
 }
 
-/// One answer as the bridge carries it, under the id its press was
-/// given, with something to report or without.
+/// One answer as the bridge carries it.
 fn reported(id: u64, kind: K, error: &str, report: Option<platitude_core::WriteReport>) -> TabMsg {
     TabMsg::WriteState {
         id,
@@ -525,7 +484,7 @@ fn answered(id: u64, kind: K, error: &str) -> TabMsg {
     reported(id, kind, error, None)
 }
 
-/// The other two of the write's three boundaries (`session::write`).
+/// The write starting — none of its three boundaries (`session::write`).
 fn started(id: u64, kind: K) -> TabMsg {
     TabMsg::WriteState {
         id,
@@ -538,9 +497,8 @@ fn started(id: u64, kind: K) -> TabMsg {
     }
 }
 
-/// The last boundary. The kind is taken and dropped so the calls below
-/// read like the pair above them — what a settle says is the id, and
-/// whose write it was is the caller's own business.
+/// The last boundary. A settle carries only the id; `_kind` keeps the
+/// calls reading like the pair above.
 fn settle_msg(id: u64, _kind: K) -> TabMsg {
     TabMsg::WriteSettled { id }
 }
@@ -549,10 +507,8 @@ fn stash_answered(id: u64, error: &str) -> TabMsg {
     answered(id, K::Stash, error)
 }
 
-// Two stash answers in one drain — an apply that landed and the pop
-// pressed behind it, which git refused — look alike to the group and to
-// the op name. The id each press was given finds its own answer, and
-// reads nothing into which came first or how many there were.
+// An apply that landed and a pop git refused look alike to the group and
+// to the op name; only the id tells them apart.
 #[test]
 fn an_answer_is_found_by_the_id_its_press_was_given_whatever_came_in_between() {
     let mut tab = RepoTab::default();
@@ -584,8 +540,6 @@ fn an_answer_is_found_by_the_id_its_press_was_given_whatever_came_in_between() {
     );
 }
 
-// The same two answers the other way round: the id is what finds the
-// answer, wherever it stands.
 #[test]
 fn the_id_finds_the_answer_wherever_it_stands_in_the_list() {
     let mut tab = RepoTab::default();
@@ -595,9 +549,6 @@ fn the_id_finds_the_answer_wherever_it_stands_in_the_list() {
     assert!(tab.write_answer_at(0).is_some_and(|a| a.failed));
 }
 
-// The list is this notify's alone: a notify raised from somewhere
-// else carries no answers, and the one before it went down with its
-// own notify.
 #[test]
 fn a_notify_that_carried_no_answer_says_so() {
     let mut tab = RepoTab::default();
@@ -616,14 +567,13 @@ fn a_notify_that_carried_no_answer_says_so() {
 
 // ---- the editor's commit, found by the id its press was given --------
 
-/// The id the queue took the editor's commit under, and one it gave
-/// somebody else. What these tests are about is that the editor's
-/// answer is found by the number.
+/// The id the queue gave the press under test, and one it gave somebody
+/// else.
 const OURS: u64 = 7;
 const SOMEBODY_ELSE: u64 = 8;
 
-/// A tab whose editor has sent a commit and is waiting for it
-/// (`state::commit_from_fields` writes the id down at the press).
+/// The editor sent a commit and waits for it
+/// (`state::commit_from_fields`).
 fn editor_pressed() -> RepoTab {
     let mut tab = RepoTab::default();
     tab.commit_out.asked(Some(OURS));
@@ -635,12 +585,8 @@ fn for_the_editor(tab: &RepoTab) -> Option<&WriteAnswer> {
     tab.write_answer_at(tab.commit_answer)
 }
 
-// The fetch left running comes back while the commit's answer is still
-// being waited out, and the two meet in one drain (`take_feed` empties
-// the queue whole and notifies once). Written into one group, the
-// fetch's answer — landed, nothing to report — is the one the page would
-// read, and the editor would sit there full of a message that is already
-// a commit.
+// Read off the group, the fetch's answer would be the one the page saw,
+// and the editor would sit full of a message that is already a commit.
 #[test]
 fn the_editors_commit_answers_over_the_fetch_behind_it() {
     let mut tab = editor_pressed();
@@ -657,8 +603,6 @@ fn the_editors_commit_answers_over_the_fetch_behind_it() {
     );
 }
 
-// The other way round, to say that nothing reads the order: the fetch
-// answers first and the commit behind it.
 #[test]
 fn the_order_the_two_came_back_in_is_not_read_into() {
     let mut tab = editor_pressed();
@@ -672,9 +616,7 @@ fn the_order_the_two_came_back_in_is_not_read_into() {
     assert!(tab.write_fetched);
 }
 
-// Once. The answer belongs to the notify that carried it, so the drain
-// after it tells the editor nothing — a second telling would empty boxes
-// somebody has since typed into.
+// A second telling would empty boxes somebody has since typed into.
 #[test]
 fn the_editor_is_told_once() {
     let mut tab = editor_pressed();
@@ -689,10 +631,8 @@ fn the_editor_is_told_once() {
     assert_eq!(tab.commit_answer, -1);
 }
 
-// A hook turned the commit down while a stash pressed behind it landed.
-// The refusal is the one with something to say, and it is the one a
-// single group loses: read there, the page would find a landing with
-// nothing to report and the words would never reach the screen.
+// A hook refused the commit while a stash behind it landed: read off the
+// group, the page would find the landing and the words would never show.
 #[test]
 fn a_refused_commit_keeps_its_words_past_the_landing_beside_it() {
     let mut tab = editor_pressed();
@@ -712,8 +652,7 @@ fn a_refused_commit_keeps_its_words_past_the_landing_beside_it() {
     assert!(answer.failed, "a rejected commit keeps the editor's text");
     assert_eq!(answer.report_kind, "commit");
     assert_eq!(answer.report_reason, "lint found 1 problem");
-    // …and it is reported once: the group is the stash's, so nothing the
-    // page reads there can report the same refusal a second time.
+    // Reported once: the group is the stash's.
     assert!(!tab.write_refused);
     assert!(
         tab.write_stale_diff,
@@ -722,10 +661,8 @@ fn a_refused_commit_keeps_its_words_past_the_landing_beside_it() {
     assert_eq!(tab.write_report_kind, "");
 }
 
-// The group is this notify's, like the answers beside it. A refusal the
-// page has already reported would otherwise still be standing in it when
-// the next drain notifies, and be reported over again on an answer that
-// went somewhere else entirely.
+// The group is emptied per notify, or a refusal already reported would be
+// reported again on the next drain's answer.
 #[test]
 fn a_drain_whose_answer_had_an_owner_leaves_the_group_saying_nothing() {
     let mut tab = editor_pressed();
@@ -759,20 +696,16 @@ fn fenced(id: u64, kind: K, error: &str) -> TabMsg {
     }
 }
 
-/// A tab whose band press put the working tree away and is waiting for
-/// the reading that finds the tree gone (`ops_remote::stash_push` writes
-/// the id down at the press).
+/// The band's stash press, waiting for the reading that finds the tree
+/// gone (`ops_remote::stash_push`).
 fn tree_stashed() -> RepoTab {
     let mut tab = RepoTab::default();
     tab.stash_out.asked(Some(OURS));
     tab
 }
 
-// The fetch running behind the press answers in the same drain, and it
-// is the one a property every answer rewrites is left describing: read
-// there, the tree emptying behind it is nobody's doing, the reader is
-// left standing over a pane that describes nothing, and the viewport
-// never follows the entry they just made.
+// Read off the group (the fetch's), the tree emptying is nobody's doing
+// and the viewport never follows the entry just made.
 #[test]
 fn the_stash_that_emptied_the_tree_is_ours_over_the_fetch_behind_it() {
     let mut tab = tree_stashed();
@@ -796,8 +729,8 @@ fn the_stash_that_emptied_the_tree_is_ours_over_the_fetch_behind_it() {
     );
 }
 
-// …and it stands past the drains in between, because the status whose
-// counts find the tree empty is a feed of its own and arrives long after.
+// It stands past the drains in between: the status that finds the tree
+// empty is a feed of its own and arrives long after.
 #[test]
 fn the_landing_stands_until_the_tree_is_read() {
     let mut tab = tree_stashed();
@@ -820,9 +753,8 @@ fn the_landing_stands_until_the_tree_is_read() {
     );
 }
 
-// A stash git would not make took no tree away, so the tree emptying
-// next emptied for some other reason — but the words it was refused with
-// are still the press's own to say.
+// A refused stash took no tree away, but its words are still the press's
+// to say.
 #[test]
 fn a_refused_stash_claims_no_tree_and_keeps_its_words() {
     let mut tab = tree_stashed();
@@ -844,9 +776,8 @@ fn a_refused_stash_claims_no_tree_and_keeps_its_words() {
     );
 }
 
-// Every stash operation answers under the same word, so the answer alone
-// cannot say it was the press that emptied the tree: a pop pressed from
-// the details band lands in the same drain and looks identical.
+// Every stash operation answers as `Stash`: a pop from the details band
+// looks identical.
 #[test]
 fn somebody_elses_stash_answer_claims_no_tree() {
     let mut tab = RepoTab::default();
@@ -860,11 +791,8 @@ fn somebody_elses_stash_answer_claims_no_tree() {
     );
 }
 
-// **The other order.** The status the press published can be applied
-// before the page has read the answer that says whose it was: the two
-// are drained apart. Dropped there, the tree emptying is gone — the next
-// status has no change to report, and the reader is left standing over a
-// pane describing a tree that is not there.
+// The other order: status and answer are drained apart. Dropped there, the
+// emptying is lost — the next status has no change to report.
 #[test]
 fn a_tree_read_empty_before_the_answer_still_lands_the_press() {
     let mut tab = tree_stashed();
@@ -877,22 +805,14 @@ fn a_tree_read_empty_before_the_answer_still_lands_the_press() {
     );
 }
 
-// …and the same drain brings somebody else's refusal, which is what the
-// group is left describing. **Everything the landing needs is in this
-// notify** — the tree was read before it and the answer is in it — so
-// the press is owed its exit here, and nothing is coming to ask again:
-// the status that would have is the one that already went by. Sequenced
-// off the group, the refusal's branch ends the whole of the page's
-// answer before the exit is reached, and the reader sits on a pane
-// describing a tree that is gone until something else moves.
+// …with somebody else's refusal in the same drain. The tree was read
+// before it, so this notify is the last chance to pay the exit; sequenced
+// off the group, the refusal's branch returns before the exit is reached.
 #[test]
 fn a_landing_owed_in_the_drain_that_refuses_somebody_elses_write() {
     let mut tab = tree_stashed();
     tab.tree_was_read(FENCE, EMPTIED);
-    // A push: a failed fetch raises `fetch_first_failed`, and a
-    // signal needs the proxy no unit test has. Which write it was
-    // changes nothing — the group's branch ends the page's answer
-    // on any refusal it is left describing.
+    // A push, not a fetch (`fetch_first_failed`); any refusal would do.
     tab.absorb(vec![
         fenced(OURS, K::Stash, ""),
         answered(SOMEBODY_ELSE, K::Push, "! [rejected]"),
@@ -911,9 +831,8 @@ fn a_landing_owed_in_the_drain_that_refuses_somebody_elses_write() {
     );
 }
 
-/// A tab whose run has armed its watch and had an ask taken under `id` —
-/// what `ask_session` does inside the call that returns that id, which a
-/// tab with no session behind it cannot be driven through.
+/// A run armed its watch and had an ask taken under `id` — by hand, since
+/// `ask_session` needs a session.
 fn watching(id: u64) -> RepoTab {
     let mut tab = RepoTab::default();
     tab.watch_next_write("press".into());
@@ -921,17 +840,10 @@ fn watching(id: u64) -> RepoTab {
     tab
 }
 
-/// **The two boundaries reach the watch off the feed's own messages** —
-/// the wiring `write_watch`'s own tests cannot see. Nothing else opens it:
-/// the fetch a timer fires and the one an opening makes come down the same
-/// feed, and the answer to each carries its own id.
-///
-/// Before the watch the barrier armed on a count and waited for it to
-/// move. Neither half of that was about the press: those fetches move
-/// `writeSeq` on their own, and between the press and the moment git has
-/// the write there is a stretch where nothing is running — so one of them
-/// landing inside it satisfied both halves, and the picture was taken
-/// before the write ran (P3-確認事項).
+/// The feed's own messages reach the watch — the wiring `write_watch`'s
+/// own tests cannot see — and the timer's and an opening's fetches on the
+/// same feed do not open it. Waiting on `writeSeq` instead is fooled by
+/// them.
 #[test]
 fn the_boundaries_reach_the_watch_and_nothing_else_opens_it() {
     let mut tab = watching(OURS);
@@ -959,16 +871,10 @@ fn the_boundaries_reach_the_watch_and_nothing_else_opens_it() {
     assert!(tab.wrote_through());
 }
 
-/// **An ask that was numbered first and queued second**: the run's own
-/// write carries the *lower* id and finishes *last*, and the barrier
-/// opens on it alone.
-///
-/// This is the arrangement the identity comparison exists for.
-/// `OperationId::next()` and the queue's own lock are not the same moment
-/// — a request takes its number and then queues — so a caller can be
-/// numbered and then lose its turn. A boundary read as `>=` would have
-/// opened here on somebody else's answer, and the run would have gone on
-/// to photograph a page its own write had not reached.
+/// Numbered first, queued second: the run's write carries the lower id and
+/// finishes last. `OperationId::next()` is taken before the queue's lock,
+/// so ids do not follow queue order; a `>=` boundary would open here on
+/// somebody else's answer.
 #[test]
 fn a_write_numbered_after_this_one_and_finished_first_does_not_open_it() {
     let mut tab = watching(OURS);
@@ -998,9 +904,7 @@ fn a_write_numbered_after_this_one_and_finished_first_does_not_open_it() {
     assert!(tab.wrote_through(), "and this write's own finish opens it");
 }
 
-/// The same the other way round — the run's own ask numbered *after* the
-/// one that finishes first. Neither direction is the test on its own: one
-/// catches `>=`, the other catches `<=`.
+/// The mirror: one direction catches `>=`, the other `<=`.
 #[test]
 fn nor_does_one_numbered_before_it() {
     let mut tab = watching(SOMEBODY_ELSE);
@@ -1018,8 +922,6 @@ fn nor_does_one_numbered_before_it() {
     assert!(tab.wrote_through());
 }
 
-/// **A run that has asked for nothing passes nothing.** The watch is
-/// asleep, and no answer to anybody's write makes it say otherwise.
 #[test]
 fn a_run_with_no_write_of_its_own_never_passes() {
     let mut tab = RepoTab::default();
@@ -1033,14 +935,10 @@ fn a_run_with_no_write_of_its_own_never_passes() {
     assert!(!tab.wrote_through());
 }
 
-/// **What the run reads to hold its own contract**: the stage and the id
-/// are the whole of it, and the tab refuses nothing.
-///
-/// Arming over a write still out is a breach where the run had pressed
-/// for that write — what the watch is carrying is as often as not one
-/// nobody pressed for (the read a menu makes on its way open), and only
-/// the run knows which. So the tab answers where it stands and leaves
-/// the judgement upstairs (`AutoActDriver.beginWrite`).
+/// The tab reports stage and id and refuses nothing: whether arming over a
+/// write still out is a breach only the run knows — often that write is
+/// one nobody pressed for, like a menu's read on its way open
+/// (`AutoActDriver.beginWrite`).
 #[test]
 fn the_tab_says_where_the_watch_stands_and_judges_nothing() {
     let mut tab = watching(OURS);
@@ -1061,28 +959,16 @@ fn the_tab_says_where_the_watch_stands_and_judges_nothing() {
 
 // ---- the pushes a ref row sends ---------------------------------------
 
-/// The row pressed: a `push --delete` went to the queue under `OURS`, for
-/// the remote row `origin/topic`.
 fn ref_push_pressed() -> RepoTab {
     let mut tab = RepoTab::default();
     tab.ref_push_asked("origin/topic", Some(OURS));
     tab
 }
 
-/// The far side's refusal reaches the press that asked for it, whichever
-/// order the drain carried the two answers in.
-///
-/// **All of these answer under the word `push`** — the two `push
-/// --delete`s, the replace git has no command for, the two pairs that
-/// reach over there after doing something here — and so does the fetch
-/// running behind them. One drain empties the whole queue and notifies
-/// once, and the group the page reads when any answer will do describes
-/// whichever ownerless answer finished last: a fetch that landed after
-/// the refusal took the report away with it, and the reader was told
-/// nothing at all (P3-確認事項, observed).
-///
-/// Both orders, because only one of them is the bug: a test that ran the
-/// other alone would pass against the arrangement that lost it.
+/// Every ref row push answers as `Push`, and the group describes whichever
+/// ownerless answer finished last — a fetch landing after the refusal
+/// would take the report with it. Both orders, because only one of them
+/// fails against the group.
 #[test]
 fn a_ref_rows_push_keeps_its_refusal_when_a_fetch_answers_beside_it() {
     for fetch_first in [false, true] {
@@ -1118,17 +1004,14 @@ fn a_ref_rows_push_keeps_its_refusal_when_a_fetch_answers_beside_it() {
             tab.ref_push_target, "origin/topic",
             "named with the row it was sent for"
         );
-        // Which is exactly why it cannot be read off the group: that one
-        // is the fetch's, and it landed.
+        // The group is the fetch's, which landed.
         assert!(tab.write_fetched && !tab.write_refused);
         assert_eq!(tab.write_report_kind, "");
     }
 }
 
-/// And the next press starts from nothing. An answer left standing would
-/// be read a second time under a press this drain brought no answer for
-/// at all — the same thing every other owner puts down at the top of a
-/// drain (`Press::new_notify`).
+/// An answer left standing would be read again under the next press, which
+/// this drain brought no answer for (`Press::new_notify`).
 #[test]
 fn a_ref_rows_push_does_not_hand_the_next_press_the_last_answer() {
     let mut tab = ref_push_pressed();

@@ -75,8 +75,8 @@ pub(super) fn snapshot(
     drifted(remotes, tags, Vec::new())
 }
 
-/// A remotes snapshot that knows the configured remote names — what the
-/// filtered list cuts its rows by (`build_remote_groups`).
+/// A remotes snapshot with configured remote names (what
+/// `build_remote_groups` cuts by).
 pub(super) fn named(
     remotes: Vec<platitude_core::session::BranchItem>,
     names: &[&str],
@@ -97,11 +97,8 @@ pub(super) fn drifted(
     carried(remotes, tags, tag_drifts, Vec::new())
 }
 
-/// The same again, with what the remotes were last heard to carry under
-/// `refs/tags/` — the list a tag's row opens on (`tag_remotes`). Each
-/// reading is a tag's name, the remote carrying it, and the digit the
-/// commit is spelled from: two readings on one digit are two remotes
-/// agreeing about where the name stands.
+/// The same, with the remotes' `refs/tags/` readings (`tag_remotes`) as
+/// `(name, remote, digit)`: two readings on one digit agree on the commit.
 pub(super) fn carried(
     remotes: Vec<platitude_core::session::BranchItem>,
     tags: Vec<platitude_core::session::TagItem>,
@@ -137,8 +134,8 @@ pub(super) fn section(kind: &str, all: Source) -> NavSectionModel {
     model
 }
 
-/// One of the working tree's bucket lists: the whole status, and the one
-/// run of it this list shows (`NavSectionModel::run`).
+/// One of the working tree's bucket lists: the whole status, showing one
+/// run (`NavSectionModel::run`).
 pub(super) fn worktree(run: &str, all: Source) -> NavSectionModel {
     let mut model = section("worktree", all);
     model.run = run.to_string();
@@ -158,8 +155,8 @@ pub(super) fn flags(model: &NavSectionModel, row: usize, role: Role) -> bool {
         .is_some_and(|row| model.field(row, role).flag())
 }
 
-/// A number role's answer. `-1` where the row is not there at all, so a
-/// row a test looked for and missed cannot read as a count of nothing.
+/// A number role's answer; `-1` for a missing row, so a miss cannot read
+/// as zero.
 pub(super) fn numbers(model: &NavSectionModel, row: usize, role: Role) -> i32 {
     model
         .row_at(row)
@@ -186,9 +183,8 @@ pub(super) fn tracked(
     }
 }
 
-/// One of each kind of pending change, in the order git reports them:
-/// the entries git tracks sorted by name, and then the untracked ones
-/// sorted after all of them.
+/// One of each kind of pending change, in git's order: tracked entries
+/// sorted, then the untracked ones after them.
 pub(super) fn pending() -> platitude_core::status::WorkTreeStatus {
     use platitude_core::status::StatusItem;
     platitude_core::status::WorkTreeStatus {

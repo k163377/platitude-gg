@@ -30,14 +30,9 @@ pub struct PerfProbe {
 }
 
 impl Default for PerfProbe {
-    /// Built out of what is driving the run, which is read in one place
-    /// (`harness::knobs`).
     fn default() -> Self {
         let knobs = super::knobs();
         Self {
-            // A run that named no selection but asked for one takes the
-            // first row, which is what makes `--select` on its own a
-            // measurement with something in the panes.
             selection: if knobs.perf_selection.is_empty() {
                 if knobs.select { "first" } else { "none" }.into()
             } else {
@@ -150,8 +145,8 @@ impl PerfProbe {
             return;
         };
         let elapsed = self.clock_ms() - start;
-        // Written here, past the last frame: no log or file IO in the per-frame
-        // callback; the flush can affect the final frame and memory.
+        // Past the last frame: IO in the per-frame callback would move the
+        // frames being measured.
         if self.trace_frames {
             let mut previous = start;
             for (index, &clock_ms) in self.frames.iter().enumerate() {

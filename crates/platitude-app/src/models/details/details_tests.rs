@@ -1,7 +1,5 @@
 //! The changed-file list of a commit: the tree it is shaped into and the
-//! walk the arrow keys take over it (規約 §diff のファイル一覧). Beside the
-//! model, so the ceiling the model sits under stays about the model
-//! (.claude/rules/structure.md).
+//! walk the arrow keys take over it (規約 §diff のファイル一覧).
 
 use super::{DetailsModel, FileItem};
 use crate::encode::{Landed, Landing};
@@ -30,8 +28,6 @@ fn landed(row: i32, path: &str) -> Landed {
     })
 }
 
-/// The arrows walk the rows on screen, one file per press, and stop at
-/// each end (規約 §diff のファイル一覧).
 #[test]
 fn the_arrows_walk_the_changed_files_and_stop_at_the_ends() {
     let mut model = commit(&["a.txt", "z.txt"]);
@@ -69,14 +65,13 @@ fn the_arrows_walk_the_changed_files_and_stop_at_the_ends() {
     );
 }
 
-/// A folder row has no diff behind it, so the walk steps over it and
-/// lands on the next file.
+/// A folder row has no diff behind it.
 #[test]
 fn the_arrows_step_over_a_folder_row() {
     let model = commit(&["one/x.txt", "two/y.txt"]);
 
-    // Tree view is the resting look, and it puts each folder's row above
-    // the file under it: row 2 is `two`, between the two leaves.
+    // Tree view (the default) puts each folder's row above its files: row
+    // 2 is `two`.
     assert_eq!(model.files.len(), 4);
     assert!(model.files[2].folder);
     assert_eq!(
@@ -89,8 +84,7 @@ fn the_arrows_step_over_a_folder_row() {
     );
 }
 
-/// Where a rename came from, asked by path — what the walk hands the diff
-/// so git reads both ends of the rename.
+/// The walk hands the diff a rename's source, so git reads both ends.
 #[test]
 fn a_renamed_file_gives_up_its_source_by_path() {
     let mut model = commit(&["new.txt", "plain.txt"]);

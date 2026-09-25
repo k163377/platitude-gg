@@ -2,13 +2,12 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The plan's one door onto the repository, in the seat where things are concluded — the commit button's, which the
-// exit card will take over the moment the run stops part-way (§進行中の操作から出る). The warning is the note's own
-// amber, said inside the phrase; the hold is the drop table's (§履歴を合流させる — 見るのは先端).
+// The plan's one door onto the repository, in the commit button's seat (the exit card takes it if the run stops
+// part-way — §進行中の操作から出る). The hold follows the drop table (§履歴を合流させる「見るのは先端」).
 Item {
     id: bar
 
-    /// The plan whose run this fires (the page owns it; a pane may call a model's slots — app-ui.md).
+    /// The plan whose run this fires.
     required property var plan
     /// The rewrite warning's count for the plan's own range (`RepoPage.planPushed`).
     required property int pushedCount
@@ -18,7 +17,7 @@ Item {
     required property bool busy
 
     height: runButton.implicitHeight + Theme.spaceMd
-    /// What the run asks for as things stand: rows are leaving the history and nothing else reaches the tip.
+    /// A hold: rows leave the history and nothing else reaches the tip.
     readonly property bool holds: bar.plan.dropCount > 0 && !bar.tipHeldElsewhere
 
     ActionButton {
@@ -32,14 +31,10 @@ Item {
         // A phrase for each count — `commit(s)` would reach the reader as written (デザイン規約 §タイポグラフィ).
         text: bar.plan.stepCount === 1 ? qsTr("%n commit", "", bar.plan.stepCount)
                                        : qsTr("%n commits", "", bar.plan.stepCount)
-        // **The warning is a clause of the phrase.** The count is the fact, said in the tag's own words at the end of
-        // what the button says; a line of its own would put a second thing to read in the seat this button fills, and
-        // the two colours would then have to be told apart before either is read.
+        // The warning is a clause at the end of the phrase, not a second line in the seat.
         phraseNote: bar.pushedCount > 0 ? qsTr("%n already pushed", "", bar.pushedCount) : ""
-        // The frame carries the warning and only a hold colours the word (§長押し — BandPushButton と同じ線).
-        // **The dressing reads the length the press was given** (`ActionButton.armedMs`): `tipHeldElsewhere` follows
-        // the fetch the plan's freeze deliberately leaves running, so a button dressed from the live answer would
-        // lose its red under a hand that is already holding.
+        // The frame carries the warning; only a hold colours the word (§長押し). The dressing reads `armedMs`, not
+        // `holds`: `tipHeldElsewhere` follows a fetch that keeps running, and could drop the red under a holding hand.
         frameColor: runButton.armedMs > 0 ? Theme.danger
                     : bar.pushedCount > 0 ? Theme.warning : Theme.accent
         tone: runButton.armedMs > 0 ? Theme.danger : Theme.textPrimary

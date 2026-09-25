@@ -3,22 +3,15 @@
 use super::*;
 
 impl RepoTab {
-    /// Everything uncommitted, in one entry.
+    /// Everything uncommitted, in one entry, untracked files included
+    /// (デザイン規約 §変更を退避する「未追跡は必ず含める」).
     ///
-    /// Untracked files go with it: a stash that leaves new files behind is
-    /// the surprise most often reported to other git GUIs, and the stash
-    /// a switch makes on its own carries them for the same reason.
+    /// `message` is the summary standing in the commit box, or empty for
+    /// git's own `WIP on …`; the press asks nothing.
     ///
-    /// `message` is the summary standing in the commit box, or empty —
-    /// the press still asks nothing, so nothing is gathered before the
-    /// write; what is already written down is used (デザイン規約
-    /// §変更を退避する). Empty leaves git to write its own `WIP on …`.
-    ///
-    /// **The press writes down the id it was accepted under**
-    /// (`ops::StashOut`): this is one of the two presses that can leave
-    /// the working tree with nothing in it, and the reading that finds it
-    /// empty comes long after the answer — by then, whose doing it was is
-    /// a thing only the press itself can still say.
+    /// The press writes down its id (`ops::StashOut`): the reading that
+    /// finds the tree empty comes long after the answer, when only the
+    /// press can say whose doing it was.
     pub(super) fn stash_push(&mut self, message: String) {
         let options = platitude_core::stash::PushOptions {
             include_untracked: true,
@@ -30,9 +23,8 @@ impl RepoTab {
             .asked(asked.map(platitude_core::OperationId::as_u64));
     }
 
-    /// The other one, over the gathered files only. It can empty the tree
-    /// as squarely as the whole-tree press — the rows gathered may be all
-    /// there were.
+    /// The same over the gathered files only — it can empty the tree too,
+    /// since they may be all there were.
     pub(super) fn stash_chosen_paths(&mut self, message: String) {
         let paths = std::mem::take(&mut self.pending_paths);
         if paths.is_empty() {
@@ -65,15 +57,9 @@ impl RepoTab {
         self.with_session(|s| s.check_branch_delete(branch.clone()));
     }
 
-    /// `git push <remote> <local>:<remote_branch>`, named to a ref
-    /// row.
-    ///
-    /// **Nothing on screen reaches this yet** (`pushBranch` has no caller
-    /// in `ui/`): what a ref row sends today is the two `push --delete`s
-    /// and the replace. It is answered by id all the same, so a door
-    /// added to it arrives with the refusal already going to the press
-    /// that made it
-    /// (`ops::PushOut`, P3-確認事項).
+    /// `git push <remote> <local>:<remote_branch>`, keyed to a ref row.
+    /// Nothing in `ui/` calls `pushBranch` yet; it is answered by id anyway
+    /// (`ops::PushOut`), so a door added to it gets its own refusal.
     pub(super) fn branch_push(
         &mut self,
         remote: String,
@@ -96,10 +82,8 @@ impl RepoTab {
         self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
     }
 
-    /// Asked on every selection and answered by a git of its own. The
-    /// commit asked about is written down first, so that an answer
-    /// arriving for a selection already left behind can be told from the
-    /// one the pane is waiting for (`signature_wanted`).
+    /// The commit asked about is written down first, so an answer for a
+    /// selection already left can be dropped (`signature_wanted`).
     pub(super) fn look_up_signature(&mut self, oid_hex: String) {
         let Ok(oid) = platitude_core::oid::Oid::from_hex_str(oid_hex.trim()) else {
             tracing::warn!(oid_hex, "invalid oid in signature check");

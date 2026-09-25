@@ -4,10 +4,9 @@ import QtTest
 import platitude.ui
 
 // The two message boxes are surfaces a click drops a caret on (デザイン規約 §コミットメッセージの 2 つの枠), and the
-// box is the whole of what the frame encloses. **Twice a strip has taken it**, and neither could be seen: the
-// inset the view is held off the frame by, which nothing stood in until `SweepBand`, and the sideways bar the style
-// hands every `ScrollView` whether or not it has anywhere to go. Both are questions about how Qt hands a press to an
-// item tree, which is what this file is for (規約 §右のペインの字は掴める).
+// box is the whole of what the frame encloses. Two unseen strips can take the press — the inset the view is held off
+// the frame by (`SweepBand` stands in it) and the sideways bar the style hands every `ScrollView` — both questions of
+// how Qt hands a press to an item tree (規約 §右のペインの字は掴める).
 Item {
     id: root
     width: 400
@@ -21,9 +20,8 @@ Item {
         }
     }
 
-    // The boxes' own shape, with the real hand under the real inset: a frame, a view held off it by `spaceXs`, and
-    // the words inside the view. Built here, because what these ask about is the text's selection, which the
-    // pair reports nothing of.
+    // The boxes' own shape (a frame, a view held off it by `spaceXs`, the real hand under the inset), built here
+    // because the pair reports nothing of the text's selection.
     Component {
         id: box
         Rectangle {
@@ -52,9 +50,8 @@ Item {
         name: "MessageBand"
         when: windowShown
 
-        /// The diagnosis a miss needs: the chain of items standing at that point, front-most last, with the sizes and
-        /// the two numbers a bar answers by. "The caret did not land" names nothing on its own — what it was that
-        /// took the press is the whole of the answer, and it is a strip nobody can see.
+        /// The chain of items at that point, front-most last, with sizes and a bar's numbers — a miss has to name what
+        /// took the press.
         function under(item, x, y) {
             let at = item
             let px = x
@@ -87,9 +84,8 @@ Item {
             return editor
         }
 
-        /// **The sideways bar is refused by policy** (`DescriptionBox`) — what `null` leaves behind is a
-        /// `TypeError` per box on every start, which no screenshot and no press can see, so it is caught
-        /// here.
+        /// The sideways bar is refused by policy (`DescriptionBox`): `null` leaves a `TypeError` per box on every
+        /// start, which no screenshot and no press can see.
         function test_a_refused_sideways_bar_says_nothing() {
             failOnWarning(/Cannot read property 'active' of null/)
             makePair()
@@ -98,10 +94,7 @@ Item {
             verify(waitForRendering(frame), "the box was rendered")
         }
 
-        /// **The whole of the summary frame drops a caret in the summary** — the words, the band around them, and
-        /// the four corners. Swept on a grid: what has gone wrong here twice is a strip nobody could see (the
-        /// inset the view leaves, and the style's sideways bar), and a run that names its points is a run that
-        /// walks over one (`details-sweep`, the same rule).
+        /// Swept on a grid: a run that names its points walks over an unseen strip (`details-sweep`, the same rule).
         function test_the_whole_summary_frame_lands_a_caret() {
             const editor = makePair()
             const top = editor.summaryNeed
@@ -123,7 +116,6 @@ Item {
             }
         }
 
-        /// And the same over the description's own frame, which is the same two strips one box further down.
         function test_the_whole_description_frame_lands_a_caret() {
             const editor = makePair()
             const top = editor.summaryNeed + Theme.spaceXs
@@ -145,9 +137,8 @@ Item {
             }
         }
 
-        /// **The words keep every press they had.** The hand lies under the view, so a double click still reaches the
-        /// text and selects a word — typing then replaces it, which shortens the summary. A hand laid over the view
-        /// would take that press, leave nothing selected, and the same keystroke would make the summary longer.
+        /// The hand lies under the view, so a double click still selects a word and typing replaces it; a hand laid
+        /// over the view would take the press, and the same keystroke would make the summary longer.
         function test_words_keep_their_own_press() {
             const editor = makePair()
             const was = editor.subjectText
@@ -157,8 +148,7 @@ Item {
             verify(editor.subjectText.length < was.length)
         }
 
-        /// A press in the band lands on the character nearest it: the top of the box is the head of the text and the
-        /// bottom is its end, whatever the words are.
+        /// The top of the box is the head of the text and the bottom is its end, whatever the words are.
         function test_the_band_lands_on_the_nearest_character() {
             const frame = createTemporaryObject(box, root)
             verify(frame !== null)
@@ -170,7 +160,6 @@ Item {
             compare(frame.field.cursorPosition, frame.field.length)
         }
 
-        /// And a drag out of the band is a selection, the way a drag out of any other margin is.
         function test_a_drag_from_the_band_selects() {
             const frame = createTemporaryObject(box, root)
             verify(frame !== null)
