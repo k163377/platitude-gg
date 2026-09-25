@@ -101,6 +101,17 @@ mod tests {
         assert!(!hits("stash@", &row));
     }
 
+    #[test]
+    fn a_working_tree_row_answers_nothing() {
+        // As the walk lays it: git's all-zero id, ours and a copy's alike.
+        let row = GraphRowItem {
+            oid_hex: "0".repeat(40),
+            ..GraphRowItem::default()
+        };
+        assert!(!hits("0000", &row));
+        assert!(!hits(&"0".repeat(40), &row));
+    }
+
     /// The stand-in reads HEAD's mark off the model (its row is off screen
     /// whenever the stand-in is up), so a re-marking re-marks that too.
     #[test]

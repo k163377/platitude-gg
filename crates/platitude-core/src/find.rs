@@ -10,6 +10,8 @@
 //! reason nothing on it shows, and the domain half of an address, which
 //! would light every row (デザイン規約 §コミットを探す).
 
+use crate::oid::Oid;
+
 /// One typed line, ready to be asked of a row.
 ///
 /// Built once per keystroke; the folding and the shape tests are done
@@ -29,8 +31,9 @@ pub struct Query {
 /// their start.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Row<'a> {
-    /// Full object name in lowercase hex. Empty for a row that is not a
-    /// commit (the working-tree row), which matches nothing at all.
+    /// Full object name in lowercase hex, as the row wears it. A row that
+    /// is not a commit (every working copy's row) wears git's all-zero id
+    /// and matches nothing at all.
     pub oid_hex: &'a str,
     /// The first line of the message; the description is not searched
     /// (module note).
@@ -64,9 +67,9 @@ impl Query {
 
     /// Whether this row is one of the answers.
     pub fn matches(&self, row: &Row<'_>) -> bool {
-        // The caller blanks a non-commit's id (`Row::oid_hex`): the
-        // working-tree row's all-zero id would otherwise answer `0000`.
-        if row.oid_hex.is_empty() {
+        // A working copy's row wears the all-zero id (`Row::oid_hex`),
+        // which would otherwise answer `0000`.
+        if Oid::hex_is_zero(row.oid_hex) {
             return false;
         }
         self.at_start_of(row.oid_hex)
@@ -264,8 +267,10 @@ mod tests {
 
     #[test]
     fn a_row_that_is_not_a_commit_matches_nothing() {
+        // Every working copy's row wears git's all-zero id.
+        let zero = "0".repeat(40);
         let wip = Row {
-            oid_hex: "",
+            oid_hex: &zero,
             subject: "Uncommitted changes",
             ..Row::default()
         };
