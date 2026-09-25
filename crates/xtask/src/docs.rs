@@ -95,7 +95,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     for finding in torn.iter().chain(&over) {
         println!("docs: {finding}");
     }
-    for finding in &quoted.findings {
+    for finding in quoted.writable.iter().chain(&quoted.findings) {
         println!("docs: {}: {finding}", tokens::DOCUMENT);
     }
     for finding in held.writable.iter().chain(&held.findings) {
@@ -119,13 +119,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
             over.len()
         ));
     }
-    if !quoted.findings.is_empty() {
+    if !quoted.writable.is_empty() {
         wrong.push(format!(
             "{} value cell(s) that do not quote the source: the values live in Theme.qml and \
              Metrics.qml, and the document prints what they say — change the value there and run \
              `{}`",
-            quoted.findings.len(),
+            quoted.writable.len(),
             SYNC.line()
+        ));
+    }
+    if !quoted.findings.is_empty() {
+        wrong.push(format!(
+            "{} token(s) the design document's tables name and neither Theme.qml nor Metrics.qml \
+             declares — no sync writes these: fix the row, or the token",
+            quoted.findings.len()
         ));
     }
     if !held.writable.is_empty() {
@@ -204,8 +211,8 @@ fn written(root: &Path, held: commands::Held, sync: bool) -> Result<commands::He
     })
 }
 
-/// With `--sync`, write the value cells. A run that writes clears every
-/// finding.
+/// With `--sync`, write the value cells. What the write answers is
+/// cleared; a token the source does not declare is still said.
 fn quote(root: &Path, sync: bool) -> Result<tokens::Quoted, String> {
     let quoted = tokens::quote(root)?;
     if !sync {
@@ -219,10 +226,10 @@ fn quote(root: &Path, sync: bool) -> Result<tokens::Quoted, String> {
     println!(
         "docs: {} rewritten — {} value cell(s) now quote the source",
         tokens::DOCUMENT,
-        quoted.findings.len()
+        quoted.writable.len()
     );
     Ok(tokens::Quoted {
-        findings: Vec::new(),
+        writable: Vec::new(),
         rewritten: None,
         ..quoted
     })

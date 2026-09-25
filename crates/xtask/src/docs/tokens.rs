@@ -47,7 +47,10 @@ impl Token {
 }
 
 pub(crate) struct Quoted {
-    /// What does not quote the source, as sentences.
+    /// Value cells that do not quote the source, as sentences — what
+    /// `--sync` writes.
+    pub writable: Vec<String>,
+    /// What no sync can answer: a token the source does not declare.
     pub findings: Vec<String>,
     /// The document with every value cell as the source has it, present
     /// only when that differs from what is on disk.
@@ -176,6 +179,7 @@ fn shape(cells: &[&str]) -> Option<Shape> {
 /// what the source says.
 fn hold(text: &str, tokens: &BTreeMap<String, Token>) -> Quoted {
     let mut findings = Vec::new();
+    let mut writable = Vec::new();
     let mut out: Vec<String> = Vec::new();
     let mut cells = 0usize;
     let mut open: Option<Shape> = None;
@@ -250,7 +254,7 @@ fn hold(text: &str, tokens: &BTreeMap<String, Token>) -> Quoted {
             if cell.text.trim() == text {
                 continue;
             }
-            findings.push(format!(
+            writable.push(format!(
                 "line {}: the document quotes {} where the source says {} — `cargo xtask docs \
                  --sync` writes the source's value",
                 at + 1,
@@ -267,6 +271,7 @@ fn hold(text: &str, tokens: &BTreeMap<String, Token>) -> Quoted {
         rebuilt.push('\n');
     }
     Quoted {
+        writable,
         findings,
         rewritten: (rebuilt != text).then_some(rebuilt),
         cells,
@@ -357,10 +362,45 @@ readonly property string uiFamily: _pickFamily(fontFamilyUi)
         hold(doc, &sources())
     }
 
+    /// A write answers the cells it wrote, not a row naming a token
+    /// nobody declares.
+    #[test]
+    fn a_sync_that_writes_a_cell_still_says_the_token_the_source_does_not_have() {
+        let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-docs"), "sync")
+            .expect("a directory of its own");
+        for (source, text) in SOURCES
+            .iter()
+            .zip(["readonly property color bgBase: \"#020617\"\n", ""])
+        {
+            let path = root.join(source);
+            std::fs::create_dir_all(path.parent().expect("a parent")).expect("the source's folder");
+            std::fs::write(path, text).expect("a source");
+        }
+        let doc = root.join(DOCUMENT);
+        std::fs::create_dir_all(doc.parent().expect("a parent")).expect("the document's folder");
+        std::fs::write(
+            &doc,
+            "| token | 値 |\n|---|---|\n| `bgBase` | `#FFFFFF` |\n| `gone` | 1 |\n",
+        )
+        .expect("a document");
+
+        let after = crate::docs::quote(&root, true).expect("a quote");
+        let written = std::fs::read_to_string(&doc).expect("the document, written");
+        std::fs::remove_dir_all(&root).expect("the directory, cleared");
+        assert!(written.contains("| `bgBase` | `#020617` |"), "{written}");
+        assert_eq!(after.findings.len(), 1, "{:?}", after.findings);
+        assert!(
+            after.findings[0].contains("`gone` is not declared"),
+            "{:?}",
+            after.findings
+        );
+    }
+
     #[test]
     fn a_colour_is_quoted_in_code_ticks() {
         let found = run("| token | 値 |\n|---|---|\n| `bgBase` | `#FFFFFF` |\n");
-        assert_eq!(found.findings.len(), 1, "{:?}", found.findings);
+        assert_eq!(found.writable.len(), 1, "{:?}", found.writable);
+        assert!(found.findings.is_empty(), "{:?}", found.findings);
         assert!(
             found
                 .rewritten
@@ -373,6 +413,7 @@ readonly property string uiFamily: _pickFamily(fontFamilyUi)
     fn a_cell_that_already_says_what_the_source_says_is_left_alone() {
         let found = run("| token | 値 |\n|---|---|\n| `bgBase` | `#020617` |\n");
         assert!(found.findings.is_empty(), "{:?}", found.findings);
+        assert!(found.writable.is_empty(), "{:?}", found.writable);
         assert!(found.rewritten.is_none());
         assert_eq!(found.cells, 1);
     }
@@ -418,6 +459,7 @@ readonly property string uiFamily: _pickFamily(fontFamilyUi)
             "| token | pixelSize | lineHeight | 用途 |\n|---|---|---|---|\n| `fontCode` | 13 | — | 説明 |\n",
         );
         assert!(found.findings.is_empty(), "{:?}", found.findings);
+        assert!(found.writable.is_empty(), "{:?}", found.writable);
         assert!(found.rewritten.is_none());
     }
 
@@ -456,6 +498,7 @@ readonly property string uiFamily: _pickFamily(fontFamilyUi)
         let doc = "| 値 | 用途 |\n|---|---|\n| 260(min 180) | サイドバー幅 |\n| 1440×900 | 初期ウィンドウ |\n";
         let found = run(doc);
         assert!(found.findings.is_empty(), "{:?}", found.findings);
+        assert!(found.writable.is_empty(), "{:?}", found.writable);
         assert!(found.rewritten.is_none());
     }
 
@@ -463,6 +506,7 @@ readonly property string uiFamily: _pickFamily(fontFamilyUi)
     fn a_value_that_is_not_a_literal_is_left_to_the_prose() {
         let found = run("| token | 値 |\n|---|---|\n| `uiFamily` | OS ごと |\n");
         assert!(found.findings.is_empty(), "{:?}", found.findings);
+        assert!(found.writable.is_empty(), "{:?}", found.writable);
         assert!(found.rewritten.is_none());
     }
 
@@ -484,6 +528,7 @@ readonly property string uiFamily: _pickFamily(fontFamilyUi)
         let doc = "| 役割 | 段 |\n|---|---|\n| 読ませる本体 | `fontSm` |\n";
         let found = run(doc);
         assert!(found.findings.is_empty(), "{:?}", found.findings);
+        assert!(found.writable.is_empty(), "{:?}", found.writable);
         assert!(found.rewritten.is_none());
     }
 
@@ -491,6 +536,7 @@ readonly property string uiFamily: _pickFamily(fontFamilyUi)
     fn a_row_whose_first_cell_is_prose_is_left_where_it_stands() {
         let found = run("| token | 値 |\n|---|---|\n| その diff の最大行番号 | 1 |\n");
         assert!(found.findings.is_empty(), "{:?}", found.findings);
+        assert!(found.writable.is_empty(), "{:?}", found.writable);
         assert!(found.rewritten.is_none());
     }
 
@@ -505,6 +551,7 @@ readonly property string uiFamily: _pickFamily(fontFamilyUi)
         let doc = "| token | 値 |\n|---|---|\n| `bgBase` | `#020617` |\n\n| 役割 | 段 |\n|---|---|\n| `iconLg` | 9 |\n";
         let found = run(doc);
         assert!(found.findings.is_empty(), "{:?}", found.findings);
+        assert!(found.writable.is_empty(), "{:?}", found.writable);
         assert!(found.rewritten.is_none());
     }
 
