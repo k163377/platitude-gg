@@ -61,9 +61,10 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=window-floor [fold|log|wip] (the four forms: verbs.md `window-floor`). With no argument the saved
-    // shape is xtask's 320x240, under every floor; `fold` / `log` stand the window on its floor, then put the list
-    // back / open the log, so the floor rises under a window already standing on it.
+    // PGG_AUTO_ACT=window-floor [fold|log|wip|rail] (the five forms: verbs.md `window-floor`). With no argument the
+    // saved shape is xtask's 320x240, under every floor; `fold` / `log` stand the window on its floor, then put the list
+    // back / open the log, so the floor rises under a window already standing on it. `rail` folds, stands on the floor
+    // and opens the log: the log comes up as far as the panes let it, over the rail's last cell unless they hold it.
     SampleTimer {
         id: floorActTimer
         running: Harness.autoAct === "window-floor"
@@ -92,7 +93,7 @@ Item {
                 return
             if (!floorActTimer.shapeRequested) {
                 floorActTimer.shapeRequested = true
-                if (Harness.autoActArg === "fold")
+                if (Harness.autoActArg === "fold" || Harness.autoActArg === "rail")
                     window.floorPage.sidebarCollapsed = true
                 else if (Harness.autoActArg === "wip")
                     window.floorPage.showWip()
@@ -100,7 +101,7 @@ Item {
                     return
                 return
             }
-            if (Harness.autoActArg === "fold"
+            if ((Harness.autoActArg === "fold" || Harness.autoActArg === "rail")
                     && !window.floorPage.sidebarCollapsed)
                 return
             if (Harness.autoActArg === "wip" && !window.floorPage.wipShown)
@@ -128,6 +129,9 @@ Item {
             if (window.width < window.floorWidth
                     || window.height < window.floorHeight)
                 return
+            // On the floor, before it moves: a folded window's rail is only ever read here in `fold`.
+            if (!acts.menuReadAfterFrames())
+                return
             stop()
             floorRaiseTimer.start()
         }
@@ -143,7 +147,7 @@ Item {
                 floorRaiseTimer.raised = true
                 return
             }
-            if (!floorRaiseTimer.raised && Harness.autoActArg === "log") {
+            if (!floorRaiseTimer.raised && (Harness.autoActArg === "log" || Harness.autoActArg === "rail")) {
                 window.floorPage.commandsOpen = true
                 floorRaiseTimer.raised = true
                 return
@@ -151,7 +155,7 @@ Item {
             if (Harness.autoActArg === "fold"
                     && window.floorPage.sidebarCollapsed)
                 return
-            if (Harness.autoActArg === "log"
+            if ((Harness.autoActArg === "log" || Harness.autoActArg === "rail")
                     && !window.floorPage.commandsOpen)
                 return
             stop()
@@ -167,7 +171,7 @@ Item {
             if (Harness.autoActArg === "fold"
                     && window.floorPage.sidebarCollapsed)
                 return
-            if (Harness.autoActArg === "log"
+            if ((Harness.autoActArg === "log" || Harness.autoActArg === "rail")
                     && !window.floorPage.commandsOpen)
                 return
             // The block scrolls even when not shown, so only `wipShown` catches a face taken away behind the run
@@ -176,9 +180,57 @@ Item {
                     && (!window.floorPage.wipShown
                         || !window.floorPage.wipBlockScrolls))
                 return
+            if (!acts.menuReadAfterFrames())
+                return
             stop()
             acts.reportFloor()
         }
+    }
+
+    // ---- whether the left menu stands whole in the room the page gives it ----
+    // Read off the layout itself (デザイン規約 §窓の床「左メニューが全部入る」): the floor's own sum would agree with
+    // itself whatever the rail drew. A `SplitView` and a `Column` lay out on polish, so a reading waits two swapped
+    // frames after it is asked for — one whose polish ran before the ask answers for the shape before it.
+    property int framesSwapped: 0
+    Connections {
+        target: acts.window
+        function onFrameSwapped() {
+            acts.framesSwapped++
+        }
+    }
+    property int menuFramesWanted: -1
+    /// Every reading held, and the last one's two numbers.
+    property bool menuHeld: true
+    property real menuEnd: 0
+    property real menuRoom: 0
+    /// Whether the menu has been read for the stage asking: false while the frames it waits for are still to come.
+    function menuReadAfterFrames() {
+        if (acts.menuFramesWanted < 0)
+            acts.menuFramesWanted = acts.framesSwapped + 2
+        if (acts.framesSwapped < acts.menuFramesWanted) {
+            // `update()`, asked again each beat: a still offscreen scene swaps nothing unasked
+            // (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
+            acts.window.update()
+            return false
+        }
+        acts.menuFramesWanted = -1
+        const pane = window.floorPage.pageSidebar
+        if (pane.collapsed) {
+            const rail = pane.autoRail
+            // The rail's one child is the column of the fold block and the cells. It fills the rail, and what it laid
+            // out runs past it when the rail is shorter — the rail does not clip.
+            const column = rail.children[0]
+            acts.menuEnd = column.childrenRect.y + column.childrenRect.height
+            acts.menuRoom = rail.height
+        } else {
+            // The list's last band, at its own height: the layout gives a band no minimum, so a short list squeezes
+            // the bands rather than pushing the last one out.
+            const last = pane.autoSections.headOf("tag")
+            acts.menuEnd = last.y + last.implicitHeight
+            acts.menuRoom = pane.autoSections.height
+        }
+        acts.menuHeld = acts.menuHeld && acts.menuEnd <= acts.menuRoom
+        return true
     }
     /// `fits=` is the whole verdict: reporting the floor alone would pass with the window nowhere near it.
     function reportFloor() {
@@ -188,6 +240,8 @@ Item {
             // The verdict leads: `must_say` catches only neighbours in one substring.
             "window_floor fits="
             + (window.width >= floorW && window.height >= floorH)
+            // Beside `fits=`: a floor summed short passes that one, the window standing on it.
+            + " menu=" + acts.menuHeld + " menuEnd=" + acts.menuEnd + " menuRoom=" + acts.menuRoom
             + " floorW=" + floorW + " floorH=" + floorH
             // `floorW` is the larger of these two (`Main.floorWidth`). Folding lowers `pageW` only — where, on an OS
             // whose band carries the window buttons, the two change places.

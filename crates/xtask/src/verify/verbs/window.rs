@@ -14,11 +14,13 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "window_fill fills=true",
     },
     // A window let past its floor frames like one held at it — the pane
-    // that went past is outside the frame.
+    // that went past is outside the frame. `menu=` is the left menu read
+    // off its own layout: a floor summed short stands the window on it
+    // and still says `fits=true`.
     Verb {
         name: "window-floor",
         when: &[],
-        plain: "window_floor fits=true",
+        plain: "window_floor fits=true menu=true",
     },
     // Which tab went: every demo tree is called `repo`, so the strip
     // photographs the same either way. `gone=` is the pressed tab's own
