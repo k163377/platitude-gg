@@ -289,10 +289,20 @@ pub(super) const TABLE: &[Verb] = &[
     },
     Verb {
         name: "list-menu",
-        when: &[(
-            Arg::Is("1:1"),
-            "list_menu list=true menu=true branch=false tag=true",
-        )],
+        // On `worktrees` only rows naming a copy are pressed — row 1 stacks
+        // a branch another copy holds (`1:0`) over a copy's folder (`1:1`),
+        // and both bring up the WORKTREE card. A line pressing that
+        // preset's tag (row 3) needs a row of its own above this one.
+        when: &[
+            (
+                Arg::WithPreset("worktrees"),
+                "list_menu list=true menu=true copy=true",
+            ),
+            (
+                Arg::Is("1:1"),
+                "list_menu list=true menu=true copy=false branch=false tag=true",
+            ),
+        ],
         plain: "list_menu list=true menu=true",
     },
     // Several commits held at once, by Ctrl and by Shift. The completion

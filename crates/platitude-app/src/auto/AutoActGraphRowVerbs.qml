@@ -525,9 +525,10 @@ Item {
                 return
             listMenuTimer.stop()
             // `list=` is read with the menu up: the card has to still stand under it (デザイン規約 §メニュー の例外).
-            // `branch=` / `tag=`: which card the named row brought up is what this gesture decides.
+            // `copy=` / `branch=` / `tag=`: which card the named row brought up is what this gesture decides.
             Harness.report("list_menu list=" + refList.opened
                               + " menu=" + commitMenu.opened
+                              + " copy=" + driver.commitCopyCard.applies
                               + " branch=" + commitBranchCard.applies
                               + " tag=" + commitTagCard.applies
                               + " rows=" + commitMenu.offeredRows)
