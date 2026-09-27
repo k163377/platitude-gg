@@ -66,6 +66,17 @@ Item {
             rowPartReport.want = parts[2]
             rowPartReport.x = Number(parts[1])
             rowPartTimer.start()
+        } else if (act === "ref-list-leave") {
+            // The hand onto the stretch of a chip column the chip's card leaves bare, the list out, and then the hand
+            // gone — to no row (`off`), back onto the same stretch within the beat (`back`), into the card for a
+            // right-click and back onto the stretch before the menu goes (`menu`), or onto another row's (its
+            // number), each through the row's own hover door (`GraphRowDelegate.pointerCrossed`). The argument is
+            // `<行|head>:<先>`; `head` is HEAD's stand-in (`--preset deep`, sent to the end).
+            const leave = arg.split(":")
+            leaveTimer.from = leave[0]
+            leaveTimer.to = leave.length > 1 ? leave[1] : ""
+            leaveTimer.step = 0
+            leaveTimer.start()
         } else if (act === "list-menu") {
             // The right-click on a row of the stacked list (デザイン規約 §グラフ行の右クリック). The argument is
             // `<行>[:<カードの行>]`.
@@ -861,6 +872,151 @@ Item {
             + " card=" + rowCard.opened
             + " agrees=" + (got === rowPartReport.want
                             && refList.opened !== rowCard.opened))
+            driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=ref-list-leave. Each step goes in once the one before has landed, and the last waits out the beat
+    // the leave started (`RowHoverHost.listSettling`) — a leave that starts none is read at once, which is the list
+    // left standing with no hand near it.
+    SampleTimer {
+        id: leaveTimer
+        /// Where the hand comes on (a row number or `head`), and where it goes after (`off` / `back` / `menu` / a row
+        /// number).
+        property string from: ""
+        property string to: ""
+        property int step: 0
+        /// The hand goes on to another row's column (`to` is its number) rather than staying about this one.
+        function crosses() {
+            return leaveTimer.to !== "off" && leaveTimer.to !== "back" && leaveTimer.to !== "menu"
+        }
+        /// The point along the row the hand came on at, and whether the card that opened lies over it — read off
+        /// the scene's two boxes, so a card that covers the point makes the run say so rather than pass for another.
+        property real handX: 0
+        property bool covered: false
+        /// The card's box as it first stood: a hand come back holds the list rather than laying it out again, and the
+        /// list laid out again under its unstacked chip is measured off a chip without its fan.
+        property string firstBox: ""
+        function boxOf() {
+            const face = refList.background
+            const at = face.mapToItem(null, 0, 0)
+            return Math.round(at.x) + "," + Math.round(at.y)
+                   + " " + Math.round(face.width) + "x" + Math.round(face.height)
+        }
+        /// The ask and the beat as they stood in the turn of the leave.
+        property bool heldAfter: false
+        property bool settlingAfter: false
+        /// Where the hand is along `item` — the middle of the stretch its chip's card will leave bare, left of where
+        /// the card is placed (`RowHoverHost.openRefList`); -1 where the chip leaves none.
+        function bareX(item) {
+            const room = item.chipItem.mapToItem(item, 0, 0).x - Theme.spaceXs - Theme.borderWidth
+            return room >= 2 * Theme.spaceXs ? Math.floor(room / 2) : -1
+        }
+        /// The row or stand-in called `which`, or null while it is not laid out.
+        function surface(which) {
+            if (which === "head")
+                return graphPane.headPin
+            return graphPane.view.itemAtIndex(Number(which))
+        }
+        /// Where the hand is held across `item`: a row's middle, the stand-in's row line.
+        function handY(item) {
+            return item === graphPane.headPin ? item.rowMidY : item.height / 2
+        }
+        function coveredAt(item, x) {
+            const face = refList.background
+            const card = face.mapToItem(null, 0, 0)
+            const hand = item.mapToItem(null, x, leaveTimer.handY(item))
+            return hand.x >= card.x && hand.x < card.x + face.width
+                   && hand.y >= card.y && hand.y < card.y + face.height
+        }
+        onTriggered: {
+            if (graphModel.loading || graphModel.rowTotal === 0)
+                return
+            const item = leaveTimer.surface(leaveTimer.from)
+            if (leaveTimer.step === 0) {
+                if (leaveTimer.from === "head" && item.wanted && (!item.visible || !item.rowAbove)) {
+                    graphPane.view.positionViewAtEnd()
+                    return
+                }
+                if (leaveTimer.from !== "head" && item === null) {
+                    graphPane.view.positionViewAtIndex(Number(leaveTimer.from), ListView.Contain)
+                    return
+                }
+                const other = leaveTimer.crosses() ? leaveTimer.surface(leaveTimer.to) : null
+                if (!Awaited.all("ref_list_leave", {
+                        "from": item !== null && item.visible && item.chipItem.visible,
+                        "to": !leaveTimer.crosses() || (other !== null && other.visible && other.chipItem.visible)
+                    }))
+                    return
+                leaveTimer.handX = leaveTimer.bareX(item)
+                if (leaveTimer.handX < 0 || (other !== null && leaveTimer.bareX(other) < 0)) {
+                    leaveTimer.stop()
+                    Harness.report("ref_list_leave to=" + leaveTimer.to + " bare=false")
+                    driver.complete()
+                    return
+                }
+                item.pointerCrossed(true, leaveTimer.handX)
+                leaveTimer.step = 1
+                return
+            }
+            if (leaveTimer.step === 1) {
+                // A tick after the ask, so the card stands where it was placed.
+                if (!Awaited.all("ref_list_leave", {
+                        "list": refList.opened, "on": rowHost.refListAnchor === item.chipItem }))
+                    return
+                leaveTimer.covered = leaveTimer.coveredAt(item, leaveTimer.handX)
+                leaveTimer.firstBox = leaveTimer.boxOf()
+                if (leaveTimer.to === "off") {
+                    item.pointerCrossed(false, 0)
+                } else if (leaveTimer.to === "back") {
+                    item.pointerCrossed(false, 0)
+                    item.pointerCrossed(true, leaveTimer.handX)
+                } else if (leaveTimer.to === "menu") {
+                    // Into the card, and a right-click on its first row: that row's menu stands on the list
+                    // (`RepoPage.menuRaisedOn` = `refList`). Not built yet: no press has gone in.
+                    if (!refList.menuRow(0))
+                        return
+                    item.pointerCrossed(false, 0)
+                    leaveTimer.step = 3
+                    return
+                } else {
+                    // Qt tells the row the hand came onto before the row it left (`deliverHoverEvent`: the rows under
+                    // the point, then the ones no longer under it).
+                    const other = leaveTimer.surface(leaveTimer.to)
+                    other.pointerCrossed(true, leaveTimer.bareX(other))
+                    item.pointerCrossed(false, 0)
+                }
+                leaveTimer.heldAfter = rowHost.refListWanted
+                leaveTimer.settlingAfter = rowHost.listSettling
+                leaveTimer.step = 2
+                return
+            }
+            if (leaveTimer.step === 3) {
+                // The hand back on the chip's column while the menu stands, and the menu let go of as Escape does:
+                // its close asks the list again (`RepoPage` → `settleRefList`).
+                if (!Awaited.all("ref_list_leave", { "menu": commitMenu.opened }))
+                    return
+                item.pointerCrossed(true, leaveTimer.handX)
+                leaveTimer.heldAfter = rowHost.refListWanted
+                leaveTimer.settlingAfter = rowHost.listSettling
+                commitMenu.dismiss()
+                leaveTimer.step = 2
+                return
+            }
+            if (!Awaited.all("ref_list_leave", { "menu": !commitMenu.visible, "beat": !rowHost.listSettling }))
+                return
+            leaveTimer.stop()
+            const target = leaveTimer.to === "off" ? null
+                         : leaveTimer.crosses() ? leaveTimer.surface(leaveTimer.to) : item
+            Harness.report("ref_list_leave to=" + leaveTimer.to
+                              + " covered=" + leaveTimer.covered
+                              + " list=" + refList.opened
+                              + " on=" + (target !== null && rowHost.refListAnchor === target.chipItem)
+                              + " same=" + (leaveTimer.boxOf() === leaveTimer.firstBox)
+                              // How the leave was taken, for a reader of a red run.
+                              + " held=" + leaveTimer.heldAfter
+                              + " settling=" + leaveTimer.settlingAfter
+                              + " x=" + leaveTimer.handX
+                              + " box=" + leaveTimer.firstBox + "->" + leaveTimer.boxOf())
             driver.complete()
         }
     }

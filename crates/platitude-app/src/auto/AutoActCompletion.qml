@@ -172,7 +172,7 @@ QtObject {
                 "list-menu",
                 "ref-list", "ref-list-card", "ref-list-lit", "ref-list-choose",
                 "ref-list-follow", "ref-list-follow-lit",
-                "row-part", "graph-reclick",
+                "row-part", "ref-list-leave", "graph-reclick",
                 "graph-head-list",
                 "graph-reclick-list",
                 "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",

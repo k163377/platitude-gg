@@ -274,6 +274,30 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "agrees=true",
     },
+    // The chip's list once the hand has left the stretch of the chip
+    // column its card leaves bare: for no row (`off` — the list goes),
+    // back within the beat (`back` — held, not laid out again), or onto
+    // another row's chip column (its number — the list stands there).
+    // `covered=false` holds the run to that stretch: a card over the
+    // point takes the hand itself and says nothing about the row.
+    Verb {
+        name: "ref-list-leave",
+        when: &[
+            (
+                Arg::Ends(":off"),
+                "ref_list_leave to=off covered=false list=false",
+            ),
+            (
+                Arg::Ends(":back"),
+                "ref_list_leave to=back covered=false list=true on=true same=true",
+            ),
+            (
+                Arg::Ends(":menu"),
+                "ref_list_leave to=menu covered=false list=true on=true",
+            ),
+        ],
+        plain: "covered=false list=true on=true",
+    },
     // `list-menu` (below) names one of the stacked names: the row's menu
     // aimed at the name under the press. `list=`: the card pressed on
     // still stands under the menu. `branch=` / `tag=`: which card the
