@@ -190,13 +190,14 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // Read a tick after the verb: the step out from under the card is animated, and the value in the verb's own call
-    // is the one before it moved. `pin=` is HEAD's stand-in once the jump sent HEAD's row off — `none`, `lit` or
-    // `dim`; one left lit photographs exactly like a match.
+    // Read once the card has faded in and the graph's step out from under it has landed: both are animated, and a shot
+    // before the fade ends shows the row beneath through the card. `pin=` is HEAD's stand-in once the jump sent HEAD's
+    // row off — `none`, `lit` or `dim`; one left lit photographs exactly like a match.
     SampleTimer {
         id: findSettled
         onTriggered: {
-            if (!graphPane.findCard.open)
+            const card = graphPane.findCard
+            if (!card.open || card.opacity < 1 || graphPane.findShift !== (card.findClears ? card.height : 0))
                 return
             findSettled.stop()
             const pin = graphPane.headPin
