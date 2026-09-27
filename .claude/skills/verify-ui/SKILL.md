@@ -60,7 +60,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 **白紙の overlay.png は「その時点で何も開いていなかった」の意味**。報告行 `overlay saved=<bool> popups=<n>` の **`popups=` がオーバーレイ自身が抱えていた数**(メニュー 1 / サブメニューを開けば 2 / モーダルは dimmer を伴って 2 以上)。`commit-menu` / `reset-menu` はこの行が must_say — **overlay が主題の動詞には同じ 1 行を足せる**(`verify/verbs.rs`)。「閉じたか」は `Popup.opened` の報告行で読む。
 
-**overlay が空でない run は 3 枚目 `scene.png` を出す** —— app.png と overlay.png を**描かれた座標のまま重ねた 1 枚**。「開いたものは、それを開けたものに対して**どこに**立っているか」(hover の席・カードの密着・メニューの掛かり方)はこれでしか読めない。報告行は `scene saved=<bool>`。**hover の席を見せる時はこの 1 枚を board に出す**。
+**overlay が空でない run は 3 枚目 `scene.png` を出す** —— app.png と overlay.png を**描かれた座標のまま重ねた 1 枚**で、**窓の縁(Windows の窓モードの 1px)が写るのはこの 1 枚だけ**(app.png は本体だけ)。「開いたものは、それを開けたものに対して**どこに**立っているか」(hover の席・カードの密着・メニューの掛かり方)はこれでしか読めない。報告行は `scene saved=<bool>`。**hover の席を見せる時はこの 1 枚を board に出す**。
 
 ## 場面ごとの各論(このディレクトリ。その場面に入る前に読む)
 

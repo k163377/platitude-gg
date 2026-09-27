@@ -16,6 +16,8 @@ Item {
     /// What a scene picture is of: the content, or the gate standing in front of it while git has not answered.
     required property Item mainUi
     required property Item gate
+    /// …with the window's edge over it where the window draws one (`Main.edgeDrawn`).
+    required property Item windowEdge
 
     /// `AutoShotDriver` schedules their updates and waits on the textures.
     readonly property alias overlayMirror: overlayMirror
@@ -33,8 +35,9 @@ Item {
             live: false
         }
     }
-    // Content and overlay laid over each other: where a popup stands against what it opened off. Two named sources,
-    // because this mirror is inside the content. Refreshed only when the overlay holds something (else it is app.png).
+    // Content, the window's edge and the overlay laid over each other: where a popup stands against what it opened
+    // off. Named sources, because this mirror is inside the content. Refreshed only when the overlay holds something
+    // (else it is app.png).
     Loader {
         id: sceneMirror
         active: Harness.shotDir !== ""
@@ -47,9 +50,23 @@ Item {
             property int owed: 0
             signal ready()
             function refresh() {
-                sceneShot.owed = 2
+                // Where each stands in the window, rather than stretched over all of it: the edge runs round the
+                // whole window, and the body is drawn over the part it fills.
+                sceneShot.seat(uiSource)
+                sceneShot.seat(edgeSource)
+                sceneShot.owed = edgeSource.visible ? 3 : 2
                 uiSource.scheduleUpdate()
+                if (edgeSource.visible)
+                    edgeSource.scheduleUpdate()
                 overlaySource.scheduleUpdate()
+            }
+            function seat(source) {
+                const item = source.sourceItem
+                const at = sceneShot.mapFromItem(item, 0, 0)
+                source.x = at.x
+                source.y = at.y
+                source.width = item.width
+                source.height = item.height
             }
             function landed() {
                 sceneShot.owed--
@@ -58,9 +75,16 @@ Item {
             }
             ShaderEffectSource {
                 id: uiSource
-                anchors.fill: parent
                 live: false
                 sourceItem: mirrors.gate.visible ? mirrors.gate : mirrors.mainUi
+                onScheduledUpdateCompleted: sceneShot.landed()
+            }
+            // Over the body and under the overlay, as the window stacks them.
+            ShaderEffectSource {
+                id: edgeSource
+                visible: mirrors.windowEdge.visible
+                live: false
+                sourceItem: mirrors.windowEdge
                 onScheduledUpdateCompleted: sceneShot.landed()
             }
             ShaderEffectSource {

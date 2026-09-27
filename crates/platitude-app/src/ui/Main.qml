@@ -269,6 +269,7 @@ ApplicationWindow {
             chrome: chrome,
             mainUi: body,
             gate: gate,
+            windowEdge: windowEdge,
             windowShape: windowShape,
             sharedToolTip: sharedToolTip,
             openFailedDialog: openFailedDialog,
@@ -356,6 +357,7 @@ ApplicationWindow {
     // The window's edge (規約 §ウィンドウの縁), windowed only; its bottom side coincides with the floor line at the end
     // of `WindowBody`'s column, which alone stays when maximised.
     Rectangle {
+        id: windowEdge
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
         z: 9999

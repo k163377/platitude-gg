@@ -20,6 +20,8 @@ Item {
     required property var chrome
     required property var mainUi
     required property var gate
+    /// The window's edge, drawn outside `mainUi` — the scene picture lays it over the body (`WindowShotMirrors`).
+    required property var windowEdge
     required property var windowShape
     required property var sharedToolTip
     required property var openFailedDialog
@@ -147,6 +149,7 @@ Item {
         window: harness.window
         mainUi: harness.mainUi
         gate: harness.gate
+        windowEdge: harness.windowEdge
     }
 
     AutoShotDriver {
