@@ -12,15 +12,18 @@ Rectangle {
     property bool open: false
     /// Writable so a headless run can fill the box — keystrokes cannot be injected.
     property alias query: field.text
-    /// How many rows the query matched, and which of them the view is on. At zero the count is not shown.
+    /// A line is standing — the owner says what counts as one. Only then is there anything to count, `0 / 0` included.
+    property bool searching: false
+    /// How many rows the query matched, and which of them the view is on.
     property int matches: 0
     property int atMatch: 0
     /// Rows loaded: the widest the count can get, and the width its place is held at so the caret does not slide as
     /// the matches narrow (§コミットを探す).
     property int loaded: 0
-    /// Something was typed that nothing answers: the frame turns warning and the reason waits in the tooltip.
-    property bool refused: false
-    property string refusedTip: ""
+    /// Something was typed that nothing answers. No state colour — nothing spills over and nothing waits for a hand
+    /// (規約 §状態); the count says `0 / 0` and the reason waits in the tooltip.
+    property bool unanswered: false
+    property string unansweredTip: ""
     /// How wide the card may grow before it covers a subject's first character; the owner measures it.
     property real maxWidth: 0
 
@@ -85,11 +88,10 @@ Rectangle {
         readonly property real wantedWidth:
             Math.max(findRow.fieldMinWidth, field.contentWidth + field.leftPadding + field.rightPadding)
             + findRow.fixedWidth
-        // Everything right of the box. The count counts only while shown: a Layout skips an invisible item and its
-        // spacing with it.
+        // Everything right of the box. The count's place is held with nothing typed and at no match alike, so crossing
+        // either edge does not move the box's left edge — the card hangs from the right.
         readonly property real fixedWidth:
-            (findBar.matches > 0 ? widest.implicitWidth + findRow.spacing : 0)
-            + closeButton.implicitWidth + findRow.spacing
+            widest.implicitWidth + findRow.spacing + closeButton.implicitWidth + findRow.spacing
 
         // A search box's fixed width (デザイン規約 §レイアウト初期値), here its floor.
         readonly property real fieldMinWidth: 160
@@ -99,10 +101,9 @@ Rectangle {
             Layout.fillWidth: true
             Layout.minimumWidth: findRow.fieldMinWidth
             placeholderText: qsTr("Find commits")
-            refused: findBar.refused
-            ToolTip.visible: findBar.refused && hovered
+            ToolTip.visible: findBar.unanswered && hovered
             ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: findBar.refusedTip
+            ToolTip.text: findBar.unansweredTip
             Keys.onEscapePressed: findBar.dismiss()
             Keys.onPressed: event => {
                 if (event.key !== Qt.Key_Return && event.key !== Qt.Key_Enter)
@@ -114,10 +115,10 @@ Rectangle {
                 event.accepted = true
             }
         }
+        // Emptied by its text, never hidden: a Layout skips an invisible item and its spacing with it.
         Label {
             id: count
-            visible: findBar.matches > 0
-            text: qsTr("%1 / %2").arg(findBar.atMatch).arg(findBar.matches)
+            text: findBar.searching ? qsTr("%1 / %2").arg(findBar.atMatch).arg(findBar.matches) : ""
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
             // Held at its widest (`loaded`) and right-aligned, so the numbers grow away from the box.

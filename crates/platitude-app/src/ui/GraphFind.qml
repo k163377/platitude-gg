@@ -67,8 +67,9 @@ FindBar {
     // Bound: a background refresh re-marks the rows without anybody typing.
     matches: find.graphModel.matchCount
     atMatch: find.graphModel.matchCount > 0 ? find.graphModel.matchOrdinal(find.view.currentIndex) : 0
-    refused: find.open && find.graphModel.searching && find.graphModel.matchCount === 0
-    refusedTip: find.graphModel.truncated
+    searching: find.graphModel.searching
+    unanswered: find.open && find.graphModel.searching && find.graphModel.matchCount === 0
+    unansweredTip: find.graphModel.truncated
                 ? qsTr("Nothing in the loaded history matches — older commits are not loaded")
                 : qsTr("Nothing in this history matches")
     onQueryChanged: find.runFind()
