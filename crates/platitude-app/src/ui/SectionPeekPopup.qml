@@ -31,6 +31,9 @@ AppCard {
     property real top: 0
     /// The pointer is still on that cell.
     property bool wanted: false
+    /// The section whose row last raised a menu: the one a menu raised here holds open (`SidebarPane`'s `pinned`). A
+    /// rest on another cell while that menu stands opens that section, which goes as a hover does.
+    property string menuKind: ""
     /// Where this section last saw the hand, in its own coordinates — tells a hand that moved from a layout that
     /// moved under it (`SidebarPane`, and the handler below).
     property point handAt: Qt.point(-1, -1)
@@ -91,6 +94,7 @@ AppCard {
             peek.gestures.forgetClicks()
         peek.kind = ""
         peek.wanted = false
+        peek.menuKind = ""
         // The list has gone, whatever the last hover said.
         peek.contentPointed = false
     }
@@ -222,8 +226,15 @@ AppCard {
             markedRemote: peek.repoTab.pushDefault
             originRemote: peek.repoTab.markedOrigin
             onRefActivated: oidHex => peek.refActivated(oidHex)
-            onRefMenuRequested: (kind, name, full, oidHex, aim) => peek.refMenuRequested(kind, name, full, oidHex, aim)
-            onRemoteMenuRequested: name => peek.remoteMenuRequested(name)
+            // Marked before the page raises the menu, so the hold is there as it comes up.
+            onRefMenuRequested: (kind, name, full, oidHex, aim) => {
+                peek.menuKind = peek.kind
+                peek.refMenuRequested(kind, name, full, oidHex, aim)
+            }
+            onRemoteMenuRequested: name => {
+                peek.menuKind = peek.kind
+                peek.remoteMenuRequested(name)
+            }
         }
     }
 }

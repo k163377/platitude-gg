@@ -829,11 +829,20 @@ FocusScope {
         publishFlow.forcePush()
     }
 
+    /// Where the standing right-click menu was raised — `sidebar` (the left panel's rows), `refList` (the rows of a
+    /// chip's stacked list), `graph`, `files`, `diff` — or "" while none stands. What hover opened stays under a menu
+    /// raised on its own rows and goes behind any other (デザイン規約 §メニュー). One binding over the seats and the
+    /// doors' marks, which are written before the menu shows: a reader that also read `menuStanding` could see the
+    /// menu up before its origin.
+    readonly property string menuRaisedOn:
+        page.menuShowing(refMenuSeat) ? (page.refMenuInSidebar ? "sidebar" : "graph")
+        : page.menuShowing(remoteMenuSeat) ? "sidebar"
+        : page.menuShowing(commitMenuSeat) ? (page.rowMenuOnList ? "refList" : "graph")
+        : page.menuShowing(fileMenuSeat) ? "files"
+        : page.menuShowing(diffMenuSeat) ? "diff" : ""
     /// One of this page's right-click menus is standing: nothing behind a menu is being hovered, so no card or tip may
     /// come out over the rows the hand is reading. A menu nobody has raised yet is not standing.
-    readonly property bool menuStanding:
-        page.menuShowing(refMenuSeat) || page.menuShowing(commitMenuSeat) || page.menuShowing(fileMenuSeat)
-        || page.menuShowing(remoteMenuSeat) || page.menuShowing(diffMenuSeat)
+    readonly property bool menuStanding: page.menuRaisedOn !== ""
     function menuShowing(seat) {
         return seat.item !== null && seat.item.showing
     }
@@ -867,9 +876,6 @@ FocusScope {
             onDropStashRequested: selector => page.dropStashNow(selector)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
             onRemoveCopyRequested: (path, name) => repoTab.removeWorktree(path, name)
-            // For a menu raised on the stacked list's row: the list stayed up under it, and the pointer now decides
-            // again whether it stays.
-            onDismissed: rowHost.settleRefList()
         }
     }
     // What a remote itself offers. Its own menu: a remote is repository configuration, and the ref menu is about
@@ -882,7 +888,6 @@ FocusScope {
             heldReason: page.doorsHeldWhy
             repoTab: repoTab
             onUrlRequested: name => publishFlow.startEditRemote(name)
-            onDismissed: rowHost.settleRefList()
         }
     }
     /// The one door into that menu. Says whether it opened.
@@ -897,8 +902,8 @@ FocusScope {
     /// acts on: a WORKTREES row opens the menu of the branch it has out, and the box still opens on that row.
     property string refMenuRowKind: ""
     property string refMenuRowId: ""
-    /// The one door into that menu: the sidebar's rows, a chip, the stacked list and the automation all come through
-    /// here. Says whether it opened. A working copy's row names its copy (`full` is its path), which carries its own
+    /// The one door into that menu: the sidebar's rows (`inSidebar`) and the automation, whose calls without it take
+    /// the graph's side. Says whether it opened. A working copy's row names its copy (`full` is its path), which carries its own
     /// card (`RefRowMenu.offerOn`). `aim` is a remote the reader named on its own (a TAGS row's carrier line), which
     /// the menu then acts on.
     function openRefMenu(kind, name, full, oidHex, inSidebar, aim) {
@@ -1167,10 +1172,15 @@ FocusScope {
         return GitFacts.menuKind(shown[0].kind) === "" ? null : shown[0]
     }
 
-    /// The one door into that menu: graph rows, the rows of a chip's stacked list, and automation. `chip` is the name
-    /// it is aimed at; null aims it at nothing, and left out it is asked of the model (`rowChipAt`). The first level
-    /// is the same commit either way — the name only picks which card comes up (デザイン規約 §グラフ行の右クリック).
-    function openRowMenu(oidHex, chip) {
+    /// Whether the standing row menu was raised on a row of the chip's stacked list, which it stands on rather than
+    /// over (`menuRaisedOn`).
+    property bool rowMenuOnList: false
+    /// The one door into that menu: graph rows, the rows of a chip's stacked list (`onList`), and automation. `chip`
+    /// is the name it is aimed at; null aims it at nothing, and left out it is asked of the model (`rowChipAt`). The
+    /// first level is the same commit either way — the name only picks which card comes up
+    /// (デザイン規約 §グラフ行の右クリック).
+    function openRowMenu(oidHex, chip, onList) {
+        page.rowMenuOnList = onList === true
         const named = chip === undefined ? page.rowChipAt(oidHex) : chip
         commitMenuSeat.active = true
         const menu = commitMenuSeat.item
@@ -1256,7 +1266,8 @@ FocusScope {
             onDeleteRemoteTagRequested: (remote, tag, onlyThere) =>
                 repoTab.deleteRemoteTag(remote, tag, onlyThere)
             onDeleteTagEverywhereRequested: (tag, remote) => repoTab.deleteTagEverywhere(tag, remote)
-            // As the ref menu's.
+            // For a menu raised on a row of the stacked list: the list stayed up under it, and the pointer now decides
+            // again whether it stays.
             onDismissed: rowHost.settleRefList()
         }
     }
@@ -1338,8 +1349,7 @@ FocusScope {
         remotesModel: remotesModel
         tagsModel: tagsModel
         tagAgainst: repoTab.defaultRemote
-        menuStanding: commitMenuSeat.item !== null && commitMenuSeat.item.opened
-        hoverBlocked: page.menuStanding
+        menuRaisedOn: page.menuRaisedOn
         onRecordActivated: chip => page.activateChip(chip)
         // A plain click in the card is a click on its row: every name in it is on that one commit.
         onRecordChosen: (oidHex, atRow) => page.activateRow(oidHex, atRow)
@@ -1349,7 +1359,7 @@ FocusScope {
             page.activateRow(oidHex, atRow)
             detailsPane.callAttention()
         }
-        onRecordMenuAsked: (oidHex, chip) => page.openRowMenu(oidHex, chip)
+        onRecordMenuAsked: (oidHex, chip) => page.openRowMenu(oidHex, chip, true)
         // The line under a card's name: the same jump its left-panel row makes.
         onMateFollowed: oidHex => page.jumpToRef(oidHex)
     }
@@ -2816,9 +2826,9 @@ FocusScope {
                     collapsed: page.sidebarCollapsed
                     // Null on the blank page: nothing has run there (the band's `>_` answered the same way up above).
                     commandsPage: page.blank ? null : page
-                    // The menus the rows raise are the page's, so only the page can say one stands over the folded
-                    // list.
-                    menuOpen: page.menuStanding
+                    // The menus the rows raise are the page's, so only the page can say where the standing one came
+                    // from — the folded list's open section stays under its own rows' menu alone.
+                    menuRaisedOn: page.menuRaisedOn
                     onFoldRequested: collapse => page.foldByHand(collapse)
                     onRefActivated: oidHex => page.jumpToRef(oidHex)
                     onRefMenuRequested: (kind, name, full, oidHex, aim) =>

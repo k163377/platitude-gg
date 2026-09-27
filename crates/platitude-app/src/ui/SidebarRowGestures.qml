@@ -14,7 +14,7 @@ QtObject {
     required property RepoTab repoTab
     required property NavSectionModel remotesModel
 
-    /// A menu raised from one of the folded list's rows is standing over it. The page's to set — the menus are its.
+    /// One of the page's menus is standing, raised on these rows or anywhere else (`SidebarPane.menuRaisedOn`).
     property bool menuOpen: false
 
     /// The pane's write doors are held (`SidebarPane.doorsHeld`). Only the two gestures that write, or open a box to

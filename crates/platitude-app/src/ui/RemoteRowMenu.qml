@@ -24,7 +24,6 @@ Item {
     /// The form for this remote's URL — the same dialog `Add remote…` opens, with the half that is already known
     /// filled in (デザイン規約 §リモートを書き留める).
     signal urlRequested(string name)
-    signal dismissed()
 
     /// The one door in. Says whether it opened.
     function offerOn(name) {
@@ -35,7 +34,6 @@ Item {
     AppMenu {
         id: menu
         heldReason: remoteRowMenu.heldReason
-        onClosed: remoteRowMenu.dismissed()
 
         AppMenuItem {
             //: Opens the form that holds this remote's URL. Says the same words as the form's own heading.

@@ -58,6 +58,7 @@ Rectangle {
         host: sidebar
         // Only the doors' hold: the plan's freeze already takes the list out of the input path.
         held: sidebar.doorsHeld
+        menuOpen: sidebar.menuRaisedOn !== ""
         repoTab: sidebar.repoTab
         remotesModel: sidebar.remotesModel
     }
@@ -88,8 +89,17 @@ Rectangle {
     /// Automation only: whether the box refuses what is typed, and its line — a frame colour and a tooltip.
     readonly property bool editRefused: rowGestures.editRefused
     readonly property string editRefusedWhy: rowGestures.editRefusedWhy
-    /// A menu raised from one of the folded list's rows stands over it; the page sets it, the menus being its.
+    /// Where the page's standing menu was raised (`RepoPage.menuRaisedOn`), "" while none stands; `sidebar` is these
+    /// rows. The page sets it, the menus being its.
+    property string menuRaisedOn: ""
+    /// Any of the page's menus is standing: no row opens or wears a tip behind it (`SidebarRowGestures.menuOpen`).
     property alias menuOpen: rowGestures.menuOpen
+    // What the rail opened is behind a menu raised anywhere else, and goes at once (デザイン規約 §メニュー); under
+    // one raised on its own rows it stays (`peek.pinned`).
+    onMenuRaisedOnChanged: {
+        if (sidebar.menuRaisedOn !== "" && sidebar.menuRaisedOn !== "sidebar")
+            sidebar.closePeek()
+    }
     function stopEdit() {
         rowGestures.stopEdit()
     }
@@ -298,6 +308,8 @@ Rectangle {
     /// For the smoke hooks alone (like `GraphPane.view`): PGG_AUTO_ACT=nav-reclick clicks a row in here.
     readonly property var peekSection: peek
 
+    // Opens under a standing menu too — the hand is on the rail, and a menu raised elsewhere does not hold what it opens
+    // (デザイン規約 §左メニューを畳む).
     function openPeek(kind, top) {
         peek.openAt(kind, top)
     }
@@ -322,9 +334,9 @@ Rectangle {
         paneW: sidebar.width
         paneH: sidebar.height
         listW: sidebar.openWidth
-        // A box open on one of its rows holds it as a menu does: a name half typed into a list the pointer walked away
-        // from is a name lost.
-        pinned: sidebar.menuOpen || sidebar.editKey !== ""
+        // A menu raised on its rows holds it — this section's, not one a rest brought in under that menu; so does a box
+        // open on one of them: a name half typed into a list the pointer walked away from is a name lost.
+        pinned: (sidebar.menuRaisedOn === "sidebar" && peek.menuKind === peek.kind) || sidebar.editKey !== ""
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
         onRefMenuRequested: (kind, name, full, oidHex, aim) => sidebar.refMenuRequested(kind, name, full, oidHex, aim)
         onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name)

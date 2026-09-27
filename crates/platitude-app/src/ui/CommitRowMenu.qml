@@ -104,9 +104,6 @@ Item {
     /// Either menu is on screen — what the page reads to hide hover behind it. Read this, not `visible`, which comes
     /// back stale from another file (rules-refs/app-ui.md「メニューが立っている間、裏の hover は伏せる」).
     readonly property bool showing: commitMenu.visible || stashMenu.visible
-    /// Whether it has finished opening — what the stacked list reads to know it is standing *on* this menu's row
-    /// (`RowHoverHost.menuStanding`).
-    readonly property bool opened: commitMenu.opened
 
     /// The automation's handles into these rows, an automation-only exposure the same as `GraphPane.view` is
     /// (rules-refs/app-ui.md「製品の部品はハーネスへ答える相手を丸ごと渡す」).

@@ -105,8 +105,6 @@ Item {
     /// Which remote branch a local one is measured against — the branch card's row, answered in the page's one bar
     /// (`UpstreamFlow`).
     signal upstreamRequested(string branch, string counterpart)
-    /// The menu went away: the stacked list it may have stood on is the pointer's to answer for again.
-    signal dismissed()
 
     anchors.fill: parent
 
@@ -244,9 +242,9 @@ Item {
     AppMenu {
         id: refMenu
         heldReason: refRowMenu.heldReason
-        // A refused delete's `-D` is left standing: the card clears it as it opens (`RefBranchMenu.standOn`), and
-        // nothing reads it while the card is down.
-        onClosed: refRowMenu.dismissed()
+        // Nothing to clear at the close: a refused delete's `-D` is left standing, the card clears it as it opens
+        // (`RefBranchMenu.standOn`), and nothing reads it while the card is down.
+
         // `Create branch here…` and `switch` are one group: it runs `switch --create` (デザイン規約 §メニュー の入れ子).
         AppMenuItem {
             id: refBranchHereItem

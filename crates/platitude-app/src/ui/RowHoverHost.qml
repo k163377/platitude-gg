@@ -21,11 +21,11 @@ Item {
     /// The remote a tag's readings are weighed against — the one this window's tag rows act on, as the left panel's
     /// TAGS rows read them (`NavList.pushRemote`).
     required property string tagAgainst
-    /// A ref menu is standing on one of the list's rows; it keeps the list up (`refListKeep`).
-    required property bool menuStanding
-    /// Any of the page's menus is standing. The row's card does not come out behind one — opened last, it would be
-    /// drawn over the menu. The chip's list is exempt (`menuStanding`).
-    required property bool hoverBlocked
+    /// Where the page's standing menu was raised (`RepoPage.menuRaisedOn`), "" while none stands. Nothing here comes
+    /// out behind one — opened last, it would be drawn over the menu — and what is out goes at once, but for the
+    /// chip's list under a menu raised on its own rows (`refList`), which stands on it and keeps it up
+    /// (デザイン規約 §メニュー).
+    required property string menuRaisedOn
 
     /// The pointer is on the row (written by `RepoPage.restOnCommit`), or on the chip whose list is up or about to
     /// be — what the settle beats read.
@@ -66,13 +66,16 @@ Item {
 
     anchors.fill: parent
 
-    onHoverBlockedChanged: {
-        if (host.hoverBlocked)
-            host.closeRowCard()
+    onMenuRaisedOnChanged: {
+        if (host.menuRaisedOn === "")
+            return
+        host.closeRowCard()
+        if (host.menuRaisedOn !== "refList")
+            host.closeRefList()
     }
 
     function openRowCard(row) {
-        if (!row || host.refListUp || host.hoverBlocked)
+        if (!row || host.refListUp || host.menuRaisedOn !== "")
             return
         // Already out for this commit (the hand came back from the card): only hold it — re-seating off the pointer
         // would slide the card sideways. By commit, since delegates travel; a closed card has cleared its commit.
@@ -117,6 +120,9 @@ Item {
     /// grows right, into the graph (規約 §グラフ行のダブルクリック) — picking a side by name length would open the same
     /// chip differently on different rows.
     function openRefList(oidHex, atRow, records, anchor) {
+        // Not behind a menu, nor in place of the list a menu stands on.
+        if (host.menuRaisedOn !== "")
+            return
         const at = anchor.mapToItem(host, 0, 0)
         host.refListOid = oidHex
         host.refListRow = atRow
@@ -248,7 +254,7 @@ Item {
         id: refListKeep
         card: refList
         pointedAt: host.refListWanted
-        grace: host.menuStanding
+        grace: host.menuRaisedOn === "refList"
     }
     // ---- the row's own card -----------------------------------------
     CommitHoverCard {
