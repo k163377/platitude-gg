@@ -901,7 +901,7 @@ Item {
                         if (!refList.menuRow(0))
                             return
                         // The hand off the chip, as its row reports it (`GraphRowDelegate.settlePointed`).
-                        graphPane.view.chipCollapseRequested()
+                        graphPane.view.chipCollapseRequested(stacked.chipItem)
                     }
                 }
                 menuListTimer.step = 2

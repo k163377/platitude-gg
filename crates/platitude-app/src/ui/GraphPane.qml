@@ -96,8 +96,9 @@ Rectangle {
     /// The pointer settled on a row (or left it): open the commit card under it. `row` is the delegate, for its
     /// position and fields — the page lets it go at once.
     signal rowHoverRequested(var row, bool inside)
-    /// The pointer left that chip — put it back, unless it went into the list itself (only the owner can tell).
-    signal chipCollapseRequested()
+    /// The pointer left the chip `anchor` — put its list back, unless it went into the list itself (only the owner can
+    /// tell).
+    signal chipCollapseRequested(var anchor)
     signal createBranchRequested(string oidHex, string name)
     /// The same box, answered with a tag.
     signal createTagRequested(string oidHex, string name)
@@ -412,7 +413,7 @@ Rectangle {
         onRowRenameRequested: (oidHex, chip) => graphArea.rowRenameRequested(oidHex, chip)
         onChipExpandRequested: (oidHex, atRow, records, anchor) =>
             graphArea.chipExpandRequested(oidHex, atRow, records, anchor)
-        onChipCollapseRequested: graphArea.chipCollapseRequested()
+        onChipCollapseRequested: anchor => graphArea.chipCollapseRequested(anchor)
         onRowHoverRequested: (row, inside) => graphArea.rowHoverRequested(row, inside)
         onNamingSubmitted: (oidHex, name, mode) => {
             const kind = graphList.namingKind
@@ -502,7 +503,7 @@ Rectangle {
         // Its chip unfolds through the rows' own door: the card is the one the page holds for every chip.
         onChipExpandRequested: (oidHex, atRow, records, anchor) =>
             graphArea.chipExpandRequested(oidHex, atRow, records, anchor)
-        onChipCollapseRequested: graphArea.chipCollapseRequested()
+        onChipCollapseRequested: anchor => graphArea.chipCollapseRequested(anchor)
     }
     /// The stand-in itself — automation-only exposure, like `view`.
     readonly property alias headPin: headPin

@@ -32,7 +32,8 @@ Item {
     property bool rowCardWanted: false
     property bool refListWanted: false
     /// The chip the open list hangs off (null when none), read back through `GraphPane.chipListAnchor`: its row stays
-    /// lit, unstacks its sheets and ignores the leave the card causes (`GraphRowDelegate.listOnThisChip`).
+    /// lit and unstacks its sheets (`GraphRowDelegate.listOnThisChip`), and only it lets the list go
+    /// (`closeRefListUnlessEntered`).
     property var refListAnchor: null
     /// The commit whose card is out (empty when none), read back through `GraphPane.rowCardOid`: the row keeps its
     /// hover band while its card stands, though the hand walking down into the card has left the row.
@@ -122,6 +123,17 @@ Item {
     /// grows right, into the graph (規約 §グラフ行のダブルクリック) — picking a side by name length would open the same
     /// chip differently on different rows.
     function openRefList(oidHex, atRow, records, anchor) {
+        // Already out on this chip: the hand came back onto its column (off the card, or within the beat of a leave) —
+        // only hold it (規約「出ているものの的へ戻る手は即通す」). Placed again it would be measured off the chip with its
+        // sheets down (`RefChipStack.unstacked`) and slide under the hand by the fan and the lift. **Before the menu's
+        // refusal**: a menu raised on one of its rows stands on this list, and the hand back on the column is what keeps
+        // it once that menu goes. The row number is taken again: rows can move under a standing card, and a click in
+        // the card goes to that row (`recordChosen`).
+        if (refList.opened && host.refListAnchor === anchor && host.refListOid === oidHex) {
+            host.refListRow = atRow
+            host.refListWanted = true
+            return
+        }
         // Not behind a menu, nor in place of the list a menu stands on.
         if (host.menuRaisedOn !== "")
             return
@@ -204,7 +216,12 @@ Item {
         }
         return null
     }
-    function closeRefListUnlessEntered() {
+    /// The hand left the chip `anchor` for somewhere that is not its column. **Only the chip the list stands on lets it
+    /// go**: Qt tells the row the hand came onto before the row it left, so the one left would otherwise take down the
+    /// list the arrival has just opened on its own chip. A list whose chip has gone with its row is let go by any.
+    function closeRefListUnlessEntered(anchor) {
+        if (host.refListAnchor !== null && anchor !== host.refListAnchor)
+            return
         host.refListWanted = false
         host.settleRefList()
     }
@@ -236,8 +253,8 @@ Item {
             host.graphPane.settleUnderHand()
             host.mateFollowed(to.oid)
         }
-        // The card covers its chip, whose row then sees no hover: `refListWanted` holds the card through the leave
-        // the row reports, until the card has the pointer; from then the card holds itself.
+        // Once the card has the hand the ask that opened it is spent: from then the hand inside holds it, or the hand
+        // back on the chip's column asks again (`openRefList`).
         onPointerInsideChanged: {
             if (refList.pointerInside)
                 host.refListWanted = false

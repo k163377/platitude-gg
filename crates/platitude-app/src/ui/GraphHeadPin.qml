@@ -31,8 +31,8 @@ Rectangle {
     signal activated(int row, int modifiers)
     /// The pointer came onto the chip: unfold it, as a row's chip unfolds (`GraphRowDelegate.openPointed`).
     signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)
-    /// And left it — put it back, unless it went into the card (only the owner can tell).
-    signal chipCollapseRequested()
+    /// And left it — put it back, unless it went into the card (only the owner can tell). `anchor` is the chip it left.
+    signal chipCollapseRequested(var anchor)
 
     /// The pointer resting on this, for the headless run (hover cannot be injected).
     property bool pointed: false
@@ -45,9 +45,9 @@ Rectangle {
     readonly property bool chipPointed: pin.pointerX >= 0 && pin.pointerX < pin.labelWidth && pin.records.length > 0
     onChipPointedChanged: pin.settleChip()
     /// A second click is waiting out its window; hover holds still meanwhile, as on a row
-    /// (`GraphRowDelegate.renameWaiting`).
+    /// (`GraphRowDelegate.renameWaiting`), and what the hand did meanwhile — a leave included — settles when it ends.
     readonly property bool renameWaiting: pin.view.renameWaiting
-    onRenameWaitingChanged: if (!pin.renameWaiting && pin.pointerX >= 0) pin.settleChip()
+    onRenameWaitingChanged: if (!pin.renameWaiting) pin.settleChip()
     /// Unfolds at once, as a row's chip does (規約 §hover のツールチップ「展開は即時に開く」).
     function settleChip() {
         if (pin.renameWaiting)
@@ -55,13 +55,12 @@ Rectangle {
         if (pin.chipPointed)
             pin.chipExpandRequested(pin.graphModel.oidAt(pin.headRow), pin.headRow, pin.records, pinStack)
         else
-            pin.chipCollapseRequested()
+            pin.chipCollapseRequested(pinStack)
     }
-    /// The leave skipped while the card stood on the chip (see `pinMouse`) is taken once the card goes, or a hand
-    /// coming back reads as one that never left.
-    onListOnThisChipChanged: {
-        if (!pin.listOnThisChip && !pinMouse.containsMouse)
-            pin.pointerX = -1
+    /// The hand came onto the stand-in at `x`, or left it — **every leave answered**, as on a row
+    /// (`GraphRowDelegate.pointerCrossed`, which a run enters the same way).
+    function pointerCrossed(inside, x) {
+        pin.pointerX = inside ? x : -1
     }
 
     readonly property int headRow: pin.graphModel.headRow
@@ -306,16 +305,6 @@ Rectangle {
                 pin.activated(pin.headRow, mouse.modifiers)
         }
         onPositionChanged: mouse => pin.pointerX = mouse.x
-        onContainsMouseChanged: {
-            if (pinMouse.containsMouse) {
-                pin.pointerX = pinMouse.mouseX
-                return
-            }
-            // The card opens on the chip and takes the pointer; that leave says nothing about the hand (as
-            // `GraphRowDelegate`).
-            if (pin.listOnThisChip)
-                return
-            pin.pointerX = -1
-        }
+        onContainsMouseChanged: pin.pointerCrossed(pinMouse.containsMouse, pinMouse.mouseX)
     }
 }

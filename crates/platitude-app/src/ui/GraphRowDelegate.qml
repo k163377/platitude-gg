@@ -363,12 +363,6 @@ Item {
     /// The open list is this row's chip's — read back from the page, which owns the card.
     readonly property bool listOnThisChip:
         rowItem.ListView.view ? rowItem.ListView.view.chipListAnchor === chipColumn.chipItem : false
-    /// What the row skips while the list stands on it (see the area below) it takes back the moment the list goes, or
-    /// the pointer is left where it was last seen and a hand coming back is taken for one that never left.
-    onListOnThisChipChanged: {
-        if (!rowItem.listOnThisChip && !rowMouse.containsMouse)
-            rowItem.pointerRowX = -1
-    }
     /// The card out is of this row's own commit — read back from the page the same way. **By the commit**:
     /// delegates travel, and a row that scrolled into this one's place is not the row the card is of.
     readonly property bool cardOnThisRow: rowItem.ListView.view && rowItem.oid_hex !== ""
@@ -396,8 +390,9 @@ Item {
         if (!view || rowItem.renameWaiting)
             return
         restDelay.stop()
+        // Named by the chip: only the one the list stands on lets it go (`RowHoverHost.closeRefListUnlessEntered`).
         if (rowItem.pointedPart !== "chip")
-            view.chipCollapseRequested()
+            view.chipCollapseRequested(chipColumn.chipItem)
         if (rowItem.pointedPart !== "row")
             view.rowHoverRequested(rowItem, false)
         // What has to go goes all the same; what would open waits for the hand.
@@ -542,18 +537,18 @@ Item {
             rowItem.doubleClick(mouse.modifiers)
         }
         onPositionChanged: mouse => rowItem.pointerRowX = mouse.x
-        onContainsMouseChanged: {
-            if (rowMouse.containsMouse) {
-                rowItem.pointerRowX = rowMouse.mouseX
-                return
-            }
-            // The list opens *on* the chip, so this area loses the pointer the instant it is drawn; answering that
-            // leave would take the list down under the hand that asked for it. **Only the row the list stands on skips
-            // it**, and only while it stands — a hand walking off lands on another row, which reports a real point.
-            if (rowItem.listOnThisChip)
-                return
-            rowItem.pointerRowX = -1
-        }
+        onContainsMouseChanged: rowItem.pointerCrossed(rowMouse.containsMouse, rowMouse.mouseX)
+    }
+    /// The hand came onto the row at `x`, or left it. A run enters here (verify-ui implement.md「注入はハンドラ本体そのもの
+    /// へ入れる」).
+    ///
+    /// **Every leave is answered**, the one the chip's own card causes included: the card is drawn over the chip and
+    /// takes the pointer, and to the row that leave is the same as a hand walking off to the pane's header, the left
+    /// panel or out of the window — none of which is a row that would report the hand. Answered, the list is let go and
+    /// stays only for the hand inside the card, which Qt hands it before this leave (`tst_listoverhand.qml`); a hand
+    /// coming back onto the chip column asks again and is held (`RowHoverHost.openRefList`).
+    function pointerCrossed(inside, x) {
+        rowItem.pointerRowX = inside ? x : -1
     }
     /// Where the pointer is along the row, so the card opens under it rather than at the row's left edge.
     readonly property real pointerX: rowMouse.mouseX

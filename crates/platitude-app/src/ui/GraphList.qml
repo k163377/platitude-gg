@@ -130,7 +130,8 @@ AppListView {
     /// A second click, late enough to rule out a double-click: rename the chip's first ref, whatever its kind.
     signal rowRenameRequested(string oidHex, var chip)
     signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)
-    signal chipCollapseRequested()
+    /// `anchor` is the chip the pointer left (`GraphRowDelegate.settlePointed`).
+    signal chipCollapseRequested(var anchor)
     signal rowHoverRequested(var row, bool inside)
     property var chipListAnchor: null
     property string rowCardOid: ""

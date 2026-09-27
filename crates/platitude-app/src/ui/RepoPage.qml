@@ -2904,7 +2904,7 @@ FocusScope {
                             namingRefusedWhy: page.graphNameRefusedWhy
                             onChipExpandRequested: (oidHex, atRow, records, anchor) =>
                                 rowHost.openRefList(oidHex, atRow, records, anchor)
-                            onChipCollapseRequested: rowHost.closeRefListUnlessEntered()
+                            onChipCollapseRequested: anchor => rowHost.closeRefListUnlessEntered(anchor)
                             onRowHoverRequested: (row, inside) => page.restOnCommit(row, inside)
                             onCreateBranchRequested: (oidHex, name) => repoTab.createBranch(name, oidHex, true)
                             // Nothing moves: a tag is left on the commit and the tree stays where it is.
