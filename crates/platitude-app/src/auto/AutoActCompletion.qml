@@ -95,7 +95,7 @@ QtObject {
                 "delete-stood-down",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
-                "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
+                "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close", "menu-peek",
                 "nav-filter", "nav-tip", "nav-jump", "nav-open", "nav-open-foot", "nav-open-then", "nav-open-held",
                 "nav-drag-open", "nav-peek-open", "nav-open-tip", "nav-open-tag", "nav-follow", "nav-follow-lit",
                 "nav-reclick", "nav-reclick-away", "nav-rename-far",
@@ -184,7 +184,7 @@ QtObject {
                 "graph-choose-said", "graph-choose-sweep", "graph-choose-diff", "graph-choose-dbl",
                 "graph-choose-drop",
                 "signature", "signature-tip", "stash-tip", "path-tip", "tip-copy", "tip-sweep",
-                "row-card", "card-sweep", "menu-hover",
+                "row-card", "card-sweep", "menu-hover", "menu-list",
                 // The card opens after a rest, so the return waits until the sampler has seen it come up.
                 "row-card-return",
                 // One sampler's walk: the card must hold a cut message before the note can be pressed, and what the

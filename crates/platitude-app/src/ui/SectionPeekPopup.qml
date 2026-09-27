@@ -136,6 +136,9 @@ AppCard {
     }
     /// Automation only: the list itself, for a run that sends it by its own hand and reads where it went.
     readonly property alias list: peekList
+    /// Automation only: the beat after a leave is still running — what a run waits out to read whether the section
+    /// was kept (PGG_AUTO_ACT=menu-peek).
+    readonly property bool settling: peekKeeper.keep.running
     HoverCardHost {
         id: peekKeeper
         card: peek

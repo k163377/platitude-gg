@@ -45,6 +45,8 @@ Item {
     /// (rules-refs/app-ui.md).
     readonly property alias listPopup: refList
     readonly property alias hoverCard: rowCard
+    /// Automation only: the list's beat after a leave is still running (PGG_AUTO_ACT=menu-list own).
+    readonly property bool listSettling: refListKeep.keep.running
 
     /// The commit whose chip the open list belongs to — a click in the card is a click on that graph row.
     property string refListOid: ""

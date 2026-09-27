@@ -156,6 +156,14 @@ Item {
             menuHoverTimer.oidHex = hoverOid
             menuHoverTimer.asked = false
             menuHoverTimer.start()
+        } else if (act === "menu-list") {
+            // The chip's stacked list and a standing menu (デザイン規約 §メニュー): `behind` asks for HEAD's list with
+            // a graph row's menu up, `under` raises that menu over the open list; `own` raises the menu on the list's
+            // first row and takes the hand off the chip — the one menu it stays under (`list-menu` reads that menu's
+            // cards, at once).
+            menuListTimer.how = arg === "" ? "behind" : arg
+            menuListTimer.step = 0
+            menuListTimer.start()
         } else if (act === "graph-choose-dbl") {
             // Toggling a row out of the choice and back in, quickly, arrives as a double-click, modifier and all
             // (`tst_moddblclick`), and the plain double-click is `switch` (デザイン規約 §複数のコミットを選ぶ). The
@@ -854,6 +862,60 @@ Item {
             + " agrees=" + (got === rowPartReport.want
                             && refList.opened !== rowCard.opened))
             driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=menu-list. The list is HEAD's — the one commit sure to have a chip — and a graph row's menu the row
+    // under it's, as `menu-hover` raises it. Each step waits for the one before to land; the list goes, or stays out,
+    // in the same turn as the ask, so the answer is read once the menu is up — for `own`, once the beat the hand's
+    // leaving started has run out.
+    SampleTimer {
+        id: menuListTimer
+        property string how: ""
+        property int step: 0
+        onTriggered: {
+            const head = graphModel.loading || graphModel.rowTotal === 0 ? -1 : graphModel.headRow
+            const stacked = head < 0 ? null : graphPane.view.itemAtIndex(head)
+            const other = head < 0 ? "" : graphModel.oidAt(head + 1)
+            if (menuListTimer.step === 0) {
+                if (!Awaited.all("menu_list_rows", { "head": stacked !== null, "other": other !== "" }))
+                    return
+                if (menuListTimer.how === "behind")
+                    page.openRowMenu(other)
+                else
+                    graphPane.view.chipExpandRequested(stacked.oid_hex, stacked.index, stacked.chipItem.records,
+                                                       stacked.chipItem)
+                menuListTimer.step = 1
+            } else if (menuListTimer.step === 1) {
+                if (menuListTimer.how === "behind") {
+                    if (!Awaited.all("menu_list_menu", { "menu": commitMenu.opened, "head": stacked !== null }))
+                        return
+                    graphPane.view.chipExpandRequested(stacked.oid_hex, stacked.index, stacked.chipItem.records,
+                                                       stacked.chipItem)
+                } else {
+                    if (!Awaited.all("menu_list_open", { "list": refList.opened }))
+                        return
+                    if (menuListTimer.how === "under") {
+                        page.openRowMenu(other)
+                    } else {
+                        // Not built yet: no press has gone in.
+                        if (!refList.menuRow(0))
+                            return
+                        // The hand off the chip, as its row reports it (`GraphRowDelegate.settlePointed`).
+                        graphPane.view.chipCollapseRequested()
+                    }
+                }
+                menuListTimer.step = 2
+            } else {
+                if (!Awaited.all("menu_list_after", {
+                        "menu": commitMenu.opened,
+                        "beat": menuListTimer.how !== "own" || !rowHost.listSettling
+                    }))
+                    return
+                menuListTimer.stop()
+                Harness.report("menu_list how=" + menuListTimer.how + " menu=" + commitMenu.opened
+                                  + " list=" + refList.opened + " raised=" + page.menuRaisedOn)
+                driver.complete()
+            }
         }
     }
     // The row under a standing menu, asked for its card where its delay timer would ask. Asked once the menu is up,

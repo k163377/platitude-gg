@@ -210,6 +210,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "menu_hover menu=true card=false",
     },
+    // The chip's stacked list and a standing menu: a graph row's keeps it
+    // from coming out (`behind`) and takes one already out down (`under`);
+    // the menu raised on its own row holds it once the hand has left the
+    // chip (`own`, read after the list's beat — `list-menu` reads at once,
+    // while the chip still asks for it). `behind` is paired with
+    // `ref-list`, which proves the same ask opens it.
+    Verb {
+        name: "menu-list",
+        when: &[(Arg::Is("own"), "menu=true list=true raised=refList")],
+        plain: "menu=true list=false raised=graph",
+    },
     // The card of a row's message. `lit=`: the card takes the pointer off
     // the row as the hand walks in, and a row gone dark leaves nothing on
     // screen saying which commit the message is of.

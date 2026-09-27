@@ -80,6 +80,16 @@ Item {
                                         workTree.branch)
             }
             navRailTimer.start()
+        } else if (act === "menu-peek") {
+            // The folded rail's section and a standing menu (デザイン規約 §左メニューを畳む). `behind` rests on the
+            // BRANCHES cell with a graph row's menu up — it opens — and walks off it; `under` raises that menu over the
+            // open section; `own` raises the menu on one of the section's rows and walks the hand out — the one menu it
+            // stays under; `own-swap` rests on the TAGS cell under that menu and walks off it — TAGS goes as a hover.
+            page.foldByHand(true)
+            menuPeekTimer.how = arg === "" ? "behind" : arg
+            menuPeekTimer.step = 0
+            menuPeekTimer.opened = false
+            menuPeekTimer.start()
         } else if (act === "nav-peek-open") {
             // A row opened inside the peeked section: what is read is that the popup makes room and stays up while
             // the rows under it move.
@@ -415,6 +425,80 @@ Item {
                 + " peek=" + navProbe.peekStanding + " open=" + navProbe.rowFactsOpen
                 + " says=" + navProbe.rowFactsWords())
             driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=menu-peek. Each step waits for the one before to land: the rail and the sections with rows to open
+    // (else a cell refuses for want of rows, not for the menu), the section or the menu up, then — for those that walk
+    // the hand off — the beat that closes a section left alone, run out.
+    SampleTimer {
+        id: menuPeekTimer
+        property string how: ""
+        property int step: 0
+        /// The section came out for the rest: what makes its absence at the end a close, not a refusal.
+        property bool opened: false
+        onTriggered: {
+            if (menuPeekTimer.step === 0) {
+                if (!Awaited.all("menu_peek_rail", {
+                        "folded": page.sidebarCollapsed && sidebarPane.width > 0,
+                        "branches": branchesModel.total > 0,
+                        "tags": menuPeekTimer.how !== "own-swap" || tagsModel.total > 0,
+                        "head": graphModel.rowOf(workTree.headOid) >= 0
+                    }))
+                    return
+                if (menuPeekTimer.how === "behind")
+                    page.openRowMenu(workTree.headOid)
+                else
+                    navProbe.peekAt("branch")
+                menuPeekTimer.step = 1
+            } else if (menuPeekTimer.step === 1) {
+                if (menuPeekTimer.how === "behind") {
+                    if (!Awaited.all("menu_peek_menu", { "menu": commitMenu.opened }))
+                        return
+                    navProbe.peekAt("branch")
+                    // Read at the rest, before the walk off: a section that never opened also reads as gone.
+                    menuPeekTimer.opened = sidebarPane.peekSection.visible
+                    navProbe.peekAway("branch")
+                } else if (menuPeekTimer.how === "under") {
+                    if (!Awaited.all("menu_peek_open", { "peek": navProbe.peekStanding }))
+                        return
+                    menuPeekTimer.opened = true
+                    page.openRowMenu(workTree.headOid)
+                } else {
+                    // The current branch's row: the list's first row may be a folder, which raises no menu.
+                    const row = navProbe.peek.sectionModel ? navProbe.peek.sectionModel.rowOfName(workTree.branch) : -1
+                    if (!Awaited.all("menu_peek_open", { "peek": navProbe.peekStanding, "row": row >= 0 }))
+                        return
+                    // Not built yet: no press has gone in.
+                    if (!navProbe.peek.list.rightClickRow(row))
+                        return
+                    navProbe.peekAway("branch")
+                    navProbe.peekOut()
+                    if (menuPeekTimer.how === "own-swap") {
+                        // On to the TAGS cell and off it: the section the rest brings in is not the one the menu
+                        // was raised on.
+                        navProbe.peekAt("tag")
+                        menuPeekTimer.opened = sidebarPane.peekKind === "tag"
+                        navProbe.peekAway("tag")
+                    } else {
+                        menuPeekTimer.opened = true
+                    }
+                }
+                menuPeekTimer.step = 2
+            } else {
+                if (!Awaited.all("menu_peek_after", {
+                        "menu": page.menuStanding,
+                        "beat": menuPeekTimer.how === "under" || !navProbe.peek.settling
+                    }))
+                    return
+                menuPeekTimer.stop()
+                Harness.report("menu_peek how=" + menuPeekTimer.how
+                    + " menu=" + page.menuStanding
+                    + " opened=" + menuPeekTimer.opened
+                    + " peek=" + sidebarPane.peekKind
+                    + " shown=" + sidebarPane.peekSection.visible
+                    + " raised=" + page.menuRaisedOn)
+                driver.complete()
+            }
         }
     }
     /// Whether this act's subject is the peeked section going away. `run()` writes it on every road to the beat, so a

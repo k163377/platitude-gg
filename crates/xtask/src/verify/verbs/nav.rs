@@ -651,6 +651,29 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "peek=branch top=",
     },
+    // The folded rail's section and a standing menu: under a graph row's
+    // menu it still opens at a rest and goes once the hand has left
+    // (`behind`, read after the beat that closes a section left alone;
+    // `opened=` is the rest's answer, or a section that never came out
+    // would read as closed), and a graph row's menu raised over it takes it
+    // down (`under`); the menu raised on its own row holds it with the hand
+    // gone (`own`), and holds only that section — TAGS, rested on under
+    // that menu, goes as a hover does (`own-swap`). `shown=` is the popup
+    // itself — `peek=` clears as it starts to close.
+    Verb {
+        name: "menu-peek",
+        when: &[
+            (
+                Arg::Is("own"),
+                "menu=true opened=true peek=branch shown=true raised=sidebar",
+            ),
+            (
+                Arg::Is("own-swap"),
+                "menu=true opened=true peek= shown=false raised=sidebar",
+            ),
+        ],
+        plain: "menu=true opened=true peek= shown=false raised=graph",
+    },
     // The current branch's stand-in on the top edge its row scrolled out
     // of. A row filtered away (`nav-open head:<filter>`) draws the same,
     // and `rowshown=false` beside `above=true` tells them apart. `y=0`
