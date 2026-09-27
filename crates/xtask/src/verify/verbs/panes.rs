@@ -215,6 +215,14 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "bar_arrow click=40 held=true left=true stopped=true",
     },
+    // The track between them: a click is one page, a hold runs on and
+    // stops with the thumb's far end on the hand, a hand slid off keeps
+    // the run from starting, and letting go gives the bar back.
+    Verb {
+        name: "bar-track",
+        when: &[],
+        plain: "bar_track page=true reached=true held=true left=true stopped=true",
+    },
     // The middle button's hand left running on a surface: the anchor ring
     // stands the same over a list that moved and one that did not, so
     // `answered=` is read off the surface. In the working tree's two boxes

@@ -171,7 +171,7 @@ AppListView {
         id: wheelGlide
         view: graphList
     }
-    // The bar's arrows glide their steps on this same glide (`AutoScrollBar.stepGlide`).
+    // The bar's arrows and track glide their steps on this same glide (`AutoScrollBar.stepGlide`).
     Binding {
         target: graphList.ScrollBar.vertical
         property: "stepGlide"

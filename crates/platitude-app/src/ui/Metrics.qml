@@ -56,6 +56,10 @@ QtObject {
     readonly property int arrowRepeatDelayMs: 250
     // Pixels per second: a step twenty times a second.
     readonly property int arrowRepeatSpeed: 800
+    // A press on a scroll bar's track sends this share of the view, glided; held, pages run on twenty a second after
+    // the arrow's pause, until the thumb reaches the hand. Chromium's Fluent bar, measured (787 of a 900 view, 437 of
+    // 500).
+    readonly property real trackPageShare: 0.875
     // The chip column's default width; its floor is a character count measured from the font in use.
     readonly property int labelColW: 152
     readonly property int graphDefaultLanes: 12

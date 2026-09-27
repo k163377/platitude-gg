@@ -53,6 +53,16 @@ ScrollBar {
     property int arrowHeld: 0
     /// Whether the held arrow is running on (the pause is over, and the hand has stayed on the arrow).
     property bool arrowRunning: false
+    /// Which way the held track sends: -1 up (pressed above the thumb), 1 down, 0 not held. Only an upright bar with a
+    /// view pages; a sideways bar keeps the style's jump to the press.
+    property int trackHeld: 0
+    /// Where the hand holds the track, in the bar's coordinates: the run stops as the thumb reaches it.
+    property real trackAt: 0
+    /// Whether the held track is running on (the pause is over, the thumb short of the hand, the hand on the bar).
+    property bool trackRunning: false
+    readonly property bool trackWaiting: trackWait.running
+    /// The page a press on the track sends (`Metrics.trackPageShare` of the view, whole pixels as Chromium's).
+    readonly property real trackPage: bar.view ? Math.floor(bar.view.height * Metrics.trackPageShare) : 0
     /// When the run last sent, for the next tick's share: the timer's beat slips under load, the speed must not.
     property real runAt: 0
     /// The glide a press's step rides. A surface that glides its wheel notches hands its own in (`WheelGlide`), so a
@@ -100,7 +110,71 @@ ScrollBar {
         const now = Date.now()
         const share = (now - bar.runAt) / 1000
         bar.runAt = now
-        bar.view.contentY = bar.limitY(bar.view.contentY + bar.arrowHeld * Metrics.arrowRepeatSpeed * share)
+        if (bar.trackRunning)
+            bar.trackTick(share)
+        else
+            bar.view.contentY = bar.limitY(bar.view.contentY + bar.arrowHeld * Metrics.arrowRepeatSpeed * share)
+    }
+
+    /// The thumb's two ends in the bar's coordinates, as drawn (`visual…` carries the style's minimum size).
+    function thumbTop() {
+        return bar.topPadding + bar.visualPosition * bar.availableHeight
+    }
+    function thumbBottom() {
+        return bar.thumbTop() + bar.visualSize * bar.availableHeight
+    }
+    /// Whether the thumb has reached the hand on the held track, from the side it pages towards.
+    function thumbAtHand() {
+        return bar.trackHeld > 0 ? bar.thumbBottom() >= bar.trackAt : bar.thumbTop() <= bar.trackAt
+    }
+    /// A press on the track at `y`: one page, glided, towards the press, and the pause before a run — or nothing, if
+    /// the press is on the thumb, whose own drag answers it (the handler hands it on). Chromium's Fluent bar, measured.
+    function pressTrack(y) {
+        if (y >= bar.thumbTop() && y <= bar.thumbBottom())
+            return false
+        bar.trackHeld = y < bar.thumbTop() ? -1 : 1
+        bar.trackAt = y
+        bar.trackRunning = false
+        bar.stepGlide.sendTo(bar.limitY(bar.stepGlide.at + bar.trackHeld * bar.trackPage))
+        trackWait.restart()
+        return true
+    }
+    function releaseTrack() {
+        bar.trackHeld = 0
+        bar.trackRunning = false
+        trackWait.stop()
+    }
+    /// The hand moved on the held track: off the bar the run stops and does not come back until the next press; along
+    /// it, the run aims at the hand and stops once the thumb is there (Chromium, measured).
+    function pointerOnTrack(inside, y) {
+        if (bar.trackHeld === 0)
+            return
+        if (inside)
+            bar.trackAt = y
+        if (!inside || bar.thumbAtHand()) {
+            bar.trackRunning = false
+            trackWait.stop()
+        }
+    }
+    function startTrackRun() {
+        if (bar.thumbAtHand())
+            return
+        bar.runAt = Date.now()
+        bar.trackRunning = true
+    }
+    /// Pages twenty a second (the arrow's beat); the last one only as far as puts the thumb's far end on the hand.
+    function trackTick(share) {
+        const v = bar.view
+        const perSecond = Metrics.arrowRepeatSpeed / Metrics.arrowStep
+        v.contentY = bar.limitY(v.contentY + bar.trackHeld * bar.trackPage * perSecond * share)
+        if (!bar.thumbAtHand())
+            return
+        const past = bar.trackHeld > 0 ? bar.thumbBottom() - bar.trackAt : bar.trackAt - bar.thumbTop()
+        const travel = bar.availableHeight * (1 - bar.visualSize)
+        const reach = v.contentHeight + v.topMargin + v.bottomMargin - v.height
+        if (travel > 0)
+            v.contentY = bar.limitY(v.contentY - bar.trackHeld * past * reach / travel)
+        bar.trackRunning = false
     }
 
     WheelGlide {
@@ -113,9 +187,14 @@ ScrollBar {
         onTriggered: bar.startRun()
     }
     Timer {
+        id: trackWait
+        interval: Metrics.arrowRepeatDelayMs
+        onTriggered: bar.startTrackRun()
+    }
+    Timer {
         interval: 16
         repeat: true
-        running: bar.arrowRunning
+        running: bar.arrowRunning || bar.trackRunning
         onTriggered: bar.runTick()
     }
 
@@ -142,10 +221,23 @@ ScrollBar {
         ink: bar.arrowHeld === 1 ? bar.arrowHeldInk : bar.arrowInk
         opacity: bar.arrowOpacity
     }
-    // The whole width of the bar takes the press, as the thumb's does. Hover stays off (below: the bar takes none).
+    // The track between the arrows: a press off the thumb pages (`pressTrack`); one on the thumb is handed on to the
+    // bar's own drag. Declared before the arrows' areas; none of them takes hover (below: the bar takes none).
     //
-    // `preventStealing` on both: the bar is a child of its view, which filters its children's presses and takes a
+    // `preventStealing` on all three: the bar is a child of its view, which filters its children's presses and takes a
     // moving hand for a drag of its rows — the thumb keeps its grab by itself, these areas have to say so.
+    MouseArea {
+        y: bar.arrowEnd
+        width: bar.width
+        height: Math.max(0, bar.height - 2 * bar.arrowEnd)
+        enabled: bar.view !== null && bar.orientation === Qt.Vertical && bar.hasTrack
+        preventStealing: true
+        onPressed: mouse => mouse.accepted = bar.pressTrack(mouse.y + bar.arrowEnd)
+        onReleased: bar.releaseTrack()
+        onCanceled: bar.releaseTrack()
+        onPositionChanged: mouse => bar.pointerOnTrack(containsMouse, mouse.y + bar.arrowEnd)
+    }
+    // The whole width of the bar takes the press, as the thumb's does. Hover stays off (below: the bar takes none).
     MouseArea {
         width: bar.width
         height: bar.arrowEnd
@@ -180,15 +272,15 @@ ScrollBar {
         parent: bar.view
     }
 
-    /// Whether the bar is in the hand: the thumb, or an arrow.
-    readonly property bool held: bar.pressed || bar.arrowHeld !== 0
+    /// Whether the bar is in the hand: the thumb, an arrow, or the track.
+    readonly property bool held: bar.pressed || bar.arrowHeld !== 0 || bar.trackHeld !== 0
     /// Whether the reader is here: pointing into the range, or holding the bar (a drag may take the pointer
     /// anywhere). Not `activeFocus` — a list keeps it for the rest of the session after one click.
     readonly property bool attended: bar.inArea || bar.held
 
-    /// The window's hover stops while this is held (`Hand.heldBar`): an arrow runs the rows past a still hand just as
-    /// a drag does. Every way a hold ends clears it here: a bar hidden or disabled mid-drag loses the grab and reports
-    /// `pressed` false, and an arrow's press is cancelled.
+    /// The window's hover stops while this is held (`Hand.heldBar`): an arrow or the track runs the rows past a still
+    /// hand just as a drag does. Every way a hold ends clears it here: a bar hidden or disabled mid-drag loses the grab
+    /// and reports `pressed` false, and an arrow's or the track's press is cancelled.
     onHeldChanged: {
         if (bar.held)
             Hand.heldBar = bar
@@ -212,6 +304,7 @@ ScrollBar {
         if (!bar.visible) {
             bar.lit = false
             bar.releaseArrow()
+            bar.releaseTrack()
         }
     }
     /// Says the view has just been sent (wired below for a flickable; `GraphLaneBar` / `DiffCodeScroll` call it).

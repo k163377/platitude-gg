@@ -85,6 +85,7 @@ Item {
             floatBar.releaseArrow()
             paneBar.releaseArrow()
             desc.bar.releaseArrow()
+            paneBar.releaseTrack()
             // A step still gliding would carry on into the next test's reset.
             for (const bar of [floatBar, paneBar, desc.bar])
                 bar.stepGlide.halt()
@@ -170,9 +171,40 @@ Item {
             compare(Hand.heldBar, paneBar)
         }
 
-        /// A hand that moves while it holds an arrow keeps it: the list the bar stands in must not take the press for a
-        /// drag of its rows.
-        function test_a_moving_hand_keeps_the_arrow() {
+        /// A press on the track pages once towards it: seven eighths of the view, glided (Chromium, measured).
+        function test_a_click_on_the_track_sends_one_page() {
+            compare(paneBar.trackPage, Math.floor(paneList.height * Metrics.trackPageShare))
+            const below = paneBar.height - paneBar.arrowEnd - 2
+            verify(paneBar.pressTrack(below))
+            paneBar.releaseTrack()
+            tryVerify(() => !paneBar.stepping)
+            compare(paneList.contentY, paneBar.trackPage)
+            paneList.contentY = 1000
+            verify(paneBar.pressTrack(paneBar.arrowEnd + 1))
+            paneBar.releaseTrack()
+            tryVerify(() => !paneBar.stepping)
+            compare(paneList.contentY, 1000 - paneBar.trackPage)
+        }
+
+        /// Held, the pages run on until the thumb's far end is on the hand — no further — and the bar is held the way
+        /// a drag holds it.
+        function test_a_held_track_stops_with_the_thumb_on_the_hand() {
+            const hand = 250
+            verify(paneBar.pressTrack(hand))
+            compare(Hand.heldBar, paneBar)
+            // Past the pause and out of the run: a run can start and end between two samples, so neither edge is waited
+            // for on its own.
+            tryVerify(() => !paneBar.trackWaiting && !paneBar.trackRunning && !paneBar.stepping, undefined,
+                      "the run stopped")
+            verify(Math.abs(paneBar.thumbBottom() - hand) <= 1,
+                   "the thumb ends at " + paneBar.thumbBottom() + ", the hand is at " + hand)
+            paneBar.releaseTrack()
+            compare(Hand.heldBar, null)
+        }
+
+        /// A hand that moves while it holds an arrow or the track keeps it: the list the bar stands in must not take the
+        /// press for a drag of its rows.
+        function test_a_moving_hand_keeps_the_arrow_and_the_track() {
             const x = paneBar.width / 2
             const low = paneBar.height - 2
             mousePress(paneBar, x, low)
@@ -182,6 +214,16 @@ Item {
             compare(paneBar.arrowHeld, 1, "the arrow is still in the hand")
             verify(!paneList.dragging, "the list did not take the press")
             mouseRelease(paneBar, x, low - 120)
+            tryVerify(() => !paneBar.stepping)
+            paneList.contentY = 0
+            const track = paneBar.height - paneBar.arrowEnd - 30
+            mousePress(paneBar, x, track)
+            compare(paneBar.trackHeld, 1)
+            mouseMove(paneBar, x, track - 60, -1, Qt.LeftButton)
+            mouseMove(paneBar, x, track - 120, -1, Qt.LeftButton)
+            compare(paneBar.trackHeld, 1, "the track is still in the hand")
+            verify(!paneList.dragging, "the list did not take the press")
+            mouseRelease(paneBar, x, track - 120)
         }
 
         /// A thumb in the hand lights the bar, not the arrows past the lit step: only the part in use goes up to the
@@ -208,6 +250,38 @@ Item {
             desc.bar.releaseArrow()
             desc.rollBy(-120)
             tryCompare(desc, "textAt", Metrics.arrowStep + desc.wheelStep)
+        }
+
+        /// Slid off the bar before the pause is over, the run never starts, and a hand coming back does not start it
+        /// (Chromium, measured).
+        function test_sliding_off_the_track_stops_it_for_good() {
+            verify(paneBar.pressTrack(paneBar.height - paneBar.arrowEnd - 2))
+            paneBar.pointerOnTrack(false, 0)
+            verify(!paneBar.trackWaiting && !paneBar.trackRunning)
+            paneBar.pointerOnTrack(true, paneBar.height - paneBar.arrowEnd - 2)
+            // waits(paced): the subject is a run that must **not** start, so the wait is the pause it would start after,
+            // twice over.
+            wait(2 * Metrics.arrowRepeatDelayMs)
+            verify(!paneBar.trackRunning, "the run stays stopped")
+            compare(paneBar.trackHeld, 1)
+        }
+
+        /// A real press off the thumb is the track's; one on the thumb is the thumb's own drag.
+        function test_a_press_on_the_track_pages_and_one_on_the_thumb_drags() {
+            const below = paneBar.height - paneBar.arrowEnd - 2
+            mousePress(paneBar, paneBar.width / 2, below)
+            compare(paneBar.trackHeld, 1)
+            mouseRelease(paneBar, paneBar.width / 2, below)
+            compare(paneBar.trackHeld, 0)
+            tryVerify(() => !paneBar.stepping)
+            compare(paneList.contentY, paneBar.trackPage)
+            const onThumb = (paneBar.thumbTop() + paneBar.thumbBottom()) / 2
+            mousePress(paneBar, paneBar.width / 2, onThumb)
+            verify(paneBar.pressed, "the thumb took it")
+            compare(paneBar.trackHeld, 0)
+            mouseMove(paneBar, paneBar.width / 2, onThumb + 20)
+            verify(paneList.contentY > paneBar.trackPage, "and the drag moved the rows")
+            mouseRelease(paneBar, paneBar.width / 2, onThumb + 20)
         }
 
         /// Arrows born in a bar with nowhere to go are drawn when the rows arrive and the bar comes up — or a picture

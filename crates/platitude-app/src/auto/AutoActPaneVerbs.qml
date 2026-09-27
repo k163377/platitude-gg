@@ -74,6 +74,10 @@ Item {
             // HEAD is the commit `--preset long` gives its eighty files.
             page.activateRow(workTree.headOid)
             paneBarTimer.begin()
+        } else if (act === "bar-track") {
+            // The file list `--preset long` gives HEAD eighty files for, as `bar-arrow`.
+            page.activateRow(workTree.headOid)
+            barTrackTimer.begin()
         } else if (act === "bar-arrow") {
             // The file list `--preset long` gives HEAD eighty files for, as `pane-bar`.
             page.activateRow(workTree.headOid)
@@ -471,6 +475,87 @@ Item {
             + " x=" + Math.round(graphPane.graphX)
             + " max=" + Math.round(graphPane.graphXMax))
             driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=bar-track: the track of the right panel's file list (`PaneScrollBar`; デザイン規約 §スクロールバーの
+    // 矢印), pressed through the functions its handler calls. A click below the thumb sends one page; a hold runs on and
+    // stops with the thumb's far end on the hand; a hand slid off before the pause ends keeps the run from starting;
+    // letting go gives the bar back. Each stage waits on the view or the bar's own state, never on a clock.
+    SampleTimer {
+        id: barTrackTimer
+        property string stage: ""
+        property real from: 0
+        property real hand: 0
+        property real sent: 0
+        property real moved: 0
+        property bool page: false
+        property bool reached: false
+        property bool held: false
+        property bool left: false
+        property bool stopped: false
+        function begin() {
+            barTrackTimer.stage = "laid"
+            barTrackTimer.page = false
+            barTrackTimer.reached = false
+            barTrackTimer.held = false
+            barTrackTimer.left = false
+            barTrackTimer.stopped = false
+            barTrackTimer.start()
+        }
+        onTriggered: {
+            const view = detailsPane.filesWalk.view
+            const bar = detailsPane.filesBar
+            // The first stage names what it waits on itself; one line a tick each would take turns at `said`.
+            if (barTrackTimer.stage !== "laid")
+                Awaited.at("bar_track", barTrackTimer.stage)
+            if (barTrackTimer.stage === "laid") {
+                if (!Awaited.all("bar_track_laid", {
+                        "rows": !!view && view.count > 0,
+                        "room": !!view && view.contentHeight > view.height + 1,
+                        "arrows": bar.arrowEnd > 0
+                    }))
+                    return
+                view.contentY = bar.limitY(view.originY - view.topMargin)
+                barTrackTimer.from = view.contentY
+                // The page of the view as pressed: the rows and the message come in one answer, and the block above
+                // the list takes its height on the next polish, so the view the step lands in may be another height.
+                barTrackTimer.sent = bar.trackPage
+                bar.pressTrack(bar.height - bar.arrowEnd - 2)
+                bar.releaseTrack()
+                barTrackTimer.stage = "click"
+            } else if (barTrackTimer.stage === "click") {
+                if (bar.stepping)
+                    return
+                barTrackTimer.moved = Math.round(view.contentY - barTrackTimer.from)
+                barTrackTimer.page = barTrackTimer.moved === barTrackTimer.sent
+                view.contentY = bar.limitY(view.originY - view.topMargin)
+                // Well below the thumb, short of the end: the run has pages to go before it reaches the hand.
+                barTrackTimer.hand = bar.arrowEnd + (bar.height - 2 * bar.arrowEnd) * 0.8
+                bar.pressTrack(barTrackTimer.hand)
+                barTrackTimer.held = Hand.heldBar === bar
+                barTrackTimer.stage = "hold"
+            } else if (barTrackTimer.stage === "hold") {
+                if (bar.trackWaiting || bar.trackRunning || bar.stepping)
+                    return
+                barTrackTimer.reached = Math.abs(bar.thumbBottom() - barTrackTimer.hand) <= 1
+                bar.releaseTrack()
+                view.contentY = bar.limitY(view.originY - view.topMargin)
+                bar.pressTrack(bar.height - bar.arrowEnd - 2)
+                bar.pointerOnTrack(false, 0)
+                barTrackTimer.stage = "off"
+            } else if (barTrackTimer.stage === "off") {
+                if (bar.stepping)
+                    return
+                barTrackTimer.left = bar.trackHeld === 1 && !bar.trackWaiting && !bar.trackRunning
+                bar.releaseTrack()
+                barTrackTimer.stopped = Hand.heldBar !== bar
+                barTrackTimer.stop()
+                Harness.report("bar_track page=" + barTrackTimer.page + " reached=" + barTrackTimer.reached
+                                  + " held=" + barTrackTimer.held + " left=" + barTrackTimer.left
+                                  + " stopped=" + barTrackTimer.stopped + " sent=" + barTrackTimer.sent
+                                  + " moved=" + barTrackTimer.moved + " at=" + Math.round(view.contentY))
+                driver.complete()
+            }
         }
     }
     // PGG_AUTO_ACT=bar-arrow: the arrows of the right panel's file list (`PaneScrollBar`; デザイン規約 §スクロールバーの矢印),
