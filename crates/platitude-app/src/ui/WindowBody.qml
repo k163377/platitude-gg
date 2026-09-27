@@ -27,8 +27,8 @@ Item {
     readonly property alias waitRing: waitRingSeat
 
     // ---- the floor the window may not be dragged under --------------------
-    // Measured here, where both halves (band and page) are; the window applies it (`Main.minimumWidth` /
-    // `WindowShape.holdFloor`).
+    // Measured here, where both halves (band and page) are; the window adds its edge and applies it
+    // (`Main.floorWidth` / `WindowShape.holdFloor`).
     /// The page the floor is read off: the blank page with no tab open (same panes, same minimums).
     readonly property var floorPage: mainUi.curPage !== null ? mainUi.curPage : blankPage.item
     readonly property real floorWidth:
@@ -69,8 +69,9 @@ Item {
             curPage: mainUi.curPage
             captionMerged: mainUi.window.captionMerged
             windowMaximized: mainUi.window.visibility === Window.Maximized
-            // Read here: the floor is the larger of band's and page's (`TopBar.windowAtFloor`).
-            windowAtFloor: mainUi.window.width <= Math.ceil(mainUi.floorWidth)
+            // Read here: the floor is the larger of band's and page's (`TopBar.windowAtFloor`). The body's own width
+            // against the body's own floor — the window's carries the edge beside them (`Main.edgeInset`).
+            windowAtFloor: mainUi.width <= Math.ceil(mainUi.floorWidth)
             onOpenRepositoryRequested: mainUi.window.openRepositoryPicker()
             onCloneRepositoryRequested: mainUi.window.startClone()
             onIdentityEditRequested: mainUi.dialogSeat.openSettingsAt("git")

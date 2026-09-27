@@ -50,8 +50,8 @@ Item {
             property int owed: 0
             signal ready()
             function refresh() {
-                // Where each stands in the window, rather than stretched over all of it: the edge runs round the
-                // whole window, and the body is drawn over the part it fills.
+                // Where each stands in the window: the body stands in from the edge (`Main.edgeInset`), and a
+                // source stretched over the whole window would draw it wider than it is.
                 sceneShot.seat(uiSource)
                 sceneShot.seat(edgeSource)
                 sceneShot.owed = edgeSource.visible ? 3 : 2

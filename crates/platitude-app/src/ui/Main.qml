@@ -26,14 +26,25 @@ ApplicationWindow {
     title: Words.appName
     color: Theme.bgBase
 
+    /// Whether this app draws the window's edge: a frameless window has no frame for the platform to draw one on, and
+    /// a maximised one's edge is the screen's (デザイン規約 §ウィンドウの縁).
+    readonly property bool edgeDrawn: root.captionMerged && root.visibility !== Window.Maximized
+    /// How far the body stands in from the left and right edges, so the edge runs beside the band's end cells (☰ / ✕)
+    /// rather than over their outer column. Sideways only: the band's top row stays under the top edge
+    /// (規約 §ウィンドウの縁「縁は中身を食わない — 左右だけ」).
+    readonly property int edgeInset: root.edgeDrawn ? Theme.borderWidth : 0
+    // The grab runs are reported in scene coordinates, which the inset moves without moving them inside the band.
+    onEdgeInsetChanged: chrome.reportCaptionStrip()
+
     // ---- the floor the window may not be dragged under --------------------
     // Past the minimums, `SplitView` and the layouts lay items out over their own edge (デザイン規約 §窓の床).
     // `minimumWidth` only covers a dragged edge and a rising floor — `QWindow::resize` hands a size straight to the
     // platform without reading the hints — so every size this application sets goes through `holdFloor`. Measured in
-    // `WindowBody`; named here, where the harness and `WindowShape` read them.
+    // `WindowBody`; named here, where the harness and `WindowShape` read them. The width's floors take in the edge's
+    // two columns (`edgeInset`).
     readonly property alias floorPage: body.floorPage
-    readonly property alias floorWidth: body.floorWidth
-    readonly property alias openFloorWidth: body.openFloorWidth
+    readonly property real floorWidth: body.floorWidth + 2 * root.edgeInset
+    readonly property real openFloorWidth: body.openFloorWidth + 2 * root.edgeInset
     readonly property alias floorHeight: body.floorHeight
     minimumWidth: Math.ceil(root.floorWidth)
     minimumHeight: Math.ceil(root.floorHeight)
@@ -361,7 +372,7 @@ ApplicationWindow {
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
         z: 9999
-        visible: root.captionMerged && root.visibility !== Window.Maximized
+        visible: root.edgeDrawn
         color: "transparent"
         border.width: Theme.borderWidth
         border.color: Theme.borderDefault
@@ -375,6 +386,8 @@ ApplicationWindow {
         // outside the content item never wakes the render loop, so every change waits for the next input.
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
+        anchors.leftMargin: root.edgeInset
+        anchors.rightMargin: root.edgeInset
         visible: AppBackend.gitState === "ok"
         window: root
         chrome: chrome

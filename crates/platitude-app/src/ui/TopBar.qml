@@ -312,7 +312,8 @@ Rectangle {
                           (topBar.width - topBar.actionsBox) / topBar.actionCells))
     /// The two widths the shapes change at, for a run to put the window on: the narrowest panel that still says every
     /// wording whole, and the widest that has given all three up. Read off the cap's own arithmetic, so a driver never
-    /// writes a second copy of it (`WindowBandActs`).
+    /// writes a second copy of it (`WindowBandActs`). **The panel's widths** — the window is wider by its edge
+    /// (`Main.edgeInset`).
     readonly property int actionsWholeAt:
         Math.ceil(topBar.actionsBox + topBar.actionCells * fetchButton.naturalWidth)
     readonly property int actionsFoldAt:
@@ -437,8 +438,8 @@ Rectangle {
     /// The air at the panel's right end: the find's step in from the window edge, and a step before the find, since the
     /// three are a set and would otherwise read as four.
     readonly property real opsRightAir: topBar.findRightMargin + Theme.spaceMd
-    /// The find's step in from the window's edge. Its own, not the band's: the band runs the ✕ into the corner, and a
-    /// frame there would sit on the window's drawn edge.
+    /// The find's step in from the window's edge. Its own, not the band's: the band runs the ✕ up to the edge, and a
+    /// frame there would stand against the window's drawn edge.
     readonly property real findRightMargin: topBar.captionMerged ? Theme.spaceXs : Theme.spaceMd
     /// …and with the find in it, at the width the four share.
     readonly property real opsRightMargin: topBar.actionCap + topBar.opsRightAir

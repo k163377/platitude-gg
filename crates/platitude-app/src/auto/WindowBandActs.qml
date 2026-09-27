@@ -450,14 +450,15 @@ Item {
         if (!isNaN(wanted) && wanted > 0)
             return wanted
         // The panel's own arithmetic, not worked out again here, so a build whose schedule moved cannot pass
-        // (`TopBar.actionsWholeAt`).
+        // (`TopBar.actionsWholeAt`). Those are the panel's widths; the window is wider by its edge on each side.
+        const edges = 2 * window.edgeInset
         if (arg === "fold")
-            return topBar.actionsFoldAt
+            return topBar.actionsFoldAt + edges
         // Never under the window's floor: less would photograph a window no hand can make.
         if (arg === "whole")
-            return Math.max(topBar.actionsWholeAt, Math.ceil(window.floorWidth))
+            return Math.max(topBar.actionsWholeAt + edges, Math.ceil(window.floorWidth))
         // The last labelled cell: a pixel past it, the three give their words up.
-        return topBar.actionsFoldAt + 1
+        return topBar.actionsFoldAt + 1 + edges
     }
     /// `folded=`, `even=` and `find=` are what the picture cannot answer: one width says nothing of where the shape
     /// changes, and cells a pixel apart look alike.
