@@ -204,6 +204,10 @@ Rectangle {
     /// Automation: the colour the `>_` painted while the panel is down (`PGG_AUTO_ACT=commands-clear`).
     readonly property alias commandsMarkColor: commandsSeat.markColor
     readonly property real footRoom: commandsSeat.visible ? commandsSeat.height : 0
+    /// How short the pane may be with the whole menu on it (デザイン規約 §窓の床): folded, the rail's every cell; open,
+    /// the list's bands (its rows scroll). The foot row counts while it stands — the log up takes it away.
+    readonly property real floorHeight:
+        (sidebar.collapsed ? rail.wholeHeight : sections.bandsHeight) + sidebar.footRoom
 
     /// Which row has its facts open, in the sections below or the rail's section (`SectionPeekPopup`): one row for the
     /// pane, since only one pointer is ever resting (`SidebarRowGestures.openKey`).

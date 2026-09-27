@@ -2750,7 +2750,7 @@ FocusScope {
             SplitView {
                 visible: !page.openFailed
                 SplitView.fillHeight: true
-                SplitView.minimumHeight: pageLayout.panesMinHeight
+                SplitView.minimumHeight: pageLayout.panesFloorHeight
                 orientation: Qt.Horizontal
                 handle: SplitHandleBar {
                     onHandChanged: (which, held) => page.holdSplitBar(which, held)

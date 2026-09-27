@@ -62,7 +62,13 @@ QtObject {
     // lays the rest out beyond its edge, where nothing scrolls. The numbers are §レイアウト初期値's.
     readonly property int rightMinWidth: 300
     readonly property int panesMinHeight: 200
-    readonly property int commandsMinHeight: 120
+    /// The three panes' floor: their own, and at least the left menu whole — the log dragged up as far as it goes
+    /// stops at the menu's last cell, never over it.
+    readonly property real panesFloorHeight: Math.max(layout.panesMinHeight, layout.sidebarPane.floorHeight)
+    /// The log's band and one record with a line of output under it (`CommandRowDelegate.height`), and the list's
+    /// `bottomMargin`.
+    readonly property int commandsMinHeight:
+        Theme.headerHeight + Theme.rowHeight + Theme.fontSmLine + 2 * Theme.spaceXs + Theme.spaceXs
     /// Whether the working-tree pane scrolls past its bottom — its blocks keep their heights (`window-floor wip`).
     readonly property bool wipBlockScrolls: layout.wipPane.blockScrolls
     /// …and how far the commit-details pane runs past its bottom.
@@ -81,7 +87,7 @@ QtObject {
         layout.sidebarPane.minOpenWidth
         + Theme.splitterWidth + layout.centreMinWidth + Theme.splitterWidth + layout.rightMinWidth
     readonly property real floorHeight:
-        layout.panesMinHeight
+        layout.panesFloorHeight
         + (layout.page.commandsOpen ? Theme.splitterWidth + layout.commandsMinHeight : 0)
 
     /// Assigned, not bound, as in `applySavedLayout`.

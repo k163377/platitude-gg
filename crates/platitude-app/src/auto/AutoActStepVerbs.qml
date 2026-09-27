@@ -78,7 +78,8 @@ Item {
             changesFoldTimer.begin()
         } else if (act === "diff-step" || act === "diff-step-edge") {
             // Moves the view (規約 §diff を上下に送る). Needs the 320x240 seed: no demo diff outgrows a default window,
-            // and in the seed two rows lie below the fold — so the plain walk is one row.
+            // and in the seed — lifted to the floor the folded rail holds — rows lie below the fold, so the plain walk
+            // is one row.
             page.showWip()
             page.toggleDiff("untracked", arg, "")
             // The hand walks in by the wheel's door: the diff does not take the keyboard by appearing

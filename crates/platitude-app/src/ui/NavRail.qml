@@ -95,6 +95,12 @@ Rectangle {
     /// One cell's height: an `iconXl` mark over a `fontSm` line (デザイン規約 §寸法). Not square — `railWidth` is set
     /// by the ☰ above, a different question (§左メニューを畳む).
     readonly property int cellHeight: Theme.toolbarHeight
+    /// The ground under the last number, which a cell otherwise keeps none of (デザイン規約 §左メニューを畳む). The last
+    /// cell's own, so its wash and its hand reach down to what lies under the rail.
+    readonly property int tailRoom: Theme.spaceXs / 2
+    /// The fold block and every cell. The rail is not clipped, so a pane shorter than this draws the last cells over
+    /// what lies under it (`SidebarPane.floorHeight`).
+    readonly property int wholeHeight: Theme.headerHeight + rail.sections.length * rail.cellHeight + rail.tailRoom
 
     /// Where a section's cell sits, for the smoke hooks.
     function topOf(kind) {
@@ -129,6 +135,7 @@ Rectangle {
             delegate: Rectangle {
                 id: cell
                 required property var modelData
+                required property int index
                 readonly property int sectionCount: rail.countOf(cell.modelData.kind)
                 readonly property bool open: rail.openKind === cell.modelData.kind
                 // Only tags can be kept out of the graph.
@@ -143,7 +150,7 @@ Rectangle {
                 readonly property bool addLive: cell.addable && !rail.addHeld
 
                 width: Theme.railWidth
-                height: rail.cellHeight
+                height: rail.cellHeight + (cell.index === rail.sections.length - 1 ? rail.tailRoom : 0)
                 // The open section's cell keeps the wash, to say which cell opened it. An empty cell does not wash
                 // unless it can be pressed (規約 §無効).
                 color: (cellHover.hovered && (!cell.empty || cell.addLive)) || cell.open

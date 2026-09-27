@@ -122,6 +122,11 @@ ColumnLayout {
     // section has rows it cannot show.
     readonly property int sectionPull: 10000
     readonly property int groundPull: 1
+    /// The filter band and the five section bands — what the column holds whatever the rows (`SidebarPane.floorHeight`).
+    /// The rows scroll inside their own share, so they are not counted.
+    readonly property real bandsHeight:
+        refFilter.implicitHeight + branchHead.implicitHeight + remoteHead.implicitHeight
+        + worktreeHead.implicitHeight + stashHead.implicitHeight + tagHead.implicitHeight
 
     spacing: 0
     SidebarFilterRow {

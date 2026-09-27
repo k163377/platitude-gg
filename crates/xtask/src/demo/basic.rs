@@ -88,7 +88,9 @@ pub(super) fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["add", "--", "c.txt"])?;
     repo.write("c.txt", "c v1\nstaged\nand unstaged on top\n")?;
     repo.git(&["mv", "renamed-from.txt", "renamed-to.txt"])?;
-    // Long enough that its all-additions diff reads as a file.
+    // Long enough that its all-additions diff reads as a file, and runs past
+    // the diff pane of a window on its floor — which a diff folds the left
+    // menu for, and the folded rail holds taller (`diff-step`).
     repo.write(
         "untracked.txt",
         "Notes for the next release\n\
@@ -97,6 +99,10 @@ pub(super) fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
          - write the install steps down\n\
          - check the licence headers\n\
          - measure the cold start once more\n\
+         - pin the oldest git it runs on\n\
+         - try the offline build on a clean machine\n\
+         - list the shortcuts in one place\n\
+         - ask for a second look at the icons\n\
          \n\
          Nothing here is recorded yet.\n",
     )?;
