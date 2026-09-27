@@ -117,22 +117,30 @@ Rectangle {
             Layout.leftMargin: Theme.spaceXs
             Layout.bottomMargin: Theme.spaceXs
             spacing: Theme.spaceXs
+            // The chip stands on the line's first row: both hang from the top and the shorter drops half the
+            // difference (as `AskBar`'s heading).
             CodeChip {
+                id: editChip
                 word: "edit"
                 size: Theme.fontSm
                 tint: Theme.textSecondary
-                Layout.alignment: Qt.AlignVCenter
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: Math.max(0, (editWords.lineHeight - editChip.implicitHeight) / 2)
             }
-            Label {
+            // **Wrapped, never cut** (デザイン規約 §フル interactive rebase): the second half is what to do, and a cut
+            // takes exactly that. What comes after it is the `--continue` row under it, and that more steps follow is
+            // the heading's count. HEAD sits on that commit, so the message boxes above are the tool
+            // (`offers::message_edit` の edit 停止の免除).
+            CardText {
+                id: editWords
                 Layout.fillWidth: true
-                // HEAD sits on that commit, so the message boxes above are the tool
-                // (`offers::message_edit` の edit 停止の免除).
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: Math.max(0, (editChip.implicitHeight - editWords.lineHeight) / 2)
                 text: opExitCard.workTree.opEditOid !== ""
-                      ? qsTr("Stopped on purpose at %1 — amend it above, then continue")
+                      ? qsTr("Stopped at %1 — amend it above")
                             .arg(opExitCard.workTree.opEditOid.substring(0, 8))
-                      : qsTr("Stopped on purpose — amend the commit above, then continue")
-                elide: Text.ElideRight
-                font.pixelSize: Theme.fontSm
+                      : qsTr("Stopped — amend the commit above")
+                pixelSize: Theme.fontSm
                 color: Theme.textSecondary
             }
         }

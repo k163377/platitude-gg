@@ -5,6 +5,9 @@ import platitude.ui
 
 // One row of the stopped operation's card: `AppMenuItem`'s row standing in a pane — the menu's chip, sentence and hold
 // mark exactly, so the menu's reader reads it untaught. Not `MenuItem` itself, which only lays out inside a Menu.
+// **The sentence wraps where a menu's is cut** (デザイン規約 §進行中の操作から出る): a menu is as wide as its widest
+// row and says the rest on hover, while this card is only as wide as the pane — and what a row does is the one thing
+// it is there to say. The chip, the mark and the note stand on the first line.
 Item {
     id: opRow
 
@@ -44,13 +47,14 @@ Item {
     }
     readonly property bool holding: opRow.holdProgress > 0
 
-    implicitHeight: opRow.visible ? Theme.rowHeight : 0
+    /// One line of the sentence; the row is a menu row's height for the first and grows by each one after it.
+    readonly property real lineHeight: rowLabel.lineCount > 0 ? rowLabel.implicitHeight / rowLabel.lineCount
+                                                              : rowLabel.implicitHeight
+    /// The first line's band: the taller of the sentence's line and the chip, each piece of the first line centred in
+    /// it. The chip's family and the sentence's differ by OS, so a margin worked out from one alone can go negative.
+    readonly property real firstBand: Math.max(opRow.lineHeight, codeLabel.implicitHeight)
+    implicitHeight: opRow.visible ? Theme.rowHeight + rowLabel.implicitHeight - opRow.lineHeight : 0
     Accessible.description: opRow.holdMs > 0 ? Words.holdToActivate : ""
-
-    // The whole line where the pane has cut it, as a menu row (`AppMenuItem`).
-    ToolTip.visible: rowHover.containsMouse && rowLabel.truncated
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: opRow.code + " " + opRow.text
 
     // One colour for every word, so the chip cannot disagree with its sentence; a held row wears its cost before it is
     // touched (デザイン規約 §状態).
@@ -70,22 +74,29 @@ Item {
     }
 
     // At the row's own left edge, overhanging the seat the words leave for it, as a menu row's mark (`AppMenuItem`).
+    // Centred on the first line's band.
     HoldIcon {
+        id: holdMark
         anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: Metrics.opticalDrop
+        y: (Theme.rowHeight - holdMark.height) / 2 + Metrics.opticalDrop
         progress: opRow.holdProgress
         tint: opRow.wordColor
         visible: opRow.armedMs > 0
     }
 
-    // `AppMenuItem`'s padding, so the card's rows and a menu's read alike.
+    // `AppMenuItem`'s padding, so the card's rows and a menu's read alike. Hung from the top with the first line centred
+    // in a menu row's band, so a one-line row stands where it always did.
     RowLayout {
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         anchors.leftMargin: Theme.spaceSm + opRow.holdIndent
         anchors.rightMargin: Theme.spaceSm
+        anchors.topMargin: (Theme.rowHeight - opRow.firstBand) / 2
         spacing: Theme.spaceSm
         Item {
+            Layout.alignment: Qt.AlignTop
+            Layout.topMargin: (opRow.firstBand - codeLabel.implicitHeight) / 2
             implicitWidth: Math.max(opRow.codeColW, codeLabel.implicitWidth)
             implicitHeight: codeLabel.implicitHeight
             Rectangle {
@@ -110,16 +121,19 @@ Item {
         Label {
             id: rowLabel
             Layout.fillWidth: true
+            Layout.alignment: Qt.AlignTop
+            Layout.topMargin: (opRow.firstBand - opRow.lineHeight) / 2
             text: opRow.text
             font.pixelSize: Theme.fontMd
-            elide: Text.ElideRight
-            verticalAlignment: Text.AlignVCenter
+            wrapMode: Text.Wrap
             color: opRow.wordColor
         }
         Label {
+            id: noteLabel
+            Layout.alignment: Qt.AlignTop
+            Layout.topMargin: (opRow.firstBand - noteLabel.implicitHeight) / 2
             visible: opRow.note !== ""
             text: opRow.note
-            verticalAlignment: Text.AlignVCenter
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
         }
