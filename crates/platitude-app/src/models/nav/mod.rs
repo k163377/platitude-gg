@@ -8,7 +8,7 @@ use std::sync::Arc;
 use qtbridge::qtbridge_type_lib::{QByteArray, QHash, QModelIndex, QVariant};
 use qtbridge::{QAbstractItemModel, QAbstractItemModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::encode::{Fields, Landed, Landing, Listed, Optional, Record, field};
+use crate::encode::{Fields, Landed, Landing, Listed, One, Optional, Record, field};
 use crate::hub::{CarriedStatusMsg, Feed, Hub, RefsMsg, StatusMsg, attached};
 
 use super::pathtree::DirNode;
@@ -39,6 +39,65 @@ impl Record for TagCarrier {
             remote: field(map, "remote")?,
             apart: field(map, "apart")?,
         })
+    }
+}
+
+/// What a tag's menu stands on (`NavSectionModel::tag_menu`,
+/// `platitude_core::session::TagMenuFacts`), in the words the card reads.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TagMenu {
+    pub push_remote: String,
+    /// Hex; empty for the plain push.
+    pub lease: String,
+    pub reach: String,
+    /// `drift` / `unnamed`, empty where the rows reaching over there are
+    /// not held back.
+    pub held_back: String,
+    /// The remotes carrying the name, as a sentence lists them.
+    pub carriers: String,
+    pub row_goes: bool,
+}
+
+impl Record for TagMenu {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("pushRemote", &self.push_remote)
+            .put("lease", &self.lease)
+            .put("reach", &self.reach)
+            .put("heldBack", &self.held_back)
+            .put("carriers", &self.carriers)
+            .put("rowGoes", &self.row_goes)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            push_remote: field(map, "pushRemote")?,
+            lease: field(map, "lease")?,
+            reach: field(map, "reach")?,
+            held_back: field(map, "heldBack")?,
+            carriers: field(map, "carriers")?,
+            row_goes: field(map, "rowGoes")?,
+        })
+    }
+}
+
+impl From<platitude_core::session::TagMenuFacts> for TagMenu {
+    fn from(facts: platitude_core::session::TagMenuFacts) -> Self {
+        use platitude_core::session::TagDeleteHeld;
+        Self {
+            push_remote: facts.push_remote,
+            lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),
+            reach: facts.reach,
+            held_back: match facts.held_back {
+                TagDeleteHeld::No => "",
+                TagDeleteHeld::Drifted => "drift",
+                TagDeleteHeld::Unnamed => "unnamed",
+            }
+            .to_string(),
+            carriers: facts.carriers.join(", "),
+            row_goes: facts.row_goes,
+        }
     }
 }
 

@@ -121,12 +121,55 @@ impl Source {
     }
 
     /// The remotes carrying tag `name`, once each, with whether it stands
-    /// somewhere other than `against` (`RefsSnapshot::tag_remotes`).
+    /// apart from the right reading (`RefsSnapshot::tag_remotes`).
     /// Empty before the remotes are read.
     pub(super) fn tag_carriers(&self, name: &str, against: &str) -> Vec<(&str, bool)> {
         match self {
             Self::Tags(snapshot) => snapshot.tag_remotes(name, against),
             _ => Vec::new(),
+        }
+    }
+
+    /// Whether the reading of tag `name` on `commit` stands apart from the
+    /// right one (`RefsSnapshot::tag_apart_at`).
+    pub(super) fn tag_apart_at(
+        &self,
+        name: &str,
+        commit: platitude_core::Oid,
+        against: &str,
+    ) -> bool {
+        match self {
+            Self::Tags(snapshot) => snapshot.tag_apart_at(name, commit, against),
+            _ => false,
+        }
+    }
+
+    /// Who the right reading of tag `name` belongs to, as a sentence lists
+    /// them (`RefsSnapshot::tag_weighed_against`); empty where nobody.
+    pub(super) fn tag_weighed_against(&self, name: &str, against: &str) -> String {
+        match self {
+            Self::Tags(snapshot) => snapshot.tag_weighed_against(name, against).join(", "),
+            _ => String::new(),
+        }
+    }
+
+    /// What a menu on tag `name` stands on (`RefsSnapshot::tag_menu`).
+    pub(super) fn tag_menu(&self, name: &str, against: &str, aim: &str) -> TagMenu {
+        match self {
+            Self::Tags(snapshot) => snapshot.tag_menu(name, against, aim).into(),
+            _ => TagMenu::default(),
+        }
+    }
+
+    /// The one remote a chip of tag `name` at `commit` draws the reading
+    /// of (`RefsSnapshot::tag_aim_at`); empty where none.
+    pub(super) fn tag_aim_at(&self, name: &str, commit: platitude_core::Oid) -> String {
+        match self {
+            Self::Tags(snapshot) => snapshot
+                .tag_aim_at(name, commit)
+                .unwrap_or_default()
+                .to_string(),
+            _ => String::new(),
         }
     }
 

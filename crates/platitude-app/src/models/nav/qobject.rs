@@ -415,15 +415,85 @@ impl NavSectionModel {
         self.all.tag_drift(&name, &remote)
     }
 
+    /// Whether the reading of this tag standing on `oid` (hex) stands
+    /// apart from the right one (`RefsSnapshot::tag_apart_at` — `against`
+    /// decides where it carries the name, else the remotes by agreeing) —
+    /// the copy here asked with its own commit (an open TAGS row), a graph
+    /// row's reading with that row's (the card a chip unfolds into). False
+    /// where no remote carries the name, and for an `oid` that is no commit
+    /// id. Asked of the tags section.
+    ///
+    /// The one test behind every holder that wears the warning
+    /// (デザイン規約 §左メニューの所作), the copy here included — the same one
+    /// `tag_remotes` marks its carriers by, so the two agree whatever
+    /// `against` is.
+    #[qslot]
+    pub(super) fn tag_apart_at(&self, name: String, oid: String, against: String) -> bool {
+        if name.is_empty() || self.section != "tags" {
+            return false;
+        }
+        let Ok(commit) = platitude_core::Oid::from_hex_str(oid.trim()) else {
+            return false;
+        };
+        self.all.tag_apart_at(&name, commit, &against)
+    }
+
+    /// Who the right reading of this tag belongs to, as the sentence of a
+    /// holder apart from it names them — `against` where it carries the
+    /// name, else every remote agreeing on one commit (`fork, mirror`).
+    /// Empty where the remotes disagree and none of them decides, and
+    /// before the remotes are read. Asked of the tags section.
+    #[qslot]
+    pub(super) fn tag_weighed_against(&self, name: String, against: String) -> String {
+        if name.is_empty() || self.section != "tags" {
+            return String::new();
+        }
+        self.all.tag_weighed_against(&name, &against)
+    }
+
+    /// What a menu on this tag stands on, read as it opens (`RefTagMenu`):
+    /// where the push goes and what it is leased to, which remote the
+    /// deletes reach and why they stand greyed, and whether the row goes
+    /// with them (`RefsSnapshot::tag_menu`). `aim` is a remote the reader
+    /// named on its own — a carrier's line, a chip drawing that remote's
+    /// reading (`tag_aim_at`) — or empty. Asked of the tags section.
+    #[qslot]
+    pub(super) fn tag_menu(&self, name: String, against: String, aim: String) -> One<TagMenu> {
+        if name.is_empty() || self.section != "tags" {
+            return One::new(TagMenu {
+                push_remote: against,
+                ..TagMenu::default()
+            });
+        }
+        One::new(self.all.tag_menu(&name, &against, &aim))
+    }
+
+    /// The one remote a chip of this tag at `oid` (hex) draws the reading
+    /// of — so a menu opened on that chip names it on its own. Empty for
+    /// the copy here, for a reading several remotes share, and for an
+    /// `oid` that is no commit id. Asked of the tags section.
+    #[qslot]
+    pub(super) fn tag_aim_at(&self, name: String, oid: String) -> String {
+        if name.is_empty() || self.section != "tags" {
+            return String::new();
+        }
+        let Ok(commit) = platitude_core::Oid::from_hex_str(oid.trim()) else {
+            return String::new();
+        };
+        self.all.tag_aim_at(&name, commit)
+    }
+
     /// The remotes carrying this tag, one record each in name order
     /// (`TagCarrier`) — what the row opens on (デザイン規約 §左メニューの所作).
     /// Empty where no remote has the name, and until a fetch has been
     /// through (`remote::tags::list_tags`). Asked of the tags section.
     ///
-    /// `apart` is read against `against`, the remote this window's tag rows
-    /// act on (`RepoTab.defaultRemote`; デザイン規約 §タグを作る・送る) — not
-    /// the copy here: a local tag that is itself the odd one out would put
-    /// the mark on everybody else.
+    /// `apart` is read against the right reading, which `against` — the
+    /// remote this window's tag rows act on (`RepoTab.defaultRemote`;
+    /// デザイン規約 §タグを作る・送る) — decides where it carries the name, and
+    /// the remotes by agreeing where it does not; never the copy here: a
+    /// local tag that is itself the odd one out would put the mark on
+    /// everybody else.
     #[qslot]
     pub(super) fn tag_remotes(&self, name: String, against: String) -> TagCarriers {
         if name.is_empty() || self.section != "tags" {

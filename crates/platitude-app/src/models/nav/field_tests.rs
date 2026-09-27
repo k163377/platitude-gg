@@ -151,6 +151,113 @@ fn a_tag_row_opens_on_its_carriers_and_says_which_stand_apart() {
     assert!(model.tag_remotes(String::new(), "origin".into()).is_empty());
 }
 
+/// The same test for one reading by the commit it stands on: the copy
+/// here is asked with its own, a graph row's reading with the row's, and
+/// both are weighed against the reference alone.
+#[test]
+fn a_reading_of_a_tag_is_apart_by_its_commit() {
+    let mut model = section(
+        "tags",
+        Source::Tags(carried(
+            Vec::new(),
+            // Every tag here stands on `a`.
+            vec![tag("v-agreed", true, true), tag("v-moved", true, true)],
+            Vec::new(),
+            vec![
+                ("v-agreed", "origin", "a"),
+                ("v-agreed", "fork", "b"),
+                ("v-moved", "origin", "b"),
+            ],
+        )),
+    );
+    model.arrange();
+    let apart =
+        |name: &str, at: &str| model.tag_apart_at(name.into(), oid(at).to_hex(), "origin".into());
+
+    assert!(
+        !apart("v-agreed", "a"),
+        "the copy here stands where origin does"
+    );
+    assert!(apart("v-agreed", "b"), "the fork's reading does not");
+    assert!(
+        apart("v-moved", "a"),
+        "the copy here, moved off origin's commit"
+    );
+    assert!(!apart("v-moved", "b"), "the reference's own reading");
+    // Decided as a row opens, so a half-formed question answers "no".
+    assert!(!model.tag_apart_at("v-moved".into(), "not an id".into(), "origin".into()));
+    // With no remote to act on, the remotes decide as they would without
+    // the reference among them — the same answer the lines are marked by.
+    assert!(model.tag_apart_at("v-moved".into(), oid("a").to_hex(), String::new()));
+    assert_eq!(
+        model
+            .tag_remotes("v-moved".into(), String::new())
+            .iter()
+            .map(|carrier| carrier.apart)
+            .collect::<Vec<_>>(),
+        [false],
+        "origin's own reading, the only one"
+    );
+}
+
+/// What the menus and notes of a tag are read off, through the section's
+/// slots: who decides, where a delete reaches and why it greys, and which
+/// remote a chip names on its own. Every tag here stands on `a`.
+#[test]
+fn a_tags_menu_and_note_come_off_the_readings() {
+    let mut model = section(
+        "tags",
+        Source::Tags(carried(
+            Vec::new(),
+            vec![tag("v-pair", true, true), tag("v-split", true, true)],
+            Vec::new(),
+            vec![
+                ("v-pair", "fork", "b"),
+                ("v-pair", "mirror", "b"),
+                ("v-split", "fork", "a"),
+                ("v-split", "mirror", "c"),
+            ],
+        )),
+    );
+    model.arrange();
+
+    assert_eq!(
+        model.tag_weighed_against("v-pair".into(), "origin".into()),
+        "fork, mirror",
+        "remotes that agree, named as a sentence lists them"
+    );
+    assert_eq!(
+        model.tag_weighed_against("v-split".into(), "origin".into()),
+        ""
+    );
+
+    let pair = model.tag_menu("v-pair".into(), "origin".into(), String::new());
+    assert_eq!(pair.push_remote, "origin");
+    assert_eq!(pair.reach, "");
+    assert_eq!(pair.held_back, "unnamed");
+    assert_eq!(pair.carriers, "fork, mirror");
+    let aimed = model.tag_menu("v-pair".into(), "origin".into(), "mirror".into());
+    assert_eq!(aimed.push_remote, "mirror");
+    assert_eq!(aimed.reach, "mirror");
+    assert_eq!(aimed.held_back, "");
+    assert_eq!(
+        aimed.lease,
+        oid("b").to_hex(),
+        "mirror has it elsewhere than here"
+    );
+
+    assert_eq!(
+        model.tag_aim_at("v-split".into(), oid("c").to_hex()),
+        "mirror"
+    );
+    assert_eq!(
+        model.tag_aim_at("v-split".into(), oid("a").to_hex()),
+        "",
+        "that chip is the copy here"
+    );
+    assert_eq!(model.tag_aim_at("v-pair".into(), oid("b").to_hex()), "");
+}
+
 /// Which sides a tag's name stands on — what tells the three delete rows
 /// apart, since one row of TAGS carries both (`offers::TagSides`).
 #[test]
