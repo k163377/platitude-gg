@@ -71,6 +71,8 @@ MenuItem {
     property string markName: ""
     property color nameMarkTint: Theme.textSecondary
     readonly property bool namesMark: menuItem.nameMark !== "" && menuItem.markName !== ""
+    /// Automation: whether that name lost its tail — a picture a pixel short and one whole read alike at a glance.
+    readonly property bool nameCut: menuItem.namesMark && markNameLabel.truncated
     /// A fact about the row in the left menu's far column — the branch a working copy has out
     /// (`NavRowBody.branchSeat`). Empty draws none.
     property string sideName: ""
@@ -163,13 +165,16 @@ MenuItem {
     // A row this menu is not offering takes no room: the list lays rows out by height, so an invisible row that keeps
     // one leaves a hole.
     implicitHeight: menuItem.offered ? Theme.rowHeight : 0
-    implicitWidth: (codeChip.visible ? codeChip.implicitWidth + Theme.spaceSm : 0)
+    // The chip and the marked name are bid in whole pixels, as the layout hands them out: the row's `RowLayout` rounds
+    // each of those up, and a sum rounded once comes up the fractions short — the marked name, laid out last, elides
+    // (a Linux font's `worktree remove` + folder).
+    implicitWidth: (codeChip.visible ? Math.ceil(codeChip.implicitWidth) + Theme.spaceSm : 0)
                    + (menuItem.growsForText
                       ? itemLabel.implicitWidth : Math.min(itemLabel.implicitWidth, Metrics.labelColW))
                    // The marked name is data: it bids at most `labelColW` and elides past it (デザイン規約 §メニュー).
                    + (menuItem.namesMark
-                      ? menuItem.markWordGap + Theme.iconSm
-                        + Math.min(markNameLabel.implicitWidth, Metrics.labelColW) : 0)
+                      ? menuItem.markWordGap
+                        + Math.ceil(Theme.iconSm + Math.min(markNameLabel.implicitWidth, Metrics.labelColW)) : 0)
                    + (menuItem.note !== "" ? noteLabel.implicitWidth + Theme.spaceSm : 0)
                    // Everything drawn after the words bids too, or the row that sets the menu's width cuts its own
                    // name. Asked of what the row holds, not `visible`: a closed card's rows answer false, and the
