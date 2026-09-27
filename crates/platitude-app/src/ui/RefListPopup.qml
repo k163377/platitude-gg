@@ -274,7 +274,10 @@ AppCard {
                 function layOutNow() {
                     rowChip.layOutNow()
                 }
-                readonly property real whoseRoom: whose.visible ? whose.width + Theme.spaceSm : 0
+                /// Asked of the record, not of `whose.visible`: the card is measured before it opens
+                /// (`RowHoverHost.openRefList`), and nothing inside a closed popup is visible — the room read there
+                /// came to nothing, and taken back once the card was up it came out of the chip.
+                readonly property real whoseRoom: rowChip.recWhere !== "" ? whose.width + Theme.spaceSm : 0
                 /// The counterpart named inside this row's chip frame (`RefChip.mate`), or null.
                 readonly property var mate:
                     refRow.index >= 0 && refRow.index < refList.mates.length
