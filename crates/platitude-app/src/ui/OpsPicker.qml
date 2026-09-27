@@ -67,8 +67,9 @@ HoverToolButton {
     property int gap: Theme.spaceXs
     /// The step after the chevron's ink, where a row needs it to differ from `gap` (`TopBar`).
     property real markStep: picker.gap
-    /// The step from the kind mark's ink to the name. Zero: the mark's own air is the whole step
-    /// (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
+    /// The step from the kind mark's ink to the name; the mark's own air counts towards it (デザイン規約 §余白「印が
+    /// 自分で持っている余白は、隣の詰めに数える」). Zero sets the mark as a letter of the name: its own air is the whole
+    /// step.
     property real kindStep: 0
     /// The chevron's size — the larger of the two marks, since it is what a hand goes for.
     property int markSize: Theme.iconMd

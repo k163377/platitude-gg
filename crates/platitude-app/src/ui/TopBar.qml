@@ -672,6 +672,10 @@ Rectangle {
                 kindTint: topBar.detachedHead ? Theme.warning : Theme.accent
                 // **The size the left list draws the same mark at** (`NavHeader`, 規約 §操作パネル).
                 kindSize: Theme.iconMd
+                // **A mark standing in the row, not a letter of the name** (規約 §操作パネル): the row's step, the
+                // mark's own air counting towards it. At zero the gap is a letter's, and the mark reads as the name's
+                // first character.
+                kindStep: Theme.spaceXs
                 tone: topBar.detachedHead ? Theme.warning : Theme.textPrimary
                 // No `markSeat`: only the repository's mark stands in a column (the ☰'s), so a seat wider than this
                 // mark is air nobody asked for.

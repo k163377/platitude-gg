@@ -13,6 +13,8 @@ Item {
     component Branch: OpsPicker {
         kind: "branch"
         kindSize: Theme.iconMd
+        // As `TopBar` sets it: a step past the mark's own air, so both lines' sums carry a `kindGap`.
+        kindStep: Theme.spaceXs
         pixelSize: Theme.fontLg
         height: Theme.opsBarHeight
         width: drawnWidth
@@ -97,6 +99,23 @@ Item {
             compare(longName.wholeWidth, longName.bareBox + longName.lineOneWhole)
             compare(bare.wholeWidth, bare.bareBox + bare.lineOneWhole)
             compare(bare.lineTwoWhole, 0)
+        }
+
+        /// Each line's own want fits the room its sum gives, and both lines' words start on one x. A step laid out but
+        /// left out of the sum is not cut for: the column grows past the box and the line walks out under what follows.
+        function test_each_line_fits_its_sum_and_both_start_on_one_x() {
+            for (const picker of [shortName, longName]) {
+                // contentItem: the chevron's slot, then the two lines' column; each line: its mark's slot, then its
+                // first run.
+                const stack = picker.contentItem.children[1]
+                const nameLine = stack.children[0]
+                const noteLine = stack.children[1]
+                tryVerify(() => nameLine.implicitWidth <= picker.textRoom, undefined,
+                          picker.name + ": the name's line fits its sum")
+                tryVerify(() => noteLine.implicitWidth <= picker.textRoom, undefined,
+                          picker.name + ": the upstream's line fits its sum")
+                compare(noteLine.children[1].x, nameLine.children[1].x, picker.name + ": both words start on one x")
+            }
         }
 
         function test_the_counts_end_an_upstream_that_runs_further() {
