@@ -75,8 +75,10 @@ RowLayout {
         // its own path.
         origPath: body.row.orig_name
         // Where the ref is, as a chip says it: grey when only remote, `hereTone` where the reader stands
-        // (デザイン規約 §ref の種別).
+        // (デザイン規約 §ref の種別). Open, a tag whose copy here stands apart from the remote its lines are read against
+        // wears their warning: the name is that copy's line (デザイン規約 §左メニューの所作 の TAGS の段).
         tone: body.row.is_head ? body.hereTone
+            : body.row.factsOpen && body.row.factsHereApart ? Theme.warning
             : body.row.only_remote ? Theme.textSecondary : Theme.textPrimary
         weight: body.row.is_head ? Font.DemiBold : Font.Normal
         // A pending file's line-ending mark; the row's hover says what, the diff pane in full.

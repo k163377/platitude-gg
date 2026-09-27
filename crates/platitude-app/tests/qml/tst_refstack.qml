@@ -412,6 +412,28 @@ Item {
             compare(readingChip.trackY, readingChip.countY)
         }
 
+        // A tag standing on another commit than the reference says so as that line, in the warning a gone reading
+        // wears there (`NavFacts.apartLine` via `RowHoverHost.mateOf`): nothing can hover over the card. The tag's
+        // own name keeps the colour that says where it is.
+        function test_a_tag_standing_apart_says_so_under_its_name() {
+            readingChip.records = [root.tagHere]
+            readingChip.mate = NavFacts.apartLine(NavFacts.apartNote("origin"))
+            readingChip.layOutNow()
+            compare(readingChip.height, 2 * Theme.fontChipLine + 2 * Theme.borderWidth)
+            const words = []
+            const walk = item => {
+                if (item.text === "Differs from origin")
+                    words.push(item)
+                for (let i = 0; i < item.children.length; i++)
+                    walk(item.children[i])
+            }
+            walk(readingChip)
+            compare(words.length, 1, "the sentence is drawn once, as the line")
+            compare(words[0].color, Theme.warning)
+            compare(readingChip.nameColor, Theme.textPrimary, "the name still says it is held here")
+            verify(!readingChip.mateGoes, "it names no ref, so it goes nowhere")
+        }
+
         // The line is inside the frame, so it widens the card (`RefListPopup.layOutRows` reads this back).
         function test_a_reading_longer_than_the_name_widens_the_frame() {
             readingChip.records = [root.current]

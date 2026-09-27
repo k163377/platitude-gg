@@ -98,8 +98,8 @@ Item {
         function test_a_drifted_reading_is_out_while_the_local_delete_is_not() {
             root.standOn({ offers: root.drifted, remoteDrifted: true })
             compare(card.deleteItem.blockedReason, "", "the branch here goes")
-            compare(card.deleteRemoteItem.blockedReason, Words.remoteOnAnotherCommit)
-            compare(card.deleteBothItem.blockedReason, Words.remoteOnAnotherCommit)
+            compare(card.deleteRemoteItem.blockedReason, "Differs from origin/feature/topic-a")
+            compare(card.deleteBothItem.blockedReason, "Differs from origin/feature/topic-a")
         }
 
         function test_a_branch_nothing_holds_back_offers_all_three() {

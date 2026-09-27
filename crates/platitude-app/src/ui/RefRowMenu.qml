@@ -157,22 +157,29 @@ Item {
             branch, remote, GitFacts.branchOfRef(remoteRef, refRowMenu.repoTab.remoteNames), forced)
     }
 
-    /// The TAG card's `facts` (`RefTagMenu.standOn`), read here because this is where the models are. Drift and sides
-    /// live in the TAGS section alone; the last argument is the `pull` row's upstream, which no tag carries.
-    function tagFacts(kind, full, oidHex) {
-        const remote = refRowMenu.repoTab.defaultRemote
-        const drift = kind === "tag" ? refRowMenu.tagsModel.remoteTagDrift(full, remote) : ""
-        const sides = kind === "tag" ? refRowMenu.tagsModel.tagSides(full) : ""
+    /// The TAG card's `facts` (`RefTagMenu.standOn`), read here because this is where the models are. What the card
+    /// reaches and why its rows are held back live in the TAGS section alone (`NavSectionModel.tagMenu`); `aim` is a
+    /// remote the reader named on its own. The last argument is the `pull` row's upstream, which no tag carries.
+    function tagFacts(kind, full, oidHex, aim) {
+        if (kind !== "tag")
+            return { "pushRemote": refRowMenu.repoTab.defaultRemote, "offers": "" }
+        const menu = refRowMenu.tagsModel.tagMenu(full, refRowMenu.repoTab.defaultRemote, aim)
+        const sides = refRowMenu.tagsModel.tagSides(full)
         return {
-            "pushRemote": remote,
-            "tagDriftOid": drift,
-            "tagOnlyThere": sides === "remote",
-            "offers": kind !== "tag" ? "" : GitFacts.refMenuOffers(
+            "pushRemote": menu.pushRemote,
+            "tagDriftOid": menu.lease,
+            "tagReach": menu.reach,
+            "tagHeldBack": menu.heldBack,
+            "tagCarriers": menu.carriers,
+            "tagOnlyThere": menu.rowGoes,
+            "tagHere": sides === "here" || sides === "both",
+            // Held back reads as drift to core: the rows reaching over there stay out (offers::ref_menu).
+            "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex,
                 refRowMenu.repoTab.state === "open", refRowMenu.askBusy,
                 refRowMenu.workTree.branch, refRowMenu.workTree.detached,
                 refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
-                "", "", drift !== "", remote, sides, "")
+                "", "", menu.heldBack !== "", menu.pushRemote, sides, "")
         }
     }
 
@@ -180,8 +187,9 @@ Item {
     /// offer — the current branch met as a chip — falls back to the row's own menu.
     ///
     /// `copyPath` is the working copy the WORKTREE card stands on — the WORKTREES row's own; left out, the copy
-    /// holding this row's branch, if another does.
-    function offerOn(kind, name, full, oidHex, copyPath) {
+    /// holding this row's branch, if another does. `aim` is a remote the reader named on its own
+    /// (`RepoPage.openRefMenu`), which the TAG card acts on.
+    function offerOn(kind, name, full, oidHex, copyPath, aim) {
         // A working copy with a branch out is that branch's menu, carrying the copy's card: the copy is where the
         // branch is, and the row says both (デザイン規約 §左メニューの所作).
         if (kind === "worktree") {
@@ -193,7 +201,7 @@ Item {
         refRowMenu.refId = full
         refRowMenu.refOid = oidHex
         branchMenu.standOn(kind, name, full, oidHex, refRowMenu.branchFacts(kind, full, oidHex))
-        tagMenu.standOn(kind, full, oidHex, refRowMenu.tagFacts(kind, full, oidHex))
+        tagMenu.standOn(kind, full, oidHex, refRowMenu.tagFacts(kind, full, oidHex, aim === undefined ? "" : aim))
         // Whether another working copy has this row's branch out (through the same-named local branch for a remote
         // row): `switch` then opens that copy instead (offers::SwitchAction::OpenHolder). A copy with no branch leads
         // to itself, unless this tab already stands in it.

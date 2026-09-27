@@ -235,7 +235,7 @@ AppMenu {
         // (デザイン規約 §左メニューの所作 の削除の表).
         offered: state.kind === "branch" && state.remoteCounterpart !== ""
         blockedReason: state.canDeleteRemote ? ""
-                     : state.remoteDrifted ? Words.remoteOnAnotherCommit
+                     : state.remoteDrifted ? Words.differsFrom(state.remoteCounterpart)
                      : branchCard.deleteBlockedWhileBusy
         holdMs: Metrics.holdMs
         holdTone: Theme.warning
@@ -266,7 +266,7 @@ AppMenu {
         blockedReason: state.canDelete && state.canDeleteRemote ? ""
                      : state.onCurrentBranch ? branchCard.deleteBlockedOnCurrent
                      : state.heldByWorktree !== "" ? branchCard.blockedByWorktree
-                     : state.remoteDrifted ? Words.remoteOnAnotherCommit
+                     : state.remoteDrifted ? Words.differsFrom(state.remoteCounterpart)
                      : branchCard.deleteBlockedWhileBusy
         // As on the local row.
         tipMarkWord: refBothDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""

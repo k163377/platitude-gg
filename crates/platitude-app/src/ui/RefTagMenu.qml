@@ -35,6 +35,8 @@ AppMenu {
     readonly property alias deleteTagItem: refTagDeleteItem
     readonly property alias deleteRemoteTagItem: refRemoteTagDeleteItem
     readonly property alias deleteTagBothItem: refBothTagDeleteItem
+    /// Where this card's deletes reach, for a run's report (`AutoActRefVerbs.reachWords`).
+    readonly property alias reach: state.reach
 
     /// Everything this card reads, worked out once as the menu opens and left alone while it stands.
     QtObject {
@@ -45,25 +47,41 @@ AppMenu {
         property string pushRemote: ""
         /// Where the remote was last heard to have this name, when that is somewhere else. Empty for the plain push.
         property string tagDriftOid: ""
+        /// The remote the rows deleting over there reach — empty where none can be named — and why they stand greyed:
+        /// `drift` (that remote has the name elsewhere than here) / `unnamed` (several carry it, `tagCarriers`).
+        property string reach: ""
+        property string heldBack: ""
+        property string tagCarriers: ""
+        property bool tagHere: false
         property bool canPushTag: false
         property bool canDelete: false
         property bool canDeleteRemoteTag: false
         property bool canDeleteTagEverywhere: false
-        /// Whether the name is only over there (`deleteRemoteTagRequested`).
+        /// Whether deleting from `reach` leaves the name nowhere (`deleteRemoteTagRequested`).
         property bool tagOnlyThere: false
+        /// Why those rows stand greyed, in words (`Words.differsFrom` / `Words.severalRemotesHave`).
+        readonly property string heldWhy: state.heldBack === "unnamed" ? Words.severalRemotesHave(state.tagCarriers)
+                                        : state.heldBack === "drift" ? Words.differsFrom(state.reach) : ""
     }
 
     /// Stands the card on that row, off answers already in hand. `oidHex` is the row's commit, where a name would be
-    /// made, tag or not. `facts` is what the carrying menu read: `pushRemote` (where pushes go), `tagDriftOid` (where
-    /// a remote last had this name, when elsewhere), `tagOnlyThere`, and `offers` (`GitFacts.refMenuOffers` —
-    /// `offers::RefMenuOffers::words`). All of it is in hand before the card shows, so the push row's shape is fixed.
+    /// made, tag or not. `facts` is what the carrying menu read (`NavSectionModel.tagMenu`): `pushRemote` (where
+    /// pushes go), `tagDriftOid` (where that remote last had this name, when elsewhere), `tagReach` / `tagHeldBack` /
+    /// `tagCarriers` (where the deletes reach and why they grey), `tagOnlyThere`, `tagHere`, and `offers`
+    /// (`GitFacts.refMenuOffers` — `offers::RefMenuOffers::words`). All of it is in hand before the card shows, so
+    /// the push row's shape is fixed.
     function standOn(kind, full, oidHex, facts) {
         state.kind = kind
         state.refId = full
         state.refOid = oidHex
         state.pushRemote = facts.pushRemote
-        state.tagDriftOid = kind === "tag" ? facts.tagDriftOid : ""
-        if (kind !== "tag") {
+        const tagged = kind === "tag"
+        state.tagDriftOid = tagged ? facts.tagDriftOid : ""
+        state.reach = tagged ? facts.tagReach : ""
+        state.heldBack = tagged ? facts.tagHeldBack : ""
+        state.tagCarriers = tagged ? facts.tagCarriers : ""
+        state.tagHere = tagged && facts.tagHere
+        if (!tagged) {
             state.canPushTag = false
             state.canDelete = false
             state.canDeleteRemoteTag = false
@@ -134,32 +152,34 @@ AppMenu {
     AppMenuItem {
         id: refRemoteTagDeleteItem
         code: "push --delete"
-        text: state.refId
+        // The name and the remote it goes from: the deletes need not reach where the pushes go (`state.reach`).
+        //: Follows the `push --delete` chip: "push --delete v1.5 from origin".
+        text: state.reach !== "" ? qsTr("%1 from %2").arg(state.refId).arg(state.reach) : state.refId
         growsForText: false
-        // A drifted reading keeps its seat and greys; a side that does not exist is gone
+        // A reading held back keeps its seat and greys; a side that does not exist is gone
         // (デザイン規約 §左メニューの所作 の削除の表).
-        offered: state.kind === "tag" && (state.canDeleteRemoteTag || state.tagDriftOid !== "")
-        blockedReason: state.canDeleteRemoteTag ? "" : Words.remoteOnAnotherCommit
+        offered: state.kind === "tag" && (state.canDeleteRemoteTag || state.heldBack !== "")
+        blockedReason: state.canDeleteRemoteTag ? "" : state.heldWhy
         holdMs: Metrics.holdMs
         // Warning: only a name goes, and the commit stays (デザイン規約 §タグを作る・送る).
         holdTone: Theme.warning
         onHeld: {
             tagMenu.dismiss()
-            tagMenu.deleteRemoteTagRequested(state.pushRemote, state.refId, state.tagOnlyThere)
+            tagMenu.deleteRemoteTagRequested(state.reach, state.refId, state.tagOnlyThere)
         }
     }
     // Two commands, so words and no chip (§git 用語のコード表記 の 1:1 規則).
     AppMenuItem {
         id: refBothTagDeleteItem
         text: qsTr("Delete both")
-        offered: state.kind === "tag" && (state.canDeleteTagEverywhere || state.tagDriftOid !== "")
-        blockedReason: state.canDeleteTagEverywhere ? "" : Words.remoteOnAnotherCommit
+        offered: state.kind === "tag" && (state.canDeleteTagEverywhere || (state.heldBack !== "" && state.tagHere))
+        blockedReason: state.canDeleteTagEverywhere ? "" : state.heldWhy
         holdMs: Metrics.holdMs
         // Only names go — git keeps the object — so never the danger of the branch's `-D`.
         holdTone: Theme.warning
         onHeld: {
             tagMenu.dismiss()
-            tagMenu.deleteTagEverywhereRequested(state.refId, state.pushRemote)
+            tagMenu.deleteTagEverywhereRequested(state.refId, state.reach)
         }
     }
 }

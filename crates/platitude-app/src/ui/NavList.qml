@@ -54,7 +54,7 @@ AppListView {
 
     signal refActivated(string oidHex)
     signal fileActivated(string bucket, string path, string origPath)
-    signal refMenuRequested(string kind, string name, string full, string oidHex)
+    signal refMenuRequested(string kind, string name, string full, string oidHex, string aim)
     /// Right-click on the row a remote itself stands on.
     signal remoteMenuRequested(string name)
 
@@ -252,6 +252,9 @@ AppListView {
                // a remote's name.
                + " remotes=" + row.factsRemotes
                + " against=" + row.factsAgainst + " apart=" + row.factsApart
+               // The copy here, weighed by the same test: what the row's own name wears. Then who the right reading
+               // belongs to — empty where the remotes disagree and nobody decides.
+               + " here_apart=" + row.factsHereApart + " by=" + row.factsBy
                + " why=" + row.factsWhy + " path=" + row.factsPath
     }
     /// Where the open row and its lines landed (PGG_AUTO_ACT=nav-open); `view=` is the list's visible span.
@@ -355,7 +358,8 @@ AppListView {
         onRefClicked: oidHex => navList.refActivated(oidHex)
         onFileClicked: (bucket, path, origPath) => navList.fileActivated(bucket, path, origPath)
         onFolderClicked: key => navList.sectionModel.toggleFolder(key)
-        onRefMenuRequested: (name, full, oidHex) => navList.refMenuRequested(navList.kindHint, name, full, oidHex)
+        onRefMenuRequested: (name, full, oidHex, aim) =>
+            navList.refMenuRequested(navList.kindHint, name, full, oidHex, aim)
         onRemoteMenuRequested: name => navList.remoteMenuRequested(name)
         onRowClicked: {
             if (navList.gestures)

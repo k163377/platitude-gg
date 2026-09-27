@@ -899,14 +899,16 @@ FocusScope {
     property string refMenuRowId: ""
     /// The one door into that menu: the sidebar's rows, a chip, the stacked list and the automation all come through
     /// here. Says whether it opened. A working copy's row names its copy (`full` is its path), which carries its own
-    /// card (`RefRowMenu.offerOn`).
-    function openRefMenu(kind, name, full, oidHex, inSidebar) {
+    /// card (`RefRowMenu.offerOn`). `aim` is a remote the reader named on its own (a TAGS row's carrier line), which
+    /// the menu then acts on.
+    function openRefMenu(kind, name, full, oidHex, inSidebar, aim) {
         page.refMenuInSidebar = inSidebar === true
         page.refMenuRowKind = kind
         page.refMenuRowId = full
         refMenuSeat.active = true
         return kind === "worktree" ? refMenuSeat.item.offerOn(kind, name, full, oidHex, full)
-                                   : refMenuSeat.item.offerOn(kind, name, full, oidHex)
+                                   : refMenuSeat.item.offerOn(kind, name, full, oidHex, undefined,
+                                                              aim === undefined ? "" : aim)
     }
     /// A new branch on a commit, asked for from a menu: the name box opens where that menu was raised. The sidebar's
     /// half opens on the row that raised the menu, standing whenever that half is taken (only its door sets
@@ -1334,6 +1336,8 @@ FocusScope {
         currentBranch: workTree.branch
         branchesModel: branchesModel
         remotesModel: remotesModel
+        tagsModel: tagsModel
+        tagAgainst: repoTab.defaultRemote
         menuStanding: commitMenuSeat.item !== null && commitMenuSeat.item.opened
         hoverBlocked: page.menuStanding
         onRecordActivated: chip => page.activateChip(chip)
@@ -2817,7 +2821,8 @@ FocusScope {
                     menuOpen: page.menuStanding
                     onFoldRequested: collapse => page.foldByHand(collapse)
                     onRefActivated: oidHex => page.jumpToRef(oidHex)
-                    onRefMenuRequested: (kind, name, full, oidHex) => page.openRefMenu(kind, name, full, oidHex, true)
+                    onRefMenuRequested: (kind, name, full, oidHex, aim) =>
+                        page.openRefMenu(kind, name, full, oidHex, true, aim)
                     onRemoteMenuRequested: name => page.openRemoteMenu(name)
                     onWorktreeActivated: path => page.openRepositoryPathRequested(path)
                     onRefSwitchRequested: (kind, name) => page.switchToRef(kind, name)

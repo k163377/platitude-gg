@@ -22,6 +22,11 @@ Item {
     property string sectionUpstream: ""
     property string sectionTracked: ""
     property var sectionCarried: []
+    property bool sectionHereApart: false
+    /// Who the right reading belongs to (`NavSectionModel.tagWeighedAgainst`); empty where the remotes disagree.
+    property string sectionBy: "origin"
+    /// What the last `tagApartAt` was asked, so a case can say which commit and which reference were weighed.
+    property var apartAsked: null
     property string branchUpstream: ""
     property string branchGone: ""
     property int branchAhead: 0
@@ -39,6 +44,11 @@ Item {
         function upstreamOidOf(name) { return root.sectionReadingAt }
         function trackedBy(full) { return root.sectionTracked }
         function tagRemotes(name, against) { return root.sectionCarried }
+        function tagWeighedAgainst(name, against) { return root.sectionBy }
+        function tagApartAt(name, oid, against) {
+            root.apartAsked = { "name": name, "oid": oid, "against": against }
+            return root.sectionHereApart
+        }
     }
     /// A working copy's row asks it about the branch it holds; a remote-tracking row, where the branch reading it
     /// stands.
@@ -336,11 +346,122 @@ Item {
             compare(row.factsLines[0].note, "", "the one standing where the reading is says nothing extra")
             compare(row.factsLines[1].text, "fork")
             compare(row.factsLines[1].tone, Theme.warning)
-            compare(row.factsLines[1].note, "On another commit than origin")
+            compare(row.factsLines[1].note, "Differs from origin")
             // A remote is not a row of this panel, so neither line goes anywhere.
             compare(row.factsLines[0].to, null)
             compare(row.factsLines[1].to, null)
             row.destroy()
+        }
+
+        /// The copy here is weighed by the same test as the remotes, with its own commit against the same reference,
+        /// and its line is the row's own name: that name wears the warning while open, and a rest on it says why in the
+        /// carriers' words. Closed, the row says where the tag is and nothing more.
+        function test_a_tag_whose_copy_here_stands_apart_wears_the_warning_on_its_own_name() {
+            root.sectionCarried = [{ "remote": "fork", "apart": true }, { "remote": "origin", "apart": false }]
+            root.sectionHereApart = true
+            root.apartAsked = null
+            const row = root.rowOf({ "kindHint": "tag", "name": "v1.5", "full": "v1.5",
+                                     "pushRemote": "origin", "oid_hex": "e5" })
+            const name = root.drawn(row, "cutAt")
+            compare(name.length, 1)
+            compare(name[0].color, Theme.textPrimary, "closed: a tag held here")
+
+            root.openRow(row)
+            verify(row.factsOpen)
+            compare(root.apartAsked.name, "v1.5")
+            compare(root.apartAsked.oid, "e5", "the copy here, by the commit it stands on")
+            compare(root.apartAsked.against, "origin", "against the remote the lines are read against")
+            compare(row.factsHereApart, true)
+            compare(row.factsNameNote, "Differs from origin")
+            compare(row.factsLines[0].note, row.factsNameNote, "one sentence for every holder apart")
+            compare(name[0].color, Theme.warning, "open: the name is that copy's line")
+
+            row.openKey = ""
+            compare(name[0].color, Theme.textPrimary, "and plain again once the row closes")
+            row.destroy()
+            root.sectionHereApart = false
+        }
+
+        /// The note names whoever the right reading belongs to: every remote agreeing on it where the one this window
+        /// acts on is silent, and nobody where the remotes disagree — then every holder is apart and says so.
+        function test_a_tags_note_names_who_decides_or_that_nobody_does_data() {
+            return [
+                { tag: "the reference", by: "origin", note: "Differs from origin" },
+                { tag: "remotes that agree", by: "fork, mirror", note: "Differs from fork, mirror" },
+                { tag: "remotes that disagree", by: "", note: "Remotes disagree" },
+            ]
+        }
+        function test_a_tags_note_names_who_decides_or_that_nobody_does(data) {
+            root.sectionCarried = [{ "remote": "fork", "apart": true }, { "remote": "mirror", "apart": true }]
+            root.sectionBy = data.by
+            root.sectionHereApart = true
+            const row = root.rowOf({ "kindHint": "tag", "name": "v3", "full": "v3", "pushRemote": "origin",
+                                     "oid_hex": "e5" })
+            verify(row.gatherFacts())
+            compare(row.factsLines[0].note, data.note)
+            compare(row.factsLines[1].note, data.note)
+            compare(row.factsNameNote, data.note, "the copy here says the same")
+            compare(row.factsBy, data.by.split(", ").join(","), "and the report lists them as the others")
+            row.destroy()
+            root.sectionBy = "origin"
+            root.sectionHereApart = false
+        }
+
+        /// Each carrier's line names its remote on its own, so a menu asked for on it acts on that remote
+        /// (`NavRowFacts.lineMenu`). What the row's own section passes up is read off the signal the row raises.
+        function test_a_menu_asked_on_a_carriers_line_names_that_remote() {
+            root.sectionCarried = [{ "remote": "fork", "apart": false }, { "remote": "mirror", "apart": false }]
+            const row = root.openRow(root.rowOf({ "kindHint": "tag", "name": "v3", "full": "v3",
+                                                  "pushRemote": "origin", "oid_hex": "e5" }))
+            verify(row.factsItem !== null)
+            compare(row.factsLines[1].aim, "mirror")
+            let aimed = null
+            row.refMenuRequested.connect((name, full, oidHex, aim) => aimed = aim)
+            row.factsItem.lineMenu(1)
+            compare(aimed, "mirror", "the line's remote")
+            row.factsItem.lineMenu(-1)
+            compare(aimed, "", "and none off the lines")
+            row.destroy()
+        }
+
+        /// The same through the hand: the line is the one the right press went down on — not the last left press's,
+        /// and not the first line for a block no left press has touched.
+        function test_a_right_click_names_the_line_it_went_down_on() {
+            root.sectionCarried = [{ "remote": "fork", "apart": false }, { "remote": "mirror", "apart": false }]
+            const row = root.openRow(root.rowOf({ "kindHint": "tag", "name": "v3", "full": "v3",
+                                                  "pushRemote": "origin", "oid_hex": "e5" }))
+            const facts = row.factsItem
+            verify(facts !== null)
+            let aimed = null
+            row.refMenuRequested.connect((name, full, oidHex, aim) => aimed = aim)
+            const onMirror = facts.lineWordsMiddle(1)
+            facts.handPressed(Qt.RightButton, onMirror.x, onMirror.y)
+            facts.handClicked(Qt.RightButton, Qt.NoModifier)
+            compare(aimed, "mirror", "the line under the right press")
+
+            const onFork = facts.lineWordsMiddle(0)
+            facts.handPressed(Qt.LeftButton, onFork.x, onFork.y)
+            facts.handReleased()
+            facts.handPressed(Qt.RightButton, onMirror.x, onMirror.y)
+            facts.handClicked(Qt.RightButton, Qt.NoModifier)
+            compare(aimed, "mirror", "a left press on another line before it changes nothing")
+            row.destroy()
+        }
+
+        /// A name only a remote has has no copy here to weigh, so nothing is asked and its grey stays.
+        function test_a_tag_only_a_remote_has_weighs_no_copy_here() {
+            root.sectionCarried = [{ "remote": "fork", "apart": false }]
+            root.sectionHereApart = true
+            root.apartAsked = null
+            const row = root.openRow(root.rowOf({ "kindHint": "tag", "name": "v0.9-theirs", "full": "v0.9-theirs",
+                                                  "pushRemote": "origin", "only_remote": true, "oid_hex": "f6" }))
+            verify(row.factsOpen)
+            compare(root.apartAsked, null, "the remote's reading is not a copy here")
+            compare(row.factsHereApart, false)
+            compare(row.factsNameNote, "")
+            compare(root.drawn(row, "cutAt")[0].color, Theme.textSecondary)
+            row.destroy()
+            root.sectionHereApart = false
         }
 
         /// The name in full is reason enough to open, as for a branch with no reading.

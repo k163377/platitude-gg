@@ -41,10 +41,10 @@ QtObject {
     /// row under the pointer wears a git command of its own on its chip, and `running` is what tells the two apart.
     readonly property string otherCommandRunning: qsTr("Wait for the running command")
 
-    /// Why the delete rows that reach a remote are out on a name whose two sides have drifted, on the branch card and
-    /// the tag card (デザイン規約 §左メニューの所作 の削除の表). Says the state only: a line pointing at the row that
-    /// deletes the reading would outgrow the menu it explains.
-    readonly property string remoteOnAnotherCommit: qsTr("The remote is on another commit")
+    /// Why every holder of a tag wears the warning when the remotes carry it on different commits and the remote this
+    /// window acts on is not among them: no reading is the right one (`differsFrom` has nobody to name). Said where
+    /// that one is — a tag's holders on the left panel and in a chip's card (`NavFacts.apartNote`).
+    readonly property string remotesDisagree: qsTr("Remotes disagree")
 
     /// Why the `pull` row is greyed while both sides have moved, from both entrances (`RefRowMenu` / `CommitRowMenu`;
     /// デザイン規約 §取り込んで合流させる).
@@ -64,6 +64,22 @@ QtObject {
     /// clock stays its own.
     function stamp(epochSeconds) {
         return Qt.formatDateTime(new Date(epochSeconds * 1000), "yyyy-MM-dd HH:mm")
+    }
+
+    /// Why a copy of a name wears the warning, or why a row cannot reach the other copy: it stands on another commit
+    /// than `reference` has it on. One sentence wherever two copies of one name disagree — a tag's holders on the left
+    /// panel and in a chip's card (`NavFacts.apartNote`), and the delete rows that reach a remote on the branch card
+    /// and the tag card, named there by what the copy the menu is about is read against (デザイン規約 §左メニューの所作
+    /// の削除の表). Says the state only: a line pointing at the row that deletes the reading would outgrow the menu it
+    /// explains.
+    function differsFrom(reference) {
+        return qsTr("Differs from %1").arg(reference)
+    }
+    /// Why a tag menu's rows that delete over there stand greyed when several remotes carry the name and none of them
+    /// is the one this window acts on: no one of them can be picked unasked, and the menu names who they are — each is
+    /// reached from its own line (デザイン規約 §左メニューの所作 の削除の表). `carriers` as a sentence lists them.
+    function severalRemotesHave(carriers) {
+        return qsTr("Several remotes have it: %1").arg(carriers)
     }
 
     /// What to call a side git left nothing to name (デザイン規約 §conflict の ours / theirs). The names swap over

@@ -193,7 +193,8 @@ Item {
             const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteDrifted": false,
                             "open": false, "merged": "", "offers": [] }
             // A tag standing here only, in core's words as `tst_tagcard.qml` spells them.
-            const tagged = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false,
+            const tagged = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "tagReach": "",
+                             "tagHeldBack": "", "tagCarriers": "", "tagHere": true,
                              "offers": ["branch-here", "integrate", "delete", "push-tag"] }
             const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
             return [

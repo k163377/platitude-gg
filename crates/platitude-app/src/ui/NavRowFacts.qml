@@ -31,6 +31,16 @@ Item {
     /// The hand is on the row's own line (`NavItemDelegate.handOn`) — the other road to the same supplement: hovering
     /// the copy's name asks for its path too. One box for both, so the hand crosses between them without it going down.
     property bool rowPointed: false
+    /// TAGS only: why the row's own name wears the warning (`NavFacts.answers`), said while the hand rests on that
+    /// line alone (`nameRested`) — not on these lines, which keep notes of their own. Empty where it wears none.
+    property string nameNote: ""
+    property bool nameRested: false
+    /// Stands in for that rest where headless cannot put a hand (PGG_AUTO_ACT=nav-open-tag `:name`).
+    property bool nameTipPointed: false
+    function pointNameTip(on) {
+        facts.nameTipPointed = on
+        return true
+    }
     /// Which line the hand is on, of those that keep a supplement, or -1 — held here because the box is this
     /// block's. A line going out clears it only while it still holds it: the hand reaches the next line before Qt
     /// says it left the last.
@@ -179,10 +189,12 @@ Item {
     /// The hand, in this item's coordinates: the press anchors a sweep at the nearest field, the move drags it, and
     /// the click goes where it landed — unless the drag took words, in which case the reader was copying and nothing
     /// hears it.
+    /// Where any press went down is kept — a right press names the line its menu acts on (`lineMenu`) — and only a
+    /// left one anchors a sweep.
     function handPressed(button, x, y) {
+        facts.pressFrom = Qt.point(x, y)
         if (button !== Qt.LeftButton)
             return
-        facts.pressFrom = Qt.point(x, y)
         pad.pressAt(x, y)
     }
     function handMoved(x, y) {
@@ -199,11 +211,32 @@ Item {
             facts.row.followFact(to)
             return
         }
-        // A menu asked for from here is the row's, and keeps these lines up: they are what it is about
-        // (デザイン規約 §左メニューの所作).
-        if (button === Qt.RightButton)
-            facts.row.factsMenuAsked()
+        if (button === Qt.RightButton) {
+            facts.lineMenu(facts.lineAt(facts.pressFrom), modifiers)
+            return
+        }
         facts.row.rowPressed(button, modifiers)
+    }
+    /// The menu asked for on line `row` (-1 for none of them). It is the row's, and keeps these lines up: they are
+    /// what it is about (デザイン規約 §左メニューの所作). A line naming a remote on its own — a TAGS row's carrier
+    /// (`NavFacts.carrierLine`'s `aim`) — hands that remote to the menu to act on. What a right-click calls, and the
+    /// one way in for a run (PGG_AUTO_ACT=tag-line-menu).
+    function lineMenu(row, modifiers) {
+        const aim = row >= 0 && row < facts.lines.length ? (facts.lines[row].aim || "") : ""
+        facts.row.factsMenuAsked()
+        facts.row.rowPressed(Qt.RightButton, modifiers === undefined ? Qt.NoModifier : modifiers, aim)
+    }
+    /// Which line a point is on, in this item's coordinates — each line's seat and half the gap either side — or -1.
+    function lineAt(p) {
+        for (let i = 0; i < lineSeats.count; i++) {
+            const line = lineSeats.itemAt(i)
+            if (line === null)
+                continue
+            const top = lines.y + line.y - Theme.spaceXs / 2
+            if (p.y >= top && p.y < top + line.height + Theme.spaceXs)
+                return i
+        }
+        return -1
     }
     /// **A double-click on a line that goes somewhere is two presses of it**, not a double-click on the row — which
     /// would move the working tree to a name the hand was not on.
@@ -216,10 +249,12 @@ Item {
     /// No height where no line is drawn, so the rows under it do not move.
     implicitHeight: lines.implicitHeight > 0 ? lines.implicitHeight + Theme.spaceXs : 0
 
-    // The supplement: a line's note (why it wears a warning) or the block's path (WORKTREES — also asked for from the
-    // row's own line). A row never has both; where one did, the note wins, being about the line the hand is on.
+    // The supplement: a line's note (why it wears a warning), the row's own name's (the same, on TAGS), or the block's
+    // path (WORKTREES — also asked for from the row's own line). A row never has a path and a note; where one did, the
+    // note wins, being about the line the hand is on.
     readonly property string says:
         facts.noted !== "" ? facts.noted
+        : (facts.nameRested || facts.nameTipPointed) && facts.nameNote !== "" ? facts.nameNote
         : (factsHover.hovered || facts.rowPointed) && facts.path !== "" ? facts.path : ""
     /// The words the box is wearing — **the last thing asked for, not what is asked now**: bound to the ask, the
     /// attached write-through empties the box the instant the hand leaves for it (rules-refs/app-ui.md の

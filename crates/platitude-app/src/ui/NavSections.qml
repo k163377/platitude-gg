@@ -70,7 +70,7 @@ ColumnLayout {
     signal sectionToggled(string kind)
     signal foldRequested(bool collapse)
     signal refActivated(string oidHex)
-    signal refMenuRequested(string kind, string name, string full, string oidHex)
+    signal refMenuRequested(string kind, string name, string full, string oidHex, string aim)
     signal remoteMenuRequested(string name)
     signal addRemoteRequested()
 
@@ -168,7 +168,7 @@ ColumnLayout {
         pinSeatRow: headPin.seatedUnder ? headPin.underRow : -1
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)
-        onRefMenuRequested: (kind, name, full, oidHex) => sections.refMenuRequested(kind, name, full, oidHex)
+        onRefMenuRequested: (kind, name, full, oidHex, aim) => sections.refMenuRequested(kind, name, full, oidHex, aim)
 
         HeadPinRow {
             id: headPin
@@ -226,7 +226,7 @@ ColumnLayout {
         originRemote: sections.repoTab.markedOrigin
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)
-        onRefMenuRequested: (kind, name, full, oidHex) => sections.refMenuRequested(kind, name, full, oidHex)
+        onRefMenuRequested: (kind, name, full, oidHex, aim) => sections.refMenuRequested(kind, name, full, oidHex, aim)
         onRemoteMenuRequested: name => sections.remoteMenuRequested(name)
     }
 
@@ -251,7 +251,7 @@ ColumnLayout {
         branchesModel: sections.branchesModel
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)
-        onRefMenuRequested: (kind, name, full, oidHex) => sections.refMenuRequested(kind, name, full, oidHex)
+        onRefMenuRequested: (kind, name, full, oidHex, aim) => sections.refMenuRequested(kind, name, full, oidHex, aim)
     }
 
     NavHeader {
@@ -272,7 +272,7 @@ ColumnLayout {
         Layout.verticalStretchFactor: sections.sectionPull
         // A stash is a commit: clicking shows its stashed changes in the details pane.
         onRefActivated: oidHex => sections.refActivated(oidHex)
-        onRefMenuRequested: (kind, name, full, oidHex) => sections.refMenuRequested(kind, name, full, oidHex)
+        onRefMenuRequested: (kind, name, full, oidHex, aim) => sections.refMenuRequested(kind, name, full, oidHex, aim)
     }
 
     NavHeader {
@@ -299,7 +299,7 @@ ColumnLayout {
         pushRemote: sections.repoTab.defaultRemote
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)
-        onRefMenuRequested: (kind, name, full, oidHex) => sections.refMenuRequested(kind, name, full, oidHex)
+        onRefMenuRequested: (kind, name, full, oidHex, aim) => sections.refMenuRequested(kind, name, full, oidHex, aim)
     }
 
     // Takes the height the sections have no rows for (`groundPull`).

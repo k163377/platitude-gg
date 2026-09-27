@@ -34,14 +34,23 @@ Item {
         onDeleteTagEverywhereRequested: (tag, remote) => root.asked = "delete-both " + tag + " " + remote
     }
 
-    function standOn(offers, drift, onlyThere) {
+    /// The card on `offers`, the rest as `NavSectionModel.tagMenu` answers for a name `origin` carries: the deletes
+    /// reach it, and a drift holds them back. `over` replaces any of those answers.
+    function standOn(offers, drift, onlyThere, over) {
         root.asked = ""
-        card.standOn("tag", "v1.0", "abc123", {
+        const facts = {
             "pushRemote": "origin",
             "tagDriftOid": drift,
+            "tagReach": "origin",
+            "tagHeldBack": drift !== "" ? "drift" : "",
+            "tagCarriers": "origin",
             "tagOnlyThere": onlyThere,
+            "tagHere": offers.includes("delete"),
             "offers": offers
-        })
+        }
+        for (const key in (over || {}))
+            facts[key] = over[key]
+        card.standOn("tag", "v1.0", "abc123", facts)
     }
 
     TestCase {
@@ -89,10 +98,45 @@ Item {
             root.standOn(root.drifted, "deadbee", false)
             verify(card.deleteRemoteTagItem.offered, "the seat is kept")
             verify(card.deleteTagBothItem.offered)
-            compare(card.deleteRemoteTagItem.blockedReason, Words.remoteOnAnotherCommit)
-            compare(card.deleteTagBothItem.blockedReason, Words.remoteOnAnotherCommit)
+            compare(card.deleteRemoteTagItem.blockedReason, "Differs from origin")
+            compare(card.deleteTagBothItem.blockedReason, "Differs from origin")
             verify(card.deleteTagItem.offered, "while the local delete is pressable")
             compare(card.deleteTagItem.blockedReason, "")
+        }
+
+        /// Several remotes carry the name and none of them is the one this window acts on: no remote can be picked
+        /// unasked, so the two rows reaching over there stand greyed and name who has it — each is reached from its
+        /// own line (デザイン規約 §左メニューの所作 の削除の表).
+        function test_a_name_several_remotes_carry_unasked_greys_the_rows_reaching_them() {
+            root.standOn(root.drifted, "", false,
+                         { "tagReach": "", "tagHeldBack": "unnamed", "tagCarriers": "fork, mirror" })
+            verify(card.deleteRemoteTagItem.offered, "the seat is kept")
+            verify(card.deleteTagBothItem.offered)
+            compare(card.deleteRemoteTagItem.blockedReason, "Several remotes have it: fork, mirror")
+            compare(card.deleteTagBothItem.blockedReason, "Several remotes have it: fork, mirror")
+            compare(card.deleteRemoteTagItem.text, "v1.0", "and names no remote it cannot reach")
+
+            root.standOn(["branch-here", "integrate"], "", false,
+                         { "tagReach": "", "tagHeldBack": "unnamed", "tagCarriers": "fork, mirror", "tagHere": false })
+            verify(card.deleteRemoteTagItem.offered)
+            verify(!card.deleteTagBothItem.offered, "a name not held here has no both")
+        }
+
+        /// The deletes need not reach where the pushes go — the one remote carrying a name origin lacks, or one the
+        /// reader named — so the row says which.
+        function test_the_remote_delete_names_the_remote_it_reaches() {
+            root.standOn(root.both, "", false)
+            compare(card.deleteRemoteTagItem.text, "v1.0 from origin")
+            compare(card.pushTagItem.text, "to origin")
+
+            root.standOn(root.overThere, "", true, { "tagReach": "fork", "tagCarriers": "fork" })
+            compare(card.deleteRemoteTagItem.text, "v1.0 from fork")
+            card.deleteRemoteTagItem.held()
+            compare(root.asked, "delete-remote fork v1.0 true", "sent where the row said")
+
+            root.standOn(root.both, "", false, { "tagReach": "fork" })
+            card.deleteTagBothItem.held()
+            compare(root.asked, "delete-both v1.0 fork")
         }
 
         /// A stash is nobody's history, so it has no card at all.

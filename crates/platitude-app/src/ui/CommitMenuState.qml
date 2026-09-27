@@ -141,22 +141,29 @@ QtObject {
         }
     }
 
-    /// What the TAG card stands on — the same answer `RefRowMenu.tagFacts` gives at the other entrance.
+    /// What the TAG card stands on — the same answer `RefRowMenu.tagFacts` gives at the other entrance. A chip drawing
+    /// one remote's reading names that remote on its own, so the card acts on it (`NavSectionModel.tagAimAt`).
     function tagFacts(kind, full, oidHex) {
-        const remote = menuState.repoTab.defaultRemote
-        const drift = kind === "tag" ? menuState.tagsModel.remoteTagDrift(full, remote) : ""
-        const sides = kind === "tag" ? menuState.tagsModel.tagSides(full) : ""
+        if (kind !== "tag")
+            return { "pushRemote": menuState.repoTab.defaultRemote, "offers": [] }
+        const menu = menuState.tagsModel.tagMenu(full, menuState.repoTab.defaultRemote,
+                                                 menuState.tagsModel.tagAimAt(full, oidHex))
+        const sides = menuState.tagsModel.tagSides(full)
         return {
-            "pushRemote": remote,
-            "tagDriftOid": drift,
-            "tagOnlyThere": sides === "remote",
-            "offers": kind !== "tag" ? [] : GitFacts.refMenuOffers(
+            "pushRemote": menu.pushRemote,
+            "tagDriftOid": menu.lease,
+            "tagReach": menu.reach,
+            "tagHeldBack": menu.heldBack,
+            "tagCarriers": menu.carriers,
+            "tagOnlyThere": menu.rowGoes,
+            "tagHere": sides === "here" || sides === "both",
+            "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex,
                 menuState.repoTab.state === "open",
                 menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
                 menuState.workTree.branch, menuState.workTree.detached,
                 menuState.workTree.opText, menuState.workTree.conflictCount,
-                "", "", drift !== "", remote, sides, "")
+                "", "", menu.heldBack !== "", menu.pushRemote, sides, "")
         }
     }
 

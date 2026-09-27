@@ -131,7 +131,8 @@ Item {
     signal editCancelled()
     /// Right-click on a ref row; the page owns the menu because delegates are recycled out from under an open popup.
     /// `name` is what the row shows, `full` what git knows it by (a stash shows a message and answers to a selector).
-    signal refMenuRequested(string name, string full, string oidHex)
+    /// `aim` is a remote the press named on its own — a TAGS row's carrier line (`NavRowFacts.lineMenu`) — else empty.
+    signal refMenuRequested(string name, string full, string oidHex, string aim)
     /// Right-click on a remote's own row, the only folder row with anything behind it (デザイン規約 §左メニューの所作).
     /// Its own signal because a remote is configuration and opens a different menu.
     signal remoteMenuRequested(string name)
@@ -451,8 +452,9 @@ Item {
         navRow.rowPressed(button, modifiers)
     }
     /// A press on this row, and a double-click on it — out of the handler because the open lines answer with these
-    /// two as well (`NavRowFacts`): a press there that never moved is this row's own click.
-    function rowPressed(button, modifiers) {
+    /// two as well (`NavRowFacts`): a press there that never moved is this row's own click. `aim` is the remote a
+    /// line of those names on its own, the menu's to act on (`refMenuRequested`).
+    function rowPressed(button, modifiers, aim) {
         if (button === Qt.RightButton) {
             // Only rows with operations behind them open a menu. A working copy's is the ref menu too: the branch it has
             // out, or its commit, and its own card (デザイン規約 §左メニューの所作).
@@ -462,7 +464,7 @@ Item {
                         || navRow.kindHint === "tag"
                         || navRow.kindHint === "stash"
                         || navRow.kindHint === "worktree"))
-                navRow.refMenuRequested(navRow.name, navRow.fullName, navRow.oid_hex)
+                navRow.refMenuRequested(navRow.name, navRow.fullName, navRow.oid_hex, aim === undefined ? "" : aim)
             else if (!navRow.folder && navRow.kindHint === "wt")
                 navRow.fileMenuRequested(navRow.bucket, navRow.fullName)
             else if (navRow.isRemoteRow)
@@ -613,6 +615,12 @@ Item {
     property string factsRemotes: ""
     property string factsApart: ""
     property string factsAgainst: ""
+    /// Who the right reading belongs to, comma-separated as the others (`NavFacts.answers`' `by`).
+    property string factsBy: ""
+    /// TAGS only: the copy here stands apart from that reading too — the row's own name wears the warning while open
+    /// (`NavRowBody`), and `factsNameNote` is what a rest on it says (`NavFacts.answers`).
+    property bool factsHereApart: false
+    property string factsNameNote: ""
     /// Those answers as the lines to draw, in reading order (`NavFacts.lines`); the named fields above are what a run
     /// reads back (`NavList.openWords`).
     property var factsLines: []
@@ -638,6 +646,9 @@ Item {
         navRow.factsApart = said.remotes.filter(carried => carried.apart)
                                         .map(carried => carried.remote).join(",")
         navRow.factsAgainst = said.against
+        navRow.factsBy = said.by.split(", ").join(",")
+        navRow.factsHereApart = said.hereApart
+        navRow.factsNameNote = said.nameNote
         navRow.factsName = said.name
         navRow.factsLines = NavFacts.lines(navRow.kindHint, said)
         return navRow.factsName !== ""
@@ -701,6 +712,10 @@ Item {
             // **The rest on the row's own line asks for it too** — walking down to the lines would pay a second rest
             // for it. Both roads write the same ask, so the box stays up as the hand crosses into the lines.
             rowPointed: navRow.handOn || navRow.tipPointedAt
+            // Why the row's own name wears the warning, said on a rest on that name alone: the lines under it keep
+            // notes of their own. `rowHover` hears only the row's own line — the lines take the pointer off it.
+            nameNote: navRow.factsNameNote
+            nameRested: rowHover.hovered
         }
     }
 }

@@ -34,7 +34,7 @@ Rectangle {
     signal refActivated(string oidHex)
     /// Right-click on a row. `kind` is the section it came from, `name` what the row shows and `full` what git knows
     /// it by.
-    signal refMenuRequested(string kind, string name, string full, string oidHex)
+    signal refMenuRequested(string kind, string name, string full, string oidHex, string aim)
     signal worktreeActivated(string path)
     /// Double-click on a branch row: `kind` is the word the page's dispatcher reads (`branch` / `remote`, the
     /// same word a chip goes out under).
@@ -259,7 +259,7 @@ Rectangle {
         onSectionToggled: kind => sidebar.toggleSection(kind)
         onFoldRequested: collapse => sidebar.foldRequested(collapse)
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
-        onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
+        onRefMenuRequested: (kind, name, full, oidHex, aim) => sidebar.refMenuRequested(kind, name, full, oidHex, aim)
         onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name)
         onAddRemoteRequested: sidebar.askAddRemote()
     }
@@ -323,7 +323,7 @@ Rectangle {
         // from is a name lost.
         pinned: sidebar.menuOpen || sidebar.editKey !== ""
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
-        onRefMenuRequested: (kind, name, full, oidHex) => sidebar.refMenuRequested(kind, name, full, oidHex)
+        onRefMenuRequested: (kind, name, full, oidHex, aim) => sidebar.refMenuRequested(kind, name, full, oidHex, aim)
         onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name)
         onAddRemoteRequested: sidebar.askAddRemote()
     }

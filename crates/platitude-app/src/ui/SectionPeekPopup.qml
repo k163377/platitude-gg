@@ -36,7 +36,7 @@ AppCard {
     property point handAt: Qt.point(-1, -1)
 
     signal refActivated(string oidHex)
-    signal refMenuRequested(string kind, string name, string full, string oidHex)
+    signal refMenuRequested(string kind, string name, string full, string oidHex, string aim)
     /// Right-click on the row a remote itself stands on — the same menu the open list raises.
     signal remoteMenuRequested(string name)
     signal addRemoteRequested()
@@ -222,7 +222,7 @@ AppCard {
             markedRemote: peek.repoTab.pushDefault
             originRemote: peek.repoTab.markedOrigin
             onRefActivated: oidHex => peek.refActivated(oidHex)
-            onRefMenuRequested: (kind, name, full, oidHex) => peek.refMenuRequested(kind, name, full, oidHex)
+            onRefMenuRequested: (kind, name, full, oidHex, aim) => peek.refMenuRequested(kind, name, full, oidHex, aim)
             onRemoteMenuRequested: name => peek.remoteMenuRequested(name)
         }
     }

@@ -17,6 +17,10 @@ Item {
     /// The sections `mateOf` asks.
     required property var branchesModel
     required property var remotesModel
+    required property var tagsModel
+    /// The remote a tag's readings are weighed against — the one this window's tag rows act on, as the left panel's
+    /// TAGS rows read them (`NavList.pushRemote`).
+    required property string tagAgainst
     /// A ref menu is standing on one of the list's rows; it keeps the list up (`refListKeep`).
     required property bool menuStanding
     /// Any of the page's menus is standing. The row's card does not come out behind one — opened last, it would be
@@ -119,7 +123,7 @@ Item {
         // The row's card would be drawn over the list.
         host.closeRowCard()
         refList.records = records
-        refList.mates = host.matesFor(records)
+        refList.mates = host.matesFor(records, oidHex)
         // The anchor is the whole stack (front card and fan) — read before `refListAnchor` below takes the sheets
         // down.
         refList.coverWidth = anchor.width
@@ -143,20 +147,27 @@ Item {
     }
     /// Each record's second line (`mateOf`), null where there is none. Asked as the card opens: the card is measured
     /// over its rows in that turn, so a later answer has no room (デザイン規約 §行が読む答えはどこから来るか).
-    function matesFor(records) {
+    /// `oidHex` is the commit every record of the card stands on.
+    function matesFor(records, oidHex) {
         const here = ({})
         for (let i = 0; i < records.length; ++i)
             here[records[i].name] = 1
         const out = []
         for (let j = 0; j < records.length; ++j)
-            out.push(host.mateOf(records[j], here))
+            out.push(host.mateOf(records[j], here, oidHex))
         return out
     }
     /// The line one record opens under itself — the left panel's line, from the same `NavFacts`. None for a
     /// counterpart already a row of this card (same commit = level), and none for the working copy holding the
     /// branch: the chip's frame already says it (デザイン規約 §ref の種別).
-    function mateOf(chip, here) {
+    function mateOf(chip, here, oidHex) {
         const name = chip.name
+        // A tag's reading — the copy here, or a remote's on this commit — standing apart from the right one: the test
+        // the left panel's TAGS rows wear their warning by (`NavSectionModel.tagApartAt`), its note said as the line.
+        if (chip.kind === "tag")
+            return host.tagsModel !== null && host.tagsModel.tagApartAt(name, oidHex, host.tagAgainst)
+                 ? NavFacts.apartLine(NavFacts.apartNote(host.tagsModel.tagWeighedAgainst(name, host.tagAgainst)))
+                 : null
         if (chip.kind === "branch") {
             const gone = host.branchesModel.upstreamGoneOf(name)
             const reads = gone !== ""
