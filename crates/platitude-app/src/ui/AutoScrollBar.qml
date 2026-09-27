@@ -19,6 +19,155 @@ ScrollBar {
     /// Whether the idle step is drawn as less opacity. `PaneScrollBar` clears it: its opaque slab names a colour.
     property bool dimsItself: true
 
+    /// The arrows at the two ends of an upright bar (デザイン規約 §スクロールバーの矢印): one thumb across (Chromium's
+    /// Fluent bar, measured), each end the arrow's ink and above and below it the air the thumb keeps from the bar's
+    /// free side (`leftPadding`) — a thin, faint bar holds its arrows close. A sideways bar has none. `PaneScrollBar`
+    /// hands in its own span.
+    property real arrowSpan: bar.orientation === Qt.Vertical ? bar.availableWidth : 0
+    readonly property int arrowLength: bar.arrowSpan > 0
+                                       ? Math.ceil(bar.arrowSpan * upArrow.tallShare + 2 * bar.leftPadding) : 0
+    property bool arrowsBuried: false
+    /// The thumb's resting ink, one step up on the arrow being held and on nothing else: Chromium lights only the part
+    /// in use (measured: a thumb in the hand leaves the arrows as they are).
+    property color arrowInk: bar.palette.mid
+    property color arrowHeldInk: bar.palette.dark
+    /// The style's thumb stands at three quarters (Fusion's `active` state); the arrows are drawn as it is.
+    property real arrowOpacity: 0.75
+    /// The bar's length, read off its view — the bar's own height feeds its implicit height through the padding. A
+    /// bar that ends short of its view names its own (`DescriptionBox`).
+    property real lengthAlong: bar.view ? bar.view.height : 0
+    /// A bar shorter than its two ends squeezes each to half its length, the arrows with them, and has no thumb once
+    /// nothing is left between them (Chromium's Fluent bar, measured on boxes 10–140px tall: the arrows never go).
+    readonly property int arrowEnd: Math.min(bar.arrowLength, Math.floor(bar.lengthAlong / 2))
+    readonly property bool hasTrack: bar.arrowLength === 0 || bar.lengthAlong - 2 * bar.arrowEnd >= 1
+
+    topPadding: bar.arrowLength > 0 ? bar.arrowEnd : 2
+    bottomPadding: bar.arrowLength > 0 ? bar.arrowEnd : 2
+    Binding {
+        target: bar.contentItem
+        property: "visible"
+        value: bar.hasTrack
+    }
+
+    /// Which arrow is held: -1 the upper, 1 the lower, 0 neither.
+    property int arrowHeld: 0
+    /// Whether the held arrow is running on (the pause is over, and the hand has stayed on the arrow).
+    property bool arrowRunning: false
+    /// When the run last sent, for the next tick's share: the timer's beat slips under load, the speed must not.
+    property real runAt: 0
+    /// The glide a press's step rides. A surface that glides its wheel notches hands its own in (`WheelGlide`), so a
+    /// notch after a step adds to it and every hand that halts the surface's glide halts the step as well
+    /// (rules-refs/app-ui.md「ホイールの 1 ノッチは送られる、跳ばない」); any other bar rides one of its own.
+    property var stepGlide: ownGlide
+    /// Whether a press's step is still gliding.
+    readonly property bool stepping: bar.stepGlide.sending
+
+    /// Where the view may stand: its own `clampY` where it keeps one (margins, a room of its own), its extent otherwise.
+    function limitY(y) {
+        const v = bar.view
+        if (typeof v.clampY === "function")
+            return v.clampY(y)
+        const top = v.originY - v.topMargin
+        return Math.max(top, Math.min(y, Math.max(top, v.originY + v.contentHeight + v.bottomMargin - v.height)))
+    }
+    /// A press on an arrow, `dir` -1 up and 1 down: one step, glided, and the pause before a run. The handlers below
+    /// and a run both come in here (verify-ui implement.md).
+    function pressArrow(dir) {
+        bar.arrowHeld = dir
+        bar.arrowRunning = false
+        bar.stepGlide.sendTo(bar.limitY(bar.stepGlide.at + dir * Metrics.arrowStep))
+        runWait.restart()
+    }
+    /// The hand let go: the run stops where it is. A step still gliding lands.
+    function releaseArrow() {
+        bar.arrowHeld = 0
+        bar.arrowRunning = false
+        runWait.stop()
+    }
+    /// The hand slid off the held arrow: the run stops and does not come back until the next press (Chromium,
+    /// measured).
+    function pointerOnArrow(on) {
+        if (on || bar.arrowHeld === 0)
+            return
+        bar.arrowRunning = false
+        runWait.stop()
+    }
+    function startRun() {
+        bar.runAt = Date.now()
+        bar.arrowRunning = true
+    }
+    function runTick() {
+        const now = Date.now()
+        const share = (now - bar.runAt) / 1000
+        bar.runAt = now
+        bar.view.contentY = bar.limitY(bar.view.contentY + bar.arrowHeld * Metrics.arrowRepeatSpeed * share)
+    }
+
+    WheelGlide {
+        id: ownGlide
+        view: bar.view
+    }
+    Timer {
+        id: runWait
+        interval: Metrics.arrowRepeatDelayMs
+        onTriggered: bar.startRun()
+    }
+    Timer {
+        interval: 16
+        repeat: true
+        running: bar.arrowRunning
+        onTriggered: bar.runTick()
+    }
+
+    ScrollArrow {
+        id: upArrow
+        x: bar.leftPadding
+        width: bar.availableWidth
+        height: bar.arrowEnd
+        visible: bar.arrowEnd > 0
+        buried: bar.arrowsBuried
+        span: bar.arrowSpan * bar.arrowEnd / Math.max(1, bar.arrowLength)
+        ink: bar.arrowHeld === -1 ? bar.arrowHeldInk : bar.arrowInk
+        opacity: bar.arrowOpacity
+    }
+    ScrollArrow {
+        x: bar.leftPadding
+        y: bar.height - bar.arrowEnd
+        width: bar.availableWidth
+        height: bar.arrowEnd
+        visible: bar.arrowEnd > 0
+        down: true
+        buried: bar.arrowsBuried
+        span: bar.arrowSpan * bar.arrowEnd / Math.max(1, bar.arrowLength)
+        ink: bar.arrowHeld === 1 ? bar.arrowHeldInk : bar.arrowInk
+        opacity: bar.arrowOpacity
+    }
+    // The whole width of the bar takes the press, as the thumb's does. Hover stays off (below: the bar takes none).
+    //
+    // `preventStealing` on both: the bar is a child of its view, which filters its children's presses and takes a
+    // moving hand for a drag of its rows — the thumb keeps its grab by itself, these areas have to say so.
+    MouseArea {
+        width: bar.width
+        height: bar.arrowEnd
+        enabled: bar.arrowEnd > 0
+        preventStealing: true
+        onPressed: bar.pressArrow(-1)
+        onReleased: bar.releaseArrow()
+        onCanceled: bar.releaseArrow()
+        onContainsMouseChanged: bar.pointerOnArrow(containsMouse)
+    }
+    MouseArea {
+        y: bar.height - bar.arrowEnd
+        width: bar.width
+        height: bar.arrowEnd
+        enabled: bar.arrowEnd > 0
+        preventStealing: true
+        onPressed: bar.pressArrow(1)
+        onReleased: bar.releaseArrow()
+        onCanceled: bar.releaseArrow()
+        onContainsMouseChanged: bar.pointerOnArrow(containsMouse)
+    }
+
     /// Whether the reader is inside the range this bar sends, from a handler on the view — an ancestor of the rows, so
     /// it leaves them their hover (rules-refs/app-ui.md「行に重ねる面の `HoverHandler` は祖先が持つ」). The two sideways
     /// bars have no view and are handed their pane's answer; a headless run writes this property too.
@@ -31,14 +180,17 @@ ScrollBar {
         parent: bar.view
     }
 
-    /// Whether the reader is here: pointing into the range, or holding the thumb (a drag may take the pointer
+    /// Whether the bar is in the hand: the thumb, or an arrow.
+    readonly property bool held: bar.pressed || bar.arrowHeld !== 0
+    /// Whether the reader is here: pointing into the range, or holding the bar (a drag may take the pointer
     /// anywhere). Not `activeFocus` — a list keeps it for the rest of the session after one click.
-    readonly property bool attended: bar.inArea || bar.pressed
+    readonly property bool attended: bar.inArea || bar.held
 
-    /// The window's hover stops while this is held (`Hand.heldBar`). Every way a hold ends clears it here: a bar hidden
-    /// or disabled mid-drag loses the grab and reports `pressed` false.
-    onPressedChanged: {
-        if (bar.pressed)
+    /// The window's hover stops while this is held (`Hand.heldBar`): an arrow runs the rows past a still hand just as
+    /// a drag does. Every way a hold ends clears it here: a bar hidden or disabled mid-drag loses the grab and reports
+    /// `pressed` false, and an arrow's press is cancelled.
+    onHeldChanged: {
+        if (bar.held)
             Hand.heldBar = bar
         else if (Hand.heldBar === bar)
             Hand.heldBar = null
@@ -57,8 +209,10 @@ ScrollBar {
             bar.lit = false
     }
     onVisibleChanged: {
-        if (!bar.visible)
+        if (!bar.visible) {
             bar.lit = false
+            bar.releaseArrow()
+        }
     }
     /// Says the view has just been sent (wired below for a flickable; `GraphLaneBar` / `DiffCodeScroll` call it).
     /// Only while somebody is here: a load growing the graph and `shiftRows` move the view too, and would leave it lit.
@@ -68,7 +222,7 @@ ScrollBar {
     }
 
     /// What the bar is painting: full ink while it is being used, a step down once it is not.
-    readonly property bool bright: bar.lit || bar.pressed
+    readonly property bool bright: bar.lit || bar.held
 
     /// Hover is left to the view. Taking it breaks two ways: a `Flickable` drops its own handler's hover over a
     /// hover-taking child (a hole in `inArea` the width of the bar), and the bar's `hovered` latches after a press.

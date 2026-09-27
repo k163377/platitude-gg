@@ -432,6 +432,12 @@ Rectangle {
                 id: wheelGlide
                 view: diffList
             }
+            // The bar's arrows glide their steps on this same glide (`AutoScrollBar.stepGlide`).
+            Binding {
+                target: diffList.ScrollBar.vertical
+                property: "stepGlide"
+                value: wheelGlide
+            }
             // The arrows are answered below (規約 §diff を上下に送る): Qt's own key navigation would scroll to a
             // `currentIndex` nothing here follows.
             keyNavigationEnabled: false

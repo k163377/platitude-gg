@@ -108,6 +108,11 @@ Rectangle {
     /// Whether a pull is asking for a height the box cannot be, either way. Letting go ends it, so no badge is
     /// stranded.
     readonly property bool gripRefused: box.gripDragging && box.askedPast
+    /// How far into the text's inset the bar stops while the grip is offered: at the mark's highest ink, so the down
+    /// arrow stands wholly above the grip, never down in the mark's square beside its slant, and keeps from it the air
+    /// its end holds below it anywhere (デザイン規約 §スクロールバーの矢印). Rounded up: an end reaching into the mark
+    /// would bring the arrow down onto it.
+    readonly property int gripYield: Math.ceil(textView.y + textView.height - (grip.y + gripMark.y + gripMark.inkTop))
     /// Automation: a pull carried past one of the two ends (`PGG_AUTO_ACT=divider-refuse`, cases `desc-max` /
     /// `desc-min`).
     function pullPast(down) {
@@ -116,7 +121,7 @@ Rectangle {
         box.pullTo(down ? box.ceiling + over : box.restHeight - over)
         // Written after the pull, off `boxHeight` (the anchored grip only moves on the next layout): written before,
         // it leaves the badge at the corner the grip has since left.
-        box.gripPoint = box.mapToItem(null, box.width - grip.width / 2, box.boxHeight - grip.height / 2
+        box.gripPoint = box.mapToItem(null, box.width - gripMark.width / 2, box.boxHeight - gripMark.height / 2
         + (down ? over : -over))
     }
     // The badge is the page's (`RepoPage`): a refused hand is outside this box, and a badge parented here is
@@ -210,7 +215,12 @@ Rectangle {
             view: textView.contentItem
             x: textView.width - width
             y: textView.topPadding
-            height: textView.availableHeight
+            // Short of the grip's ink while it is offered (`gripYield`).
+            height: textView.availableHeight - (box.grips ? box.gripYield : 0)
+            lengthAlong: textBar.height
+            stepGlide: glide
+            // Taking the bar is the reader taking the box over, as the wheel is.
+            onHeldChanged: if (textBar.held) box.unpin()
         }
         // Reached once it exists. Not `interactive`: the flickable would answer the wheel as well as the handler and
         // move the text twice; `rollBy` is the only thing that moves it.
@@ -239,7 +249,8 @@ Rectangle {
         }
     }
     // Declared after the ScrollView, or the bar's end takes the corner. The mark hangs off the square's lower-right, on
-    // the text's own inset.
+    // the text's own inset. While the bar stands, the down arrow's end reaches into the square (`gripYield`): the part
+    // of the square the bar covers is the bar's, the rest the grip's.
     MouseArea {
         id: grip
         visible: box.grips
@@ -247,6 +258,15 @@ Rectangle {
         anchors.bottom: parent.bottom
         width: Theme.iconMd
         height: Theme.iconMd
+        // A mask is the whole of the hit test: Qt asks it instead of the item's own rectangle, so it says the square
+        // itself — a point outside it answered true takes presses from anywhere in the window.
+        containmentMask: QtObject {
+            function contains(point: point): bool {
+                if (point.x < 0 || point.y < 0 || point.x > grip.width || point.y > grip.height)
+                    return false
+                return !textBar.visible || !textBar.contains(grip.mapToItem(textBar, point.x, point.y))
+            }
+        }
         hoverEnabled: true
         cursorShape: Qt.SizeVerCursor
         /// Where the pull started, in the pane's coordinates — the grip travels with the edge it moves.
@@ -265,7 +285,9 @@ Rectangle {
             box.pullTo(grip.fromHeight + mapToItem(box.parent, 0, mouse.y).y - grip.fromY)
         }
         NavIcon {
-            anchors.fill: parent
+            id: gripMark
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
             kind: "grip"
             tint: grip.containsMouse || grip.pressed ? Theme.textSecondary : Theme.borderStrong
         }

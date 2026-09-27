@@ -245,6 +245,7 @@ fn main() {
     qrc::embed!("ui/CloseToolButton.qml");
     qrc::embed!("ui/RowHoverHost.qml");
     qrc::embed!("ui/SampleTimer.qml");
+    qrc::embed!("ui/ScrollArrow.qml");
     qrc::embed!("ui/SectionPeekPopup.qml");
     qrc::embed!("ui/SettingsAppPane.qml");
     qrc::embed!("ui/SettingsDialog.qml");

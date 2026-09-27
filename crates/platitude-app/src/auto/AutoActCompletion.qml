@@ -203,7 +203,7 @@ QtObject {
                 "changes-shut", "wip-shut",
                 "wip-embedded",
                 "changes-fold", "changes-unfold",
-                "graph-bar", "graph-bar-away", "pane-bar", "pane-bar-away",
+                "graph-bar", "graph-bar-away", "pane-bar", "pane-bar-away", "bar-arrow",
                 "text-bar", "text-bar-away", "middle-scroll", "middle-scroll-exit",
                 // The surface is put up and filled on the sampler's own ticks; a render barrier would photograph it
                 // before the press.

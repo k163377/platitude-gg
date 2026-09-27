@@ -92,9 +92,13 @@ InkCanvas {
         switch (icon.kind) {
         case "check": return 4.5
         case "bang": return 3.5
+        // The long stroke's upper end.
+        case "grip": return 6
         default: return 0
         }
     }
+    /// The ink's top edge in the item's pixels, half a stroke included. Of the unturned mark.
+    readonly property real inkTop: icon.inkTopGrid / 16 * icon.height - icon.stroke / 2
     /// The ink span in the item's pixels, stroke included. A quarter turn reads the other axis.
     readonly property real inkWidth:
         (icon.rotation % 180 === 0 ? icon.inkGrid : icon.inkTallGrid)

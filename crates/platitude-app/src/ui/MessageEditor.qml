@@ -230,6 +230,8 @@ ColumnLayout {
                 x: summaryView.width - width
                 y: summaryView.topPadding
                 height: summaryView.availableHeight
+                stepGlide: summaryGlide
+                onHeldChanged: if (summaryBar.held) editor.unpinSummary()
             }
             // ScrollView keeps its Flickable private -- reach it once it exists. Not interactive: answering the same
             // wheel as the handler moves the text twice.

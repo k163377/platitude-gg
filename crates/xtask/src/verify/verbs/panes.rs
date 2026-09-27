@@ -206,6 +206,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "text_bar ink=0.3",
     },
+    // The arrows at a bar's ends: a click is one step, a hold runs on and
+    // holds the bar the way a drag does, sliding off stops the run with the
+    // hand still down, and letting go stops it and gives the bar back. Each
+    // is read off the view having moved or not, never off a clock.
+    Verb {
+        name: "bar-arrow",
+        when: &[],
+        plain: "bar_arrow click=40 held=true left=true stopped=true",
+    },
     // The middle button's hand left running on a surface: the anchor ring
     // stands the same over a list that moved and one that did not, so
     // `answered=` is read off the surface. In the working tree's two boxes

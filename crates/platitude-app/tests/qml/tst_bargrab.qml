@@ -149,9 +149,10 @@ Item {
         function barOf(view) {
             return view.ScrollBar.vertical
         }
-        /// The middle of the bar's handle, in the bar's own coordinates — where a hand takes hold of it.
+        /// The middle of the bar's handle, in the bar's own coordinates — where a hand takes hold of it. Read off the
+        /// handle itself: the arrows' ends are no part of its travel.
         function thumbY(bar) {
-            return (bar.position + bar.size / 2) * bar.height
+            return bar.contentItem.y + bar.contentItem.height / 2
         }
         /// The box is out and settled on the target it came out on. A list that has just built its rows can hand the
         /// row under the hand to a new delegate, and the box then goes down and counts again (`SharedToolTip.handOver`)

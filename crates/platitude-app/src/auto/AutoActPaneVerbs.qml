@@ -74,6 +74,10 @@ Item {
             // HEAD is the commit `--preset long` gives its eighty files.
             page.activateRow(workTree.headOid)
             paneBarTimer.begin()
+        } else if (act === "bar-arrow") {
+            // The file list `--preset long` gives HEAD eighty files for, as `pane-bar`.
+            page.activateRow(workTree.headOid)
+            barArrowTimer.begin()
         } else if (act === "text-bar" || act === "text-bar-away") {
             // The argument picks a commit whose body runs past the box — one that fits never moves, and the run waits
             // out its watchdog.
@@ -467,6 +471,79 @@ Item {
             + " x=" + Math.round(graphPane.graphX)
             + " max=" + Math.round(graphPane.graphXMax))
             driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=bar-arrow: the arrows of the right panel's file list (`PaneScrollBar`; デザイン規約 §スクロールバーの矢印),
+    // pressed through the functions their handlers call. A click sends one step; a hold runs on past it; sliding off
+    // stops the run with the hand still down; letting go stops it and gives the bar back. No clock is read: a run's
+    // start is waited for on the view having gone past the press's step, its stop read off the bar's own state (only a
+    // running arrow moves the view), so a slow machine takes longer and says the same.
+    SampleTimer {
+        id: barArrowTimer
+        property string stage: ""
+        property real from: 0
+        property int click: -1
+        property bool held: false
+        property bool left: false
+        property bool stopped: false
+        function begin() {
+            barArrowTimer.stage = "laid"
+            barArrowTimer.click = -1
+            barArrowTimer.held = false
+            barArrowTimer.left = false
+            barArrowTimer.stopped = false
+            barArrowTimer.start()
+        }
+        onTriggered: {
+            const view = detailsPane.filesWalk.view
+            const bar = detailsPane.filesBar
+            // The first stage names what it waits on itself; one line a tick each would take turns at `said`.
+            if (barArrowTimer.stage !== "laid")
+                Awaited.at("bar_arrow", barArrowTimer.stage)
+            if (barArrowTimer.stage === "laid") {
+                // Laid out, with somewhere to go and arrows to press.
+                if (!Awaited.all("bar_arrow_laid", {
+                        "rows": !!view && view.count > 0,
+                        "room": !!view && view.contentHeight > view.height + 1,
+                        "arrows": bar.arrowEnd > 0
+                    }))
+                    return
+                view.contentY = bar.limitY(view.originY - view.topMargin)
+                barArrowTimer.from = view.contentY
+                bar.pressArrow(1)
+                bar.releaseArrow()
+                barArrowTimer.stage = "click"
+            } else if (barArrowTimer.stage === "click") {
+                if (bar.stepping)
+                    return
+                barArrowTimer.click = Math.round(view.contentY - barArrowTimer.from)
+                barArrowTimer.from = view.contentY
+                bar.pressArrow(1)
+                barArrowTimer.held = Hand.heldBar === bar
+                barArrowTimer.stage = "hold"
+            } else if (barArrowTimer.stage === "hold") {
+                // Past the press's own step: the run has started.
+                if (view.contentY <= barArrowTimer.from + Metrics.arrowStep + 1)
+                    return
+                bar.pointerOnArrow(false)
+                barArrowTimer.left = bar.arrowHeld === 1 && !bar.arrowRunning
+                bar.releaseArrow()
+                // Back to the start: the second hold has room to run, wherever the first one got to.
+                view.contentY = bar.limitY(view.originY - view.topMargin)
+                barArrowTimer.from = view.contentY
+                bar.pressArrow(1)
+                barArrowTimer.stage = "again"
+            } else if (barArrowTimer.stage === "again") {
+                if (view.contentY <= barArrowTimer.from + Metrics.arrowStep + 1)
+                    return
+                bar.releaseArrow()
+                barArrowTimer.stopped = !bar.arrowRunning && Hand.heldBar !== bar
+                barArrowTimer.stop()
+                Harness.report("bar_arrow click=" + barArrowTimer.click + " held=" + barArrowTimer.held
+                                  + " left=" + barArrowTimer.left + " stopped=" + barArrowTimer.stopped
+                                  + " end=" + bar.arrowEnd + " at=" + Math.round(view.contentY))
+                driver.complete()
+            }
         }
     }
 }

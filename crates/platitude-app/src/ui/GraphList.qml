@@ -171,6 +171,12 @@ AppListView {
         id: wheelGlide
         view: graphList
     }
+    // The bar's arrows glide their steps on this same glide (`AutoScrollBar.stepGlide`).
+    Binding {
+        target: graphList.ScrollBar.vertical
+        property: "stepGlide"
+        value: wheelGlide
+    }
     // Mouse wheels scroll a fixed number of rows per notch; touchpads keep native Flickable panning.
     WheelHandler {
         acceptedDevices: PointerDevice.Mouse
