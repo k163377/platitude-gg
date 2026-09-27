@@ -22,6 +22,7 @@ mod halt;
 mod hook;
 mod landing;
 mod permit;
+mod pins;
 mod seats;
 mod selection;
 mod shell;

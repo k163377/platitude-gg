@@ -567,11 +567,12 @@ fn an_xtask_change_leaves_the_app_alone_and_runs_on_both_sides() {
 
 #[test]
 fn a_build_input_change_owes_everything() {
-    let sb = Sandbox::new("lockfile");
-    sb.write(&sb.seat, "Cargo.lock", "# lock\n# bumped\n");
-    sb.commit_all(&sb.seat, "chore: bump", &[]);
+    let sb = Sandbox::new("build-input");
+    sb.write(&sb.seat, "clippy.toml", "too-many-lines-threshold = 100\n");
+    sb.commit_all(&sb.seat, "chore: a lint threshold", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
-    assert!(text.contains("everything (Cargo.lock)"), "{text}");
+    assert!(text.contains("everything (clippy.toml)"), "{text}");
+    assert!(!text.contains("the full tier"), "{text}");
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
     for owed in [

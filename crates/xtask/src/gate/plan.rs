@@ -2,6 +2,7 @@
 //! its diff, the steps that reach selects, and which of those are already
 //! green for the inputs they read.
 
+mod pins;
 mod steps;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -64,9 +65,12 @@ pub(crate) struct Plan {
     /// another tree stamps while this run queues (`gate::step::run_one`
     /// looks again).
     pub fresh: bool,
-    /// Every file in the tree counted as reached, and why: `--all`, or the
-    /// build input that changed.
+    /// Every file in the tree counted as reached, and why: `--all`, a
+    /// moved version, or the build input that changed.
     pub everything: Option<String>,
+    /// The full tier's steps (`periodic`, every census line on both sides):
+    /// `--all`, or a moved version ([`pins`]) before a merge.
+    pub full: bool,
     pub changed: Vec<String>,
     pub reach: BTreeSet<String>,
     pub required: Vec<Required>,
@@ -223,8 +227,18 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         .filter(|file| !graph::is_markdown(file))
         .cloned()
         .collect();
+    // The daily tier stays the host's quick half; stage 2 owes the full
+    // tier for a new version.
+    let pinned = if ask.all || ask.host_only {
+        None
+    } else {
+        pins::moved(&here, &base, &head, &executable_changes)
+    };
+    let full = ask.all || pinned.is_some();
     let everything = if ask.all {
         Some("--all".to_string())
+    } else if pinned.is_some() {
+        pinned
     } else if let Some(input) = executable_changes.iter().find(|f| moves_everything(f)) {
         Some(input.clone())
     } else {
@@ -253,6 +267,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         tiers: &tiers,
         worn: &worn,
         whole: everything.is_some(),
+        full,
     };
     let (
         steps,
@@ -285,6 +300,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         host_only: ask.host_only,
         fresh: ask.fresh,
         everything,
+        full,
         changed,
         reach: reach.into_keys().collect(),
         required,
@@ -416,6 +432,8 @@ struct Reading<'a> {
     tiers: &'a Tiers,
     worn: &'a BTreeMap<String, BTreeSet<String>>,
     whole: bool,
+    /// Owes the full tier ([`Plan::full`]).
+    full: bool,
 }
 
 /// What the verb selection counted beside the steps it made.
@@ -482,7 +500,7 @@ fn cache_key(ids: &BTreeMap<String, String>, step: &Step) -> String {
 pub(crate) fn describe(plan: &Plan) -> String {
     let short = |sha: &str| sha.chars().take(10).collect::<String>();
     let mut out = format!(
-        "gate: HEAD {} against main {} (base {}): {}{}{}\n",
+        "gate: HEAD {} against main {} (base {}): {}{}{}{}\n",
         short(&plan.head),
         short(&plan.main),
         short(&plan.base),
@@ -499,7 +517,8 @@ pub(crate) fn describe(plan: &Plan) -> String {
         match &plan.everything {
             Some(why) => format!(", everything ({why})"),
             None => String::new(),
-        }
+        },
+        if plan.full { ", the full tier" } else { "" }
     );
     if plan.everything.is_some() {
         out.push_str(&format!(

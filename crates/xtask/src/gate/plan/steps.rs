@@ -175,7 +175,7 @@ pub(super) fn select(
     steps.extend(clippy_steps(&sorted));
     steps.extend(unit_steps(g, &sorted));
     steps.extend(it_steps(g, &sorted));
-    if ask.all {
+    if read.full {
         steps.extend(periodic_steps(g, read.dir, &sorted));
     }
     let (binary, counted) = binary_steps(read, &sorted, reach, changed, ask);
@@ -537,7 +537,7 @@ fn binary_steps(
     let shadow = verbs_in_snapshot(read, changed)
         .map_or(lines.len(), |shown| census.verbs_touching(&shown).len());
     let selected = lines.len();
-    let mut lines = owed_lines(read, &sorted.qml, lines, ask.all);
+    let mut lines = owed_lines(read, &sorted.qml, lines, read.full);
     let left = selected - lines.len();
     for extra in ask.extra_verbs {
         if !lines.contains(extra) {
@@ -563,7 +563,7 @@ fn binary_steps(
         host_step.release = true;
         steps.push(host_step);
         // Asked for by name, the line runs where the asker can see it.
-        if !(read.tiers.on_linux(line, ask.all) || ask.extra_verbs.contains(line)) {
+        if !(read.tiers.on_linux(line, read.full) || ask.extra_verbs.contains(line)) {
             continue;
         }
         let mut linux = xtask(&["linux", "verify-ui"]);

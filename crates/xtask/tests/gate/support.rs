@@ -319,91 +319,7 @@ impl Sandbox {
     fn seed(&self) {
         std::fs::create_dir_all(&self.repo).expect("repo dir");
         self.git_ok(&self.repo, &["init", "-q", "-b", "main"]);
-        for (path, text) in [
-            ("Cargo.toml", "[workspace]\n"),
-            ("Cargo.lock", "# lock\n"),
-            // A landing steps out of the build slot under here; what it
-            // leaves is nobody's uncommitted change.
-            (".gitignore", "/target\n"),
-            ("deny.toml", "[bans]\n"),
-            ("rust-toolchain.toml", "[toolchain]\nchannel = \"stable\"\n"),
-            ("ci/linux/Dockerfile", "FROM ubuntu\n"),
-            (
-                "crates/platitude-core/src/lib.rs",
-                "pub mod refs;\npub mod stash;\n",
-            ),
-            (
-                "crates/platitude-core/src/stash.rs",
-                "pub fn stash() {}\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn t() { stash() }\n}\n",
-            ),
-            (
-                "crates/platitude-core/src/refs.rs",
-                "pub fn refs() {}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
-            ),
-            (
-                "crates/platitude-core/tests/it/main.rs",
-                "mod support;\nmod refs_integration;\nmod stash_integration;\n",
-            ),
-            (
-                "crates/platitude-core/tests/it/support/mod.rs",
-                "pub fn repo() {}\n",
-            ),
-            (
-                "crates/platitude-core/tests/it/stash_integration.rs",
-                "use crate::support;\nuse platitude_core::stash;\n#[test]\nfn s() { support::repo(); stash::stash() }\n",
-            ),
-            (
-                "crates/platitude-core/tests/it/refs_integration.rs",
-                "use crate::support;\nuse platitude_core::refs;\n#[test]\nfn r() { support::repo(); refs::refs() }\n",
-            ),
-            (
-                "crates/platitude-app/src/main.rs",
-                "mod models;\nfn main() {}\n",
-            ),
-            (
-                "crates/platitude-app/src/models.rs",
-                "use platitude_core::stash;\npub struct StashModel;\n#[qobject]\nimpl StashModel {}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn m() {}\n}\n",
-            ),
-            (
-                // Reads the singleton, as product components do: no run
-                // names a singleton, so only a reader puts it in reach.
-                "crates/platitude-app/src/ui/Main.qml",
-                "Item {\n    spacing: Theme.gap\n    StashPane {}\n}\n",
-            ),
-            (
-                "crates/platitude-app/src/ui/StashPane.qml",
-                "Item {\n    property var model: StashModel\n}\n",
-            ),
-            (
-                "crates/platitude-app/src/ui/Theme.qml",
-                "pragma Singleton\nQtObject {}\n",
-            ),
-            (
-                "crates/platitude-app/src/ui/qmldir",
-                "module platitude.ui\nsingleton Theme 1.0 Theme.qml\nMain 1.0 Main.qml\n",
-            ),
-            ("crates/platitude-app/src/auto/Driver.qml", "Item {}\n"),
-            (
-                "crates/xtask/src/main.rs",
-                "mod qmltest;\nmod seats;\nfn main() {}\n",
-            ),
-            (
-                "crates/xtask/src/seats.rs",
-                "#[cfg(test)]\nmod tests {\n    #[test]\n    fn x() {}\n}\n",
-            ),
-            ("crates/xtask/src/qmltest.rs", "pub fn run() {}\n"),
-            (
-                "crates/xtask/verb-census.txt",
-                "# census\nstash --preset basic\tDriver Main StashPane\n",
-            ),
-            // The census's verb runs on the container too, so every test
-            // sees both sides' verb blocks.
-            (
-                "crates/xtask/verb-tiers.txt",
-                "linux\tstash --preset basic\t-\tthe sandbox's line on both sides\n",
-            ),
-            ("internal-docs/notes.md", "# notes\n"),
-        ] {
+        for (path, text) in SEED {
             self.write(&self.repo, path, text);
         }
         self.write(
@@ -453,6 +369,101 @@ impl Drop for Sandbox {
         let _ = std::fs::remove_dir_all(&self.root);
     }
 }
+
+/// The miniature's files, as `Sandbox::seed` commits them on main.
+const SEED: &[(&str, &str)] = &[
+    ("Cargo.toml", "[workspace]\n"),
+    ("Cargo.lock", "# lock\n"),
+    // A landing steps out of the build slot under here; what it
+    // leaves is nobody's uncommitted change.
+    (".gitignore", "/target\n"),
+    ("deny.toml", "[bans]\n"),
+    ("rust-toolchain.toml", "[toolchain]\nchannel = \"stable\"\n"),
+    ("ci/linux/Dockerfile", "FROM ubuntu\n"),
+    (
+        ".github/workflows/ci.yml",
+        "env:\n  QT_VERSION: \"6.10.3\"\n",
+    ),
+    (
+        "crates/platitude-core/src/lib.rs",
+        "pub mod refs;\npub mod stash;\npub mod version;\n",
+    ),
+    (
+        "crates/platitude-core/src/version.rs",
+        "/// The oldest git.\npub const MINIMUM_GIT: (u32, u32) = (2, 43);\n",
+    ),
+    (
+        "crates/platitude-core/src/stash.rs",
+        "pub fn stash() {}\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn t() { stash() }\n}\n",
+    ),
+    (
+        "crates/platitude-core/src/refs.rs",
+        "pub fn refs() {}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
+    ),
+    (
+        "crates/platitude-core/tests/it/main.rs",
+        "mod support;\nmod refs_integration;\nmod stash_integration;\n",
+    ),
+    (
+        "crates/platitude-core/tests/it/support/mod.rs",
+        "pub fn repo() {}\n",
+    ),
+    (
+        "crates/platitude-core/tests/it/stash_integration.rs",
+        "use crate::support;\nuse platitude_core::stash;\n#[test]\nfn s() { support::repo(); stash::stash() }\n",
+    ),
+    (
+        "crates/platitude-core/tests/it/refs_integration.rs",
+        "use crate::support;\nuse platitude_core::refs;\n#[test]\nfn r() { support::repo(); refs::refs() }\n",
+    ),
+    (
+        "crates/platitude-app/src/main.rs",
+        "mod models;\nfn main() {}\n",
+    ),
+    (
+        "crates/platitude-app/src/models.rs",
+        "use platitude_core::stash;\npub struct StashModel;\n#[qobject]\nimpl StashModel {}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn m() {}\n}\n",
+    ),
+    (
+        // Reads the singleton, as product components do: no run
+        // names a singleton, so only a reader puts it in reach.
+        "crates/platitude-app/src/ui/Main.qml",
+        "Item {\n    spacing: Theme.gap\n    StashPane {}\n}\n",
+    ),
+    (
+        "crates/platitude-app/src/ui/StashPane.qml",
+        "Item {\n    property var model: StashModel\n}\n",
+    ),
+    (
+        "crates/platitude-app/src/ui/Theme.qml",
+        "pragma Singleton\nQtObject {}\n",
+    ),
+    (
+        "crates/platitude-app/src/ui/qmldir",
+        "module platitude.ui\nsingleton Theme 1.0 Theme.qml\nMain 1.0 Main.qml\n",
+    ),
+    ("crates/platitude-app/src/auto/Driver.qml", "Item {}\n"),
+    (
+        "crates/xtask/src/main.rs",
+        "mod qmltest;\nmod seats;\nfn main() {}\n",
+    ),
+    (
+        "crates/xtask/src/seats.rs",
+        "#[cfg(test)]\nmod tests {\n    #[test]\n    fn x() {}\n}\n",
+    ),
+    ("crates/xtask/src/qmltest.rs", "pub fn run() {}\n"),
+    (
+        "crates/xtask/verb-census.txt",
+        "# census\nstash --preset basic\tDriver Main StashPane\n",
+    ),
+    // The census's verb runs on the container too, so every test
+    // sees both sides' verb blocks.
+    (
+        "crates/xtask/verb-tiers.txt",
+        "linux\tstash --preset basic\t-\tthe sandbox's line on both sides\n",
+    ),
+    ("internal-docs/notes.md", "# notes\n"),
+];
 
 /// The checked-in hook with its verdict line pointed at this binary, so
 /// the script's own structure is what runs in the sandbox.
