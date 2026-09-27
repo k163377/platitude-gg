@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use super::{
-    Ask, CARGO, Counted, DENY, DOCKERFILE, DOCS, QMLTEST, Reading, Side, Step, app, core, harness,
-    qml_dirs, under,
+    Ask, CARGO, Counted, DENY, DOCKERFILE, DOCS, IMAGE, QMLTEST, Reading, Side, Step, app, core,
+    harness, qml_dirs, under,
 };
 use crate::gate::census;
 use crate::gate::graph::{Carried, Graph, Reach, stem_of};
@@ -66,7 +66,7 @@ fn on_linux(id: &str, command: &[String], inputs: &[String]) -> Step {
     let mut linux = xtask(&["linux"]);
     linux.extend(command[1..].iter().cloned());
     let mut linux_inputs = inputs.to_vec();
-    linux_inputs.push(DOCKERFILE.to_string());
+    linux_inputs.extend(IMAGE.map(String::from));
     step(
         &format!("{id} linux"),
         Side::Linux,
@@ -261,7 +261,7 @@ fn qmltest_steps(reach: &Reach, whole: bool) -> Vec<Step> {
     }
     let inputs = [ui, tests, QMLTEST.to_string()];
     let mut linux_inputs = inputs.to_vec();
-    linux_inputs.push(DOCKERFILE.to_string());
+    linux_inputs.extend(IMAGE.map(String::from));
     vec![
         step("qmltest", Side::Host, false, xtask(&["qmltest"]), &inputs),
         step(
@@ -340,7 +340,7 @@ fn clippy_steps(sorted: &Sorted) -> Vec<Step> {
         let mut linux = xtask(&["linux"]);
         linux.extend(clippy[1..].iter().cloned());
         let mut linux_inputs = inputs.clone();
-        linux_inputs.push(DOCKERFILE.to_string());
+        linux_inputs.extend(IMAGE.map(String::from));
         steps.push(step(
             &format!("clippy-linux {package}"),
             Side::Linux,
@@ -569,7 +569,7 @@ fn binary_steps(
         let mut linux = xtask(&["linux", "verify-ui"]);
         linux.extend(crate::verify::suite_words(line));
         let mut linux_inputs = verb_inputs.clone();
-        linux_inputs.push(DOCKERFILE.to_string());
+        linux_inputs.extend(IMAGE.map(String::from));
         let mut linux_step = step(
             &format!("verify-linux {line}"),
             Side::Linux,
@@ -583,7 +583,8 @@ fn binary_steps(
     }
     if binary_moved || changed.iter().any(|f| f == DOCKERFILE) {
         let mut bare_inputs = binary_inputs;
-        bare_inputs.extend(["crates/xtask/src/linux", DOCKERFILE].map(String::from));
+        bare_inputs.push("crates/xtask/src/linux".to_string());
+        bare_inputs.extend(IMAGE.map(String::from));
         let mut bare = step(
             "bare",
             Side::Linux,
