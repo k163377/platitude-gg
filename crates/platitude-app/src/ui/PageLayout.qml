@@ -86,9 +86,13 @@ QtObject {
     readonly property real openFloorWidth:
         layout.sidebarPane.minOpenWidth
         + Theme.splitterWidth + layout.centreMinWidth + Theme.splitterWidth + layout.rightMinWidth
+    /// The panes over the taller of the menu's two faces, and the log at its floor under them, whether or not it is up:
+    /// neither the fold nor the log moves it, so opening either on a window at its floor leaves the window's size alone
+    /// (デザイン規約 §窓の床). The foot the log takes the place of is shorter than the log, so a window with the log
+    /// down holds `panesFloorHeight` too.
     readonly property real floorHeight:
-        layout.panesFloorHeight
-        + (layout.page.commandsOpen ? Theme.splitterWidth + layout.commandsMinHeight : 0)
+        Math.max(layout.panesMinHeight, layout.sidebarPane.menuHeight)
+        + Theme.splitterWidth + layout.commandsMinHeight
 
     /// Assigned, not bound, as in `applySavedLayout`.
     function setDetailsWidth(w) {

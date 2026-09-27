@@ -29,8 +29,11 @@ Item {
         if (act === "graph-step" || act === "graph-step-edge"
             || act === "graph-step-far" || act === "graph-step-named"
             || act === "graph-step-dirty" || act === "graph-step-diff") {
-            // `-edge` walks off the bottom.
-            page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
+            // `-edge` walks off the bottom. `-far` sets off from the row its argument names: the row it steps onto is
+            // centred only where half a view lies above it, which near the tip it never does on a window standing on
+            // its floor.
+            page.activateRow(act === "graph-step-far" && arg !== "" ? graphModel.oidAt(Number(arg))
+                             : workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
             graphStepTimer.named = act === "graph-step-named"
             graphStepTimer.dirty = act === "graph-step-dirty"
             graphStepTimer.away = act === "graph-step-far"

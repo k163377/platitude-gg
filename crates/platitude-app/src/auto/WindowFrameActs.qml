@@ -63,7 +63,8 @@ Item {
 
     // PGG_AUTO_ACT=window-floor [fold|log|wip|rail] (the five forms: verbs.md `window-floor`). With no argument the
     // saved shape is xtask's 320x240, under every floor; `fold` / `log` stand the window on its floor, then put the list
-    // back / open the log, so the floor rises under a window already standing on it. `rail` folds, stands on the floor
+    // back / open the log — the width's floor rises under a window already standing on it, the height's holds still
+    // (デザイン規約 §窓の床). `rail` folds, stands on the floor
     // and opens the log: the log comes up as far as the panes let it, over the rail's last cell unless they hold it.
     SampleTimer {
         id: floorActTimer

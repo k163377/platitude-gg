@@ -89,8 +89,8 @@ pub(super) fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
     repo.write("c.txt", "c v1\nstaged\nand unstaged on top\n")?;
     repo.git(&["mv", "renamed-from.txt", "renamed-to.txt"])?;
     // Long enough that its all-additions diff reads as a file, and runs past
-    // the diff pane of a window on its floor — which a diff folds the left
-    // menu for, and the folded rail holds taller (`diff-step`).
+    // the diff pane of a window on its floor — which holds the log's floor
+    // too, open or not (`diff-step`).
     repo.write(
         "untracked.txt",
         "Notes for the next release\n\
@@ -103,6 +103,10 @@ pub(super) fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
          - try the offline build on a clean machine\n\
          - list the shortcuts in one place\n\
          - ask for a second look at the icons\n\
+         - read the settings file back after a crash\n\
+         - time a fetch over a slow link\n\
+         - see what the log says when git is missing\n\
+         - sort the release notes by area\n\
          \n\
          Nothing here is recorded yet.\n",
     )?;

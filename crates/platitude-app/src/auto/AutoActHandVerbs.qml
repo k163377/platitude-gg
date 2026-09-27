@@ -128,12 +128,16 @@ Item {
         }
         return middle
     }
-    /// The window taken down to its floor (規約 §窓の床): the blocks scroll only once the pane is too short for them.
+    /// The panes taken down to their own floor (規約 §窓の床): the blocks scroll only once the pane is too short for
+    /// them. The window's floor holds the log at its floor too, so the window goes down to it and the log comes up to
+    /// take that share — with the log down the panes stand taller than their floor.
     function toFloor() {
         const window = page.Window.window
         const floor = Math.ceil(window.floorHeight)
         if (window.height !== floor)
             window.height = floor
+        if (!page.commandsOpen)
+            page.commandsOpen = true
     }
 
     /// The right pane on one commit, put there through the page's own door: a page on a dirty tree opens on the

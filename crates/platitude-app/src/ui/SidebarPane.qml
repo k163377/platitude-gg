@@ -208,6 +208,9 @@ Rectangle {
     /// the list's bands (its rows scroll). The foot row counts while it stands — the log up takes it away.
     readonly property real floorHeight:
         (sidebar.collapsed ? rail.wholeHeight : sections.bandsHeight) + sidebar.footRoom
+    /// The taller of the two faces, folded or open, with no foot: what the window's floor holds whichever face stands
+    /// (`PageLayout.floorHeight`).
+    readonly property real menuHeight: Math.max(rail.wholeHeight, sections.bandsHeight)
 
     /// Which row has its facts open, in the sections below or the rail's section (`SectionPeekPopup`): one row for the
     /// pane, since only one pointer is ever resting (`SidebarRowGestures.openKey`).
