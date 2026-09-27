@@ -15,7 +15,13 @@ const AFTERWARDS: u64 = 42;
 
 /// Every list has drawn a reading taken at `at`.
 fn every_list_drew(gone: &mut StandIn, at: u64) {
-    for row in [Row::Branch, Row::Remote, Row::Tag, Row::Stash] {
+    for row in [
+        Row::Branch,
+        Row::Remote,
+        Row::Tag,
+        Row::Stash,
+        Row::Worktree,
+    ] {
         gone.listing_applied(row, at);
     }
     gone.look_again();
@@ -320,14 +326,31 @@ fn an_unnamed_row_stands_nothing_in() {
     assert_eq!(gone.rows(), &Rows::default());
 }
 
-/// The working copies and the working tree's buckets have rows, but
-/// nothing takes one away ahead of git.
+/// The working tree's buckets have rows, but nothing takes one away ahead
+/// of git; the working copies' section (`worktrees`) does.
 #[test]
-fn only_the_four_sections_that_draw_a_stood_in_row_are_named() {
+fn only_the_five_sections_that_draw_a_stood_in_row_are_named() {
     assert_eq!(Row::drawn_by("branches"), Some(Row::Branch));
     assert_eq!(Row::drawn_by("remotes"), Some(Row::Remote));
     assert_eq!(Row::drawn_by("tags"), Some(Row::Tag));
     assert_eq!(Row::drawn_by("stashes"), Some(Row::Stash));
-    assert_eq!(Row::drawn_by("worktrees"), None);
+    assert_eq!(Row::drawn_by("worktrees"), Some(Row::Worktree));
     assert_eq!(Row::drawn_by("worktree"), None);
+}
+
+/// A removed copy's row is read off the worktree listing, which runs
+/// beside the refs read: the refs catching up answers for nothing.
+#[test]
+fn a_removed_copy_waits_for_its_own_listing() {
+    let mut gone = StandIn::default();
+    gone.asked(&[(Row::Worktree, "C:/work/topic")], Some(OURS));
+    gone.answered(OURS, false, FENCE);
+    for row in [Row::Branch, Row::Remote, Row::Tag, Row::Stash] {
+        gone.listing_applied(row, AFTERWARDS);
+    }
+    gone.look_again();
+    assert_eq!(gone.rows().worktree, "C:/work/topic");
+    gone.listing_applied(Row::Worktree, AFTERWARDS);
+    gone.look_again();
+    assert_eq!(gone.rows(), &Rows::default());
 }

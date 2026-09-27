@@ -40,7 +40,7 @@ mod tabs;
 pub use feed::{Feed, Feeds, attach_feed, attached};
 pub use msg::{
     CarriedStatusMsg, CloneMsg, CommandMsg, DetailsMsg, DiffMsg, GraphMsg, HeadMsg, OpProgressMsg,
-    OpenMsg, PlanMsg, RefsMsg, StashList, StateMsg, StatusMsg, TabMsg,
+    OpenMsg, PlanMsg, RefsMsg, StashList, StateMsg, StatusMsg, TabMsg, WorktreeList,
 };
 pub use prefs::AvatarUrls;
 pub use tabs::{from_session, listing_applied, stand_in, with_session};

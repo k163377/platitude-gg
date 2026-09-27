@@ -8,7 +8,7 @@ use std::sync::Arc;
 use qtbridge::qtbridge_type_lib::{QByteArray, QHash, QModelIndex, QVariant};
 use qtbridge::{QAbstractItemModel, QAbstractItemModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::encode::{Fields, Landed, Landing, Listed, Record, field};
+use crate::encode::{Fields, Landed, Landing, Listed, Optional, Record, field};
 use crate::hub::{CarriedStatusMsg, Feed, Hub, RefsMsg, StatusMsg, attached};
 
 use super::pathtree::DirNode;
@@ -67,8 +67,10 @@ mod walk;
 mod walk_tests;
 
 use card::CardRows;
-use copy_card::CopyRows;
-use item::{FOLDED, HELD, LOCKED, MAIN, NavItem, PRUNABLE, fold_state};
+use copy_card::{CopyRow, CopyRows};
+use item::{FOLDED, HELD, NavItem, PRUNABLE, fold_state};
+/// The worktree rows' state words, which `GitFacts` hands to core's card rule.
+pub(crate) use item::{LOCKED, MAIN};
 use role::{Arranged, Role, Row, Value};
 use source::{Bucket, Entry, Source, letters_of, pr_key};
 
@@ -185,6 +187,6 @@ pub struct NavSectionModel {
     /// That copy's name, as the band says it.
     carried_name: String,
     stash_feed: Option<Arc<Feed<crate::hub::StashList>>>,
-    worktrees_feed: Option<Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>>,
+    worktrees_feed: Option<Arc<Feed<crate::hub::WorktreeList>>>,
     tab_id: i32,
 }

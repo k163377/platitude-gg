@@ -168,7 +168,7 @@ pub struct Feeds {
     /// window's status tick would take the other's rows off the screen.
     pub carried_nav: Arc<Feed<CarriedStatusMsg>>,
     pub stash: Arc<Feed<super::StashList>>,
-    pub worktrees: Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>,
+    pub worktrees: Arc<Feed<super::WorktreeList>>,
     pub details: Arc<Feed<DetailsMsg>>,
     pub diff: Arc<Feed<DiffMsg>>,
     pub commands: Arc<Feed<CommandMsg>>,

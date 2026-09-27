@@ -206,6 +206,89 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "delete_blocked code=branch --delete tip=true",
     },
+    // A working copy's WORKTREE card, raised from its WORKTREES row. The
+    // picture shows a greyed row; only the line says it is out rather
+    // than pale, which sentence its hover gives, and whether the menu
+    // stands on the branch the copy has out (`branch=`) — the two locks of
+    // `--preset worktrees` (with and without a reason), a copy on a branch
+    // and one on none. `held=false`: the row is a click; `cut=false`: the
+    // folder came out whole, which a Linux font once missed by a pixel.
+    Verb {
+        name: "worktree-menu",
+        when: &[
+            (
+                Arg::Is("hotfix"),
+                "worktree_menu copy=hotfix card=true offered=true blocked=true tip=true \
+                 code=worktree remove branch=true held=false cut=false \
+                 reason=Locked — release run is using this checkout",
+            ),
+            (
+                Arg::Is("spike"),
+                "worktree_menu copy=spike card=true offered=true blocked=true tip=true \
+                 code=worktree remove branch=true held=false cut=false \
+                 reason=This working copy is locked",
+            ),
+            (
+                Arg::Is("detached"),
+                "worktree_menu copy=detached card=true offered=true blocked=false tip=false \
+                 code=worktree remove branch=false held=false cut=false",
+            ),
+            // The repository's own copy: its branch's menu, and no card.
+            (
+                Arg::Is("repo"),
+                "worktree_menu copy=repo card=false branch=true",
+            ),
+            (
+                Arg::WithPreset("worktrees"),
+                "card=true offered=true blocked=false tip=false code=worktree remove",
+            ),
+        ],
+        // No preset: a copy of `demo-repo worktrees` opened with `--repo`
+        // is the one this tab stands in (verbs.md).
+        plain: "card=true offered=true blocked=true tip=true code=worktree remove branch=true \
+                held=false cut=false reason=This tab is showing this working copy",
+    },
+    // The same card from the graph: the row the copy stands on, its menu
+    // aimed at the copy's folder chip (`detached`) or at the branch chip
+    // of the copy that has it out (`topic`). `:go` presses it, and the
+    // copy leaves the list as from the sidebar.
+    Verb {
+        name: "worktree-graph",
+        when: &[
+            (Arg::Ends(":go"), "worktree_gone row=-1 log=false"),
+            (
+                Arg::Is("detached"),
+                "worktree_menu copy=detached card=true offered=true blocked=false tip=false \
+                 code=worktree remove branch=false held=false cut=false",
+            ),
+            (
+                Arg::Is("topic"),
+                "worktree_menu copy=topic card=true offered=true blocked=false tip=false \
+                 code=worktree remove branch=true held=false cut=false",
+            ),
+        ],
+        plain: "card=true offered=true code=worktree remove",
+    },
+    // The copy leaves the list for good (`row=-1` once the listing that
+    // saw the removal is drawn), and a landing raises no log.
+    Verb {
+        name: "worktree-remove",
+        when: &[],
+        plain: "worktree_gone row=-1 log=false",
+    },
+    // git keeps a copy holding work: the report bar in the gesture's
+    // colour, the log left shut. `why=true` is the screen's own sentence
+    // — git's ends in advice to force it; `mark=true` the tree mark in
+    // front of the copy's name in the heading.
+    Verb {
+        name: "worktree-remove-refused",
+        when: &[(
+            Arg::Is("topic"),
+            "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
+             said=topic was not removed mark=true",
+        )],
+        plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false",
+    },
     // An elided row whose hover says the whole name. The wider lines name
     // no pane: `tree=` echoes the view asked for (`-tree`, where row 0 is
     // the elided folder chain), `tip=` the shared instance's visible. The

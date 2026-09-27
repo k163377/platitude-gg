@@ -17,6 +17,10 @@ Rectangle {
     property string detail: ""
     /// Which state, if any, this report is in — `danger` / `warning` / empty (`Words.reportTone`).
     property string tone: ""
+    /// The word in the heading that is a working copy's name, which wears the tree mark in front of it (デザイン規約
+    /// §ref の種別「名前の印」); empty for none. Set in the heading's own text, so a translation that moves the word
+    /// leaves the sentence plain (`Words.roomInSentence`).
+    property string markWord: ""
     /// Whether the report stands. **The words stay put while the bar goes back up** (`AskBar.open`).
     property bool open: false
     /// Whether Escape goes to something standing above this report — two enabled `StandardKey.Cancel` shortcuts in
@@ -36,8 +40,13 @@ Rectangle {
     readonly property bool settled: bar.openHeight > 0 && bar.implicitHeight === bar.openHeight
     readonly property bool shut: !bar.open && bar.implicitHeight === 0
     /// Automation: whether either line lost its tail. **Read off the fields**: a wrapped bar and a cut one can be the
-    /// same height (`tests/qml/tst_reportdress.qml`).
-    readonly property bool wordsCut: headingWord.truncated || detailWord.truncated
+    /// same height (`tests/qml/tst_reportdress.qml`). The heading is a `CardText`, which wraps and has no cap to cut at.
+    readonly property bool wordsCut: detailWord.truncated
+    /// Automation: whether the heading's tree mark found its word, and where it stands against the heading.
+    readonly property alias markSeat: headingWord.markSeat
+    readonly property alias markShown: headMark.visible
+    /// …and how wide the mark's ink is — the room the name has to have been pushed by.
+    readonly property alias markInk: headMark.inkWidth
     /// Automation: the one control, so a run can read where it stands — the middle of the bar, however many lines
     /// the words take.
     readonly property alias pill: okPill
@@ -82,15 +91,50 @@ Rectangle {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
-            // **Wrapped, never cut** (デザイン規約 §答えの要らない報せ): the heading names a branch and a remote.
-            Label {
+            // **Wrapped, never cut** (デザイン規約 §答えの要らない報せ): the heading names a branch and a remote. A
+            // `CardText`, since only a text field answers where a character stands — what the tree mark in front of a
+            // working copy's name is set against (as `SharedToolTip`).
+            CardText {
                 id: headingWord
                 Layout.fillWidth: true
                 text: bar.label
+                /// How many spaces the mark's ink takes; the sentence's own space before the word is the gap.
+                readonly property int markRoom:
+                    bar.markWord === "" || spaceRuler.advanceWidth <= 0
+                    ? 0 : Math.ceil(headMark.inkWidth / spaceRuler.advanceWidth)
+                /// Where that gap came out (empty when none). One binding over its inputs, since `charRect` is a call
+                /// (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
+                readonly property rect markSeat: {
+                    const at = bar.label.indexOf(bar.markWord)
+                    if (headingWord.markRoom <= 0 || at < 0 || headingWord.markup === ""
+                            || headingWord.width <= 0 || headingWord.height <= 0)
+                        return Qt.rect(0, 0, 0, 0)
+                    return headingWord.charRect(at + headingWord.markRoom)
+                }
+                markup: headingWord.markRoom > 0 ? Words.roomInSentence(bar.label, bar.markWord, headingWord.markRoom)
+                                                 : ""
                 color: Theme.textPrimary
-                font.pixelSize: Theme.fontMd
-                font.weight: Font.DemiBold
-                wrapMode: Text.Wrap
+                pixelSize: Theme.fontMd
+                weight: Font.DemiBold
+                /// A space in the heading's own font and weight, so a family with a wider space opens a wider gap.
+                TextMetrics {
+                    id: spaceRuler
+                    font.family: Theme.uiFamily
+                    font.pixelSize: Theme.fontMd
+                    font.weight: Font.DemiBold
+                    text: " "
+                }
+                /// Set against the word, so mark and name read as one: the ink ends where the word begins.
+                NavIcon {
+                    id: headMark
+                    visible: headingWord.markSeat.width > 0 || headingWord.markSeat.height > 0
+                    kind: "tree"
+                    tint: Theme.textSecondary
+                    width: Theme.iconSm
+                    height: Theme.iconSm
+                    x: headingWord.markSeat.x - (Theme.iconSm + headMark.inkWidth) / 2
+                    y: headingWord.markSeat.y + (headingWord.markSeat.height - Theme.iconSm) / 2
+                }
             }
             // Wrapped: a forge writes the broken rule last (after `GH006: …`), so a cut drops the sentence the reader
             // came for. Nothing caps the height (デザイン規約 §答えの要らない報せ).

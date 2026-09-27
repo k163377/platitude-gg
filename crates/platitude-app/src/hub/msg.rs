@@ -229,6 +229,15 @@ pub struct StashList {
     pub looked: u64,
 }
 
+/// The working copies, and when the read that listed them looked
+/// (`SessionEvent::WorktreesLoaded`) — a removed copy's row waits on it, as
+/// a dropped stash waits on [`StashList`].
+#[derive(Debug)]
+pub struct WorktreeList {
+    pub entries: Vec<platitude_core::worktrees::WorktreeEntry>,
+    pub looked: u64,
+}
+
 /// A sidebar refs section's snapshot, and — for the branches section —
 /// where HEAD stands (`session::standing`).
 #[derive(Debug)]

@@ -16,7 +16,7 @@ QtObject {
     required property GraphModel graphModel
     /// Which working copy has a branch checked out — what the `switch` row needs beyond the commit's own rules.
     required property NavSectionModel worktreesModel
-    /// What the two cards at the foot need worked out for them: the reading a branch carries and where a tag stands
+    /// What the cards at the foot need worked out for them: the reading a branch carries and where a tag stands
     /// (`cardFacts`).
     required property NavSectionModel branchesModel
     required property NavSectionModel tagsModel
@@ -63,12 +63,9 @@ QtObject {
         menuState.menuHeldLeaf = ""
         menuState.menuCanPull = false
         menuState.menuPullBlocked = false
-        if (kind !== "branch" && kind !== "remote")
+        if (kind !== "branch" && kind !== "remote" && kind !== "worktree")
             return
-        // A remote row lands on the local branch of the same name, so it is that one another copy can be holding.
-        const held = kind === "branch"
-            ? menuState.worktreesModel.worktreeHolding(name)
-            : menuState.worktreesModel.worktreeHolding(menuState.repoTab.localNameFor(name))
+        const held = menuState.copyLeadingFrom(kind, name)
         const offers = GitFacts.refMenuOffers(
             kind, name, oidHex,
             menuState.repoTab.state === "open",
@@ -86,15 +83,33 @@ QtObject {
         menuState.menuPullBlocked = menuState.menuCanPull && menuState.workTree.pullBlocked
     }
 
-    /// What the two cards at the foot stand on, aimed at the menu's name — each emptied where that name is the other's
-    /// kind, so that card holds only what can still be made here. Read here, where the models are.
+    /// The other working copy the menu's name leads to: the one holding the branch (a remote row through the local
+    /// branch of the same name), or the copy a folder's chip names — unless this tab stands in it. Empty for none.
+    function copyLeadingFrom(kind, name) {
+        if (kind === "branch")
+            return menuState.worktreesModel.worktreeHolding(name)
+        if (kind === "remote")
+            return menuState.worktreesModel.worktreeHolding(menuState.repoTab.localNameFor(name))
+        if (kind === "worktree" && !GitFacts.samePath(name, menuState.repoTab.repoPath))
+            return name
+        return ""
+    }
+
+    /// What the cards at the foot stand on, aimed at the menu's name — each emptied where that name is another's
+    /// kind, so that card holds only what can still be made here. The WORKTREE card stands on the copy a folder's
+    /// chip names, or on the one holding the chip's local branch — not a remote chip's, which only leads there
+    /// (`RefRowMenu.offerOn`). Read here, where the models are.
     function cardFacts(oidHex) {
         const kind = menuState.menu.targetKind
         const branchy = kind === "branch" || kind === "remote"
         const name = menuState.menu.targetName
+        const copy = kind === "worktree" ? name : kind === "branch" ? menuState.copyLeadingFrom(kind, name) : ""
         return {
             "branch": menuState.branchFacts(branchy ? kind : "", branchy ? name : "", oidHex),
-            "tag": menuState.tagFacts(kind === "tag" ? "tag" : "", kind === "tag" ? name : "", oidHex)
+            "tag": menuState.tagFacts(kind === "tag" ? "tag" : "", kind === "tag" ? name : "", oidHex),
+            "copy": copy === "" ? undefined : menuState.worktreesModel.copyFacts(copy),
+            "copyHere": GitFacts.samePath(copy, menuState.repoTab.repoPath),
+            "busy": menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount
         }
     }
 

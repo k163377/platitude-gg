@@ -127,6 +127,8 @@ QtObject {
         case "conflicted-part": return qsTr("Nothing was taken from this file")
         case "rename": return qsTr("%1 was not renamed").arg(name)
         case "half-rename": return qsTr("The rename did not finish")
+        case "worktree-kept": return qsTr("%1 was not removed").arg(name)
+        case "worktree-half": return qsTr("%1 was not removed completely").arg(name)
         // All seven rewrite refusals: which one it was is the line underneath.
         case "across-merge":
         case "off-branch":
@@ -174,6 +176,9 @@ QtObject {
             return qsTr("This file is still conflicted. It has to be resolved before parts of it can be taken.")
         case "half-rename":
             return qsTr("The new name was made; the old one is still there.")
+        // Only when git said it was the changes: its own words end in advice to force it, which nothing here offers.
+        case "worktree-kept":
+            return qsTr("It has uncommitted changes.")
         // The rewrite refusals live in `rewriteRefusedWhy`, which the plan's door reads too. Delegated whole: a
         // second copy of that list gets a new refusal on one side only.
         default: return Words.rewriteRefusedWhy(kind)
@@ -206,10 +211,18 @@ QtObject {
         }
     }
 
+    /// Whether a report's heading names a working copy — the name then wears the tree mark (`NoticeBar.markWord`,
+    /// デザイン規約 §ref の種別「名前の印」).
+    function reportNamesCopy(kind) {
+        return kind === "worktree-kept" || kind === "worktree-half"
+    }
+
     /// The colour a report's own hairline wears: `warning` while the gesture is still going (the rename box is open,
-    /// or a half-done rename is left standing), `danger` once it is over (デザイン規約 §答えの要らない報せ).
+    /// or a half-done rename is left standing), `danger` once it is over (デザイン規約 §答えの要らない報せ). A working
+    /// copy git would not remove is `warning` too: the copy still stands, with what kept it there.
     function reportTone(kind) {
-        return kind === "rename" || kind === "half-rename" ? "warning" : "danger"
+        return kind === "rename" || kind === "half-rename" || kind === "worktree-kept" || kind === "worktree-half"
+            ? "warning" : "danger"
     }
 
     /// What the two sides each did to a conflicted file, from git's two stage letters (デザイン規約 §conflict の種別).
@@ -292,11 +305,13 @@ QtObject {
     /// The same sentence with `spaces` of room opened in front of `word`, for a drawn mark to stand in
     /// (`SharedToolTip`; where the gap lands is `CardText.charRect`'s to answer). `""` where the word is not in the
     /// sentence — a translation moved it — so the caller draws the sentence as it came, with no mark on the wrong word.
+    /// The room is pinned whole: rich text drops a lone space opening a block (a name that starts the sentence,
+    /// `NoticeBar`), and a breakable one would let a line end between the mark and its name.
     function roomInSentence(sentence, word, spaces) {
         const seat = sentence.indexOf(word)
         if (word === "" || spaces <= 0 || seat < 0)
             return ""
-        return Words.inked(sentence.substring(0, seat) + " ".repeat(spaces) + sentence.substring(seat))
+        return Words.inked(sentence.substring(0, seat)) + "&nbsp;".repeat(spaces) + Words.inked(sentence.substring(seat))
     }
     /// Words as markup reads them. Rich text folds runs of spaces and newlines the way HTML does, so all but the last
     /// space of a run is pinned and a newline becomes `<br>`. Pin only those: `NoticeLine` wraps, and a sentence

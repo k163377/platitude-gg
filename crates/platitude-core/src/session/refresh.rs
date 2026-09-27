@@ -253,13 +253,15 @@ impl RepoSession {
             let read = s
                 .worktrees_read
                 .run(move || async move {
+                    // Stamped before git is spawned, as the stashes are.
+                    let looked = session.standing.stamp();
                     let cancel = session.root_cancel.clone();
                     match crate::worktrees::load(&session.executor, &workdir, &cancel).await {
                         Ok(worktrees) => {
                             let news = session.note_worktree_holders(&worktrees, &workdir);
                             session
                                 .sink
-                                .event(SessionEvent::WorktreesLoaded { worktrees });
+                                .event(SessionEvent::WorktreesLoaded { worktrees, looked });
                             WorktreeRead {
                                 published: true,
                                 news,

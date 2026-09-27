@@ -161,6 +161,7 @@ pub struct RepoTab {
     gone_remote: String,
     gone_tag: String,
     gone_stash: String,
+    gone_worktree: String,
     /// The commit the standing `checkSignature` is about — the question,
     /// where `signature_oid` and its three are the answer.
     ///

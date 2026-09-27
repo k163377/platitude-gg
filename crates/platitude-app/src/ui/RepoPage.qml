@@ -545,6 +545,14 @@ FocusScope {
     /// turned away, which the headless double press reads (動詞 `switch-remote-twice`): from outside, both presses
     /// look alike.
     function switchToRef(kind, name, leaving) {
+        // A working copy on no branch, named by its path (the menus' `Open`, `RefRowMenu.offerOn`): the tab goes and
+        // stands in it, as its WORKTREES row's double-click does — ahead of the gate below, since it writes nothing.
+        if (kind === "worktree") {
+            if (worktreesModel.copyFacts(name) === undefined)
+                return false
+            page.openRepositoryPathRequested(name)
+            return true
+        }
         // `busyCount` alone is not the gate: it rises only when the queue starts the write and is down before the
         // screen catches up (`moveLanding`); the held doors cover a plan's run not yet started (`doorsHeldWhy`).
         // Every graph door comes through here.
@@ -858,6 +866,7 @@ FocusScope {
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onDropStashRequested: selector => page.dropStashNow(selector)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
+            onRemoveCopyRequested: (path, name) => repoTab.removeWorktree(path, name)
             // For a menu raised on the stacked list's row: the list stayed up under it, and the pointer now decides
             // again whether it stays.
             onDismissed: rowHost.settleRefList()
@@ -881,25 +890,32 @@ FocusScope {
         remoteMenuSeat.active = true
         return remoteMenuSeat.item.offerOn(name)
     }
-
     /// Which surface raised the standing ref menu: its branch row opens a name box on the row the hand is already on
     /// (デザイン規約 §可否・警告の出し場所).
     property bool refMenuInSidebar: false
+    /// The row that raised it, by the key the sidebar's rows answer to (`NavList.keyOf`) — apart from what the menu
+    /// acts on: a WORKTREES row opens the menu of the branch it has out, and the box still opens on that row.
+    property string refMenuRowKind: ""
+    property string refMenuRowId: ""
     /// The one door into that menu: the sidebar's rows, a chip, the stacked list and the automation all come through
-    /// here. Says whether it opened.
+    /// here. Says whether it opened. A working copy's row names its copy (`full` is its path), which carries its own
+    /// card (`RefRowMenu.offerOn`).
     function openRefMenu(kind, name, full, oidHex, inSidebar) {
         page.refMenuInSidebar = inSidebar === true
+        page.refMenuRowKind = kind
+        page.refMenuRowId = full
         refMenuSeat.active = true
-        return refMenuSeat.item.offerOn(kind, name, full, oidHex)
+        return kind === "worktree" ? refMenuSeat.item.offerOn(kind, name, full, oidHex, full)
+                                   : refMenuSeat.item.offerOn(kind, name, full, oidHex)
     }
     /// A new branch on a commit, asked for from a menu: the name box opens where that menu was raised. The sidebar's
-    /// half reads the row off the ref menu, standing whenever that half is taken (only its door sets
+    /// half opens on the row that raised the menu, standing whenever that half is taken (only its door sets
     /// `refMenuInSidebar`).
     function startBranchAt(oidHex) {
         if (oidHex === "")
             return
         if (page.refMenuInSidebar)
-            sidebarPane.beginBranchAt(refMenuSeat.item.kind, refMenuSeat.item.refId, oidHex)
+            sidebarPane.beginBranchAt(page.refMenuRowKind, page.refMenuRowId, oidHex)
         else
             graphPane.startNaming(oidHex)
     }
@@ -908,7 +924,7 @@ FocusScope {
         if (oidHex === "")
             return
         if (page.refMenuInSidebar)
-            sidebarPane.beginTagAt(refMenuSeat.item.kind, refMenuSeat.item.refId, oidHex)
+            sidebarPane.beginTagAt(page.refMenuRowKind, page.refMenuRowId, oidHex)
         else
             graphPane.startTagging(oidHex)
     }
@@ -1047,6 +1063,7 @@ FocusScope {
     readonly property string goneRemote: repoTab.goneRemote
     readonly property string goneTag: repoTab.goneTag
     readonly property string goneStash: repoTab.goneStash
+    readonly property string goneWorktree: repoTab.goneWorktree
     /// The chips that go with the rows are the graph model's to key (`GraphModel.setGone` / `encode::gone_keys`). A
     /// dropped stash has no chip: it is a graph row, not a name on one, and a row only leaves with the walk.
     function syncGone() {
@@ -1065,6 +1082,8 @@ FocusScope {
         page.syncGone()
     }
     onGoneStashChanged: stashesModel.setHidden(page.goneStash)
+    // No chip: a working copy is marked on the graph by its checkout, which the listing that proves it gone redraws.
+    onGoneWorktreeChanged: worktreesModel.setHidden(page.goneWorktree)
 
     /// Automation: holds a row taken away before git answers, for its picture — asked before the press, since a demo
     /// repository answers before the grab (verify-ui スキル §壊れない動詞の実装と反復). Held by withholding
@@ -1133,9 +1152,9 @@ FocusScope {
     }
 
     // ---- context menu on a graph row -------------------------------
-    /// The first chip a graph row draws (what a press hands over — `GraphRowDelegate.renameChip`), for callers with no
-    /// row in hand; null where it draws no ref. Chips already taken off screen are filtered as the delegate does, so a
-    /// gone name puts no card up (デザイン規約 §消す操作は先に画面から消す).
+    /// The first chip a graph row draws (what a right-click hands over — `GraphRowDelegate.menuChip`), for callers with
+    /// no row in hand; null where it draws neither a ref nor a working copy's folder. Chips already taken off screen
+    /// are filtered as the delegate does, so a gone name puts no card up (デザイン規約 §消す操作は先に画面から消す).
     function rowChipAt(oidHex) {
         const row = graphModel.rowOf(oidHex)
         if (row < 0)
@@ -1143,7 +1162,7 @@ FocusScope {
         const shown = GitFacts.chipsShown(graphModel.labelsAt(row), graphModel.goneChips)
         if (shown.length === 0)
             return null
-        return GitFacts.refKind(shown[0].kind) === "" ? null : shown[0]
+        return GitFacts.menuKind(shown[0].kind) === "" ? null : shown[0]
     }
 
     /// The one door into that menu: graph rows, the rows of a chip's stacked list, and automation. `chip` is the name
@@ -1153,8 +1172,11 @@ FocusScope {
         const named = chip === undefined ? page.rowChipAt(oidHex) : chip
         commitMenuSeat.active = true
         const menu = commitMenuSeat.item
-        menu.targetKind = named ? GitFacts.refKind(named.kind) : ""
-        menu.targetName = menu.targetKind === "" ? "" : named.name
+        const kind = named ? GitFacts.menuKind(named.kind) : ""
+        // A folder's chip carries only the folder: the copy is the one of that name standing on this commit.
+        const target = kind === "" ? "" : kind === "worktree" ? worktreesModel.copyAt(named.name, oidHex) : named.name
+        menu.targetKind = target === "" ? "" : kind
+        menu.targetName = target
         commitMenuState.openRowMenu(oidHex)
     }
 
@@ -1215,6 +1237,7 @@ FocusScope {
             // The branch card's own rows, answered where the ref menu's are.
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
+            onRemoveCopyRequested: (path, name) => repoTab.removeWorktree(path, name)
             // The remote-ref deletes go through `CommitMenuState`, beside the lookups their cards read.
             onCherryPickRequested: oidHex => repoTab.cherryPick(oidHex)
             onRevertRequested: oidHex => repoTab.revert(oidHex)
@@ -1416,6 +1439,7 @@ FocusScope {
             branchesModel: branchesModel,
             remotesModel: remotesModel,
             worktreeModel: worktreeModel,
+            worktreesModel: worktreesModel,
             stashesModel: stashesModel,
             tagsModel: tagsModel,
             graphPane: graphPane,
@@ -1447,18 +1471,21 @@ FocusScope {
     function showReport(kind, remote, name, reason) {
         page.showNotice(Words.writeReported(kind, remote, name),
                         reason !== "" ? reason : Words.writeReportedWhy(kind),
-                        Words.reportTone(kind))
+                        Words.reportTone(kind),
+                        Words.reportNamesCopy(kind) ? name : "")
     }
     /// Automation only: git's answer to a write has been taken all the way — bar raised, mark down, standing questions
     /// cleared. What it was about rides the signal: a drain can bring several reports, so the tab holds none to read
     /// back.
     signal writeReported(string kind, string remote, string name)
-    /// `label` is what did not happen, `detail` the refuser's words, `tone` the state colour, if any.
-    function showNotice(label, detail, tone) {
+    /// `label` is what did not happen, `detail` the refuser's words, `tone` the state colour, if any; `markWord` the
+    /// working copy's name in `label` that wears the tree mark, left out for none (`NoticeBar.markWord`).
+    function showNotice(label, detail, tone, markWord) {
         // Dressed, then raised — so nothing is written on a bar the reader can see (`NoticeBar.open`).
         noticeBar.label = label
         noticeBar.detail = detail
         noticeBar.tone = tone
+        noticeBar.markWord = markWord === undefined ? "" : markWord
         noticeBar.open = true
     }
     /// Only lowered: the words stay while the bar slides up.
@@ -2633,7 +2660,7 @@ FocusScope {
             page.listingDrawn()
         }
     }
-    /// A list has drawn what it was handed, and a delete may be waiting on that list's own row — so **all four say
+    /// A list has drawn what it was handed, and a delete may be waiting on that list's own row — so **all five say
     /// it**, and **which list is not passed on** (`ops_delete::note_listing_drawn`, rules-refs/app-ui.md
     /// 「消した行を戻す合図は 3 つ」). Withheld while a run holds the in-between open for a picture (`holdGoneRows`).
     function listingDrawn() {
@@ -2666,6 +2693,14 @@ FocusScope {
     Connections {
         target: stashesModel
         function onStashesSettled() {
+            page.listingDrawn()
+        }
+    }
+    // The working copies on a word of their own too: their listing follows the write apart from the refs', and a
+    // removed copy's row answers only to it.
+    Connections {
+        target: worktreesModel
+        function onWorktreesSettled() {
             page.listingDrawn()
         }
     }

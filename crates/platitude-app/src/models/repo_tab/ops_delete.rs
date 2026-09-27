@@ -133,6 +133,13 @@ impl RepoTab {
         self.took_away(&[(Row::Stash, &selector)], asked);
     }
 
+    /// `git worktree remove`. The WORKTREES row goes, keyed by the path
+    /// the row carries; the branch it had out keeps its row.
+    pub(super) fn worktree_remove(&mut self, path: String, name: String) {
+        let asked = self.ask_session(|s| s.remove_worktree(path.clone(), name.clone()));
+        self.took_away(&[(Row::Worktree, &path)], asked);
+    }
+
     /// git's answer to any write. Refused, the rows come back before the
     /// drain's notify, so the row is on screen when the reader is told
     /// (`RepoPage.absorbWriteResult`); landed, they stay away until a
@@ -171,7 +178,7 @@ impl RepoTab {
         }
     }
 
-    /// Moves this tab's stand-in on and copies its picture into the four
+    /// Moves this tab's stand-in on and copies its picture into the five
     /// `gone_*`, saying whether they moved. The copy keeps bindings out of
     /// the hub's borrow (rules/app-ui.md §Qt Bridges・QML の不変条件).
     fn stand_in(&mut self, f: impl FnOnce(&mut StandIn)) -> bool {
@@ -180,6 +187,7 @@ impl RepoTab {
             && rows.remote == self.gone_remote
             && rows.tag == self.gone_tag
             && rows.stash == self.gone_stash
+            && rows.worktree == self.gone_worktree
         {
             return false;
         }
@@ -187,6 +195,7 @@ impl RepoTab {
         self.gone_remote = rows.remote;
         self.gone_tag = rows.tag;
         self.gone_stash = rows.stash;
+        self.gone_worktree = rows.worktree;
         true
     }
 }

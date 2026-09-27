@@ -1,6 +1,10 @@
 use super::*;
 
 impl Default for RepoTab {
+    // One line per field of the QObject: the length is the struct's width.
+    // `qproperty!` binds a direct field, so a narrower body means splitting
+    // the tab's QObject itself.
+    #[expect(clippy::too_many_lines)]
     fn default() -> Self {
         Self {
             tab_id: 0,
@@ -39,6 +43,7 @@ impl Default for RepoTab {
             gone_remote: String::new(),
             gone_tag: String::new(),
             gone_stash: String::new(),
+            gone_worktree: String::new(),
             signature_wanted: String::new(),
             author_name: String::new(),
             author_email: String::new(),

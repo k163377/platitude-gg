@@ -96,7 +96,7 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           commands-fail-shut, commands-clear, fetch-fail,
                           fetch-recover, fetch-recover-held, fetch-resume,
                           push-retry, remote-refused, tag-refused,
-                          push-outdated,
+                          push-outdated, worktree-remove-refused,
                           commit-refused, notice-over-diff, stale-part —
                           which refuses a write of its own, without git —,
                           rename-taken, fold-first-commit,

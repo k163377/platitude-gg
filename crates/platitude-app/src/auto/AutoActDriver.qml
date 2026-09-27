@@ -21,6 +21,8 @@ Item {
     property NavSectionModel branchesModel
     property NavSectionModel remotesModel
     property NavSectionModel worktreeModel
+    /// The working copies (WORKTREES).
+    property NavSectionModel worktreesModel
     property NavSectionModel stashesModel
     property NavSectionModel tagsModel
 
@@ -71,6 +73,10 @@ Item {
     property UpstreamFlow upstreamFlow
     property RemoteDialog remoteDialog
     property AppMenu remoteMenu
+    /// The WORKTREE card in each of the two menus that carry it: the ref menu (a WORKTREES row, a held branch) and the
+    /// graph row's (a copy's chip).
+    property RefWorktreeMenu refCopyCard
+    property RefWorktreeMenu commitCopyCard
     /// The remote the push-default verbs act on, and the mark they wait for before the shot — empty where no mark
     /// is asked to move.
     property string remoteTarget: ""
@@ -442,7 +448,10 @@ Item {
                               + " wrong=" + page.commandsWrong
                               + (noticeBarrier.saysPlan ? " plan=" + page.planActive : "")
                               // Last, because it is a sentence.
-                              + " said=" + page.noticeCard.label)
+                              + " said=" + page.noticeCard.label
+                              // …but for the one report whose heading names a working copy: whether the tree mark
+                              // found the name (`NoticeBar.markWord`). Absent elsewhere, so no other line moves.
+                              + (page.noticeCard.markWord !== "" ? " mark=" + page.noticeCard.markShown : ""))
             driver.complete()
         }
     }

@@ -10,6 +10,8 @@ pub enum Row {
     Remote,
     Tag,
     Stash,
+    /// A working copy, by its path as git lists it.
+    Worktree,
 }
 
 impl Row {
@@ -23,6 +25,7 @@ impl Row {
             "remotes" => Some(Self::Remote),
             "tags" => Some(Self::Tag),
             "stashes" => Some(Self::Stash),
+            "worktrees" => Some(Self::Worktree),
             _ => None,
         }
     }
@@ -39,6 +42,7 @@ pub struct Rows {
     pub remote: String,
     pub tag: String,
     pub stash: String,
+    pub worktree: String,
 }
 
 impl Rows {
@@ -53,6 +57,7 @@ impl Rows {
             Row::Remote => &mut self.remote,
             Row::Tag => &mut self.tag,
             Row::Stash => &mut self.stash,
+            Row::Worktree => &mut self.worktree,
         };
         *seat = name.to_string();
     }
@@ -68,6 +73,7 @@ impl Rows {
             Row::Remote => &mut self.remote,
             Row::Tag => &mut self.tag,
             Row::Stash => &mut self.stash,
+            Row::Worktree => &mut self.worktree,
         }
     }
 
@@ -76,6 +82,7 @@ impl Rows {
             && self.remote.is_empty()
             && self.tag.is_empty()
             && self.stash.is_empty()
+            && self.worktree.is_empty()
     }
 }
 
@@ -90,6 +97,7 @@ struct Applied {
     remote: u64,
     tag: u64,
     stash: u64,
+    worktree: u64,
 }
 
 impl Applied {
@@ -99,6 +107,7 @@ impl Applied {
             Row::Remote => self.remote,
             Row::Tag => self.tag,
             Row::Stash => self.stash,
+            Row::Worktree => self.worktree,
         }
     }
 
@@ -109,6 +118,7 @@ impl Applied {
             Row::Remote => &mut self.remote,
             Row::Tag => &mut self.tag,
             Row::Stash => &mut self.stash,
+            Row::Worktree => &mut self.worktree,
         };
         *seat = (*seat).max(at);
     }
@@ -210,11 +220,17 @@ impl StandIn {
     /// A list has drawn what it was handed: ask every row whether the list
     /// that draws *it* has caught up.
     ///
-    /// One door for all four, taking no list: a caller naming the list it
+    /// One door for all five, taking no list: a caller naming the list it
     /// came from could name it wrongly, and a stash edge sent to a refs
     /// door would leave the stash row standing for good.
     pub fn look_again(&mut self) {
-        for row in [Row::Branch, Row::Remote, Row::Tag, Row::Stash] {
+        for row in [
+            Row::Branch,
+            Row::Remote,
+            Row::Tag,
+            Row::Stash,
+            Row::Worktree,
+        ] {
             self.settle_row(row);
         }
     }

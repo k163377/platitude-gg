@@ -135,6 +135,15 @@ AppListView {
         row.leftClick(Qt.NoModifier)
         return true
     }
+    /// Smoke hook (PGG_AUTO_ACT=worktree-menu): a right-click on a row, through the row's own press
+    /// (`NavItemDelegate.rowPressed`), so the menu it opens is routed the way a hand's is. False as `clickRow`.
+    function rightClickRow(index) {
+        const row = navList.itemAtIndex(index)
+        if (!row)
+            return false
+        row.rowPressed(Qt.RightButton, Qt.NoModifier)
+        return true
+    }
     /// Smoke hook (PGG_AUTO_ACT=nav-drag-open): press a closed row's line and drag along it to the far side, through
     /// the row's own handlers (verify-ui implement.md「注入はハンドラ本体そのものへ入れる」). False as `clickRow`.
     function dragRow(index) {

@@ -20,12 +20,14 @@ Item {
     property string heldReason: ""
 
     /// The name this menu is aimed at: the one the chip draws, or the one pressed in the chip's stacked list. `kind`
-    /// is `branch` / `remote` / `tag`, empty on a row that draws no ref name (デザイン規約 §グラフ行の右クリック).
+    /// is `branch` / `remote` / `tag`, or `worktree` for a working copy's folder chip — its name then the copy's path —
+    /// and empty on a row that draws neither (デザイン規約 §グラフ行の右クリック).
     property string targetKind: ""
     property string targetName: ""
     /// What merge / rebase are handed: the name where the row draws one — a merge by name says so in the commit it
-    /// writes, and one by id does not.
-    readonly property string integrateRef: rowMenu.targetName !== "" ? rowMenu.targetName : rowMenu.oid
+    /// writes, and one by id does not. A copy's path is no ref, so the commit.
+    readonly property string integrateRef:
+        rowMenu.targetName !== "" && rowMenu.targetKind !== "worktree" ? rowMenu.targetName : rowMenu.oid
     /// The branch every one of these rows makes its sentence about (規約 §履歴を合流させる).
     required property string branch
 
@@ -94,6 +96,8 @@ Item {
     signal deleteTagRequested(string tag)
     signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere)
     signal deleteTagEverywhereRequested(string tag, string remote)
+    /// The WORKTREE card's `worktree remove`, passed straight up.
+    signal removeCopyRequested(string path, string name)
     /// The menu went away — and the stacked list it may have been standing on is the pointer's to answer for again.
     signal dismissed()
 
@@ -115,8 +119,9 @@ Item {
     readonly property alias stashDropItem: stashDeleteItem
     readonly property alias resetSubmenu: resetMenu
     readonly property alias hardResetRow: hardResetItem
-    /// The two cards the rows above hang behind (`AppMenu.openSub`).
+    /// The three cards the rows above hang behind (`AppMenu.openSub`).
     readonly property alias branchCard: branchCommitMenu
+    readonly property alias copyCard: copyCommitMenu
     readonly property alias tagCard: tagCommitMenu
 
     anchors.fill: parent
@@ -126,10 +131,12 @@ Item {
     function offerStash() {
         stashMenu.offer()
     }
-    /// `facts` is what the two cards stand on, read where the models are (`CommitMenuState.cardFacts`): `branch` and
-    /// `tag`, each already aimed at the target or emptied because the target is the other's kind.
+    /// `facts` is what the cards stand on, read where the models are (`CommitMenuState.cardFacts`): `branch` and
+    /// `tag`, each already aimed at the target or emptied because the target is the other's kind, and `copy` — the
+    /// working copy the target names or the one holding its branch (undefined for none) — with `copyHere` / `busy`.
     function offerCommit(facts) {
-        // Both cards stand on their facts before `offer()`: their `applies` decides whether their row counts
+        copyCommitMenu.standOn(facts.copy, facts.copyHere, facts.busy)
+        // Every card stands on its facts before `offer()`: its `applies` decides whether its row counts
         // (`AppMenu.offeredRows`).
         const branchy = rowMenu.targetKind === "branch" || rowMenu.targetKind === "remote"
         const branchKind = branchy ? rowMenu.targetKind : ""
@@ -328,6 +335,14 @@ Item {
             onDeleteRemoteRequested: remoteRef => rowMenu.deleteRemoteRequested(remoteRef)
             onDeleteEverywhereRequested: (branch, remoteRef, forced) =>
                 rowMenu.deleteEverywhereRequested(branch, remoteRef, forced)
+        }
+        AppMenuSeparator {}
+        // The same WORKTREE card as the sidebar's, above the TAG card: the copy the chip names, or the one holding the
+        // chip's branch (デザイン規約 §メニュー の入れ子).
+        RefWorktreeMenu {
+            id: copyCommitMenu
+            heldReason: rowMenu.heldReason
+            onRemoveRequested: (path, name) => rowMenu.removeCopyRequested(path, name)
         }
         AppMenuSeparator {}
         // The same TAG card as the sidebar's: `Create tag here…` always, and the tag's own rows where the row draws

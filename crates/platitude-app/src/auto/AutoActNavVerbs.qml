@@ -171,10 +171,152 @@ Item {
             // None of these is about a section going: "-by-rename" opens one and holds it open for the box.
             acts.peekGoneWanted = false
             navRailTimer.start()
+        } else if (act === "worktree-menu" || act === "worktree-remove" || act === "worktree-remove-refused"
+                   || act === "worktree-graph") {
+            // A working copy's WORKTREE card, raised where a hand raises it: its WORKTREES row's right-click (the row's
+            // own press), or the graph row its chip is on (`worktree-graph`, the row's own right-click door). The
+            // argument is the copy's folder, `:go` on the graph one to press. The menu verb stands the card (a greyed
+            // row wears its tip); the others press `worktree remove` — landing, or refused by git into the report bar.
+            const go = arg.endsWith(":go")
+            worktreeMenuTimer.copy = go ? arg.slice(0, -3) : arg
+            worktreeMenuTimer.onGraph = act === "worktree-graph"
+            worktreeMenuTimer.press = act === "worktree-remove" || act === "worktree-remove-refused" || go
+            worktreeMenuTimer.refused = act === "worktree-remove-refused"
+            worktreeMenuTimer.start()
         } else {
             return false
         }
         return true
+    }
+
+    // ---- a working copy's card (デザイン規約 §左メニューの所作 の削除の表) ----
+    readonly property var worktreesModel: driver.worktreesModel
+    readonly property var refMenu: driver.refMenu
+    /// The WORKTREES row showing the copy called `name`, -1 while none does.
+    function copyRow(name) {
+        const list = navProbe.listOf("worktree")
+        if (!list)
+            return -1
+        for (let at = 0; at < list.count; at++) {
+            if (worktreesModel.nameAt(at) === name)
+                return at
+        }
+        return -1
+    }
+    /// Puts a menu a verb just raised where a hand's right-click would have: headless, the pointer never leaves the
+    /// screen's origin, and `popup()` opens there (rules-refs/app-ui.md「ヘッドレスの窓には手が乗っている」).
+    function standMenuOn(menu, row) {
+        const p = row.mapToItem(menu.parent, row.width * 0.35, row.height * 0.6)
+        menu.x = p.x
+        menu.y = p.y
+    }
+    SampleTimer {
+        id: worktreeMenuTimer
+        property string copy: ""
+        property bool onGraph: false
+        property bool press: false
+        property bool refused: false
+        readonly property var menu: worktreeMenuTimer.onGraph ? acts.commitMenu : acts.refMenu
+        readonly property var card: worktreeMenuTimer.onGraph ? driver.commitCopyCard : driver.refCopyCard
+        /// Raises the menu, through the row's own door. False while the row is not there yet.
+        function raise() {
+            const at = acts.copyRow(worktreeMenuTimer.copy)
+            if (at < 0)
+                return false
+            if (!worktreeMenuTimer.onGraph) {
+                const list = navProbe.listOf("worktree")
+                if (!list.rightClickRow(at))
+                    return false
+                acts.standMenuOn(acts.refMenu, list.itemAtIndex(at))
+                return true
+            }
+            // The graph row the copy stands on, pressed where its own right-click goes: the menu aimed at the row's
+            // first chip (`GraphRowDelegate.menuChip`).
+            const facts = worktreesModel.copyFacts(worktreesModel.fullAt(at))
+            const row = facts === undefined ? -1 : graphModel.rowOf(facts.head)
+            const item = row < 0 ? null : graphPane.view.itemAtIndex(row)
+            if (item === null)
+                return false
+            graphPane.view.rowMenuRequested(item.oid_hex, item.menuChip)
+            acts.standMenuOn(acts.commitMenu, item)
+            return true
+        }
+        onTriggered: {
+            // The row's gate is read as the menu opens (`RefWorktreeMenu.standOn`): opened while a write runs, it greys.
+            if (repoTab.busyCount !== 0)
+                return
+            if (!worktreeMenuTimer.menu.opened) {
+                worktreeMenuTimer.raise()
+                return
+            }
+            const card = worktreeMenuTimer.card
+            // The repository's own copy has no card (git never removes it): the menu is the whole answer.
+            if (!card.applies && !worktreeMenuTimer.press) {
+                worktreeMenuTimer.stop()
+                Harness.report("worktree_menu copy=" + worktreeMenuTimer.copy + " card=false"
+                                  + " branch=" + (worktreeMenuTimer.onGraph ? driver.commitBranchCard.applies
+                                                                            : driver.refBranchCard.applies))
+                driver.complete()
+                return
+            }
+            // The card is one level in (デザイン規約 §メニュー の入れ子); opened so the picture shows its row.
+            if (!card.opened) {
+                worktreeMenuTimer.menu.openSub(card)
+                return
+            }
+            const item = card.removeItem
+            if (!worktreeMenuTimer.press) {
+                // A greyed row says why on its hover alone, forced through the property the real hover writes.
+                item.tipForced = item.blocked
+                if (item.blocked && !item.ToolTip.visible)
+                    return
+                worktreeMenuTimer.stop()
+                Harness.report("worktree_menu copy=" + worktreeMenuTimer.copy
+                                  + " card=" + card.opened
+                                  + " offered=" + item.offered
+                                  + " blocked=" + item.blocked
+                                  + " tip=" + item.ToolTip.visible
+                                  + " code=" + item.code
+                                  // Whether the menu stands on the branch the copy has out, which brings the BRANCH card.
+                                  + " branch=" + (worktreeMenuTimer.onGraph ? driver.commitBranchCard.applies
+                                                                            : driver.refBranchCard.applies)
+                                  + " held=" + (item.holdMs > 0)
+                                  // Whether the folder came out whole: the row bids for it, and a bid a fraction
+                                  // short elides it on one OS only (`AppMenuItem.implicitWidth`).
+                                  + " cut=" + item.nameCut
+                                  // Last, because it is a sentence.
+                                  + " reason=" + item.blockedWhy)
+                driver.complete()
+                return
+            }
+            worktreeMenuTimer.stop()
+            // A click, as a hand makes it: the row's handler, then the menus fold.
+            driver.pressWrite("worktree-remove", () => {
+                item.triggered()
+                worktreeMenuTimer.menu.dismiss()
+                return true
+            })
+            // git keeps the copy and says why: the bar is the answer, and the log stays shut (`write_notice log=`).
+            if (worktreeMenuTimer.refused)
+                driver.barrierNotice.start()
+            else
+                worktreeGoneTimer.start()
+        }
+    }
+    // A removed copy, judged on the list it leaves: gone at the press and still gone once git's listing is in.
+    SampleTimer {
+        id: worktreeGoneTimer
+        onTriggered: {
+            if (!driver.wroteAndSettled() || repoTab.goneWorktree !== "")
+                return
+            worktreeGoneTimer.stop()
+            // The judged two first; the copy and the count are the preset's.
+            Harness.report("worktree_gone row=" + acts.copyRow(worktreeMenuTimer.copy)
+                              + " log=" + page.commandsOpen
+                              + " copy=" + worktreeMenuTimer.copy
+                              + " total=" + worktreesModel.total)
+            renderedBarrier.begin()
+        }
     }
     SampleTimer {
         id: pinEdgeTimer

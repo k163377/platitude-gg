@@ -251,6 +251,7 @@ ColumnLayout {
         branchesModel: sections.branchesModel
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)
+        onRefMenuRequested: (kind, name, full, oidHex) => sections.refMenuRequested(kind, name, full, oidHex)
     }
 
     NavHeader {

@@ -29,10 +29,12 @@ Item {
     readonly property int askBusy: refRowMenu.heldReason !== "" ? 0 : refRowMenu.repoTab.busyCount
 
     /// The row the menu stands on. `refId` is what git knows it by, which on a stash is a selector, apart from
-    /// the row's message.
+    /// the row's message, and on a working copy with no branch out its path.
     property string kind: ""
     property string refId: ""
     property string refOid: ""
+    /// What merge / rebase are handed: the name, or the commit where the row is a working copy — a path is no ref.
+    readonly property string integrateRef: refRowMenu.kind === "worktree" ? refRowMenu.refOid : refRowMenu.refId
 
     property bool canSwitch: false
     /// Whether `switch` will raise a question (an operation standing, or unmerged files), worn as the row's `!`
@@ -56,7 +58,8 @@ Item {
     /// Whether merge / rebase are on offer — one reading for both rows and the rebase note, so the note appears
     /// exactly where its row does. A stash is not a line of history.
     readonly property bool integrateOffered:
-        (refRowMenu.kind === "branch" || refRowMenu.kind === "remote" || refRowMenu.kind === "tag")
+        (refRowMenu.kind === "branch" || refRowMenu.kind === "remote" || refRowMenu.kind === "tag"
+         || refRowMenu.kind === "worktree")
         && refRowMenu.canIntegrateFrom
     /// Whether a rebase onto this row would rewrite a commit a remote has (`<ref>..HEAD`), read off the drawn rows
     /// (`GraphModel.rebaseRewritesPublished`): a `git rev-list` would land after the card and widen it under the hand
@@ -78,12 +81,14 @@ Item {
     readonly property alias deleteTagBothItem: tagMenu.deleteTagBothItem
     readonly property alias deleteItem: branchMenu.deleteItem
     readonly property alias upstreamItem: branchMenu.upstreamItem
+    readonly property alias removeCopyItem: copyMenu.removeItem
     readonly property alias stashDropItem: refStashDropItem
     readonly property alias switchItem: refSwitchItem
     readonly property alias pullItem: refPullItem
     readonly property alias rebaseItem: refRebaseItem
     /// The cards those rows hang behind; a run photographing one opens it first (`AppMenu.openSub`).
     readonly property alias branchCard: branchMenu
+    readonly property alias copyCard: copyMenu
     readonly property alias tagCard: tagMenu
 
     /// What the page answers for: moving the working tree, the delete git may still refuse, and the stash drop that two
@@ -95,6 +100,8 @@ Item {
     signal tagHereRequested(string oidHex)
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal dropStashRequested(string selector)
+    /// The WORKTREE card's `worktree remove`, which takes the copy's row off the screen at the press (`RepoTab`).
+    signal removeCopyRequested(string path, string name)
     /// Which remote branch a local one is measured against — the branch card's row, answered in the page's one bar
     /// (`UpstreamFlow`).
     signal upstreamRequested(string branch, string counterpart)
@@ -171,18 +178,35 @@ Item {
 
     /// Opens on that ref, deciding there and then what it offers. Says whether it opened at all: a ref with nothing to
     /// offer — the current branch met as a chip — falls back to the row's own menu.
-    function offerOn(kind, name, full, oidHex) {
+    ///
+    /// `copyPath` is the working copy the WORKTREE card stands on — the WORKTREES row's own; left out, the copy
+    /// holding this row's branch, if another does.
+    function offerOn(kind, name, full, oidHex, copyPath) {
+        // A working copy with a branch out is that branch's menu, carrying the copy's card: the copy is where the
+        // branch is, and the row says both (デザイン規約 §左メニューの所作).
+        if (kind === "worktree") {
+            const copy = refRowMenu.worktreesModel.copyFacts(full)
+            if (copy !== undefined && copy.branch !== "")
+                return refRowMenu.offerOn("branch", copy.branch, copy.branch, oidHex, full)
+        }
         refRowMenu.kind = kind
         refRowMenu.refId = full
         refRowMenu.refOid = oidHex
         branchMenu.standOn(kind, name, full, oidHex, refRowMenu.branchFacts(kind, full, oidHex))
         tagMenu.standOn(kind, full, oidHex, refRowMenu.tagFacts(kind, full, oidHex))
         // Whether another working copy has this row's branch out (through the same-named local branch for a remote
-        // row): `switch` then opens that copy instead (offers::SwitchAction::OpenHolder).
+        // row): `switch` then opens that copy instead (offers::SwitchAction::OpenHolder). A copy with no branch leads
+        // to itself, unless this tab already stands in it.
         const held = kind === "branch" ? refRowMenu.worktreesModel.worktreeHolding(full)
                    : kind === "remote" ? refRowMenu.worktreesModel.worktreeHolding(
                                              refRowMenu.repoTab.localNameFor(full))
+                   : kind === "worktree" && !GitFacts.samePath(full, refRowMenu.repoTab.repoPath) ? full
                                        : ""
+        // The card names a copy the row itself names or whose branch it is: a remote row leads to the holder of the
+        // same-named local branch, but the copy is not what it names (デザイン規約 §メニュー「カードは名指す ref がある時だけ」).
+        const copyAt = copyPath !== undefined ? copyPath : kind === "remote" ? "" : held
+        copyMenu.standOn(copyAt === "" ? undefined : refRowMenu.worktreesModel.copyFacts(copyAt),
+                         GitFacts.samePath(copyAt, refRowMenu.repoTab.repoPath), refRowMenu.askBusy)
         // Core's rule (offers::ref_menu), asked once so the answers stand while the menu does.
         const offers = GitFacts.refMenuOffers(
             kind, full, oidHex,
@@ -248,7 +272,7 @@ Item {
             refSentence: qsTr("into %1")
             refName: refRowMenu.workTree.branch
             offered: refRowMenu.integrateOffered
-            onTriggered: refRowMenu.repoTab.merge(refRowMenu.refId, false, false, "")
+            onTriggered: refRowMenu.repoTab.merge(refRowMenu.integrateRef, false, false, "")
         }
         AppMenuItem {
             id: refRebaseItem
@@ -261,7 +285,7 @@ Item {
             offered: refRowMenu.integrateOffered
             // Published = reachable from a remote-tracking ref, as of the last fetch.
             note: refRowMenu.rebasePublished ? Words.rewritesPushed : ""
-            onTriggered: refRowMenu.repoTab.rebase(refRowMenu.refId, "", true)
+            onTriggered: refRowMenu.repoTab.rebase(refRowMenu.integrateRef, "", true)
         }
         AppMenuSeparator {}
         // A group of its own above the cards, and the word alone (デザイン規約 §取り込んで合流させる).
@@ -303,6 +327,14 @@ Item {
             onDeleteRemoteRequested: remoteRef => refRowMenu.deleteRemoteNow(remoteRef)
             onDeleteEverywhereRequested: (branch, remoteRef, forced) =>
                 refRowMenu.deleteEverywhereNow(branch, remoteRef, forced)
+        }
+        AppMenuSeparator {}
+        // The working copy this row names or leads to; above the TAG card (デザイン規約 §メニュー の入れ子). The same card
+        // the graph row's menu carries.
+        RefWorktreeMenu {
+            id: copyMenu
+            heldReason: refRowMenu.heldReason
+            onRemoveRequested: (path, name) => refRowMenu.removeCopyRequested(path, name)
         }
         AppMenuSeparator {}
         // The same card the graph row's menu carries.

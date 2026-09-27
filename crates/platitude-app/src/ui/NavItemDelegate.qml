@@ -454,12 +454,14 @@ Item {
     /// two as well (`NavRowFacts`): a press there that never moved is this row's own click.
     function rowPressed(button, modifiers) {
         if (button === Qt.RightButton) {
-            // Only rows with operations behind them open a menu.
+            // Only rows with operations behind them open a menu. A working copy's is the ref menu too: the branch it has
+            // out, or its commit, and its own card (デザイン規約 §左メニューの所作).
             if (!navRow.folder && navRow.oid_hex !== ""
                     && (navRow.kindHint === "branch"
                         || navRow.kindHint === "remote"
                         || navRow.kindHint === "tag"
-                        || navRow.kindHint === "stash"))
+                        || navRow.kindHint === "stash"
+                        || navRow.kindHint === "worktree"))
                 navRow.refMenuRequested(navRow.name, navRow.fullName, navRow.oid_hex)
             else if (!navRow.folder && navRow.kindHint === "wt")
                 navRow.fileMenuRequested(navRow.bucket, navRow.fullName)

@@ -278,6 +278,9 @@ pub enum SessionEvent {
     },
     WorktreesLoaded {
         worktrees: Vec<crate::worktrees::WorktreeEntry>,
+        /// When this listing looked, as [`Self::StashesLoaded`]: a removed
+        /// copy's row waits on a listing that saw the removal.
+        looked: u64,
     },
     DetailsLoaded {
         generation: u64,

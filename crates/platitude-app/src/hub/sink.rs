@@ -272,8 +272,11 @@ impl SessionSink for BridgeSink {
                     looked,
                 })
             }
-            SessionEvent::WorktreesLoaded { worktrees } => {
-                self.feeds.worktrees.push_replace(worktrees)
+            SessionEvent::WorktreesLoaded { worktrees, looked } => {
+                self.feeds.worktrees.push_replace(crate::hub::WorktreeList {
+                    entries: worktrees,
+                    looked,
+                })
             }
             SessionEvent::DetailsLoaded {
                 generation,

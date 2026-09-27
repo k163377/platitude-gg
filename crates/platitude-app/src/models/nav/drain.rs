@@ -82,6 +82,7 @@ impl NavSectionModel {
             self.carried_name = name;
             arrived |= self.take(Source::whole_files(status)) || moved;
         }
+        let mut worktrees_arrived = false;
         if let Some(feed) = self.worktrees_feed.clone()
             && let Some(list) = feed.drain().pop()
         {
@@ -89,8 +90,11 @@ impl NavSectionModel {
                 .flatten()
                 .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
                 .unwrap_or_default();
+            worktrees_arrived = true;
+            // The same stamp, for the listing a removed copy waits on.
+            crate::hub::listing_applied(self.tab_id, &self.section, list.looked);
             // A bare entry has no working copy to show.
-            let list = list.into_iter().filter(|w| !w.bare).collect();
+            let list = list.entries.into_iter().filter(|w| !w.bare).collect();
             arrived |= self.take(Source::Worktrees { list, current });
         }
         let mut stashes_arrived = false;
@@ -114,6 +118,9 @@ impl NavSectionModel {
         }
         if moved {
             self.refs_moved();
+        }
+        if worktrees_arrived {
+            self.worktrees_settled();
         }
         if stashes_arrived {
             self.stashes_settled();

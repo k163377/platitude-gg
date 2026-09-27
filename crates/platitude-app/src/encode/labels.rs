@@ -80,6 +80,17 @@ pub fn ref_kind_word(word: &str) -> &'static str {
     }
 }
 
+/// The kind a chip's word aims a right-click menu at: [`ref_kind_word`],
+/// and `worktree` for a working copy with no branch out — it has a menu
+/// (its WORKTREE card) though no name the rename or switch gestures take.
+/// `""` for the detached HEAD.
+pub fn menu_kind_word(word: &str) -> &'static str {
+    match kind_from_word(word) {
+        Some(LabelKind::Worktree) => "worktree",
+        _ => ref_kind_word(word),
+    }
+}
+
 impl Chip {
     /// What this chip answers to on the row and on the card alike: kind
     /// and name, nothing of how it is drawn — a background pass that
@@ -302,6 +313,16 @@ mod tests {
         assert_eq!(ref_kind_word("head"), "", "nothing to act on");
         assert_eq!(ref_kind_word("worktree"), "", "nor is a working copy");
         assert_eq!(ref_kind_word(""), "");
+    }
+
+    /// A working copy's chip opens a menu (its card) and still names no
+    /// ref: the rename and switch gestures read `ref_kind_word`.
+    #[test]
+    fn a_working_copys_chip_aims_a_menu_and_the_head_marker_none() {
+        assert_eq!(menu_kind_word("worktree"), "worktree");
+        assert_eq!(menu_kind_word("branch"), "branch");
+        assert_eq!(menu_kind_word("tag"), "tag");
+        assert_eq!(menu_kind_word("head"), "");
     }
 
     #[test]

@@ -24,6 +24,8 @@ Item {
     required property var branchesModel
     required property var remotesModel
     required property var worktreeModel
+    /// The working copies (WORKTREES), apart from `worktreeModel` — this tab's own changed files.
+    required property var worktreesModel
     required property var stashesModel
     required property var tagsModel
     required property var graphPane
@@ -92,6 +94,7 @@ Item {
             branchesModel: harness.branchesModel
             remotesModel: harness.remotesModel
             worktreeModel: harness.worktreeModel
+            worktreesModel: harness.worktreesModel
             stashesModel: harness.stashesModel
             tagsModel: harness.tagsModel
             graphPane: harness.graphPane
@@ -137,6 +140,8 @@ Item {
             upstreamFlow: harness.upstreamFlow
             remoteDialog: harness.publishFlow.dialog
             remoteMenu: harness.remoteRowMenu.menu
+            refCopyCard: harness.refRowMenu.copyCard
+            commitCopyCard: harness.commitRowMenu.copyCard
             refList: harness.rowHost.listPopup
             rowCard: harness.rowHost.hoverCard
             rowHost: harness.rowHost

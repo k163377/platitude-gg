@@ -230,6 +230,7 @@ fn main() {
     qrc::embed!("ui/RefRowMenu.qml");
     qrc::embed!("ui/RefTagMenu.qml");
     qrc::embed!("ui/RemoteRowMenu.qml");
+    qrc::embed!("ui/RefWorktreeMenu.qml");
     qrc::embed!("ui/RenameCarryFlow.qml");
     qrc::embed!("ui/RenameCarryForm.qml");
     qrc::embed!("ui/RefusalBadge.qml");

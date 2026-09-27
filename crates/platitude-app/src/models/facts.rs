@@ -34,6 +34,32 @@ impl GitFacts {
         crate::encode::ref_kind_word(&kind).to_string()
     }
 
+    /// What a right-click on a chip of that word aims the menu at: the ref
+    /// kinds, and `worktree` for a working copy's folder chip — a copy has a
+    /// menu (its WORKTREE card), where it has no name to rename or switch
+    /// to (`ref_kind`). `""` for the detached HEAD.
+    #[qslot]
+    fn menu_kind(&self, kind: String) -> String {
+        crate::encode::menu_kind_word(&kind).to_string()
+    }
+
+    /// What the WORKTREE card offers for one copy (`RefWorktreeMenu.standOn`):
+    /// `state` is the copy's row word (`models::nav::item` — `MAIN` /
+    /// `LOCKED` / `PRUNABLE` / empty), `here` whether the tab stands in it.
+    #[qslot]
+    fn worktree_card_offers(&self, state: String, here: bool, busy_count: i32) -> Vec<String> {
+        platitude_core::offers::worktree_card(
+            state == crate::models::nav::MAIN,
+            state == crate::models::nav::LOCKED,
+            here,
+            busy_count,
+        )
+        .words()
+        .into_iter()
+        .map(str::to_string)
+        .collect()
+    }
+
     /// The remote half of a remote-tracking name (`origin/main`): the
     /// longest of `remote_names` wins (a remote's name may contain `/`);
     /// where none owns the ref the first slash answers, so the gesture

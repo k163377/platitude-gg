@@ -41,6 +41,7 @@ impl RepoTab {
         self.gone_remote = String::new();
         self.gone_tag = String::new();
         self.gone_stash = String::new();
+        self.gone_worktree = String::new();
         // The ask goes and the answer stays: a read still out answers
         // nowhere, and the page asks again (`RepoPage.standSettled`).
         self.signature_wanted = String::new();

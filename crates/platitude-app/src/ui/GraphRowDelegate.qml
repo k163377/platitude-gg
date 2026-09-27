@@ -111,6 +111,11 @@ Item {
     readonly property var renameChip:
         rowItem.labelRecords.length > 0 && GitFacts.refKind(rowItem.labelRecords[0].kind) !== ""
             ? rowItem.labelRecords[0] : null
+    // **What a right-click aims the menu's cards at**: the same first record, and a working copy's folder chip too —
+    // a copy has a card (its WORKTREE card) though no name to rename (デザイン規約 §グラフ行の右クリック).
+    readonly property var menuChip:
+        rowItem.labelRecords.length > 0 && GitFacts.menuKind(rowItem.labelRecords[0].kind) !== ""
+            ? rowItem.labelRecords[0] : null
     // The chip, sheets and all — what the card it unfolds into stands on (`GraphRowChips.chipItem`).
     readonly property alias chipItem: chipColumn.chipItem
     // The mark the chip wears while a second click waits out its window, as drawn (PGG_AUTO_ACT=graph-reclick-mark).
@@ -526,10 +531,10 @@ Item {
             // highlighted would offer to act on all of them (デザイン規約 §複数のコミットを選ぶ).
             rowItem.claimRow(Qt.NoModifier)
             // The WIP row is not a commit, so it has no menu. **One menu wherever along the row the press landed**:
-            // its rows are about this commit, the cards at its foot about `renameChip` (デザイン規約 §グラフ行の右クリック)
+            // its rows are about this commit, the cards at its foot about `menuChip` (デザイン規約 §グラフ行の右クリック)
             // — unlike a rest, a right-click has nothing to divide (`partAt`).
             if (!rowItem.isWip)
-                rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.renameChip)
+                rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.menuChip)
         }
         onDoubleClicked: mouse => {
             if (mouse.button !== Qt.LeftButton)

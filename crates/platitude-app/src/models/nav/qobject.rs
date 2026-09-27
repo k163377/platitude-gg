@@ -108,6 +108,12 @@ impl NavSectionModel {
     #[qsignal]
     pub(super) fn stashes_settled(&mut self);
 
+    /// A worktree listing arrived, whether or not it moved anything — a
+    /// listing of its own, as the stashes' is: the copy a removal took
+    /// away waits on it.
+    #[qsignal]
+    pub(super) fn worktrees_settled(&mut self);
+
     /// Wires this instance to one section's data feed. `section`:
     /// `branches` / `remotes` / `worktrees` / `stashes` / `tags`. The
     /// working tree's changed files come through [`Self::attach_worktree`].
@@ -259,6 +265,21 @@ impl NavSectionModel {
     #[qslot]
     fn copy_card(&self) -> CopyRows {
         CopyRows::new(self.copy_rows())
+    }
+
+    /// The copy at `path` as its row says it (`copy_of`) — what the
+    /// WORKTREE card of a menu stands on, read as the menu opens.
+    /// `undefined` for a path not listed, or listed as going.
+    #[qslot]
+    fn copy_facts(&self, path: String) -> Optional<CopyRow> {
+        Optional::new(self.copy_of(&path))
+    }
+
+    /// The path of the copy a folder's chip names: `name` standing on
+    /// `head` (`copy_standing`); empty where none does.
+    #[qslot]
+    fn copy_at(&self, name: String, head: String) -> String {
+        self.copy_standing(&name, &head)
     }
 
     /// Which row on show this ref sits on; -1 when it is on none. What a

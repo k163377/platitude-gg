@@ -17,6 +17,12 @@ pub struct CopyRow {
     /// The state of the checkout, in the section's own word for it —
     /// `MAIN`, `LOCKED`, `PRUNABLE`, or empty (`item::MAIN`).
     pub change: String,
+    /// Why it is in that state, where git said: a lock's reason, or why it
+    /// would be pruned (the section's `orig_path`).
+    pub reason: String,
+    /// The commit it stands on, as hex — what tells two copies of one
+    /// folder name apart on the graph (`copy_standing`).
+    pub head: String,
 }
 
 /// The card, in the order the section draws it.
@@ -29,6 +35,8 @@ impl Record for CopyRow {
             .put("full", &self.full)
             .put("branch", &self.branch)
             .put("change", &self.change)
+            .put("reason", &self.reason)
+            .put("head", &self.head)
             .done()
     }
 
@@ -38,6 +46,8 @@ impl Record for CopyRow {
             full: field(map, "full")?,
             branch: field(map, "branch")?,
             change: field(map, "change")?,
+            reason: field(map, "reason")?,
+            head: field(map, "head")?,
         })
     }
 }
@@ -65,9 +75,30 @@ impl NavSectionModel {
                     full: self.field(row, Role::Full).as_str().to_string(),
                     branch: self.field(row, Role::Bucket).as_str().to_string(),
                     change: self.field(row, Role::Change).as_str().to_string(),
+                    reason: self.field(row, Role::OrigPath).as_str().to_string(),
+                    head: self.field(row, Role::OidHex).as_str().to_string(),
                 }
             })
             .collect()
+    }
+
+    /// The copy at `path`, as its row says it — what a WORKTREE card stands
+    /// on, whichever entrance raised it. `None` for a path this listing
+    /// does not hold, or holds as gone.
+    pub(super) fn copy_of(&self, path: &str) -> Option<CopyRow> {
+        self.copy_rows().into_iter().find(|row| row.full == path)
+    }
+
+    /// The path of the copy called `name` standing on `head` — what a
+    /// folder's chip on the graph names, which carries only the folder:
+    /// two copies of one name under different parents sit on different
+    /// commits, or are the one chip. Empty where none does.
+    pub(super) fn copy_standing(&self, name: &str, head: &str) -> String {
+        self.copy_rows()
+            .into_iter()
+            .find(|row| row.name == name && row.head == head)
+            .map(|row| row.full)
+            .unwrap_or_default()
     }
 }
 
@@ -81,14 +112,24 @@ mod tests {
         branch: Option<&str>,
         locked: bool,
     ) -> platitude_core::worktrees::WorktreeEntry {
+        // One commit per copy, told apart by the folder.
+        let head = match path.rsplit('\\').next() {
+            Some("home") => "1111",
+            Some("plain") => "2222",
+            _ => "3333",
+        };
         platitude_core::worktrees::WorktreeEntry {
             path: path.to_string(),
             branch: branch.map(str::to_string),
-            head_hex: None,
+            head_hex: Some(head.to_string()),
             bare: false,
             detached: branch.is_none(),
             locked,
-            lock_reason: String::new(),
+            lock_reason: if locked {
+                "kept".to_string()
+            } else {
+                String::new()
+            },
             prunable: false,
             prune_reason: String::new(),
             main: path.ends_with("home"),
@@ -145,6 +186,8 @@ mod tests {
                 full: "C:\\work\\home".to_string(),
                 branch: "main".to_string(),
                 change: "MAIN".to_string(),
+                reason: String::new(),
+                head: "1111".to_string(),
             }
         );
         assert_eq!(
@@ -154,6 +197,32 @@ mod tests {
         assert_eq!(
             (rows[2].branch.as_str(), rows[2].change.as_str()),
             ("", "LOCKED")
+        );
+    }
+
+    /// What a WORKTREE card stands on, by path from a row and by folder and
+    /// commit from a chip; a copy shown as gone has no card.
+    #[test]
+    fn a_copy_is_found_by_its_path_or_by_its_folder_where_it_stands() {
+        let mut model = copies();
+        let held = model.copy_of("C:\\work\\held").expect("listed");
+        assert_eq!(
+            (held.change.as_str(), held.reason.as_str()),
+            ("LOCKED", "kept")
+        );
+        assert_eq!(model.copy_standing("held", "3333"), "C:\\work\\held");
+        assert_eq!(
+            model.copy_standing("held", "1111"),
+            "",
+            "not standing there"
+        );
+        assert!(model.copy_of("C:\\work\\elsewhere").is_none());
+
+        model.hidden = vec!["C:\\work\\held".to_string()];
+        model.arrange();
+        assert!(
+            model.copy_of("C:\\work\\held").is_none(),
+            "going: no card for it"
         );
     }
 

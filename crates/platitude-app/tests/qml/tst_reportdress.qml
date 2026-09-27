@@ -47,7 +47,34 @@ Item {
             bar.label = Words.writeReported(kind, remote, name)
             bar.detail = reason !== "" ? reason : Words.writeReportedWhy(kind)
             bar.tone = Words.reportTone(kind)
+            bar.markWord = Words.reportNamesCopy(kind) ? name : ""
             bar.open = true
+        }
+
+        /// A working copy the removal left standing: the gesture's colour, and the copy's name in the heading behind
+        /// the tree mark every copy's name wears (デザイン規約 §ref の種別「名前の印」). Both kinds, and a report naming
+        /// no copy, since a bar that marks every heading passes the first half alone.
+        function test_a_copy_git_kept_is_named_behind_the_tree_mark() {
+            compare(Words.reportTone("worktree-kept"), "warning")
+            compare(Words.reportTone("worktree-half"), "warning")
+            compare(Words.writeReported("worktree-kept", "", "topic"), "topic was not removed")
+            compare(Words.writeReported("worktree-half", "", "topic"), "topic was not removed completely")
+            compare(Words.writeReportedWhy("worktree-kept"), "It has uncommitted changes.")
+            verify(!Words.reportNamesCopy("rename"), "a branch's name wears no tree")
+
+            // One space of room, where this font needs two: pinned, or rich text drops it at the block's start.
+            compare(Words.roomInSentence("topic was not removed", "topic", 1), "&nbsp;topic was not removed")
+
+            dress("worktree-kept", "", "topic", "")
+            tryVerify(() => bar.settled && bar.markShown && bar.markInk > 0)
+            // The name opens the sentence, where rich text drops a lone leading space: the room must still be there,
+            // as wide as the mark's ink, or the mark is drawn over the name's first letter.
+            verify(bar.markSeat.x >= bar.markInk, "the name was pushed by the whole mark: " + bar.markSeat.x
+                   + " < " + bar.markInk)
+
+            dress("update", "origin", "main", "")
+            tryVerify(() => bar.settled)
+            verify(!bar.markShown, "no copy named, no mark")
         }
 
         /// Both arms, because either alone passes against a bar painted one colour.

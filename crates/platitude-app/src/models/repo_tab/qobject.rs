@@ -98,6 +98,7 @@ impl RepoTab {
     qproperty!("goneRemote", Member = gone_remote, Notify = changed);
     qproperty!("goneTag", Member = gone_tag, Notify = changed);
     qproperty!("goneStash", Member = gone_stash, Notify = changed);
+    qproperty!("goneWorktree", Member = gone_worktree, Notify = changed);
     qproperty!("authorName", Member = author_name, Notify = changed);
     qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("authorAvatar", Member = author_avatar, Notify = changed);
@@ -905,6 +906,13 @@ impl RepoTab {
     #[qslot]
     fn drop_stash(&mut self, selector: String) {
         self.stash_drop(selector);
+    }
+
+    /// `git worktree remove` (destructive): the copy's row goes at the
+    /// press. `name` is the row's own word for it, for a refusal's heading.
+    #[qslot]
+    fn remove_worktree(&mut self, path: String, name: String) {
+        self.worktree_remove(path, name);
     }
 
     /// One of the sidebar's lists has drawn a reading; what that proves
