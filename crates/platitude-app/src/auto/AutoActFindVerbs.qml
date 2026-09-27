@@ -81,6 +81,17 @@ Item {
                               + " cap=" + Math.round(graphPane.width - graphPane.subjectTextX)
                               + " clears=" + graphPane.findCard.findClears)
             findSettled.restart()
+        } else if (act === "find-hint" || act === "find-hint-key") {
+            // The note under the card waits for the typing to stop; `-key` holds the line's last character back and
+            // presses it after the stop. `head:<n>` is the first n characters of HEAD's id — a fixture's ids differ
+            // between the two OSes.
+            const line = arg.startsWith("head:")
+                         ? graphModel.oidAt(graphModel.headRow).substring(0, Number(arg.slice(5)))
+                         : arg
+            page.startFind()
+            findHinted.key = act === "find-hint-key" ? line.slice(-1) : ""
+            graphPane.findCard.query = line.slice(0, line.length - findHinted.key.length)
+            findHinted.start()
         } else if (act === "find-scroll") {
             // The search drawn, then the list scrolled: rows come in on delegates handed on from rows just drawn
             // dimmed or lit, where one row's ink can carry into the next. `find` draws each row only once.
@@ -240,6 +251,29 @@ Item {
             Harness.report("find_scroll grabbed=" + findScrolled.grabbed + " moved=" + findScrolled.moved
                               + " pin=" + (!pin.visible ? "none" : pin.wordsOpacity < 1 ? "dim" : "lit")
                               + " matches=" + graphPane.findCard.matches)
+            renderedBarrier.begin()
+        }
+    }
+    // PGG_AUTO_ACT=find-hint / find-hint-key: waits on the card's own word that the typing stopped (`typingStopped`),
+    // which a line with no note reaches all the same. `-key` then presses the held-back character and is shot on the
+    // next frame — the one that keystroke took the note down in (規約 §コミットを探す).
+    SampleTimer {
+        id: findHinted
+        property string key: ""
+        onTriggered: {
+            const card = graphPane.findCard
+            if (!card.typingStopped)
+                return
+            findHinted.stop()
+            if (findHinted.key === "") {
+                Harness.report("find_hint stopped=true shown=" + card.hintShown + " matches=" + card.matches
+                                  + " query=" + card.query + " hint=" + card.hint)
+            } else {
+                const before = card.hintShown
+                card.query = card.query + findHinted.key
+                Harness.report("find_hint_key before=" + before + " after=" + card.hintShown
+                                  + " stopped=" + card.typingStopped + " query=" + card.query)
+            }
             renderedBarrier.begin()
         }
     }

@@ -14,6 +14,13 @@ pub struct GitFacts;
 
 #[qobject(ConvertToCamelCase, NoQmlElement)]
 impl GitFacts {
+    /// How many hex characters the find bar needs before it reads a line as
+    /// an object name (`find::MIN_OID_PREFIX`) — the number its hint says.
+    #[qslot]
+    fn oid_floor(&self) -> i32 {
+        platitude_core::find::MIN_OID_PREFIX as i32
+    }
+
     /// Whether a hex id is the WIP row's all-zero sentinel
     /// (`Oid::zero_like`). Empty is "no id at all".
     #[qslot]

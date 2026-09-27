@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import platitude
 import platitude.ui
 
 // The find card over the graph and what a query does to the view. Rows are marked in Rust (`GraphModel.setFind`,
@@ -72,6 +73,8 @@ FindBar {
     unansweredTip: find.graphModel.truncated
                 ? qsTr("Nothing in the loaded history matches — older commits are not loaded")
                 : qsTr("Nothing in this history matches")
+    // Hex under the floor finds no commit by its hash, and nothing on screen would say why (規約 §コミットを探す).
+    hint: find.graphModel.shortOfAnOid ? qsTr("Hashes need at least %1 characters").arg(GitFacts.oidFloor()) : ""
     onQueryChanged: find.runFind()
     onNextRequested: find.findNext()
     onPreviousRequested: find.findPrevious()

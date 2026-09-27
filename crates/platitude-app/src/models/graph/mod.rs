@@ -106,6 +106,9 @@ pub struct GraphModel {
     match_count: i32,
     /// Whether a query is set, whatever it found — what dims the rows.
     searching: bool,
+    /// Whether the query is hex too short to be read as an object name
+    /// (`find::Query::short_of_an_oid`) — what the find bar's hint answers.
+    short_of_an_oid: bool,
     /// Whether the newest row is one of the answers; the graph steps down
     /// from under the card for it (規約 §コミットを探す). The working-tree
     /// row never matches, so true also means a clean tree.

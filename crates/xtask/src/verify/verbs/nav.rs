@@ -817,6 +817,30 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(Arg::Is(""), "find_drop open=false shown=false")],
         plain: "find_drop open=true shown=true",
     },
+    // The note under the find card once the typing stops: hex under the
+    // hash floor has one, a line with any other character or four hex
+    // characters none (`head:4` types HEAD's first four).
+    Verb {
+        name: "find-hint",
+        when: &[
+            (
+                Arg::Is("head:4"),
+                "find_hint stopped=true shown=false matches=1",
+            ),
+            (
+                Arg::OneOf(&["", "fix", "feat", "zzz"]),
+                "find_hint stopped=true shown=false",
+            ),
+        ],
+        plain: "find_hint stopped=true shown=true",
+    },
+    // The keystroke after the stop takes the note down, though the line is
+    // still short of a hash.
+    Verb {
+        name: "find-hint-key",
+        when: &[],
+        plain: "find_hint_key before=true after=false stopped=false",
+    },
     // The panel's own mark opening the find bar; the key opens the same
     // picture, so the press reaching the page from the mark is the line.
     Verb {

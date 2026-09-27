@@ -21,8 +21,8 @@ pub struct Query {
     /// The line as typed, ASCII-folded, whitespace kept exactly (`fix ` asks
     /// for the word, not the prefix).
     needle: String,
-    /// The line could be the start of an object name.
-    oid_prefix: bool,
+    /// The line is hex only — an object name's shape, whatever its length.
+    hex: bool,
 }
 
 /// The fields of one row a search can look at, all already in memory.
@@ -55,14 +55,20 @@ impl Query {
             return None;
         }
         let needle = text.to_ascii_lowercase();
-        let oid_prefix =
-            needle.len() >= MIN_OID_PREFIX && needle.bytes().all(|b| b.is_ascii_hexdigit());
-        Some(Self { needle, oid_prefix })
+        let hex = needle.bytes().all(|b| b.is_ascii_hexdigit());
+        Some(Self { needle, hex })
     }
 
     /// The line as typed (folded), for whoever has to show it back.
     pub fn text(&self) -> &str {
         &self.needle
+    }
+
+    /// Hex only, but shorter than an object name is read from: the line
+    /// may be the start of one no row answers yet, and the bar says why
+    /// (規約 §コミットを探す).
+    pub fn short_of_an_oid(&self) -> bool {
+        self.hex && self.needle.len() < MIN_OID_PREFIX
     }
 
     /// Whether this row is one of the answers.
@@ -96,14 +102,14 @@ impl Query {
     /// the line could be an object name at all. Inside random hex a short
     /// run would light rows for no reason a reader could see.
     fn at_start_of(&self, oid_hex: &str) -> bool {
-        self.oid_prefix && oid_hex.starts_with(&self.needle)
+        self.hex && self.needle.len() >= MIN_OID_PREFIX && oid_hex.starts_with(&self.needle)
     }
 }
 
 /// Shortest run of hex read as an object name — the shortest git resolves
 /// (`rev-parse --short` floors at 4). Three would find commits by an id no
 /// git command accepts.
-const MIN_OID_PREFIX: usize = 4;
+pub const MIN_OID_PREFIX: usize = 4;
 
 /// Case-folded substring test over bytes: valid UTF-8 never starts with a
 /// continuation byte, so a byte-level hit is always a real substring hit.
@@ -256,6 +262,17 @@ mod tests {
     fn short_hex_is_not_an_object_name() {
         assert!(!hits("3f2", &plain("")));
         assert!(hits("3f2", &plain("commit 3f2 was the one")), "as prose");
+    }
+
+    #[test]
+    fn hex_under_the_floor_is_short_of_an_oid() {
+        let short = |q: &str| Query::new(q).is_some_and(|q| q.short_of_an_oid());
+        assert!(short("3"));
+        assert!(short("3F2"), "however it was typed");
+        assert!(short("add"), "a word all in hex may start an id too");
+        assert!(!short("3f2a"), "four is read as an id");
+        assert!(!short("3fz"));
+        assert!(!short("3f "), "a space is no hex");
     }
 
     #[test]

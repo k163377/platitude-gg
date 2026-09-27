@@ -44,6 +44,11 @@ impl GraphModel {
     // Properties for the reason `matchCount` is.
     qproperty!("searching", Member = searching, Notify = stats_changed);
     qproperty!(
+        "shortOfAnOid",
+        Member = short_of_an_oid,
+        Notify = stats_changed
+    );
+    qproperty!(
         "firstMatched",
         Member = first_matched,
         Notify = stats_changed
@@ -445,6 +450,7 @@ impl GraphModel {
         }
         self.query = next;
         self.searching = self.query.is_some();
+        self.short_of_an_oid = self.query.as_ref().is_some_and(Query::short_of_an_oid);
         self.remark_notified();
         self.stats_changed();
     }

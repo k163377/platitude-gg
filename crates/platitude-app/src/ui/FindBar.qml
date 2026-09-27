@@ -26,6 +26,13 @@ Rectangle {
     property string unansweredTip: ""
     /// How wide the card may grow before it covers a subject's first character; the owner measures it.
     property real maxWidth: 0
+    /// A note on what was typed, hung under the card once the typing stops and gone with the next keystroke
+    /// (§コミットを探す). Empty: nothing to note.
+    property string hint: ""
+    /// The typing stopped a tooltip's wait ago — since the last keystroke, or since the card came up.
+    readonly property bool typingStopped: typingPause.over
+    /// The note is up: the typing stopped, on a line that has one.
+    readonly property bool hintShown: findBar.open && findBar.typingStopped && findBar.hint !== ""
 
     signal dismissed()
     /// Enter and Shift+Enter: on to the next match, back to the previous.
@@ -37,17 +44,20 @@ Rectangle {
         findBar.open = true
         field.forceActiveFocus()
         field.selectAll()
+        typingPause.begin()
     }
     function dismiss() {
         if (!findBar.open)
             return
         findBar.open = false
+        typingPause.halt()
         findBar.dismissed()
     }
     /// Closes without `dismissed`: the press that landed elsewhere owns the keyboard, and the answer to `dismissed`
     /// would take the caret from the box that press landed in.
     function dropAway() {
         findBar.open = false
+        typingPause.halt()
     }
     /// Whether a press at `scenePos` (scene coordinates) landed on this card, `✕` and count included. `null` — a
     /// headless press with no place — is never on it.
@@ -58,9 +68,9 @@ Rectangle {
         return p.x >= 0 && p.y >= 0 && p.x < findBar.width && p.y < findBar.height
     }
 
-    // Hangs from the edge above, so only the lower corners are rounded.
-    bottomLeftRadius: Theme.radiusMd
-    bottomRightRadius: Theme.radiusMd
+    // Hangs from the edge above, so only the lower corners are rounded — the note's, while it hangs below.
+    bottomLeftRadius: findBar.hintShown ? 0 : Theme.radiusMd
+    bottomRightRadius: findBar.bottomLeftRadius
     color: Theme.bgElevated
     border.width: Theme.borderWidth
     border.color: Theme.borderDefault
@@ -101,6 +111,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.minimumWidth: findRow.fieldMinWidth
             placeholderText: qsTr("Find commits")
+            onTextChanged: typingPause.begin()
             ToolTip.visible: findBar.unanswered && hovered
             ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: findBar.unansweredTip
@@ -136,6 +147,52 @@ Rectangle {
             Layout.alignment: Qt.AlignVCenter
             Accessible.name: qsTr("Close the find bar")
             onClicked: findBar.dismiss()
+        }
+    }
+
+    // A keystroke starts the wait over and takes down a note already up: a hand still typing has not stopped to read.
+    // The wait is a tooltip's — the note is one more fact about what is in the box (規約 §hover のツールチップ).
+    Timer {
+        id: typingPause
+        property bool over: false
+        function begin() {
+            typingPause.over = false
+            typingPause.restart()
+        }
+        function halt() {
+            typingPause.over = false
+            typingPause.stop()
+        }
+        interval: Metrics.tipDelayMs
+        onTriggered: typingPause.over = true
+    }
+    // Under the card, outside its height: the graph steps out from under the card by that height (`findClears`), and a
+    // note that comes and goes with the typing must not move the rows. It shares the card's bottom line and takes over
+    // its rounded corners. Comes and goes at once, like a tooltip.
+    Rectangle {
+        anchors.top: parent.bottom
+        anchors.topMargin: -Theme.borderWidth
+        anchors.left: parent.left
+        anchors.right: parent.right
+        implicitHeight: hintWords.implicitHeight + 2 * Theme.spaceXs
+        visible: findBar.hintShown
+        bottomLeftRadius: Theme.radiusMd
+        bottomRightRadius: Theme.radiusMd
+        color: Theme.bgElevated
+        border.width: Theme.borderWidth
+        border.color: Theme.borderDefault
+        Label {
+            id: hintWords
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.right: parent.right
+            // Level with the box's own words, and wrapped rather than cut: the card may be at its narrowest.
+            anchors.leftMargin: findRow.anchors.leftMargin + field.leftPadding
+            anchors.rightMargin: findRow.anchors.leftMargin
+            text: findBar.hint
+            wrapMode: Text.Wrap
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontSm
         }
     }
 }

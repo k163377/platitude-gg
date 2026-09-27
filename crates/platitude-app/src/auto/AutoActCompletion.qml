@@ -245,7 +245,7 @@ QtObject {
                 "op-exit-lands",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
                 "avatar-rest", "avatar-hover", "avatar-tip",
-                "find", "find-next", "find-prev", "find-drop", "find-scroll", "band-find",
+                "find", "find-next", "find-prev", "find-drop", "find-scroll", "find-hint", "find-hint-key", "band-find",
                 // Completed by `WindowAutoActDriver`; some begin here (picker, command failure, recovery), but the
                 // shot waits for the window-level predicate.
                 "open-fetches",
