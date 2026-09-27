@@ -289,6 +289,8 @@ impl RepoTab {
                     ReportKind::ConflictedPart => "conflicted-part",
                     ReportKind::RenameRefused => "rename",
                     ReportKind::HalfRenamed => "half-rename",
+                    ReportKind::WorktreeKept => "worktree-kept",
+                    ReportKind::WorktreeHalfRemoved => "worktree-half",
                     ReportKind::RewriteAcrossMerge => "across-merge",
                     ReportKind::RewriteOffBranch => "off-branch",
                     ReportKind::FoldFirstCommit => "fold-first",

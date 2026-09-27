@@ -226,4 +226,23 @@ impl RepoSession {
             },
         )
     }
+
+    /// Takes another working copy off the disk (`git worktree remove`),
+    /// the branch it had out left where it is. `name` is the copy as the
+    /// screen names it, for a refusal's heading
+    /// ([`crate::worktrees::remove`]).
+    ///
+    /// Moves no ref, so the refs are read first and the rest only where
+    /// they moved; the worktree listing that follows every such write
+    /// frees the branch and drops a branchless copy's graph row itself
+    /// (`refresh_worktrees`).
+    pub fn remove_worktree(self: &Arc<Self>, path: String, name: String) -> Option<OperationId> {
+        self.write(
+            OperationKind::Worktree,
+            AfterWrite::Refs,
+            move |exec, repo, cancel| async move {
+                crate::worktrees::remove(&exec, &repo.workdir, &path, &name, &cancel).await
+            },
+        )
+    }
 }

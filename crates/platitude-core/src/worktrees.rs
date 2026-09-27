@@ -130,6 +130,32 @@ pub async fn load(
     })
 }
 
+/// `git worktree remove -- <path>`: the folder and git's record of it. The
+/// branch it had out stays. `name` is the copy as the screen names it,
+/// which a refusal's heading is written from.
+///
+/// Unforced, so git keeps what it refuses for (uncommitted changes, a
+/// lock, submodules); ignored files go with the folder
+/// (git-worktree(1)). Every refusal is a report
+/// ([`crate::report::worktree_not_removed`]).
+pub async fn remove(
+    executor: &GitExecutor,
+    workdir: &Path,
+    path: &str,
+    name: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["worktree", "remove", "--", path]);
+    let command = cmd.describe();
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    match out.code {
+        0 => Ok(()),
+        _ => Err(crate::report::worktree_not_removed(name, command, &out)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

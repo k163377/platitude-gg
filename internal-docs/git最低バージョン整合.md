@@ -80,6 +80,7 @@
 | `symbolic-ref` | `-q` / `--short` | 古参(1.7.10) |
 | `tag` | `--delete` / `--end-of-options` | 2.42.0 ✓ |
 | `worktree` | `list --porcelain -z` | 2.42.1 ✓(`-z` 2.36) |
+| `worktree` | `remove -- <path>` | 2.43.0 ✓(2.17 導入。拒否の文 `contains modified or untracked files` も 2.17 から同じ) |
 
 `--format=` のプレースホルダ(`%H %P %T %an %ae %at %aI %cn %ce %ct %cI %B %s %gd %gs %G? %GS %GK %x00`)は pretty-formats 2.43.0 で全て記載確認 ✓。
 

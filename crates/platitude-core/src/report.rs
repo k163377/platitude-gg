@@ -39,6 +39,16 @@ pub enum ReportKind {
     /// made and the old one is still there. The one report about something
     /// half done, hence its state colour (デザイン規約 §状態「進行中で対処が要る」).
     HalfRenamed,
+    /// A working copy `git worktree remove` would not take away — nothing
+    /// was deleted. The reason is empty where it was uncommitted changes:
+    /// git's words end in advice to force it, which the screen does not
+    /// offer, so it writes its own (as [`Self::Outdated`]).
+    WorktreeKept,
+    /// A working copy git took off its list but could not empty: git goes
+    /// on to drop its record after a folder it could not delete in full
+    /// (a file held open is the usual cause on Windows). Half done, as
+    /// [`Self::HalfRenamed`].
+    WorktreeHalfRemoved,
 
     /// The five shapes a history cannot be rewritten in, found before a
     /// rebase is spawned ([`crate::sequencer::plan_edit`]). git is never
@@ -126,6 +136,34 @@ pub fn half_renamed(name: &str, from: crate::error::GitError) -> crate::error::G
             name,
             String::new(),
         )),
+    }
+}
+
+/// What git says when changes stand in the way (`LC_ALL=C`; the same
+/// words since `worktree remove` came in, 2.17).
+const WORKTREE_UNCLEAN: &str = "contains modified or untracked files";
+
+/// A working copy git did not take away, from its answer to
+/// `worktree remove`. git's `die()` exits 128 before anything is deleted;
+/// any other failure came after the folder's deletion began, and git drops
+/// its record regardless (builtin/worktree.c `remove_worktree`).
+#[must_use]
+pub fn worktree_not_removed(
+    name: &str,
+    command: String,
+    out: &crate::process::GitOutput,
+) -> crate::error::GitError {
+    let said = out.failure_message();
+    let (kind, reason) = match out.code {
+        128 if said.contains(WORKTREE_UNCLEAN) => (ReportKind::WorktreeKept, String::new()),
+        128 => (ReportKind::WorktreeKept, said.clone()),
+        _ => (ReportKind::WorktreeHalfRemoved, said.clone()),
+    };
+    crate::error::GitError::Reported {
+        command,
+        code: out.code,
+        stderr: said,
+        report: Box::new(WriteReport::about(kind, name, reason)),
     }
 }
 
@@ -265,6 +303,27 @@ mod tests {
         assert!(
             err.to_string().contains("the stash list moved"),
             "the step's own words reach the log: {err}"
+        );
+    }
+
+    /// Copied off a real run (git 2.55.0.windows.3, the copy git itself
+    /// was running in): the entry went and the folder stayed. Past `die()`,
+    /// so git's words are all there is to say which file held on.
+    #[test]
+    fn a_removal_that_failed_past_its_first_deletion_is_half_done() {
+        let out = crate::process::GitOutput {
+            code: 255,
+            stdout: Vec::new(),
+            stderr: b"error: failed to delete 'C:/t/wtrm/wt-cur': Permission denied\n".to_vec(),
+        };
+        let err = worktree_not_removed("wt-cur", "git worktree remove".to_string(), &out);
+
+        let report = err.report().expect("a report");
+        assert_eq!(report.kind, ReportKind::WorktreeHalfRemoved);
+        assert_eq!(report.name, "wt-cur");
+        assert_eq!(
+            report.reason,
+            "error: failed to delete 'C:/t/wtrm/wt-cur': Permission denied"
         );
     }
 

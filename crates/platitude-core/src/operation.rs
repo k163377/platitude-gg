@@ -82,6 +82,8 @@ pub enum OperationKind {
     Mergetool,
     Config,
     Identity,
+    /// `git worktree remove`: another working copy taken off the disk.
+    Worktree,
     /// A branch deleted here and on its remote as one write: answers as
     /// a branch write, runs on the remote lane (the second half is a push).
     DeleteBranchEverywhere,
@@ -126,6 +128,7 @@ impl OperationKind {
             Self::Mergetool => "mergetool",
             Self::Config => "config",
             Self::Identity => "identity",
+            Self::Worktree => "worktree",
             Self::AutoFetch => "auto-fetch",
             Self::OpenFetch => "open-fetch",
         }
@@ -175,7 +178,8 @@ impl OperationKind {
             | Self::Resolve
             | Self::Mergetool
             | Self::Config
-            | Self::Identity => Lane::Local,
+            | Self::Identity
+            | Self::Worktree => Lane::Local,
         }
     }
 
@@ -216,7 +220,8 @@ impl OperationKind {
             | Self::Resolve
             | Self::Mergetool
             | Self::Config
-            | Self::Identity => true,
+            | Self::Identity
+            | Self::Worktree => true,
         }
     }
 
@@ -302,6 +307,7 @@ mod tests {
             OperationKind::Config,
             OperationKind::Mergetool,
             OperationKind::Identity,
+            OperationKind::Worktree,
             OperationKind::Remote,
             OperationKind::DeleteBranchEverywhere,
             OperationKind::DeleteTagEverywhere,
@@ -357,6 +363,7 @@ mod tests {
             OperationKind::Resolve,
             OperationKind::Mergetool,
             OperationKind::Identity,
+            OperationKind::Worktree,
             OperationKind::Remote,
             OperationKind::Config,
         ] {

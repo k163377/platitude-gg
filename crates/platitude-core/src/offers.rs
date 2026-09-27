@@ -16,13 +16,18 @@ pub use moves::{
 };
 
 /// The kind of ref a menu row stands on, in the words the chip records
-/// carry (`branch` / `remote` / `tag` / `stash`).
+/// carry (`branch` / `remote` / `tag` / `stash`), and `worktree` for a
+/// working copy on no branch (its WORKTREES row, or its folder's chip).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefKind {
     Branch,
     Remote,
     Tag,
     Stash,
+    /// Another working copy, named by its path. What the row leads to is
+    /// that copy: `held_by_worktree` in [`ref_menu`] is its own path while
+    /// it is not the one the tab stands in.
+    Worktree,
 }
 
 impl RefKind {
@@ -34,6 +39,7 @@ impl RefKind {
             "remote" => Some(Self::Remote),
             "tag" => Some(Self::Tag),
             "stash" => Some(Self::Stash),
+            "worktree" => Some(Self::Worktree),
             _ => None,
         }
     }
@@ -232,7 +238,9 @@ pub fn ref_menu(
     let tag_here = sides.is_none_or(TagSides::here);
     let tag_on_remote = sides.is_some_and(TagSides::on_remote);
     RefMenuOffers {
-        switch_to: branchy && full != current_branch,
+        // A working copy leads to itself — unless the tab already stands
+        // in it, which is when the caller hands no holder.
+        switch_to: (branchy && full != current_branch) || (kind == RefKind::Worktree && held),
         switch_asks: !held && (op_standing || conflict_count > 0),
         branch_here: kind != RefKind::Stash && !oid_hex.is_empty() && !busy && !op_standing,
         integrate_from: open
@@ -253,9 +261,12 @@ pub fn ref_menu(
             && match kind {
                 RefKind::Branch => full == current_branch,
                 RefKind::Remote => full == current_upstream,
-                RefKind::Tag | RefKind::Stash => false,
+                RefKind::Tag | RefKind::Stash | RefKind::Worktree => false,
             },
+        // A working copy's own delete is the WORKTREE card's
+        // ([`worktree_card`]).
         delete: !busy
+            && kind != RefKind::Worktree
             && !(kind == RefKind::Branch && (full == current_branch || held))
             // A remote-only tag leaves `tag --delete` nothing to name.
             && tag_here,
@@ -358,9 +369,74 @@ pub fn commit_menu(
     }
 }
 
+/// Why the WORKTREE card's `worktree remove` row stands greyed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoveOut {
+    /// `git worktree lock`: git refuses until it is unlocked.
+    Locked,
+    /// The tab stands in that copy: git runs inside the folder it would be
+    /// deleting, and on Windows stops part-way through it.
+    Here,
+    /// Another write is out.
+    Busy,
+}
+
+/// What the WORKTREE card offers for one working copy, decided as the
+/// menu opens (`RefWorktreeMenu.standOn`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct WorktreeCardOffers {
+    /// `worktree remove` has a row: every copy but the repository's own,
+    /// which git never removes (`is a main working tree`).
+    pub remove: bool,
+    /// Why that row is greyed, where it is; the lock first, since it is the
+    /// one reason the reader has to go and undo.
+    pub remove_out: Option<RemoveOut>,
+}
+
+impl WorktreeCardOffers {
+    /// The offers as words, the shape `GitFacts.worktreeCardOffers` answers
+    /// with: `remove`, then `out-locked` / `out-here` / `out-busy`.
+    pub fn words(&self) -> Vec<&'static str> {
+        let mut words: Vec<&'static str> = Vec::new();
+        if self.remove {
+            words.push("remove");
+        }
+        match self.remove_out {
+            Some(RemoveOut::Locked) => words.push("out-locked"),
+            Some(RemoveOut::Here) => words.push("out-here"),
+            Some(RemoveOut::Busy) => words.push("out-busy"),
+            None => {}
+        }
+        words
+    }
+}
+
+/// The WORKTREE card's rule. `main` is the repository's own copy, `here`
+/// the one the asking tab stands in.
+pub fn worktree_card(main: bool, locked: bool, here: bool, busy_count: i32) -> WorktreeCardOffers {
+    if main {
+        return WorktreeCardOffers::default();
+    }
+    let remove_out = if locked {
+        Some(RemoveOut::Locked)
+    } else if here {
+        Some(RemoveOut::Here)
+    } else if busy_count > 0 {
+        Some(RemoveOut::Busy)
+    } else {
+        None
+    };
+    WorktreeCardOffers {
+        remove: true,
+        remove_out,
+    }
+}
+
 #[cfg(test)]
 mod commit_tests;
 #[cfg(test)]
 mod moves_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod worktree_tests;
