@@ -55,20 +55,27 @@ pub(super) fn tags(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// The same states across two remotes: a tag's row opens on one line per
+/// The same states across three remotes: a tag's row opens on one line per
 /// remote (デザイン規約 §左メニューの所作).
 ///
-/// | tag           | here          | on origin        | on fork       |
-/// |---------------|---------------|------------------|---------------|
-/// | `v1.0`        | second commit | the same commit  | the same one  |
-/// | `v1.5`        | HEAD          | the second one   | HEAD          |
-/// | `v2.0-local`  | HEAD          | nowhere          | nowhere       |
-/// | `v0.9-theirs` | —             | nowhere          | a commit no branch there has |
+/// | tag           | here          | on origin        | on fork       | on mirror |
+/// |---------------|---------------|------------------|---------------|-----------|
+/// | `v1.0`        | second commit | the same commit  | the same one  | —         |
+/// | `v1.5`        | HEAD          | the second one   | HEAD          | —         |
+/// | `v2.0-local`  | HEAD          | nowhere          | nowhere       | —         |
+/// | `v0.9-theirs` | —             | nowhere          | a commit no branch there has | — |
+/// | `v3.0-pair`   | —             | nowhere          | that commit   | that commit |
+/// | `v3.1-moved`  | HEAD          | nowhere          | second commit | second commit |
+/// | `v3.2-split`  | second commit | nowhere          | second commit | HEAD      |
 ///
 /// `v1.5` is why this preset exists: the one row where a remote that
-/// agrees and one that has the name elsewhere stand under one name. As
-/// with `tags`, nothing shows until a fetch, so its verb asks for one
-/// first (`nav-open-tag`).
+/// agrees and one that has the name elsewhere stand under one name. The
+/// `v3` names are origin's silence: two remotes agreeing decide
+/// (`v3.1-moved` — the copy here is the odd one out), two disagreeing
+/// leave every holder apart (`v3.2-split`), and two carrying a name with
+/// no reference among them leave a menu no remote to reach unasked
+/// (`v3.0-pair`; `v0.9-theirs` has the one). As with `tags`, nothing shows
+/// until a fetch, so its verb asks for one first (`nav-open-tag`).
 pub(super) fn tagremotes(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# tags\n", "docs: start the readme")?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
@@ -114,6 +121,32 @@ pub(super) fn tagremotes(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git_at(&seeder.clone(), &["tag", "v0.9-theirs"])?;
     repo.git_at(&seeder.clone(), &["push", "origin", "gone", "v0.9-theirs"])?;
     repo.git_at(&seeder.clone(), &["push", "origin", "--delete", "gone"])?;
+
+    // A third remote, and the names origin says nothing of.
+    let mirror = repo.root.join("mirror.git");
+    std::fs::create_dir_all(&mirror).map_err(|e| e.to_string())?;
+    repo.git_at(&mirror.clone(), &["init", "--bare", "-b", "main"])?;
+    let mirror_url = file_url(&mirror);
+    repo.git(&["remote", "add", "mirror", &mirror_url])?;
+    repo.git(&["push", "mirror", "main"])?;
+    // On the seeder's commit as well, so no fetch brings it down either.
+    repo.git_at(&seeder.clone(), &["remote", "add", "mirror", &mirror_url])?;
+    repo.git_at(&seeder.clone(), &["tag", "v3.0-pair"])?;
+    for remote in ["origin", "mirror"] {
+        repo.git_at(&seeder.clone(), &["push", remote, "gone", "v3.0-pair"])?;
+        repo.git_at(&seeder.clone(), &["push", remote, "--delete", "gone"])?;
+    }
+    let second = repo.git(&["rev-parse", "HEAD~1"])?;
+    // Both remotes on the second commit, the copy here moved on to HEAD.
+    repo.git(&["tag", "v3.1-moved", second.trim()])?;
+    repo.git(&["push", "fork", "refs/tags/v3.1-moved"])?;
+    repo.git(&["push", "mirror", "refs/tags/v3.1-moved"])?;
+    repo.git(&["tag", "-f", "v3.1-moved"])?;
+    // Mirror on HEAD; fork and the copy here on the second commit.
+    repo.git(&["tag", "v3.2-split"])?;
+    repo.git(&["push", "mirror", "refs/tags/v3.2-split"])?;
+    repo.git(&["tag", "-f", "v3.2-split", second.trim()])?;
+    repo.git(&["push", "fork", "refs/tags/v3.2-split"])?;
     Ok(())
 }
 
