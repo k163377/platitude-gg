@@ -99,6 +99,11 @@ Item {
         }
         return -1
     }
+    /// Where a TAG card's rows reach, in the one report line both entrances' verbs say it with
+    /// (`AutoActRefVerbs.reachWords`).
+    function tagReachWords(card) {
+        return refVerbs.reachWords(card)
+    }
 
     property bool claimed: false
     /// The page starts this once its models are attached: a verb run before them would act on a repository nothing

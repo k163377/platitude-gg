@@ -114,6 +114,37 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "covers=true",
     },
+    // The same card after a fetch, where a tag's readings are known. A
+    // tag standing apart from the right reading opens on the line saying
+    // so (`RowHoverHost.mateOf`) — `apart=` names which records, `says=`
+    // the words, naming who decides. Row 0 of `tags` holds the copy here
+    // of `v1.5`, moved off origin's commit; row 1 holds origin's own
+    // reading of it, which is never apart, beside `v1.0`, which agrees.
+    // `<row>:<tag>` reads that one tag's line (`tagremotes`, origin silent
+    // on the `v3` names): on HEAD's row the copy here of `v3.1-moved`, off
+    // the commit fork and mirror agree on, and mirror's reading of
+    // `v3.2-split`; a row down, the copy here of `v3.2-split` — fork and
+    // mirror disagree, so every reading says so.
+    Verb {
+        name: "fetch-ref-list",
+        when: &[
+            (
+                Arg::Is("0:v3.1-moved"),
+                "row=0 tag=v3.1-moved held=true says=Differs from fork, mirror",
+            ),
+            (
+                Arg::Is("0:v3.2-split"),
+                "row=0 tag=v3.2-split held=true says=Remotes disagree",
+            ),
+            (
+                Arg::Is("1:v3.2-split"),
+                "row=1 tag=v3.2-split held=true says=Remotes disagree",
+            ),
+            (Arg::Is("0"), "row=0 apart=v1.5 says=Differs from origin"),
+            (Arg::Is("1"), "row=1 apart= says="),
+        ],
+        plain: "fetch_ref_list row=",
+    },
     // The same card from the stand-in for a HEAD scrolled off, which asks
     // for it itself: `on=` is the card landing on the stand-in's chip, not
     // a row's — the one that takes its sheets down and keeps its ground lit.

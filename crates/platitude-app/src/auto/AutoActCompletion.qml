@@ -122,6 +122,7 @@ QtObject {
                 // The tag verbs wait for the readings that decide the menu's rows, and the pressing ones press from
                 // there — so the barrier is behind the wait.
                 "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both", "tag-refused",
+                "tag-chip-menu", "tag-line-menu",
                 // The menu and its WORKTREE card open from a sampler once the row is laid out; the pressing ones click
                 // from there and wait for the list the copy leaves, or for the bar git's refusal comes down in.
                 "worktree-menu", "worktree-remove", "worktree-remove-refused", "worktree-graph",

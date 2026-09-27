@@ -21,6 +21,34 @@ Item {
     readonly property var remoteDialog: driver.remoteDialog
     readonly property var renderedBarrier: driver.barrierRendered
     readonly property var writeBarrier: driver.barrierWrite
+    readonly property var refList: driver.refList
+
+    /// The card's tags that opened on the line saying they stand apart (`RowHoverHost.mateOf`), and the words of the
+    /// first — what the colour in the picture cannot say: which reading it was weighed against.
+    function apartWords() {
+        const names = []
+        let says = ""
+        for (let i = 0; i < acts.refList.records.length; i++) {
+            const mate = i < acts.refList.mates.length ? acts.refList.mates[i] : null
+            if (acts.refList.records[i].kind !== "tag" || mate === null)
+                continue
+            names.push(acts.refList.records[i].name)
+            if (says === "")
+                says = mate.text
+        }
+        return "apart=" + names.join(",") + " says=" + says
+    }
+    /// The same for one tag of the card (`<row>:<tag>`): whether the card holds it at all, and its line's words.
+    function tagWords(tag) {
+        for (let i = 0; i < acts.refList.records.length; i++) {
+            const rec = acts.refList.records[i]
+            if (rec.kind !== "tag" || rec.name !== tag)
+                continue
+            const mate = i < acts.refList.mates.length ? acts.refList.mates[i] : null
+            return "tag=" + tag + " held=true says=" + (mate === null ? "" : mate.text)
+        }
+        return "tag=" + tag + " held=false says="
+    }
 
     /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
@@ -306,13 +334,18 @@ Item {
         onTriggered: {
             if (!driver.wroteAndSettled())
                 return
-            const stacked = graphPane.view.itemAtIndex(
-                Number(Harness.autoActArg))
+            // `<row>` or `<row>:<tag>` — the second reports that one tag's line.
+            const asked = ("" + Harness.autoActArg).split(":")
+            const stacked = graphPane.view.itemAtIndex(Number(asked[0]))
             if (!stacked)
                 return
             fetchedRefListTimer.stop()
             graphPane.view.chipExpandRequested(
                 stacked.oid_hex, stacked.index, stacked.chipItem.records, stacked.chipItem)
+            // The card's lines are handed over as it opens (`RowHoverHost.openRefList`), so they are read here. The
+            // free words last: a claim is one substring.
+            Harness.report("fetch_ref_list row=" + stacked.index + " "
+                           + (asked.length > 1 ? acts.tagWords(asked[1]) : acts.apartWords()))
             renderedBarrier.begin()
         }
     }

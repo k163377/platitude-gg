@@ -192,10 +192,16 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "delete-blocked-tip",
         when: &[
+            // The current branch of `basic`, whose reading has moved: the
+            // sentence names that reading, so the row is this one run.
+            (
+                Arg::Is(":remote"),
+                "delete_blocked code=push --delete tip=true holder= \
+                 reason=Differs from origin/main",
+            ),
             (
                 Arg::Ends(":remote"),
-                "delete_blocked code=push --delete tip=true holder= \
-                 reason=The remote is on another commit",
+                "delete_blocked code=push --delete tip=true holder= reason=Differs from ",
             ),
             // `holder=` is the folder of the copy holding this branch —
             // the witness that the card looked the copy up.
@@ -423,9 +429,11 @@ pub(super) const TABLE: &[Verb] = &[
     // and no carriers all frame as a row with lines under it. `remotes=`
     // is what the lines name; `against=` / `apart=` which reading the
     // others are read against and which stands elsewhere, both off the
-    // index alone (`RemoteTagIndex::carriers_against`). The empty list
-    // means something only because the run fetches and waits for the
-    // reading first (`AutoActNavBoxVerbs.navOpenTagTimer`).
+    // index alone (`RemoteTagIndex::carriers_against`); `here_apart=`
+    // the copy here weighed by the same test — what the row's own name
+    // wears (`RemoteTagIndex::apart_at`). The empty list means something
+    // only because the run fetches and waits for the reading first
+    // (`AutoActNavBoxVerbs.navOpenTagTimer`).
     Verb {
         name: "nav-open-tag",
         // `says=` carrying the name is the row having opened; `open=` is
@@ -437,37 +445,79 @@ pub(super) const TABLE: &[Verb] = &[
             // rests on the first line, which here is the one apart.
             (
                 Arg::Is("v1.5:drift:tip"),
-                "tip=true text=On another commit than origin",
+                "apart=fork here_apart=true by=origin why= path= tip=true text=Differs from origin",
+            ),
+            // The same for the row's own name: the copy here stands where
+            // the fork does, off origin's commit, and says so in the same
+            // words.
+            (
+                Arg::Is("v1.5:drift:name"),
+                "apart=fork here_apart=true by=origin why= path= tip=true text=Differs from origin",
+            ),
+            // Origin silent, fork and mirror agreeing: they decide, and the
+            // copy here — moved off their commit — is the one apart, named
+            // against both of them.
+            (
+                Arg::Is("v3.1-moved:name"),
+                "remotes=fork,mirror against=origin apart= here_apart=true by=fork,mirror \
+                 why= path= tip=true text=Differs from fork, mirror",
+            ),
+            // Origin silent, fork and mirror disagreeing: nobody decides,
+            // and every holder — the copy here too — stands apart.
+            (
+                Arg::Is("v3.2-split:tip"),
+                "remotes=fork,mirror against=origin apart=fork,mirror here_apart=true by= \
+                 why= path= tip=true text=Remotes disagree",
+            ),
+            // Only fork and mirror, agreeing, and nothing here: nobody apart.
+            (
+                Arg::Is("v3.0-pair"),
+                "says=v3.0-pair local= track=0/0 held= up= gone=false branch= state= \
+                 remotes=fork,mirror against=origin apart= here_apart=false by=fork,mirror",
             ),
             // Carried by both remotes, on one commit.
             (
                 Arg::Is("v1.0:remote"),
                 "says=v1.0 local= track=0/0 held= up= gone=false branch= state= \
-                 remotes=fork,origin against=origin apart=",
+                 remotes=fork,origin against=origin apart= here_apart=false",
             ),
-            // The two remotes hold the name on different commits; the one
-            // marked is the one apart from the reading this window acts on
-            // (the local tag, standing where the fork is, has no say).
+            // The two remotes hold the name on different commits; the ones
+            // marked are those apart from the reading this window acts on —
+            // the fork, and the local tag standing where the fork is.
             (
                 Arg::Is("v1.5:drift"),
                 "says=v1.5 local= track=0/0 held= up= gone=false branch= state= \
-                 remotes=fork,origin against=origin apart=fork",
+                 remotes=fork,origin against=origin apart=fork here_apart=true",
             ),
             // A name only `fork` has (no local ref): nobody stands apart,
             // since the reference remote has no reading of it.
             (
                 Arg::Is("v0.9-theirs:remote"),
                 "says=v0.9-theirs local= track=0/0 held= up= gone=false branch= state= \
-                 remotes=fork against=origin apart=",
+                 remotes=fork against=origin apart= here_apart=false",
             ),
             // And the row that opens on nothing at all.
             (
                 Arg::Is("v2.0-local"),
                 "says=v2.0-local local= track=0/0 held= up= gone=false branch= state= \
-                 remotes= against=origin apart=",
+                 remotes= against=origin apart= here_apart=false",
             ),
         ],
         plain: "open=true",
+    },
+    // A menu asked for on one carrier's line of an open TAGS row: that
+    // remote, named on its own, is the one every row reaching over there
+    // acts on — even where nobody could be picked unasked (`v3.0-pair`,
+    // carried by fork and mirror, origin silent). `reach=` is what no
+    // picture of a row that names no remote could say.
+    Verb {
+        name: "tag-line-menu",
+        when: &[(
+            Arg::Is("v3.0-pair:1"),
+            "tag_reach reach=mirror offered=true blocked=false push=to mirror \
+             del=v3.0-pair from mirror why=",
+        )],
+        plain: "tag_reach reach=",
     },
     // The rest that opened a row, held, with the working copy's path as
     // the tip. `open=`: a tip over a row that never opened is the shared

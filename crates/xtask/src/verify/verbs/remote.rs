@@ -86,6 +86,28 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "tag-menu",
         when: &[
+            // Every remote read first. Fork and mirror carry the name and
+            // origin does not: no remote can be picked unasked, so the row
+            // stands out and names who has it (`tag_reach`, the line after
+            // `tag_menu`).
+            (
+                Arg::Is("v3.0-pair:read"),
+                "tag_reach reach= offered=true blocked=true push=to origin del=v3.0-pair \
+                 why=Several remotes have it: fork, mirror",
+            ),
+            // Only fork carries it: fork is reached, and the row says so.
+            (
+                Arg::Is("v0.9-theirs:read"),
+                "tag_reach reach=fork offered=true blocked=false push=to origin \
+                 del=v0.9-theirs from fork why=",
+            ),
+            // The greyed `push --delete` row's reason, forced out: the
+            // sentence every copy of a name standing apart says, naming
+            // the remote the row would reach (`Words.differsFrom`).
+            (
+                Arg::Ends(":drift:tip"),
+                "delete_blocked code=push --delete tip=true holder= reason=Differs from origin",
+            ),
             // One reading, both halves in one line: the push row's second
             // form, and the two rows reaching the remote name greyed
             // (デザイン規約 §左メニューの所作 の削除の表).
@@ -99,6 +121,19 @@ pub(super) const TABLE: &[Verb] = &[
             ),
         ],
         plain: "sides=here local_del=true remote_del=false both_del=false blocked=none",
+    },
+    // The graph row's menu on a tag's chip that draws one remote's reading
+    // (`v3.2-split` on HEAD's row is mirror's, the copy here standing a row
+    // down): that remote is named on its own, so the card pushes to it and
+    // deletes from it (`CommitMenuState.tagFacts` → `tagAimAt`).
+    Verb {
+        name: "tag-chip-menu",
+        when: &[(
+            Arg::Is("v3.2-split@0"),
+            "tag_reach reach=mirror offered=true blocked=false push=to mirror \
+             del=v3.2-split from mirror why=",
+        )],
+        plain: "tag_reach reach=",
     },
     // The far side keeping a branch: `said=` is the sentence built from
     // what core classified (remote, branch, a deletion), `why=true` the

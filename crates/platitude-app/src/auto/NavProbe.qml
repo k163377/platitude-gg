@@ -188,6 +188,26 @@ QtObject {
         const lines = probe.sidebar.openFactsItem()
         return lines !== null && lines.pointLineTip(row, on)
     }
+    /// PGG_AUTO_ACT=tag-line-menu: a right-click on one line of the open row, in at the hand's own handlers
+    /// (`NavRowFacts.handPressed` / `handClicked`) at the middle of that line's words — so the line the menu acts on
+    /// is the one the press found, as for a real hand. False until the lines are built.
+    function factsLineMenu(row) {
+        const lines = probe.sidebar.openFactsItem()
+        if (lines === null || row >= lines.lines.length)
+            return false
+        const at = lines.lineWordsMiddle(row)
+        if (at.x < 0)
+            return false
+        lines.handPressed(Qt.RightButton, at.x, at.y)
+        lines.handClicked(Qt.RightButton, Qt.NoModifier)
+        return true
+    }
+    /// PGG_AUTO_ACT=nav-open-tag `:name`: the rest on the open row's own name, where a tag's row keeps why that name
+    /// wears the warning (`NavRowFacts.pointNameTip`). False until the lines are built.
+    function pointFactsName(on) {
+        const lines = probe.sidebar.openFactsItem()
+        return lines !== null && lines.pointNameTip(on)
+    }
 
     /// PGG_AUTO_ACT=nav-follow: the first of the open lines whose words go somewhere (-1 for none), and where.
     function factsFirstGoing() {

@@ -28,6 +28,7 @@ Item {
     readonly property var sidebarPane: driver.sidebarPane
     readonly property var navProbe: driver.navProbe
     readonly property var refMenu: driver.refMenu
+    readonly property var refTagCard: driver.refTagCard
     readonly property var renderedBarrier: driver.barrierRendered
     readonly property var writeBarrier: driver.barrierWrite
 
@@ -102,6 +103,12 @@ Item {
             // A TAGS row opening on the remotes carrying its name. Named, not numbered: tags sort newest-first with
             // remote-only names last, so the row a name lands on is the preset's business.
             navOpenTagTimer.begin(arg)
+        } else if (act === "tag-line-menu") {
+            // `<tag>:<line>`: the same row opened, then the menu asked for on that line of it — a carrier's line names
+            // its remote on its own, so the TAG card acts on it (`NavRowFacts.lineMenu`).
+            const at = arg.lastIndexOf(":")
+            navOpenTagTimer.begin(arg.slice(0, at))
+            navOpenTagTimer.menuLine = Number(arg.slice(at + 1))
         } else if (act === "nav-rename" || act === "rename-branch"
                    || act === "rename-tag" || act === "rename-stash") {
             const kind = act === "rename-tag" ? "tag" : act === "rename-stash" ? "stash" : "branch"
@@ -804,20 +811,27 @@ Item {
         /// somewhere else. Empty is a name nobody out there has — an empty row looks the same before the reading, so
         /// that run waits on its own fetch being read through (`AutoActDriver.wroteAndSettled`).
         property string wants: ""
-        /// Whether the hand goes on to the first of the lines the row opened — the first on purpose: searching for the
-        /// one with a supplement would ask the answer where to find itself. Lines are in name order, so which it is
-        /// is the preset's (`--preset tagremotes`: `fork`); on a line with nothing to add the run hits the ceiling.
-        property bool tip: false
+        /// Where the hand goes on to rest once the row is open: `line` = the first of the lines it opened — the first
+        /// on purpose: searching for the one with a supplement would ask the answer where to find itself. Lines are in
+        /// name order, so which it is is the preset's (`--preset tagremotes`: `fork`) — / `name` = the row's own name,
+        /// which keeps why the copy here wears the warning / empty = nowhere. On a place with nothing to add the run
+        /// hits the ceiling.
+        property string rest: ""
         property bool rested: false
+        /// PGG_AUTO_ACT=tag-line-menu: the line the menu is asked for on, -1 for a run that only opens the row.
+        property int menuLine: -1
         /// As `navTipTimer.stood`.
         property string stood: ""
         function begin(arg) {
             const parts = ("" + arg).split(":")
+            const last = parts[parts.length - 1]
+            const rest = parts.length > 1 && (last === "tip" || last === "name") ? last : ""
             navOpenTagTimer.tag = parts[0]
-            navOpenTagTimer.wants = parts.length > 1 && parts[1] !== "tip" ? parts[1] : ""
-            navOpenTagTimer.tip = parts[parts.length - 1] === "tip"
+            navOpenTagTimer.wants = parts.length > 1 && parts[1] !== rest ? parts[1] : ""
+            navOpenTagTimer.rest = rest === "tip" ? "line" : rest
             navOpenTagTimer.stood = ""
             navOpenTagTimer.rested = false
+            navOpenTagTimer.menuLine = -1
             // Waited on by its ask's id (`rename-tag-remote` の同じ待ち).
             driver.pressWrite("fetch", () => {
                 repoTab.fetch("")
@@ -854,12 +868,27 @@ Item {
                 navOpenTagTimer.stood = geom
                 return
             }
-            // Then the second rest, on the first line, re-applied until it takes: the lines are built a pass after
-            // the row that opened them.
-            const tip = page.ToolTip.toolTip
-            if (navOpenTagTimer.tip) {
+            // Or the menu on one line, asked once — its answer is the card, not the line.
+            if (navOpenTagTimer.menuLine >= 0) {
                 if (!navOpenTagTimer.rested) {
-                    navOpenTagTimer.rested = navProbe.pointFactsLine(0, true)
+                    navOpenTagTimer.rested = navProbe.factsLineMenu(navOpenTagTimer.menuLine)
+                    return
+                }
+                if (!refMenu.opened)
+                    return
+                navOpenTagTimer.stop()
+                refMenu.openSub(refTagCard)
+                Harness.report(driver.tagReachWords(refTagCard))
+                renderedBarrier.begin()
+                return
+            }
+            // Then the second rest, on the first line or the name, re-applied until it takes: the lines are built a
+            // pass after the row that opened them.
+            const tip = page.ToolTip.toolTip
+            if (navOpenTagTimer.rest !== "") {
+                if (!navOpenTagTimer.rested) {
+                    navOpenTagTimer.rested = navOpenTagTimer.rest === "name" ? navProbe.pointFactsName(true)
+                                                                             : navProbe.pointFactsLine(0, true)
                     return
                 }
                 if (!tip.visible)

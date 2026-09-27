@@ -46,6 +46,17 @@ Item {
     readonly property var renderedBarrier: driver.barrierRendered
     readonly property var writeBarrier: driver.barrierWrite
 
+    /// Where a TAG card's rows reach, as one line: the remote the deletes go to, whether that row is up and out, its
+    /// words, where the push goes, and why the row greys — what the picture cannot say is which remote a row that
+    /// names none would have hit. The free words last: a claim is one substring.
+    function reachWords(card) {
+        const row = card.deleteRemoteTagItem
+        return "tag_reach reach=" + card.reach
+            + " offered=" + row.offered + " blocked=" + (row.offered && row.blocked)
+            + " push=" + card.pushTagItem.text
+            + " del=" + row.text + " why=" + row.blockedReason
+    }
+
     /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
         if (act === "delete-branch" || act === "delete-branch-go" || act === "delete-branch-refused") {
@@ -138,6 +149,17 @@ Item {
             pullBlockedTimer.row = arg === "chip" ? pullCommitItem : refPullItem
             pullBlockedTimer.row.tipForced = true
             pullBlockedTimer.start()
+        } else if (act === "tag-chip-menu") {
+            // `<tag>@<row>`: the graph row's menu aimed at that tag's chip on that row — a reading one remote alone
+            // draws names that remote on its own (`CommitMenuState.tagFacts`). Every remote is read first.
+            const at = arg.split("@")
+            tagChipTimer.tag = at[0]
+            tagChipTimer.row = at.length > 1 ? Number(at[1]) : 0
+            driver.pressWrite("fetch", () => {
+                repoTab.fetch("")
+                return true
+            })
+            tagChipTimer.start()
         } else if (act === "chip-menu") {
             // The chip raises the row's menu aimed at its name (デザイン規約 §グラフ行の右クリック).
             page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
@@ -199,7 +221,8 @@ Item {
             tagMenuTimer.begin(arg, "remote-refuse")
         } else if (act === "tag-menu" || act === "push-tag"
                    || act === "delete-remote-tag" || act === "delete-tag-both") {
-            // `<tag>[:drift|:remote]` — `:drift` for the forced push, `:remote` for the delete rows.
+            // `<tag>[:drift|:remote][:tip]` — `:drift` for the forced push, `:remote` for the delete rows, `:tip` for
+            // the reason a greyed delete row gives.
             tagMenuTimer.begin(arg,
                                act === "push-tag" ? "push"
                              : act === "delete-remote-tag" ? "remote-delete"
@@ -263,6 +286,25 @@ Item {
                               + " note=" + refDeleteItem.note)
             driver.holdToEnd(refDeleteItem)
             writeBarrier.start()
+        }
+    }
+    // PGG_AUTO_ACT=tag-chip-menu: once this run's fetch is read through, the graph row's menu on that tag's chip, its
+    // TAG card open.
+    SampleTimer {
+        id: tagChipTimer
+        property string tag: ""
+        property int row: 0
+        onTriggered: {
+            if (!driver.wroteAndSettled() || repoTab.busyCount !== 0)
+                return
+            const oid = graphModel.oidAt(tagChipTimer.row)
+            if (oid === "")
+                return
+            tagChipTimer.stop()
+            page.openRowMenu(oid, { "kind": "tag", "name": tagChipTimer.tag })
+            commitMenu.openSub(commitTagCard)
+            Harness.report(acts.reachWords(commitTagCard))
+            renderedBarrier.begin()
         }
     }
     // Waits on the attached ToolTip itself (it opens after `tipDelayMs`): read sooner, the line says false while the
@@ -370,17 +412,30 @@ Item {
         property string wants: ""
         /// Which row this run presses, empty for the ones that only stand the card up.
         property string press: ""
+        /// `:tip` last: the card stood up, the `push --delete` row's reason is forced out, as `delete-blocked-tip` does
+        /// on a branch's card — the one place that row says why it is out.
+        property bool tip: false
         function begin(arg, pressing) {
             const parts = arg.split(":")
             tagMenuTimer.tag = parts[0]
-            tagMenuTimer.wants = parts.length > 1 ? parts[1] : ""
+            tagMenuTimer.tip = parts.length > 1 && parts[parts.length - 1] === "tip"
+            tagMenuTimer.wants = parts.length > 1 && parts[1] !== "tip" ? parts[1] : ""
             tagMenuTimer.press = pressing
-            if (tagMenuTimer.wants !== "")
+            // `read` waits for every remote's reading, so it waits on its own fetch by its id (`nav-open-tag`'s wait):
+            // a name several remotes carry frames as one only one of them does while the others are still unread.
+            if (tagMenuTimer.wants === "read")
+                driver.pressWrite("fetch", () => {
+                    repoTab.fetch("")
+                    return true
+                })
+            else if (tagMenuTimer.wants !== "")
                 repoTab.fetch("")
             tagMenuTimer.start()
         }
         /// Asked of the lookups the menu asks (`NavSectionModel`); no count of fetches says the readings are in.
         function ready() {
+            if (tagMenuTimer.wants === "read")
+                return driver.wroteAndSettled()
             if (tagMenuTimer.wants === "drift")
                 return tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote) !== ""
             if (tagMenuTimer.wants === "remote") {
@@ -420,6 +475,14 @@ Item {
                               // driver's properties.
                               + " lease=" + tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote)
                               + " text=" + refPushTagItem.text)
+            Harness.report(acts.reachWords(refTagCard))
+            if (tagMenuTimer.press === "" && tagMenuTimer.tip) {
+                // Forced through the property the real hover writes; the branch card's wait answers for it.
+                acts.blockedTipRow = refRemoteTagDeleteItem
+                acts.blockedTipRow.tipForced = true
+                blockedTipTimer.start()
+                return
+            }
             if (tagMenuTimer.press === "") {
                 driver.complete()
                 return
