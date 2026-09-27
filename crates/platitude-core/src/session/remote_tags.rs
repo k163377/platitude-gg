@@ -49,6 +49,28 @@ pub(crate) struct Carrier {
     pub(crate) annotated: bool,
 }
 
+/// The reading of one name every holder is weighed against
+/// ([`RemoteTagIndex::truth`]).
+enum Truth<'a> {
+    /// No remote carries the name: there is nothing to weigh against.
+    Unheard,
+    /// This commit is the right one, by the word of these remotes.
+    At { commit: Oid, by: Vec<&'a str> },
+    /// The remotes disagree and none of them decides: every holder stands
+    /// apart.
+    Disputed,
+}
+
+impl Truth<'_> {
+    fn apart_at(&self, commit: Oid) -> bool {
+        match self {
+            Self::Unheard => false,
+            Self::At { commit: right, .. } => *right != commit,
+            Self::Disputed => true,
+        }
+    }
+}
+
 impl RemoteTagEntry {
     /// Whether any remote holds this as a tag object.
     pub(crate) fn annotated(&self) -> bool {
@@ -112,34 +134,115 @@ impl RemoteTagIndex {
     }
 
     /// The remotes carrying this name, each said once and in name order,
-    /// with whether it stands somewhere other than where `against` has it
-    /// — what a tag's row opens under itself
-    /// (デザイン規約 §左メニューの所作).
-    ///
-    /// `against` is the remote this repository's tag rows act on, not the
-    /// local tag: that is one opinion among the readings, and as the
-    /// reference it would put the warning on whichever remote disagrees
-    /// with a local tag that may itself be the odd one out. Where
-    /// `against` does not carry the name, nobody stands apart.
+    /// with whether it stands apart from the reading every holder is
+    /// weighed against ([`Self::truth`]) — what a tag's row opens under
+    /// itself (デザイン規約 §左メニューの所作).
     pub fn carriers_against(&self, name: &str, against: &str) -> Vec<(&str, bool)> {
-        let start = self.entries.partition_point(|e| e.name.as_str() < name);
-        let run = || {
-            self.entries[start..]
-                .iter()
-                .take_while(|e| e.name.as_str() == name)
-        };
-        let reference = run()
-            .find(|e| e.remotes.iter().any(|c| c.remote.as_str() == against))
-            .map(|e| e.commit);
-        let mut out: Vec<(&str, bool)> = run()
+        let truth = self.truth(name, against);
+        let mut out: Vec<(&str, bool)> = self
+            .run_of(name)
+            .iter()
             .flat_map(|e| {
-                let apart = reference.is_some_and(|here| here != e.commit);
+                let apart = truth.apart_at(e.commit);
                 e.remotes.iter().map(move |c| (c.remote.as_str(), apart))
             })
             .collect();
         out.sort_unstable();
         out.dedup_by(|a, b| a.0 == b.0);
         out
+    }
+
+    /// Whether a reading of this name standing on `commit` — this
+    /// repository's own, or a remote's — stands apart from the reading
+    /// every holder is weighed against ([`Self::truth`]): the one test
+    /// behind every holder of a tag that wears the warning
+    /// (デザイン規約 §左メニューの所作).
+    pub fn apart_at(&self, name: &str, commit: Oid, against: &str) -> bool {
+        self.truth(name, against).apart_at(commit)
+    }
+
+    /// Who the reading every holder is weighed against belongs to, as the
+    /// sentence names it: `against` where it carries the name, else every
+    /// remote carrying it, in name order. Empty where there is no such
+    /// reading — nobody carries the name, or the remotes disagree without
+    /// `against` among them.
+    pub fn weighed_against(&self, name: &str, against: &str) -> Vec<&str> {
+        match self.truth(name, against) {
+            Truth::At { by, .. } => by,
+            Truth::Unheard | Truth::Disputed => Vec::new(),
+        }
+    }
+
+    /// Which reading of this name is the right one (デザイン規約
+    /// §左メニューの所作 の TAGS の段). `against` — the remote this
+    /// repository's tag rows act on — decides wherever it carries the name.
+    /// Where it does not, the remotes decide only by agreeing: one commit
+    /// among them is the right one, two are no answer. The copy here never
+    /// decides: it is one opinion among the readings, and as the reference
+    /// it would put the warning on whichever remote disagrees with a local
+    /// tag that may itself be the odd one out.
+    fn truth(&self, name: &str, against: &str) -> Truth<'_> {
+        let run = self.run_of(name);
+        if let Some((commit, carrier)) = run.iter().find_map(|e| {
+            e.remotes
+                .iter()
+                .find(|c| c.remote.as_str() == against)
+                .map(|c| (e.commit, c))
+        }) {
+            return Truth::At {
+                commit,
+                by: vec![carrier.remote.as_str()],
+            };
+        }
+        match run {
+            [] => Truth::Unheard,
+            [only] => Truth::At {
+                commit: only.commit,
+                by: only.remotes.iter().map(|c| c.remote.as_str()).collect(),
+            },
+            _ => Truth::Disputed,
+        }
+    }
+
+    /// The remote a menu's rows that delete this name over there reach,
+    /// unasked: `against` where it carries the name, else the one remote
+    /// that does. `None` where no remote carries it, or several do without
+    /// `against` — then only a holder named on its own can be reached
+    /// (デザイン規約 §左メニューの所作 の削除の表).
+    pub fn delete_target(&self, name: &str, against: &str) -> Option<&str> {
+        let carriers = || self.run_of(name).iter().flat_map(|e| e.remotes.iter());
+        if let Some(reference) = carriers().find(|c| c.remote.as_str() == against) {
+            return Some(reference.remote.as_str());
+        }
+        let mut carriers = carriers();
+        match (carriers.next(), carriers.next()) {
+            (Some(only), None) => Some(only.remote.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Where `remote` has this name; `None` where it does not carry it.
+    pub(crate) fn commit_on(&self, name: &str, remote: &str) -> Option<Oid> {
+        self.run_of(name)
+            .iter()
+            .find(|e| e.remotes.iter().any(|c| c.remote.as_str() == remote))
+            .map(|e| e.commit)
+    }
+
+    /// The remotes carrying this name on `commit`, in name order.
+    pub fn carriers_at(&self, name: &str, commit: Oid) -> Vec<&str> {
+        self.run_of(name)
+            .iter()
+            .find(|e| e.commit == commit)
+            .map(|e| e.remotes.iter().map(|c| c.remote.as_str()).collect())
+            .unwrap_or_default()
+    }
+
+    /// This name's entries, one per commit it stands on.
+    fn run_of(&self, name: &str) -> &[RemoteTagEntry] {
+        let start = self.entries.partition_point(|e| e.name.as_str() < name);
+        let len = self.entries[start..].partition_point(|e| e.name.as_str() == name);
+        &self.entries[start..start + len]
     }
 
     /// Whether the graph's cloud belongs on this repository's copy of the

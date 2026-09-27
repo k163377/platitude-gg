@@ -592,6 +592,215 @@ fn the_carriers_of_a_tag_stand_apart_from_the_reference_alone() {
     );
 }
 
+/// A snapshot over `refs` and the remotes' readings as
+/// `(name, commit, remote)`.
+fn read_with(refs: &[RefEntry], readings: &[(&str, u8, &str)]) -> RefsSnapshot {
+    let remote_tags = std::sync::Arc::new(RemoteTagIndex::build(readings.iter().map(
+        |(name, commit, remote)| {
+            (
+                crate::Name::from(*name),
+                oid(*commit),
+                false,
+                crate::Name::from(*remote),
+            )
+        },
+    )));
+    let nobody = held_by_nobody();
+    let joins = RefJoins::new(refs, &nobody);
+    build_snapshot(refs, &head_at(oid(1)), &remote_tags, &joins)
+}
+
+/// The same test for one reading by its commit: the copy here (asked with
+/// its own commit) and the reading a graph row carries (asked with that
+/// row's). The reference decides wherever it carries the name.
+#[test]
+fn a_reading_of_a_tag_is_apart_where_the_reference_has_it_elsewhere() {
+    let refs = [branch("main", oid(1)), tag("v1", oid(3), false)];
+    let snapshot = read_with(
+        &refs,
+        &[("v1", 2, "origin"), ("v1", 3, "fork"), ("v1", 4, "mirror")],
+    );
+
+    assert!(
+        snapshot.tag_apart_at("v1", oid(3), "origin"),
+        "the copy here stands where origin does not"
+    );
+    assert!(
+        snapshot.tag_apart_at("v1", oid(4), "origin"),
+        "so does a reading only another remote carries"
+    );
+    assert!(
+        !snapshot.tag_apart_at("v1", oid(2), "origin"),
+        "the reference's own reading is never apart"
+    );
+    assert!(
+        !snapshot.tag_apart_at("v1", oid(3), "fork"),
+        "against fork, the copy here agrees"
+    );
+    assert_eq!(snapshot.tag_weighed_against("v1", "origin"), ["origin"]);
+    assert!(!snapshot.tag_apart_at("never", oid(2), "origin"));
+    assert!(snapshot.tag_weighed_against("never", "origin").is_empty());
+}
+
+/// Without the reference among them, the remotes decide by agreeing: one
+/// commit among them is the right one, whoever carries it, and the
+/// sentence names every one of them.
+#[test]
+fn remotes_that_agree_decide_where_the_reference_is_silent() {
+    let refs = [branch("main", oid(1)), tag("v2", oid(2), false)];
+    let snapshot = read_with(&refs, &[("v2", 5, "fork"), ("v2", 5, "mirror")]);
+
+    assert!(
+        snapshot.tag_apart_at("v2", oid(2), "origin"),
+        "the copy here stands off the commit both remotes agree on"
+    );
+    assert!(
+        !snapshot.tag_apart_at("v2", oid(5), "origin"),
+        "and the remotes that agree are not apart"
+    );
+    assert_eq!(
+        snapshot.tag_remotes("v2", "origin"),
+        vec![("fork", false), ("mirror", false)]
+    );
+    assert_eq!(
+        snapshot.tag_weighed_against("v2", "origin"),
+        ["fork", "mirror"]
+    );
+}
+
+/// Remotes that disagree with no reference among them leave no right
+/// reading: every holder stands apart, the copy here included.
+#[test]
+fn remotes_that_disagree_without_the_reference_put_every_holder_apart() {
+    let refs = [branch("main", oid(1)), tag("v3", oid(5), false)];
+    let snapshot = read_with(&refs, &[("v3", 5, "fork"), ("v3", 6, "mirror")]);
+
+    assert!(
+        snapshot.tag_apart_at("v3", oid(5), "origin"),
+        "the copy here, though it stands where fork does"
+    );
+    assert!(snapshot.tag_apart_at("v3", oid(6), "origin"));
+    assert_eq!(
+        snapshot.tag_remotes("v3", "origin"),
+        vec![("fork", true), ("mirror", true)]
+    );
+    assert!(
+        snapshot.tag_weighed_against("v3", "origin").is_empty(),
+        "nobody to name"
+    );
+}
+
+/// Unasked, a delete reaches the reference, else the one remote carrying
+/// the name; with several and no reference, no remote can be named.
+#[test]
+fn a_tag_delete_reaches_the_reference_or_the_only_carrier() {
+    let snapshot = read_with(
+        &[branch("main", oid(1))],
+        &[
+            ("both", 2, "origin"),
+            ("both", 3, "fork"),
+            ("solo", 2, "fork"),
+            ("pair", 2, "fork"),
+            ("pair", 2, "mirror"),
+        ],
+    );
+
+    assert_eq!(snapshot.tag_delete_target("both", "origin"), Some("origin"));
+    assert_eq!(snapshot.tag_delete_target("solo", "origin"), Some("fork"));
+    assert_eq!(
+        snapshot.tag_delete_target("pair", "origin"),
+        None,
+        "two carriers agreeing are still two remotes to pick from"
+    );
+    assert_eq!(snapshot.tag_delete_target("never", "origin"), None);
+}
+
+/// A chip names one remote on its own only where it draws that one
+/// remote's reading — not the copy here, not a reading two remotes share.
+#[test]
+fn a_chip_names_the_one_remote_whose_reading_it_draws() {
+    let refs = [branch("main", oid(1)), tag("v1", oid(3), false)];
+    let snapshot = read_with(
+        &refs,
+        &[
+            ("v1", 2, "origin"),
+            ("v1", 3, "fork"),
+            ("v1", 4, "mirror"),
+            ("v1", 4, "backup"),
+        ],
+    );
+
+    assert_eq!(snapshot.tag_aim_at("v1", oid(2)), Some("origin"));
+    assert_eq!(
+        snapshot.tag_aim_at("v1", oid(3)),
+        None,
+        "that chip is the copy here, which fork happens to agree with"
+    );
+    assert_eq!(
+        snapshot.tag_aim_at("v1", oid(4)),
+        None,
+        "two remotes' reading"
+    );
+    assert_eq!(snapshot.tag_aim_at("v1", oid(9)), None);
+}
+
+/// What a tag's menu stands on, for each way the rows reaching over there
+/// are decided (デザイン規約 §左メニューの所作 の削除の表).
+#[test]
+fn a_tag_menu_reaches_the_remote_it_can_name() {
+    let refs = [
+        branch("main", oid(1)),
+        tag("moved", oid(3), false),
+        tag("pair-here", oid(2), false),
+    ];
+    let snapshot = read_with(
+        &refs,
+        &[
+            ("moved", 2, "origin"),
+            ("moved", 3, "fork"),
+            ("theirs", 5, "fork"),
+            ("pair-here", 2, "fork"),
+            ("pair-here", 4, "mirror"),
+        ],
+    );
+
+    // The reference reached, off the commit here: the plain rows are
+    // held back and the push is the leased one.
+    let moved = snapshot.tag_menu("moved", "origin", "");
+    assert_eq!(moved.push_remote, "origin");
+    assert_eq!(moved.lease, Some(oid(2)));
+    assert_eq!(moved.reach, "origin");
+    assert_eq!(moved.held_back, TagDeleteHeld::Drifted);
+    assert!(!moved.row_goes, "the copy here stays");
+
+    // Named on its own, fork takes every row, and agrees with here.
+    let aimed = snapshot.tag_menu("moved", "origin", "fork");
+    assert_eq!(aimed.push_remote, "fork");
+    assert_eq!(aimed.lease, None);
+    assert_eq!(aimed.reach, "fork");
+    assert_eq!(aimed.held_back, TagDeleteHeld::No);
+
+    // Named on its own, origin is reached drifted or not.
+    let pointed = snapshot.tag_menu("moved", "origin", "origin");
+    assert_eq!(pointed.held_back, TagDeleteHeld::No);
+    assert_eq!(pointed.lease, Some(oid(2)));
+
+    // Only fork has it and nothing here does: fork is reached, and the
+    // row goes with the one reading there is.
+    let theirs = snapshot.tag_menu("theirs", "origin", "");
+    assert_eq!(theirs.push_remote, "origin");
+    assert_eq!(theirs.reach, "fork");
+    assert_eq!(theirs.held_back, TagDeleteHeld::No);
+    assert!(theirs.row_goes);
+
+    // Two remotes, no reference: none can be named unasked.
+    let pair = snapshot.tag_menu("pair-here", "origin", "");
+    assert_eq!(pair.reach, "");
+    assert_eq!(pair.held_back, TagDeleteHeld::Unnamed);
+    assert_eq!(pair.carriers, ["fork", "mirror"]);
+    assert!(!pair.row_goes);
+}
+
 /// Times one `publish_refs` join — what every poll tick does on top of
 /// the two git reads. How to run it and the record:
 /// `ci/baseline/refs-join-windows-x64.md`.

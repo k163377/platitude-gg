@@ -124,7 +124,7 @@ pub use query::{DiffReadOutcome, DiffRefreshTask};
 use read_flight::{ReadFlight, Stamp};
 pub use remote_tags::RemoteTagIndex;
 pub use repo_session::RepoSession;
-pub use snapshot::{BranchItem, RefsSnapshot, TagDrift, TagItem};
+pub use snapshot::{BranchItem, RefsSnapshot, TagDeleteHeld, TagDrift, TagItem, TagMenuFacts};
 use standing::{HeadHold, HeadOffer, HeadPublished, Standing};
 pub use state::AutoFetchTicker;
 use state::{

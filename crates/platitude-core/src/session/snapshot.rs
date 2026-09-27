@@ -79,14 +79,117 @@ impl RefsSnapshot {
     }
 
     /// The remotes carrying the tag called `short`, each once and in name
-    /// order, with whether it stands somewhere other than where `against`
-    /// has it — empty where no remote has the name or nothing has read the
-    /// remotes yet ([`RemoteTagIndex::carriers_against`]).
+    /// order, with whether it stands apart from the right reading, which
+    /// `against` decides where it carries the name — empty where no remote
+    /// has the name or nothing has read the remotes yet
+    /// ([`RemoteTagIndex::carriers_against`]).
     ///
     /// The row's cloud ([`TagItem::has_remote`]) says somebody has it; the
     /// row opened says who, from this (デザイン規約 §左メニューの所作).
     pub fn tag_remotes(&self, short: &str, against: &str) -> Vec<(&str, bool)> {
         self.remote_tags.carriers_against(short, against)
+    }
+
+    /// Whether the reading of tag `short` standing on `commit` stands apart
+    /// from the right one ([`RemoteTagIndex::apart_at`]) — asked with this
+    /// repository's own commit for the tag here, and with a graph row's
+    /// commit for the reading that row carries. The copy here is weighed
+    /// like any remote's and never decides.
+    pub fn tag_apart_at(&self, short: &str, commit: Oid, against: &str) -> bool {
+        self.remote_tags.apart_at(short, commit, against)
+    }
+
+    /// Who the right reading of tag `short` belongs to, as the sentence of
+    /// a holder apart from it names them ([`RemoteTagIndex::weighed_against`]);
+    /// empty where the remotes disagree and nobody decides.
+    pub fn tag_weighed_against(&self, short: &str, against: &str) -> Vec<&str> {
+        self.remote_tags.weighed_against(short, against)
+    }
+
+    /// The remote a tag menu's delete rows reach when nobody named one
+    /// ([`RemoteTagIndex::delete_target`]).
+    pub fn tag_delete_target(&self, short: &str, against: &str) -> Option<&str> {
+        self.remote_tags.delete_target(short, against)
+    }
+
+    /// What a menu on tag `short` stands on, worked out as it opens
+    /// (デザイン規約 §タグを作る・送る / §左メニューの所作 の削除の表).
+    /// `against` is the remote this repository's tag rows act on; `aim` a
+    /// remote the reader named on its own — a carrier's line of the open
+    /// row, a chip drawing that one remote's reading — or empty.
+    ///
+    /// Named on its own, a remote takes every row that reaches over there,
+    /// drifted or not: the reader is pointing at that reading itself.
+    /// Unnamed, the pushes go to `against` and the deletes to
+    /// [`RemoteTagIndex::delete_target`]; those stand greyed where no
+    /// remote can be named, or where the one reached has the name on
+    /// another commit than here (the reading is deleted from its own line).
+    pub fn tag_menu(&self, short: &str, against: &str, aim: &str) -> TagMenuFacts {
+        let here = self
+            .tag_named(short)
+            .filter(|tag| tag.here)
+            .map(|tag| tag.oid);
+        let carriers: Vec<&str> = self
+            .remote_tags
+            .carriers_against(short, against)
+            .into_iter()
+            .map(|(remote, _)| remote)
+            .collect();
+        let push_remote = if aim.is_empty() { against } else { aim };
+        let reach = if aim.is_empty() {
+            self.remote_tags.delete_target(short, against).unwrap_or("")
+        } else {
+            aim
+        };
+        let elsewhere = |remote: &str| {
+            here.and_then(|oid| {
+                self.remote_tags
+                    .commit_on(short, remote)
+                    .filter(|there| *there != oid)
+            })
+        };
+        let held_back = if !aim.is_empty() {
+            TagDeleteHeld::No
+        } else if reach.is_empty() && !carriers.is_empty() {
+            TagDeleteHeld::Unnamed
+        } else if !reach.is_empty() && elsewhere(reach).is_some() {
+            TagDeleteHeld::Drifted
+        } else {
+            TagDeleteHeld::No
+        };
+        TagMenuFacts {
+            push_remote: push_remote.to_string(),
+            lease: if push_remote.is_empty() {
+                None
+            } else {
+                elsewhere(push_remote)
+            },
+            row_goes: here.is_none() && carriers.as_slice() == [reach],
+            reach: reach.to_string(),
+            held_back,
+            carriers: carriers
+                .iter()
+                .map(|remote| (*remote).to_string())
+                .collect(),
+        }
+    }
+
+    /// The remote a menu opened on the chip of tag `short` at `commit`
+    /// names on its own: that chip draws exactly one remote's reading, and
+    /// not the copy here — which, standing on the same commit, is what the
+    /// chip is. `None` for the copy here and for a reading several remotes
+    /// share.
+    pub fn tag_aim_at(&self, short: &str, commit: Oid) -> Option<&str> {
+        if self
+            .tag_named(short)
+            .is_some_and(|tag| tag.here && tag.oid == commit)
+        {
+            return None;
+        }
+        match self.remote_tags.carriers_at(short, commit).as_slice() {
+            [only] => Some(*only),
+            _ => None,
+        }
     }
 
     fn branch_named<'a>(sorted: &'a [BranchItem], short: &str) -> Option<&'a BranchItem> {
@@ -182,6 +285,40 @@ pub struct TagItem {
     /// Whether this repository holds the tag; false lists a name only a
     /// remote has, which no graph row shows.
     pub here: bool,
+}
+
+/// What a menu on one tag stands on ([`RefsSnapshot::tag_menu`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TagMenuFacts {
+    /// Where `push` sends the name.
+    pub push_remote: String,
+    /// Where that remote has the name when that is not where it stands
+    /// here — what the held overwrite is leased to; `None` for the plain
+    /// push.
+    pub lease: Option<Oid>,
+    /// The remote the delete rows reach; empty where none can be named.
+    pub reach: String,
+    /// Why those rows stand greyed, if they do.
+    pub held_back: TagDeleteHeld,
+    /// Every remote carrying the name, in name order — what the greyed
+    /// rows name when no one of them can be reached.
+    pub carriers: Vec<String>,
+    /// Deleting from `reach` leaves no holder of the name, so its row goes
+    /// with it.
+    pub row_goes: bool,
+}
+
+/// Why a tag menu's rows that delete over there stand greyed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TagDeleteHeld {
+    /// They do not.
+    #[default]
+    No,
+    /// The remote reached has the name on another commit than here.
+    Drifted,
+    /// Several remotes carry the name, none of them the reference, and
+    /// nobody named one.
+    Unnamed,
 }
 
 /// One remote holding one tag on a commit this repository does not have
