@@ -7,31 +7,73 @@ use std::collections::BTreeSet;
 use super::options::parse;
 use super::ownership::{claim_dir, claim_resource, fresh_shot_dir};
 use super::repos::{body_for, folder_for, seed_merge_tool};
-use super::shim::stage_old_git;
+use super::shim::stage_shim;
 use super::{child, outcome, repos, seed};
 
-/// Which gits a run is staged with: the version the shim answers, the
-/// PATH the app is handed, and where a second git stands. One of
-/// `--old-git` / `--other-git` per run: both are the same copy, reading
-/// one pair of variables.
+/// The verbs that bring an old git of their own, so the line is just
+/// `verify-ui old-git`: the band's `OLD GIT`, alone or among the rest.
+const OLD_GIT_VERBS: [&str; 5] = [
+    "old-git",
+    "old-git-card",
+    "old-git-fold",
+    "badges-all",
+    "badges-all-hover",
+];
+/// Likewise a git without Git LFS: a desk's Git for Windows carries it,
+/// and the band's `NO LFS` stands only where git cannot run it.
+const NO_LFS_VERBS: [&str; 4] = ["no-lfs", "no-lfs-card", "badges-all", "badges-all-hover"];
+
+/// Which gits a run is staged with.
+struct Gits<'a> {
+    /// What the staged copy answers `--version` with (`--old-git` on
+    /// PATH, `--other-git` beside the pictures); empty when neither.
+    version: &'a str,
+    /// Whether the copy on PATH answers `git lfs` as missing.
+    no_lfs: bool,
+    /// The PATH the app is handed.
+    child_path: std::ffi::OsString,
+    /// Where a second git stands.
+    other: Option<std::path::PathBuf>,
+}
+
+/// The gits a run is staged with. `--old-git` / `--no-lfs` stand one copy
+/// on PATH; `--other-git` stands one beside it, reading the same
+/// variables — so a run takes one or the other.
 fn gits_for<'a>(
     opts: &'a super::options::Options,
     shot_dir: &std::path::Path,
     path: &std::ffi::OsString,
-) -> Result<(&'a str, std::ffi::OsString, Option<std::path::PathBuf>), String> {
-    // The old-git verbs bring their own version, so the line is just
-    // `verify-ui old-git`. Below any minimum this app will ever have.
-    let old_git = match (opts.old_git.as_str(), opts.verb.as_str()) {
-        ("", "old-git" | "old-git-card" | "old-git-fold") => "2.42.0",
-        (asked, _) => asked,
+) -> Result<Gits<'a>, String> {
+    // Below any minimum this app will ever have.
+    let old_git = match opts.old_git.as_str() {
+        "" if OLD_GIT_VERBS.contains(&opts.verb.as_str()) => "2.42.0",
+        asked => asked,
     };
-    if !old_git.is_empty() && !opts.other_git.is_empty() {
-        return Err("--old-git and --other-git are one git each; a run takes one".into());
+    let no_lfs = opts.no_lfs || NO_LFS_VERBS.contains(&opts.verb.as_str());
+    let on_path = !old_git.is_empty() || no_lfs;
+    if on_path && !opts.other_git.is_empty() {
+        return Err(
+            "--old-git / --no-lfs and --other-git stage one copy of git each; a run takes one"
+                .into(),
+        );
     }
-    if !old_git.is_empty() {
-        let staged = stage_old_git(shot_dir, path)?;
-        println!("git for this run: {old_git} (real git behind it)");
-        return Ok((old_git, staged, None));
+    if on_path {
+        let staged = stage_shim(shot_dir, path)?;
+        println!(
+            "git for this run: {}{} (real git behind it)",
+            if old_git.is_empty() {
+                "this machine's"
+            } else {
+                old_git
+            },
+            if no_lfs { ", without Git LFS" } else { "" }
+        );
+        return Ok(Gits {
+            version: old_git,
+            no_lfs,
+            child_path: staged,
+            other: None,
+        });
     }
     // Likewise the second-git runs, which typed without one would wait
     // out the watchdog for a path never staged. Any version at or above
@@ -43,14 +85,24 @@ fn gits_for<'a>(
         (asked, _) => asked,
     };
     if other.is_empty() {
-        return Ok((old_git, path.clone(), None));
+        return Ok(Gits {
+            version: "",
+            no_lfs: false,
+            child_path: path.clone(),
+            other: None,
+        });
     }
     let staged = super::shim::stage_other_git(shot_dir)?;
     println!(
         "a second git for this run: {} answering {other}",
         staged.display()
     );
-    Ok((other, path.clone(), Some(staged)))
+    Ok(Gits {
+        version: other,
+        no_lfs: false,
+        child_path: path.clone(),
+        other: Some(staged),
+    })
 }
 
 /// What this run takes of the machine for as long as it runs — an app
@@ -164,7 +216,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             &opened
         }
     );
-    let (shim_version, child_path, other_git) = gits_for(&opts, &shot_dir, &path)?;
+    let gits = gits_for(&opts, &shot_dir, &path)?;
 
     // Git reads "who is sitting here" from a config file and from the
     // directory it runs in, so every run gets both of its own: a gitconfig
@@ -188,11 +240,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
         shot_dir: &shot_dir,
         config_dir: &config_dir,
         config: &config,
-        child_path: &child_path,
+        child_path: &gits.child_path,
         path: &path,
         arg: &arg,
-        shim_version,
-        other_git: other_git.as_deref(),
+        shim_version: gits.version,
+        shim_no_lfs: gits.no_lfs,
+        other_git: gits.other.as_deref(),
         repos: &repos,
         opts: &opts,
     })?;

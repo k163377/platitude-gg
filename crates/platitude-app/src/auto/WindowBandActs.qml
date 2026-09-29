@@ -208,7 +208,7 @@ Item {
             + " push=" + topBar.pushMode + " stash=" + topBar.stashMode
             + " badges=" + [topBar.opBadgeShown, topBar.conflictBadgeShown,
                             topBar.identityBadgeShown, topBar.oldGitBadgeShown,
-                            topBar.staleBadgeShown].join(","))
+                            topBar.staleBadgeShown, topBar.lfsBadgeShown].join(","))
         window.finishAutoAct()
     }
 

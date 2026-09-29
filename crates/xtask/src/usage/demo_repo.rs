@@ -34,6 +34,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         cherry-pick-conflict  a cherry-pick stopped on a conflict
         cherry-pick-quit  the same, let go of with --quit: no operation
                   standing, the same files still unmerged
+        lfs       *.psd / *.mp4 tracked in Git LFS, three such files
+                  pending beside a text change (no-lfs --no-lfs counts 3)
+        lfs-conflict  the stopped merge of conflict with one file for LFS
+                  added beside it: every badge the page can raise
         conflict-kinds   four kinds of conflict in one stopped merge
         drop-collides    a drop that replays clean and collides restoring
         drop-stops       a drop that stops part-way, over a dirty tree

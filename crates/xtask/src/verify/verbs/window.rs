@@ -550,6 +550,60 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "mark=true tint=warning fitted=true",
     },
+    // The badge files for a missing Git LFS raise, over `--preset lfs`
+    // (three such files beside a text change). `count=` is the model's —
+    // the number the card's sentence says, which no picture is read for —
+    // so the run judges the count git's attributes gave, not just that
+    // something stood. `badge=` is the band's own reading, as `old-git`'s.
+    // `floor` folds it alone: yellow, as `old-git-fold`'s.
+    Verb {
+        name: "no-lfs",
+        when: &[(
+            Arg::Starts("floor"),
+            "no-lfs badge=true card=false count=3 words=false mark=true tint=warning fitted=true",
+        )],
+        plain: "no-lfs badge=true card=false count=3 words=true mark=false",
+    },
+    // Its card: the one row, and its sentence's count. The other rows
+    // stay down on this preset on both sides (an identity is seeded, and
+    // the container's git is the minimum, not under it).
+    Verb {
+        name: "no-lfs-card",
+        when: &[(
+            Arg::Starts("floor"),
+            "no-lfs badge=true card=true count=3 words=false mark=true tint=warning fitted=true \
+             rows=lfs cap=",
+        )],
+        plain: "no-lfs badge=true card=true count=3 words=true mark=false tint=warning \
+                fitted=true rows=lfs cap=",
+    },
+    // All six of the band's badges at once, over `--preset lfs-conflict`
+    // (a stopped merge with one file for LFS beside it), an old git and
+    // no Git LFS: the widest the band's state ever asks for. The shapes
+    // and their reasons are `badges`'.
+    Verb {
+        name: "badges-all",
+        when: &[
+            (
+                Arg::Is("1000:6"),
+                "stale=true lfs=true op=true conflicts=true identity=true oldGit=true \
+                 narrowed=true words=true mark=false shadow=true",
+            ),
+            (
+                Arg::Starts("floor"),
+                "words=false mark=true shadow=true tint=danger fitted=true",
+            ),
+        ],
+        plain: "stale=true lfs=true op=true conflicts=true identity=true oldGit=true \
+                narrowed=false words=true mark=false shadow=true",
+    },
+    // Its card: six rows in the band's order, the LFS one saying its one
+    // file in the singular.
+    Verb {
+        name: "badges-all-hover",
+        when: &[],
+        plain: "card=true rows=op,conflicts,identity,stale,lfs,old-git",
+    },
     // The picker is the platform's own window and stands in neither
     // photograph (`popups=0`), so the line is the whole evidence. It comes
     // up beside the repository already open (rules-refs/app-ui.md).

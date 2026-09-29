@@ -69,6 +69,10 @@ pub(super) struct Options {
     /// passes everything else to the real one (`git_shim`). Empty: the git
     /// this machine has.
     pub(super) old_git: String,
+    /// Run the app against a git that answers `git lfs` as a git without
+    /// Git LFS does, and passes everything else to the real one
+    /// (`git_shim`). Off: whatever this machine has.
+    pub(super) no_lfs: bool,
     /// A second git the run may point the settings box at, answering
     /// `--version` with this: staged beside the pictures, off PATH
     /// (`shim::stage_other_git`).
@@ -141,6 +145,9 @@ impl Options {
             words.push("--old-git".to_string());
             words.push(self.old_git.clone());
         }
+        if self.no_lfs {
+            words.push("--no-lfs".to_string());
+        }
         if !self.other_git.is_empty() {
             words.push("--other-git".to_string());
             words.push(self.other_git.clone());
@@ -200,6 +207,7 @@ impl Default for Options {
             restore: false,
             allow_write_failure: false,
             old_git: String::new(),
+            no_lfs: false,
             other_git: String::new(),
             label: String::new(),
             no_board: false,
@@ -274,6 +282,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--old-git" => {
                 opts.old_git = it.next().ok_or("--old-git needs a version")?.clone();
             }
+            "--no-lfs" => opts.no_lfs = true,
             "--other-git" => {
                 opts.other_git = it.next().ok_or("--other-git needs a version")?.clone();
             }

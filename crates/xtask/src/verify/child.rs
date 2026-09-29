@@ -13,7 +13,9 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use super::options::Options;
-use super::shim::{OTHER_GIT, SHIM_REAL, SHIM_VERSION, identity_answer, identity_seed, real_git};
+use super::shim::{
+    OTHER_GIT, SHIM_NO_LFS, SHIM_REAL, SHIM_VERSION, identity_answer, identity_seed, real_git,
+};
 use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
 /// Grace after the app-side watchdog before the parent reaps a wedged GUI.
@@ -34,6 +36,8 @@ pub(super) struct Start<'a> {
     /// What the staged git copy answers `--version` with (`--old-git` on
     /// PATH, `--other-git` beside the pictures); empty when neither.
     pub(super) shim_version: &'a str,
+    /// Whether the copy on PATH answers `git lfs` as missing (`--no-lfs`).
+    pub(super) shim_no_lfs: bool,
     pub(super) other_git: Option<&'a std::path::Path>,
     pub(super) repos: &'a [PathBuf],
     pub(super) opts: &'a Options,
@@ -214,6 +218,7 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         path,
         arg,
         shim_version,
+        shim_no_lfs,
         other_git,
         repos,
         opts,
@@ -269,11 +274,16 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         cmd.env("PGG_FAULT_HOLD_SAVE", hold_save);
     }
     // Set on the app so every git it starts inherits them, wherever the
-    // staged copy stands (`--old-git` on PATH, `--other-git` where the
-    // settings point).
+    // staged copy stands (`--old-git` / `--no-lfs` on PATH, `--other-git`
+    // where the settings point).
     if !shim_version.is_empty() {
-        cmd.env(SHIM_VERSION, shim_version)
-            .env(SHIM_REAL, real_git(path)?);
+        cmd.env(SHIM_VERSION, shim_version);
+    }
+    if shim_no_lfs {
+        cmd.env(SHIM_NO_LFS, "1");
+    }
+    if !shim_version.is_empty() || shim_no_lfs {
+        cmd.env(SHIM_REAL, real_git(path)?);
     }
     if let Some(other) = other_git {
         cmd.env(OTHER_GIT, other);

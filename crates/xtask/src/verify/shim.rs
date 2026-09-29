@@ -11,24 +11,39 @@ use std::process::{Command, ExitCode};
 pub(super) const SHIM_VERSION: &str = "PGG_SHIM_GIT_VERSION";
 /// The git that copy passes everything else to.
 pub(super) const SHIM_REAL: &str = "PGG_SHIM_REAL_GIT";
+/// Set on the app when `--no-lfs` asks for it: the copy answers `git lfs`
+/// as a git without Git LFS does, whatever this machine has.
+pub(super) const SHIM_NO_LFS: &str = "PGG_SHIM_NO_LFS";
 /// Set on the app when `--other-git` asks for one: where a second git
 /// stands, staged beside the pictures and **off** PATH.
 pub(super) const OTHER_GIT: &str = "PGG_OTHER_GIT";
 
 /// Stands in for git when this binary was copied onto a run's PATH under
-/// git's name (`--old-git`); `None` in every other process, the xtask
-/// that set it up included. Only `--version` is answered here — the rest
-/// goes to the real git, so the app sees a working install that is old.
+/// git's name (`--old-git` / `--no-lfs`); `None` in every other process,
+/// the xtask that set it up included. Only `--version` (the old version)
+/// and `lfs` (not there) are answered here — the rest goes to the real
+/// git, so the app sees a working install that is old or has no Git LFS.
 ///
 /// This binary because it is already built, and script work belongs in
 /// xtask (CLAUDE.md §技術スタック).
 pub fn git_shim() -> Option<ExitCode> {
-    let version = std::env::var(SHIM_VERSION).ok()?;
+    let version = std::env::var(SHIM_VERSION).ok();
+    let no_lfs = std::env::var_os(SHIM_NO_LFS).is_some();
+    if version.is_none() && !no_lfs {
+        return None;
+    }
     let real = std::env::var_os(SHIM_REAL)?;
     let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
-    if args.iter().any(|a| a == "--version") {
+    if let Some(version) = version
+        && args.iter().any(|a| a == "--version")
+    {
         println!("git version {version}");
         return Some(ExitCode::SUCCESS);
+    }
+    // git's own words and code for a subcommand it cannot find.
+    if no_lfs && subcommand(&args).is_some_and(|sub| sub == "lfs") {
+        eprintln!("git: 'lfs' is not a git command. See 'git --help'.");
+        return Some(ExitCode::from(1));
     }
     // Stdio inherited: the app reads this output as git's.
     let status = Command::new(&real).args(&args).status();
@@ -43,6 +58,21 @@ pub fn git_shim() -> Option<ExitCode> {
     Some(ExitCode::from(u8::try_from(code).unwrap_or(1)))
 }
 
+/// The subcommand git was asked to run: the first word after the global
+/// options, two of which take the next word as their value (the app
+/// leads every command with `-c <key>=<value>` pairs).
+fn subcommand(args: &[OsString]) -> Option<&OsString> {
+    let mut it = args.iter();
+    while let Some(arg) = it.next() {
+        if arg == "-c" || arg == "-C" {
+            it.next();
+        } else if !arg.to_string_lossy().starts_with('-') {
+            return Some(arg);
+        }
+    }
+    None
+}
+
 /// The git the shim hands everything else to, found the way the app finds
 /// it — the first one on the PATH the run was going to use.
 pub(super) fn real_git(path: &std::ffi::OsStr) -> Result<PathBuf, String> {
@@ -50,7 +80,7 @@ pub(super) fn real_git(path: &std::ffi::OsStr) -> Result<PathBuf, String> {
     std::env::split_paths(path)
         .map(|dir| dir.join(name))
         .find(|candidate| candidate.is_file())
-        .ok_or_else(|| format!("--old-git needs a real git on PATH; no {name} found on it"))
+        .ok_or_else(|| format!("the git shim needs a real git on PATH; no {name} found on it"))
 }
 
 /// Stands a second git (the copy `--old-git` uses) beside the pictures,
@@ -68,7 +98,7 @@ pub(super) fn stage_other_git(shot_dir: &std::path::Path) -> Result<PathBuf, Str
 
 /// Puts a copy of this binary on the front of `path` under git's name, and
 /// returns the PATH the app should run with.
-pub(super) fn stage_old_git(
+pub(super) fn stage_shim(
     shot_dir: &std::path::Path,
     path: &std::ffi::OsStr,
 ) -> Result<OsString, String> {
@@ -118,6 +148,8 @@ pub(super) fn identity_seed(verb: &str) -> Option<&'static str> {
         | "badges"
         | "badges-hover"
         | "badges-hover-early"
+        | "badges-all"
+        | "badges-all-hover"
         | super::child::HELD_SAVE_VERB => Some(""),
         // `identity-tip` closes the dialog on the half-landed save: its
         // badge stands only while the identity is half there.
@@ -133,7 +165,9 @@ pub(super) fn identity_seed(verb: &str) -> Option<&'static str> {
 /// shape.
 pub(super) fn identity_answer<'a>(verb: &str, arg: &'a str) -> &'a str {
     match verb {
-        "badges" | "badges-hover" | "badges-hover-early" => "skip",
+        "badges" | "badges-hover" | "badges-hover-early" | "badges-all" | "badges-all-hover" => {
+            "skip"
+        }
         _ if arg.is_empty() => IDENTITY_ASKED,
         _ => arg,
     }

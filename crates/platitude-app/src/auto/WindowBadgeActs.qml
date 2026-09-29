@@ -4,9 +4,9 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The state badges' half of the band's PGG_AUTO_ACT harness: the three the band raises at once, the one a graph
-/// that stopped reading raises, and the one an old git raises. Split from `WindowBandActs` for length alone; each verb
-/// stands itself up on its own `running:` (rules-refs/structure.md「窓側の自動化は動詞が自分で `running:` に立つ」).
+/// The state badges' half of the band's PGG_AUTO_ACT harness: the three the band raises at once (and all six), the one
+/// a graph that stopped reading raises, the one an old git raises, and the one files for a missing Git LFS raise.
+/// Split from `WindowBandActs` for length alone; each verb stands itself up on its own `running:` (rules-refs/structure.md「窓側の自動化は動詞が自分で `running:` に立つ」).
 // An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
@@ -28,17 +28,23 @@ Item {
     // PGG_AUTO_ACT=badges: all three of the band's state badges at once — the widest the band asks for, which only the
     // floor keeps from pushing `>_` off the end (デザイン規約 §ウィンドウの縁). The argument is `<width>[:<tabs>]`: the
     // window width (or `floor`), and how many tabs the run built the strip out of (`verify::repos::band_tab_count`).
+    // `badges-all` / `badges-all-hover`: every one of the six — the run's git is old and has no Git LFS
+    // (`verify-ui` stages both by the verb's name), and the graph is made stale here the way `graph-stale` makes it.
     SampleTimer {
         id: badgesActTimer
         running: Harness.autoAct === "badges"
                  || Harness.autoAct === "badges-hover"
                  || Harness.autoAct === "badges-hover-early"
+                 || badgesActTimer.wantsAll
         /// Whether the report is of the card or of the band behind it; the two hover verbs differ only in when the
         /// pointer goes down.
         readonly property bool wantsCard: Harness.autoAct === "badges-hover"
                                           || Harness.autoAct === "badges-hover-early"
+                                          || Harness.autoAct === "badges-all-hover"
+        readonly property bool wantsAll: Harness.autoAct === "badges-all" || Harness.autoAct === "badges-all-hover"
         property bool stateRequested: false
         property bool sizeRequested: false
+        property bool staleArmed: false
         property int requestedWidth: -1
         onTriggered: {
             if (identityDialog.opened || topBar.bandTabsWidth <= 0
@@ -46,6 +52,20 @@ Item {
                     || !topBar.opBadgeShown || !topBar.conflictBadgeShown
                     || !topBar.identityBadgeShown)
                 return
+            if (badgesActTimer.wantsAll) {
+                const page = window.curPage
+                // Armed over a page that has settled, as `graph-stale` arms it (`staleActTimer` says why).
+                if (!badgesActTimer.staleArmed) {
+                    if (page.pageGraph.loading || page.pageGraph.finishCount <= 0 || !PageSettled.settled(page))
+                        return
+                    badgesActTimer.staleArmed = true
+                    page.pageGraph.failGraphPass("swapping")
+                    return
+                }
+                if (!topBar.staleBadgeShown || !topBar.lfsBadgeShown || !topBar.oldGitBadgeShown
+                        || page.pageGraph.loading)
+                    return
+            }
             // The strip shares the band's shortfall, so a run that named a tab count waits until the strip holds
             // every one — read off the strip's own count, since the pages come up in their own time.
             const words = Harness.autoActArg.split(":")
@@ -56,7 +76,7 @@ Item {
             const wantedW = parseInt(arg)
             const sized = arg === "floor" || (!isNaN(wantedW) && wantedW > 0)
             // The pointer, through the one property the real hover writes.
-            if (Harness.autoAct === "badges-hover" && !stateRequested) {
+            if ((Harness.autoAct === "badges-hover" || Harness.autoAct === "badges-all-hover") && !stateRequested) {
                 topBar.statePointedAt = true
                 stateRequested = true
             }
@@ -93,11 +113,13 @@ Item {
     /// the band's own colour — recomputing the rule here would agree with itself whatever the band did.
     readonly property string stateTint: Qt.colorEqual(topBar.stateMarkColor, Theme.danger) ? "danger" : "warning"
     /// `fits=` leads, and the three badges are judged with it: a run where one never stood photographs an uncrowded
-    /// band.
+    /// band. `stale=` / `lfs=` ride between, so the three's line stays one string for `badges` to be judged by.
     function reportBadges() {
         const floorW = Math.ceil(window.floorWidth)
         Harness.report(
             "badges fits=" + (window.width >= floorW)
+            + " stale=" + topBar.staleBadgeShown
+            + " lfs=" + topBar.lfsBadgeShown
             + " op=" + topBar.opBadgeShown
             + " conflicts=" + topBar.conflictBadgeShown
             + " identity=" + topBar.identityBadgeShown
@@ -129,7 +151,9 @@ Item {
             + " bandW=" + Math.ceil(topBar.floorWidth)
             + " floorW=" + floorW + " w=" + window.width
             + " tabsW=" + Math.round(topBar.bandTabsWidth)
-            + " grabRun=" + Math.round(topBar.bandGrabRun))
+            + " grabRun=" + Math.round(topBar.bandGrabRun)
+            // The count the card's sentence says, from the model the badge reads.
+            + " lfsCount=" + window.curPage.pageWt.lfsNeeded)
         window.finishAutoAct()
     }
 
@@ -309,6 +333,67 @@ Item {
                 + " cap=" + topBar.stateCapW
                 + " version=" + AppBackend.gitVersion
                 + " min=" + AppBackend.minimumGit
+                + " w=" + window.width)
+            window.finishAutoAct()
+        }
+    }
+
+    // PGG_AUTO_ACT=no-lfs / no-lfs-card: the run's git answers `git lfs` as a git without Git LFS does
+    // (`verify-ui --no-lfs`, staged by the verb's name), over a preset with files for LFS pending (`--preset lfs`).
+    // The argument is a width, or `floor` for the folded mark, as `old-git`'s is.
+    SampleTimer {
+        id: noLfsActTimer
+        running: Harness.autoAct === "no-lfs" || Harness.autoAct === "no-lfs-card"
+        property bool stateRequested: false
+        property bool sizeRequested: false
+        property int requestedWidth: -1
+        onTriggered: {
+            const page = window.curPage
+            if (topBar.bandTabsWidth <= 0 || page === null)
+                return
+            const arg = Harness.autoActArg
+            const wantedW = parseInt(arg)
+            if (!noLfsActTimer.sizeRequested && arg === "floor") {
+                noLfsActTimer.requestedWidth = Math.ceil(window.floorWidth)
+                window.width = noLfsActTimer.requestedWidth
+                window.height = Math.ceil(window.floorHeight)
+                noLfsActTimer.sizeRequested = true
+                return
+            } else if (!noLfsActTimer.sizeRequested && !isNaN(wantedW) && wantedW > 0) {
+                noLfsActTimer.requestedWidth = wantedW
+                window.width = noLfsActTimer.requestedWidth
+                noLfsActTimer.sizeRequested = true
+                return
+            }
+            if (!page.pageWt.loaded || !topBar.lfsBadgeShown)
+                return
+            if (noLfsActTimer.sizeRequested
+                    && (topBar.width !== mainUi.width
+                        || (arg === "floor"
+                            ? window.width < noLfsActTimer.requestedWidth
+                            : Math.round(window.width) !== noLfsActTimer.requestedWidth)))
+                return
+            // Down on a tick of its own and read on a later one, as `old-git-card`'s pointer is.
+            if (Harness.autoAct === "no-lfs-card" && !stateRequested) {
+                topBar.statePointedAt = true
+                stateRequested = true
+                return
+            }
+            if (Harness.autoAct === "no-lfs-card" && (!topBar.stateCardOpen || !topBar.stateCardLaidOut))
+                return
+            stop()
+            // `count=` is the model's, which the card's sentence says: the picture cannot be read for a number. The
+            // judged fields run together, `rows=` last among them (a closed card stands no rows).
+            Harness.report(
+                "no-lfs badge=" + topBar.lfsBadgeShown
+                + " card=" + topBar.stateCardOpen
+                + " count=" + page.pageWt.lfsNeeded
+                + " words=" + topBar.stateWordsShown
+                + " mark=" + topBar.stateMarkShown
+                + " tint=" + acts.stateTint
+                + " fitted=" + topBar.stateMarkFitted
+                + " rows=" + topBar.stateCardRows
+                + " cap=" + topBar.stateCapW
                 + " w=" + window.width)
             window.finishAutoAct()
         }

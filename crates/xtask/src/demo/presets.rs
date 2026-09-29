@@ -13,6 +13,7 @@ use super::conflict::{
     rebase_empty, rebase_staged, revert_clashes,
 };
 use super::deep::{deep, deep_detached, deep_parked, perf, perf_sequence, replay};
+use super::lfs::{lfs, lfs_conflict};
 use super::pictures::{bigpicture, pictures};
 use super::remote::{
     behind, diverged, forkdiverged, forkmark, gone, hooked, outrun, protected, slowhook,
@@ -146,6 +147,8 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "rebase-empty" => rebase_empty(&mut repo)?,
         "cherry-pick-conflict" => cherry_pick_conflict(&mut repo)?,
         "cherry-pick-quit" => cherry_pick_quit(&mut repo)?,
+        "lfs" => lfs(&mut repo)?,
+        "lfs-conflict" => lfs_conflict(&mut repo)?,
         "conflict-kinds" => conflict_kinds(&mut repo)?,
         "drop-collides" => drop_collides(&mut repo)?,
         "drop-stops" => drop_stops(&mut repo)?,

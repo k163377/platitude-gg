@@ -336,8 +336,10 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
     if !opts.repo.is_empty() && !opts.preset.is_empty() {
         return Err("--repo and --preset name different fixtures: pass one of them".into());
     }
-    let badges =
-        opts.verb == "badges" || opts.verb == "badges-hover" || opts.verb == "badges-hover-early";
+    let badges = matches!(
+        opts.verb.as_str(),
+        "badges" | "badges-hover" | "badges-hover-early" | "badges-all" | "badges-all-hover"
+    );
     // A `--repo` beside a tab count: `--repo` wins the list, while
     // `WindowBadgeActs` waits for a band carrying the count, and the run
     // hangs silently to its ceiling.
@@ -417,10 +419,12 @@ fn route_of(verb: &str, arg: &str) -> Result<Route, String> {
         // A strip and a page with a state at once: the count rides in the
         // argument beside the width (`band_tab_count`); with none, the
         // ordinary one repository.
-        "badges" | "badges-hover" | "badges-hover-early" => match band_tab_count(arg)? {
-            Some(count) => Route::BandStrip(count),
-            None => Route::Presets,
-        },
+        "badges" | "badges-hover" | "badges-hover-early" | "badges-all" | "badges-all-hover" => {
+            match band_tab_count(arg)? {
+                Some(count) => Route::BandStrip(count),
+                None => Route::Presets,
+            }
+        }
         "ops-repo-pick" => Route::NamedPresets,
         _ => Route::Presets,
     })
