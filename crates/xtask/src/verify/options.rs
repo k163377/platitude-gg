@@ -176,32 +176,40 @@ fn typed_label(word: Option<&String>) -> Result<String, String> {
     crate::shots::written_label(word.ok_or("--label needs a phrase")?)
 }
 
+/// A run the command line says nothing about but its verb: built, and
+/// under the stock ceiling.
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            verb: String::new(),
+            arg: String::new(),
+            repo: Vec::new(),
+            preset: Vec::new(),
+            build: true,
+            select: false,
+            scroll_to: String::new(),
+            system_title_bar: false,
+            watchdog_ms: WATCHDOG_MS,
+            fault_hang: String::new(),
+            fault_no_deadline: false,
+            fault_hold_act: false,
+            fault_hold_save: String::new(),
+            fault_stall_look: false,
+            shot_dir: None,
+            config_dir: None,
+            restore: false,
+            allow_write_failure: false,
+            old_git: String::new(),
+            other_git: String::new(),
+            label: String::new(),
+            no_board: false,
+            no_census: false,
+        }
+    }
+}
+
 pub(super) fn parse(args: &[String]) -> Result<Options, String> {
-    let mut opts = Options {
-        verb: String::new(),
-        arg: String::new(),
-        repo: Vec::new(),
-        preset: Vec::new(),
-        build: true,
-        select: false,
-        scroll_to: String::new(),
-        system_title_bar: false,
-        watchdog_ms: WATCHDOG_MS,
-        fault_hang: String::new(),
-        fault_no_deadline: false,
-        fault_hold_act: false,
-        fault_hold_save: String::new(),
-        fault_stall_look: false,
-        shot_dir: None,
-        config_dir: None,
-        restore: false,
-        allow_write_failure: false,
-        old_git: String::new(),
-        other_git: String::new(),
-        label: String::new(),
-        no_board: false,
-        no_census: false,
-    };
+    let mut opts = Options::default();
     let mut positional: Vec<&str> = Vec::new();
     let mut it = args.iter();
     while let Some(a) = it.next() {
