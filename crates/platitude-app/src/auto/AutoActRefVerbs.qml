@@ -117,6 +117,14 @@ Item {
             // The far side keeps the branch (`--preset protected`): the refusal comes back as a report, in a bar.
             if (act === "remote-refused")
                 driver.barrierNotice.start()
+        } else if (act === "delete-upstream-go" || act === "delete-both-go") {
+            // A local branch's card and a row that reaches its reading: that alone, or the pair. What reaches the
+            // remote is leased to the reading's commit as the card read it (`RefRowMenu.branchFacts`), so a card
+            // holding the wrong one is a refused write. The branch has to be tracked, merged and in step
+            // (`--preset stack`'s `side`).
+            page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
+            refMenu.openSub(refBranchCard)
+            driver.holdToEnd(act === "delete-both-go" ? refBranchCard.deleteBothItem : refBranchCard.deleteRemoteItem)
         } else if (act === "delete-force") {
             repoTab.deleteBranch(arg, true)
         } else if (act === "delete-branch-chip") {

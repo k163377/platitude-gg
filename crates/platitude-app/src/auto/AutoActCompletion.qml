@@ -27,6 +27,7 @@ QtObject {
                 "delete-branch",
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
                 "delete-remote-go", "remote-refused", "delete-force", "delete-branch-refused",
+                "delete-upstream-go", "delete-both-go",
                 "delete-branch-chip", "delete-stood-down",
                 "set-upstream-go", "set-upstream-enter", "publish-upstream",
                 "delete-stash-row", "stash-apply-row", "stash-pop-row",
