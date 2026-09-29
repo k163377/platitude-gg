@@ -53,6 +53,8 @@ Item {
         /// Which branch went, read back the way the page would send it.
         property string sentBranch: ""
         property string pushState: "behind"
+        property int pushBehind: 1
+        property int pushAhead: 0
         property bool pushFailed: false
         property bool planShown: false
         property bool canPush: false
@@ -61,8 +63,6 @@ Item {
         property QtObject pageTab: QtObject { property string busyOp: "" }
         property QtObject pageWt: QtObject {
             property string branch: tab.branch
-            property int behind: 1
-            property int ahead: 0
         }
         function forcePush() { tab.sent++; tab.sentBranch = tab.branch }
         function pushNow() { tab.sent++; tab.sentBranch = tab.branch }

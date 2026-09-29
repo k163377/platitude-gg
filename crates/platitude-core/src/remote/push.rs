@@ -15,6 +15,7 @@ use crate::process::{GitCommand, GitExecutor};
 use super::list::{config_value, current_branch};
 use super::marks::{PushMarks, push_marks};
 use super::refusal::refusal;
+use super::standing::PushTrack;
 
 /// How hard a push may overwrite the remote.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -207,6 +208,68 @@ pub async fn push(
     ))
 }
 
+/// How `branch` stands against the tracking ref of where a mark sends
+/// its push ([`super::pushes_elsewhere`]): one `for-each-ref`, git naming
+/// the ref through that remote's fetch refspecs (`%(push)`) and counting
+/// against it (`%(push:track)`).
+///
+/// Asked as `push.default=current`, the branch under its own name — the
+/// refspec [`plan_current_push`] sends there. The default `simple` names
+/// no destination that is not the upstream (`@{push}`: `cannot resolve
+/// 'simple' push to a single destination`).
+pub async fn push_track(
+    executor: &GitExecutor,
+    workdir: &Path,
+    branch: &str,
+    cancel: &CancellationToken,
+) -> Result<PushTrack, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args([
+            "-c",
+            "push.default=current",
+            "for-each-ref",
+            "--format=%(push)%00%(push:remoteref)%00%(push:track)",
+        ])
+        .arg(format!("refs/heads/{branch}"));
+    let out = executor.run(cmd, cancel).await?;
+    Ok(parse_push_track(branch, &out.stdout))
+}
+
+/// One [`push_track`] line: `<ref>\0<remote ref>\0<track>`. Every way of
+/// having nothing to count against answers the empty [`PushTrack`].
+fn parse_push_track(branch: &str, bytes: &[u8]) -> PushTrack {
+    let line = bytes.split(|b| *b == b'\n').next().unwrap_or_default();
+    let mut fields = line.split(|b| *b == 0);
+    let (Some(tracking), Some(remote_ref), Some(track)) =
+        (fields.next(), fields.next(), fields.next())
+    else {
+        return PushTrack::default();
+    };
+    // Set only by a `remote.<name>.push` refspec, which moves `%(push)`
+    // where the send's own refspec does not go.
+    if !remote_ref.is_empty() && remote_ref != format!("refs/heads/{branch}").as_bytes() {
+        return PushTrack::default();
+    }
+    // Only a remote branch is on screen for a lease to pin to; `[gone]`
+    // names a ref nothing has fetched.
+    let Some(tracking) = std::str::from_utf8(tracking)
+        .ok()
+        .and_then(|name| name.strip_prefix("refs/remotes/"))
+    else {
+        return PushTrack::default();
+    };
+    if track == b"[gone]" {
+        return PushTrack::default();
+    }
+    let (ahead, behind) = crate::refs::parse_track(track);
+    PushTrack {
+        tracking: tracking.to_string(),
+        ahead: i32::try_from(ahead).unwrap_or(i32::MAX),
+        behind: i32::try_from(behind).unwrap_or(i32::MAX),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -323,6 +386,49 @@ mod tests {
             plan("main", "", "", "", "", "origin").is_ok(),
             "a fallback is a destination"
         );
+    }
+
+    /// git 2.55's `push_track` lines, one per arrangement.
+    #[test]
+    fn a_push_track_counts_only_against_a_remote_branch_the_send_reaches() {
+        let track = |line: &[u8]| parse_push_track("main", line);
+        assert_eq!(
+            track(b"refs/remotes/fork/main\0\0[ahead 1, behind 1]\n"),
+            PushTrack {
+                tracking: "fork/main".to_string(),
+                ahead: 1,
+                behind: 1,
+            }
+        );
+        assert_eq!(
+            track(b"refs/remotes/fork/main\0\0\n"),
+            PushTrack {
+                tracking: "fork/main".to_string(),
+                ahead: 0,
+                behind: 0,
+            },
+            "level with it is a count too"
+        );
+        assert_eq!(
+            track(b"refs/remotes/fork/main\0refs/heads/main\0[ahead 1]\n").tracking,
+            "fork/main",
+            "a push refspec that sends the branch under its own name"
+        );
+        for (line, why) in [
+            (&b"refs/remotes/fork/main\0\0[gone]\n"[..], "never fetched"),
+            (b"\0\0\n", "no fetch refspec takes the branch in"),
+            (
+                b"refs/remotes/fork/wip\0refs/heads/wip\0\n",
+                "a push refspec that renames the branch: the send goes elsewhere",
+            ),
+            (
+                b"refs/mirror/fork/main\0\0[ahead 1]\n",
+                "not a remote branch: nothing on screen to lease against",
+            ),
+            (b"", "no such branch"),
+        ] {
+            assert_eq!(track(line), PushTrack::default(), "{why}");
+        }
     }
 
     /// The toolbar label ([`push_target`], from the snapshot) and the send

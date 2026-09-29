@@ -56,9 +56,10 @@ pub struct WorkTreeModel {
     status_seq: i32,
     /// The branch the last status read HEAD on, for `counts_settled`.
     status_branch: String,
-    /// Whether `upstream` / `ahead` / `behind` are about the branch the
-    /// record names. Between a move of HEAD and the status behind it the
-    /// three are blank and the push standing is closed.
+    /// Whether `upstream` / `ahead` / `behind` (and the push's own
+    /// `push_*` three) are about the branch the record names. Between a
+    /// move of HEAD and the status behind it they are blank and the push
+    /// standing is closed.
     counts_settled: bool,
     /// What the last status said of its branch's standing, shown through
     /// the three below only while it is the branch HEAD is on (`settle`).
@@ -83,6 +84,18 @@ pub struct WorkTreeModel {
     /// destination and standing both read it; it rides with the status so
     /// it never pairs with another branch.
     push_remote: String,
+    /// What the last status said of the branch against where a mark sends
+    /// its push (`StatusMsg::push_track`), shown through the three below
+    /// only while it is the branch HEAD is on (`settle`).
+    status_push_track: platitude_core::remote::PushTrack,
+    /// The remote branch the push's own counts are against, where a mark
+    /// sends the push to another remote than the upstream's; empty
+    /// everywhere else, and where nothing here tracks the branch over
+    /// there. The toolbar reads these in place of `ahead` / `behind` there
+    /// (`platitude_core::remote::push_standing`).
+    push_tracking: String,
+    push_ahead: i32,
+    push_behind: i32,
     op_text: String,
     /// The same operation in git's spelling (`cherry-pick`), for the pill
     /// that says the whole command (デザイン規約 §git 用語のコード表記).
@@ -229,6 +242,9 @@ impl WorkTreeModel {
     qproperty!("behind", Member = behind, Notify = changed);
     qproperty!("pullBlocked", Member = pull_blocked, Notify = changed);
     qproperty!("pushRemote", Member = push_remote, Notify = changed);
+    qproperty!("pushTracking", Member = push_tracking, Notify = changed);
+    qproperty!("pushAhead", Member = push_ahead, Notify = changed);
+    qproperty!("pushBehind", Member = push_behind, Notify = changed);
     qproperty!("opText", Member = op_text, Notify = changed);
     qproperty!("opCommand", Member = op_command, Notify = changed);
     qproperty!("opAlso", Member = op_also, Notify = changed);
@@ -343,6 +359,10 @@ impl WorkTreeModel {
         self.behind = 0;
         self.pull_blocked = false;
         self.push_remote = String::new();
+        self.status_push_track = platitude_core::remote::PushTrack::default();
+        self.push_tracking = String::new();
+        self.push_ahead = 0;
+        self.push_behind = 0;
         self.op_text = String::new();
         self.op_command = String::new();
         self.op_also = String::new();
@@ -427,6 +447,7 @@ impl WorkTreeModel {
             op_message,
             merge_tool,
             push_remote,
+            push_track,
             eol_marks,
             stop,
         } = msg;
@@ -446,6 +467,7 @@ impl WorkTreeModel {
         self.status_ahead = status.ahead;
         self.status_behind = status.behind;
         self.push_remote = push_remote;
+        self.status_push_track = push_track;
         self.has_conflicts = status.has_conflicts();
         let kinds = platitude_core::status::Kinds::of(&status);
         self.wip_added = kinds.added as i32;
@@ -518,12 +540,19 @@ impl WorkTreeModel {
             self.ahead = self.status_ahead;
             self.behind = self.status_behind;
             self.pull_blocked = self.status_ahead > 0 && self.status_behind > 0;
+            self.push_tracking
+                .clone_from(&self.status_push_track.tracking);
+            self.push_ahead = self.status_push_track.ahead;
+            self.push_behind = self.status_push_track.behind;
         } else {
             self.upstream.clear();
             self.upstream_tracked = false;
             self.ahead = 0;
             self.behind = 0;
             self.pull_blocked = false;
+            self.push_tracking.clear();
+            self.push_ahead = 0;
+            self.push_behind = 0;
         }
     }
 
@@ -653,6 +682,7 @@ mod tests {
             op_message: String::new(),
             merge_tool: String::new(),
             push_remote: String::new(),
+            push_track: platitude_core::remote::PushTrack::default(),
             eol_marks: Arc::new(Vec::new()),
             stop: platitude_core::integrate::RebaseStop::default(),
         }))
@@ -776,6 +806,36 @@ mod tests {
         assert!(model.counts_settled);
         assert_eq!(model.upstream, "origin/main");
         assert_eq!(model.ahead, 0);
+    }
+
+    /// The push destination's own counts go blank with the upstream's.
+    #[test]
+    fn the_push_destinations_counts_are_the_branch_they_were_read_with() {
+        let mut model = WorkTreeModel::default();
+        let mut read = status_of("feature", Some("origin/feature"), 0, 1, Vec::new());
+        if let StateMsg::Status(status) = &mut read {
+            status.push_track = platitude_core::remote::PushTrack {
+                tracking: "fork/feature".to_string(),
+                ahead: 1,
+                behind: 2,
+            };
+        }
+        model.absorb(vec![head_on("feature", ROOT, 1), read]);
+        let pushes = |model: &WorkTreeModel| {
+            (
+                model.push_tracking.clone(),
+                model.push_ahead,
+                model.push_behind,
+            )
+        };
+        assert_eq!(pushes(&model), ("fork/feature".to_string(), 1, 2));
+
+        model.absorb(vec![head_on("main", NEXT, 2)]);
+        assert_eq!(
+            pushes(&model),
+            (String::new(), 0, 0),
+            "feature's destination is not main's"
+        );
     }
 
     #[test]

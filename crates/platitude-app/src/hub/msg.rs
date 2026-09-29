@@ -392,6 +392,10 @@ pub struct StatusMsg {
     /// (`branch.<branch>.pushRemote`), empty where it marks none. Rides the
     /// status because it is per-branch: read for the branch in `status`.
     pub push_remote: String,
+    /// The branch's counts against where a mark sends its push, when that
+    /// is not the upstream's remote; empty everywhere else. Per-branch like
+    /// `push_remote`.
+    pub push_track: platitude_core::remote::PushTrack,
     /// Pending files whose change has something to say about line endings.
     pub eol_marks: Arc<Vec<platitude_core::session::EolMark>>,
     /// Why a standing rebase is standing — the `edit` stop that a clean

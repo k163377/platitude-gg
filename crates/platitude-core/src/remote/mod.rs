@@ -30,8 +30,8 @@ pub use self::marks::{
     OriginMarks, PushDefault, PushMarks, clear_origin, mark_origin, origin_marks, push_marks,
 };
 pub use self::pull::pull;
-pub use self::push::{PushForce, PushSpec, plan_current_push, plan_publish, push};
-pub use self::standing::{PushStanding, push_standing, push_target};
+pub use self::push::{PushForce, PushSpec, plan_current_push, plan_publish, push, push_track};
+pub use self::standing::{PushStanding, PushTrack, push_standing, push_target, pushes_elsewhere};
 pub use self::tags::{
     RemoteTag, delete_remote_tag, list_tags, parse_ls_remote_tags, push_tag, replace_remote_tag,
 };

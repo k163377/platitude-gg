@@ -215,6 +215,7 @@ impl SessionSink for BridgeSink {
                 op_message,
                 merge_tool,
                 push_remote,
+                push_track,
                 eol_marks,
                 stop,
             } => {
@@ -235,6 +236,7 @@ impl SessionSink for BridgeSink {
                         op_message: op_message.clone(),
                         merge_tool: merge_tool.clone(),
                         push_remote: push_remote.clone(),
+                        push_track: push_track.clone(),
                         eol_marks: Arc::clone(&eol_marks),
                         stop: stop.clone(),
                     });
@@ -251,6 +253,7 @@ impl SessionSink for BridgeSink {
                         op_message,
                         merge_tool,
                         push_remote,
+                        push_track,
                         eol_marks,
                         stop,
                     })));

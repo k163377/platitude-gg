@@ -92,7 +92,9 @@ impl GitFacts {
 
     /// What a push of the current branch can do, in the word
     /// `PublishFlow.pushState` branches on. A closed tab is the caller's to
-    /// add: this answers for the repository alone.
+    /// add: this answers for the repository alone. The `push_*` three are
+    /// the destination's own counts (`WorkTreeModel.pushTracking`), read
+    /// where the push goes elsewhere.
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn push_standing(
@@ -107,6 +109,9 @@ impl GitFacts {
         push_remote: String,
         push_default: String,
         remote_names: Vec<String>,
+        push_tracking: String,
+        push_ahead: i32,
+        push_behind: i32,
     ) -> String {
         platitude_core::remote::push_standing(
             unborn,
@@ -119,9 +124,35 @@ impl GitFacts {
             &push_remote,
             &push_default,
             names(&remote_names),
+            &platitude_core::remote::PushTrack {
+                tracking: push_tracking,
+                ahead: push_ahead,
+                behind: push_behind,
+            },
         )
         .as_str()
         .to_string()
+    }
+
+    /// Whether a mark sends the push to another remote than the
+    /// upstream's — where the counts that speak for it are the
+    /// destination's own, and so the ones a tooltip says and a lease pins
+    /// to (`PublishFlow.pushElsewhere`). The same rule `push_standing`
+    /// weighs, so the words and the standing read one set of counts.
+    #[qslot]
+    fn push_goes_elsewhere(
+        &self,
+        upstream: String,
+        push_remote: String,
+        push_default: String,
+        remote_names: Vec<String>,
+    ) -> bool {
+        platitude_core::remote::pushes_elsewhere(
+            &upstream,
+            &push_remote,
+            &push_default,
+            names(&remote_names),
+        )
     }
 
     /// Where the toolbar's push button would send this branch, spelled as

@@ -15,7 +15,7 @@ ActionButton {
     /// The last push of this branch was refused.
     readonly property bool failed: pushButton.curPage !== null && pushButton.curPage.pushFailed
     /// The standings where an overwrite is the only send there is (デザイン規約 §リモートへ送る). `elsewhere` stays
-    /// plain: it has no tracking ref on screen for the lease to pin to.
+    /// plain: nothing here tracks the branch over there, so no commit is on screen for the lease to pin to.
     readonly property bool forceShape: pushButton.mode === "diverged" || pushButton.mode === "behind"
     /// The shape as the press under way was given it, settled when the button goes down (デザイン規約 §長押し): `mode`
     /// moves under a holding hand with the fetch behind every press. Everything the shape decides reads this
@@ -60,27 +60,29 @@ ActionButton {
         if (pushButton.curPage.planShown)
             return qsTr("A rebase plan is being composed — it rewrites the very commits a push would send")
         const to = pushButton.curPage.pushTargetLabel
-        const wt = pushButton.curPage.pageWt
+        // The counts the standing read: the destination's own where the push goes elsewhere.
+        const ahead = pushButton.curPage.pushAhead
+        const behind = pushButton.curPage.pushBehind
         // A sentence for each count — `commit(s)` would reach the reader as written (デザイン規約 §タイポグラフィ).
         const what = pushButton.mode === "unborn"
                      ? qsTr("No commits yet — git has no branch to send")
                    : pushButton.mode === "publish"
                      ? qsTr("This branch has not been sent anywhere yet — asks where it goes")
-                   // No count: `ahead` is against another remote (デザイン規約 §リモートへ送る).
+                   // No count: nothing here tracks the branch over there (デザイン規約 §リモートへ送る).
                    : pushButton.mode === "elsewhere"
                      ? qsTr("Push to %1").arg(to)
                    : pushButton.mode === "ready"
-                     ? (wt.ahead === 1 ? qsTr("Push %n commit to %1", "", wt.ahead)
-                                       : qsTr("Push %n commits to %1", "", wt.ahead)).arg(to)
+                     ? (ahead === 1 ? qsTr("Push %n commit to %1", "", ahead)
+                                    : qsTr("Push %n commits to %1", "", ahead)).arg(to)
                    : pushButton.mode === "clean"
                      ? qsTr("Nothing to push — %1 is up to date").arg(to)
                    // One sentence for both overwrite standings (デザイン規約 §リモートへ送る).
                    : pushButton.forceShape
-                     ? (wt.behind === 1
+                     ? (behind === 1
                         ? qsTr("Hold to overwrite %1, dropping %n commit it has (as of the last fetch)", "",
-                               wt.behind)
+                               behind)
                         : qsTr("Hold to overwrite %1, dropping %n commits it has (as of the last fetch)", "",
-                               wt.behind)).arg(to)
+                               behind)).arg(to)
                    : ""
         // What git said, under what the button would do next (デザイン規約 §リモートへ送る).
         const why = pushButton.curPage.pushFailReason

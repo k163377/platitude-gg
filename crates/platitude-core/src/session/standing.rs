@@ -138,6 +138,12 @@ struct Inner {
     /// The merge tool as the last status read that asked for it saw it,
     /// repeated by the reads that did not ask.
     merge_tool: String,
+    /// The push destination's counts as the last read that could tell
+    /// left them, and the branch they are about
+    /// (`RepoSession::read_push_track`): one failed read would drop a
+    /// diverged `push -f` to the plain shape for a tick, and a hold under
+    /// way with it.
+    push_track: Option<(String, crate::remote::PushTrack)>,
 }
 
 impl Default for Standing {
@@ -291,6 +297,19 @@ impl Standing {
         self.lock().merge_tool = tool;
     }
 
+    /// The kept push counts where they are about `branch`; nothing where
+    /// the last read was about another.
+    pub(super) fn push_track_of(&self, branch: &str) -> crate::remote::PushTrack {
+        match &self.lock().push_track {
+            Some((kept, track)) if kept == branch => track.clone(),
+            _ => crate::remote::PushTrack::default(),
+        }
+    }
+
+    pub(super) fn set_push_track(&self, branch: &str, track: crate::remote::PushTrack) {
+        self.lock().push_track = Some((branch.to_string(), track));
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         relock(&self.inner)
     }
@@ -313,6 +332,28 @@ mod tests {
             HeadOffer::Moved { seq } | HeadOffer::Settled { seq } => seq,
             other => panic!("{other:?} carries no number"),
         }
+    }
+
+    /// What a failed read repeats is only ever the same branch's answer.
+    #[test]
+    fn the_kept_push_counts_are_the_branch_they_were_read_for() {
+        let standing = Standing::default();
+        let track = crate::remote::PushTrack {
+            tracking: "fork/main".to_string(),
+            ahead: 1,
+            behind: 2,
+        };
+        assert_eq!(
+            standing.push_track_of("main"),
+            crate::remote::PushTrack::default()
+        );
+        standing.set_push_track("main", track.clone());
+        assert_eq!(standing.push_track_of("main"), track);
+        assert_eq!(
+            standing.push_track_of("topic"),
+            crate::remote::PushTrack::default(),
+            "main's destination is not topic's"
+        );
     }
 
     #[test]

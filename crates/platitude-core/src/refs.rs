@@ -136,10 +136,11 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
     }))
 }
 
-/// Reads `%(upstream:track)`; git omits a zero leg. Parsing the words is
-/// safe only because `for-each-ref` is plumbing and never localizes them
+/// Reads `%(upstream:track)` (and `%(push:track)`, the same words); git
+/// omits a zero leg. Parsing the words is safe only because
+/// `for-each-ref` is plumbing and never localizes them
 /// (rules-refs/core.md「ahead / behind は listing に同乗する」).
-fn parse_track(field: &[u8]) -> (u32, u32) {
+pub(crate) fn parse_track(field: &[u8]) -> (u32, u32) {
     let Some(inside) = field
         .strip_prefix(b"[")
         .and_then(|rest| rest.strip_suffix(b"]"))

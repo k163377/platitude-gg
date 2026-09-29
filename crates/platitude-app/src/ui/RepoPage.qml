@@ -818,6 +818,8 @@ FocusScope {
     /// behind it down here (`TopBar`).
     readonly property alias pushTargetLabel: publishFlow.pushTargetLabel
     readonly property alias pushState: publishFlow.pushState
+    readonly property alias pushAhead: publishFlow.pushAhead
+    readonly property alias pushBehind: publishFlow.pushBehind
     readonly property alias canPush: publishFlow.canPush
     readonly property alias canForcePush: publishFlow.canForcePush
     readonly property alias pushFailed: publishFlow.pushFailed

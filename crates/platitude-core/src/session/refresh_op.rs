@@ -1,9 +1,11 @@
-//! The stopped operation, read: what a merge is bringing in, why a
-//! rebase stopped, how far a stepped operation has got, and the two
-//! sides it is between.
+//! The status pass ([`RepoSession::publish_status`]) and what it reads
+//! beside `git status`: the stopped operation — what a merge is bringing
+//! in, why a rebase stopped, how far a stepped operation has got, and the
+//! two sides it is between — and, where a mark sends the push away from
+//! the upstream, the branch's counts against that destination.
 //!
-//! Read on the status pass ([`super::refresh`]); kept apart because its
-//! extra reads are paid only while something is stopped.
+//! The stopped operation's reads are paid only while something is
+//! stopped, the push counts only while the push goes elsewhere.
 
 use super::joins::status_key;
 use super::*;
@@ -109,6 +111,63 @@ impl RepoSession {
         }
     }
 
+    /// The branch's counts against where a mark sends its push, read only
+    /// where that is not the upstream's remote ([`Self::push_goes_elsewhere`]):
+    /// a process every tick, and nothing else reads them. A read that could
+    /// not tell repeats the branch's last answer (`Standing`).
+    async fn read_push_track(
+        &self,
+        workdir: &std::path::Path,
+        branch: &str,
+        status: &WorkTreeStatus,
+        marks: &remote::PushMarks,
+        cancel: &CancellationToken,
+    ) -> remote::PushTrack {
+        let told = if self.push_goes_elsewhere(status, marks) {
+            remote::push_track(&self.executor, workdir, branch, cancel).await
+        } else {
+            Ok(remote::PushTrack::default())
+        };
+        match told {
+            Ok(track) => {
+                self.standing.set_push_track(branch, track.clone());
+                track
+            }
+            Err(_) => self.standing.push_track_of(branch),
+        }
+    }
+
+    /// [`remote::pushes_elsewhere`] for a status whose upstream git can
+    /// compare against — with none the push asks where it goes, and no
+    /// count is read. The remote names are the kept ones, not read for
+    /// this; before the first listing the cut falls back to the mark's
+    /// exact prefix.
+    fn push_goes_elsewhere(&self, status: &WorkTreeStatus, marks: &remote::PushMarks) -> bool {
+        let Some(upstream) = status
+            .upstream
+            .as_deref()
+            .filter(|_| status.upstream_tracked)
+        else {
+            return false;
+        };
+        let push_remote = marks.push_remote.as_deref().unwrap_or_default();
+        let push_default = marks
+            .push_default
+            .as_ref()
+            .map_or("", |marked| marked.remote.as_str());
+        let elsewhere = |names: &[remote::Remote]| {
+            remote::pushes_elsewhere(
+                upstream,
+                push_remote,
+                push_default,
+                names.iter().map(|remote| remote.name.as_str()),
+            )
+        };
+        self.remotes
+            .peek(|remotes| elsewhere(&remotes.list))
+            .unwrap_or_else(|| elsewhere(&[]))
+    }
+
     /// Loads status + op state and publishes them. Answers whether the WIP
     /// row moved — the tree turned dirty or clean, or a standing merge
     /// changed what it brings in — or that nothing was published at all.
@@ -167,17 +226,20 @@ impl RepoSession {
                 // nothing to push. The branch's mark rides this event, the
                 // repository's the refs snapshot, so a moved default sends
                 // the refs out again ([`RepoSession::note_push_default`]).
-                let push_remote = match &status.branch_head {
+                let (push_remote, push_track) = match &status.branch_head {
                     Some(branch) => {
                         match remote::push_marks(&self.executor, &workdir, branch, &cancel).await {
                             Ok(marks) => {
                                 self.note_push_default(&marks.push_default);
-                                marks.push_remote.unwrap_or_default()
+                                let track = self
+                                    .read_push_track(&workdir, branch, &status, &marks, &cancel)
+                                    .await;
+                                (marks.push_remote.unwrap_or_default(), track)
                             }
-                            Err(_) => String::new(),
+                            Err(_) => Default::default(),
                         }
                     }
-                    None => String::new(),
+                    None => Default::default(),
                 };
                 if !self.standing.current(looked) {
                     self.read_status_from(self.status_read.stamp());
@@ -221,6 +283,7 @@ impl RepoSession {
                     op_message,
                     merge_tool,
                     push_remote,
+                    push_track,
                     eol_marks,
                     stop,
                 });

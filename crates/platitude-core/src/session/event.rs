@@ -150,6 +150,11 @@ pub enum SessionEvent {
         /// standing only — [`crate::remote::plan_current_push`] re-reads
         /// the keys to send.
         push_remote: String,
+        /// The branch's counts against the tracking ref where a mark sends
+        /// its push, when that is not the upstream's remote
+        /// ([`crate::remote::pushes_elsewhere`]); empty everywhere else.
+        /// Rides the status for the reason `push_remote` does.
+        push_track: crate::remote::PushTrack,
         /// Pending paths whose change has something to say about line
         /// endings. Shared: most status reads repeat the previous answer.
         eol_marks: Arc<Vec<EolMark>>,

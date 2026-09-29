@@ -39,15 +39,16 @@ Item {
     ///
     /// - `closed`    — no branch to send
     /// - `publish`   — never sent: where it goes is a question (also with no remote — the question can make one)
-    /// - `elsewhere` — the push goes to a marked remote this branch does not track (`pushTargetLabel`), so the
-    ///                 counts say nothing
+    /// - `elsewhere` — the push goes to a marked remote this branch does not track (`pushTargetLabel`), and nothing
+    ///                 here tracks the branch over there, so no counts speak
     /// - `ready`     — commits to add, nothing in the way
     /// - `clean`     — the remote has them all
     /// - `behind`    — the remote moved on; nothing to add
     /// - `diverged`  — both moved; only an overwrite can land
     ///
     /// The table is core's (`platitude_core::remote::push_standing`, through a pure `GitFacts` slot whose inputs are
-    /// all bound here). The counts are the last fetch's, so they prove the negative only: a push may still be refused.
+    /// all bound here), read against the destination's own counts where the push goes elsewhere (`pushElsewhere`).
+    /// The counts are the last fetch's, so they prove the negative only: a push may still be refused.
     readonly property string pushState:
         // `closed` too until the counts are about HEAD's branch (`WorkTreeModel.countsSettled`).
         publishFlow.repoTab.state !== "open" || !publishFlow.workTree.countsSettled ? "closed"
@@ -56,7 +57,21 @@ Item {
                                 publishFlow.workTree.upstream, publishFlow.workTree.upstreamTracked,
                                 publishFlow.workTree.ahead, publishFlow.workTree.behind,
                                 publishFlow.workTree.pushRemote, publishFlow.repoTab.pushDefault,
-                                publishFlow.repoTab.remoteNames)
+                                publishFlow.repoTab.remoteNames, publishFlow.workTree.pushTracking,
+                                publishFlow.workTree.pushAhead, publishFlow.workTree.pushBehind)
+    /// A mark sends the push to another remote than the upstream's: the counts that speak for it are then the
+    /// destination's own, never the upstream's (デザイン規約 §リモートへ送る). Core's rule, the one `pushState` weighs.
+    readonly property bool pushElsewhere:
+        GitFacts.pushGoesElsewhere(publishFlow.workTree.upstream, publishFlow.workTree.pushRemote,
+                                   publishFlow.repoTab.pushDefault, publishFlow.repoTab.remoteNames)
+    /// The counts the standing reads, for the words that say them (`BandPushButton.tip`), and the remote branch they
+    /// are against, which an overwrite leases to.
+    readonly property int pushAhead: publishFlow.pushElsewhere ? publishFlow.workTree.pushAhead
+                                                               : publishFlow.workTree.ahead
+    readonly property int pushBehind: publishFlow.pushElsewhere ? publishFlow.workTree.pushBehind
+                                                                : publishFlow.workTree.behind
+    readonly property string pushMeasured: publishFlow.pushElsewhere ? publishFlow.workTree.pushTracking
+                                                                     : publishFlow.workTree.upstream
     readonly property bool canPush: (publishFlow.pushState === "publish"
                                      || publishFlow.pushState === "elsewhere"
                                      || publishFlow.pushState === "ready")
@@ -85,12 +100,12 @@ Item {
     /// Leased against the commit this window shows, not the tracking ref — a background fetch moves that and would
     /// make it a plain force. A remote that moved since is refused, and core answers with a fetch.
     function forcePush() {
-        publishFlow.repoTab.pushCurrent(publishFlow.workTree.branch, "lease", publishFlow.upstreamOid())
+        publishFlow.repoTab.pushCurrent(publishFlow.workTree.branch, "lease", publishFlow.leaseOid())
     }
-    /// Commit the remote-tracking branch points at, as shown here.
-    function upstreamOid() {
-        return publishFlow.workTree.upstream !== ""
-               ? publishFlow.remotesModel.oidOfName(publishFlow.workTree.upstream)
+    /// Commit the remote branch the counts are against (`pushMeasured`) points at, as shown here.
+    function leaseOid() {
+        return publishFlow.pushMeasured !== ""
+               ? publishFlow.remotesModel.oidOfName(publishFlow.pushMeasured)
                : ""
     }
     /// A push this button sent has come back, found by its id (`RepoTab.pushAnswer`, -1 when this notify carries
