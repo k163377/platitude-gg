@@ -161,6 +161,35 @@ pub(super) fn deep_parked(repo: &mut DemoRepo) -> Result<(), String> {
     deep_history(repo, SideLine::Parked)
 }
 
+/// `deep` with a changed file on top: the performance scenario's diff.
+pub(super) fn perf(repo: &mut DemoRepo) -> Result<(), String> {
+    deep(repo)?;
+    repo.commit(
+        "f.txt",
+        "A changed file for the visible diff.\n",
+        "test: performance scenario",
+    )?;
+    Ok(())
+}
+
+/// `deep` with two revisions of a coloured file on top: the performance
+/// sequence's diffs.
+pub(super) fn perf_sequence(repo: &mut DemoRepo) -> Result<(), String> {
+    deep(repo)?;
+    for revision in 0..2 {
+        let mut source = String::from("class Benchmark {\n");
+        for line in 0..180 {
+            source.push_str(&format!(
+                "    fun item{line}(): Int = {}\n",
+                line + revision
+            ));
+        }
+        source.push_str("}\n");
+        repo.commit("bench.kt", &source, "test: coloured performance sequence")?;
+    }
+    Ok(())
+}
+
 /// The same history with HEAD detached a long way down it and a second
 /// lane live at both ends — the one shape where the stand-in
 /// (`GraphHeadPin`) rides the bottom edge, wears the detached marker, and
