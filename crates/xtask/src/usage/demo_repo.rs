@@ -59,6 +59,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   with nothing behind it (nav-open)
         forkmark  a fork checkout: fetches from origin, and the branch's
                   own mark sends every push of it to the fork instead
+        forkdiverged  the same, with the fork's main fetched and holding a
+                  commit of its own: ahead of origin, diverged from the
+                  fork the push goes to (push-target, force-push)
         protected an origin that keeps what it holds: every push to it is
                   turned away the way a forge turns one away from a
                   protected branch, and it holds a tag as well

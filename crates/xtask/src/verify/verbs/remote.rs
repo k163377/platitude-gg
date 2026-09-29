@@ -178,25 +178,42 @@ pub(super) const TABLE: &[Verb] = &[
     // `--preset forkmark`: the branch tracks `origin` and its own mark
     // sends pushes to `fork`, which git weighs first (git-config(5)) — a
     // label from `remote.pushDefault` and the upstream says `origin/main`
-    // here. `state=elsewhere`: the counts are about origin, not the
-    // destination. With neither mark set the upstream is the destination.
+    // here. `state=elsewhere`: the fork holds nothing yet, so nothing here
+    // tracks the branch over there. `--preset forkdiverged`: it does, and
+    // the fork's own counts decide — `ready` against origin, `diverged`
+    // against the fork. With neither mark set the upstream is the
+    // destination.
     Verb {
         name: "push-target",
-        when: &[(
-            Arg::Is("forkmark"),
-            "push_target label=fork/main state=elsewhere branch_mark=fork",
-        )],
+        when: &[
+            (
+                Arg::Is("forkmark"),
+                "push_target label=fork/main state=elsewhere branch_mark=fork",
+            ),
+            (
+                Arg::WithPreset("forkdiverged"),
+                "push_target label=fork/main state=diverged branch_mark=fork",
+            ),
+        ],
         plain: "push_target label=origin/main state=ready branch_mark=",
     },
     // A hand on that button: `tip=true` the words up (`tipDelayMs` waited
     // out), `mode=` which sentence (`ready` what a push sends, `diverged`
-    // what the overwrite drops), and the counts it carries, per fixture.
+    // what the overwrite drops), and the counts it says, per fixture —
+    // `forkdiverged`'s are the fork's, where origin's read `ahead=1
+    // behind=0`.
     Verb {
         name: "push-hover",
-        when: &[(
-            Arg::WithPreset("diverged"),
-            "push_hover tip=true mode=diverged ahead=1 behind=1",
-        )],
+        when: &[
+            (
+                Arg::WithPreset("diverged"),
+                "push_hover tip=true mode=diverged ahead=1 behind=1",
+            ),
+            (
+                Arg::WithPreset("forkdiverged"),
+                "push_hover tip=true mode=diverged ahead=1 behind=1",
+            ),
+        ],
         plain: "push_hover tip=true mode=ready ahead=1 behind=0",
     },
     // A remote's own menu: `rows=` because the marked remote's menu loses

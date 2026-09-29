@@ -54,7 +54,8 @@ pub(super) fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
 /// git weighs the branch's mark before the repository's (git-config(5)),
 /// so a destination worked out from the repository's alone names `origin`
 /// while the push goes to the fork (`push-target`, デザイン規約
-/// §リモートへ送る). The commit of our own makes the button live.
+/// §リモートへ送る). The fork holds nothing yet, so nothing here tracks
+/// the branch over there and no counts speak for the push.
 pub(super) fn forkmark(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.add_origin()?;
@@ -68,6 +69,29 @@ pub(super) fn forkmark(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["config", "branch.main.pushRemote", "fork"])?;
 
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    Ok(())
+}
+
+/// [`forkmark`] with the fork holding a `main` of its own, fetched: a
+/// commit there ours lacks (made by a second clone), and ours one it
+/// lacks. Against origin the push reads `ready`; against the fork, where
+/// it goes, `diverged` — git refuses the plain push there
+/// (`[rejected] (non-fast-forward)`), and the overwrite leases to
+/// `fork/main`.
+pub(super) fn forkdiverged(repo: &mut DemoRepo) -> Result<(), String> {
+    forkmark(repo)?;
+    repo.git(&["push", "fork", "HEAD~1:refs/heads/main"])?;
+
+    let seeder = repo.seeder("fork.git")?;
+    std::fs::write(seeder.join("NOTES.md"), "kept on the fork\n").map_err(|e| e.to_string())?;
+    repo.git_at(&seeder.clone(), &["add", "--", "NOTES.md"])?;
+    repo.git_at(
+        &seeder.clone(),
+        &["commit", "-m", "docs: a note only the fork has"],
+    )?;
+    repo.git_at(&seeder.clone(), &["push"])?;
+
+    repo.git(&["fetch", "fork"])?;
     Ok(())
 }
 

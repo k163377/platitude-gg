@@ -261,10 +261,11 @@ Item {
             if (!page.pageBand.pushTipStanding)
                 return
             pushHoverTimer.stop()
+            // The counts the tip says: the destination's own where the push goes elsewhere (`RepoPage.pushAhead`).
             Harness.report("push_hover tip=" + page.pageBand.pushTipStanding
                               + " mode=" + page.pageBand.pushMode
-                              + " ahead=" + workTree.ahead
-                              + " behind=" + workTree.behind)
+                              + " ahead=" + page.pushAhead
+                              + " behind=" + page.pushBehind)
             driver.complete()
         }
     }

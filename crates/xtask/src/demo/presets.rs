@@ -15,7 +15,8 @@ use super::conflict::{
 use super::deep::{deep, deep_detached, deep_parked, perf, perf_sequence, replay};
 use super::pictures::{bigpicture, pictures};
 use super::remote::{
-    behind, diverged, forkmark, gone, hooked, outrun, protected, slowhook, unpublished, unreachable,
+    behind, diverged, forkdiverged, forkmark, gone, hooked, outrun, protected, slowhook,
+    unpublished, unreachable,
 };
 use super::repo::DemoRepo;
 use super::scale::{
@@ -158,6 +159,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "unpublished" => unpublished(&mut repo)?,
         "gone" => gone(&mut repo)?,
         "forkmark" => forkmark(&mut repo)?,
+        "forkdiverged" => forkdiverged(&mut repo)?,
         "protected" => protected(&mut repo)?,
         "outrun" => outrun(&mut repo)?,
         "hooked" => hooked(&mut repo)?,
