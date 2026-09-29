@@ -6,7 +6,9 @@
 `tokio::join!` で並走するため、体感コストは**遅い方の側**で決まる。
 ウォームキャッシュ、3 回の最小値。下表の refs 側は `symbolic-ref` /
 `config --get-regexp` も 1 tick ごとに撃っていた時の値 = 現在は上限。
-status 側の実測は 2 本の時のもの(3 本目は短いローカル config 1 本)— 支配項は変わらない。
+status 側の実測は 2 本の時のもの(3 本目は短いローカル config 1 本。印が upstream と別のリモートへ送るブランチの
+間だけ 4 本目に push 先との数の `for-each-ref` 1 本 — perf corpus で数えない時 19ms・6 万コミットを数えて 40ms、
+同じ corpus の `status` は 380ms)— 支配項は変わらない。
 
 | リポジトリ | commits | refs | 1 tick の実時間 |
 |---|---|---|---|

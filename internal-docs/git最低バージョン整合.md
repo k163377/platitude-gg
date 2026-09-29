@@ -56,6 +56,7 @@
 | `fetch` | `--prune` / `--all` | 古参(1.6.5 / 1.6.6) |
 | `for-each-ref` | `--format=`(`refname` `objecttype` `objectname` `*objectname` `upstream` `HEAD` `creatordate:unix`) | 2.43.0 ✓(`:unix` は `--date=unix` 委譲、git-log 2.43.0 ✓) |
 | `for-each-ref` | `--points-at=` / `--count`(プラン preview の onto 名) | 古参(--points-at は 2.7、--count は 2.0)+ 2.43.0 ✓ |
+| `for-each-ref` | 前置 `-c push.default=current` / `--format=`(`push` `push:remoteref` `push:track`)/ パターン `refs/heads/<branch>`(push 先の追跡 ref との数 — `remote::push_track`) | 2.43.0 ✓(`push` は `upstream` と同じ `:track` `:remoteref` を受ける旨の記載。`push.default=current` は古参)。実バイナリは `push_default_integration` を `cargo xtask linux test` で |
 | `ls-files` | `-z` / `--eol` / pathspec | `--eol` は 2.8 |
 | `log` | `-z` / `-1` / `--date-order` / `--branches` `--remotes` `--tags` / `--max-count=` / `--ignore-missing` / `--reverse` / `--format=` / `--end-of-options` | 2.43.0 ✓。`-z` は diff-options.txt の `ifdef::git-log` を v2.43.0 ソースで確認。`--date-order` は古参 |
 | `ls-remote` | `--tags` / `--heads` / `--end-of-options` / `--` | 古参(`--tags` / `--heads` は 1.0 以前)。`--end-of-options` は gitcli 2.43.0 ✓ |
