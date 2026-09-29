@@ -418,6 +418,10 @@ Item {
             }
             if (driver.statusOwed && !driver.owedStatusLanded())
                 return
+            // A write refused with a report brings its bar down on the answer, and the bar grows into place
+            // (`NoticeBar` の `Behavior`): shot on the answer, it is half open.
+            if (page.noticeCard.open && !page.noticeCard.settled)
+                return
             writeBarrier.stop()
             // `mine=false`: passed without a write of its own; `settled=`: the last boundary that write reached.
             Harness.report("write_barrier mine=" + (repoTab.watchedWriteId() !== 0)

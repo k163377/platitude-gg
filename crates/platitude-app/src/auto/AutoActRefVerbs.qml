@@ -505,6 +505,8 @@ Item {
                 // Judged on the sidebar after: waits for this name's reading to change, as `createTagTimer` does.
                 tagGoneTimer.was = tagsModel.tagSides(tagMenuTimer.tag)
                 tagGoneTimer.tag = tagMenuTimer.tag
+                tagGoneTimer.errorBefore = repoTab.lastError
+                tagGoneTimer.noticeBefore = page.noticeCard.open ? page.noticeCard.label : ""
                 driver.holdToEnd(tagMenuTimer.press === "remote-delete" ? refRemoteTagDeleteItem
                                                                          : refTagBothDeleteItem)
                 tagGoneTimer.start()
@@ -528,10 +530,28 @@ Item {
         id: tagGoneTimer
         property string tag: ""
         property string was: ""
+        /// What the page already said before the press: only an answer that moved these is this write's refusal.
+        property string errorBefore: ""
+        property string noticeBefore: ""
+        /// Whether this write came back refused — a bar the press raised (a lease the remote had left), or an error.
+        function refused() {
+            return (page.noticeCard.open && page.noticeCard.label !== tagGoneTimer.noticeBefore)
+                || repoTab.lastError !== tagGoneTimer.errorBefore
+        }
         onTriggered: {
             if (!driver.wroteAndSettled())
                 return
             const now = tagsModel.tagSides(tagGoneTimer.tag)
+            // Refused, nothing moves: the answer is what is shot.
+            if (now === tagGoneTimer.was && tagGoneTimer.refused()) {
+                tagGoneTimer.stop()
+                Harness.report("tag_kept tag=" + tagGoneTimer.tag + " sides=" + now)
+                if (page.noticeCard.open)
+                    driver.barrierNotice.start()
+                else
+                    renderedBarrier.begin()
+                return
+            }
             if (now === tagGoneTimer.was)
                 return
             tagGoneTimer.stop()
