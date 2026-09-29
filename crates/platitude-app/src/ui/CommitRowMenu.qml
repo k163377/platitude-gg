@@ -92,7 +92,7 @@ Item {
     signal forceDeleteRequested(string branch)
     signal deleteRemoteRequested(string remoteRef, string expect)
     signal deleteEverywhereRequested(string branch, string remoteRef, bool forced, string expect)
-    signal pushTagRequested(string remote, string tag, bool lease)
+    signal pushTagRequested(string remote, string tag, string lease)
     signal deleteTagRequested(string tag)
     signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere, string expect)
     signal deleteTagEverywhereRequested(string tag, string remote, string expect)

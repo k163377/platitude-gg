@@ -43,6 +43,10 @@ Item {
         onRebaseRequested: ref => root.asked = "rebase " + ref
         onPullRequested: root.asked = "pull"
         onResetRequested: mode => root.asked = "reset " + mode
+        onPushTagRequested: (remote, tag, lease) => root.asked = "push " + remote + " " + tag + " " + lease
+        onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
+            root.asked = "delete-remote-tag " + remote + " " + tag + " " + expect
+        onDeleteRemoteRequested: (remoteRef, expect) => root.asked = "delete-remote " + remoteRef + " " + expect
     }
 
     /// The row wearing that command, read the way the menu reads itself (`AppMenu.offeredRows`), so a row nothing
@@ -231,6 +235,37 @@ Item {
                     "the rows that answer for an existing tag need one to name")
             compare(menu.tagCard.deleteTagItem.offered, data.tagNamed !== "")
             menu.menu.dismiss()
+        }
+
+        /// The cards' leases come up through this menu as the oids they are — a lease passed on as a flag would
+        /// reach git as `true`.
+        function test_the_carried_cards_hand_their_leases_up_whole() {
+            const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
+                            "remoteDrifted": false, "open": false, "merged": "", "offers": [] }
+            const drifted = { "pushRemote": "origin", "tagDriftOid": "deadbee", "tagOnlyThere": false,
+                              "tagReach": "origin", "tagHeldBack": "drift", "tagCarriers": "origin", "tagHere": true,
+                              "offers": ["branch-here", "integrate", "delete", "push-tag"] }
+            root.aimAt({ targetKind: "tag", targetName: "v1.0" })
+            menu.offerCommit({ "branch": empty, "tag": drifted })
+            menu.tagCard.pushTagItem.held()
+            compare(root.asked, "push origin v1.0 deadbee")
+
+            const both = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "tagReach": "origin",
+                           "tagHeldBack": "", "tagCarriers": "origin", "tagHere": true,
+                           "offers": ["branch-here", "integrate", "delete", "push-tag", "delete-remote-tag"] }
+            root.aimAt({ targetKind: "tag", targetName: "v1.0" })
+            menu.offerCommit({ "branch": empty, "tag": both })
+            menu.tagCard.deleteRemoteTagItem.held()
+            compare(root.asked, "delete-remote-tag origin v1.0 " + menu.oid)
+
+            const reading = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "",
+                              "remoteCounterpartOid": "", "remoteDrifted": false, "open": true, "merged": "",
+                              "offers": ["delete"] }
+            const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
+            root.aimAt({ targetKind: "remote", targetName: "origin/main" })
+            menu.offerCommit({ "branch": reading, "tag": notag })
+            menu.branchCard.deleteItem.held()
+            compare(root.asked, "delete-remote origin/main " + menu.oid)
         }
     }
 }
