@@ -116,8 +116,8 @@ QtObject {
     /// What the BRANCH card stands on — the same answer `RefRowMenu.branchFacts` gives at the other entrance.
     function branchFacts(kind, full, oidHex) {
         if (kind !== "branch" && kind !== "remote")
-            return { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteDrifted": false,
-                     "offers": [], "open": false, "merged": "" }
+            return { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
+                     "remoteDrifted": false, "offers": [], "open": false, "merged": "" }
         const held = kind === "branch"
             ? menuState.worktreesModel.worktreeHolding(full)
             : menuState.worktreesModel.worktreeHolding(menuState.repoTab.localNameFor(full))
@@ -128,6 +128,7 @@ QtObject {
             "heldByWorktree": held,
             "holderLeaf": held === "" ? "" : GitFacts.pathLeaf(held),
             "remoteCounterpart": counterpart,
+            "remoteCounterpartOid": counterpart === "" ? "" : menuState.branchesModel.upstreamOidOf(full),
             "remoteDrifted": drifted,
             "open": open,
             "merged": !open || kind !== "branch" ? "" : menuState.graphModel.branchDeleteMerged(
@@ -168,21 +169,21 @@ QtObject {
     }
 
     /// Delete the remote branch alone, or both at once — the ref split against the tab's configured remote names
-    /// (`RefRowMenu.deleteRemoteNow`).
-    function deleteRemoteNow(remoteRef) {
+    /// (`RefRowMenu.deleteRemoteNow`), leased to `expect`.
+    function deleteRemoteNow(remoteRef, expect) {
         const remote = GitFacts.remoteOfRef(remoteRef, menuState.repoTab.remoteNames)
         if (remote === "")
             return
         menuState.repoTab.deleteRemoteBranch(
-            remote, GitFacts.branchOfRef(remoteRef, menuState.repoTab.remoteNames))
+            remote, GitFacts.branchOfRef(remoteRef, menuState.repoTab.remoteNames), expect)
     }
 
-    function deleteEverywhereNow(branch, remoteRef, forced) {
+    function deleteEverywhereNow(branch, remoteRef, forced, expect) {
         const remote = GitFacts.remoteOfRef(remoteRef, menuState.repoTab.remoteNames)
         if (remote === "")
             return
         menuState.repoTab.deleteBranchEverywhere(
-            branch, remote, GitFacts.branchOfRef(remoteRef, menuState.repoTab.remoteNames), forced)
+            branch, remote, GitFacts.branchOfRef(remoteRef, menuState.repoTab.remoteNames), forced, expect)
     }
 
     function openRowMenu(oidHex) {

@@ -554,8 +554,8 @@ fn a_tag_the_remote_has_elsewhere_loses_both_rows_that_reach_it() {
 }
 
 /// An unread section reads as a local tag: the remote rows wait for a
-/// reading, since git's qualified `--delete` does not fail on a name the
-/// remote lacks (`remote::delete_remote_tag`).
+/// reading, which is what their delete is leased to
+/// (`remote::delete_remote_tag`).
 #[test]
 fn an_unread_tag_keeps_its_local_delete_and_offers_no_remote_one() {
     let unread = tag_offers("", "origin", 0);

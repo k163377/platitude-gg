@@ -9,7 +9,9 @@
 use crate::support::TestRepo;
 use crate::support::exec::env;
 use crate::support::remote::origin_and_clone;
+use crate::support::session::{opened, write_answer, write_result};
 use platitude_core::GitError;
+use platitude_core::OperationKind;
 use platitude_core::commit;
 use platitude_core::integrate::Landing;
 use platitude_core::remote::{self, PushForce, PushSpec};
@@ -89,7 +91,12 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
     let err = remote::push(&exec, &work.path, &leased, NET, &cancel)
         .await
         .expect_err("stale lease");
-    assert!(err.is_outdated(), "{err}");
+    assert_eq!(
+        err.report().map(|report| report.kind),
+        Some(ReportKind::Moved),
+        "a lease the remote left says the branch moved, not that it is ahead: {err}"
+    );
+    assert!(err.is_outdated(), "and is caught up with all the same");
 
     let forced = PushSpec {
         force: PushForce::Force,
@@ -124,6 +131,7 @@ async fn replacing_a_remote_branch_moves_the_name_and_the_tracking() {
         "origin",
         "billing",
         "billing-v2",
+        &tip,
         NET,
         &cancel,
     )
@@ -162,6 +170,7 @@ async fn a_replace_whose_push_fails_deletes_nothing() {
     work.git(&["switch", "-c", "billing"]);
     work.commit_file("b.txt", "b\n", "billing work");
     work.git(&["push", "-u", "origin", "billing"]);
+    let tip = work.git(&["rev-parse", "origin/billing"]);
     // Unrelated work already under the new name: the push cannot fast-forward.
     work.git(&["switch", "-c", "someone-else", "main"]);
     work.commit_file("c.txt", "c\n", "not ours");
@@ -174,6 +183,7 @@ async fn a_replace_whose_push_fails_deletes_nothing() {
         "origin",
         "billing",
         "billing-v2",
+        &tip,
         NET,
         &cancel,
     )
@@ -191,6 +201,179 @@ async fn a_replace_whose_push_fails_deletes_nothing() {
         work.git(&["config", "branch.billing.merge"]),
         "refs/heads/billing",
         "and nothing was re-pointed"
+    );
+}
+
+/// A branch of our own on the remote, pushed and tracked: its tip as the
+/// screen shows it (the remote-tracking ref).
+fn a_branch_over_there(work: &mut TestRepo, name: &str) -> String {
+    work.git(&["switch", "-c", name]);
+    work.commit_file(&format!("{name}.txt"), "ours\n", "our work");
+    work.git(&["push", "-u", "origin", name]);
+    work.git(&["switch", "main"]);
+    work.git(&["rev-parse", &format!("origin/{name}")])
+}
+
+/// Someone else's push to `branch` after our last fetch. Returns the tip
+/// it left over there, which this clone has never seen.
+fn moved_over_there(bare: &TestRepo, branch: &str) -> String {
+    let mut other = TestRepo::init();
+    other.git(&["remote", "add", "origin", &bare.file_url()]);
+    other.git(&["fetch", "origin"]);
+    other.git(&["switch", "-c", branch, &format!("origin/{branch}")]);
+    other.commit_file("theirs.txt", "theirs\n", "pushed since our fetch");
+    other.git(&["push", "origin", branch]);
+    other.git(&["rev-parse", "HEAD"])
+}
+
+/// The lease is on the commit the screen showed: a push since the last
+/// fetch turns the delete into a refusal a fetch answers, and their
+/// commit — never here — stays over there. Unmoved, the same delete goes.
+#[tokio::test]
+async fn a_remote_branch_that_moved_since_the_last_fetch_is_not_deleted() {
+    let (mut bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    let shown = a_branch_over_there(&mut work, "topic");
+    let theirs = moved_over_there(&bare, "topic");
+
+    let err =
+        remote::delete_remote_branch(&exec, &work.path, "origin", "topic", &shown, NET, &cancel)
+            .await
+            .expect_err("the remote is not where the screen showed it");
+    let Some(report) = err.report() else {
+        panic!("a stale lease reads as any outdated push: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::MovedDelete);
+    assert_eq!(
+        (report.remote.as_str(), report.name.as_str()),
+        ("origin", "topic")
+    );
+    assert_eq!(
+        bare.git(&["rev-parse", "topic"]),
+        theirs,
+        "their commit is still over there"
+    );
+
+    work.git(&["fetch", "origin"]);
+    let seen = work.git(&["rev-parse", "origin/topic"]);
+    remote::delete_remote_branch(&exec, &work.path, "origin", "topic", &seen, NET, &cancel)
+        .await
+        .expect("leased to what is there, the delete goes");
+    assert!(!bare.git_ok(&["rev-parse", "--verify", "refs/heads/topic"]));
+}
+
+/// The name goes qualified, so a branch the remote dropped since the last
+/// fetch is the lease's refusal like any other move — a bare name fails
+/// before the lease is weighed (`remote ref does not exist`) — and a tag
+/// of the same name over there neither blocks the delete nor goes with it.
+#[tokio::test]
+async fn a_remote_branch_dropped_since_the_last_fetch_is_the_leases_refusal() {
+    let (mut bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    let shown = a_branch_over_there(&mut work, "gone");
+    bare.git(&["update-ref", "-d", "refs/heads/gone"]);
+
+    let err =
+        remote::delete_remote_branch(&exec, &work.path, "origin", "gone", &shown, NET, &cancel)
+            .await
+            .expect_err("nothing is there to hold the lease");
+    assert_eq!(
+        err.report().map(|report| report.kind),
+        Some(ReportKind::MovedDelete),
+        "{err}"
+    );
+
+    let tip = a_branch_over_there(&mut work, "twin");
+    work.git(&["push", "origin", &format!("{tip}:refs/tags/twin")]);
+    remote::delete_remote_branch(&exec, &work.path, "origin", "twin", &tip, NET, &cancel)
+        .await
+        .expect("the qualified name picks the branch");
+    assert!(!bare.git_ok(&["rev-parse", "--verify", "refs/heads/twin"]));
+    assert_eq!(
+        bare.git(&["rev-parse", "refs/tags/twin"]),
+        tip,
+        "and the tag of the same name stays"
+    );
+}
+
+/// Replace is a push and then the leased delete: refused, it stops with
+/// both names over there and the tracking left on the old one.
+#[tokio::test]
+async fn a_replace_whose_delete_is_refused_leaves_both_names_and_the_tracking() {
+    let (mut bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    let shown = a_branch_over_there(&mut work, "billing");
+    let theirs = moved_over_there(&bare, "billing");
+
+    let err = remote::replace_remote_branch(
+        &exec,
+        &work.path,
+        "origin",
+        "billing",
+        "billing-v2",
+        &shown,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the old name moved since the screen showed it");
+    assert!(err.is_outdated(), "{err}");
+    assert_eq!(
+        bare.git(&["rev-parse", "billing"]),
+        theirs,
+        "the old name stays"
+    );
+    assert_eq!(
+        bare.git(&["rev-parse", "billing-v2"]),
+        shown,
+        "beside the new one, which went up first"
+    );
+    assert_eq!(
+        work.git(&["config", "branch.billing.merge"]),
+        "refs/heads/billing",
+        "and nothing was re-pointed"
+    );
+}
+
+/// `Delete both` runs the local half first (`session::delete_branch_everywhere`
+/// says why), so a refused lease stops it half-way: the branch is gone here
+/// and the remote keeps theirs. The refusal is the outdated one a push
+/// gives, and so is what follows it: a fetch, after which the commit the
+/// screen showed is reached from the remote-tracking ref.
+#[tokio::test(flavor = "multi_thread")]
+async fn delete_both_refused_by_the_lease_keeps_the_commit_under_the_remote_tracking_ref() {
+    let (mut bare, mut work) = origin_and_clone();
+    let shown = a_branch_over_there(&mut work, "topic");
+    let theirs = moved_over_there(&bare, "topic");
+    let (sink, session) = opened(&work).await;
+
+    let id = session
+        .delete_branch_everywhere(
+            "topic".into(),
+            "origin".into(),
+            "topic".into(),
+            false,
+            shown.clone(),
+        )
+        .expect("accepted");
+    let refused = write_answer(&sink, id).await;
+
+    assert!(refused.is_some(), "the remote half is refused");
+    assert!(
+        !work.git_ok(&["rev-parse", "--verify", "refs/heads/topic"]),
+        "the local half had already run"
+    );
+    assert_eq!(bare.git(&["rev-parse", "topic"]), theirs);
+
+    assert_eq!(
+        write_result(&sink, OperationKind::Fetch).await,
+        None,
+        "the refusal is caught up with, as a push's is"
+    );
+    assert_eq!(work.git(&["rev-parse", "origin/topic"]), theirs);
+    assert!(
+        work.git_ok(&["merge-base", "--is-ancestor", &shown, "origin/topic"]),
+        "and the commit the screen showed is still reached from it"
     );
 }
 
@@ -416,14 +599,16 @@ fn decline_every_push_watched(bare: &TestRepo, said: &str, on_busy: impl FnOnce(
 
 #[tokio::test]
 async fn a_branch_the_far_side_keeps_comes_back_as_a_refusal_with_its_words() {
-    let (bare, work) = origin_and_clone();
+    let (bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
     decline_every_push(
         &bare,
         "GH006: Protected branch update failed for refs/heads/main.",
     );
+    // Leased to what is there: the lease passes, so the hook is what says no.
+    let tip = work.git(&["rev-parse", "origin/main"]);
 
-    let err = remote::delete_remote_branch(&exec, &work.path, "origin", "main", NET, &cancel)
+    let err = remote::delete_remote_branch(&exec, &work.path, "origin", "main", &tip, NET, &cancel)
         .await
         .expect_err("the far side keeps main");
     let Some(report) = err.report() else {
@@ -496,8 +681,9 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
         .await
         .expect("the tag goes over while nothing is standing over it");
     decline_every_push(&bare, "Tag protection rules prevent this.");
+    let shown = work.git(&["rev-parse", "v1.0"]);
 
-    let err = remote::delete_remote_tag(&exec, &work.path, "origin", "v1.0", NET, &cancel)
+    let err = remote::delete_remote_tag(&exec, &work.path, "origin", "v1.0", &shown, NET, &cancel)
         .await
         .expect_err("the far side keeps the tag");
     let Some(report) = err.report() else {
@@ -542,6 +728,7 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
         .await
         .expect("the tag goes over while nothing is standing over it");
     decline_every_push(&bare, "Tag protection rules prevent this.");
+    let shown = work.git(&["rev-parse", "v1.0"]);
 
     // The install below rewrites this same inode, so the handle stays on it.
     let hook = bare.path.join(".git").join("hooks").join("pre-receive");
@@ -571,7 +758,7 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
         }
     });
 
-    let err = remote::delete_remote_tag(&exec, &work.path, "origin", "v1.0", NET, &cancel)
+    let err = remote::delete_remote_tag(&exec, &work.path, "origin", "v1.0", &shown, NET, &cancel)
         .await
         .expect_err("the far side keeps the tag");
     let Some(report) = err.report() else {
@@ -740,8 +927,9 @@ mod periodic {
         .await
         .expect("push temp");
         assert!(bare.git(&["branch", "--list"]).contains("temp"));
+        let tip = work.git(&["rev-parse", "temp"]);
 
-        remote::delete_remote_branch(&exec, &work.path, "origin", "temp", NET, &cancel)
+        remote::delete_remote_branch(&exec, &work.path, "origin", "temp", &tip, NET, &cancel)
             .await
             .expect("delete remote branch");
         assert!(!bare.git(&["branch", "--list"]).contains("temp"));
@@ -755,6 +943,28 @@ mod periodic {
                 .contains("origin/temp"),
             "--prune dropped the stale remote-tracking ref"
         );
+    }
+
+    /// Why `Delete both` cannot run the remote half first: `push --delete`
+    /// takes the remote-tracking ref with it, and a branch merged only into
+    /// that upstream is then refused by the plain `branch --delete` —
+    /// leaving the remote gone and the branch here.
+    #[tokio::test]
+    #[ignore = "git's own merged check behind a fixed order: not worth the pre-merge run"]
+    async fn a_branch_whose_upstream_went_first_is_refused_as_not_merged() {
+        let (_bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+        let shown = a_branch_over_there(&mut work, "topic");
+
+        remote::delete_remote_branch(&exec, &work.path, "origin", "topic", &shown, NET, &cancel)
+            .await
+            .expect("the remote half goes");
+        assert!(!work.git_ok(&["rev-parse", "--verify", "refs/remotes/origin/topic"]));
+
+        let err = platitude_core::branch::delete(&exec, &work.path, "topic", false, &cancel)
+            .await
+            .expect_err("merged into an upstream that is no longer here");
+        assert!(err.to_string().contains("not fully merged"), "{err}");
     }
 
     /// Adding a remote is bookkeeping: a URL that goes nowhere is

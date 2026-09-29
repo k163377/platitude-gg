@@ -58,10 +58,13 @@ impl RepoTab {
     /// `git push <remote> --delete <branch>`: only the remote row leaves,
     /// keyed `<remote>/<branch>` as the row is — the halves were cut with
     /// the configured names (`GitFacts.remoteOfRef`), since a remote's
-    /// name may hold a slash.
-    pub(super) fn remote_branch_delete(&mut self, remote: String, branch: String) {
+    /// name may hold a slash. `expect` is the commit the row showed, which
+    /// the delete is leased to (`remote::delete_remote_branch`).
+    pub(super) fn remote_branch_delete(&mut self, remote: String, branch: String, expect: String) {
         let row = format!("{remote}/{branch}");
-        let asked = self.ask_session(|s| s.delete_remote_branch(remote.clone(), branch.clone()));
+        let asked = self.ask_session(|s| {
+            s.delete_remote_branch(remote.clone(), branch.clone(), expect.clone())
+        });
         self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
         self.took_away(&[(Row::Remote, &row)], asked);
     }
@@ -82,10 +85,17 @@ impl RepoTab {
         remote: String,
         remote_branch: String,
         force: bool,
+        expect: String,
     ) {
         let row = format!("{remote}/{remote_branch}");
         let asked = self.ask_session(|s| {
-            s.delete_branch_everywhere(branch.clone(), remote.clone(), remote_branch.clone(), force)
+            s.delete_branch_everywhere(
+                branch.clone(),
+                remote.clone(),
+                remote_branch.clone(),
+                force,
+                expect.clone(),
+            )
         });
         self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
         self.took_away(&[(Row::Branch, &branch), (Row::Remote, &row)], asked);
@@ -103,9 +113,17 @@ impl RepoTab {
     ///
     /// `row_goes`: the sidebar's row leaves only where the remote alone
     /// had the name; one held here too keeps its row and loses the badge
-    /// (`RefTagMenu`). The row knows which, so it travels with the press.
-    pub(super) fn remote_tag_delete(&mut self, remote: String, tag: String, row_goes: bool) {
-        let asked = self.ask_session(|s| s.delete_remote_tag(remote.clone(), tag.clone()));
+    /// (`RefTagMenu`). The row knows which, so it travels with the press,
+    /// as does `expect`, the commit it showed the tag on — the lease.
+    pub(super) fn remote_tag_delete(
+        &mut self,
+        remote: String,
+        tag: String,
+        row_goes: bool,
+        expect: String,
+    ) {
+        let asked =
+            self.ask_session(|s| s.delete_remote_tag(remote.clone(), tag.clone(), expect.clone()));
         self.ref_push_asked(
             &format!("{remote}/{tag}"),
             asked.map(platitude_core::OperationId::as_u64),
@@ -114,11 +132,12 @@ impl RepoTab {
         self.took_away(rows, asked);
     }
 
-    /// `git tag --delete` and then the remote's copy, as one queued
-    /// write: the local half first, so a pair that stops part-way
-    /// leaves the name only on the remote.
-    pub(super) fn tag_delete_everywhere(&mut self, tag: String, remote: String) {
-        let asked = self.ask_session(|s| s.delete_tag_everywhere(tag.clone(), remote.clone()));
+    /// The remote's copy and then `git tag --delete`, as one queued
+    /// write: a lease the remote refuses stops it with nothing touched
+    /// (`session::delete_tag_everywhere`).
+    pub(super) fn tag_delete_everywhere(&mut self, tag: String, remote: String, expect: String) {
+        let asked = self
+            .ask_session(|s| s.delete_tag_everywhere(tag.clone(), remote.clone(), expect.clone()));
         self.ref_push_asked(
             &format!("{remote}/{tag}"),
             asked.map(platitude_core::OperationId::as_u64),

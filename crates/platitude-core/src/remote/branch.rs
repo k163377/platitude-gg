@@ -80,6 +80,20 @@ impl RemoteBranchState {
 /// `git push <remote> --delete <branch>`: removes a branch on the remote.
 /// Destructive — the caller confirms first.
 ///
+/// `expect` is the commit the screen showed the branch on, and the delete
+/// is leased to it: a remote that moved since is refused
+/// (`[rejected] (stale info)`, read as outdated) rather than losing
+/// commits this repository never had. The oid travels from the press —
+/// the remote-tracking ref is no pin, a background fetch moves it
+/// ([`super::PushForce`]).
+///
+/// The name goes qualified as `refs/heads/<branch>`, as a tag's does
+/// ([`super::delete_remote_tag`]): a bare name is matched against every
+/// ref over there, so one the remote already dropped fails before the
+/// lease is weighed (`remote ref does not exist`) and one a tag shares
+/// fails as ambiguous. Qualified, a dropped branch is the lease's refusal
+/// like any other move.
+///
 /// Read like an ordinary push (`--porcelain`, then
 /// [`super::refusal::refusal`]): a far-side refusal (protected branch,
 /// hook) is a report to pass on (デザイン規約 §リモートブランチを消す).
@@ -88,12 +102,23 @@ pub async fn delete_remote_branch(
     workdir: &Path,
     remote: &str,
     branch: &str,
+    expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
+    let refname = format!("refs/heads/{branch}");
+    let lease = format!("--force-with-lease={refname}:{expect}");
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["push", "--porcelain", "--delete", "--", remote, branch])
+        .args([
+            "push",
+            "--porcelain",
+            &lease,
+            "--delete",
+            "--",
+            remote,
+            &refname,
+        ])
         .timeout(timeout)
         .paced_elsewhere();
     let command = cmd.describe();
@@ -109,15 +134,19 @@ pub async fn delete_remote_branch(
 /// the old name (an open PR, a protection rule) stays behind.
 ///
 /// The new name is pushed from the remote-tracking ref, since a moved-on
-/// local branch of the same name would publish its commits too. Local
-/// branches tracking the old name are then repointed: a stale upstream
-/// would send the next push back to the deleted name.
+/// local branch of the same name would publish its commits too. The old
+/// name's delete is leased to `expect`, as in [`delete_remote_branch`]; a
+/// refused lease leaves both names over there and the tracking alone.
+/// Local branches tracking the old name are then repointed: a stale
+/// upstream would send the next push back to the deleted name.
+#[expect(clippy::too_many_arguments)]
 pub async fn replace_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
     remote: &str,
     from: &str,
     to: &str,
+    expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
@@ -129,7 +158,7 @@ pub async fn replace_remote_branch(
         force: PushForce::None,
     };
     push(executor, workdir, &spec, timeout, cancel).await?;
-    delete_remote_branch(executor, workdir, remote, from, timeout, cancel).await?;
+    delete_remote_branch(executor, workdir, remote, from, expect, timeout, cancel).await?;
     for branch in tracking_branches(executor, workdir, remote, from, cancel).await? {
         crate::branch::set_upstream(executor, workdir, &branch, remote, to, cancel).await?;
     }

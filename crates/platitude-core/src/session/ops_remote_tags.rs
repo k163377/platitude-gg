@@ -131,7 +131,10 @@ impl RepoSession {
     /// under `refs/tags/` has no local record, so the refs refresh after it
     /// would not notice (rules-refs/core.md「タグのリモート状態」). Inside,
     /// as in [`Self::fetch_and_read_tags`]: the press has already agreed to
-    /// reach the network. A refused push moved nothing and reads nothing.
+    /// reach the network. A refused push moved nothing and reads nothing —
+    /// except one refused for a lease the remote has left
+    /// ([`crate::ReportKind::is_outdated`]), which reads again to show where
+    /// the name went, as a branch's catch-up fetch does ([`tags_moved`]).
     ///
     /// **The refresh comes after the closure returns**: `AfterWrite::Graph`
     /// reads the refs then, and asking for one inside would be a second
@@ -148,7 +151,7 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                remote::push_tag(
+                let result = remote::push_tag(
                     &exec,
                     &repo.workdir,
                     &remote_name,
@@ -157,20 +160,25 @@ impl RepoSession {
                     timeout,
                     &cancel,
                 )
-                .await?;
-                s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
-                    .await;
-                Ok(())
+                .await;
+                if tags_moved(&result) {
+                    s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
+                        .await;
+                }
+                result
             },
         )
     }
 
-    /// Takes one tag off one remote, leaving whatever is here. Reads that
-    /// remote's tags afterwards, as [`Self::push_tag`] does.
+    /// Takes one tag off one remote, leaving whatever is here, leased to
+    /// `expect`, the commit the screen showed it on
+    /// ([`remote::delete_remote_tag`]). Reads that remote's tags
+    /// afterwards, as [`Self::push_tag`] does.
     pub fn delete_remote_tag(
         self: &Arc<Self>,
         remote_name: String,
         tag: String,
+        expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
@@ -178,31 +186,36 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                remote::delete_remote_tag(
+                let result = remote::delete_remote_tag(
                     &exec,
                     &repo.workdir,
                     &remote_name,
                     &tag,
+                    &expect,
                     timeout,
                     &cancel,
                 )
-                .await?;
-                s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
-                    .await;
-                Ok(())
+                .await;
+                if tags_moved(&result) {
+                    s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
+                        .await;
+                }
+                result
             },
         )
     }
 
     /// Replaces a tag on a remote with one under a new name, which git
-    /// does as a push and a delete (see [`remote::replace_remote_tag`]).
-    /// The UI asks first: the old name is destroyed. Reads that remote's
-    /// tags afterwards, as [`Self::push_tag`] does.
+    /// does as a push and a delete (see [`remote::replace_remote_tag`]),
+    /// the delete leased to `expect`. The UI asks first: the old name is
+    /// destroyed. Reads that remote's tags afterwards, as
+    /// [`Self::push_tag`] does.
     pub fn replace_remote_tag(
         self: &Arc<Self>,
         remote_name: String,
         from: String,
         to: String,
+        expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
@@ -210,55 +223,81 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                remote::replace_remote_tag(
+                let result = remote::replace_remote_tag(
                     &exec,
                     &repo.workdir,
                     &remote_name,
                     &from,
                     &to,
+                    &expect,
                     timeout,
                     &cancel,
                 )
-                .await?;
-                s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
-                    .await;
-                Ok(())
+                .await;
+                if tags_moved(&result) {
+                    s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
+                        .await;
+                }
+                result
             },
         )
     }
 
-    /// Deletes a tag here and on the remote as one queued write.
+    /// Deletes a tag here and on the remote as one queued write, the
+    /// remote half leased to `expect` as in [`Self::delete_remote_tag`].
     ///
-    /// Local half first, as in [`Self::delete_branch_everywhere`]: a
-    /// cancelled or failed pair never leaves the name gone from the remote
-    /// while it still stands in the sidebar.
+    /// **The remote half goes first**, unlike
+    /// [`Self::delete_branch_everywhere`]: a refused lease then stops the
+    /// pair with nothing touched, where the other order would already have
+    /// dropped the name here — with no reflog behind it. The local half
+    /// after it refuses only a name that is not here, which the menu does
+    /// not offer.
     pub fn delete_tag_everywhere(
         self: &Arc<Self>,
         tag: String,
         remote_name: String,
+        expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
         // A kind of its own: it answers as a tag write but runs on the
-        // remote lane, since the far end paces the second half and the read.
+        // remote lane, since the far end paces the first half and the read.
         self.write(
             OperationKind::DeleteTagEverywhere,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                tag::delete(&exec, &repo.workdir, &tag, &cancel).await?;
-                remote::delete_remote_tag(
+                let remote_half = remote::delete_remote_tag(
                     &exec,
                     &repo.workdir,
                     &remote_name,
                     &tag,
+                    &expect,
                     timeout,
                     &cancel,
                 )
-                .await?;
-                s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
-                    .await;
-                Ok(())
+                .await;
+                // The remote's tags are read whatever the local half says:
+                // the name is gone over there even where it stays here.
+                let local_half = if remote_half.is_ok() {
+                    tag::delete(&exec, &repo.workdir, &tag, &cancel).await
+                } else {
+                    Ok(())
+                };
+                if tags_moved(&remote_half) {
+                    s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
+                        .await;
+                }
+                remote_half.and(local_half)
             },
         )
     }
+}
+
+/// Whether a remote-tag write's answer calls for reading that remote's
+/// tags again: it landed, or the remote was found holding the name elsewhere
+/// ([`crate::ReportKind::is_outdated`]) — the read is what shows where.
+fn tags_moved(result: &Result<(), GitError>) -> bool {
+    result
+        .as_ref()
+        .map_or_else(GitError::is_outdated, |()| true)
 }

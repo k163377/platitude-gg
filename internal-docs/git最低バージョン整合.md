@@ -59,15 +59,15 @@
 | `for-each-ref` | 前置 `-c push.default=current` / `--format=`(`push` `push:remoteref` `push:track`)/ パターン `refs/heads/<branch>`(push 先の追跡 ref との数 — `remote::push_track`) | 2.43.0 ✓(`push` は `upstream` と同じ `:track` `:remoteref` を受ける旨の記載。`push.default=current` は古参)。実バイナリは `push_default_integration` を `cargo xtask linux test` で |
 | `ls-files` | `-z` / `--eol` / pathspec | `--eol` は 2.8 |
 | `log` | `-z` / `-1` / `--date-order` / `--branches` `--remotes` `--tags` / `--max-count=` / `--ignore-missing` / `--reverse` / `--format=` / `--end-of-options` | 2.43.0 ✓。`-z` は diff-options.txt の `ifdef::git-log` を v2.43.0 ソースで確認。`--date-order` は古参 |
-| `ls-remote` | `--tags` / `--heads` / `--end-of-options` / `--` | 古参(`--tags` / `--heads` は 1.0 以前)。`--end-of-options` は gitcli 2.43.0 ✓ |
+| `ls-remote` | `--tags` / `--heads` / `--end-of-options` / `--` / パターン複数(`refs/tags/<t>` と `refs/tags/<t>^{}`) | 古参(`--tags` / `--heads` は 1.0 以前)。`--end-of-options` は gitcli 2.43.0 ✓。`^{}` の行はそれを名指すパターンにしか当たらない(2.43 / 2.55 で実測) |
 | `merge` | `--no-edit` / `--no-ff` / `--ff-only` / `--squash` / `--continue` `--abort` `--quit` | 2.43.0 ✓ |
 | `merge-base` | `--is-ancestor` | 古参(1.8.0) |
 | `mergetool` | `--no-prompt` / `--gui` / `--tool=` / `--tool-help` | 2.43.0 ✓ |
 | `config` | `--get-regexp` に `^mergetool\..*\.cmd$`(自前定義ツールの列挙) | 古参 |
 | `-c` | `mergetool.writeToTemp=true`(mergetool 実行時) | 2.43.0 ✓ |
-| `push` | `--porcelain` / `--set-upstream` / `--force-with-lease=<ref>:<oid>` / `--force` / `--delete` | 2.43.0 ✓ |
+| `push` | `--porcelain` / `--set-upstream` / `--force-with-lease=<ref>:<oid>` / `--force` / `--delete` / **`--force-with-lease=<ref>:<oid>` と `--delete` の併用**(`refs/heads/<b>:<oid>` + `--delete -- <remote> refs/heads/<b>`、タグは `refs/tags/<t>:<oid>` + `--delete -- <remote> refs/tags/<t>`) | 2.43.0 ✓。併用は最低バージョンのコンテナで実測(`cargo xtask linux test -p platitude-core --test it remote_`)— 一致で `[deleted]`、ズレと向こうに無い修飾名で `(delete):<ref>` の `[rejected] (stale info)` + exit 1。2.55 と同じ答え |
 | `rebase` | `--interactive` / `--no-rebase-merges` / `--onto` / `--root` / `--update-refs` / `--continue` `--abort` `--skip` `--quit` | 2.43.0 ✓(`--update-refs` 2.38 = **最も新しい依存**) |
-| `remote` | `add` / `set-url` / `--end-of-options` | 古参(`set-url` 1.7.0)+ 2.43 実測(上記) |
+| `remote` | `add` / `set-url` / `--end-of-options` / `get-url --push --`(`pushurl` が無ければ fetch の URL) | 古参(`set-url` 1.7.0、`get-url` 2.7)+ 2.43 実測(上記。`get-url --push --` はコンテナの `remote_` テスト) |
 | `reset` | `--quiet` / `--soft` `--mixed` `--hard` | 古参。**`--end-of-options` は付けられない** |
 | `restore` | `--staged` / `--worktree`(併用) | 2.43.0 ✓(2.23 導入。2.43 時点 EXPERIMENTAL 表記) |
 | `rev-list` | `--count` / `--merges` / `--not` / `--remotes` / `--max-count=` / `--branches` / `--exclude=` / `--glob=` | 古参(`--count` 1.7.2 / `--exclude` 1.9 / `--glob` 1.7.0)。`--exclude` / `--glob` の効き方の罠は rules-refs/core.md |

@@ -188,10 +188,10 @@ Item {
         /// The other card comes up holding only what can still be made here.
         function test_each_card_is_aimed_only_at_a_name_of_its_own_kind_data() {
             const branchy = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
-                              "remoteDrifted": false, "open": true, "merged": "yes",
+                              "remoteCounterpartOid": "abc123", "remoteDrifted": false, "open": true, "merged": "yes",
                               "offers": ["switch", "branch-here", "integrate", "delete", "set-upstream"] }
-            const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteDrifted": false,
-                            "open": false, "merged": "", "offers": [] }
+            const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
+                            "remoteDrifted": false, "open": false, "merged": "", "offers": [] }
             // A tag standing here only, in core's words as `tst_tagcard.qml` spells them.
             const tagged = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "tagReach": "",
                              "tagHeldBack": "", "tagCarriers": "", "tagHere": true,

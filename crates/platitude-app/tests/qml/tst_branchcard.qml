@@ -33,16 +33,18 @@ Item {
         onUpstreamRequested: (branch, counterpart) => root.asked = "upstream " + branch + " " + counterpart
         onCheckDeleteRequested: branch => root.asked = "check " + branch
         onForceDeleteRequested: branch => root.asked = "force " + branch
-        onDeleteRemoteRequested: remoteRef => root.asked = "delete-remote " + remoteRef
-        onDeleteEverywhereRequested: (branch, remoteRef, forced) =>
-            root.asked = "delete-both " + branch + " " + remoteRef + " " + forced
+        onDeleteRemoteRequested: (remoteRef, expect) => root.asked = "delete-remote " + remoteRef + " " + expect
+        onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
+            root.asked = "delete-both " + branch + " " + remoteRef + " " + forced + " " + expect
     }
 
-    /// `merged` is what the drawn rows already say (`yes` / `no`, empty when only git can answer).
+    /// `merged` is what the drawn rows already say (`yes` / `no`, empty when only git can answer). The row stands on
+    /// `abc123` and its reading on `def456`, so a press says which commit it leased.
     function standOn(fields) {
         const all = { "kind": "branch", "name": "feature/topic-a", "full": "feature/topic-a",
                       "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
-                      "remoteDrifted": false, "open": true, "merged": "yes", "offers": root.free }
+                      "remoteCounterpartOid": "def456", "remoteDrifted": false, "open": true, "merged": "yes",
+                      "offers": root.free }
         for (const key in fields)
             all[key] = fields[key]
         root.asked = ""
@@ -50,6 +52,7 @@ Item {
             "heldByWorktree": all.heldByWorktree,
             "holderLeaf": all.holderLeaf,
             "remoteCounterpart": all.remoteCounterpart,
+            "remoteCounterpartOid": all.remoteCounterpartOid,
             "remoteDrifted": all.remoteDrifted,
             "open": all.open,
             "merged": all.merged,
@@ -199,25 +202,26 @@ Item {
             card.upstreamItem.triggered()
             compare(root.asked, "upstream feature/topic-a origin/feature/topic-a")
 
+            // What reaches the remote is leased to the reading's own commit.
             root.standOn({})
             card.deleteRemoteItem.held()
-            compare(root.asked, "delete-remote origin/feature/topic-a")
+            compare(root.asked, "delete-remote origin/feature/topic-a def456")
 
             root.standOn({})
             card.deleteBothItem.held()
-            compare(root.asked, "delete-both feature/topic-a origin/feature/topic-a false")
+            compare(root.asked, "delete-both feature/topic-a origin/feature/topic-a false def456")
 
             // Once the local half is `-D`, the pair runs the forced form.
             root.standOn({})
             card.forceDeleteBranch = "feature/topic-a"
             card.deleteBothItem.held()
-            compare(root.asked, "delete-both feature/topic-a origin/feature/topic-a true")
+            compare(root.asked, "delete-both feature/topic-a origin/feature/topic-a true def456")
 
-            // A remote row's own delete goes to the reading it names.
+            // A remote row's own delete goes to the reading it names, leased to the commit the row stands on.
             root.standOn({ kind: "remote", name: "origin/main", full: "origin/main",
-                           remoteCounterpart: "", offers: ["delete"] })
+                           remoteCounterpart: "", remoteCounterpartOid: "", offers: ["delete"] })
             card.deleteItem.held()
-            compare(root.asked, "delete-remote origin/main")
+            compare(root.asked, "delete-remote origin/main abc123")
         }
     }
 }

@@ -41,11 +41,18 @@ pub async fn list_tags(
 /// last seen holding this tag on; empty sends it plain, which git refuses
 /// where the name already stands on something else over there.
 ///
-/// No refusal here is read as outdated or queues anything behind it: unlike
-/// a branch, a tag is not put right by fetching (`--prune` keeps the local
-/// tag, `--prune-tags` exits 1). A far-side rule (`[remote rejected]`)
-/// reads as a report, as for a branch (`super::refusal::refused`,
-/// デザイン規約 §答えの要らない報せ) — `--porcelain` is what makes it readable.
+/// A plain push onto a name the remote holds on **the same commit** is
+/// answered as sent: git refuses it (`already exists`) wherever the objects
+/// differ — a lightweight tag over there for an annotated one here, or
+/// another annotation — but the screen shows one commit on both sides, so
+/// it is no collision to report. The remote's object is left as it is.
+///
+/// A lease the remote has left, and a name it holds on another commit,
+/// read as outdated; what puts them right is reading the remote's tags
+/// again, not a fetch, which the session does (`session::push_tag`). A
+/// far-side rule (`[remote rejected]`) reads as a report, as for a branch
+/// (`super::refusal::tag_refusal`, デザイン規約 §答えの要らない報せ) —
+/// `--porcelain` is what makes either readable.
 pub async fn push_tag(
     executor: &GitExecutor,
     workdir: &Path,
@@ -70,29 +77,64 @@ pub async fn push_tag(
     if out.code == 0 {
         return Ok(());
     }
-    Err(super::refusal::refused(command, &out, remote, tag, false))
+    if super::refusal::is_taken(&out.stdout_utf8())
+        && holds_same_commit(executor, workdir, remote, tag, timeout, cancel).await?
+    {
+        return Ok(());
+    }
+    Err(super::refusal::tag_refusal(
+        command, &out, remote, tag, false,
+    ))
 }
 
-/// Takes one tag off one remote. Nothing here is touched.
-///
-/// The name must stay qualified as `refs/tags/<name>`: a bare name that is
-/// also a branch over there is refused and neither is deleted. The
-/// qualified form exits 0 on a name the remote lacks, so whether there is
-/// anything to delete is the caller's to know (`offers::TagSides`).
-/// A far-side refusal is read as in [`push_tag`], hence `--porcelain`.
-pub async fn delete_remote_tag(
+/// Whether `remote` holds `tag` on the commit the tag here peels to.
+async fn holds_same_commit(
     executor: &GitExecutor,
     workdir: &Path,
     remote: &str,
     tag: &str,
     timeout: Duration,
     cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let Some(there) = holding(executor, workdir, remote, tag, timeout, cancel).await? else {
+        return Ok(false);
+    };
+    let cmd = GitCommand::new().cwd(workdir).args([
+        "rev-parse",
+        "--verify",
+        "--end-of-options",
+        &format!("refs/tags/{tag}^{{commit}}"),
+    ]);
+    let here = executor.run(cmd, cancel).await?;
+    Ok(here.stdout_utf8().trim() == there.commit.to_hex())
+}
+
+/// Takes one tag off one remote. Nothing here is touched.
+///
+/// `expect` is the commit the screen showed the tag on, and the delete is
+/// leased to it: a name the remote has moved or dropped since is refused
+/// (`[rejected] (stale info)`) and read as outdated, as in [`push_tag`].
+/// See [`lease_on`] for why the lease is not `expect` itself.
+///
+/// The name must stay qualified as `refs/tags/<name>`: a bare name that is
+/// also a branch over there is refused and neither is deleted.
+/// A far-side refusal is read as in [`push_tag`], hence `--porcelain`.
+pub async fn delete_remote_tag(
+    executor: &GitExecutor,
+    workdir: &Path,
+    remote: &str,
+    tag: &str,
+    expect: &str,
+    timeout: Duration,
+    cancel: &CancellationToken,
 ) -> Result<(), GitError> {
+    let pinned = lease_on(executor, workdir, remote, tag, expect, timeout, cancel).await?;
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args([
             "push",
             "--porcelain",
+            &format!("--force-with-lease=refs/tags/{tag}:{pinned}"),
             "--delete",
             "--",
             remote,
@@ -105,7 +147,101 @@ pub async fn delete_remote_tag(
     if out.code == 0 {
         return Ok(());
     }
-    Err(super::refusal::refused(command, &out, remote, tag, true))
+    Err(super::refusal::tag_refusal(
+        command, &out, remote, tag, true,
+    ))
+}
+
+/// What a delete of this tag is leased to: the object the remote holds it
+/// on, where that peels to `expect`, and `expect` otherwise.
+///
+/// A lease compares the ref's own value, which for an annotated tag is the
+/// tag object — leased to the commit it peels to, the delete is refused as
+/// stale, and git takes no `^{}` there. The screen holds only the commit
+/// ([`RemoteTag::commit`]), so the object is asked for here; a remote that
+/// has left `expect` gets `expect` itself, which git then refuses.
+async fn lease_on(
+    executor: &GitExecutor,
+    workdir: &Path,
+    remote: &str,
+    tag: &str,
+    expect: &str,
+    timeout: Duration,
+    cancel: &CancellationToken,
+) -> Result<String, GitError> {
+    let there = holding(executor, workdir, remote, tag, timeout, cancel).await?;
+    Ok(pin_for(there.as_ref(), expect))
+}
+
+/// One tag as one remote holds it now: the ref's own value, and the commit
+/// it peels to (the same oid for a lightweight tag).
+struct Holding {
+    object: Oid,
+    commit: Oid,
+}
+
+/// What `remote` holds `tag` on where the push goes; `None` where it lacks
+/// the name.
+///
+/// Asked of the push URL (`remote get-url --push`, the fetch URL where none
+/// is set): `ls-remote <name>` reads the fetch URL, and a `pushurl` naming
+/// another repository would weigh what the send never reaches.
+async fn holding(
+    executor: &GitExecutor,
+    workdir: &Path,
+    remote: &str,
+    tag: &str,
+    timeout: Duration,
+    cancel: &CancellationToken,
+) -> Result<Option<Holding>, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["remote", "get-url", "--push", "--", remote]);
+    let url = executor
+        .run(cmd, cancel)
+        .await?
+        .stdout_utf8()
+        .trim()
+        .to_string();
+    let refname = format!("refs/tags/{tag}");
+    let peeled = format!("{refname}^{{}}");
+    // Both names: a bare pattern does not match the `^{}` line.
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["ls-remote", "--tags", "--", &url, &refname, &peeled])
+        .timeout(timeout)
+        .paced_elsewhere();
+    let out = executor.run(cmd, cancel).await?;
+    Ok(parse_holding(&out.stdout, &refname))
+}
+
+/// [`holding`] off the `ls-remote` lines for one tag.
+fn parse_holding(bytes: &[u8], refname: &str) -> Option<Holding> {
+    let mut object = None;
+    let mut commit = None;
+    for (oid, name) in bytes
+        .split(|b| *b == b'\n')
+        .filter_map(split_ls_remote_line)
+    {
+        if name == refname {
+            object = Some(oid);
+        } else if name.strip_suffix("^{}") == Some(refname) {
+            commit = Some(oid);
+        }
+    }
+    let object = object?;
+    Some(Holding {
+        object,
+        commit: commit.unwrap_or(object),
+    })
+}
+
+/// [`lease_on`]'s choice: the remote's object where it peels to `expect`.
+fn pin_for(there: Option<&Holding>, expect: &str) -> String {
+    match there {
+        Some(there) if there.commit.to_hex() == expect => there.object.to_hex(),
+        _ => expect.to_string(),
+    }
 }
 
 /// Replaces a tag on a remote with one under a new name — no git command
@@ -118,19 +254,23 @@ pub async fn delete_remote_tag(
 /// (`offers::TagSides`, デザイン規約 §手元の改名の後のリモート).
 ///
 /// The push goes first so a refused name leaves the old one standing.
+/// The old name's delete is leased to `expect`, as in
+/// [`delete_remote_tag`]; refused, both names stay over there.
 /// Whatever hung off the old name over there (a release) stays behind on
 /// it; the UI warns before this runs.
+#[expect(clippy::too_many_arguments)]
 pub async fn replace_remote_tag(
     executor: &GitExecutor,
     workdir: &Path,
     remote: &str,
     from: &str,
     to: &str,
+    expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     push_tag(executor, workdir, remote, to, "", timeout, cancel).await?;
-    delete_remote_tag(executor, workdir, remote, from, timeout, cancel).await
+    delete_remote_tag(executor, workdir, remote, from, expect, timeout, cancel).await
 }
 
 /// One tag as a remote advertises it.
@@ -254,5 +394,37 @@ nothex\trefs/tags/v2\n";
         let tags = parse_ls_remote_tags(bytes);
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].name, "v1");
+    }
+
+    /// Real `ls-remote --tags -- origin refs/tags/<t> refs/tags/<t>^{}`
+    /// stdout (git 2.55 and 2.43 alike).
+    const ANNOTATED: &[u8] = b"\
+2ed5d8dca01fe0551588949ea26e6dc65e69cae8\trefs/tags/ann\n\
+a9771664a8219f845abfd8ce6f5d7af521247539\trefs/tags/ann^{}\n";
+    const LIGHTWEIGHT: &[u8] = b"\
+a9771664a8219f845abfd8ce6f5d7af521247539\trefs/tags/light\n";
+    const SHOWN: &str = "a9771664a8219f845abfd8ce6f5d7af521247539";
+    const ELSEWHERE: &str = "8e54e2935b5e9b6cf32833403904fd3f68da81f2";
+
+    fn pin(bytes: &[u8], refname: &str, expect: &str) -> String {
+        pin_for(parse_holding(bytes, refname).as_ref(), expect)
+    }
+
+    #[test]
+    fn an_annotated_tag_is_leased_to_its_object_where_it_peels_to_the_commit_shown() {
+        assert_eq!(
+            pin(ANNOTATED, "refs/tags/ann", SHOWN),
+            "2ed5d8dca01fe0551588949ea26e6dc65e69cae8"
+        );
+        assert_eq!(pin(LIGHTWEIGHT, "refs/tags/light", SHOWN), SHOWN);
+    }
+
+    /// Leased to the commit shown, a remote that has moved or dropped the
+    /// name refuses the delete itself.
+    #[test]
+    fn a_tag_the_remote_has_left_is_leased_to_the_commit_shown() {
+        assert_eq!(pin(ANNOTATED, "refs/tags/ann", ELSEWHERE), ELSEWHERE);
+        assert_eq!(pin(LIGHTWEIGHT, "refs/tags/light", ELSEWHERE), ELSEWHERE);
+        assert_eq!(pin(b"", "refs/tags/ann", SHOWN), SHOWN);
     }
 }

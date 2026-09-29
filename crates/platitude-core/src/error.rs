@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::report::{ReportKind, WriteReport};
+use crate::report::WriteReport;
 
 /// Errors produced while locating, spawning or running the git CLI.
 ///
@@ -123,6 +123,6 @@ impl GitError {
     /// move behind it (`RepoSession::push` fetches on it).
     pub fn is_outdated(&self) -> bool {
         self.report()
-            .is_some_and(|report| report.kind == ReportKind::Outdated)
+            .is_some_and(|report| report.kind.is_outdated())
     }
 }

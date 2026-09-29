@@ -821,11 +821,13 @@ impl RepoTab {
     /// Replaces a tag on a remote with one under a new name. git has no
     /// command for it, so core pushes the new name and deletes the old —
     /// the UI holds the answer down first, because the old name is
-    /// destroyed.
+    /// destroyed. `expect` is the commit the old name was shown on, which
+    /// its delete is leased to.
     #[qslot]
-    fn replace_remote_tag(&mut self, remote: String, from: String, to: String) {
-        let asked =
-            self.ask_session(|s| s.replace_remote_tag(remote.clone(), from.clone(), to.clone()));
+    fn replace_remote_tag(&mut self, remote: String, from: String, to: String, expect: String) {
+        let asked = self.ask_session(|s| {
+            s.replace_remote_tag(remote.clone(), from.clone(), to.clone(), expect.clone())
+        });
         // Keyed like every outgoing tag write (`ops_delete::remote_tag_delete`),
         // on the name that goes, so the page reports this press's answer.
         self.ref_push_asked(
@@ -836,16 +838,17 @@ impl RepoTab {
 
     /// The remote's copy of a tag. `rowGoes` is whether the sidebar's row
     /// leaves with it — true where only the remote had the name
-    /// (`ops_delete::remote_tag_delete`).
+    /// (`ops_delete::remote_tag_delete`). `expect` is the commit the row
+    /// showed the tag on, which the delete is leased to.
     #[qslot]
-    fn delete_remote_tag(&mut self, remote: String, tag: String, row_goes: bool) {
-        self.remote_tag_delete(remote, tag, row_goes);
+    fn delete_remote_tag(&mut self, remote: String, tag: String, row_goes: bool, expect: String) {
+        self.remote_tag_delete(remote, tag, row_goes, expect);
     }
 
-    /// Both copies of a tag, as one queued write.
+    /// Both copies of a tag, as one queued write, leased as above.
     #[qslot]
-    fn delete_tag_everywhere(&mut self, tag: String, remote: String) {
-        self.tag_delete_everywhere(tag, remote);
+    fn delete_tag_everywhere(&mut self, tag: String, remote: String, expect: String) {
+        self.tag_delete_everywhere(tag, remote, expect);
     }
 
     /// Renames a tag. git has none, so core builds it out of a new name on
@@ -1115,25 +1118,27 @@ impl RepoTab {
     }
 
     /// Replaces a branch on a remote the way `replaceRemoteTag` replaces a
-    /// tag.
+    /// tag, the old name's delete leased to `expect`.
     #[qslot]
-    fn replace_remote_branch(&mut self, remote: String, from: String, to: String) {
+    fn replace_remote_branch(&mut self, remote: String, from: String, to: String, expect: String) {
         let row = format!("{remote}/{from}");
-        let asked =
-            self.ask_session(|s| s.replace_remote_branch(remote.clone(), from.clone(), to.clone()));
+        let asked = self.ask_session(|s| {
+            s.replace_remote_branch(remote.clone(), from.clone(), to.clone(), expect.clone())
+        });
         self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
     }
 
-    /// `git push <remote> --delete <branch>` (destructive).
+    /// `git push <remote> --delete <branch>` (destructive), leased to
+    /// `expect`, the commit the row showed.
     #[qslot]
-    fn delete_remote_branch(&mut self, remote: String, branch: String) {
-        self.remote_branch_delete(remote, branch);
+    fn delete_remote_branch(&mut self, remote: String, branch: String, expect: String) {
+        self.remote_branch_delete(remote, branch, expect);
     }
 
     /// `git branch --delete` (`-D` under `force`) and then
-    /// `git push <remote> --delete`, as one queued write: the local half
-    /// refuses first where it refuses at all, leaving the remote
-    /// as it was.
+    /// `git push <remote> --delete` leased to `expect`, as one queued
+    /// write: the local half refuses first where it refuses at all,
+    /// leaving the remote as it was.
     #[qslot]
     fn delete_branch_everywhere(
         &mut self,
@@ -1141,8 +1146,9 @@ impl RepoTab {
         remote: String,
         remote_branch: String,
         force: bool,
+        expect: String,
     ) {
-        self.branch_delete_everywhere(branch, remote, remote_branch, force)
+        self.branch_delete_everywhere(branch, remote, remote_branch, force, expect)
     }
 
     /// `git merge <rev>`.

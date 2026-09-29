@@ -7,11 +7,14 @@
 use crate::error::GitError;
 use crate::report::{ReportKind, WriteReport};
 
-/// Which of the three a non-zero push of a branch is.
+/// Which a non-zero push of a branch is: one that would drop the remote's
+/// commits, leased to a reading the remote has left, turned down over
+/// there, or a failure.
 ///
-/// The two refusals are told apart because only one has a next move (a
-/// fetch answers `fetch first`, nothing answers a protected branch), so
-/// they reach the screen as different reports (デザイン規約 §答えの要らない報せ).
+/// The refusals are told apart because only some have a next move (a
+/// fetch answers `fetch first`, nothing answers a protected branch), and
+/// the ones a fetch answers by what they found, so each reaches the screen
+/// as its own report (デザイン規約 §答えの要らない報せ).
 pub(super) fn refusal(
     command: String,
     out: &crate::process::GitOutput,
@@ -19,29 +22,80 @@ pub(super) fn refusal(
     branch: &str,
     deleting: bool,
 ) -> GitError {
-    if is_outdated(&out.stdout_utf8()) {
-        return GitError::Reported {
-            command,
-            code: out.code,
-            stderr: out.failure_message(),
-            report: Box::new(WriteReport::on_remote(
-                ReportKind::Outdated,
-                remote,
-                branch,
-                // Nothing is quoted: the far side never saw this push, and
-                // git's terminal advice adds only the cause, which the
-                // screen writes itself (`Words.writeReportedWhy`). The full
-                // text is in the log.
-                String::new(),
-            )),
-        };
-    }
-    refused(command, out, remote, branch, deleting)
+    let porcelain = out.stdout_utf8();
+    let kind = if refused_for(&porcelain, "(stale info)") {
+        moved(deleting)
+    } else if would_drop(&porcelain) {
+        ReportKind::Outdated
+    } else {
+        return refused(command, out, remote, branch, deleting);
+    };
+    outdated(kind, command, out, remote, branch)
 }
 
-/// The same reading for a push no fetch can answer — a tag, whose local
-/// name a fetch leaves where it is (`remote::tags`): a far-side refusal
-/// or a plain failure.
+/// The same reading for a tag: a lease the remote has left, as for a
+/// branch, and a plain push onto a name the remote holds on another commit
+/// (`already exists`) — both answered by reading the remote's tags again
+/// (`session::push_tag`), which a fetch does not do (`--prune` keeps the
+/// local tag, `--prune-tags` exits 1).
+pub(super) fn tag_refusal(
+    command: String,
+    out: &crate::process::GitOutput,
+    remote: &str,
+    tag: &str,
+    deleting: bool,
+) -> GitError {
+    let porcelain = out.stdout_utf8();
+    let kind = if refused_for(&porcelain, "(stale info)") {
+        moved(deleting)
+    } else if is_taken(&porcelain) {
+        ReportKind::TagElsewhere
+    } else {
+        return refused(command, out, remote, tag, deleting);
+    };
+    outdated(kind, command, out, remote, tag)
+}
+
+/// A lease the remote has left, sending or deleting.
+fn moved(deleting: bool) -> ReportKind {
+    match deleting {
+        true => ReportKind::MovedDelete,
+        false => ReportKind::Moved,
+    }
+}
+
+/// Whether a plain tag push was refused for a name the remote already
+/// holds on something else (`already exists`).
+pub(super) fn is_taken(porcelain: &str) -> bool {
+    refused_for(porcelain, "(already exists)")
+}
+
+fn outdated(
+    kind: ReportKind,
+    command: String,
+    out: &crate::process::GitOutput,
+    remote: &str,
+    name: &str,
+) -> GitError {
+    GitError::Reported {
+        command,
+        code: out.code,
+        stderr: out.failure_message(),
+        report: Box::new(WriteReport::on_remote(
+            kind,
+            remote,
+            name,
+            // Nothing is quoted: the far side never saw this push, and
+            // git's terminal advice adds only the cause, which the
+            // screen writes itself (`Words.writeReportedWhy`). The full
+            // text is in the log.
+            String::new(),
+        )),
+    }
+}
+
+/// The reading for a refusal no read here answers: a far-side refusal or
+/// a plain failure.
 pub(super) fn refused(
     command: String,
     out: &crate::process::GitOutput,
@@ -144,22 +198,29 @@ fn bracket_reason(summary: &str) -> String {
     }
 }
 
-/// Whether a `--porcelain` push result refused a ref for knowing the remote
-/// only as it used to be.
-///
-/// The lines are `<flag>\t<from>:<to>\t<summary>`, where `!` is a refusal.
-/// Three summaries are answered by fetching: `fetch first`,
-/// `non-fast-forward` (a ref that is not the current branch's upstream),
-/// and `stale info` (a lease pinned to a commit the remote has left).
-fn is_outdated(porcelain: &str) -> bool {
+/// Whether a `--porcelain` push result refused a ref because the remote
+/// holds commits the send would drop: `fetch first` (not here yet),
+/// `non-fast-forward` (here, but not in what was sent) and `remote ref
+/// updated since checkout` (a lease with no oid, under
+/// `push.useForceIfIncludes`). The other refusal a fetch answers,
+/// `stale info`, is a lease's and read apart ([`refusal`]).
+fn would_drop(porcelain: &str) -> bool {
+    [
+        "(fetch first)",
+        "(non-fast-forward)",
+        "(remote ref updated since checkout)",
+    ]
+    .iter()
+    .any(|why| refused_for(porcelain, why))
+}
+
+/// Whether a `--porcelain` push result refused a ref with `why` in its
+/// summary. The lines are `<flag>\t<from>:<to>\t<summary>`, where `!` is a
+/// refusal.
+fn refused_for(porcelain: &str, why: &str) -> bool {
     porcelain.lines().any(|line| {
         let mut fields = line.split('\t');
-        fields.next() == Some("!")
-            && fields.nth(1).is_some_and(|summary| {
-                summary.contains("(fetch first)")
-                    || summary.contains("(stale info)")
-                    || summary.contains("(non-fast-forward)")
-            })
+        fields.next() == Some("!") && fields.nth(1).is_some_and(|summary| summary.contains(why))
     })
 }
 
@@ -180,23 +241,41 @@ mod tests {
     const NEW_BRANCH: &str = "To C:/tmp/remote.git\n\
          *\trefs/heads/side:refs/heads/side\t[new branch]\nDone\n";
 
+    /// git 2.55: the remote's tip is here but not in what was sent, and a
+    /// plain tag push onto a name the remote holds on something else.
+    const REFUSED_NON_FAST_FORWARD: &str = "To C:/tmp/remote.git\n\
+         !\trefs/heads/main:refs/heads/main\t[rejected] (non-fast-forward)\nDone\n";
+    const REFUSED_TAG_TAKEN: &str = "To C:/tmp/remote.git\n\
+         !\trefs/tags/v1:refs/tags/v1\t[rejected] (already exists)\nDone\n";
+
     #[test]
-    fn a_refusal_a_fetch_would_answer_is_recognised() {
-        assert!(is_outdated(REFUSED_FETCH_FIRST));
-        assert!(is_outdated(REFUSED_STALE_LEASE));
+    fn a_refusal_a_fetch_would_answer_is_recognised_by_what_it_found() {
+        assert!(would_drop(REFUSED_FETCH_FIRST));
+        assert!(would_drop(REFUSED_NON_FAST_FORWARD));
+        assert!(
+            !would_drop(REFUSED_STALE_LEASE),
+            "a lease the remote left says the ref moved, not that commits would go"
+        );
+        assert!(refused_for(REFUSED_STALE_LEASE, "(stale info)"));
+        assert!(is_taken(REFUSED_TAG_TAKEN));
+        assert!(!would_drop(REFUSED_TAG_TAKEN));
     }
 
     #[test]
     fn pushes_that_landed_are_not_refusals() {
-        assert!(!is_outdated(FORCED_UPDATE));
-        assert!(!is_outdated(UP_TO_DATE));
-        assert!(!is_outdated(NEW_BRANCH));
+        for landed in [FORCED_UPDATE, UP_TO_DATE, NEW_BRANCH] {
+            assert!(!would_drop(landed));
+            assert!(!refused_for(landed, "(stale info)"));
+            assert!(!is_taken(landed));
+        }
     }
 
     #[test]
     fn refusals_a_fetch_cannot_help_with_are_left_alone() {
-        assert!(!is_outdated(REFUSED_BY_THE_FAR_SIDE));
-        assert!(!is_outdated(""));
+        assert!(!would_drop(REFUSED_BY_THE_FAR_SIDE));
+        assert!(!refused_for(REFUSED_BY_THE_FAR_SIDE, "(stale info)"));
+        assert!(!is_taken(REFUSED_BY_THE_FAR_SIDE));
+        assert!(!would_drop(""));
     }
 
     /// The same git 2.51 run with a `pre-receive` hook exiting non-zero,

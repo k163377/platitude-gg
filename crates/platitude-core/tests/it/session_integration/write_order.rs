@@ -594,8 +594,15 @@ async fn a_composite_delete_takes_its_turn_for_the_half_that_is_here() {
     closing.close();
 
     let (reopened_sink, reopened) = opened(&repo).await;
+    // No lease to name: the local half is what refuses.
     let removal = reopened
-        .delete_branch_everywhere("victim".into(), "origin".into(), "victim".into(), false)
+        .delete_branch_everywhere(
+            "victim".into(),
+            "origin".into(),
+            "victim".into(),
+            false,
+            String::new(),
+        )
         .expect("the delete was accepted");
 
     std::fs::write(&release, b"go").expect("release the hook");

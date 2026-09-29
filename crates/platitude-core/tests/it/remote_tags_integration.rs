@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::support::TestRepo;
-use crate::support::session::CaptureSink;
+use crate::support::session::{CaptureSink, opened, write_answer};
 use platitude_core::remote;
 use platitude_core::session::{
     LabelKind, Recording, RefLabel, RefsSnapshot, RemoteTagRefreshOutcome, RepoSession,
@@ -94,9 +94,14 @@ async fn a_tag_the_remote_has_not_got_goes_plainly_and_a_drifted_one_needs_the_l
     );
 
     let refused = remote::push_tag(&exec, &path, "origin", "v-drift", "", NET, &cancel).await;
-    assert!(
-        refused.is_err(),
-        "a plain push will not move a tag the remote has elsewhere"
+    assert_eq!(
+        refused
+            .as_ref()
+            .err()
+            .and_then(platitude_core::GitError::report)
+            .map(|report| report.kind),
+        Some(platitude_core::ReportKind::TagElsewhere),
+        "a plain push will not move a tag the remote has on another commit: {refused:?}"
     );
     assert_eq!(
         at_origin(&mut work, "v-drift"),
@@ -111,6 +116,67 @@ async fn a_tag_the_remote_has_not_got_goes_plainly_and_a_drifted_one_needs_the_l
         at_origin(&mut work, "v-drift"),
         head,
         "the name follows this repository"
+    );
+}
+
+/// git refuses a plain push onto a name the remote holds as another object
+/// even on the same commit (`already exists` — a lightweight tag over there
+/// for the annotated one here). The screen shows one commit on both sides,
+/// so it is answered as sent, and the remote's object stays.
+#[tokio::test]
+async fn a_tag_the_remote_holds_on_the_same_commit_is_answered_as_sent() {
+    let (_bare, mut work, root, _head) = tag_scenario();
+    let exec = crate::support::exec::isolated();
+    let cancel = CancellationToken::new();
+    let path = work.path.clone();
+    work.git(&[
+        "push",
+        "--force",
+        "origin",
+        &format!("{root}:refs/tags/v-both"),
+    ]);
+
+    remote::push_tag(&exec, &path, "origin", "v-both", "", NET, &cancel)
+        .await
+        .expect("the same commit over there is no collision");
+    assert_eq!(
+        at_origin(&mut work, "v-both"),
+        root,
+        "the lightweight tag over there was left as it is"
+    );
+}
+
+/// The same-commit check reads where the push goes: with a `pushurl` naming
+/// another repository, the fetch URL holding the name on this commit says
+/// nothing about the one the send reaches.
+#[tokio::test]
+async fn the_same_commit_is_weighed_where_the_push_goes() {
+    let (bare, mut work, _root, head) = tag_scenario();
+    let exec = crate::support::exec::isolated();
+    let cancel = CancellationToken::new();
+    let path = work.path.clone();
+    let mut pushed_to = TestRepo::init();
+    let dest = pushed_to.path.clone();
+    pushed_to.git_in(&dest, &["config", "core.bare", "true"]);
+    pushed_to.git_in(&dest, &["fetch", "-q", &bare.file_url(), "+refs/*:refs/*"]);
+    pushed_to.git_in(&dest, &["update-ref", "refs/tags/v-both", &head]);
+    work.git(&[
+        "remote",
+        "set-url",
+        "--push",
+        "origin",
+        &pushed_to.file_url(),
+    ]);
+
+    let refused = remote::push_tag(&exec, &path, "origin", "v-both", "", NET, &cancel).await;
+    assert_eq!(
+        refused
+            .as_ref()
+            .err()
+            .and_then(platitude_core::GitError::report)
+            .map(|report| report.kind),
+        Some(platitude_core::ReportKind::TagElsewhere),
+        "the fetch URL agrees with this commit, the push URL does not: {refused:?}"
     );
 }
 
@@ -134,7 +200,7 @@ async fn a_qualified_delete_takes_the_tag_and_leaves_the_branch_of_the_same_name
     let path = work.path.clone();
     work.git(&["push", "origin", &format!("{root}:refs/heads/v-both")]);
 
-    remote::delete_remote_tag(&exec, &path, "origin", "v-both", NET, &cancel)
+    remote::delete_remote_tag(&exec, &path, "origin", "v-both", &root, NET, &cancel)
         .await
         .expect("the qualified refspec names one ref");
 
@@ -170,9 +236,11 @@ async fn replacing_a_tag_on_a_remote_pushes_the_new_name_and_deletes_the_old() {
     work.git(&["tag", "--delete", "v-both"]);
     let object = work.git(&["rev-parse", "v-moved"]);
 
-    remote::replace_remote_tag(&exec, &path, "origin", "v-both", "v-moved", NET, &cancel)
-        .await
-        .expect("the push and the delete both go through");
+    remote::replace_remote_tag(
+        &exec, &path, "origin", "v-both", "v-moved", &root, NET, &cancel,
+    )
+    .await
+    .expect("the push and the delete both go through");
 
     assert_eq!(at_origin(&mut work, "v-both"), "", "the old name is gone");
     assert_eq!(
@@ -192,7 +260,7 @@ async fn replacing_a_tag_on_a_remote_pushes_the_new_name_and_deletes_the_old() {
 /// pinned is that the order makes a refusal harmless.
 #[tokio::test]
 async fn a_replace_the_remote_refuses_leaves_the_old_name_standing() {
-    let (_bare, mut work, _root, _head) = tag_scenario();
+    let (_bare, mut work, root, _head) = tag_scenario();
     let exec = crate::support::exec::isolated();
     let cancel = CancellationToken::new();
     let path = work.path.clone();
@@ -200,8 +268,10 @@ async fn a_replace_the_remote_refuses_leaves_the_old_name_standing() {
     let drift = at_origin(&mut work, "v-drift");
 
     // `v-drift` stands on another commit over there, so its push is refused.
-    let refused =
-        remote::replace_remote_tag(&exec, &path, "origin", "v-both", "v-drift", NET, &cancel).await;
+    let refused = remote::replace_remote_tag(
+        &exec, &path, "origin", "v-both", "v-drift", &root, NET, &cancel,
+    )
+    .await;
 
     assert!(
         refused.is_err(),
@@ -217,6 +287,207 @@ async fn a_replace_the_remote_refuses_leaves_the_old_name_standing() {
         drift,
         "with the one it was refused for where it was"
     );
+}
+
+/// `v-both` moved over there to `to` since it was read — somebody else's
+/// push of a lightweight tag over the annotated one.
+fn move_v_both_over_there(work: &mut TestRepo, to: &str) {
+    work.git(&[
+        "push",
+        "--force",
+        "origin",
+        &format!("{to}:refs/tags/v-both"),
+    ]);
+}
+
+/// A delete leased to the commit the screen showed: a remote that moved
+/// the name since refuses it and keeps it; read again, the delete goes.
+/// `a_qualified_delete_…` above holds the unmoved annotated tag, whose
+/// lease is its object and not the commit shown (`remote::tags::lease_on`).
+#[tokio::test]
+async fn a_tag_the_remote_moved_since_it_was_read_is_not_deleted() {
+    let (_bare, mut work, root, head) = tag_scenario();
+    let exec = crate::support::exec::isolated();
+    let cancel = CancellationToken::new();
+    let path = work.path.clone();
+    move_v_both_over_there(&mut work, &head);
+
+    let refused = remote::delete_remote_tag(&exec, &path, "origin", "v-both", &root, NET, &cancel)
+        .await
+        .expect_err("the name is not where the screen showed it");
+    let Some(report) = refused.report() else {
+        panic!("a stale lease on a tag reads as a branch's does: {refused}");
+    };
+    assert_eq!(report.kind, platitude_core::ReportKind::MovedDelete);
+    assert_eq!(
+        (report.remote.as_str(), report.name.as_str()),
+        ("origin", "v-both")
+    );
+    assert_eq!(
+        at_origin(&mut work, "v-both"),
+        head,
+        "and it stays over there"
+    );
+
+    remote::delete_remote_tag(&exec, &path, "origin", "v-both", &head, NET, &cancel)
+        .await
+        .expect("leased to what is there, the delete goes");
+    assert_eq!(at_origin(&mut work, "v-both"), "");
+}
+
+/// Replace is a push and then the leased delete: refused, both names stay
+/// over there.
+#[tokio::test]
+async fn a_replace_whose_delete_is_refused_leaves_both_names() {
+    let (_bare, mut work, root, head) = tag_scenario();
+    let exec = crate::support::exec::isolated();
+    let cancel = CancellationToken::new();
+    let path = work.path.clone();
+    move_v_both_over_there(&mut work, &head);
+    work.git(&["tag", "v-moved", "v-both"]);
+    work.git(&["tag", "--delete", "v-both"]);
+    let object = work.git(&["rev-parse", "v-moved"]);
+
+    remote::replace_remote_tag(
+        &exec, &path, "origin", "v-both", "v-moved", &root, NET, &cancel,
+    )
+    .await
+    .expect_err("the old name moved since the screen showed it");
+
+    assert_eq!(at_origin(&mut work, "v-both"), head, "the old name stays");
+    assert_eq!(
+        at_origin(&mut work, "v-moved"),
+        object,
+        "beside the new one"
+    );
+}
+
+/// `Delete both` of a tag runs the remote half first
+/// (`session::delete_tag_everywhere`): a refused lease leaves the name
+/// here as well as there. Leased to what is there, both go.
+#[tokio::test(flavor = "multi_thread")]
+async fn delete_both_of_a_tag_refused_by_the_lease_touches_nothing() {
+    let (_bare, mut work, root, head) = tag_scenario();
+    move_v_both_over_there(&mut work, &head);
+    let (sink, session) = opened(&work).await;
+
+    let id = session
+        .delete_tag_everywhere("v-both".into(), "origin".into(), root.clone())
+        .expect("accepted");
+    assert!(
+        write_answer(&sink, id).await.is_some(),
+        "the lease is refused"
+    );
+    assert_eq!(
+        work.git(&["rev-list", "-n", "1", "v-both"]),
+        root,
+        "the name is still here"
+    );
+    assert_eq!(at_origin(&mut work, "v-both"), head, "and over there");
+    // The catch-up a branch gets from a fetch: the remote's tags read again.
+    let snapshot = refs_after_write(&sink, id).await;
+    assert!(
+        snapshot
+            .tag_drifts
+            .iter()
+            .any(|d| d.name.as_str() == "v-both" && d.commit.to_hex() == head),
+        "read again, the name shows where the remote moved it: {:?}",
+        snapshot.tag_drifts
+    );
+
+    work.git(&["push", "origin", "v-local"]);
+    let id = session
+        .delete_tag_everywhere("v-local".into(), "origin".into(), head.clone())
+        .expect("accepted");
+    assert_eq!(write_answer(&sink, id).await, None);
+    assert!(!work.git_ok(&["rev-parse", "--verify", "refs/tags/v-local"]));
+    assert_eq!(at_origin(&mut work, "v-local"), "");
+}
+
+/// A plain push onto a name the remote holds on another commit is read
+/// again on its way out, as a stale lease is: the drift the screen had not
+/// read is what the answer leaves on it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_tag_the_remote_holds_elsewhere_is_read_again_on_the_refusal() {
+    let (_bare, work, root, _head) = tag_scenario();
+    let (sink, session) = opened(&work).await;
+
+    let id = session
+        .push_tag("origin".into(), "v-drift".into(), String::new())
+        .expect("accepted");
+    assert!(write_answer(&sink, id).await.is_some(), "git refuses it");
+    let snapshot = refs_after_write(&sink, id).await;
+    assert!(
+        snapshot
+            .tag_drifts
+            .iter()
+            .any(|d| d.name.as_str() == "v-drift" && d.commit.to_hex() == root),
+        "read again, the name shows where the remote has it: {:?}",
+        snapshot.tag_drifts
+    );
+}
+
+/// The remote half landed and the local one did not (its ref is locked
+/// here): the answer is the local refusal, and the remote's tags are read
+/// all the same, so the badge does not claim a name the remote dropped.
+#[tokio::test(flavor = "multi_thread")]
+async fn delete_both_of_a_tag_reads_the_remote_again_where_the_local_half_fails() {
+    let (_bare, mut work, root, _head) = tag_scenario();
+    let (sink, session) = opened(&work).await;
+    session.fetch(Some("origin".into()));
+    let before = snapshot_after_the_fetch(&sink).await;
+    assert!(
+        before
+            .tags
+            .iter()
+            .any(|t| t.short == "v-both" && t.has_remote),
+        "the badge is up to begin with"
+    );
+    let lock = work
+        .path
+        .join(".git")
+        .join("refs")
+        .join("tags")
+        .join("v-both.lock");
+    std::fs::write(&lock, b"").expect("hold the tag's ref lock");
+
+    let id = session
+        .delete_tag_everywhere("v-both".into(), "origin".into(), root.clone())
+        .expect("accepted");
+    let answer = write_answer(&sink, id).await;
+
+    assert!(
+        answer
+            .as_deref()
+            .is_some_and(|said| said.contains("v-both.lock")),
+        "the local half is what refused: {answer:?}"
+    );
+    assert_eq!(at_origin(&mut work, "v-both"), "", "the remote half landed");
+    let after = refs_after_write(&sink, id).await;
+    assert!(
+        after
+            .tags
+            .iter()
+            .any(|t| t.short == "v-both" && t.here && !t.has_remote),
+        "and the name stands here without the remote's badge: {:?}",
+        after.tags.iter().find(|t| t.short == "v-both")
+    );
+    std::fs::remove_file(&lock).expect("let go of the lock");
+}
+
+/// The refs snapshot published after the write accepted under `id` —
+/// the one that carries what the write read on its way out.
+async fn refs_after_write(sink: &CaptureSink, id: platitude_core::OperationId) -> RefsSnapshot {
+    sink.wait_for("the refs published after the write", |evs| {
+        let done = evs
+            .iter()
+            .position(|e| matches!(e, SessionEvent::WriteFinished { id: got, .. } if *got == id))?;
+        evs[done..].iter().find_map(|e| match e {
+            SessionEvent::RefsLoaded { snapshot, .. } => Some((**snapshot).clone()),
+            _ => None,
+        })
+    })
+    .await
 }
 
 /// The lease is what makes the hold safe to offer without a dialog: it
@@ -241,7 +512,15 @@ async fn a_lease_pinned_to_a_commit_the_remote_has_left_is_refused() {
 
     let refused = remote::push_tag(&exec, &path, "origin", "v-drift", &root, NET, &cancel).await;
 
-    assert!(refused.is_err(), "the lease is stale, so git turns it down");
+    assert_eq!(
+        refused
+            .as_ref()
+            .err()
+            .and_then(platitude_core::GitError::report)
+            .map(|report| report.kind),
+        Some(platitude_core::ReportKind::Moved),
+        "the lease is stale, so git turns it down — the name moved: {refused:?}"
+    );
     assert_eq!(
         at_origin(&mut work, "v-drift"),
         third,
@@ -625,20 +904,26 @@ async fn a_drift_is_listed_by_remote_with_the_commit_a_lease_would_name() {
 mod periodic {
     use super::*;
 
-    /// The qualified form needs no resolution over there:
-    /// `warning: deleting a non-existent ref` and exit 0, where a bare name
-    /// fails. Whether there is anything to delete is the menu's to know
-    /// (`offers::TagSides`).
+    /// Leased to a commit, the qualified form refuses a name the remote
+    /// has not got as `[rejected] (stale info)` — unleased, it exits 0 with
+    /// `warning: deleting a non-existent ref`. The screen showed it there,
+    /// so the remote dropped it since: someone else's move, not ours to
+    /// call done.
     #[tokio::test]
     #[ignore = "git's answer to a ref that is not there: not worth the pre-merge run"]
-    async fn deleting_a_tag_the_remote_has_not_got_is_not_an_error() {
-        let (_bare, work, _root, _head) = tag_scenario();
+    async fn deleting_a_tag_the_remote_has_not_got_is_refused_by_the_lease() {
+        let (_bare, work, _root, head) = tag_scenario();
         let exec = crate::support::exec::isolated();
         let cancel = CancellationToken::new();
 
-        remote::delete_remote_tag(&exec, &work.path, "origin", "v-local", NET, &cancel)
-            .await
-            .expect("git answers with a warning, not a refusal");
+        let err =
+            remote::delete_remote_tag(&exec, &work.path, "origin", "v-local", &head, NET, &cancel)
+                .await
+                .expect_err("nothing is there to hold the lease");
+        assert!(
+            err.is_outdated(),
+            "read as any stale lease on a tag (`remote::push_tag`): {err:?}"
+        );
     }
 
     /// The chips each row carries right now, keyed by commit.

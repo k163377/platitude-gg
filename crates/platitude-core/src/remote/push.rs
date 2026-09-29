@@ -164,8 +164,9 @@ pub async fn plan_publish(
 
 /// `git push` for one branch.
 ///
-/// A refusal that a fetch would answer comes back as
-/// [`crate::ReportKind::Outdated`].
+/// A refusal that a fetch would answer comes back as a report whose kind
+/// says so ([`crate::ReportKind::is_outdated`]): `Outdated` where the send
+/// would drop the remote's commits, `Moved` for a lease it has left.
 pub async fn push(
     executor: &GitExecutor,
     workdir: &Path,

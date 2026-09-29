@@ -25,9 +25,11 @@ AppMenu {
     signal pushTagRequested(string remote, string tag, string lease)
     signal deleteTagRequested(string tag)
     /// `onlyThere`: the name was only on the remote, so its sidebar row goes too instead of losing the badge — the
-    /// write cannot tell from a remote and a name (デザイン規約 §消す操作は先に画面から消す).
-    signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere)
-    signal deleteTagEverywhereRequested(string tag, string remote)
+    /// write cannot tell from a remote and a name (デザイン規約 §消す操作は先に画面から消す). `expect` on both remote
+    /// deletes is the commit this card showed the tag on, which the delete is leased to (`remote::delete_remote_tag`):
+    /// the rows are offered only where the remote's copy stands there too.
+    signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere, string expect)
+    signal deleteTagEverywhereRequested(string tag, string remote, string expect)
 
     /// The automation's handles into these rows, passed on through `RefRowMenu`.
     readonly property alias tagHereItem: refTagHereItem
@@ -165,7 +167,7 @@ AppMenu {
         holdTone: Theme.warning
         onHeld: {
             tagMenu.dismiss()
-            tagMenu.deleteRemoteTagRequested(state.reach, state.refId, state.tagOnlyThere)
+            tagMenu.deleteRemoteTagRequested(state.reach, state.refId, state.tagOnlyThere, state.refOid)
         }
     }
     // Two commands, so words and no chip (§git 用語のコード表記 の 1:1 規則).
@@ -179,7 +181,7 @@ AppMenu {
         holdTone: Theme.warning
         onHeld: {
             tagMenu.dismiss()
-            tagMenu.deleteTagEverywhereRequested(state.refId, state.reach)
+            tagMenu.deleteTagEverywhereRequested(state.refId, state.reach, state.refOid)
         }
     }
 }

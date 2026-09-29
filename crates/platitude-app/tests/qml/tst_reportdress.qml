@@ -45,7 +45,7 @@ Item {
         /// claim is carried by `report-tone half-rename`.
         function dress(kind, remote, name, reason) {
             bar.label = Words.writeReported(kind, remote, name)
-            bar.detail = reason !== "" ? reason : Words.writeReportedWhy(kind)
+            bar.detail = reason !== "" ? reason : Words.writeReportedWhy(kind, remote, name)
             bar.tone = Words.reportTone(kind)
             bar.markWord = Words.reportNamesCopy(kind) ? name : ""
             bar.open = true
@@ -122,13 +122,35 @@ Item {
                           "tip-moved", "op-standing",
                           // Refused by git before the far side heard it: nobody to quote, and git's own text is
                           // terminal advice.
-                          "outdated"]
+                          "outdated", "moved", "moved-delete", "tag-elsewhere"]
             for (const kind of owed)
-                verify(Words.writeReportedWhy(kind).length > 0, kind)
+                verify(Words.writeReportedWhy(kind, "origin", "main").length > 0, kind)
             compare(Words.writeReportedWhy("delete"), "")
             compare(Words.writeReportedWhy("update"), "")
             compare(Words.writeReportedWhy("rename"), "", "the box that is still holding the name answers instead")
             compare(Words.writeReportedWhy(""), "")
+        }
+
+        /// The refusals a read answers, told apart by what the remote turned out to be: holding commits the push would
+        /// drop, changed since the last fetch (sending or deleting, a branch or a tag alike), or holding the tag on
+        /// another commit. Source text, as below.
+        function test_a_refusal_a_read_answers_says_what_the_remote_turned_out_to_be() {
+            const said = {
+                "outdated": ["origin", "main", "main was not sent to origin",
+                             "origin has commits that this push would drop."],
+                "moved": ["origin", "main", "main was not sent to origin",
+                          "origin has changed since the last fetch."],
+                "moved-delete": ["origin", "next", "next was not deleted from origin",
+                                 "origin has changed since the last fetch."],
+                "tag-elsewhere": ["origin", "v6.3", "v6.3 was not sent to origin",
+                                  "origin already has v6.3 on another commit."]
+            }
+            for (const kind in said) {
+                const [remote, name, heading, why] = said[kind]
+                compare(Words.writeReported(kind, remote, name), heading, kind)
+                compare(Words.writeReportedWhy(kind, remote, name), why, kind)
+                compare(Words.reportTone(kind), "danger", kind)
+            }
         }
 
         /// The three the plan turns down reach the row menu's door with the same line: the list is delegated whole

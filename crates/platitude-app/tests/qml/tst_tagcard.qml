@@ -29,9 +29,10 @@ Item {
         onTagHereRequested: oidHex => root.asked = "tag-here " + oidHex
         onPushTagRequested: (remote, tag, lease) => root.asked = "push " + remote + " " + tag + " " + lease
         onDeleteTagRequested: tag => root.asked = "delete " + tag
-        onDeleteRemoteTagRequested: (remote, tag, onlyThere) =>
-            root.asked = "delete-remote " + remote + " " + tag + " " + onlyThere
-        onDeleteTagEverywhereRequested: (tag, remote) => root.asked = "delete-both " + tag + " " + remote
+        onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
+            root.asked = "delete-remote " + remote + " " + tag + " " + onlyThere + " " + expect
+        onDeleteTagEverywhereRequested: (tag, remote, expect) =>
+            root.asked = "delete-both " + tag + " " + remote + " " + expect
     }
 
     /// The card on `offers`, the rest as `NavSectionModel.tagMenu` answers for a name `origin` carries: the deletes
@@ -132,11 +133,11 @@ Item {
             root.standOn(root.overThere, "", true, { "tagReach": "fork", "tagCarriers": "fork" })
             compare(card.deleteRemoteTagItem.text, "v1.0 from fork")
             card.deleteRemoteTagItem.held()
-            compare(root.asked, "delete-remote fork v1.0 true", "sent where the row said")
+            compare(root.asked, "delete-remote fork v1.0 true abc123", "sent where the row said, leased to its commit")
 
             root.standOn(root.both, "", false, { "tagReach": "fork" })
             card.deleteTagBothItem.held()
-            compare(root.asked, "delete-both v1.0 fork")
+            compare(root.asked, "delete-both v1.0 fork abc123")
         }
 
         /// A stash is nobody's history, so it has no card at all.
@@ -174,7 +175,7 @@ Item {
 
             root.standOn(root.both, "", false)
             card.deleteTagBothItem.held()
-            compare(root.asked, "delete-both v1.0 origin")
+            compare(root.asked, "delete-both v1.0 origin abc123")
         }
 
         /// From a remote and a name the write cannot tell whether the sidebar row goes or only loses its badge, so
@@ -182,11 +183,11 @@ Item {
         function test_the_remote_delete_carries_whether_the_name_was_only_over_there() {
             root.standOn(root.overThere, "", true)
             card.deleteRemoteTagItem.held()
-            compare(root.asked, "delete-remote origin v1.0 true")
+            compare(root.asked, "delete-remote origin v1.0 true abc123")
 
             root.standOn(root.both, "", false)
             card.deleteRemoteTagItem.held()
-            compare(root.asked, "delete-remote origin v1.0 false")
+            compare(root.asked, "delete-remote origin v1.0 false abc123")
         }
     }
 }

@@ -112,8 +112,8 @@ Item {
     /// row is held through the local branch of the same name.
     function branchFacts(kind, full, oidHex) {
         if (kind !== "branch" && kind !== "remote")
-            return { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteDrifted": false,
-                     "offers": "", "open": false, "merged": "" }
+            return { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
+                     "remoteDrifted": false, "offers": "", "open": false, "merged": "" }
         const held = kind === "branch"
             ? refRowMenu.worktreesModel.worktreeHolding(full)
             : refRowMenu.worktreesModel.worktreeHolding(refRowMenu.repoTab.localNameFor(full))
@@ -124,6 +124,7 @@ Item {
             "heldByWorktree": held,
             "holderLeaf": held === "" ? "" : GitFacts.pathLeaf(held),
             "remoteCounterpart": counterpart,
+            "remoteCounterpartOid": counterpart === "" ? "" : refRowMenu.branchesModel.upstreamOidOf(full),
             "remoteDrifted": drifted,
             "open": open,
             "merged": !open || kind !== "branch" ? "" : refRowMenu.graphModel.branchDeleteMerged(
@@ -137,22 +138,22 @@ Item {
     }
 
     /// Deletes the remote branch alone, cut against the configured remote names — a remote's name may contain `/`
-    /// (`GitFacts.remoteOfRef`).
-    function deleteRemoteNow(remoteRef) {
+    /// (`GitFacts.remoteOfRef`). `expect` is the commit the card showed it on, the delete's lease.
+    function deleteRemoteNow(remoteRef, expect) {
         const remote = GitFacts.remoteOfRef(remoteRef, refRowMenu.repoTab.remoteNames)
         if (remote === "")
             return
         refRowMenu.repoTab.deleteRemoteBranch(
-            remote, GitFacts.branchOfRef(remoteRef, refRowMenu.repoTab.remoteNames))
+            remote, GitFacts.branchOfRef(remoteRef, refRowMenu.repoTab.remoteNames), expect)
     }
 
     /// Both halves at once, cut the same way: one write with one answer, so it is one thing to put back.
-    function deleteEverywhereNow(branch, remoteRef, forced) {
+    function deleteEverywhereNow(branch, remoteRef, forced, expect) {
         const remote = GitFacts.remoteOfRef(remoteRef, refRowMenu.repoTab.remoteNames)
         if (remote === "")
             return
         refRowMenu.repoTab.deleteBranchEverywhere(
-            branch, remote, GitFacts.branchOfRef(remoteRef, refRowMenu.repoTab.remoteNames), forced)
+            branch, remote, GitFacts.branchOfRef(remoteRef, refRowMenu.repoTab.remoteNames), forced, expect)
     }
 
     /// The TAG card's `facts` (`RefTagMenu.standOn`), read here because this is where the models are. What the card
@@ -330,9 +331,9 @@ Item {
             onUpstreamRequested: (branch, counterpart) => refRowMenu.upstreamRequested(branch, counterpart)
             onCheckDeleteRequested: branch => refRowMenu.repoTab.checkBranchDelete(branch)
             onForceDeleteRequested: branch => refRowMenu.repoTab.deleteBranch(branch, true)
-            onDeleteRemoteRequested: remoteRef => refRowMenu.deleteRemoteNow(remoteRef)
-            onDeleteEverywhereRequested: (branch, remoteRef, forced) =>
-                refRowMenu.deleteEverywhereNow(branch, remoteRef, forced)
+            onDeleteRemoteRequested: (remoteRef, expect) => refRowMenu.deleteRemoteNow(remoteRef, expect)
+            onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
+                refRowMenu.deleteEverywhereNow(branch, remoteRef, forced, expect)
         }
         AppMenuSeparator {}
         // The working copy this row names or leads to; above the TAG card (デザイン規約 §メニュー の入れ子). The same card
@@ -351,10 +352,10 @@ Item {
             onTagHereRequested: oidHex => refRowMenu.tagHereRequested(oidHex)
             onPushTagRequested: (remote, tag, lease) => refRowMenu.repoTab.pushTag(remote, tag, lease)
             onDeleteTagRequested: tag => refRowMenu.repoTab.deleteTag(tag)
-            onDeleteRemoteTagRequested: (remote, tag, onlyThere) =>
-                refRowMenu.repoTab.deleteRemoteTag(remote, tag, onlyThere)
-            onDeleteTagEverywhereRequested: (tag, remote) =>
-                refRowMenu.repoTab.deleteTagEverywhere(tag, remote)
+            onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
+                refRowMenu.repoTab.deleteRemoteTag(remote, tag, onlyThere, expect)
+            onDeleteTagEverywhereRequested: (tag, remote, expect) =>
+                refRowMenu.repoTab.deleteTagEverywhere(tag, remote, expect)
         }
     }
 }

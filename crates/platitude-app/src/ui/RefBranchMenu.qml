@@ -56,8 +56,8 @@ AppMenu {
     /// delete alone, and the pair.
     signal checkDeleteRequested(string branch)
     signal forceDeleteRequested(string branch)
-    signal deleteRemoteRequested(string remoteRef)
-    signal deleteEverywhereRequested(string branch, string remoteRef, bool forced)
+    signal deleteRemoteRequested(string remoteRef, string expect)
+    signal deleteEverywhereRequested(string branch, string remoteRef, bool forced, string expect)
 
     /// The automation's handles into these rows, passed on by the carrying menu.
     readonly property alias deleteItem: refDeleteItem
@@ -73,6 +73,8 @@ AppMenu {
         property string refName: ""
         property string refOid: ""
         property string remoteCounterpart: ""
+        /// The commit that reading showed as the menu opened: the lease of every delete that reaches it.
+        property string remoteCounterpartOid: ""
         /// That reading stands on another commit, so the two rows that reach it say why.
         property bool remoteDrifted: false
         property string heldByWorktree: ""
@@ -91,7 +93,8 @@ AppMenu {
 
     /// Freezes the card on that branch. `facts` is what the carrying menu read for it: `heldByWorktree` the other
     /// working copy holding this row's local branch and `holderLeaf` its folder, `remoteCounterpart` the reading a
-    /// local branch speaks for and `remoteDrifted` whether that stands on another commit, `offers` core's words,
+    /// local branch speaks for, `remoteCounterpartOid` its commit and `remoteDrifted` whether that stands on another
+    /// commit, `offers` core's words,
     /// `open` whether the tab is, and `merged` what the drawn rows say about the plain delete (`yes` / `no`, empty
     /// for a tip or a reference older than the window, whose answer only git has).
     function standOn(kind, name, full, oidHex, facts) {
@@ -105,6 +108,7 @@ AppMenu {
         state.deleteAsked = false
         if (kind !== "branch" && kind !== "remote") {
             state.remoteCounterpart = ""
+            state.remoteCounterpartOid = ""
             state.remoteDrifted = false
             state.heldByWorktree = ""
             state.holderLeaf = ""
@@ -117,6 +121,7 @@ AppMenu {
         state.heldByWorktree = facts.heldByWorktree
         state.holderLeaf = facts.holderLeaf
         state.remoteCounterpart = facts.remoteCounterpart
+        state.remoteCounterpartOid = facts.remoteCounterpartOid
         state.remoteDrifted = facts.remoteDrifted
         // What the rows may offer is core's rule (`offers::ref_menu`).
         const offers = facts.offers
@@ -219,7 +224,8 @@ AppMenu {
         onHeld: {
             branchCard.dismiss()
             if (remoteRow) {
-                branchCard.deleteRemoteRequested(state.refId)
+                // Leased to the commit this row showed (`remote::delete_remote_branch`).
+                branchCard.deleteRemoteRequested(state.refId, state.refOid)
             } else {
                 branchCard.forceDeleteRequested(state.refId)
             }
@@ -241,11 +247,12 @@ AppMenu {
         holdTone: Theme.warning
         onHeld: {
             branchCard.dismiss()
-            branchCard.deleteRemoteRequested(state.remoteCounterpart)
+            branchCard.deleteRemoteRequested(state.remoteCounterpart, state.remoteCounterpartOid)
         }
     }
     // Two commands, so words and no code (§git 用語のコード表記). The local half runs first; its refusal stops the
-    // pair with nothing touched.
+    // pair with nothing touched, and a refused lease on the remote half stops it with the local one done
+    // (`session::delete_branch_everywhere`).
     AppMenuItem {
         id: refBothDeleteItem
         /// Whether the local half goes as `-D`, latched for the press under way (デザイン規約 §長押し): read live, git's
@@ -277,7 +284,7 @@ AppMenu {
             branchCard.dismiss()
             // One write with one answer, so one thing to put back.
             branchCard.deleteEverywhereRequested(state.refId, state.remoteCounterpart,
-                                                 refBothDeleteItem.forces)
+                                                 refBothDeleteItem.forces, state.remoteCounterpartOid)
         }
     }
 }

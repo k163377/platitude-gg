@@ -1026,14 +1026,17 @@ FocusScope {
         // And the same stop at a name already over there (`carryBranchRenameOver`).
         if (name === from || remotesModel.oidOfName(remote + "/" + name) !== "")
             return
+        // The commit the bar marks, taken as it is raised: the old name's delete is leased to it
+        // (`remote::replace_remote_branch`), so a remote that moved while the question stood is refused.
+        const shown = remotesModel.oidOfName(remoteRef)
         page.startRowAsk(
-            remotesModel.oidOfName(remoteRef),
+            shown,
             //: %1 and %2 are remote branches, e.g. origin/main. The old name goes and the new one is made.
             qsTr("Replace %1 with %2?").arg(remoteRef).arg(remote + "/" + name),
             qsTr("The old branch is deleted, not moved."),
             false,
             qsTr("Replace"),
-            function () { repoTab.replaceRemoteBranch(remote, from, name) },
+            function () { repoTab.replaceRemoteBranch(remote, from, name, shown) },
             true,
             qsTr("Hold to replace. %1 goes up first, then %2 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.").arg(remote + "/" + name).arg(remoteRef))
         page.replaceRemoteAsked(remoteRef, name)
@@ -1260,14 +1263,14 @@ FocusScope {
             onPullRequested: repoTab.pull()
             onCheckDeleteRequested: branch => repoTab.checkBranchDelete(branch)
             onForceDeleteRequested: branch => repoTab.deleteBranch(branch, true)
-            onDeleteRemoteRequested: remoteRef => commitMenuState.deleteRemoteNow(remoteRef)
-            onDeleteEverywhereRequested: (branch, remoteRef, forced) =>
-                commitMenuState.deleteEverywhereNow(branch, remoteRef, forced)
+            onDeleteRemoteRequested: (remoteRef, expect) => commitMenuState.deleteRemoteNow(remoteRef, expect)
+            onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
+                commitMenuState.deleteEverywhereNow(branch, remoteRef, forced, expect)
             onPushTagRequested: (remote, tag, lease) => repoTab.pushTag(remote, tag, lease)
             onDeleteTagRequested: tag => repoTab.deleteTag(tag)
-            onDeleteRemoteTagRequested: (remote, tag, onlyThere) =>
-                repoTab.deleteRemoteTag(remote, tag, onlyThere)
-            onDeleteTagEverywhereRequested: (tag, remote) => repoTab.deleteTagEverywhere(tag, remote)
+            onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
+                repoTab.deleteRemoteTag(remote, tag, onlyThere, expect)
+            onDeleteTagEverywhereRequested: (tag, remote, expect) => repoTab.deleteTagEverywhere(tag, remote, expect)
             // For a menu raised on a row of the stacked list: the list stayed up under it, and the pointer now decides
             // again whether it stays.
             onDismissed: rowHost.settleRefList()
@@ -1486,7 +1489,7 @@ FocusScope {
     /// refuser's words; empty where this end refused, and then the second line is ours (`Words.writeReportedWhy`).
     function showReport(kind, remote, name, reason) {
         page.showNotice(Words.writeReported(kind, remote, name),
-                        reason !== "" ? reason : Words.writeReportedWhy(kind),
+                        reason !== "" ? reason : Words.writeReportedWhy(kind, remote, name),
                         Words.reportTone(kind),
                         Words.reportNamesCopy(kind) ? name : "")
     }

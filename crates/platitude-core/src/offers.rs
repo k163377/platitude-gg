@@ -127,10 +127,9 @@ pub struct RefMenuOffers {
     /// tag only a remote has is not sent.
     pub push_tag: bool,
     /// The tag taken off the remote, leaving whatever is here. Only where a
-    /// remote was last heard to carry the name: the qualified `--delete`
-    /// does not fail on a name the remote lacks
-    /// ([`crate::remote::delete_remote_tag`]), so a guess would report
-    /// success for nothing.
+    /// remote was last heard to carry the name: the delete is leased to the
+    /// commit that reading shows ([`crate::remote::delete_remote_tag`]), so
+    /// with no reading there is nothing to lease to.
     pub delete_remote_tag: bool,
     /// Both at once, for the name that stands on both sides.
     pub delete_tag_everywhere: bool,

@@ -136,7 +136,13 @@ QtObject {
         switch (kind) {
         case "delete": return qsTr("%1 would not delete %2").arg(remote).arg(name)
         case "update": return qsTr("%1 would not update %2").arg(remote).arg(name)
-        case "outdated": return qsTr("%1 was not sent to %2").arg(name).arg(remote)
+        // A branch and a tag alike, whatever stopped them; the line underneath says what did.
+        //: %1 is a branch or a tag, %2 a remote.
+        case "outdated":
+        case "moved":
+        case "tag-elsewhere": return qsTr("%1 was not sent to %2").arg(name).arg(remote)
+        //: %1 is a branch or a tag, %2 a remote.
+        case "moved-delete": return qsTr("%1 was not deleted from %2").arg(name).arg(remote)
         case "stale-stage": return qsTr("Nothing was staged")
         case "stale-unstage": return qsTr("Nothing was unstaged")
         case "stale-discard": return qsTr("Nothing was discarded")
@@ -178,12 +184,23 @@ QtObject {
     }
 
     /// The second line for the reports nobody outside answered, so there is nobody to quote. Empty for the reports
-    /// that quote somebody else; the page uses what came across (デザイン規約 §答えの要らない報せ).
-    function writeReportedWhy(kind) {
+    /// that quote somebody else; the page uses what came across (デザイン規約 §答えの要らない報せ). `remote` and `name`
+    /// are the heading's. The refusals a read answers say what the remote turned out to be, and no more: the graph
+    /// shows the rest once the read that follows has landed.
+    function writeReportedWhy(kind, remote, name) {
         switch (kind) {
         // Not git's own advice under the refusal: it ends in `git pull`, and the session is fetching already.
+        //: %1 is a remote.
         case "outdated":
-            return qsTr("The remote has commits this clone has not fetched yet.")
+            return qsTr("%1 has commits that this push would drop.").arg(remote)
+        // A lease the remote has left — the ref moved, or went.
+        //: %1 is a remote.
+        case "moved":
+        case "moved-delete":
+            return qsTr("%1 has changed since the last fetch.").arg(remote)
+        //: %1 is a remote, %2 a tag.
+        case "tag-elsewhere":
+            return qsTr("%1 already has %2 on another commit.").arg(remote).arg(name)
         case "stale-stage":
         case "stale-unstage":
         case "stale-discard":

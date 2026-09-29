@@ -274,33 +274,50 @@ impl RepoSession {
         });
     }
 
-    /// `git push <remote> --delete <branch>`.
+    /// `git push <remote> --delete <branch>`, leased to `expect`, the
+    /// commit the screen showed it on ([`remote::delete_remote_branch`]).
+    /// A remote that moved since is caught up with, as a push is
+    /// ([`Self::catch_up_after`]).
     pub fn delete_remote_branch(
         self: &Arc<Self>,
         remote_name: String,
         branch_name: String,
+        expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                remote::delete_remote_branch(
+                let result = remote::delete_remote_branch(
                     &exec,
                     &repo.workdir,
                     &remote_name,
                     &branch_name,
+                    &expect,
                     timeout,
                     &cancel,
                 )
-                .await
+                .await;
+                s.catch_up_after(&result, remote_name);
+                result
             },
         )
     }
 
-    /// Deletes a branch here and on its remote as one write. The local half
-    /// goes first because it can refuse, stopping the pair with nothing
-    /// touched (core.md「複合操作は 1 手目が失敗したら止める」).
+    /// Deletes a branch here and on its remote as one write, the remote
+    /// half leased to `expect` as in [`Self::delete_remote_branch`].
+    ///
+    /// The local half goes first because it can refuse, stopping the pair
+    /// with nothing touched (core.md「複合操作は 1 手目が失敗したら止める」) —
+    /// and it has to: `push --delete` takes the remote-tracking ref with
+    /// it, and a plain `branch --delete` merged only into that upstream is
+    /// then refused as not merged, leaving the remote gone and the branch
+    /// here. A refused lease stops the pair half-way instead, with the
+    /// branch gone here and its commit reachable from the remote-tracking
+    /// ref — the catch-up fetch moves that ref on to where the remote went.
+    ///
     /// A kind of its own ([`OperationKind::DeleteBranchEverywhere`]): it
     /// answers as a branch write, but the far end paces its second half.
     pub fn delete_branch_everywhere(
@@ -309,22 +326,27 @@ impl RepoSession {
         remote_name: String,
         remote_branch: String,
         force: bool,
+        expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
+        let s = Arc::clone(self);
         self.write(
             OperationKind::DeleteBranchEverywhere,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 branch::delete(&exec, &repo.workdir, &branch, force, &cancel).await?;
-                remote::delete_remote_branch(
+                let result = remote::delete_remote_branch(
                     &exec,
                     &repo.workdir,
                     &remote_name,
                     &remote_branch,
+                    &expect,
                     timeout,
                     &cancel,
                 )
-                .await
+                .await;
+                s.catch_up_after(&result, remote_name);
+                result
             },
         )
     }
@@ -371,29 +393,35 @@ impl RepoSession {
     }
 
     /// Replaces a branch on a remote with one under a new name, which git
-    /// does as a push and a delete (see [`remote::replace_remote_branch`]).
-    /// The UI asks first: the old name is destroyed.
+    /// does as a push and a delete (see [`remote::replace_remote_branch`]),
+    /// the delete leased to `expect`, and caught up with as a push is. The
+    /// UI asks first: the old name is destroyed.
     pub fn replace_remote_branch(
         self: &Arc<Self>,
         remote_name: String,
         from: String,
         to: String,
+        expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                remote::replace_remote_branch(
+                let result = remote::replace_remote_branch(
                     &exec,
                     &repo.workdir,
                     &remote_name,
                     &from,
                     &to,
+                    &expect,
                     timeout,
                     &cancel,
                 )
-                .await
+                .await;
+                s.catch_up_after(&result, remote_name);
+                result
             },
         )
     }

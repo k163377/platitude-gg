@@ -151,11 +151,12 @@ impl Applied {
 /// down when it puts the rows on screen — core having published a reading
 /// says nothing about what the window shows.
 ///
-/// Known gap: `Delete both` deletes locally and then pushes, and a failed
-/// remote half answers with the same one error as a refused local half —
-/// so a landed local delete is put back too, until the refs read takes it
-/// away again. Telling them apart needs a result per half from core
-/// (rules-refs/app-ui.md).
+/// Known gap: a branch's `Delete both` deletes locally and then pushes,
+/// and a failed remote half (a refused lease among them) answers with the
+/// same one error as a refused local half — so a landed local delete is
+/// put back too, until the refs read takes it away again. Telling them
+/// apart needs a result per half from core (rules-refs/app-ui.md). A
+/// tag's pair runs the remote half first, so there the put-back is right.
 #[derive(Debug, Default)]
 pub struct StandIn {
     rows: Rows,

@@ -81,6 +81,7 @@ async fn reading_the_tracking_branches_answers_by_code() {
     work.git(&["switch", "-c", "billing"]);
     work.commit_file("b.txt", "b\n", "billing work");
     work.git(&["push", "-u", "origin", "billing"]);
+    let tip = work.git(&["rev-parse", "origin/billing"]);
 
     remote::replace_remote_branch(
         &exec,
@@ -88,6 +89,7 @@ async fn reading_the_tracking_branches_answers_by_code() {
         "origin",
         "billing",
         "billing-v2",
+        &tip,
         NET,
         &cancel,
     )

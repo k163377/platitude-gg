@@ -10,11 +10,23 @@ pub enum ReportKind {
     RemoteDelete,
     /// The far side would not move a ref to what was sent.
     RemoteUpdate,
-    /// git would not send at all: what this end holds about the remote is
-    /// older than the remote (`fetch first`, `stale info`,
-    /// `non-fast-forward`). The session has already queued the fetch that
-    /// corrects it ([`crate::session::RepoSession::push`]).
+    /// git would not send at all: the remote holds commits the send would
+    /// drop (`fetch first`, `non-fast-forward`, `remote ref updated since
+    /// checkout`). The session has already queued the fetch that shows
+    /// them ([`crate::session::RepoSession::push`]).
     Outdated,
+    /// A lease the remote has left (`stale info`): the ref — a branch or a
+    /// tag — moved or went over there since the screen read it, so nothing
+    /// pinned to that reading was sent. Caught up with as
+    /// [`Self::Outdated`] is: a fetch for a branch, that remote's tags read
+    /// again for a tag (`session::push_tag`).
+    Moved,
+    /// The same refusal for a delete.
+    MovedDelete,
+    /// A plain tag push onto a name the remote holds on another commit
+    /// (`already exists` — on the same commit it is answered as sent,
+    /// [`crate::remote::push_tag`]). That remote's tags are read again.
+    TagElsewhere,
     /// A commit that was not made — always something outside saying no (a
     /// hook, a signing key, another git holding the index): what this
     /// application could answer is gated before the press.
@@ -82,6 +94,19 @@ pub enum ReportKind {
     /// the rewrite reached git (typically started from a terminal). The
     /// band names the operation.
     RewriteWhileStanding,
+}
+
+impl ReportKind {
+    /// Whether this end read the remote before it moved — the refusals a
+    /// read of the remote answers, which the session makes right away
+    /// (a fetch for a branch, the remote's tags for a tag).
+    #[must_use]
+    pub fn is_outdated(self) -> bool {
+        matches!(
+            self,
+            Self::Outdated | Self::Moved | Self::MovedDelete | Self::TagElsewhere
+        )
+    }
 }
 
 /// One report: the two halves the screen is made of, and the names the

@@ -26,6 +26,9 @@ Item {
     property string remote: ""
     property string from: ""
     property string to: ""
+    /// The commit the old name was shown on over there, which `Replace` leases its delete to
+    /// (`remote::replace_remote_branch` / `replace_remote_tag`).
+    property string shown: ""
     /// Which answer is picked. The question opens on the one that takes nothing away, so the pill is live from the
     /// first frame (デザイン規約 §手元の改名の後のリモート).
     property int choice: carryFlow.keepsBoth
@@ -67,12 +70,14 @@ Item {
     anchors.fill: parent
 
     /// Opens the question. `oidHex` is the commit the bar marks, taken by the caller before the rename: the rows are
-    /// rebuilt behind the answer that raises this (`RepoPage.armRenameTagRemote`).
+    /// rebuilt behind the answer that raises this (`RepoPage.armRenameTagRemote`). It is where the old name stands over
+    /// there too — the caller asks only where the two agree — so it is also the lease.
     function startAsk(kind, remote, from, to, oidHex) {
         carryFlow.kind = kind
         carryFlow.remote = remote
         carryFlow.from = from
         carryFlow.to = to
+        carryFlow.shown = oidHex
         carryFlow.choice = carryFlow.keepsBoth
         carryFlow.askRequested(
             oidHex,
@@ -112,12 +117,12 @@ Item {
     function answer() {
         if (carryFlow.kind === "branch") {
             if (carryFlow.takesAway)
-                carryFlow.repoTab.replaceRemoteBranch(carryFlow.remote, carryFlow.from, carryFlow.to)
+                carryFlow.repoTab.replaceRemoteBranch(carryFlow.remote, carryFlow.from, carryFlow.to, carryFlow.shown)
             else if (carryFlow.choice === carryFlow.keepsBoth)
                 carryFlow.repoTab.pointUpstreamAndPush(carryFlow.to, carryFlow.remote, carryFlow.to)
         } else if (carryFlow.kind === "tag") {
             if (carryFlow.takesAway)
-                carryFlow.repoTab.replaceRemoteTag(carryFlow.remote, carryFlow.from, carryFlow.to)
+                carryFlow.repoTab.replaceRemoteTag(carryFlow.remote, carryFlow.from, carryFlow.to, carryFlow.shown)
             else if (carryFlow.choice === carryFlow.keepsBoth)
                 carryFlow.repoTab.pushTag(carryFlow.remote, carryFlow.to, "")
         }

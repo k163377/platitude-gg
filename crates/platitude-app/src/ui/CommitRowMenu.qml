@@ -90,12 +90,12 @@ Item {
     signal pullRequested()
     signal checkDeleteRequested(string branch)
     signal forceDeleteRequested(string branch)
-    signal deleteRemoteRequested(string remoteRef)
-    signal deleteEverywhereRequested(string branch, string remoteRef, bool forced)
+    signal deleteRemoteRequested(string remoteRef, string expect)
+    signal deleteEverywhereRequested(string branch, string remoteRef, bool forced, string expect)
     signal pushTagRequested(string remote, string tag, bool lease)
     signal deleteTagRequested(string tag)
-    signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere)
-    signal deleteTagEverywhereRequested(string tag, string remote)
+    signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere, string expect)
+    signal deleteTagEverywhereRequested(string tag, string remote, string expect)
     /// The WORKTREE card's `worktree remove`, passed straight up.
     signal removeCopyRequested(string path, string name)
     /// The menu went away — and the stacked list it may have been standing on is the pointer's to answer for again.
@@ -329,9 +329,9 @@ Item {
             onUpstreamRequested: (branch, counterpart) => rowMenu.upstreamRequested(branch, counterpart)
             onCheckDeleteRequested: branch => rowMenu.checkDeleteRequested(branch)
             onForceDeleteRequested: branch => rowMenu.forceDeleteRequested(branch)
-            onDeleteRemoteRequested: remoteRef => rowMenu.deleteRemoteRequested(remoteRef)
-            onDeleteEverywhereRequested: (branch, remoteRef, forced) =>
-                rowMenu.deleteEverywhereRequested(branch, remoteRef, forced)
+            onDeleteRemoteRequested: (remoteRef, expect) => rowMenu.deleteRemoteRequested(remoteRef, expect)
+            onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
+                rowMenu.deleteEverywhereRequested(branch, remoteRef, forced, expect)
         }
         AppMenuSeparator {}
         // The same WORKTREE card as the sidebar's, above the TAG card: the copy the chip names, or the one holding the
@@ -351,10 +351,10 @@ Item {
             onTagHereRequested: oidHex => rowMenu.tagHereRequested(oidHex)
             onPushTagRequested: (remote, tag, lease) => rowMenu.pushTagRequested(remote, tag, lease)
             onDeleteTagRequested: tag => rowMenu.deleteTagRequested(tag)
-            onDeleteRemoteTagRequested: (remote, tag, onlyThere) =>
-                rowMenu.deleteRemoteTagRequested(remote, tag, onlyThere)
-            onDeleteTagEverywhereRequested: (tag, remote) =>
-                rowMenu.deleteTagEverywhereRequested(tag, remote)
+            onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
+                rowMenu.deleteRemoteTagRequested(remote, tag, onlyThere, expect)
+            onDeleteTagEverywhereRequested: (tag, remote, expect) =>
+                rowMenu.deleteTagEverywhereRequested(tag, remote, expect)
         }
     }
 }
