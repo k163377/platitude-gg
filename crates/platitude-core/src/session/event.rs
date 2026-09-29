@@ -158,6 +158,10 @@ pub enum SessionEvent {
         /// Pending paths whose change has something to say about line
         /// endings. Shared: most status reads repeat the previous answer.
         eol_marks: Arc<Vec<EolMark>>,
+        /// Pending files that need Git LFS where git cannot run it; 0
+        /// wherever it can, or where nothing pending needs it
+        /// ([`crate::lfs`]).
+        lfs_needed: usize,
         /// Why a standing rebase stopped: the tree alone cannot tell an
         /// `edit` stop from an empty one, and the exit card's words and
         /// `--skip`'s cost turn on which (デザイン規約 §進行中の操作から出る).

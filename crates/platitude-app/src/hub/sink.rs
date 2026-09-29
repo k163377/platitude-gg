@@ -217,6 +217,7 @@ impl SessionSink for BridgeSink {
                 push_remote,
                 push_track,
                 eol_marks,
+                lfs_needed,
                 stop,
             } => {
                 // One copy per WIP list: each answers about the whole tree
@@ -238,6 +239,7 @@ impl SessionSink for BridgeSink {
                         push_remote: push_remote.clone(),
                         push_track: push_track.clone(),
                         eol_marks: Arc::clone(&eol_marks),
+                        lfs_needed,
                         stop: stop.clone(),
                     });
                 }
@@ -255,6 +257,7 @@ impl SessionSink for BridgeSink {
                         push_remote,
                         push_track,
                         eol_marks,
+                        lfs_needed,
                         stop,
                     })));
             }

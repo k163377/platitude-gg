@@ -268,11 +268,16 @@ impl RepoSession {
                 let stale = self.eol_marks_stale.swap(false, Ordering::SeqCst);
                 let key = status_key(&status);
                 let moved = relock(&self.status_key).replace(key) != Some(key);
-                let eol_marks = if stale || moved {
-                    self.settle_eol_marks(&workdir, &status, &cancel).await
-                } else {
-                    self.eol_marks()
-                };
+                let (eol_marks, lfs_needed) = tokio::join!(
+                    async {
+                        if stale || moved {
+                            self.settle_eol_marks(&workdir, &status, &cancel).await
+                        } else {
+                            self.eol_marks()
+                        }
+                    },
+                    self.lfs_needed(&workdir, &status, stale || moved, &cancel),
+                );
                 self.sink.event(SessionEvent::StatusLoaded {
                     status,
                     head_seq,
@@ -285,6 +290,7 @@ impl RepoSession {
                     push_remote,
                     push_track,
                     eol_marks,
+                    lfs_needed,
                     stop,
                 });
                 if flipped { Reread::Moved } else { Reread::Same }

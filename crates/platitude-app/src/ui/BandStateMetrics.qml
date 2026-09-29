@@ -31,6 +31,7 @@ Item {
     readonly property int identityW: Math.ceil(mIdentity.implicitWidth) + 2 * Theme.spaceXs
     readonly property int oldGitW: Math.ceil(mOldGit.implicitWidth) + 2 * Theme.spaceXs
     readonly property int staleW: Math.ceil(mStale.implicitWidth) + 2 * Theme.spaceXs
+    readonly property int lfsW: Math.ceil(mLfs.implicitWidth) + 2 * Theme.spaceXs
 
     /// The narrowest a badge is drawn with words in it. Settled by `settleMinW`: `advanceWidth` is a method, so a
     /// binding on it holds the default font's answer (rules-refs/app-ui.md「`FontMetrics.advanceWidth()` も同じ側」).
@@ -84,6 +85,10 @@ Item {
     BadgeWord {
         id: mStale
         text: Words.badgeStaleGraph
+    }
+    BadgeWord {
+        id: mLfs
+        text: Words.badgeNoLfs
     }
     DotMark {
         id: mDot

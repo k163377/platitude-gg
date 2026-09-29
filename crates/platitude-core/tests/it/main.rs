@@ -16,6 +16,7 @@ mod eol_setting_integration;
 mod exec;
 mod identity_integration;
 mod integrate_integration;
+mod lfs_integration;
 mod logparse;
 mod preview_integration;
 mod push_default_integration;

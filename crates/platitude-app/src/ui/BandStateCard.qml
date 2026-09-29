@@ -29,6 +29,9 @@ AppCard {
     property bool identityShown: false
     property bool oldGitShown: false
     property bool staleShown: false
+    property bool lfsShown: false
+    /// How many pending files need Git LFS — the one thing the `NO LFS` badge has no room for.
+    property int lfsNeeded: 0
     /// True: the walk stopped part-way and rows are missing; false: every row is drawn but out of date. True wins
     /// where both hold — it is the heavier, and the one with words to show.
     property bool staleStopped: false
@@ -43,6 +46,7 @@ AppCard {
                                                stateCard.conflictShown ? conflictBadge.implicitWidth : 0,
                                                stateCard.identityShown ? identityBadge.implicitWidth : 0,
                                                stateCard.staleShown ? staleBadge.implicitWidth : 0,
+                                               stateCard.lfsShown ? lfsBadge.implicitWidth : 0,
                                                stateCard.oldGitShown ? oldGitBadge.implicitWidth : 0)
 
     /// Automation: which rows are standing, in band order, read off the rows themselves. Standing precedes drawn —
@@ -57,6 +61,8 @@ AppCard {
             out.push("identity")
         if (staleRow.visible)
             out.push("stale")
+        if (lfsRow.visible)
+            out.push("lfs")
         if (oldGitRow.visible)
             out.push("old-git")
         return out.join(",")
@@ -73,7 +79,7 @@ AppCard {
     /// sits below the one before, and together they fill the content exactly.
     readonly property bool laidOut: stateCard.rowsSettled()
     function rowsSettled() {
-        const all = [opRow, conflictRow, identityRow, staleRow, oldGitRow]
+        const all = [opRow, conflictRow, identityRow, staleRow, lfsRow, oldGitRow]
         let bottom = -1
         for (let i = 0; i < all.length; i++) {
             if (!all[i].visible)
@@ -262,6 +268,40 @@ AppCard {
                       : stateCard.staleWhy !== ""
                         ? stateCard.staleWhy
                         : qsTr("Only part of the history could be read")
+                color: Theme.textSecondary
+                pixelSize: Theme.fontSm
+            }
+        }
+
+        // Pending files need Git LFS and git cannot run it: how many.
+        RowLayout {
+            id: lfsRow
+            visible: stateCard.lfsShown
+            spacing: Theme.spaceSm
+            Rectangle {
+                id: lfsBadge
+                color: "transparent"
+                border.color: Theme.warning
+                border.width: Theme.borderWidth
+                radius: Theme.radiusSm
+                implicitHeight: Theme.iconLg
+                implicitWidth: lfsLabel.implicitWidth + 2 * Theme.spaceXs
+                Layout.preferredWidth: stateCard.badgeRun
+                Label {
+                    id: lfsLabel
+                    anchors.centerIn: parent
+                    text: Words.badgeNoLfs
+                    color: Theme.warning
+                    font.pixelSize: Theme.fontSm
+                    font.weight: Font.DemiBold
+                }
+            }
+            CardText {
+                // A sentence for each count, as the conflicts row's; "uncommitted" is the files pane's own word for
+                // the list they are counted from. That LFS is missing is the badge's to say, not this line's.
+                text: stateCard.lfsNeeded === 1
+                      ? qsTr("%n uncommitted file needs Git LFS", "", stateCard.lfsNeeded)
+                      : qsTr("%n uncommitted files need Git LFS", "", stateCard.lfsNeeded)
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
             }

@@ -398,6 +398,8 @@ pub struct StatusMsg {
     pub push_track: platitude_core::remote::PushTrack,
     /// Pending files whose change has something to say about line endings.
     pub eol_marks: Arc<Vec<platitude_core::session::EolMark>>,
+    /// Pending files that need Git LFS where git cannot run it.
+    pub lfs_needed: usize,
     /// Why a standing rebase is standing — the `edit` stop that a clean
     /// tree cannot be told from an empty stop by. Default while none is.
     pub stop: platitude_core::integrate::RebaseStop,

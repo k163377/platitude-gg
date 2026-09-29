@@ -43,9 +43,11 @@ Item {
     readonly property bool staleBadgeShown: stateGroup.curPage !== null
                                             && (stateGroup.curPage.pageGraph.failed
                                                 || stateGroup.curPage.pageGraph.stale)
+    /// Pending files need Git LFS and git cannot run it here (`WorkTreeModel.lfsNeeded`).
+    readonly property bool lfsBadgeShown: stateGroup.stateWt !== null && stateGroup.stateWt.lfsNeeded > 0
     readonly property bool stateShown: stateGroup.opBadgeShown || stateGroup.conflictBadgeShown
                                        || stateGroup.identityBadgeShown || stateGroup.oldGitBadgeShown
-                                       || stateGroup.staleBadgeShown
+                                       || stateGroup.staleBadgeShown || stateGroup.lfsBadgeShown
     /// The narrowest a badge is drawn before the group gives up on words, in characters (規約 §ウィンドウの縁).
     readonly property int stateMinChars: 2
     /// Settled where it is measured (`BandStateMetrics`).
@@ -58,6 +60,7 @@ Item {
     readonly property int identityBadgeW: badgeMetrics.identityW
     readonly property int oldGitBadgeW: badgeMetrics.oldGitW
     readonly property int staleBadgeW: badgeMetrics.staleW
+    readonly property int lfsBadgeW: badgeMetrics.lfsW
 
     /// Automation: which of the three shapes is on screen, what the badges were narrowed to, and the card — what the
     /// band made of the state (`PGG_AUTO_ACT=badges` / `badges-hover`).
@@ -82,6 +85,7 @@ Item {
         + (stateGroup.conflictBadgeShown ? stateGroup.conflictBadgeW + Theme.spaceXs : 0)
         + (stateGroup.identityBadgeShown ? stateGroup.identityBadgeW + Theme.spaceXs : 0)
         + (stateGroup.staleBadgeShown ? stateGroup.staleBadgeW + Theme.spaceXs : 0)
+        + (stateGroup.lfsBadgeShown ? stateGroup.lfsBadgeW + Theme.spaceXs : 0)
         + (stateGroup.oldGitBadgeShown ? stateGroup.oldGitBadgeW + Theme.spaceXs : 0)
         - Theme.spaceXs
     readonly property real foldedWidth: stateGroup.cellFolded
@@ -135,6 +139,8 @@ Item {
             want.push(stateGroup.identityBadgeW)
         if (stateGroup.staleBadgeShown)
             want.push(stateGroup.staleBadgeW)
+        if (stateGroup.lfsBadgeShown)
+            want.push(stateGroup.lfsBadgeW)
         if (stateGroup.oldGitBadgeShown)
             want.push(stateGroup.oldGitBadgeW)
         stateGroup.cap = share.cap(want, stateGroup.room)
@@ -278,6 +284,23 @@ Item {
                 Layout.maximumWidth: Math.ceil(implicitWidth)
             }
         }
+        // Cleared by an install as `OLD GIT` is, but ahead of it: it also goes with the files that raised it
+        // (規約 §ウィンドウの縁).
+        StateBadge {
+            id: lfsBadge
+            visible: stateGroup.lfsBadgeShown
+            naturalW: stateGroup.lfsBadgeW
+            cap: stateGroup.cap
+            Label {
+                text: Words.badgeNoLfs
+                color: Theme.warning
+                font.pixelSize: Theme.fontSm
+                font.weight: Font.DemiBold
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+                Layout.maximumWidth: Math.ceil(implicitWidth)
+            }
+        }
         StateBadge {
             id: oldGitBadge
             visible: stateGroup.oldGitBadgeShown
@@ -356,6 +379,8 @@ Item {
         identityShown: stateGroup.identityBadgeShown
         oldGitShown: stateGroup.oldGitBadgeShown
         staleShown: stateGroup.staleBadgeShown
+        lfsShown: stateGroup.lfsBadgeShown
+        lfsNeeded: stateGroup.stateWt !== null ? stateGroup.stateWt.lfsNeeded : 0
         staleStopped: stateGroup.curPage !== null && stateGroup.curPage.pageGraph.failed
         staleWhy: stateGroup.curPage !== null ? stateGroup.curPage.pageGraph.error : ""
         onIdentityRequested: stateGroup.identityEditRequested()

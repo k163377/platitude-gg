@@ -66,6 +66,7 @@ mod heap;
 mod join_tests;
 mod joins;
 mod latest;
+mod lfs;
 mod log;
 mod model;
 mod open;

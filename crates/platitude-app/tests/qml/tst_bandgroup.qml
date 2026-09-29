@@ -23,6 +23,7 @@ Item {
         property int opStep: 0
         property int opSteps: 0
         property bool hasConflicts: true
+        property int lfsNeeded: 0
     }
     QtObject {
         id: graph
@@ -79,6 +80,7 @@ Item {
             group.tabCount = 1
             workTree.opText = "MERGING"
             workTree.hasConflicts = true
+            workTree.lfsNeeded = 0
             graph.failed = false
             graph.stale = false
         }
@@ -190,7 +192,33 @@ Item {
             verify(!group.stateMarkShown)
         }
 
-        /// Three of the five badges read the page in front, so a page state handed in answers them; that a real
+        /// Files that need Git LFS where git cannot run it raise their own badge, drawn after the rest of the page's
+        /// (only `OLD GIT` would follow it), with room asked for it — and in yellow: the mark turns red only for a
+        /// conflict or a stale graph (デザイン規約 §ウィンドウの縁).
+        function test_files_that_need_git_lfs_raise_their_own_badge_last_among_the_pages() {
+            verify(!group.lfsBadgeShown, "nothing needs Git LFS")
+            const without = group.naturalWidth
+
+            workTree.lfsNeeded = 2
+            verify(group.lfsBadgeShown, "two files need it")
+            compare(group.naturalWidth, without + Theme.spaceXs + group.lfsBadgeW, "and the group asks for its room")
+            compare(badgesDrawn(), [group.opBadgeW, group.conflictBadgeW, group.lfsBadgeW],
+                    "after the operation and its conflicts")
+
+            workTree.opText = ""
+            workTree.hasConflicts = false
+            verify(group.stateShown, "it stands the group up on its own")
+            compare(badgesDrawn(), [group.lfsBadgeW])
+            group.windowAtFloor = true
+            verify(group.stateMarkShown)
+            verify(Qt.colorEqual(group.stateMarkColor, Theme.warning), "folded, its mark is yellow")
+
+            workTree.lfsNeeded = 0
+            verify(!group.lfsBadgeShown)
+            verify(!group.stateShown)
+        }
+
+        /// Four of the six badges read the page in front, so a page state handed in answers them; that a real
         /// repository's state reaches the model is the headless runs' half.
         function test_which_badge_stands_is_the_page_state_handed_in() {
             verify(group.opBadgeShown, "a stopped operation")

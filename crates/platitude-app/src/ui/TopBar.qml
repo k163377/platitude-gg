@@ -46,6 +46,7 @@ Rectangle {
     readonly property bool identityBadgeShown: stateGroup.identityBadgeShown
     readonly property bool oldGitBadgeShown: stateGroup.oldGitBadgeShown
     readonly property bool staleBadgeShown: stateGroup.staleBadgeShown
+    readonly property bool lfsBadgeShown: stateGroup.lfsBadgeShown
     readonly property real stateBadgeMinW: stateGroup.stateBadgeMinW
 
     /// Automation: which of the group's three shapes is on screen, what the badges were narrowed to, and what the card

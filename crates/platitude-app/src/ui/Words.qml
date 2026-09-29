@@ -59,6 +59,8 @@ QtObject {
     /// What is drawn is out of date: the walk gave up part-way, or the rebuild that would refresh the rows did not
     /// land. The badge is the only place this state is said (デザイン規約 §ウィンドウの縁).
     readonly property string badgeStaleGraph: qsTr("STALE GRAPH")
+    /// Pending files need Git LFS and git cannot run it here (デザイン規約 §ウィンドウの縁).
+    readonly property string badgeNoLfs: qsTr("NO LFS")
 
     /// The one way a commit's moment is written, from the epoch seconds rows carry. The commands panel's `HH:mm:ss`
     /// clock stays its own.

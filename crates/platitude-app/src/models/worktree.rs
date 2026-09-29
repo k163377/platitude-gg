@@ -146,6 +146,9 @@ pub struct WorkTreeModel {
     /// Staged files whose change says something about its line endings.
     /// The working-tree side is not counted: a commit carries the index.
     eol_staged_count: i32,
+    /// Pending files that need Git LFS where git cannot run it — the band's
+    /// `NO LFS` (デザイン規約 §ウィンドウの縁). 0 wherever git runs it.
+    lfs_needed: i32,
     /// File-list rows of each change kind, for the graph's uncommitted row
     /// (`status::Kinds`), off this status at no git of its own. Conflicts
     /// are `conflict_count`.
@@ -272,6 +275,7 @@ impl WorkTreeModel {
         Member = eol_staged_count,
         Notify = changed
     );
+    qproperty!("lfsNeeded", Member = lfs_needed, Notify = changed);
     qproperty!("wipAdded", Member = wip_added, Notify = changed);
     qproperty!("wipModified", Member = wip_modified, Notify = changed);
     qproperty!("wipDeleted", Member = wip_deleted, Notify = changed);
@@ -382,6 +386,7 @@ impl WorkTreeModel {
         self.side_theirs = String::new();
         self.merge_tool = String::new();
         self.eol_staged_count = 0;
+        self.lfs_needed = 0;
         self.wip_added = 0;
         self.wip_modified = 0;
         self.wip_deleted = 0;
@@ -449,6 +454,7 @@ impl WorkTreeModel {
             push_remote,
             push_track,
             eol_marks,
+            lfs_needed,
             stop,
         } = msg;
         self.side_ours = sides.ours;
@@ -457,6 +463,7 @@ impl WorkTreeModel {
         self.merge_tool = merge_tool;
         self.eol_staged_count =
             i32::try_from(eol_marks.iter().filter(|m| m.staged).count()).unwrap_or(i32::MAX);
+        self.lfs_needed = i32::try_from(lfs_needed).unwrap_or(i32::MAX);
         // HEAD is not read off here — it has its own message, ahead of
         // this one (`StateMsg::Head`). Kept: which report and branch the
         // counts were read with (`settle`).
@@ -684,6 +691,7 @@ mod tests {
             push_remote: String::new(),
             push_track: platitude_core::remote::PushTrack::default(),
             eol_marks: Arc::new(Vec::new()),
+            lfs_needed: 0,
             stop: platitude_core::integrate::RebaseStop::default(),
         }))
     }
