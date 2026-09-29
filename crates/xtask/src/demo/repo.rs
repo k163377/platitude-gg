@@ -211,6 +211,23 @@ impl DemoRepo {
         self.root.join("origin.git")
     }
 
+    /// A second clone of the bare repository `bare` beside the work tree,
+    /// under somebody else's name: where the commits this one lacks come
+    /// from. Answers where it is.
+    pub(super) fn seeder(&mut self, bare: &str) -> Result<PathBuf, String> {
+        let seeder = self.root.join("seeder");
+        let url = file_url(&self.root.join(bare));
+        let root = self.root.clone();
+        self.git_at(&root, &["clone", &url, "seeder"])?;
+        for (key, value) in [
+            ("user.name", "Away Colleague"),
+            ("user.email", "away@example.com"),
+        ] {
+            self.git_at(&seeder.clone(), &["config", key, value])?;
+        }
+        Ok(seeder)
+    }
+
     pub(super) fn add_origin(&mut self) -> Result<(), String> {
         let bare = self.origin_bare();
         std::fs::create_dir_all(&bare).map_err(|e| e.to_string())?;

@@ -32,16 +32,7 @@ pub(super) fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["push", "origin", "taken"])?;
 
     // `outsider`, pushed from another clone.
-    let seeder = repo.root.join("seeder");
-    let url = file_url(&repo.root.join("origin.git"));
-    let root = repo.root.clone();
-    repo.git_at(&root, &["clone", &url, "seeder"])?;
-    for (key, value) in [
-        ("user.name", "Away Colleague"),
-        ("user.email", "away@example.com"),
-    ] {
-        repo.git_at(&seeder.clone(), &["config", key, value])?;
-    }
+    let seeder = repo.seeder("origin.git")?;
     repo.git_at(&seeder.clone(), &["switch", "--create", "outsider"])?;
     std::fs::write(seeder.join("elsewhere.txt"), "not here\n").map_err(|e| e.to_string())?;
     repo.git_at(&seeder.clone(), &["add", "--", "elsewhere.txt"])?;
@@ -88,16 +79,7 @@ pub(super) fn behind(repo: &mut DemoRepo) -> Result<(), String> {
     repo.add_origin()?;
     repo.git(&["push", "--set-upstream", "origin", "main"])?;
 
-    let seeder = repo.root.join("seeder");
-    let url = file_url(&repo.root.join("origin.git"));
-    let root = repo.root.clone();
-    repo.git_at(&root, &["clone", &url, "seeder"])?;
-    for (key, value) in [
-        ("user.name", "Away Colleague"),
-        ("user.email", "away@example.com"),
-    ] {
-        repo.git_at(&seeder.clone(), &["config", key, value])?;
-    }
+    let seeder = repo.seeder("origin.git")?;
     std::fs::write(seeder.join("a.txt"), "v2\nremote work\n").map_err(|e| e.to_string())?;
     repo.git_at(&seeder.clone(), &["add", "--", "a.txt"])?;
     repo.git_at(
