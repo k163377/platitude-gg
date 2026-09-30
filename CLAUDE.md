@@ -43,6 +43,7 @@
 ## Git 運用
 
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)で、メッセージは英語。push は追加のみ
+- **依存(crate・Qt・toolchain)の更新は、追従の改善まで 1 回の land に入れる** — その land の前後を `land` が `deps/<日付>/before`・`after` のタグで挟んで push する(範囲の印はこの 2 本だけ。[反映前テストの機械化.md](internal-docs/反映前テストの機械化.md) §版を動かした land のタグ)
 - **rebase はその場でユーザーが指示した時だけ**(main への追従・squash を含む。その時だけ `PGG_ALLOW_REBASE=1` を先頭に付ける)。worktree ブランチが main より遅れたままは正常
 - **完了報告・反映の前に、依頼範囲の修正・レビュー対応・docs 更新を完了して commit する**(バックグラウンドのレビュー・検証も結果を受け取って対応まで)。外部確認・判断が得られなければ阻害要因を報告し、範囲を減らすならユーザーと合意する
 - **main を動かすのはその場でユーザーが指示した時だけ**: <!--cmd:land.branch-->`cargo xtask land <branch>`(席で rebase → gate → fast-forward)。指示がなければ席で `gate` を通し、branch/SHA と検証結果を添えて「マージ可」と報告する。**許可は発話 1 回につき main が動く land 1 回**で、main が動いて初めて消える(判定は [land の許可](internal-docs/反映前テストの機械化.md#land-の許可permit))
