@@ -103,6 +103,9 @@ Item {
     /// whole pixel below (rules-refs/app-ui.md「自然幅の上限は切り上げる」).
     implicitWidth: Math.ceil(ruler.implicitWidth)
     implicitHeight: field.implicitHeight
+    // The field's own, for a holder that sets words of two faces on one line (`CommitAuthorRow.firstBase` /
+    // `secondBase`).
+    baselineOffset: field.baselineOffset
     clip: line.clipped
 
     Text {

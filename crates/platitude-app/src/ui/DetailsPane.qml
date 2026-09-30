@@ -27,6 +27,18 @@ ColumnLayout {
     readonly property bool choosing: detailsPane.details.selectionCount > 1
     // Reflog selector when the selected row is a stash ("" otherwise).
     property string stashRef: ""
+    /// Whether the commit on show is a stash entry (`CommitAuthorRow.stashed`). Taken as a commit's details land, not
+    /// read off `stashRef`: the selection moves at the click and the details a beat later, and between the two the
+    /// commit still on show would have its parents counted by the next one's rule.
+    property bool stashShown: false
+    /// The commit `stashShown` was taken for.
+    property string stashJudged: ""
+    function judgeStash() {
+        if (detailsPane.details.shaHex === detailsPane.stashJudged)
+            return
+        detailsPane.stashJudged = detailsPane.details.shaHex
+        detailsPane.stashShown = detailsPane.stashRef !== ""
+    }
     // The page decides (`RepoPage.messageEdit` → `offers::message_edit`).
     property bool editable: false
     // A write is already running, so nothing new starts.
@@ -82,6 +94,7 @@ ColumnLayout {
         host: detailsPane
         block: block
         details: detailsPane.details
+        onParentPicked: oidHex => detailsPane.parentClicked(oidHex)
     }
 
     signal fileActivated(string path, string origPath)
@@ -240,9 +253,15 @@ ColumnLayout {
 
     Connections {
         target: detailsPane.details
-        function onChanged() { detailsPane.syncMessage() }
+        function onChanged() {
+            detailsPane.syncMessage()
+            detailsPane.judgeStash()
+        }
     }
-    Component.onCompleted: detailsPane.syncMessage()
+    Component.onCompleted: {
+        detailsPane.syncMessage()
+        detailsPane.judgeStash()
+    }
 
     // Where the arrows stand is where the diff is: the page says so through `readPath`, whoever moved it.
     FileRowWalk {
@@ -340,6 +359,7 @@ ColumnLayout {
         signatureSigner: detailsPane.signatureSigner
         committerFace: detailsPane.committerFace
         committerFaceUrl: detailsPane.committerFaceUrl
+        stashed: detailsPane.stashShown
         signsCommits: detailsPane.signsCommits
         signingTip: detailsPane.signingTip
         avatarPointedAt: detailsPane.avatarPointedAt
@@ -347,11 +367,15 @@ ColumnLayout {
         summaryPointedAt: detailsPane.summaryPointedAt
         mateCardInside: cards.matesPointerInside
         authorCardInside: cards.authorPointerInside
+        parentCardInside: cards.parentsPointerInside
+        parentCardOpen: cards.parentCardOpen
         onAvatarClicked: detailsPane.avatarClicked()
         onCopyRequested: text => detailsPane.copyRequested(text)
         onParentClicked: oidHex => detailsPane.parentClicked(oidHex)
         onOpenMateRequested: at => cards.openMateCard(at)
         onSettleMateRequested: cards.settleMates()
+        onOpenParentsRequested: line => cards.openParentCard(line)
+        onSettleParentsRequested: cards.settleParents()
         onOpenAuthorRequested: at => cards.openAuthorCard(at)
         onSettleAuthorRequested: cards.settleAuthor()
         onEscaped: detailsPane.revertMessage()

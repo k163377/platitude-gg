@@ -3,8 +3,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-/// The two cards the commit's author row opens: author and committer, and the co-authors the message credits. They
-/// open in the pane's coordinates, so they do not scroll with the block; the row's anchor is mapped on the way in.
+/// The cards the commit's author row opens: author and committer, the co-authors the message credits, and every parent
+/// of a line with more than it has room for. They open in the pane's coordinates, so they do not scroll with the block;
+/// the row's anchor is mapped on the way in.
 ///
 /// A `QtObject`, not an `Item`: the pane is a `ColumnLayout`, where any item is a row (rules-refs/app-ui.md).
 QtObject {
@@ -23,6 +24,41 @@ QtObject {
     /// Whether the pointer is on a card — the row asks, because the two together are one hover.
     readonly property bool matesPointerInside: mateCard.pointerInside
     readonly property bool authorPointerInside: authorCard.pointerInside
+    readonly property bool parentCardOpen: parentCard.opened
+    readonly property bool parentsPointerInside: parentCard.pointerInside
+
+    /// A row of the parents' card was pressed: the pane goes there, as the parent line's own links do.
+    signal parentPicked(string oidHex)
+
+    /// Opens every parent on the seat a single parent's hash has — the line's right end (`line`, in the row's
+    /// coordinates), which the line keeps while it stands as one parent's (`HashPlate.unrolled`; デザイン規約
+    /// §右のペインの親). Once: the lit state can fall and rise as the hand crosses from the count into the card, which
+    /// is the card it already opened.
+    function openParentCard(line) {
+        const row = cards.block.valueRow
+        if (parentCard.opened || row.plate.parents.length < 2)
+            return
+        const at = row.mapToItem(cards.host, line.x + line.width, line.y)
+        parentCard.parents = row.plate.parents
+        cards.parentsOf = cards.details.shaHex
+        parentCard.x = Math.round(at.x - parentCard.hashWidth - parentCard.hashInset)
+        parentCard.y = Math.round(at.y + line.height / 2 - parentCard.firstMiddle)
+        // The pane's floor is the ceiling; its rows scroll past it.
+        parentCard.listRoom = cards.host.height - parentCard.y - Theme.spaceXs
+        parentCard.open()
+    }
+    function settleParents() {
+        parentKeep.settle()
+    }
+    /// The commit the parents' card was opened on: its rows are that commit's, so another one closes it.
+    property string parentsOf: ""
+    readonly property Connections parentsFollow: Connections {
+        target: cards.details
+        function onChanged() {
+            if (parentCard.opened && cards.details.shaHex !== cards.parentsOf)
+                parentCard.close()
+        }
+    }
 
     /// Where each card was raised (host coordinates) and how far either may stand. Set on open: `mapToItem` is a
     /// call, so a binding would not see the splitter move.
@@ -85,6 +121,17 @@ QtObject {
         id: mateKeep
         card: mateCard
         pointedAt: cards.block.matesPointed
+    }
+
+    readonly property ParentListCard parentCard: ParentListCard {
+        id: parentCard
+        parent: cards.host
+        onPicked: oidHex => cards.parentPicked(oidHex)
+    }
+    readonly property HoverCardHost parentKeep: HoverCardHost {
+        id: parentKeep
+        card: parentCard
+        pointedAt: cards.block.parentsPointed
     }
 
     readonly property AuthorCard authorCard: AuthorCard {

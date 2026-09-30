@@ -21,7 +21,8 @@ Item {
         anchors.centerIn: parent
         sha8: "164db4f7"
         fullSha: "164db4f7aaaabbbbccccddddeeeeffff00001111"
-        parentSha: "974a87e8aaaabbbbccccddddeeeeffff00002222"
+        parents: ["974a87e8aaaabbbbccccddddeeeeffff00002222"]
+        parentRoom: root.width
         onCopyRequested: text => { root.copies++; root.copied = text }
         onParentClicked: oidHex => { root.visits++; root.visited = oidHex }
     }
@@ -37,8 +38,8 @@ Item {
             root.visited = ""
             // A selection outlives the gesture that made it, so the board is cleared before the next one asks whether
             // it made any.
-            for (let i = 0; i < plate.valueFields.length; i++)
-                plate.valueFields[i].deselect()
+            for (let i = 0; i < plate.valueFields().length; i++)
+                plate.valueFields()[i].deselect()
         }
 
         /// A point of the row's value, in the root's coordinates.
@@ -100,7 +101,7 @@ Item {
             const p = pointIn("parent", 0.5)
             mouseClick(root, p.x, p.y)
             compare(root.visits, 1, "a click on the parent hash is the link's")
-            compare(root.visited, plate.parentSha)
+            compare(root.visited, plate.parents[0])
         }
 
         function test_f_drag_over_the_parent_selects_it_and_goes_nowhere() {
@@ -110,7 +111,7 @@ Item {
             mouseMove(root, (from.x + to.x) / 2, from.y)
             mouseMove(root, to.x, to.y)
             mouseRelease(root, to.x, to.y)
-            compare(plate.parentSelected, plate.parentSha.substring(0, 8),
+            compare(plate.parentSelected(), plate.parents[0].substring(0, 8),
                     "the drag put the shown hash in the field")
             compare(root.visits, 0, "a drag is not a click")
         }
@@ -156,7 +157,7 @@ Item {
             mousePress(root, pfrom.x, pfrom.y)
             mouseMove(root, pto.x, pto.y)
             mouseRelease(root, pto.x, pto.y)
-            compare(plate.parentSelected, plate.parentSha.substring(0, 8))
+            compare(plate.parentSelected(), plate.parents[0].substring(0, 8))
             compare(plate.shaSelected, "", "the hash let go when the parent took the caret")
         }
     }

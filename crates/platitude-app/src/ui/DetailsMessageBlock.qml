@@ -26,6 +26,8 @@ Flickable {
     required property string signatureSigner
     required property int committerFace
     required property string committerFaceUrl
+    /// The commit is a stash entry, whose parents past the first are git's bookkeeping (`CommitAuthorRow.stashed`).
+    required property bool stashed
     required property bool signsCommits
     required property string signingTip
     /// Pointer stand-ins, and whether the pane's cards have the pointer (the cards open in pane coordinates).
@@ -34,12 +36,16 @@ Flickable {
     required property bool summaryPointedAt
     required property bool mateCardInside
     required property bool authorCardInside
+    required property bool parentCardInside
+    required property bool parentCardOpen
 
     signal avatarClicked()
     signal copyRequested(string text)
     signal parentClicked(string oidHex)
     signal openMateRequested(point at)
     signal settleMateRequested()
+    signal openParentsRequested(rect line)
+    signal settleParentsRequested()
     signal openAuthorRequested(point at)
     signal settleAuthorRequested()
     signal escaped()
@@ -53,9 +59,12 @@ Flickable {
     readonly property alias valueRow: authorRow
     readonly property alias coAuthorRecords: authorRow.coAuthorRecords
     readonly property alias matesClipped: authorRow.matesClipped
+    readonly property alias matesFolded: authorRow.matesFolded
+    readonly property alias matesSaid: authorRow.matesSaid
     readonly property alias nameClipped: authorRow.nameClipped
     readonly property alias matesPointed: authorRow.matesPointed
     readonly property alias authorPointed: authorRow.authorPointed
+    readonly property alias parentsPointed: authorRow.parentsPointed
     readonly property alias signatureTipShown: authorRow.signatureTipShown
     readonly property alias subjectText: msgEditor.subjectText
     readonly property alias bodyText: msgEditor.bodyText
@@ -140,13 +149,18 @@ Flickable {
                 avatarPointedAt: block.avatarPointedAt
                 signaturePointedAt: block.signaturePointedAt
                 paneWidth: block.paneWidth
+                stashed: block.stashed
                 mateCardInside: block.mateCardInside
                 authorCardInside: block.authorCardInside
+                parentCardInside: block.parentCardInside
+                parentsUnrolled: block.parentCardOpen
                 onAvatarClicked: block.avatarClicked()
                 onCopyRequested: text => block.copyRequested(text)
                 onParentClicked: oidHex => block.parentClicked(oidHex)
                 onOpenMateRequested: at => block.openMateRequested(at)
                 onSettleMateRequested: block.settleMateRequested()
+                onOpenParentsRequested: line => block.openParentsRequested(line)
+                onSettleParentsRequested: block.settleParentsRequested()
                 onOpenAuthorRequested: at => block.openAuthorRequested(at)
                 onSettleAuthorRequested: block.settleAuthorRequested()
             }

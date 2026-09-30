@@ -8,6 +8,10 @@ Item {
     property int code: 0
     /// A `file:` URL from the store, empty for the generated pattern.
     property string imageUrl: ""
+    /// How far under the box's top the face is drawn, less than a pixel: a holder centring the face on something a
+    /// whole pixel cannot centre it on (`CoAuthorLine`) moves the box by whole pixels and hands the rest here, drawn
+    /// by the painter rather than by shifting the texture, which would blur every row. The canvas runs past the box.
+    property real drop: 0
 
     /// The picture has loaded (the canvas reads it asynchronously), so a shot can wait on it. A function: a binding on
     /// the `isImageLoaded` call would never re-evaluate.
@@ -20,19 +24,23 @@ Item {
 
     InkCanvas {
         id: pattern
-        anchors.fill: parent
+        width: ident.width
+        height: ident.height + Math.ceil(ident.drop)
         onImageLoaded: requestPaint()
         onPaint: {
             const ctx = getContext("2d")
-            const r = width / 2
+            const d = width
+            const r = d / 2
+            ctx.setTransform(1, 0, 0, 1, 0, 0)
             ctx.clearRect(0, 0, width, height)
+            ctx.translate(0, ident.drop)
             ctx.save()
             ctx.beginPath()
             ctx.arc(r, r, r, 0, 2 * Math.PI)
             ctx.clip()
             if (ident.imageUrl !== "") {
                 if (pattern.isImageLoaded(ident.imageUrl))
-                    ctx.drawImage(ident.imageUrl, 0, 0, width, height)
+                    ctx.drawImage(ident.imageUrl, 0, 0, d, d)
                 ctx.restore()
                 ctx.strokeStyle = Theme.borderStrong
                 ctx.lineWidth = Theme.borderWidth
@@ -42,11 +50,11 @@ Item {
                 return
             }
             ctx.fillStyle = Theme.bgElevated
-            ctx.fillRect(0, 0, width, height)
+            ctx.fillRect(0, 0, d, d)
             ctx.fillStyle = Theme.graphLane[(ident.code >> 15) & 0x7]
-            const inner = width * Metrics.identiconFill
+            const inner = d * Metrics.identiconFill
             const cell = inner / 5
-            const o = (width - inner) / 2
+            const o = (d - inner) / 2
             for (let row = 0; row < 5; row++) {
                 for (let col = 0; col < 3; col++) {
                     if ((ident.code >> (row * 3 + col)) & 1) {
@@ -69,6 +77,7 @@ Item {
     Connections {
         target: ident
         function onCodeChanged() { pattern.requestPaint() }
+        function onDropChanged() { pattern.requestPaint() }
         function onImageUrlChanged() {
             if (ident.imageUrl !== "")
                 pattern.loadImage(ident.imageUrl)

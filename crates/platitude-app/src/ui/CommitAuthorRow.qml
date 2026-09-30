@@ -3,7 +3,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The details pane's author row: avatar + name/date on the left, own hash over parent hash on the right.
+// The details pane's author row: avatar + name/date on the left, own hash over the parents' on the right.
 //
 // Hovering the name or the co-author credit opens a card (デザイン規約 §author の hover / §co-author の表示). The cards
 // belong to the pane, which keeps them put while this block scrolls; this row only raises the anchor point.
@@ -30,6 +30,9 @@ Item {
     property bool signaturePointedAt: false
     /// The pane's width; the credit line takes half of it.
     property real paneWidth: 0
+    /// A stash entry: its parents past the first are the index and untracked commits git files it with, which the graph
+    /// sifts out (`rows::sift_batch`), so the line names only the base it was made on.
+    property bool stashed: false
     /// The cards' own hover, fed back so the stretch that opened a card and the card itself read as one.
     property bool mateCardInside: false
     property bool authorCardInside: false
@@ -44,6 +47,16 @@ Item {
     /// ...or on the card it opened.
     readonly property bool matesLit: authorRow.matesPointed || authorRow.mateCardInside
 
+    // ---- the parents' card -----------------------------------------
+    // Every parent over the parent line, opened from its count (デザイン規約 §右のペインの親).
+    /// Whether the pointer is on the count — the same pair of writers as `matesPointed`.
+    property bool parentsPointed: false
+    /// ...or on the card it opened.
+    property bool parentCardInside: false
+    readonly property bool parentsLit: authorRow.parentsPointed || authorRow.parentCardInside
+    /// The card is out, and the line stands as one parent's would under it (`HashPlate.unrolled`).
+    property bool parentsUnrolled: false
+
     // ---- the author's own card --------------------------------------
     /// Whether the pointer is on the name — the same pair of writers as `matesPointed`.
     property bool authorPointed: false
@@ -54,8 +67,12 @@ Item {
 
     /// The name did not fit — for headless runs, which cannot see an ellipsis (`LineText.clipped`, the output side).
     readonly property bool nameClipped: authorLabel.clipped
-    /// The same question for the credit line under it (`CoAuthorLine.clipped`).
+    /// The same question for the credit line under it (`CoAuthorLine.clipped`), and for the date beside that.
     readonly property bool matesClipped: coBlock.clipped
+    readonly property bool dateClipped: detailsDate.clipped
+    /// Whether the credit folded to its face and a count, and the count it says (`CoAuthorLine.folded`).
+    readonly property bool matesFolded: coBlock.folded
+    readonly property string matesSaid: coBlock.countStands ? coBlock.countSaid : "-"
 
     signal avatarClicked()
     signal copyRequested(string text)
@@ -66,12 +83,18 @@ Item {
     signal settleMateRequested()
     signal openAuthorRequested(point at)
     signal settleAuthorRequested()
+    /// The same pair for the parents' card, at the parent line's seat (`HashPlate.parentSeatRect`, row coordinates).
+    signal openParentsRequested(rect line)
+    signal settleParentsRequested()
 
     function showCoAuthors(on) {
         authorRow.matesPointed = on
     }
     function showAuthor(on) {
         authorRow.authorPointed = on
+    }
+    function showParents(on) {
+        authorRow.parentsPointed = on
     }
     function coAuthorName(i) {
         return coBlock.nameAt(i)
@@ -101,8 +124,80 @@ Item {
         if (which === "hash")
             return hashPlate.shaSelected
         if (which === "parent")
-            return hashPlate.parentSelected
+            return hashPlate.parentSelected()
         return ""
+    }
+    /// The width the parent line may take: what neither line's words need, each line keeping a slack of its own
+    /// (デザイン規約 §右のペインの親). Both, since the plate is one column as wide as its widest row. Read off the lines'
+    /// natural widths, which the plate's width does not move.
+    readonly property real parentRoom: rowContent.width - avatarBadge.width - 2 * rowContent.spacing
+        - Math.max(nameLine.implicitWidth, authorRow.dateNeed) - Theme.spaceXs
+    /// The date line's words at their own widths, with the step before its slack — counted here rather than read off
+    /// the line, whose date is held to what the line is handed (`detailsDate`), which the plate's width moves.
+    readonly property real dateNeed: detailsDate.implicitWidth + dateLine.spacing
+        + (coBlock.visible ? Math.ceil(coBlock.implicitWidth) + dateLine.spacing : 0)
+    /// Who gives way on the date line when it is short (デザイン規約 §co-author の表示): the credit's name is cut, then
+    /// folded to its face and count, and only then is the date cut from its tail, the minutes first. Measured top down
+    /// — the row less the face and the plate — not off the line, whose items are laid out to these: a floor read off
+    /// the width it holds up would hold it up for good.
+    readonly property real textRoom: Math.max(0, rowContent.width - avatarBadge.width - 2 * rowContent.spacing
+        - hashPlate.implicitWidth)
+    readonly property real dateRoom: Math.min(detailsDate.implicitWidth, Math.max(0, authorRow.textRoom
+        - dateLine.spacing - (coBlock.visible ? coBlock.foldedWidth + dateLine.spacing : 0)))
+    readonly property real creditRoom: Math.min(Math.ceil(coBlock.implicitWidth), Math.max(coBlock.foldedWidth,
+        authorRow.textRoom - authorRow.dateRoom - 2 * dateLine.spacing))
+    /// Automation: the date and the credit as laid out, which reach `dateRoom` / `creditRoom` a pass after a width is
+    /// handed down.
+    readonly property real dateWidth: detailsDate.width
+    readonly property real creditWidth: coBlock.width
+    /// Where the date line's drawn words end, in `item`'s x: the credit's stretch, or the date where nobody is
+    /// credited.
+    function dateWordsEnd(item) {
+        return coBlock.visible ? coBlock.mapToItem(item, coBlock.stretchWidth, 0).x
+                               : detailsDate.mapToItem(item, detailsDate.width, 0).x
+    }
+    // ---- one baseline per line (デザイン規約 §右のペインの親) ----
+    // The two columns stand side by side, each centred on its own content, and words of two faces (the name's, the
+    // hashes' mono) sit at different heights in boxes of one height. The left column is the reference: the plate moves
+    // its rows onto the name's baseline and the date's (`HashPlate.firstBase` / `secondBase`).
+    /// How far down this row an item stands as laid out. Transforms are left out: they are what this feeds.
+    function laidY(item) {
+        let y = 0
+        for (let at = item; at !== null && at !== authorRow; at = at.parent)
+            y += at.y
+        return y
+    }
+    readonly property real firstBase: authorRow.laidY(authorLabel) + authorLabel.baselineOffset
+    readonly property real secondBase: authorRow.laidY(detailsDate) + detailsDate.baselineOffset
+
+    /// Automation (verify-ui `details-align`): where every word of the row sits, in the window's y (-1 for one not
+    /// drawn) — the name and the hash share the first line, the date, the credit and the parents the second.
+    function baselines() {
+        const plate = hashPlate.baselines(null)
+        const mates = coBlock.baselines(null)
+        return {
+            name: authorLabel.mapToItem(null, 0, authorLabel.baselineOffset).y,
+            hash: plate.hash,
+            date: detailsDate.mapToItem(null, 0, detailsDate.baselineOffset).y,
+            dateText: detailsDate.text,
+            dateSize: detailsDate.pixelSize,
+            face: coBlock.faceMiddle(null),
+            mate: mates.name,
+            mateCount: mates.count,
+            mateCountSize: mates.countSize,
+            parent: plate.parent,
+            comma: plate.comma,
+            parentCount: plate.count,
+            parentCountSize: plate.countSize,
+            // How far the date line's words stand clear of the parent line's arrow: the two must not meet.
+            apart: hashPlate.parents.length > 0
+                ? hashPlate.arrowBox(null).x - authorRow.dateWordsEnd(null) : Number.POSITIVE_INFINITY
+        }
+    }
+    /// Automation (verify-ui `details-parents`): the plate, and where the date line's words end in the row's x.
+    readonly property alias plate: hashPlate
+    function dateLineEnd() {
+        return dateLine.mapToItem(authorRow, 0, 0).x + authorRow.dateNeed - dateLine.spacing
     }
     // ---- what a sweep over this row needs to know (`SweepRoom`) ------
     //
@@ -117,7 +212,7 @@ Item {
     function lineValues(line) {
         return line === 0
             ? [authorLabel, hashPlate.fieldFor("hash")]
-            : [detailsDate].concat(coBlock.valueFields, [hashPlate.fieldFor("parent")])
+            : [detailsDate].concat(coBlock.valueFields, hashPlate.parentFields())
     }
     /// Whether a press at that point belongs to a control of this row (the avatar badge, the plate's two), which keep
     /// their whole hit areas.
@@ -218,6 +313,12 @@ Item {
         else
             authorRow.settleMateRequested()
     }
+    onParentsLitChanged: {
+        if (authorRow.parentsLit)
+            authorRow.openParentsRequested(hashPlate.parentSeatRect(authorRow))
+        else
+            authorRow.settleParentsRequested()
+    }
     onAuthorLitChanged: {
         if (authorRow.authorLit)
             authorRow.openAuthorRequested(authorLabel.mapToItem(authorRow, 0, authorLabel.height))
@@ -256,6 +357,7 @@ Item {
             // Name, the signature mark on its shoulder, and — only for a broken signature — a word, so the error is
             // found without hovering (デザイン規約 §署名の表示).
             RowLayout {
+                id: nameLine
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
                 // A field, so the name can be dragged over (規約 §右のペインの字は掴める). It has no `elide`: a long name
@@ -311,13 +413,22 @@ Item {
                 }
             }
             RowLayout {
+                id: dateLine
                 Layout.fillWidth: true
-                spacing: Theme.spaceSm
+                // The date's minutes stand from the credit's face as the face from its name.
+                spacing: Theme.spaceXs
                 LineText {
                     id: detailsDate
                     text: Words.stamp(authorRow.details.authorTime)
                     color: Theme.textSecondary
                     pixelSize: Theme.fontSm
+                    // The credit beside it sits on the same baseline, its face and count in another box.
+                    Layout.alignment: Qt.AlignBaseline
+                    // Held at its room both ways (`dateRoom`), so the credit's name gives way — cut, then folded —
+                    // before the date does.
+                    Layout.preferredWidth: authorRow.dateRoom
+                    Layout.minimumWidth: authorRow.dateRoom
+                    Layout.maximumWidth: authorRow.dateRoom
                 }
                 // The first co-author's face and name, then `+N` (デザイン規約 §co-author の表示).
                 CoAuthorLine {
@@ -330,7 +441,10 @@ Item {
                     // pane paints past the window's edge.
                     Layout.fillWidth: true
                     Layout.maximumWidth: Math.ceil(coBlock.implicitWidth)
-                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredWidth: authorRow.creditRoom
+                    // Folded is as small as it draws: under that its face and count would run into the parents.
+                    Layout.minimumWidth: coBlock.foldedWidth
+                    Layout.alignment: Qt.AlignBaseline
                     onPointerChanged: inside => authorRow.showCoAuthors(inside)
                 }
                 Item {
@@ -344,7 +458,13 @@ Item {
             Layout.alignment: Qt.AlignRight
             sha8: authorRow.details.sha8
             fullSha: authorRow.details.shaHex
-            parentSha: authorRow.details.parentHex
+            parents: authorRow.stashed && authorRow.details.parentHex !== "" ? [authorRow.details.parentHex]
+                                                                             : authorRow.details.parentHexes
+            parentRoom: authorRow.parentRoom
+            unrolled: authorRow.parentsUnrolled
+            firstBase: authorRow.firstBase - authorRow.laidY(hashPlate)
+            secondBase: authorRow.secondBase - authorRow.laidY(hashPlate)
+            onMorePointedChanged: authorRow.showParents(hashPlate.morePointed)
             onCopyRequested: text => authorRow.copyRequested(text)
             onParentClicked: oidHex => authorRow.parentClicked(oidHex)
         }
