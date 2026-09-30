@@ -256,7 +256,10 @@ impl RepoSession {
                     head_seq: fence.head_seq,
                     reads_from: fence.reads_from,
                 });
-                matches!(after, AfterWrite::Graph | AfterWrite::Refs)
+                matches!(
+                    after,
+                    AfterWrite::Graph | AfterWrite::Refs | AfterWrite::Name { .. }
+                )
             }
             // Only a network write lands here (a local token is nobody's
             // to cancel): the session is closing. The boundaries must
@@ -321,7 +324,10 @@ impl RepoSession {
         rebuild_graph: bool,
     ) -> Vec<FollowUp> {
         let after = operation.after;
-        self.forget_derived();
+        let name_only = matches!(after, AfterWrite::Name { .. });
+        if !name_only {
+            self.forget_derived();
+        }
 
         // Tree and refs settle before the graph: either can move the WIP
         // row or a ref, and rebuilding first would walk the history twice
@@ -334,10 +340,15 @@ impl RepoSession {
         // the tree only where they moved, the one thing a status could then
         // report differently (`AfterWrite::Refs`) — in series on purpose: a
         // join would run the read the series saves.
+        //
+        // A delete moves a ref every time, so it is told at acceptance
+        // whether the tree is owed a read, and reads none otherwise
+        // (`AfterWrite::Name`).
         let mut failed = Vec::new();
         let tree_only = after == AfterWrite::Tree;
         let (tree, refs) = match after {
             AfterWrite::Tree => (self.read_status().await, Reread::Same),
+            AfterWrite::Name { status: false } => (Reread::Same, self.read_refs().await),
             AfterWrite::Refs => {
                 let refs = self.read_refs().await;
                 let tree = if refs == Reread::Moved {
@@ -347,9 +358,10 @@ impl RepoSession {
                 };
                 (tree, refs)
             }
-            AfterWrite::Snapshots | AfterWrite::Graph | AfterWrite::Author => {
-                tokio::join!(self.read_status(), self.read_refs())
-            }
+            AfterWrite::Name { status: true }
+            | AfterWrite::Snapshots
+            | AfterWrite::Graph
+            | AfterWrite::Author => tokio::join!(self.read_status(), self.read_refs()),
         };
         if tree == Reread::Failed {
             note_failed(&mut failed, FollowUp::Status);
@@ -378,10 +390,11 @@ impl RepoSession {
         // refusal put a dropped stash back on screen (the app stands rows
         // in until a listing proves them gone).
         let mut listings = Vec::new();
-        if !tree_only {
-            if !refs_moved {
-                self.settle_head_reach();
-            }
+        if !tree_only && !refs_moved {
+            self.settle_head_reach();
+        }
+        // A delete leaves both listings as they were (`AfterWrite::Name`).
+        if !tree_only && !name_only {
             listings.extend(self.refresh_stashes().map(|task| (FollowUp::Stashes, task)));
             listings.extend(
                 self.refresh_worktrees()

@@ -31,13 +31,59 @@ impl RepoSession {
     }
 
     pub fn delete_branch(self: &Arc<Self>, name: String, force: bool) -> Option<OperationId> {
+        let status = self.measures_head(Some(&name), None);
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Branch,
-            AfterWrite::Graph,
+            AfterWrite::Name { status },
             move |exec, repo, cancel| async move {
-                branch::delete(&exec, &repo.workdir, &name, force, &cancel).await
+                branch::delete(&exec, &repo.workdir, &name, force, &cancel).await?;
+                s.own_config_rewrite();
+                Ok(())
             },
         )
+    }
+
+    /// Whether taking these names away moves what HEAD's branch is
+    /// measured against, so the status behind the write is owed a read
+    /// ([`AfterWrite::Name`]): its upstream — a remote branch, or under
+    /// `remote = .` a branch here — or the remote branch of its own name a
+    /// push elsewhere counts against. `remote` comes as its two halves
+    /// (`origin`, `main`).
+    ///
+    /// Off the snapshot on screen, which the menu offering the delete was
+    /// read from; two binary searches, whatever the number of refs. With no
+    /// snapshot, or HEAD on no branch, the answer is no: the next tick's
+    /// status reads whatever there is.
+    pub(super) fn measures_head(&self, local: Option<&str>, remote: Option<(&str, &str)>) -> bool {
+        let Some(snapshot) = self.published_snapshot() else {
+            return false;
+        };
+        let Some(head) = snapshot
+            .head
+            .as_ref()
+            .and_then(|head| head.branch.as_deref())
+            .and_then(|branch| snapshot.local_named(branch))
+        else {
+            return false;
+        };
+        // A branch here as the upstream leaves `upstream` empty and names
+        // the commit alone (`BranchItem::upstream_oid`).
+        let local_upstream = local.is_some_and(|name| {
+            head.upstream.is_empty()
+                && head.upstream_oid.is_some()
+                && snapshot.local_named(name).map(|b| b.oid) == head.upstream_oid
+        });
+        let remote_upstream = remote.is_some_and(|(remote, branch)| {
+            branch == head.short.as_str()
+                || head
+                    .upstream
+                    .as_str()
+                    .strip_prefix(remote)
+                    .and_then(|rest| rest.strip_prefix('/'))
+                    == Some(branch)
+        });
+        local_upstream || remote_upstream
     }
 
     /// Asks whether `branch --delete` would go through for this branch
@@ -152,7 +198,7 @@ impl RepoSession {
     pub fn delete_tag(self: &Arc<Self>, name: String) -> Option<OperationId> {
         self.write(
             OperationKind::Tag,
-            AfterWrite::Graph,
+            AfterWrite::Name { status: false },
             move |exec, repo, cancel| async move {
                 tag::delete(&exec, &repo.workdir, &name, &cancel).await
             },

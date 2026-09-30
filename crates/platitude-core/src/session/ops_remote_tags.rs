@@ -184,7 +184,7 @@ impl RepoSession {
         let s = Arc::clone(self);
         self.write(
             OperationKind::Push,
-            AfterWrite::Graph,
+            AfterWrite::Name { status: false },
             move |exec, repo, cancel| async move {
                 let result = remote::delete_remote_tag(
                     &exec,
@@ -264,7 +264,7 @@ impl RepoSession {
         // remote lane, since the far end paces the first half and the read.
         self.write(
             OperationKind::DeleteTagEverywhere,
-            AfterWrite::Graph,
+            AfterWrite::Name { status: false },
             move |exec, repo, cancel| async move {
                 let remote_half = remote::delete_remote_tag(
                     &exec,

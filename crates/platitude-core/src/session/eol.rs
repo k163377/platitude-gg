@@ -105,6 +105,27 @@ impl RepoSession {
         *seen = Some(stamp);
     }
 
+    /// Takes the config file as it stands now for read, after a write of
+    /// this session's that rewrote it and changed nothing kept from it:
+    /// `git branch --delete` rewrites the file to drop `branch.<name>.*`,
+    /// section or no section. Without this, every delete reads the remotes
+    /// again behind itself.
+    ///
+    /// An edit that landed beside the write is still seen, one listing
+    /// late: the ref the delete moved drops the remotes for the next
+    /// listing (`publish_refs`).
+    pub(super) fn own_config_rewrite(&self) {
+        let Some(path) = self.config_path() else {
+            return;
+        };
+        let stamp = ConfigStamp::of(&path);
+        let mut seen = relock(&self.config_stamp);
+        // Nothing kept yet is nothing to keep.
+        if seen.is_some() {
+            *seen = Some(stamp);
+        }
+    }
+
     /// Drops the remote answer when the push mark moved under it, and
     /// re-reads refs to say the new one. `seen` is the status tick's read
     /// of the effective config ([`crate::remote::push_marks`]): the stat

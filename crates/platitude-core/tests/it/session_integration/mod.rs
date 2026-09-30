@@ -13,6 +13,7 @@ mod carried_moved;
 mod carry_move;
 mod carry_rewrite;
 mod command_log;
+mod delete_reads;
 mod details;
 mod details_order;
 mod head;

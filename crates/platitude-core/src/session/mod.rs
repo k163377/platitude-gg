@@ -242,6 +242,16 @@ pub enum AfterWrite {
     /// carries the push marks and the merge tool, `git config` reads the
     /// refs key does not see.
     Refs,
+    /// A name taken away — a branch or a tag, here or on a remote: the refs
+    /// and the graph. Nothing else such a write reaches is read again: not
+    /// the tree, the stashes or the working copies (git refuses to delete a
+    /// branch any copy has out), nor what the config decides (a delete
+    /// edits `branch.<name>.*` alone — [`RepoSession::own_config_rewrite`]).
+    ///
+    /// `status` where the name was what HEAD is measured against
+    /// ([`RepoSession::measures_head`]): the status's `# branch.ab` and the
+    /// push counts read that ref.
+    Name { status: bool },
     /// Working tree / index / stash only.
     Snapshots,
     /// History or refs moved, so the graph has to be rebuilt too.

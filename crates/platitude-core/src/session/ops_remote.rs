@@ -285,10 +285,11 @@ impl RepoSession {
         expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
+        let status = self.measures_head(None, Some((&remote_name, &branch_name)));
         let s = Arc::clone(self);
         self.write(
             OperationKind::Push,
-            AfterWrite::Graph,
+            AfterWrite::Name { status },
             move |exec, repo, cancel| async move {
                 let result = remote::delete_remote_branch(
                     &exec,
@@ -329,12 +330,14 @@ impl RepoSession {
         expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
+        let status = self.measures_head(Some(&branch), Some((&remote_name, &remote_branch)));
         let s = Arc::clone(self);
         self.write(
             OperationKind::DeleteBranchEverywhere,
-            AfterWrite::Graph,
+            AfterWrite::Name { status },
             move |exec, repo, cancel| async move {
                 branch::delete(&exec, &repo.workdir, &branch, force, &cancel).await?;
+                s.own_config_rewrite();
                 let result = remote::delete_remote_branch(
                     &exec,
                     &repo.workdir,
