@@ -11,6 +11,7 @@ impl DetailsModel {
     qproperty!("shaHex", Member = sha_hex, Notify = changed);
     qproperty!("sha8", Member = sha8, Notify = changed);
     qproperty!("parentHex", Member = parent_hex, Notify = changed);
+    qproperty!("parentHexes", Member = parent_hexes, Notify = changed);
     qproperty!("authorName", Member = author_name, Notify = changed);
     qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("authorTime", Member = author_time, Notify = changed);
@@ -204,7 +205,8 @@ impl DetailsModel {
         }
         self.sha_hex = hex;
         self.sha8 = details.oid.short_hex(8);
-        self.parent_hex = details.parents.first().map(Oid::to_hex).unwrap_or_default();
+        self.parent_hexes = details.parents.iter().map(Oid::to_hex).collect();
+        self.parent_hex = self.parent_hexes.first().cloned().unwrap_or_default();
         self.author_name = details.author_name.clone();
         self.author_email = details.author_email.clone();
         // Same input as the graph rows (author name) → same identicon.

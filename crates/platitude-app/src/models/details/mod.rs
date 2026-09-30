@@ -57,7 +57,11 @@ pub struct DetailsModel {
     folder_overrides: HashMap<String, bool>,
     sha_hex: String,
     sha8: String,
+    /// The first parent, which a commit's diff is read against.
     parent_hex: String,
+    /// Every parent in git's order, the first included: what the parent
+    /// line draws (デザイン規約 §右のペインの親).
+    parent_hexes: Vec<String>,
     author_name: String,
     author_email: String,
     author_time: i64,
@@ -110,6 +114,7 @@ impl Default for DetailsModel {
             sha_hex: String::new(),
             sha8: String::new(),
             parent_hex: String::new(),
+            parent_hexes: Vec::new(),
             author_name: String::new(),
             author_email: String::new(),
             author_time: 0,
@@ -172,6 +177,7 @@ impl DetailsModel {
         self.sha_hex.clear();
         self.sha8.clear();
         self.parent_hex.clear();
+        self.parent_hexes.clear();
         self.author_name.clear();
         self.author_email.clear();
         self.author_time = 0;
