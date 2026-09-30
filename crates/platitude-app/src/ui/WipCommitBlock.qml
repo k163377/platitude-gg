@@ -6,7 +6,8 @@ import QtQuick.Layouts
 import platitude.ui
 
 // Everything under the WIP pane's file list, pinned to the pane's bottom: the message pair, the amend row, the
-// commit button, and the way out of a stopped operation.
+// commit button, and the way out of a stopped operation — which alone stands while a rebase, pick or revert is
+// stopped anywhere but an `edit` step (`composeHidden`).
 //
 // Scrolls on its own when the pane is too short: its contents keep their height, so past the list's zero they would
 // be laid out below the pane's edge, and the window's floor cannot grow with a card git puts up (規約 §窓の床).
@@ -35,6 +36,12 @@ Flickable {
 
     /// What the block would take with nothing in its way — the pane holds it against `blockRoom`.
     readonly property real wants: blockCol.implicitHeight
+    /// A rebase, cherry-pick or revert standing anywhere but an `edit` step: the message pair, the amend row and the
+    /// commit button go, and the exit card stands in the button's seat (デザイン規約 §進行中の操作から出る). Its rows
+    /// are the way on there, and a commit of one's own would drop what the stopped commit carries — a rebase's author
+    /// and message, a pick's message. The edit step keeps them: amending is what it stops for. A merge keeps them too:
+    /// its `--continue` is the commit this button makes.
+    readonly property bool composeHidden: block.workTree.opStepping && !block.workTree.opEditing
 
     // -- what the pane reads back out of here --
     readonly property alias subjectText: msgEditor.subjectText
@@ -59,6 +66,8 @@ Flickable {
     readonly property alias commitWarned: commitButton.eolWarned
     readonly property alias commitPointed: commitHover.containsMouse
     readonly property alias commitSeat: commitButton
+    /// Automation: the message pair itself, to read whether it stands (`composeHidden` takes it down).
+    readonly property alias messageSeat: msgEditor
     readonly property alias commitEnabled: commitButton.enabled
     readonly property alias signingTipShown: commitButton.phraseSignatureTipShown
     /// Automation only: the block's own hand and the two the boxes carry, started and drifted without a pointer (a
@@ -114,6 +123,7 @@ Flickable {
             // The pair, one block of one height (デザイン規約 §コミットメッセージの 2 つの枠).
             MessageEditor {
                 id: msgEditor
+                visible: !block.composeHidden
                 Layout.fillWidth: true
                 Layout.preferredHeight: msgEditor.pairHeight
                 standingSubject: block.standingSubject
@@ -127,7 +137,7 @@ Flickable {
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
                 // Nothing to amend before the first commit.
-                visible: block.workTree.headOid !== ""
+                visible: block.workTree.headOid !== "" && !block.composeHidden
                 AppCheckBox {
                     id: amendBox
                     text: qsTr("Amend the last commit")
@@ -157,7 +167,7 @@ Flickable {
             // fit the pane and none elides.
             AppCheckBox {
                 id: authorBox
-                visible: block.amending && block.repoTab.headAuthorDiffers
+                visible: block.amending && block.repoTab.headAuthorDiffers && !block.composeHidden
                 text: qsTr("Make me the author")
                 font.pixelSize: Theme.fontSm
                 onVisibleChanged: if (!visible) checked = false
@@ -170,6 +180,7 @@ Flickable {
             // The toolbar's framed button, so its frame, tone and `!` say its state in a vocabulary already read.
             ActionButton {
                 id: commitButton
+                visible: !block.composeHidden
                 Layout.fillWidth: true
                 // The pane's own action, filling the width: a step up (`fontLg`, the summary's size) at the
                 // toolbar's height — at control height it reads as a strip.
@@ -222,7 +233,8 @@ Flickable {
                 // Unmerged paths stop it: git will not commit over them (デザイン規約 §可否・警告の出し場所). A stopped
                 // merge presses on its own, with an empty box and nothing staged — git writes the merge commit
                 // either way, and this seat is the whole way out of a merge (§進行中の操作から出る).
-                enabled: block.repoTab.busyCount === 0 && block.repoTab.identityReady
+                // Not while hidden either: the pane's own press (`WipPane.pressCommit`) reads this.
+                enabled: !block.composeHidden && block.repoTab.busyCount === 0 && block.repoTab.identityReady
                          && block.workTree.conflictCount === 0
                          && (block.onStandingMessage
                              || (msgEditor.subjectText.trim() !== ""

@@ -185,10 +185,12 @@ pub(super) const TABLE: &[Verb] = &[
     // The stop that was asked for: git's edit marker up, the skip's cost
     // back, the exit card's rows standing — over a clean tree it frames
     // like the emptied-commit stop (デザイン規約 §フル interactive rebase).
+    // `box=` / `button=`: the one stepping stop that keeps the message
+    // boxes and the commit button, since amending is what it stops for.
     Verb {
         name: "rebase-edit-stop",
         when: &[],
-        plain: "edit_stop editing=true skipfree=false oid=true cont=true skip=true",
+        plain: "edit_stop editing=true skipfree=false oid=true cont=true skip=true box=true button=true",
     },
     // The row's verb walked out of `reword` and back. The dropped draft and
     // the commit's own message draw the same two boxes, and a dropped one
@@ -243,6 +245,19 @@ pub(super) const TABLE: &[Verb] = &[
         name: "rebase-edit-stop-out",
         when: &[],
         plain: "op_exit_landed wip=false op= follows=true onscreen=true",
+    },
+    // What stands beside the exit card. A stopped rebase, pick or revert
+    // hides the message boxes and the commit button — the card's rows are
+    // the way on — and a stopped merge keeps both, its `--continue` being
+    // that button. A picture of a hidden box and of an empty one differ by
+    // a frame, so the drawn items say it.
+    Verb {
+        name: "op-exit",
+        when: &[(
+            Arg::WithPreset("conflict"),
+            "op_exit card=true box=true button=true",
+        )],
+        plain: "op_exit card=true box=false button=false",
     },
     // Which exit-card row the run actually ran. The row is named by a
     // positional word, so a misspelt or missing one matches nothing — and

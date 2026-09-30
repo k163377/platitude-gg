@@ -254,6 +254,10 @@ Item {
                               + " oid=" + (workTree.opEditOid !== "")
                               + " cont=" + wipPane.offersOpExit("--continue")
                               + " skip=" + wipPane.offersOpExit("--skip")
+                              // The one stepping stop that keeps the message boxes and the commit button: amending
+                              // is what it stops for (デザイン規約 §進行中の操作から出る). Read off the drawn items.
+                              + " box=" + wipPane.commitBlock.messageSeat.visible
+                              + " button=" + wipPane.commitBlock.commitSeat.visible
                               + " op=" + workTree.opText)
             if (planOpenTimer.act !== "rebase-edit-stop-out") {
                 renderedBarrier.begin()

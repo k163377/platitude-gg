@@ -187,6 +187,8 @@ Item {
             page.showWip()
             if (act === "op-exit-go")
                 Harness.report("op_exit_held " + wipPane.completeOpExit("--" + arg))
+            else
+                opExitTimer.start()
         } else if (act === "op-exit-lands") {
             // "-go" followed to where it puts the reader, a status later than the write's own answer
             // (`AutoActDriver.awaitOpExitLanding`). The bare word as above, defaulting to `continue`.
@@ -560,6 +562,22 @@ Item {
                               + " shown=" + detailsModel.shaHex.substring(0, 8)
                               + " author=" + detailsModel.authorName
                               + " committer=" + detailsModel.committerName)
+            driver.complete()
+        }
+    }
+    // What stands beside the exit card (デザイン規約 §進行中の操作から出る): a stopped rebase, pick or revert hides the
+    // message boxes and the commit button, a stopped merge keeps them — its `--continue` is that button. Read off the
+    // drawn items (an item's `visible` is false under a hidden parent), once the card stands on the working-tree face.
+    SampleTimer {
+        id: opExitTimer
+        onTriggered: {
+            if (!page.wipShown || !wipPane.offersOpExit("--abort"))
+                return
+            opExitTimer.stop()
+            Harness.report("op_exit card=" + wipPane.offersOpExit("--abort")
+                              + " box=" + wipPane.commitBlock.messageSeat.visible
+                              + " button=" + wipPane.commitBlock.commitSeat.visible
+                              + " op=" + workTree.opText)
             driver.complete()
         }
     }
