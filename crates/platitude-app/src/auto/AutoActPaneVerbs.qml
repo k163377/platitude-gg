@@ -236,8 +236,10 @@ Item {
         }
         onTriggered: {
             if (graphModel.loading || graphModel.rowTotal === 0
-                    || graphModel.headRow < 0 || graphModel.headLabels.length === 0)
+                    || graphModel.headRow < 0 || graphModel.headLabels.length === 0) {
+                Awaited.at("graph_head", "rows")
                 return
+            }
             const act = Harness.autoAct
             if (!graphHeadTimer.stoodAside) {
                 graphHeadTimer.stoodAside = true
@@ -252,6 +254,7 @@ Item {
                 // The stand-in has to be up on this run's edge first: the runs about it going would call an empty band
                 // a success, and a preset whose HEAD starts off the bottom hands the others one nobody scrolled for.
                 if (!graphPane.headPin.visible || graphPane.headPin.rowAbove === graphHeadTimer.below) {
+                    Awaited.at("graph_head", "edge")
                     if (graphHeadTimer.below)
                         graphPane.view.positionViewAtBeginning()
                     else
@@ -274,10 +277,16 @@ Item {
                 return
             }
             // Both are judged on the row being on screen (the stand-in stepped aside); a press also on the selection.
-            if (graphPane.headPin.visible || !graphPane.view.rowOnScreen(graphModel.headRow))
+            // The move again while it has not taken: asked once and lost, nothing else brings HEAD's row back.
+            if (graphPane.headPin.visible || !graphPane.view.rowOnScreen(graphModel.headRow)
+                    || (act === "graph-head-go" && graphPane.view.currentIndex !== graphModel.headRow)) {
+                Awaited.at("graph_head", "landed")
+                if (act === "graph-head-go" && graphPane.headPin.visible)
+                    graphPane.headPin.activated(graphPane.headPin.headRow, Qt.NoModifier)
+                else if (act === "graph-head-back" && !graphPane.view.rowOnScreen(graphModel.headRow))
+                    graphPane.view.positionViewAtBeginning()
                 return
-            if (act === "graph-head-go" && graphPane.view.currentIndex !== graphModel.headRow)
-                return
+            }
             graphHeadTimer.stop()
             graphHeadTimer.report()
         }

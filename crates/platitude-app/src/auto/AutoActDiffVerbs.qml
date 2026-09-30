@@ -1159,8 +1159,12 @@ Item {
             // waits(measured): printed in the report and compared with nothing — the run ends on `coloured`
             colourPlaceTimer.waited += colourPlaceTimer.interval
             if (!colourPlaceTimer.scrolled) {
+                // The open again while the pane is not reading this file: asked once and lost, nothing else brings
+                // the rows.
+                if (!page.diffShown || page.diffKey !== "unstaged:" + Harness.autoActArg)
+                    page.openDiff("unstaged", Harness.autoActArg, "")
                 // Scroll as soon as the rows are there, before the colours.
-                if (diffPane.firstChangedLine(0) < 0)
+                if (!Awaited.all("colour_place", { "rows": diffPane.firstChangedLine(0) >= 0 }))
                     return
                 diffPane.scrollTo(acts.readY)
                 colourPlaceTimer.scrolled = true
@@ -1168,11 +1172,13 @@ Item {
                 return
             }
             if (!diffPane.diffModel.coloured) {
+                Awaited.at("colour_place", "coloured")
                 colourPlaceTimer.look()
                 return
             }
             const now = acts.reachNow()
             if (now !== colourPlaceTimer.lastReach) {
+                Awaited.at("colour_place", "still")
                 colourPlaceTimer.lastReach = now
                 return
             }
