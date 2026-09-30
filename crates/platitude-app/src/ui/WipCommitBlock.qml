@@ -265,8 +265,9 @@ Flickable {
             // The way out of a stopped operation (`OpExitCard`), under the button that finishes things.
             OpExitCard {
                 id: opExitCard
+                // No margin of its own: the column's step apart from the commit button, the block's margin under the
+                // list's edge when the button is hidden — the one gap every piece of the block keeps.
                 Layout.fillWidth: true
-                Layout.topMargin: Theme.spaceXs
                 repoTab: block.repoTab
                 workTree: block.workTree
             }
