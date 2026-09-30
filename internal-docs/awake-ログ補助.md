@@ -1,6 +1,6 @@
 # Claude Desktop の許可ログによるスリープ制御補助
 
-Windows の holder revision 3、activity protocol 1。実装は `crates/xtask/src/awake/desktop.rs`
+Windows の holder revision 4、activity protocol 1。実装は `crates/xtask/src/awake/desktop.rs`
 (holder のスクリプトに埋め込まれる)。
 
 hook が知らせない 2 つの区間を、デスクトップアプリの `main.log` の後追いで補う。
@@ -46,9 +46,12 @@ CLI session は hook の `session_id`、ツール名は hook の `tool_name` と
 - hook は許可待ちなのに対応する要求が見つからない呼び出しは、初回観測から 5 秒以降の読取りで unmatched に数える
   (状態表示のためで、判定は hook のまま)
 
-別 revision の holder が同時に動いていると、それぞれが自分のスクリプトで判定する。補助を持たない holder は
-人待ちでも保持し続けるので、この holder が解除しても眠らない。状態表示に別ビルドと出る。
-他のセッションの holder は終了させず、そのビルドで動くセッションを終えてから更新する。
+別 revision の holder が同時に動いていると、それぞれが自分のスクリプトで判定し、1 本でも保持すれば眠らない。
+補助を持たない holder は人待ちでも保持し続けるので、この holder が解除しても眠らない。状態表示に別ビルドと出る。
+revision 4 以降の holder は、自分のビルドの hook が 10 分動かず、使われている別ビルドの holder
+(全部のビルドが静かなら、より上の revision の holder)が立っていれば、自分から降りる。
+hook の印(`.awake/hooks-r<n>`)を書かない revision 3 以前の holder は自分では降りないので、
+そのビルドで動くセッションが無くなったら名前ファイル `.awake/holder-r<n>` を消す(次の読取りで終わり、保持を解く)。
 
 ## 診断・復旧
 
@@ -100,12 +103,12 @@ cargo test -p xtask --bin xtask awake::tests::holder::desktop
 
 | 遷移 | 時間 |
 | --- | ---: |
-| 初回の Prompt → 保持 | 2747 ms |
-| 他セッションの Stop 後、`browser:open_file` の要求だけが残る → 解除 | 120 ms |
-| その許可の行の追記 → 保持 | 19 ms |
-| Stop → 解除 | 24 ms |
-| 子プロセスの無い WebFetch の許可待ち → 許可の行の追記 → 保持 | 19 ms |
-| Stop → 解除 | 19 ms |
+| 初回の Prompt → 保持 | 1990 ms |
+| 他セッションの Stop 後、`browser:open_file` の要求だけが残る → 解除 | 122 ms |
+| その許可の行の追記 → 保持 | 21 ms |
+| Stop → 解除 | 25 ms |
+| 子プロセスの無い WebFetch の許可待ち → 許可の行の追記 → 保持 | 40 ms |
+| Stop → 解除 | 23 ms |
 
 テスト群を既定の並列で回した時の単発の観測値で、負荷や通知の欠落による遅延の上限ではない。
 `SetThreadExecutionState` は非 0 を返し、解除時の直前状態は `0x80000001`(system の継続要求のみ = display は要求していない)。
@@ -134,7 +137,7 @@ cargo test -p xtask --bin xtask a_desktop_wait_allows_physical_sleep -- --ignore
 終了時にタイマーと通知の登録を破棄する。
 
 2026-09-30 JST の結果(元の AC スリープ 1800 秒、画面消灯 AC 60 秒)。1 passed、499.16 秒、設定の復元も成功。
-試験に使った holder は、判定のスクリプトは現行と同じで、起動時のスクリプトの受け渡しだけが異なる:
+試験に使った holder は revision 3 のもので、保持・解除の判定は現行と同じ(現行は起動時のスクリプトの受け渡しと、使われなくなったビルドの holder が降りる判定が加わる):
 
 | 時刻 | 観測 |
 | --- | --- |

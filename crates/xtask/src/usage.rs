@@ -699,10 +699,13 @@ const TAIL: &str = "  shipped [--no-build]
       one of its shell calls runs — the session's or a subagent's, sent
       to the background at the start or halfway — or until the wake-up
       it scheduled is due. A process the Claude process already had, or
-      started during another tool's call, is no work. The directory's
-      lock is held for its files alone. Prints the claims as written,
-      each holder's last verdict, and what it last made of the desktop
-      app's log.
+      started during another tool's call, is no work. A holder whose
+      build's hooks have been quiet for ten minutes steps down while a
+      holder of a build in use — or, when every build is quiet, of a
+      higher revision — stands; the last one standing never does. The
+      directory's lock is held for its files alone. Prints the claims
+      as written, each holder's last verdict, when its build's hooks
+      last ran, and what it last made of the desktop app's log.
 
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads

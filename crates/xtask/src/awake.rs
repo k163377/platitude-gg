@@ -66,12 +66,19 @@
 //! window, reads the shared protocol's claims while any stands, asks
 //! `ES_SYSTEM_REQUIRED` — never the display, which the power plan turns off
 //! as usual — while any counts, lets go while none does, and quits once no
-//! compatible claim is left. Every change to the directory is made
-//! under its `lock`, by the hooks and the holders of every revision alike
-//! — a byte-range lock both sides speak (`File::lock` over the whole file,
-//! `FileStream.Lock` over its first byte) — so a holder quitting and a
-//! session claiming cannot pass each other: whichever comes second sees
-//! what the first wrote. The lock is held for the directory's files alone:
+//! compatible claim is left. The claims are every build's, so a holder
+//! also steps down once the hooks of its own build have been quiet for
+//! [`RETIRE_AFTER`] while a holder of another build stands whose hooks
+//! have not — or, when every build's hooks are quiet, one of a higher
+//! revision: the holder of a build no session runs any more goes, the last
+//! one standing never does, and a hook of the build that went starts it
+//! again. Each hook stamps its build's `hooks-r<n>`.
+//!
+//! Every change to the directory is made under its `lock`, by the hooks
+//! and the holders of every revision alike — a byte-range lock both sides
+//! speak (`File::lock` over the whole file, `FileStream.Lock` over its
+//! first byte) — so a holder quitting and a session claiming cannot pass
+//! each other: whichever comes second sees what the first wrote. The lock is held for the directory's files alone:
 //! a hook starts a holder, and a holder asks after processes and reads
 //! transcripts, with it let go, so no seat's slow step holds up another's.
 //! The holder validates the snapshot and applies its OS request under the
@@ -131,6 +138,11 @@ const LOCK: &str = "lock";
 /// it `<the hook's pid> starting` — a fresh name, which keeps every other
 /// hook from starting one — and starts it outside the lock.
 const HOLDER: &str = "holder";
+/// What the time of a build's last hook is called ahead of its revision
+/// (`hooks-r<n>`), in milliseconds since the epoch: whether a session still
+/// runs the build, for its holder to step down by. The holder's script
+/// names it too.
+const HOOKS: &str = "hooks";
 const CLAIM: &str = "claim";
 /// What a hook reserving the holder's name writes after its own pid.
 const STARTING: &str = "starting";
@@ -146,7 +158,7 @@ const AGENT: char = '~';
 /// The holder implementation, independent of the activity protocol.
 /// A script change raises this; compatible builds still update the same
 /// claims, so a Stop or a question reaches every holder reading them.
-const REVISION: u32 = 3;
+const REVISION: u32 = 4;
 /// The shared activity protocol, including claim names and bodies. Do not
 /// raise this for a holder change: a protocol change needs a migration,
 /// not a second independent copy of a session's current state.
@@ -164,6 +176,13 @@ const WORKING_TTL: Duration = Duration::from_secs(60 * 60);
 /// A heartbeat older than this is a holder that died without clearing
 /// its name; the next claim written starts another.
 const HOLDER_STALE: Duration = Duration::from_secs(3 * 15);
+/// How long the hooks of a holder's build go unheard before it steps down
+/// for another build's holder: a session waiting on a person or on a
+/// long background run is quiet too, and the holder that stays covers its
+/// claims meanwhile — a start again at its next hook is the cost of
+/// setting this short.
+#[cfg(windows)]
+const RETIRE_AFTER: Duration = Duration::from_secs(10 * 60);
 /// How long past its scheduled time a wake-up still holds the machine:
 /// time for the wake-up's turn to reach a hook that writes `working`.
 const WAKE_GRACE: u64 = 5 * 60;
@@ -318,14 +337,18 @@ fn target(session: &str, whose: Whose<'_>, mark: Mark<'_>) -> Option<Target> {
 /// then, when no holder of this [`REVISION`] beat, the holder's start
 /// outside it: WMI takes a while to start one, and every seat's hooks and
 /// holders wait on the lock. A start that fails leaves the reservation to
-/// go stale, so the hooks after it try again at most that often. Answers
-/// the pid of the holder this call started, if it started one.
+/// go stale, so the hooks after it try again at most that often. Every
+/// call stamps this build's hooks as heard ([`HOOKS`]). Answers the pid of
+/// the holder this call started, if it started one.
 fn apply(dir: &Path, name: &str, writer: &Writer, mark: Mark<'_>) -> Result<Option<u32>, String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
     let hook = std::process::id();
     let reservation = format!("{hook} {STARTING}");
     {
         let _held = lock(dir)?;
+        let heard = dir.join(format!("{HOOKS}-r{REVISION}"));
+        std::fs::write(&heard, writer.now_ms.to_string())
+            .map_err(|e| format!("could not write {}: {e}", heard.display()))?;
         let path = dir.join(name);
         let before = match std::fs::read_to_string(&path) {
             Ok(text) => Some(
@@ -490,35 +513,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     } else {
         None
     };
-    let mut holders: Vec<(String, String)> = std::fs::read_dir(&dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|entry| {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            let revision = name.strip_prefix(&format!("{HOLDER}-r"))?.to_string();
-            Some((revision, std::fs::read_to_string(entry.path()).ok()?))
-        })
-        .collect();
-    holders.sort();
-    if holders.is_empty() {
-        println!("holder: none — nothing keeps this machine awake");
-    }
-    for (revision, said) in &holders {
-        let mut words = said.split_whitespace();
-        let (pid, verdict) = (words.next().unwrap_or("?"), words.next().unwrap_or("-"));
-        let note = if *revision != REVISION.to_string() {
-            " (another holder build: it reads the shared activity with a script of its own)"
-        } else if !holder_fresh(&dir) {
-            " (stale — the next claim written starts another)"
-        } else {
-            ""
-        };
-        println!("holder r{revision}: pid {pid}, {verdict}{note}");
-        if let Ok(seen) = std::fs::read_to_string(dir.join(format!("{DESKTOP_SEEN}{revision}"))) {
-            println!("  desktop app's log, last read: {}", seen.trim());
-        }
-    }
+    show_holders(&dir);
     let now = now_secs();
     let (mut others, mut torn) = (0, 0);
     let own = format!("r{CLAIM_FORMAT}.");
@@ -573,6 +568,50 @@ pub fn run(args: &[String]) -> Result<(), String> {
         println!("  no claims");
     }
     Ok(())
+}
+
+/// Each holder's name as it stands, when its build's hooks last ran, and
+/// its last reading of the desktop app's log.
+fn show_holders(dir: &Path) {
+    let mut holders: Vec<(String, String)> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let revision = name.strip_prefix(&format!("{HOLDER}-r"))?.to_string();
+            Some((revision, std::fs::read_to_string(entry.path()).ok()?))
+        })
+        .collect();
+    holders.sort();
+    if holders.is_empty() {
+        println!("holder: none — nothing keeps this machine awake");
+    }
+    for (revision, said) in &holders {
+        let mut words = said.split_whitespace();
+        let (pid, verdict) = (words.next().unwrap_or("?"), words.next().unwrap_or("-"));
+        let note = if *revision != REVISION.to_string() {
+            " (another holder build: it reads the shared activity with a script of its own)"
+        } else if !holder_fresh(dir) {
+            " (stale — the next claim written starts another)"
+        } else {
+            ""
+        };
+        println!("holder r{revision}: pid {pid}, {verdict}{note}");
+        let heard = std::fs::read_to_string(dir.join(format!("{HOOKS}-r{revision}")))
+            .ok()
+            .and_then(|said| said.trim().parse::<u64>().ok());
+        match heard {
+            Some(at) => println!(
+                "  its build's hooks last ran {}s ago",
+                now_ms().saturating_sub(at) / 1000
+            ),
+            None => println!("  its build's hooks leave no stamp — it never steps down"),
+        }
+        if let Ok(seen) = std::fs::read_to_string(dir.join(format!("{DESKTOP_SEEN}{revision}"))) {
+            println!("  desktop app's log, last read: {}", seen.trim());
+        }
+    }
 }
 
 /// `cargo xtask awake log on|off`: whether holders read the desktop app's

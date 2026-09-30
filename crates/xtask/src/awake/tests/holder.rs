@@ -714,7 +714,7 @@ fn the_holder_s_script_is_pinned_to_its_revision() {
                 crate::awake::desktop::SCRIPT
             ))
         ),
-        (3, "c98aa6fc2e4404a5".to_string()),
+        (4, "8842f5f934a49a73".to_string()),
         "the holder's script changed: raise REVISION, then pin the new digest here"
     );
 }

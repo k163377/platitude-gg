@@ -55,7 +55,9 @@ const DELEGATED: &str = "'Agent', 'Task'";
 /// claims that verdict comes from — a reading that could not copy them
 /// keeps the verdict and the time it had — and
 /// quits — letting go in `finally` — once no compatible claim is left
-/// and its name is gone, or another holder took its name; until its first
+/// and its name is gone, once it steps down for another build's holder
+/// (`hooks-r<n>`, [`RETIRE_AFTER`](super::RETIRE_AFTER)) and its name is
+/// gone, or when another holder took its name; until its first
 /// reading its name may still be the reservation of the hook that started
 /// it. Owners are matched by image name and by the start time first seen
 /// for that claim and pid, since a pid is reused — by another session's
@@ -191,6 +193,24 @@ function Test-Named {
   if (-not (Test-Path -LiteralPath $name)) { return $false }
   $said = Read-Word $name
   return ((($said -split ' ')[0] -eq $me) -or ($said -eq $reserved))
+}
+function Get-Heard($build) {
+  $path = "$dir\hooks-r$build"
+  if (-not (Test-Path -LiteralPath $path)) { return [int64]0 }
+  $said = [int64]0
+  if ([int64]::TryParse((Read-Word $path), [ref]$said)) { return $said }
+  return [int64]::MaxValue
+}
+function Test-Retiring($nowms) {
+  $quiet = [int64]@RETIRE@ * 1000
+  if (($nowms - (Get-Heard $revision)) -lt $quiet) { return $false }
+  foreach ($other in Get-ChildItem -LiteralPath $dir -Filter 'holder-r*') {
+    if ($other.Name -notmatch '^holder-r(\d+)$') { continue }
+    $theirs = [int]$Matches[1]
+    if (($theirs -eq [int]$revision) -or (([DateTime]::UtcNow - $other.LastWriteTimeUtc).TotalSeconds -ge @STALE@)) { continue }
+    if ((($nowms - (Get-Heard $theirs)) -lt $quiet) -or ($theirs -gt [int]$revision)) { return $true }
+  }
+  return $false
 }
 function Get-Stamp($line) {
   if ($line -match '"timestamp":"([^"]+)"') { return [DateTimeOffset]::Parse($Matches[1]).ToUnixTimeMilliseconds() }
@@ -431,6 +451,7 @@ try {
           }
           if (($seen.Count -eq 0) -and ($current.Count -eq 0) -and (Remove-Word $name)) { break }
         }
+        if ((Test-Retiring $nowms) -and (Remove-Word $name)) { break }
         if ($keep -ne $holding) {
           if ($keep) { $previous = [PggAwake]::SetThreadExecutionState([uint32]@HOLD@) }
           else { $previous = [PggAwake]::SetThreadExecutionState([uint32]@LET_GO@) }
@@ -466,6 +487,8 @@ pub(super) fn script(dir: &Path, reserved: u32) -> String {
         .replace("@HOLD@", &HOLD.to_string())
         .replace("@LET_GO@", &LET_GO.to_string())
         .replace("@TTL@", &super::WORKING_TTL.as_secs().to_string())
+        .replace("@RETIRE@", &super::RETIRE_AFTER.as_secs().to_string())
+        .replace("@STALE@", &super::HOLDER_STALE.as_secs().to_string())
         .replace("@TICK@", &TICK.as_secs().to_string())
         .replace("@SLACK@", &SPAN_SLACK_MS.to_string())
         .replace("@DELEGATED@", DELEGATED)
