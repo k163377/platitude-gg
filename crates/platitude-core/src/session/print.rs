@@ -13,6 +13,10 @@ use super::*;
 /// **Two halves because the chips move on their own**: a refs read writes
 /// new badges into rows already delivered (`apply_refs`) holding only the
 /// new chips, so the half it restates is the only half it can.
+///
+/// **`rest` is itself two hashes, what the commit says and where it is
+/// drawn**: a delete's stand-in lays rows out again from the walk's record
+/// (`session::leaving`), which keeps the first and not the row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct RowPrint {
     /// Everything except the chips.
@@ -34,13 +38,69 @@ impl RowPrint {
         }
     }
 
-    /// **Destructured on purpose**: a field added to [`LogRow`] and not
-    /// hashed here is a change the rebuild would call the old picture.
-    /// Naming every field makes that a build error.
+    /// The print of a row whose content hash is `content`
+    /// ([`Self::content_of`]), drawn on `lanes` under `labels` — what
+    /// [`Self::of`] gives the whole row.
+    pub(super) fn laid(content: u64, lanes: &GraphRow, labels: &[RefLabel]) -> Self {
+        let GraphRow {
+            row,
+            node_lane,
+            node_color,
+            segments,
+            width,
+        } = lanes;
+        Self {
+            rest: Self::placed(content, *row, *node_lane, *node_color, *width, segments),
+            labels: Self::labels_of(labels),
+        }
+    }
+
     fn rest_of(row: &LogRow) -> u64 {
+        Self::placed(
+            Self::content_of(row),
+            row.row,
+            row.node_lane,
+            row.node_color,
+            row.width,
+            &row.segments,
+        )
+    }
+
+    /// Where a row is drawn, over what it says.
+    fn placed(
+        content: u64,
+        row: u32,
+        node_lane: u16,
+        node_color: u8,
+        width: u16,
+        segments: &[Segment],
+    ) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        content.hash(&mut h);
+        row.hash(&mut h);
+        node_lane.hash(&mut h);
+        node_color.hash(&mut h);
+        width.hash(&mut h);
+        for s in segments {
+            (s.kind as u8).hash(&mut h);
+            s.lane.hash(&mut h);
+            s.color.hash(&mut h);
+            s.dashed.hash(&mut h);
+        }
+        segments.len().hash(&mut h);
+        h.finish()
+    }
+
+    /// Everything a row says but its place and its chips.
+    ///
+    /// **Destructured on purpose**: a field added to [`LogRow`] and not
+    /// hashed here or in [`Self::placed`] is a change the rebuild would
+    /// call the old picture. Naming every field makes that a build error.
+    pub(super) fn content_of(row: &LogRow) -> u64 {
         use std::hash::{Hash, Hasher};
         let LogRow {
-            row,
+            row: _,
             oid_hex,
             short_sha,
             author,
@@ -49,10 +109,10 @@ impl RowPrint {
             time,
             subject,
             body,
-            node_lane,
-            node_color,
-            width,
-            segments,
+            node_lane: _,
+            node_color: _,
+            width: _,
+            segments: _,
             labels: _,
             published,
             stash_ref,
@@ -60,7 +120,6 @@ impl RowPrint {
             carried,
         } = row;
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        row.hash(&mut h);
         oid_hex.hash(&mut h);
         short_sha.hash(&mut h);
         author.hash(&mut h);
@@ -73,16 +132,6 @@ impl RowPrint {
         time.hash(&mut h);
         subject.hash(&mut h);
         body.hash(&mut h);
-        node_lane.hash(&mut h);
-        node_color.hash(&mut h);
-        width.hash(&mut h);
-        for s in segments {
-            (s.kind as u8).hash(&mut h);
-            s.lane.hash(&mut h);
-            s.color.hash(&mut h);
-            s.dashed.hash(&mut h);
-        }
-        segments.len().hash(&mut h);
         stash_ref.hash(&mut h);
         published.hash(&mut h);
         parents.hash(&mut h);
@@ -124,11 +173,8 @@ mod tests {
         Oid::from_hex_str(&digit.to_string().repeat(40)).unwrap()
     }
 
-    /// Every field is moved one at a time, so a field the print forgets
-    /// fails here instead of quietly leaving the old row on screen.
-    #[test]
-    fn a_row_that_differs_anywhere_prints_differently() {
-        let base = LogRow {
+    fn a_row() -> LogRow {
+        LogRow {
             row: 3,
             oid_hex: "a".repeat(40),
             short_sha: "aaaaaaa".into(),
@@ -164,7 +210,14 @@ mod tests {
             published: false,
             parents: Box::from([oid('b')]),
             carried: None,
-        };
+        }
+    }
+
+    /// Every field is moved one at a time, so a field the print forgets
+    /// fails here instead of quietly leaving the old row on screen.
+    #[test]
+    fn a_row_that_differs_anywhere_prints_differently() {
+        let base = a_row();
         let print = RowPrint::of(&base);
 
         type Moved = (&'static str, Box<dyn Fn(&mut LogRow)>);
@@ -225,6 +278,26 @@ mod tests {
             RowPrint::labels_of(&chipped.labels),
             RowPrint::of(&chipped).labels,
             "what `apply_refs` writes back is what a rebuild computes"
+        );
+    }
+
+    /// A row laid out again from the walk's record prints as the row itself
+    /// would (`session::leaving`).
+    #[test]
+    fn a_row_laid_again_from_its_content_prints_as_itself() {
+        let base = a_row();
+        let print = RowPrint::of(&base);
+        let lanes = GraphRow {
+            row: base.row,
+            node_lane: base.node_lane,
+            node_color: base.node_color,
+            segments: base.segments.clone(),
+            width: base.width,
+        };
+        assert_eq!(
+            RowPrint::laid(RowPrint::content_of(&base), &lanes, &base.labels),
+            print,
+            "a stand-in's print would call the walk that follows it a change"
         );
     }
 }

@@ -5,9 +5,9 @@
 //! Beside the rows: `GraphRowItem` is at the fifteen fields
 //! `#[derive(QModelItem)]` allows, and none of this is a role — menus ask
 //! for it as they open (`publishedAt` / `rebaseRewritesPublished` /
-//! `branchDeleteMerged`). Kept in step with the rows at the three places
+//! `branchDeleteMerged`). Kept in step with the rows at the four places
 //! they move: cleared in `reset_unnotified`, extended in `take_chunk`,
-//! rebuilt whole in `replace_walk`.
+//! rebuilt whole in `replace_walk` and `relay_walk`.
 
 use platitude_core::publish::WalkedRow;
 
@@ -25,6 +25,12 @@ pub(super) struct RowMark {
     parents_end: u32,
 }
 
+impl RowMark {
+    pub(super) fn oid(&self) -> Oid {
+        self.oid
+    }
+}
+
 impl GraphModel {
     pub(super) fn clear_marks(&mut self) {
         self.marks.clear();
@@ -36,9 +42,6 @@ impl GraphModel {
 
     /// Takes the marks off a chunk of walked rows, in the rows' order.
     pub(super) fn extend_marks(&mut self, rows: &[LogRow]) {
-        // A tally is a count of files; one past `i32` is not a working
-        // tree anybody has.
-        let count = |n: usize| i32::try_from(n).unwrap_or(i32::MAX);
         self.marks.reserve(rows.len());
         self.index.reserve(rows.len());
         for row in rows {
@@ -46,40 +49,55 @@ impl GraphModel {
             // becomes the WIP row's zero id, which no range ends on and no
             // row names as a parent.
             let oid = Oid::from_hex_str(&row.oid_hex).unwrap_or_else(|_| Oid::zero_unsized());
-            // Filed by the index the delegate asks with. All six written
-            // even when zero: none at all is what says a row is not a
-            // copy's (`carried_tally`).
-            if let Some(carried) = &row.carried {
-                let k = &carried.kinds;
-                self.carried.insert(
-                    self.marks.len(),
-                    super::CarriedRow {
-                        name: carried.name.to_string(),
-                        path: carried.path.clone(),
-                        tally: Optional::some(Tally {
-                            added: count(k.added),
-                            modified: count(k.modified),
-                            deleted: count(k.deleted),
-                            renamed: count(k.renamed),
-                            copied: count(k.copied),
-                            conflicted: count(k.conflicted),
-                        }),
-                    },
-                );
-                self.carried_revision = self.carried_revision.wrapping_add(1);
-            }
-            self.parent_oids.extend(row.parents.iter().copied());
-            self.index.push((oid, self.marks.len() as u32));
-            self.marks.push(RowMark {
-                oid,
-                published: row.published,
-                parents_end: self.parent_oids.len() as u32,
-            });
+            self.push_mark(oid, row.published, &row.parents, row.carried.as_ref());
         }
         // Once per chunk (a handful per walk). The stable sort: it finds
         // everything before this chunk already in order and merges the
         // chunk in.
         self.index.sort();
+    }
+
+    /// One row's marks, after the ones already kept — a walked row's, or a
+    /// row a relaying keeps (`relay.rs`). The caller sorts the index.
+    pub(super) fn push_mark(
+        &mut self,
+        oid: Oid,
+        published: bool,
+        parents: &[Oid],
+        carried: Option<&platitude_core::session::Carried>,
+    ) {
+        // A tally is a count of files; one past `i32` is not a working
+        // tree anybody has.
+        let count = |n: usize| i32::try_from(n).unwrap_or(i32::MAX);
+        // Filed by the index the delegate asks with. All six written even
+        // when zero: none at all is what says a row is not a copy's
+        // (`carried_tally`).
+        if let Some(carried) = carried {
+            let k = &carried.kinds;
+            self.carried.insert(
+                self.marks.len(),
+                super::CarriedRow {
+                    name: carried.name.to_string(),
+                    path: carried.path.clone(),
+                    tally: Optional::some(Tally {
+                        added: count(k.added),
+                        modified: count(k.modified),
+                        deleted: count(k.deleted),
+                        renamed: count(k.renamed),
+                        copied: count(k.copied),
+                        conflicted: count(k.conflicted),
+                    }),
+                },
+            );
+            self.carried_revision = self.carried_revision.wrapping_add(1);
+        }
+        self.parent_oids.extend(parents.iter().copied());
+        self.index.push((oid, self.marks.len() as u32));
+        self.marks.push(RowMark {
+            oid,
+            published,
+            parents_end: self.parent_oids.len() as u32,
+        });
     }
 
     /// The whole window at once, for a pass that replaced it.
@@ -92,7 +110,7 @@ impl GraphModel {
         self.marks.get(row).is_some_and(|mark| mark.published)
     }
 
-    fn parents_of(&self, row: usize) -> &[Oid] {
+    pub(super) fn parents_of(&self, row: usize) -> &[Oid] {
         let Some(mark) = self.marks.get(row) else {
             return &[];
         };

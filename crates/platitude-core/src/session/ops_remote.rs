@@ -277,7 +277,8 @@ impl RepoSession {
     /// `git push <remote> --delete <branch>`, leased to `expect`, the
     /// commit the screen showed it on ([`remote::delete_remote_branch`]).
     /// A remote that moved since is caught up with, as a push is
-    /// ([`Self::catch_up_after`]).
+    /// ([`Self::catch_up_after`]). The commits only the remote branch held
+    /// leave the graph at once (`session::leaving`).
     pub fn delete_remote_branch(
         self: &Arc<Self>,
         remote_name: String,
@@ -286,10 +287,12 @@ impl RepoSession {
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let status = self.measures_head(None, Some((&remote_name, &branch_name)));
+        let (remote, branch) = (remote_name.clone(), branch_name.clone());
         let s = Arc::clone(self);
-        self.write(
+        self.write_taking(
             OperationKind::Push,
             AfterWrite::Name { status },
+            &[LeavingRef::Remote(&remote, &branch)],
             move |exec, repo, cancel| async move {
                 let result = remote::delete_remote_branch(
                     &exec,
@@ -321,6 +324,10 @@ impl RepoSession {
     ///
     /// A kind of its own ([`OperationKind::DeleteBranchEverywhere`]): it
     /// answers as a branch write, but the far end paces its second half.
+    ///
+    /// Plain or forced, both names leave the graph at once, and the commits
+    /// only they held with them (`session::leaving`): what a plain delete
+    /// was merged into may be the remote branch going too.
     pub fn delete_branch_everywhere(
         self: &Arc<Self>,
         branch: String,
@@ -331,10 +338,15 @@ impl RepoSession {
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let status = self.measures_head(Some(&branch), Some((&remote_name, &remote_branch)));
+        let names = (branch.clone(), remote_name.clone(), remote_branch.clone());
         let s = Arc::clone(self);
-        self.write(
+        self.write_taking(
             OperationKind::DeleteBranchEverywhere,
             AfterWrite::Name { status },
+            &[
+                LeavingRef::Branch(&names.0),
+                LeavingRef::Remote(&names.1, &names.2),
+            ],
             move |exec, repo, cancel| async move {
                 branch::delete(&exec, &repo.workdir, &branch, force, &cancel).await?;
                 s.own_config_rewrite();

@@ -30,14 +30,22 @@ impl RepoSession {
         )
     }
 
+    /// Deletes a branch here. Forced, the commits only it held leave the
+    /// graph at once (`session::leaving`); a plain delete takes none with
+    /// it — git refuses one whose tip is not merged into its upstream or
+    /// HEAD, and the graph draws both.
     pub fn delete_branch(self: &Arc<Self>, name: String, force: bool) -> Option<OperationId> {
         let status = self.measures_head(Some(&name), None);
+        let names = [LeavingRef::Branch(&name)];
+        let leaving: &[LeavingRef<'_>] = if force { &names } else { &[] };
+        let target = name.clone();
         let s = Arc::clone(self);
-        self.write(
+        self.write_taking(
             OperationKind::Branch,
             AfterWrite::Name { status },
+            leaving,
             move |exec, repo, cancel| async move {
-                branch::delete(&exec, &repo.workdir, &name, force, &cancel).await?;
+                branch::delete(&exec, &repo.workdir, &target, force, &cancel).await?;
                 s.own_config_rewrite();
                 Ok(())
             },
@@ -194,13 +202,16 @@ impl RepoSession {
     }
 
     /// Deletes a tag. What it marked may have nothing else reaching it, so
-    /// the UI asks first.
+    /// the UI asks first — and those commits leave the graph at once
+    /// (`session::leaving`).
     pub fn delete_tag(self: &Arc<Self>, name: String) -> Option<OperationId> {
-        self.write(
+        let target = name.clone();
+        self.write_taking(
             OperationKind::Tag,
             AfterWrite::Name { status: false },
+            &[LeavingRef::Tag(&name)],
             move |exec, repo, cancel| async move {
-                tag::delete(&exec, &repo.workdir, &name, &cancel).await
+                tag::delete(&exec, &repo.workdir, &target, &cancel).await
             },
         )
     }

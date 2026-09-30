@@ -197,6 +197,7 @@ impl RepoSession {
             write_tx,
             write_order: Mutex::new(None),
             accepting: Mutex::new(()),
+            leaving: Mutex::new(Vec::new()),
             released: std::sync::atomic::AtomicBool::new(false),
             network_timeout: Mutex::new(remote::DEFAULT_NETWORK_TIMEOUT),
             config_stamp: Mutex::new(None),

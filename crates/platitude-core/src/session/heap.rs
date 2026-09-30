@@ -13,6 +13,11 @@ impl RepoSession {
         let mut parts = vec![
             Part::of("sent-rows", &shared.sent_rows),
             Part::new(
+                "walked-rows",
+                shared.walked.heap_bytes(),
+                shared.walked.len(),
+            ),
+            Part::new(
                 "label-map",
                 shared.label_map.heap_bytes(),
                 shared.label_map.len(),

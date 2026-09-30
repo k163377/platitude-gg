@@ -18,7 +18,8 @@ use platitude_core::parse::diff::FilePatch;
 use platitude_core::preview::FilePreview;
 use platitude_core::process::{CommandEnd, GitExecutor};
 use platitude_core::session::{
-    DrawnGraph, FirstPass, LogRow, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink,
+    DrawnGraph, FirstPass, LogRow, RefLabel, RefsSnapshot, RelaidRow, RepoSession, SessionEvent,
+    SessionSink,
 };
 use platitude_core::settings::{Settings, State, Store};
 use platitude_core::stash::StashEntry;

@@ -345,6 +345,7 @@ impl RepoSession {
         }
         totals.shown += rows.len() as u32;
         shared.sent_rows.extend(rows.iter().map(RowPrint::of));
+        shared.walked.extend(&rows);
         self.sink.event(SessionEvent::LogChunk { generation, rows });
     }
 }

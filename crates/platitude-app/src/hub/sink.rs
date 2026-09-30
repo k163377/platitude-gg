@@ -146,6 +146,19 @@ impl SessionSink for BridgeSink {
                 walked,
                 truncated,
             }),
+            SessionEvent::LogRelaid {
+                generation,
+                from,
+                rows,
+                walked,
+                truncated,
+            } => self.feeds.graph.push(GraphMsg::Relaid {
+                generation,
+                from,
+                rows,
+                walked,
+                truncated,
+            }),
             SessionEvent::LabelsChanged { generation, rows } => {
                 self.feeds.graph.push(GraphMsg::Labels { generation, rows });
             }

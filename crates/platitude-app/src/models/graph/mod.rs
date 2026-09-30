@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use platitude_core::Oid;
 use platitude_core::find::{Query, Row};
-use platitude_core::session::LogRow;
+use platitude_core::session::{LogRow, RelaidRow};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{Chips, Lanes, Optional};
@@ -18,6 +18,7 @@ mod head;
 mod item;
 mod marks;
 mod qobject;
+mod relay;
 mod stream;
 
 use item::{ChosenRow, ChosenRows, GraphRowItem, Tally, to_row_item};
@@ -49,9 +50,13 @@ pub struct GraphModel {
     /// its index before.
     carried_revision: i32,
     /// Every drawn row by its id, in id order, for a binary search per ask
-    /// (`marks::row_at`). Kept in step with `marks` at the same three
-    /// places.
+    /// (`marks::row_at`). Kept in step with `marks` at the same places.
     index: Vec<(Oid, u32)>,
+    /// Rows a relaying took off the graph (`relay.rs`), by id: a refused
+    /// delete lays them out again by id, and nothing else holds them. A
+    /// handful: taken back by a walk that draws them again, let go of at a
+    /// reset.
+    set_aside: std::collections::HashMap<Oid, relay::SetAside>,
     /// Where HEAD stands, as the one record has it (`GraphMsg::Head`);
     /// `None` until reported. Read off the record, not the chips, which
     /// land a pass after the rows. A range question from HEAD takes the

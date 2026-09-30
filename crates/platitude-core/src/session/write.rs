@@ -45,6 +45,28 @@ impl RepoSession {
         F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
         Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
     {
+        self.write_taking(kind, after, &[], task)
+    }
+
+    /// [`Self::write`] for a delete: what only `names` hold leaves the
+    /// graph now, and comes back if git refuses (`session::leaving`).
+    pub(super) fn write_taking<F, Fut>(
+        self: &Arc<Self>,
+        kind: OperationKind,
+        after: AfterWrite,
+        names: &[LeavingRef<'_>],
+        task: F,
+    ) -> Option<OperationId>
+    where
+        F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
+    {
+        let leaving = if names.is_empty() {
+            None
+        } else {
+            self.resolve_leaving(names)
+        };
+        let stands_in = leaving.is_some();
         // The place in the tree's order is taken inside the call that
         // hands the id back, so a tab opened over a running write cannot
         // step in front of it (`session::write_order`). Taken by what
@@ -72,6 +94,11 @@ impl RepoSession {
             if local {
                 self.local_writes.fetch_add(1, Ordering::SeqCst);
             }
+            // Written down before it is sent, so no answer can come for a
+            // delete that is not.
+            if let Some(leaving) = leaving {
+                self.leave(operation.id, leaving);
+            }
             // Fails only once the loop has ended.
             let sent = self.write_tx.send(WriteRequest {
                 operation,
@@ -86,8 +113,14 @@ impl RepoSession {
             if local {
                 self.local_writes.fetch_sub(1, Ordering::SeqCst);
             }
+            self.leaving_done(operation.id);
             tracing::debug!(?operation, "write not accepted: the session is closed");
             return None;
+        }
+        if stands_in {
+            // Off the caller's thread: laying out is a pass over the window.
+            let s = Arc::clone(self);
+            self.runtime.spawn(async move { s.relay_leaving() });
         }
         Some(operation.id)
     }
@@ -169,6 +202,9 @@ impl RepoSession {
         // The request's place goes back as it ends; the tree is free from
         // here on.
         self.run_write(request).await;
+        // Landed, a delete is drawn by the walk behind it by now; refused,
+        // it was put back at the answer (`session::leaving`).
+        self.leaving_done(operation.id);
         *relock(&self.write_running) = None;
         // The quit gate counts by lane; the tree is told by kind.
         if operation.lane == Lane::Local {
@@ -294,6 +330,9 @@ impl RepoSession {
                     head_seq: fence.head_seq,
                     reads_from: fence.reads_from,
                 });
+                // A refused delete's commits come back with its rows, before
+                // anything is read (`session::leaving`).
+                self.leaving_refused(id);
                 // A half-finished command still changed the repository
                 // (conflicted merge, interrupted rebase, partial apply),
                 // but it did not move history the way it meant to.
@@ -417,6 +456,11 @@ impl RepoSession {
                     note_failed(&mut failed, listing);
                 }
             }
+        }
+        // A landed delete whose walk did not land stands on in the graph
+        // until one does (`session::leaving`).
+        if rebuild_graph && failed.contains(&FollowUp::Graph) {
+            self.leaving_unwalked(operation.id);
         }
         failed
     }

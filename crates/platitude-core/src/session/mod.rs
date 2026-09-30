@@ -66,6 +66,9 @@ mod heap;
 mod join_tests;
 mod joins;
 mod latest;
+mod leaving;
+#[cfg(test)]
+mod leaving_tests;
 mod lfs;
 mod log;
 mod model;
@@ -114,8 +117,9 @@ pub use graph_refresh::{
 };
 pub use joins::same_path_key;
 use latest::Latest;
+use leaving::{Leaving, LeavingRef, Walked};
 pub(crate) use model::LabelIndex;
-pub use model::{LabelKind, LogOptions, LogRow, RefLabel};
+pub use model::{LabelKind, LogOptions, LogRow, RefLabel, RelaidRow};
 pub use open::{DrawnGraph, FirstPass};
 use pass_watch::PassWatch;
 pub use pass_watch::{PassHooks, PassStep};

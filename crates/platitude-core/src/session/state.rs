@@ -198,6 +198,11 @@ pub(super) struct Shared {
     /// background rebuild can tell "same picture" and skip the swap.
     /// Prints rather than rows: this grows with the window ([`RowPrint`]).
     pub(super) sent_rows: Vec<RowPrint>,
+    /// The commit rows as the walk behind `sent_rows` gave them, before a
+    /// delete that is out took any away — what the delete's stand-in lays
+    /// out again (`session::leaving`). Written where `sent_rows` is, by
+    /// the walk; laying out again leaves it be.
+    pub(super) walked: Walked,
     /// The footer delivered with them, compared alongside: a window change
     /// can keep every row and still change the footer (two commits are cut
     /// by a window of two, not by three), and a rebuild that overtook the

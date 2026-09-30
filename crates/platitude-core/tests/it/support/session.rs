@@ -351,6 +351,11 @@ impl PassDoors {
     pub fn fail_every_pass(&self, at: PassStep) {
         *self.fault.lock().unwrap() = Some(at);
     }
+
+    /// Passes walk again from here on.
+    pub fn stop_failing(&self) {
+        *self.fault.lock().unwrap() = None;
+    }
 }
 
 impl PassHooks for PassDoors {

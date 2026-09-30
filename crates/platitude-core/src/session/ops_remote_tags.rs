@@ -251,7 +251,8 @@ impl RepoSession {
     /// pair with nothing touched, where the other order would already have
     /// dropped the name here — with no reflog behind it. The local half
     /// after it refuses only a name that is not here, which the menu does
-    /// not offer.
+    /// not offer. The commits only the tag held leave the graph at once
+    /// (`session::leaving`).
     pub fn delete_tag_everywhere(
         self: &Arc<Self>,
         tag: String,
@@ -259,12 +260,14 @@ impl RepoSession {
         expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
+        let name = tag.clone();
         let s = Arc::clone(self);
         // A kind of its own: it answers as a tag write but runs on the
         // remote lane, since the far end paces the first half and the read.
-        self.write(
+        self.write_taking(
             OperationKind::DeleteTagEverywhere,
             AfterWrite::Name { status: false },
+            &[LeavingRef::Tag(&name)],
             move |exec, repo, cancel| async move {
                 let remote_half = remote::delete_remote_tag(
                     &exec,

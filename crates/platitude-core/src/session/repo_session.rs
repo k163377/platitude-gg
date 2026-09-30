@@ -208,6 +208,12 @@ pub struct RepoSession {
     /// first ([`RepoSession::write`] says what disagreeing would cost).
     /// Nothing else about a write is under it.
     pub(super) accepting: Mutex<()>,
+    /// The deletes out now, whose commits the graph stands in for
+    /// (`session::leaving`). The session's own, not the graph's record: a
+    /// record handed to the next session (`DrawnGraph`) must not carry
+    /// deletes whose answers only this one hears. Taken after the graph's
+    /// lock where both are held.
+    pub(super) leaving: Mutex<Vec<Leaving>>,
     /// Set by the close, before it gives anything back
     /// ([`RepoSession::keeps_what_it_reads`]). Reads already in flight
     /// answer after it, and what they answer with is dropped.

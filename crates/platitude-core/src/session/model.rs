@@ -170,6 +170,23 @@ impl crate::mem::Footprint for LabelIndex {
     }
 }
 
+/// One row of a graph laid out again without walking
+/// ([`SessionEvent::LogRelaid`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RelaidRow {
+    /// A commit the consumer has drawn — on screen now, or taken away by
+    /// an earlier relaying — on its new lanes, wearing `labels`. All else
+    /// about the row is as the consumer has it.
+    Moved {
+        oid: Oid,
+        lanes: GraphRow,
+        labels: Vec<RefLabel>,
+    },
+    /// A row made fresh from the readings: this window's uncommitted row,
+    /// or another working copy's.
+    Made(Box<LogRow>),
+}
+
 /// Display-ready row of the commit graph.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogRow {

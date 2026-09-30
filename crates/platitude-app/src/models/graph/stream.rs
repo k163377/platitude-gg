@@ -42,6 +42,13 @@ impl GraphModel {
                     walked,
                     truncated,
                 } => self.replace_walk(generation, &rows, elapsed_ms, walked, truncated),
+                GraphMsg::Relaid {
+                    generation,
+                    from,
+                    rows,
+                    walked,
+                    truncated,
+                } => self.relay_walk(generation, from, &rows, walked, truncated),
                 GraphMsg::Failed {
                     generation,
                     message,
@@ -86,6 +93,7 @@ impl GraphModel {
         if generation > self.generation {
             self.generation = generation;
             self.reset();
+            self.set_aside.clear();
             self.reset_count += 1;
             self.loading = true;
             self.row_total = 0;
@@ -188,7 +196,7 @@ impl GraphModel {
         }
     }
 
-    fn replace_walk(
+    pub(super) fn replace_walk(
         &mut self,
         generation: u64,
         rows: &[LogRow],
@@ -220,6 +228,7 @@ impl GraphModel {
             .max(1);
         // Written before the splice churns `rows` into the same shape.
         self.replace_marks(rows);
+        self.drawn_again_from_set_aside();
         // A pass landed, as in `finish_walk`.
         self.pinned_oid = None;
         self.splice_notified(items);

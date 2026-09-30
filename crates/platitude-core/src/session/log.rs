@@ -227,11 +227,10 @@ impl RepoSession {
         cancel: &CancellationToken,
         reads: Option<PassReads>,
     ) -> RefreshOutcome {
-        let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
         let mut watch = PassWatch::operation(self);
         // Before the lock, because reading them can go to git.
         let (tips, inputs) = self.reads_for(reads, workdir, cancel).await;
-        {
+        let generation = {
             // Reset and announce under one lock: every reader of row
             // numbers in `shared` sends under the same lock, so no message
             // describes a graph the consumer is not on yet (see
@@ -247,6 +246,11 @@ impl RepoSession {
                 watch.answered();
                 return RefreshOutcome::Cancelled;
             }
+            // Numbered under the lock it installs under: a graph laid out
+            // again meanwhile (`session::leaving`) took a number too, and a
+            // stream numbered below the graph on screen is one the
+            // consumer refuses.
+            let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
             shared.builder = GraphBuilder::new();
             // Seeded first, so every emitted row already carries the
             // answer the menus read off it.
@@ -254,6 +258,7 @@ impl RepoSession {
             shared.generation = generation;
             shared.applied.clear();
             shared.sent_rows.clear();
+            shared.walked.clear();
             // No footer until the walk ends, so a rebuild landing in
             // between finds none to compare against.
             shared.sent_footer = None;
@@ -261,7 +266,8 @@ impl RepoSession {
             // The stale graph has just been cleared.
             self.tell_graph_stale(false);
             watch.announced(generation);
-        }
+            generation
+        };
         // Outside the lock: a fault raised here unwinds, and `watch` is
         // what reports it.
         self.run_pass_step(PassStep::Streaming);
@@ -291,24 +297,33 @@ impl RepoSession {
                     // both ways from it (the WIP row, sifted stash parents).
                     truncated: options.limit.is_some_and(|n| totals.walked >= n),
                 };
-                // Recorded and sent under one lock, so a rebuild comparing
-                // against this footer finds it only after the consumer has
-                // been told.
-                let Some(mut shared) = self.store_shared() else {
-                    return RefreshOutcome::Cancelled;
-                };
-                // Only the stream the consumer is on records its footer
-                // (see `emit_rows`).
-                if shared.generation == generation {
-                    shared.sent_footer = Some(footer);
+                {
+                    // Recorded and sent under one lock, so a rebuild
+                    // comparing against this footer finds it only after
+                    // the consumer has been told.
+                    let Some(mut shared) = self.store_shared() else {
+                        return RefreshOutcome::Cancelled;
+                    };
+                    // Only the stream the consumer is on records its
+                    // footer (see `emit_rows`).
+                    if shared.generation == generation {
+                        shared.sent_footer = Some(footer);
+                        shared.walked.footer = Some(footer);
+                        self.leaving_walked();
+                    }
+                    self.sink.event(SessionEvent::LogFinished {
+                        generation,
+                        total: totals.shown,
+                        elapsed_ms: started.elapsed().as_millis() as u64,
+                        walked: footer.walked,
+                        truncated: footer.truncated,
+                    });
                 }
-                self.sink.event(SessionEvent::LogFinished {
-                    generation,
-                    total: totals.shown,
-                    elapsed_ms: started.elapsed().as_millis() as u64,
-                    walked: footer.walked,
-                    truncated: footer.truncated,
-                });
+                // A stream cannot leave rows out as it goes, so a delete
+                // that is out takes its commits off the finished graph.
+                if self.deletes_out() {
+                    self.relay_leaving();
+                }
                 watch.answered();
                 RefreshOutcome::Changed
             }
@@ -370,7 +385,6 @@ impl RepoSession {
         if cancel.is_cancelled() {
             return RefreshOutcome::Cancelled;
         }
-        let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
         // Off-screen: a pass that never finishes leaves a real picture
         // standing (`PassWatch`).
         let mut watch = PassWatch::operation(self);
@@ -422,8 +436,10 @@ impl RepoSession {
             }
         };
 
-        self.lay_again_if_moved(&mut rows, &mut builder, &laid_from);
-        let total = rows.len() as u32;
+        // As walked, before anything is laid out of it (`Shared::walked`).
+        let mut record = Walked::of(&rows);
+        let standing = self.lay_again_if_moved(&mut rows, &mut builder, &laid_from);
+        let holders = self.holders();
         let tags = self.tags_shown();
         {
             let Some(mut shared) = self.store_shared() else {
@@ -435,14 +451,27 @@ impl RepoSession {
                 watch.answered();
                 return RefreshOutcome::Cancelled;
             }
+            // A delete that is out keeps its commits off this graph too.
+            let gone = self.lay_leaving(
+                &mut rows,
+                &mut builder,
+                &record,
+                &standing,
+                &holders,
+                &shared.label_map,
+            );
+            let total = rows.len() as u32;
             let elapsed_ms = started.elapsed().as_millis() as u64;
             let applied = wear_chips(&mut rows, &shared.label_map, tags);
-            let footer = Footer {
+            let walk_footer = Footer {
                 walked,
                 // See run_direct_pass: the walk is what decides
                 // truncation.
                 truncated: options.limit.is_some_and(|n| walked >= n),
             };
+            record.footer = Some(walk_footer);
+            // The walk's, less what a delete out now took off it.
+            let footer = leaving::footer_without(walk_footer, &gone);
             // Every pass speaks while the working-tree row is held back
             // ([`PassHooks::holds_back_the_working_tree_row`]): after a
             // stopped replay that row is the only difference, so the pass
@@ -451,12 +480,14 @@ impl RepoSession {
             shared.builder = builder;
             shared.publish_marks = marks;
             shared.applied = applied;
+            shared.walked = record;
+            self.leaving_walked();
             if unchanged {
                 // The UI already shows exactly this; swapping would only
                 // reset the view. The generation stays: nothing was sent,
                 // and this walk numbered its rows the same way or it would
                 // not compare equal.
-                tracing::debug!(generation, total, "graph rebuild unchanged; swap skipped");
+                tracing::debug!(total, "graph rebuild unchanged; swap skipped");
                 // A walk that found the screen current clears an earlier
                 // failure's mark.
                 self.tell_graph_stale(false);
@@ -465,6 +496,8 @@ impl RepoSession {
             }
             shared.sent_rows = rows.iter().map(RowPrint::of).collect();
             shared.sent_footer = Some(footer);
+            // Numbered as it installs, as a stream is (`run_direct_pass`).
+            let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
             shared.generation = generation;
             // Under the lock, as in run_direct_pass.
             self.sink.event(SessionEvent::LogReplaced {

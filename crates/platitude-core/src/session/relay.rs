@@ -87,20 +87,21 @@ impl RepoSession {
     }
 
     /// What is published is laid from the answer standing now (the
-    /// module doc says why).
+    /// module doc says why), which comes back for a laying after this one
+    /// (`session::leaving`).
     pub(super) fn lay_again_if_moved(
         self: &Arc<Self>,
         rows: &mut Vec<LogRow>,
         builder: &mut GraphBuilder,
         laid_from: &Standing,
-    ) {
+    ) -> Standing {
         let standing = self.standing_rows();
-        if standing == *laid_from {
-            return;
+        if standing != *laid_from {
+            let (relaid, laid) = self.relay_rows(std::mem::take(rows), &standing);
+            *rows = relaid;
+            *builder = laid;
         }
-        let (relaid, laid) = self.relay_rows(std::mem::take(rows), &standing);
-        *rows = relaid;
-        *builder = laid;
+        standing
     }
 
     /// The rows again, laid from `standing`: commit rows keep everything
@@ -126,6 +127,17 @@ pub(super) fn lay(
     standing: &Standing,
     head_tip: Option<Oid>,
 ) -> (Vec<LogRow>, GraphBuilder) {
+    lay_without(rows, standing, head_tip, &std::collections::HashSet::new())
+}
+
+/// [`lay`], leaving out the commits in `gone` — what a delete that is out
+/// takes off the graph (`session::leaving`).
+pub(super) fn lay_without(
+    rows: Vec<LogRow>,
+    standing: &Standing,
+    head_tip: Option<Oid>,
+    gone: &std::collections::HashSet<Oid>,
+) -> (Vec<LogRow>, GraphBuilder) {
     let mut laying = Laying::new(standing, head_tip);
     let mut out: Vec<LogRow> = Vec::with_capacity(rows.len() + 1);
     out.extend(laying.top());
@@ -139,6 +151,9 @@ pub(super) fn lay(
             out.push(row);
             continue;
         };
+        if gone.contains(&oid) {
+            continue;
+        }
         let (made, g) = laying.commit(&oid, &row.parents, !row.stash_ref.is_empty());
         out.extend(made);
         out.push(LogRow {
@@ -154,8 +169,10 @@ pub(super) fn lay(
 }
 
 /// One laying-out in progress: the builder, and the synthetic rows the
-/// readings still owe it — the steps [`lay`] takes over a pass's rows, for
-/// a caller that lays out rows of another shape the same way.
+/// readings still owe it. Stepped through by [`lay_without`] over a pass's
+/// rows and by the stand-in over the walk's record
+/// (`session::leaving::lay_walked`), so the two cannot lay a graph two
+/// ways.
 pub(super) struct Laying {
     pub(super) builder: GraphBuilder,
     carried: CarriedRows,
