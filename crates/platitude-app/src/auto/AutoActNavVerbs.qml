@@ -688,9 +688,11 @@ Item {
                 return
             const at = graphModel.rowOf(acts.jumpWant)
             // A commit the walk never reached is an answer: the page had settled before the click (`PageSettled`), so
-            // the row will not arrive. A row the model has but the view has not laid out yet is waited for.
+            // the row will not arrive. Not so another copy's HEAD: the walk that draws it follows the copies' listing,
+            // which the settle does not wait for. A row the model has but the view has not laid out yet is waited for.
             const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
-            if (at >= 0 && !item)
+            if (!Awaited.all("nav_jump", { "row": at >= 0 || jumpTimer.kind !== "worktree",
+                                           "laid": at < 0 || !!item }))
                 return
             jumpTimer.stop()
             Harness.report("nav_jump section=" + jumpTimer.kind
