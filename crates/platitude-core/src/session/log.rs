@@ -436,38 +436,18 @@ impl RepoSession {
                 return RefreshOutcome::Cancelled;
             }
             let elapsed_ms = started.elapsed().as_millis() as u64;
-            let mut applied: HashMap<u32, Vec<RefLabel>> = HashMap::new();
-            for row in &mut rows {
-                if let Ok(oid) = Oid::from_hex_str(&row.oid_hex) {
-                    let labels = shared.label_map.labels_of(&oid, tags);
-                    if !labels.is_empty() {
-                        row.labels = labels.to_vec();
-                        applied.insert(row.row, labels.to_vec());
-                    }
-                }
-            }
+            let applied = wear_chips(&mut rows, &shared.label_map, tags);
             let footer = Footer {
                 walked,
                 // See run_direct_pass: the walk is what decides
                 // truncation.
                 truncated: options.limit.is_some_and(|n| walked >= n),
             };
-            // Rows and footer both: rows alone would call a widened window
-            // the same picture and leave the truncation notice standing
-            // (rules-refs/core.md「swap を省く判定は行とフッタの両方」).
-            //
             // Every pass speaks while the working-tree row is held back
             // ([`PassHooks::holds_back_the_working_tree_row`]): after a
             // stopped replay that row is the only difference, so the pass
             // would be dropped as the same picture. Only a harness raises it.
-            let unchanged = !self.holds_back_the_working_tree_row()
-                && shared.sent_footer == Some(footer)
-                && shared.sent_rows.len() == rows.len()
-                && shared
-                    .sent_rows
-                    .iter()
-                    .zip(&rows)
-                    .all(|(sent, fresh)| *sent == RowPrint::of(fresh));
+            let unchanged = !self.holds_back_the_working_tree_row() && shared.shows(&rows, footer);
             shared.builder = builder;
             shared.publish_marks = marks;
             shared.applied = applied;
@@ -511,4 +491,20 @@ impl RepoSession {
         // Focus coming back is when the other copies most likely moved.
         self.refresh_carried();
     }
+}
+
+/// Puts each row's chips on it, answering them by row — what the next
+/// refs read diffs against (`apply_refs`).
+fn wear_chips(rows: &mut [LogRow], labels: &LabelIndex, tags: bool) -> HashMap<u32, Vec<RefLabel>> {
+    let mut applied = HashMap::new();
+    for row in rows {
+        if let Ok(oid) = Oid::from_hex_str(&row.oid_hex) {
+            let chips = labels.labels_of(&oid, tags);
+            if !chips.is_empty() {
+                row.labels = chips.to_vec();
+                applied.insert(row.row, chips.to_vec());
+            }
+        }
+    }
+    applied
 }

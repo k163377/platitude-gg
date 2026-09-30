@@ -206,6 +206,22 @@ pub(super) struct Shared {
     pub(super) sent_footer: Option<Footer>,
 }
 
+impl Shared {
+    /// Whether the consumer already shows `rows` under `footer` — rows and
+    /// footer both: rows alone would call a widened window the same
+    /// picture and leave the truncation notice standing
+    /// (rules-refs/core.md「swap を省く判定は行とフッタの両方」).
+    pub(super) fn shows(&self, rows: &[LogRow], footer: Footer) -> bool {
+        self.sent_footer == Some(footer)
+            && self.sent_rows.len() == rows.len()
+            && self
+                .sent_rows
+                .iter()
+                .zip(rows)
+                .all(|(sent, fresh)| *sent == RowPrint::of(fresh))
+    }
+}
+
 /// One fact read out of the repository and kept until something that
 /// could have changed it happens.
 ///

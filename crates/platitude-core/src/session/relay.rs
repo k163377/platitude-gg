@@ -126,24 +126,9 @@ pub(super) fn lay(
     standing: &Standing,
     head_tip: Option<Oid>,
 ) -> (Vec<LogRow>, GraphBuilder) {
-    let mut builder = GraphBuilder::new();
+    let mut laying = Laying::new(standing, head_tip);
     let mut out: Vec<LogRow> = Vec::with_capacity(rows.len() + 1);
-    // First, where the walk puts it, so HEAD's chain keeps lane 0 either
-    // way (`session::walk`).
-    match (&standing.pending, head_tip) {
-        (Some(incoming), Some(head)) => {
-            out.push(super::rows::wip_row(
-                &head,
-                incoming.as_slice(),
-                &mut builder,
-            ));
-        }
-        // Unborn: the row stands where the first commit will.
-        (Some(_), None) => out.push(super::rows::wip_root_row(&mut builder)),
-        (None, _) => {}
-    }
-
-    let mut carried = CarriedRows::new(&standing.carried);
+    out.extend(laying.top());
     for row in rows {
         if is_synthetic(&row) {
             continue;
@@ -154,18 +139,8 @@ pub(super) fn lay(
             out.push(row);
             continue;
         };
-        // A copy standing here draws above the commit, and a stash asks
-        // with the commit it was taken on (`CarriedRows`).
-        let dashed = !row.stash_ref.is_empty();
-        let anchor = if dashed {
-            row.parents.first().copied()
-        } else {
-            Some(oid)
-        };
-        if let Some(anchor) = anchor {
-            out.extend(carried.take_at(&anchor, &mut builder));
-        }
-        let g = builder.push_ids(&oid, &row.parents, dashed);
+        let (made, g) = laying.commit(&oid, &row.parents, !row.stash_ref.is_empty());
+        out.extend(made);
         out.push(LogRow {
             row: g.row,
             node_lane: g.node_lane,
@@ -175,7 +150,65 @@ pub(super) fn lay(
             ..row
         });
     }
-    (out, builder)
+    (out, laying.builder)
+}
+
+/// One laying-out in progress: the builder, and the synthetic rows the
+/// readings still owe it — the steps [`lay`] takes over a pass's rows, for
+/// a caller that lays out rows of another shape the same way.
+pub(super) struct Laying {
+    pub(super) builder: GraphBuilder,
+    carried: CarriedRows,
+    top: Option<LogRow>,
+}
+
+impl Laying {
+    pub(super) fn new(standing: &Standing, head_tip: Option<Oid>) -> Self {
+        let mut builder = GraphBuilder::new();
+        // First, where the walk puts it, so HEAD's chain keeps lane 0
+        // either way (`session::walk`).
+        let top = match (&standing.pending, head_tip) {
+            (Some(incoming), Some(head)) => Some(super::rows::wip_row(
+                &head,
+                incoming.as_slice(),
+                &mut builder,
+            )),
+            // Unborn: the row stands where the first commit will.
+            (Some(_), None) => Some(super::rows::wip_root_row(&mut builder)),
+            (None, _) => None,
+        };
+        Self {
+            builder,
+            carried: CarriedRows::new(&standing.carried),
+            top,
+        }
+    }
+
+    /// This window's uncommitted row, where it stands: first, and once.
+    pub(super) fn top(&mut self) -> Option<LogRow> {
+        self.top.take()
+    }
+
+    /// Lays one commit: the copies' rows owed above it, and its lanes.
+    pub(super) fn commit(
+        &mut self,
+        oid: &Oid,
+        parents: &[Oid],
+        stash: bool,
+    ) -> (Vec<LogRow>, GraphRow) {
+        // A copy standing here draws above the commit, and a stash asks
+        // with the commit it was taken on (`CarriedRows`).
+        let anchor = if stash {
+            parents.first().copied()
+        } else {
+            Some(*oid)
+        };
+        let made = match anchor {
+            Some(anchor) => self.carried.take_at(&anchor, &mut self.builder),
+            None => Vec::new(),
+        };
+        (made, self.builder.push_ids(oid, parents, stash))
+    }
 }
 
 /// Every working copy's uncommitted row carries the all-zero id, which no

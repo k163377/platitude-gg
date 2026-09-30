@@ -26,7 +26,7 @@ use crate::commit::{self, CommitOptions};
 use crate::conflict;
 use crate::details::{self, CommitDetails, DiffTarget};
 use crate::error::GitError;
-use crate::graph::{GraphBuilder, Segment};
+use crate::graph::{GraphBuilder, GraphRow, Segment};
 use crate::identity;
 use crate::integrate;
 use crate::model::CommitMeta;
