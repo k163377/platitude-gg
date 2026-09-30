@@ -26,14 +26,22 @@ linux	band-actions --preset longnames	-	fits= folded= read the band's measured w
 linux	band-actions-alert --preset longnames --allow-write-failure	-	fits= folded= cut= read the band's measured widths
 linux	band-actions-none --preset longnames	-	fits= folded= cut= read the band's measured widths
 linux	carried-read an-extremely-long-working-copy-name-for-the-edge-case --preset carried	-	cut= reads whether a long copy name fits
+linux	co-authors 0:min --preset octopus-mates	-	folded= said= read the credit's measured room beside the parents
+linux	co-authors 8:min --preset octopus-mates	-	folded= said= read the credit's measured room beside the parents
 linux	code-grow late.txt --preset widelate	-	grew= past= read the code column against the widest line
 linux	code-shrink top.txt --preset widelate	-	narrower= reads the code column against the widest line
 linux	code-swap late.txt --preset widelate	-	room= narrower= read the code column against the widest line
 linux	corner 1	-	shown= reads the room the details pane leaves
 linux	corner 1 --preset long	-	room= reads the room the details pane leaves
 linux	corner wip	-	room= reads the room the working tree pane leaves
+linux	details-align 0 --preset octopus-mates	-	line1= line2= read the author row's measured baselines
+linux	details-align 16:min --preset octopus-mates	-	line1= line2= read the author row's measured baselines
+linux	details-align 7 --preset edges	-	line1= line2= read the author row's measured baselines
 linux	details-fit 7 --preset edges	-	fills= fits= read the details pane's measured text
 linux	details-grow 7 --preset edges	-	keeps= reads the description's laid-out height
+linux	details-parents 0 --preset octopus	-	said= crowd= read the parent line's measured cut
+linux	details-parents 8:min --preset octopus	-	floor= crowd= read the parent line's measured cut at the pane's floor
+linux	details-parents-card 0 --preset octopus	-	seat= clear= read the card's measured place on the line
 linux	details-grow-squeeze 7 --preset edges	-	keeps= reads the description's laid-out height
 linux	diff-band-sweep unstaged:crates/platitude-core/src/session/integration/support/fixtures/refs_join_snapshot.rs --preset longpaths	-	cut= reads whether a long path fits the band
 linux	graph-min --preset co-authors	-	w= min= read the graph column's measured floor

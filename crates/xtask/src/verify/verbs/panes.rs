@@ -44,6 +44,74 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "details_fit fills=true fits=true",
     },
+    // The parent line cut to the room the row leaves it: nothing on the
+    // name or the date line gave way to it, and whatever it left out is
+    // counted. How many digits and links stand is the font's, so only the
+    // merge of two (`--preset octopus` row 8) names the count — and the
+    // stash filed with its untracked files (`--preset stashes` row 0),
+    // whose three parents in git are one in the graph.
+    Verb {
+        name: "details-parents",
+        when: &[
+            (
+                Arg::Starts("8"),
+                "details_parents floor=true said=true order=true even=true crowd=false fits=true \
+                 of=2 drawn=2 more=0",
+            ),
+            (
+                Arg::WithPreset("stashes"),
+                "details_parents floor=true said=true order=true even=true crowd=false fits=true \
+                 of=1 drawn=1 more=0 git=3",
+            ),
+        ],
+        plain: "details_parents floor=true said=true order=true even=true crowd=false fits=true",
+    },
+    // The count's card: its first hash on a single parent's seat, the
+    // arrow left outside it, nothing else of the line beside it, every hash
+    // whole, and the plate as wide as before, so the name beside it holds
+    // still. The eight rows are `--preset octopus` row 0's.
+    Verb {
+        name: "details-parents-card",
+        when: &[(
+            Arg::WithPreset("octopus"),
+            "parents_card open=true seat=true clear=true bare=true whole=true still=true rows=8 of=8",
+        )],
+        plain: "parents_card open=true seat=true clear=true bare=true whole=true still=true",
+    },
+    // The author row's two lines, each on one baseline whatever the faces
+    // (the name's and the hashes' mono): a pixel off is what the eye reads
+    // as crooked, and no picture is asked for a pixel.
+    Verb {
+        name: "details-align",
+        when: &[],
+        plain: "details_align line1=true line2=true sizes=true apart=true face=true",
+    },
+    // The credit on the date row: whole where the row has room for it
+    // (`--preset co-authors` row 4), folded at the pane's floor beside a
+    // merge's parents (`--preset octopus-mates`) — the face for the first
+    // and the count unchanged, or the face alone for one; no name cut to a
+    // sliver.
+    Verb {
+        name: "co-authors",
+        when: &[
+            (
+                Arg::Is("0:min"),
+                "co_authors count=3 cut=true first=Claude Opus 5 open=false folded=true said=+2",
+            ),
+            (
+                Arg::Is("8:min"),
+                "co_authors count=1 cut=true first=Claude Opus 5 open=false folded=true said=-",
+            ),
+        ],
+        plain: "co_authors count=3 cut=false first=Claude Opus 5 open=false folded=false said=+2",
+    },
+    // A press on the card's row: the page lands on that parent and the
+    // card goes down with the press.
+    Verb {
+        name: "details-parents-go",
+        when: &[],
+        plain: "parents_go landed=true shut=true",
+    },
     // `Ctrl+A` on a value field reaches the whole of it, cut tail
     // included; the claim is that what came out is what the model says the
     // pane shows (a `Text` in place of the field draws the identical row).

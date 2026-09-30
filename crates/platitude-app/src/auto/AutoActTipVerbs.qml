@@ -71,8 +71,14 @@ Item {
             page.activateRow(graphModel.oidAt(Number(arg)))
             authorCardTimer.start()
         } else if (act === "co-authors" || act === "co-authors-open") {
-            // Same pairing as author-card.
-            page.activateRow(graphModel.oidAt(Number(arg)))
+            // Same pairing as author-card. `<row>[:<width>]`, as `details-parents`: `min` is the pane's floor, where
+            // the credit folds (規約 §co-author の表示).
+            const widthAt = ("" + arg).indexOf(":")
+            page.activateRow(graphModel.oidAt(Number(widthAt > 0 ? arg.substring(0, widthAt) : arg)))
+            if (widthAt > 0) {
+                const width = arg.substring(widthAt + 1)
+                page.setDetailsWidth(width === "min" ? 0 : Number(width))
+            }
             coAuthorTimer.start()
         } else {
             return false
@@ -262,23 +268,36 @@ Item {
             driver.complete()
         }
     }
-    // Waits for the details, which carry the credit line.
+    // Waits for the details, which carry the credit line, and for the row to stop moving: a width asked for arrives a
+    // frame after the row it resizes.
     SampleTimer {
         id: coAuthorTimer
+        property string lastGeom: ""
         onTriggered: {
-            if (!driver.cardSettled)
+            if (!driver.cardSettled || detailsPane.width <= 0)
                 return
+            const geom = Math.round(detailsPane.width) + "/" + Math.round(detailsPane.valueRow.width)
+                + "/" + detailsPane.messageBlock.matesFolded
+            if (geom !== coAuthorTimer.lastGeom) {
+                coAuthorTimer.lastGeom = geom
+                return
+            }
             if (Harness.autoAct === "co-authors-open")
                 detailsPane.messageBlock.showCoAuthors(true)
             if (Harness.autoAct === "co-authors-open" && !detailsPane.authorCards.matesCardOpen)
                 return
             coAuthorTimer.stop()
             // `open=` is the card's own visibility; the input that asked for it would go green with the binding cut.
+            // `folded=` / `said=` are the credit as drawn: the name and the count of the rest, or folded, the face and
+            // that same count (`-` for one, whose face stands alone).
             Harness.report(
                 "co_authors count=" + detailsPane.messageBlock.coAuthorRecords.length
                 + " cut=" + detailsPane.messageBlock.matesClipped
                 + " first=" + detailsPane.messageBlock.coAuthorName(0)
-                + " open=" + detailsPane.authorCards.matesCardOpen)
+                + " open=" + detailsPane.authorCards.matesCardOpen
+                + " folded=" + detailsPane.messageBlock.matesFolded
+                + " said=" + detailsPane.messageBlock.matesSaid
+                + " pane=" + Math.round(detailsPane.width))
             driver.complete()
         }
     }
