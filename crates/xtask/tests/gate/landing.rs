@@ -62,8 +62,141 @@ fn land_rebases_then_gates_then_fast_forwards() {
     );
     let ran = without_always(&sb.ran());
     assert!(ran.contains("test platitude-core 1"), "{ran:?}");
+    assert!(
+        sb.git_ok(&sb.repo, &["tag", "-l"]).is_empty(),
+        "a landing that moves no version is tagged: {text}"
+    );
     let (ok, text) = sb.land("worktree-a");
     assert!(ok && text.contains("nothing to land"), "{text}");
+}
+
+/// A lock whose app is built with `qtbridge` at `version`.
+fn lock_with_qtbridge(version: &str) -> String {
+    format!(
+        "version = 4\n\n[[package]]\nname = \"platitude-app\"\nversion = \"0.0.0\"\n\
+         dependencies = [\n \"qtbridge\",\n]\n\n[[package]]\nname = \"qtbridge\"\n\
+         version = \"{version}\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n"
+    )
+}
+
+/// A landing that moves a version the shipped build is made from lands
+/// between two tags, pushed where main goes: the last main on the old
+/// versions, and the main the update and its follow-up arrived at. A
+/// second update the same day counts on.
+#[test]
+fn a_version_move_lands_between_two_pushed_tags() {
+    let sb = Sandbox::new("land-tags");
+    sb.git_ok(&sb.root, &["init", "-q", "--bare", "origin.git"]);
+    let origin = sb.root.join("origin.git");
+    let url = origin.display().to_string().replace('\\', "/");
+    sb.git_ok(&sb.repo, &["remote", "add", "origin", &url]);
+    sb.git_ok(&sb.repo, &["config", "branch.main.remote", "origin"]);
+    let tags_of = |dir: &std::path::Path| {
+        sb.git_ok(dir, &["tag", "-l"])
+            .lines()
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+    let at = |tag: &str| sb.git_ok(&sb.repo, &["rev-parse", &format!("{tag}^{{commit}}")]);
+    let said = |tag: &str| sb.git_ok(&sb.repo, &["tag", "-l", "--format=%(contents)", tag]);
+    let day = || {
+        sb.git_ok(
+            &sb.repo,
+            &["log", "-1", "--format=%cd", "--date=short", "main"],
+        )
+    };
+
+    let seed = sb.main_sha();
+    sb.write(&sb.seat, "Cargo.lock", &lock_with_qtbridge("0.2.1"));
+    sb.commit_all(&sb.seat, "chore: build with qtbridge", &[]);
+    let (ok, text) = sb.land("worktree-a");
+    assert!(ok, "{text}");
+    let first = day();
+    let [before, after] = [
+        format!("deps/{first}/before"),
+        format!("deps/{first}/after"),
+    ];
+    assert!(
+        text.contains(&format!("pushed {before} and {after} to origin")),
+        "{text}"
+    );
+    assert_eq!(at(&before), seed);
+    assert_eq!(at(&after), sb.main_sha());
+    assert!(
+        said(&before).contains("\n+ qtbridge 0.2.1"),
+        "{}",
+        said(&before)
+    );
+    assert!(
+        said(&after).starts_with(&format!(
+            "Update done: 1 commit(s) of the update and its follow-up since {before}"
+        )),
+        "{}",
+        said(&after)
+    );
+    assert_eq!(tags_of(&origin), tags_of(&sb.repo));
+
+    let old_main = sb.main_sha();
+    sb.write(&sb.seat, "Cargo.lock", &lock_with_qtbridge("0.3.0"));
+    sb.commit_all(&sb.seat, "chore: qtbridge 0.3", &[]);
+    sb.write_refs(&sb.seat, 8);
+    sb.commit_all(&sb.seat, "perf(core): after the update", &[]);
+    let (ok, text) = sb.land("worktree-a");
+    assert!(ok, "{text}");
+    // Two landings a midnight apart are two days, and neither counts on.
+    let second = day();
+    let stem = if second == first {
+        format!("deps/{second}-2")
+    } else {
+        format!("deps/{second}")
+    };
+    let [before, after] = [format!("{stem}/before"), format!("{stem}/after")];
+    assert!(
+        text.contains(&format!("pushed {before} and {after} to origin")),
+        "{text}"
+    );
+    assert_eq!(at(&before), old_main);
+    assert_eq!(at(&after), sb.main_sha());
+    assert!(
+        said(&after).contains("\nqtbridge 0.2.1 -> 0.3.0"),
+        "{}",
+        said(&after)
+    );
+    assert!(said(&after).contains(": 2 commit(s)"), "{}", said(&after));
+    assert_eq!(tags_of(&origin).len(), 4);
+    assert_eq!(tags_of(&origin), tags_of(&sb.repo));
+}
+
+/// Main has moved by the time the tags go out, so a push that fails
+/// leaves the landing green, the tags here, and the command that
+/// finishes the push said.
+#[test]
+fn an_unpushed_pair_stays_here_and_says_how_to_push_it() {
+    let sb = Sandbox::new("land-tags-unpushed");
+    let nowhere = sb.root.join("no-such-remote.git");
+    let url = nowhere.display().to_string().replace('\\', "/");
+    sb.git_ok(&sb.repo, &["remote", "add", "origin", &url]);
+    sb.git_ok(&sb.repo, &["config", "branch.main.remote", "origin"]);
+    sb.write(&sb.seat, "Cargo.lock", &lock_with_qtbridge("0.2.1"));
+    sb.commit_all(&sb.seat, "chore: build with qtbridge", &[]);
+    let (ok, text) = sb.land("worktree-a");
+    assert!(ok, "{text}");
+    assert_eq!(sb.main_sha(), sb.head(&sb.seat));
+    let day = sb.git_ok(
+        &sb.repo,
+        &["log", "-1", "--format=%cd", "--date=short", "main"],
+    );
+    assert!(
+        text.contains(&format!(
+            "the version tags were not pushed to origin, so they stand here only — push them with \
+             `git push --atomic origin refs/tags/deps/{day}/before refs/tags/deps/{day}/after`"
+        )),
+        "{text}"
+    );
+    assert_eq!(
+        sb.git_ok(&sb.repo, &["tag", "-l"]),
+        format!("deps/{day}/after\ndeps/{day}/before")
+    );
 }
 
 /// The gate's steps rebuild the seat's task runner after the rebase, and

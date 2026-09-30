@@ -16,6 +16,8 @@ use crate::seats::{
 use crate::subprocess::git_query;
 
 mod record;
+mod tags;
+mod versions;
 use record::Phases;
 
 pub(crate) static LAND: command::Command = command::Command {
@@ -135,6 +137,9 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     // a landing that changed the script would leave the old copy answering.
     println!("{}", crate::gate::hooks::install(&root)?);
     println!("landed {branch}: main {before} -> {after} ({ahead} commit(s)).");
+    if tags::bracket(&here, &before, &after, ahead) {
+        phases.mark("version tags");
+    }
     // While the claim still stands, so nothing else is building here: the
     // rebase may have left a generation of build products behind.
     crate::sweep::at_a_tail(seat_dir, &crate::sweep::Tail::after_a_landing());
