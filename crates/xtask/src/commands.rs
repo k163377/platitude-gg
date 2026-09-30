@@ -27,6 +27,7 @@ pub(crate) fn all() -> Vec<&'static Command> {
         crate::budget::COMMANDS,
         crate::land::COMMANDS,
         crate::gui::COMMANDS,
+        crate::awake::COMMANDS,
         crate::hook::COMMANDS,
     ]
     .concat()

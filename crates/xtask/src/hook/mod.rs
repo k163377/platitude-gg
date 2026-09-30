@@ -10,6 +10,7 @@ use std::io::Read;
 
 pub(crate) mod approval;
 mod attribution;
+mod awake;
 mod chips;
 mod commit;
 mod dump;
@@ -44,6 +45,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
     std::io::stdin()
         .read_to_string(&mut input)
         .map_err(|e| format!("failed to read hook payload: {e}"))?;
+    // Whether the session is at work (`awake`) is written before any
+    // handler answers, so a refusal or an early return leaves it said.
+    match event {
+        "prompt-submit" => awake::prompt(&input),
+        "pre-tool" => awake::tool_start(&input),
+        "post-tool" | "permission-denied" => awake::after_tool(&input),
+        "permission-request" => awake::permission_request(&input),
+        "elicitation" => awake::elicitation(&input, true),
+        "elicitation-result" => awake::elicitation(&input, false),
+        "stop" | "stop-failure" => awake::stopped(&input),
+        "subagent-start" => awake::subagent_start(&input),
+        "subagent-stop" => awake::subagent_stop(&input),
+        _ => {}
+    }
     match event {
         "pre-write" => write::pre_write(&input),
         "post-write" => write::post_write(&input),
@@ -56,6 +71,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "prompt-submit" => review::prompt_submit(&input),
         "session-start" => greeting::session_start(&input),
         "session-end" => session_end(&input),
+        "stop-failure" | "pre-tool" | "post-tool" | "permission-request" | "permission-denied"
+        | "elicitation" | "elicitation-result" | "subagent-start" | "subagent-stop" => Ok(()),
         other => Err(format!("unknown hook event: {other:?}")),
     }
 }
@@ -88,6 +105,7 @@ fn session_end(input: &str) -> Result<(), String> {
     chips::session_end(input);
     repeat::session_end(input);
     seat::session_end(input);
+    awake::session_end(input);
     Ok(())
 }
 

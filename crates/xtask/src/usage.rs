@@ -660,10 +660,47 @@ const TAIL: &str = "  shipped [--no-build]
       reaches the rest — an approach abandoned under a name nobody
       retakes (--label), or a seat whose session is long gone.
 
+  awake
+      Which sessions keep this machine from idle-sleeping (Windows
+      only): each session's hooks, and each subagent's apart, write a
+      claim under .awake/ in the primary checkout — in one activity
+      protocol, which every compatible build's hooks update, so a Stop
+      reaches every holder reading it — working from a prompt, idle once
+      the turn stops, and each tool call from its start to its end, with
+      whether a person is asked about it; a holder with no window, one
+      per revision of its script, reading while any claim stands, asks
+      the system, never the display, to stay up while any counts. A
+      working claim counts while one of its own calls runs (open, no
+      result yet, no person asked — however long it runs), or for an
+      hour after its last hook while none is open — never while its open
+      calls all wait on a person, nor once the session's transcript ends
+      on the user interrupting the turn. A subagent stopped from outside
+      runs no SubagentStop: its claim goes once its session's transcript
+      records its stop (a background task's notice naming it, or the
+      result of the call it runs under). A notice (a background task's
+      end, another session's message) written into a session's
+      transcript since its last hook starts a turn: the holder marks the
+      claim working from it, until the turn's Stop. An MCP server's
+      pending request for input holds up one of the session's running
+      calls on that server, and its answer frees that one request alone.
+      No hook says when a person lets a call through, so a call nothing
+      shows running (an MCP tool, a fetch) is not seen from then to its
+      end, nor when a tool the desktop app runs asks a person itself, so
+      such a call counts as running while it waits. Any claim counts
+      while a process of one of its shell calls runs — the session's or
+      a subagent's, sent to the background at the start or halfway — or
+      until the wake-up it scheduled is due. A process the Claude process
+      already had, or started during another tool's call, is no work.
+      The directory's lock is held for its files alone. Prints the claims
+      as written and each holder's last verdict.
+
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads
       the hook payload from stdin). Events: pre-write, post-write,
-      pre-shell, pre-chip, post-chip, stop, pre-worktree,
-      post-worktree, prompt-submit, session-start (which also installs
-      the gate's git hook), session-end.
+      pre-shell, pre-tool, pre-chip, post-chip, post-tool,
+      permission-request, permission-denied, elicitation,
+      elicitation-result, subagent-start, subagent-stop, stop,
+      stop-failure, pre-worktree, post-worktree, prompt-submit,
+      session-start (which also installs the gate's git hook),
+      session-end.
 ";

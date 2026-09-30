@@ -4,6 +4,7 @@
 
 app.kill
 app.launch
+awake.status
 budget.standing
 check.stage2
 corpus.build

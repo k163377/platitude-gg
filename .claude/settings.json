@@ -36,9 +36,35 @@
             "command": "cargo run --quiet -p xtask --profile hooks -- hook pre-chip"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook pre-tool"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook permission-request"
+          }
+        ]
       }
     ],
     "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook post-tool"
+          }
+        ]
+      },
       {
         "matcher": "Write|Edit",
         "hooks": [
@@ -67,12 +93,62 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook post-tool"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook subagent-start"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook subagent-stop"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook permission-denied"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "cargo run --quiet -p xtask --profile hooks -- hook stop"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook stop-failure"
           }
         ]
       }
@@ -103,6 +179,26 @@
           {
             "type": "command",
             "command": "cargo run --quiet -p xtask --profile hooks -- hook session-end"
+          }
+        ]
+      }
+    ],
+    "Elicitation": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook elicitation"
+          }
+        ]
+      }
+    ],
+    "ElicitationResult": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo run --quiet -p xtask --profile hooks -- hook elicitation-result"
           }
         ]
       }

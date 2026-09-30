@@ -18,6 +18,9 @@ target/
 .repeats/
 .entered/
 .permits/
+# The sleep holder's claims (cargo xtask awake), one file per session,
+# beside this .git so every seat's sessions keep one holder.
+.awake/
 
 # IDE / editors
 .idea/

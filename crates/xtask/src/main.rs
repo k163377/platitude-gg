@@ -3,6 +3,7 @@
 mod app_build;
 mod app_env;
 mod app_out;
+mod awake;
 mod budget;
 mod check;
 mod command;
@@ -77,6 +78,7 @@ fn main() -> ExitCode {
         Some("land") => land::run(&args[1..]),
         Some("kill") => gui::kill(&args[1..]),
         Some("launch") => gui::launch(&args[1..]),
+        Some("awake") => awake::run(&args[1..]),
         Some("hook") => hook::run(&args[1..]),
         _ => {
             usage::print();
