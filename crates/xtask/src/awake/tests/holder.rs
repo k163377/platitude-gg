@@ -839,6 +839,7 @@ fn claims_made_at_once_start_one_holder() {
 mod coordination;
 mod counting;
 mod desktop;
+mod physical;
 
 #[test]
 fn an_installed_holder_handles_unicode_and_quotes_and_removes_its_script() {

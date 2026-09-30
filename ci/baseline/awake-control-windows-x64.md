@@ -1,7 +1,7 @@
 # Windows のスリープ保持: 実測
 
 2026-09-30。holder revision 3、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
-デスクトップアプリのログによる補助の記録は [ログ補助](../../internal-docs/awake-ログ補助.md)。
+デスクトップアプリのログによる補助と実スリープ試験の記録は [ログ補助](../../internal-docs/awake-ログ補助.md)。
 
 ## 判定
 
@@ -34,14 +34,13 @@ display の継続要求は加えていない。
 WMI の起動と PowerShell の C# 型のコンパイルを含み、成立するまで保持の無い区間がある ——
 「呼び出しの実行前に必ず保持済み」の保証には使えない。
 
-awake の Windows テストは **68 passed / 0 failed / 2 ignored**(52.43 秒)。ignored は、親テストが専用環境で
-呼ぶ子プロセスの入口 2 本。子コマンドの背景実行、質問・許可待ち、複数セッション、
+awake の Windows テストは **68 passed / 0 failed / 3 ignored**(52.08 秒)。ignored は、親テストが専用環境で
+呼ぶ子プロセスの入口 2 本と、手動の実スリープ試験 1 本。子コマンドの背景実行、質問・許可待ち、複数セッション、
 subagent、通知、所有者の終了、読取りの妨害、同時起動、hook のパイプの解放、互換ビルドの同居、
 照会中に始まった仕事、ログ補助を含む。
 
 ## 未実施・限界
 
-- 実際のスリープ・画面消灯は試験していない。電源設定は変えない
 - `powercfg /requests` は管理者権限が無く取得できない。`CallNtPowerInformation(SystemExecutionState)` は
   他アプリの要求も含む全体の値で、この実装の保持・解除の帰属には使わない
 - Claude の実際の許可操作、アプリ独自の許可画面、実際の MCP の内部実行は再現していない。

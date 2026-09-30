@@ -116,4 +116,36 @@ cargo test -p xtask --bin xtask awake::tests::holder::desktop
 遠隔からの許可、時計の変更、秒精度の中の別の呼び出し、ログに出ない待機、未知のツール・アプリの更新には
 対応できない場合がある。補助が止まっている・使えない時は、
 [P3 の未達](P3-確認事項.md#開発環境スリープ止め-cargo-xtask-awake)の挙動に戻る。
-API の成功・ログの認識と、実際の消灯・スリープ到達は別の証拠として扱う。実際のスリープ・画面消灯は試験していない。
+API の成功・ログの認識と、実際の消灯・スリープ到達は別の証拠として扱う(§実スリープ試験)。
+
+## 実スリープ試験
+
+手動の専用テスト `crates/xtask/src/awake/tests/holder/physical.rs`。電源設定を一時的に変えて実際のスリープを許すので、
+通常の gate では ignored。ユーザーが無人試験を許可した時だけ回す。`PGG_AWAKE_PHYSICAL_LOG` に記録先の絶対パスを置く。
+
+```text
+cargo test -p xtask --bin xtask a_desktop_wait_allows_physical_sleep -- --ignored --nocapture
+```
+
+親の Claude プロセスと許可ログは fixture、holder の OS 要求・画面の通知・S3 は実機。
+実際の Claude の許可画面の一連の操作を確かめたことにはならない。
+試験は AC スリープを 180 秒にして始め、`finally` で元の値へ戻す。DC・画面消灯の設定は変えない。
+強制スリープの命令、マウス・キー入力、自動許可は使わない。復帰は試験用の 8 分の wake timer で求め、
+終了時にタイマーと通知の登録を破棄する。
+
+2026-09-30 JST の結果(元の AC スリープ 1800 秒、画面消灯 AC 60 秒)。1 passed、499.16 秒、設定の復元も成功。
+試験に使った holder は、判定のスクリプトは現行と同じで、起動時のスクリプトの受け渡しだけが異なる:
+
+| 時刻 | 観測 |
+| --- | --- |
+| 08:51:49.746 | 保持の開始。holder は system のみを要求 |
+| 08:51:49.749 | Windows の DISPLAY 通知 state=0(消灯) |
+| 08:55:16.765 | 3 分を超えた保持の区間でも global execution state=1、スリープ通知なし |
+| 08:55:19.780 | 試験用の `browser:open_file` 許可待ちの行を追記 |
+| 08:55:21.773 | global execution state=0 |
+| 08:55:24.876 | Windows の SUSPEND 通知 |
+| 08:55:25.783 | System ログの Kernel-Power イベント 42 |
+| 08:59:51.902 | 復帰後の判定 PASS(消灯・保持中の非スリープ・解除後の実スリープ) |
+
+Power-Troubleshooter イベント 1 の sleep time は 08:55:19.818、wake time は 08:59:53.012(復帰元は
+powershell.exe の timer の可能性と記録)。イベントの記録時刻・通知時刻は実際の遷移の時刻と異なるので同一視しない。
