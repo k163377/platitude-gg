@@ -601,12 +601,7 @@ fn qt_version(root: &Path) -> Result<String, String> {
     let path = root.join(".github").join("workflows").join("ci.yml");
     let text = std::fs::read_to_string(&path)
         .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
-    text.lines()
-        .filter_map(|line| line.trim().strip_prefix("QT_VERSION:"))
-        .map(|value| value.trim().trim_matches('"').trim_matches('\''))
-        .find(|value| !value.is_empty())
-        .map(str::to_string)
-        .ok_or_else(|| format!("no QT_VERSION in {}", path.display()))
+    crate::qt::pinned_in(&text).ok_or_else(|| format!("no QT_VERSION in {}", path.display()))
 }
 
 fn image_exists(tag: &str) -> Result<bool, String> {

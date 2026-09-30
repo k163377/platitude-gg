@@ -33,6 +33,17 @@ pub fn path_with_qt() -> Result<OsString, String> {
     std::env::join_paths(parts).map_err(|e| format!("rebuilding PATH failed: {e}"))
 }
 
+/// The Qt version CI's workflow pins (`QT_VERSION:`) — the one place it
+/// is pinned, for CI and the container alike.
+pub(crate) fn pinned_in(workflow: &str) -> Option<String> {
+    workflow
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("QT_VERSION:"))
+        .map(|value| value.trim().trim_matches('"').trim_matches('\''))
+        .find(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
 fn qmake_on(path: &OsString) -> bool {
     std::env::split_paths(path).any(|dir| has_qmake(&dir))
 }
