@@ -243,6 +243,7 @@ fn main() {
     qrc::embed!("ui/RepoPageStack.qml");
     qrc::embed!("ui/CloneDialog.qml");
     qrc::embed!("ui/CloseToolButton.qml");
+    qrc::embed!("ui/RowHand.qml");
     qrc::embed!("ui/RowHoverHost.qml");
     qrc::embed!("ui/SampleTimer.qml");
     qrc::embed!("ui/ScrollArrow.qml");

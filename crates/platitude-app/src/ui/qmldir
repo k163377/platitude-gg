@@ -171,6 +171,7 @@ RebasePlanRow 1.0 RebasePlanRow.qml
 RebasePlanRunBar 1.0 RebasePlanRunBar.qml
 RepoPage 1.0 RepoPage.qml
 RepoPageStack 1.0 RepoPageStack.qml
+RowHand 1.0 RowHand.qml
 RowHoverHost 1.0 RowHoverHost.qml
 SampleTimer 1.0 SampleTimer.qml
 ScrollArrow 1.0 ScrollArrow.qml
