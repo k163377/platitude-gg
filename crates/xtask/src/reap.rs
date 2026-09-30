@@ -96,8 +96,8 @@ pub(crate) fn others_in_this_group() -> Option<Vec<u32>> {
 
 /// [`others_in_this_group`] against a given `/proc`, so a test can arrange
 /// an unreadable listing or `stat`. A process gone between the listing and
-/// the read is not running; any other failure to read makes the whole
-/// answer `None`.
+/// the read is not running, whether it went before the open or after it;
+/// any other failure to read makes the whole answer `None`.
 #[cfg(target_os = "linux")]
 pub(crate) fn others_in_group_under(proc: &std::path::Path) -> Option<Vec<u32>> {
     let me = std::process::id();
@@ -137,10 +137,26 @@ enum Standing {
 
 #[cfg(target_os = "linux")]
 fn standing_of(proc: &std::path::Path, pid: u32) -> Standing {
-    let stat = match std::fs::read_to_string(proc.join(pid.to_string()).join("stat")) {
+    standing_read(std::fs::read_to_string(
+        proc.join(pid.to_string()).join("stat"),
+    ))
+}
+
+/// `ESRCH`, the same number on every Linux architecture.
+#[cfg(target_os = "linux")]
+const NO_SUCH_PROCESS: i32 = 3;
+
+/// [`standing_of`] from what the read of a `stat` came to.
+#[cfg(target_os = "linux")]
+fn standing_read(read: std::io::Result<String>) -> Standing {
+    let stat = match read {
         Ok(stat) => stat,
-        // The one failure that is an answer.
+        // The two failures that are an answer: gone before the open
+        // (`ENOENT`), and gone between the open and the read — the kernel
+        // answers a `stat` whose task is no more with `ESRCH`, which the
+        // standard library has no kind for.
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Standing::Over,
+        Err(error) if error.raw_os_error() == Some(NO_SUCH_PROCESS) => return Standing::Over,
         Err(_) => return Standing::Unreadable,
     };
     // Counted from the last `)`: the second field is the command, in
@@ -488,6 +504,39 @@ mod tests {
             "{stubborn}"
         );
         assert!(stubborn.ends_with("build lock: 8, 9"), "{stubborn}");
+    }
+
+    /// The window a busy machine reads [`super::others_in_group_under`]
+    /// through: a `stat` opened while its process ran and read after it was
+    /// reaped. The kernel's own answer, not an arranged one.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_stat_whose_process_went_after_the_open_is_over() {
+        use std::io::Read;
+
+        let mut child = Command::new("sleep")
+            .arg("30")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("a child to open the stat of");
+        let mut stat = std::fs::File::open(format!("/proc/{}/stat", child.id()))
+            .expect("the stat of a running child");
+        let _ = child.kill();
+        child.wait().expect("the child reaped");
+        let mut text = String::new();
+        let read = stat.read_to_string(&mut text).map(|_| text);
+
+        let errno = read.as_ref().err().and_then(std::io::Error::raw_os_error);
+        assert_eq!(
+            errno,
+            Some(super::NO_SUCH_PROCESS),
+            "the read of a reaped process's stat came to {read:?}"
+        );
+        assert!(
+            matches!(super::standing_read(read), super::Standing::Over),
+            "a process that went after the open was taken for an unreadable listing"
+        );
     }
 
     /// The trap the start time is there for: a process naming the step's
