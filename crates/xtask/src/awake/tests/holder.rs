@@ -706,8 +706,15 @@ fn the_holder_s_command_fits_a_command_line() {
 #[test]
 fn the_holder_s_script_is_pinned_to_its_revision() {
     assert_eq!(
-        (crate::awake::REVISION, digest(crate::awake::holder::SCRIPT)),
-        (2, "348f36a55791b21a".to_string()),
+        (
+            crate::awake::REVISION,
+            digest(&format!(
+                "{}{}",
+                crate::awake::holder::SCRIPT,
+                crate::awake::desktop::SCRIPT
+            ))
+        ),
+        (3, "c98aa6fc2e4404a5".to_string()),
         "the holder's script changed: raise REVISION, then pin the new digest here"
     );
 }
@@ -831,6 +838,7 @@ fn claims_made_at_once_start_one_holder() {
 
 mod coordination;
 mod counting;
+mod desktop;
 
 #[test]
 fn an_installed_holder_handles_unicode_and_quotes_and_removes_its_script() {

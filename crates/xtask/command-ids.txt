@@ -4,6 +4,8 @@
 
 app.kill
 app.launch
+awake.log.off
+awake.log.on
 awake.status
 budget.standing
 check.stage2

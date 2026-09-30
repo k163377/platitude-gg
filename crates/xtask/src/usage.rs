@@ -660,7 +660,7 @@ const TAIL: &str = "  shipped [--no-build]
       reaches the rest — an approach abandoned under a name nobody
       retakes (--label), or a seat whose session is long gone.
 
-  awake
+  awake [log on|off]
       Which sessions keep this machine from idle-sleeping (Windows
       only): each session's hooks, and each subagent's apart, write a
       claim under .awake/ in the primary checkout — in one activity
@@ -683,16 +683,26 @@ const TAIL: &str = "  shipped [--no-build]
       claim working from it, until the turn's Stop. An MCP server's
       pending request for input holds up one of the session's running
       calls on that server, and its answer frees that one request alone.
-      No hook says when a person lets a call through, so a call nothing
-      shows running (an MCP tool, a fetch) is not seen from then to its
-      end, nor when a tool the desktop app runs asks a person itself, so
-      such a call counts as running while it waits. Any claim counts
-      while a process of one of its shell calls runs — the session's or
-      a subagent's, sent to the background at the start or halfway — or
-      until the wake-up it scheduled is due. A process the Claude process
-      already had, or started during another tool's call, is no work.
-      The directory's lock is held for its files alone. Prints the claims
-      as written and each holder's last verdict.
+      No hook says when a person lets a call through, nor when a tool
+      the desktop app runs asks a person itself: each holder reads
+      those, best-effort, off the desktop app's own log
+      (%LOCALAPPDATA%\\Claude\\logs\\main.log) — a permission request it
+      ties to one open call alone holds that call up until its answer,
+      and a grant sets it running again. The log is read after the
+      fact, so neither is protected before the reading that sees it;
+      without a line it can tie (no log, a format it does not know,
+      calls it cannot tell apart) a call nothing shows running (an MCP
+      tool, a fetch) is not seen from its grant to its end, and one the
+      app asks about itself counts as running while it waits. `log off`
+      makes every holder go by the hooks alone from its next reading,
+      `log on` reads the log again. Any claim counts while a process of
+      one of its shell calls runs — the session's or a subagent's, sent
+      to the background at the start or halfway — or until the wake-up
+      it scheduled is due. A process the Claude process already had, or
+      started during another tool's call, is no work. The directory's
+      lock is held for its files alone. Prints the claims as written,
+      each holder's last verdict, and what it last made of the desktop
+      app's log.
 
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads

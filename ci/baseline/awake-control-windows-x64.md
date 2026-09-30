@@ -1,6 +1,7 @@
 # Windows のスリープ保持: 実測
 
-2026-09-30。holder revision 2、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
+2026-09-30。holder revision 3、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
+デスクトップアプリのログによる補助の記録は [ログ補助](../../internal-docs/awake-ログ補助.md)。
 
 ## 判定
 
@@ -12,8 +13,8 @@
 ## 実 API 試験
 
 `awake::tests::holder::coordination::compatible_holders_apply_and_clear_real_windows_requests_together`。
-テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r2)と、
-同じスクリプトで holder 名だけ r3 にした互換ビルドを同時に動かす。OS API は置き換えない。
+テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r3)と、
+同じスクリプトで holder 名だけ r4 にした互換ビルドを同時に動かす。OS API は置き換えない。
 session / hook の入力は fixture で、Claude 本体ではない。
 
 `SetThreadExecutionState` の非 0 の戻り値は、成功とそのスレッドの直前の状態を示す
@@ -21,21 +22,22 @@ session / hook の入力は fixture で、Claude 本体ではない。
 両 holder とも保持時の戻り値は `0x80000000`、解除時は `0x80000001` —— system の継続要求を設定・解除でき、
 display の継続要求は加えていない。
 
-| 遷移 | r2(WMI 起動) | r3(互換ビルド) |
+| 遷移 | r3(WMI 起動) | r4(互換ビルド) |
 | --- | ---: | ---: |
-| 最初の Prompt → 保持 | 4954 ms | 1736 ms |
-| s が Stop、t は質問待ち → 解除 | 42 ms | 20 ms |
-| t の質問への回答 → 保持 | 51 ms | 23 ms |
-| t も Stop → 解除 | 20 ms | 43 ms |
+| 最初の Prompt → 保持 | 1841 ms | 1796 ms |
+| s が Stop、t は質問待ち → 解除 | 53 ms | 41 ms |
+| t の質問への回答 → 保持 | 23 ms | 75 ms |
+| t も Stop → 解除 | 21 ms | 45 ms |
 
 質問待ちになる前から s が作業中なら、t の質問だけでは解除しないことも同じテストで確かめる。
 数値は awake のテスト群を既定の並列で回した時の単発の観測値で、遅延の上限ではない。最初の保持は
 WMI の起動と PowerShell の C# 型のコンパイルを含み、成立するまで保持の無い区間がある ——
 「呼び出しの実行前に必ず保持済み」の保証には使えない。
 
-awake の Windows テストは **60 passed / 0 failed / 2 ignored**(50.85 秒)。ignored は、親テストが専用環境で
-呼ぶ子プロセスの入口 2 本。子コマンドの背景実行、質問・許可待ち、複数セッション、subagent、通知、
-所有者の終了、読取りの妨害、同時起動、hook のパイプの解放、互換ビルドの同居、照会中に始まった仕事を含む。
+awake の Windows テストは **68 passed / 0 failed / 2 ignored**(52.43 秒)。ignored は、親テストが専用環境で
+呼ぶ子プロセスの入口 2 本。子コマンドの背景実行、質問・許可待ち、複数セッション、
+subagent、通知、所有者の終了、読取りの妨害、同時起動、hook のパイプの解放、互換ビルドの同居、
+照会中に始まった仕事、ログ補助を含む。
 
 ## 未実施・限界
 

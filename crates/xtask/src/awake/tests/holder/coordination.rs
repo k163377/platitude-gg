@@ -39,7 +39,7 @@ fn other_build(dir: &std::path::Path) -> OtherBuild {
     OtherBuild(child)
 }
 
-fn observed(dir: &std::path::Path, revision: u32, verdict: &str, since: u64) -> u32 {
+pub(super) fn observed(dir: &std::path::Path, revision: u32, verdict: &str, since: u64) -> u32 {
     let row = crate::wait::until(
         "the holder's native request result",
         || {
@@ -143,6 +143,7 @@ fn once(dir: &std::path::Path, revision: u32, during_query: &str) -> String {
     let source = crate::awake::holder::SCRIPT;
     let source = &source[source.find("$dir =").expect("the script's directory")..];
     let body = source
+        .replace("@DESKTOP@", crate::awake::desktop::SCRIPT)
         .replace("@DIR@", &dir.display().to_string().replace('\'', "''"))
         .replace("@REVISION@", &revision.to_string())
         .replace("@FORMAT@", "1")

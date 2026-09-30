@@ -130,6 +130,19 @@ $holding = $false
 $previous = 0
 $applied = 0
 $readat = 0
+@DESKTOP@
+$desktopPath = [IO.Path]::Combine("$env:LOCALAPPDATA", 'Claude', 'logs', 'main.log')
+if (Test-Path -LiteralPath "$dir\desktop-log.path") { $desktopPath = [IO.File]::ReadAllText("$dir\desktop-log.path").Trim() }
+$desktop = New-DesktopLog $desktopPath
+$desktopWatch = $null
+try {
+  if (Test-Path -LiteralPath "$dir\desktop-log.off") { throw 'disabled' }
+  $desktopWatch = New-Object IO.FileSystemWatcher -ArgumentList ([IO.Path]::GetDirectoryName($desktopPath)), 'main*.log'
+  foreach ($kind in 'Created', 'Changed', 'Deleted', 'Renamed') {
+    [void](Register-ObjectEvent -InputObject $desktopWatch -EventName $kind -SourceIdentifier "desktop-$kind")
+  }
+  $desktopWatch.EnableRaisingEvents = $true
+} catch { $desktop.Status='watcher unavailable; polling' }
 $delegated = @(@DELEGATED@)
 $shells = @(@STARTS_PROCESSES@)
 $interrupted = '"content":\[\{"type":"text","text":"\[Request interrupted by user( for tool use)?\]"\}\]'
@@ -348,6 +361,16 @@ try {
           }
           if ($changed) { $changes += ,@($claim.FullName, $text, ("r$format " + (($word[0..7]) -join ' '))) }
         }
+        $candidates=@()
+        foreach ($session in $calls.Keys) {
+          foreach ($call in $calls[$session]) {
+            $part=$call -split ':'
+            if (([int64]$part[5] -eq 0) -and -not $ended[$session].ContainsKey($part[1])) {
+              $candidates += @{ Key="$session/$($part[0])/$($part[1])/$($part[4])"; Session=$session.Substring($session.IndexOf('.')+1); Part=$part }
+            }
+          }
+        }
+        Update-DesktopLog $desktop $candidates $nowms
         $runs = @{}
         foreach ($entry in $counted) {
           $claim, $text, $word, $session, $who, $lines = $entry
@@ -364,7 +387,7 @@ try {
           $bare = $session.Substring($session.IndexOf('.') + 1)
           foreach ($part in $open) {
             $starting = ($delegated -contains $part[2]) -and -not $minded[$bare]
-            if (($part[6] -eq '0') -and ($starting -or ($delegated -notcontains $part[2]))) { $runs[$session] = @($runs[$session]) + $part[2] }
+            if ((-not (Get-DesktopAsked $desktop $session $part)) -and ($starting -or ($delegated -notcontains $part[2]))) { $runs[$session] = @($runs[$session]) + $part[2] }
           }
           $fresh = ($nowms - [int64]$word[2]) -lt @TTL@ * 1000
           if (($open.Count -eq 0) -and $fresh) { $keep = $true }
@@ -416,12 +439,19 @@ try {
         $verdict = 'released'
         if ($keep) { $verdict = 'holding' }
         Write-Word $name "$me $verdict $readat $previous $applied"
+        $transport='polling'
+        if ($desktopWatch -and $desktopWatch.EnableRaisingEvents) { $transport='file-events' }
+        Write-Word "$dir\desktop-r$revision" "$me $nowms $($desktop.Status) transport=$transport"
       } catch [IO.IOException], [UnauthorizedAccessException] { $keep = $holding }
     } finally { Exit-Lock $lock }
     [void](Wait-Event -Timeout @TICK@)
     Get-Event | Remove-Event
   }
-} finally { [void][PggAwake]::SetThreadExecutionState([uint32]@LET_GO@) }
+} finally {
+  [void][PggAwake]::SetThreadExecutionState([uint32]@LET_GO@)
+  Close-DesktopLog $desktop
+  if ($null -ne $desktopWatch) { $desktopWatch.Dispose() }
+}
 "#;
 
 /// The script for a holder in `dir`, started under the reservation of the
@@ -429,6 +459,7 @@ try {
 #[cfg(windows)]
 pub(super) fn script(dir: &Path, reserved: u32) -> String {
     SCRIPT
+        .replace("@DESKTOP@", super::desktop::SCRIPT)
         .replace("@DIR@", &dir.display().to_string().replace('\'', "''"))
         .replace("@RESERVED@", &reserved.to_string())
         .replace("@STARTING@", super::STARTING)

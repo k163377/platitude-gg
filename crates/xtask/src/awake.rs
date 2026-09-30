@@ -42,11 +42,17 @@
 //!
 //! A turn whose open calls all wait on a person — a permission prompt, a
 //! question of its own, a server's request for input — counts for
-//! nothing: no hook says when a person lets a call through, so a call that
-//! nothing shows running (an MCP tool, a fetch) is not seen from then to
-//! its end. Nor does one say when a tool the desktop app runs asks a
-//! person itself (its browser's leave to open a file): such a call counts
-//! as running while it waits.
+//! nothing. No hook says when a person lets a call through, nor when a
+//! tool the desktop app runs asks a person itself (its browser's leave to
+//! open a file), so the holder reads what those leave unsaid, best-effort,
+//! off the desktop app's own log (`desktop`): a permission request logged
+//! for a call it ties to one open call alone holds that call up until its
+//! answer, and a grant sets the call running again. Without such a line —
+//! no log, a request it cannot tie to one call, the supplement switched
+//! off — a call that nothing shows running (an MCP tool, a fetch) is not
+//! seen from its grant to its end, and one the app asks about itself
+//! counts as running while it waits. The log is read after the fact:
+//! neither is protected before the reading that sees it.
 //!
 //! Whatever the state, a claim counts while a process of one of its shell
 //! calls runs — a child of the Claude process started between the call's
@@ -80,6 +86,7 @@ use crate::command::{Command, Permission, Where};
 use crate::locks::Locked;
 
 mod claim;
+mod desktop;
 mod holder;
 
 pub(crate) use claim::digest;
@@ -94,7 +101,23 @@ pub(crate) static STATUS: Command = Command {
     permission: Permission::Plain,
 };
 
-pub(crate) static COMMANDS: &[&Command] = &[&STATUS];
+pub(crate) static LOG_ON: Command = Command {
+    id: "awake.log.on",
+    call: "awake log on",
+    purpose: "enable the best-effort Desktop permission log supplement",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+pub(crate) static LOG_OFF: Command = Command {
+    id: "awake.log.off",
+    call: "awake log off",
+    purpose: "disable the Desktop log supplement and retain hook-only sleep control",
+    run_in: Where::Either,
+    needs: &[],
+    permission: Permission::Plain,
+};
+pub(crate) static COMMANDS: &[&Command] = &[&STATUS, &LOG_ON, &LOG_OFF];
 
 /// In the primary checkout, so every seat's sessions share one holder per
 /// [`REVISION`] (the `.chips` / `.permits` layout).
@@ -111,13 +134,19 @@ const HOLDER: &str = "holder";
 const CLAIM: &str = "claim";
 /// What a hook reserving the holder's name writes after its own pid.
 const STARTING: &str = "starting";
+/// While this file stands, holders leave the desktop app's log unread and
+/// go by the hooks alone. The holder's script names it too.
+const DESKTOP_OFF: &str = "desktop-log.off";
+/// What a holder's last reading of the desktop app's log is called ahead
+/// of its revision (`desktop-r<n>`). The holder's script names it too.
+const DESKTOP_SEEN: &str = "desktop-r";
 /// Between a session's id and a subagent's in the name of the subagent's
 /// claim.
 const AGENT: char = '~';
 /// The holder implementation, independent of the activity protocol.
 /// A script change raises this; compatible builds still update the same
 /// claims, so a Stop or a question reaches every holder reading them.
-const REVISION: u32 = 2;
+const REVISION: u32 = 3;
 /// The shared activity protocol, including claim names and bodies. Do not
 /// raise this for a holder change: a protocol change needs a migration,
 /// not a second independent copy of a session's current state.
@@ -446,11 +475,14 @@ fn now_ms() -> u64 {
 /// `cargo xtask awake`: the claims as written, and whether the holder
 /// holds the machine. Whether each claim counts is the holder's to decide.
 pub fn run(args: &[String]) -> Result<(), String> {
-    if !args.is_empty() {
-        return Err(format!("awake takes no arguments (got {args:?})"));
+    if !args.is_empty() && args != ["log", "on"] && args != ["log", "off"] {
+        return Err(format!("awake accepts log on or log off (got {args:?})"));
     }
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let dir = dir_of(&cwd.to_string_lossy()).ok_or("not inside a checkout of this repository")?;
+    if !args.is_empty() {
+        return configure_log(&dir, &args[1]);
+    }
     // Read under the lock every rewrite happens under: a file caught
     // between a rewrite's truncation and its write reads empty.
     let _held = if dir.exists() {
@@ -483,6 +515,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
             ""
         };
         println!("holder r{revision}: pid {pid}, {verdict}{note}");
+        if let Ok(seen) = std::fs::read_to_string(dir.join(format!("{DESKTOP_SEEN}{revision}"))) {
+            println!("  desktop app's log, last read: {}", seen.trim());
+        }
     }
     let now = now_secs();
     let (mut others, mut torn) = (0, 0);
@@ -537,6 +572,24 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if claims.is_empty() && others == 0 && torn == 0 {
         println!("  no claims");
     }
+    Ok(())
+}
+
+/// `cargo xtask awake log on|off`: whether holders read the desktop app's
+/// log. Each holder takes it up at its next reading.
+fn configure_log(dir: &Path, mode: &str) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+    let _held = lock(dir)?;
+    let path = dir.join(DESKTOP_OFF);
+    if mode == "off" {
+        std::fs::write(&path, "disabled\n")
+            .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    } else {
+        remove(&path)?;
+    }
+    println!(
+        "the desktop app's log supplement is {mode}; each holder takes it up at its next reading"
+    );
     Ok(())
 }
 

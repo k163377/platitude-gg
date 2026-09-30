@@ -49,11 +49,16 @@ fn claim_file(whose: &str) -> String {
     format!("r{CLAIM_FORMAT}.{whose}.claim")
 }
 
+/// The test's own directory, with the desktop app's log left unread: a
+/// holder started there would otherwise read the user's.
 fn scratch(stem: &str) -> Scratch {
-    Scratch(
+    let dir = Scratch(
         crate::verify::claim_dir(&std::env::temp_dir().join("pgg-awake"), stem)
             .expect("a directory of its own"),
-    )
+    );
+    std::fs::write(dir.join(crate::awake::DESKTOP_OFF), "test isolation")
+        .expect("no real Desktop logs");
+    dir
 }
 
 /// What a hook writes at `at` seconds since the epoch.
