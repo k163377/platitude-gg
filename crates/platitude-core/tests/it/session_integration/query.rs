@@ -471,9 +471,15 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
     .await;
 
     // The move re-read the remotes once; the next poll finds the held answer
-    // equal and asks for no listing. Exactly one — how to read a two off the
-    // commands is in internal-docs/ハング調査.md「`listed == 1`」, and
-    // neither cause is answered by allowing two.
+    // equal and asks for no listing. Exactly one: the opening's boundary
+    // leaves no remotes read in flight, so the move's forget is the only
+    // invalidation and the listing behind it the only miss. A two is one of
+    // those broken, and the commands say which — two listings either side of
+    // a `config` read are a read an invalidation met part-way, which reads
+    // again and caches nothing (`Derived::get_or_try_init`); two apart are a
+    // second forget, the config stat taking the repository's own file for
+    // moved (`forget_what_the_config_decides`). Neither is answered by
+    // allowing two.
     assert_eq!(
         listed(&sink),
         1,
