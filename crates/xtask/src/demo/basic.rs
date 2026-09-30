@@ -280,6 +280,117 @@ pub(super) fn rewrite_merge(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// The branches `octopus` joins at its tip: seven, so the merge has eight
+/// parents — more than the details pane's parent line holds at its
+/// default width, and fewer than it holds wide.
+const OCTOPUS_ARMS: [&str; 7] = ["api", "cli", "docs", "i18n", "perf", "store", "ui"];
+
+/// A merge of two under a merge of eight, HEAD on the latter: what the
+/// details pane's parent line is drawn for (デザイン規約 §右のペインの親).
+/// Each arm writes a file of its own, so git's octopus strategy takes
+/// them all in one commit.
+pub(super) fn octopus(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.git(&["switch", "--create", "feature/login"])?;
+    repo.commit("login.txt", "login v1\n", "feat: sign in with a password")?;
+    repo.git(&["switch", "main"])?;
+    repo.commit("README.md", "# demo\n\nTidied.\n", "docs: tidy the readme")?;
+    repo.git(&["merge", "--no-ff", "--no-edit", "feature/login"])?;
+    let mut arms = Vec::new();
+    for arm in OCTOPUS_ARMS {
+        let branch = format!("topic/{arm}");
+        repo.git(&["switch", "--create", &branch, "main"])?;
+        repo.commit(
+            &format!("{arm}.txt"),
+            &format!("{arm} v1\n"),
+            &format!("feat: add {arm}"),
+        )?;
+        arms.push(branch);
+    }
+    repo.git(&["switch", "main"])?;
+    let mut merge = vec!["merge", "--no-ff", "--no-edit"];
+    merge.extend(arms.iter().map(String::as_str));
+    repo.git(&merge)?;
+    Ok(())
+}
+
+/// One co-author and three, written as `co-authors` writes them
+/// (`authorship::co_authors`).
+const ONE_MATE: &str = "Co-authored-by: Claude Opus 5 <noreply@anthropic.com>";
+const THREE_MATES: &str = "Co-authored-by: Claude Opus 5 <noreply@anthropic.com>\n\
+     Co-authored-by: Claude Fable 5 <noreply@anthropic.com>\n\
+     Co-authored-by: Claude Opus 4.8 <noreply@anthropic.com>";
+
+/// Merges that credit co-authors, whose names share the date line with
+/// the parent line's room: two parents with one co-author, two with
+/// three, four with one, eight with three — HEAD on the last. Under them
+/// all, and made first so the rows above keep their numbers: thirteen
+/// parents crediting twelve, by an author with a long name — both counts
+/// in two digits.
+pub(super) fn octopus_mates(repo: &mut DemoRepo) -> Result<(), String> {
+    const MERGES: [(&[&str], &str); 4] = [
+        (&["feature/login"], ONE_MATE),
+        (&["feature/cache"], THREE_MATES),
+        (&["topic/api", "topic/cli", "topic/docs"], ONE_MATE),
+        (
+            &[
+                "wave/a", "wave/b", "wave/c", "wave/d", "wave/e", "wave/f", "wave/g",
+            ],
+            THREE_MATES,
+        ),
+    ];
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    // Twelve branches and main: thirteen parents, so even the floor's two leave a count of two digits.
+    let crowd: Vec<String> = (1..=12).map(|i| format!("crowd/{i:02}")).collect();
+    let twelve: Vec<String> = (1..=12)
+        .map(|i| format!("Co-authored-by: Pair Programmer {i:02} <pair{i:02}@example.com>"))
+        .collect();
+    merge_crediting(
+        repo,
+        &crowd.iter().map(String::as_str).collect::<Vec<_>>(),
+        &twelve.join("\n"),
+        Some("Alexandria Montgomery-Vanderbilt"),
+    )?;
+    for (branches, mates) in MERGES {
+        merge_crediting(repo, branches, mates, None)?;
+    }
+    Ok(())
+}
+
+/// A commit on each of `branches` off main, then one merge of them all
+/// into main whose message credits `mates`, by `author` where one is
+/// named.
+fn merge_crediting(
+    repo: &mut DemoRepo,
+    branches: &[&str],
+    mates: &str,
+    author: Option<&str>,
+) -> Result<(), String> {
+    for branch in branches {
+        repo.git(&["switch", "--create", branch, "main"])?;
+        let file = format!("{}.txt", branch.replace('/', "-"));
+        repo.commit(&file, "v1\n", &format!("feat: add {branch}"))?;
+    }
+    repo.git(&["switch", "main"])?;
+    // git's own subject, and the trailers as the last paragraph.
+    let quoted: Vec<String> = branches.iter().map(|b| format!("'{b}'")).collect();
+    let subject = match quoted.split_last() {
+        Some((last, [])) => format!("Merge branch {last}"),
+        Some((last, rest)) => format!("Merge branches {} and {last}", rest.join(", ")),
+        None => return Err("a merge of nothing".into()),
+    };
+    let message = format!("{subject}\n\n{mates}");
+    let name = author.map(|a| format!("user.name={a}"));
+    let mut merge = Vec::new();
+    if let Some(name) = name.as_deref() {
+        merge.extend(["-c", name]);
+    }
+    merge.extend(["merge", "--no-ff", "-m", message.as_str()]);
+    merge.extend(branches.iter().copied());
+    repo.git(&merge)?;
+    Ok(())
+}
+
 /// One commit on the branch, first and newest at once, so a fold has
 /// nothing to fold into and a drop would take the whole history
 /// (`report::fold_first_commit` / `report::drop_all_commits`).

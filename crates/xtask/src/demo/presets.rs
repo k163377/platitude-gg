@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 
 use super::authorship::{authorship, co_authors};
 use super::basic::{
-    basic, detached, dirty, embedded, eol, mergetools, nested, noremote, one_commit, plan,
-    rewrite_merge, shallow, stashes,
+    basic, detached, dirty, embedded, eol, mergetools, nested, noremote, octopus, octopus_mates,
+    one_commit, plan, rewrite_merge, shallow, stashes,
 };
 use super::conflict::{
     cherry_pick_conflict, cherry_pick_quit, clashing, conflict, conflict_kinds, conflict_ours,
@@ -155,6 +155,8 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "stashes" => stashes(&mut repo)?,
         "detached" => detached(&mut repo)?,
         "rewrite-merge" => rewrite_merge(&mut repo)?,
+        "octopus" => octopus(&mut repo)?,
+        "octopus-mates" => octopus_mates(&mut repo)?,
         "one-commit" => one_commit(&mut repo)?,
         "shallow" => shallow(&mut repo)?,
         "behind" => behind(&mut repo)?,

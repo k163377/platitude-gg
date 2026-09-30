@@ -45,6 +45,13 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         detached  HEAD detached at a tag
         rewrite-merge  a merge inside the stretch a rewrite of the tip
                   would replay: the plan turned down before it opens
+        octopus   a merge of eight parents on a merge of two, HEAD on the
+                  eight: the details pane's parent line cut to what fits
+                  (details-parents)
+        octopus-mates  merges that credit co-authors — two parents with one
+                  and with three, four with one, eight with three (HEAD),
+                  and under them thirteen crediting twelve by a long name:
+                  the date line's names beside the parent line
         one-commit  one commit on the branch and one beside it nobody
                   took: the fold and the drop with nowhere to go, and the
                   commit the branch cannot see (fold-first-commit,
