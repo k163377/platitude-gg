@@ -166,8 +166,10 @@ fn answered(bin: &Path, pinned: Option<&str>) -> Result<Qt, String> {
     Ok(qt)
 }
 
-/// A `QMAKE` in the environment that names another qmake than `qt`'s: the
-/// build scripts would take it over PATH.
+/// A `QMAKE` in the environment that names another Qt than `qt`: the
+/// build scripts would take it over PATH. Another qmake of the same
+/// install — `qmake` beside `qmake6`, which the Linux image sets — is the
+/// same Qt, by what it answers.
 fn no_other_qmake(qt: &Qt, set: Option<&OsStr>) -> Result<(), String> {
     let Some(set) = set.filter(|value| !value.is_empty()) else {
         return Ok(());
@@ -180,12 +182,25 @@ fn no_other_qmake(qt: &Qt, set: Option<&OsStr>) -> Result<(), String> {
     if same(&named, &qt.qmake) {
         return Ok(());
     }
-    Err(format!(
-        "QMAKE is {}, and the Qt chosen is {}: the build scripts read QMAKE before PATH. \
-         Unset QMAKE, or set QT_BIN to the bin directory it names",
-        named.display(),
-        qt.describe()
-    ))
+    let refused = |what: String| {
+        Err(format!(
+            "QMAKE is {} ({what}), and the Qt chosen is {}: the build scripts read QMAKE \
+             before PATH. Unset QMAKE, or set QT_BIN to the bin directory it names",
+            named.display(),
+            qt.describe()
+        ))
+    };
+    match query(&named) {
+        Ok(other) if one_install(&other, qt) => Ok(()),
+        Ok(other) => refused(other.describe()),
+        Err(why) => refused(why),
+    }
+}
+
+/// Two qmakes that answer for one install: the headers a build reads and
+/// the libraries a run loads are the same.
+fn one_install(a: &Qt, b: &Qt) -> bool {
+    a.version == b.version && a.prefix == b.prefix && a.runtime == b.runtime
 }
 
 /// What `qmake -query` says about its own install.
@@ -352,6 +367,25 @@ mod tests {
         assert!(no_other_qmake(&qt, Some(OsStr::new("C:/Qt/6.12.0/b/qmake.exe"))).is_ok());
         let other = no_other_qmake(&qt, Some(OsStr::new("C:/Qt/6.10.3/b/qmake.exe")));
         assert!(other.is_err_and(|e| e.contains("QMAKE is C:/Qt/6.10.3")));
+    }
+
+    /// The Linux image's `QMAKE` is `qmake`, and the chooser takes the
+    /// `qmake6` beside it.
+    #[test]
+    fn two_qmakes_of_one_install_are_one_qt() {
+        let answer = "QT_INSTALL_PREFIX:/opt/qt/6.12.0/gcc_64\n\
+                      QT_INSTALL_BINS:/opt/qt/6.12.0/gcc_64/bin\n\
+                      QT_INSTALL_LIBS:/opt/qt/6.12.0/gcc_64/lib\nQT_VERSION:6.12.0\n";
+        let six = parse_query(Path::new("/opt/qt/6.12.0/gcc_64/bin/qmake6"), answer);
+        let plain = parse_query(Path::new("/opt/qt/6.12.0/gcc_64/bin/qmake"), answer);
+        let (six, plain) = (six.expect("an answer"), plain.expect("an answer"));
+        assert!(one_install(&six, &plain));
+        let older = parse_query(
+            Path::new("/opt/qt/6.10.3/gcc_64/bin/qmake"),
+            &answer.replace("6.12.0", "6.10.3"),
+        )
+        .expect("an answer");
+        assert!(!one_install(&six, &older));
     }
 
     #[test]
