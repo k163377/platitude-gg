@@ -575,6 +575,56 @@ const EVERY_BUILD: [&str; 11] = [
     "deny",
 ];
 
+/// A crate patched in from `vendor/` is built into what depends on it:
+/// its source and its headers ask every build again, selected and keyed
+/// alike — a selection alone would meet the earlier run's stamps. Its notes
+/// ask nothing.
+#[test]
+fn a_patched_in_crate_s_code_asks_every_build_again_and_its_notes_do_not() {
+    let sb = Sandbox::new("vendor-key");
+    let patched = "vendor/patched";
+    sb.write(
+        &sb.seat,
+        &format!("{patched}/src/lib.rs"),
+        "pub fn f() {}\n",
+    );
+    sb.write(&sb.seat, &format!("{patched}/include/f.h"), "void f();\n");
+    sb.write(&sb.seat, &format!("{patched}/NOTES.md"), "# patched\n");
+    sb.commit_all(&sb.seat, "build(deps): a patched crate", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let first = without_always(&sb.ran());
+    for id in EVERY_BUILD {
+        assert!(first.contains(id), "{id} did not run: {first:?}");
+    }
+
+    for (file, text) in [
+        ("src/lib.rs", "pub fn f() { let _ = 1; }\n"),
+        ("include/f.h", "void f(int);\n"),
+    ] {
+        sb.write(&sb.seat, &format!("{patched}/{file}"), text);
+        sb.commit_all(&sb.seat, "fix(deps): the patched crate", &[]);
+        let text = sb.gate_ok(&sb.seat, &[]);
+        // The diff against main holds the whole crate; the line names one.
+        assert!(text.contains(&format!("everything ({patched}/")), "{text}");
+        let again = without_always(&sb.ran());
+        for id in EVERY_BUILD {
+            assert!(
+                again.contains(id),
+                "{id} kept its stamp over {file}: {again:?}"
+            );
+        }
+    }
+
+    sb.write(
+        &sb.seat,
+        &format!("{patched}/NOTES.md"),
+        "# patched, said again\n",
+    );
+    sb.commit_all(&sb.seat, "docs: the patched crate's notes", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    assert_eq!(sb.ran(), set(&ALWAYS), "the notes asked a build again");
+}
+
 /// cargo's configuration is read by every build it configures — its `[env]`
 /// reaches every C and C++ compile a build script runs — so a change to it
 /// asks each build again, and not only the selection.
