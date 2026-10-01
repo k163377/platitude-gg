@@ -158,7 +158,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // only, so the build never sees it.
     // waits(measured): what the build took, said on the `spent` line and judged by nothing
     let at = std::time::Instant::now();
-    let exe = crate::app_build::app_exe(&root, &path, opts.build, &[])?;
+    let exe = crate::app_build::app_exe(&root, &path, None, opts.build, &[])?;
     let build = at.elapsed();
 
     // Inside a container this claim guards nothing

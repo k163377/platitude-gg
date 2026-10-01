@@ -63,7 +63,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "shipped",
     )?;
     let path = crate::qt::path_with_qt()?;
-    let exe = crate::app_build::shipped_exe(&root, &path, build)?;
+    let exe = crate::app_build::shipped_exe(&root, &path, None, build)?;
 
     // Its own directory, never the settings of the person at this machine.
     let config = crate::keepsakes::keepsake_dir("shipped")?;

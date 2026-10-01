@@ -145,6 +145,12 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
         context.built.short(),
         context.built.tree.display()
     );
+    println!(
+        "  qt          : {} — {} (build {})",
+        context.built.qt.describe(),
+        context.built.qt_source,
+        context.built.identity.hash()
+    );
     if let Some(corpus) = context.corpus {
         println!("  corpus      : {corpus}");
     }

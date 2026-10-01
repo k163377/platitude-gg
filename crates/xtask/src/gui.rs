@@ -94,7 +94,10 @@ pub fn launch(args: &[String]) -> Result<(), String> {
     for (pid, exe) in reap_under(&root)? {
         println!("reaped this tree's stale run first: {pid} ({exe})");
     }
-    let exe = stand_from_a_copy(&root, &crate::app_build::app_exe(&root, &path, build, &[])?)?;
+    let exe = stand_from_a_copy(
+        &root,
+        &crate::app_build::app_exe(&root, &path, None, build, &[])?,
+    )?;
     let mut command = Command::new(&exe);
     command
         .current_dir(&root)

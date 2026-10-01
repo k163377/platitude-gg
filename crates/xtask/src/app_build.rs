@@ -19,10 +19,12 @@ pub(crate) const HARNESS_FEATURE: &str = "automation";
 ///
 /// `extra` follows `build --release` (package, further features). `path`
 /// is the PATH the *build* runs with — not the run's, which may carry
-/// verify-ui's git shim.
+/// verify-ui's git shim. `qmake` names the Qt in `QMAKE` too, for a build
+/// that may follow another Qt in the same target directory (`crate::qt`).
 pub(crate) fn app_exe(
     root: &Path,
     path: &std::ffi::OsStr,
+    qmake: Option<&Path>,
     build: bool,
     extra: &[&str],
 ) -> Result<PathBuf, String> {
@@ -40,20 +42,23 @@ pub(crate) fn app_exe(
         // Through the budget's runner, so a ledger reading this process's
         // ticket after it is killed knows which cargo still compiles
         // (`crate::budget::watched`).
-        let status = crate::budget::watched(
-            std::process::Command::new("cargo")
-                .args([
-                    "build",
-                    "--locked",
-                    "--release",
-                    "--features",
-                    HARNESS_FEATURE,
-                ])
-                .args(extra)
-                .current_dir(root)
-                .env("PATH", path),
-        )
-        .map_err(|e| format!("failed to run cargo: {e}"))?;
+        let mut cargo = std::process::Command::new("cargo");
+        cargo
+            .args([
+                "build",
+                "--locked",
+                "--release",
+                "--features",
+                HARNESS_FEATURE,
+            ])
+            .args(extra)
+            .current_dir(root)
+            .env("PATH", path);
+        if let Some(qmake) = qmake {
+            cargo.env("QMAKE", qmake);
+        }
+        let status =
+            crate::budget::watched(&mut cargo).map_err(|e| format!("failed to run cargo: {e}"))?;
         if !status.success() {
             return Err(format!("cargo build --release failed{}", held_by(root)));
         }
@@ -75,18 +80,22 @@ const SHIPPED_PROFILE: &str = "shipped";
 pub(crate) fn shipped_exe(
     root: &Path,
     path: &std::ffi::OsStr,
+    qmake: Option<&Path>,
     build: bool,
 ) -> Result<PathBuf, String> {
     if build {
         println!("building (release, no features — the shipped set)…");
         let _busy = crate::still::busy(root, "cargo build --profile shipped")?;
-        let status = crate::budget::watched(
-            std::process::Command::new("cargo")
-                .args(["build", "--locked", "--profile", SHIPPED_PROFILE])
-                .current_dir(root)
-                .env("PATH", path),
-        )
-        .map_err(|e| format!("failed to run cargo: {e}"))?;
+        let mut cargo = std::process::Command::new("cargo");
+        cargo
+            .args(["build", "--locked", "--profile", SHIPPED_PROFILE])
+            .current_dir(root)
+            .env("PATH", path);
+        if let Some(qmake) = qmake {
+            cargo.env("QMAKE", qmake);
+        }
+        let status =
+            crate::budget::watched(&mut cargo).map_err(|e| format!("failed to run cargo: {e}"))?;
         if !status.success() {
             return Err("cargo build --profile shipped failed".into());
         }

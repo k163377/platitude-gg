@@ -28,6 +28,7 @@ mod corpus;
 mod display;
 mod experiment;
 mod fonts;
+mod identity;
 mod interactions;
 mod measure;
 mod options;
@@ -83,7 +84,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
 fn run_options(opts: Options) -> Result<(), String> {
     let root = crate::tree::workspace_root();
-    let path = crate::qt::path_with_qt()?;
     guard_the_window(&root)?;
 
     // Taken before the build: a release build is minutes of exactly the
@@ -95,17 +95,21 @@ fn run_options(opts: Options) -> Result<(), String> {
     // this tree's or the rig's.
     let built = {
         let _building = crate::still::busy(&root, "cargo xtask perf (building)")?;
-        build(&root, &path, &opts)?
+        build(&root, &opts)?
     };
     println!(
-        "measured: {} of {}",
+        "measured: {} of {}, against {} ({})",
         built.short(),
         if opts.at.is_empty() {
             "this tree, edits included"
         } else {
             "the rig"
-        }
+        },
+        built.qt.describe(),
+        built.qt_source
     );
+    let path = built.qt.path()?;
+    loads_what_it_linked(&built, &path)?;
 
     let corpus = if opts.open {
         let found = corpus::describe(&opts.repo)?;
@@ -211,41 +215,98 @@ fn announce(
 
 /// The rig's build of `--at`'s commit, or this tree's own — edits
 /// included, which the evidence's `source.patch` records.
-fn build(
-    root: &std::path::Path,
-    path: &std::ffi::OsStr,
-    opts: &Options,
-) -> Result<rig::Built, String> {
+fn build(root: &std::path::Path, opts: &Options) -> Result<rig::Built, String> {
     if !opts.at.is_empty() {
-        return rig::build_at(root, &opts.at, path, opts);
+        return rig::build_at(root, &opts.at, opts);
     }
-    let exe = build_in(root, path, opts.build, opts)?;
+    let (qt, qt_source) = if opts.qt.is_empty() {
+        (crate::qt::this_tree()?, "this tree's".to_string())
+    } else {
+        qt_for(opts, "this tree's", "")?
+    };
+    // A Qt other than the tree's own follows another in its target
+    // directory: named, not only put on PATH (`crate::qt`).
+    let exe = build_in(root, &qt, !opts.qt.is_empty(), opts.build, opts)?;
     let commit = crate::subprocess::git_query(&crate::seats::slashed(root), &["rev-parse", "HEAD"])
         .unwrap_or_default();
+    let identity = identity::of(
+        &format!("{commit} with this tree's edits"),
+        &opts.features(),
+        &qt,
+        &identity::configs(root, None),
+    );
     Ok(rig::Built {
         exe,
         commit,
         tree: root.to_path_buf(),
+        qt,
+        qt_source,
+        identity,
     })
+}
+
+/// The Qt a build is made with: the one `--qt` names, or else `pinned` —
+/// `pin` saying whose pin it is, for the record. Either way it is held to
+/// what its qmake answers (`crate::qt::of_version`).
+fn qt_for(opts: &Options, pin: &str, pinned: &str) -> Result<(crate::qt::Qt, String), String> {
+    if opts.qt.is_empty() {
+        return Ok((crate::qt::of_version(pinned)?, pin.to_string()));
+    }
+    Ok((
+        crate::qt::of_version(&opts.qt)?,
+        format!("--qt {} (over {pin})", opts.qt),
+    ))
+}
+
+/// A run loads Qt from the first place the loader finds it, which need
+/// not be the Qt the exe was built against; refused when it is not.
+fn loads_what_it_linked(built: &rig::Built, path: &std::ffi::OsStr) -> Result<(), String> {
+    let Some(loaded) = crate::qt::runtime_dir(&built.exe, path) else {
+        return if cfg!(windows) {
+            Err(format!(
+                "a run of {} would find no Qt6Core.dll beside it or on its PATH",
+                built.exe.display()
+            ))
+        } else {
+            Ok(())
+        };
+    };
+    let same = match (loaded.canonicalize(), built.qt.runtime.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => loaded == built.qt.runtime,
+    };
+    if same {
+        return Ok(());
+    }
+    Err(format!(
+        "a run of {} would load Qt from {}, and it was built against {}",
+        built.exe.display(),
+        loaded.display(),
+        built.qt.describe()
+    ))
 }
 
 /// The one place the harness / memprobe / shipped choice is spelled for a
 /// build, so the shelf and the manifest name what was built
-/// (`Options::features`).
+/// (`Options::features`). `name_qmake` for a build whose target directory
+/// may have held another Qt (`crate::qt`).
 fn build_in(
     tree: &std::path::Path,
-    path: &std::ffi::OsStr,
+    qt: &crate::qt::Qt,
+    name_qmake: bool,
     build: bool,
     opts: &Options,
 ) -> Result<std::path::PathBuf, String> {
+    let path = qt.path()?;
+    let qmake = name_qmake.then_some(qt.qmake.as_path());
     if !opts.harness {
-        return crate::app_build::shipped_exe(tree, path, build);
+        return crate::app_build::shipped_exe(tree, &path, qmake, build);
     }
     let mut extra = vec!["-p", "platitude-app"];
     if opts.breakdown {
         extra.extend(["--features", "memprobe"]);
     }
-    crate::app_build::app_exe(tree, path, build, &extra)
+    crate::app_build::app_exe(tree, &path, qmake, build, &extra)
 }
 
 /// The scenario the runs drive, as the warm note keys it: what a stage
