@@ -66,13 +66,46 @@ field_by_bridge!(
     [] i64,
     [] u64,
     [] f64,
-    [] String,
     [] Vec<String>,
     [] Vec<i32>,
     [T: Record] Listed<T>,
     [T: Record] One<T>,
     [T: Record] Optional<T>,
 );
+
+impl FieldValue for String {
+    fn variant(&self) -> QVariant {
+        QVariantConvertible::to_qvariant(self)
+    }
+}
+
+/// Read by [`text_of`], not the bridge's own conversion: records come back
+/// from QML a field at a time (a graph row's chips, on every delegate).
+impl FieldRead for String {
+    fn read(variant: &QVariant) -> Result<Self, ()> {
+        variant
+            .value::<QString>()
+            .map(|text| text_of(&text))
+            .ok_or(())
+    }
+}
+
+/// A `QString` as a `String`, allocated once at its UTF-8 length. The
+/// bridge's conversion (`String::from(&QString)` = `from_utf16_lossy`)
+/// grows its buffer as it decodes, from a guess of half the UTF-16 length:
+/// more than one allocation for most strings, several for text that is not
+/// ASCII (ci/baseline/code-costs-windows-x64.md §橋の値の組み立て). An
+/// unpaired surrogate reads as U+FFFD, as there.
+fn text_of(text: &QString) -> String {
+    let units = text.as_slice();
+    let decoded = || {
+        char::decode_utf16(units.iter().copied())
+            .map(|unit| unit.unwrap_or(char::REPLACEMENT_CHARACTER))
+    };
+    let mut out = String::with_capacity(decoded().map(char::len_utf8).sum());
+    out.extend(decoded());
+    out
+}
 
 impl FieldValue for str {
     fn variant(&self) -> QVariant {
@@ -567,6 +600,23 @@ mod tests {
             assert!(Is::<One<Probe>>::PROPERTY);
             assert!(!Is::<Optional<Probe>>::PROPERTY);
         }
+    }
+
+    /// What the bridge's own conversion answers, for every kind of text:
+    /// one allocation is the only difference.
+    #[test]
+    fn a_string_field_reads_as_the_bridge_would_read_it() {
+        for text in [
+            QString::from(""),
+            QString::from("main"),
+            QString::from("修正: レーンを保つ"),
+            QString::from("emoji 🙂 and ü"),
+        ] {
+            let read = String::read(&QVariant::from(&text));
+            assert_eq!(read, Ok(String::from(&text)));
+            assert_eq!(read.map(|s| s.capacity() == s.len()), Ok(true), "{text}");
+        }
+        assert_eq!(String::read(&QVariant::default()), Err(()));
     }
 
     /// The slot wires are read and written in place of the Qt value, so

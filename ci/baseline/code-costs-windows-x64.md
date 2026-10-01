@@ -60,13 +60,15 @@
 
 ## 橋の値の組み立て(`encode::wire`)
 
-QML が行を読むたびに組む値(§メモリの形 の `encode::wire`)の代金。release・Qt 6.12.0・
-qtbridge 0.3.0・rustc 1.98.1 の単体の計時(8 レーン 5 欄の行を 2 万回組んで QVariant にし、
-3 周とも同じ順)。
+QML が行を読むたびに組む値と、QML から読み戻す値(§メモリの形 の `encode::wire`)の代金。
+release・Qt 6.12.0・qtbridge 0.3.0(同梱版)・rustc 1.98.1。製品の変換をそのまま回す計測
+(グラフ行の 15 role を `QModelItem::get_role` で読む / `ChosenRows` 50 件を組んで読み戻す)を、
+順序を入れ替えた 6 プロセスで撃った 1 操作あたりの中央値。
 
 | 場所 | 読み |
 |---|---|
 | `encode::wire::key_of`(欄名の `QString` を毎回作る案) | 行 1 本 5.0µs 対 使い回し 4.1–4.3µs |
+| `encode::wire::text_of`(文字列の欄の読み戻し) | `ChosenRows` 50 件: 橋の変換(`String::from(&QString)` = `from_utf16_lossy`)143µs・Rust の割り当て 901 回 → UTF-8 の長さで 1 回に確保 118µs・501 回。日本語の欄では 151µs・1101 回 → 111µs・501 回 |
 
 ## 着色(`highlight`)
 
