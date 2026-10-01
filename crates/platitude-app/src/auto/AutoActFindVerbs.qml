@@ -187,7 +187,7 @@ Item {
             avatarAssignTimer.stop()
             AppBackend.assignAvatar(detailsModel.authorEmail,
                                     detailsModel.authorName,
-                                    Harness.autoActArg)
+                                    Harness.fileUrl(Harness.autoActArg))
             avatarReportTimer.start()
         }
     }
@@ -298,7 +298,7 @@ Item {
             avatarSeedTimer.stop()
             AppBackend.assignAvatar(detailsModel.authorEmail,
                                     detailsModel.authorName,
-                                    Harness.autoActArg)
+                                    Harness.fileUrl(Harness.autoActArg))
             page.settingsDialogRequested()
         }
     }
