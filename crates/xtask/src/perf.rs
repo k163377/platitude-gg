@@ -226,7 +226,7 @@ fn build(root: &std::path::Path, opts: &Options) -> Result<rig::Built, String> {
     };
     // A Qt other than the tree's own follows another in its target
     // directory: named, not only put on PATH (`crate::qt`).
-    let exe = build_in(root, &qt, !opts.qt.is_empty(), opts.build, opts)?;
+    let exe = build_in(root, &qt, !opts.qt.is_empty(), &[], opts.build, opts)?;
     let commit = crate::subprocess::git_query(&crate::seats::slashed(root), &["rev-parse", "HEAD"])
         .unwrap_or_default();
     let identity = identity::of(
@@ -234,6 +234,7 @@ fn build(root: &std::path::Path, opts: &Options) -> Result<rig::Built, String> {
         &opts.features(),
         &qt,
         &identity::configs(root, None),
+        &[],
     );
     Ok(rig::Built {
         exe,
@@ -294,19 +295,23 @@ fn build_in(
     tree: &std::path::Path,
     qt: &crate::qt::Qt,
     name_qmake: bool,
+    unset: &[String],
     build: bool,
     opts: &Options,
 ) -> Result<std::path::PathBuf, String> {
     let path = qt.path()?;
-    let qmake = name_qmake.then_some(qt.qmake.as_path());
+    let with = crate::app_build::BuildEnv {
+        qmake: name_qmake.then_some(qt.qmake.as_path()),
+        unset,
+    };
     if !opts.harness {
-        return crate::app_build::shipped_exe(tree, &path, qmake, build);
+        return crate::app_build::shipped_exe(tree, &path, with, build);
     }
     let mut extra = vec!["-p", "platitude-app"];
     if opts.breakdown {
         extra.extend(["--features", "memprobe"]);
     }
-    crate::app_build::app_exe(tree, &path, qmake, build, &extra)
+    crate::app_build::app_exe(tree, &path, with, build, &extra)
 }
 
 /// The scenario the runs drive, as the warm note keys it: what a stage

@@ -9,6 +9,7 @@ use super::ownership::{claim_dir, claim_resource, fresh_shot_dir};
 use super::repos::{body_for, folder_for, seed_merge_tool};
 use super::shim::stage_shim;
 use super::{child, outcome, repos, seed};
+use crate::app_build::{BuildEnv, app_exe};
 
 /// The verbs that bring an old git of their own, so the line is just
 /// `verify-ui old-git`: the band's `OLD GIT`, alone or among the rest.
@@ -158,7 +159,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // only, so the build never sees it.
     // waits(measured): what the build took, said on the `spent` line and judged by nothing
     let at = std::time::Instant::now();
-    let exe = crate::app_build::app_exe(&root, &path, None, opts.build, &[])?;
+    let exe = app_exe(&root, &path, BuildEnv::default(), opts.build, &[])?;
     let build = at.elapsed();
 
     // Inside a container this claim guards nothing

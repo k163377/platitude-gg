@@ -341,7 +341,11 @@ const TAIL: &str = "  shipped [--no-build]
       prefix), rustc, the C++ compiler, cargo's configuration files and the
       build flags in the environment all match — build.txt beside it, and
       in the evidence, lists them — and a run is refused if it would load
-      another Qt than its build linked.
+      another Qt than its build linked. The rig's build does not inherit
+      what this tree's cargo configuration put into the environment (its
+      [env]): the commit's own configuration sets that. cargo still reads
+      the configuration of every directory above the rig, the primary
+      checkout's included, and build.txt names each one it read.
       options:
         --at <rev>        the commit to measure, built on the rig (above)
         --qt <version>    build and run with this Qt, not the pinned one

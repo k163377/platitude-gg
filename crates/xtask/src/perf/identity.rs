@@ -29,12 +29,14 @@ impl Identity {
 }
 
 /// The build of `source` with `features` against `qt`, with cargo's
-/// configuration `configs` (see [`configs`]).
+/// configuration `configs` (see [`configs`]), started without the
+/// variables `unset` names (see [`injected`]).
 pub(crate) fn of(
     source: &str,
     features: &str,
     qt: &Qt,
     configs: &[(PathBuf, Vec<u8>)],
+    unset: &[String],
 ) -> Identity {
     let rustc = rustc();
     let cxx = cxx();
@@ -56,7 +58,7 @@ pub(crate) fn of(
             .hash()
         ));
     }
-    for (key, value) in build_env(std::env::vars()) {
+    for (key, value) in build_env(std::env::vars(), unset) {
         text.push_str(&format!("env {key}={value}\n"));
     }
     Identity {
@@ -105,8 +107,64 @@ pub(crate) fn configs(tree: &Path, at: Option<(&str, &str)>) -> Vec<(PathBuf, Ve
     found
 }
 
-/// The environment a build reads its flags and tools from, sorted.
-fn build_env(vars: impl Iterator<Item = (String, String)>) -> Vec<(String, String)> {
+/// What cargo's `[env]` put into this process: `cargo xtask` is a `cargo
+/// run`, so the configuration of the tree it was typed in sets its
+/// variables here, and a build of another tree started from here would
+/// take them for its own. Each `[env]` key of `configs` whose value here
+/// is the one configured — cargo leaves a variable already set alone, so
+/// one that differs is the caller's.
+pub(crate) fn injected(configs: &[(PathBuf, Vec<u8>)]) -> Vec<String> {
+    injected_given(configs, |key| std::env::var(key).ok())
+}
+
+fn injected_given(
+    configs: &[(PathBuf, Vec<u8>)],
+    here: impl Fn(&str) -> Option<String>,
+) -> Vec<String> {
+    let mut keys = Vec::new();
+    for (_, contents) in configs {
+        let mut in_env = false;
+        for line in String::from_utf8_lossy(contents).lines() {
+            let line = line.trim();
+            if line.starts_with('[') {
+                in_env = line == "[env]";
+                continue;
+            }
+            let Some((key, value)) = line.split_once('=').filter(|_| in_env) else {
+                continue;
+            };
+            let key = key.trim();
+            // `KEY = "value"`, or the table form `KEY = { value = "value", … }`.
+            let value = value.trim();
+            let value = value
+                .strip_prefix('{')
+                .and_then(|table| table.split_once("value"))
+                .and_then(|(_, rest)| rest.trim_start().strip_prefix('='))
+                .unwrap_or(value);
+            let Some(configured) = quoted(value.trim_start()) else {
+                continue;
+            };
+            if here(key).as_deref() == Some(configured) && !keys.iter().any(|k| k == key) {
+                keys.push(key.to_string());
+            }
+        }
+    }
+    keys
+}
+
+/// The text of a TOML string that opens `value`, basic or literal.
+fn quoted(value: &str) -> Option<&str> {
+    let quote = value.chars().next().filter(|c| *c == '"' || *c == '\'')?;
+    let rest = &value[1..];
+    rest.find(quote).map(|end| &rest[..end])
+}
+
+/// The environment a build reads its flags and tools from, less `unset`,
+/// sorted.
+fn build_env(
+    vars: impl Iterator<Item = (String, String)>,
+    unset: &[String],
+) -> Vec<(String, String)> {
     const EXACT: [&str; 7] = [
         "CC",
         "CXX",
@@ -130,6 +188,7 @@ fn build_env(vars: impl Iterator<Item = (String, String)>) -> Vec<(String, Strin
         .filter(|(key, _)| {
             EXACT.contains(&key.as_str()) || PREFIXES.iter().any(|prefix| key.starts_with(prefix))
         })
+        .filter(|(key, _)| !unset.contains(key))
         .collect();
     picked.sort();
     picked
@@ -231,21 +290,31 @@ mod tests {
     #[test]
     fn every_part_of_a_build_moves_its_fingerprint() {
         let config = vec![(PathBuf::from("t/.cargo/config.toml"), b"[env]\n".to_vec())];
-        let base = of("abc", "automation", &qt("6.12.0"), &config).hash();
-        assert_eq!(base, of("abc", "automation", &qt("6.12.0"), &config).hash());
-        assert_ne!(base, of("abd", "automation", &qt("6.12.0"), &config).hash());
-        assert_ne!(base, of("abc", "none", &qt("6.12.0"), &config).hash());
-        assert_ne!(base, of("abc", "automation", &qt("6.10.3"), &config).hash());
+        let base = of("abc", "automation", &qt("6.12.0"), &config, &[]).hash();
+        assert_eq!(
+            base,
+            of("abc", "automation", &qt("6.12.0"), &config, &[]).hash()
+        );
+        assert_ne!(
+            base,
+            of("abd", "automation", &qt("6.12.0"), &config, &[]).hash()
+        );
+        assert_ne!(base, of("abc", "none", &qt("6.12.0"), &config, &[]).hash());
+        assert_ne!(
+            base,
+            of("abc", "automation", &qt("6.10.3"), &config, &[]).hash()
+        );
         let flagged = vec![(
             PathBuf::from("t/.cargo/config.toml"),
             b"[env]\nCFLAGS = \"-DX\"\n".to_vec(),
         )];
         assert_ne!(
             base,
-            of("abc", "automation", &qt("6.12.0"), &flagged).hash()
+            of("abc", "automation", &qt("6.12.0"), &flagged, &[]).hash()
         );
     }
 
+    /// What the build does not inherit is not what it is made with.
     #[test]
     fn the_build_flags_are_read_and_nothing_else() {
         let vars = [
@@ -258,18 +327,35 @@ mod tests {
             ("CCACHE_DIR", "z"),
         ]
         .map(|(k, v)| (k.to_string(), v.to_string()));
-        let keys: Vec<String> = build_env(vars.into_iter())
+        let keys: Vec<String> = build_env(vars.into_iter(), &["RUSTFLAGS".to_string()])
             .into_iter()
             .map(|(k, _)| k)
             .collect();
+        assert_eq!(keys, ["CC", "CFLAGS", "CXXFLAGS_x86_64_pc_windows_msvc"]);
+    }
+
+    /// A seat's `[env]`, as `cargo xtask` run there leaves it in this
+    /// process; a value set before cargo ran is the caller's own.
+    #[test]
+    fn what_this_tree_s_cargo_configuration_put_here_is_told_apart() {
+        let configs = [(
+            PathBuf::from("seat/.cargo/config.toml"),
+            b"[alias]\nxtask = \"run\"\n\n[env]\n# why\nCFLAGS = \"-DTREE_SITTER_HIDE_SYMBOLS\"\n\
+              CXXFLAGS_x86_64_pc_windows_msvc = '/utf-8'\nCC = { value = \"clang\", force = true }\n\
+              RUSTFLAGS = \"-Cx\"\n\n[build]\nCARGO = \"no\"\n"
+                .to_vec(),
+        )];
+        let here = |key: &str| match key {
+            "CFLAGS" => Some("-DTREE_SITTER_HIDE_SYMBOLS".to_string()),
+            "CXXFLAGS_x86_64_pc_windows_msvc" => Some("/utf-8".to_string()),
+            "CC" => Some("clang".to_string()),
+            "RUSTFLAGS" => Some("-Cmine".to_string()),
+            "CARGO" => Some("no".to_string()),
+            _ => None,
+        };
         assert_eq!(
-            keys,
-            [
-                "CC",
-                "CFLAGS",
-                "CXXFLAGS_x86_64_pc_windows_msvc",
-                "RUSTFLAGS"
-            ]
+            injected_given(&configs, here),
+            ["CFLAGS", "CXXFLAGS_x86_64_pc_windows_msvc", "CC"]
         );
     }
 

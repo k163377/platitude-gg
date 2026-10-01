@@ -96,7 +96,13 @@ pub fn launch(args: &[String]) -> Result<(), String> {
     }
     let exe = stand_from_a_copy(
         &root,
-        &crate::app_build::app_exe(&root, &path, None, build, &[])?,
+        &crate::app_build::app_exe(
+            &root,
+            &path,
+            crate::app_build::BuildEnv::default(),
+            build,
+            &[],
+        )?,
     )?;
     let mut command = Command::new(&exe);
     command

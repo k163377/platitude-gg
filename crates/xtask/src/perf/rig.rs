@@ -93,7 +93,10 @@ pub(super) fn build_at(caller: &Path, rev: &str, opts: &Options) -> Result<Built
         super::qt_for(opts, &format!("{} pins {pinned}", short(&commit)), &pinned)?;
     let set = opts.feature_slug();
     let configs = identity::configs(Path::new(&rig), Some((&here, &commit)));
-    let identity = identity::of(&commit, &opts.features(), &qt, &configs);
+    // The rig's own configuration sets what it sets: none of what this
+    // tree's put into this process reaches its build.
+    let unset = identity::injected(&identity::configs(caller, None));
+    let identity = identity::of(&commit, &opts.features(), &qt, &configs, &unset);
     let shelved = shelf(Path::new(&rig), &commit, &set, &identity.hash());
     let exe = shelved.join(crate::app_build::exe_name());
     if identity.complete && exe.is_file() {
@@ -140,7 +143,7 @@ pub(super) fn build_at(caller: &Path, rev: &str, opts: &Options) -> Result<Built
     );
     // The rig follows one commit's Qt with another's in one target
     // directory: its qmake is named, not only put on PATH (`crate::qt`).
-    let fresh = super::build_in(Path::new(&rig), &qt, true, true, opts)?;
+    let fresh = super::build_in(Path::new(&rig), &qt, true, &unset, true, opts)?;
     shelve(&fresh, &exe)?;
     std::fs::write(shelved.join("build.txt"), &identity.text).map_err(|e| {
         format!(
