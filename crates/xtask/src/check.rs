@@ -316,6 +316,12 @@ pub(crate) fn run_step(
     let _busy = crate::still::busy(root, &step.join(" "))?;
     let mut command = Command::new(&step[0]);
     command.args(&step[1..]).current_dir(root);
+    // The pinned Qt for every cargo the step starts, whatever Qt the shell
+    // that started the gate names (`crate::qt`). A step that needs no Qt
+    // runs as it is where none is found; one that does says so itself.
+    if let Ok(path) = crate::qt::path_with_qt() {
+        command.env("PATH", path);
+    }
     crate::still::step(&mut command);
     // Every caller holds a ticket for this step (`room`), so what the step
     // starts takes no second one.
