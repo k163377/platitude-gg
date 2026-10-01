@@ -134,9 +134,7 @@ impl Fields {
     }
 
     pub(crate) fn put<V: FieldValue + ?Sized>(mut self, key: &'static str, value: &V) -> Self {
-        // The value first: a nested record looks its own keys up.
-        let value = value.variant();
-        with_key(key, |key| self.0.insert_clone(key, &value));
+        self.0.insert(key_of(key), value.variant());
         self
     }
 
@@ -147,26 +145,21 @@ impl Fields {
 
 /// One named field read back. An absent one is `Err`.
 pub(crate) fn field<T: FieldRead>(map: &QVariantMap, key: &'static str) -> Result<T, ()> {
-    // Read once the key is let go of: a nested record looks its own up.
-    let value = with_key(key, |key| map.get(key)).ok_or(())?;
-    T::read(&value)
+    T::read(&map.get(&key_of(key)).ok_or(())?)
 }
 
 /// Whether the record has a field `key` holding something — what a field
 /// that may be left out is told apart by.
 pub(crate) fn has_field(map: &QVariantMap, key: &'static str) -> bool {
-    with_key(key, |key| map.get(key)).is_some_and(|value| value.is_valid())
+    map.get(&key_of(key)).is_some_and(|value| value.is_valid())
 }
 
-/// `use_key` handed a field's name as Qt keys it, made once per name and
-/// thread and lent after. Records are built on every read, from the same
-/// few dozen names, and turning each to UTF-16 on every build is a visible
-/// share of a row's (ci/baseline/code-costs-windows-x64.md §橋の値の組み立て).
-/// The name is lent, not copied: Qt's map takes its own copy, so a copy
-/// here is one more pair of calls across the bridge per field. Lent for
-/// `use_key` alone, which must not come back here — a nested record
-/// builds and reads its fields outside it ([`Fields::put`], [`field`]).
-fn with_key<R>(name: &'static str, use_key: impl FnOnce(&QString) -> R) -> R {
+/// A field's name as Qt keys it, made once per name and thread and copied
+/// after (an implicitly shared `QString`: the copy is a count). Records are
+/// built on every read, from the same few dozen names, and turning each to
+/// UTF-16 on every build is a visible share of a row's
+/// (ci/baseline/code-costs-windows-x64.md §橋の値の組み立て).
+fn key_of(name: &'static str) -> QString {
     thread_local! {
         static KEYS: std::cell::RefCell<std::collections::HashMap<(usize, usize), QString>> =
             std::cell::RefCell::new(std::collections::HashMap::new());
@@ -175,10 +168,9 @@ fn with_key<R>(name: &'static str, use_key: impl FnOnce(&QString) -> R) -> R {
     // text: a name is one string in the image, and a name stored twice
     // merely takes two entries.
     KEYS.with_borrow_mut(|keys| {
-        use_key(
-            keys.entry((name.as_ptr().addr(), name.len()))
-                .or_insert_with(|| QString::from(name)),
-        )
+        keys.entry((name.as_ptr().addr(), name.len()))
+            .or_insert_with(|| QString::from(name))
+            .clone()
     })
 }
 
@@ -613,7 +605,8 @@ mod tests {
     }
 
     /// Records inside a record: built and read back while the outer one is
-    /// mid-way through its own fields, so no key may still be lent.
+    /// mid-way through its own fields, each looking its own keys up
+    /// ([`key_of`] holds its cache only for the lookup).
     #[derive(Debug, Clone, PartialEq, Default)]
     struct Nest {
         name: String,
