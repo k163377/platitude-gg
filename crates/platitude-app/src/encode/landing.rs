@@ -38,7 +38,7 @@ impl Record for Landing {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use qtbridge::qtbridge_type_lib::QVariant;
+    use qtbridge::QVariantConvertible;
 
     #[test]
     fn a_landing_round_trips_and_nowhere_is_nothing() {
@@ -47,11 +47,9 @@ mod tests {
             bucket: "staged".into(),
             path: "src/日本語.txt".into(),
         });
-        assert_eq!(
-            Landed::try_from(&QVariant::from(&landed)),
-            Ok(landed.clone())
-        );
+        let back = <Landed as QVariantConvertible>::try_from_qvariant(&landed.to_qvariant());
+        assert_eq!(back.map(|b| (*b).clone()), Ok((*landed).clone()));
         assert_eq!(landed.as_ref().map(|l| l.row), Some(3));
-        assert!(!QVariant::from(&Landed::none()).is_valid());
+        assert!(!Landed::none().to_qvariant().is_valid());
     }
 }

@@ -318,10 +318,12 @@ mod tests {
 
     #[test]
     fn a_fetch_that_lands_takes_down_the_line_a_fetch_put_up() {
-        let mut tab = RepoTab::default();
-        tab.fetch_failures = 2;
-        tab.last_error = "fatal: unable to access".into();
-        tab.last_error_from_fetch = true;
+        let mut tab = RepoTab {
+            fetch_failures: 2,
+            last_error: "fatal: unable to access".into(),
+            last_error_from_fetch: true,
+            ..RepoTab::default()
+        };
         tab.fetch_settled("", true);
         assert_eq!(tab.fetch_failures, 0);
         assert_eq!(tab.last_error, "");
@@ -330,9 +332,11 @@ mod tests {
 
     #[test]
     fn a_fetch_that_lands_leaves_a_background_reads_line_standing() {
-        let mut tab = RepoTab::default();
-        tab.last_error = "fatal: bad revision".into();
-        tab.last_error_from_fetch = false;
+        let mut tab = RepoTab {
+            last_error: "fatal: bad revision".into(),
+            last_error_from_fetch: false,
+            ..RepoTab::default()
+        };
         tab.fetch_settled("", true);
         assert_eq!(tab.fetch_failures, 0);
         assert_eq!(tab.last_error, "fatal: bad revision");
@@ -357,13 +361,15 @@ mod tests {
 
     #[test]
     fn later_failures_neither_rewrite_nor_reclaim_the_line() {
-        let mut tab = RepoTab::default();
         // The first failure's line has been dismissed, and a background
         // read has written its own news since.
-        tab.fetch_failures = 1;
-        tab.fetch_log_raised = true;
-        tab.last_error = "fatal: bad revision".into();
-        tab.last_error_from_fetch = false;
+        let mut tab = RepoTab {
+            fetch_failures: 1,
+            fetch_log_raised: true,
+            last_error: "fatal: bad revision".into(),
+            last_error_from_fetch: false,
+            ..RepoTab::default()
+        };
         tab.fetch_settled("fatal: unable to access", true);
         assert_eq!(tab.fetch_failures, 2);
         // Same news as the first: it neither touches nor claims the line.

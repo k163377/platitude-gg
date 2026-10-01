@@ -14,7 +14,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use qtbridge::{QObjectHolder, qobject};
+use qtbridge::{QmlObject, qobject};
 
 use crate::hub::{Feed, Hub};
 

@@ -7,10 +7,11 @@ use platitude_core::rebase_plan::PlanRefusal;
 /// A model waiting on one click's answer — the only state a refusal is
 /// taken in (`qobject::open`).
 fn asking(from: &str) -> RebasePlanModel {
-    let mut model = RebasePlanModel::default();
-    model.loading = true;
-    model.asked_from = from.to_string();
-    model
+    RebasePlanModel {
+        loading: true,
+        asked_from: from.to_string(),
+        ..RebasePlanModel::default()
+    }
 }
 
 /// Each refusal's name, and the plan left shut — which the model must
@@ -41,8 +42,10 @@ fn a_refusal_for_another_click_raises_nothing() {
     assert!(model.loading, "the click that is waiting is still waiting");
 
     // Nor is a standing plan taken down by an answer nobody awaits.
-    let mut settled = RebasePlanModel::default();
-    settled.active = true;
+    let mut settled = RebasePlanModel {
+        active: true,
+        ..RebasePlanModel::default()
+    };
     assert_eq!(settled.refused("deep", PlanRefusal::OffBranch), None);
     assert!(settled.active);
 }

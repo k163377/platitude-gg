@@ -57,10 +57,12 @@ fn a_merge_that_landed_answers_at_the_tip() {
 
 #[test]
 fn a_merge_that_stopped_does_not_claim_the_tip() {
-    let mut tab = RepoTab::default();
     // The stop arrives before the answer that ends the write
     // (`TabMsg::WriteStopped`), so the flag is already standing.
-    tab.last_write_stopped = true;
+    let mut tab = RepoTab {
+        last_write_stopped: true,
+        ..RepoTab::default()
+    };
     tab.settle_write(1, K::Merge, String::new(), None, 0, 0);
     assert!(!at_tip(&tab), "nothing landed at the tip to go to");
 }
@@ -197,10 +199,12 @@ fn the_push_answer_is_this_notifys_own() {
 #[test]
 fn a_fetch_answer_says_so_whichever_way_it_went() {
     assert!(settled(K::Fetch, "").write_fetched);
-    let mut tab = RepoTab::default();
     // Panel already raised, so no `fetch_first_failed` is emitted — a
     // signal needs the proxy no unit test has.
-    tab.fetch_log_raised = true;
+    let mut tab = RepoTab {
+        fetch_log_raised: true,
+        ..RepoTab::default()
+    };
     tab.settle_write(
         1,
         K::Fetch,

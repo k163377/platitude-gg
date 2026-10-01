@@ -60,7 +60,7 @@ impl platitude_core::mem::Footprint for Mate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use qtbridge::qtbridge_type_lib::QVariant;
+    use qtbridge::QVariantConvertible;
 
     #[test]
     fn a_mate_carries_name_address_and_the_face_off_the_name() {
@@ -83,7 +83,10 @@ mod tests {
             "the face comes off the name, the way the graph rows' do"
         );
         assert_eq!(mates[1].email, "");
-        assert_eq!(Mates::try_from(&QVariant::from(&mates)), Ok(mates));
+        assert_eq!(
+            <Mates as QVariantConvertible>::try_from_qvariant(&mates.to_qvariant()),
+            Ok(mates)
+        );
     }
 
     #[test]

@@ -17,7 +17,11 @@ impl DetailsModel {
     qproperty!("authorTime", Member = author_time, Notify = changed);
     qproperty!("avatar", Member = avatar, Notify = changed);
     qproperty!("avatarUrl", Member = avatar_url, Notify = changed);
-    qproperty!("coAuthors", Member = co_authors, Notify = changed);
+    // Through a getter: a value QML wrote would not reach Rust (encode::wire_qml).
+    qproperty!("coAuthors", Read = co_authors, Notify = changed);
+    fn co_authors(&self) -> &crate::encode::Mates {
+        &self.co_authors
+    }
     qproperty!("committerName", Member = committer_name, Notify = changed);
     qproperty!("committerEmail", Member = committer_email, Notify = changed);
     qproperty!(

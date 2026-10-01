@@ -6,7 +6,7 @@ use std::time::Instant;
 use platitude_core::Oid;
 use platitude_core::find::{Query, Row};
 use platitude_core::session::{LogRow, RelaidRow};
-use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
+use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject, qobject};
 
 use crate::encode::{Chips, Lanes, Optional};
 use crate::hub::{Feed, GraphMsg};

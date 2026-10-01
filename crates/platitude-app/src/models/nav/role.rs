@@ -48,8 +48,8 @@ pub(super) enum Value<'a> {
 impl Value<'_> {
     pub(super) fn variant(&self) -> QVariant {
         match self {
-            Self::Said(text) => QVariant::from(*text),
-            Self::Spelled(text) => QVariant::from(text),
+            Self::Said(text) => QVariant::from(&QString::from(*text)),
+            Self::Spelled(text) => QVariant::from(&QString::from(text)),
             Self::Flag(flag) => QVariant::from(flag),
             Self::Number(number) => QVariant::from(number),
         }

@@ -45,10 +45,10 @@ impl QAbstractItemModel for NavSectionModel {
 
     /// The names QML resolves a role by, spelled by `Role` and held to the
     /// item's derived table by the test in `role.rs`.
-    fn role_names(&self) -> QHash<i32, QByteArray> {
-        let mut names = QHash::default();
+    fn role_names(&self) -> QHash_i32_QByteArray {
+        let mut names = QHash_i32_QByteArray::default();
         for (number, role) in Role::ALL.iter().enumerate() {
-            names.insert(&(number as i32), &QByteArray::from(role.spelling()));
+            names.insert_clone(&(number as i32), &QByteArray::from(role.spelling()));
         }
         names
     }

@@ -1,8 +1,6 @@
 //! One row of the graph: the item the view reads its roles off, and the
 //! turning of a walked commit into one.
 
-use std::collections::HashMap;
-
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use crate::encode::{Chips, Fields, Lanes, Listed, Mates, Record, field};
@@ -214,6 +212,7 @@ impl Record for ChosenRow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use qtbridge::QVariantConvertible;
 
     fn commit(oid_hex: &str) -> GraphRowItem {
         GraphRowItem {
@@ -279,7 +278,7 @@ mod tests {
         assert_eq!(chosen[0].sha8, "01234567");
         assert_eq!(chosen[0].mates[0].name, "Bob");
         assert_eq!(
-            ChosenRows::try_from(&qtbridge::qtbridge_type_lib::QVariant::from(&chosen)),
+            <ChosenRows as QVariantConvertible>::try_from_qvariant(&chosen.to_qvariant()),
             Ok(chosen)
         );
     }

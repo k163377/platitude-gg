@@ -19,7 +19,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use qtbridge::{QObjectHolder, qobject};
+use qtbridge::{QmlObject, qobject};
 use tokio_util::sync::CancellationToken;
 
 use crate::hub::{Feed, Hub};

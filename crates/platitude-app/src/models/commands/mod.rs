@@ -1,7 +1,6 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
+use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject, qobject};
 
 use platitude_core::session::Recording;
 

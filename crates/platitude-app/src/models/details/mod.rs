@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use platitude_core::Oid;
 use platitude_core::session::SelectionRead;
-use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
+use qtbridge::{QListModel, QListModelBase, QModelItem, QmlObject, qobject};
 
 use crate::encode::{Landed, Landing};
 use crate::hub::{DetailsMsg, Feed, Hub};

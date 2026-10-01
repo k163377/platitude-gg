@@ -3,8 +3,9 @@ resolver = "3"
 members = ["crates/platitude-core", "crates/platitude-app", "crates/xtask"]
 # A bare `cargo build` leaves the task runner out.
 default-members = ["crates/platitude-core", "crates/platitude-app"]
-# The Phase 0 spike is throwaway reference code.
-exclude = ["spike"]
+# The Phase 0 spike is throwaway reference code; vendor/ holds third-party
+# crates as published (plus a patch), not ours to lint or format.
+exclude = ["spike", "vendor"]
 
 [workspace.package]
 version = "0.0.0"
@@ -55,3 +56,9 @@ print_stdout = "deny"
 print_stderr = "deny"
 undocumented_unsafe_blocks = "deny"
 too_many_lines = "warn"
+
+# qtbridge-interfaces 0.3.0 with its QObject proxies reached through shared
+# references (vendor/qtbridge-interfaces/PLATITUDE-MODIFIED.md): published,
+# a release build aborts at the first row a mutable slot notifies.
+[patch.crates-io]
+qtbridge-interfaces = { path = "vendor/qtbridge-interfaces" }

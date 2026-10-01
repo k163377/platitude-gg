@@ -1,7 +1,7 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 
-use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
+use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject, qobject};
 
 use crate::encode::{Fields, Listed, Record, field};
 use crate::hub::{Feed, Hub, OpenMsg};

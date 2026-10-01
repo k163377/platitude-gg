@@ -2,26 +2,28 @@
 //! walk the arrow keys take over it (規約 §diff のファイル一覧).
 
 use super::{DetailsModel, FileItem};
-use crate::encode::{Landed, Landing};
+use crate::encode::Landing;
 
 fn commit(paths: &[&str]) -> DetailsModel {
-    let mut model = DetailsModel::default();
-    model.raw_files = paths
-        .iter()
-        .map(|path| FileItem {
-            change: "M".to_string(),
-            path: (*path).to_string(),
-            name: (*path).to_string(),
-            ..Default::default()
-        })
-        .collect();
+    let mut model = DetailsModel {
+        raw_files: paths
+            .iter()
+            .map(|path| FileItem {
+                change: "M".to_string(),
+                path: (*path).to_string(),
+                name: (*path).to_string(),
+                ..Default::default()
+            })
+            .collect(),
+        ..DetailsModel::default()
+    };
     model.rebuild_rows();
     model
 }
 
 /// A landing on `row` at `path` — a commit's files sit in no bucket.
-fn landed(row: i32, path: &str) -> Landed {
-    Landed::some(Landing {
+fn landed(row: i32, path: &str) -> Option<Landing> {
+    Some(Landing {
         row,
         bucket: String::new(),
         path: path.to_string(),
@@ -35,17 +37,17 @@ fn the_arrows_walk_the_changed_files_and_stop_at_the_ends() {
     model.rebuild_rows();
 
     assert_eq!(
-        model.step_file(String::new(), "a.txt".to_string(), 1),
+        *model.step_file(String::new(), "a.txt".to_string(), 1),
         landed(1, "z.txt")
     );
     assert_eq!(
-        model.step_file(String::new(), "z.txt".to_string(), -1),
+        *model.step_file(String::new(), "z.txt".to_string(), -1),
         landed(0, "a.txt")
     );
     // Only the sign is read: one press is one file.
     assert_eq!(
-        model.step_file(String::new(), "a.txt".to_string(), 9),
-        model.step_file(String::new(), "a.txt".to_string(), 1)
+        *model.step_file(String::new(), "a.txt".to_string(), 9),
+        *model.step_file(String::new(), "a.txt".to_string(), 1)
     );
     assert!(
         model
@@ -75,11 +77,11 @@ fn the_arrows_step_over_a_folder_row() {
     assert_eq!(model.files.len(), 4);
     assert!(model.files[2].folder);
     assert_eq!(
-        model.step_file(String::new(), "one/x.txt".to_string(), 1),
+        *model.step_file(String::new(), "one/x.txt".to_string(), 1),
         landed(3, "two/y.txt")
     );
     assert_eq!(
-        model.step_file(String::new(), "two/y.txt".to_string(), -1),
+        *model.step_file(String::new(), "two/y.txt".to_string(), -1),
         landed(1, "one/x.txt")
     );
 }

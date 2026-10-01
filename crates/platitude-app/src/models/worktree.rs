@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use qtbridge::{QObjectHolder, qobject};
+use qtbridge::{QmlObject, qobject};
 
 use crate::hub::{Feed, HeadMsg, OpProgressMsg, StateMsg, StatusMsg};
 
