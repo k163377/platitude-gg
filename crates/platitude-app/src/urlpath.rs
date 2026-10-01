@@ -65,8 +65,13 @@ pub fn shown_path(path: &str) -> String {
 }
 
 /// Empty for a path with no root: a dialog cannot be opened at one.
+/// Folds `\` only on Windows: elsewhere a backslash is a letter of the
+/// name, and is encoded.
 fn path_to_file_url(path: &Path) -> String {
-    let encoded = percent_encode(&path.to_string_lossy().replace('\\', "/"));
+    let text = path.to_string_lossy();
+    #[cfg(windows)]
+    let text = text.replace('\\', "/");
+    let encoded = percent_encode(&text);
     if encoded.starts_with("//") {
         // UNC: the leading pair names the host, which the URL keeps.
         format!("file:{encoded}")
@@ -203,17 +208,32 @@ mod tests {
             "file:///C:/Users/dev/repo"
         );
         assert_eq!(
-            path_to_file_url(Path::new(r"C:\Users\dev\repo")),
-            "file:///C:/Users/dev/repo"
-        );
-        assert_eq!(
             path_to_file_url(Path::new("/home/dev/repo")),
             "file:///home/dev/repo"
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_windows_path_becomes_a_file_url() {
+        assert_eq!(
+            path_to_file_url(Path::new(r"C:\Users\dev\repo")),
+            "file:///C:/Users/dev/repo"
         );
         assert_eq!(
             path_to_file_url(Path::new(r"\\server\share\repo")),
             "file://server/share/repo"
         );
+    }
+
+    /// Folded, it would name `/home/dev/we/ird.png`.
+    #[test]
+    #[cfg(not(windows))]
+    fn a_backslash_in_a_name_is_encoded_not_folded() {
+        let path = Path::new(r"/home/dev/we\ird.png");
+        let url = file_url(path);
+        assert_eq!(url, "file:///home/dev/we%5Cird.png");
+        assert_eq!(file_url_to_path(&url), path);
     }
 
     #[test]
