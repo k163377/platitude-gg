@@ -51,6 +51,22 @@ Item {
         }
     }
 
+    AppCombo {
+        id: combo
+        width: 160
+        model: ["origin", "upstream"]
+    }
+
+    // The list's rows hold no tip of their own, so one is seated in the list.
+    Item {
+        id: inCombo
+        parent: combo.popup.contentItem
+        width: 40
+        height: 20
+        ToolTip.text: "in a combo's list"
+        ToolTip.visible: root.up && combo.popup.opened
+    }
+
     TestCase {
         name: "TipPolicy"
         when: windowShown
@@ -64,6 +80,7 @@ Item {
                 { tag: "card", popup: card, target: inCard },
                 { tag: "menu", popup: menu, target: inMenu },
                 { tag: "dialog", popup: dialog, target: inDialog },
+                { tag: "combo", popup: combo.popup, target: inCombo },
             ]
         }
 
