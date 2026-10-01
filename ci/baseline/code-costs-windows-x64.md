@@ -67,7 +67,7 @@ release・Qt 6.12.0・qtbridge 0.3.0(同梱版)・rustc 1.98.1。製品の変換
 
 | 場所 | 読み |
 |---|---|
-| `encode::wire::key_of`(欄名の `QString` を毎回作る案) | 行 1 本 5.0µs 対 使い回し 4.1–4.3µs |
+| `encode::wire::with_key`(欄名の `QString`) | 8 レーン・チップ 3・共著者 1 の行の全 role: 毎回作る 10.1µs → 使い回して複製 8.1µs → 使い回して貸す 7.9µs(複製との差は 4%。初回の 10 回・2.6KB の確保は同じ) |
 | `encode::wire::text_of`(文字列の欄の読み戻し) | `ChosenRows` 50 件: 橋の変換(`String::from(&QString)` = `from_utf16_lossy`)143µs・Rust の割り当て 901 回 → UTF-8 の長さで 1 回に確保 118µs・501 回。日本語の欄では 151µs・1101 回 → 111µs・501 回 |
 
 ## 着色(`highlight`)

@@ -134,7 +134,9 @@ impl Fields {
     }
 
     pub(crate) fn put<V: FieldValue + ?Sized>(mut self, key: &'static str, value: &V) -> Self {
-        self.0.insert(key_of(key), value.variant());
+        // The value first: a nested record looks its own keys up.
+        let value = value.variant();
+        with_key(key, |key| self.0.insert_clone(key, &value));
         self
     }
 
@@ -145,21 +147,26 @@ impl Fields {
 
 /// One named field read back. An absent one is `Err`.
 pub(crate) fn field<T: FieldRead>(map: &QVariantMap, key: &'static str) -> Result<T, ()> {
-    T::read(&map.get(&key_of(key)).ok_or(())?)
+    // Read once the key is let go of: a nested record looks its own up.
+    let value = with_key(key, |key| map.get(key)).ok_or(())?;
+    T::read(&value)
 }
 
 /// Whether the record has a field `key` holding something — what a field
 /// that may be left out is told apart by.
 pub(crate) fn has_field(map: &QVariantMap, key: &'static str) -> bool {
-    map.get(&key_of(key)).is_some_and(|value| value.is_valid())
+    with_key(key, |key| map.get(key)).is_some_and(|value| value.is_valid())
 }
 
-/// A field's name as Qt keys it, made once per name and thread and copied
-/// after (an implicitly shared `QString`: the copy is a count). Records are
-/// built on every read, from the same few dozen names, and turning each to
-/// UTF-16 on every build is a visible share of a row's
-/// (ci/baseline/code-costs-windows-x64.md §橋の値の組み立て).
-fn key_of(name: &'static str) -> QString {
+/// `use_key` handed a field's name as Qt keys it, made once per name and
+/// thread and lent after. Records are built on every read, from the same
+/// few dozen names, and turning each to UTF-16 on every build is a visible
+/// share of a row's (ci/baseline/code-costs-windows-x64.md §橋の値の組み立て).
+/// The name is lent, not copied: Qt's map takes its own copy, so a copy
+/// here is one more pair of calls across the bridge per field. Lent for
+/// `use_key` alone, which must not come back here — a nested record
+/// builds and reads its fields outside it ([`Fields::put`], [`field`]).
+fn with_key<R>(name: &'static str, use_key: impl FnOnce(&QString) -> R) -> R {
     thread_local! {
         static KEYS: std::cell::RefCell<std::collections::HashMap<(usize, usize), QString>> =
             std::cell::RefCell::new(std::collections::HashMap::new());
@@ -168,9 +175,10 @@ fn key_of(name: &'static str) -> QString {
     // text: a name is one string in the image, and a name stored twice
     // merely takes two entries.
     KEYS.with_borrow_mut(|keys| {
-        keys.entry((name.as_ptr().addr(), name.len()))
-            .or_insert_with(|| QString::from(name))
-            .clone()
+        use_key(
+            keys.entry((name.as_ptr().addr(), name.len()))
+                .or_insert_with(|| QString::from(name)),
+        )
     })
 }
 
@@ -600,6 +608,45 @@ mod tests {
             assert!(Is::<One<Probe>>::PROPERTY);
             assert!(!Is::<Optional<Probe>>::PROPERTY);
         }
+    }
+
+    /// Records inside a record: built and read back while the outer one is
+    /// mid-way through its own fields, so no key may still be lent.
+    #[derive(Debug, Clone, PartialEq, Default)]
+    struct Nest {
+        name: String,
+        inner: Listed<Probe>,
+        one: One<Probe>,
+    }
+
+    impl Record for Nest {
+        fn to_map(&self) -> QVariantMap {
+            Fields::new()
+                .put("name", &self.name)
+                .put("inner", &self.inner)
+                .put("one", &self.one)
+                .done()
+        }
+
+        fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+            Ok(Self {
+                name: field(map, "name")?,
+                inner: field(map, "inner")?,
+                one: field(map, "one")?,
+            })
+        }
+    }
+
+    #[test]
+    fn a_record_inside_a_record_builds_and_reads_back() {
+        let nest = Nest {
+            name: "outer".into(),
+            inner: Listed::new(probes()),
+            one: One::new(probes().remove(0)),
+        };
+        assert_eq!(Nest::from_map(&nest.to_map()), Ok(nest.clone()));
+        let nested = Listed::new(vec![nest.clone(), Nest::default()]);
+        assert_eq!(through_a_slot(&nested), nested);
     }
 
     /// What the bridge's own conversion answers, for every kind of text:
