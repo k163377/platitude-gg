@@ -316,6 +316,9 @@ QtObject {
 
         const one = probe.echoOne(sample("w", 2, true))
         say("slot-one", one.word === "w" && one.count === 2 && one.on === true, one)
+        // A JS string may hold half a surrogate pair; the record's text reads it as U+FFFD.
+        const lone = probe.echoOne(sample("\uD800x", 1, true))
+        say("slot-one-lone-surrogate-replaced", lone.word === "�x", lone.word)
         const blank = probe.echoOne({ word: "short" })
         say("slot-one-missing-field-default", blank.word === "" && blank.count === 0 && blank.on === false,
             blank)
@@ -350,7 +353,7 @@ QtObject {
 "#;
 
 /// How many lines [`CHECKS`] says.
-const CHECKED: usize = 25;
+const CHECKED: usize = 26;
 
 /// One write of `VALUE` to `PROPERTY`, said before and after: what the
 /// write threw, if anything, and what the object holds once it is done.
