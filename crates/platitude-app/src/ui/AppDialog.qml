@@ -26,6 +26,8 @@ Dialog {
            : Math.min(Theme.textWidth, (parent ? parent.width : Theme.textWidth) - 2 * Theme.spaceXxl)
     height: dialog.fills ? (parent ? parent.height : 480) : implicitHeight
     modal: true
+    // The tips inside time themselves, as the window's do: a popup inherits no policy (`Main.qml`).
+    ToolTip.policy: ToolTip.Manual
     closePolicy: Popup.CloseOnEscape
     focus: true
     padding: Theme.spaceXxl

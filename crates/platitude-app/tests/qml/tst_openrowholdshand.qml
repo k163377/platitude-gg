@@ -14,6 +14,8 @@ Item {
     id: root
     width: 320
     height: 240
+    // What `Main.qml` and the popup bases declare (rules-refs/app-ui.md「ToolTip.policy」).
+    ToolTip.policy: ToolTip.Manual
 
     /// Empty leaves the line going nowhere; a commit makes it a target (`NavFacts.place`), which lays a band over it.
     property string readingAt: ""
