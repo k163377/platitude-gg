@@ -233,6 +233,13 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "overlay saved=true popups=3",
     },
+    // The picture filed against the details' author: a refused one still
+    // completes the run, with the identicon in the picture.
+    Verb {
+        name: "avatar-assign",
+        when: &[],
+        plain: " details=true ",
+    },
     // Enter in that box opens the file picker (デザイン規約 §アバターを与える),
     // the platform's own window and in neither PNG (as `open-picker`).
     // `who=` is the guard the button beside the box wears: a picker opened
