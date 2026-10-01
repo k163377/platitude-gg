@@ -4,7 +4,7 @@
 use super::*;
 
 impl Hub {
-    /// Installs the hub into the main thread. Call once before `QApp::run`.
+    /// Installs the hub into the main thread. Call once before the event loop starts.
     pub fn install(runtime: tokio::runtime::Runtime, store: Store, held_elsewhere: String) {
         let settings = store.load_settings();
         let state = store.load_state();
@@ -55,7 +55,7 @@ impl Hub {
         })
     }
 
-    /// Shuts down all sessions and the runtime. Call after `QApp::run`.
+    /// Shuts down all sessions and the runtime. Call after the event loop returns.
     pub fn shutdown() {
         let hub = HUB.with(|h| h.borrow_mut().take());
         if let Some(mut hub) = hub {

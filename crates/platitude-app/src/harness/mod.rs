@@ -45,13 +45,14 @@ pub(crate) fn start_clock() {
 /// which leaves out the QML naming them too (why `Harness` is a type of
 /// its own: `singleton`).
 #[cfg(feature = "automation")]
-pub(crate) fn install(app: &mut qtbridge::QApp) {
-    app.register::<perf_probe::PerfProbe>()
-        .register::<singleton::Harness>();
+pub(crate) fn register_types() {
+    use qtbridge::QmlElement;
+    perf_probe::PerfProbe::register();
+    singleton::Harness::register();
 }
 
 #[cfg(not(feature = "automation"))]
-pub(crate) fn install(_app: &mut qtbridge::QApp) {}
+pub(crate) fn register_types() {}
 
 /// The reporting channel the harness reads its answers off (QML →
 /// tracing → `xtask`). No arm without the feature: the only caller is
