@@ -285,10 +285,10 @@ impl GraphModel {
 
         if old_len > new_len {
             if let Some(proxy) = self.try_get_rust_proxy_ptr() {
-                // SAFETY: same pattern as QListModelBase::remove — the
-                // proxy pointer stays valid while the QObject side is
-                // attached, and we are on the Qt main thread in a slot.
-                unsafe { &mut *proxy }.base_begin_remove_rows(
+                // SAFETY: as in `models::notify` — the registry's pointer
+                // for this value's attached QObject, which outlives the
+                // slot (main thread), and only ever shared.
+                unsafe { &*proxy }.base_begin_remove_rows(
                     &mut *self,
                     &qtbridge::qtbridge_type_lib::QModelIndex::default(),
                     new_len as i32,
@@ -296,7 +296,7 @@ impl GraphModel {
                 );
                 self.rows.truncate(new_len);
                 // SAFETY: see above.
-                unsafe { &mut *proxy }.base_end_remove_rows(&mut *self);
+                unsafe { &*proxy }.base_end_remove_rows(&mut *self);
             } else {
                 self.rows.truncate(new_len);
             }

@@ -4,6 +4,12 @@
 //! all three are spelled out through the proxy API the way
 //! `QListModelBase::push` does it — hence the `unsafe`.
 //!
+//! The proxy is only ever reached through a shared reference: while a
+//! notification runs, Qt re-enters it through its own pointer (`rowCount`,
+//! `data`) and reads the model through the exclusive borrow handed to the
+//! call (`&mut *self`). An exclusive reference to the proxy across the call
+//! is what let the compiler drop that borrow before Qt could read it.
+//!
 //! Everything here runs on the Qt main thread inside one slot, so nothing
 //! of Qt's runs between writing the rows and notifying.
 
@@ -22,10 +28,10 @@ macro_rules! impl_extend_notified {
                 };
                 let first = self.$field.len() as i32;
                 let last = first + batch.len() as i32 - 1;
-                // SAFETY: same pattern as QListModelBase::push — the proxy
-                // pointer stays valid while the QObject side is attached,
-                // and we are on the Qt main thread inside a slot.
-                unsafe { &mut *proxy }.base_begin_insert_rows(
+                // SAFETY: the registry's pointer for this value's attached
+                // QObject, which outlives the slot we are in (main thread);
+                // shared, as the module says.
+                unsafe { &*proxy }.base_begin_insert_rows(
                     &mut *self,
                     &qtbridge::qtbridge_type_lib::QModelIndex::default(),
                     first,
@@ -33,7 +39,7 @@ macro_rules! impl_extend_notified {
                 );
                 self.$field.extend(batch);
                 // SAFETY: see above.
-                unsafe { &mut *proxy }.base_end_insert_rows(&mut *self);
+                unsafe { &*proxy }.base_end_insert_rows(&mut *self);
             }
         }
     };
@@ -66,15 +72,13 @@ macro_rules! impl_move_notified {
                 let (Ok(first), Ok(before)) = (i32::try_from(from), i32::try_from(before)) else {
                     return;
                 };
-                // SAFETY: same pattern as `extend_notified` — the proxy
-                // pointer stays valid while the QObject side is attached,
-                // and we are on the Qt main thread inside a slot.
-                unsafe { &mut *proxy }
+                // SAFETY: as in `extend_notified`.
+                unsafe { &*proxy }
                     .base_begin_move_rows(&mut *self, &root, first, first, &root, before);
                 let item = self.$field.remove(from);
                 self.$field.insert(to, item);
                 // SAFETY: see above.
-                unsafe { &mut *proxy }.base_end_move_rows(&mut *self);
+                unsafe { &*proxy }.base_end_move_rows(&mut *self);
             }
         }
     };
@@ -99,11 +103,9 @@ macro_rules! impl_notify_runs {
                     let (Ok(first), Ok(last)) = (i32::try_from(first), i32::try_from(last)) else {
                         continue;
                     };
-                    // SAFETY: same pattern as `extend_notified` — the
-                    // proxy pointer stays valid while the QObject side is
-                    // attached, and we are on the Qt main thread inside a
-                    // slot. `base_index` only builds an index.
-                    let proxy = unsafe { &mut *proxy };
+                    // SAFETY: as in `extend_notified`. `base_index` only
+                    // builds an index.
+                    let proxy = unsafe { &*proxy };
                     let top_left = proxy.base_index(&*self, first, 0, &root);
                     let bottom_right = proxy.base_index(&*self, last, 0, &root);
                     proxy.base_data_changed(&mut *self, &top_left, &bottom_right);
