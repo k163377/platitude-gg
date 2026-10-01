@@ -295,8 +295,9 @@ pub(crate) enum Stepped {
 }
 
 /// One step with both streams on its log file, watched. `Ok` is the step's
-/// verdict or the stop it was ended for; `Err` is a ceiling or a spawn
-/// failure. `stop` is the gate's halt; everyone else hands `&|| false`. A
+/// verdict or the stop it was ended for; `Err` is a ceiling, a spawn
+/// failure or a Qt of another version on PATH (`crate::qt`). `stop` is
+/// the gate's halt; everyone else hands `&|| false`. A
 /// stop ends the step's process tree and nothing past it — a container the
 /// step brought up keeps working — so hand `stop` only to a step whose
 /// work ends with that tree or is reached by a mark (`gate::runner`).
@@ -316,6 +317,13 @@ pub(crate) fn run_step(
     let _busy = crate::still::busy(root, &step.join(" "))?;
     let mut command = Command::new(&step[0]);
     command.args(&step[1..]).current_dir(root);
+    // The pinned Qt for every cargo the step starts, whatever Qt the shell
+    // that started the gate names (`crate::qt`). Where there is no Qt at
+    // all, a step that needs none runs as it is and one that does fails on
+    // its own; a qmake of another version stops the step here.
+    if let Some(path) = crate::qt::path_with_qt_if_any()? {
+        command.env("PATH", path);
+    }
     crate::still::step(&mut command);
     // Every caller holds a ticket for this step (`room`), so what the step
     // starts takes no second one.
