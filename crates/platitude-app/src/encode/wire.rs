@@ -124,7 +124,7 @@ pub(crate) fn has_field(map: &QVariantMap, key: &'static str) -> bool {
 /// A field's name as Qt keys it, made once per name and thread and copied
 /// after (an implicitly shared `QString`: the copy is a count). Records are
 /// built on every read, from the same few dozen names, and turning each to
-/// UTF-16 again was a share of a row's build worth keeping
+/// UTF-16 on every build is a visible share of a row's
 /// (ci/baseline/code-costs-windows-x64.md §橋の値の組み立て).
 fn key_of(name: &'static str) -> QString {
     thread_local! {

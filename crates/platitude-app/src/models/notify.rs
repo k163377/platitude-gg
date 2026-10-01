@@ -7,8 +7,9 @@
 //! The proxy is only ever reached through a shared reference: while a
 //! notification runs, Qt re-enters it through its own pointer (`rowCount`,
 //! `data`) and reads the model through the exclusive borrow handed to the
-//! call (`&mut *self`). An exclusive reference to the proxy across the call
-//! is what let the compiler drop that borrow before Qt could read it.
+//! call (`&mut *self`). Across the call, an exclusive reference to the
+//! proxy lets an optimized build drop the hand-over of that borrow before
+//! Qt reads it, and the first re-entrant read aborts.
 //!
 //! Everything here runs on the Qt main thread inside one slot, so nothing
 //! of Qt's runs between writing the rows and notifying.

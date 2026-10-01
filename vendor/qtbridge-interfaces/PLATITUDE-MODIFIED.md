@@ -20,9 +20,9 @@ shared references only. Every `base_*` call, `set_data` / `remove_rows` /
 callers reach the proxy through `&*proxy` instead of `&mut *proxy`. The user model's own
 `&mut self` and its `RefCell` checks are unchanged.
 
-Why: with `&mut self`, an optimized build dropped the borrow state the proxy stores for
+Why: with `&mut self`, an optimized build drops the borrow state the proxy stores for
 Qt's re-entrant reads (`try_store_handle_and_call_cpp_mut`), and the first row notified
-from a mutable slot aborted in `rowCount` with `BorrowError`
+from a mutable slot aborts in `rowCount` with `BorrowError`
 (internal-docs/P3-確認事項.md, the qtbridge entry; the report for upstream is `UPSTREAM-REPORT.md`).
 
 Back to the published crate when a qtbridge release takes the proxies by `&self`: remove

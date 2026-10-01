@@ -63,7 +63,8 @@ fn main() {
 Run with `QT_QPA_PLATFORM=offscreen`.
 
 - **Expected**: `qml: count=3`, exit 0.
-- **Actual (release)**: 10 of 10 runs abort, exit 0xC0000409:
+- **Actual (release)**: every run aborts (10 of 10 on Rust 1.97.1 / Qt 6.10.3, 5 of 5 on
+  1.98.1 / 6.12.0), exit 0xC0000409:
   ```
   thread 'main' panicked at qtbridge-interfaces-0.3.0/src/qlist_model/proxy_rust.rs:393:9:
   Failed to borrow for row_count: BorrowError(BorrowError)
@@ -140,10 +141,12 @@ Unchanged on purpose: the user model's own `&mut self` (the `QListModel` / adapt
 
 Same toolchain, Qt, lockfile (only the `qtbridge-interfaces` source differs) and inputs:
 
-| build | runs | result |
-|---|---|---|
-| 0.3.0 release | 10 | 10 × abort, `Failed to borrow for row_count` |
-| candidate release | 10 | 10 × `count=3`, exit 0 |
-| 0.3.0 dev | 3 | 3 × `count=3` |
+| build | Rust / Qt | runs | result |
+|---|---|---|---|
+| 0.3.0 release | 1.97.1 / 6.10.3 | 10 | 10 × abort, `Failed to borrow for row_count` |
+| candidate release | 1.97.1 / 6.10.3 | 10 | 10 × `count=3`, exit 0 |
+| 0.3.0 release | 1.98.1 / 6.12.0 | 5 | 5 × abort, `Failed to borrow for row_count` |
+| candidate release | 1.98.1 / 6.12.0 | 5 | 5 × `count=3`, exit 0 |
+| 0.3.0 dev | 1.97.1 / 6.10.3 | 3 | 3 × `count=3` |
 
 No diagnostic output was added to either build that was compared.
