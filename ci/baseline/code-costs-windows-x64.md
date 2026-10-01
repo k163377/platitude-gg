@@ -58,6 +58,16 @@
 | `corpus` の loose refs | 5 万本で slack 80MB、`pack-refs` 後は 6MB |
 | `encode::wire`(橋の値を行の隣に持つ案) | 合成コーパスの 2,000 行の窓(レーン p50 29 本 / 行、chip 766)で WorkingSet 中央 318.9 → 377.8MB(+59)、private 296.2 → 361.7MB(+65)、settled 312.7 → 371.2MB(+58)= net が予算 300MB の外。同じ座りの fps 177.8 → 176.5、起動 1662 → 1706ms、応答は 5 run の揺れの中 — 読む時に組む形と差なし |
 
+## 橋の値の組み立て(`encode::wire`)
+
+QML が行を読むたびに組む値(§メモリの形 の `encode::wire`)の代金。release・Qt 6.12.0・
+qtbridge 0.3.0・rustc 1.98.1 の単体の計時(8 レーン 5 欄の行を 2 万回組んで QVariant にし、
+3 周とも同じ順)。
+
+| 場所 | 読み |
+|---|---|
+| `encode::wire::key_of`(欄名の `QString` を毎回作る案) | 行 1 本 5.0µs 対 使い回し 4.1–4.3µs |
+
 ## 着色(`highlight`)
 
 | 場所 | 読み |

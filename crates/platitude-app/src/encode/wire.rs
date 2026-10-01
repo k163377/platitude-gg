@@ -100,8 +100,8 @@ impl Fields {
         Self(QVariantMap::default())
     }
 
-    pub(crate) fn put<V: FieldValue + ?Sized>(mut self, key: &str, value: &V) -> Self {
-        self.0.insert(QString::from(key), value.variant());
+    pub(crate) fn put<V: FieldValue + ?Sized>(mut self, key: &'static str, value: &V) -> Self {
+        self.0.insert(key_of(key), value.variant());
         self
     }
 
@@ -111,15 +111,34 @@ impl Fields {
 }
 
 /// One named field read back. An absent one is `Err`.
-pub(crate) fn field<T: FieldRead>(map: &QVariantMap, key: &str) -> Result<T, ()> {
-    T::read(&map.get(&QString::from(key)).ok_or(())?)
+pub(crate) fn field<T: FieldRead>(map: &QVariantMap, key: &'static str) -> Result<T, ()> {
+    T::read(&map.get(&key_of(key)).ok_or(())?)
 }
 
 /// Whether the record has a field `key` holding something — what a field
 /// that may be left out is told apart by.
-pub(crate) fn has_field(map: &QVariantMap, key: &str) -> bool {
-    map.get(&QString::from(key))
-        .is_some_and(|value| value.is_valid())
+pub(crate) fn has_field(map: &QVariantMap, key: &'static str) -> bool {
+    map.get(&key_of(key)).is_some_and(|value| value.is_valid())
+}
+
+/// A field's name as Qt keys it, made once per name and thread and copied
+/// after (an implicitly shared `QString`: the copy is a count). Records are
+/// built on every read, from the same few dozen names, and turning each to
+/// UTF-16 again was a share of a row's build worth keeping
+/// (ci/baseline/code-costs-windows-x64.md §橋の値の組み立て).
+fn key_of(name: &'static str) -> QString {
+    thread_local! {
+        static KEYS: std::cell::RefCell<std::collections::HashMap<(usize, usize), QString>> =
+            std::cell::RefCell::new(std::collections::HashMap::new());
+    }
+    // By where the literal lives and how long it is, never by hashing its
+    // text: a name is one string in the image, and a name stored twice
+    // merely takes two entries.
+    KEYS.with_borrow_mut(|keys| {
+        keys.entry((name.as_ptr().addr(), name.len()))
+            .or_insert_with(|| QString::from(name))
+            .clone()
+    })
 }
 
 // ---------------------------------------------------------------------------
