@@ -21,39 +21,58 @@ const QMAKE_NAMES: [&str; 2] = ["qmake6", "qmake"];
 /// then whatever qmake PATH already names (CI and Linux, where PATH is set
 /// to the pinned Qt by whoever installed it).
 pub fn path_with_qt() -> Result<OsString, String> {
-    let current = std::env::var_os("PATH").unwrap_or_default();
     let pinned = pinned_here();
-    let bin = explicit_qt_bin().or_else(|| pinned.as_deref().and_then(installed_bin));
+    path_for(pinned.as_deref())?.ok_or_else(|| not_found(pinned))
+}
+
+/// As [`path_with_qt`], for a caller with work that needs no Qt: `None`
+/// where no Qt is found. A qmake on PATH of another version is still
+/// refused — whatever in the work does build against Qt would build
+/// against that one.
+pub fn path_with_qt_if_any() -> Result<Option<OsString>, String> {
+    path_for(pinned_here().as_deref())
+}
+
+fn path_for(pinned: Option<&str>) -> Result<Option<OsString>, String> {
+    let current = std::env::var_os("PATH").unwrap_or_default();
+    let bin = explicit_qt_bin().or_else(|| pinned.and_then(installed_bin));
     if let Some(bin) = bin {
         let mut parts = vec![bin];
         parts.extend(std::env::split_paths(&current));
-        return std::env::join_paths(parts).map_err(|e| format!("rebuilding PATH failed: {e}"));
+        return std::env::join_paths(parts)
+            .map(Some)
+            .map_err(|e| format!("rebuilding PATH failed: {e}"));
     }
-    if let Some(dir) = qmake_dir_on(&current) {
-        // An install that names its version (aqtinstall's layout, also CI's)
-        // has to be the pinned one.
-        if let (Some(pinned), Some(found)) = (pinned.as_deref(), version_of_bin(&dir))
-            && pinned != found
-        {
-            return Err(format!(
-                "the qmake on PATH is Qt {found} ({}), and ci.yml pins {pinned}: install \
-                 {pinned} or set QT_BIN to its bin directory",
-                dir.display()
-            ));
-        }
-        return Ok(current);
+    let Some(dir) = qmake_dir_on(&current) else {
+        return Ok(None);
+    };
+    // An install that names its version (aqtinstall's layout, also CI's)
+    // has to be the pinned one.
+    if let (Some(pinned), Some(found)) = (pinned, version_of_bin(&dir))
+        && pinned != found
+    {
+        return Err(format!(
+            "the qmake on PATH is Qt {found} ({}), and ci.yml pins {pinned}: install \
+             {pinned} or set QT_BIN to its bin directory",
+            dir.display()
+        ));
     }
-    Err(match (cfg!(windows), pinned) {
+    Ok(Some(current))
+}
+
+fn not_found(pinned: Option<String>) -> String {
+    match (cfg!(windows), pinned) {
         (true, Some(version)) => format!(
             "Qt {version} (ci.yml's QT_VERSION) is not under C:\\Qt and qmake is not on \
-             PATH. Install it with aqtinstall (`aqt install-qt --base \
-             https://download.qt.io/ windows desktop {version} win64_msvc2022_64 -O \
-             C:\\Qt`), or set QT_BIN to its bin directory."
+             PATH. Install it as ci.yml's Windows job does — aqtinstall from its \
+             AQT_SOURCE, then `aqt install-qt --base https://download.qt.io/ windows \
+             desktop {version} win64_msvc2022_64 -O C:\\Qt` — or set QT_BIN to its bin \
+             directory."
         ),
         _ => "qmake not found on PATH. Add the Qt bin directory to PATH or set QT_BIN \
               to it."
             .to_string(),
-    })
+    }
 }
 
 /// The Qt version CI's workflow pins (`QT_VERSION:`) — the one place it
