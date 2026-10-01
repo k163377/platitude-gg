@@ -127,5 +127,13 @@ impl Harness {
     fn held_saves(&self) -> i32 {
         i32::try_from(super::faults::held_saves()).unwrap_or(i32::MAX)
     }
+
+    /// A file the run was handed, as the chooser it stands in for answers:
+    /// a `file:` URL, made by the product's own conversion
+    /// (`urlpath::file_url`) from the whole path.
+    #[qslot]
+    fn file_url(&self, path: String) -> String {
+        crate::urlpath::file_url(std::path::Path::new(&path))
+    }
 }
 qml_register!(Harness, "Harness", singleton = true);

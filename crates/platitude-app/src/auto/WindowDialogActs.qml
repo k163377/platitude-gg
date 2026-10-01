@@ -37,21 +37,18 @@ Item {
     }
     /// `folder=` names this machine, so `beside_copy=` is what is judged: whether the picker came up in the folder
     /// holding the copy the tab stands in (`RepoTab.picker_folder_url`; the cases are verbs.md `open-picker`).
-    /// Compared as paths through `GitFacts.pickedPath`, not as text — a space arrives percent-encoded — both spelled
-    /// with `/` (規約 §パスの区切り). No page, no copy: `false`.
+    /// Compared as paths, not as text — a space arrives percent-encoded — and the copy's folder is the product's own
+    /// conversion's to find (`GitFacts.folderUrlOf`), not split here. No page, no copy: `false`.
     function pickerLine() {
         return "picker beside_copy=" + acts.pickerIsBesideCopy()
                 + " folder=" + folderDialog.currentFolder
     }
     function pickerIsBesideCopy() {
         const page = window.curPage
-        if (page === null)
+        if (page === null || page.pageTab.repoPath === "")
             return false
-        const copy = page.pageTab.repoPath
-        const cut = copy.lastIndexOf("/")
-        if (cut <= 0)
-            return false
-        return GitFacts.pickedPath(folderDialog.currentFolder.toString()) === copy.substring(0, cut)
+        return GitFacts.pickedPath(folderDialog.currentFolder.toString())
+                === GitFacts.pickedPath(GitFacts.folderUrlOf(page.pageTab.repoPath))
     }
     // Every other verb that puts the picker up says where it was pointed; nothing else says so afterwards.
     Connections {
