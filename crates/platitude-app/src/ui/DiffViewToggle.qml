@@ -19,14 +19,14 @@ RowLayout {
     ViewMarkButton {
         Layout.fillHeight: true
         mark: "unified"
-        lit: !toggle.split
+        showing: !toggle.split
         tip: qsTr("Unified view")
         onClicked: toggle.chosen(false)
     }
     ViewMarkButton {
         Layout.fillHeight: true
         mark: "split"
-        lit: toggle.split
+        showing: toggle.split
         tip: qsTr("Split view")
         onClicked: toggle.chosen(true)
     }

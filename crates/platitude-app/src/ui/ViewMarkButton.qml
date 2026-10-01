@@ -12,8 +12,8 @@ HoverToolButton {
 
     /// Which of `NavIcon`'s kinds this half is drawn as.
     required property string mark
-    /// Whether this half's view is the one showing.
-    required property bool lit
+    /// Whether this half's view is the one showing. Not `lit`, which is the button's own word for a hand on it.
+    required property bool showing
 
     implicitWidth: Theme.iconXl
     implicitHeight: Theme.iconXl
@@ -24,6 +24,6 @@ HoverToolButton {
     bottomInset: viewButton.topPadding
     contentItem: NavIcon {
         kind: viewButton.mark
-        tint: viewButton.lit ? Theme.accent : Theme.accentDim
+        tint: viewButton.showing ? Theme.accent : Theme.accentDim
     }
 }

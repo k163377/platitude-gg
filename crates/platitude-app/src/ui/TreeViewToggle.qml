@@ -21,14 +21,14 @@ RowLayout {
     ViewMarkButton {
         Layout.fillHeight: true
         mark: "hier"
-        lit: toggle.treeView
+        showing: toggle.treeView
         tip: qsTr("Tree view")
         onClicked: toggle.chosen(true)
     }
     ViewMarkButton {
         Layout.fillHeight: true
         mark: "list"
-        lit: !toggle.treeView
+        showing: !toggle.treeView
         tip: qsTr("Paths view")
         onClicked: toggle.chosen(false)
     }
