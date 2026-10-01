@@ -1,6 +1,8 @@
 //! The measurement rig (`seats::RIG`): the commit that was asked for,
-//! built in a tree nobody edits, and the exe shelved by commit and
-//! feature set so it is never built twice.
+//! built in a tree nobody edits against the Qt that commit pins (or the
+//! one `--qt` names), and the exe shelved by commit, feature set and the
+//! rest of what it is built from (`perf::identity`) so it is never built
+//! twice.
 //!
 //! The rig is claimed while it is switched and built, the way a seat is
 //! (`seats::take_seat`), so two invocations cannot check two commits out
@@ -14,6 +16,7 @@
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use crate::qt::Qt;
 use crate::seats::{
     Held, Identity, Standing, primary_checkout, rig_path, same_tree, slashed, take_seat,
     unlock_seat,
@@ -21,6 +24,7 @@ use crate::seats::{
 use crate::subprocess::git_query;
 
 use super::Options;
+use super::identity;
 
 /// How many builds the shelf keeps: an A/B needs two, a record's tables
 /// three (the harness, the harness with memprobe, the shipped set), and
@@ -33,11 +37,16 @@ const KEEP: usize = 8;
 const SHELF: &str = "shelf";
 
 /// A build the measurement can run: where the exe is, which commit it is
-/// of, and the tree the run is started from.
+/// of, the tree the run is started from, and the Qt it was built against
+/// — the one its run loads.
 pub(super) struct Built {
     pub(super) exe: PathBuf,
     pub(super) commit: String,
     pub(super) tree: PathBuf,
+    pub(super) qt: Qt,
+    /// Why this Qt: a commit's pin, or `--qt`.
+    pub(super) qt_source: String,
+    pub(super) identity: identity::Identity,
 }
 
 impl Built {
@@ -54,12 +63,7 @@ impl Built {
 ///
 /// Called under the measurement's own announcement (`perf::run`), so no
 /// measurement holds the machine while this switches, reaps and builds.
-pub(super) fn build_at(
-    caller: &Path,
-    rev: &str,
-    path: &std::ffi::OsStr,
-    opts: &Options,
-) -> Result<Built, String> {
+pub(super) fn build_at(caller: &Path, rev: &str, opts: &Options) -> Result<Built, String> {
     let here = slashed(caller);
     let commit = git_query(
         &here,
@@ -74,18 +78,47 @@ pub(super) fn build_at(
     .ok_or_else(|| format!("--at {rev}: nothing here names a commit by that"))?;
     let (primary, trees) = primary_checkout(&here)?;
     let rig = rig_path(&primary);
-    let set = opts.feature_slug();
-    let exe = shelf(Path::new(&rig), &commit, &set).join(crate::app_build::exe_name());
-    if exe.is_file() {
-        println!(
-            "rig: {} ({set}) is on the shelf — nothing to build",
+    let pinned = git_query(
+        &here,
+        &["show", &format!("{commit}:.github/workflows/ci.yml")],
+    )
+    .and_then(|workflow| crate::qt::pinned_in(&workflow))
+    .ok_or_else(|| {
+        format!(
+            "{} pins no Qt (ci.yml's QT_VERSION): name one with --qt",
             short(&commit)
+        )
+    })?;
+    let (qt, qt_source) =
+        super::qt_for(opts, &format!("{} pins {pinned}", short(&commit)), &pinned)?;
+    let set = opts.feature_slug();
+    let configs = identity::configs(Path::new(&rig), Some((&here, &commit)));
+    // The rig's own configuration sets what it sets: none of what this
+    // tree's put into this process reaches its build.
+    let unset = identity::injected(&identity::configs(caller, None));
+    let identity = identity::of(&commit, &opts.features(), &qt, &configs, &unset);
+    let shelved = shelf(Path::new(&rig), &commit, &set, &identity.hash());
+    let exe = shelved.join(crate::app_build::exe_name());
+    if identity.complete && exe.is_file() {
+        println!(
+            "rig: {} ({set}, Qt {}) is on the shelf — nothing to build",
+            short(&commit),
+            qt.version
         );
         return Ok(Built {
             exe,
             commit,
             tree: PathBuf::from(rig),
+            qt,
+            qt_source,
+            identity,
         });
+    }
+    if !identity.complete {
+        println!(
+            "rig: the compiler or rustc did not answer, so no shelved build can be matched — \
+             building"
+        );
     }
     if !opts.build {
         return Err(format!(
@@ -103,9 +136,21 @@ pub(super) fn build_at(
         println!("rig: reaped a stale run first: {pid} ({stale})");
     }
     switch(&rig, &commit)?;
-    println!("rig: building {} ({set}) in {rig}", short(&commit));
-    let fresh = super::build_in(Path::new(&rig), path, true, opts)?;
+    println!(
+        "rig: building {} ({set}) in {rig} against {}",
+        short(&commit),
+        qt.describe()
+    );
+    // The rig follows one commit's Qt with another's in one target
+    // directory: its qmake is named, not only put on PATH (`crate::qt`).
+    let fresh = super::build_in(Path::new(&rig), &qt, true, &unset, true, opts)?;
     shelve(&fresh, &exe)?;
+    std::fs::write(shelved.join("build.txt"), &identity.text).map_err(|e| {
+        format!(
+            "could not write {}: {e}",
+            shelved.join("build.txt").display()
+        )
+    })?;
     let shelf = Path::new(&rig).join("target").join(SHELF);
     for gone in stale_builds(&shelf, KEEP) {
         if let Err(error) = std::fs::remove_dir_all(&gone) {
@@ -119,6 +164,9 @@ pub(super) fn build_at(
         exe,
         commit,
         tree: PathBuf::from(rig),
+        qt,
+        qt_source,
+        identity,
     })
 }
 
@@ -265,10 +313,14 @@ fn stale_builds(shelf: &Path, keep: usize) -> Vec<PathBuf> {
         .collect()
 }
 
-fn shelf(rig: &Path, commit: &str, set: &str) -> PathBuf {
-    rig.join("target")
-        .join(SHELF)
-        .join(format!("{}-{set}", short(commit)))
+/// One build's place: the commit and feature set, as people read them,
+/// and the fingerprint of the rest of what it was built from.
+fn shelf(rig: &Path, commit: &str, set: &str, built_from: &str) -> PathBuf {
+    rig.join("target").join(SHELF).join(format!(
+        "{}-{set}-{}",
+        short(commit),
+        built_from.get(..8).unwrap_or(built_from)
+    ))
 }
 
 fn short(commit: &str) -> &str {
@@ -282,14 +334,19 @@ mod tests {
     use super::{shelf, short, stale_builds};
 
     /// One shelf name per build the record tells apart, so the harness
-    /// build and the shipped one of a commit never answer for each other.
+    /// build and the shipped one of a commit — or one commit against two
+    /// Qts — never answer for each other.
     #[test]
-    fn a_build_is_shelved_by_commit_and_feature_set() {
+    fn a_build_is_shelved_by_commit_feature_set_and_what_it_was_built_from() {
         let rig = Path::new("C:/x/platitude-gg/.claude/worktrees/rig");
         let commit = "3443a122abcdef0123456789abcdef0123456789";
         assert_eq!(
-            shelf(rig, commit, "automation"),
-            rig.join("target/shelf/3443a122abcd-automation")
+            shelf(rig, commit, "automation", "0123456789abcdef"),
+            rig.join("target/shelf/3443a122abcd-automation-01234567")
+        );
+        assert_ne!(
+            shelf(rig, commit, "automation", "0123456789abcdef"),
+            shelf(rig, commit, "automation", "fedcba9876543210")
         );
         assert_eq!(short("abc"), "abc");
     }

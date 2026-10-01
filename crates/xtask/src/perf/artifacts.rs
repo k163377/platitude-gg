@@ -132,6 +132,7 @@ pub(super) fn prepare(
         if opts.at.is_empty() { "-" } else { &opts.at }
     )
     .map_err(|e| e.to_string())?;
+    built_from(&directory, &mut manifest, built)?;
     writeln!(
         manifest,
         "screen={}\nscreen_hz={}\nwindow={WINDOW_WIDTH}x{WINDOW_HEIGHT}\ncorpus={corpus}\n",
@@ -143,33 +144,7 @@ pub(super) fn prepare(
         .map_err(|e| e.to_string())?;
     std::fs::write(directory.join("display-chosen.txt"), modes).map_err(|e| e.to_string())?;
     capture(&directory, "git-version.txt", root, &["--version"])?;
-    // The commit the exe is of, from the build: a shelf hit switches
-    // the rig nowhere, so its HEAD may be some other measurement's
-    // commit by now.
-    std::fs::write(
-        directory.join("source-head.txt"),
-        format!("{}\n", built.commit),
-    )
-    .map_err(|e| e.to_string())?;
-    if opts.at.is_empty() {
-        capture(
-            &directory,
-            "source-status.txt",
-            source,
-            &["status", "--short"],
-        )?;
-        capture(
-            &directory,
-            "source.patch",
-            source,
-            &["diff", "HEAD", "--", "crates"],
-        )?;
-    } else {
-        // A rig build is of a clean tree at that commit (`rig::switch`):
-        // nothing beyond the commit to record.
-        std::fs::write(directory.join("source-status.txt"), "").map_err(|e| e.to_string())?;
-        std::fs::write(directory.join("source.patch"), "").map_err(|e| e.to_string())?;
-    }
+    source_of(&directory, built, opts)?;
     let output = Command::new("git")
         .current_dir(root)
         .arg("hash-object")
@@ -198,6 +173,57 @@ pub(super) fn prepare(
         )?;
     }
     Ok((directory, exe_hash))
+}
+
+/// The commit the exe is of, from the build — a shelf hit switches the rig
+/// nowhere, so its HEAD may be some other measurement's commit by now —
+/// and what this tree held beyond it.
+fn source_of(directory: &Path, built: &super::rig::Built, opts: &Options) -> Result<(), String> {
+    let source = built.tree.as_path();
+    std::fs::write(
+        directory.join("source-head.txt"),
+        format!("{}\n", built.commit),
+    )
+    .map_err(|e| e.to_string())?;
+    if opts.at.is_empty() {
+        capture(
+            directory,
+            "source-status.txt",
+            source,
+            &["status", "--short"],
+        )?;
+        capture(
+            directory,
+            "source.patch",
+            source,
+            &["diff", "HEAD", "--", "crates"],
+        )
+    } else {
+        // A rig build is of a clean tree at that commit (`rig::switch`):
+        // nothing beyond the commit to record.
+        std::fs::write(directory.join("source-status.txt"), "").map_err(|e| e.to_string())?;
+        std::fs::write(directory.join("source.patch"), "").map_err(|e| e.to_string())
+    }
+}
+
+/// What the exe links and its run loads, and the rest of what it was built
+/// from (`perf::identity`), whole in build.txt.
+fn built_from(
+    directory: &Path,
+    manifest: &mut std::fs::File,
+    built: &super::rig::Built,
+) -> Result<(), String> {
+    writeln!(
+        manifest,
+        "qt={}\nqt_prefix={}\nqt_runtime={}\nqt_source={}\nbuild_identity={}\n",
+        built.qt.version,
+        built.qt.prefix,
+        built.qt.runtime.display(),
+        built.qt_source,
+        built.identity.hash()
+    )
+    .map_err(|e| e.to_string())?;
+    std::fs::write(directory.join("build.txt"), &built.identity.text).map_err(|e| e.to_string())
 }
 
 fn capture(directory: &Path, name: &str, repo: &Path, args: &[&str]) -> Result<(), String> {

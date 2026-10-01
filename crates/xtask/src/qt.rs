@@ -11,7 +11,9 @@
 //! A Qt is what its qmake answers (`qmake -query`), not what its directory
 //! is called. And the build scripts take `QMAKE` before PATH and are run
 //! again only when `QMAKE` changes (qt-build-utils): a `QMAKE` naming
-//! another Qt is refused here.
+//! another Qt is refused here, and a build that may follow one Qt with
+//! another in the same target directory names its qmake there
+//! (`app_build`'s `qmake`, which `perf` hands its rig and `--qt` builds).
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -77,6 +79,11 @@ pub fn path_with_qt_if_any() -> Result<Option<OsString>, String> {
     chosen()?.map(|qt| qt.path()).transpose()
 }
 
+/// This tree's Qt, or why there is none.
+pub(crate) fn this_tree() -> Result<Qt, String> {
+    chosen()?.ok_or_else(|| not_found(pinned_here().as_deref()))
+}
+
 /// This tree's Qt (see [`path_with_qt`]), asked once per process: a gate
 /// starts hundreds of steps, and the answer cannot move under it.
 pub(crate) fn chosen() -> Result<Option<Qt>, String> {
@@ -99,6 +106,30 @@ fn choose() -> Result<Option<Qt>, String> {
     if let Some(qt) = &qt {
         no_other_qmake(qt, std::env::var_os("QMAKE").as_deref())?;
     }
+    Ok(qt)
+}
+
+/// The Qt of `version` — a commit's pin, or one asked for over it —
+/// wherever this machine has it. `QT_BIN` answers only if it is that
+/// version: a build that silently took it would measure another Qt.
+pub(crate) fn of_version(version: &str) -> Result<Qt, String> {
+    let qt = if let Some(explicit) = explicit()? {
+        if explicit.version != version {
+            return Err(format!(
+                "QT_BIN is Qt {} and this build wants Qt {version}: unset QT_BIN, or ask for \
+                 Qt {} by name",
+                explicit.version, explicit.version
+            ));
+        }
+        explicit
+    } else if let Some(bin) = installed_bin(version) {
+        answered(&bin, Some(version))?
+    } else {
+        let dir = qmake_dir_on(&std::env::var_os("PATH").unwrap_or_default())
+            .ok_or_else(|| not_found(Some(version)))?;
+        answered(&dir, Some(version))?
+    };
+    no_other_qmake(&qt, std::env::var_os("QMAKE").as_deref())?;
     Ok(qt)
 }
 
@@ -276,6 +307,21 @@ fn bin_under(version_dir: &Path) -> Option<PathBuf> {
         .find(|bin| qmake_in(bin).is_some())
 }
 
+/// The directory a run of `exe` with `path` loads Qt's core library from:
+/// the exe's own directory, then PATH — the order the Windows loader
+/// takes for a library that is neither known nor already loaded. `None`
+/// off Windows, where the loader reads the binary's own search path.
+pub(crate) fn runtime_dir(exe: &Path, path: &OsStr) -> Option<PathBuf> {
+    if !cfg!(windows) {
+        return None;
+    }
+    exe.parent()
+        .map(Path::to_path_buf)
+        .into_iter()
+        .chain(std::env::split_paths(path))
+        .find(|dir| dir.join("Qt6Core.dll").is_file())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,5 +398,23 @@ mod tests {
         std::fs::write(toolchain.join(QMAKE_NAMES[0]), b"").expect("qmake");
         assert_eq!(bin_under(&root.join("6.12.0")), Some(toolchain));
         assert_eq!(bin_under(&root.join("6.11.3")), None, "not installed");
+    }
+
+    /// The exe's own directory first, then PATH in order.
+    #[test]
+    #[cfg(windows)]
+    fn a_run_loads_qt_from_the_first_directory_that_holds_it() {
+        let root = crate::yard::Yard::new("qt-runtime");
+        let exe_dir = root.join("built");
+        let [first, second] = [root.join("qt-a"), root.join("qt-b")];
+        for dir in [&exe_dir, &first, &second] {
+            std::fs::create_dir_all(dir).expect("dir");
+        }
+        std::fs::write(second.join("Qt6Core.dll"), b"").expect("a dll");
+        let exe = exe_dir.join("platitude-gg.exe");
+        let path = std::env::join_paths([&first, &second]).expect("a path");
+        assert_eq!(runtime_dir(&exe, &path), Some(second.clone()));
+        std::fs::write(exe_dir.join("Qt6Core.dll"), b"").expect("a dll");
+        assert_eq!(runtime_dir(&exe, &path), Some(exe_dir));
     }
 }

@@ -332,8 +332,23 @@ const TAIL: &str = "  shipped [--no-build]
       keeps its target/ and its uncommitted edits, and those edits are
       not what is measured: the commit is. Evidence still lands under
       this tree's target/perf, and the manifest names the commit.
+      Each build is made and run with the Qt its own commit pins (ci.yml's
+      QT_VERSION, as qmake answers for it), so --at across a Qt update
+      compares the whole dependency set; --qt <version> builds and runs
+      with that Qt instead, to tell Qt apart from the rest, and the
+      manifest says which (qt_source). A shelved exe is taken again only
+      when the commit, the feature set, the Qt (qmake's version and
+      prefix), rustc, the C++ compiler, cargo's configuration files and the
+      build flags in the environment all match — build.txt beside it, and
+      in the evidence, lists them — and a run is refused if it would load
+      another Qt than its build linked. The rig's build does not inherit
+      what this tree's cargo configuration put into the environment (its
+      [env]): the commit's own configuration sets that. cargo still reads
+      the configuration of every directory above the rig, the primary
+      checkout's included, and build.txt names each one it read.
       options:
         --at <rev>        the commit to measure, built on the rig (above)
+        --qt <version>    build and run with this Qt, not the pinned one
         --runs <n>        kept runs after the discarded first (default 3)
         --watchdog-ms <n> outer hang ceiling (default 300000)
         --settle-ms <n>   hold the app idle this long after it reports,

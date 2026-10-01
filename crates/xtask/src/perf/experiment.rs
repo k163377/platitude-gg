@@ -17,15 +17,19 @@ fn order(blocks: u32) -> Vec<&'static str> {
 pub(super) fn compare(mut opts: Options) -> Result<(), String> {
     let root = crate::tree::workspace_root();
     super::guard_the_window(&root)?;
-    let path = crate::qt::path_with_qt()?;
+    // Each side against its own commit's Qt, or both against `--qt`'s.
     let (a, b) = {
         let _busy = crate::still::busy(&root, "perf A/B builds")?;
-        let a = super::build(&root, &path, &opts)?;
+        let a = super::build(&root, &opts)?;
         let mut other = opts.clone();
         other.at = opts.compare.clone();
-        let b = super::build(&root, &path, &other)?;
-        (a.commit, b.commit)
+        let b = super::build(&root, &other)?;
+        (
+            (a.commit, format!("{} ({})", a.qt.version, a.qt_source)),
+            (b.commit, format!("{} ({})", b.qt.version, b.qt_source)),
+        )
     };
+    println!("A/B: A {} on Qt {}; B {} on Qt {}", a.0, a.1, b.0, b.1);
     if opts.open {
         let found = super::corpus::describe(&opts.repo)?;
         freeze_corpus(&mut opts, found)?;
@@ -48,7 +52,7 @@ pub(super) fn compare(mut opts: Options) -> Result<(), String> {
     std::fs::create_dir(&directory).map_err(|e| e.to_string())?;
     let mut schedule =
         std::fs::File::create(directory.join("order.tsv")).map_err(|e| e.to_string())?;
-    writeln!(schedule, "step\tvariant\tcommit\tcache\tresult").map_err(|e| e.to_string())?;
+    writeln!(schedule, "step\tvariant\tcommit\tqt\tcache\tresult").map_err(|e| e.to_string())?;
     let blocks = opts.runs;
     opts.runs = 1;
     opts.build = false;
@@ -57,16 +61,13 @@ pub(super) fn compare(mut opts: Options) -> Result<(), String> {
     // switch borrows the other binary's warm cache.
     let mut expected = None;
     for (step, variant) in order(blocks).iter().enumerate() {
-        opts.at = if *variant == "A" {
-            a.clone()
-        } else {
-            b.clone()
-        };
+        let (commit, qt) = if *variant == "A" { &a } else { &b };
+        opts.at = commit.clone();
         let output = directory.join(format!("{:03}-{variant}", step + 1));
         opts.output = Some(output.clone());
         writeln!(
             schedule,
-            "{}\t{variant}\t{}\t{}\t{}",
+            "{}\t{variant}\t{}\t{qt}\t{}\t{}",
             step + 1,
             opts.at,
             opts.cache,

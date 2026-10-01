@@ -23,6 +23,7 @@ pub(crate) const HARNESS_FEATURE: &str = "automation";
 pub(crate) fn app_exe(
     root: &Path,
     path: &std::ffi::OsStr,
+    with: BuildEnv<'_>,
     build: bool,
     extra: &[&str],
 ) -> Result<PathBuf, String> {
@@ -40,25 +41,50 @@ pub(crate) fn app_exe(
         // Through the budget's runner, so a ledger reading this process's
         // ticket after it is killed knows which cargo still compiles
         // (`crate::budget::watched`).
-        let status = crate::budget::watched(
-            std::process::Command::new("cargo")
-                .args([
-                    "build",
-                    "--locked",
-                    "--release",
-                    "--features",
-                    HARNESS_FEATURE,
-                ])
-                .args(extra)
-                .current_dir(root)
-                .env("PATH", path),
-        )
-        .map_err(|e| format!("failed to run cargo: {e}"))?;
+        let mut cargo = std::process::Command::new("cargo");
+        cargo
+            .args([
+                "build",
+                "--locked",
+                "--release",
+                "--features",
+                HARNESS_FEATURE,
+            ])
+            .args(extra)
+            .current_dir(root)
+            .env("PATH", path);
+        with.apply(&mut cargo);
+        let status =
+            crate::budget::watched(&mut cargo).map_err(|e| format!("failed to run cargo: {e}"))?;
         if !status.success() {
             return Err(format!("cargo build --release failed{}", held_by(root)));
         }
     }
     where_it_lands(root, "release")
+}
+
+/// What a build's cargo starts with beyond its tree and PATH. The default
+/// is this process's environment as it stands.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct BuildEnv<'a> {
+    /// Named in `QMAKE` too, for a build that may follow another Qt in
+    /// the same target directory (`crate::qt`).
+    pub(crate) qmake: Option<&'a Path>,
+    /// Not handed down: what this tree's cargo configuration put into this
+    /// process, which a build of another tree would take for its own
+    /// (`perf::identity::injected`).
+    pub(crate) unset: &'a [String],
+}
+
+impl BuildEnv<'_> {
+    fn apply(self, cargo: &mut std::process::Command) {
+        if let Some(qmake) = self.qmake {
+            cargo.env("QMAKE", qmake);
+        }
+        for key in self.unset {
+            cargo.env_remove(key);
+        }
+    }
 }
 
 /// The profile the shipped build lands in: the release settings, in a
@@ -75,18 +101,20 @@ const SHIPPED_PROFILE: &str = "shipped";
 pub(crate) fn shipped_exe(
     root: &Path,
     path: &std::ffi::OsStr,
+    with: BuildEnv<'_>,
     build: bool,
 ) -> Result<PathBuf, String> {
     if build {
         println!("building (release, no features — the shipped set)…");
         let _busy = crate::still::busy(root, "cargo build --profile shipped")?;
-        let status = crate::budget::watched(
-            std::process::Command::new("cargo")
-                .args(["build", "--locked", "--profile", SHIPPED_PROFILE])
-                .current_dir(root)
-                .env("PATH", path),
-        )
-        .map_err(|e| format!("failed to run cargo: {e}"))?;
+        let mut cargo = std::process::Command::new("cargo");
+        cargo
+            .args(["build", "--locked", "--profile", SHIPPED_PROFILE])
+            .current_dir(root)
+            .env("PATH", path);
+        with.apply(&mut cargo);
+        let status =
+            crate::budget::watched(&mut cargo).map_err(|e| format!("failed to run cargo: {e}"))?;
         if !status.success() {
             return Err("cargo build --profile shipped failed".into());
         }

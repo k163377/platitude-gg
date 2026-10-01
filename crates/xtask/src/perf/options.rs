@@ -68,6 +68,10 @@ pub(super) struct Options {
     /// The commit to measure, built on the rig (`perf::rig`); empty
     /// measures this tree's own build, edits and all.
     pub(super) at: String,
+    /// The Qt to build and run with instead of the commit's pin (`--qt
+    /// <version>`): a comparison with Qt held the same, told apart from one
+    /// across the whole dependency set (`perf::rig`).
+    pub(super) qt: String,
     /// How quiet the machine has to be. Opened by `--allow-noisy`, which
     /// publishes the numbers a busy machine produced.
     pub(super) limits: Limits,
@@ -149,6 +153,7 @@ fn defaults() -> Options {
         screen: String::new(),
         corpus: String::new(),
         at: String::new(),
+        qt: String::new(),
         limits: Limits::default(),
         software: false,
         settings: Vec::new(),
@@ -224,6 +229,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--screen" => opts.screen = value()?,
             "--corpus" => opts.corpus = value()?,
             "--at" => opts.at = value()?,
+            "--qt" => opts.qt = value()?,
             "--allow-noisy" => opts.limits = Limits::OPEN,
             "--software" => opts.software = true,
             "--log" => {
