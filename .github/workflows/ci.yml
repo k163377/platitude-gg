@@ -12,7 +12,11 @@ permissions:
   contents: read
 
 env:
-  QT_VERSION: "6.10.3"
+  QT_VERSION: "6.12.0"
+  # Windows Qt from 6.11 sits in a folder per toolchain, which no
+  # aqtinstall release reads (3.3.0 asks for qt6_<ver>/qt6_<ver>/Updates.xml):
+  # the commit carries miurahr/aqtinstall#1000, merged after 3.3.0.
+  AQT_SOURCE: "aqtinstall @ git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7"
 
 jobs:
   test:
@@ -75,7 +79,7 @@ jobs:
         if: steps.cache-qt.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          pip install aqtinstall
+          pip install "${AQT_SOURCE}"
           # --base pins the primary server (mirror redirects would escape
           # the egress allowlist)
           aqt install-qt --base https://download.qt.io/ \
