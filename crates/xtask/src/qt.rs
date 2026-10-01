@@ -129,7 +129,10 @@ mod tests {
 
     #[test]
     fn a_bin_in_the_versioned_layout_names_its_version() {
-        let bin = Path::new("C:\\Qt").join("6.10.3").join("msvc2022_64").join("bin");
+        let bin = Path::new("C:\\Qt")
+            .join("6.10.3")
+            .join("msvc2022_64")
+            .join("bin");
         assert_eq!(version_of_bin(&bin).as_deref(), Some("6.10.3"));
         let ci = Path::new("/tmp/qt/6.12.0/gcc_64/bin");
         assert_eq!(version_of_bin(ci).as_deref(), Some("6.12.0"));
