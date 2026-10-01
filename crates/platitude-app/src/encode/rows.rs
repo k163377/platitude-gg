@@ -4,10 +4,10 @@ use platitude_core::highlight::DiffColors;
 use platitude_core::intraline::IntraMarks;
 use platitude_core::parse::diff::{DiffLineKind, FilePatch};
 
-use qtbridge::qtbridge_type_lib::{QString, QVariantMap};
+use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::markup::{Runs, spelled_ranges, styled};
-use super::wire::{Fields, Record, field};
+use super::wire::{Fields, Record, field, has_field};
 
 /// One flattened row of the diff pane.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -111,7 +111,7 @@ impl Record for Marks {
         let own = LineMarks::from_map(&field(map, "own")?)?;
         // A right side that is absent is a row with one line; one that
         // is there but does not read is a refusal, like any field.
-        let pair = if map.value(&QString::from("pair")).is_valid() {
+        let pair = if has_field(map, "pair") {
             Some(LineMarks::from_map(&field(map, "pair")?)?)
         } else {
             None

@@ -245,7 +245,7 @@ impl DiffModel {
         let Some(item) = self.lines.get_mut(row) else {
             return false;
         };
-        if item.sel == own && item.pair_sel == pair {
+        if *item.sel == *own && *item.pair_sel == *pair {
             return false;
         }
         item.sel = own;

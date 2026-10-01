@@ -252,7 +252,7 @@ impl CommandsModel {
         let Some(item) = self.rows.get_mut(row) else {
             return false;
         };
-        if item.sel == spelled {
+        if *item.sel == *spelled {
             return false;
         }
         item.sel = spelled;

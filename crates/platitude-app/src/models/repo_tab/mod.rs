@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use platitude_core::{OperationKind, ReportKind};
-use qtbridge::{QObjectHolder, qobject};
+use qtbridge::{QmlObject, qobject};
 
 use crate::encode::{Fields, Optional, Record, field};
 use crate::hub::{Feed, Hub, TabMsg};

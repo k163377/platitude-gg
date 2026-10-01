@@ -1,8 +1,7 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use platitude_core::sequencer::TodoAction;
-use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
+use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject, qobject};
 
 use crate::hub::{Feed, PlanMsg};
 

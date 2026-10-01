@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use platitude_core::version;
-use qtbridge::{QObjectHolder, qobject};
+use qtbridge::{QmlObject, qobject};
 
 use crate::hub::{Feed, Hub};
 

@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use qtbridge::{QObjectHolder, qobject};
+use qtbridge::{QmlObject, qobject};
 
 use crate::hub::{CloneMsg, Feed, Hub};
 use crate::urlpath::file_url_to_path;

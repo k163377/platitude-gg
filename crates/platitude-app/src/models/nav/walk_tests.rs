@@ -4,8 +4,8 @@
 use super::testkit::*;
 use super::*;
 
-fn landed(row: i32, bucket: &str, path: &str) -> Landed {
-    Landed::some(Landing {
+fn landed(row: i32, bucket: &str, path: &str) -> Option<Landing> {
+    Some(Landing {
         row,
         bucket: bucket.to_string(),
         path: path.to_string(),
@@ -37,13 +37,13 @@ fn the_arrows_walk_one_bucket_and_stop_at_its_ends() {
     model.arrange();
 
     assert_eq!(
-        model.step("staged", "d.txt", 1),
+        *model.step("staged", "d.txt", 1),
         landed(1, "staged", "src/b.txt")
     );
     // Only the sign is read: one press is one file.
     assert_eq!(
-        model.step("staged", "d.txt", 9),
-        model.step("staged", "d.txt", 1)
+        *model.step("staged", "d.txt", 9),
+        *model.step("staged", "d.txt", 1)
     );
     // Both ends of this list.
     assert!(model.step("staged", "d.txt", -1).is_none());
@@ -58,8 +58,8 @@ fn a_walk_crossing_into_a_bucket_lands_at_the_end_it_comes_in_by() {
     let mut model = worktree("staged", Source::files(pending()));
     model.tree_view = false;
     model.arrange();
-    assert_eq!(model.edge(1), landed(0, "staged", "d.txt"));
-    assert_eq!(model.edge(-1), landed(1, "staged", "src/b.txt"));
+    assert_eq!(*model.edge(1), landed(0, "staged", "d.txt"));
+    assert_eq!(*model.edge(-1), landed(1, "staged", "src/b.txt"));
 
     let mut empty = worktree("conflicts", Source::files(Default::default()));
     empty.arrange();
@@ -77,10 +77,10 @@ fn the_arrows_step_over_a_folder_row() {
     assert_eq!(says(&model, 0, Role::Name), "src");
     assert!(flags(&model, 0, Role::Folder));
     assert_eq!(
-        model.step("untracked", "c.txt", -1),
+        *model.step("untracked", "c.txt", -1),
         landed(1, "unstaged", "src/b.txt")
     );
-    assert_eq!(model.edge(1), landed(1, "unstaged", "src/b.txt"));
+    assert_eq!(*model.edge(1), landed(1, "unstaged", "src/b.txt"));
 }
 
 /// An untracked file keys by its own bucket, not its heading's.

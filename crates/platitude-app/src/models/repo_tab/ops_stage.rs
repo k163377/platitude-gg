@@ -168,12 +168,14 @@ mod tests {
 
     #[test]
     fn the_plan_counts_the_rows_a_discard_would_touch() {
-        let mut tab = RepoTab::default();
-        tab.pending_paths = vec![
-            "unstaged:a.txt".into(),
-            "conflicts:both.txt".into(),
-            "staged:b.txt".into(),
-        ];
+        let mut tab = RepoTab {
+            pending_paths: vec![
+                "unstaged:a.txt".into(),
+                "conflicts:both.txt".into(),
+                "staged:b.txt".into(),
+            ],
+            ..RepoTab::default()
+        };
         tab.plan_discard_rows();
         assert_eq!(tab.discard_count, 2, "the conflicted row is not counted");
         assert_eq!(
@@ -190,8 +192,10 @@ mod tests {
             ("untracked:new.txt", "untracked"),
             ("staged:b.txt", "staged"),
         ] {
-            let mut tab = RepoTab::default();
-            tab.pending_paths = vec![key.into()];
+            let mut tab = RepoTab {
+                pending_paths: vec![key.into()],
+                ..RepoTab::default()
+            };
             tab.plan_discard_rows();
             assert_eq!(tab.discard_count, 1);
             assert_eq!(tab.discard_only, only);
@@ -200,8 +204,10 @@ mod tests {
 
     #[test]
     fn a_choice_of_conflicted_rows_alone_plans_nothing() {
-        let mut tab = RepoTab::default();
-        tab.pending_paths = vec!["conflicts:both.txt".into()];
+        let mut tab = RepoTab {
+            pending_paths: vec!["conflicts:both.txt".into()],
+            ..RepoTab::default()
+        };
         tab.plan_discard_rows();
         assert_eq!(tab.discard_count, 0);
         assert_eq!(tab.discard_only, "");

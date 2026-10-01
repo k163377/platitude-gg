@@ -231,6 +231,7 @@ fn byte_of(text: &str, at: usize, units: fn(char, usize) -> usize) -> usize {
 mod tests {
     use super::*;
     use platitude_core::highlight::Rgb;
+    use qtbridge::QVariantConvertible;
 
     fn run(len: usize, r: u8, g: u8, b: u8) -> Span {
         Span {
@@ -300,7 +301,7 @@ mod tests {
         assert!(spelled_ranges(text, &[]).is_empty());
         let runs = spelled_ranges(text, &[(0, 3), (4, 1)]);
         assert_eq!(
-            Runs::try_from(&qtbridge::qtbridge_type_lib::QVariant::from(&runs)),
+            <Runs as QVariantConvertible>::try_from_qvariant(&runs.to_qvariant()),
             Ok(runs)
         );
     }

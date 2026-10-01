@@ -3,7 +3,6 @@
 //!
 //! - per-tab objects wire themselves with `attach(tabId)` and consume their
 //!   feed in `drain` (the only slot ever called through an invoker)
-//! - `#[derive(QModelItem)]` requires `HashMap` in scope (macro hygiene).
 
 mod app_backend;
 mod clone;
@@ -47,7 +46,7 @@ pub(crate) use notify::{impl_extend_notified, impl_move_notified, impl_notify_ru
 /// Registers a type under the `platitude` QML module.
 macro_rules! qml_register {
     ($ty:ty, $name:literal, singleton = $singleton:literal) => {
-        impl qtbridge::QmlRegister for $ty {
+        impl qtbridge::QmlElement for $ty {
             const URI: &str = "platitude";
             const ELEMENT_NAME: &str = $name;
             const MAJOR_VERSION: u8 = 1;

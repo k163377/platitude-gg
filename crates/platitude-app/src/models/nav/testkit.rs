@@ -128,10 +128,11 @@ pub(super) fn carried(
 }
 
 pub(super) fn section(kind: &str, all: Source) -> NavSectionModel {
-    let mut model = NavSectionModel::default();
-    model.section = kind.to_string();
-    model.all = all;
-    model
+    NavSectionModel {
+        section: kind.to_string(),
+        all,
+        ..NavSectionModel::default()
+    }
 }
 
 /// One of the working tree's bucket lists: the whole status, showing one

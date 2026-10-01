@@ -149,6 +149,7 @@ mod tests {
     use super::*;
     use platitude_core::highlight::DiffColors;
     use platitude_core::parse::diff::parse_patch;
+    use qtbridge::QVariantConvertible;
 
     fn records(candidates: &Candidates) -> Vec<(bool, String)> {
         candidates
@@ -264,7 +265,7 @@ mod tests {
         let candidates = widest_lines(&patches, &DiffColors::default());
         assert_eq!(records(&candidates), [(true, "4:1ab\u{1f600}".to_string())]);
         assert_eq!(
-            Candidates::try_from(&qtbridge::qtbridge_type_lib::QVariant::from(&candidates)),
+            <Candidates as QVariantConvertible>::try_from_qvariant(&candidates.to_qvariant()),
             Ok(candidates)
         );
     }

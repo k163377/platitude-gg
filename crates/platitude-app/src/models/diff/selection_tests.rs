@@ -33,10 +33,11 @@ fn model(patch: &str, coloured: bool) -> DiffModel {
     } else {
         Default::default()
     };
-    let mut model = DiffModel::default();
-    model.lines = super::rows::line_items(&patches, true, &colors, None, false);
-    model.shown = Some(Arc::new(patches));
-    model
+    DiffModel {
+        lines: super::rows::line_items(&patches, true, &colors, None, false),
+        shown: Some(Arc::new(patches)),
+        ..DiffModel::default()
+    }
 }
 
 /// hunk / ctx / del / add / ctx on rows 0..4.
@@ -226,11 +227,12 @@ fn a_wash_on_a_wide_line_names_places_and_not_columns() {
 fn split_model(patch: &str) -> DiffModel {
     let patches = parse_patch(patch.as_bytes());
     let colors = platitude_core::highlight::colors(&patches, None);
-    let mut model = DiffModel::default();
-    model.split = true;
-    model.lines = super::rows::line_items(&patches, true, &colors, None, true);
-    model.shown = Some(Arc::new(patches));
-    model
+    DiffModel {
+        split: true,
+        lines: super::rows::line_items(&patches, true, &colors, None, true),
+        shown: Some(Arc::new(patches)),
+        ..DiffModel::default()
+    }
 }
 
 /// hunk / ctx / del+add / ctx on rows 0..3, the change read across row 2.

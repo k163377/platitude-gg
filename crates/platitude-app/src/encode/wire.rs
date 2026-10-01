@@ -13,18 +13,16 @@
 //!
 //! Three wrappers — [`Listed<T>`], [`One<T>`], [`Optional<T>`] — each a
 //! model role (`QVariantConvertible`) and a `#[qslot]` argument or answer
-//! (`QMetaCallArg`); the two that are always something are a `qproperty!`
-//! member too (`QPropertyMember`). qtbridge implements those three for
-//! its own containers only.
-//!
-//! No bare `QList<QVariant>` is held or copied on this side: under GCC the
-//! type lib's copy (`QList_Clone`) comes back as a one-element list holding
-//! the original. A list is built, handed to Qt, and dropped.
+//! (`QMetaTypeCompatible`). qtbridge implements those two for its own
+//! containers only, and a property (`QPropertyMember`) comes with them
+//! for any type that is also `PartialEq` — which is why [`Optional`] is
+//! not.
 
+use qtbridge::qtbridge_runtime::QMetaTypeGet;
 use qtbridge::qtbridge_type_lib::{
-    QMetaType, QMetaTypeGet, QString, QVariant, QVariantList, QVariantMap,
+    QMetaType, QMetaTypeType, QString, QVariant, QVariantList, QVariantMap,
 };
-use qtbridge::{QMetaCallArg, QObjectHolder, QPropertyMember};
+use qtbridge::{QMetaTypeCompatible, QVariantConvertible};
 
 /// A record with a JS object's shape: named fields, each read by QML as
 /// its own type.
@@ -34,6 +32,67 @@ pub trait Record: Sized {
     fn from_map(map: &QVariantMap) -> Result<Self, ()>;
 }
 
+/// What one field of a record may hold, as QML reads it.
+pub(crate) trait FieldValue {
+    fn variant(&self) -> QVariant;
+}
+
+/// The inverse of [`FieldValue`]: a value of another type that does not
+/// convert is `Err` (`QVariant::canConvert`, then the value).
+pub(crate) trait FieldRead: Sized {
+    fn read(variant: &QVariant) -> Result<Self, ()>;
+}
+
+/// Every type the bridge itself carries by value, and the three wrappers.
+macro_rules! field_by_bridge {
+    ($([$($generic:tt)*] $ty:ty),* $(,)?) => {
+        $(impl<$($generic)*> FieldValue for $ty {
+            fn variant(&self) -> QVariant {
+                QVariantConvertible::to_qvariant(self)
+            }
+        }
+
+        impl<$($generic)*> FieldRead for $ty {
+            fn read(variant: &QVariant) -> Result<Self, ()> {
+                QVariantConvertible::try_from_qvariant(variant)
+            }
+        })*
+    };
+}
+field_by_bridge!(
+    [] bool,
+    [] i32,
+    [] u32,
+    [] i64,
+    [] u64,
+    [] f64,
+    [] String,
+    [] Vec<String>,
+    [] Vec<i32>,
+    [T: Record] Listed<T>,
+    [T: Record] One<T>,
+    [T: Record] Optional<T>,
+);
+
+impl FieldValue for str {
+    fn variant(&self) -> QVariant {
+        QVariant::from(&QString::from(self))
+    }
+}
+
+/// A record nested in a record (`encode::Marks`).
+impl FieldValue for QVariantMap {
+    fn variant(&self) -> QVariant {
+        QVariant::from(self)
+    }
+}
+
+impl FieldRead for QVariantMap {
+    fn read(variant: &QVariant) -> Result<Self, ()> {
+        variant.value::<QVariantMap>().ok_or(())
+    }
+}
+
 pub(crate) struct Fields(QVariantMap);
 
 impl Fields {
@@ -41,11 +100,8 @@ impl Fields {
         Self(QVariantMap::default())
     }
 
-    pub(crate) fn put<V: ?Sized>(mut self, key: &str, value: &V) -> Self
-    where
-        for<'a> QVariant: From<&'a V>,
-    {
-        self.0.insert(&QString::from(key), &QVariant::from(value));
+    pub(crate) fn put<V: FieldValue + ?Sized>(mut self, key: &str, value: &V) -> Self {
+        self.0.insert(QString::from(key), value.variant());
         self
     }
 
@@ -54,14 +110,50 @@ impl Fields {
     }
 }
 
-/// One named field read back. An absent one is `Err` (an invalid
-/// `QVariant`, which no conversion accepts).
-pub(crate) fn field<T>(map: &QVariantMap, key: &str) -> Result<T, ()>
-where
-    for<'a> T: TryFrom<&'a QVariant, Error = ()>,
-{
-    T::try_from(&map.value(&QString::from(key)))
+/// One named field read back. An absent one is `Err`.
+pub(crate) fn field<T: FieldRead>(map: &QVariantMap, key: &str) -> Result<T, ()> {
+    T::read(&map.get(&QString::from(key)).ok_or(())?)
 }
+
+/// Whether the record has a field `key` holding something — what a field
+/// that may be left out is told apart by.
+pub(crate) fn has_field(map: &QVariantMap, key: &str) -> bool {
+    map.get(&QString::from(key))
+        .is_some_and(|value| value.is_valid())
+}
+
+// ---------------------------------------------------------------------------
+
+/// The C++ value a `#[qslot]` takes or answers for a wrapper, as the
+/// bridge reads and writes it in the call's argument array: laid out as
+/// the Qt type itself (`repr(transparent)` over cxx-qt-lib's layout of
+/// it), under the metatype Qt knows that type by.
+macro_rules! slot_wire {
+    ($(#[$doc:meta])* $name:ident($inner:ty) = $metatype:ident) => {
+        $(#[$doc])*
+        #[repr(transparent)]
+        pub struct $name($inner);
+
+        impl QMetaTypeGet for $name {
+            fn get_qmetatype() -> QMetaType {
+                QMetaType::new(i32::from(QMetaTypeType::$metatype))
+            }
+        }
+    };
+}
+
+slot_wire!(
+    /// [`Listed`] in a slot: a `QVariantList`.
+    ListWire(QVariantList) = QVariantList
+);
+slot_wire!(
+    /// [`One`] in a slot: a `QVariantMap`.
+    MapWire(QVariantMap) = QVariantMap
+);
+slot_wire!(
+    /// [`Optional`] in a slot: a `QVariant`, invalid for nothing.
+    VariantWire(QVariant) = QVariant
+);
 
 // ---------------------------------------------------------------------------
 
@@ -87,18 +179,18 @@ impl<T: Record> Listed<T> {
     /// Built for this read (see the module).
     fn to_list(&self) -> QVariantList {
         let mut list = QVariantList::default();
-        list.reserve(self.items.len());
+        list.reserve(isize::try_from(self.items.len()).unwrap_or(isize::MAX));
         for record in &self.items {
-            list.push_back(QVariant::from(&record.to_map()));
+            list.append(QVariant::from(&record.to_map()));
         }
         list
     }
 
     /// A missing or mistyped field in any element is `Err`.
     fn read(list: &QVariantList) -> Result<Vec<T>, ()> {
-        let mut out = Vec::with_capacity(list.len());
-        for i in 0..list.len() {
-            out.push(T::from_map(&QVariantMap::try_from(&list[i])?)?);
+        let mut out = Vec::with_capacity(usize::try_from(list.len()).unwrap_or(0));
+        for element in list {
+            out.push(T::from_map(&element.value::<QVariantMap>().ok_or(())?)?);
         }
         Ok(out)
     }
@@ -112,52 +204,32 @@ impl<T> std::ops::Deref for Listed<T> {
     }
 }
 
-impl<T: Record> From<&Listed<T>> for QVariant {
-    fn from(value: &Listed<T>) -> Self {
-        QVariant::from(&value.to_list())
+impl<T: Record> QVariantConvertible for Listed<T> {
+    fn to_qvariant(&self) -> QVariant {
+        QVariant::from(&self.to_list())
+    }
+
+    fn try_from_qvariant(value: &QVariant) -> Result<Self, ()> {
+        Ok(Self::new(Self::read(
+            &value.value::<QVariantList>().ok_or(())?,
+        )?))
     }
 }
 
-impl<T: Record> TryFrom<&QVariant> for Listed<T> {
-    type Error = ();
+impl<T: Record> QMetaTypeCompatible for Listed<T> {
+    type CompatibleType = ListWire;
 
-    fn try_from(value: &QVariant) -> Result<Self, ()> {
-        Ok(Self::new(Self::read(&QVariantList::try_from(value)?)?))
-    }
-}
-
-impl<T: Record + PartialEq> QPropertyMember for Listed<T> {
-    fn qmetatype() -> QMetaType {
-        <QVariantList as QMetaTypeGet>::get_qmetatype()
-    }
-
-    fn to_qvariant<Owner: QObjectHolder>(&self, _owner: &Owner) -> QVariant {
-        QVariant::from(self)
-    }
-
-    fn from_qvariant(value: &QVariant) -> Result<Self, ()> {
-        Self::try_from(value)
-    }
-
-    fn property_eq(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
-impl<T: Record> QMetaCallArg for Listed<T> {
-    type WireType = QVariantList;
-
-    fn to_wire(&self) -> QVariantList {
-        self.to_list()
+    fn to_compatible(&self) -> ListWire {
+        ListWire(self.to_list())
     }
 
     /// An element that does not read is no shape this side hands out: it
     /// is logged and left out rather than taking the call down.
-    fn from_wire(wire: &QVariantList) -> Self {
-        let mut out = Vec::with_capacity(wire.len());
-        for i in 0..wire.len() {
-            match QVariantMap::try_from(&wire[i])
-                .ok()
+    fn from_compatible(wire: &ListWire) -> Self {
+        let mut out = Vec::with_capacity(usize::try_from(wire.0.len()).unwrap_or(0));
+        for (i, element) in wire.0.iter().enumerate() {
+            match element
+                .value::<QVariantMap>()
                 .and_then(|map| T::from_map(&map).ok())
             {
                 Some(record) => out.push(record),
@@ -169,10 +241,6 @@ impl<T: Record> QMetaCallArg for Listed<T> {
             }
         }
         Self::new(out)
-    }
-
-    fn wire_metatype() -> QMetaType {
-        <QVariantList as QMetaTypeGet>::get_qmetatype()
     }
 }
 
@@ -204,49 +272,29 @@ impl<T> std::ops::Deref for One<T> {
     }
 }
 
-impl<T: Record> From<&One<T>> for QVariant {
-    fn from(value: &One<T>) -> Self {
-        QVariant::from(&value.to_map())
+impl<T: Record> QVariantConvertible for One<T> {
+    fn to_qvariant(&self) -> QVariant {
+        QVariant::from(&self.value.to_map())
+    }
+
+    fn try_from_qvariant(value: &QVariant) -> Result<Self, ()> {
+        Ok(Self::new(T::from_map(
+            &value.value::<QVariantMap>().ok_or(())?,
+        )?))
     }
 }
 
-impl<T: Record> TryFrom<&QVariant> for One<T> {
-    type Error = ();
+impl<T: Record + Default> QMetaTypeCompatible for One<T> {
+    type CompatibleType = MapWire;
 
-    fn try_from(value: &QVariant) -> Result<Self, ()> {
-        Ok(Self::new(T::from_map(&QVariantMap::try_from(value)?)?))
-    }
-}
-
-impl<T: Record + PartialEq> QPropertyMember for One<T> {
-    fn qmetatype() -> QMetaType {
-        <QVariantMap as QMetaTypeGet>::get_qmetatype()
-    }
-
-    fn to_qvariant<Owner: QObjectHolder>(&self, _owner: &Owner) -> QVariant {
-        QVariant::from(self)
-    }
-
-    fn from_qvariant(value: &QVariant) -> Result<Self, ()> {
-        Self::try_from(value)
-    }
-
-    fn property_eq(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
-impl<T: Record + Default> QMetaCallArg for One<T> {
-    type WireType = QVariantMap;
-
-    fn to_wire(&self) -> QVariantMap {
-        self.value.to_map()
+    fn to_compatible(&self) -> MapWire {
+        MapWire(self.value.to_map())
     }
 
     /// A record that does not read is logged and answered as the default
     /// (as for [`Listed`]).
-    fn from_wire(wire: &QVariantMap) -> Self {
-        T::from_map(wire).map_or_else(
+    fn from_compatible(wire: &MapWire) -> Self {
+        T::from_map(&wire.0).map_or_else(
             |()| {
                 tracing::warn!(
                     record = std::any::type_name::<T>(),
@@ -256,10 +304,6 @@ impl<T: Record + Default> QMetaCallArg for One<T> {
             },
             Self::new,
         )
-    }
-
-    fn wire_metatype() -> QMetaType {
-        <QVariantMap as QMetaTypeGet>::get_qmetatype()
     }
 }
 
@@ -276,11 +320,12 @@ impl<T: platitude_core::mem::Footprint> platitude_core::mem::Footprint for One<T
 ///
 /// **A role or a slot's answer, never a property**: a property read
 /// converts to its declared metatype (`handleMetaCallReadProperty`), and
-/// an invalid value ends the process with "Property type mismatch". So no
-/// [`QPropertyMember`]; a property that may hold nothing is a revision
-/// property beside a slot answering this
-/// (`RepoTab.remoteBranchRevision` / `remoteBranchAsked()`).
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// an invalid value ends the process with "Property type mismatch". The
+/// bridge makes a property of any `PartialEq` type that crosses by value,
+/// so this one is not `PartialEq` — compare what it holds (`*a == *b`).
+/// A property that may hold nothing is a revision property beside a slot
+/// answering this (`RepoTab.remoteBranchRevision` / `remoteBranchAsked()`).
+#[derive(Debug, Clone)]
 pub struct Optional<T> {
     value: Option<T>,
 }
@@ -313,46 +358,39 @@ impl<T> Default for Optional<T> {
     }
 }
 
-impl<T: Record> From<&Optional<T>> for QVariant {
-    fn from(value: &Optional<T>) -> Self {
-        value
-            .value
+impl<T: Record> QVariantConvertible for Optional<T> {
+    fn to_qvariant(&self) -> QVariant {
+        self.value
             .as_ref()
             .map_or_else(QVariant::default, |v| QVariant::from(&v.to_map()))
     }
-}
-
-impl<T: Record> TryFrom<&QVariant> for Optional<T> {
-    type Error = ();
 
     /// An invalid value is "nothing", not a refusal.
-    fn try_from(value: &QVariant) -> Result<Self, ()> {
+    fn try_from_qvariant(value: &QVariant) -> Result<Self, ()> {
         if !value.is_valid() {
             return Ok(Self::none());
         }
-        Ok(Self::some(T::from_map(&QVariantMap::try_from(value)?)?))
+        Ok(Self::some(T::from_map(
+            &value.value::<QVariantMap>().ok_or(())?,
+        )?))
     }
 }
 
-impl<T: Record> QMetaCallArg for Optional<T> {
-    type WireType = QVariant;
+impl<T: Record> QMetaTypeCompatible for Optional<T> {
+    type CompatibleType = VariantWire;
 
-    fn to_wire(&self) -> QVariant {
-        QVariant::from(self)
+    fn to_compatible(&self) -> VariantWire {
+        VariantWire(QVariantConvertible::to_qvariant(self))
     }
 
-    fn from_wire(wire: &QVariant) -> Self {
-        Self::try_from(wire).unwrap_or_else(|()| {
+    fn from_compatible(wire: &VariantWire) -> Self {
+        QVariantConvertible::try_from_qvariant(&wire.0).unwrap_or_else(|()| {
             tracing::warn!(
                 record = std::any::type_name::<T>(),
                 "a record handed back from QML did not read"
             );
             Self::none()
         })
-    }
-
-    fn wire_metatype() -> QMetaType {
-        <QVariant as QMetaTypeGet>::get_qmetatype()
     }
 }
 
@@ -406,49 +444,69 @@ mod tests {
         ]
     }
 
+    /// What the bridge does with a slot's argument: the C++ value in
+    /// place, read through the layout of [`ListWire`] and friends.
+    fn through_a_slot<W: QMetaTypeCompatible>(value: &W) -> W {
+        W::from_compatible(&value.to_compatible())
+    }
+
     /// By the same conversions the bridge runs for a role, a property and a slot.
     #[test]
     fn a_list_of_records_round_trips_through_qt_containers() {
         let listed = Listed::new(probes());
-        let variant = QVariant::from(&listed);
-        assert_eq!(Listed::<Probe>::try_from(&variant), Ok(listed.clone()));
+        let variant = listed.to_qvariant();
         assert_eq!(
-            <Listed<Probe> as QMetaCallArg>::from_wire(&listed.to_wire()),
-            listed
+            Listed::<Probe>::try_from_qvariant(&variant),
+            Ok(listed.clone())
         );
+        assert_eq!(through_a_slot(&listed), listed);
         assert_eq!(
-            Listed::<Probe>::try_from(&QVariant::from(&Listed::<Probe>::default())),
+            Listed::<Probe>::try_from_qvariant(&Listed::<Probe>::default().to_qvariant()),
             Ok(Listed::default())
         );
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].word, "main");
     }
 
+    /// A copy of a `QList<QVariant>` is the list's own copy constructor —
+    /// not brace-initialisation, which GCC resolves to the
+    /// `initializer_list` one: a one-element list holding the original.
+    /// Run under GCC too (`cargo xtask linux test -p platitude-app`).
+    #[test]
+    fn a_copied_list_of_records_keeps_every_element() {
+        let list = Listed::new(probes()).to_list();
+        let copied = list.clone();
+        assert_eq!(copied.len(), 2);
+        let first = copied
+            .get(0)
+            .and_then(|element| element.value::<QVariantMap>())
+            .map(|map| Probe::from_map(&map));
+        assert_eq!(first, Some(Ok(probes().remove(0))));
+        assert_eq!(Listed::<Probe>::read(&copied), Ok(probes()));
+    }
+
     #[test]
     fn one_record_and_an_optional_one_round_trip() {
         let one = One::new(probes().remove(0));
         assert_eq!(
-            One::<Probe>::try_from(&QVariant::from(&one)),
+            One::<Probe>::try_from_qvariant(&one.to_qvariant()),
             Ok(one.clone())
         );
-        assert_eq!(<One<Probe> as QMetaCallArg>::from_wire(&one.to_wire()), one);
+        assert_eq!(through_a_slot(&one), one);
         assert_eq!(one.word, "main");
 
         let some = Optional::some(probes().remove(1));
-        assert_eq!(
-            Optional::<Probe>::try_from(&QVariant::from(&some)),
-            Ok(some.clone())
-        );
+        let back = Optional::<Probe>::try_from_qvariant(&some.to_qvariant()).map(|o| o.value);
+        assert_eq!(back, Ok(Some(probes().remove(1))));
+        assert_eq!(*through_a_slot(&some), *some);
         assert!(some.is_some());
         let none = Optional::<Probe>::none();
-        assert!(!QVariant::from(&none).is_valid());
+        assert!(!none.to_qvariant().is_valid());
+        let back = Optional::<Probe>::try_from_qvariant(&none.to_qvariant()).map(|o| o.value);
+        assert_eq!(back, Ok(None));
         assert_eq!(
-            Optional::<Probe>::try_from(&QVariant::from(&none)),
-            Ok(none)
-        );
-        assert_eq!(
-            <Optional<Probe> as QMetaCallArg>::from_wire(&QVariant::default()),
-            Optional::none()
+            *Optional::<Probe>::from_compatible(&VariantWire(QVariant::default())),
+            None
         );
     }
 
@@ -457,17 +515,30 @@ mod tests {
         let short = Fields::new().put("word", "x").done();
         assert_eq!(Probe::from_map(&short), Err(()));
         let mut list = QVariantList::default();
-        list.push_back(QVariant::from(&short));
+        list.append(QVariant::from(&short));
         assert_eq!(Listed::<Probe>::read(&list), Err(()));
         // The slot road leaves such an element out instead.
-        assert_eq!(<Listed<Probe> as QMetaCallArg>::from_wire(&list).len(), 0);
+        assert_eq!(Listed::<Probe>::from_compatible(&ListWire(list)).len(), 0);
         assert_eq!(
-            <One<Probe> as QMetaCallArg>::from_wire(&short),
+            One::<Probe>::from_compatible(&MapWire(short.clone())),
             One::default()
         );
         assert_eq!(
-            <Optional<Probe> as QMetaCallArg>::from_wire(&QVariant::from(&short)),
-            Optional::none()
+            *Optional::<Probe>::from_compatible(&VariantWire(QVariant::from(&short))),
+            None
         );
+    }
+
+    /// The slot wires are read and written in place of the Qt value, so
+    /// each must be exactly its size and carry the metatype Qt gives it.
+    #[test]
+    fn each_slot_wire_is_its_qt_type() {
+        use std::mem::size_of;
+        assert_eq!(size_of::<ListWire>(), size_of::<QVariantList>());
+        assert_eq!(size_of::<MapWire>(), size_of::<QVariantMap>());
+        assert_eq!(size_of::<VariantWire>(), size_of::<QVariant>());
+        assert_eq!(ListWire::get_qmetatype().name(), "QVariantList");
+        assert_eq!(MapWire::get_qmetatype().name(), "QVariantMap");
+        assert_eq!(VariantWire::get_qmetatype().name(), "QVariant");
     }
 }

@@ -118,14 +118,16 @@ mod tests {
     fn a_search_marks_the_head_row_for_its_stand_in() {
         let head = "a1".repeat(20);
         let oid = Oid::from_hex_str(&head).expect("an id");
-        let mut model = GraphModel::default();
-        model.rows = vec![GraphRowItem {
-            oid_hex: head,
-            subject: "the login refactor".into(),
-            ..GraphRowItem::default()
-        }];
-        model.index = vec![(oid, 0)];
-        model.head_oid = Some(oid);
+        let mut model = GraphModel {
+            rows: vec![GraphRowItem {
+                oid_hex: head,
+                subject: "the login refactor".into(),
+                ..GraphRowItem::default()
+            }],
+            index: vec![(oid, 0)],
+            head_oid: Some(oid),
+            ..GraphModel::default()
+        };
         model.settle_head();
         assert!(!model.head_matched, "no search, no mark");
 
@@ -146,20 +148,22 @@ mod tests {
     /// at that row's strength, so a re-marking re-reads that row too.
     #[test]
     fn a_search_marks_the_oldest_row_for_the_footer() {
-        let mut model = GraphModel::default();
-        model.rows = vec![
-            GraphRowItem {
-                oid_hex: "b2".repeat(20),
-                subject: "the newest".into(),
-                ..GraphRowItem::default()
-            },
-            GraphRowItem {
-                oid_hex: "c3".repeat(20),
-                subject: "the oldest".into(),
-                ..GraphRowItem::default()
-            },
-        ];
-        model.query = Query::new("newest");
+        let mut model = GraphModel {
+            rows: vec![
+                GraphRowItem {
+                    oid_hex: "b2".repeat(20),
+                    subject: "the newest".into(),
+                    ..GraphRowItem::default()
+                },
+                GraphRowItem {
+                    oid_hex: "c3".repeat(20),
+                    subject: "the oldest".into(),
+                    ..GraphRowItem::default()
+                },
+            ],
+            query: Query::new("newest"),
+            ..GraphModel::default()
+        };
         model.remark_notified();
         assert!(!model.tail_matched, "the oldest row was passed over");
 

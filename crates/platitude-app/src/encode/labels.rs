@@ -193,7 +193,7 @@ impl platitude_core::mem::Footprint for Chip {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use qtbridge::qtbridge_type_lib::QVariant;
+    use qtbridge::QVariantConvertible;
 
     fn label(text: &str, kind: LabelKind) -> RefLabel {
         RefLabel {
@@ -257,7 +257,10 @@ mod tests {
         // A branchless copy's marker carries the padlock alone: it names
         // no branch, so `held` stays down (the kind puts the frame on it).
         assert!(chips[3].locked && !chips[3].held);
-        assert_eq!(Chips::try_from(&QVariant::from(&chips)), Ok(chips));
+        assert_eq!(
+            <Chips as QVariantConvertible>::try_from_qvariant(&chips.to_qvariant()),
+            Ok(chips)
+        );
     }
 
     /// Spelled out whole: a word that moves is a test that fails.

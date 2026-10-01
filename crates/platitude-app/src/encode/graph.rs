@@ -149,7 +149,7 @@ pub fn tail_lanes(segments: &[Segment]) -> Lanes {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use qtbridge::qtbridge_type_lib::QVariant;
+    use qtbridge::QVariantConvertible;
 
     fn seg(kind: SegmentKind, lane: u16, color: u8, dashed: bool) -> Segment {
         Segment {
@@ -167,7 +167,10 @@ mod tests {
             seg(SegmentKind::IntoNode, 2, 11, false),
             seg(SegmentKind::OutOfNode, 1, 0, true),
         ]);
-        assert_eq!(Lanes::try_from(&QVariant::from(&lanes)), Ok(lanes.clone()));
+        assert_eq!(
+            <Lanes as QVariantConvertible>::try_from_qvariant(&lanes.to_qvariant()),
+            Ok(lanes.clone())
+        );
         // The words the canvas branches on, spelled out whole.
         let first = lanes[0].to_map();
         assert_eq!(field::<String>(&first, "kind"), Ok("through".into()));
@@ -183,7 +186,7 @@ mod tests {
             Ok("out".into())
         );
         assert_eq!(
-            Lanes::try_from(&QVariant::from(&lanes_of(&[]))),
+            <Lanes as QVariantConvertible>::try_from_qvariant(&lanes_of(&[]).to_qvariant()),
             Ok(Lanes::default())
         );
     }
