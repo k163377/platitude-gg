@@ -9,6 +9,8 @@ Item {
     id: root
     width: 400
     height: 200
+    // What `Main.qml` and the popup bases declare (rules-refs/app-ui.md「ToolTip.policy」).
+    ToolTip.policy: ToolTip.Manual
 
     Item {
         id: mine

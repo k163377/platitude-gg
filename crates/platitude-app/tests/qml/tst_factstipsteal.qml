@@ -11,6 +11,8 @@ Item {
     id: root
     width: 400
     height: 200
+    // What `Main.qml` and the popup bases declare (rules-refs/app-ui.md「ToolTip.policy」).
+    ToolTip.policy: ToolTip.Manual
 
     property bool pointed: false
     /// How often `pointed` has changed — what a blink would run up.

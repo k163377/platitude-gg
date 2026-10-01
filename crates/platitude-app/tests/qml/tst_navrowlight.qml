@@ -14,6 +14,8 @@ Item {
     id: root
     width: 300
     height: 200
+    // What `Main.qml` and the popup bases declare (rules-refs/app-ui.md「ToolTip.policy」).
+    ToolTip.policy: ToolTip.Manual
 
     /// The panel's count, as the rows are handed it (`SidebarRowGestures.handMoves`).
     property int handMoves: 0

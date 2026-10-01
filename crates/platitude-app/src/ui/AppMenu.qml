@@ -8,6 +8,8 @@ Menu {
     id: appMenu
     // Also what keeps the card's rounded corner clear of a highlighted first or last row.
     padding: Theme.spaceXs
+    // The rows' tips time themselves, as the window's do: a popup inherits no policy (`Main.qml`).
+    ToolTip.policy: ToolTip.Manual
 
     /// A git term for this submenu's title row, drawn as a code chip; empty for a title of words.
     property string titleCode: ""

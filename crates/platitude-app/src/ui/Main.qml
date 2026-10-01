@@ -25,6 +25,10 @@ ApplicationWindow {
     flags: root.captionMerged ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
     title: Words.appName
     color: Theme.bgBase
+    // Every tip waits only the delay its site names (`Metrics.tipDelayMs`) and stays until its site lets it go: Qt's
+    // automatic policy would add the platform's wake-up delay and a timeout to each. A popup inherits nothing from the
+    // window, so the popup bases say it again (rules-refs/app-ui.md「ToolTip.policy」).
+    ToolTip.policy: ToolTip.Manual
 
     /// Whether this app draws the window's edge: a frameless window has no frame for the platform to draw one on, and
     /// a maximised one's edge is the screen's (デザイン規約 §ウィンドウの縁).

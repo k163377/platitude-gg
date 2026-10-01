@@ -5,7 +5,8 @@ import QtTest
 //  - hover follows the item, not the hand: a scroll gives it to whatever arrives under the still pointer, and the app
 //    hears an ordinary arrival;
 //  - a handler on the ancestor has its `point` handed to it again when the layout moves, so being told is no test of
-//    whether the hand moved — the position is (why `SidebarPane` weighs the new place against the last).
+//    whether the hand moved — the position is (why `SidebarPane` weighs the new place against the last). It comes on
+//    a later frame than the one the move is drawn on (Qt 6.12), so it is waited for.
 Item {
     id: root
     width: 200
@@ -93,7 +94,8 @@ Item {
             const told = root.stirs
             list.contentY = root.rowHeight * 2
             verify(waitForRendering(list), "the move is on screen")
-            verify(root.stirs > told, "the ancestor is told about the pointer again — the layout moved under it")
+            tryVerify(() => root.stirs > told, undefined,
+                      "the ancestor is told about the pointer again — the layout moved under it")
             compare(root.moves, rested, "but the place it was told about is the one it already had")
         }
 

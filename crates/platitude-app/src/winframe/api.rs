@@ -83,7 +83,7 @@ pub fn fit_to_work_area(screen: &str) -> bool {
 /// `set_caption_strips` describes, which get the platform's own caption
 /// behaviour (drag, snap, double-click, window menu).
 ///
-/// Qt 6.10's own answer (`QWindowsWindow::handleNonClientHitTest`)
+/// Qt's own answer (`QWindowsWindow::handleNonClientHitTest`, 6.10–6.12)
 /// synthesises presses into the scene from a `GetAsyncKeyState` poll; a
 /// press whose release this window does not see leaves a phantom press
 /// that swallows the next click and pins hover. Only a real mouse

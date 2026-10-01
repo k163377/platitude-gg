@@ -25,6 +25,8 @@ Popup {
 
     padding: Theme.spaceSm
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    // The tips inside time themselves, as the window's do: a popup inherits no policy (`Main.qml`).
+    ToolTip.policy: ToolTip.Manual
     background: AppCardFace {
         id: cardFace
         tracksPointer: card.tracksPointer
