@@ -2,3 +2,17 @@
 # gate starts (internal-docs/反映前テストの機械化.md).
 [alias]
 xtask = "run --quiet --locked -p xtask --"
+
+# What the C and C++ dependencies are compiled with (cc-rs reads both).
+[env]
+# A tree-sitter grammar's parser.c exports its `tree_sitter_<lang>`
+# (`__declspec(dllexport)` / default visibility) unless this is defined: an
+# exe holding exports makes link.exe write an import library nobody asked
+# for (rustc's `linker_messages` warning), and keeps every grammar in every
+# exe that links platitude-core, whether it reads them or not.
+CFLAGS = "-DTREE_SITTER_HIDE_SYMBOLS"
+# Qt's headers are UTF-8, and cl reads a source in the machine's code page
+# unless told (C4819 on a Japanese Windows, where a multibyte character at a
+# line's end can take the newline with it). Qt hands every CMake consumer
+# the same flag (`Qt6::Platform`'s INTERFACE_COMPILE_OPTIONS).
+CXXFLAGS_x86_64_pc_windows_msvc = "/utf-8"
