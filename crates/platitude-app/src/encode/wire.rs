@@ -444,13 +444,15 @@ mod tests {
         ]
     }
 
-    /// What the bridge does with a slot's argument: the C++ value in
-    /// place, read through the layout of [`ListWire`] and friends.
+    /// The two conversions the bridge runs for a slot's argument, back to
+    /// back in Rust — no meta-call and no QML engine. What QML hands a
+    /// slot, and makes of its answer, is `wire_qml`'s.
     fn through_a_slot<W: QMetaTypeCompatible>(value: &W) -> W {
         W::from_compatible(&value.to_compatible())
     }
 
-    /// By the same conversions the bridge runs for a role, a property and a slot.
+    /// By the same conversions the bridge runs for a role, a property and a
+    /// slot, called from Rust.
     #[test]
     fn a_list_of_records_round_trips_through_qt_containers() {
         let listed = Listed::new(probes());
