@@ -15,6 +15,8 @@ mod words;
 
 #[cfg(test)]
 mod rows_tests;
+#[cfg(test)]
+mod wire_qml;
 
 pub use columns::{Candidates, widest_lines};
 pub use graph::{Lanes, avatar_code, conflict_side_colors, lanes_of, spell_lanes, tail_lanes};
