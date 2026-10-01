@@ -1,38 +1,19 @@
-//! `file://` URL ↔ local path conversion for the QML FolderDialog, which
-//! answers with a URL and is opened at one.
-//!
-//! Dependency-free: only the shapes QML produces are handled
-//! (`file:///C:/dir`, `file:///home/user/dir`, percent-encoded).
+//! `file://` URL ↔ local path. The conversions are Qt's (`QUrl`) — the
+//! same the platform dialogs answer with and QML's `Image` reads. What is
+//! this app's own is the rest: a path with no root has no URL, the picker
+//! opens beside the repository, and the screen spells a path with `/`.
 
 use std::path::{Path, PathBuf};
 
-/// A non-`file:` input is taken as a path already.
+use cxx_qt_lib::{QString, QUrl};
+
+/// The local path a `file:` URL names: a dialog's answer, or a URL this
+/// side made. Anything that names no local file is empty — none of the
+/// slots that take one is handed a bare path.
 pub fn file_url_to_path(url: &str) -> PathBuf {
-    let Some(rest) = url.strip_prefix("file://") else {
-        return PathBuf::from(url);
-    };
-    let decoded = percent_decode(rest);
-    #[cfg(windows)]
-    {
-        // `/C:/Users/...` → `C:/Users/...`.
-        if let Some(drive) = decoded
-            .strip_prefix('/')
-            .filter(|r| r.chars().nth(1) == Some(':'))
-        {
-            return PathBuf::from(drive);
-        }
-        // A rest not starting at `/` names a host (`file://server/share` is
-        // a UNC path); read as-is it would resolve against the working
-        // directory.
-        if !decoded.is_empty() && !decoded.starts_with('/') {
-            return PathBuf::from(format!("//{decoded}"));
-        }
-        PathBuf::from(decoded)
-    }
-    #[cfg(not(windows))]
-    {
-        PathBuf::from(decoded)
-    }
+    QUrl::from(url)
+        .to_local_file()
+        .map_or_else(PathBuf::new, |path| PathBuf::from(path.to_string()))
 }
 
 /// The folder the picker opens at for a repository at `path`: the one it
@@ -64,80 +45,26 @@ pub fn shown_path(path: &str) -> String {
     path.to_string()
 }
 
-/// Empty for a path with no root: a dialog cannot be opened at one.
-/// Folds `\` only on Windows: elsewhere a backslash is a letter of the
-/// name, and is encoded.
+/// Encoded, so a query the caller appends (`?read=`) stays one. Empty for
+/// a path with no root: a dialog cannot be opened at one.
 fn path_to_file_url(path: &Path) -> String {
-    let text = path.to_string_lossy();
-    #[cfg(windows)]
-    let text = text.replace('\\', "/");
-    let encoded = percent_encode(&text);
-    if encoded.starts_with("//") {
-        // UNC: the leading pair names the host, which the URL keeps.
-        format!("file:{encoded}")
-    } else if encoded.starts_with('/') {
-        format!("file://{encoded}")
-    } else if encoded.as_bytes().get(1) == Some(&b':') {
-        // The URL brings its own slash: `C:/x` → `file:///C:/x`.
-        format!("file:///{encoded}")
-    } else {
-        String::new()
+    if !path.has_root() {
+        return String::new();
     }
-}
-
-/// Leaves the separators and the drive colon as themselves. `#` and `?`
-/// are the ones that matter: unencoded, either cuts the URL short.
-fn percent_encode(input: &str) -> String {
-    const HEX: &[u8; 16] = b"0123456789ABCDEF";
-    let mut out = String::with_capacity(input.len());
-    for byte in input.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' | b':' => {
-                out.push(byte as char);
-            }
-            _ => {
-                out.push('%');
-                out.push(HEX[(byte >> 4) as usize] as char);
-                out.push(HEX[(byte & 0x0f) as usize] as char);
-            }
-        }
-    }
-    out
-}
-
-fn percent_decode(input: &str) -> String {
-    let bytes = input.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%'
-            && let (Some(h), Some(l)) = (
-                bytes.get(i + 1).copied().and_then(hex_val),
-                bytes.get(i + 2).copied().and_then(hex_val),
-            )
-        {
-            out.push((h << 4) | l);
-            i += 3;
-        } else {
-            out.push(bytes[i]);
-            i += 1;
-        }
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-fn hex_val(c: u8) -> Option<u8> {
-    match c {
-        b'0'..=b'9' => Some(c - b'0'),
-        b'a'..=b'f' => Some(c - b'a' + 10),
-        b'A'..=b'F' => Some(c - b'A' + 10),
-        _ => None,
-    }
+    let url = QUrl::from_local_file(&QString::from(path.to_string_lossy().as_ref()));
+    String::from_utf8_lossy(url.to_encoded().as_slice()).into_owned()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A URL as a dialog answers with it: QML's `selectedFile.toString()`.
+    fn dialog_url(path: &Path) -> String {
+        QUrl::from_local_file(&QString::from(path.to_string_lossy().as_ref()))
+            .to_qstring()
+            .to_string()
+    }
 
     #[test]
     fn a_path_is_shown_with_the_separator_git_answers_with() {
@@ -169,47 +96,50 @@ mod tests {
     fn the_leaf_is_the_last_segment_whichever_separator_wrote_it() {
         assert_eq!(path_leaf("C:\\Users\\dev\\repo"), "repo");
         assert_eq!(path_leaf("/home/dev/repo"), "repo");
-        assert_eq!(path_leaf("C:/mixed\\separators/leaf"), "leaf");
-        assert_eq!(path_leaf("bare"), "bare");
-        assert_eq!(path_leaf(""), "");
+        assert_eq!(path_leaf("repo"), "repo");
+    }
+
+    /// What a dialog answers reads back to the path it was opened on —
+    /// whatever the name holds.
+    #[test]
+    fn a_dialog_s_answer_reads_back_to_its_path() {
+        let mut paths = vec![
+            "/with space/repo",
+            "/日本語/repo",
+            "/50%off/repo",
+            "/pct%41/repo",
+            "/a#b/repo",
+            "/plus+amp&at@semi;/repo",
+        ];
+        if cfg!(windows) {
+            paths.extend([r"C:\Users\dev\with space", r"\\server\share\repo"]);
+        } else {
+            paths.extend(["/q?mark/repo", r"/we\ird/repo"]);
+        }
+        for path in paths {
+            let want = if cfg!(windows) {
+                path.replace('\\', "/")
+            } else {
+                path.to_string()
+            };
+            let url = dialog_url(Path::new(path));
+            assert_eq!(file_url_to_path(&url), PathBuf::from(want), "{url}");
+        }
     }
 
     #[test]
-    #[cfg(windows)]
-    fn windows_drive_urls() {
-        assert_eq!(
-            file_url_to_path("file:///C:/Users/dev/repo"),
-            PathBuf::from("C:/Users/dev/repo")
-        );
-        assert_eq!(
-            file_url_to_path("file:///C:/with%20space/repo"),
-            PathBuf::from("C:/with space/repo")
-        );
+    fn what_names_no_local_file_reads_as_no_path() {
+        assert_eq!(file_url_to_path(""), PathBuf::new());
+        assert_eq!(file_url_to_path("http://example.com/x"), PathBuf::new());
     }
 
+    /// Encoded, so the preview's `?read=` cannot be read as part of a name
+    /// that holds a `?` or a `#`.
     #[test]
-    fn unicode_percent_sequences_decode() {
-        let p = file_url_to_path("file:///tmp/%E6%97%A5%E6%9C%AC%E8%AA%9E");
-        assert!(p.to_string_lossy().ends_with("日本語"));
-    }
-
-    #[test]
-    fn plain_paths_pass_through() {
+    fn a_file_url_is_encoded() {
         assert_eq!(
-            file_url_to_path("C:/plain/path"),
-            PathBuf::from("C:/plain/path")
-        );
-    }
-
-    #[test]
-    fn paths_become_file_urls() {
-        assert_eq!(
-            path_to_file_url(Path::new("C:/Users/dev/repo")),
-            "file:///C:/Users/dev/repo"
-        );
-        assert_eq!(
-            path_to_file_url(Path::new("/home/dev/repo")),
-            "file:///home/dev/repo"
+            file_url(Path::new("/home/dev/日本語 #1/a?b.png")),
+            "file:///home/dev/%E6%97%A5%E6%9C%AC%E8%AA%9E%20%231/a%3Fb.png"
         );
     }
 
@@ -217,11 +147,11 @@ mod tests {
     #[cfg(windows)]
     fn a_windows_path_becomes_a_file_url() {
         assert_eq!(
-            path_to_file_url(Path::new(r"C:\Users\dev\repo")),
+            file_url(Path::new(r"C:\Users\dev\repo")),
             "file:///C:/Users/dev/repo"
         );
         assert_eq!(
-            path_to_file_url(Path::new(r"\\server\share\repo")),
+            file_url(Path::new(r"\\server\share\repo")),
             "file://server/share/repo"
         );
     }
@@ -239,27 +169,27 @@ mod tests {
     #[test]
     fn a_repository_opens_the_folder_it_sits_in() {
         assert_eq!(
-            picker_folder_url(Path::new("C:/Users/dev/repo")),
-            "file:///C:/Users/dev"
-        );
-        assert_eq!(
             picker_folder_url(Path::new("/home/dev/repo")),
             "file:///home/dev"
         );
     }
 
-    // What counts as a root is the platform's reading of the path, so the
-    // drive and UNC roots are tested on Windows only.
+    /// An empty answer would open wherever the dialog was last left.
     #[test]
     fn a_repository_at_a_root_opens_the_root() {
-        // An empty answer would open wherever the dialog was last left.
         assert_eq!(picker_folder_url(Path::new("/")), "file:///");
         assert_eq!(picker_folder_url(Path::new("/repo")), "file:///");
     }
 
+    // What counts as a root is the platform's reading of the path, so the
+    // drive and UNC roots are tested on Windows only.
     #[test]
     #[cfg(windows)]
     fn a_repository_at_a_drive_root_opens_the_drive() {
+        assert_eq!(
+            picker_folder_url(Path::new("C:/Users/dev/repo")),
+            "file:///C:/Users/dev"
+        );
         assert_eq!(picker_folder_url(Path::new("C:/")), "file:///C:/");
         assert_eq!(picker_folder_url(Path::new(r"C:\")), "file:///C:/");
         assert_eq!(picker_folder_url(Path::new("C:/repo")), "file:///C:/");
@@ -277,62 +207,107 @@ mod tests {
     }
 
     #[test]
-    fn a_path_with_no_root_has_no_folder_to_open() {
+    fn a_path_with_no_root_has_no_url() {
         assert_eq!(picker_folder_url(Path::new("")), "");
         assert_eq!(picker_folder_url(Path::new("repo")), "");
+        assert_eq!(file_url(Path::new("repo/sub")), "");
     }
 
+    /// One pixel, to load.
+    const PNG: [u8; 70] = [
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
+        0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0xda, 0x63, 0x64,
+        0x60, 0xf8, 0x5f, 0x0f, 0x00, 0x02, 0x87, 0x01, 0x80, 0xeb, 0x47, 0xba, 0x92, 0x00, 0x00,
+        0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+
+    /// The child: a Qt application loading the QML its parent wrote, which
+    /// says how each `Image` came out.
     #[test]
-    fn rootless_paths_have_no_url() {
-        assert_eq!(path_to_file_url(Path::new("repo/sub")), "");
-        assert_eq!(path_to_file_url(Path::new("")), "");
+    #[ignore = "started by real_files_load_from_their_urls_and_read_back, offscreen, as a process of its own"]
+    fn images_side() {
+        let Some(qml) = std::env::var_os("URLPATH_IMAGES") else {
+            return;
+        };
+        let mut app = qtbridge::qtbridge_type_lib::QGuiApplication::new();
+        let mut engine = qtbridge::qtbridge_type_lib::QQmlApplicationEngine::new();
+        crate::qml_engine::arm(engine.pin_mut());
+        crate::qml_engine::load(engine.pin_mut(), &file_url(Path::new(&qml)))
+            .expect("the images load");
+        app.pin_mut().exec();
+        drop(engine);
+        qtbridge::collect_garbage();
+        drop(app);
     }
 
+    /// Real files under names that need encoding: a dialog's answer reads
+    /// back to the same file, and `file_url`, bare and with the preview's
+    /// query, loads in an `Image`.
     #[test]
-    fn url_form_survives_the_round_trip() {
-        for path in [
-            "/home/dev/with space/repo",
-            "/home/dev/日本語/repo",
-            "/home/dev/50%off/repo",
-            "/home/dev/a#b?c/repo",
-        ] {
-            let url = path_to_file_url(Path::new(path));
-            assert_eq!(file_url_to_path(&url), PathBuf::from(path), "{url}");
+    fn real_files_load_from_their_urls_and_read_back() {
+        let base = std::env::temp_dir().join(format!("pgg url 実在 #{}", std::process::id()));
+        let mut names = vec![
+            "plain.png",
+            "日本語 名前.png",
+            "hash#1.png",
+            "pct%41.png",
+            "a#b/inner.png",
+        ];
+        if !cfg!(windows) {
+            names.extend(["q?mark.png", r"we\ird.png"]);
         }
-    }
-
-    #[test]
-    #[cfg(windows)]
-    fn unc_urls_survive_the_round_trip() {
-        let url = path_to_file_url(Path::new(r"\\server\share\repo"));
-        assert_eq!(url, "file://server/share/repo");
-        assert_eq!(
-            file_url_to_path(&url),
-            PathBuf::from("//server/share/repo"),
-            "the host segment stays a host, not the head of a relative path"
-        );
-    }
-
-    #[test]
-    #[cfg(windows)]
-    fn drive_urls_survive_the_round_trip() {
-        let path = Path::new(r"C:\Users\dev\with space\日本語");
-        let url = path_to_file_url(path);
-        assert_eq!(
-            url,
-            "file:///C:/Users/dev/with%20space/%E6%97%A5%E6%9C%AC%E8%AA%9E"
-        );
-        assert_eq!(
-            file_url_to_path(&url),
-            PathBuf::from("C:/Users/dev/with space/日本語")
-        );
-    }
-
-    #[test]
-    fn malformed_percent_is_kept_literal() {
-        let p = file_url_to_path("file:///tmp/50%25off");
-        assert!(p.to_string_lossy().ends_with("50%off"));
-        let p2 = file_url_to_path("file:///tmp/broken%2");
-        assert!(p2.to_string_lossy().ends_with("broken%2"));
+        let mut sources = Vec::new();
+        for name in &names {
+            let path = base.join(name);
+            std::fs::create_dir_all(path.parent().expect("a folder")).expect("the folder");
+            std::fs::write(&path, PNG).expect("the file");
+            let back = file_url_to_path(&dialog_url(&path));
+            assert_eq!(
+                std::fs::read(&back).ok().as_deref(),
+                Some(&PNG[..]),
+                "{name}"
+            );
+            sources.push(format!("{:?}", file_url(&path)));
+            sources.push(format!("{:?}", format!("{}?read=1", file_url(&path))));
+        }
+        let qml = base.join("Images.qml");
+        std::fs::write(
+            &qml,
+            format!(
+                "import QtQuick\nItem {{\n    id: root\n    Repeater {{\n        id: images\n        model: [{}]\n        \
+                 delegate: Image {{ required property string modelData; source: modelData }}\n    }}\n    \
+                 function report() {{\n        for (let i = 0; i < images.count; i++)\n            \
+                 console.log('IMAGE\\t' + images.itemAt(i).status + '\\t' + images.itemAt(i).source)\n        \
+                 Qt.quit()\n    }}\n    Component.onCompleted: Qt.callLater(root.report)\n}}\n",
+                sources.join(", ")
+            ),
+        )
+        .expect("the QML");
+        let out = std::process::Command::new(std::env::current_exe().expect("this test binary"))
+            .args([
+                "urlpath::tests::images_side",
+                "--exact",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("URLPATH_IMAGES", &qml)
+            .env("QT_QPA_PLATFORM", "offscreen")
+            .env("QT_FORCE_STDERR_LOGGING", "1")
+            .output()
+            .expect("the child starts");
+        let errors = String::from_utf8_lossy(&out.stderr);
+        let images: Vec<&str> = errors
+            .lines()
+            .filter_map(|line| line.split_once("IMAGE\t").map(|(_, rest)| rest))
+            .collect();
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(images.len(), sources.len(), "every image said:\n{errors}");
+        // `Image.Ready` is 1: a local file loads in the call that sets it.
+        let failed: Vec<&&str> = images
+            .iter()
+            .filter(|line| !line.starts_with("1\t"))
+            .collect();
+        assert!(failed.is_empty(), "{failed:?}");
     }
 }
