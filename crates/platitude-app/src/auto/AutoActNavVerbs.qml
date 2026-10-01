@@ -274,7 +274,7 @@ Item {
                 worktreeMenuTimer.menu.openSub(card)
                 return
             }
-            const item = card.removeItem
+            const item = card.removeCopyItem
             if (!worktreeMenuTimer.press) {
                 // A greyed row says why on its hover alone, forced through the property the real hover writes.
                 item.tipForced = item.blocked

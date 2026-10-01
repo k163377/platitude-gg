@@ -81,7 +81,7 @@ Item {
     readonly property alias deleteTagBothItem: tagMenu.deleteTagBothItem
     readonly property alias deleteItem: branchMenu.deleteItem
     readonly property alias upstreamItem: branchMenu.upstreamItem
-    readonly property alias removeCopyItem: copyMenu.removeItem
+    readonly property alias removeCopyItem: copyMenu.removeCopyItem
     readonly property alias stashDropItem: refStashDropItem
     readonly property alias switchItem: refSwitchItem
     readonly property alias pullItem: refPullItem

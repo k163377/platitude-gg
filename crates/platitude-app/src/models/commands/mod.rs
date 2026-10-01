@@ -39,7 +39,7 @@ pub struct CommandItem {
     /// out, so copying it gives back what actually ran.
     full: String,
     /// "running" | "ok" | "failed"
-    state: String,
+    status: String,
     /// The right-hand word for a command that did not go through
     /// ("exit 1", "timed out"); empty when it did.
     result: String,
@@ -339,7 +339,7 @@ impl CommandsModel {
                         clock: clock_of(at_ms, self.zone_minutes),
                         args,
                         full,
-                        state: "running".to_string(),
+                        status: "running".to_string(),
                         ..Default::default()
                     });
                     self.running = true;
@@ -372,7 +372,7 @@ impl CommandsModel {
                     self.set(
                         index,
                         CommandItem {
-                            state: if ok { "ok" } else { "failed" }.to_string(),
+                            status: if ok { "ok" } else { "failed" }.to_string(),
                             result: match (ok, code) {
                                 (true, _) => String::new(),
                                 (false, Some(code)) => format!("exit {code}"),
@@ -390,7 +390,7 @@ impl CommandsModel {
                     }
                     // "Still running" is about the whole list: a fetch
                     // can outlive the write that started it.
-                    self.running = self.rows.iter().any(|r| r.state == "running");
+                    self.running = self.rows.iter().any(|r| r.status == "running");
                     touched = true;
                     // An unasked command leaves its row only; its run's
                     // first failure is the tab's to raise (`fetch_settled`).
@@ -419,7 +419,7 @@ impl platitude_core::mem::Footprint for CommandItem {
         self.clock.heap_bytes()
             + self.args.heap_bytes()
             + self.full.heap_bytes()
-            + self.state.heap_bytes()
+            + self.status.heap_bytes()
             + self.result.heap_bytes()
             + self.duration.heap_bytes()
             + self.output.heap_bytes()

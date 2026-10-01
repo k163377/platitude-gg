@@ -318,7 +318,7 @@ impl CommandsModel {
                 out.push('\n');
             }
             out.push_str(text.get(from..to).unwrap_or_default());
-            if from != 0 || to != text.len() || item.state != "failed" {
+            if from != 0 || to != text.len() || item.status != "failed" {
                 continue;
             }
             for said in item.output.lines() {

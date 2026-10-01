@@ -367,8 +367,6 @@ Item {
     // word's ground — pulled back wherever that would reach the frame (デザイン規約 §git 用語のコード表記「`!` の席」).
     NavIcon {
         id: alertMark
-        // The stem's round cap stands half a stroke over the grid line.
-        readonly property real inkTop: alertMark.inkTopGrid / 16 * alertMark.height - alertMark.stroke / 2
         // Folded, the seat wears it instead (`ActionButtonSeat.cornerAlert`); a phrase, at its left end (`phraseAlert`).
         visible: btnLabel.alert && !btnLabel.folded && !btnLabel.phrased
         kind: "bang"

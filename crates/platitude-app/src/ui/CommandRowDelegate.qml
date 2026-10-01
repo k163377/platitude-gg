@@ -14,7 +14,7 @@ Rectangle {
     required property string clock
     required property string args
     required property string full
-    required property string state
+    required property string status
     required property string result
     required property string duration
     required property string output
@@ -31,7 +31,7 @@ Rectangle {
     /// Asked where a run of a column is drawn (`LineRuler`); the same ruler `CommandsTextSelect` reads a press against.
     required property var ruler
 
-    readonly property bool failed: row.state === "failed"
+    readonly property bool failed: row.status === "failed"
     readonly property bool showsOutput: row.failed && row.output !== ""
 
     // ---- where this row's columns are drawn ---------------------------------------------------------------------
@@ -64,7 +64,7 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
-        ToolTip.visible: containsMouse && row.state !== "running"
+        ToolTip.visible: containsMouse && row.status !== "running"
         ToolTip.delay: Metrics.tipDelayMs
         // The reproducible form is long; it is here so the log stays one line per command.
         ToolTip.text: row.full
@@ -215,9 +215,9 @@ Rectangle {
             }
             Label {
                 // Exit 0 is not written, only the time it took.
-                text: row.state === "running" ? qsTr("running…") : row.duration
+                text: row.status === "running" ? qsTr("running…") : row.duration
                 textFormat: Text.PlainText
-                color: row.state === "running" ? Theme.accent : Theme.textMuted
+                color: row.status === "running" ? Theme.accent : Theme.textMuted
                 font.family: Theme.monoFamily
                 font.pixelSize: Theme.fontSm
             }

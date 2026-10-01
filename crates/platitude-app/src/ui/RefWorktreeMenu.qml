@@ -14,8 +14,9 @@ AppMenu {
     /// The copy the card stands on, frozen by `standOn`: its path (what git removes) and its folder (what the row says).
     readonly property alias path: state.path
     readonly property alias name: state.name
-    /// Automation's handle into the row, passed on through the carrying menus.
-    readonly property alias removeItem: refCopyRemoveItem
+    /// Automation's handle into the row, passed on through the carrying menus. Not `removeItem`, which is `Menu`'s own
+    /// way to take a row off.
+    readonly property alias removeCopyItem: refCopyRemoveItem
 
     signal removeRequested(string path, string name)
 

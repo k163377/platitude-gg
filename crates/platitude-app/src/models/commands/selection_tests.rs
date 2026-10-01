@@ -37,12 +37,12 @@ fn wash(
     ))
 }
 
-fn row(args: &str, state: &str, result: &str, duration: &str, output: &str) -> CommandItem {
+fn row(args: &str, status: &str, result: &str, duration: &str, output: &str) -> CommandItem {
     CommandItem {
         clock: "12:03:17".to_string(),
         args: args.to_string(),
         full: format!("git {args}"),
-        state: state.to_string(),
+        status: status.to_string(),
         result: result.to_string(),
         duration: duration.to_string(),
         output: output.to_string(),
