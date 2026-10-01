@@ -24,6 +24,12 @@ Item {
     readonly property var detailsPane: driver.detailsPane
     readonly property var renderedBarrier: driver.barrierRendered
 
+    /// The picture the run was handed (a path, so the census line names no machine's URL), as the file chooser it
+    /// stands in for answers: a `file:` URL (`AppBackend.assignAvatar` reads nothing else).
+    function chosenFile(path) {
+        return GitFacts.folderUrlOf(path) + "/" + encodeURIComponent(path.split(/[\\/]/).pop())
+    }
+
     /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
         if (act === "open-picker") {
@@ -187,7 +193,7 @@ Item {
             avatarAssignTimer.stop()
             AppBackend.assignAvatar(detailsModel.authorEmail,
                                     detailsModel.authorName,
-                                    Harness.autoActArg)
+                                    acts.chosenFile(Harness.autoActArg))
             avatarReportTimer.start()
         }
     }
@@ -298,7 +304,7 @@ Item {
             avatarSeedTimer.stop()
             AppBackend.assignAvatar(detailsModel.authorEmail,
                                     detailsModel.authorName,
-                                    Harness.autoActArg)
+                                    acts.chosenFile(Harness.autoActArg))
             page.settingsDialogRequested()
         }
     }
