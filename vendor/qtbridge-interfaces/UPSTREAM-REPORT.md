@@ -150,3 +150,18 @@ Same toolchain, Qt, lockfile (only the `qtbridge-interfaces` source differs) and
 | 0.3.0 dev | 1.97.1 / 6.10.3 | 3 | 3 × `count=3` |
 
 No diagnostic output was added to either build that was compared.
+
+Across the model kinds and entry points, each from a mutable slot with a view attached (Rust 1.98.1,
+Qt 6.12.0, offscreen, 3 runs each):
+
+| case | 0.3.0 release (MSVC) | 0.3.0 dev (MSVC) | candidate release (MSVC / GCC) |
+|---|---|---|---|
+| `QListModel` push | abort, `row_count` | pass | pass / pass |
+| `QAbstractItemModel` insert | abort, `row_count` | pass | pass / pass |
+| `QAbstractItemModel` reset, `setData`, `removeRows` | abort, `role_names` | pass | pass / pass |
+| `QTableModel` push_row | abort, `row_count` | pass | pass / pass |
+| `QParserStatus` (`componentComplete` → signal → mutable slot) | pass | pass | pass / pass |
+| a mutable slot that runs the event loop, which runs another mutable slot of the same object | `BorrowMutError` | `BorrowMutError` | `BorrowMutError` / `BorrowMutError` |
+
+The last row is the contract still enforced: a second exclusive borrow of the user object that
+nothing handed over is refused with the candidate as without it.

@@ -25,5 +25,8 @@ Qt's re-entrant reads (`try_store_handle_and_call_cpp_mut`), and the first row n
 from a mutable slot aborts in `rowCount` with `BorrowError`
 (internal-docs/P3-確認事項.md, the qtbridge entry; the report for upstream is `UPSTREAM-REPORT.md`).
 
-Back to the published crate when a qtbridge release takes the proxies by `&self`: remove
-this directory and the `[patch.crates-io]` entry in the workspace `Cargo.toml`.
+Back to the published crate when a qtbridge release keeps the reference contract on
+re-entry, however its signatures read: in a release build, the minimal reproduction of
+`UPSTREAM-REPORT.md` passes, every model kind's entry point in its coverage table passes, and a
+second mutable borrow nothing handed over is still refused. Then remove this directory and the
+`[patch.crates-io]` entry in the workspace `Cargo.toml`, and run those on Windows and Linux.
