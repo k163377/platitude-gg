@@ -308,10 +308,17 @@ pub(super) fn folder_for(
             Ok(repo.display().to_string())
         }
         // A picture made here keeps the avatar verbs' line free of one
-        // machine's path, so the census can record it.
+        // machine's path, so the census can record it. Its name holds what
+        // a URL spells differently from a path — a space, a non-ASCII
+        // letter, `#`, a `%` before hex digits and, where a name may hold
+        // one, a backslash — and the verbs wait on the picture loading.
         "avatar-settings" | "avatar-combo" | "avatar-row-lit" | "avatar-remove" => {
             std::fs::create_dir_all(&made).map_err(|e| e.to_string())?;
-            let picture = made.join("avatar.png");
+            let name = match cfg!(windows) {
+                true => "face 顔 #1 %41.png",
+                false => "face 顔 #1 %41\\x.png",
+            };
+            let picture = made.join(name);
             std::fs::write(&picture, tiny_png()).map_err(|e| e.to_string())?;
             Ok(picture.display().to_string())
         }
