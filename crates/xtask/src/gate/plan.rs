@@ -497,7 +497,9 @@ fn cache_key(ids: &BTreeMap<String, String>, step: &Step) -> String {
     format!("{hash:016x}")
 }
 
-pub(crate) fn describe(plan: &Plan) -> String {
+/// The plan as the gate prints it; `keys` adds each cached-or-run step's
+/// key (a dry run's: what a change of a step's inputs moves).
+pub(crate) fn describe(plan: &Plan, keys: bool) -> String {
     let short = |sha: &str| sha.chars().take(10).collect::<String>();
     let mut out = format!(
         "gate: HEAD {} against main {} (base {}): {}{}{}{}\n",
@@ -584,20 +586,30 @@ pub(crate) fn describe(plan: &Plan) -> String {
     }
     out.push_str(&format!("steps ({}):\n", plan.required.len()));
     for r in &plan.required {
-        let standing = if r.step.always {
-            "always"
-        } else if r.cached {
-            "cached"
-        } else {
-            "run"
-        };
-        let side = match r.step.side {
-            Side::Host => "host",
-            Side::Linux => "linux",
-        };
-        out.push_str(&format!("  {standing:<6} [{side:<5}] {}\n", r.step.id));
+        out.push_str(&step_row(r, keys));
     }
     out
+}
+
+/// One step of [`describe`]: where it stands, its side, and its key.
+fn step_row(r: &Required, keys: bool) -> String {
+    let standing = if r.step.always {
+        "always"
+    } else if r.cached {
+        "cached"
+    } else {
+        "run"
+    };
+    let side = match r.step.side {
+        Side::Host => "host",
+        Side::Linux => "linux",
+    };
+    let mut row = format!("  {standing:<6} [{side:<5}] {}", r.step.id);
+    if keys && !r.step.always {
+        row.push_str(&format!("  key {}", r.key));
+    }
+    row.push('\n');
+    row
 }
 
 #[cfg(test)]

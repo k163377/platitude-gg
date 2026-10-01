@@ -139,7 +139,7 @@ fn gate(args: &[String]) -> Result<(), String> {
         },
         &mut spent,
     )?;
-    print!("{}", plan::describe(&plan));
+    print!("{}", plan::describe(&plan, opts.dry_run));
     let mut shift = Shift::default();
     if opts.dry_run {
         // The plan's own cost, said but not kept: a record would name a
@@ -214,7 +214,7 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> 
         },
         &mut spent,
     )?;
-    print!("{}", plan::describe(&plan));
+    print!("{}", plan::describe(&plan, false));
     let jobs = crate::budget::default_jobs();
     let mut shift = Shift::default();
     // A landing's red leaves main where it was whatever else would pass,
