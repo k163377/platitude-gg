@@ -2,7 +2,7 @@
 //!
 //! The run's own ceiling is a QML `Timer` (`auto/AutoShotDriver.qml`): it
 //! fires only while the event loop turns, never in the teardown `main`
-//! runs after `QApp::run` returns, and a wedge in either is otherwise
+//! runs after the event loop returns, and a wedge in either is otherwise
 //! reaped as a bare `TIMED OUT` (internal-docs/ハング調査.md). So a thread
 //! of its own sleeps out the same deadline and, if the process is still
 //! standing, writes down where it stood and ends it.
@@ -62,10 +62,11 @@ const TRAIL_FILE: &str = "stations.txt";
 pub(crate) enum Station {
     /// Before the event loop: the runtime, the settings, the engine.
     Starting = 0,
-    /// Inside `QApp::run`. A process still here at the deadline never
+    /// Loading the window's QML, then inside the event loop (`exec` in
+    /// `main`). A process still here at the deadline never
     /// turned its loop far enough to fire the QML watchdog.
     EventLoop = 1,
-    /// `QApp::run` has returned and the teardown has not begun.
+    /// The event loop has returned and the teardown has not begun.
     LeftEventLoop = 2,
     SettingsFlush = 3,
     TabsClosing = 4,

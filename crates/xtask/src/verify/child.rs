@@ -79,8 +79,9 @@ pub(super) struct Ran {
 }
 
 /// Qt's warning when its engine could not load, or (parsed) could not
-/// create, the root file (`qqmlapplicationengine.cpp`, v6.10.3);
-/// `rootObjects()` stays empty, so no window is coming.
+/// create, the root file (`qqmlapplicationengine.cpp`, v6.12.0); no window
+/// is coming, and the app ends itself with exit 1 right after
+/// (`platitude-app` `qml_engine`). The line is still what says why.
 ///
 /// Matched on ASCII only: a Windows Qt writes its log in the local code
 /// page (verify-ui skill).

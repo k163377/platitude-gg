@@ -9,6 +9,7 @@ mod hub;
 mod logsink;
 mod models;
 mod ops;
+mod qml_engine;
 mod qrc;
 mod urlpath;
 mod winframe;
@@ -20,7 +21,8 @@ use models::{
     WorkTreeModel,
 };
 use platitude_core::settings::{Build, Claim, Store};
-use qtbridge::QApp;
+use qtbridge::QmlElement;
+use qtbridge::qtbridge_type_lib::{QGuiApplication, QQmlApplicationEngine, QString};
 
 #[expect(clippy::too_many_lines)]
 fn main() {
@@ -64,11 +66,16 @@ fn main() {
     });
     Hub::install(runtime, store, held_elsewhere);
 
-    let mut app = QApp::new();
+    // Held here rather than in qtbridge's `QApp`, which does not say when the
+    // window's QML fails to load (`qml_engine`).
+    let mut app = QGuiApplication::new();
+    let mut engine = QQmlApplicationEngine::new();
+    qml_engine::arm(engine.pin_mut());
     // The slug, not a display name: QStandardPaths joins it into
     // `~/.cache/<name>/` and xcb makes it the WM_CLASS class, where a space
     // costs a desktop-file match.
-    app.application_name("platitude-gg");
+    app.pin_mut()
+        .set_application_name(&QString::from("platitude-gg"));
     // Every file listed in ui/qmldir must be embedded here.
     qrc::embed!("ui/qmldir");
     qrc::embed!("ui/Theme.qml");
@@ -303,26 +310,40 @@ fn main() {
     qrc::embed!("ui/WipTallyRow.qml");
     qrc::embed!("ui/Main.qml");
     embed_harness_qml();
-    harness::install(&mut app);
+    harness::register_types();
+    for register in [
+        AppBackend::register,
+        GitFacts::register,
+        TabsModel::register,
+        CloneModel::register,
+        RepoConfigModel::register,
+        LineEndingsModel::register,
+        RepoTab::register,
+        GraphModel::register,
+        NavSectionModel::register,
+        WorkTreeModel::register,
+        DetailsModel::register,
+        DiffModel::register,
+        CommandsModel::register,
+        RebasePlanModel::register,
+    ] {
+        register();
+    }
+    engine
+        .pin_mut()
+        .add_import_path(&QString::from("qrc:/qt/qml"));
     harness::station(harness::Station::EventLoop);
-    let code = app
-        .register::<AppBackend>()
-        .register::<GitFacts>()
-        .register::<TabsModel>()
-        .register::<CloneModel>()
-        .register::<RepoConfigModel>()
-        .register::<LineEndingsModel>()
-        .register::<RepoTab>()
-        .register::<GraphModel>()
-        .register::<NavSectionModel>()
-        .register::<WorkTreeModel>()
-        .register::<DetailsModel>()
-        .register::<DiffModel>()
-        .register::<CommandsModel>()
-        .register::<RebasePlanModel>()
-        .add_import_path("qrc:/qt/qml")
-        .load_qml_from_file("qrc:/qt/qml/platitude/ui/Main.qml")
-        .run();
+    if let Err(failed) = qml_engine::load(engine.pin_mut(), "qrc:/qt/qml/platitude/ui/Main.qml") {
+        // Qt's own lines above name the file and the error; this one is the
+        // run's verdict, and the exit code says it to whoever started it.
+        tracing::error!(url = %failed.url, "the window's QML would not load");
+        Hub::shutdown();
+        drop(engine);
+        qtbridge::collect_garbage();
+        drop(app);
+        std::process::exit(1);
+    }
+    let code = app.pin_mut().exec();
 
     harness::station(harness::Station::LeftEventLoop);
     // Read first: shutting the hub down consumes it.
@@ -335,6 +356,10 @@ fn main() {
     // would run against a render thread ended mid-frame and wait for good on
     // a lock it died holding (`harness::deadline`, internal-docs/ハング調査.md).
     harness::station(harness::Station::QtTearingDown);
+    // `QApp`'s order: the engine lets go of every JS wrapper, the collection
+    // frees what nothing holds any more, then the application.
+    drop(engine);
+    qtbridge::collect_garbage();
     drop(app);
     if restart {
         // The lock goes first: `std::process::exit` runs no destructor, so
