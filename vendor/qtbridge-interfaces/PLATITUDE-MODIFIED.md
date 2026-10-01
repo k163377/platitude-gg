@@ -8,7 +8,9 @@ of https://code.qt.io/cgit/qt/qtbridge-rust.git), licensed
 
 **Modified by platitude-gg on 2026-10-01.** The only change is
 `platitude-proxy-shared.diff` (8 files under `src/`, apply with `patch -p1` to the
-published crate); every other file is byte for byte the published one.
+published crate); every other file of the published crate is byte for byte as published.
+Added beside them: `LGPL-3.0-only.txt` (from the upstream repository's `LICENSES/`), this
+file, the diff, and `UPSTREAM-REPORT.md`.
 
 What the change does: the Rust proxy of a QObject (`Q*ProxyRust`) is re-entered by Qt
 through its own pointer while a call into Qt is running, so it is reached through
@@ -21,7 +23,7 @@ callers reach the proxy through `&*proxy` instead of `&mut *proxy`. The user mod
 Why: with `&mut self`, an optimized build dropped the borrow state the proxy stores for
 Qt's re-entrant reads (`try_store_handle_and_call_cpp_mut`), and the first row notified
 from a mutable slot aborted in `rowCount` with `BorrowError`
-(internal-docs/P3-確認事項.md, the qtbridge 0.3 entry).
+(internal-docs/P3-確認事項.md, the qtbridge entry; the report for upstream is `UPSTREAM-REPORT.md`).
 
 Back to the published crate when a qtbridge release takes the proxies by `&self`: remove
 this directory and the `[patch.crates-io]` entry in the workspace `Cargo.toml`.
