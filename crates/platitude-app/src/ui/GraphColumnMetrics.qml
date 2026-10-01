@@ -92,7 +92,7 @@ QtObject {
     readonly property real graphFullW: Metrics.laneInset + Math.max(1, maxLanes) * Metrics.laneW + Theme.spaceSm
     // The floor: the message tick against lane 0's co-author badge, the widest ink on that lane. Mirrors
     // GraphLaneCell's badge geometry — move one, move both. The tick stands `spaceSm` past the column's edge, where the
-    // faces' clipper also reaches, so that much comes off.
+    // ink's clipper also reaches (the dissolve's far end), so that much comes off.
     readonly property real graphColWMin: Math.ceil(Metrics.laneInset + Metrics.laneW / 2
         + Metrics.nodeIcon / 2 - 2 * Theme.borderWidth + (Theme.iconSm + Theme.borderWidth) / 2)
         - Theme.spaceSm

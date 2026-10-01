@@ -127,6 +127,13 @@ Item {
     // The standing question is about this row. Its words are on the bar above the graph; the row answers "which one"
     // and nothing else.
     readonly property bool marked: rowItem.ListView.view ? rowItem.ListView.view.askOid === rowItem.oid_hex : false
+    /// The three grounds below as they add up over the pane's (`Qt.tint` folds a wash over what is under it): what the
+    /// lanes sink into at the column's edge (`GraphLaneCell.ground`). Change a ground there, change it here.
+    readonly property color laneGround: {
+        const picked = rowItem.selected ? Theme.bgSelected : Theme.bgSurface
+        const lit = rowItem.lit && !rowItem.selected ? Qt.tint(picked, Theme.bgHover) : picked
+        return rowItem.marked ? Qt.tint(lit, Theme.bgHover) : lit
+    }
 
     Rectangle {
         anchors.fill: parent
@@ -217,6 +224,7 @@ Item {
             isWip: rowItem.isWip
             stashRef: rowItem.stash_ref
             dimmed: rowItem.dimmed
+            ground: rowItem.laneGround
         }
 
         RowLayout {

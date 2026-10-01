@@ -40,6 +40,7 @@ Item {
             isWip: false
             stashRef: ""
             dimmed: true
+            ground: Theme.bgSurface
         }
     }
 

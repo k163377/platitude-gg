@@ -44,14 +44,16 @@ Item {
 
     // A row's hover band: this answers a press too.
     Rectangle {
+        id: tailHover
         anchors.fill: parent
         color: Theme.bgHover
         visible: tailMouse.containsMouse && tail.canLoadMore
     }
 
+    // Reaching, and sinking at the column's edge, as far as a row's lanes (`GraphLaneCell`).
     Item {
         x: tail.labelWidth
-        width: tail.graphColWidth
+        width: tail.graphColWidth + Theme.spaceSm
         height: parent.height
         clip: true
         InkCanvas {
@@ -92,6 +94,11 @@ Item {
                 target: tail.graphModel
                 function onStatsChanged() { tailCanvas.requestPaint() }
             }
+        }
+        LaneDissolve {
+            x: tail.graphColWidth
+            height: parent.height
+            ground: tailHover.visible ? Qt.tint(Theme.bgSurface, Theme.bgHover) : Theme.bgSurface
         }
     }
     // Kept in the subject column, in the secondary colour: the window is normal, not a state (デザイン規約 §状態).

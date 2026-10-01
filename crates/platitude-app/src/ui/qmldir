@@ -121,6 +121,7 @@ IdentityFields 1.0 IdentityFields.qml
 IdentityGate 1.0 IdentityGate.qml
 ImagePreviewCell 1.0 ImagePreviewCell.qml
 LabeledField 1.0 LabeledField.qml
+LaneDissolve 1.0 LaneDissolve.qml
 LineEndingField 1.0 LineEndingField.qml
 MessageActionsRow 1.0 MessageActionsRow.qml
 MessageEditor 1.0 MessageEditor.qml

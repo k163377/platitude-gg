@@ -22,6 +22,8 @@ Item {
     required property string stashRef
     /// The search passed this row over: its lanes, its marks and its face all go down.
     required property bool dimmed
+    /// What lies under the ink at the column's edge, washes folded in — where it all sinks (`LaneDissolve`).
+    required property color ground
 
     /// Identicon code of the first co-author, or 0 when nobody is credited.
     readonly property int mateFace: laneCell.coAuthors.length === 0 ? 0 : laneCell.coAuthors[0].face
@@ -64,9 +66,10 @@ Item {
     }
     Component.onCompleted: laneCell.loadFace()
 
-    // The faces' clipper, `spaceSm` past the column to where the message tick stands (規約 §グラフ列は最も広い所のレーンまで);
-    // the lanes stop at the column's edge by a clip inside the paint. One canvas, not two — each is an image plus a
-    // texture on every row (rules-refs/app-ui.md「1 行 1 Canvas」).
+    // The ink's clipper, `spaceSm` past the column to where the message tick stands, the whole strip the dissolve covers
+    // (規約 §グラフ列は最も広い所のレーンまで). Lanes and faces reach it alike: the edge is the dissolve's, laid over the
+    // canvas, so nothing inside the paint depends on where the column ends. One canvas, not two — each is an image plus
+    // a texture on every row (rules-refs/app-ui.md「1 行 1 Canvas」).
     Item {
         width: parent.width + Theme.spaceSm
         height: parent.height
@@ -121,11 +124,8 @@ Item {
             onPaint: {
                 const ctx = getContext("2d")
                 ctx.clearRect(0, 0, width, height)
-                // ---- the lanes and their marks, clipped to the column's edge (`xOffset + width` on the canvas) ----
+                // ---- the lanes and their marks ----
                 ctx.save()
-                ctx.beginPath()
-                ctx.rect(0, 0, laneCell.xOffset + laneCell.width, height)
-                ctx.clip()
                 ctx.lineWidth = Metrics.laneStroke
                 // Lanes dim per row (規約 §コミットを探す). Set on every paint: a reused cell's context carries the
                 // last row's alpha.
@@ -153,7 +153,7 @@ Item {
                     ctx.stroke()
                 }
                 ctx.setLineDash([])
-                // The WIP row: a dashed, empty node, inside the lanes' clip.
+                // The WIP row: a dashed, empty node, at the lanes' alpha.
                 const r = Metrics.nodeIcon / 2
                 if (laneCell.isWip) {
                     ctx.strokeStyle = Theme.textSecondary
@@ -163,8 +163,8 @@ Item {
                     ctx.arc(nodeX, midY, r - 1, 0, 2 * Math.PI)
                     ctx.stroke()
                     ctx.setLineDash([])
-                    // Restore before returning: the context outlives the paint, and a kept save hands this clip and
-                    // alpha to the next one, whose clearRect then misses the faces' strip.
+                    // Restore before returning: the context outlives the paint, and a kept save hands this alpha to
+                    // the next row painted here.
                     ctx.restore()
                     return
                 }
@@ -187,7 +187,7 @@ Item {
                     ctx.restore()
                     return
                 }
-                // ---- the faces, leaning as far as the clipper goes ----
+                // ---- the faces ----
                 ctx.restore()
                 // Saved like the lanes' half, so this row's alpha and composite do not carry over.
                 ctx.save()
@@ -223,5 +223,11 @@ Item {
                 ctx.restore()
             }
         }
+    }
+    // Over the clipper's strip past the column, which is where it stands still while the canvas slides.
+    LaneDissolve {
+        x: laneCell.width
+        height: parent.height
+        ground: laneCell.ground
     }
 }

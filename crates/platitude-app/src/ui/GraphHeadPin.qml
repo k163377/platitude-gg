@@ -82,6 +82,10 @@ Rectangle {
     /// The search passed HEAD's row over, as `GraphRowDelegate.dimmed`. Read off the model: the row is off screen
     /// whenever this is up.
     readonly property bool dimmed: pin.view.findOn && !pin.graphModel.headMatched
+    /// The row's box as its grounds add up (`GraphRowDelegate.laneGround`), read off the two as drawn: what its ink
+    /// sinks into at the column's edge. The hold under it is the band's plain ground.
+    readonly property color rowGround: pin.picked ? Theme.bgSelected
+                                       : pin.lit ? Qt.tint(Theme.bgSurface, Theme.bgHover) : Theme.bgSurface
 
     // ---- the three bands --------------------------------------------------------------------------------------------
     //
@@ -184,15 +188,16 @@ Rectangle {
         unstacked: pin.listOnThisChip
     }
     // This commit's lanes and face, drawn by a row's own cell, cut at the node's edge where the going-out takes over.
+    // Cut there only: sideways the cell reaches, and sinks, as far as a row's (`spaceSm` past the column).
     Item {
         x: pin.labelWidth
         y: pin.rowAbove ? pin.rowY : pin.nodeOutY
-        width: pin.graphColWidth
+        width: pin.graphColWidth + Theme.spaceSm
         height: pin.rowAbove ? pin.nodeOutY - pin.rowY : pin.rowY + Theme.graphRowHeight - pin.nodeOutY
         clip: true
         GraphLaneCell {
             y: pin.rowAbove ? 0 : pin.rowY - pin.nodeOutY
-            width: parent.width
+            width: pin.graphColWidth
             height: Theme.graphRowHeight
             xOffset: pin.graphXOffset
             fullWidth: pin.graphFullWidth
@@ -205,14 +210,16 @@ Rectangle {
             isWip: false
             stashRef: ""
             dimmed: pin.dimmed
+            ground: pin.rowGround
         }
     }
     // The lanes leaving on this side, fading from the node to the hold's far edge (`into` reaches the top edge, `out`
-    // the bottom — `SegmentKind`).
+    // the bottom — `SegmentKind`), and sinking at the column's edge as the row's do — where the two fades cross, the
+    // ink is at the product of both.
     Item {
         x: pin.labelWidth
         y: Math.min(pin.nodeOutY, pin.outTo)
-        width: pin.graphColWidth
+        width: pin.graphColWidth + Theme.spaceSm
         height: Math.abs(pin.outTo - pin.nodeOutY)
         clip: true
         InkCanvas {
@@ -250,6 +257,20 @@ Rectangle {
                 const v = Math.round(Math.max(0, Math.min(1, a)) * 255)
                 return "#" + (v < 16 ? "0" : "") + v.toString(16) + hex.substring(1)
             }
+        }
+        // The edge, one strip per ground under it — the row's box, then the hold — each trimmed to the going-out by
+        // this box's clip.
+        LaneDissolve {
+            x: pin.graphColWidth
+            y: pin.rowY - parent.y
+            height: Theme.graphRowHeight
+            ground: pin.rowGround
+        }
+        LaneDissolve {
+            x: pin.graphColWidth
+            y: (pin.rowAbove ? pin.rowY + Theme.graphRowHeight : pin.rowY - pin.hold) - parent.y
+            height: pin.hold
+            ground: Theme.bgSurface
         }
     }
     // A canvas repaints only when it is asked to, and none of these is its own property.
