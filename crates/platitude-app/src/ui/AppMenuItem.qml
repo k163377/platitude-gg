@@ -129,10 +129,15 @@ MenuItem {
     property color holdTone: Theme.danger
     /// Held all the way down.
     signal held()
-    /// Automation: run the hold to its end without a press behind it.
+    /// Automation: run the hold to its end without a press behind it — on a row a hand could hold.
     function completeHold() {
+        if (menuItem.blocked || !menuItem.enabled)
+            return
         holdDrive.begin()
     }
+    // Blocked under a hand: the hold under way blanks rather than running out to fire, as a row blocked from the start
+    // drops the press (`rowPress`).
+    onBlockedChanged: if (menuItem.blocked) holdDrive.blank()
     readonly property bool holding: menuItem.holdProgress > 0
 
     /// A row that runs on a click but leaves the menu standing: `branch -d` refuses while the branch holds commits

@@ -25,7 +25,6 @@ Item {
     /// same answer reads this, so the wording holds under a hand already on the row.
     readonly property alias armedMs: holdDrive.armedMs
     property color holdTone: Theme.danger
-    property bool enabled: true
     /// The width this row's chip asks the card's shared column to hold, so every sentence starts on the same x.
     readonly property real codeColSeat: codeLabel.implicitWidth
     /// The column the card settled on.
@@ -37,8 +36,10 @@ Item {
     signal picked()
 
     /// Automation: run the row to its end — the hold where there is one, the plain press where not
-    /// (`HoldDriver.begin()` does nothing at `holdMs` 0).
+    /// (`HoldDriver.begin()` does nothing at `holdMs` 0). A row turned off answers it as it answers a hand: not at all.
     function completeHold() {
+        if (!opRow.enabled)
+            return
         if (opRow.holdMs <= 0) {
             opRow.picked()
             return
@@ -143,7 +144,6 @@ Item {
         id: rowHover
         anchors.fill: parent
         hoverEnabled: true
-        enabled: opRow.enabled
         onPressed: holdDrive.begin()
         // Released anywhere, or dragged off the row: both call it off. A plain row runs on the release that lands on
         // it.
@@ -159,8 +159,12 @@ Item {
         onCanceled: holdDrive.letUp()
         onPositionChanged: if (!containsMouse) holdDrive.letUp()
     }
-    // Keyboard: focus it, then hold Space or Enter (`HoldDriver.pressKey`).
-    activeFocusOnTab: opRow.enabled
+    // Keyboard: focus it, then hold Space or Enter (`HoldDriver.pressKey`). Turned off — `enabled`, its own or an
+    // ancestor's — the row drops the focus and the pointer's grab, so neither a key nor a release reaches it, and the
+    // tab passes it by.
+    activeFocusOnTab: true
+    // A hold already under way when it turns off blanks rather than running out to fire (as `ActionButton.live`).
+    onEnabledChanged: if (!opRow.enabled) holdDrive.blank()
     Keys.onPressed: event => {
         if (holdDrive.pressKey(event))
             return
