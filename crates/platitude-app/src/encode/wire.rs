@@ -529,6 +529,27 @@ mod tests {
         );
     }
 
+    /// A property can be any type the bridge carries by value that is also
+    /// `PartialEq` (qtbridge's blanket `QPropertyMember`); `Optional` must
+    /// stay out, since an invalid value read as a property ends the
+    /// process. A `PartialEq` added to it stops the test build.
+    #[test]
+    fn of_the_three_only_optional_is_no_property() {
+        struct Is<T>(std::marker::PhantomData<T>);
+        trait NoProperty {
+            const PROPERTY: bool = false;
+        }
+        impl<T> NoProperty for Is<T> {}
+        impl<T: qtbridge::QPropertyMember> Is<T> {
+            const PROPERTY: bool = true;
+        }
+        const {
+            assert!(Is::<Listed<Probe>>::PROPERTY);
+            assert!(Is::<One<Probe>>::PROPERTY);
+            assert!(!Is::<Optional<Probe>>::PROPERTY);
+        }
+    }
+
     /// The slot wires are read and written in place of the Qt value, so
     /// each must be exactly its size and carry the metatype Qt gives it.
     #[test]
