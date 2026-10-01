@@ -221,9 +221,11 @@ fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
         return Vec::new();
     }
     // The manifests carry what the lock does not: a license field and the
-    // features a dependency is taken with.
-    let mut inputs: BTreeSet<String> = ["Cargo.toml", "Cargo.lock", DENY]
+    // features a dependency is taken with; cargo's configuration ([`CARGO`])
+    // can patch a dependency or replace its source.
+    let mut inputs: BTreeSet<String> = CARGO
         .into_iter()
+        .chain([DENY])
         .map(str::to_string)
         .collect();
     inputs.extend(
@@ -334,7 +336,7 @@ fn clippy_steps(sorted: &Sorted) -> Vec<Step> {
             "-D",
             "warnings",
         ]));
-        let inputs = cargo_inputs(&[&crate_dir, "clippy.toml", ".cargo"]);
+        let inputs = cargo_inputs(&[&crate_dir, "clippy.toml"]);
         let id = format!("clippy {package}");
         steps.push(step(&id, Side::Host, false, clippy.clone(), &inputs));
         let mut linux = xtask(&["linux"]);

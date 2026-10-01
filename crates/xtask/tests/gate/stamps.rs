@@ -559,6 +559,49 @@ fn a_file_the_product_opens_is_owed_though_no_scan_could_find_it() {
     }
 }
 
+/// What each build step owes again for a change that no graph of the
+/// sources sees but every build reads.
+const EVERY_BUILD: [&str; 11] = [
+    "test platitude-core (all)",
+    "test platitude-app (all)",
+    "test xtask (all)",
+    "test it (all)",
+    "clippy platitude-core",
+    "clippy platitude-app",
+    "clippy xtask",
+    "shipped",
+    "verify stash --preset basic",
+    "bare",
+    "deny",
+];
+
+/// cargo's configuration is read by every build it configures — its `[env]`
+/// reaches every C and C++ compile a build script runs — so a change to it
+/// asks each build again, and not only the selection.
+#[test]
+fn a_cargo_config_change_asks_every_build_again() {
+    let sb = Sandbox::new("cargo-config-key");
+    let config = ".cargo/config.toml";
+    sb.write(&sb.seat, config, "[env]\nCFLAGS = \"-DFIRST\"\n");
+    sb.commit_all(&sb.seat, "build: a flag", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let first = without_always(&sb.ran());
+    for id in EVERY_BUILD {
+        assert!(first.contains(id), "{id} did not run: {first:?}");
+    }
+
+    sb.write(&sb.seat, config, "[env]\nCFLAGS = \"-DSECOND\"\n");
+    sb.commit_all(&sb.seat, "build: another flag", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let again = without_always(&sb.ran());
+    for id in EVERY_BUILD {
+        assert!(
+            again.contains(id),
+            "{id} kept its stamp over {config}: {again:?}"
+        );
+    }
+}
+
 /// Stamps included: a cached path that filed nothing would leave the
 /// table short by exactly the verbs it never ran. The gate checks its
 /// books against the plan, so such a path is a red run.

@@ -125,8 +125,10 @@ const CI: &str = ".github/workflows/ci.yml";
 const IMAGE: [&str; 2] = [DOCKERFILE, CI];
 /// The dependency policy, which nothing in the source graph reads.
 const DENY: &str = "deny.toml";
-/// What every cargo build reads.
-const CARGO: [&str; 3] = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml"];
+/// What every cargo build reads besides the sources: the manifest, the
+/// lock and the toolchain, and cargo's own configuration (`.cargo/` — its
+/// `[env]` reaches every C and C++ compile a build script runs).
+const CARGO: [&str; 4] = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".cargo"];
 /// What a QML test run reads besides [`qml_dirs`]: the recipe that
 /// stages the module for it.
 const QMLTEST: &str = "crates/xtask/src/qmltest.rs";
