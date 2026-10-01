@@ -7,9 +7,11 @@
 //! nor pick its platform once one is up, so the QML runs offscreen in a
 //! copy of this binary started for it ([`qml_side`]).
 //!
-//! A value QML writes to a `Listed` / `One` property that does not read
-//! takes the process down: the bridge's generated write panics inside an
-//! `extern "C"` call. Each such write runs in a copy of its own.
+//! A write from QML runs in a copy of its own: one the wire does not read,
+//! made to a `Listed` / `One` property with a `Member`, takes the process
+//! down (the bridge's generated write panics inside an `extern "C"` call).
+//! What the product holds to and what the bridge happens to do are two
+//! tests apart.
 
 #![expect(
     clippy::print_stdout,
@@ -96,6 +98,9 @@ fn two() -> Listed<Sample> {
 pub struct WireProbe {
     listed: Listed<Sample>,
     one: One<Sample>,
+    count: i32,
+    word: String,
+    words: Vec<String>,
 }
 
 impl Default for WireProbe {
@@ -103,6 +108,9 @@ impl Default for WireProbe {
         Self {
             listed: two(),
             one: One::new(Sample::new("main", 3, true)),
+            count: 7,
+            word: "main".into(),
+            words: vec!["main".into()],
         }
     }
 }
@@ -111,6 +119,30 @@ impl Default for WireProbe {
 impl WireProbe {
     qproperty!("listed", Member = listed, Notify = changed);
     qproperty!("one", Member = one, Notify = changed);
+    // Qt's own types, which the engine converts to before the write reaches Rust.
+    qproperty!("count", Member = count, Notify = changed);
+    qproperty!("word", Member = word, Notify = changed);
+    qproperty!("words", Member = words, Notify = changed);
+    // `listed` behind a getter alone, with and without a notification.
+    qproperty!("listedRead", Read = listed_read, Notify = changed);
+    qproperty!("listedConstant", Read = listed_read, Constant);
+
+    fn listed_read(&self) -> &Listed<Sample> {
+        &self.listed
+    }
+
+    /// Everything a write could have changed, as one line.
+    #[qslot]
+    fn state(&self) -> String {
+        format!(
+            "count={} word={} words={:?} listed={:?} one={}",
+            self.count,
+            self.word,
+            self.words,
+            self.held_words(),
+            self.one.word
+        )
+    }
 
     #[qsignal]
     fn changed(&mut self);
@@ -320,7 +352,8 @@ QtObject {
 /// How many lines [`CHECKS`] says.
 const CHECKED: usize = 25;
 
-/// One write of `VALUE` to `listed`, said before and after.
+/// One write of `VALUE` to `PROPERTY`, said before and after: what the
+/// write threw, if anything, and what the object holds once it is done.
 const WRITE: &str = r#"
 import QtQml
 import wireprobe
@@ -329,37 +362,90 @@ QtObject {
     property WireProbe probe: WireProbe {}
 
     Component.onCompleted: {
-        probe.check("write-before", true, "")
-        probe.listed = VALUE
-        probe.check("write-after", true, JSON.stringify(probe.heldWords()))
+        probe.check("write-before", true, probe.state())
+        let threw = ""
+        try { probe.PROPERTY = VALUE } catch (e) { threw = String(e) }
+        probe.check("write-threw", threw !== "", threw)
+        probe.check("write-after", true, probe.state())
         Qt.quit()
     }
 }
 "#;
 
-/// Values of `listed` that do not read: an element short of a field, and
-/// no list at all.
-const UNREADABLE: [(&str, &str); 2] = [
-    ("missing-field", r#"[{ word: "short" }]"#),
-    ("wrong-type", r#""not a list""#),
+/// Where a write is checked, which decides what may answer it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Checked {
+    /// Qt's own type: the engine converts to it before the write reaches
+    /// Rust, so a value it cannot convert never does.
+    ByQt,
+    /// `Listed` / `One`: Qt sees a `QVariantList` / `QVariantMap`, and the
+    /// elements and fields are the wire's to read.
+    ByTheWire,
+    /// A property with a getter and no write: nothing on the Rust side to
+    /// take the value.
+    NoWrite,
+    /// `Constant`: read-only to the meta-object itself.
+    Constant,
+}
+
+/// One write the diagnosis makes: name, property, value, where it is checked.
+const WRITES: [(&str, &str, &str, Checked); 11] = [
+    ("count-text", "count", r#""abc""#, Checked::ByQt),
+    ("count-object", "count", "({ a: 1 })", Checked::ByQt),
+    ("word-object", "word", "({ a: 1 })", Checked::ByQt),
+    ("words-object", "words", "({ a: 1 })", Checked::ByQt),
+    ("words-numbers", "words", "[1, 2]", Checked::ByQt),
+    (
+        "listed-missing-field",
+        "listed",
+        r#"[{ word: "short" }]"#,
+        Checked::ByTheWire,
+    ),
+    (
+        "listed-not-a-list",
+        "listed",
+        r#""not a list""#,
+        Checked::ByTheWire,
+    ),
+    (
+        "one-missing-field",
+        "one",
+        r#"({ word: "short" })"#,
+        Checked::ByTheWire,
+    ),
+    (
+        "getter-only-well-formed",
+        "listedRead",
+        "[]",
+        Checked::NoWrite,
+    ),
+    (
+        "getter-only-missing-field",
+        "listedRead",
+        r#"[{ word: "short" }]"#,
+        Checked::NoWrite,
+    ),
+    (
+        "constant-well-formed",
+        "listedConstant",
+        "[]",
+        Checked::Constant,
+    ),
 ];
 
-/// The QML a child runs: [`CHECKS`], or one [`WRITE`] of an [`UNREADABLE`].
+/// The QML a child runs: [`CHECKS`], or one of the [`WRITES`].
 fn child_qml(child: &str) -> String {
-    UNREADABLE
-        .iter()
-        .find(|(name, _)| *name == child)
-        .map_or_else(
-            || CHECKS.to_owned(),
-            |(_, value)| WRITE.replace("VALUE", value),
-        )
+    WRITES.iter().find(|(name, ..)| *name == child).map_or_else(
+        || CHECKS.to_owned(),
+        |(_, property, value, _)| WRITE.replace("PROPERTY", property).replace("VALUE", value),
+    )
 }
 
 /// The child: a Qt application whose QML is [`child_qml`]. Nothing without
 /// the parent's mark, so a run of every ignored test does not start one in
 /// a process the other tests share.
 #[test]
-#[ignore = "started by the_wire_shapes_cross_the_qml_boundary, offscreen, as a process of its own"]
+#[ignore = "started by the tests below, offscreen, as a process of its own"]
 fn qml_side() {
     let Some(child) = std::env::var_os("WIRE_QML_CHILD") else {
         return;
@@ -411,15 +497,13 @@ fn said(stdout: &str) -> BTreeMap<&str, (&str, &str)> {
         .collect()
 }
 
+/// What the product holds to: reads, slot calls and roles across the
+/// boundary, with what QML hands a slot that does not read.
 #[test]
 fn the_wire_shapes_cross_the_qml_boundary() {
-    let checks = start("checks");
-    let writes: Vec<(&str, Child)> = UNREADABLE
-        .iter()
-        .map(|(name, _)| (*name, start(name)))
-        .collect();
-
-    let out = checks.wait_with_output().expect("the checks child ends");
+    let out = start("checks")
+        .wait_with_output()
+        .expect("the checks child ends");
     let text = String::from_utf8_lossy(&out.stdout);
     let checks = said(&text);
     for (name, (ok, detail)) in &checks {
@@ -437,19 +521,98 @@ fn the_wire_shapes_cross_the_qml_boundary() {
         .collect();
     assert!(failed.is_empty(), "failed: {failed:?}\n{text}");
     assert_eq!(checks.len(), CHECKED, "every check said its line:\n{text}");
+}
 
-    for (name, child) in writes {
-        let out = child.wait_with_output().expect("the write child ends");
-        let text = String::from_utf8_lossy(&out.stdout);
-        let errors = String::from_utf8_lossy(&out.stderr);
-        let lines = said(&text);
-        println!("write {name}: {} {lines:?}", out.status);
+/// How one write came out.
+#[derive(Debug, PartialEq)]
+enum Outcome {
+    /// The process went down; the panic's message.
+    Aborted(String),
+    /// QML threw (what it threw) and the object holds what it held.
+    Refused(String),
+    /// Nothing thrown and nothing changed.
+    Ignored,
+    /// The write went in: what the object holds after it.
+    Taken(String),
+}
+
+fn outcome(out: &std::process::Output) -> Outcome {
+    let text = String::from_utf8_lossy(&out.stdout);
+    let lines = said(&text);
+    let detail = |name: &str| lines.get(name).map(|(_, detail)| *detail);
+    let before = detail("write-before").unwrap_or_default();
+    match (detail("write-threw"), detail("write-after")) {
+        (Some(threw), Some(after)) if after == before && !threw.is_empty() => {
+            Outcome::Refused(threw.to_string())
+        }
+        (Some(_), Some(after)) if after == before => Outcome::Ignored,
+        (Some(_), Some(after)) => Outcome::Taken(after.to_string()),
+        _ => {
+            let errors = String::from_utf8_lossy(&out.stderr);
+            let panic = errors
+                .lines()
+                .skip_while(|line| !line.contains("panicked at"))
+                .nth(1)
+                .unwrap_or("")
+                .to_string();
+            Outcome::Aborted(panic)
+        }
+    }
+}
+
+/// Runs every write of [`WRITES`] checked as `which`, each in a child of its
+/// own (a write may take the process down), and answers how each came out.
+fn writes(which: impl Fn(Checked) -> bool) -> Vec<(&'static str, Checked, Outcome)> {
+    let children: Vec<_> = WRITES
+        .iter()
+        .filter(|(.., checked)| which(*checked))
+        .map(|(name, _, _, checked)| (*name, *checked, start(name)))
+        .collect();
+    children
+        .into_iter()
+        .map(|(name, checked, child)| {
+            let out = child.wait_with_output().expect("the write child ends");
+            let came = outcome(&out);
+            println!("{name} ({checked:?}): {came:?}");
+            (name, checked, came)
+        })
+        .collect()
+}
+
+/// What the product holds to: a property the product exposes through a
+/// getter alone (`Read`, no `Member`) cannot be changed from QML, nor taken
+/// down by a value that does not read.
+#[test]
+fn a_property_exposed_through_its_getter_alone_cannot_be_written() {
+    for (name, _, came) in writes(|checked| checked == Checked::NoWrite) {
         assert!(
-            !out.status.success()
-                && lines.contains_key("write-before")
-                && !lines.contains_key("write-after")
-                && errors.contains("Failed to convert QVariant for qproperty 'listed'"),
-            "an unreadable {name} written to a property took the process down:\n{text}\n{errors}"
+            matches!(came, Outcome::Ignored | Outcome::Refused(_)),
+            "{name}: {came:?}"
         );
+    }
+}
+
+/// Not the product's contract: what the bridge does with each kind of
+/// write QML can make to a writable property. Fails only on an answer
+/// outside what is known for its kind — a bridge that starts refusing what
+/// it used to take down is not a failure.
+#[test]
+fn what_the_bridge_does_with_a_write_from_qml() {
+    for (name, checked, came) in writes(|checked| checked != Checked::NoWrite) {
+        let known = match (checked, &came) {
+            // Qt converts or refuses; it never hands Rust a value of
+            // another type.
+            (Checked::ByQt, Outcome::Aborted(_)) => false,
+            (Checked::ByQt, _) => true,
+            // The generated write panics in `extern "C"` on a value the
+            // wire does not read (qtbridge-gen `qproperty_info.rs`).
+            (Checked::ByTheWire, Outcome::Aborted(panic)) => {
+                panic.starts_with("Failed to convert QVariant for qproperty")
+            }
+            (Checked::ByTheWire, Outcome::Refused(_) | Outcome::Ignored) => true,
+            (Checked::Constant, Outcome::Refused(_)) => true,
+            _ => false,
+        };
+        assert!(known, "{name} ({checked:?}): {came:?}");
     }
 }

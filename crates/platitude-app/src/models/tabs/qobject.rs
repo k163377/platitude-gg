@@ -32,11 +32,11 @@ impl TabsModel {
 
     // Its own signal: a name settling or a carry changes it without moving
     // the front.
-    qproperty!(
-        "openRepos",
-        Member = open_repos,
-        Notify = open_repos_changed
-    );
+    // Through a getter: a value QML wrote would not reach Rust (encode::wire_qml).
+    qproperty!("openRepos", Read = open_repos, Notify = open_repos_changed);
+    fn open_repos(&self) -> &OpenRepos {
+        &self.open_repos
+    }
 
     // True while an asked-for folder waits on git (`TabsModel::asking`).
     // Tabs arrive over later frames, so whatever reads the whole strip (a

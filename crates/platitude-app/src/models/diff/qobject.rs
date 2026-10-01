@@ -9,7 +9,11 @@ use super::*;
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl DiffModel {
     qproperty!("widestNo", Member = widest_no, Notify = changed);
-    qproperty!("widestLines", Member = widest_lines, Notify = changed);
+    // Through a getter: a value QML wrote would not reach Rust (encode::wire_qml).
+    qproperty!("widestLines", Read = widest_lines, Notify = changed);
+    fn widest_lines(&self) -> &Candidates {
+        &self.widest_lines
+    }
     qproperty!("rowsGen", Member = rows_gen, Notify = changed);
     qproperty!("commitBands", Member = commit_bands, Notify = changed);
     qproperty!("split", Member = split, Notify = changed);

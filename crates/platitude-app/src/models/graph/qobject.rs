@@ -53,23 +53,26 @@ impl GraphModel {
         Member = first_matched,
         Notify = stats_changed
     );
-    qproperty!(
-        "tailGeometry",
-        Member = tail_geometry,
-        Notify = stats_changed
-    );
+    // The three wire values through getters: a value QML wrote would not
+    // reach Rust (encode::wire_qml).
+    qproperty!("tailGeometry", Read = tail_geometry, Notify = stats_changed);
+    fn tail_geometry(&self) -> &crate::encode::Lanes {
+        &self.tail_geometry
+    }
     qproperty!("tailMatched", Member = tail_matched, Notify = stats_changed);
     // What the stand-in draws — properties for the reason `head.rs` gives.
     qproperty!("headRow", Member = head_row, Notify = stats_changed);
-    qproperty!("headLabels", Member = head_labels, Notify = stats_changed);
+    qproperty!("headLabels", Read = head_labels, Notify = stats_changed);
+    fn head_labels(&self) -> &crate::encode::Chips {
+        &self.head_labels
+    }
     qproperty!("headSubject", Member = head_subject, Notify = stats_changed);
     qproperty!("headColor", Member = head_color, Notify = stats_changed);
     qproperty!("headLane", Member = head_lane, Notify = stats_changed);
-    qproperty!(
-        "headGeometry",
-        Member = head_geometry,
-        Notify = stats_changed
-    );
+    qproperty!("headGeometry", Read = head_geometry, Notify = stats_changed);
+    fn head_geometry(&self) -> &crate::encode::Lanes {
+        &self.head_geometry
+    }
     qproperty!("headAvatar", Member = head_avatar, Notify = stats_changed);
     qproperty!("headMatched", Member = head_matched, Notify = stats_changed);
     qproperty!(
