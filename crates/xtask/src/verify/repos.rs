@@ -311,8 +311,10 @@ pub(super) fn folder_for(
         // machine's path, so the census can record it. Its name holds what
         // a URL spells differently from a path — a space, a non-ASCII
         // letter, `#`, a `%` before hex digits and, where a name may hold
-        // one, a backslash — and the verbs wait on the picture loading.
-        "avatar-settings" | "avatar-combo" | "avatar-row-lit" | "avatar-remove" => {
+        // one, a backslash — and the card's verbs wait on the picture
+        // loading; `avatar-assign` says whether it was filed.
+        "avatar-assign" | "avatar-settings" | "avatar-combo" | "avatar-row-lit"
+        | "avatar-remove" => {
             std::fs::create_dir_all(&made).map_err(|e| e.to_string())?;
             let name = match cfg!(windows) {
                 true => "face 顔 #1 %41.png",
