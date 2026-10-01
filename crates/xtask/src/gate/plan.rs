@@ -125,10 +125,20 @@ const CI: &str = ".github/workflows/ci.yml";
 const IMAGE: [&str; 2] = [DOCKERFILE, CI];
 /// The dependency policy, which nothing in the source graph reads.
 const DENY: &str = "deny.toml";
+/// The crates the workspace `Cargo.toml` patches in (`[patch.crates-io]`):
+/// built into whatever depends on them, read by no graph of the sources.
+const VENDOR: &str = "vendor";
 /// What every cargo build reads besides the sources: the manifest, the
-/// lock and the toolchain, and cargo's own configuration (`.cargo/` — its
-/// `[env]` reaches every C and C++ compile a build script runs).
-const CARGO: [&str; 4] = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".cargo"];
+/// lock and the toolchain, cargo's own configuration (`.cargo/` — its
+/// `[env]` reaches every C and C++ compile a build script runs), and the
+/// patched-in crates.
+const CARGO: [&str; 5] = [
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    ".cargo",
+    VENDOR,
+];
 /// What a QML test run reads besides [`qml_dirs`]: the recipe that
 /// stages the module for it.
 const QMLTEST: &str = "crates/xtask/src/qmltest.rs";
@@ -397,6 +407,7 @@ fn moves_everything(file: &str) -> bool {
         file,
         "Cargo.toml" | "Cargo.lock" | "rust-toolchain.toml" | "clippy.toml" | DOCKERFILE
     ) || file.starts_with(".cargo/")
+        || under(file, VENDOR)
         || (file.starts_with("crates/")
             && (file.ends_with("/Cargo.toml") || file.ends_with("/build.rs")))
         // What the app's build script links in: no source names it.

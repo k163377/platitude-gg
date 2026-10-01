@@ -221,8 +221,9 @@ fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
         return Vec::new();
     }
     // The manifests carry what the lock does not: a license field and the
-    // features a dependency is taken with; cargo's configuration ([`CARGO`])
-    // can patch a dependency or replace its source.
+    // features a dependency is taken with — a patched-in crate's among
+    // them; cargo's configuration ([`CARGO`]) can patch a dependency or
+    // replace its source.
     let mut inputs: BTreeSet<String> = CARGO
         .into_iter()
         .chain([DENY])
