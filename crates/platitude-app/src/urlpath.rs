@@ -27,9 +27,12 @@ pub fn file_url(path: &Path) -> String {
     path_to_file_url(path)
 }
 
-/// The last segment of a path, whichever separator wrote it.
+/// The last segment of a path, cut where the platform ends a folder.
+///
+/// A backslash ends one only on Windows: elsewhere it is a letter of the
+/// name, as `shown_path` reads it.
 pub fn path_leaf(path: &str) -> &str {
-    path.rsplit(['/', '\\']).next().unwrap_or(path)
+    path.rsplit(std::path::is_separator).next().unwrap_or(path)
 }
 
 /// A path spelled with `/`, the way the screen spells one
@@ -93,10 +96,23 @@ mod tests {
     }
 
     #[test]
-    fn the_leaf_is_the_last_segment_whichever_separator_wrote_it() {
-        assert_eq!(path_leaf("C:\\Users\\dev\\repo"), "repo");
+    fn the_leaf_is_the_last_segment() {
+        assert_eq!(path_leaf("C:/Users/dev/repo"), "repo");
         assert_eq!(path_leaf("/home/dev/repo"), "repo");
         assert_eq!(path_leaf("repo"), "repo");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_windows_leaf_is_cut_at_either_separator() {
+        assert_eq!(path_leaf(r"C:\Users\dev\repo"), "repo");
+        assert_eq!(path_leaf(r"C:\Users/dev\repo"), "repo");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_backslash_stays_in_the_leaf_where_it_is_part_of_a_name() {
+        assert_eq!(path_leaf(r"/srv/we\ird"), r"we\ird");
     }
 
     /// What a dialog answers reads back to the path it was opened on —

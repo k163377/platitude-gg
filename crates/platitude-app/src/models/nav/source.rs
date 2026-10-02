@@ -393,8 +393,8 @@ impl<'a> Entry<'a> {
     }
 }
 
-/// The last segment of a worktree path, which git prints the platform's
-/// way, so either separator splits (`urlpath::path_leaf`).
+/// The last segment of a worktree path, cut where the platform ends a
+/// folder (`urlpath::path_leaf`).
 fn leaf_of(path: &str) -> &str {
     crate::urlpath::path_leaf(path)
 }

@@ -374,7 +374,7 @@ impl GitFacts {
         platitude_core::trailers::split_identity(&text).0
     }
 
-    /// The last segment of a path, whichever separator wrote it.
+    /// The last segment of a path, cut where the platform ends a folder.
     #[qslot]
     fn path_leaf(&self, path: String) -> String {
         crate::urlpath::path_leaf(&path).to_string()

@@ -381,11 +381,12 @@ mod tests {
     fn only_a_linked_copy_is_named_after_the_repository() {
         assert_eq!(tab("C:/one", "C:/one").copy_name, "");
         assert_eq!(tab("C:/two", "C:/elsewhere/wt").copy_name, "wt");
-        assert_eq!(
-            tab("C:/two", r"C:\elsewhere\wt").copy_name,
-            "wt",
-            "either separator ends a folder on the way in"
-        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_windows_copy_is_named_whichever_separator_wrote_it() {
+        assert_eq!(tab("C:/two", r"C:\elsewhere\wt").copy_name, "wt");
     }
 
     #[test]
