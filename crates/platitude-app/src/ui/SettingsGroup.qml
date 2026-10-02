@@ -25,7 +25,7 @@ ColumnLayout {
             text: group.caption
             color: Theme.textPrimary
             pixelSize: Theme.fontMd
-            weight: Font.DemiBold
+            weight: Theme.fontWeightStrong
         }
         Rectangle {
             Layout.fillWidth: true

@@ -97,7 +97,7 @@ Rectangle {
             text: header.caption
             color: header.empty ? Theme.textMuted : Theme.textSecondary
             font.pixelSize: Theme.fontMd
-            font.weight: Font.DemiBold
+            font.weight: Theme.fontWeightStrong
         }
         // At the caption's own step, in its own label: what says it is a count is the weight and the colour
         // (デザイン規約 §タイポグラフィ).

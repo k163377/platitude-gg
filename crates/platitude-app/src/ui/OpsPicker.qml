@@ -77,7 +77,7 @@ HoverToolButton {
     /// takes the ☰'s cell); `markGap` then comes out zero because the seat already holds more air than a step.
     property int markSeat: picker.markSize
     property int pixelSize: Theme.fontMd
-    property int weight: Font.DemiBold
+    property int weight: Theme.fontWeightStrong
     /// Both lines' height **whatever is written now**, read off the faces — the panel's buttons are drawn this deep
     /// even for a one-line branch or a page still loading.
     readonly property real pairHeight: nameMetrics.height + noteMetrics.height

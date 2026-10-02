@@ -366,7 +366,7 @@ Item {
                 text: measured.title
                 // The tab's tracking, or the strip and the tab read one name at two widths.
                 font.letterSpacing: tabMetrics.titleTracking(measured.title.length)
-                font.weight: tabStrip.tabsModel.currentIndex === measured.index ? Font.DemiBold : Font.Normal
+                font.weight: tabStrip.tabsModel.currentIndex === measured.index ? Theme.fontWeightStrong : Font.Normal
             }
             TabTreeMark {
                 id: treeMeasure

@@ -41,7 +41,7 @@ Item {
             // 規約 §タイポグラフィ「画面を占める状態メッセージの見出し」 — not the app name's step.
             text: qsTr("No commits yet")
             font.pixelSize: Theme.fontLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fontWeightStrong
             anchors.horizontalCenter: parent.horizontalCenter
         }
         NoticeLine {
@@ -63,7 +63,7 @@ Item {
         Label {
             text: Words.appName
             font.pixelSize: Theme.fontXl
-            font.weight: Font.DemiBold
+            font.weight: Theme.fontWeightStrong
             anchors.horizontalCenter: parent.horizontalCenter
         }
         NoticeLine {

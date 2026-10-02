@@ -95,7 +95,7 @@ Rectangle {
             // The part of the name its folders do not say (`models::nav::view` の `head_shown`); whole under a filter.
             text: headPin.branchesModel.headShownName
             color: Theme.textLink
-            weight: Font.DemiBold
+            weight: Theme.fontWeightStrong
             pixelSize: Theme.fontMd
             // Swapped for the whole name while open, as the rows do (`NameCell.whole`); a wrap hangs below.
             inked: !headPin.factsOpen
@@ -109,7 +109,7 @@ Rectangle {
                 sourceComponent: CardText {
                     text: headPin.factsName
                     pixelSize: Theme.fontMd
-                    weight: Font.DemiBold
+                    weight: Theme.fontWeightStrong
                     color: Theme.textLink
                 }
             }

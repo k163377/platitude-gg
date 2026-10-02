@@ -70,7 +70,7 @@ AppDialog {
         Label {
             text: remoteDialog.editing === "" ? qsTr("Add remote") : qsTr("Where %1 is").arg(remoteDialog.editing)
             font.pixelSize: Theme.fontXl
-            font.weight: Font.DemiBold
+            font.weight: Theme.fontWeightStrong
         }
         Label {
             Layout.fillWidth: true

@@ -895,7 +895,7 @@ Rectangle {
             text: qsTr("Search")
             // A step heavier than the chips beside it, so the four read as one weight: a UI face at this size puts
             // less ink down than the mono one a command is set in.
-            wordWeight: Font.DemiBold
+            wordWeight: Theme.fontWeightStrong
             // Measured for the three's longest wording and laid out at its width, so the ink lands at the same two
             // ends theirs does (`ActionButton.slack`).
             widestText: topBar.widestAction

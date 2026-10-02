@@ -372,7 +372,7 @@ Item {
                     Layout.maximumWidth: authorLabel.implicitWidth
                     color: Theme.textPrimary
                     pixelSize: Theme.fontMd
-                    weight: Font.DemiBold
+                    weight: Theme.fontWeightStrong
                     // The "hover opens more" underline, as on the credit line (規約 §co-author の表示).
                     BandRule {
                         visible: authorLabel.text !== ""

@@ -136,7 +136,7 @@ Rectangle {
         width: tabPin.titleW
         text: tabPin.frontTab ? tabPin.frontTab.title : ""
         letterSpacing: tabPin.metrics.titleTracking(pinTitle.text.length)
-        weight: Font.DemiBold
+        weight: Theme.fontWeightStrong
         color: Theme.textPrimary
     }
     TabTreeMark {

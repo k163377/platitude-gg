@@ -46,7 +46,7 @@ Item {
         id: stateFont
         font.family: Theme.uiFamily
         font.pixelSize: Theme.fontSm
-        font.weight: Font.DemiBold
+        font.weight: Theme.fontWeightStrong
         // On the font's change too: the initial evaluation still sees the default font.
         onFontChanged: metrics.settleMinW()
         Component.onCompleted: metrics.settleMinW()
@@ -55,7 +55,7 @@ Item {
     component BadgeWord: Label {
         visible: false
         font.pixelSize: Theme.fontSm
-        font.weight: Font.DemiBold
+        font.weight: Theme.fontWeightStrong
     }
     BadgeWord {
         id: mOpText

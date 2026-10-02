@@ -26,7 +26,7 @@ Rectangle {
         Label {
             text: changesBand.caption
             font.pixelSize: Theme.fontMd
-            font.weight: Font.DemiBold
+            font.weight: Theme.fontWeightStrong
             color: Theme.textSecondary
         }
         // The caption's size; weight and colour mark it as a count (規約 §タイポグラフィ).

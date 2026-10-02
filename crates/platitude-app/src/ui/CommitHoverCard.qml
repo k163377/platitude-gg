@@ -82,7 +82,7 @@ AppCard {
             text: hoverCard.subject
             color: Theme.textPrimary
             pixelSize: Theme.fontMd
-            weight: Font.DemiBold
+            weight: Theme.fontWeightStrong
             capHeight: hoverCard.subjectHeight
         }
         CardText {

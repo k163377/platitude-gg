@@ -46,7 +46,7 @@ AppDialog {
             CardText {
                 Layout.fillWidth: true
                 pixelSize: Theme.fontXl
-                weight: Font.DemiBold
+                weight: Theme.fontWeightStrong
                 text: qsTr("Closing when git finishes")
             }
         }

@@ -348,7 +348,7 @@ MenuItem {
                           ? menuItem.arrow.width + Theme.spaceXs : 0
             // A heading takes the sidebar section band's weight and ink (デザイン規約 §メニュー の入れ子); a folder the
             // ink alone.
-            font.weight: menuItem.titled ? Font.DemiBold : menuItem.font.weight
+            font.weight: menuItem.titled ? Theme.fontWeightStrong : menuItem.font.weight
             color: menuItem.titled || (menuItem.folderRow && menuItem.enabled && !menuItem.blocked)
                    ? Theme.textSecondary : menuItem.wordColor
         }

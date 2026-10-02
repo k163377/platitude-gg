@@ -38,7 +38,7 @@ Rectangle {
         Label {
             text: qsTr("STASH")
             font.pixelSize: Theme.fontMd
-            font.weight: Font.DemiBold
+            font.weight: Theme.fontWeightStrong
             color: Theme.textSecondary
             // Unlike `PaneHeader`'s, this caption shares its row with the buttons and would paint over them when
             // squeezed.

@@ -42,7 +42,7 @@ Item {
         CardText {
             text: Words.openFailure(screen.kind)
             pixelSize: Theme.fontLg
-            weight: Font.DemiBold
+            weight: Theme.fontWeightStrong
             horizontalAlignment: Text.AlignHCenter
             width: parent.width
         }

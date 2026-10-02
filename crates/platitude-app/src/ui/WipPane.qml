@@ -614,7 +614,7 @@ ColumnLayout {
             Label {
                 text: qsTr("UNCOMMITTED CHANGES")
                 font.pixelSize: Theme.fontMd
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 color: Theme.textSecondary
             }
             // The count stands at the caption's own step, as in every heading band (see DetailsChangesBand's).

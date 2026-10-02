@@ -100,7 +100,7 @@ AppDialog {
             // No article: it names a kind (§長さ).
             text: qsTr("Clone repository")
             font.pixelSize: Theme.fontXl
-            font.weight: Font.DemiBold
+            font.weight: Theme.fontWeightStrong
         }
 
         LabeledField {

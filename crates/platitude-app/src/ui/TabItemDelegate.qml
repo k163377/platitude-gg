@@ -188,7 +188,7 @@ Rectangle {
         // The other half of the easing: a short name's letters set a little apart. Off the letter count, since the
         // air is computed from the width (`TabMetrics.titleTracking`).
         letterSpacing: tabItem.metrics.titleTracking(tabItem.title.length)
-        weight: tabItem.current ? Font.DemiBold : Font.Normal
+        weight: tabItem.current ? Theme.fontWeightStrong : Font.Normal
         color: Theme.textPrimary
     }
     // The linked copy this tab stands in, after its name, on every such tab in front or not (デザイン規約 §タブの所作).

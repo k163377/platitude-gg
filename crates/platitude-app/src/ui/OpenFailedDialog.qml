@@ -47,7 +47,7 @@ AppDialog {
         CardText {
             Layout.fillWidth: true
             pixelSize: Theme.fontXl
-            weight: Font.DemiBold
+            weight: Theme.fontWeightStrong
             // One line (§長さ): "not a repository" already says what git says about parent folders. Shared with the
             // tab's failure screen (`Words.openFailure`).
             text: Words.openFailure(openFailedDialog.kind)

@@ -78,7 +78,7 @@ Rectangle {
             Label {
                 text: opExitCard.workTree.opText
                 font.pixelSize: Theme.fontMd
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 color: Theme.warning
             }
             // Bisect, when it is running alongside. The mark between the two names is drawn (規約 §余白).
@@ -91,7 +91,7 @@ Rectangle {
                 visible: opExitCard.workTree.opAlso !== ""
                 text: opExitCard.workTree.opAlso
                 font.pixelSize: Theme.fontMd
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 color: Theme.warning
             }
             // How far it got. The dash stays a character, not a drawn mark: it is part of a sentence, and renders
@@ -102,7 +102,7 @@ Rectangle {
                       .arg(opExitCard.workTree.opStep)
                       .arg(opExitCard.workTree.opSteps)
                 font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 color: Theme.warning
             }
             // Takes the slack, or the layout centres what it cannot fill.

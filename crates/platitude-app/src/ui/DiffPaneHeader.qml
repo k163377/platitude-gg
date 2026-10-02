@@ -65,7 +65,7 @@ Rectangle {
             Label {
                 text: qsTr("DIFF")
                 font.pixelSize: Theme.fontMd
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 color: Theme.textSecondary
             }
             // The path, in a field the reader can copy from (規約 §右のペインの字は掴める), cut in the middle: both
@@ -77,7 +77,7 @@ Rectangle {
                 Layout.maximumWidth: titleField.implicitWidth
                 text: header.title
                 pixelSize: Theme.fontMd
-                weight: Font.DemiBold
+                weight: Theme.fontWeightStrong
                 color: Theme.textSecondary
                 cutAt: "middle"
                 ground: Theme.bgElevated
@@ -115,7 +115,7 @@ Rectangle {
                     Layout.preferredHeight: Theme.rowHeight
                     text: header.copyName
                     pixelSize: Theme.fontMd
-                    weight: Font.DemiBold
+                    weight: Theme.fontWeightStrong
                     // The band's colour, not a step quieter: the name is part of the phrase, not an aside.
                     color: Theme.textSecondary
                 }

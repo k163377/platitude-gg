@@ -71,7 +71,7 @@ ColumnLayout {
             Label {
                 text: qsTr("WORKING COPY")
                 font.pixelSize: Theme.fontMd
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 color: Theme.textSecondary
             }
             // A dash, not `on` (規約 §別の作業コピーを読む), and as a character (規約 §寸法「字で出ていた記号は 5 種」).
@@ -109,7 +109,7 @@ ColumnLayout {
                         anchors.fill: parent
                         text: carriedPane.copyName
                         pixelSize: Theme.fontMd
-                        weight: Font.DemiBold
+                        weight: Theme.fontWeightStrong
                         // The caption's colour: the band is one phrase (規約 §別の作業コピーを読む).
                         color: Theme.textSecondary
                     }

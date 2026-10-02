@@ -11,7 +11,7 @@ TextArea {
     readonly property bool caretHeld: summary.activeFocus || menuSeat.holding
     wrapMode: TextArea.Wrap
     font.pixelSize: Theme.fontLg
-    font.weight: Font.DemiBold
+    font.weight: Theme.fontWeightStrong
     color: Theme.textPrimary
     background: null
     padding: 0

@@ -129,7 +129,7 @@ AppCard {
                         text: stateCard.opText
                         color: Theme.warning
                         font.pixelSize: Theme.fontSm
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fontWeightStrong
                     }
                     // Bisect runs alongside and shares the badge. The dot is drawn — a typed one would put a
                     // full-width cell inside the badge (規約 §余白).
@@ -143,14 +143,14 @@ AppCard {
                         text: stateCard.opAlso
                         color: Theme.warning
                         font.pixelSize: Theme.fontSm
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fontWeightStrong
                     }
                     Label {
                         visible: stateCard.opSteps > 0
                         text: qsTr("%1/%2").arg(stateCard.opStep).arg(stateCard.opSteps)
                         color: Theme.warning
                         font.pixelSize: Theme.fontSm
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fontWeightStrong
                     }
                 }
             }
@@ -179,7 +179,7 @@ AppCard {
                     text: Words.badgeConflicts
                     color: Theme.textOnAccent
                     font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fontWeightStrong
                 }
             }
             CardText {
@@ -218,7 +218,7 @@ AppCard {
                     text: Words.badgeSetIdentity
                     color: Theme.warning
                     font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fontWeightStrong
                 }
                 MouseArea {
                     id: identityMouse
@@ -259,7 +259,7 @@ AppCard {
                     text: Words.badgeStaleGraph
                     color: Theme.danger
                     font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fontWeightStrong
                 }
             }
             CardText {
@@ -293,7 +293,7 @@ AppCard {
                     text: Words.badgeNoLfs
                     color: Theme.warning
                     font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fontWeightStrong
                 }
             }
             CardText {
@@ -327,7 +327,7 @@ AppCard {
                     text: Words.badgeOldGit
                     color: Theme.warning
                     font.pixelSize: Theme.fontSm
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fontWeightStrong
                 }
             }
             CardText {

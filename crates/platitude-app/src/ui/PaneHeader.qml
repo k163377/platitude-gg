@@ -17,7 +17,7 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         x: Theme.spaceXs
         font.pixelSize: Theme.fontMd
-        font.weight: Font.DemiBold
+        font.weight: Theme.fontWeightStrong
         color: Theme.textSecondary
     }
     Label {

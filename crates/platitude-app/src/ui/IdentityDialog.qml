@@ -54,7 +54,7 @@ AppDialog {
         Label {
             text: qsTr("Set up your identity")
             font.pixelSize: Theme.fontXl
-            font.weight: Font.DemiBold
+            font.weight: Theme.fontWeightStrong
         }
         Label {
             Layout.fillWidth: true

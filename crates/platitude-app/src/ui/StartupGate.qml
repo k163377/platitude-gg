@@ -38,7 +38,7 @@ Item {
         CardText {
             text: Words.appName
             pixelSize: Theme.fontXl
-            weight: Font.DemiBold
+            weight: Theme.fontWeightStrong
             horizontalAlignment: Text.AlignHCenter
             width: parent.width
         }

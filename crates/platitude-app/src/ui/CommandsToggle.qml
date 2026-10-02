@@ -75,7 +75,7 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         text: Words.commandsTitle
         font.pixelSize: Theme.fontMd
-        font.weight: Font.DemiBold
+        font.weight: Theme.fontWeightStrong
         color: toggle.wrong ? Theme.danger : Theme.textSecondary
     }
     MouseArea {

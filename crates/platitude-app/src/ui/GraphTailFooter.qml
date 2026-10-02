@@ -122,7 +122,7 @@ Item {
                 .arg(tail.graphModel.walkedTotal)
         color: Theme.textSecondary
         font.pixelSize: Theme.fontMd
-        font.weight: Font.DemiBold
+        font.weight: Theme.fontWeightStrong
     }
     // The underline that says the line can be pressed: `borderStrong` at rest, the words' colour under the pointer
     // (規約 §author の hover). Drawn, since the label's box is the whole subject column.

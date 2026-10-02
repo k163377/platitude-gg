@@ -82,6 +82,10 @@ QtObject {
     // The one loosening in the app (デザイン規約 §タイポグラフィ). Sub-pixel on purpose: past about this the letters read
     // as a different face rather than the same word set wider.
     readonly property real tracking: 0.5
+    // The one weight past Normal (デザイン規約 §タイポグラフィ). Bold on Ubuntu: Noto Sans CJK JP's Medium comes only
+    // with fonts-noto-cjk-extra, so DemiBold draws Medium on one machine and Bold on the next — and Yu Gothic UI's
+    // Semibold carries its Bold's outlines, so Bold is the weight Windows shows.
+    readonly property int fontWeightStrong: Qt.platform.os === "linux" ? Font.Bold : Font.DemiBold
     // Families each OS ships that also carry Japanese (デザイン規約 §タイポグラフィ).
     readonly property var fontFamilyUi: ["Yu Gothic UI", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans JP",
                                          "Noto Sans", "DejaVu Sans"]

@@ -201,7 +201,7 @@ Rectangle {
                     visible: bar.code !== ""
                     word: bar.code
                     tint: bar.tone
-                    weight: Font.DemiBold
+                    weight: Theme.fontWeightStrong
                 }
                 // A field (the pad above), wrapped, never cut: the bar grows by the line (デザイン規約
                 // §立っている質問は 1 か所で聞く).
@@ -211,7 +211,7 @@ Rectangle {
                     markup: bar.labelWords
                     color: bar.plainWords ? Theme.textPrimary : bar.tone
                     pixelSize: Theme.fontMd
-                    weight: Font.DemiBold
+                    weight: Theme.fontWeightStrong
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignTop
                     // The other half, **only where a chip stands**: an invisible chip still has a height, and read

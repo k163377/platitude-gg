@@ -47,7 +47,7 @@ Rectangle {
                   ? qsTr("UNSTAGED FILES")
                   : Words.badgeConflicts
             font.pixelSize: Theme.fontMd
-            font.weight: Font.DemiBold
+            font.weight: Theme.fontWeightStrong
             color: bucketHeader.section === "conflicts" ? Theme.danger : Theme.textSecondary
         }
         // The count in its own label at the caption's step (デザイン規約 §タイポグラフィ). The conflicted bucket has

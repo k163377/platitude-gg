@@ -256,7 +256,7 @@ Rectangle {
             text: chip.recName
             color: chip.nameColor
             font.pixelSize: Theme.fontChip
-            font.weight: chip.recHead ? Font.DemiBold : Font.Normal
+            font.weight: chip.recHead ? Theme.fontWeightStrong : Font.Normal
             elide: chip.wrapped ? Text.ElideNone : Text.ElideRight
             // `Text.Wrap`: a ref name has no spaces, and this breaks anywhere when there is no word boundary.
             wrapMode: chip.wrapped ? Text.Wrap : Text.NoWrap

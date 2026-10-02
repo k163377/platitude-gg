@@ -115,13 +115,13 @@ Rectangle {
                                                  : ""
                 color: Theme.textPrimary
                 pixelSize: Theme.fontMd
-                weight: Font.DemiBold
+                weight: Theme.fontWeightStrong
                 /// A space in the heading's own font and weight, so a family with a wider space opens a wider gap.
                 TextMetrics {
                     id: spaceRuler
                     font.family: Theme.uiFamily
                     font.pixelSize: Theme.fontMd
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fontWeightStrong
                     text: " "
                 }
                 /// Set against the word, so mark and name read as one: the ink ends where the word begins.

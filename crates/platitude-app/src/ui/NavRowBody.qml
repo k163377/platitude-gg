@@ -80,7 +80,7 @@ RowLayout {
         tone: body.row.is_head ? body.hereTone
             : body.row.factsOpen && body.row.factsHereApart ? Theme.warning
             : body.row.only_remote ? Theme.textSecondary : Theme.textPrimary
-        weight: body.row.is_head ? Font.DemiBold : Font.Normal
+        weight: body.row.is_head ? Theme.fontWeightStrong : Font.Normal
         // A pending file's line-ending mark; the row's hover says what, the diff pane in full.
         marked: body.row.kindHint === "wt" && body.row.eol_mark
     }

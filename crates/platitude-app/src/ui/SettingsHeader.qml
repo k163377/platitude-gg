@@ -44,7 +44,7 @@ Item {
         Label {
             text: qsTr("Settings")
             font.pixelSize: Theme.fontXl
-            font.weight: Font.DemiBold
+            font.weight: Theme.fontWeightStrong
         }
         // The category, beside the title: the same step, told apart by weight and ink — one title in two halves
         // (規約 §タイポグラフィ 「重み・色・大文字が作る」).

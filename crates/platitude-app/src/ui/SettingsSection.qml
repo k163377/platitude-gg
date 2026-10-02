@@ -22,7 +22,7 @@ ColumnLayout {
             text: section.caption
             color: Theme.textPrimary
             pixelSize: Theme.fontMd
-            weight: Font.DemiBold
+            weight: Theme.fontWeightStrong
         }
         Rectangle {
             Layout.fillWidth: true

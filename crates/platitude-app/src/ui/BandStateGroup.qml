@@ -205,7 +205,7 @@ Item {
                 text: stateGroup.stateWt !== null ? stateGroup.stateWt.opText : ""
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 // The one part of this badge that gives: the count and the second operation mean nothing cut in half.
                 elide: Text.ElideRight
                 Layout.fillWidth: true
@@ -223,7 +223,7 @@ Item {
                 text: stateGroup.stateWt !== null ? stateGroup.stateWt.opAlso : ""
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
             }
             Label {
                 visible: stateGroup.stateWt !== null && stateGroup.stateWt.opSteps > 0
@@ -231,7 +231,7 @@ Item {
                       : qsTr("%1/%2").arg(stateGroup.stateWt.opStep).arg(stateGroup.stateWt.opSteps)
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
             }
         }
         StateBadge {
@@ -244,7 +244,7 @@ Item {
                 text: Words.badgeConflicts
                 color: Theme.textOnAccent
                 font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 elide: Text.ElideRight
                 Layout.fillWidth: true
                 Layout.maximumWidth: Math.ceil(implicitWidth)
@@ -261,7 +261,7 @@ Item {
                 text: Words.badgeSetIdentity
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 elide: Text.ElideRight
                 Layout.fillWidth: true
                 Layout.maximumWidth: Math.ceil(implicitWidth)
@@ -278,7 +278,7 @@ Item {
                 text: Words.badgeStaleGraph
                 color: Theme.danger
                 font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 elide: Text.ElideRight
                 Layout.fillWidth: true
                 Layout.maximumWidth: Math.ceil(implicitWidth)
@@ -295,7 +295,7 @@ Item {
                 text: Words.badgeNoLfs
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 elide: Text.ElideRight
                 Layout.fillWidth: true
                 Layout.maximumWidth: Math.ceil(implicitWidth)
@@ -310,7 +310,7 @@ Item {
                 text: Words.badgeOldGit
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fontWeightStrong
                 elide: Text.ElideRight
                 Layout.fillWidth: true
                 Layout.maximumWidth: Math.ceil(implicitWidth)
@@ -348,7 +348,7 @@ Item {
             anchors.centerIn: parent
             text: "…"
             font.pixelSize: Theme.fontMd
-            font.weight: Font.DemiBold
+            font.weight: Theme.fontWeightStrong
             color: stateGroup.tint
         }
         MouseArea {
