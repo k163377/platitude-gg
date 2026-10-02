@@ -177,6 +177,8 @@ ColumnLayout {
     }
     /// Automation only: the boxes' middle-button hands, driven without a pointer.
     readonly property alias summaryHand: summaryHand
+    /// Automation: the summary box itself, for what a hand does to it before a right-click (its text and selection).
+    readonly property alias summaryBox: summaryArea
     readonly property alias descriptionHand: descBox.hand
     /// The middle button's drift over the summary: the words only (`DescriptionBox.driftText`).
     function driftSummary(dy) {

@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+// For the attached types alone (rules-refs/app-ui.md carries what an unimported one answers).
+import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
@@ -39,6 +41,15 @@ Item {
             detailsSelectTimer.which = cut > 0 ? rest.substring(0, cut) : rest
             page.activateRow(graphModel.oidAt(cut > 0 ? Number(rest.substring(cut + 1)) : 0))
             detailsSelectTimer.start()
+        } else if (act === "field-menu") {
+            // `empty` (and none) / `typed` / `selected` in the commit box, `readonly` on the summary of the commit under
+            // HEAD.
+            fieldMenuTimer.boxState = arg === "" ? "empty" : arg
+            if (arg === "readonly")
+                page.activateRow(graphModel.oidAt(graphModel.rowOf(driver.workTree.headOid) + 1))
+            else
+                page.showWip()
+            fieldMenuTimer.start()
         } else if (act === "hash-tip" || act === "hash-tip-counting") {
             page.activateRow(graphModel.oidAt(arg === "" ? 0 : Number(arg)))
             hashTipTimer.counting = act === "hash-tip-counting"
@@ -193,6 +204,52 @@ Item {
                               + " which=" + detailsSelectTimer.which + " text=" + got)
             driver.complete()
         }
+    }
+
+    /// A summary box's right-click menu (`FieldMenu`) on the box in the state the argument names, asked for through the
+    /// box's own request — the entry Qt's right-click takes. `rows=` (on the table) and `live=` (can be pressed) are read
+    /// off the card: a greyed row and a lit one differ by a shade a picture leaves to the eye.
+    SampleTimer {
+        id: fieldMenuTimer
+        /// `empty` / `typed` / `selected` / `readonly`.
+        property string boxState: ""
+        onTriggered: {
+            const older = fieldMenuTimer.boxState === "readonly"
+            if (older ? !driver.cardSettled : !page.wipShown)
+                return
+            fieldMenuTimer.stop()
+            const box = older ? detailsPane.messageBlock.summaryBox : wipPane.commitBlock.messageSeat.summaryBox
+            // Something for Paste to offer: a run's clipboard starts empty.
+            driver.clipboard.copy("pasted words")
+            if (fieldMenuTimer.boxState === "typed") {
+                wipPane.setMessage("", "")
+                // Undoable, as typing is: `text` set outright leaves nothing to undo.
+                box.insert(0, "fix: typed into the box")
+            } else if (fieldMenuTimer.boxState === "selected") {
+                wipPane.setMessage("fix: a summary to cut a word from", "")
+                box.select(7, 14)
+            } else if (older) {
+                box.select(0, box.text.indexOf(" ") > 0 ? box.text.indexOf(" ") : box.length)
+            } else {
+                wipPane.setMessage("", "")
+            }
+            // At the caret, as Qt names a text box's every request; with no hand here the card stands under it.
+            const caret = box.cursorRectangle
+            box.ContextMenu.requested(Qt.point(caret.x + caret.width / 2, caret.y + caret.height / 2))
+            const seat = acts.menuSeatOf(box)
+            const menu = seat !== null ? seat.item : null
+            Harness.report("field_menu box=" + fieldMenuTimer.boxState
+                              + " opened=" + (menu !== null && menu.opened)
+                              + " rows=" + (menu !== null ? menu.rowWords(false).join(",") : "")
+                              + " live=" + (menu !== null ? menu.rowWords(true).join(",") : ""))
+            driver.complete()
+        }
+    }
+    function menuSeatOf(box) {
+        for (let i = 0; i < box.children.length; i++)
+            if (box.children[i].editor === box)
+                return box.children[i]
+        return null
     }
 
     /// What the plate's one word does once the press it offers has been made — read off the tip already up, since a

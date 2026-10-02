@@ -128,6 +128,32 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "details_select_away dropped=true held=true",
     },
+    // A summary box's right-click menu, read off the card: the rows on the
+    // table and the ones that can be pressed, in order. A greyed row and a
+    // lit one differ by a shade the picture leaves to the eye.
+    Verb {
+        name: "field-menu",
+        when: &[
+            (
+                Arg::Is("typed"),
+                "field_menu box=typed opened=true \
+                 rows=Undo,Redo,Cut,Copy,Paste,Delete,Select all live=Undo,Paste,Select all",
+            ),
+            (
+                Arg::Is("selected"),
+                "field_menu box=selected opened=true \
+                 rows=Undo,Redo,Cut,Copy,Paste,Delete,Select all \
+                 live=Cut,Copy,Paste,Delete,Select all",
+            ),
+            (
+                Arg::Is("readonly"),
+                "field_menu box=readonly opened=true rows=Copy,Select all live=Copy,Select all",
+            ),
+        ],
+        // `empty`, and no argument.
+        plain: "field_menu box=empty opened=true \
+                rows=Undo,Redo,Cut,Copy,Paste,Delete,Select all live=Paste",
+    },
     // A range selection is swept from the room beside the values (a few
     // characters, one line — aiming at them misses). Claimed together: the
     // sweep reaches the value, and a press on the value's box is still the

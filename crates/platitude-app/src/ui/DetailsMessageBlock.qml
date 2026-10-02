@@ -87,6 +87,8 @@ Flickable {
     readonly property alias hand: hand
     readonly property alias summaryHand: msgEditor.summaryHand
     readonly property alias descriptionHand: msgEditor.descriptionHand
+    /// Automation only: the summary box itself (`MessageEditor.summaryBox`).
+    readonly property alias summaryBox: msgEditor.summaryBox
 
     // -- and what it does on the pane's word --
     function coAuthorName(i) { return authorRow.coAuthorName(i) }
