@@ -64,7 +64,15 @@ AppDialog {
     /// Automation: sends the chapters to their foot, where the repository group stands — the resting position
     /// shows the group above it.
     function autoShowChapterFoot() {
-        chapters.contentY = Math.max(0, chapterCol.implicitHeight - chapters.height)
+        chapters.contentY = settingsDialog.chapterFoot()
+    }
+    /// Automation: whether the chapters stand at their foot as the column is now — it can grow after a send.
+    function autoAtChapterFoot() {
+        return chapters.contentY === settingsDialog.chapterFoot()
+    }
+    /// The `contentY` that brings the chapters' last line to the view's bottom.
+    function chapterFoot() {
+        return Math.max(0, chapterCol.implicitHeight - chapters.height)
     }
     /// Automation: the chapters' height, the room they have, and whether their bar stands — whether every chapter can
     /// be reached, which a photograph cannot say. What breaks it silently is a wrapping label under-reporting its

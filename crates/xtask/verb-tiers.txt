@@ -56,8 +56,8 @@ full	author-card 0 --preset authorship	author-card-open 0 --preset authorship	ot
 full	author-card-open 1 --preset authorship	author-card-open 0 --preset authorship	picture: Same path, branch and must_say as row 0; differs only by the bot author's long forge address = the card picture.
 full	author-card-open 2 --preset authorship	author-card-open 0 --preset authorship	picture: Same path and must_say as row 0; the committed-later stamps under one name (AuthorCard.qml) are the card picture.
 full	avatar-rest	avatar-tip	picture: Resting face picture; its flow runs before a merge via avatar-tip.
-full	avatar-row-lit	avatar-combo	picture: Bright half of a dim/bright picture pair; the hover is injected by the harness, so the extra is a binding worth a human look rather than a stage-2 claim.
-full	avatar-settings	avatar-combo	picture: List picture at the chapter foot; its wait is a subset of avatar-combo's.
+full	avatar-row-lit	avatar-remove	picture: Bright half of a dim/bright picture pair; the hover is injected by the harness, so the extra is a binding worth a human look rather than a stage-2 claim.
+full	avatar-settings	avatar-remove	picture: List picture at the chapter foot; its wait is a subset of avatar-remove's.
 full	badges 1400:6 --preset conflict	badges --preset conflict ; badges 1000:6 --preset conflict	held: Same judged line as the plain run; its extra (six tabs still leaving the words) is the share-out boundary QtTested; real fonts reach the group before a merge via plain and 1000:6.
 full	badges-all --preset lfs-conflict	badges --preset conflict ; badges-all-hover --preset lfs-conflict	other: All six badges' words standing unnarrowed at 1440; the three-badge run walks the same share-out on real fonts and the card run stands the same six before a merge, and the share-out itself is QtTested (tst_bandshare, tst_bandgroup).
 full	band	band --system-title-bar	picture: No must_say row although the driver says 'numbers say it': the gate only sees the band lay out, which every other line also needs. Numbers and picture are for a human.

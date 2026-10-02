@@ -24,6 +24,27 @@ Item {
         value: Harness.autoAct === "avatar-row-lit" ? 0 : -1
     }
 
+    /// The frame count the last send to the chapters' foot was made at, or -1 before the first.
+    property int footSentAtFrame: -1
+    /// Whether the chapters stand at their foot in a frame drawn after the last send; sends them there until they do.
+    /// The foot is read off the column's height, which can grow after a send: the opened screen's first layout pass
+    /// lays every chapter out again, and a send made before it leaves `AVATARS` below the view.
+    function chaptersAtFoot() {
+        Awaited.at(Harness.autoAct, "foot")
+        if (acts.footSentAtFrame >= 0 && acts.window.frameCounter <= acts.footSentAtFrame) {
+            // `update()`, asked again each beat: a still offscreen scene swaps nothing unasked
+            // (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
+            acts.window.update()
+            return false
+        }
+        if (acts.footSentAtFrame >= 0 && acts.settingsDialog.autoAtChapterFoot())
+            return true
+        acts.settingsDialog.autoShowChapterFoot()
+        acts.footSentAtFrame = acts.window.frameCounter
+        acts.window.update()
+        return false
+    }
+
     /// The real loading edge, raised off both `SettingsGitPane.toolsAsked` and the model's own change (the read can be
     /// out by the first, or start after it); the box holds its indicator up until the screen closes.
     property bool toolLoadingSeen: false
@@ -281,9 +302,10 @@ Item {
             if (!acts.repoPane.autoEndingsReady
                     || acts.repoPane.autoEndingHeld !== endingsTimer.wanted)
                 return
-            endingsTimer.stop()
             // Last, so the picture holds the chapter that was written into.
-            settingsDialog.autoShowChapterFoot()
+            if (!acts.chaptersAtFoot())
+                return
+            endingsTimer.stop()
             Harness.report("line_endings " + acts.repoPane.endingsTally())
             window.finishAutoAct()
         }
@@ -553,11 +575,11 @@ Item {
             // The removal's answer arrives after the hold: the store letting the row go.
             if (act === "avatar-remove" && acts.appPane.autoAvatarRows >= avatarCardTimer.rowsBefore)
                 return
-            avatarCardTimer.stop()
             // Last, so the picture holds `AVATARS`, the category's foot, out of the resting view's reach. Not for the
             // candidate list: its popup stays where the field stood, and scrolling would leave it off its box.
-            if (act !== "avatar-combo")
-                settingsDialog.autoShowChapterFoot()
+            if (act !== "avatar-combo" && !acts.chaptersAtFoot())
+                return
+            avatarCardTimer.stop()
             Harness.report("avatar_card rows=" + acts.appPane.autoAvatarRows
                               + " painted=" + acts.appPane.autoAvatarRowPainted(0)
                               + " lit=" + acts.appPane.autoAvatarRowLit(0)
