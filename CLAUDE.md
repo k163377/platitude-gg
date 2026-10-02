@@ -31,7 +31,7 @@
 **変更作業の完了には、依頼範囲の作業完了(§Git 運用)と、現在の commit に対する `gate` の PASS の両方が必要**。UI 配線では **触った動詞が両 OS で PASS し、両方の PNG を目視するまで**(verify-ui スキルを必ず呼ぶ)。
 
 - **起動だけの要求(「rebase して起動」等)は fast path** — シェル呼び出し 1 個で起動して即報告し、ターンを終える(verify-ui スキル §起動 fast path)。段 2 はユーザーが検証・反映を指示した時
-- **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ = 最低 git バージョンを積んだ唯一の環境。**`bare` は宣言した依存だけの Ubuntu で動くかだけを見る**)
+- **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ = 最低 git バージョンを積んだ唯一の環境。Windows では WSL 3 の `wslc` が回す — Docker 不要。**`bare` は宣言した依存だけの Ubuntu で動くかだけを見る**)
 - **書く作業は worktree 座席 `a`〜`f` で行う**(ドキュメントも含めて全部 — 本体 checkout は読むだけ)。席は `cargo xtask seat`(引数なし)が lock して返すので、それを EnterWorktree に渡す。未マージの席は続きの仕事専用。**claim は会話のもの — プロセスの死活は見ない**。claim を動かすのは 3 つだけ: **land が返す** / <!--cmd:seat.release-->`cargo xtask seat release` / **ユーザーがその場で指示した時だけ**の乗っ取り <!--cmd:seat.takeover-->`PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>`(対象は他人の claim だけ)。全席詰まりなら増設せず、持ち主を添えて報告して止まる。**完了後も席に留まる**
 - **依頼範囲の作業はこのセッションで完了する**。チップは別セッションでしかできない作業だけ(触っているファイルを claim するチップは hook が deny)。継続して参照する制約・要判断は `internal-docs/P<n>-確認事項.md` へ記録する
 - **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ <!--cmd:app.launch-->`PGG_ALLOW_GUI=1 cargo xtask launch`。自ツリーの残存プロセス・exe の使用中状態は `cargo xtask kill`。**窓のビルドがどのツリーのものかは右下が名乗る**

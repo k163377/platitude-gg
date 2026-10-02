@@ -140,7 +140,8 @@ cargo が置き換えた成果物を消さないことの代金。**1 世代 = �
 |---|---|
 | 席 1 つの `target/`(6 席の合計) | 148GB(51 / 47 / 15 / 12 / 12 / 5)。1 世代は 12〜15GB |
 | その内訳(積もった席の `target/debug` 42.7GB) | `incremental` 24.7GB(設定 250 個、生きているのは十数個)/ `deps` 12.8GB(外部 crate の rlib が典型 6 世代・最大 14 世代、テスト exe が 7〜9 世代)/ `build` 5.2GB(`qtbridge-type-lib` の出力 146MB × 8 世代) |
-| Linux 側のボリューム `pgg-linux-target-<席>`(積もった席) | 11.3GB = `debug/incremental` 4.8 + `debug/deps` 2.6 + `debug/build` 2.0 + `release` 1.4。6 席で 56GB、1 世代は 6GB |
+| Linux 側のボリューム `pgg-linux-target-<席>`(空から gate を 1 本回した 1 世代) | 3.8GB = `debug/incremental` 1.5 + `debug/deps` 0.96 + `debug/build` 0.53 + `release` 0.83。debug の debuginfo は自前のクレートの行テーブルだけ(イメージの `/usr/local/cargo/config.toml`)。テスト exe `it` は 119MB・`libplatitude_core` の rlib は 105MB(full debuginfo の時は 250MB / 262MB) |
+| コンテナの incremental | 持つ。1 世代の 1.5GB がそれで、持たないと core を touch した後の `linux test -p platitude-core --no-run` が 5s → 10.5s(2 回ずつ交互) |
 | incremental セッションの日付 | `<crate>-<id>/` の 2 段下の最新ファイルが、そのディレクトリ自身の日付と秒まで一致(40 件中 39 件。残り 1 件は 1 秒差)。artifact との差は ±5 秒 |
 | fresh なビルドが `.fingerprint/*/invoked.timestamp` に触るか | 触らない(`target/hooks` で hook が朝から数百回走っても、時刻は最後の再ビルドのまま)= **古さは「死んでいる」の証拠にならない** |
 | 正規集合を続けて 2 回読んだ時に relink する unit(listing 1 回あたり) | 2。どちらも `pgg-todo-editor` — feature 解決の違う 2 行(`test --locked --workspace --no-run` と `test --locked -p platitude-core --no-run`)が hash 無しの同じ bin を書くので、listing 1 回につき 1 回ずつ相手を上書きする。他の 15 行は全部 fresh |
@@ -152,7 +153,10 @@ cargo が置き換えた成果物を消さないことの代金。**1 世代 = �
 
 | 対象 | 読み |
 |---|---|
-| `docker builder prune --max-used-space` が数える範囲 | **image が共有していない記録だけ**。未参照 6.328GB に上限 6.0GB を当てて消えたのは 11 日前の 616.3MB 1 本で、shared 6.38GB は不動(buildkit v0.33 `cache/manager.go`: 総和は `if ui.Shared { continue }` の後で、shared は削除候補に入らない) |
-| build cache 1 世代 | 6.38GB(Qt install 1.821 + bare への Qt 複写 1.519 + toolchain 0.847 + apt 群 2.1 + 端数)。世代が 1 つ死ぬと同じだけ未参照として残る |
+| `docker builder prune --max-used-space` が数える範囲 | **image が共有していない記録だけ**。未参照 6.328GB に上限 6.0GB を当てて消えたのは 11 日前の 616.3MB 1 本で、shared 6.38GB は不動(buildkit v0.33 `cache/manager.go`: 総和は `if ui.Shared { continue }` の後で、shared は削除候補に入らない)。wslc の VM の docker 25 は同じ上限を `--keep-storage` と綴り、数え方は同じ(buildkit v0.12.5 の同じ行) |
+| イメージ(wslc が数える大きさ) | core 1.08GB / app 1.70GB / runtime 0.66GB。app の残りの大物は Rust のツールチェーン 646MB・gcc 系・Qt・Noto Sans CJK(太さ違いを含む)・llvmpipe の libLLVM 140MB で、ベースの ubuntu:24.04 は 78MB |
+| app から落とした物 | Qt の静的ライブラリ(`lib/*.a` 1.38GB。QML の language server と DOM が 1.08GB — アプリのリンクは Qt の共有ライブラリだけ)/ qttools・qtwayland・qttranslations・qtdoc のアーカイブ(`qdoc` だけで 79MB)と sbom 34MB / 明朝体の CJK 179MB / Qt を入れるためだけの Python。**前後のイメージで同じビルドを撮った 8 動詞 18 枚の PNG がバイト一致** |
+| app に残した物 | `fonts-noto-cjk-extra` 214MB(Sans の太さ違い)。無いと Font.DemiBold が Medium でなく Bold で描かれる(13px の同じ文で幅 246.3 → 250.2)= 絵が変わる |
+| build cache 1 世代(wslc) | image と共有 2.6GB(core / app / runtime が建った時点の `docker buildx du`) |
 | `--rebuild` を cache 全ヒットで撃った代金 | core の unique size が 7.17kB → 1.376GB。**再 export が新しい層の digest を作り**、app は古い core の層を持ったままなので 1 世代分が二重になる。動作確認の手段には使えない |
 | 同じ入力から建った app の tag 2 本 | unique size は各 2.402kB(shared 4.295GB)。**片方を消しても戻るのは kB で、4.3GB は残る側へ移るだけ** |
