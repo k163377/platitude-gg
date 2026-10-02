@@ -124,8 +124,53 @@ fn qml_notes(path: &str) -> Result<Vec<String>, String> {
     }
     if let Ok(content) = std::fs::read_to_string(path) {
         notes.extend(qml_font_notes(&content));
+        // Theme.qml is where the weight token picks its per-OS value.
+        if file_name != "Theme.qml" {
+            notes.extend(qml_weight_notes(&content));
+        }
     }
     Ok(notes)
+}
+
+/// The named weights past `Font.Normal`. The one the UI uses is Theme's,
+/// which picks it per OS.
+const MACHINE_WEIGHTS: [&str; 8] = [
+    "Font.Thin",
+    "Font.ExtraLight",
+    "Font.Light",
+    "Font.Medium",
+    "Font.DemiBold",
+    "Font.Bold",
+    "Font.ExtraBold",
+    "Font.Black",
+];
+
+/// デザイン規約 §タイポグラフィ's two weights, `Font.Normal` and
+/// `Theme.fontWeightStrong`: a weight named anywhere else skips the token's
+/// per-OS pick.
+fn qml_weight_notes(content: &str) -> Vec<String> {
+    let mut notes = Vec::new();
+    for (number, line) in content.lines().enumerate() {
+        let code = line.trim_start();
+        if code.starts_with("//") {
+            continue;
+        }
+        let named = MACHINE_WEIGHTS.iter().find(|weight| {
+            code.match_indices(*weight).any(|(at, _)| {
+                !code[at + weight.len()..].starts_with(|c: char| c.is_ascii_alphanumeric())
+            })
+        });
+        if let Some(weight) = named {
+            notes.push(format!(
+                "line {}: the weight past Font.Normal is Theme.fontWeightStrong \
+                 — {weight} skips its per-OS pick (Ubuntu's DemiBold draws \
+                 Medium with fonts-noto-cjk-extra and Bold without; \
+                 デザイン規約 §タイポグラフィ).",
+                number + 1
+            ));
+        }
+    }
+    notes
 }
 
 /// The font rules of デザイン規約 §QML 実装ルール, checked line by line.
@@ -164,7 +209,28 @@ fn qml_font_notes(content: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::qml_font_notes;
+    use super::{qml_font_notes, qml_weight_notes};
+
+    #[test]
+    fn flags_named_weights_past_normal() {
+        let notes = qml_weight_notes(
+            "Text {\n    font.weight: Font.DemiBold\n}\n\
+             Text { font.weight: on ? Font.Bold : Font.Normal }\n",
+        );
+        assert_eq!(notes.len(), 2, "{notes:?}");
+        assert!(notes[0].contains("line 2") && notes[0].contains("Font.DemiBold"));
+        assert!(notes[1].contains("line 4") && notes[1].contains("Font.Bold"));
+    }
+
+    #[test]
+    fn accepts_normal_the_token_and_comments() {
+        let notes = qml_weight_notes(
+            "// Font.DemiBold in a comment is fine\n\
+             Text { font.weight: on ? Theme.fontWeightStrong : Font.Normal }\n\
+             Text { font.bold: modelData.bold }\n",
+        );
+        assert!(notes.is_empty(), "{notes:?}");
+    }
 
     #[test]
     fn flags_point_size_and_families_named_outside_theme() {
