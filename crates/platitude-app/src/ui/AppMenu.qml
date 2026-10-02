@@ -86,6 +86,15 @@ Menu {
         return true
     }
 
+    /// `offer()` at a point in the parent's coordinates instead of the pointer's, kept inside the window as `popup()`
+    /// keeps the pointer's (`FieldMenu` — a request from the keyboard has no pointer behind it).
+    function offerAt(at) {
+        if (!appMenu.applies || appMenu.offeredRows === 0)
+            return false
+        appMenu.popup(at)
+        return true
+    }
+
     /// `offer()` for a card placed under its control by its own `x`/`y` (`TopBar`, `OpsBranchMenu`).
     function offerHere() {
         if (!appMenu.applies || appMenu.offeredRows === 0)

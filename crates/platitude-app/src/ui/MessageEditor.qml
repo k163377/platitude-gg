@@ -51,7 +51,7 @@ ColumnLayout {
     readonly property color descriptionColor: descBox.textColor
     readonly property bool descriptionFocused: descBox.focused
     /// A caret is in either box — when the pane keeps the row that saves on screen (規約 §コミットメッセージの 2 つの枠).
-    readonly property bool anyFocused: summaryArea.activeFocus || descBox.focused
+    readonly property bool anyFocused: summaryArea.caretHeld || descBox.focused
 
     // -- the message pair is one block of one height --
     /// What the summary box needs for its own lines, capped: nothing in git bounds a summary, and an uncapped box

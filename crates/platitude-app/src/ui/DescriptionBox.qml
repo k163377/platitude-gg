@@ -18,7 +18,8 @@ Rectangle {
     property alias placeholderText: area.placeholderText
     /// The colour the text is painted in — the side the smoke hooks report (rules-refs/app-ui.md).
     readonly property color textColor: area.color
-    readonly property bool focused: area.activeFocus
+    /// Being written in: the caret is here, or this box's own menu stands over it (`FieldMenuSeat.holding`).
+    readonly property bool focused: area.activeFocus || menuSeat.holding
     /// Automation: the bar inside the box (a run reads its opacity, the painted side) and how far the text stands.
     readonly property alias bar: textBar
     readonly property real textAt: textView.contentItem ? textView.contentItem.contentY : 0
@@ -237,10 +238,17 @@ Rectangle {
                 event.accepted = true
             }
             // Lit only while being written; a read-only caret is for selecting (デザイン規約 §コミットメッセージの 2 つの枠).
-            color: !area.readOnly && area.activeFocus ? Theme.textPrimary : Theme.textSecondary
+            color: !area.readOnly && box.focused ? Theme.textPrimary : Theme.textSecondary
             background: null
             padding: 0
             onActiveFocusChanged: if (area.activeFocus) box.unpin()
+            // The product's right-click menu, not the style's (`FieldMenuSeat`).
+            ContextMenu.menu: null
+            ContextMenu.onRequested: menuSeat.offer()
+            FieldMenuSeat {
+                id: menuSeat
+                editor: area
+            }
             // On the text, so it is offered the wheel before the flickable can keep it (`rollBy`).
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad

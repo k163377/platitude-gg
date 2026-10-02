@@ -81,6 +81,8 @@ DiffTextMetrics 1.0 DiffTextMetrics.qml
 DiffTextSelect 1.0 DiffTextSelect.qml
 DialogActions 1.0 DialogActions.qml
 DotMark 1.0 DotMark.qml
+FieldMenu 1.0 FieldMenu.qml
+FieldMenuSeat 1.0 FieldMenuSeat.qml
 FileRowDelegate 1.0 FileRowDelegate.qml
 FileRowMenu 1.0 FileRowMenu.qml
 FileRowWalk 1.0 FileRowWalk.qml

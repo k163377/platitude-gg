@@ -31,6 +31,13 @@ Item {
             bottomPadding: 0
             placeholderText: qsTr("Filter")
             background: null
+            // The product's right-click menu, not the style's (`FieldMenuSeat`).
+            ContextMenu.menu: null
+            ContextMenu.onRequested: menuSeat.offer()
+            FieldMenuSeat {
+                id: menuSeat
+                editor: field
+            }
         }
         // The whole block is the button, the band's full height.
         FoldBlock {
@@ -40,6 +47,6 @@ Item {
         }
     }
     BandRule {
-        color: field.activeFocus ? Theme.borderFocus : Theme.borderSubtle
+        color: field.activeFocus || menuSeat.holding ? Theme.borderFocus : Theme.borderSubtle
     }
 }

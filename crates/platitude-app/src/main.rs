@@ -157,6 +157,8 @@ fn main() {
     qrc::embed!("ui/DiffTextSelect.qml");
     qrc::embed!("ui/DialogActions.qml");
     qrc::embed!("ui/DotMark.qml");
+    qrc::embed!("ui/FieldMenu.qml");
+    qrc::embed!("ui/FieldMenuSeat.qml");
     qrc::embed!("ui/FileRowDelegate.qml");
     qrc::embed!("ui/FileRowMenu.qml");
     qrc::embed!("ui/FileRowWalk.qml");

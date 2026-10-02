@@ -23,8 +23,16 @@ TextField {
     background: Rectangle {
         color: Theme.bgBase
         radius: Theme.radiusSm
-        border.color: form.activeFocus ? Theme.borderFocus : Theme.borderDefault
+        border.color: form.activeFocus || menuSeat.holding ? Theme.borderFocus : Theme.borderDefault
         border.width: Theme.borderWidth
+    }
+
+    // The product's right-click menu, not the style's (`FieldMenuSeat`).
+    ContextMenu.menu: null
+    ContextMenu.onRequested: menuSeat.offer()
+    FieldMenuSeat {
+        id: menuSeat
+        editor: form
     }
 
     // Only while choosing: writing `cursorVisible` for a typing box would show a caret where nobody is typing.

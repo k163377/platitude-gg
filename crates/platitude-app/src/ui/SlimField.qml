@@ -25,7 +25,16 @@ TextField {
     background: Rectangle {
         color: Theme.bgBase
         radius: Theme.radiusSm
-        border.color: slim.refused ? Theme.warning : slim.activeFocus ? slim.focusTone : Theme.borderDefault
+        border.color: slim.refused ? Theme.warning
+                    : slim.activeFocus || menuSeat.holding ? slim.focusTone : Theme.borderDefault
         border.width: Theme.borderWidth
+    }
+
+    // The product's right-click menu, not the style's (`FieldMenuSeat`).
+    ContextMenu.menu: null
+    ContextMenu.onRequested: menuSeat.offer()
+    FieldMenuSeat {
+        id: menuSeat
+        editor: slim
     }
 }

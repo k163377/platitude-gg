@@ -7,6 +7,8 @@ import platitude.ui
 // box. A `TextArea` only to wrap, so a long summary stays readable and the frame grows to fit.
 TextArea {
     id: summary
+    /// Being written in: the caret is here, or this box's own menu stands over it (`FieldMenuSeat.holding`).
+    readonly property bool caretHeld: summary.activeFocus || menuSeat.holding
     wrapMode: TextArea.Wrap
     font.pixelSize: Theme.fontLg
     font.weight: Font.DemiBold
@@ -25,5 +27,13 @@ TextArea {
         const kept = summary.text.substring(0, summary.cursorPosition)
         summary.text = summary.text.replace(/[\n\r]+/g, " ")
         summary.cursorPosition = kept.replace(/[\n\r]+/g, " ").length
+    }
+
+    // The product's right-click menu, not the style's (`FieldMenuSeat`).
+    ContextMenu.menu: null
+    ContextMenu.onRequested: menuSeat.offer()
+    FieldMenuSeat {
+        id: menuSeat
+        editor: summary
     }
 }
