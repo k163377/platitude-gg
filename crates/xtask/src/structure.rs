@@ -23,7 +23,8 @@
 //! them ([`env`]), the product's QML closes no popup but its own
 //! ([`popups`]), QML asks the graph, not a row's id, which row is this
 //! window's working tree ([`wiprow`]), and every text box the product
-//! declares keeps the style's right-click menu away ([`textboxes`]).
+//! declares hands its right-click and its menu key to the product's menu
+//! ([`textboxes`]).
 //!
 //! The fn half of the same § is left to clippy's `too_many_lines`.
 
@@ -140,7 +141,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
              {app_files} app files off the environment, \
              {product_files} product files closing nothing but their own, \
              {qml_files} QML files asking the graph which row is this window's, \
-             {text_boxes} text boxes keeping the style's menu away — PASS",
+             {text_boxes} text boxes handing their menu and their key to the product's — PASS",
             counted.len(),
             comment_share(physical, code),
             ledgered.len()
@@ -158,7 +159,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         ))
     } else if menus_kept == failures.len() {
         Err(format!(
-            "{menus_kept} text box(es) keeping the style's right-click menu \
+            "{menus_kept} line(s) a text box leaves to the style's menu or to nothing \
              (.claude/rules-refs/app-ui.md「`FieldMenu` = 文字の欄の右クリック」)"
         ))
     } else {
