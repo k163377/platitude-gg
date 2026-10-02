@@ -199,7 +199,7 @@ fn faked(
 }
 
 /// Whether a plan's step is a `linux` line, which brings up a container
-/// of its own (`docker run --rm`) unless it goes into the gate's
+/// of its own (the engine's `run --rm`) unless it goes into the gate's
 /// container by its mark ([`into_the_container`]).
 fn starts_its_own_container(command: &[String]) -> bool {
     command.iter().any(|word| word == "linux")

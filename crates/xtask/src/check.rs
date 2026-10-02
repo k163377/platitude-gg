@@ -2,8 +2,8 @@
 //! the container in parallel.
 //!
 //! The sides share nothing written: the host builds into this checkout's
-//! target/, the container into its per-checkout docker volume (linux.rs),
-//! and every demo repository gets its own temp directory.
+//! target/, the container into its per-checkout volume on the engine
+//! (linux.rs), and every demo repository gets its own temp directory.
 //!
 //! Within a side the steps stay sequential: they share its build
 //! directory, so cargo would serialize them on its lock anyway, and a

@@ -56,9 +56,9 @@ pub(crate) fn bounded(
 
 /// [`bounded`], with the diagnostic's stderr written into the same file
 /// as its stdout — for a program whose refusal on stderr is the answer
-/// (docker, `linux::container`). Not the default: a listing parsed off
-/// the file (`verify::look`) must not have a warning interleaved with its
-/// rows.
+/// (the container engine, `linux::container`). Not the default: a listing
+/// parsed off the file (`verify::look`) must not have a warning
+/// interleaved with its rows.
 pub(crate) fn bounded_both_streams(
     what: &str,
     command: Command,
