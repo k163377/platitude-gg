@@ -110,7 +110,12 @@ Item {
             return acts.graphPane.view.activeFocus && acts.graphPane.view.currentIndex === acts.headRow() + 1
         if (surface === "files") {
             const row = acts.wipPane.filesWalk.rowFor("unstaged", rest)
-            return !!row && row.ListView.view.activeFocus
+            // The click also opened the file's diff (`RepoPage.toggleDiff`), a git subprocess away: what the run
+            // photographs and records is the pane with its rows (`DiffPane.diffSettled`).
+            return Awaited.all("key_menu", {
+                "keyboard": !!row && row.ListView.view.activeFocus,
+                "diff": acts.page.diffKey === "unstaged:" + rest && acts.diffPane.diffSettled()
+            })
         }
         if (surface === "diff")
             return acts.diffPane.view.activeFocus && acts.diffPane.diffModel.selHasNew
@@ -173,8 +178,8 @@ Item {
                           + " foot=" + (foot ? Math.round(foot.x) + "," + Math.round(foot.y) : "none"))
     }
 
-    // Presses, waits for the keyboard to land, then asks. No ceiling: a target that never lands is ended by the
-    // watchdog.
+    // Presses, waits for the keyboard to land (and on the file list for the diff the click opened), then asks. No
+    // ceiling: a target that never lands is ended by the watchdog.
     SampleTimer {
         id: keyMenuTimer
         property string surface: ""
