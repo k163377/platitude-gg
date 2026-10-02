@@ -75,5 +75,5 @@ private commitの峰・割当回数・発生時刻は分からないので、
 ## OS別の証跡
 
 既定の出力先は `target/perf/<os>-<arch>/<run>/`。
-Windowsの正本は既存記録、Linuxは [perf-linux-x64.md](perf-linux-x64.md)、macOS arm64は
-[perf-macos-arm64.md](perf-macos-arm64.md)。未取得は未取得のまま残す。
+Windowsの正本は既存記録。Linux と macOS arm64 は実機待ちで、取る物と残す物は
+[P5-確認事項.md](../../internal-docs/P5-確認事項.md) §23。

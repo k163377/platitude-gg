@@ -60,7 +60,3 @@ qml\**\*plugin.dll（QtQuick/QtQml の QML モジュール群 12個）
 ```
 
 除外は `windeployqt --skip-plugin-types networkinformation,tls,qmltooling` で可能（P5 で採用判断・起動検証）。
-
-## 4. 補足
-
-- mac / Linux の baseline は CI 初回ビルドで取得する
