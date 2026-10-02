@@ -154,9 +154,9 @@ cargo が置き換えた成果物を消さないことの代金。**1 世代 = �
 | 対象 | 読み |
 |---|---|
 | `docker builder prune --max-used-space` が数える範囲 | **image が共有していない記録だけ**。未参照 6.328GB に上限 6.0GB を当てて消えたのは 11 日前の 616.3MB 1 本で、shared 6.38GB は不動(buildkit v0.33 `cache/manager.go`: 総和は `if ui.Shared { continue }` の後で、shared は削除候補に入らない)。wslc の VM の docker 25 は同じ上限を `--keep-storage` と綴り、数え方は同じ(buildkit v0.12.5 の同じ行) |
-| イメージ(wslc が数える大きさ) | core 1.08GB / app 1.70GB / runtime 0.66GB。app の残りの大物は Rust のツールチェーン 646MB・gcc 系・Qt・Noto Sans CJK(太さ違いを含む)・llvmpipe の libLLVM 140MB で、ベースの ubuntu:24.04 は 78MB |
+| イメージ(wslc が数える大きさ) | core 1.08GB / app 1.78GB / runtime 0.66GB。app の残りの大物は Rust のツールチェーン 646MB・gcc 系・Qt・Noto Sans CJK(太さ違いを含む)・llvmpipe の libLLVM 140MB で、ベースの ubuntu:24.04 は 78MB |
 | app から落とした物 | Qt の静的ライブラリ(`lib/*.a` 1.38GB。QML の language server と DOM が 1.08GB — アプリのリンクは Qt の共有ライブラリだけ)/ qttools・qtwayland・qttranslations・qtdoc のアーカイブ(`qdoc` だけで 79MB)と sbom 34MB / 明朝体の CJK 179MB / Qt を入れるためだけの Python。**前後のイメージで同じビルドを撮った 8 動詞 18 枚の PNG がバイト一致** |
-| app に残した物 | `fonts-noto-cjk-extra` 214MB(Sans の太さ違い)。無いと Font.DemiBold が Medium でなく Bold で描かれる(13px の同じ文で幅 246.3 → 250.2)= 絵が変わる |
+| app に残した物 | 日本語の Ubuntu デスクトップが積むフォントとロケール(P5-確認事項 §実測済み): `fonts-noto-cjk-extra` 214MB(Sans の太さ違い)と、`fonts-noto-core`・`fonts-noto-color-emoji`・`fonts-ubuntu`・`fonts-liberation`・`ja_JP.UTF-8`(合わせて app を 80MB 押し上げる)。UI の字は `-extra` の有無で変わらない(`fontWeightStrong`)|
 | build cache 1 世代(wslc) | image と共有 2.6GB(core / app / runtime が建った時点の `docker buildx du`) |
 | `--rebuild` を cache 全ヒットで撃った代金 | core の unique size が 7.17kB → 1.376GB。**再 export が新しい層の digest を作り**、app は古い core の層を持ったままなので 1 世代分が二重になる。動作確認の手段には使えない |
 | 同じ入力から建った app の tag 2 本 | unique size は各 2.402kB(shared 4.295GB)。**片方を消しても戻るのは kB で、4.3GB は残る側へ移るだけ** |

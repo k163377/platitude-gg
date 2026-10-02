@@ -77,19 +77,31 @@ ARG QT_VERSION
 # The two expensive downloads go first, so editing the library list below
 # never fetches Qt or the fonts again.
 #
-# fonts-noto-cjk carries Noto Sans CJK JP and Noto Sans Mono CJK JP, the
-# Ubuntu links of both font chains in デザイン規約; fonts-dejavu-core is the
-# last link of both. fonts-noto-cjk-extra is what Font.DemiBold resolves to
-# Medium with — without it Qt draws the UI's DemiBold text Bold, and wider.
-# The serif faces both packages carry go in the same layer: no family the
-# UI asks for reaches them, and Qt's pick for every family and weight the
-# UI uses is the same with them and without.
+# The fonts and the locale of a Japanese Ubuntu 24.04 desktop, the machine
+# a picture taken here stands for (P5-確認事項 §実測済み). Every desktop
+# install has what ubuntu-desktop-minimal depends on and recommends —
+# fonts-dejavu-core, fonts-noto-cjk (Noto Sans CJK JP and Noto Sans Mono
+# CJK JP, the Ubuntu links of both chains in デザイン規約), fonts-noto-core,
+# fonts-noto-color-emoji, fonts-ubuntu, fonts-liberation; choosing Japanese
+# on a networked install adds what `check-language-support -l ja` names,
+# fonts-noto-cjk-extra among them, and sets LANG=ja_JP.UTF-8 (below). The
+# UI draws the same without -extra (Theme.fontWeightStrong). The serif
+# faces go in the same layer: no family the UI asks for reaches them, and
+# Qt's pick for every family and weight the UI uses is the same with them
+# and without. language-selector-common's fontconfig rules stay out: Qt's
+# offscreen glyphs are byte-identical with them and without.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         fonts-dejavu-core \
+        fonts-liberation \
         fonts-noto-cjk \
         fonts-noto-cjk-extra \
+        fonts-noto-color-emoji \
+        fonts-noto-core \
+        fonts-ubuntu \
+        locales \
     && rm -f /usr/share/fonts/opentype/noto/NotoSerifCJK-* \
+    && localedef --inputfile ja_JP --charmap UTF-8 ja_JP.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
 # A venv: 24.04's system python is externally managed and refuses pip.
@@ -145,12 +157,13 @@ RUN apt-get update \
         gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# QMAKE for qtbridge, as in CI. LANG: Qt switches a "C" locale to C.UTF-8
-# itself and says so on every run; git is unaffected (core pins LC_ALL=C).
+# QMAKE for qtbridge, as in CI. LANG: a Japanese desktop's, and what Qt
+# shapes with — Noto Sans CJK JP draws `…` and `—` in their Japanese forms
+# under it. git is unaffected (core pins LC_ALL=C).
 ENV PATH=/opt/qt/${QT_VERSION}/gcc_64/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     LD_LIBRARY_PATH=/opt/qt/${QT_VERSION}/gcc_64/lib \
     QMAKE=/opt/qt/${QT_VERSION}/gcc_64/bin/qmake \
-    LANG=C.UTF-8
+    LANG=ja_JP.UTF-8
 
 # A stock Ubuntu with Qt staged the way a distribution would ship it and
 # nothing else installed: the only place that says the built binary runs
