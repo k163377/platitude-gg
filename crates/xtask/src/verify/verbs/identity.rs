@@ -17,6 +17,14 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "message_focus pane=wip focused=true",
     },
+    // A press elsewhere takes that caret back out, and the save row it put
+    // up with it. `stood=true` is the caret having been in at all: a hook
+    // that never reached the box would read the row down as well.
+    Verb {
+        name: "edit-message-away",
+        when: &[],
+        plain: "message_away stood=true row=false caret=false page=true",
+    },
     // A dialog that stayed open because the write did not take looks
     // like one nobody answered; the `*Saved=` flags say which half landed.
     Verb {

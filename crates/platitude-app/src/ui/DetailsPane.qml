@@ -213,6 +213,7 @@ ColumnLayout {
     /// What the box paints — the input side (activeFocus) would read green with the binding cut.
     readonly property color descriptionColor: block.descriptionColor
     readonly property bool descriptionFocused: block.descriptionFocused
+    readonly property bool saveRowShown: block.saveRowShown
     /// Smoke hooks: the wheel over the description box, and the ink its bar carries after
     /// (デザイン規約 §QML 実装ルール のバーの明るさ).
     function rollDescription(dy) { block.rollDescription(dy) }

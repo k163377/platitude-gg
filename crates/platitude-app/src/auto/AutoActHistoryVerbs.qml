@@ -53,7 +53,7 @@ Item {
                 driver.barrierNotice.start()
         } else if (act === "reword" || act === "edit-message"
                    || act === "edit-message-leave"
-                   || act === "edit-message-focus") {
+                   || act === "edit-message-focus" || act === "edit-message-away") {
             // HEAD's own: the only row that takes typing (`offers::message_edit`), branch or not.
             page.jumpToRef(workTree.headOid)
             rewordTimer.start()
@@ -537,6 +537,21 @@ Item {
                 Harness.report("message_focus pane=details focused="
                                   + detailsPane.descriptionFocused
                                   + " color=" + detailsPane.descriptionColor)
+                driver.complete()
+                return
+            }
+            // "edit-message-away" puts the caret in the same way, then presses on the pane's band through the window's
+            // own watcher: the save row that stood for the caret comes down with it (デザイン規約 §コミットメッセージの
+            // 2 つの枠). `stood=` says the caret was in first; `page=` that the page itself holds the keyboard after.
+            if (Harness.autoAct === "edit-message-away") {
+                detailsPane.focusDescription()
+                const stood = detailsPane.saveRowShown
+                const win = page.Window.window
+                win.caretHand.pressedAt(detailsPane.mapToItem(null, detailsPane.width / 2, 2))
+                Harness.report("message_away stood=" + stood
+                                  + " row=" + detailsPane.saveRowShown
+                                  + " caret=" + detailsPane.descriptionFocused
+                                  + " page=" + (win.activeFocusItem === page))
                 driver.complete()
                 return
             }

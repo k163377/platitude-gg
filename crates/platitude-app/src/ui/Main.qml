@@ -135,7 +135,11 @@ ApplicationWindow {
     readonly property bool onScreen: root.visible
                                      && root.visibility !== Window.Minimized && root.visibility !== Window.Hidden
 
+    /// Automation only (rules-refs/app-ui.md「自動化フック専用の露出」): a run presses through `caretHand.pressedAt`,
+    /// the road the hand's own press takes (`PGG_AUTO_ACT=edit-message-away`).
+    readonly property alias caretHand: caretHand
     FocusRelease {
+        id: caretHand
         window: root
         // Over the safe-area inset the chrome also covers, so presses on the band are heard too.
         reachUp: root.contentItem.y

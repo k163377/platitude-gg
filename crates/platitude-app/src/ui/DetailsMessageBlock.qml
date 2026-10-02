@@ -71,6 +71,8 @@ Flickable {
     readonly property alias summaryTipShown: msgEditor.summaryTipShown
     readonly property alias descriptionColor: msgEditor.descriptionColor
     readonly property alias descriptionFocused: msgEditor.descriptionFocused
+    /// The row that saves is on screen — what a caret in the boxes puts up (the output side).
+    readonly property alias saveRowShown: saveRow.visible
     readonly property alias descriptionBarInk: msgEditor.descriptionBarInk
     readonly property alias descriptionAt: msgEditor.descriptionAt
     readonly property alias summaryAt: msgEditor.summaryAt
@@ -184,6 +186,7 @@ Flickable {
             }
             // Only once something is actually changed (`MessageActionsRow`).
             MessageActionsRow {
+                id: saveRow
                 Layout.fillWidth: true
                 dirty: block.messageDirty
                 editing: block.editable && msgEditor.anyFocused

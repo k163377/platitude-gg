@@ -224,7 +224,7 @@ QtObject {
                 // barrier. `pull-ahead` is answered without moving anything — it waits for the panel it opens to
                 // show the row git wrote.
                 "pull-go", "pull-ahead",
-                "edit-message-leave", "edit-message-focus",
+                "edit-message-leave", "edit-message-focus", "edit-message-away",
                 // All four end in their own samplers: the plan arrives through the feed, and the three that run wait
                 // out the write's own landing (the gone row / the edit marker) behind the write barrier. The last
                 // also waits out where putting the stop down leaves the reader, which the continuation's answer
