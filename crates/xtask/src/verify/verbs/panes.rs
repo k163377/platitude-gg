@@ -154,6 +154,38 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "field_menu box=empty opened=true \
                 rows=Undo,Redo,Cut,Copy,Paste,Delete,Select all live=Paste",
     },
+    // The menu key on a surface holding the keyboard: the card stood, and
+    // under the left end of the row the keyboard is on (the diff: under its
+    // row, right of the row's head). `pointer` is Qt's request with a place
+    // of its own — xcb's menu key at the pointer — which the graph turns
+    // away: a card there is the pointer's place answered for the keyboard.
+    Verb {
+        name: "key-menu",
+        when: &[
+            (
+                Arg::Is("graph:request"),
+                "key_menu on=graph via=request opened=true under=true",
+            ),
+            (
+                Arg::Is("graph:pointer"),
+                "key_menu on=graph via=pointer opened=false",
+            ),
+            (
+                Arg::Starts("files:"),
+                "key_menu on=files via=key opened=true under=true",
+            ),
+            (
+                Arg::Starts("diff:"),
+                "key_menu on=diff via=key opened=true under=true",
+            ),
+            (
+                Arg::Starts("nav:"),
+                "key_menu on=nav via=key opened=true under=true",
+            ),
+        ],
+        // `graph`.
+        plain: "key_menu on=graph via=key opened=true under=true",
+    },
     // A range selection is swept from the room beside the values (a few
     // characters, one line — aiming at them misses). Claimed together: the
     // sweep reaches the value, and a press on the value's box is still the

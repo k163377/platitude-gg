@@ -582,6 +582,7 @@ Item {
     AutoActGraphRowVerbs { id: graphRowVerbs; driver: driver }
     AutoActGraphReclickVerbs { id: graphReclickVerbs; driver: driver }
     AutoActStepVerbs { id: stepVerbs; driver: driver }
+    AutoActKeyMenuVerbs { id: keyMenuVerbs; driver: driver }
     AutoActPaneVerbs { id: paneVerbs; driver: driver }
     AutoActTipVerbs { id: tipVerbs; driver: driver }
     AutoActDetailsVerbs { id: detailsVerbs; driver: driver }
@@ -609,6 +610,7 @@ Item {
             || graphRowVerbs.run(act, arg)
             || graphReclickVerbs.run(act, arg)
             || stepVerbs.run(act, arg)
+            || keyMenuVerbs.run(act, arg)
             || paneVerbs.run(act, arg)
             || tipVerbs.run(act, arg)
             || detailsVerbs.run(act, arg)
