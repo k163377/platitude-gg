@@ -172,9 +172,10 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "settings_sweep all=true caret=true hand=true",
     },
-    // The same way out over an unsaved identity: the screen stays and
-    // asks in its foot. `save=true`: the typing that stops the way out is
-    // the one that lights the button the reader is sent to.
+    // The same way out over an unsaved identity: the screen stays, sends
+    // the reader to the chapter and arms its `✕` — it has no foot to ask
+    // in. `save=true`: the typing that stops the way out is the one that
+    // lights the button the reader is sent to.
     Verb {
         name: "settings-leave",
         when: &[],

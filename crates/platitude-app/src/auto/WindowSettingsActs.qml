@@ -382,8 +382,8 @@ Item {
     }
 
     // PGG_AUTO_ACT=settings-leave: the way out taken while an identity chapter holds an edit git has not been given;
-    // the screen must still be there, with the question in its foot. Both halves are said: a screen that stayed
-    // frames like one never asked to go.
+    // the screen must still be there, sent to that chapter with its `✕` armed (the screen has no foot to ask in).
+    // Both halves are said: a screen that stayed frames like one never asked to go.
     SampleTimer {
         id: leaveTimer
         running: Harness.autoAct === "settings-leave"
