@@ -383,16 +383,17 @@ fn the_short_sections_read_out_of_what_arrived() {
         "worktrees",
         Source::Worktrees {
             list: vec![
-                entry("C:\\work\\repo", Some("main"), Some("a")),
+                entry("C:/work/repo", Some("main"), Some("a")),
+                // Spelled otherwise than `current`, which the mark folds.
                 entry("C:\\work\\other", Some("topic"), Some("b")),
-                entry("C:\\work\\bare", None, None),
+                entry("C:/work/bare", None, None),
             ],
             current: "c:/work/other".to_string(),
         },
     );
     model.arrange();
     assert_eq!(says(&model, 0, Role::Name), "repo");
-    assert_eq!(says(&model, 0, Role::Full), "C:\\work\\repo");
+    assert_eq!(says(&model, 0, Role::Full), "C:/work/repo");
     assert_eq!(says(&model, 0, Role::Bucket), "main");
     assert!(!flags(&model, 0, Role::IsHead));
     // The one this window is showing is marked, however git spelled it.
@@ -431,13 +432,13 @@ fn a_worktree_row_wears_the_state_of_its_checkout() {
         "worktrees",
         Source::Worktrees {
             list: vec![
-                entry("C:\\work\\home", false, "", false),
-                entry("C:\\work\\plain", false, "", false),
-                entry("C:\\work\\held", true, "release run", false),
-                entry("C:\\work\\quiet", true, "", false),
-                entry("C:\\work\\gone", false, "", true),
+                entry("C:/work/home", false, "", false),
+                entry("C:/work/plain", false, "", false),
+                entry("C:/work/held", true, "release run", false),
+                entry("C:/work/quiet", true, "", false),
+                entry("C:/work/gone", false, "", true),
                 // git can report both; the lock wins (`item::LOCKED`).
-                entry("C:\\work\\both", true, "release run", true),
+                entry("C:/work/both", true, "release run", true),
             ],
             current: String::new(),
         },
@@ -618,18 +619,16 @@ fn the_worktree_holding_a_branch_answers_for_every_other_copy() {
         "worktrees",
         Source::Worktrees {
             list: vec![
+                // Spelled otherwise than `current`, which the mark folds.
                 entry("C:\\work\\repo", Some("main")),
-                entry("C:\\work\\other", Some("topic")),
-                entry("C:\\work\\loose", None),
+                entry("C:/work/other", Some("topic")),
+                entry("C:/work/loose", None),
             ],
             current: "c:/work/repo".to_string(),
         },
     );
     model.arrange();
-    assert_eq!(
-        model.worktree_holding("topic".to_string()),
-        "C:\\work\\other"
-    );
+    assert_eq!(model.worktree_holding("topic".to_string()), "C:/work/other");
     // The copy this window is in refuses nothing — moving onto the
     // branch it already has out is a no-op.
     assert_eq!(model.worktree_holding("main".to_string()), "");

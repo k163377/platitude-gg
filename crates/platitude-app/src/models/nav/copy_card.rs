@@ -113,7 +113,7 @@ mod tests {
         locked: bool,
     ) -> platitude_core::worktrees::WorktreeEntry {
         // One commit per copy, told apart by the folder.
-        let head = match path.rsplit('\\').next() {
+        let head = match path.rsplit('/').next() {
             Some("home") => "1111",
             Some("plain") => "2222",
             _ => "3333",
@@ -141,9 +141,9 @@ mod tests {
             "worktrees",
             Source::Worktrees {
                 list: vec![
-                    copy("C:\\work\\home", Some("main"), false),
-                    copy("C:\\work\\plain", Some("topic"), false),
-                    copy("C:\\work\\held", None, true),
+                    copy("C:/work/home", Some("main"), false),
+                    copy("C:/work/plain", Some("topic"), false),
+                    copy("C:/work/held", None, true),
                 ],
                 current: "c:/work/home".to_string(),
             },
@@ -170,10 +170,10 @@ mod tests {
     #[test]
     fn a_copy_shown_as_gone_is_off_the_card() {
         let mut model = copies();
-        model.hidden = vec!["C:\\work\\plain".to_string()];
+        model.hidden = vec!["C:/work/plain".to_string()];
         model.arrange();
         assert_eq!(model.total, 2);
-        assert_eq!(fulls(&model), vec!["C:\\work\\home", "C:\\work\\held"]);
+        assert_eq!(fulls(&model), vec!["C:/work/home", "C:/work/held"]);
     }
 
     #[test]
@@ -183,7 +183,7 @@ mod tests {
             rows[0],
             CopyRow {
                 name: "home".to_string(),
-                full: "C:\\work\\home".to_string(),
+                full: "C:/work/home".to_string(),
                 branch: "main".to_string(),
                 change: "MAIN".to_string(),
                 reason: String::new(),
@@ -205,23 +205,23 @@ mod tests {
     #[test]
     fn a_copy_is_found_by_its_path_or_by_its_folder_where_it_stands() {
         let mut model = copies();
-        let held = model.copy_of("C:\\work\\held").expect("listed");
+        let held = model.copy_of("C:/work/held").expect("listed");
         assert_eq!(
             (held.change.as_str(), held.reason.as_str()),
             ("LOCKED", "kept")
         );
-        assert_eq!(model.copy_standing("held", "3333"), "C:\\work\\held");
+        assert_eq!(model.copy_standing("held", "3333"), "C:/work/held");
         assert_eq!(
             model.copy_standing("held", "1111"),
             "",
             "not standing there"
         );
-        assert!(model.copy_of("C:\\work\\elsewhere").is_none());
+        assert!(model.copy_of("C:/work/elsewhere").is_none());
 
-        model.hidden = vec!["C:\\work\\held".to_string()];
+        model.hidden = vec!["C:/work/held".to_string()];
         model.arrange();
         assert!(
-            model.copy_of("C:\\work\\held").is_none(),
+            model.copy_of("C:/work/held").is_none(),
             "going: no card for it"
         );
     }
