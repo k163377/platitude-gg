@@ -45,6 +45,20 @@ RUN mkdir -p /usr/local/cargo/registry \
     && ln -s registry/.package-cache /usr/local/cargo/.package-cache \
     && ln -s registry/.package-cache-mutate /usr/local/cargo/.package-cache-mutate
 
+# What a debug build in here keeps of debuginfo: the line tables a
+# backtrace names a line from, for the workspace's own code, and none for
+# the dependencies — C and C++ included (cc-rs reads the same setting).
+# Nothing in here is ever stepped through, and full debuginfo is the
+# better part of every build volume and of every link's memory. Lowest in
+# cargo's config order, so the tree's own files still decide anything
+# they spell.
+RUN printf '%s\n' \
+        '[profile.dev]' \
+        'debug = "line-tables-only"' \
+        '[profile.dev.package."*"]' \
+        'debug = false' \
+        > /usr/local/cargo/config.toml
+
 # /work is a bind mount owned by the host's user, and git refuses a repository
 # it takes for someone else's. The integration tests never read this (they
 # set GIT_CONFIG_NOSYSTEM).
@@ -63,24 +77,44 @@ ARG QT_VERSION
 # The two expensive downloads go first, so editing the library list below
 # never fetches Qt or the fonts again.
 #
-# fonts-noto-cjk / -extra carry Noto Sans CJK JP and Noto Sans Mono CJK JP,
-# the Ubuntu links of both font chains in デザイン規約; fonts-dejavu-core is
-# the last link of both.
+# fonts-noto-cjk carries Noto Sans CJK JP and Noto Sans Mono CJK JP, the
+# Ubuntu links of both font chains in デザイン規約; fonts-dejavu-core is the
+# last link of both. fonts-noto-cjk-extra is what Font.DemiBold resolves to
+# Medium with — without it Qt draws the UI's DemiBold text Bold, and wider.
+# The serif faces both packages carry go in the same layer: no family the
+# UI asks for reaches them, and Qt's pick for every family and weight the
+# UI uses is the same with them and without.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         fonts-dejavu-core \
         fonts-noto-cjk \
         fonts-noto-cjk-extra \
-        python3-venv \
+    && rm -f /usr/share/fonts/opentype/noto/NotoSerifCJK-* \
     && rm -rf /var/lib/apt/lists/*
 
 # A venv: 24.04's system python is externally managed and refuses pip.
-# --base pins the primary server, as CI does.
-RUN python3 -m venv /opt/aqt \
+# --base pins the primary server, as CI does. Python goes with the venv in
+# the same layer: nothing past the install runs it.
+#
+# The archives the app and its tests reach and no more: every QML module
+# they import is qtdeclarative's, qtsvg is kept for the image formats, and
+# qttools (designer, linguist, qdoc), qtwayland, qttranslations and qtdoc
+# are left out — a module the app came to need would fail its build or its
+# QML load here, loudly. Out of what comes, the static archives (Qt's own
+# tooling; the app links Qt's shared libraries only) and the bill of
+# materials go in the same layer.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends python3-venv \
+    && python3 -m venv /opt/aqt \
     && /opt/aqt/bin/pip install --no-cache-dir aqtinstall \
     && /opt/aqt/bin/aqt install-qt --base https://download.qt.io/ \
         linux desktop "${QT_VERSION}" linux_gcc_64 -O /opt/qt \
-    && rm -rf /opt/aqt
+        --archives icu qtbase qtdeclarative qtsvg \
+    && rm -rf /opt/aqt \
+    && rm -f /opt/qt/${QT_VERSION}/gcc_64/lib/*.a \
+    && rm -rf /opt/qt/${QT_VERSION}/gcc_64/sbom \
+    && apt-get purge --yes --auto-remove python3-venv \
+    && rm -rf /var/lib/apt/lists/*
 
 # libgl1-mesa-dev and libxkbcommon-dev are CI's two installs. The rest a
 # GitHub runner already has, and Qt's libraries want them with or without a
