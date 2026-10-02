@@ -220,6 +220,56 @@ fn a_wash_on_a_wide_line_names_places_and_not_columns() {
     assert_eq!(model.copied_new(), "torn");
 }
 
+/// The moving end as `(side, row, place)`, or nothing.
+fn end_of(model: &DiffModel) -> Option<(i32, i32, i32)> {
+    model
+        .moving_end()
+        .as_ref()
+        .map(|end| (end.side, end.row, end.place))
+}
+
+#[test]
+fn the_moving_end_follows_the_hand_in_the_places_its_row_spells() {
+    // Row 3 spells its tab as the four spaces to the stop, so its byte 3
+    // (after `\tle`) is place 6.
+    let mut model = model(
+        &format!(
+            "\
+--- a/f
++++ b/f
+@@ -1,3 +1,3 @@
+ fn main() {{
+-{TAB}let a = 1;
++{TAB}let a = 2;
+ }}
+"
+        ),
+        false,
+    );
+    assert_eq!(end_of(&model), None, "nothing selected, no end");
+    model.start_select(0, 1, 2);
+    model.drag_select(0, 3, 3);
+    assert_eq!(
+        end_of(&model),
+        Some((0, 3, 6)),
+        "dragged down: the lower end"
+    );
+    model.drag_select(0, 1, 0);
+    assert_eq!(
+        end_of(&model),
+        Some((0, 1, 0)),
+        "back up past the start: the end the hand carried"
+    );
+    model.select_whole_row(0, 3);
+    assert_eq!(
+        end_of(&model),
+        Some((0, 3, 14)),
+        "a whole row ends at the line's end"
+    );
+    model.drop_selection();
+    assert_eq!(end_of(&model), None);
+}
+
 // ---- the same text read side by side ----------------------------------
 
 /// The rows laid out side by side (`encode::pair_rows`), coloured — a

@@ -10,9 +10,9 @@ use qtbridge::qtbridge_type_lib::QVariantMap;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject, qobject};
 
 use crate::encode::{
-    Candidates, DiffRow, Fields, LineMarks, Marks, One, Optional, Record, Runs, SplitRow, diff_key,
-    field, flatten_patches, human_size, is_combined, is_new_file, is_unmerged_only, pair_rows,
-    source_byte, spelled_ranges, widest_lines,
+    Candidates, DiffRow, Ended, Fields, LineMarks, Marks, One, Optional, Record, Runs, SplitRow,
+    TextEnd, diff_key, field, flatten_patches, human_size, is_combined, is_new_file,
+    is_unmerged_only, pair_rows, source_byte, spelled_place, spelled_ranges, widest_lines,
 };
 use crate::hub::{DiffMsg, Feed};
 

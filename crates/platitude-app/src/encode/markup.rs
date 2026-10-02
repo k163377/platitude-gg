@@ -142,6 +142,22 @@ pub fn plain_ranges(text: &str, ranges: &[(usize, usize)]) -> Runs {
     places_of(text, ranges, plain_units)
 }
 
+/// Where the byte boundary `byte` of the source line stands in the line as
+/// the row spells it: the place a range starting there starts at
+/// ([`spelled_ranges`]). Past the end of the line it is the line's end.
+pub fn spelled_place(text: &str, byte: usize) -> usize {
+    let mut here = 0usize;
+    let mut col = 0usize;
+    for (at, ch) in text.char_indices() {
+        if at >= byte {
+            break;
+        }
+        here += spelled_units(ch, col);
+        col += step_of(ch, col);
+    }
+    here
+}
+
 fn places_of(text: &str, ranges: &[(usize, usize)], units: fn(char, usize) -> usize) -> Runs {
     if ranges.is_empty() {
         return Runs::default();

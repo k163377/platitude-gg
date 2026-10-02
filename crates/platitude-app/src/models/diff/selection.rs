@@ -129,6 +129,28 @@ impl DiffModel {
         (first_row, first_at) <= (row, at) && (row, at) <= (last_row, last_at)
     }
 
+    /// The end a drag carried (`sel_to_*` — a right-click's whole row ends
+    /// at the line's end), in the places its row spells: where a text box's
+    /// caret would stand, which the menu key opens under
+    /// (デザイン規約 §メニュー のキーボード).
+    pub(super) fn moving_end(&self) -> Ended {
+        if !self.sel_active {
+            return Ended::none();
+        }
+        let Ok(row) = usize::try_from(self.sel_to_row) else {
+            return Ended::none();
+        };
+        let byte = usize::try_from(self.sel_to_at).unwrap_or(0);
+        let place = self
+            .source_line(self.sel_side, row)
+            .map_or(0, |text| spelled_place(text, byte));
+        Ended::some(TextEnd {
+            side: self.sel_side,
+            row: self.sel_to_row,
+            place: i32::try_from(place).unwrap_or(i32::MAX),
+        })
+    }
+
     pub(super) fn start_select(&mut self, side: i32, row: i32, at: i32) -> bool {
         self.move_ends(side, row, at, row, at, true)
     }

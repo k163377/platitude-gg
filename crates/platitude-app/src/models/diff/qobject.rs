@@ -289,6 +289,13 @@ impl DiffModel {
         self.holds(side, row, at)
     }
 
+    /// Where the selection's moving end stands (`moving_end`), or nothing
+    /// where none stands.
+    #[qslot]
+    fn selection_end(&self) -> Ended {
+        self.moving_end()
+    }
+
     #[qslot]
     fn clear_select(&mut self) {
         if self.drop_selection() {
