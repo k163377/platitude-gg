@@ -10,12 +10,15 @@ Item {
     height: 200
 
     readonly property string longRemote: "origin-with-a-very-long-name-for-a-remote"
+    // Wider than both floors and the `/` in any face: the scenes that hand the bar the width this name asks for are
+    // about a destination too long for it, not one narrower than the two floors (which overflows on purpose).
+    readonly property string absurdRemote: "origin-with-a-name-so-long-no-question-bar-could-hold-it-beside-a-branch"
     readonly property string longBranch: "feature/a-branch-name-that-is-far-too-long-to-sit-in-one-box"
 
     PublishForm {
         id: form
         width: root.width
-        choices: [root.longRemote, "origin"]
+        choices: [root.longRemote, root.absurdRemote, "origin"]
         remote: "origin"
         branch: "feature/new-thing"
     }
@@ -25,7 +28,7 @@ Item {
     UpstreamForm {
         id: upstream
         width: root.width
-        remotes: [root.longRemote, "origin"]
+        remotes: [root.longRemote, root.absurdRemote, "origin"]
         branches: ["main", "feature/topic-a"]
         remote: "origin"
         branch: "feature/new-thing"
@@ -90,8 +93,8 @@ Item {
         /// too: it grows only while the name keeps its floor.
         function test_an_absurd_destination_stops_where_the_name_would_lose_its_floor() {
             const b = boxes()
-            form.remote = root.longRemote
-            tryVerify(() => b.remote.wantedWidth > Metrics.askFieldMinW)
+            form.remote = root.absurdRemote
+            tryVerify(() => b.remote.wantedWidth > 2 * Metrics.askFieldMinW + Theme.spaceXl)
             form.width = b.remote.wantedWidth
             // Within a hair: the ceiling counts the `/` label, a fractional width the row rounds its own way.
             // Without the ceiling the name overflows by hundreds of px. The narrowing lands a frame late, so this
@@ -114,18 +117,19 @@ Item {
             verify(name.width > Metrics.askFieldMinW, "the name has the slack: " + name.width)
 
             // A destination too long for the bar comes down to where the name keeps its floor.
-            upstream.remote = root.longRemote
-            tryVerify(() => remote.wantedWidth > Metrics.askFieldMinW)
+            upstream.remote = root.absurdRemote
+            tryVerify(() => remote.wantedWidth > 2 * Metrics.askFieldMinW + Theme.spaceXl)
             upstream.width = remote.wantedWidth
             tryVerify(() => name.x + name.width - upstream.width <= Theme.spaceXs)
             verify(remote.width < remote.wantedWidth, "it wanted more: " + remote.wantedWidth)
             verify(name.width >= Metrics.askFieldMinW, "and the name keeps its floor: " + name.width)
 
-            // Both too long: both on the floor, the name scrolling inside its box.
+            // Both too long: both on the floor, the name scrolling inside its box. The destination comes down a frame
+            // after the name, so its width is waited for too.
             upstream.branch = root.longBranch
             upstream.width = 2 * Metrics.askFieldMinW
             tryVerify(() => name.width === Metrics.askFieldMinW)
-            compare(remote.width, Metrics.askFieldMinW, "and the destination is on the same floor")
+            tryCompare(remote, "width", Metrics.askFieldMinW)
             verify(name.wantedWidth > name.width, "with more text than box, which is where it scrolls")
         }
 
