@@ -509,6 +509,18 @@ Item {
                                           modifiers === undefined ? Qt.NoModifier : modifiers)
     }
 
+    /// A right-click on this row, and the menu key on it (`GraphRowWalk.menuFromKeys`).
+    function askMenu() {
+        // **A right-click takes the choice down to this row**: the menu acts on one commit, and several left
+        // highlighted would offer to act on all of them (デザイン規約 §複数のコミットを選ぶ).
+        rowItem.claimRow(Qt.NoModifier)
+        // The WIP row is not a commit, so it has no menu. **One menu wherever along the row the press landed**:
+        // its rows are about this commit, the cards at its foot about `menuChip` (デザイン規約 §グラフ行の右クリック)
+        // — unlike a rest, a right-click has nothing to divide (`partAt`).
+        if (!rowItem.isWip)
+            rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.menuChip)
+    }
+
     MouseArea {
         id: rowMouse
         anchors.fill: parent
@@ -528,16 +540,8 @@ Item {
                 rowItem.leftClick(mouse.modifiers)
         }
         onClicked: mouse => {
-            if (mouse.button !== Qt.RightButton)
-                return
-            // **A right-click takes the choice down to this row**: the menu acts on one commit, and several left
-            // highlighted would offer to act on all of them (デザイン規約 §複数のコミットを選ぶ).
-            rowItem.claimRow(Qt.NoModifier)
-            // The WIP row is not a commit, so it has no menu. **One menu wherever along the row the press landed**:
-            // its rows are about this commit, the cards at its foot about `menuChip` (デザイン規約 §グラフ行の右クリック)
-            // — unlike a rest, a right-click has nothing to divide (`partAt`).
-            if (!rowItem.isWip)
-                rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.menuChip)
+            if (mouse.button === Qt.RightButton)
+                rowItem.askMenu()
         }
         onDoubleClicked: mouse => {
             if (mouse.button !== Qt.LeftButton)

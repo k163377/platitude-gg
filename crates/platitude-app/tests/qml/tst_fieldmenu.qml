@@ -9,8 +9,9 @@ import platitude.ui
 // - The rows are a fixed table (デザイン規約 §メニュー の文字の欄): the ones that change the words go on a read-only
 //   box, the ones the box cannot do right now stay greyed and take no click, and each lit row does what it says.
 // - Qt names a text box's caret as the place of every request it answers, a right-click's too, so the card reads the
-//   hand instead: under the hand where it is on the box (a right-click), under the caret where it is not (the menu
-//   key), and under the caret in a headless window whatever the hand (`Hand.away`).
+//   right button instead: a request raised inside a right press or release is the right-click's, under the hand;
+//   any other is the keyboard's (the menu key, Windows' Shift+F10, xcb's request at the pointer), under the caret of
+//   the box holding it, and a box without the caret turns it away (デザイン規約 §メニュー のキーボード).
 Item {
     id: root
     width: 640
@@ -51,12 +52,11 @@ Item {
             height: 80
             text: "a description"
         }
-        // The two kinds of box a menu is handed, each with a seat of its own, for the rows. Hover written in: the default
-        // follows the platform's hover effects, which the offscreen platform has none of.
+        // The two kinds of box a menu is handed, each with a seat of its own, for the rows.
         TextField {
             id: line
             width: 300
-            hoverEnabled: true
+            Keys.onMenuPressed: event => event.accepted = lineSeat.offer()
             FieldMenuSeat {
                 id: lineSeat
                 editor: line
@@ -66,7 +66,7 @@ Item {
             id: page
             width: 300
             height: 60
-            hoverEnabled: true
+            Keys.onMenuPressed: event => event.accepted = pageSeat.offer()
             FieldMenuSeat {
                 id: pageSeat
                 editor: page
@@ -90,16 +90,31 @@ Item {
         id: requests
         signalName: "requested"
     }
+    /// Whether the seat heard a right button behind each request, read as the request arrives.
+    property var heardRight: []
+    Connections {
+        id: rightWatch
+        target: null
+        ignoreUnknownSignals: true
+        function onRequested(position) {
+            root.heardRight.push(seatWatched.rightPressing)
+        }
+    }
+    property var seatWatched: null
 
     TestCase {
         name: "FieldMenu"
         when: windowShown
 
+        property int trigger: Application.styleHints.contextMenuTrigger
+        // The style hint is the application's: a file that leaves it moved hands the files after it another platform.
+        function cleanup() {
+            Application.styleHints.contextMenuTrigger = trigger
+        }
         function init() {
             for (const seat of [lineSeat, pageSeat])
                 if (seat.item)
                     seat.item.close()
-            Hand.away = false
             mouseMove(root, root.width - 2, root.height - 2)
             line.readOnly = false
             page.readOnly = false
@@ -107,10 +122,6 @@ Item {
             page.text = ""
             root.forceActiveFocus()
             board.copy("pasted")
-        }
-        // `Hand` is one for the whole run: a file that leaves it away hands the files after it a window with no hand.
-        function cleanup() {
-            Hand.away = false
         }
 
         /// The box the right-click lands on inside `item`: the item itself, or the one text box in it.
@@ -144,8 +155,9 @@ Item {
             for (const letter of words)
                 keyClick(letter)
         }
-        /// Opens the menu and answers the rows that can be pressed.
+        /// Opens the menu from the keyboard — on the box holding the caret — and answers the rows that can be pressed.
         function rowsOn(seat) {
+            seat.editor.forceActiveFocus()
             verify(seat.offer(), "the menu opened")
             tryCompare(seat.item, "opened", true)
             return seat.item.rowWords(true)
@@ -359,24 +371,82 @@ Item {
             typeInto(box, "abc")
             const caret = box.cursorRectangle
             const underCaret = Qt.point(caret.x, caret.y + caret.height)
-            verify(!box.hovered)
+            const standsAt = () => Qt.point(seat.item.x, seat.item.y)
             verify(seat.offer())
             tryCompare(seat.item, "opened", true)
-            compare(Qt.point(seat.item.x, seat.item.y), underCaret, "no hand on the box: the menu key's, under the caret")
+            compare(standsAt(), underCaret, "no right button behind it: the keyboard's, under the caret")
             seat.item.close()
             tryCompare(seat.item, "visible", false)
+            // The hand resting on the box tells nothing: xcb raises the menu key's request at the pointer.
             mouseMove(box, 40, 6)
-            tryCompare(box, "hovered", true)
             verify(seat.offer())
             tryCompare(seat.item, "opened", true)
+            compare(standsAt(), underCaret, "a hand on the box, no right button: still the caret")
+        }
+
+        function test_a_right_click_stands_under_the_hand_data() {
+            return test_a_right_clicks_request_comes_inside_its_button_data()
+        }
+        function test_a_right_click_stands_under_the_hand(data) {
+            const box = data.box
+            const seat = seatOf(box)
+            box.forceActiveFocus()
+            const caret = box.cursorRectangle
+            mouseClick(box, box.width - 20, box.height / 2, Qt.RightButton)
+            tryVerify(() => seat.item !== null && seat.item.opened)
             // Where the platform's cursor is — the offscreen one never moves off the screen's corner — not the caret.
-            verify(seat.item.x !== underCaret.x || seat.item.y !== underCaret.y, "a hand on the box: a right-click's")
+            verify(seat.item.x !== caret.x || seat.item.y !== caret.y + caret.height, "a right-click's, under the hand")
             seat.item.close()
             tryCompare(seat.item, "visible", false)
-            Hand.away = true
-            verify(seat.offer())
-            tryCompare(seat.item, "opened", true)
-            compare(Qt.point(seat.item.x, seat.item.y), underCaret, "a headless window's hand answers nothing")
+        }
+
+        function test_a_box_without_the_caret_turns_the_keyboards_request_away_data() {
+            return test_the_rows_are_what_the_box_can_do_now_data()
+        }
+        function test_a_box_without_the_caret_turns_the_keyboards_request_away(data) {
+            const seat = data.seat
+            verify(!data.box.activeFocus)
+            verify(!seat.offer(), "the keyboard is elsewhere: the request was raised at the pointer resting here")
+            verify(seat.item === null || !seat.item.visible)
+        }
+
+        function test_the_menu_key_opens_under_the_caret_data() {
+            return test_the_rows_are_what_the_box_can_do_now_data()
+        }
+        function test_the_menu_key_opens_under_the_caret(data) {
+            const box = data.box
+            const seat = data.seat
+            typeInto(box, "ab")
+            const caret = box.cursorRectangle
+            keyClick(Qt.Key_Menu)
+            tryVerify(() => seat.item !== null && seat.item.opened)
+            compare(Qt.point(seat.item.x, seat.item.y), Qt.point(caret.x, caret.y + caret.height))
+        }
+
+        /// The premise the right-click is told by: Qt raises its request inside the right button's press or release,
+        /// which the seat is hearing at that moment. A Qt that raised it a turn later goes red here.
+        /// Linux raises it at the press, Windows at the release (the style hint the platform theme sets).
+        function test_a_right_clicks_request_comes_inside_its_button_data() {
+            return [
+                { tag: "TextField, press", box: formBox, trigger: Qt.ContextMenuTrigger.Press },
+                { tag: "TextField, release", box: formBox, trigger: Qt.ContextMenuTrigger.Release },
+                { tag: "TextArea, press", box: summaryBox, trigger: Qt.ContextMenuTrigger.Press },
+                { tag: "TextArea, release", box: summaryBox, trigger: Qt.ContextMenuTrigger.Release },
+            ]
+        }
+        function test_a_right_clicks_request_comes_inside_its_button(data) {
+            Application.styleHints.contextMenuTrigger = data.trigger
+            const box = data.box
+            root.seatWatched = seatOf(box)
+            root.heardRight = []
+            rightWatch.target = box.ContextMenu
+            mouseClick(box, 20, box.height / 2, Qt.RightButton)
+            tryVerify(() => root.heardRight.length === 1)
+            compare(root.heardRight[0], true, "the right button was down or just coming up")
+            rightWatch.target = null
+            root.seatWatched.item.close()
+            // And it lets go the turn after.
+            tryVerify(() => !root.seatWatched.rightPressing)
         }
     }
 }

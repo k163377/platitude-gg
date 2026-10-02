@@ -206,6 +206,38 @@ ColumnLayout {
         }
         return null
     }
+    /// The menu key on a bucket's list (デザイン規約 §メニュー のキーボード): the choice's menu as a right-click on a
+    /// chosen row raises it (`NavItemDelegate.rowPressed`), standing under the left end of the row the keyboard came
+    /// with — the last one pressed or walked onto (`anchorRow`), or the first chosen one where that has left the
+    /// choice. The row comes on screen first, as little as will do. Nothing chosen, nothing opens; nor while no bucket's
+    /// list holds the keyboard (`KeyMenu.answer` comes here from anything inside the pane). Says whether a row was
+    /// asked.
+    function menuFromKeys() {
+        if (wipPane.chosenCount === 0 || !wipPane.bucketPanes.some(pane => pane.list.activeFocus))
+            return false
+        let at = wipPane.anchorRow
+        if (wipPane.chosenKeys[wipPane.keyAt(at)] !== true) {
+            const first = wipPane.chosenRows()[0]
+            at = first === undefined ? -1 : wipPane.rowIndexOf(first.bucket + ":" + first.fullName)
+        }
+        const standing = wipPane.bucketPanes
+        for (let i = 0; i < standing.length && at >= 0; i++) {
+            if (at >= standing[i].rows) {
+                at -= standing[i].rows
+                continue
+            }
+            const list = standing[i].list
+            list.positionViewAtIndex(at, ListView.Contain)
+            // A row the move brought on is built at the next polish; the menu needs it now.
+            list.forceLayout()
+            const item = list.itemAtIndex(at)
+            if (!item)
+                return false
+            KeyMenu.ask(item.mapToItem(null, 0, Theme.rowHeight), () => item.rowPressed(Qt.RightButton, Qt.NoModifier))
+            return true
+        }
+        return false
+    }
     /// Makes one row the whole of the choice — a plain click, or a right-click outside the choice before its menu
     /// (the menu acts on what is lit).
     function chooseOnly(bucket, path) {

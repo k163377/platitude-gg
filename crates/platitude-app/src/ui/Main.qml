@@ -397,5 +397,13 @@ ApplicationWindow {
         chrome: chrome
         dialogSeat: dialogSeat
         tabsModel: tabsModel
+        // Under everything the window draws, so every request nothing above took reaches it (`keyMenuAsked`).
+        ContextMenu.onRequested: position => root.keyMenuAsked(body.mapToItem(null, position))
+    }
+    /// Qt's context-menu request that nothing it was handed to took, at `scenePoint`: one with no place — Windows'
+    /// Shift+F10 — is answered where the keyboard is (`KeyMenu.answer`); a placed one (a right-click nothing opened a
+    /// menu for, xcb's menu key at the pointer) is turned away. Says whether a menu was asked.
+    function keyMenuAsked(scenePoint) {
+        return KeyMenu.placeless(scenePoint) && KeyMenu.answer(root.activeFocusItem)
     }
 }

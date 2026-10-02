@@ -78,20 +78,16 @@ Menu {
         }
         return n
     }
-    /// Opens at the pointer unless nothing is on offer (デザイン規約 §メニュー). Says whether it opened.
+    /// Opens at the pointer unless nothing is on offer (デザイン規約 §メニュー) — or, asked from the keyboard, where the
+    /// keyboard's target stands (`KeyMenu.at`), kept inside the window as `popup()` keeps the pointer's. Says whether
+    /// it opened.
     function offer() {
         if (!appMenu.applies || appMenu.offeredRows === 0)
             return false
-        appMenu.popup()
-        return true
-    }
-
-    /// `offer()` at a point in the parent's coordinates instead of the pointer's, kept inside the window as `popup()`
-    /// keeps the pointer's (`FieldMenu` — a request from the keyboard has no pointer behind it).
-    function offerAt(at) {
-        if (!appMenu.applies || appMenu.offeredRows === 0)
-            return false
-        appMenu.popup(at)
+        if (KeyMenu.at !== null)
+            appMenu.popup(appMenu.parent.mapFromItem(null, KeyMenu.at))
+        else
+            appMenu.popup()
         return true
     }
 

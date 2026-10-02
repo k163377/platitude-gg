@@ -35,12 +35,16 @@ AppMenu {
         fieldMenu.hadCaret = false
     }
 
-    /// Opens on the box as it stands: under the hand where the hand is on the box — a right-click, opened where every
-    /// right-click menu opens — and under the caret otherwise, the menu key's. Not from the request's position: Qt moves
-    /// every request a text box answers to its caret, a right-click's too (`QQuickTextInput::contextMenuEvent` /
+    /// Opens on the box as it stands: under the hand for a right-click (`rightClick`), opened where every right-click
+    /// menu opens, and under the caret for the keyboard (デザイン規約 §メニュー のキーボード) — which only the box holding
+    /// the caret answers: xcb raises the menu key's request at the pointer, on whatever box it rests on, and the key
+    /// itself reaches the box with the caret. Not from the request's position: Qt moves every request a text box
+    /// answers to its caret, a right-click's too (`QQuickTextInput::contextMenuEvent` /
     /// `QQuickTextEdit::contextMenuEvent`). Says whether it opened.
-    function offerNow() {
+    function offerNow(rightClick) {
         const box = fieldMenu.editor
+        if (!rightClick && !box.activeFocus)
+            return false
         const chosen = box.selectedText !== ""
         fieldMenu.hadCaret = box.activeFocus
         fieldMenu.typing = !box.readOnly
@@ -50,11 +54,10 @@ AppMenu {
         fieldMenu.canCopy = chosen
         fieldMenu.canPaste = box.canPaste
         fieldMenu.canSelectAll = box.selectionStart > 0 || box.selectionEnd < box.length
-        // A headless window's pointer rests on its corner and answers nothing (`Hand.away`).
-        if (box.hovered && !Hand.away)
+        if (rightClick)
             return fieldMenu.offer()
         const caret = box.cursorRectangle
-        return fieldMenu.offerAt(Qt.point(caret.x, caret.y + caret.height))
+        return KeyMenu.ask(box.mapToItem(null, caret.x, caret.y + caret.height), () => fieldMenu.offer())
     }
 
     /// Automation: the rows on the table, in order, as the words they show — the ones that can be pressed only, when

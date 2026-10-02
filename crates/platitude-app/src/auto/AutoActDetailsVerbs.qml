@@ -233,7 +233,9 @@ Item {
             } else {
                 wipPane.setMessage("", "")
             }
-            // At the caret, as Qt names a text box's every request; with no hand here the card stands under it.
+            // The keyboard's request (no right button behind it), which only the box holding the caret answers: at the
+            // caret, as Qt names a text box's every request, and the card stands under it (`FieldMenu.offerNow`).
+            box.forceActiveFocus()
             const caret = box.cursorRectangle
             box.ContextMenu.requested(Qt.point(caret.x + caret.width / 2, caret.y + caret.height / 2))
             const seat = acts.menuSeatOf(box)

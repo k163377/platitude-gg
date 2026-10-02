@@ -85,6 +85,7 @@ fn main() {
     qrc::embed!("ui/Motion.qml");
     qrc::embed!("ui/Hand.qml");
     qrc::embed!("ui/MiddleHand.qml");
+    qrc::embed!("ui/KeyMenu.qml");
     qrc::embed!("ui/ActionButton.qml");
     qrc::embed!("ui/ActionButtonLabel.qml");
     qrc::embed!("ui/ActionButtonSeat.qml");

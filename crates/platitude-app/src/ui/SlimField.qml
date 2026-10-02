@@ -30,9 +30,10 @@ TextField {
         border.width: Theme.borderWidth
     }
 
-    // The product's right-click menu, not the style's (`FieldMenuSeat`).
+    // The product's right-click menu, not the style's, and the menu key's (`FieldMenuSeat`).
     ContextMenu.menu: null
     ContextMenu.onRequested: menuSeat.offer()
+    Keys.onMenuPressed: event => event.accepted = menuSeat.offer()
     FieldMenuSeat {
         id: menuSeat
         editor: slim

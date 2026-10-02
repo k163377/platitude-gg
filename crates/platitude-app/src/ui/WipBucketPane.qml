@@ -63,6 +63,8 @@ ColumnLayout {
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = bucketPane.pane.filesWalk.stepFile(-1, event.isAutoRepeat)
         Keys.onDownPressed: event => event.accepted = bucketPane.pane.filesWalk.stepFile(1, event.isAutoRepeat)
+        // The menu key; Windows' Shift+F10 comes through the window (`Main.keyMenuAsked`).
+        Keys.onMenuPressed: event => event.accepted = bucketPane.pane.menuFromKeys()
         delegate: NavItemDelegate {
             listWidth: bucketList.width
             kindHint: "wt"

@@ -235,6 +235,19 @@ Rectangle {
         diffPane.copyRequested(text)
         return true
     }
+    /// The menu key on the diff (デザイン規約 §メニュー のキーボード): the selection's menu, as a right-click inside the
+    /// selection raises it, standing under the selection's moving end (`DiffTextSelect.endPlace`). Nothing selected,
+    /// nothing opens; nor while the rows do not hold the keyboard (`KeyMenu.answer` comes here from anything inside
+    /// the pane). Says whether the selection was asked.
+    function menuFromKeys() {
+        if (!diffList.activeFocus || !diffPane.diffModel.selHasNew && diffPane.diffModel.selRemoved === 0)
+            return false
+        const place = textPick.endPlace()
+        if (place === null)
+            return false
+        KeyMenu.ask(place, () => diffPane.codeMenuRequested())
+        return true
+    }
     /// Automation: the text hand without a pointer (verify-ui), through the same three functions the `MouseArea`'s
     /// handlers call, so a run cannot pass while they do something else. `side`: 0 for the rows' own lines, 1 for the
     /// right of a split row.
@@ -449,6 +462,8 @@ Rectangle {
             }
             Keys.onUpPressed: event => event.accepted = diffPane.stepRows(-1)
             Keys.onDownPressed: event => event.accepted = diffPane.stepRows(1)
+            // The menu key; Windows' Shift+F10 comes through the window (`Main.keyMenuAsked`).
+            Keys.onMenuPressed: event => event.accepted = diffPane.menuFromKeys()
             // Mouse wheels send `Metrics.wheelRows` rows per notch, as every other surface does; touchpads keep
             // Flickable's own panning.
             WheelHandler {

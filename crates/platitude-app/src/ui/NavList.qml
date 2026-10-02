@@ -63,6 +63,46 @@ AppListView {
         return navList.kindHint + ":" + (full !== "" ? full : name)
     }
 
+    // ---- the keyboard (デザイン規約 §左メニューの所作) ----------------
+    // A click on a row brings the keyboard here, where it answers the menu key on the row clicked last
+    // (`SidebarRowGestures.activeKey`). Nothing here walks the rows, so the arrows go nowhere: Qt's own key navigation
+    // would move `currentIndex` and tell nobody.
+    keyNavigationEnabled: false
+    function takeKeyboard() {
+        if (navList.gestures !== null)
+            navList.forceActiveFocus()
+    }
+    // Let go off screen (a folded section, the folded rail): Qt keeps active focus on an item it made invisible.
+    onVisibleChanged: {
+        if (!navList.visible)
+            navList.focus = false
+    }
+    /// The menu key on the left menu (デザイン規約 §メニュー のキーボード): the row clicked last answers as its
+    /// right-click does (`NavItemDelegate.rowPressed`), with the menu standing under the left end of the row's own
+    /// line. The row comes on screen first, as little as will do; a row a filter or a fold hides opens nothing, and a
+    /// list without the keyboard nothing (`KeyMenu.answer` comes here from its focus). Says whether a row was asked.
+    function menuFromKeys() {
+        if (!navList.activeFocus || navList.gestures === null || navList.sectionModel === null)
+            return false
+        const key = navList.gestures.activeKey
+        const head = navList.kindHint + ":"
+        if (!key.startsWith(head))
+            return false
+        const row = navList.sectionModel.rowOfName(key.substring(head.length))
+        if (row < 0)
+            return false
+        navList.positionViewAtIndex(row, ListView.Contain)
+        // A row the move brought on is built at the next polish; the menu needs it now.
+        navList.forceLayout()
+        const item = navList.itemAtIndex(row)
+        if (!item)
+            return false
+        KeyMenu.ask(item.mapToItem(null, 0, item.lineHeight), () => item.rowPressed(Qt.RightButton, Qt.NoModifier))
+        return true
+    }
+    // The menu key; Windows' Shift+F10 comes through the window (`Main.keyMenuAsked`).
+    Keys.onMenuPressed: event => event.accepted = navList.menuFromKeys()
+
     /// Bring this section's row into view when its box or its facts open: a row can be typed into while scrolled
     /// off (the sticky `HeadPinRow` raises the same menu), and a name changing off screen is one nobody agreed to.
     Connections {
@@ -364,6 +404,7 @@ AppListView {
         onRowClicked: {
             if (navList.gestures)
                 navList.gestures.noteClick(row.rowKey)
+            navList.takeKeyboard()
         }
         onFactsAsked: (open, at) => {
             if (!navList.gestures)
@@ -380,6 +421,7 @@ AppListView {
         onFactsFollowed: (key, oidHex) => {
             if (navList.gestures)
                 navList.gestures.followLine(key, oidHex)
+            navList.takeKeyboard()
         }
         onActivateRequested: {
             if (navList.gestures)

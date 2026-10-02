@@ -153,6 +153,30 @@ Item {
                                            pick.ruler.placeAt(item.textOf(side), item.boldOf(side),
                                                               pick.codeX + Math.max(0, x)))
     }
+    /// Where the selection's moving end is drawn (`DiffModel.selectionEnd` — the place a text box's caret would stand),
+    /// in scene coordinates at the foot of its row, which the menu key opens under (デザイン規約 §メニュー のキーボード).
+    /// The row comes on screen first, as little as will do; an end sent sideways out of its column stands at the
+    /// column's edge. Null with nothing selected.
+    function endPlace() {
+        const end = pick.diffModel.selectionEnd()
+        if (end === undefined)
+            return null
+        pick.view.positionViewAtIndex(end.row, ListView.Contain)
+        // A row the move brought on is built at the next polish; the place is wanted now.
+        pick.view.forceLayout()
+        const item = pick.view.itemAtIndex(end.row)
+        if (!item)
+            return null
+        const start = pick.codeStart(end.side)
+        let x = start
+        if (!item.banded) {
+            pick.ruler.hold(item.textOf(end.side), item.boldOf(end.side))
+            x += pick.ruler.xOf(Math.min(end.place, pick.ruler.length)) - pick.codeX
+        }
+        const right = pick.split && end.side === 0 ? pick.divider : pick.width
+        const foot = item.mapToItem(null, 0, item.height)
+        return Qt.point(pick.mapToItem(null, Math.max(start, Math.min(x, right)), 0).x, foot.y)
+    }
     /// Not a hunk heading: the press there belongs to its two words (デザイン規約 §diff の中身をコピーする).
     function takesPress(row) {
         const item = pick.view.itemAtIndex(row)

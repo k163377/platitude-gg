@@ -54,6 +54,29 @@ Item {
         else if (bottom > walk.view.contentY + walk.view.height)
             walk.view.contentY = walk.view.clampY(bottom - walk.view.height)
     }
+    /// Whether any of `row` is on screen.
+    function rowShows(row) {
+        const top = walk.view.originY + row * Theme.graphRowHeight
+        return top + Theme.graphRowHeight > walk.view.contentY && top < walk.view.contentY + walk.view.height
+    }
+    /// The menu key on the history (デザイン規約 §メニュー のキーボード): the current row's own right-click
+    /// (`GraphRowDelegate.askMenu` — the choice drawn in to that row, and its menu, none on the working tree's row),
+    /// standing under the row's left end. The row comes on screen first as a step lands on it: as little as will do,
+    /// into the middle from out of sight. Only while the list holds the keyboard — the window hands Shift+F10 to the
+    /// nearest surface up from whatever does (`KeyMenu.answer`). Says whether a row was asked.
+    function menuFromKeys() {
+        const row = walk.view.currentIndex
+        if (!walk.visible || !walk.view.activeFocus || row < 0 || row >= walk.view.count)
+            return false
+        walk.revealStep(row, walk.rowShows(row))
+        // The rows a move brought on are built at the next polish; the menu needs this one now.
+        walk.view.forceLayout()
+        const item = walk.view.itemAtIndex(row)
+        if (!item || item.isWip)
+            return false
+        KeyMenu.ask(item.mapToItem(null, 0, Theme.graphRowHeight), () => item.askMenu())
+        return true
+    }
     /// For the runs: how the last step left `row` in the viewport, given `wasY` from before it — `in` (the view never
     /// moved), `edge` (flush against top or bottom), `center`, or `adrift` (規約 §矢印で履歴を辿る).
     function stepLanding(row, wasY) {
