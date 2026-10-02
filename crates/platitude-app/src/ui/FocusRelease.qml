@@ -40,12 +40,25 @@ Item {
             return
         const local = item.mapFromItem(null, scenePos)
         if (local.x < 0 || local.y < 0 || local.x >= item.width || local.y >= item.height) {
-            if (watcher.home !== null)
-                watcher.home.forceActiveFocus()
-            else
-                watcher.window.contentItem.forceActiveFocus()
+            watcher.letGo(item, watcher.home !== null ? watcher.home : watcher.window.contentItem)
             watcher.pressedAway(scenePos)
         }
+    }
+    /// The keyboard from `box` to `to`. A focus scope handed the focus passes it straight back down to the child that
+    /// last held it — the page is one, and so is a list or a scroll view between — so while `to` stands above the box,
+    /// every link up to it lets go first, or the caret comes back to the box it was walked away from
+    /// (`tests/qml/tst_pagerelease.qml`).
+    function letGo(box, to) {
+        const links = []
+        for (let link = box; link !== null; link = link.parent) {
+            if (link === to) {
+                for (const held of links)
+                    held.focus = false
+                break
+            }
+            links.push(link)
+        }
+        to.forceActiveFocus()
     }
     /// The hand is live and covers what it was laid on — the half a run entering `pressedAt` cannot prove.
     readonly property bool stands: hand.enabled && watcher.width > 0 && watcher.height > 0
