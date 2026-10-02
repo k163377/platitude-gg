@@ -162,8 +162,8 @@ AppCard {
     // The hand walking in off the rail crosses that padding, which the content's handler cannot see; a hand resting
     // on it would otherwise close the section (デザイン規約 §左メニューを畳む).
     tracksPointer: true
-    // Leaving closes it (above); Escape is for a pointer already inside.
-    closePolicy: Popup.CloseOnEscape
+    // Leaving closes it (above).
+    closesOnPressOutside: false
 
     // The sidebar's own ground (the header band would be lost on `bgElevated`); the frame floats it (規約 §メニュー),
     // and square corners since it starts flush against the rail.

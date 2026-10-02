@@ -22,9 +22,17 @@ Popup {
     /// A card of sentences sets its content here so a press in any gap starts a selection (`AppCardFace.textContent`);
     /// a card of rows leaves it, since there a press is the row's (規約 §hover のツールチップ「選べる一覧も対象外」).
     property alias textContent: cardFace.textContent
+    /// A press outside puts the card down; off for a card the pointer leaving closes (`BandStateCard`,
+    /// `SectionPeekPopup`). The card spells its own `closePolicy` from this (below).
+    property bool closesOnPressOutside: true
 
     padding: Theme.spaceSm
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    // Escape only while the keyboard is in the card (a press on its words, `CardText`): Qt keeps every window
+    // `Shortcut` out while a popup other than a tooltip stands with `CloseOnEscape`, yet the popup hears Escape only
+    // from the keyboard it holds — declared always, a card the hand opened would keep Ctrl+F, F5 and the bars' Escape
+    // from the window and still stay up on Escape (rules-refs/app-ui.md「hover のカードは窓の `Shortcut` を塞がない」).
+    closePolicy: (card.activeFocus ? Popup.CloseOnEscape : Popup.NoAutoClose)
+                 | (card.closesOnPressOutside ? Popup.CloseOnPressOutside : Popup.NoAutoClose)
     // The tips inside time themselves, as the window's do: a popup inherits no policy (`Main.qml`).
     ToolTip.policy: ToolTip.Manual
     background: AppCardFace {

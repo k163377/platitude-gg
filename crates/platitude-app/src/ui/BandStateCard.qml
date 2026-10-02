@@ -91,8 +91,8 @@ AppCard {
         return bottom > 0 && Math.abs(rows.height - bottom) < 0.5
     }
 
-    // Escape only: the pointer leaving is what closes it (`BandStateGroup.settleStateCard`).
-    closePolicy: Popup.CloseOnEscape
+    // The pointer leaving is what closes it (`BandStateGroup.settleStateCard`).
+    closesOnPressOutside: false
     // Both halves of `AppCard.pointerInside`, for the same reason.
     tracksPointer: true
     contentPointed: contentHover.hovered

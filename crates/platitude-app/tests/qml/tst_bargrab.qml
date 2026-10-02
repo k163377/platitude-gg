@@ -38,15 +38,15 @@ Item {
         }
     }
 
-    // A card read by scrolling it (`RefListPopup`, `SectionPeekPopup`): its own bar, inside it. Escape alone closes
-    // it, as `SectionPeekPopup` and `BandStateCard` — a press outside is not what takes it down here.
+    // A card read by scrolling it (`RefListPopup`, `SectionPeekPopup`): its own bar, inside it. As `SectionPeekPopup`
+    // and `BandStateCard`, a press outside is not what takes it down here.
     AppCard {
         id: peekCard
         x: 220
         y: 20
         width: 160
         height: 200
-        closePolicy: Popup.CloseOnEscape
+        closesOnPressOutside: false
         tracksPointer: true
         contentPointed: cardHover.hovered
         contentItem: Item {
