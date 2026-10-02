@@ -1,5 +1,5 @@
 //! The gate's own container: the one the Linux side's verbs go into by
-//! `docker exec`, instead of a container apiece. It is owned by the gate
+//! the engine's `exec`, instead of a container apiece. It is owned by the gate
 //! that prepared the copy they start from (`runner`) and taken down when
 //! that gate's side is over. The cargo steps, `bare` and `offline` keep a
 //! container of their own: different images, mounts or network.
@@ -28,15 +28,16 @@
 //! container leaves once no verb has been in for a while and none is
 //! running. A mark counts as running for the step ceiling and no longer.
 //!
-//! **Every docker command out here is bounded**
-//! (`subprocess::bounded_both_streams`), with a file for what docker
+//! **Every engine command out here is bounded**
+//! (`subprocess::bounded_both_streams`), with a file for what the engine
 //! said, and a failure is said in the gate's words — never a container
-//! quietly left, never a `docker run` in place of a failed exec.
+//! quietly left, never a `run` in place of a failed exec.
 
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use super::engine;
 use super::runner::{note_of, spelled};
 use crate::subprocess::{Answer, bounded_both_streams};
 
@@ -67,7 +68,7 @@ const STATE_DIR: &str = "/run/pgg-gate";
 /// its own. The verbs of a side follow each other by seconds.
 const IDLE: Duration = Duration::from_secs(5 * 60);
 
-/// How long a docker command about the container may take out here,
+/// How long an engine command about the container may take out here,
 /// against a daemon that may be wedged — each is seconds when it works.
 const START_CEILING: Duration = Duration::from_secs(120);
 const STOP_CEILING: Duration = Duration::from_secs(30);
@@ -86,16 +87,16 @@ pub(crate) fn container_of(root: &Path, name: &str) -> String {
 
 /// Starts the container the copy's verbs go into, and says so.
 ///
-/// `--init`, so what a verb leaves orphaned is reaped: the container's
-/// own process is a shell that waits on nothing. `--detach`, so no
-/// process out here holds it.
+/// Behind the image's init ([`engine::INIT`]), so what a verb leaves
+/// orphaned is reaped: the container's own process is a shell that waits
+/// on nothing. `--detach`, so no process out here holds it.
 pub(super) fn start_container(root: &Path, name: &str, gate: u32, tag: &str) -> Result<(), String> {
     let container = container_of(root, name);
     let out = crate::keepsakes::keepsake_base()?;
     let logs = root.join("target").join("gate-logs");
     std::fs::create_dir_all(&logs).map_err(|e| format!("{}: {e}", logs.display()))?;
-    let mut cmd = Command::new("docker");
-    cmd.args(["run", "--detach", "--rm", "--init", "--name", &container])
+    let mut cmd = engine::command();
+    cmd.args(["run", "--detach", "--rm", "--name", &container])
         .arg("--label")
         .arg(format!("{TREE_LABEL}={}", super::checkout_name(root)))
         .arg("--label")
@@ -136,6 +137,7 @@ pub(super) fn start_container(root: &Path, name: &str, gate: u32, tag: &str) -> 
         .arg("--env")
         .arg(format!("{}=1", super::IN_CONTAINER))
         .arg(tag)
+        .args(engine::INIT)
         .args(["sh", "-c", IDLE_SCRIPT, "pgg-gate"])
         .arg(IDLE.as_secs().to_string())
         .arg((crate::check::STEP_CEILING.as_secs() / 60).to_string())
@@ -154,14 +156,16 @@ pub(super) fn start_container(root: &Path, name: &str, gate: u32, tag: &str) -> 
             Ok(())
         }
         Answer::Ended { status, stdout } => Err(format!(
-            "the gate's container {container} did not start (docker exited {:?}): {}",
+            "the gate's container {container} did not start ({} exited {:?}): {}",
+            engine::NAME,
             status.code(),
             stdout.trim()
         )),
         Answer::OutOfTime { pid, after, ended } => Err(format!(
-            "the gate's container {container} did not start within {:.0}s — docker (pid {pid}) \
+            "the gate's container {container} did not start within {:.0}s — {} (pid {pid}) \
              was {}",
             after.as_secs_f32(),
+            engine::NAME,
             match ended {
                 Ok(()) => "ended".to_string(),
                 Err(why) => format!("not ended: {why}"),
@@ -190,62 +194,69 @@ fn live_gate(root: &Path) -> Result<u32, String> {
 pub(super) fn take_down_earlier_gates(root: &Path) -> Result<(), String> {
     let logs = root.join("target").join("gate-logs");
     let said = logs.join("linux-container.list.txt");
-    let mut list = Command::new("docker");
+    let mut list = engine::command();
     list.args([
         "ps",
         "--all",
         "--filter",
         &format!("label={TREE_LABEL}={}", super::checkout_name(root)),
         "--format",
-        &format!("{{{{.Names}}}}\t{{{{.Label \"{GATE_LABEL}\"}}}}\t{{{{.Status}}}}"),
+        "json",
     ]);
     let listed =
         match bounded_both_streams("listing this tree's containers", list, STOP_CEILING, &said) {
             Answer::Ended { status, stdout } if status.success() => stdout,
             Answer::Ended { status, stdout } => {
                 return Err(format!(
-                    "docker ps exited {:?} listing this tree's containers: {}",
+                    "{} ps exited {:?} listing this tree's containers: {}",
+                    engine::NAME,
                     status.code(),
                     stdout.trim()
                 ));
             }
             Answer::OutOfTime { after, .. } => {
                 return Err(format!(
-                    "docker ps did not list this tree's containers within {:.0}s",
+                    "{} ps did not list this tree's containers within {:.0}s",
+                    engine::NAME,
                     after.as_secs_f32()
                 ));
             }
             Answer::Unstarted(why) => return Err(why),
         };
-    for line in listed.lines() {
-        let mut fields = line.split('\t');
-        let (Some(name), Some(gate), status) = (fields.next(), fields.next(), fields.next()) else {
-            continue;
-        };
+    for (name, gate, status) in listed.lines().filter_map(listed_gate) {
         let live = live_gate(root)?;
         if gate == live.to_string() {
             println!("left {name} alone: the live gate's ({live})");
             continue;
         }
-        let line = remove_container(root, name);
+        let line = remove_container(root, &name);
         println!(
             "an earlier gate's container ({}): {line}",
-            status.unwrap_or("status unknown")
+            status.as_deref().unwrap_or("status unknown")
         );
     }
     Ok(())
+}
+
+/// A container's name, its gate label and its status, off one line of a
+/// `--format json` listing — or None for a line that has no name, or no
+/// gate label to tell its gate by (`--filter` chose it by the tree's).
+fn listed_gate(line: &str) -> Option<(String, String, Option<String>)> {
+    let name = engine::field(line, "Names")?;
+    let gate = engine::label(&engine::field(line, "Labels")?, GATE_LABEL)?;
+    Some((name, gate, engine::field(line, "Status")))
 }
 
 /// Removes the gate's container, and answers a line saying what
 /// became of it — never an error: the gate's verdict is about its steps.
 pub(crate) fn remove_container(root: &Path, name: &str) -> String {
     // Under the container's name, so a sweep of several keeps every
-    // answer docker gave.
+    // answer the engine gave.
     let said = root
         .join("target")
         .join("gate-logs")
         .join(format!("linux-remove-{name}.txt"));
-    let mut rm = Command::new("docker");
+    let mut rm = engine::command();
     rm.args(["rm", "--force", name]);
     // waits(measured): the removal's cost, said on its line and judged by nothing
     let at = std::time::Instant::now();
@@ -253,19 +264,37 @@ pub(crate) fn remove_container(root: &Path, name: &str) -> String {
         Answer::Ended { status, .. } if status.success() => {
             format!("{name} removed in {:.1}s", at.elapsed().as_secs_f32())
         }
-        // Gone on its idle ceiling (`--rm`; one leaving right now
-        // answers "already in progress"), or never started.
-        Answer::Ended { stdout, .. }
-            if stdout.contains("No such container") || stdout.contains("already in progress") =>
-        {
-            format!("{name} is not there (gone on its own, or never started)")
+        // Leaving right now on its idle ceiling (`--rm`): docker's own
+        // "already in progress".
+        Answer::Ended { stdout, .. } if stdout.contains("already in progress") => {
+            format!("{name} is not there (gone on its own)")
         }
-        Answer::Ended { status, stdout } => format!(
-            "{name} was not removed (docker exited {:?}: {}) — the next gate in this tree \
-             takes it down, and `docker rm --force {name}` does now",
-            status.code(),
-            stdout.trim()
-        ),
+        // Whatever the refusal said, the engine's listing decides.
+        Answer::Ended { status, stdout } => {
+            let refused = format!(
+                "{} exited {:?}: {}",
+                engine::NAME,
+                status.code(),
+                stdout.trim()
+            );
+            let asked = said.with_file_name(format!("linux-asked-{name}.txt"));
+            match engine::presence(engine::Kind::Container, name, &asked) {
+                engine::Presence::Gone => {
+                    format!("{name} is not there (gone on its own, or never started)")
+                }
+                engine::Presence::There => format!(
+                    "{name} was not removed ({refused}) — the next gate in this tree takes it \
+                     down, and `{} rm --force {name}` does now",
+                    engine::NAME
+                ),
+                engine::Presence::Unknown(why) => format!(
+                    "{name} was not confirmed removed ({refused}), and asking whether it is \
+                     still there failed ({why}) — it may still be running: the next gate in \
+                     this tree takes it down, and `{} rm --force {name}` does now",
+                    engine::NAME
+                ),
+            }
+        }
         Answer::OutOfTime { after, .. } => format!(
             "{name} was not removed within {:.0}s — it leaves on its own once no verb has \
              been in it for {}s, and the next gate in this tree takes it down",
@@ -290,8 +319,8 @@ pub(crate) fn exec_in(container: &str, command: &[String], mark: &str) -> Result
     let mut cmd = exec_line(container, &inside, mark)?;
     // A killed launcher leaves the process in there running; what
     // reaches it then is its mark (`stop_step`).
-    let status =
-        crate::budget::watched(&mut cmd).map_err(|e| format!("failed to run docker: {e}"))?;
+    let status = crate::budget::watched(&mut cmd)
+        .map_err(|e| format!("failed to run {}: {e}", engine::NAME))?;
     if status.success() {
         crate::keepsakes::onto_the_board(keepsake.as_ref().map(|out| out.dir.as_path()), command);
         return Ok(());
@@ -302,17 +331,20 @@ pub(crate) fn exec_in(container: &str, command: &[String], mark: &str) -> Result
     })
 }
 
-/// The `docker exec` for `inside` — the copy and its arguments, the
+/// The engine's `exec` for `inside` — the copy and its arguments, the
 /// verb's `/out` leaf already on it — in `container`, marked `mark`.
 /// Pure but for the terminal check, so a test can read the line.
 pub(super) fn exec_line(container: &str, inside: &[String], mark: &str) -> Result<Command, String> {
     let Some(copy) = inside.first() else {
         return Err("nothing to run".into());
     };
-    let mut cmd = Command::new("docker");
+    let mut cmd = engine::command();
     cmd.arg("exec");
+    // No stdin but a terminal's, as on every run (`super::carried`).
     if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
         cmd.arg("--interactive").arg("--tty");
+    } else {
+        cmd.stdin(Stdio::null());
     }
     super::marked(&mut cmd);
     cmd.arg("--env")
@@ -342,7 +374,7 @@ pub(crate) fn stop_step(container: &str, mark: &str, logs: &Path) -> Result<Stri
     // The stop's whole account; the line answered is its last.
     let said = logs.join(format!("linux-stop-{mark}.txt"));
     let account = format!("(the stop's account: {})", said.display());
-    let mut stop = Command::new("docker");
+    let mut stop = engine::command();
     stop.args([
         "exec",
         container,
@@ -398,7 +430,7 @@ pub(crate) fn stop_step(container: &str, mark: &str, logs: &Path) -> Result<Stri
 /// `unset` does not touch it, and a subshell forked for `|` or `$( )`
 /// inherits it whole, so a marked walker would list and kill its own
 /// pipeline. The walker is an `env -u` exec of a fresh shell
-/// ([`exec_script`]) or a `docker exec` that never had the mark
+/// ([`exec_script`]) or an `exec` that never had the mark
 /// ([`stop_step`]).
 const MARKED_FN: &str = "marked() {\n\
      \x20 for p in /proc/[0-9]*; do\n\
@@ -500,7 +532,7 @@ mod tests {
 
     use super::super::runner::spelled;
 
-    /// The name is also one docker and a shell accept.
+    /// The name is also one an engine and a shell accept.
     #[test]
     fn the_gates_container_is_named_for_the_tree_and_the_run() {
         let root = Path::new("C:\\Users\\x\\IdeaProjects\\platitude-gg\\.claude\\worktrees\\c");
@@ -534,7 +566,7 @@ mod tests {
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        assert_eq!(line.get_program(), "docker");
+        assert_eq!(line.get_program(), super::engine::command().get_program());
         assert_eq!(args[0], "exec");
         for env in [
             format!("{}=1", crate::still::UNDER),

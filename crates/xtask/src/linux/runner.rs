@@ -9,7 +9,7 @@
 //! and `offline` are cargo's work and stay cargo's.
 //!
 //! **Whose directory, and whose lock.** `/work/target` is this
-//! checkout's own docker volume (`super::volume`). The build takes that
+//! checkout's own volume on the engine (`super::volume`). The build takes that
 //! volume's cargo lock and gives it back when its container ends, before
 //! any step of the side starts.
 //!
@@ -24,7 +24,7 @@
 //!
 //! **Everything is one step** — the one container (or `sh`) the gate
 //! starts through `check::run_step`, under its ceiling, log and tree
-//! kill. A docker command on the side would be a road out of that
+//! kill. An engine command on the side would be a road out of that
 //! ceiling (`budget::watched` has none) and a second container to orphan.
 //!
 //! **Installed by rename**: a copy written in place is a binary somebody
@@ -237,8 +237,9 @@ pub(crate) const NOTE_MOUNT: &str = "/pgg-gate-running";
 /// **It also takes yesterday's demo repositories with it**, as the host
 /// does on its way into a gate (`verify::ownership::sweep_yesterdays_runs`):
 /// the volume is one checkout's, and otherwise gains about five hundred
-/// run directories a gate and loses none — a file count the VM pays for
-/// ([the record](../../../../ci/baseline/wsl-memory-windows-x64.md)).
+/// run directories a gate and loses none — on a disk that never gives
+/// back what it once held (internal-docs/P3-確認事項.md §開発環境(Linux
+/// コンテナ)).
 /// Spared: templates (`.pgg-template-ready` / `-refused`), trees somebody
 /// kept (`.pgg-keep`), and anything under thirty minutes old — a
 /// `cargo xtask linux verify-ui` run by hand beside the gate, which its

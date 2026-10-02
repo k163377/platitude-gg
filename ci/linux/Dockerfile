@@ -1,5 +1,5 @@
 # `cargo xtask linux <cargo args>` builds this image and runs the workspace
-# inside it.
+# inside it — with WSL's own engine (wslc) on Windows, docker elsewhere.
 #
 # ubuntu:24.04: what CI's ubuntu-latest resolves to, and its git is the
 # oldest git最低バージョン整合.md supports — no other machine here runs it.
@@ -16,6 +16,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # build-essential: cc, rustc's linker. openssh-client: ssh-keygen, which
 # git's ssh signing runs (the signing tests); CI's runners already have it.
+# tini: the gate's long-lived container starts behind it, to reap what a
+# verb leaves orphaned — docker's `--init` is tini, and wslc has no such
+# flag (`linux::engine::INIT`).
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         build-essential \
@@ -23,6 +26,7 @@ RUN apt-get update \
         curl \
         git \
         openssh-client \
+        tini \
     && rm -rf /var/lib/apt/lists/*
 
 # rust-toolchain.toml stays the one toolchain pin: rustup installs what it names.

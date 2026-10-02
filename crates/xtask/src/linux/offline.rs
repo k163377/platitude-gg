@@ -44,12 +44,12 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
     println!("collected {} test binaries", binaries.len());
 
     let smoke = format!("{TARGET_MOUNT}/debug/platitude-gg");
-    let mut cmd = docker_run(root, false, &[("PGG_SMOKE_BIN", &smoke)]);
+    let mut cmd = engine_run(root, false, &[("PGG_SMOKE_BIN", &smoke)]);
     cmd.arg(&app)
         .args(["bash", "ci/offline-test.sh"])
         .args(&binaries);
-    let status =
-        crate::budget::watched(&mut cmd).map_err(|e| format!("failed to run docker: {e}"))?;
+    let status = crate::budget::watched(&mut cmd)
+        .map_err(|e| format!("failed to run {}: {e}", super::engine::NAME))?;
     if status.code() == Some(124) {
         return Err(
             "the smoke run hit ci/offline-test.sh's timeout: the app was started \
@@ -74,7 +74,7 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
 /// the field CI reads with jq (.github/workflows/ci.yml), so what runs
 /// offline is chosen as the job chooses it.
 fn test_binaries(root: &Path, tag: &str) -> Result<Vec<String>, String> {
-    let mut cmd = docker_run(root, true, &[]);
+    let mut cmd = engine_run(root, true, &[]);
     cmd.arg(tag).args([
         "cargo",
         "test",
@@ -126,10 +126,10 @@ fn profile_is_test(line: &str) -> bool {
     rest[..end].contains("\"test\":true")
 }
 
-/// A `docker run` against this checkout, up to but not including the tag.
+/// An engine's `run` against this checkout, up to but not including the tag.
 /// `network` false is the empty network namespace CI's `unshare -n` gives;
 /// the mounts are every other run's, so nothing is compiled twice.
-fn docker_run(root: &Path, network: bool, env: &[(&str, &str)]) -> Command {
+fn engine_run(root: &Path, network: bool, env: &[(&str, &str)]) -> Command {
     let mut cmd = super::carried();
     if !network {
         cmd.arg("--network").arg("none");
@@ -177,7 +177,7 @@ mod tests {
     /// A run with no network is still a run on this machine.
     #[test]
     fn the_offline_container_is_under_the_launchers_ticket() {
-        let said = crate::linux::tests::args_of(&docker_run(Path::new("."), false, &[]));
+        let said = crate::linux::tests::args_of(&engine_run(Path::new("."), false, &[]));
         for mark in [crate::still::UNDER, crate::budget::HELD] {
             assert!(
                 said.contains(&format!("{mark}=1")),

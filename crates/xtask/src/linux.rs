@@ -1,6 +1,7 @@
 //! `cargo xtask linux <command…>` — the workspace on Linux, from a
 //! workstation that has none. The rest of the line goes to cargo in a
-//! container built from ci/linux/Dockerfile; an xtask verb gets `cargo
+//! container built from ci/linux/Dockerfile — by WSL's own engine on
+//! Windows, docker elsewhere ([`engine`]); an xtask verb gets `cargo
 //! xtask` in front. On Linux the container drops out and the command runs
 //! where it stands.
 //!
@@ -9,9 +10,10 @@
 //! so a run need not download Qt first; `bare` and `runtime` belong to the
 //! `bare` verb.
 //!
-//! The build directory (/work/target) and the cargo registry are docker
-//! volumes, never the host's: one target/ shared between two operating
-//! systems is two cargos on one build lock and two sets of fingerprints.
+//! The build directory (/work/target) and the cargo registry are the
+//! engine's volumes, never the host's: one target/ shared between two
+//! operating systems is two cargos on one build lock and two sets of
+//! fingerprints.
 //! Only source reading crosses the host filesystem — slow, but once per
 //! build, and a copy inside a volume would be a second answer to "which
 //! tree is the real one".
@@ -35,7 +37,10 @@ pub(crate) static RUN: command::Command = command::Command {
     call: "linux <command>",
     purpose: "run a command against this checkout on Ubuntu, in the container",
     run_in: Where::Seat,
-    needs: &["docker running (on Linux the command runs where it stands)"],
+    needs: &[
+        "the container engine: WSL 3's wslc on Windows, docker elsewhere (on Linux the command \
+         runs where it stands)",
+    ],
     permission: Permission::Plain,
 };
 
@@ -79,6 +84,7 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&RUN, &VERIFY, &RUNNER, &ST
 
 mod bare;
 pub(crate) mod container;
+pub(crate) mod engine;
 mod offline;
 pub(crate) mod runner;
 mod tested;
@@ -163,7 +169,7 @@ struct Options {
     /// `--runner`: the name of a prepared copy to start the verb from
     /// ([`runner`]).
     copy: Option<String>,
-    /// `--container`: the gate's own container to `docker exec` the verb
+    /// `--container`: the gate's own container to `exec` the verb
     /// in ([`container::exec_in`]). Only with `--runner`.
     container: Option<String>,
     /// `--step`: the mark every process of this verb carries inside
@@ -383,8 +389,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // Announced here as well (its own xtask is under the announcement);
     // a verb run where it stands announces itself.
     let _busy = crate::still::busy(&root, "linux")?;
-    // The gate's own container, already up, by `docker exec`: one that is
-    // not there is a red step saying so, never a `docker run` in its place.
+    // The gate's own container, already up, by `exec`: one that is not
+    // there is a red step saying so, never a `run` in its place.
     if let (Some(name), Some(mark)) = (&container, &step) {
         return container::exec_in(name, &command, mark);
     }
@@ -605,15 +611,17 @@ fn qt_version(root: &Path) -> Result<String, String> {
 }
 
 fn image_exists(tag: &str) -> Result<bool, String> {
-    let status = Command::new("docker")
+    let status = engine::command()
         .args(["image", "inspect", tag])
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .map_err(|e| {
             format!(
-                "failed to run docker: {e}. `cargo xtask linux` needs docker on \
-                 PATH — it is the entire Linux side of a Windows workstation."
+                "failed to run {}: {e}. `cargo xtask linux` needs {}.",
+                engine::NAME,
+                engine::NEEDS
             )
         })?;
     Ok(status.success())
@@ -624,7 +632,7 @@ fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
     // Ahead of the build: one that stops halfway has written cache
     // entries with no image to belong to.
     SHARING_MOVED.store(true, Ordering::Relaxed);
-    let mut cmd = Command::new("docker");
+    let mut cmd = engine::command();
     cmd.arg("build")
         .arg("--file")
         .arg(root.join("ci").join("linux").join("Dockerfile"))
@@ -637,9 +645,9 @@ fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
             .arg(format!("QT_VERSION={}", qt_version(root)?));
     }
     let status = crate::budget::watched(cmd.arg(root))
-        .map_err(|e| format!("failed to run docker build: {e}"))?;
+        .map_err(|e| format!("failed to run {} build: {e}", engine::NAME))?;
     if !status.success() {
-        return Err("docker build failed".into());
+        return Err(format!("{} build failed", engine::NAME));
     }
     Ok(())
 }
@@ -664,12 +672,14 @@ fn stale_images<'a>(listed: &'a str, stage: &str, keep: &BTreeSet<String>) -> Ve
 /// built anything decides nothing — a tag dies with the last checkout
 /// naming it.
 ///
-/// Docker refuses to remove an image a running container uses, so a run
-/// next door is safe. Every removal is printed.
-fn forget_older_images(listed: &str, stage: &str, keep: &BTreeSet<String>) {
+/// The engine refuses to remove an image a running container uses, so a
+/// run next door is safe. Every removal is printed. `said` is where the
+/// engine's listings go ([`engine::presence`]).
+fn forget_older_images(listed: &str, stage: &str, keep: &BTreeSet<String>, said: &Path) {
     for tag in stale_images(listed, stage, keep) {
-        let Ok(done) = Command::new("docker")
+        let Ok(done) = engine::command()
             .args(["image", "rm", tag])
+            .stdin(Stdio::null())
             .stdout(Stdio::null())
             .output()
         else {
@@ -680,16 +690,43 @@ fn forget_older_images(listed: &str, stage: &str, keep: &BTreeSet<String>) {
             println!("removed the older image {tag}");
             continue;
         }
-        // Swept by the seat next door since the listing: the state this
-        // wanted.
-        let said = String::from_utf8_lossy(&done.stderr);
-        if !said.contains("No such image") {
-            println!(
-                "left {tag} alone — docker would not remove it ({})",
-                said.trim()
-            );
-        }
+        after_a_failed_removal(engine::Kind::Image, tag, &done.stderr, said);
     }
+}
+
+/// What a removal that failed left, said: nothing when the object is gone
+/// (the seat next door swept it since the listing — the state wanted), a
+/// line when it is still there, and another when nobody could find out —
+/// an object that could not be asked after is never reported gone.
+fn after_a_failed_removal(kind: engine::Kind, name: &str, refused: &[u8], said: &Path) {
+    let refused = String::from_utf8_lossy(refused);
+    match engine::presence(kind, name, said) {
+        engine::Presence::Gone => {}
+        engine::Presence::There => println!(
+            "left {name} alone — {} would not remove it ({})",
+            engine::NAME,
+            refused.trim()
+        ),
+        engine::Presence::Unknown(why) => println!(
+            "did not confirm {name} removed — {} would not remove it ({}), and asking whether it \
+             is still there failed ({why})",
+            engine::NAME,
+            refused.trim()
+        ),
+    }
+}
+
+/// The `repository:tag` of every image of [`IMAGE`]'s, one a line, off a
+/// `--format json` listing ([`engine::field`]).
+fn image_tags(listing: &str) -> String {
+    listing
+        .lines()
+        .filter_map(|line| {
+            let repository = engine::field(line, "Repository")?;
+            let tag = engine::field(line, "Tag")?;
+            (repository == IMAGE).then(|| format!("{repository}:{tag}\n"))
+        })
+        .collect()
 }
 
 /// What the checkouts on this machine still name: the volumes their
@@ -781,7 +818,7 @@ fn orphan_volumes<'a>(listed: &'a str, names: &BTreeSet<String>) -> Vec<&'a str>
 /// the container, where the names are the outside machine's.
 ///
 /// A volume already gone was swept by another seat; one still mounted
-/// docker refuses, and that is printed.
+/// the engine refuses, and that is printed.
 fn housekeeping(root: &Path) {
     static ONCE: std::sync::Once = std::sync::Once::new();
     if cfg!(target_os = "linux") || std::env::var_os(IN_CONTAINER).is_some() {
@@ -795,29 +832,47 @@ fn housekeeping(root: &Path) {
                 return;
             }
         };
-        forget_orphan_volumes(&alive.names);
-        // Nothing off a half-read list (`Alive::tags`); `alive` has said
-        // which checkout would not answer.
-        let Some(keep) = &alive.tags else {
-            return;
-        };
-        let Ok(out) = Command::new("docker")
-            .args(["images", IMAGE, "--format", "{{.Repository}}:{{.Tag}}"])
-            .stderr(Stdio::null())
-            .output()
-        else {
-            return;
-        };
-        let listed = String::from_utf8_lossy(&out.stdout);
-        for stage in STAGES {
-            forget_older_images(&listed, stage, keep);
-        }
+        // This process's own: two lines of one tree can be at it at once.
+        let said = root
+            .join("target")
+            .join(format!("linux-housekeeping-{}.txt", std::process::id()));
+        forget(&alive, &said);
+        let _ = std::fs::remove_file(&said);
     });
 }
 
-fn forget_orphan_volumes(names: &BTreeSet<String>) {
-    let Ok(out) = Command::new("docker")
-        .args(["volume", "ls", "--format", "{{.Name}}"])
+/// [`housekeeping`]'s removals: the orphan volumes, then the images no
+/// checkout names — nothing off a half-read list (`Alive::tags`), and
+/// `alive` has said which checkout would not answer.
+fn forget(alive: &Alive, said: &Path) {
+    forget_orphan_volumes(&alive.names, said);
+    let Some(keep) = &alive.tags else {
+        return;
+    };
+    let Ok(out) = engine::command()
+        .args([
+            "images",
+            "--filter",
+            &format!("reference={IMAGE}"),
+            "--format",
+            "json",
+        ])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return;
+    };
+    let listed = image_tags(&String::from_utf8_lossy(&out.stdout));
+    for stage in STAGES {
+        forget_older_images(&listed, stage, keep, said);
+    }
+}
+
+fn forget_orphan_volumes(names: &BTreeSet<String>, said: &Path) {
+    let Ok(out) = engine::command()
+        .args(["volume", "ls", "--quiet"])
+        .stdin(Stdio::null())
         .stderr(Stdio::null())
         .output()
     else {
@@ -825,8 +880,9 @@ fn forget_orphan_volumes(names: &BTreeSet<String>) {
     };
     let listed = String::from_utf8_lossy(&out.stdout);
     for orphan in orphan_volumes(&listed, names) {
-        let Ok(done) = Command::new("docker")
+        let Ok(done) = engine::command()
             .args(["volume", "rm", orphan])
+            .stdin(Stdio::null())
             .stdout(Stdio::null())
             .output()
         else {
@@ -836,13 +892,7 @@ fn forget_orphan_volumes(names: &BTreeSet<String>) {
             println!("removed the orphan volume {orphan} — no checkout here names it");
             continue;
         }
-        let said = String::from_utf8_lossy(&done.stderr);
-        if !said.contains("no such volume") {
-            println!(
-                "left the volume {orphan} alone — docker would not remove it ({})",
-                said.trim()
-            );
-        }
+        after_a_failed_removal(engine::Kind::Volume, orphan, &done.stderr, said);
     }
 }
 
@@ -869,7 +919,7 @@ static SHARING_MOVED: AtomicBool = AtomicBool::new(false);
 /// Not between the stages of one line: `bare` builds an image out of the
 /// previous one's cache, so a trim in [`ensure_image`] would take what the
 /// next stage asks for. A guard, so it runs on every road out; declared
-/// under the ticket, so its docker is counted. Held by [`run`] and by
+/// under the ticket, so its engine command is counted. Held by [`run`] and by
 /// [`sweep_the_volume`], whose housekeeping can move the sharing too.
 struct TrimTheCache;
 
@@ -878,32 +928,16 @@ impl Drop for TrimTheCache {
         if !SHARING_MOVED.load(Ordering::Relaxed) {
             return;
         }
-        let ceiling = CACHE_CEILING.to_string();
-        let Ok(out) = Command::new("docker")
-            .args(["builder", "prune", "--force", "--max-used-space", &ceiling])
-            .output()
-        else {
-            return;
-        };
-        if !out.status.success() {
-            println!(
-                "left the build cache alone — docker would not trim it ({})",
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-            return;
+        match engine::trim_build_cache(CACHE_CEILING) {
+            Ok(freed) => println!(
+                "trimmed the unreferenced build cache to {} MiB — freed {freed}",
+                CACHE_CEILING >> 20
+            ),
+            Err(said) => println!(
+                "left the build cache alone — {} would not trim it ({said})",
+                engine::NAME
+            ),
         }
-        // docker's own last line, which is the only place it says how
-        // much came out.
-        let said = String::from_utf8_lossy(&out.stdout);
-        let freed = said
-            .lines()
-            .rev()
-            .find_map(|line| line.trim().strip_prefix("Total:"))
-            .map_or("nothing", str::trim);
-        println!(
-            "trimmed the unreferenced build cache to {} MiB — freed {freed}",
-            CACHE_CEILING >> 20
-        );
     }
 }
 
@@ -933,10 +967,12 @@ fn in_container(
         cmd.arg("--volume")
             .arg(format!("{}:{}:ro", mount_path(note), runner::NOTE_MOUNT));
     }
-    // A terminal only when there is one to attach: docker refuses --tty
-    // outright when the harness runs this with a pipe for stdin.
+    // A terminal only when there is one to attach: the engine refuses
+    // --tty outright when the harness runs this with a pipe for stdin.
     if std::io::stdin().is_terminal() {
-        cmd.arg("--interactive").arg("--tty");
+        cmd.arg("--interactive")
+            .arg("--tty")
+            .stdin(Stdio::inherit());
     }
     cmd.arg("--volume")
         .arg(format!("{}:{WORK}", mount_path(root)))
@@ -974,10 +1010,10 @@ fn in_container(
     }
     // Through the budget's runner (`crate::budget::watched`): the
     // container goes on running when the launcher is killed. It sees the
-    // docker CLI only; a container whose CLI was killed too is `docker
-    // ps`'s to find.
-    let status =
-        crate::budget::watched(&mut cmd).map_err(|e| format!("failed to run docker: {e}"))?;
+    // engine's CLI only; a container whose CLI was killed too is the
+    // engine's `ps` to find.
+    let status = crate::budget::watched(&mut cmd)
+        .map_err(|e| format!("failed to run {}: {e}", engine::NAME))?;
     if status.success() {
         // The line as typed: the one `bridge` wrote says
         // `--no-board` whether or not the caller did.
@@ -1056,23 +1092,26 @@ fn watched_from_inside(inside: &[String], copy: Option<&str>) -> Vec<String> {
     line
 }
 
-/// A `docker run` already carrying this command's announcement to a
+/// An engine's `run` already carrying this command's announcement to a
 /// measurement and its ticket, neither of which the container may take
 /// again (`still::UNDER`, `budget::HELD`).
 ///
 /// Every container starts here: a road that forgot a mark would count the
 /// machine twice — the launcher holding weight while what it started
 /// queues for its own, a pair where neither half can move. `here` marks
-/// its child through `budget::under`, and a `docker exec` into the gate's
+/// its child through `budget::under`, and an `exec` into the gate's
 /// container takes [`marked`] (`container::exec_line`).
+///
+/// No stdin: nothing in there reads one it was not given a terminal for
+/// (`in_container` hands the terminal over).
 pub(super) fn carried() -> Command {
-    let mut cmd = Command::new("docker");
-    cmd.arg("run").arg("--rm");
+    let mut cmd = engine::command();
+    cmd.arg("run").arg("--rm").stdin(Stdio::null());
     marked(&mut cmd);
     cmd
 }
 
-/// The two marks, on a `docker run` or a `docker exec` — one place, so
+/// The two marks, on a `run` or an `exec` — one place, so
 /// that no road can carry one and forget the other.
 pub(super) fn marked(cmd: &mut Command) {
     for mark in [crate::still::UNDER, crate::budget::HELD] {
@@ -1100,7 +1139,7 @@ fn here(root: &Path, command: &[String]) -> Result<(), String> {
     })
 }
 
-/// A host path as docker wants it in --volume: forward slashes, drive
+/// A host path as the engine wants it in --volume: forward slashes, drive
 /// letter and all (backslashes do not mount).
 fn mount_path(path: &Path) -> String {
     path.display().to_string().replace('\\', "/")
@@ -1112,7 +1151,7 @@ pub(super) fn volume(root: &Path, kind: &str) -> String {
     format!("{IMAGE}-{kind}-{}", checkout_name(root))
 }
 
-/// The checkout's own name, as docker may spell it: the volumes and the
+/// The checkout's own name, as the engine may spell it: the volumes and the
 /// gate's container are named after it (`container::container_of`).
 pub(super) fn checkout_name(root: &Path) -> String {
     // The last segment after either separator: the path is a Windows one

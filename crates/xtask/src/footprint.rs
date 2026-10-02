@@ -1,10 +1,10 @@
 //! `cargo xtask footprint <command…>` — what the machine is holding
 //! while something runs, on one time axis.
 //!
-//! Both sides are read, because neither answers for the other:
-//! `vmmemWSL`'s working set is what Windows has lost, the distro's
-//! `/proc/meminfo` what Linux thinks the whole VM uses — memory is not
-//! namespaced, so a sum over `docker stats` is no substitute.
+//! Both sides are read, because neither answers for the other: the VM
+//! process's working set ([`VM_PROCESS`]) is what Windows has lost, the
+//! VM's `/proc/meminfo` what Linux thinks the whole VM uses — memory is
+//! not namespaced, so a sum over the engine's `stats` is no substitute.
 //!
 //! Long-lived children sample and are killed when the command ends; a
 //! process per tick would cost more than it reads. Their rows are kept
@@ -20,9 +20,9 @@ use crate::command::{self, Permission, Where};
 pub(crate) static FOOTPRINT: command::Command = command::Command {
     id: "footprint.watch",
     call: "footprint [--settle <seconds>] <command…>",
-    purpose: "run a command and record what the host, the VM and docker hold while it does",
+    purpose: "run a command and record what the host, the VM and the engine hold while it does",
     run_in: Where::Seat,
-    needs: &["docker running, for the container side of the reading"],
+    needs: &["the container engine (wslc on Windows), for the container side of the reading"],
     permission: Permission::Plain,
 };
 
@@ -31,12 +31,14 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&FOOTPRINT];
 /// Short against a gate's minutes, long against the cost of a line.
 const EVERY: Duration = Duration::from_secs(2);
 
-/// The distro the containers run in.
-const DISTRO: &str = "docker-desktop";
+/// The Windows process the containers' VM is: wslc's session VM, named
+/// after the session and its user, hence the wildcard.
+const VM_PROCESS: &str = "vmmemwslc*";
 
 /// How long the samplers stay up after the command ends: long enough for
-/// `autoMemoryReclaim` (tens of seconds) to have started handing memory
-/// back, short enough that runs back to back still read apart.
+/// the VM to have started handing memory back (wslc tears an idle one down
+/// after tens of seconds), short enough that runs back to back still read
+/// apart.
 const SETTLE: Duration = Duration::from_secs(60);
 
 fn settle_for(args: &[String]) -> Result<(Duration, Vec<String>), String> {
@@ -70,9 +72,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
         .map_err(|e| format!("{}: {e}", kept.display()))?;
     println!("footprint: {}", kept.display());
 
-    docker_listing(&kept, "docker-before.txt");
+    engine_listing(&kept, "containers-before.txt");
     let mut watching = Watching::start(&kept)?;
-    // In the seconds the docker events carry, so every file can be cut at
+    // In the seconds the engine's events carry, so every file can be cut at
     // the command's end.
     let mut timeline = format!("started {}\n", crate::note::now_secs());
     // Through this runner, so the line reads as it would alone.
@@ -89,7 +91,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     watching.stop();
     timeline.push_str(&format!("settled {}\n", crate::note::now_secs()));
     let _ = std::fs::write(kept.join("timeline.txt"), timeline);
-    docker_listing(&kept, "docker-after.txt");
+    engine_listing(&kept, "containers-after.txt");
     summarise(&kept);
 
     match outcome {
@@ -111,11 +113,11 @@ impl Watching {
     fn start(kept: &Path) -> Result<Self, String> {
         let host = kept.join("host.csv");
         let vm = kept.join("vm.txt");
-        let events = kept.join("docker-events.txt");
+        let events = kept.join("events.txt");
         Self::gather(vec![
             Box::new(move || host_side(&host)),
             Box::new(move || vm_side(&vm)),
-            Box::new(move || docker_side(&events)),
+            Box::new(move || engine_side(&events)),
         ])
     }
 
@@ -176,7 +178,7 @@ const MEM_CLASS: &str = "using System;\n\
 /// The processes a gate puts on the machine, by name. The count and the
 /// working set they add up to say whether what the host lost is the
 /// run's own processes or the VM behind them.
-const OURS: &str = "platitude-gg,cargo,rustc,xtask,git,link,docker";
+const OURS: &str = "platitude-gg,cargo,rustc,xtask,git,link,wslc,wslcsession,docker";
 
 /// What Windows has lost, one CSV row a tick.
 ///
@@ -200,7 +202,8 @@ fn host_side(to: &Path) -> Result<Child, String> {
          try {{\n\
          $m = [FootMem]::Now()\n\
          if ($vm -eq $null -or $vm.HasExited) \
-         {{ $vm = Get-Process -Name vmmemWSL -ErrorAction SilentlyContinue }}\n\
+         {{ $vm = Get-Process -Name {VM_PROCESS} -ErrorAction SilentlyContinue \
+         | Select-Object -First 1 }}\n\
          $ws = 0\n\
          if ($vm -ne $null) {{ $vm.Refresh(); $ws = [int]($vm.WorkingSet64/1MB) }}\n\
          $ours = @(Get-Process -Name {OURS} -ErrorAction SilentlyContinue)\n\
@@ -224,9 +227,8 @@ fn host_side(to: &Path) -> Result<Child, String> {
 
 /// What the VM thinks it is using, one block per tick.
 ///
-/// One line, and nothing in it to quote: `wsl.exe` re-splits the command,
-/// so a newline cuts the script off and nested quotes arrive in pieces.
-/// So the shell picks nothing; [`summarise`] takes the keys out here.
+/// One line, and nothing in it to quote, so the shell picks nothing;
+/// [`summarise`] takes the keys out here.
 fn vm_side(to: &Path) -> Result<Child, String> {
     let pause = format!("sleep {}", EVERY.as_secs());
     // `memory.peak` catches the high-water mark between ticks.
@@ -244,44 +246,42 @@ fn vm_side(to: &Path) -> Result<Child, String> {
          echo ---; {pause}; done"
     );
     let out = std::fs::File::create(to).map_err(|e| format!("{}: {e}", to.display()))?;
-    Command::new("wsl")
-        .args(["-d", DISTRO, "--", "sh", "-c", &script])
-        .stdin(Stdio::null())
+    crate::linux::engine::in_its_vm("sh", &["-c", &script])
         .stdout(Stdio::from(out))
         .stderr(Stdio::null())
         .spawn()
         .map_err(|e| format!("could not start the VM sampler: {e}"))
 }
 
-/// What docker did while this ran, one line an event. Containers made
-/// and torn down are counted off this, not the cgroup samples: one that
-/// lived less than a tick is in no sample, and `docker events --since`
+/// What the engine did while this ran, one line an event: time, type,
+/// action and the object's id lead every line ([`events`]). Containers
+/// made and torn down are counted off this, not the cgroup samples: one
+/// that lived less than a tick is in no sample, and `events --since`
 /// remembers too little to ask afterwards.
-fn docker_side(to: &Path) -> Result<Child, String> {
+///
+/// wslc takes no template and leads its own lines that way; docker is
+/// told to.
+fn engine_side(to: &Path) -> Result<Child, String> {
     let out = std::fs::File::create(to).map_err(|e| format!("{}: {e}", to.display()))?;
-    Command::new("docker")
-        .args([
-            "events",
-            "--format",
-            "{{.Time}} {{.Type}} {{.Action}} {{.Actor.Attributes.name}}",
-        ])
+    let mut events = crate::linux::engine::command();
+    events.arg("events");
+    if !cfg!(windows) {
+        events.args(["--format", "{{.Time}} {{.Type}} {{.Action}} {{.Actor.ID}}"]);
+    }
+    events
         .stdin(Stdio::null())
         .stdout(Stdio::from(out))
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|e| format!("could not start the docker events sampler: {e}"))
+        .map_err(|e| format!("could not start the engine's events sampler: {e}"))
 }
 
 /// Every container this machine has, running or not — the two ends of
 /// the question "did the run leave any".
-fn docker_listing(kept: &Path, name: &str) {
-    let Ok(out) = Command::new("docker")
-        .args([
-            "ps",
-            "-a",
-            "--format",
-            "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.CreatedAt}}",
-        ])
+fn engine_listing(kept: &Path, name: &str) {
+    let Ok(out) = crate::linux::engine::command()
+        .args(["ps", "-a", "--format", "json"])
+        .stdin(Stdio::null())
         .stderr(Stdio::null())
         .output()
     else {
@@ -353,16 +353,20 @@ fn summarise(kept: &Path) {
         );
     }
     containers(&vm);
-    events(&std::fs::read_to_string(kept.join("docker-events.txt")).unwrap_or_default());
+    events(&std::fs::read_to_string(kept.join("events.txt")).unwrap_or_default());
     stalls(&vm);
     readers(&vm);
 }
 
+/// Counted by id: a container that ends on its own is docker's `die` and
+/// wslc's `stop`, and one stopped from outside is both on docker.
 fn events(events: &str) {
-    let (mut created, mut destroyed, mut up, mut most) = (0usize, 0usize, 0i64, 0i64);
+    let (mut created, mut destroyed, mut most) = (0usize, 0usize, 0usize);
+    let mut up = std::collections::BTreeSet::new();
     for line in events.lines() {
         let mut words = line.split_whitespace();
-        let (Some(_time), Some(kind), Some(action)) = (words.next(), words.next(), words.next())
+        let (Some(_time), Some(kind), Some(action), Some(id)) =
+            (words.next(), words.next(), words.next(), words.next())
         else {
             continue;
         };
@@ -373,21 +377,23 @@ fn events(events: &str) {
             "create" => created += 1,
             "destroy" => destroyed += 1,
             "start" => {
-                up += 1;
-                most = most.max(up);
+                up.insert(id);
+                most = most.max(up.len());
             }
-            "die" => up -= 1,
+            "die" | "stop" => {
+                up.remove(id);
+            }
             _ => {}
         }
     }
     println!(
-        "footprint: docker                {created} container(s) created, {destroyed} destroyed, \
+        "footprint: containers made       {created} created, {destroyed} destroyed, \
          at most {most} up at once"
     );
 }
 
 /// Who read the disk while this ran. The reader need not have a
-/// container, so neither the VM's growth nor `docker stats` names it.
+/// container, so neither the VM's growth nor the engine's `stats` names it.
 ///
 /// A pid is not an identity here: one reused between two ticks reads as
 /// a single process that grew. The long-lived readers this exists to

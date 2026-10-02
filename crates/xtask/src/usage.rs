@@ -26,7 +26,7 @@ commands:
       #[cfg(not(windows))] is not compiled here at all, so an unused
       import or an orphaned fn behind that cfg would reach CI unseen.
       The two sides write to different build trees (target/ vs the
-      docker volume), so the wall clock is whichever side finishes
+      container's volume), so the wall clock is whichever side finishes
       last. Each --verb also runs verify-ui on the host, so one flag
       covers the verb on both OSes; its value is a whole verify-ui
       argument line, quoted when the verb needs its preset or argument
@@ -455,14 +455,14 @@ const TAIL: &str = "  shipped [--no-build]
       the last tick of it.
         cargo xtask footprint --settle 300 gate --all --fresh
       For the question repeating a gate raises: whether the VM grows and
-      what kind of memory grew. Neither side answers it alone —
-      `vmmemWSL`'s working set is what Windows has lost, /proc/meminfo
-      inside the distro is what Linux thinks it holds, and memory is not
-      namespaced, so that file is the whole VM and a sum over docker
-      stats is not a substitute. Judge by MemAvailable: MemFree alone
-      cannot tell a cache that would be given back from memory that is
-      gone. The rows are kept under target/footprint/<run>/ and nothing
-      sweeps them.
+      what kind of memory grew. Neither side answers it alone — the VM
+      process's working set (wslc's `vmmemwslc-…`) is what Windows has
+      lost, /proc/meminfo inside the VM is what Linux thinks it holds, and
+      memory is not namespaced, so that file is the whole VM and a sum
+      over the engine's stats is not a substitute. Judge by MemAvailable:
+      MemFree alone cannot tell a cache that would be given back from
+      memory that is gone. The rows are kept under target/footprint/<run>/
+      and nothing sweeps them.
 
   budget [--dir <tree>]
       What the machine's one budget is doing: how much of it the running
@@ -489,8 +489,9 @@ const TAIL: &str = "  shipped [--no-build]
   linux [--rebuild] [--shell] [--stage core|app] [--runner <name>
         [--container <name> --step <mark>]] <command…>
       Run a command against this checkout on Ubuntu, in a container built
-      from ci/linux/Dockerfile. On Linux it skips the container and runs
-      the command where it stands.
+      from ci/linux/Dockerfile — by WSL's own wslc on Windows (WSL 3.0 or
+      later, no Docker Desktop), by docker elsewhere. On Linux it skips the
+      container and runs the command where it stands.
         cargo xtask linux test -p platitude-core --test it
         cargo xtask linux verify-ui commit --preset basic
         cargo xtask linux bare
@@ -499,7 +500,7 @@ const TAIL: &str = "  shipped [--no-build]
       A cargo command goes to cargo; an xtask verb goes to cargo xtask.
       `--runner <name>` starts an xtask verb from the copy a gate
       prepared; with `--container <name> --step <mark>` beside it the
-      verb goes into the gate's own container by docker exec, every
+      verb goes into the gate's own container by the engine's exec, every
       process of it carrying the mark. `stop` ends what still carries a
       mark in that container — what the gate does at a ceiling, by hand —
       and says what went and what would not.
@@ -524,9 +525,9 @@ const TAIL: &str = "  shipped [--no-build]
       Both are worth a place in a pre-merge sweep.
       Which image it runs in follows what the command needs: core is
       Ubuntu and the toolchain, app adds Qt, a software GL stack and the
-      fonts デザイン規約 names for Ubuntu. The build directory is a docker
-      volume, so this target/ is untouched, and a verify-ui run is handed
-      a host directory to leave its screenshot in.
+      fonts デザイン規約 names for Ubuntu. The build directory is a volume
+      of the engine's, so this target/ is untouched, and a verify-ui run
+      is handed a host directory to leave its screenshot in.
       options:
         --rebuild        build the image again even if one already matches
         --shell          open a shell in the container instead

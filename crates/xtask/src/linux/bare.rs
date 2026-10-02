@@ -175,5 +175,5 @@ fn run_on_bare(
             .arg(tag)
             .args(["bash", "-lc", script]),
     )
-    .map_err(|e| format!("failed to run docker: {e}"))
+    .map_err(|e| format!("failed to run {}: {e}", super::engine::NAME))
 }

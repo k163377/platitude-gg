@@ -11,7 +11,7 @@ const REAL: &str = "uv run --no-project python";
 const STUBBED: [&str; 4] = ["python", "python3", "python.exe", "python3.exe"];
 
 /// What reaches a real interpreter of its own.
-const CARRIES_ONE: [&str; 3] = ["xtask linux", "docker", "uv run"];
+const CARRIES_ONE: [&str; 4] = ["xtask linux", "wslc", "docker", "uv run"];
 
 /// PreToolUse(Bash|PowerShell). Answers whether it refused, like
 /// `pre_git`.
@@ -67,6 +67,7 @@ mod tests {
             "uv run --no-project python analyse.py",
             "cargo xtask linux python3 -V",
             "docker exec pgg python3 -c 'print(1)'",
+            "wslc exec pgg python3 -c 'print(1)'",
             // Named as data, not run.
             "grep -rn python crates/xtask/src",
             // The pipes inside a quoted pattern are the pattern's.

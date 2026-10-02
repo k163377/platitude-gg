@@ -269,7 +269,7 @@ fn the_command_runs_bracketed_by_a_look_at_what_a_resolve_reads() {
     assert!(script.contains("exit \"$code\""), "{script}");
 }
 
-/// A reap would be a `docker rm` with no ceiling over it, and nothing
+/// A reap would be an engine's `rm` with no ceiling over it, and nothing
 /// needs one: an interrupted container cannot reach this checkout's
 /// copies (`linux::runner::SCRIPT`), and its cargo lock is waited out
 /// under the step's ceiling. The gate's own container is named and

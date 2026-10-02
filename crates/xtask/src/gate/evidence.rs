@@ -23,7 +23,7 @@ const KEEP: usize = 10;
 
 /// How long a question asked about a red step may take. This runs after
 /// the step's watched run has ended, on the gate's thread and inside the
-/// step's ticket, so a docker that does not answer would hold both
+/// step's ticket, so an engine that does not answer would hold both
 /// unbounded. Sized for a daemon that is not up.
 const ASKING_CEILING: Duration = Duration::from_secs(15);
 
@@ -136,11 +136,12 @@ fn host_side(run: &str, tree: &Path, asking: &Path, command: &[String], said: &s
         asked("the host's cargo", cargo, ASKING_CEILING, asking)
     ));
     if let Some(tag) = image_in(said) {
-        let mut docker = Command::new("docker");
-        docker.args(["image", "inspect", "--format", "{{.Id}}", &tag]);
+        let mut inspect = crate::linux::engine::command();
+        inspect.args(["image", "inspect", "--format", "json", &tag]);
+        let answer = asked("the image inspect", inspect, ASKING_CEILING, asking);
         out.push_str(&format!(
             "image     {tag}\nimage id  {}\n",
-            asked("docker image inspect", docker, ASKING_CEILING, asking)
+            crate::linux::engine::field(&answer, "Id").unwrap_or(answer)
         ));
     }
     if std::fs::remove_file(asking).is_err() {
