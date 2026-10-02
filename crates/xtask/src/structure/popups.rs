@@ -3,14 +3,17 @@
 //! closes two things is a set spelled by hand, and the next entrance added
 //! is the one it misses.
 //!
-//! Three shapes are counted, all in the product's own QML:
+//! Four shapes are counted, all in the product's own QML:
 //!
 //! * a function or handler body that closes more than one thing —
 //!   `close()` and `dismiss()` alike, however they are qualified;
 //! * a popup component declaring its own `dismiss()`, which silently
 //!   shadows Qt's (the one a row calls to take every menu level down);
 //! * any component declaring its own `close()`: it exists to be closed
-//!   from outside, the start of a hand-spelled set.
+//!   from outside, the start of a hand-spelled set;
+//! * a card (`AppCard` at the root) setting its own `closePolicy`: the
+//!   base spells it, Escape only while the keyboard is in the card
+//!   (.claude/rules-refs/app-ui.md「hover のカードは窓の `Shortcut` を塞がない」).
 //!
 //! The bars (`AskBar`, `FindBar`, `NoticeBar`) keep their `dismiss()`: they
 //! are items with a verb of their own.
@@ -28,6 +31,11 @@ const POPUPS: &[&str] = &["Popup", "Menu", "Dialog", "Drawer", "AppMenu", "AppDi
 const CLOSERS: &[&str] = &["close", "dismiss"];
 /// Where a failing line sends its reader.
 const RULE: &str = ".claude/rules-refs/app-ui.md「メニューを閉じるのは自分」";
+/// The base whose `closePolicy` is its own to spell.
+const CARD: &str = "AppCard";
+/// Where a card's failing line sends its reader.
+const CARD_RULE: &str =
+    ".claude/rules-refs/app-ui.md「hover のカードは窓の `Shortcut` を塞がない」";
 
 /// One failure per line that closes what is not its to close, and how many
 /// product files were read.
@@ -62,9 +70,23 @@ fn findings(text: &str) -> Vec<Finding> {
     let code = super::without_comments_and_strings(text);
     let root = root_type(&code);
     let popup = root.as_deref().is_some_and(|name| POPUPS.contains(&name));
+    let card = root.as_deref() == Some(CARD);
+    let depths = depths_at_line_starts(&code);
     let mut found = Vec::new();
     for (number, line) in code.lines().enumerate() {
         let trimmed = line.trim_start();
+        if card && depths.get(number) == Some(&1) && trimmed.starts_with("closePolicy:") {
+            found.push(Finding {
+                line: number + 1,
+                what: format!(
+                    "sets `closePolicy` on an `{CARD}` — the base spells it: Escape only while the \
+                     keyboard is in the card, since a popup standing with `CloseOnEscape` keeps every \
+                     window `Shortcut` out (Ctrl+F, F5, the bars' Escape) yet hears Escape only from \
+                     the keyboard it holds. A card the pointer leaving closes says \
+                     `closesOnPressOutside: false` ({CARD_RULE})"
+                ),
+            });
+        }
         if declares(trimmed, "close") {
             found.push(Finding {
                 line: number + 1,
@@ -99,6 +121,25 @@ fn declares(trimmed: &str, name: &str) -> bool {
         .map(str::trim_start)
         .and_then(|rest| rest.strip_prefix(name))
         .is_some_and(|rest| rest.trim_start().starts_with('('))
+}
+
+/// How many braces are open where each line starts — 1 is the root object's
+/// own body.
+fn depths_at_line_starts(code: &str) -> Vec<usize> {
+    let mut depth: usize = 0;
+    code.lines()
+        .map(|line| {
+            let at = depth;
+            for c in line.chars() {
+                match c {
+                    '{' => depth += 1,
+                    '}' => depth = depth.saturating_sub(1),
+                    _ => {}
+                }
+            }
+            at
+        })
+        .collect()
 }
 
 /// The type the file's root object is declared as: the identifier before
@@ -413,6 +454,51 @@ Item {
 }
 ";
         assert!(lines(text).is_empty());
+    }
+
+    #[test]
+    fn a_card_leaves_its_close_policy_to_the_base() {
+        let card = "\
+import QtQuick
+import QtQuick.Controls.Fusion
+
+AppCard {
+    id: card
+    // closePolicy: said in a comment is only read
+    closePolicy: Popup.CloseOnEscape
+    tracksPointer: true
+}
+";
+        let found = findings(card);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].line, 7);
+        assert!(found[0].what.contains("closesOnPressOutside: false"));
+        let spelled = "\
+AppCard {
+    closesOnPressOutside: false
+}
+";
+        assert!(lines(spelled).is_empty());
+    }
+
+    #[test]
+    fn a_popup_inside_a_card_and_a_menu_keep_their_own_policy() {
+        let nested = "\
+AppCard {
+    contentItem: Item {
+        Popup {
+            closePolicy: Popup.CloseOnEscape
+        }
+    }
+}
+";
+        assert!(lines(nested).is_empty());
+        let menu = "\
+AppMenu {
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+}
+";
+        assert!(lines(menu).is_empty());
     }
 
     #[test]
