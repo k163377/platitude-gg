@@ -194,7 +194,7 @@ fn fanned_out(calls: &[(usize, String)]) -> Finding {
 
 /// Whether the brace at `at` opens an object declaration: the token before
 /// it is an identifier whose last segment starts with a capital.
-fn opens_object(chars: &[char], at: usize) -> bool {
+pub(super) fn opens_object(chars: &[char], at: usize) -> bool {
     identifier_before(chars, at).is_some_and(|name| {
         name.rsplit('.')
             .next()

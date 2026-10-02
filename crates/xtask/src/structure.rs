@@ -17,18 +17,20 @@
 //!   the baseline follows it down; it may not grow.
 //! * **neither** — the backstop applies as written.
 //!
-//! Four other questions of how the tree is divided are counted here too:
+//! Five other questions of how the tree is divided are counted here too:
 //! the product's QML may not name a harness type ([`modules`]), the app's
 //! Rust may not look a `PGG_*` variable up outside the module that owns
 //! them ([`env`]), the product's QML closes no popup but its own
-//! ([`popups`]), and QML asks the graph, not a row's id, which row is this
-//! window's working tree ([`wiprow`]).
+//! ([`popups`]), QML asks the graph, not a row's id, which row is this
+//! window's working tree ([`wiprow`]), and every text box the product
+//! declares keeps the style's right-click menu away ([`textboxes`]).
 //!
 //! The fn half of the same § is left to clippy's `too_many_lines`.
 
 mod env;
 mod modules;
 mod popups;
+mod textboxes;
 mod wiprow;
 
 use std::collections::BTreeMap;
@@ -115,12 +117,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (looked_up, app_files) = env::check(&root)?;
     let (closed_for, product_files) = popups::check(&root)?;
     let (asked_the_id, qml_files) = wiprow::check(&root)?;
+    let (styled_boxes, text_boxes) = textboxes::check(&root)?;
     let boundary_broken = crossed.len() + looked_up.len();
     let closing_for_others = closed_for.len();
+    let menus_kept = styled_boxes.len();
     failures.extend(crossed);
     failures.extend(looked_up);
     failures.extend(closed_for);
     failures.extend(asked_the_id);
+    failures.extend(styled_boxes);
 
     for failure in &failures {
         println!("structure: {failure}");
@@ -134,7 +139,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
              {harness_types} harness types out of the product's reach, \
              {app_files} app files off the environment, \
              {product_files} product files closing nothing but their own, \
-             {qml_files} QML files asking the graph which row is this window's — PASS",
+             {qml_files} QML files asking the graph which row is this window's, \
+             {text_boxes} text boxes keeping the style's menu away — PASS",
             counted.len(),
             comment_share(physical, code),
             ledgered.len()
@@ -149,6 +155,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Err(format!(
             "{closing_for_others} line(s) closing a popup that is not theirs to close \
              (.claude/rules-refs/app-ui.md「メニューを閉じるのは自分」)"
+        ))
+    } else if menus_kept == failures.len() {
+        Err(format!(
+            "{menus_kept} text box(es) keeping the style's right-click menu \
+             (.claude/rules-refs/app-ui.md「`FieldMenu` = 文字の欄の右クリック」)"
         ))
     } else {
         Err(format!(
