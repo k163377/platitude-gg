@@ -61,10 +61,11 @@ Item {
     /// but not this: its menu offers to finish the mark, and a hover calling it origin would contradict it.
     readonly property bool holdsOrigin: navRow.isRemoteRow && navRow.fullName === navRow.originRemote
     property real listWidth: 200
-    /// Where this row's ink begins and how far each fold steps it in — handed down because each list picks both
-    /// (`FileRowDelegate`, `NavList` — デザイン規約 §余白).
-    property int rowInset: Theme.spaceXs
-    property int nestStep: Theme.spaceMd
+    /// Where this row's seat begins and how far each fold steps it in — one answer for every list
+    /// (`NavList.rowInset` / `nestStep`, デザイン規約 §余白), so a file's name stands where a branch's does. The
+    /// sidebar hands its own down, which its stand-in row reads too (`HeadPinRow`).
+    property int rowInset: Theme.spaceXs + Theme.iconSm - Theme.iconXs
+    property int nestStep: Theme.iconSm / 2
     /// The layer an open name box is drawn in, and where this row's list sits in it (`NavList`), so the box follows
     /// its row through a scroll. No layer: the box stays in its seat.
     property Item boxLayer: null

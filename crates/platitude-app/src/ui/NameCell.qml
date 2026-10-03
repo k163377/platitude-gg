@@ -56,18 +56,18 @@ RowLayout {
     /// green with the arrow unwired.
     readonly property real foldTurn: foldSeat.item ? foldSeat.item.rotation : -1
     /// How wide the slot every row opens with is, taken on the ink (デザイン規約
-    /// §余白「印が自分で持っている余白は、隣の詰めに数える」). A change code fills its box, so a list showing one takes
-    /// `iconMd`; the fold arrow and the state marks are drawn on the `iconSm` grid without reaching its edge, so their
-    /// seat comes down a step. That width is the ceiling a mark drawn for this seat is designed against (the widest,
-    /// the house, spans 11 of 16).
+    /// §余白「印が自分で持っている余白は、隣の詰めに数える」). The fold arrow and the state marks are drawn on the
+    /// `iconSm` grid without reaching its edge, so the seat is a step under it. That width is the ceiling a mark
+    /// drawn for this seat is designed against (the widest, the house, spans 11 of 16), and the widest change code,
+    /// the pen, is as wide on the `iconMd` grid it is drawn on (10 of 16).
     ///
-    /// One answer per list (`showChange` is a section's kind): measured per row, the padlock and the fold arrow would
-    /// step the names in and out.
-    readonly property int seatSize: nameCell.showChange ? Theme.iconMd : Theme.iconXs
-    /// Where a mark stands inside that seat: hard against its left edge, its box hanging out on the right. The air
-    /// comes off the right alone — the mark's left is what the fold's step reads as nesting. Zero where the change
-    /// mark fills its seat.
-    readonly property real seatNudge: nameCell.showChange ? 0 : (Theme.iconSm - nameCell.seatSize) / 2
+    /// One width for every list, so a name stands as far from its mark in the file lists as in the sidebar; measured
+    /// per row, the padlock and the fold arrow would step the names in and out.
+    readonly property int seatSize: Theme.iconXs
+    /// Where an `iconSm` mark stands inside that seat: hard against its left edge, its box hanging out on the right.
+    /// The air comes off the right alone — the mark's left is what the fold's step reads as nesting
+    /// (`NavList.nestStep`).
+    readonly property real seatNudge: (Theme.iconSm - nameCell.seatSize) / 2
     /// Where the name itself is drawn — the lines a row opens read their voice off it, and it knows whether the name
     /// was cut (`NavRowFacts`, rules/app-ui.md「測って押し出す値は…」).
     readonly property Item nameInk: newName
@@ -95,9 +95,14 @@ RowLayout {
                 tint: Theme.textSecondary
             }
         }
+        // A change code is drawn a grid up from the seat's other marks, so its box is the wider: set to end where
+        // theirs does, the widest of them (the pen) fills the seat and a name follows it as closely as it follows a
+        // chevron. The box hangs out on the left, into the fold's step; filling the seat would draw it two grids down.
         Loader {
             active: !nameCell.folder && nameCell.showChange
-            anchors.fill: parent
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            anchors.rightMargin: nameCell.seatSize - Theme.iconSm
             sourceComponent: ChangeIcon {
                 change: nameCell.change
             }

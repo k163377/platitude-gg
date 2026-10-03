@@ -84,7 +84,10 @@ Item {
     NameCell {
         id: nameCell
         anchors.fill: parent
-        anchors.leftMargin: Theme.spaceXs + (fileRow.model.depth ?? 0) * Theme.spaceMd
+        // Where every list's rows begin and how far a fold steps them in (`NavList.rowInset` / `nestStep`,
+        // デザイン規約 §余白): a file's name stands where a branch's does.
+        anchors.leftMargin: Theme.spaceXs + Theme.iconSm - Theme.iconXs
+                            + (fileRow.model.depth ?? 0) * Theme.iconSm / 2
         // The pane's scroll bar gutter — anything short stands an elided name's last glyph under the bar
         // (デザイン規約 §余白).
         anchors.rightMargin: Theme.navBarGutter

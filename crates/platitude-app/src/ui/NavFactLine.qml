@@ -56,7 +56,7 @@ RowLayout {
         enabled: line.noted
     }
 
-    // The row's own seat, to the pixel (`NameCell.seatSize` / `seatNudge` with no change codes), so the words begin
+    // The row's own seat, to the pixel (`NameCell.seatSize` / `seatNudge`), so the words begin
     // where the row's name does; sized by the mark instead, they land right of it. A TAGS row has no seat
     // (`NavRowBody.seated`): its lines' cloud stands under the name's head and the words one seat in.
     Item {
