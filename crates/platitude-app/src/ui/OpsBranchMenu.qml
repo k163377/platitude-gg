@@ -148,7 +148,6 @@ AppMenu {
             property bool filled: false
             keepsSeat: true
             widthFloor: 0
-            titleFolder: true
             // A hand resting on the row opens the card before anything else asks it for rows.
             onAboutToShow: card.fillFolder(folder)
             onOpened: card.folderStanding = folder.path

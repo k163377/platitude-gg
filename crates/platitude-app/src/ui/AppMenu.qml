@@ -23,8 +23,6 @@ Menu {
     /// (デザイン規約 §メニュー の入れ子).
     property string titleKind: ""
     property color titleTint: Theme.textSecondary
-    /// The title row is a folder of the rows under it, drawn as the left menu's folder row (`OpsBranchMenu`).
-    property bool titleFolder: false
 
     /// The rows keep the left menu's mark seat, so every name starts on one x (`AppMenuItem.seated`, §操作パネル).
     property bool keepsSeat: false
@@ -183,7 +181,6 @@ Menu {
         refName: subMenu && subMenu.titleRef !== undefined ? subMenu.titleRef : ""
         markKind: subMenu && subMenu.titleKind !== undefined ? subMenu.titleKind : ""
         markTint: subMenu && subMenu.titleTint !== undefined ? subMenu.titleTint : Theme.textSecondary
-        folderRow: subMenu !== null && subMenu.titleFolder === true
         // A submenu with nothing to offer, by `applies` or by coming out empty, takes its title row with it.
         offered: !subMenu || (subMenu.applies !== false && (subMenu.offeredRows > 0 || subMenu.promises === true))
     }

@@ -78,6 +78,16 @@ Item {
             return null
         }
 
+        /// The label that says a row's words.
+        function wordsOf(row) {
+            const kids = row.contentItem.children
+            for (let i = 0; i < kids.length; i++) {
+                if (kids[i].text === row.text)
+                    return kids[i]
+            }
+            return null
+        }
+
         /// A folder's row says its name (rules-refs/app-ui.md「`AppMenu` の delegate が作る題名行」).
         function test_a_folder_is_a_row_that_says_its_name_and_opens_its_card() {
             verify(card.offerFrom(), "the card has rows to offer")
@@ -85,7 +95,8 @@ Item {
             const feature = rowCalled(card, "feature")
             verify(feature !== null, "the folder's row says the folder's name")
             verify(feature.subMenu !== null, "the folder's row opens a card")
-            verify(feature.folderRow, "the folder's row is drawn as a folder")
+            verify(Qt.colorEqual(wordsOf(feature).color, Theme.textPrimary),
+                   "a row that opens a card to its right is not drawn darker than a branch row")
             verify(card.openFolder("feature"))
             compare(rowCalled(feature.subMenu, "tracked").full, "feature/tracked")
             verify(card.openFolder("topic/deep"))

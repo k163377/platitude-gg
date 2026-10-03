@@ -52,8 +52,6 @@ MenuItem {
     readonly property real headingSeat:
         menuItem.subMenu !== null && menuItem.menu !== null && menuItem.menu.headingSeat !== undefined
         ? menuItem.menu.headingSeat : 0
-    /// A folder row, said in the quieter ink the left menu gives one (`NameCell.folder`).
-    property bool folderRow: false
     /// How far this row's branch stands from its upstream (`HeadTrack`); both zero draws nothing (§左メニューの所作).
     property int ahead: 0
     property int behind: 0
@@ -346,11 +344,10 @@ MenuItem {
             // instead).
             rightPadding: !noteLabel.visible && menuItem.subMenu && menuItem.arrow
                           ? menuItem.arrow.width + Theme.spaceXs : 0
-            // A heading takes the sidebar section band's weight and ink (デザイン規約 §メニュー の入れ子); a folder the
-            // ink alone.
+            // A heading takes the sidebar section band's weight, not its ink: a row that opens a card to its right is
+            // never drawn darker than the rows beside it (デザイン規約 §メニュー の入れ子).
             font.weight: menuItem.titled ? Theme.fontWeightStrong : menuItem.font.weight
-            color: menuItem.titled || (menuItem.folderRow && menuItem.enabled && !menuItem.blocked)
-                   ? Theme.textSecondary : menuItem.wordColor
+            color: menuItem.wordColor
         }
         // `sideName`, pushed to the right end by the words taking the rest, a column's step off them: at a word's
         // step the two read as one run.
