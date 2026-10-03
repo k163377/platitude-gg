@@ -25,6 +25,15 @@ Canvas {
     }
 
     onOwingChanged: canvas.settle()
+    // A mark never painted draws itself as it is shown. Qt asks a canvas for its first picture once, as it enters a
+    // window, and that ask is spent on a canvas with no size; a size arriving later asks again only of a canvas that
+    // is visible or read by an effect (`qquickcanvasitem.cpp` — `sceneGraphInitialized` / `geometryChange`). A list
+    // builds the rows past its edge in the background, a time slice at a go, and such a row has its window before
+    // its bindings have run, sizes last of all: when a slice ends in between and the ask runs in the gap, the marks
+    // hidden on that row — a chip's cloud or tree on a commit with no name — are left unpainted, and the row later
+    // shows a commit that carries one. Only the unpainted: a pane coming back from behind another shows every mark
+    // in it at once, and those hold their pictures.
+    onVisibleChanged: if (canvas.visible && !canvas.inked) canvas.requestPaint()
     onPainted: canvas.inked = true
     // A mark born with its size never moves `owing`, so the first reading is taken here.
     Component.onCompleted: canvas.settle()
