@@ -26,10 +26,6 @@ InkCanvas {
     onInkChanged: arrow.requestPaint()
     onWidthChanged: arrow.requestPaint()
     onHeightChanged: arrow.requestPaint()
-    // Most arrows come into the scene inside a bar that has nowhere to go yet, some with no size either (a list laid
-    // out after it is made), and a `Canvas` not visible then asks for no first paint (rules-refs/app-ui.md「`visible:
-    // false` で生まれた `Canvas` は一度も描かれていない」): the bar would come up with its arrows never drawn.
-    onVisibleChanged: if (arrow.visible) arrow.requestPaint()
     onPaint: {
         const ctx = getContext("2d")
         ctx.clearRect(0, 0, width, height)

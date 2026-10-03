@@ -12,9 +12,6 @@ NavIcon {
     kind: "spinner"
     tint: Theme.textSecondary
     visible: ring.spinning
-    // Most rings are born invisible (rules-refs/app-ui.md「`visible: false` で生まれた `Canvas` は一度も描かれていない」);
-    // rotation does not ask for paint either — it only turns ink already there.
-    onVisibleChanged: if (ring.visible) ring.requestPaint()
 
     // On the render thread, so it keeps turning while the GUI thread drains models. Held still under `Motion.stilled`
     // so runs of the same verb photograph the same PNG — here, so no caller can forget it.

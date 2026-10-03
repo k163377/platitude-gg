@@ -260,10 +260,6 @@ MenuItem {
         visible: menuItem.heads && (menuItem.titled || !menuItem.seated)
         kind: menuItem.heads ? menuItem.markKind : "branch"
         tint: menuItem.markTint
-        // A `Canvas` in the overlay layer can miss its first paint (the card is built before it is shown), and a mark
-        // that never painted frames as one nobody wired. Same for the other marks here.
-        Component.onCompleted: rowMark.requestPaint()
-        onVisibleChanged: if (visible) rowMark.requestPaint()
     }
     // A mark about the row, in the left menu's seat and drawn the way that seat draws it (`NameCell.seatNudge`):
     // `iconSm`, its box hanging past the seat into the step after it. `iconMd` would stand taller than the left menu's.
@@ -277,8 +273,6 @@ MenuItem {
         visible: menuItem.heads && !menuItem.titled && menuItem.seated
         kind: menuItem.heads ? menuItem.markKind : "branch"
         tint: !menuItem.enabled || menuItem.blocked ? Theme.textMuted : menuItem.markTint
-        Component.onCompleted: seatMark.requestPaint()
-        onVisibleChanged: if (visible) seatMark.requestPaint()
     }
 
     contentItem: RowLayout {
@@ -403,8 +397,6 @@ MenuItem {
                     kind: menuItem.namesMark ? menuItem.nameMark : "tree"
                     tint: menuItem.blocked || !menuItem.enabled || menuItem.armedMs > 0
                           ? menuItem.wordColor : menuItem.nameMarkTint
-                    Component.onCompleted: nameMarkIcon.requestPaint()
-                    onVisibleChanged: if (visible) nameMarkIcon.requestPaint()
                 }
             }
             Label {

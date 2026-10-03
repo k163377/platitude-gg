@@ -30,6 +30,4 @@ NavIcon {
        ? badge.at.y - Theme.spaceXs - badge.height
        : badge.at.y + Theme.spaceXs
     z: 4
-    // A Canvas born invisible was never painted (rules-refs/app-ui.md).
-    onVisibleChanged: if (visible) requestPaint()
 }

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
@@ -107,6 +108,31 @@ Item {
         id: paints
         signalName: "painted"
     }
+    /// A mark in a card, as a menu row's is. A card that closes takes its items out of the window, and a canvas
+    /// leaving its window drops its picture.
+    Popup {
+        id: card
+        x: 120
+        y: 44
+        width: 20
+        height: 20
+        padding: 0
+        closePolicy: Popup.NoAutoClose
+        enter: null
+        exit: null
+        background: Item {}
+        contentItem: Item {
+            InkCanvas {
+                width: 16
+                height: 16
+                onPaint: {
+                    const ctx = getContext("2d")
+                    ctx.fillStyle = root.ink
+                    ctx.fillRect(0, 0, width, height)
+                }
+            }
+        }
+    }
 
     TestCase {
         name: "VisibleInk"
@@ -119,6 +145,7 @@ Item {
             for (const item of built)
                 item.destroy()
             built = []
+            card.close()
         }
 
         /// Every mark under `item`, drawn or not.
@@ -254,6 +281,20 @@ Item {
             verify(Qt.colorEqual(grabImage(item).pixel(16, 14), root.ink), "the picture it had is still on screen")
             compare(paints.count, 0)
             paints.target = null
+        }
+
+        /// A menu row's mark asks for no paint of its own. The first time its card opens, Qt's first ask draws it;
+        /// closed, the card leaves the window and the picture goes with it; opened again, the mark counts as painted,
+        /// so it is Qt asking a canvas back in a window (`qquickcanvasitem.cpp` `itemChange`) that draws it.
+        function test_a_mark_in_a_card_is_drawn_each_time_the_card_opens() {
+            for (const time of ["first", "second"]) {
+                card.open()
+                tryVerify(() => Qt.colorEqual(grabImage(root).pixel(128, 52), root.ink), undefined,
+                          "the mark is on screen the " + time + " time")
+                card.close()
+                tryVerify(() => !Qt.colorEqual(grabImage(root).pixel(128, 52), root.ink), undefined,
+                          "and gone with the card")
+            }
         }
     }
 }
