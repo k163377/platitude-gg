@@ -17,6 +17,10 @@ Rectangle {
     /// The mark's size, matching what it stands among: `iconMd` beside a name like the sections' marks, `iconLg`
     /// alone at the rail's end like the fold control.
     property real markSize: Theme.iconMd
+    /// Whether `(count)` follows the name — inside the seat, so the hover and the press that closes the log take it
+    /// too. Only the panel's band has a list to count.
+    property bool counted: false
+    property int count: 0
 
     /// The log this tab is filling. Test this, not `curPage`: closing a tab takes the page's models down a beat
     /// before the page itself.
@@ -35,8 +39,10 @@ Rectangle {
 
     visible: toggle.curPage !== null
     // As wide as its name when captioned: the log's band seats it in a row of controls, and a pane-wide seat would
-    // push them off the end.
-    implicitWidth: toggle.captioned ? toggle.captionX + commandsName.implicitWidth : Theme.railWidth
+    // push them off the end. The hover's ground ends as far past the last letter as it starts before the mark.
+    implicitWidth: !toggle.captioned ? Theme.railWidth
+                   : (toggle.counted ? commandsCount.x + commandsCount.implicitWidth
+                                     : toggle.captionX + commandsName.implicitWidth) + toggle.markX
     implicitHeight: toggle.captioned ? Theme.rowHeight : Theme.headerHeight
     // The ground of all three seats, so none of them needs a case.
     color: Theme.bgElevated
@@ -77,6 +83,16 @@ Rectangle {
         font.pixelSize: Theme.fontMd
         font.weight: Theme.fontWeightStrong
         color: toggle.wrong ? Theme.danger : Theme.textSecondary
+    }
+    // The sections' step, so the count sits as `(2)` does after `BRANCHES`.
+    Label {
+        id: commandsCount
+        visible: toggle.captioned && toggle.counted
+        x: toggle.captionX + commandsName.implicitWidth + Theme.spaceXs
+        anchors.verticalCenter: parent.verticalCenter
+        text: "(" + toggle.count + ")"
+        font.pixelSize: Theme.fontMd
+        color: Theme.textMuted
     }
     MouseArea {
         id: commandsMouse

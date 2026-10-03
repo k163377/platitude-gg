@@ -137,7 +137,6 @@ Rectangle {
             RowLayout {
                 anchors.fill: parent
                 anchors.rightMargin: Theme.spaceMd
-                // The sections' step, so the count sits as `(2)` does after `BRANCHES`.
                 spacing: Theme.spaceXs
 
                 CommandsToggle {
@@ -145,12 +144,9 @@ Rectangle {
                     Layout.fillHeight: true
                     captioned: true
                     ruled: false
+                    counted: true
+                    count: list.count
                     curPage: pane.curPage
-                }
-                Label {
-                    text: "(" + list.count + ")"
-                    font.pixelSize: Theme.fontMd
-                    color: Theme.textMuted
                 }
                 // One line here; the failed row keeps the whole. Capped: eliding trims only the last line of a
                 // multi-line message, and the band would grow over the rows.
