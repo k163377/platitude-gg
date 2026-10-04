@@ -431,6 +431,81 @@ pub fn worktree_card(main: bool, locked: bool, here: bool, busy_count: i32) -> W
     }
 }
 
+/// What a new working copy can be made to stand on, from the row a menu
+/// was opened on: the two rows that make one (デザイン規約 §作業コピーを作る).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CopyOffers {
+    /// `Create worktree here…` — a new branch on this row's commit, out in
+    /// a new copy. Any row with a commit but a stash, mid-operation too:
+    /// nothing in this copy is touched, so it is the one way to start on
+    /// another branch while one is stopped here.
+    pub here: bool,
+    /// `worktree add` — the row's own branch out in a new copy, where git
+    /// would take it.
+    pub checkout: Option<CopyCheckout>,
+}
+
+/// How the row's branch goes out in the new copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopyCheckout {
+    /// A local branch no copy has out: checked out as it is.
+    Branch,
+    /// A remote branch with no local one of its name: a local one is made
+    /// to follow it, as `switch` makes one.
+    Track,
+}
+
+impl CopyOffers {
+    /// The offers as words, the shape `GitFacts.copyOffers` answers with:
+    /// `here`, then `checkout-branch` / `checkout-track`.
+    pub fn words(&self) -> Vec<&'static str> {
+        let mut words: Vec<&'static str> = Vec::new();
+        if self.here {
+            words.push("here");
+        }
+        match self.checkout {
+            Some(CopyCheckout::Branch) => words.push("checkout-branch"),
+            Some(CopyCheckout::Track) => words.push("checkout-track"),
+            None => {}
+        }
+        words
+    }
+}
+
+/// The rule. `kind` is the row's (`None` on a commit row that draws no
+/// name); `held_by_worktree` the copy holding the row's branch, a remote
+/// row's through the local branch of its name, as in [`ref_menu`];
+/// `local_exists` whether a remote row's local branch is there already.
+///
+/// The branch the tree is on and one another copy has out are git's to
+/// refuse (`is already used by worktree at`), so they offer no
+/// `worktree add` — the `switch` row's `Open` leads to the holder. A
+/// remote branch whose local one exists leaves it to that branch's own
+/// row: making the copy off the remote would mean moving the local one.
+#[expect(clippy::too_many_arguments)]
+pub fn copy_rows(
+    kind: Option<RefKind>,
+    full: &str,
+    oid_hex: &str,
+    open: bool,
+    busy_count: i32,
+    current_branch: &str,
+    held_by_worktree: &str,
+    local_exists: bool,
+) -> CopyOffers {
+    let free = open && busy_count <= 0;
+    let held = !held_by_worktree.is_empty();
+    let checkout = match kind {
+        Some(RefKind::Branch) if !held && full != current_branch => Some(CopyCheckout::Branch),
+        Some(RefKind::Remote) if !held && !local_exists => Some(CopyCheckout::Track),
+        _ => None,
+    };
+    CopyOffers {
+        here: free && !oid_hex.is_empty() && kind != Some(RefKind::Stash),
+        checkout: checkout.filter(|_| free && !full.is_empty()),
+    }
+}
+
 #[cfg(test)]
 mod commit_tests;
 #[cfg(test)]

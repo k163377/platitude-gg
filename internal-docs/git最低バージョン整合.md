@@ -82,6 +82,7 @@
 | `tag` | `--delete` / `--end-of-options` | 2.42.0 ✓ |
 | `worktree` | `list --porcelain -z` | 2.42.1 ✓(`-z` 2.36) |
 | `worktree` | `remove -- <path>` | 2.43.0 ✓(2.17 導入。拒否の文 `contains modified or untracked files` も 2.17 から同じ) |
+| `worktree` | `add -- <path> <branch>` / `add -b <name> -- <path> <commit>` / `add --track -b <name> -- <path> refs/remotes/<remote>/<branch>` | 2.42.1 ✓(`-b` と `--[no-]track` の記載あり)。2.43 のコンテナで `tests/it/worktree_add.rs` が通る。**`-b` はブランチを作ってからフォルダを見る**(物の在るフォルダ・記録だけ残るパスでも枝だけ残る)のと、**`-b` の名前を `git branch` へ `--` 無しで渡す**(`-` 始まりはオプションとして走る)のは 2.43 と 2.55 で同じ |
 
 `--format=` のプレースホルダ(`%H %P %T %an %ae %at %aI %cn %ce %ct %cI %B %s %gd %gs %G? %GS %GK %x00`)は pretty-formats 2.43.0 で全て記載確認 ✓。
 

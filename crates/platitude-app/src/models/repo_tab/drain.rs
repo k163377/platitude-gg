@@ -474,6 +474,8 @@ fn report_word(kind: ReportKind) -> &'static str {
         ReportKind::HalfRenamed => "half-rename",
         ReportKind::WorktreeKept => "worktree-kept",
         ReportKind::WorktreeHalfRemoved => "worktree-half",
+        ReportKind::WorktreeNotAdded => "worktree-not-added",
+        ReportKind::WorktreeFolderTaken => "worktree-folder-taken",
         ReportKind::RewriteAcrossMerge => "across-merge",
         ReportKind::RewriteOffBranch => "off-branch",
         ReportKind::FoldFirstCommit => "fold-first",

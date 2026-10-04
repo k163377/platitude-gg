@@ -130,6 +130,120 @@ pub async fn load(
     })
 }
 
+/// What a new working copy is made to stand on. Always a branch: every
+/// road into one from the screen lands on a branch, as a move does
+/// (デザイン規約 §ブランチ・コミットへの移動「この GUI の行き先は必ずブランチ」).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CopyOn {
+    /// A branch made for it at `start` (`-b`) — the commit, tag or ref the
+    /// menu was opened on.
+    NewBranch { name: String, start: String },
+    /// A local branch no working copy has out.
+    Branch(String),
+    /// A local branch made off a remote one and set to follow it (`--track
+    /// -b`), as `switch` does for a remote branch with no local one.
+    /// `remote_ref` is the remote branch as the screen names it
+    /// (`origin/feature`).
+    Tracking { local: String, remote_ref: String },
+}
+
+/// `git worktree add`: a new folder at `path` with `on` checked out in it.
+/// `name` is the copy as the screen names it (its folder), which a
+/// refusal's heading is written from.
+///
+/// Unforced, so git keeps everything it refuses for — a folder already
+/// there, a branch another copy has out, a name taken or malformed. The
+/// menus answer those before the press; what reaches git anyway is a
+/// report ([`crate::report::worktree_not_added`]).
+///
+/// A folder holding something is turned down here, before git: git makes
+/// the `-b` branch first and only then looks at the folder, so its own
+/// refusal leaves the branch behind.
+///
+/// So is a `-b` name opening with `-`, which the name box never sends:
+/// git hands the name to its own `git branch` with nothing to end the
+/// options before it, and it runs as one (`-m` renames the branch out
+/// here).
+///
+/// The remote branch is spelled in full: `origin/feature` is ambiguous, and
+/// refused, where a local branch has that name.
+pub async fn add(
+    executor: &GitExecutor,
+    workdir: &Path,
+    path: &str,
+    on: &CopyOn,
+    name: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let made = match on {
+        CopyOn::NewBranch { name, .. } | CopyOn::Tracking { local: name, .. } => Some(name),
+        CopyOn::Branch(_) => None,
+    };
+    if let Some(made) = made.filter(|made| crate::branch::reads_as_option(made)) {
+        return Err(GitError::Rejected {
+            message: format!("'{made}' opens with '-', which git would read as an option"),
+        });
+    }
+    if !folder_free(Path::new(path)) {
+        return Err(crate::report::worktree_folder_taken(name, path));
+    }
+    let cmd = GitCommand::new().cwd(workdir).args(["worktree", "add"]);
+    let cmd = match on {
+        CopyOn::NewBranch { name, start } => cmd.args(["-b", name.as_str(), "--", path, start]),
+        CopyOn::Branch(branch) => cmd.args(["--", path, branch.as_str()]),
+        CopyOn::Tracking { local, remote_ref } => cmd.args([
+            "--track",
+            "-b",
+            local.as_str(),
+            "--",
+            path,
+            &format!("refs/remotes/{remote_ref}"),
+        ]),
+    };
+    let command = cmd.describe();
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    match out.code {
+        0 => Ok(()),
+        _ => Err(crate::report::worktree_not_added(name, command, &out)),
+    }
+}
+
+/// The folder every working copy made here lives in: beside the
+/// repository's own copy `main`, of the repository's name with `.worktrees`
+/// after it (git's paths, `/` throughout). `None` for a `main` with no
+/// parent.
+#[must_use]
+pub fn copies_folder(main: &str) -> Option<String> {
+    match main.trim_end_matches('/').rsplit_once('/') {
+        Some((parent, repo)) if !repo.is_empty() => Some(format!("{parent}/{repo}.worktrees")),
+        _ => None,
+    }
+}
+
+/// Where a new working copy for `branch` goes: in `copies_folder`, as the
+/// branch's name with each `/` a `-` — so the folder a copy is named by on
+/// screen spells its whole branch. Empty for a `main` with no parent or a
+/// branch with no name.
+#[must_use]
+pub fn new_copy_path(main: &str, branch: &str) -> String {
+    let folder = branch.replace('/', "-");
+    match copies_folder(main) {
+        Some(root) if !folder.is_empty() => format!("{root}/{folder}"),
+        _ => String::new(),
+    }
+}
+
+/// Whether git would make a copy at `path`: nothing there, or a folder
+/// with nothing in it (git-worktree(1) takes either). A file, or a folder
+/// that cannot be read, is taken.
+#[must_use]
+pub fn folder_free(path: &Path) -> bool {
+    match std::fs::read_dir(path) {
+        Ok(mut entries) => entries.next().is_none(),
+        Err(err) => err.kind() == std::io::ErrorKind::NotFound,
+    }
+}
+
 /// `git worktree remove -- <path>`: the folder and git's record of it. The
 /// branch it had out stays. `name` is the copy as the screen names it,
 /// which a refusal's heading is written from.
@@ -290,6 +404,30 @@ mod tests {
         let list = parse_worktrees(&bytes).unwrap();
         assert!(!list[0].locked);
         assert!(!list[0].prunable);
+    }
+
+    #[test]
+    fn a_new_copy_goes_under_the_repositorys_worktrees_folder_by_its_branch() {
+        assert_eq!(
+            new_copy_path("C:/work/platitude-gg", "feature/login"),
+            "C:/work/platitude-gg.worktrees/feature-login"
+        );
+        assert_eq!(
+            new_copy_path("/srv/repo/", "fix"),
+            "/srv/repo.worktrees/fix"
+        );
+        assert_eq!(new_copy_path("C:/repo", "x"), "C:/repo.worktrees/x");
+    }
+
+    #[test]
+    fn no_place_without_a_parent_or_a_name() {
+        assert_eq!(new_copy_path("repo", "x"), "");
+        assert_eq!(copies_folder("repo"), None);
+        assert_eq!(new_copy_path("C:/work/repo", ""), "");
+        assert_eq!(
+            copies_folder("C:/work/repo").as_deref(),
+            Some("C:/work/repo.worktrees")
+        );
     }
 
     #[test]

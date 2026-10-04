@@ -61,6 +61,18 @@ pub enum ReportKind {
     /// (a file held open is the usual cause on Windows). Half done, as
     /// [`Self::HalfRenamed`].
     WorktreeHalfRemoved,
+    /// A working copy `git worktree add` would not make — the place still
+    /// listed for another copy, the branch out in another copy or its name
+    /// taken, between the menu opening and git: the menus answer each before
+    /// the press. git takes back the copy it began; a `-b` branch it made
+    /// before turning the place down, or before a checkout that failed,
+    /// stays.
+    WorktreeNotAdded,
+    /// The folder a new working copy was to go in holds something — turned
+    /// down here, before git, which would have made the branch first
+    /// ([`crate::worktrees::add`]). Nothing was made, and there is nobody
+    /// to quote.
+    WorktreeFolderTaken,
 
     /// The five shapes a history cannot be rewritten in, found before a
     /// rebase is spawned ([`crate::sequencer::plan_edit`]). git is never
@@ -189,6 +201,48 @@ pub fn worktree_not_removed(
         code: out.code,
         stderr: said,
         report: Box::new(WriteReport::about(kind, name, reason)),
+    }
+}
+
+/// A working copy git did not make, from its answer to `worktree add`,
+/// quoted down to what it said about the copy: the `Preparing worktree`
+/// line is its progress, and a `hint:` is advice to the terminal
+/// (デザイン規約 §答えの要らない報せ「`hint:` は引用しない」).
+#[must_use]
+pub fn worktree_not_added(
+    name: &str,
+    command: String,
+    out: &crate::process::GitOutput,
+) -> crate::error::GitError {
+    let said = out.failure_message();
+    let reason = said
+        .lines()
+        .filter(|line| !line.starts_with("Preparing worktree") && !line.starts_with("hint:"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    crate::error::GitError::Reported {
+        command,
+        code: out.code,
+        stderr: said,
+        report: Box::new(WriteReport::about(
+            ReportKind::WorktreeNotAdded,
+            name,
+            reason,
+        )),
+    }
+}
+
+/// A working copy turned down before git ran: its folder is not empty.
+/// `path` is only the log's record.
+#[must_use]
+pub fn worktree_folder_taken(name: &str, path: &str) -> crate::error::GitError {
+    crate::error::GitError::Withheld {
+        message: format!("'{path}' is not empty"),
+        report: Box::new(WriteReport::about(
+            ReportKind::WorktreeFolderTaken,
+            name,
+            String::new(),
+        )),
     }
 }
 

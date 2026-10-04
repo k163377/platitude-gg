@@ -227,6 +227,28 @@ impl RepoSession {
         )
     }
 
+    /// Makes a new working copy at `path` with `on` out in it (`git
+    /// worktree add`). `name` is the copy as the screen names it, for a
+    /// refusal's heading ([`crate::worktrees::add`]).
+    ///
+    /// The graph is read again behind it — a new branch is a new chip —
+    /// and the worktree listing that follows every such write brings the
+    /// copy's row.
+    pub fn add_worktree(
+        self: &Arc<Self>,
+        path: String,
+        on: crate::worktrees::CopyOn,
+        name: String,
+    ) -> Option<OperationId> {
+        self.write(
+            OperationKind::Worktree,
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                crate::worktrees::add(&exec, &repo.workdir, &path, &on, &name, &cancel).await
+            },
+        )
+    }
+
     /// Takes another working copy off the disk (`git worktree remove`),
     /// the branch it had out left where it is. `name` is the copy as the
     /// screen names it, for a refusal's heading
