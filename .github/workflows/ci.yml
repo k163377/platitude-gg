@@ -1,29 +1,33 @@
-# 3-OS build + test + lint under an egress allowlist, a fully-offline test
-# job (internal-docs/実装計画.md §11.3) and the dependency policy.
+# The cargo side of CI, for the workflows that start it (light.yml,
+# full.yml): build + test + lint under an egress allowlist on the runners
+# named, and in the full set a fully-offline test job
+# (internal-docs/実装計画.md §11.3) and the dependency policy.
 # Nothing is pinned here: Qt's version is .qt-version's and the toolchain is
 # rust-toolchain.toml's, so an edit to this file changes nothing the gate
 # builds or keys a step by.
-name: CI
+# The file keeps its name: the commits from before .qt-version pin Qt in
+# it, and xtask reads them there (`qt::former_pin`).
+name: Checks (called by Light and Full)
 
-# A change that is Markdown alone starts nothing, as it selects no test in
-# the gate.
 on:
-  push:
-    branches: [main]
-    paths-ignore: ["**.md"]
-  pull_request:
-    paths-ignore: ["**.md"]
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      # Named, not -latest: a new OS release arrives as a commit to a
+      # caller. What an image carries (its compilers, its git) still moves
+      # under the name. Ubuntu's is the release ci/linux/Dockerfile's UBUNTU
+      # names, and `cargo xtask versions` holds every runner name of an OS
+      # to one.
+      os:
+        description: "the runners, as a JSON list"
+        type: string
+        required: true
+      full:
+        description: "fmt, the periodic tests, the shipped build, the offline job and the dependency policy besides clippy and the tests"
+        type: boolean
+        required: true
 
 permissions:
   contents: read
-
-# A pull request's newer push replaces its older run. A push to main is a
-# group of its own: one shared by every push would drop the runs still
-# queued behind the one running.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # One shell on all three: fail-fast, and what the desks run the suite under.
 defaults:
@@ -35,14 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Named, not -latest: a new OS release arrives as a commit here. What
-        # an image carries (its compilers, its git) still moves under the
-        # name. Ubuntu's is the release ci/linux/Dockerfile's UBUNTU names,
-        # and `cargo xtask versions` holds every runner name of an OS to one.
-        os:
-          - &ubuntu ubuntu-24.04
-          - windows-2025
-          - macos-26
+        os: ${{ fromJSON(inputs.os) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     steps:
@@ -100,10 +97,13 @@ jobs:
       # and all, so it is part of the key — a new Qt starts a new cache
       # instead of rebuilding over the old one on every run.
       # Only main writes the cache, and a red run still does — the build it
-      # kept is what the next run starts from.
+      # kept is what the next run starts from. The light and the full set
+      # keep one each: the job's id is the same for both callers, and the
+      # one saved first would otherwise be the only one ever kept.
       - &rust-cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          key: ${{ inputs.full && 'full' || 'light' }}
           env-vars: QMAKE
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
@@ -116,7 +116,10 @@ jobs:
           git --version
           qmake -query QT_VERSION
 
+      # Not in the light set: land's gate has run it on every commit, and
+      # no OS formats differently.
       - name: Format check
+        if: ${{ inputs.full }}
         run: cargo fmt --all --check
       # --all-features: nothing else here compiles automation / memprobe
       # (both off by default); Test compiles the default set.
@@ -126,16 +129,24 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --locked --workspace
+      # The tests no daily tier runs: each sits in a `periodic` module,
+      # #[ignore]d so no plain run takes it (.claude/rules-refs/core.md
+      # `periodic`).
+      - name: Periodic tests
+        if: ${{ inputs.full }}
+        run: cargo test --locked --workspace -- --ignored '::periodic::'
       # Only the build without the harness can fail to load its QML: a
       # platitude.auto type named in platitude.ui resolves in every other
       # build. No display needed — the command sets QT_QPA_PLATFORM itself.
       - name: Shipped build loads its QML
+        if: ${{ inputs.full }}
         run: cargo run --locked -p xtask -- shipped
 
   # All tests and an offscreen app smoke, inside an empty network namespace
   # (internal-docs/実装計画.md §11.3).
   offline-test:
-    runs-on: *ubuntu
+    if: ${{ inputs.full }}
+    runs-on: &ubuntu ubuntu-24.04
     timeout-minutes: 120
     steps:
       - *harden
@@ -161,7 +172,11 @@ jobs:
             PGG_SMOKE_BIN="$(pwd)/target/debug/platitude-gg" \
             unshare -n bash ci/offline-test.sh "${BINS[@]}"
 
+  # The only place the advisories are read (`cargo xtask deny` checks the
+  # other three offline), so a red here may be RustSec's news, not the
+  # tree's.
   deny:
+    if: ${{ inputs.full }}
     runs-on: *ubuntu
     timeout-minutes: 15
     steps:

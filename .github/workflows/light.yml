@@ -1,0 +1,34 @@
+# What a push to main owes CI: the one OS no desk here has. A commit
+# reaches main only through land's gate, which ran it on Windows and in the
+# Linux container (反映前テストの機械化.md §land), so a push asks macOS
+# alone — clippy and the tests (ci.yml), and the verify-ui lines whose
+# verdict the fonts decide (shots.yml, the `linux` tier). What the gate's
+# selection let through is the full test's (full.yml, weekly).
+name: Light check (macOS, on push)
+
+# A push that is Markdown alone starts nothing, as it selects no test in
+# the gate.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+
+permissions:
+  contents: read
+
+# The newest push holds every commit the ones before it carried, so a run
+# still going when another push lands is cancelled for it.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+    with:
+      os: '["macos-26"]'
+      full: false
+  shots:
+    uses: ./.github/workflows/shots.yml
+    with:
+      tier: linux

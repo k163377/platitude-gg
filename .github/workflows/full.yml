@@ -1,0 +1,47 @@
+# Everything CI checks: the full cargo set on all three OSes (ci.yml)
+# and every census line on macOS (shots.yml, the `all` tier).
+name: Full test (3 OS)
+run-name: >-
+  Full test · ${{ github.event_name == 'push' && github.ref_name
+  || github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number)
+  || github.event_name == 'schedule' && 'weekly'
+  || github.ref_name }}
+
+on:
+  # A landing that moved the shipped build's versions: land pushes the
+  # range's tags itself (反映前テストの機械化.md §版を動かした land のタグ),
+  # so the run tests the commit that finished the update.
+  push:
+    tags: ["deps/*/after"]
+  # Dependabot's: the actions the workflows name, one pull request a week.
+  pull_request:
+    paths-ignore: ["**.md"]
+  # What the light check leaves out, and what moves with no commit — the
+  # runners' images, the advisories: Sunday 03:17 JST. GitHub turns a
+  # public repository's schedule off after 60 days with no activity in it;
+  # it is turned back on from the Actions page.
+  schedule:
+    - cron: "17 18 * * 6"
+  workflow_dispatch:
+  # The snapshot build's (snapshot.yml).
+  workflow_call:
+
+permissions:
+  contents: read
+
+# A pull request's newer push replaces its older run; every other run is a
+# group of its own.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+    with:
+      os: '["ubuntu-24.04", "windows-2025", "macos-26"]'
+      full: true
+  shots:
+    uses: ./.github/workflows/shots.yml
+    with:
+      tier: all

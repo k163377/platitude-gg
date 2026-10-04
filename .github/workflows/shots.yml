@@ -3,20 +3,11 @@
 # (.claude/skills/verify-ui/mac.md says how to read them). Offscreen, as
 # every verify-ui run is: CoreText's fonts and macOS's own code paths, not
 # the Cocoa window.
-name: Shots
+# The tiers come from the workflows that call this one: `linux` on every
+# push (light.yml), `all` in the full test (full.yml).
+name: Shots (macOS)
 
 on:
-  # What the fonts decide, on every landing: the lines the container
-  # repeats before a merge (`linux` in crates/xtask/verb-tiers.txt). A
-  # landing that is Markdown alone starts nothing.
-  push:
-    branches: [main]
-    paths-ignore: ["**.md"]
-  # Every line the full gate owes, once a week (Sunday 03:17 JST). GitHub
-  # turns a public repository's schedule off after 60 days with no
-  # activity in it; it is turned back on from the Actions page.
-  schedule:
-    - cron: "17 18 * * 6"
   # Any lines, on any ref that is on GitHub.
   workflow_dispatch:
     inputs:
@@ -34,6 +25,19 @@ on:
         type: choice
         options: [ja, en]
         default: ja
+  workflow_call:
+    inputs:
+      lines:
+        type: string
+        default: ""
+      tier:
+        description: "none, linux (what the fonts decide), merge or all"
+        type: string
+        default: none
+      locale:
+        description: "ja or en"
+        type: string
+        default: ja
 
 permissions:
   contents: read
@@ -44,17 +48,17 @@ defaults:
 
 jobs:
   macos:
-    # A dispatch that names no line and no tier has nothing to run: skipped
+    # A run that names no line and no tier has nothing to run: skipped
     # here, before a runner is stood up for it.
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.tier != 'none' || inputs.lines != '' }}
+    if: ${{ inputs.tier != 'none' || inputs.lines != '' }}
     runs-on: macos-26
     timeout-minutes: 300
     env:
       # A dispatch's own words reach a script as environment, never as text
       # spliced into it. (Not LINES: a terminal's height, to what reads it.)
       REPLAY_LINES: ${{ inputs.lines }}
-      REPLAY_TIER: ${{ github.event_name == 'push' && 'linux' || github.event_name == 'schedule' && 'all' || inputs.tier }}
-      REPLAY_LOCALE: ${{ inputs.locale || 'ja' }}
+      REPLAY_TIER: ${{ inputs.tier }}
+      REPLAY_LOCALE: ${{ inputs.locale }}
     steps:
       - name: Harden runner (egress allowlist)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
