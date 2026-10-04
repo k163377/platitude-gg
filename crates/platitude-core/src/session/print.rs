@@ -118,6 +118,7 @@ impl RowPrint {
             stash_ref,
             parents,
             carried,
+            provisional,
         } = row;
         let mut h = std::collections::hash_map::DefaultHasher::new();
         oid_hex.hash(&mut h);
@@ -135,6 +136,7 @@ impl RowPrint {
         stash_ref.hash(&mut h);
         published.hash(&mut h);
         parents.hash(&mut h);
+        provisional.hash(&mut h);
         // Another copy staging one more file moves nothing else on its row
         // (its id is all-zero whatever it holds).
         if let Some(carried) = carried {
@@ -210,6 +212,7 @@ mod tests {
             published: false,
             parents: Box::from([oid('b')]),
             carried: None,
+            provisional: false,
         }
     }
 

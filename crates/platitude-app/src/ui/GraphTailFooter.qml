@@ -18,8 +18,9 @@ Item {
     required property real graphFullWidth
     required property bool findOn
 
-    /// The search passed the last row over, so the lanes here start from its dimmed strength (規約 §コミットを探す).
-    readonly property bool dimmed: tail.findOn && !tail.graphModel.tailMatched
+    /// The search passed the last row over, so the lanes here start from its dimmed strength (規約 §コミットを探す) —
+    /// as they do while the discard log's entry is on the graph, which this end is never part of.
+    readonly property bool dimmed: (tail.findOn && !tail.graphModel.tailMatched) || tail.graphModel.provisionalOn
     onDimmedChanged: tailCanvas.requestPaint()
 
     /// Whether a press here would load anything: the walk stopped at the window, and the last press has been answered.

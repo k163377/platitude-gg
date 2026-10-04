@@ -154,7 +154,12 @@ pub(super) fn lay_without(
         if gone.contains(&oid) {
             continue;
         }
-        let (made, g) = laying.commit(&oid, &row.parents, !row.stash_ref.is_empty());
+        let (made, g) = laying.commit(
+            &oid,
+            &row.parents,
+            !row.stash_ref.is_empty(),
+            row.provisional,
+        );
         out.extend(made);
         out.push(LogRow {
             row: g.row,
@@ -206,12 +211,15 @@ impl Laying {
         self.top.take()
     }
 
-    /// Lays one commit: the copies' rows owed above it, and its lanes.
+    /// Lays one commit: the copies' rows owed above it, and its lanes —
+    /// dashed for a stash and for a provisional commit, as the walk drew
+    /// them (`rows::StreamItem::row`).
     pub(super) fn commit(
         &mut self,
         oid: &Oid,
         parents: &[Oid],
         stash: bool,
+        provisional: bool,
     ) -> (Vec<LogRow>, GraphRow) {
         // A copy standing here draws above the commit, and a stash asks
         // with the commit it was taken on (`CarriedRows`).
@@ -224,7 +232,10 @@ impl Laying {
             Some(anchor) => self.carried.take_at(&anchor, &mut self.builder),
             None => Vec::new(),
         };
-        (made, self.builder.push_ids(oid, parents, stash))
+        (
+            made,
+            self.builder.push_ids(oid, parents, stash || provisional),
+        )
     }
 }
 

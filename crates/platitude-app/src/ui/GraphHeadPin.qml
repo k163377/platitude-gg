@@ -69,8 +69,11 @@ Rectangle {
     readonly property real rowTop: pin.view.originY + pin.headRow * Theme.graphRowHeight
     readonly property bool rowAbove: pin.rowTop < pin.view.contentY
     readonly property bool rowBelow: pin.rowTop + Theme.graphRowHeight > pin.view.contentY + pin.view.height
-    /// HEAD is inside the loaded window and its chips have arrived (`models::graph::head`).
+    /// HEAD is inside the loaded window and its chips have arrived (`models::graph::head`). Not while the discard log's
+    /// entry is on the graph: the view keeps to the entry's span, HEAD is out of its reach, and a stand-in at the edge
+    /// would cover the span's edge row — the entry's tip, often — where no scroll can take it out from under.
     readonly property bool wanted: pin.headRow >= 0 && pin.graphModel.headLabels.length > 0
+                                   && !pin.graphModel.provisionalOn
     /// The list's selection is on HEAD's row. The grounds read this, not each other's `visible` — that is the
     /// effective one, false whenever the stand-in is hidden.
     readonly property bool selected: pin.view.currentIndex === pin.headRow

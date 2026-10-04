@@ -70,6 +70,8 @@ pub(super) struct Walked {
 struct WalkedRow {
     oid: Oid,
     stash: bool,
+    /// Drawn for the discard log's picked entry ([`LogRow::provisional`]).
+    provisional: bool,
     content: u64,
     /// One past this row's last parent in [`Walked::parents`].
     parents_end: u32,
@@ -105,6 +107,7 @@ impl Walked {
             self.rows.push(WalkedRow {
                 oid,
                 stash: !row.stash_ref.is_empty(),
+                provisional: row.provisional,
                 content: RowPrint::content_of(row),
                 parents_end: self.parents.len() as u32,
             });
@@ -183,6 +186,8 @@ pub(super) struct Holders {
     pub(super) head_tip: Option<Oid>,
     pub(super) incoming: Vec<Oid>,
     pub(super) detached: Vec<Oid>,
+    /// The discard log's picked entry's tips (`session::shown_discard`).
+    pub(super) shown_tips: Vec<Oid>,
     /// Whether the graph walks tags: hidden, a tag starts no walk.
     pub(super) tags: bool,
 }
@@ -202,6 +207,7 @@ impl Holders {
             || self.head_tip.as_ref() == Some(oid)
             || self.incoming.contains(oid)
             || self.detached.contains(oid)
+            || self.shown_tips.contains(oid)
             || labels
                 .labels_of(oid, self.tags)
                 .iter()
@@ -273,7 +279,7 @@ pub(super) fn lay_walked(
         if gone.contains(&row.oid) {
             continue;
         }
-        let (copies, lanes) = laying.commit(&row.oid, parents, row.stash);
+        let (copies, lanes) = laying.commit(&row.oid, parents, row.stash, row.provisional);
         for copy in copies {
             laid.made(copy);
         }
@@ -400,6 +406,7 @@ impl RepoSession {
                 .iter()
                 .map(|copy| copy.oid)
                 .collect(),
+            shown_tips: self.shown_tips(),
             tags: self.tags_shown(),
         }
     }

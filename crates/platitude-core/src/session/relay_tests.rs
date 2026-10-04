@@ -37,6 +37,7 @@ fn walked(id: u8, parents: &[u8], builder: &mut GraphBuilder) -> LogRow {
         published: false,
         carried: None,
         parents,
+        provisional: false,
     }
 }
 

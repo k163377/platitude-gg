@@ -219,6 +219,7 @@ mod tests {
                     published: *id == 1,
                     carried: None,
                     parents,
+                    provisional: false,
                 }
             })
             .collect()

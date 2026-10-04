@@ -84,9 +84,89 @@ impl GraphModel {
     // One badge stands for both (`BandStateGroup.staleBadgeShown`).
     qproperty!("failed", Member = failed, Notify = stats_changed);
     qproperty!("stale", Member = stale, Notify = stats_changed);
+    // The discard log's picked entry on the graph (`provisional.rs`): whether
+    // one is shown, the first and last of the rows it would bring back and
+    // its old tip's row (-1 for none loaded), and the revision a delegate
+    // reads beside `provisionalAt`.
+    qproperty!(
+        "provisionalOn",
+        Member = provisional_on,
+        Notify = stats_changed
+    );
+    qproperty!(
+        "provisionalFirst",
+        Member = provisional_first,
+        Notify = stats_changed
+    );
+    qproperty!(
+        "provisionalLast",
+        Member = provisional_last,
+        Notify = stats_changed
+    );
+    qproperty!(
+        "provisionalTipRow",
+        Member = provisional_tip_row,
+        Notify = stats_changed
+    );
+    qproperty!(
+        "provisionalRevision",
+        Member = provisional_revision,
+        Notify = stats_changed
+    );
+    // A walk that took the entry's tips has answered: a tip row still -1 is
+    // past the window.
+    qproperty!(
+        "provisionalWalked",
+        Member = provisional_walked,
+        Notify = stats_changed
+    );
 
     #[qsignal]
     pub(super) fn stats_changed(&mut self);
+
+    /// Puts the discard log's picked entry on the graph: its parts' tips,
+    /// the first the one it lands on, how each draws (`uncommitted` /
+    /// `stash` / empty for a commit), the commits only they reach, and where
+    /// a copy on a base made for it draws — `<tip> <base> <commit>`, full
+    /// hex (`DiscardModel.tipsAt` / `looksAt` / `lostAt` / `standsAt`).
+    #[qslot]
+    fn show_discard(
+        &mut self,
+        tips: Vec<String>,
+        looks: Vec<String>,
+        lost: Vec<String>,
+        stands: Vec<String>,
+    ) {
+        self.show_provisional(tips, looks, lost, &stands);
+    }
+
+    /// Takes the entry off the graph.
+    #[qslot]
+    fn hide_discard(&mut self) {
+        self.hide_provisional();
+    }
+
+    /// Whether the row is one the shown entry would bring back. Read beside
+    /// `provisionalRevision`, for the reason `carriedName` is read beside
+    /// `carriedRevision`.
+    #[qslot]
+    fn provisional_at(&self, row: i32) -> bool {
+        usize::try_from(row).is_ok_and(|row| self.provisional_row(row))
+    }
+
+    /// Whether the row is the shown entry's copy of thrown-away work, which
+    /// draws as an uncommitted row does. Read beside `provisionalRevision`.
+    #[qslot]
+    fn provisional_wip_at(&self, row: i32) -> bool {
+        usize::try_from(row).is_ok_and(|row| self.provisional_tip_drawn_as(row, "uncommitted"))
+    }
+
+    /// Whether the row is the shown entry's dropped stash, which draws as a
+    /// stash does. Read beside `provisionalRevision`.
+    #[qslot]
+    fn provisional_stash_at(&self, row: i32) -> bool {
+        usize::try_from(row).is_ok_and(|row| self.provisional_tip_drawn_as(row, "stash"))
+    }
 
     /// Names the refs whose chips to leave undrawn, at most one per kind
     /// (a delete touches at most one of each); empty ones put theirs back,
@@ -124,6 +204,9 @@ impl GraphModel {
         // A grow still out was the old session's to answer, and it never
         // will: the footer would wait for as long as the page stands.
         self.growing = false;
+        // The discard log's entry was the old session's to walk: the new one
+        // walks without it, and every row would read as passed over.
+        self.drop_provisional();
         self.stats_changed();
     }
 

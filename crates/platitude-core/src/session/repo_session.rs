@@ -104,6 +104,9 @@ pub struct RepoSession {
     /// cancels the gpg or ssh-keygen run the last one started
     /// (`session::latest`).
     pub(super) signature_read: Latest,
+    /// The discard log's picked entry, which the walk takes one tip more
+    /// for (`session::shown_discard`); `None` while nothing is picked.
+    pub(super) shown_discard: Mutex<Option<Arc<ShownDiscard>>>,
     /// One remote-branch check at a time — a name being typed asks per
     /// settled keystroke, and each ask is a network round trip.
     pub(super) remote_branch_read: Latest,

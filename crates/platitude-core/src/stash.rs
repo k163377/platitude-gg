@@ -18,11 +18,13 @@ mod rename;
 pub use rename::rename;
 
 /// `--format=` for `stash list`: selector, commit, committer time,
-/// subject. `-z` NUL-terminates records (stash list forwards options to
-/// `git log`).
-pub const STASH_FORMAT_ARG: &str = "--format=%gd%x00%H%x00%ct%x00%gs";
+/// subject, parents, and the `Stands-on:` trailer a discard's copy put in
+/// the stash carries (破棄記録仕様.md §2.1). `-z` NUL-terminates records
+/// (stash list forwards options to `git log`).
+pub const STASH_FORMAT_ARG: &str =
+    "--format=%gd%x00%H%x00%ct%x00%gs%x00%P%x00%(trailers:key=Stands-on,valueonly,separator=%x20)";
 
-const STASH_FIELDS: usize = 4;
+const STASH_FIELDS: usize = 6;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StashEntry {
@@ -33,6 +35,9 @@ pub struct StashEntry {
     pub time: i64,
     /// Reflog subject (`WIP on main: ...` or the custom message).
     pub message: String,
+    /// Where it draws when its base is a commit a discard's copy made for
+    /// it; `None` for a stash git made.
+    pub stands: Option<crate::discards::Stands>,
 }
 
 /// What the working tree lets a stash do. Every refusal is git's own
@@ -104,11 +109,17 @@ pub fn parse_stashes(bytes: &[u8]) -> Result<Vec<StashEntry>, StashParseError> {
             .parse()
             .map_err(|_| StashParseError)?;
         let message = String::from_utf8_lossy(record[3]).into_owned();
+        let parents: Vec<Oid> = String::from_utf8_lossy(record[4])
+            .split(' ')
+            .filter_map(|hex| Oid::from_hex_str(hex).ok())
+            .collect();
+        let stands = crate::discards::Stands::of(&parents, &String::from_utf8_lossy(record[5]));
         out.push(StashEntry {
             name,
             oid,
             time,
             message,
+            stands,
         });
     }
     Ok(out)

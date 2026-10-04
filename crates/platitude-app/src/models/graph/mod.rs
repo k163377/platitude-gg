@@ -17,6 +17,7 @@ mod find;
 mod head;
 mod item;
 mod marks;
+mod provisional;
 mod qobject;
 mod relay;
 mod stream;
@@ -137,6 +138,28 @@ pub struct GraphModel {
     /// Whether the search found that row — the stand-in dims with it, or
     /// the row would change its light as it scrolled off.
     head_matched: bool,
+    /// The discard log's picked entry on the graph (`provisional.rs`): the
+    /// rows it would bring back are its parts' tips and the commits only
+    /// those tips reach, by id. Empty while nothing is picked.
+    provisional: std::collections::HashSet<String>,
+    /// The first part's tip: the row the entry lands on.
+    provisional_tip: String,
+    /// How each tip draws, by id: `uncommitted` for a copy of thrown-away
+    /// work, `stash` for a dropped stash; a commit is not in it.
+    provisional_looks: std::collections::HashMap<String, String>,
+    provisional_on: bool,
+    /// Where those rows stand: the first and the last, and the tip's own;
+    /// -1 for none loaded.
+    provisional_first: i32,
+    provisional_last: i32,
+    provisional_tip_row: i32,
+    /// Bumped whenever the answers above may have moved under a row, for
+    /// the reason `carried_revision` is.
+    provisional_revision: i32,
+    /// Whether the walk that took the entry's tips has landed
+    /// (`GraphMsg::DiscardWalked`): a tip still undrawn then lies past the
+    /// window, not past the walk.
+    provisional_walked: bool,
     error: String,
     /// The walk stopped, so the rows drawn are not all of them. Apart from
     /// `error`: a walk that fell over has no git words, and the screen says

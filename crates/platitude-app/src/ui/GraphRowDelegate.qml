@@ -36,8 +36,35 @@ Item {
     /// The find bar's line is somewhere in this row (platitude-core::find decides; the model marks it). Only ever true
     /// while a search is on.
     required property bool matched
-    // Dimmed because the search passed this row over, and still as available as any other (デザイン規約 §暗く落とした段).
-    readonly property bool dimmed: rowItem.ListView.view ? rowItem.ListView.view.findOn && !rowItem.matched : false
+    // Dimmed because the search passed this row over, and still as available as any other (デザイン規約 §暗く落とした段)
+    // — and the same while the discard log's entry is on the graph and this row is not one it would bring back: the
+    // other rows give way, the entry's own are drawn as they would stand (破棄記録仕様.md).
+    readonly property bool dimmed: rowItem.ListView.view
+        ? (rowItem.ListView.view.findOn && !rowItem.matched) || rowItem.passedOver
+        : false
+    // **`provisionalRevision` is touched on purpose**, for the reason `carriedRevision` is below.
+    readonly property bool passedOver: {
+        const view = rowItem.ListView.view
+        if (!view || !view.model || !view.model.provisionalOn)
+            return false
+        view.model.provisionalRevision
+        return !view.model.provisionalAt(rowItem.index)
+    }
+    // This row is one the discard log's entry would bring back: its mark is ringed dashed (`GraphLaneCell`). Ringed at
+    // the mark, not boxed with its run: the rows it brings back stand where their dates put them, other rows between.
+    readonly property bool provisionalRow: {
+        const view = rowItem.ListView.view
+        return !!(view && view.model && view.model.provisionalOn) && !rowItem.passedOver
+    }
+    // The discard log's entry is a stash dropped, and this is it: drawn as a stash row is. The revision is touched for
+    // the same reason.
+    readonly property bool asStash: {
+        const view = rowItem.ListView.view
+        if (!view || !view.model || !view.model.provisionalOn)
+            return false
+        view.model.provisionalRevision
+        return view.model.provisionalStashAt(rowItem.index)
+    }
 
     width: ListView.view.width
     height: Theme.graphRowHeight
@@ -52,6 +79,16 @@ Item {
     readonly property real topBleed: index === 0 && ListView.view ? ListView.view.topMargin : 0
     // The all-zero id marks the synthetic uncommitted-changes row (the sentinel is core's — `Oid::zero_like`).
     readonly property bool isWip: GitFacts.wipOid(oid_hex)
+    // The discard log's entry is a copy of thrown-away work, and this is it: drawn as an uncommitted row is — the ring,
+    // the words — while it stays a commit to every hand (破棄記録仕様.md). `provisionalRevision` is touched for the
+    // reason `carriedRevision` is below.
+    readonly property bool asUncommitted: {
+        const view = rowItem.ListView.view
+        if (rowItem.isWip || !view || !view.model || !view.model.provisionalOn)
+            return rowItem.isWip
+        view.model.provisionalRevision
+        return view.model.provisionalWipAt(rowItem.index)
+    }
     // **Whose uncommitted row this is** — every such row carries the same all-zero id. Empty on every commit and on
     // this window's own row.
     //
@@ -95,8 +132,8 @@ Item {
     // The chips a double-click can lead to (`primaryChip`).
     readonly property var branchRecords: labelRecords.filter(chip => chip.kind === "branch" || chip.kind === "remote")
     // Whether this row is somewhere HEAD could stand: the working-tree row is not a commit, and a stash sits on no
-    // branch's history.
-    readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === ""
+    // branch's history — a dropped one the log shows neither.
+    readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === "" && !rowItem.asStash
     // The commit the working tree is standing on, detached or not — the row number the model settled
     // (`models::graph::head`).
     readonly property bool isHead: rowItem.ListView.view ? rowItem.ListView.view.headRow === rowItem.index : false
@@ -222,8 +259,10 @@ Item {
             coAuthors: rowItem.co_authors
             avatar: rowItem.avatar
             avatarUrl: rowItem.avatar_url
-            isWip: rowItem.isWip
-            stashRef: rowItem.stash_ref
+            isWip: rowItem.asUncommitted
+            // Any word draws the stash's mark; a dropped stash has no `stash@{n}` to give.
+            stashRef: rowItem.asStash ? "stash" : rowItem.stash_ref
+            provisional: rowItem.provisionalRow
             dimmed: rowItem.dimmed
             ground: rowItem.laneGround
         }
@@ -252,15 +291,16 @@ Item {
                 id: wordsCut
                 // The uncommitted row's words keep their own width, so the counts sit right after them and read as
                 // part of the same sentence (規約 §未コミット行が名乗るもの).
+                // The thrown-away copy has no counts after its words, so its words fill as a commit's do.
                 Layout.fillWidth: !rowItem.isWip
                 cutAt: "end"
                 // No total — the tallies add up to it (規約 §未コミット行が名乗るもの). The same words whosever tree it
                 // is; whose comes after them, in the seat below.
-                text: rowItem.isWip ? qsTr("Uncommitted changes") : rowItem.subject
+                text: rowItem.asUncommitted ? qsTr("Uncommitted changes") : rowItem.subject
                 pixelSize: Theme.fontMd
                 // HEAD's commit writes its message in `textLink`, as the stand-in does while this row is scrolled off
                 // (規約 §グラフの中で HEAD を見失わない) — one rule, so nothing changes as it steps aside.
-                color: rowItem.isWip ? Theme.textSecondary
+                color: rowItem.asUncommitted ? Theme.textSecondary
                        : rowItem.isHead ? Theme.textLink
                        : Theme.textPrimary
             }

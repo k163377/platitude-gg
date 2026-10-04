@@ -367,6 +367,7 @@ fn a_stash_is_hidden_by_the_selector_git_knows_it_by() {
         oid: oid("a"),
         time: 0,
         message: message.to_string(),
+        stands: None,
     };
     let mut model = section(
         "stashes",

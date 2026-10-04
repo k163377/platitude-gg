@@ -148,6 +148,9 @@ impl GraphBuilder {
                 });
             }
         }
+        // A dashed node dashes every edge it sends: a stash keeps one parent
+        // (`session::rows::sift_batch`), and a provisional merge's other
+        // parents are as provisional as its first.
         for p in parents {
             // Another edge already waits for this parent: merge into the
             // nearest waiting lane (keeps the graph narrow and the
@@ -157,19 +160,19 @@ impl GraphBuilder {
                     kind: SegmentKind::OutOfNode,
                     lane: existing,
                     color: self.lane_color(existing),
-                    dashed: false,
+                    dashed: dashed_edge,
                 });
             } else if self.already_emitted(p, oid) {
                 // Out-of-order stream: skip, as above.
             } else {
                 let lane = self.find_free_lane_near(node_lane);
                 let color = self.take_color();
-                self.occupy(lane, *p, color, false);
+                self.occupy(lane, *p, color, dashed_edge);
                 segments.push(Segment {
                     kind: SegmentKind::OutOfNode,
                     lane,
                     color,
-                    dashed: false,
+                    dashed: dashed_edge,
                 });
             }
         }

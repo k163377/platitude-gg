@@ -27,6 +27,11 @@ pub(super) struct WalkInputs {
     head_tip: Option<Oid>,
     /// Each stash's own commit, by the name it is drawn under.
     stash_refs: HashMap<Oid, String>,
+    /// The stashes whose base is a commit a discard's copy made for them.
+    stash_stands: HashMap<Oid, crate::discards::Stands>,
+    /// The discard log's picked entry: one more tip, and the commits only
+    /// it reaches, which come out provisional (`session::shown_discard`).
+    shown: Option<Arc<ShownDiscard>>,
 }
 
 impl RepoSession {
@@ -51,17 +56,19 @@ impl RepoSession {
         let stashes = async {
             stash::load(&self.executor, workdir, cancel)
                 .await
-                .map(|list| {
-                    list.into_iter()
-                        .map(|s| (s.oid, s.name))
-                        .collect::<HashMap<Oid, String>>()
-                })
                 .unwrap_or_default()
         };
-        let (head_tip, stash_refs) = tokio::join!(head, stashes);
+        let (head_tip, stashes) = tokio::join!(head, stashes);
+        let stash_stands = stashes
+            .iter()
+            .filter_map(|s| s.stands.map(|stands| (s.oid, stands)))
+            .collect();
+        let stash_refs = stashes.into_iter().map(|s| (s.oid, s.name)).collect();
         Ok(WalkInputs {
             head_tip: head_tip?,
             stash_refs,
+            stash_stands,
+            shown: self.shown_discard(),
         })
     }
 
@@ -76,6 +83,8 @@ impl RepoSession {
         let WalkInputs {
             head_tip,
             stash_refs,
+            stash_stands,
+            shown,
         } = inputs;
         let Some(head_tip) = head_tip else {
             // Unborn HEAD: nothing to log, but the working-tree row can
@@ -98,11 +107,22 @@ impl RepoSession {
         let standing = self.worktree_holders();
         let detached = detached_oids(&standing);
 
-        let cmd = walk_command(workdir, options, &stash_refs, incoming, &detached);
+        let shown_tips: Vec<Oid> = shown
+            .as_ref()
+            .map(|shown| shown.tips.clone())
+            .unwrap_or_default();
+        let cmd = walk_command(
+            workdir,
+            options,
+            &stash_refs,
+            incoming,
+            &detached,
+            &shown_tips,
+        );
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
-        let mut sifter = Sifter::new(&stash_refs);
+        let mut sifter = Sifter::new(&stash_refs, &stash_stands, shown.as_deref());
         let mut carried = super::rows::CarriedRows::new(&self.carried_current());
         let mut first_sent = false;
         let mut parse_error: Option<String> = None;
@@ -175,6 +195,8 @@ impl RepoSession {
         let WalkInputs {
             head_tip,
             stash_refs,
+            stash_stands,
+            shown,
         } = inputs;
         let Some(head_tip) = head_tip else {
             // Unborn HEAD (see stream_log).
@@ -199,11 +221,22 @@ impl RepoSession {
         let standing = self.worktree_holders();
         let detached = detached_oids(&standing);
 
-        let cmd = walk_command(workdir, options, &stash_refs, incoming, &detached);
+        let shown_tips: Vec<Oid> = shown
+            .as_ref()
+            .map(|shown| shown.tips.clone())
+            .unwrap_or_default();
+        let cmd = walk_command(
+            workdir,
+            options,
+            &stash_refs,
+            incoming,
+            &detached,
+            &shown_tips,
+        );
 
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
-        let mut sifter = Sifter::new(&stash_refs);
+        let mut sifter = Sifter::new(&stash_refs, &stash_stands, shown.as_deref());
         let mut carried = super::rows::CarriedRows::new(&self.carried_current());
         let mut parse_error: Option<String> = None;
 
@@ -368,6 +401,7 @@ fn walk_command(
     stash_refs: &HashMap<Oid, String>,
     incoming: &[Oid],
     detached: &[Oid],
+    shown_tips: &[Oid],
 ) -> GitCommand {
     let mut cmd = GitCommand::new()
         .cwd(workdir)
@@ -386,11 +420,14 @@ fn walk_command(
     // somebody can be sent to (デザイン規約 §左メニューの所作).
     //
     // `HEAD` is this window's own: another copy's is in the walk only if
-    // named here.
+    // named here. So are the discard log's picked entry's tips, which only
+    // a reflog or the record reaches (`session::shown_discard`); gc may have
+    // taken them.
     let mut extra = stash_refs
         .keys()
         .chain(incoming)
         .chain(detached.iter())
+        .chain(shown_tips.iter())
         .peekable();
     if extra.peek().is_some() {
         cmd = cmd.arg("--ignore-missing");

@@ -133,6 +133,9 @@ impl SessionSink for BridgeSink {
                 })
             }
             SessionEvent::LogStale { stale } => self.feeds.graph.push(GraphMsg::Stale { stale }),
+            SessionEvent::DiscardWalked { tip } => self.feeds.graph.push(GraphMsg::DiscardWalked {
+                tip: tip.map(|tip| tip.to_hex()).unwrap_or_default(),
+            }),
             SessionEvent::LogReplaced {
                 generation,
                 rows,

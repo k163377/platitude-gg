@@ -49,6 +49,7 @@ impl GraphModel {
                     walked,
                     truncated,
                 } => self.relay_walk(generation, from, &rows, walked, truncated),
+                GraphMsg::DiscardWalked { tip } => self.note_provisional_walk(&tip),
                 GraphMsg::Failed {
                     generation,
                     message,
@@ -60,6 +61,11 @@ impl GraphModel {
             changed = true;
         }
         changed |= self.settle_head();
+        // Rows came or went under the discard log's entry: where its rows
+        // stand is read again (`provisional.rs`).
+        if changed && self.provisional_on {
+            self.settle_provisional();
+        }
         if crate::harness::memprobe::enabled() {
             crate::harness::memprobe::note("graph-rows", self.tab_id, &self.rows);
             crate::harness::memprobe::note_bytes(

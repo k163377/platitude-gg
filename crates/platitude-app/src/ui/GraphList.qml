@@ -162,6 +162,45 @@ AppListView {
         const bottom = graphList.indexAt(0, graphList.contentY + graphList.height - Theme.graphRowHeight)
         return row >= graphList.firstVisibleRow() && (bottom < 0 || row <= bottom)
     }
+    /// The one clamp (`AppListView.clampY`), kept to the span of the discard log's entry while one is on the graph
+    /// (破棄記録仕様.md): the rows it would bring back, first to last, are all the view goes over. A span shorter than
+    /// the view stands in its middle, with what it forked from in sight, and does not move.
+    function clampY(y) {
+        const minY = graphList.originY - graphList.topMargin
+        const maxY = Math.max(minY, graphList.originY + graphList.contentHeight - graphList.height
+                              + graphList.bottomMargin)
+        const model = graphList.graphModel
+        if (!model.provisionalOn || model.provisionalFirst < 0)
+            return Math.max(minY, Math.min(y, maxY))
+        const top = graphList.originY + model.provisionalFirst * Theme.graphRowHeight
+        const bottom = graphList.originY + (model.provisionalLast + 1) * Theme.graphRowHeight
+        const fits = bottom - top <= graphList.height
+        const low = fits ? (top + bottom - graphList.height) / 2 : top
+        const high = fits ? low : bottom - graphList.height
+        return Math.max(minY, Math.min(maxY, Math.max(low, Math.min(y, high))))
+    }
+    /// Every way of moving the view that does not ask the clamp — the bar's thumb, a flick, `positionViewAtIndex`, a
+    /// rebuild — is brought back inside the entry's span here, and so is the view when the span itself moves. **Never
+    /// from inside a `contentY` change**: the list is still laying its rows out for that position, and a second write
+    /// leaves the position and the rows drawn apart — the view stands still showing rows it is not at
+    /// (rules-refs/app-ui.md の `GraphList.keepToSpan` の行).
+    function keepToSpan() {
+        if (!graphList.graphModel.provisionalOn || graphList.graphModel.provisionalFirst < 0)
+            return
+        const kept = graphList.clampY(graphList.contentY)
+        if (Math.abs(kept - graphList.contentY) > 0.5) {
+            wheelGlide.halt()
+            graphList.contentY = kept
+        }
+    }
+    readonly property int spanFirst: graphList.graphModel.provisionalOn ? graphList.graphModel.provisionalFirst : -1
+    readonly property int spanLast: graphList.graphModel.provisionalOn ? graphList.graphModel.provisionalLast : -1
+    onSpanFirstChanged: Qt.callLater(graphList.keepToSpan)
+    onSpanLastChanged: Qt.callLater(graphList.keepToSpan)
+    onContentYChanged: {
+        if (graphList.graphModel.provisionalOn)
+            Qt.callLater(graphList.keepToSpan)
+    }
     /// One notch, sent — also a run's way in, since a wheel cannot be injected (verify-ui スキル).
     function sendRows(pixels) {
         wheelGlide.sendTo(graphList.clampY(wheelGlide.at - pixels))

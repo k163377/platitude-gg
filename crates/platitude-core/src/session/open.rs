@@ -169,6 +169,7 @@ impl RepoSession {
             standing: Standing::default(),
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
             signature_read: Latest::default(),
+            shown_discard: Mutex::new(None),
             remote_branch_read: Latest::default(),
             head_published_read: Latest::default(),
             carried_read: Latest::default(),

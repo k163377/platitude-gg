@@ -55,8 +55,10 @@ pub struct Segment {
     pub lane: u16,
     /// Palette index (< [`GRAPH_PALETTE_SIZE`]).
     pub color: u8,
-    /// A synthetic leash (WIP → HEAD, stash → base); real history is
-    /// always solid.
+    /// A synthetic leash (WIP → HEAD, stash → base), or an edge of a commit
+    /// drawn only for the discard log's picked entry
+    /// (`session::LogRow::provisional`); the history the repository holds
+    /// is always solid.
     pub dashed: bool,
 }
 

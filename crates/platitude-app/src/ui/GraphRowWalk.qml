@@ -27,7 +27,12 @@ Item {
                 || walk.view.namingOid !== "" || walk.view.count === 0)
             return false
         const from = walk.view.currentIndex
-        const row = from < 0 ? 0 : Math.max(0, Math.min(from + delta, walk.view.count - 1))
+        // While the discard log's entry is on the graph the steps keep to its span, as the view does
+        // (`GraphList.clampY`): a row past it could be selected and never shown.
+        const spanned = walk.graphModel.provisionalOn && walk.graphModel.provisionalFirst >= 0
+        const lowest = spanned ? walk.graphModel.provisionalFirst : 0
+        const highest = spanned ? walk.graphModel.provisionalLast : walk.view.count - 1
+        const row = from < 0 ? lowest : Math.max(lowest, Math.min(from + delta, highest))
         if (row === from)
             return false
         // Asked before the move: a selection that was out of sight is nobody's place, so that one is centered instead.

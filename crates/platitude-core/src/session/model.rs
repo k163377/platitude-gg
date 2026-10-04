@@ -229,4 +229,9 @@ pub struct LogRow {
     /// row's identity, since every uncommitted row carries the all-zero id
     /// (`session::carried`).
     pub carried: Option<super::Carried>,
+    /// A commit only the discard log's picked entry reaches — drawn for
+    /// that entry, not because the repository holds it (破棄記録仕様.md,
+    /// [`super::ShownDiscard`]). Its edges draw dashed. False everywhere
+    /// else.
+    pub provisional: bool,
 }

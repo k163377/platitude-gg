@@ -46,6 +46,7 @@ fn walk(rows: &[(u8, &[u8], bool)]) -> Vec<LogRow> {
                 published: false,
                 carried: None,
                 parents,
+                provisional: false,
             }
         })
         .collect()
@@ -159,6 +160,7 @@ fn holders(locals: Vec<BranchItem>, tags: bool) -> Holders {
         head_tip: None,
         incoming: Vec::new(),
         detached: Vec::new(),
+        shown_tips: Vec::new(),
         tags,
     }
 }
@@ -245,6 +247,10 @@ fn head_a_stash_a_merge_side_and_a_copy_hold_what_they_stand_on() {
         },
         Holders {
             detached: vec![oid(5)],
+            ..holders(Vec::new(), true)
+        },
+        Holders {
+            shown_tips: vec![oid(5)],
             ..holders(Vec::new(), true)
         },
     ] {

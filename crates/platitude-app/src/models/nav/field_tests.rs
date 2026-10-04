@@ -355,6 +355,7 @@ fn the_short_sections_read_out_of_what_arrived() {
             oid: oid("c"),
             time: 0,
             message: "On main: a thing".to_string(),
+            stands: None,
         }]),
     );
     model.arrange();

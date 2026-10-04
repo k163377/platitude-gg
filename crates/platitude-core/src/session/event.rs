@@ -383,6 +383,14 @@ pub enum SessionEvent {
         local: String,
         start: String,
     },
+    /// The walk that put the discard log's entry on the graph, or took it
+    /// off (`tip` `None`), has landed ([`RepoSession::show_discard`]): a
+    /// tip whose row is still not drawn lies past the window. `tip` is the
+    /// entry's first, so an answer for an entry picked over cannot be read
+    /// as the standing one's.
+    DiscardWalked {
+        tip: Option<Oid>,
+    },
     /// The queue took a write up: git is about to run it. `id` is the
     /// acceptance's ([`RepoSession::write`]); every later event about
     /// this write carries it.

@@ -13,23 +13,41 @@ fn z(tokens: &[&str]) -> Vec<u8> {
     v
 }
 
+const BASE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const HEAD: &str = "cccccccccccccccccccccccccccccccccccccccc";
+
 #[test]
 fn parses_entries() {
+    let parents = format!("{BASE} {SHA}");
     let bytes = z(&[
         "stash@{0}",
         SHA,
         "1700000000",
         "WIP on main: 1234567 subject",
+        &parents,
+        "",
         "stash@{1}",
         SHA,
         "1699999999",
         "On feature: custom message",
+        &parents,
+        HEAD,
     ]);
     let stashes = parse_stashes(&bytes).unwrap();
     assert_eq!(stashes.len(), 2);
     assert_eq!(stashes[0].name, "stash@{0}");
     assert_eq!(stashes[0].time, 1_700_000_000);
+    assert_eq!(stashes[0].stands, None, "a stash git made");
     assert_eq!(stashes[1].message, "On feature: custom message");
+    let oid = |hex: &str| crate::oid::Oid::from_hex_str(hex).unwrap();
+    assert_eq!(
+        stashes[1].stands,
+        Some(crate::discards::Stands {
+            made: oid(BASE),
+            on: oid(HEAD),
+        }),
+        "a discard's copy on a base made for it"
+    );
 }
 
 #[test]
