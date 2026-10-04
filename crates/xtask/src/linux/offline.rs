@@ -137,6 +137,7 @@ fn engine_run(root: &Path, network: bool, env: &[(&str, &str)]) -> Command {
     for (name, value) in env {
         cmd.arg("--env").arg(format!("{name}={value}"));
     }
+    super::given_commit(&mut cmd, root);
     cmd.arg("--volume")
         .arg(format!("{}:{WORK}", mount_path(root)))
         .arg("--volume")

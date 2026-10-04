@@ -1103,6 +1103,7 @@ fn in_container(
         // (`verify::options::census_line`).
         .arg("--env")
         .arg(format!("{IN_CONTAINER}=1"));
+    given_commit(&mut cmd, root);
 
     let mut inside = command.to_vec();
     // Kept in scope past the run below: the directory behind `/out` is
@@ -1231,6 +1232,29 @@ pub(super) fn marked(cmd: &mut Command) {
     for mark in [crate::still::UNDER, crate::budget::HELD] {
         cmd.arg("--env").arg(format!("{mark}=1"));
     }
+}
+
+/// The commit the mounted checkout stands at and the tags on it, for the
+/// app's build.rs to name the build by: inside, a worktree's `.git` names
+/// a host path nothing mounts, so git there cannot answer. Read on every
+/// start, never kept — a container lives for one commit at most.
+pub(super) fn given_commit(cmd: &mut Command, root: &Path) {
+    let dir = root.display().to_string();
+    let head = crate::subprocess::git_query(&dir, &["rev-parse", "--verify", "-q", "HEAD"]);
+    let tags = crate::subprocess::git_query(&dir, &["tag", "--points-at", "HEAD"]);
+    cmd.arg("--env")
+        .arg(format!(
+            "PLATITUDE_GIVEN_COMMIT={}",
+            head.unwrap_or_default()
+        ))
+        .arg("--env")
+        .arg(format!(
+            "PLATITUDE_GIVEN_TAGS={}",
+            tags.unwrap_or_default()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+        ));
 }
 
 fn here(root: &Path, command: &[String]) -> Result<(), String> {

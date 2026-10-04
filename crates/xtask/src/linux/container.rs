@@ -135,8 +135,9 @@ pub(super) fn start_container(root: &Path, name: &str, gate: u32, tag: &str) -> 
         .arg("--workdir")
         .arg(super::WORK)
         .arg("--env")
-        .arg(format!("{}=1", super::IN_CONTAINER))
-        .arg(tag)
+        .arg(format!("{}=1", super::IN_CONTAINER));
+    super::given_commit(&mut cmd, root);
+    cmd.arg(tag)
         .args(engine::INIT)
         .args(["sh", "-c", IDLE_SCRIPT, "pgg-gate"])
         .arg(IDLE.as_secs().to_string())
