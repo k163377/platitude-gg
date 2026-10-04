@@ -399,14 +399,19 @@ Rectangle {
     /// what is drawn, not which of the three gave way.
     readonly property string opsNames: topBar.repoName + "/" + topBar.copyName + "/" + topBar.branchName
     readonly property bool opsNameCut: repoPick.nameCut || branchPick.nameCut
-    /// Automation: whether every button at the panel's right end is as deep as what it draws (`fetchButton.height`
-    /// says why) — a short one reads in a picture as a style of its own.
+    /// How deep the four frames at the panel's right end are, their words given up or not: the branch's two lines
+    /// whatever it writes (`OpsPicker.pairHeight`; 規約 §操作パネル), and never under what a button stacks
+    /// (`ActionButton.stackDepth`) — a face with short lines (Hiragino Sans, 30px for the pair) sets the two lines
+    /// shallower than the word over the mark, and the word then stands on the frame's top line.
+    readonly property real actionDepth: Math.max(branchPick.pairHeight, fetchButton.stackDepth)
+    /// Automation: whether every button at the panel's right end is as deep as what it draws (`actionDepth` says
+    /// why) — a short one reads in a picture as a style of its own.
     readonly property bool actionsBoxed: [fetchButton, pushButton, stashButton, findButton].every(
         button => !button.visible || button.height >= button.implicitHeight - 0.5)
-    /// …and whether every frame there is the panel's two lines deep, folded or not: a folded frame one line deep sits
-    /// in a picture like any other box, and only its neighbours' say it shrank.
+    /// …and whether every frame there is that deep, folded or not: a folded frame one line deep sits in a picture
+    /// like any other box, and only its neighbours' say it shrank.
     readonly property bool actionsDeep: [fetchButton, pushButton, stashButton, findButton].every(
-        button => !button.visible || Math.abs(button.height - 2 * button.frameInset - branchPick.pairHeight) < 0.5)
+        button => !button.visible || Math.abs(button.height - 2 * button.frameInset - topBar.actionDepth) < 0.5)
     /// …and whether the four are one width, the find's word given up or not (規約 §操作パネル).
     readonly property bool actionsEven: [pushButton, stashButton, findButton].every(
         button => Math.abs(button.width - fetchButton.width) < 0.5)
@@ -833,11 +838,11 @@ Rectangle {
                 // settles — and neither moves with a button's shape, so giving the word up cannot change the width
                 // that decided to.
                 width: topBar.actionCap
-                // **Two lines deep whatever the branch writes** (`OpsPicker.pairHeight`): held to one line, a button's
-                // word and mark stand past its frame (規約 §操作パネル). Folded, the cell takes the panel's height and
-                // the frame keeps those two lines: the fold gives up the word, not the depth.
-                height: fetchButton.folded ? opsBand.height : branchPick.pairHeight
-                foldedDepth: branchPick.pairHeight
+                // **Two lines deep whatever the branch writes** (`actionDepth`): held to one line, a button's word and
+                // mark stand past its frame (規約 §操作パネル). Folded, the cell takes the panel's height and the frame
+                // keeps that depth: the fold gives up the word, not the depth.
+                height: fetchButton.folded ? opsBand.height : topBar.actionDepth
+                foldedDepth: topBar.actionDepth
             }
             BandPushButton {
                 id: pushButton
@@ -850,8 +855,8 @@ Rectangle {
                 laidByBand: true
                 foldRequested: topBar.actionsFolded
                 width: topBar.actionCap
-                height: pushButton.folded ? opsBand.height : branchPick.pairHeight
-                foldedDepth: branchPick.pairHeight
+                height: pushButton.folded ? opsBand.height : topBar.actionDepth
+                foldedDepth: topBar.actionDepth
             }
             BandStashButton {
                 id: stashButton
@@ -863,8 +868,8 @@ Rectangle {
                 laidByBand: true
                 foldRequested: topBar.actionsFolded
                 width: topBar.actionCap
-                height: stashButton.folded ? opsBand.height : branchPick.pairHeight
-                foldedDepth: branchPick.pairHeight
+                height: stashButton.folded ? opsBand.height : topBar.actionDepth
+                foldedDepth: topBar.actionDepth
             }
         }
 
@@ -905,8 +910,8 @@ Rectangle {
             foldRequested: topBar.findFolded
             laidByBand: true
             width: topBar.actionCap
-            height: findButton.folded ? opsBand.height : branchPick.pairHeight
-            foldedDepth: branchPick.pairHeight
+            height: findButton.folded ? opsBand.height : topBar.actionDepth
+            foldedDepth: topBar.actionDepth
             frameColor: Theme.borderStrong
             faceColor: Theme.bgSurface
             // A plan standing over the graph refuses this press wherever it comes from (`RepoPage.startFind`), so the

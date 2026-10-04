@@ -35,6 +35,12 @@ Item {
     /// One number for the family, from its widest mark (8–10px of ink in the 12px box).
     readonly property int markAir: seat.step === Theme.iconSm ? Theme.spaceXs / 2 : 0
 
+    /// How deep the seat is at a step: the mark and the air the seat carries round it. Asked by a button that holds
+    /// its depth across a step it is not drawn at now (`ActionButton.stackDepth`).
+    function depthAt(step) {
+        return step + Theme.spaceXs
+    }
+
     visible: seat.kind !== "" || seat.holdMs > 0
     implicitWidth: !visible ? 0
                    : seat.kind !== ""
@@ -42,7 +48,7 @@ Item {
                         ? Theme.iconSm - 2 * seat.markAir
                         : Math.max(Theme.iconMd, Theme.iconSm + seat.spread))
                      : Theme.iconSm
-    implicitHeight: seat.step + Theme.spaceXs
+    implicitHeight: seat.depthAt(seat.step)
     NavIcon {
         width: seat.step
         height: seat.step

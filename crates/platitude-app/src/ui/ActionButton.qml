@@ -49,6 +49,13 @@ HoverToolButton {
     /// move: narrowing, a stacked button gives up its word and the mark grows into the room the word was in
     /// (`stackSeat.step`).
     property bool stacked: false
+    /// The mark's step under its word in such a button: the mark is what it is read by, so it takes a lone band mark's
+    /// step (規約 §寸法).
+    readonly property int stackStep: Theme.iconLg
+    /// How deep the word over the mark is, the word given up or not: the word's line and the seat at the step it has
+    /// under a word. Whoever holds the button to a depth of its own keeps it at least this (`TopBar.actionDepth`) —
+    /// in a shallower frame the word stands on the frame's top line.
+    readonly property real stackDepth: stackLabel.implicitHeight + stackSeat.depthAt(actionBtn.stackStep)
     property int wordWeight: Font.Normal
     /// The label is a phrase with a command at each end — a chip, `text` between them, and a second chip in a colour
     /// of its own (`ActionButtonLabel.phraseHead`). Empty is the ordinary single-wording button.
@@ -437,9 +444,8 @@ HoverToolButton {
                 Layout.bottomMargin: actionBtn.folded ? 0 : Metrics.opticalDrop
                 kind: actionBtn.kind
                 holdMs: actionBtn.armedMs
-                // The mark is what this button is read by, so it takes a lone band mark's step (規約 §寸法); folded,
-                // it grows into the word's room.
-                step: actionBtn.folded ? Theme.iconXl : Theme.iconLg
+                // Folded, the mark grows into the word's room.
+                step: actionBtn.folded ? Theme.iconXl : actionBtn.stackStep
                 besideWord: false
                 holdProgress: actionBtn.holdProgress
                 busy: actionBtn.busy
