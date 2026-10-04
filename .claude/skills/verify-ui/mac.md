@@ -4,14 +4,14 @@
 
 mac の実機は無い。**mac の絵と判定は GitHub Actions の `shots.yml` が出す** — runner(`macos-26` = arm64)の上で `cargo xtask replay` が verify-ui の行を 1 本ずつ撃ち、絵とログを artifact `shots-macos` に残す。**判定は手で撃った run と同じ**(`screenshot saved=true` + 報告行)で、行の書き方も **verbs.md の表がそのまま通る**。
 
-- **いつ撃たれるか**: main への push = 段分け表の `linux` 行(判定がフォントで決まる行)/ 週 1 = census の全行(public のリポジトリで 60 日活動が無いと GitHub が schedule を止める — Actions のページから戻す)/ **名指しは dispatch**:
+- **いつ撃たれるか**: main への push = `light.yml` が段分け表の `linux` 行(判定がフォントで決まる行)/ `full.yml`(週 1・版を動かした land のタグ・PR・手動・snapshot の中)= census の全行(public のリポジトリで 60 日活動が無いと GitHub が schedule を止める — Actions のページから戻す)/ **名指しは `shots.yml` の dispatch**:
 
   ```bash
   gh workflow run shots.yml --ref main -f lines='band; nav-tip branch:0'
   ```
 
   `lines` は `verify-ui` の後ろに書く行そのものを `;` で並べる。`-f tier=linux`(`merge` / `all`)は census の行を足し、`-f locale=en` は英語のシステムで撃つ(既定は日本語)。行も tier も名指さない dispatch は job ごと skip される。**`--ref` に書けるのは GitHub に在る枝だけ** — 席の枝は GitHub に無く、出すかどうかはユーザーが決める
-- **結果を読む**: run のページの Summary に行ごとの `ok` / `FAIL` が並ぶ(赤が先頭。ビルドが赤くて撃てなかった行は末尾に名指される)。天井(270 分)で切れた run は Summary が出ない — 行ごとの `ok` / `FAIL` は Replay の step のログ、そこまでの絵は artifact に在る。絵は artifact を席の `target/` へ落として読む:
+- **結果を読む**: run のページの Summary に行ごとの `ok` / `FAIL` が並ぶ(赤が先頭。ビルドが赤くて撃てなかった行は末尾に名指される)。天井(270 分)で切れた run は Summary が出ない — 行ごとの `ok` / `FAIL` は Replay の step のログ、そこまでの絵は artifact に在る。絵は artifact を席の `target/` へ落として読む。**push と Full が撃った分は呼んだ側の run に載る**(`--workflow` は `light.yml` / `full.yml`、Snapshot の中の Full は `snapshot.yml`。`shots.yml` の一覧は dispatch の分だけ):
 
   ```bash
   gh run list --workflow shots.yml --limit 5
