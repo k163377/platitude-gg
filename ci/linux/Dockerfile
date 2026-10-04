@@ -1,8 +1,9 @@
 # `cargo xtask linux <cargo args>` builds this image and runs the workspace
 # inside it — with WSL's own engine (wslc) on Windows, docker elsewhere.
 #
-# ubuntu:24.04: what CI's ubuntu-latest resolves to, and its git is the
-# oldest git最低バージョン整合.md supports — no other machine here runs it.
+# ubuntu:24.04: the release CI's Linux jobs name, and its git is the oldest
+# git最低バージョン整合.md supports — no other machine here runs it (a
+# GitHub runner of the same release carries a newer one).
 #
 # The core stage stops at git and Rust (platitude-core is Qt-free): without
 # Qt the image builds an order of magnitude faster. `cargo xtask linux`
@@ -105,7 +106,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # A venv: 24.04's system python is externally managed and refuses pip.
-# --base pins the primary server, as CI does. Python goes with the venv in
+# --base is aqt's default spelled out: download.qt.io answers an archive
+# with a redirect to a mirror, which nothing here blocks (CI, behind an
+# egress allowlist, names the origin server). Python goes with the venv in
 # the same layer: nothing past the install runs it.
 #
 # The archives the app and its tests reach and no more: every QML module

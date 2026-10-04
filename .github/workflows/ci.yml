@@ -1,45 +1,50 @@
-# 3-OS build + test + lint with egress control, plus a fully-offline test
-# job (internal-docs/実装計画.md §11.3). QT_VERSION is pinned here: CI is the
-# toolchain's lockfile.
+# 3-OS build + test + lint under an egress allowlist, a fully-offline test
+# job (internal-docs/実装計画.md §11.3) and the dependency policy.
+# Nothing is pinned here: Qt's version is .qt-version's and the toolchain is
+# rust-toolchain.toml's, so an edit to this file changes nothing the gate
+# builds or keys a step by.
 name: CI
 
+# A change that is Markdown alone starts nothing, as it selects no test in
+# the gate.
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md"]
   pull_request:
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-env:
-  QT_VERSION: "6.12.0"
-  # Windows Qt from 6.11 sits in a folder per toolchain, which no
-  # aqtinstall release reads (3.3.0 asks for qt6_<ver>/qt6_<ver>/Updates.xml):
-  # the commit carries miurahr/aqtinstall#1000, merged after 3.3.0.
-  AQT_SOURCE: "aqtinstall @ git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7"
+# A pull request's newer push replaces its older run. A push to main is a
+# group of its own: one shared by every push would drop the runs still
+# queued behind the one running.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# One shell on all three: fail-fast, and what the desks run the suite under.
+defaults:
+  run:
+    shell: bash
 
 jobs:
   test:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            qt_host: linux
-            qt_arch: linux_gcc_64
-            qt_dir: gcc_64
-          - os: windows-latest
-            qt_host: windows
-            qt_arch: win64_msvc2022_64
-            qt_dir: msvc2022_64
-          - os: macos-latest
-            qt_host: mac
-            qt_arch: clang_64
-            qt_dir: macos
+        # Named, not -latest: ubuntu-24.04 is the image ci/linux/Dockerfile
+        # stands for, and a new OS release arrives as a commit here. What an
+        # image carries (its compilers, its git) still moves under the name.
+        os: [ubuntu-24.04, windows-2025, macos-26]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
     steps:
-      - name: Harden runner (egress allowlist)
-        uses: step-security/harden-runner@v2
+      - &harden
+        name: Harden runner (egress allowlist)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -54,48 +59,51 @@ jobs:
             static.crates.io:443
             pypi.org:443
             files.pythonhosted.org:443
+            master.qt.io:443
             download.qt.io:443
             azure.archive.ubuntu.com:80
             archive.ubuntu.com:80
             security.ubuntu.com:80
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - &checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install Linux build deps
+          persist-credentials: false
+      # rust-toolchain.toml is the pin. The image's own toolchains are
+      # brought to their channels' tips first, so the stable a desk already
+      # builds with is never newer than this one.
+      - &rust
+        name: Rust toolchain
+        run: |
+          rustup update --no-self-update
+          rustup toolchain install --no-self-update
+      - &linux-deps
+        name: Install Linux build deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libgl1-mesa-dev libxkbcommon-dev
-      - name: Cache Qt
-        id: cache-qt
-        uses: actions/cache@v4
+      - &qt
+        name: Qt
+        uses: ./.github/actions/qt
+      # After Qt: QMAKE names the Qt the builds are made against, version
+      # and all, so it is part of the key — a new Qt starts a new cache
+      # instead of rebuilding over the old one on every run.
+      # Only main writes the cache, and a red run still does — the build it
+      # kept is what the next run starts from.
+      - &rust-cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: ${{ runner.temp }}/qt
-          key: qt-${{ env.QT_VERSION }}-${{ matrix.qt_arch }}
-      - name: Install Qt
-        if: steps.cache-qt.outputs.cache-hit != 'true'
-        shell: bash
+          env-vars: QMAKE
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+      # On the record: the git is the image's own, not the oldest one
+      # supported (internal-docs/P5-確認事項.md §6).
+      - &versions
+        name: What this run builds and tests with
         run: |
-          pip install "${AQT_SOURCE}"
-          # --base pins the primary server (mirror redirects would escape
-          # the egress allowlist)
-          aqt install-qt --base https://download.qt.io/ \
-            ${{ matrix.qt_host }} desktop "${QT_VERSION}" ${{ matrix.qt_arch }} \
-            -O "${RUNNER_TEMP}/qt"
-      - name: Configure Qt environment
-        shell: bash
-        run: |
-          QT_ROOT="${RUNNER_TEMP}/qt/${QT_VERSION}/${{ matrix.qt_dir }}"
-          echo "${QT_ROOT}/bin" >> "${GITHUB_PATH}"
-          echo "QMAKE=${QT_ROOT}/bin/qmake" >> "${GITHUB_ENV}"
-          if [ "${RUNNER_OS}" = "Linux" ]; then
-            echo "LD_LIBRARY_PATH=${QT_ROOT}/lib" >> "${GITHUB_ENV}"
-          elif [ "${RUNNER_OS}" = "macOS" ]; then
-            echo "DYLD_FRAMEWORK_PATH=${QT_ROOT}/lib" >> "${GITHUB_ENV}"
-          fi
+          rustc --version
+          git --version
+          qmake -query QT_VERSION
 
       - name: Format check
         run: cargo fmt --all --check
@@ -116,53 +124,16 @@ jobs:
   # All tests and an offscreen app smoke, inside an empty network namespace
   # (internal-docs/実装計画.md §11.3).
   offline-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
     steps:
-      - name: Harden runner (egress allowlist)
-        uses: step-security/harden-runner@v2
-        with:
-          egress-policy: block
-          allowed-endpoints: >
-            github.com:443
-            api.github.com:443
-            objects.githubusercontent.com:443
-            release-assets.githubusercontent.com:443
-            results-receiver.actions.githubusercontent.com:443
-            *.blob.core.windows.net:443
-            static.rust-lang.org:443
-            index.crates.io:443
-            static.crates.io:443
-            pypi.org:443
-            files.pythonhosted.org:443
-            download.qt.io:443
-            azure.archive.ubuntu.com:80
-            archive.ubuntu.com:80
-            security.ubuntu.com:80
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install Linux build deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgl1-mesa-dev libxkbcommon-dev jq
-      - name: Cache Qt
-        id: cache-qt
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/qt
-          key: qt-${{ env.QT_VERSION }}-linux_gcc_64
-      - name: Install Qt
-        if: steps.cache-qt.outputs.cache-hit != 'true'
-        run: |
-          pip install aqtinstall
-          aqt install-qt --base https://download.qt.io/ \
-            linux desktop "${QT_VERSION}" linux_gcc_64 -O "${RUNNER_TEMP}/qt"
-      - name: Configure Qt environment
-        run: |
-          QT_ROOT="${RUNNER_TEMP}/qt/${QT_VERSION}/gcc_64"
-          echo "${QT_ROOT}/bin" >> "${GITHUB_PATH}"
-          echo "QMAKE=${QT_ROOT}/bin/qmake" >> "${GITHUB_ENV}"
-          echo "LD_LIBRARY_PATH=${QT_ROOT}/lib" >> "${GITHUB_ENV}"
+      - *harden
+      - *checkout
+      - *rust
+      - *linux-deps
+      - *qt
+      - *rust-cache
+      - *versions
 
       # Build online, run offline. The smoke needs the harness feature
       # (xtask HARNESS_FEATURE; ci/offline-test.sh).
@@ -180,10 +151,13 @@ jobs:
             unshare -n bash ci/offline-test.sh "${BINS[@]}"
 
   deny:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
+      # static.rust-lang.org: the action's container installs what
+      # rust-toolchain.toml names before it runs cargo-deny.
       - name: Harden runner (egress allowlist)
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -191,13 +165,14 @@ jobs:
             api.github.com:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
+            static.rust-lang.org:443
             index.crates.io:443
             static.crates.io:443
-      - uses: actions/checkout@v4
+      - *checkout
       # `check` with no argument runs all four; advisories pull the RustSec DB
       # from github.com.
       - name: cargo-deny (advisories / bans / licenses / sources)
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           # The action's default, plus --locked.
           arguments: --all-features --locked

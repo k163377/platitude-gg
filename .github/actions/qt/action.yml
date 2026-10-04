@@ -1,0 +1,90 @@
+# The Qt this tree pins (.qt-version, the file cargo xtask reads), restored
+# from the cache or installed, and put in front of every later step of the
+# job. A local action: the job checks out first.
+name: Qt
+description: Install the Qt this tree pins and point the job's later steps at it
+
+runs:
+  using: composite
+  steps:
+    - name: Which Qt
+      id: pin
+      shell: bash
+      run: |
+        version="$(tr -d '[:space:]' < .qt-version)"
+        if [ -z "${version}" ]; then
+          echo ".qt-version names no Qt version" >&2
+          exit 1
+        fi
+        case "${RUNNER_OS}" in
+          Linux) host=linux arch=linux_gcc_64 dir=gcc_64 ;;
+          Windows) host=windows arch=win64_msvc2022_64 dir=msvc2022_64 ;;
+          macOS) host=mac arch=clang_64 dir=macos ;;
+          *)
+            echo "no Qt is pinned for ${RUNNER_OS}" >&2
+            exit 1
+            ;;
+        esac
+        {
+          echo "version=${version}"
+          echo "host=${host}"
+          echo "arch=${arch}"
+          echo "root=${RUNNER_TEMP}/qt/${version}/${dir}"
+        } >> "${GITHUB_OUTPUT}"
+
+    # Restored and saved as two steps: the one-step cache saves where the job
+    # ends, and only a green one — a job red past this point would download
+    # Qt again on every run.
+    - name: Restore Qt
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/qt
+        key: qt-${{ steps.pin.outputs.version }}-${{ steps.pin.outputs.arch }}
+
+    - name: Install Qt
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        # Windows Qt from 6.11 sits in a folder per toolchain, which no
+        # aqtinstall release reads (3.3.0 asks for qt6_<ver>/qt6_<ver>/Updates.xml):
+        # the commit carries miurahr/aqtinstall#1000, merged after 3.3.0.
+        AQT_SOURCE: "aqtinstall @ git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7"
+        QT_PIN: ${{ steps.pin.outputs.version }}
+        QT_HOST: ${{ steps.pin.outputs.host }}
+        QT_ARCH: ${{ steps.pin.outputs.arch }}
+      # pipx, not pip: the runners' own Python refuses a global install
+      # (PEP 668) on macOS. --base names Qt's origin server, which hands out
+      # the archives itself: download.qt.io answers an archive with a redirect
+      # to whichever mirror is near, off the egress allowlist. The checksums
+      # still come from download.qt.io (aqt's trusted mirror).
+      run: |
+        pipx run --spec "${AQT_SOURCE}" aqt install-qt --base https://master.qt.io/ \
+          "${QT_HOST}" desktop "${QT_PIN}" "${QT_ARCH}" -O "${RUNNER_TEMP}/qt"
+
+    - name: Save Qt
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/qt
+        key: qt-${{ steps.pin.outputs.version }}-${{ steps.pin.outputs.arch }}
+
+    - name: Qt environment
+      shell: bash
+      env:
+        QT_ROOT: ${{ steps.pin.outputs.root }}
+      run: |
+        echo "${QT_ROOT}/bin" >> "${GITHUB_PATH}"
+        echo "QMAKE=${QT_ROOT}/bin/qmake" >> "${GITHUB_ENV}"
+        case "${RUNNER_OS}" in
+          Linux)
+            echo "LD_LIBRARY_PATH=${QT_ROOT}/lib" >> "${GITHUB_ENV}"
+            ;;
+          macOS)
+            # Not DYLD_FRAMEWORK_PATH: where SIP is on, every DYLD_* variable
+            # is dropped as a step's /bin/bash starts and never reaches
+            # cargo. The frameworks' directory is linked into what the job
+            # builds instead, which holds whether SIP is on or off.
+            echo "RUSTFLAGS=-C link-arg=-Wl,-rpath,${QT_ROOT}/lib" >> "${GITHUB_ENV}"
+            ;;
+        esac

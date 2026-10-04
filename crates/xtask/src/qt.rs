@@ -247,10 +247,10 @@ fn parse_query(qmake: &Path, text: &str) -> Result<Qt, String> {
 fn not_found(pinned: Option<&str>) -> String {
     match (cfg!(windows), pinned) {
         (true, Some(version)) => format!(
-            "Qt {version} is not under C:\\Qt and qmake is not on PATH. Install it as ci.yml's \
-             Windows job does — aqtinstall from its AQT_SOURCE, then `aqt install-qt --base \
-             https://download.qt.io/ windows desktop {version} win64_msvc2022_64 -O C:\\Qt` — \
-             or set QT_BIN to its bin directory."
+            "Qt {version} is not under C:\\Qt and qmake is not on PATH. Install it as CI's \
+             Windows jobs do — aqtinstall from the AQT_SOURCE CI's Qt action pins, then `aqt \
+             install-qt windows desktop {version} win64_msvc2022_64 -O C:\\Qt` — or set QT_BIN \
+             to its bin directory."
         ),
         _ => "qmake not found on PATH. Add the Qt bin directory to PATH or set QT_BIN \
               to it."

@@ -1,0 +1,20 @@
+# The workflows name every action by commit, and a commit moves only when
+# somebody rewrites it: Dependabot proposes the rewrite, one pull request a
+# week for all of them, the release beside each commit kept in step.
+# Actions only. A crate is not proposed here: a dependency needs its licence
+# checked and a person's permission (CLAUDE.md 絶対制約).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    # `/` is .github/workflows; an action of this repository's own is a
+    # directory to name.
+    directories:
+      - /
+      - /.github/actions/qt
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
