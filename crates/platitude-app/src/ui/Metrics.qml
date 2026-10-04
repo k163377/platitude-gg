@@ -28,6 +28,9 @@ QtObject {
     // How long something opened by hover waits before closing, for the hand to finish crossing to the next target.
     // `Qt.callLater` is too short: the two hovers change on different frames, and a callLater between them closes it.
     readonly property int hoverKeepMs: 150
+    // One on or off of a blink — what points at a place something just went (the discard log's seat). A quarter of
+    // the second a flash takes elsewhere (animate.css `flash`: out and back twice over its 1 s).
+    readonly property int blinkMs: 250
 
     // ---- 2. ベーシック: the ordinary window — its graph column, its rows, its menus ----
     readonly property int laneW: Theme.iconLg

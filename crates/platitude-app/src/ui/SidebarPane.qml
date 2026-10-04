@@ -30,6 +30,9 @@ Rectangle {
     /// The page whose command log the foot row opens (`CommandsToggle`); null while no tab is open. The row goes while
     /// the log is up, whose header band takes its place (`CommandsPane`).
     property var commandsPage: null
+    /// The page whose discard log the seat above the git commands' opens (`RecoverToggle`); null while no tab is open.
+    /// The seat goes while the list is up, whose band takes its place (`RecoverPane`).
+    property var recoverPage: null
 
     signal refActivated(string oidHex)
     /// Right-click on a row. `kind` is the section it came from, `name` what the row shows and `full` what git knows
@@ -220,7 +223,28 @@ Rectangle {
     }
     /// Automation: the colour the `>_` painted while the panel is down (`PGG_AUTO_ACT=commands-clear`).
     readonly property alias commandsMarkColor: commandsSeat.markColor
-    readonly property real footRoom: commandsSeat.visible ? commandsSeat.height : 0
+    readonly property real commandsRoom: commandsSeat.visible ? commandsSeat.height : 0
+
+    // ---- the discard log's seat, stacked on the git commands' (破棄記録仕様.md) ----
+    RecoverToggle {
+        id: recoverSeat
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: sidebar.commandsRoom
+        height: sidebar.collapsed ? Theme.headerHeight : Theme.rowHeight
+        captioned: !sidebar.collapsed
+        markSize: sidebar.collapsed ? Theme.iconLg : Theme.iconMd
+        lit: sidebar.recoverPage !== null && sidebar.recoverPage.recoverLit
+        // The list's own band carries it while the list is up — but folded, the list is not on screen, and the rail's
+        // seat is the one way back to it or out of it.
+        visible: sidebar.recoverPage !== null && (!recoverSeat.open || sidebar.collapsed)
+        // Frozen with the sections while a plan holds the menu (`frozen`).
+        enabled: !sidebar.frozen
+        opacity: sidebar.frozen ? Metrics.dimFade : 1
+        curPage: sidebar.recoverPage
+    }
+    readonly property real footRoom: sidebar.commandsRoom + (recoverSeat.visible ? recoverSeat.height : 0)
     /// How short the pane may be with the whole menu on it (デザイン規約 §窓の床): folded, the rail's every cell; open,
     /// the list's bands (its rows scroll). The foot row counts while it stands — the log up takes it away.
     readonly property real floorHeight:
@@ -329,6 +353,18 @@ Rectangle {
     function closePeek() {
         peek.shut()
     }
+
+    // ---- the discard log, over the sections while it is up ----------
+    // Laid on top of the menu rather than in its place, so the sections keep their scroll and fold underneath.
+    RecoverPane {
+        id: recoverPane
+        anchors.fill: parent
+        anchors.bottomMargin: sidebar.commandsRoom
+        visible: sidebar.recoverPage !== null && sidebar.recoverPage.recoverOpen && !sidebar.collapsed
+        curPage: sidebar.recoverPage
+    }
+    /// Automation: the discard log, whose filter a run types into (PGG_AUTO_ACT=recover-open `filter:`).
+    readonly property alias autoRecover: recoverPane
 
     SectionPeekPopup {
         id: peek

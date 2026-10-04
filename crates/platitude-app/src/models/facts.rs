@@ -28,6 +28,13 @@ impl GitFacts {
         platitude_core::oid::Oid::hex_is_zero(&hex)
     }
 
+    /// Whether the discard log's filter line is in any of the words an
+    /// entry shows (`encode::shown_matches`).
+    #[qslot]
+    fn shown_matches(&self, shown: Vec<String>, line: String) -> bool {
+        crate::encode::shown_matches(&shown, &line)
+    }
+
     /// `chips` less the ones `gone` names by key.
     #[qslot]
     fn chips_shown(&self, chips: Chips, gone: Vec<String>) -> Chips {

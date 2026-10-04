@@ -11,6 +11,7 @@ mod details;
 mod diff;
 #[cfg(test)]
 mod diff_tests;
+mod discards;
 mod facts;
 mod graph;
 mod line_endings;
@@ -31,6 +32,7 @@ pub use clone::CloneModel;
 pub use commands::CommandsModel;
 pub use details::DetailsModel;
 pub use diff::DiffModel;
+pub use discards::DiscardModel;
 pub use facts::GitFacts;
 pub use graph::GraphModel;
 pub use line_endings::LineEndingsModel;

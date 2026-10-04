@@ -174,6 +174,12 @@ ReclickGesture 1.0 ReclickGesture.qml
 RebasePlanPane 1.0 RebasePlanPane.qml
 RebasePlanRow 1.0 RebasePlanRow.qml
 RebasePlanRunBar 1.0 RebasePlanRunBar.qml
+RecoverBand 1.0 RecoverBand.qml
+RecoverEntries 1.0 RecoverEntries.qml
+RecoverHoverCard 1.0 RecoverHoverCard.qml
+RecoverMark 1.0 RecoverMark.qml
+RecoverPane 1.0 RecoverPane.qml
+RecoverToggle 1.0 RecoverToggle.qml
 RepoPage 1.0 RepoPage.qml
 RepoPageStack 1.0 RepoPageStack.qml
 RowHand 1.0 RowHand.qml

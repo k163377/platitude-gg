@@ -3,6 +3,7 @@
 //! taken apart.
 
 mod columns;
+mod discards;
 mod graph;
 mod labels;
 mod landing;
@@ -20,6 +21,7 @@ mod rows_tests;
 mod wire_qml;
 
 pub use columns::{Candidates, widest_lines};
+pub use discards::{DiscardRows, discard_rows, look_word, shown_matches};
 pub use graph::{Lanes, avatar_code, conflict_side_colors, lanes_of, spell_lanes, tail_lanes};
 pub(crate) use labels::pr_set;
 pub use labels::{Chips, chips_of, chips_shown, gone_keys, menu_kind_word, ref_kind_word};

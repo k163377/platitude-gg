@@ -674,6 +674,9 @@ FocusScope {
     onPlanShownChanged: {
         if (page.planShown) {
             page.closeDiff()
+            // The plan takes the graph, and the menu it folds is frozen under it: the discard log goes, with its entry.
+            if (page.recoverOpen)
+                page.toggleRecover()
             page.foldForPlan(true)
         } else {
             page.foldForPlan(false)
@@ -1593,6 +1596,7 @@ FocusScope {
         page.diffReadForAnswers = false
         // The press has its answer; the rest of the wait is the read (`diffSettling`).
         page.diffAwaits = false
+        page.recoverAwaits = false
         publishFlow.noteWriteAnswer()
         page.absorbPushAnswer()
         page.absorbRefPushAnswer()
@@ -1971,6 +1975,242 @@ FocusScope {
         commandsOwner.readerTakes()
         page.commandsOpen = false
     }
+
+    // ---- the record of what was thrown away (破棄記録仕様.md) ----
+    DiscardModel {
+        id: discardModel
+    }
+    RecoverEntries {
+        id: recoverShown
+        rows: discardModel.rows
+    }
+    /// What the discard log draws, worded (`RecoverEntries`), and the words themselves — its times included, which
+    /// the band over the graph writes too.
+    readonly property var recoverEntries: recoverShown.entries
+    readonly property alias recoverWords: recoverShown
+    /// The moment the log's times are read against; a minute's step is the finest a time there says.
+    property real recoverNow: Math.floor(Date.now() / 1000)
+    Timer {
+        interval: 30000
+        running: page.recoverOpen
+        repeat: true
+        onTriggered: page.recoverNow = Math.floor(Date.now() / 1000)
+    }
+    /// Whether the entries are an answer — an empty list before the first read is not "nothing was thrown away".
+    readonly property bool recoverAnswered: discardModel.state === "ready"
+    /// The reflogs are being read; the list says so while it waits (`RecoverPane`).
+    readonly property bool recoverReading: discardModel.state === "reading"
+    /// The read failed: the list says so in git's words, with no rows left from an earlier read to pick.
+    readonly property bool recoverFailed: discardModel.state === "error"
+    readonly property string recoverError: discardModel.error
+    /// The reflogs and the record, read each time the log is opened (破棄記録仕様.md §3): to the graph's window, or
+    /// whole when the window holds the whole history.
+    function readDiscards() {
+        discardModel.look(repoTab.repoPath, graphModel.truncated ? graphModel.rowTotal : 0)
+    }
+    /// The entry picked, as the list words it; null for none.
+    readonly property var recoverPicked:
+        page.recoverPick >= 0 && page.recoverPick < page.recoverEntries.length
+            ? page.recoverEntries[page.recoverPick] : null
+    /// Whether the discard log is up over the left menu.
+    property bool recoverOpen: false
+    /// The entry picked in it, -1 for none. One at a time.
+    property int recoverPick: -1
+    /// The seat lit: something was just thrown away, and this says where it went. Every write that can leave something
+    /// only the log reaches (`RepoTab.takenSeq` — a restore is not one) blinks it twice and leaves it out
+    /// (`blinkRecover`) wherever the list is not on screen; opening the log puts it out.
+    property bool recoverLit: false
+    /// The seat is blinking.
+    readonly property bool recoverBlinking: recoverBlink.running
+    readonly property int recoverTaken: repoTab.takenSeq
+    onRecoverTakenChanged: {
+        if (!page.recoverOpen || page.sidebarCollapsed)
+            page.blinkRecover()
+    }
+    /// What the log lists changed — a take, a restore, a name taken here (`RepoTab.discardSeq`): an open log reads
+    /// again. The entry picked stays picked through it, found again by what it is (`DiscardModel.keyAt`): the rows
+    /// move as entries come and go, and one the read lists no more — brought back — is put down.
+    readonly property int recoverDiscards: repoTab.discardSeq
+    onRecoverDiscardsChanged: {
+        if (!page.recoverOpen)
+            return
+        if (page.recoverPick >= 0 && page.recoverHeld === "")
+            page.recoverHeld = discardModel.keyAt(page.recoverPick)
+        page.readDiscards()
+    }
+    /// The entry picked, held across a read again (`DiscardModel.keyAt`); "" for none.
+    property string recoverHeld: ""
+    onRecoverAnsweredChanged: {
+        if (!page.recoverAnswered)
+            return
+        const held = page.recoverHeld
+        page.recoverHeld = ""
+        // Put down meanwhile — the list closed, the search opened — it stays down.
+        if (held === "" || page.recoverPick < 0)
+            return
+        const at = discardModel.indexOfKey(held)
+        if (at < 0) {
+            page.recoverPick = -1
+            page.showRecoverPick()
+            return
+        }
+        page.recoverPick = at
+        page.readRecoverReach()
+    }
+    // A failed read lists nothing: the entry it held goes down with its rows.
+    onRecoverFailedChanged: {
+        if (!page.recoverFailed)
+            return
+        page.recoverHeld = ""
+        if (page.recoverPick >= 0) {
+            page.recoverPick = -1
+            page.showRecoverPick()
+        }
+    }
+    function blinkRecover() {
+        recoverBlink.restart()
+    }
+    // Twice on and off, a `blinkMs` each, as a flash is (P3-確認事項 §破棄記録と復元).
+    SequentialAnimation {
+        id: recoverBlink
+        PropertyAction { target: page; property: "recoverLit"; value: true }
+        PauseAnimation { duration: Metrics.blinkMs }
+        PropertyAction { target: page; property: "recoverLit"; value: false }
+        PauseAnimation { duration: Metrics.blinkMs }
+        PropertyAction { target: page; property: "recoverLit"; value: true }
+        PauseAnimation { duration: Metrics.blinkMs }
+        PropertyAction { target: page; property: "recoverLit"; value: false }
+    }
+    function toggleRecover() {
+        // Folded (a diff took the screen), an open list is not on it: the rail's press brings it back, as a section's
+        // way back does, rather than closing what cannot be seen.
+        if (page.recoverOpen && page.sidebarCollapsed) {
+            page.foldByHand(false)
+            return
+        }
+        page.recoverOpen = !page.recoverOpen
+        if (page.recoverOpen) {
+            recoverBlink.stop()
+            page.recoverLit = false
+            page.recoverNow = Math.floor(Date.now() / 1000)
+            page.readDiscards()
+            // The list takes the menu's place, which the rail has no room for.
+            if (page.sidebarCollapsed)
+                page.foldByHand(false)
+        } else if (page.recoverPick >= 0) {
+            // The graph goes back to what the repository holds with the list.
+            page.recoverPick = -1
+            page.showRecoverPick()
+        }
+    }
+    /// A press on an entry picks it, or puts a picked one down. Picking ends a search as its `✕` does: the graph turns
+    /// to what the entry would bring back. Not while the log reads again: the rows up are the last read's, and the
+    /// answer would deal the number picked to another entry.
+    function pickRecover(index) {
+        if (page.recoverReading)
+            return
+        page.recoverPick = page.recoverPick === index ? -1 : index
+        if (page.recoverPick >= 0)
+            graphPane.findCard.dismiss()
+        page.showRecoverPick()
+    }
+    /// The picked entry on the graph, or none (破棄記録仕様.md): what each part would bring back walks in dashed — a
+    /// copy of thrown-away work as the uncommitted row it was, a dropped stash as the stash it was
+    /// (`GraphModel.provisionalWipAt` / `provisionalStashAt`) — every other row dims as a search's misses do, and the
+    /// view keeps to its span (`GraphModel.showDiscard`).
+    function showRecoverPick() {
+        const tips = page.recoverPick < 0 ? [] : discardModel.tipsAt(page.recoverPick)
+        page.recoverTipPending = tips.length > 0 ? tips[0] : ""
+        page.readRecoverReach()
+        if (tips.length === 0) {
+            graphModel.hideDiscard()
+            return
+        }
+        graphModel.showDiscard(tips, discardModel.looksAt(page.recoverPick), discardModel.lostAt(page.recoverPick),
+                               discardModel.standsAt(page.recoverPick))
+        page.landRecoverTip()
+    }
+    /// The picked entry's first tip, until a pass has drawn its row — then it is selected and shown, as a jump to a ref
+    /// is (`jumpToRef`), so the right pane reads what the entry would bring back.
+    property string recoverTipPending: ""
+    function landRecoverTip() {
+        const row = graphModel.provisionalTipRow
+        if (page.recoverTipPending === "" || row < 0 || graphModel.oidAt(row) !== page.recoverTipPending)
+            return
+        page.recoverTipPending = ""
+        // A diff opened while the walk was out is the reader's own doing; landing would close it.
+        if (page.diffShown)
+            return
+        page.jumpToRef(graphModel.oidAt(row))
+    }
+    /// Per part of the picked entry, whether what it would bring back is on the graph (破棄記録仕様.md §4): its tip a
+    /// row the walk has drawn, or work put back into a working copy, which no window holds back. Empty until the walk
+    /// that took the entry has landed (`GraphModel.provisionalWalked`) — before it, an undrawn tip is not yet walked,
+    /// not out of reach. Read again as the graph's rows move — a press on `Load more` walks toward it.
+    property var recoverReach: []
+    function readRecoverReach() {
+        const picked = page.recoverPicked
+        if (picked === null || !graphModel.provisionalWalked) {
+            page.recoverReach = []
+            return
+        }
+        const tips = discardModel.partTipsAt(page.recoverPick)
+        // A part whose commit this repository does not have is drawn nowhere and waits for no walk: its restore is
+        // git's to refuse (破棄記録仕様.md §4).
+        page.recoverReach = picked.parts.map((part, i) => part.look === "uncommitted" || part.look === "absent"
+                                                          || graphModel.rowOf(tips[i]) >= 0)
+    }
+    Connections {
+        target: graphModel
+        function onStatsChanged() {
+            page.landRecoverTip()
+            page.readRecoverReach()
+        }
+    }
+    // The search and the entry on the graph each dim the rows and hold the view: as picking ends a search
+    // (`pickRecover`), opening one puts the entry down.
+    Connections {
+        target: graphPane.findCard
+        function onOpenChanged() {
+            if (graphPane.findCard.open && page.recoverPick >= 0)
+                page.pickRecover(page.recoverPick)
+        }
+    }
+    /// The band's press: the picked entry's part `part` brought back, or every part (-1) — one write on the session
+    /// (`RepoSession::restore_discard`). The first thing it stands on the graph is selected once it has. Answers
+    /// whether the session took it.
+    function restoreRecover(part) {
+        if (page.recoverPick < 0)
+            return false
+        const tips = discardModel.partTipsAt(page.recoverPick)
+        const looks = page.recoverPicked.parts.map(p => p.look)
+        const first = part >= 0 ? part : looks.findIndex(look => look !== "uncommitted")
+        page.recoverLanding = first >= 0 && looks[first] !== "uncommitted" ? tips[first] : ""
+        page.recoverAwaits = discardModel.restoreAt(page.recoverPick, part)
+        return page.recoverAwaits
+    }
+    property string recoverLanding: ""
+    /// A restore taken and not answered yet: the band's buttons wait for the answer, not for the write to start — one
+    /// waiting its turn in another copy's order (破棄記録仕様.md §4) has not started, and a second press would bring
+    /// the same part back twice. Set by the press's answer, as `diffAwaits` is.
+    property bool recoverAwaits: false
+    /// A restore came back: what it stood is selected, and work that did not come back as it was thrown away says
+    /// where it went (破棄記録仕様.md §4) — the report a write that did not do all it was asked gives
+    /// (デザイン規約 §答えの要らない報せ).
+    readonly property int recoverRestores: repoTab.restoreSeq
+    onRecoverRestoresChanged: {
+        if (page.recoverLanding !== "")
+            page.jumpToRef(page.recoverLanding)
+        page.recoverLanding = ""
+        if (repoTab.restoreHow === "stash")
+            page.showNotice(qsTr("The changes went to the stashes"),
+                            qsTr("They would have conflicted with what is here now, so they wait as a stash."),
+                            "warning")
+        else if (repoTab.restoreHow === "unstaged")
+            page.showNotice(qsTr("The changes came back unstaged"),
+                            qsTr("What had been staged would not stage again over what is staged now."),
+                            "warning")
+    }
     /// A fetch reached the remote again, so the panel its failure raised goes down
     /// (デザイン規約 §git が言ったことを読む場所「取り込めるようになったら自分で閉じる」). Read on every drain: the failure
     /// run returning to zero is the recovery.
@@ -2097,6 +2337,7 @@ FocusScope {
         page.pendingRenameRemote = ""
         page.pendingRenameTo = ""
         page.diffAwaits = false
+        page.recoverAwaits = false
         page.moveLanding = ""
         page.pendingHeadSelect = false
         page.pendingHeadAsked = false
@@ -2104,6 +2345,13 @@ FocusScope {
         page.pendingWipSelect = false
         page.rewordRow = -1
         page.planRunOut = false
+        // The discard log's entry was walked by that session (`GraphModel.restand` takes it off the rows), and an open
+        // list is that copy's reading: it reads again once the copy arrived at has settled (`standSettled`).
+        page.recoverPick = -1
+        page.recoverTipPending = ""
+        page.recoverLanding = ""
+        page.recoverReach = []
+        page.owedDiscards = page.recoverOpen
         // What the models hold of that copy, each by its own rule (the `restand` slots).
         repoTab.restand()
         graphModel.restand()
@@ -2129,14 +2377,21 @@ FocusScope {
             commandsModel.setBackgroundReads(true)
     }
 
-    /// Reads that died with the closed session (`leaveCopy`): the details, and the open commit file.
+    /// Reads that died with the closed session (`leaveCopy`): the details, the open commit file, and the open discard
+    /// log, which was that copy's reading.
     property bool owedDetails: false
     property bool owedDiff: false
+    property bool owedDiscards: false
 
     /// The new session has said where it is (`RepoTab.standing` going down), so the reads that died with the last are
     /// asked again — only those: a commit is the same in every linked copy (the rule `activateRow` keeps for the
     /// commit already open). The details were noted on leaving; the signature shows it by not being the selection's.
     function standSettled() {
+        if (page.owedDiscards) {
+            page.owedDiscards = false
+            if (page.recoverOpen)
+                page.readDiscards()
+        }
         if (page.owedDetails) {
             page.owedDetails = false
             if (page.chosenCount > 1)
@@ -2233,6 +2488,7 @@ FocusScope {
         detailsModel.attach(page.tab_id)
         diffModel.attach(page.tab_id)
         planModel.attach(page.tab_id)
+        discardModel.attach(page.tab_id)
         branchesModel.attachSection(page.tab_id, "branches")
         remotesModel.attachSection(page.tab_id, "remotes")
         conflictsModel.attachWorktree(page.tab_id, "conflicts")
@@ -2886,6 +3142,7 @@ FocusScope {
                     collapsed: page.sidebarCollapsed
                     // Null on the blank page: nothing has run there (the band's `>_` answered the same way up above).
                     commandsPage: page.blank ? null : page
+                    recoverPage: page.blank ? null : page
                     // The menus the rows raise are the page's, so only the page can say where the standing one came
                     // from — the folded list's open section stays under its own rows' menu alone.
                     menuRaisedOn: page.menuRaisedOn
@@ -2927,6 +3184,22 @@ FocusScope {
                         // takes the focus as it opens) and stands until answered — a report is only read.
                         yieldsEscape: graphPane.asking
                         onAcknowledged: page.hideNotice()
+                    }
+                    // The discard log's entry on the graph, named over it with what it would bring back and the press
+                    // that does — over the graph alone, which is what it describes (P3-確認事項 §破棄記録と復元).
+                    RecoverBand {
+                        Layout.fillWidth: true
+                        visible: page.recoverPicked !== null && !page.planShown && !page.diffShown
+                        entry: page.recoverPicked
+                        when: page.recoverPicked === null
+                              ? "" : recoverShown.whenWords(page.recoverPicked.at, page.recoverNow)
+                        reach: page.recoverReach
+                        canWalkFurther: graphModel.truncated && !graphModel.growing
+                        step: graphModel.windowStep
+                        busy: repoTab.busyCount > 0 || page.recoverAwaits
+                        onRestoreAsked: part => page.restoreRecover(part)
+                        onDismissed: page.pickRecover(page.recoverPick)
+                        onFurtherAsked: graphModel.growWindow()
                     }
 
                     StackLayout {

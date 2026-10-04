@@ -16,9 +16,9 @@ mod winframe;
 
 use hub::Hub;
 use models::{
-    AppBackend, CloneModel, CommandsModel, DetailsModel, DiffModel, GitFacts, GraphModel,
-    LineEndingsModel, NavSectionModel, RebasePlanModel, RepoConfigModel, RepoTab, TabsModel,
-    WorkTreeModel,
+    AppBackend, CloneModel, CommandsModel, DetailsModel, DiffModel, DiscardModel, GitFacts,
+    GraphModel, LineEndingsModel, NavSectionModel, RebasePlanModel, RepoConfigModel, RepoTab,
+    TabsModel, WorkTreeModel,
 };
 use platitude_core::settings::{Build, Claim, Store};
 use qtbridge::QmlElement;
@@ -259,6 +259,12 @@ fn main() {
     qrc::embed!("ui/RebasePlanPane.qml");
     qrc::embed!("ui/RebasePlanRow.qml");
     qrc::embed!("ui/RebasePlanRunBar.qml");
+    qrc::embed!("ui/RecoverBand.qml");
+    qrc::embed!("ui/RecoverEntries.qml");
+    qrc::embed!("ui/RecoverHoverCard.qml");
+    qrc::embed!("ui/RecoverMark.qml");
+    qrc::embed!("ui/RecoverPane.qml");
+    qrc::embed!("ui/RecoverToggle.qml");
     qrc::embed!("ui/RepoPage.qml");
     qrc::embed!("ui/RepoPageStack.qml");
     qrc::embed!("ui/CloneDialog.qml");
@@ -338,6 +344,7 @@ fn main() {
         DiffModel::register,
         CommandsModel::register,
         RebasePlanModel::register,
+        DiscardModel::register,
     ] {
         register();
     }
