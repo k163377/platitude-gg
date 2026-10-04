@@ -16,9 +16,13 @@ const SEP: char = '\t';
 /// the primary checkout answers a bare `.git`.
 pub(super) fn board_dir() -> Result<PathBuf, String> {
     let cwd = std::env::current_dir().map_err(|e| format!("no working directory: {e}"))?;
-    let cwd = cwd.to_string_lossy().replace('\\', "/");
+    board_dir_of(&cwd.to_string_lossy().replace('\\', "/"))
+}
+
+/// The board of the repository `dir` is in.
+fn board_dir_of(dir: &str) -> Result<PathBuf, String> {
     let common = crate::subprocess::git_query(
-        &cwd,
+        dir,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
     )
     .ok_or("not in a git repository: the board lives beside the primary checkout")?;
@@ -206,6 +210,21 @@ pub(super) fn load_runs(runs: &Path) -> Vec<Run> {
         .collect();
     out.sort_by_key(|run| run.at);
     out
+}
+
+/// The names of `seat`'s runs put up after `since` (milliseconds since
+/// the epoch), oldest first, on the board of the repository `dir` is in:
+/// what a landing would take off the board before anybody was asked
+/// about it (`land`). A board that cannot be read holds none.
+pub(crate) fn put_up_since(dir: &str, seat: &str, since: u128) -> Vec<String> {
+    let Ok(board) = board_dir_of(dir) else {
+        return Vec::new();
+    };
+    load_runs(&board.join("runs"))
+        .into_iter()
+        .filter(|run| run.seat == seat && run.at > since)
+        .map(|run| run.label)
+        .collect()
 }
 
 /// Seats add to the board concurrently, so each run is its own file,

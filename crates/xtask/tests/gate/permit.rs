@@ -107,6 +107,66 @@ fn stop_reports_repository_state_without_prescribing_a_place_for_prose() {
     assert!(!after.contains("\"decision\":\"block\""), "{after}");
 }
 
+/// A landing waiting on the user's approval of pictures put up after the
+/// ask is said so where the turn ends — not left to read as a landing
+/// forgotten — and waits for the user's next message whatever becomes of
+/// the pictures: taking them off the board approves nothing.
+#[test]
+fn a_landing_waits_on_approval_until_the_users_next_message() {
+    let mut sb = Sandbox::new("permit-waits");
+    let seat = sb.root.join(".claude/worktrees/a");
+    std::fs::create_dir_all(seat.parent().expect("seat parent")).expect("seat directory");
+    sb.git_ok(
+        &sb.repo,
+        &["worktree", "move", &forward(&sb.seat), &forward(&seat)],
+    );
+    sb.seat = seat;
+    sb.write_refs(&sb.seat, 26);
+    sb.commit_all(&sb.seat, "feat(core): twenty-six", &[]);
+    says(&sb, "main反映");
+    let unmet = stop(&sb);
+    assert!(
+        unmet.contains("asked for main") && !unmet.contains("the user's approval"),
+        "{unmet}"
+    );
+    // waits(measured): a timestamp handed to the code under test, judged by nothing
+    let after_the_ask = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
+    let at = after_the_ask
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("a clock past the epoch")
+        .as_millis();
+    let run = sb.put_up("a", "行メニューの影", at);
+    let waiting = stop(&sb);
+    assert!(
+        waiting.contains("Seat a put 1 run(s) on the board after that message")
+            && waiting.contains("the user's approval"),
+        "{waiting}"
+    );
+
+    let before = sb.main_sha();
+    let (ok, text) = sb.land_as("worktree-a", SESSION);
+    assert!(!ok && text.contains("seat a put 1 run(s)"), "{text}");
+    std::fs::remove_file(&run).expect("the run taken off the board");
+    let (ok, text) = sb.land_as("worktree-a", SESSION);
+    assert!(!ok && text.contains("approves nothing"), "{text}");
+    assert_eq!(sb.main_sha(), before, "{text}");
+    let refused = lands(&sb);
+    assert!(
+        refused.contains("\"deny\"") && refused.contains("approves nothing"),
+        "{refused}"
+    );
+    let still = stop(&sb);
+    assert!(
+        still.contains("the landing waits for the user's approval"),
+        "{still}"
+    );
+
+    assert!(says(&sb, "見た、main反映").contains("Before landing"));
+    assert_eq!(lands(&sb), "");
+    let (ok, text) = sb.land_as("worktree-a", SESSION);
+    assert!(ok && text.contains("landed worktree-a"), "{text}");
+}
+
 #[test]
 fn a_landing_reminds_the_session_to_finish_the_request_before_main_moves() {
     let sb = Sandbox::new("permit-ready");

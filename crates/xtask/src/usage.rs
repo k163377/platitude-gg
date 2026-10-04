@@ -588,8 +588,15 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       detached primary) when main is checked out nowhere; the
       reference-transaction hook checks the stamp on the way. History
       stays linear and a landed seat stands at main's tip. Refuses a
-      branch checked out nowhere, a dirty seat, and a seat that holds
-      main. Bare `land` from a seat lands the seat's own branch. The
+      branch checked out nowhere, a dirty seat, a seat that holds main,
+      and — before anything moves, and again just before main does — a
+      seat that put runs on the board after the user's latest message
+      (the one the session's permit records): the landing takes them
+      off, and what went up after the ask is UI the user has not
+      approved, so the session asks for that approval and lands on the
+      next 反映. The landing that found them leaves the permit waiting
+      for that message, so taking them off the board approves nothing.
+      Bare `land` from a seat lands the seat's own branch. The
       seat's claim goes back to the roster with it: the tree is empty
       at main's tip, so the letter is free for whoever asks next, and a
       session that goes on working there claims it back at its next

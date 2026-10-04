@@ -21,7 +21,7 @@ mod page;
 mod sweep;
 mod window;
 
-pub(crate) use board::{record, record_dir, shown, written_label};
+pub(crate) use board::{put_up_since, record, record_dir, shown, written_label};
 pub(crate) use cli::run;
 pub(crate) use sweep::{seat_freed, seat_reused};
 

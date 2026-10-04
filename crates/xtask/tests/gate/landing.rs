@@ -506,3 +506,104 @@ fn codex_identity_releases_a_claim_without_a_claude_environment() {
     let listing = sb.git_ok(&sb.repo, &["worktree", "list", "--porcelain"]);
     assert!(!listing.contains("locked"), "{listing}");
 }
+
+/// The user's latest message as the prompt hook records it
+/// (`hook::permit`): asked for main, `at` seconds since the epoch.
+fn ask(sb: &Sandbox, session: &str, at: u64) {
+    let permits = sb.repo.join(".permits");
+    std::fs::create_dir_all(&permits).expect("the permits' directory");
+    std::fs::write(
+        permits.join(format!("{session}.land")),
+        format!("open\t{at}\tmain反映して\n"),
+    )
+    .expect("the permit");
+}
+
+fn now() -> u64 {
+    // waits(measured): when the fixtures say they were written, handed to the code under test
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("a clock past the epoch")
+        .as_secs()
+}
+
+/// What a seat put on the board after the user asked for main is UI the
+/// user has not approved, and the landing would take it off unseen: it
+/// stops before anything moves, and the next ask lands it (CLAUDE.md §Git
+/// 運用).
+#[test]
+fn a_landing_waits_for_approval_of_pictures_put_up_after_the_ask() {
+    let sb = Sandbox::new("land-approval");
+    let seat = sb.roster_tree("b", "worktree-b");
+    sb.write_refs(&seat, 21);
+    let tip = sb.commit_all(&seat, "feat(core): twenty-one", &[]);
+    // The census a verb run rewrites in the seat, which a landing that
+    // goes ahead commits on the way.
+    let census = std::fs::read_to_string(seat.join("crates/xtask/verb-census.txt"))
+        .expect("the census in the seat");
+    sb.write(
+        &seat,
+        "crates/xtask/verb-census.txt",
+        &format!("{census}stash --preset extra\tDriver Main\n"),
+    );
+    let before = sb.main_sha();
+    let asked = now() - 60;
+    ask(&sb, "mine", asked);
+    sb.put_up("b", "見せる前の絵", u128::from(asked - 60) * 1000);
+    sb.put_up("b", "行メニューの影", u128::from(asked + 30) * 1000);
+
+    let (ok, text) = sb.land_as("worktree-b", "mine");
+    assert!(!ok, "{text}");
+    assert!(
+        text.contains("seat b put 1 run(s) on the board after the user's message"),
+        "{text}"
+    );
+    assert!(
+        text.contains("「行メニューの影」") && !text.contains("見せる前の絵"),
+        "only what went up after the ask waits: {text}"
+    );
+    assert!(text.contains("「main反映して」"), "{text}");
+    assert_eq!(sb.main_sha(), before, "nothing moved: {text}");
+    assert_eq!(sb.head(&seat), tip, "not even the census: {text}");
+    assert!(
+        sb.git_ok(&seat, &["status", "--porcelain"])
+            .contains("crates/xtask/verb-census.txt"),
+        "{text}"
+    );
+
+    // A landing run by a person, with no session behind it, is theirs to
+    // look at.
+    let mut command = Command::new(EXE);
+    sb.env(&mut command);
+    command
+        .args(["land", "worktree-b", "--dir"])
+        .arg(&sb.repo)
+        .current_dir(&sb.repo)
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("CLAUDE_PID");
+    let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(output.status.success(), "{output:?}");
+    assert!(text.contains("committed on worktree-b"), "{text}");
+    assert!(text.contains("landed worktree-b"), "{text}");
+    assert!(text.contains("took seat b's 2 run(s) off"), "{text}");
+}
+
+/// The user looked and asked again: what went up before the new ask goes
+/// with the landing.
+#[test]
+fn the_next_ask_lands_what_the_user_was_shown() {
+    let sb = Sandbox::new("land-approved");
+    let seat = sb.roster_tree("b", "worktree-b");
+    sb.write_refs(&seat, 22);
+    sb.commit_all(&seat, "feat(core): twenty-two", &[]);
+    let shown = now() - 60;
+    sb.put_up("b", "行メニューの影", u128::from(shown) * 1000);
+    ask(&sb, "mine", shown + 30);
+
+    let (ok, text) = sb.land_as("worktree-b", "mine");
+    assert!(ok, "{text}");
+    assert!(text.contains("landed worktree-b"), "{text}");
+    assert!(text.contains("took seat b's 1 run(s) off"), "{text}");
+}

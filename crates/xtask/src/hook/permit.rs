@@ -42,6 +42,10 @@ const SEP: char = '\t';
 enum Standing {
     /// The latest message asked, and no landing has moved main on it.
     Open,
+    /// The latest message asked, and a landing found pictures its seat put
+    /// on the board after it (`land::approval`): the landing waits for the
+    /// user's next message, whatever becomes of the pictures.
+    Waiting,
     /// The latest message asked, and a landing moved main on it.
     Spent,
     /// The latest message did not ask.
@@ -105,6 +109,60 @@ pub(crate) fn landed(dir: &str, session: &str) {
     }
 }
 
+/// The user's latest message as the permit recorded it: when it was read,
+/// its opening words, and whether a landing already waits on it.
+pub(crate) struct Asked {
+    /// Seconds since the epoch.
+    at: u64,
+    excerpt: String,
+    waiting: bool,
+}
+
+impl Asked {
+    /// The moment as the board counts it (`shots::put_up_since`).
+    pub(crate) fn millis(&self) -> u128 {
+        on_the_boards_clock(self.at)
+    }
+
+    /// The message as a refusal quotes it.
+    pub(crate) fn said(&self) -> String {
+        format!("「{}」 ({})", self.excerpt, ago(self.at))
+    }
+
+    /// Whether a landing found pictures put up after this message: only
+    /// the user's next message answers that.
+    pub(crate) fn waits(&self) -> bool {
+        self.waiting
+    }
+}
+
+/// This session's latest message, for a landing that has to tell what was
+/// put on the board after it (`land`). None without a permit on record.
+pub(crate) fn asked(dir: &str, session: &str) -> Option<Asked> {
+    let permit = load(&permit_file(dir, session)?)?;
+    Some(Asked {
+        at: permit.asked_at,
+        excerpt: permit.excerpt,
+        waiting: permit.standing == Standing::Waiting,
+    })
+}
+
+/// Called by the land verb when it finds pictures put up after the ask:
+/// this session's open permit waits for the user's next message, so that
+/// taking the pictures off the board approves nothing.
+pub(crate) fn wait_for_approval(dir: &str, session: &str) {
+    let Some(path) = permit_file(dir, session) else {
+        return;
+    };
+    let Some(mut permit) = load(&path) else {
+        return;
+    };
+    if permit.standing == Standing::Open {
+        permit.standing = Standing::Waiting;
+        store(&path, &permit);
+    }
+}
+
 /// Stop: an unfulfilled landing, or work left after one. Dirty files count
 /// even with HEAD on main — the gate's standing is the committed tip.
 pub(super) fn unmet(input: &str) -> Option<String> {
@@ -122,13 +180,44 @@ pub(super) fn unmet(input: &str) -> Option<String> {
     Some(match permit.standing {
         Standing::Open => format!(
             "permit: the user's message 「{}」 ({}) asked for main (反映), and this turn ends \
-             without a landing having moved it — {remaining} remain in {cwd}.",
+             without a landing having moved it — {remaining} remain in {cwd}.{}",
+            permit.excerpt,
+            ago(permit.asked_at),
+            awaiting_approval(&cwd, permit.asked_at)
+        ),
+        Standing::Waiting => format!(
+            "permit: the user's message 「{}」 ({}) asked for main (反映), and the landing waits \
+             for the user's approval of the pictures put up after it — {remaining} remain in \
+             {cwd}. Their next 反映 lands the branch.",
             permit.excerpt,
             ago(permit.asked_at)
         ),
         Standing::Spent => format!("permit: work remains after the landing: {remaining} in {cwd}."),
         Standing::Closed => return None,
     })
+}
+
+/// What the landing waits on when the seat put pictures up after the
+/// message (`land::approval`) — said, so the turn's end reads as a wait
+/// for the user rather than a landing forgotten. Empty otherwise.
+fn awaiting_approval(cwd: &str, asked_at: u64) -> String {
+    let Some(seat) = crate::seats::roster_letter(cwd) else {
+        return String::new();
+    };
+    let unseen = crate::shots::put_up_since(cwd, seat, on_the_boards_clock(asked_at));
+    if unseen.is_empty() {
+        return String::new();
+    }
+    format!(
+        " Seat {seat} put {} run(s) on the board after that message, and the landing waits \
+         for the user's approval of them.",
+        unseen.len()
+    )
+}
+
+/// Seconds since the epoch in the board's milliseconds.
+fn on_the_boards_clock(secs: u64) -> u128 {
+    u128::from(secs) * 1000
 }
 
 /// Whether a prompt is the user's own words — not a summary carried back
@@ -163,6 +252,17 @@ fn refusal(what: &str, permit: Option<&Permit>) -> String {
             "{what} would move main a second time on one message. The user's message \
              「{excerpt}」 ({}) asked for one landing, and that landing moved main. \
              {report}; the user's next 反映 opens the next landing.",
+            ago(*asked_at)
+        ),
+        Some(Permit {
+            standing: Standing::Waiting,
+            asked_at,
+            excerpt,
+        }) => format!(
+            "{what} waits for the user's approval: a landing found pictures put up on the board \
+             after their message 「{excerpt}」 ({}), and taking them off the board approves \
+             nothing. {report}; tell the user the board holds them (F5) — their next 反映 lands \
+             the branch.",
             ago(*asked_at)
         ),
         Some(Permit {
@@ -238,6 +338,7 @@ fn parse(line: &str) -> Option<Permit> {
     let mut fields = line.split(SEP);
     let standing = match fields.next()? {
         "open" => Standing::Open,
+        "waiting" => Standing::Waiting,
         "spent" => Standing::Spent,
         "closed" => Standing::Closed,
         _ => return None,
@@ -262,6 +363,7 @@ fn store(path: &Path, permit: &Permit) {
     }
     let word = match permit.standing {
         Standing::Open => "open",
+        Standing::Waiting => "waiting",
         Standing::Spent => "spent",
         Standing::Closed => "closed",
     };

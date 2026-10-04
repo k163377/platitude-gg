@@ -15,6 +15,7 @@ use crate::seats::{
 };
 use crate::subprocess::git_query;
 
+mod approval;
 mod record;
 mod tags;
 mod versions;
@@ -110,6 +111,8 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     };
     let seat_dir = std::path::Path::new(&seat.path);
     phases.target(seat_dir, &branch);
+    // Ahead of the census commit below: a landing that waits moves nothing.
+    approval::awaited(&here, &listing, &branch)?;
     settle_the_tree(&seat.path, &branch)?;
     // The landings' queue (`budget::Pool::turn`), held to the end. Taken
     // before the seat's tree, its gate and the machine's budget, so a
@@ -128,6 +131,9 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     phases.mark("rebase");
     gate_in_the_seat(seat_dir, &branch)?;
     phases.mark("gate");
+    // Again, for a run that went up while the gate ran (a verify-ui left in
+    // the background): once main moves, the board is cleared of it unseen.
+    approval::awaited(&here, &listing, &branch)?;
     let ahead = crate::seats::commits_in(&here, &format!("main..{branch}")).unwrap_or(ahead);
     let before = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
     if primary.branch == "main" {

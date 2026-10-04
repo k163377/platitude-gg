@@ -311,6 +311,40 @@ impl Sandbox {
         self.git_ok(dir, &["rev-parse", "HEAD"])
     }
 
+    /// A run on the board under `seat`, put up `at` milliseconds since
+    /// the epoch, as verify-ui leaves one; answers the run's file.
+    pub fn put_up(&self, seat: &str, label: &str, at: u128) -> PathBuf {
+        let board = self.repo.join(".shots");
+        for dir in ["img", "runs"] {
+            std::fs::create_dir_all(board.join(dir)).expect("the board");
+        }
+        let stem = format!("{at}-{seat}-shot");
+        let png = format!("img/{stem}-0-app.png");
+        std::fs::write(board.join(&png), b"png").expect("the picture");
+        let run = board.join("runs").join(format!("{stem}.tsv"));
+        std::fs::write(
+            &run,
+            format!(
+                "label\t{label}\nverb\tv\nseat\t{seat}\nat\t{at}\nshot\t{png}\tapp.png\t1\t1\t\n"
+            ),
+        )
+        .expect("the run");
+        run
+    }
+
+    /// A worktree under the roster's directory (`.claude/worktrees/<name>`)
+    /// on a new `branch` at main's tip — a seat when `name` is a roster
+    /// letter, a tree beside the seats otherwise.
+    pub fn roster_tree(&self, name: &str, branch: &str) -> PathBuf {
+        let path = self.repo.join(".claude/worktrees").join(name);
+        let spelled = path.display().to_string().replace('\\', "/");
+        self.git_ok(
+            &self.repo,
+            &["worktree", "add", "-q", "-b", branch, &spelled, "main"],
+        );
+        path
+    }
+
     pub fn main_sha(&self) -> String {
         self.git_ok(&self.repo, &["rev-parse", "main"])
     }
@@ -319,6 +353,11 @@ impl Sandbox {
     fn seed(&self) {
         std::fs::create_dir_all(&self.repo).expect("repo dir");
         self.git_ok(&self.repo, &["init", "-q", "-b", "main"]);
+        // As in the checkout the sandbox stands for: the trees under the
+        // roster's directory are nobody's change to main.
+        let exclude = self.repo.join(".git").join("info").join("exclude");
+        std::fs::create_dir_all(exclude.parent().expect("info")).expect("info dir");
+        std::fs::write(&exclude, ".claude/worktrees/\n").expect("exclude");
         for (path, text) in SEED {
             self.write(&self.repo, path, text);
         }
