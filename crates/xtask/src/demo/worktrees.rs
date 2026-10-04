@@ -274,6 +274,43 @@ pub(super) fn worktree_detached(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// Where new working copies would go, with something already in the way
+/// of two of them — what the rows that make a copy warn of before the
+/// press (`worktrees::new_copy_path`: `repo.worktrees/<branch>`).
+/// `feature/free` has its folder to itself; `feature/blocked`'s holds a
+/// file somebody left there; and git still lists a copy at
+/// `fix/listed`'s, whose folder was taken away by hand. One more branch
+/// has a free folder too long for the menu row, which the hover gives back.
+pub(super) fn copy_places(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nA repository with places for new working copies.\n",
+        "docs: start the readme",
+    )?;
+    repo.git(&["branch", "feature/a-name-long-enough-to-cut-its-folder"])?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.git(&["branch", "feature/blocked"])?;
+    repo.git(&["branch", "fix/listed"])?;
+    repo.commit("src/lib.txt", "lib v1\n", "feat: add the library")?;
+    repo.git(&["branch", "feature/free"])?;
+    repo.commit("docs/guide.md", "guide v1\n", "docs: add a guide")?;
+
+    let places = repo.root.join("repo.worktrees");
+    let blocked = places.join("feature-blocked");
+    std::fs::create_dir_all(&blocked).map_err(|e| format!("making {}: {e}", blocked.display()))?;
+    std::fs::write(blocked.join("notes.txt"), "left here by hand\n")
+        .map_err(|e| format!("writing the blocked folder's file: {e}"))?;
+    repo.git(&[
+        "worktree",
+        "add",
+        "--detach",
+        "../repo.worktrees/fix-listed",
+    ])?;
+    let listed = places.join("fix-listed");
+    std::fs::remove_dir_all(&listed).map_err(|e| format!("removing {}: {e}", listed.display()))?;
+    Ok(())
+}
+
 /// Where [`nested_copy`] puts its linked working copy, under the preset's
 /// root. Shared with `verify::repos`, which opens the run at it rather
 /// than at the path `demo::create` answers with.

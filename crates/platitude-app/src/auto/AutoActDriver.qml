@@ -77,6 +77,11 @@ Item {
     /// commit.
     property RefWorktreeMenu refCopyCard
     property RefWorktreeMenu commitCopyCard
+    /// The two rows that make a working copy, on each of those two cards (`AutoActCopyVerbs`).
+    property AppMenuItem refCopyHereItem
+    property AppMenuItem refCopyAddItem
+    property AppMenuItem commitCopyHereItem
+    property AppMenuItem commitCopyAddItem
     /// The remote the push-default verbs act on, and the mark they wait for before the shot — empty where no mark
     /// is asked to move.
     property string remoteTarget: ""
@@ -613,6 +618,7 @@ Item {
     AutoActDiffVerbs { id: diffVerbs; driver: driver }
     AutoActSplitVerbs { id: splitVerbs; driver: driver }
     AutoActHandVerbs { id: handVerbs; driver: driver }
+    AutoActCopyVerbs { id: copyVerbs; driver: driver }
 
     function runAutoAct() {
         const act = Harness.autoAct
@@ -641,6 +647,7 @@ Item {
             || diffVerbs.run(act, arg)
             || splitVerbs.run(act, arg)
             || handVerbs.run(act, arg)
+            || copyVerbs.run(act, arg)
         if (!known && !driver.completionDeferred && !driver.writeExpected) {
             // A misspelling: window verbs are in the completion ledger, so a verb known to neither is
             // nobody's. Left to the watchdog.

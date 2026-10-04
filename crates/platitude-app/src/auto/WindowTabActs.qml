@@ -352,6 +352,41 @@ Item {
         }
     }
 
+    // A copy made from a menu stands this tab in it (デザイン規約 §作業コピーを作る): the page presses
+    // (`AutoActCopyVerbs`) and the landing is read here, the page being stood elsewhere by it. Taken as the tab first
+    // settles — the press comes several beats later, and the move behind it takes git's answer and two more processes.
+    SampleTimer {
+        id: copyMadeTimer
+        running: Harness.autoAct === "worktree-new" || Harness.autoAct === "worktree-add"
+        property string from: ""
+        onTriggered: {
+            const page = window.curPage
+            if (page === null || page.pageTab.state !== "open")
+                return
+            if (copyMadeTimer.from === "") {
+                // Settled, as the page's own verb waits to be before it presses: the opening's graph still landing
+                // would count as the graph thrown away (`standKept`).
+                if (!PageSettled.settled(page))
+                    return
+                copyMadeTimer.from = page.pageTab.repoPath
+                acts.holdStand(page)
+                return
+            }
+            if (acts.standsIn(page, copyMadeTimer.from) || !PageSettled.settled(page) || page.pageWt.branch === "")
+                return
+            stop()
+            const where = page.pageTab.repoPath
+            Harness.report("copy_made stood=" + !acts.standsIn(page, copyMadeTimer.from)
+                              + " copy=" + GitFacts.pathLeaf(where)
+                              + " branch=" + page.pageWt.branch
+                              + " tabs=" + pageRepeater.count
+                              + " kept=" + acts.standKept(page)
+                              + " log=" + page.commandsOpen
+                              + " where=" + where)
+            window.finishAutoAct()
+        }
+    }
+
     // …and away and back: unsent words are filed under the copy they were written in
     // (デザイン規約 §タブの所作「未コミットのコミットメッセージは立ち位置ごとに憶える」). `kept=` (one page
     // throughout) is what makes `back=` a put-back rather than never taken away.

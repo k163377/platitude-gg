@@ -1,6 +1,7 @@
 module platitude.auto
 AutoActDriver 1.0 AutoActDriver.qml
 AutoActCompletion 1.0 AutoActCompletion.qml
+AutoActCopyVerbs 1.0 AutoActCopyVerbs.qml
 AutoActDetailsVerbs 1.0 AutoActDetailsVerbs.qml
 AutoActDiffVerbs 1.0 AutoActDiffVerbs.qml
 AutoActFileRowVerbs 1.0 AutoActFileRowVerbs.qml

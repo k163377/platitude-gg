@@ -305,6 +305,130 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false",
     },
+    // The two rows that make a working copy, on the WORKTREE card
+    // (デザイン規約 §作業コピーを作る — `card=` is that card opened).
+    // `here=` is `Create worktree here…`, on every row with a commit;
+    // `add=` is `worktree add`, on a branch no copy has out — not on the
+    // tree's own branch (`main`) nor one another copy holds (`worktrees`'
+    // `feature/topic-a`, whose `switch` row opens that copy instead).
+    // `folder=` is where it would go, and `copy-places` puts something in
+    // the way of two branches: the row is greyed and its forced hover says
+    // which — a greyed row and a pale one are a picture apart, the
+    // sentence none. Its one long branch is cut on the row (`cut=`), and
+    // the forced hover gives the whole line back. The tip stands beside the
+    // row (`aside=`) with the tree mark in front of the folder (`mark=`,
+    // デザイン規約 §ref の種別); `says=` is the tip's text.
+    Verb {
+        name: "worktree-add-menu",
+        when: &[
+            (
+                Arg::Is("branch:feature/blocked"),
+                "copy_menu card=true here=true add=true folder=feature-blocked blocked=true tip=true \
+                 aside=true mark=feature-blocked cut=false \
+                 says=The folder is not empty — feature-blocked",
+            ),
+            (
+                Arg::Is("branch:fix/listed"),
+                "copy_menu card=true here=true add=true folder=fix-listed blocked=true tip=true \
+                 aside=true mark=fix-listed cut=false \
+                 says=Taken by another working copy — fix-listed",
+            ),
+            (
+                Arg::Has("long-enough"),
+                "copy_menu card=true here=true add=true \
+                 folder=feature-a-name-long-enough-to-cut-its-folder blocked=false tip=true aside=true \
+                 mark=feature-a-name-long-enough-to-cut-its-folder cut=true \
+                 says=worktree add feature-a-name-long-enough-to-cut-its-folder",
+            ),
+            (
+                Arg::WithPreset("worktrees"),
+                "copy_menu card=true here=true add=false folder= blocked=false",
+            ),
+            (
+                Arg::Is("branch:main"),
+                "copy_menu card=true here=true add=false folder= blocked=false",
+            ),
+            // A tag has no branch to take out: only the new one.
+            (
+                Arg::Starts("tag:"),
+                "copy_menu card=true here=true add=false folder= blocked=false",
+            ),
+            (
+                Arg::Has("remote-only"),
+                "copy_menu card=true here=true add=true folder=feature-remote-only blocked=false tip=false \
+                 aside=false mark= cut=false",
+            ),
+        ],
+        plain: "copy_menu card=true here=true add=true folder=feature-topic-a blocked=false tip=false \
+                aside=false mark= cut=false",
+    },
+    // The box `Create worktree here…` opens, and what it turns down before
+    // the press: a name git would not take, one a branch already has, and
+    // one whose folder holds something (`feature-blocked` is where the
+    // branch `feature/blocked` would go as well). `tip=` the reason up in
+    // the box's own tip, `mark=` the folder its tree mark stands before —
+    // a sentence about a branch has none.
+    Verb {
+        name: "worktree-box",
+        when: &[
+            (
+                Arg::Ends("=feature-blocked"),
+                "copy_box where=graph open=true mode=worktree refused=true tip=true \
+                 mark=feature-blocked why=The folder is not empty — feature-blocked",
+            ),
+            (
+                Arg::Ends("=feature/free"),
+                "copy_box where=graph open=true mode=worktree refused=true tip=true mark= \
+                 why=A branch called that already exists",
+            ),
+            // A name opening with `-`, which git would run as an option of
+            // its own `git branch` (`branch::is_valid_name`).
+            (
+                Arg::Ends("=-m"),
+                "copy_box where=graph open=true mode=worktree refused=true tip=true mark= \
+                 why=git will not take this as a name",
+            ),
+            (
+                Arg::Ends("@graph"),
+                "copy_box where=graph open=true mode=worktree refused=false tip=false mark= why=",
+            ),
+        ],
+        plain: "copy_box where=nav open=true mode=worktree refused=false tip=false mark= why=",
+    },
+    // A copy made and the tab stood in it: the folder the rule names, the
+    // branch out in it, one tab (the tab moved, not grew), the page kept,
+    // and no log raised by the landing.
+    Verb {
+        name: "worktree-new",
+        when: &[(
+            Arg::Ends("=feature/next"),
+            "copy_made stood=true copy=feature-next branch=feature/next tabs=1 kept=true \
+             log=false",
+        )],
+        plain: "copy_made stood=true copy=hotfix-patch branch=hotfix/patch tabs=1 kept=true \
+                log=false",
+    },
+    // The row's own branch out in a new copy: a local branch as it is, a
+    // remote one with no local branch made local and following it.
+    Verb {
+        name: "worktree-add",
+        when: &[(
+            Arg::Has("remote-only"),
+            "copy_made stood=true copy=feature-remote-only branch=feature/remote-only tabs=1 \
+             kept=true log=false",
+        )],
+        plain: "copy_made stood=true copy=feature-topic-a branch=feature/topic-a tabs=1 \
+                kept=true log=false",
+    },
+    // A name taken between the box and git: the copy was not made, said
+    // over the graph in the gesture's colour with the log left shut
+    // (デザイン規約 §作業コピーを作る), the heading naming the folder behind its tree mark.
+    Verb {
+        name: "worktree-new-refused",
+        when: &[],
+        plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
+                said=hotfix-patch was not created mark=true",
+    },
     // An elided row whose hover says the whole name. The wider lines name
     // no pane: `tree=` echoes the view asked for (`-tree`, where row 0 is
     // the elided folder chain), `tip=` the shared instance's visible. The

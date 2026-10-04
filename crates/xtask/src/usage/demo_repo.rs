@@ -191,6 +191,12 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   out in another copy, one commit past that reading: the
                   one shape where a REMOTES row opens on all three of
                   its lines (nav-open)
+        copy-places  where new working copies would go, two of them in
+                  the way before the press: feature/blocked's folder
+                  holds a file, git still lists a copy at fix/listed's,
+                  and feature/free's is free — as is the folder of one
+                  branch named too long for the menu row to hold
+                  (worktree-add-menu, worktree-box)
         longnames every name the operation panel writes, long enough to
                   be cut — a branch ahead and behind its upstream, and a
                   copy with a folder of its own (ops-panel <width>,

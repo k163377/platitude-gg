@@ -142,6 +142,10 @@ Item {
             remoteMenu: harness.remoteRowMenu.menu
             refCopyCard: harness.refRowMenu.copyCard
             commitCopyCard: harness.commitRowMenu.copyCard
+            refCopyHereItem: harness.refRowMenu.copyCard.copyHereItem
+            refCopyAddItem: harness.refRowMenu.copyCard.copyAddItem
+            commitCopyHereItem: harness.commitRowMenu.copyCard.copyHereItem
+            commitCopyAddItem: harness.commitRowMenu.copyCard.copyAddItem
             refList: harness.rowHost.listPopup
             rowCard: harness.rowHost.hoverCard
             rowHost: harness.rowHost

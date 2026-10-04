@@ -27,8 +27,8 @@ use super::signing::{errsig, signed};
 use super::stack::{stack, stack_max};
 use super::tags::{manytags, tagonly, tagremotes, tags};
 use super::worktrees::{
-    carried, carried_clashing, carried_many, long_names, nested_copy, panel, tracked_elsewhere,
-    worktree_detached, worktrees,
+    carried, carried_clashing, carried_many, copy_places, long_names, nested_copy, panel,
+    tracked_elsewhere, worktree_detached, worktrees,
 };
 
 pub fn run(args: &[String]) -> Result<PathBuf, String> {
@@ -207,6 +207,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "worktree-detached" => worktree_detached(&mut repo)?,
         "nested-copy" => nested_copy(&mut repo)?,
         "tracked-elsewhere" => tracked_elsewhere(&mut repo)?,
+        "copy-places" => copy_places(&mut repo)?,
         "pictures" => pictures(&mut repo)?,
         "bigpicture" => bigpicture(&mut repo)?,
         "empty" => {}

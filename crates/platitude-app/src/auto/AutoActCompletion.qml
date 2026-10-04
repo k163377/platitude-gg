@@ -127,6 +127,9 @@ QtObject {
                 // The menu and its WORKTREE card open from a sampler once the row is laid out; the pressing ones click
                 // from there and wait for the list the copy leaves, or for the bar git's refusal comes down in.
                 "worktree-menu", "worktree-remove", "worktree-remove-refused", "worktree-graph",
+                // The same for the rows that make a copy (`AutoActCopyVerbs`); the two that land stand the tab in the
+                // new copy, which the window reads (`WindowTabActs`).
+                "worktree-add-menu", "worktree-box", "worktree-new-refused", "worktree-add", "worktree-new",
                 "nav-add-remote", "push-default", "push-target", "push-hover", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "delete-branch-chip", "remote-refused", "chip-menu", "chip-menu-current",
