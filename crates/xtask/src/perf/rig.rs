@@ -78,17 +78,16 @@ pub(super) fn build_at(caller: &Path, rev: &str, opts: &Options) -> Result<Built
     .ok_or_else(|| format!("--at {rev}: nothing here names a commit by that"))?;
     let (primary, trees) = primary_checkout(&here)?;
     let rig = rig_path(&primary);
-    let pinned = git_query(
-        &here,
-        &["show", &format!("{commit}:.github/workflows/ci.yml")],
-    )
-    .and_then(|workflow| crate::qt::pinned_in(&workflow))
-    .ok_or_else(|| {
-        format!(
-            "{} pins no Qt (ci.yml's QT_VERSION): name one with --qt",
-            short(&commit)
-        )
-    })?;
+    let pinned =
+        crate::qt::pinned_at(&|path| git_query(&here, &["show", &format!("{commit}:{path}")]))
+            .ok_or_else(|| {
+                format!(
+                    "{} pins no Qt (in {}, or on the workflow's QT_VERSION line before that \
+                     file): name one with --qt",
+                    short(&commit),
+                    crate::qt::PIN
+                )
+            })?;
     let (qt, qt_source) =
         super::qt_for(opts, &format!("{} pins {pinned}", short(&commit)), &pinned)?;
     let set = opts.feature_slug();

@@ -70,8 +70,8 @@ WORKDIR /work
 # platform, and the fonts the design tokens name for Ubuntu.
 FROM core AS app
 
-# From the caller: ci.yml pins it and `cargo xtask linux` passes it in —
-# no second copy here.
+# From the caller: .qt-version pins it and `cargo xtask linux` passes it
+# in — no second copy here.
 ARG QT_VERSION
 
 # The two expensive downloads go first, so editing the library list below

@@ -632,17 +632,60 @@ fn stage_for(rest: &[String]) -> &'static str {
     }
 }
 
+/// What every stage is built from; the stages past core add Qt's pin.
+const IMAGE_INPUTS: [&str; 2] = ["ci/linux/Dockerfile", "rust-toolchain.toml"];
+
 /// The image is named after what builds it, so a stale image can never be
-/// the one that answers. FNV-1a over the files: the same on all three
-/// systems, the tree being LF everywhere (.gitattributes).
+/// the one that answers.
+///
+/// A dot after the stage. The tags hashed off CI's workflow had a dash
+/// there ([`former_image_tag`]), and a runner from before the pin had a
+/// file of its own removes every dashed tag its own formula does not
+/// arrive at ([`stale_images`]): spelled its way, this tree's images would
+/// go each time a seat that is behind ran a container.
 fn image_tag(root: &Path, stage: &str) -> Result<String, String> {
-    let mut inputs = vec!["ci/linux/Dockerfile", "rust-toolchain.toml"];
+    let mut inputs = IMAGE_INPUTS.to_vec();
     if stage != "core" {
-        // Every stage past core is built with the Qt version CI pins
+        // Every stage past core is built with the Qt version the tree pins
         // (runtime inherits it through bare), so the tag has to move when
         // that does.
-        inputs.push(".github/workflows/ci.yml");
+        inputs.push(crate::qt::PIN);
     }
+    Ok(format!(
+        "{IMAGE}:{stage}.{:016x}",
+        fingerprint(root, &inputs)?
+    ))
+}
+
+/// The tag a tree's own runner answers to where the tree holds no pin file:
+/// a seat that is behind, or the perf rig at an older commit. Its runner
+/// hashes CI's workflow for the Qt version and spells the tag with a dash.
+/// Never this tree's own — the workflow here pins nothing.
+fn former_image_tag(root: &Path, stage: &str) -> Result<String, String> {
+    let workflow = crate::qt::former_pin();
+    let mut inputs = IMAGE_INPUTS.to_vec();
+    if stage != "core" {
+        inputs.push(&workflow);
+    }
+    Ok(format!(
+        "{IMAGE}:{stage}-{:016x}",
+        fingerprint(root, &inputs)?
+    ))
+}
+
+/// The tag `tree`'s own runner answers to, by the formula that runner has:
+/// the pin file is what says which.
+fn tag_named_by(tree: &Path, stage: &str) -> Result<String, String> {
+    if tree.join(crate::qt::PIN).is_file() {
+        image_tag(tree, stage)
+    } else {
+        former_image_tag(tree, stage)
+    }
+}
+
+/// FNV-1a over the files: the same on all three systems, the tree being
+/// LF everywhere (.gitattributes).
+fn fingerprint(root: &Path, inputs: &[&str]) -> Result<u64, String> {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for relative in inputs {
         let path = root.join(relative);
@@ -653,15 +696,15 @@ fn image_tag(root: &Path, stage: &str) -> Result<String, String> {
             hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
         }
     }
-    Ok(format!("{IMAGE}:{stage}-{hash:016x}"))
+    Ok(hash)
 }
 
-/// The Qt version, read from CI's workflow: the one place it is pinned.
+/// The Qt version, read from the tree's pin: the one place it is pinned.
 fn qt_version(root: &Path) -> Result<String, String> {
-    let path = root.join(".github").join("workflows").join("ci.yml");
+    let path = root.join(crate::qt::PIN);
     let text = std::fs::read_to_string(&path)
         .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
-    crate::qt::pinned_in(&text).ok_or_else(|| format!("no QT_VERSION in {}", path.display()))
+    crate::qt::pinned_in(&text).ok_or_else(|| format!("no Qt version in {}", path.display()))
 }
 
 fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
@@ -689,14 +732,15 @@ fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The tags of `stage` that no checkout on this machine names. Pure, so a
-/// test holds the rule.
+/// The tags of `stage` that no checkout on this machine names, in either
+/// shape a runner spells one ([`image_tag`], [`former_image_tag`]). Pure,
+/// so a test holds the rule.
 fn stale_images<'a>(listed: &'a str, stage: &str, keep: &BTreeSet<String>) -> Vec<&'a str> {
-    let prefix = format!("{IMAGE}:{stage}-");
+    let shapes = [format!("{IMAGE}:{stage}."), format!("{IMAGE}:{stage}-")];
     listed
         .lines()
         .map(str::trim)
-        .filter(|tag| tag.starts_with(&prefix) && !keep.contains(*tag))
+        .filter(|tag| shapes.iter().any(|shape| tag.starts_with(shape)) && !keep.contains(*tag))
         .collect()
 }
 
@@ -804,6 +848,29 @@ fn checkout_names(trees: &[crate::seats::WorktreeBlock]) -> BTreeSet<String> {
         .collect()
 }
 
+/// Every stage's tag for each of `trees`, each tree asked by the formula
+/// its own runner has ([`tag_named_by`]), beside the trees that would not
+/// say and why. Apart from [`alive`], so a test holds that a tree from
+/// before the pin file is asked the former way.
+fn tags_named_by_all<'a>(trees: &[&'a Path]) -> (BTreeSet<String>, Vec<(&'a Path, String)>) {
+    let mut known = BTreeSet::new();
+    let mut silent = Vec::new();
+    for tree in trees {
+        for stage in STAGES {
+            match tag_named_by(tree, stage) {
+                Ok(tag) => {
+                    known.insert(tag);
+                }
+                Err(trouble) => {
+                    silent.push((*tree, trouble));
+                    break;
+                }
+            }
+        }
+    }
+    (known, silent)
+}
+
 fn alive(root: &Path) -> Result<Alive, String> {
     let listing = crate::subprocess::git_query(
         &crate::seats::slashed(root),
@@ -814,29 +881,17 @@ fn alive(root: &Path) -> Result<Alive, String> {
     if trees.is_empty() {
         return Err("git worktree list named no tree at all".into());
     }
-    let mut known = BTreeSet::new();
-    let mut whole = true;
-    for tree in &trees {
-        for stage in STAGES {
-            match image_tag(Path::new(&tree.path), stage) {
-                Ok(tag) => {
-                    known.insert(tag);
-                }
-                Err(trouble) => {
-                    println!(
-                        "left every {IMAGE} image alone — {} would not say which it needs \
-                         ({trouble})",
-                        tree.path
-                    );
-                    whole = false;
-                    break;
-                }
-            }
-        }
+    let roots: Vec<&Path> = trees.iter().map(|tree| Path::new(&tree.path)).collect();
+    let (known, silent) = tags_named_by_all(&roots);
+    for (tree, trouble) in &silent {
+        println!(
+            "left every {IMAGE} image alone — {} would not say which it needs ({trouble})",
+            tree.display()
+        );
     }
     Ok(Alive {
         names: checkout_names(&trees),
-        tags: whole.then_some(known),
+        tags: silent.is_empty().then_some(known),
     })
 }
 

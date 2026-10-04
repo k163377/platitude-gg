@@ -380,10 +380,7 @@ const SEED: &[(&str, &str)] = &[
     ("deny.toml", "[bans]\n"),
     ("rust-toolchain.toml", "[toolchain]\nchannel = \"stable\"\n"),
     ("ci/linux/Dockerfile", "FROM ubuntu\n"),
-    (
-        ".github/workflows/ci.yml",
-        "env:\n  QT_VERSION: \"6.10.3\"\n",
-    ),
+    (".qt-version", "6.10.3\n"),
     (
         "crates/platitude-core/src/lib.rs",
         "pub mod refs;\npub mod stash;\npub mod version;\n",

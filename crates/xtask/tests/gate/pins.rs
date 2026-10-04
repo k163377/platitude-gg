@@ -83,25 +83,46 @@ fn the_git_minimum_is_its_constant() {
     }
 }
 
-/// Qt's version lives in CI's workflow, which no source reads: a bump
+/// Qt's version lives in a file of its own, which no source reads: a bump
 /// there alone owes the full tier.
 #[test]
 fn a_qt_bump_owes_the_full_tier() {
     let sb = tiered("qt");
-    sb.write(
-        &sb.seat,
-        ".github/workflows/ci.yml",
-        "env:\n  QT_VERSION: \"6.11.0\"\n",
-    );
+    sb.write(&sb.seat, ".qt-version", "6.11.0\n");
     sb.commit_all(&sb.seat, "chore: a newer Qt", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(
-        text.contains("everything (.github/workflows/ci.yml moves a version), the full tier"),
+        text.contains("everything (.qt-version moves a version), the full tier"),
         "{text}"
     );
     for owed in FULL_ONLY {
         assert!(text.contains(owed), "{owed} not owed: {text}");
     }
+}
+
+/// A workflow is CI's own: no step here reads one, and an edit to it
+/// alone owes nothing but the always-steps — the workflow that carried
+/// Qt's version before the pin had a file of its own, and the line that
+/// carried it.
+#[test]
+fn a_workflow_edit_owes_no_step() {
+    let sb = tiered("workflow");
+    let workflow = ".github/workflows/ci.yml";
+    sb.write(
+        &sb.seat,
+        workflow,
+        "env:\n  QT_VERSION: \"6.11.0\"\njobs:\n  test:\n    runs-on: ubuntu-24.04\n",
+    );
+    sb.commit_all(&sb.seat, "ci: a job", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(!text.contains("the full tier"), "{text}");
+    // Among the files no step reads: a row of its own, where a changed
+    // file is listed behind a `*`.
+    assert!(
+        text.contains("no step reads these") && text.contains(&format!("\n  {workflow}\n")),
+        "{text}"
+    );
+    assert!(!text.contains("  run    "), "{text}");
 }
 
 /// Of the Dockerfile, the base image carries the container's git; a line

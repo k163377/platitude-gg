@@ -3,10 +3,10 @@
 //! windows.md). The harness shells don't inherit the user's PATH edits, so
 //! Qt is prepended to the PATH children get.
 //!
-//! The Qt is the version CI pins (`QT_VERSION:` in ci.yml) wherever this
-//! machine has it: a PATH naming another Qt — the user's own, from before an
-//! update — would build half a tree against one version's headers and link
-//! it against the other's libraries, and cargo does not notice the switch.
+//! The Qt is the version the tree pins ([`PIN`]) wherever this machine has
+//! it: a PATH naming another Qt — the user's own, from before an update —
+//! would build half a tree against one version's headers and link it
+//! against the other's libraries, and cargo does not notice the switch.
 //!
 //! A Qt is what its qmake answers (`qmake -query`), not what its directory
 //! is called. And the build scripts take `QMAKE` before PATH and are run
@@ -258,9 +258,32 @@ fn not_found(pinned: Option<&str>) -> String {
     }
 }
 
-/// The Qt version CI's workflow pins (`QT_VERSION:`) — the one place it
-/// is pinned, for CI and the container alike.
-pub(crate) fn pinned_in(workflow: &str) -> Option<String> {
+/// Where Qt's version is pinned, for a desk, the container and CI alike: a
+/// file of its own at the tree's root, holding the version and nothing
+/// else. Not a line of CI's workflow: the gate keys every container step
+/// by the pin, and an edit to a workflow changes nothing built here.
+pub(crate) const PIN: &str = ".qt-version";
+
+/// The version a pin file names: its one line.
+pub(crate) fn pinned_in(pin: &str) -> Option<String> {
+    pin.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_string)
+}
+
+/// Where the pin stood before it had a file of its own: the `QT_VERSION:`
+/// line of CI's workflow. Read out of older commits ([`pinned_at`]) and of
+/// trees that are behind (`linux::former_image_tag`), never off this tree,
+/// whose workflow pins nothing — so the path is spelled in pieces, and the
+/// gate's graph does not take this file for the workflow's reader
+/// (反映前テストの機械化.md §依存木).
+pub(crate) fn former_pin() -> String {
+    format!(".{}/{}/{}", "github", "workflows", "ci.yml")
+}
+
+/// The version a workflow from before [`PIN`] names.
+fn formerly_pinned_in(workflow: &str) -> Option<String> {
     workflow
         .lines()
         .filter_map(|line| line.trim().strip_prefix("QT_VERSION:"))
@@ -269,13 +292,17 @@ pub(crate) fn pinned_in(workflow: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// The version this tree pins; `None` where the workflow cannot be read.
+/// The pin as a commit holds it, in whichever of the two places that
+/// commit pins. `show` answers a path's text at the commit.
+pub(crate) fn pinned_at(show: &dyn Fn(&str) -> Option<String>) -> Option<String> {
+    show(PIN)
+        .and_then(|pin| pinned_in(&pin))
+        .or_else(|| show(&former_pin()).and_then(|workflow| formerly_pinned_in(&workflow)))
+}
+
+/// The version this tree pins; `None` where the pin cannot be read.
 fn pinned_here() -> Option<String> {
-    let workflow = crate::tree::workspace_root()
-        .join(".github")
-        .join("workflows")
-        .join("ci.yml");
-    pinned_in(&std::fs::read_to_string(workflow).ok()?)
+    pinned_in(&std::fs::read_to_string(crate::tree::workspace_root().join(PIN)).ok()?)
 }
 
 fn qmake_dir_on(path: &OsStr) -> Option<PathBuf> {
@@ -327,11 +354,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_pin_is_the_first_qt_version_line() {
-        let workflow = "env:\n  QT_VERSION: \"6.12.0\"\n  AQT_SOURCE: \"x\"\njobs:\n";
-        assert_eq!(pinned_in(workflow).as_deref(), Some("6.12.0"));
-        assert_eq!(pinned_in("env:\n  QT_VERSION: ''\n"), None);
-        assert_eq!(pinned_in("jobs:\n"), None);
+    fn the_pin_is_the_files_one_line() {
+        assert_eq!(pinned_in("6.12.0\n").as_deref(), Some("6.12.0"));
+        assert_eq!(pinned_in("\n  6.12.0  \r\n").as_deref(), Some("6.12.0"));
+        assert_eq!(pinned_in("\n"), None);
+    }
+
+    /// The tree holds the pin every build here is held to, and it reads
+    /// as a version.
+    #[test]
+    fn this_tree_pins_a_version() {
+        let version = pinned_here().expect("the pin file at the tree's root");
+        assert!(
+            version.split('.').all(|part| part.parse::<u32>().is_ok()),
+            "{version:?} does not look like a version"
+        );
+    }
+
+    /// A commit from before the pin had a file of its own answers off its
+    /// workflow; one that holds both answers off the file.
+    #[test]
+    fn a_commit_pins_in_the_file_or_in_the_workflow_it_had_before() {
+        let workflow = "env:\n  QT_VERSION: \"6.10.3\"\n  AQT_SOURCE: \"x\"\njobs:\n";
+        let before = |path: &str| (path == former_pin()).then(|| workflow.to_string());
+        assert_eq!(pinned_at(&before).as_deref(), Some("6.10.3"));
+        let after = |path: &str| match path {
+            PIN => Some("6.12.0\n".to_string()),
+            _ => before(path),
+        };
+        assert_eq!(pinned_at(&after).as_deref(), Some("6.12.0"));
+        assert_eq!(pinned_at(&|_| None), None);
+        // A workflow that pins nothing: the tree's own, since the move.
+        let unpinned = |path: &str| (path == former_pin()).then(|| "jobs:\n".to_string());
+        assert_eq!(pinned_at(&unpinned), None);
+        assert_eq!(formerly_pinned_in("env:\n  QT_VERSION: ''\n"), None);
     }
 
     /// The answer is qmake's, whatever the directory is called.

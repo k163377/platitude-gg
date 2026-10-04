@@ -332,8 +332,8 @@ const TAIL: &str = "  shipped [--no-build]
       keeps its target/ and its uncommitted edits, and those edits are
       not what is measured: the commit is. Evidence still lands under
       this tree's target/perf, and the manifest names the commit.
-      Each build is made and run with the Qt its own commit pins (ci.yml's
-      QT_VERSION, as qmake answers for it), so --at across a Qt update
+      Each build is made and run with the Qt its own commit pins (its
+      .qt-version, as qmake answers for it), so --at across a Qt update
       compares the whole dependency set; --qt <version> builds and runs
       with that Qt instead, to tell Qt apart from the rest, and the
       manifest says which (qt_source). A shelved exe is taken again only

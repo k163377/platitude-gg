@@ -148,7 +148,7 @@ cargo が置き換えた成果物を消さないことの代金。**1 世代 = �
 
 ## コンテナのイメージと build cache(`xtask::linux`)
 
-イメージの tag は入力(Dockerfile / rust-toolchain.toml / ci.yml)の指紋なので、それが動くたびに
+イメージの tag は入力(Dockerfile / rust-toolchain.toml / `.qt-version`)の指紋なので、それが動くたびに
 **1 世代まるごと**積む。**何が何を掴んでいるかを決めるのは tag で、cache の上限ではない**。
 
 | 対象 | 読み |

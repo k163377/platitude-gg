@@ -4,7 +4,7 @@
 //! breaks what no source edge leads to (反映前テストの機械化.md
 //! §版を動かす変更は段 3).
 
-use super::{CI, DOCKERFILE, core};
+use super::{DOCKERFILE, QT_PIN, core};
 use crate::subprocess::git_query;
 
 /// A file that holds a version, and which of its lines carry it.
@@ -36,10 +36,11 @@ fn pins() -> [Pin; 5] {
             path: DOCKERFILE.to_string(),
             carries: |line| line.trim_start().starts_with("FROM "),
         },
-        // Qt's version, which the container and CI install.
+        // Qt's version, which the container and CI install: the file
+        // holds nothing else.
         Pin {
-            path: CI.to_string(),
-            carries: |line| line.trim_start().starts_with("QT_VERSION:"),
+            path: QT_PIN.to_string(),
+            carries: |_| true,
         },
     ]
 }
@@ -90,15 +91,13 @@ mod tests {
         assert_ne!(carried(&version, before), carried(&version, raised));
     }
 
-    /// Qt's version is the one env line; a job's steps are not.
+    /// Qt's version is the whole of its file, and the file is the one
+    /// every reader of the pin names (`qt::PIN`).
     #[test]
-    fn qt_is_read_off_the_ci_env_line() {
-        let ci = pin("ci.yml");
-        let before = "env:\n  QT_VERSION: \"6.10.3\"\njobs:\n  test:\n";
-        let steps = "env:\n  QT_VERSION: \"6.10.3\"\njobs:\n  lint:\n";
-        let bumped = "env:\n  QT_VERSION: \"6.11.0\"\njobs:\n  test:\n";
-        assert_eq!(carried(&ci, before), carried(&ci, steps));
-        assert_ne!(carried(&ci, before), carried(&ci, bumped));
+    fn qt_is_read_off_its_own_file() {
+        let qt = pin(crate::qt::PIN);
+        assert_ne!(carried(&qt, "6.10.3\n"), carried(&qt, "6.11.0\n"));
+        assert_eq!(carried(&qt, "6.10.3\n"), carried(&qt, "6.10.3  \n"));
     }
 
     /// The base image moves the container's git; a package list does not.

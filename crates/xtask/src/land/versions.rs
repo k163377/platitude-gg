@@ -1,5 +1,5 @@
 //! The versions the shipped build is made from, read at a revision: Qt's
-//! (CI's pin), the toolchain's channel, and every crate the lock resolves
+//! (the tree's pin), the toolchain's channel, and every crate the lock resolves
 //! for the app's binary — what it links and what builds it, less what only
 //! the workspace members' tests build.
 //!
@@ -53,7 +53,7 @@ impl Versions {
 
     fn read(show: &dyn Fn(&str) -> Option<String>) -> Self {
         Self {
-            qt: show(".github/workflows/ci.yml").and_then(|ci| crate::qt::pinned_in(&ci)),
+            qt: crate::qt::pinned_at(show),
             toolchain: show("rust-toolchain.toml").and_then(|pin| channel(&pin)),
             crates: show("Cargo.lock")
                 .map(|lock| {
@@ -341,10 +341,7 @@ mod tests {
     #[test]
     fn a_move_names_both_sides() {
         let old = reading(&[
-            (
-                ".github/workflows/ci.yml",
-                "env:\n  QT_VERSION: \"6.10.3\"\n",
-            ),
+            (crate::qt::PIN, "6.10.3\n"),
             ("rust-toolchain.toml", "[toolchain]\nchannel = \"stable\"\n"),
             ("Cargo.lock", LOCK),
             ("crates/platitude-core/Cargo.toml", CORE),
@@ -356,10 +353,7 @@ mod tests {
             .replace("\"2.7.0\"", "\"2.8.0\"")
             .replace(" \"windows-sys 0.59.0\",\n", " \"windows-sys 0.61.2\",\n");
         let new = reading(&[
-            (
-                ".github/workflows/ci.yml",
-                "env:\n  QT_VERSION: \"6.11.0\"\n",
-            ),
+            (crate::qt::PIN, "6.11.0\n"),
             ("rust-toolchain.toml", "[toolchain]\nchannel = \"stable\"\n"),
             ("Cargo.lock", lock.as_str()),
             ("crates/platitude-core/Cargo.toml", CORE),
@@ -375,6 +369,23 @@ mod tests {
             ]
         );
         assert!(moved(&old, &old).is_empty());
+    }
+
+    /// A commit from before the pin had a file of its own names its Qt in
+    /// CI's workflow: read there, the land that gave the pin its file moved
+    /// no version, and one that bumps Qt across it still says so.
+    #[test]
+    fn the_pin_changing_places_is_no_move_of_qt() {
+        let workflow = crate::qt::former_pin();
+        let before = reading(&[(workflow.as_str(), "env:\n  QT_VERSION: \"6.12.0\"\n")]);
+        let after = reading(&[(crate::qt::PIN, "6.12.0\n"), (workflow.as_str(), "jobs:\n")]);
+        assert!(moved(&before, &after).is_empty());
+        let bumped = reading(&[(crate::qt::PIN, "6.13.0\n")]);
+        let said: Vec<String> = moved(&before, &bumped)
+            .iter()
+            .map(Move::to_string)
+            .collect();
+        assert_eq!(said, ["Qt 6.12.0 -> 6.13.0"]);
     }
 
     /// The toolchain moves on its channel; a component list is no version.

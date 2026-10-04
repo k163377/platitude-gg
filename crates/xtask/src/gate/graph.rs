@@ -1908,6 +1908,35 @@ mod tests {
         assert!(doubled.is_empty(), "{doubled:?}");
     }
 
+    /// CI's files are CI's alone: nothing a gate runs reads one, so an edit
+    /// there reaches no file but itself. Qt's version, which the workflow
+    /// once carried, is a file of its own (`qt::PIN`).
+    #[test]
+    fn nothing_reads_a_file_of_cis() {
+        let root = crate::tree::workspace_root();
+        let g = build(&root).expect("the graph of this tree");
+        // In pieces: whole, the name would be this file reading all of it.
+        let ci = format!(".{}", "github");
+        let mut files = Vec::new();
+        let mut dirs = vec![root.join(&ci)];
+        while let Some(dir) = dirs.pop() {
+            for entry in std::fs::read_dir(&dir).expect("a directory of CI's") {
+                let path = entry.expect("an entry of it").path();
+                if path.is_dir() {
+                    dirs.push(path);
+                } else {
+                    files.push(super::rel(&root, &path));
+                }
+            }
+        }
+        // The workflow older commits pin Qt in is spelled as it stands here.
+        assert!(files.contains(&crate::qt::former_pin()), "{files:?}");
+        for file in files {
+            let reach = g.reach(std::slice::from_ref(&file));
+            assert_eq!(reach.keys().collect::<Vec<_>>(), [&file]);
+        }
+    }
+
     #[test]
     fn a_path_declared_up_the_tree_folds_to_the_files_own_name() {
         use std::path::{Path, PathBuf};

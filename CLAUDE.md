@@ -24,7 +24,7 @@
 
 ## ビルド・テスト
 
-前提: Qt は ci.yml の `QT_VERSION` の版(xtask は Windows で `C:\Qt\<版>` を選び、PATH の別の版では組まない)+ C++ ツールチェーン(他 OS の環境は `ci/` が正)。開発は debug ビルド。**`--release` は性能計測と起動確認だけ**(release でないと QML = exe 埋め込みが反映されない)。以下 `cargo` / `cargo xtask` を省略。
+前提: Qt は `.qt-version` の版(xtask は Windows で `C:\Qt\<版>` を選び、PATH の別の版では組まない)+ C++ ツールチェーン(他 OS の環境は `ci/` が正)。開発は debug ビルド。**`--release` は性能計測と起動確認だけ**(release でないと QML = exe 埋め込みが反映されない)。以下 `cargo` / `cargo xtask` を省略。
 
 **確認は 3 段**: **1 日常** = <!--call:gate.daily-->`gate --host-only`(コンテナ無し)/ **2 反映前** = `gate`(差分の依存木と `verb-tiers.txt` の段で選んだテストを回し、緑を commit にスタンプ = `land` と git hook が要求)/ **3 フル** = `gate --all`(`periodic` のテストと全動詞を両 OS で回す。それ以外で回すのはユーザーがテストを指示した時だけ)+ <!--call:linux.bare-->`linux bare --discover` + 3OS CI + 性能実測(リリース前と依存・環境を触った時。**版(crate・Qt・最低 git)を動かす差分は `gate` 自身が段 3 の計画へ上がる**、残りは手で)。
 

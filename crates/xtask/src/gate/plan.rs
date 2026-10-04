@@ -118,11 +118,12 @@ fn harness() -> [String; 2] {
 }
 
 const DOCKERFILE: &str = "ci/linux/Dockerfile";
-/// Where Qt's version is pinned, for CI and the container alike.
-const CI: &str = ".github/workflows/ci.yml";
+/// Where Qt's version is pinned, for a desk, the container and CI alike
+/// (`qt::PIN`).
+const QT_PIN: &str = ".qt-version";
 /// What the container's image is built from (`linux::image_tag`), in the
 /// key of every step that runs in it: a new Qt is a new image.
-const IMAGE: [&str; 2] = [DOCKERFILE, CI];
+const IMAGE: [&str; 2] = [DOCKERFILE, QT_PIN];
 /// The dependency policy, which nothing in the source graph reads.
 const DENY: &str = "deny.toml";
 /// The crates the workspace `Cargo.toml` patches in (`[patch.crates-io]`):

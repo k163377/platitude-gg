@@ -400,30 +400,119 @@ some-other-project-target-a
 #[test]
 fn a_tag_a_checkout_that_is_behind_still_names_is_kept() {
     let listed = "\
-pgg-linux:app-3306fab788288e20
-pgg-linux:app-d3f3924bdfb2ec3c
-pgg-linux:app-0000000000000000
-pgg-linux:core-f12dad52a4b651e6
-pgg-linux:bare-3306fab788288e20
+pgg-linux:app.3306fab788288e20
+pgg-linux:app.d3f3924bdfb2ec3c
+pgg-linux:app.0000000000000000
+pgg-linux:core.f12dad52a4b651e6
+pgg-linux:bare.3306fab788288e20
 ";
     let keep: BTreeSet<String> = [
-        "pgg-linux:app-3306fab788288e20",
-        "pgg-linux:app-d3f3924bdfb2ec3c",
-        "pgg-linux:core-f12dad52a4b651e6",
-        "pgg-linux:bare-3306fab788288e20",
+        "pgg-linux:app.3306fab788288e20",
+        "pgg-linux:app.d3f3924bdfb2ec3c",
+        "pgg-linux:core.f12dad52a4b651e6",
+        "pgg-linux:bare.3306fab788288e20",
     ]
     .iter()
     .map(|tag| (*tag).to_string())
     .collect();
     assert_eq!(
         stale_images(listed, "app", &keep),
-        vec!["pgg-linux:app-0000000000000000"]
+        vec!["pgg-linux:app.0000000000000000"]
     );
     // A stage whose tag nobody names is a stage this leaves alone
     // entirely, and the prefix is what keeps `app` out of `bare`'s
     // answer: the two carry the same fingerprint.
     assert!(stale_images(listed, "core", &keep).is_empty());
     assert!(stale_images(listed, "bare", &keep).is_empty());
+}
+
+/// A tree with a pin file and a tree from before it name their images by
+/// two formulas, in two shapes: a dashed tag a seat that is behind still
+/// answers to stays, and one no tree's runner arrives at goes like any
+/// other.
+#[test]
+fn a_tree_from_before_the_pin_file_keeps_the_dashed_tag_its_runner_names() {
+    let yard = crate::yard::Yard::new("linux-tags");
+    let stand = |name: &str, files: &[(&str, &str)]| {
+        let tree = yard.join(name);
+        for (path, text) in files {
+            let at = tree.join(path);
+            std::fs::create_dir_all(at.parent().expect("a file under the tree")).expect("dir");
+            std::fs::write(at, text).expect("file");
+        }
+        tree
+    };
+    let shared = [
+        ("ci/linux/Dockerfile", "FROM ubuntu:24.04 AS core\n"),
+        ("rust-toolchain.toml", "[toolchain]\nchannel = \"stable\"\n"),
+    ];
+    let workflow = crate::qt::former_pin();
+    let ahead = stand(
+        "ahead",
+        &[
+            shared[0],
+            shared[1],
+            (crate::qt::PIN, "6.12.0\n"),
+            // A workflow that pins nothing, whatever else it says.
+            (workflow.as_str(), "jobs:\n"),
+        ],
+    );
+    let behind = stand(
+        "behind",
+        &[
+            shared[0],
+            shared[1],
+            (workflow.as_str(), "env:\n  QT_VERSION: \"6.12.0\"\n"),
+        ],
+    );
+
+    // Each by the formula its own runner has, as the keep set asks them.
+    let ours = tag_named_by(&ahead, "app").expect("the tree with a pin file");
+    let theirs = tag_named_by(&behind, "app").expect("the tree from before it");
+    // FNV-1a over the files' bytes, worked out apart from this crate: the
+    // former tag has to be the one a runner from before spells, to the
+    // digit, or its images are taken from under it.
+    assert_eq!(ours, "pgg-linux:app.76d8208b83d28ac8");
+    assert_eq!(theirs, "pgg-linux:app-5797d9df901044ed");
+    assert_eq!(
+        tag_named_by(&behind, "core").expect("core"),
+        "pgg-linux:core-ae6f466b6a1deea3"
+    );
+    // The keep set asks every tree, each its own way: both tags stand in
+    // it, and a tree that cannot say is named rather than skipped.
+    let (kept, silent) = tags_named_by_all(&[&ahead, &behind]);
+    assert!(silent.is_empty(), "{silent:?}");
+    for tag in [&ours, &theirs] {
+        assert!(kept.contains(tag), "{tag} is not kept: {kept:?}");
+    }
+    let nowhere = yard.join("nowhere");
+    let (_, silent) = tags_named_by_all(&[&ahead, &nowhere]);
+    assert_eq!(silent.len(), 1, "{silent:?}");
+    assert_eq!(silent[0].0, nowhere.as_path());
+    // Not a line of the workflow: an edit there names the same image.
+    std::fs::write(ahead.join(&workflow), "jobs:\n  test:\n").expect("an edited workflow");
+    assert_eq!(image_tag(&ahead, "app").expect("still"), ours);
+    // The pin is: a new Qt is a new image.
+    std::fs::write(ahead.join(crate::qt::PIN), "6.13.0\n").expect("a newer pin");
+    assert_ne!(image_tag(&ahead, "app").expect("moved"), ours);
+    // Core is built with no Qt, in either formula.
+    assert_eq!(
+        image_tag(&ahead, "core").expect("core").replace('.', "-"),
+        former_image_tag(&behind, "core").expect("core")
+    );
+
+    let listed = format!("{ours}\n{theirs}\npgg-linux:app-0000000000000000\n");
+    let keep: BTreeSet<String> = [ours.clone(), theirs.clone()].into();
+    assert_eq!(
+        stale_images(&listed, "app", &keep),
+        vec!["pgg-linux:app-0000000000000000"]
+    );
+    // Once no tree is behind, nothing names the dashed tag.
+    let keep: BTreeSet<String> = [ours.clone()].into();
+    assert_eq!(
+        stale_images(&listed, "app", &keep),
+        vec![theirs.as_str(), "pgg-linux:app-0000000000000000"]
+    );
 }
 
 /// A stage added to the Dockerfile and forgotten here is one whose images
@@ -485,9 +574,9 @@ fn mount_paths_are_forward_slashed() {
 }
 
 #[test]
-fn the_qt_version_comes_from_the_workflow() {
+fn the_qt_version_comes_from_the_trees_pin() {
     let root = crate::tree::workspace_root();
-    let version = qt_version(&root).expect("QT_VERSION in ci.yml");
+    let version = qt_version(&root).expect("the pin file at the tree's root");
     assert!(
         version.split('.').all(|part| part.parse::<u32>().is_ok()),
         "{version:?} does not look like a version"
