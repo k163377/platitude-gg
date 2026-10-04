@@ -276,9 +276,10 @@ Item {
             }
             const item = card.removeCopyItem
             if (!worktreeMenuTimer.press) {
-                // A greyed row says why on its hover alone, forced through the property the real hover writes.
-                item.tipForced = item.blocked
-                if (item.blocked && !item.ToolTip.visible)
+                // A greyed row says why on its hover alone, and a cut folder comes back whole on it.
+                // A row not on offer has no hover, and its folder no room to be cut in.
+                const wants = item.offered && (item.blocked || item.nameCut)
+                if (!Awaited.all("worktree_menu", { "tip_beside": driver.rowTipStood(item, wants) }))
                     return
                 worktreeMenuTimer.stop()
                 Harness.report("worktree_menu copy=" + worktreeMenuTimer.copy
@@ -294,8 +295,8 @@ Item {
                                   // Whether the folder came out whole: the row bids for it, and a bid a fraction
                                   // short elides it on one OS only (`AppMenuItem.implicitWidth`).
                                   + " cut=" + item.nameCut
-                                  // Last, because it is a sentence.
-                                  + " reason=" + item.blockedWhy)
+                                  // What the hover says. Last, because it is a sentence.
+                                  + " says=" + (item.ToolTip.visible ? item.ToolTip.text : ""))
                 driver.complete()
                 return
             }

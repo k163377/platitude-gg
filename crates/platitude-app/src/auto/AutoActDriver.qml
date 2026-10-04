@@ -107,6 +107,19 @@ Item {
             return false
         return tip.x + tip.width <= 0 || tip.x >= at.width
     }
+    /// Forces a menu row's tooltip through the property the real hover writes (`AppMenuItem.tipForced`), and says
+    /// whether it stands where a hand's would: up, beside the row. One that came out before the menu stood where the
+    /// hand would have raised it keeps the seat read off the row then (`SharedToolTip.targetAt`), so it is taken down
+    /// to come out again. True at once for a row that `wants` none.
+    function rowTipStood(row, wants) {
+        const tip = row.ToolTip.toolTip
+        if (row.tipForced && tip.visible && !driver.tipAside(tip)) {
+            row.tipForced = false
+            return false
+        }
+        row.tipForced = wants
+        return !wants || (row.ToolTip.visible && driver.tipAside(tip))
+    }
     /// Where a TAG card's rows reach, in the one report line both entrances' verbs say it with
     /// (`AutoActRefVerbs.reachWords`).
     function tagReachWords(card) {

@@ -219,20 +219,28 @@ pub(super) const TABLE: &[Verb] = &[
     // `--preset worktrees` (with and without a reason), a copy on a branch
     // and one on none. `held=false`: the row is a click; `cut=false`: the
     // folder came out whole, which a Linux font once missed by a pixel.
+    // `longnames`' copy is cut on purpose: its forced hover gives the whole
+    // line back. `says=` is the tip's text.
     Verb {
         name: "worktree-menu",
         when: &[
             (
+                Arg::Is("a-very-long-working-copy-folder-name"),
+                "worktree_menu copy=a-very-long-working-copy-folder-name card=true offered=true \
+                 blocked=false tip=true code=worktree remove branch=true held=false cut=true \
+                 says=worktree remove a-very-long-working-copy-folder-name",
+            ),
+            (
                 Arg::Is("hotfix"),
                 "worktree_menu copy=hotfix card=true offered=true blocked=true tip=true \
                  code=worktree remove branch=true held=false cut=false \
-                 reason=Locked — release run is using this checkout",
+                 says=Locked — release run is using this checkout",
             ),
             (
                 Arg::Is("spike"),
                 "worktree_menu copy=spike card=true offered=true blocked=true tip=true \
                  code=worktree remove branch=true held=false cut=false \
-                 reason=This working copy is locked",
+                 says=This working copy is locked",
             ),
             (
                 Arg::Is("detached"),
@@ -252,7 +260,7 @@ pub(super) const TABLE: &[Verb] = &[
         // No preset: a copy of `demo-repo worktrees` opened with `--repo`
         // is the one this tab stands in (verbs.md).
         plain: "card=true offered=true blocked=true tip=true code=worktree remove branch=true \
-                held=false cut=false reason=This tab is showing this working copy",
+                held=false cut=false says=This tab is showing this working copy",
     },
     // The same card from the graph: the row the copy stands on, its menu
     // aimed at the copy's folder chip (`detached`) or at the branch chip
