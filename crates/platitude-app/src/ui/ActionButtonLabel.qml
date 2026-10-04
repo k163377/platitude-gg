@@ -125,6 +125,11 @@ Item {
         btnLabel.phraseMates <= 0 ? 0
         : (btnLabel.mateFits ? mateFull.implicitWidth : btnLabel.cutMark) + phraseRow.spacing
 
+    /// Automation: where the plain word's baseline stands, in `item`'s y (`ActionButton.wordBase`).
+    function wordBase(item) {
+        return headText.mapToItem(item, 0, headText.baselineOffset).y
+    }
+
     implicitWidth: btnLabel.phrased ? phraseRow.implicitWidth
                    : btnLabel.folded ? 0
                    : btnLabel.headRun + (btnLabel.splitFlag ? flagRow.width : 0)

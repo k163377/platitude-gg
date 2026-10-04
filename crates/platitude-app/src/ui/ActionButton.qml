@@ -157,6 +157,12 @@ HoverToolButton {
     /// A press lands only with git off the network for this button.
     readonly property bool live: actionBtn.enabled && !actionBtn.busy
 
+    /// Automation: where the word's baseline stands, in `item`'s y. Buttons side by side are read as one line of words,
+    /// and two of different builds (one with the hold mark) are different depths (`DiffRowDelegate`'s hunk tools).
+    function wordBase(item) {
+        return (actionBtn.stacked ? stackLabel : btnLabel).wordBase(item)
+    }
+
     /// Automation: run the hold without a press, gated the way a hand's press is (`onDownChanged`). Answers whether it
     /// went in, so a run that met the button busy presses again later rather than filling a hold nothing can land.
     function completeHold() {

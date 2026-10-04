@@ -91,6 +91,10 @@ Rectangle {
 
     // Automation: the hunk's discard, `null` on every row without hunk tools (`hunkTools`).
     readonly property var discardButton: hunkTools.item ? hunkTools.item.discardButton : null
+    /// …and how far apart the heading's two words stand, -1 on a row that is no heading.
+    function hunkWordsApart() {
+        return hunkTools.item ? hunkTools.item.wordsApart() : -1
+    }
 
     // ---- the marks, read once -----------------------------------------------------------------------------------
     readonly property var ownMarks: diffRow.marks.own
@@ -440,6 +444,13 @@ Rectangle {
         z: 2
         sourceComponent: Row {
             readonly property alias discardButton: discardHunkButton
+            /// Automation: how far apart the two words stand, baseline to baseline (`PGG_AUTO_ACT=hunk-tools`) — the
+            /// hold mark makes one button deeper than the other, by an amount the face decides. Nothing on the staged
+            /// side, which has the one word.
+            function wordsApart() {
+                return diffRow.staged ? 0
+                    : Math.abs(discardHunkButton.wordBase(diffRow) - stageHunkButton.wordBase(diffRow))
+            }
             spacing: Theme.spaceXs
             // Unstaged side only: on the staged side, unstaging puts the hunk back where it can be discarded. Held
             // (デザイン規約 §長押し), with no ask bar — it stands in the heading of what it takes. Shaped like a held menu
@@ -463,6 +474,10 @@ Rectangle {
             // The file rows' `+` / `−` colours, only under the pointer; at rest `textSecondary`, the `@@` line's own
             // (デザイン規約 §diff の中のステージ).
             ActionButton {
+                id: stageHunkButton
+                // As deep as the held button beside it, so the two words stand on one line: the hold mark makes that
+                // one the deeper (by an amount the face decides), and a `Row` sets its children by their tops.
+                height: discardHunkButton.visible ? discardHunkButton.height : stageHunkButton.implicitHeight
                 text: diffRow.staged ? qsTr("Unstage hunk") : qsTr("Stage hunk")
                 font.pixelSize: Theme.fontSm
                 tone: !diffRow.underPointer ? Theme.textSecondary
