@@ -708,10 +708,15 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Is("filter"),
                 "open=false lit=false box=false menu=false rows=0",
             ),
-            // A menu raised from the open lines keeps the row open — it is
-            // what the menu is about; `menu` above is the pair that closes.
+            // A menu raised on the open row — its lines, or its own line —
+            // keeps the row open: it is what the menu is about; `menu`
+            // above is the pair that closes.
             (
                 Arg::Is("rightclick"),
+                "open=true lit=true box=false menu=true",
+            ),
+            (
+                Arg::Is("rightclick-name"),
                 "open=true lit=true box=false menu=true",
             ),
             // A drag over the lines copies and the row hears nothing (its

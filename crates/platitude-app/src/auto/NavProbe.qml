@@ -125,6 +125,15 @@ QtObject {
             lines.handClicked(Qt.RightButton, Qt.NoModifier)
             return
         }
+        if (what === "rightclick-name") {
+            // The row's own line, through the three handlers a right press reaches there in order
+            // (`NavItemDelegate.itemMouse`): the press and release answer nothing for it, the click raises the menu.
+            const open = probe.listOf(kind).itemAtIndex(row)
+            open.linePressed(Qt.RightButton, open.width / 2, open.lineHeight / 2)
+            open.lineReleased()
+            open.lineClicked(Qt.RightButton, Qt.NoModifier)
+            return
+        }
         if (what === "sweep" || what === "tap") {
             // The sweep runs the first line from its head: one started mid-word takes half a word. The tap goes in at
             // the foot, under the last line's band: a line that goes somewhere takes clicks end to end

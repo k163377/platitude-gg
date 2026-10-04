@@ -90,8 +90,8 @@ Item {
             openHeldTimer.start()
         } else if (act === "nav-open-then") {
             // The open row, then the hand's next move: `away` leaves it, `edit` opens the name box on that row, `menu`
-            // opens a menu elsewhere, `filter` types a filter that takes the row out, and `rightclick` / `sweep` /
-            // `tap` act on the open lines themselves.
+            // opens a menu elsewhere, `filter` types a filter that takes the row out, `rightclick-name` raises the
+            // row's menu on its own line, and `rightclick` / `sweep` / `tap` act on the open lines themselves.
             navTipTimer.opens = true
             navTipTimer.then = arg
             navTipTimer.begin("branch:2")
