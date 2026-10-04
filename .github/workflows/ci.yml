@@ -78,14 +78,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # rust-toolchain.toml is the pin. The image's own toolchains are
-      # brought to their channels' tips first, so the stable a desk already
-      # builds with is never newer than this one.
+      # rust-toolchain.toml names the version; the image's own toolchains
+      # are left as they are.
       - &rust
         name: Rust toolchain
-        run: |
-          rustup update --no-self-update
-          rustup toolchain install --no-self-update
+        run: rustup toolchain install --no-self-update
       - &linux-deps
         name: Install Linux build deps
         if: runner.os == 'Linux'

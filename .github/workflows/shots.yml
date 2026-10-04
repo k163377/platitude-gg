@@ -78,9 +78,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Rust toolchain
-        run: |
-          rustup update --no-self-update
-          rustup toolchain install --no-self-update
+        run: rustup toolchain install --no-self-update
       - name: Qt
         uses: ./.github/actions/qt
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
