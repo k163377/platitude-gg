@@ -208,6 +208,9 @@ Item {
             if (AppBackend.gitPathState === "" || AppBackend.gitPathState === "checking")
                 return
             gitPathTimer.stop()
+            // The write the way out makes, with the screen still up for the picture: the file a seeded run started
+            // from is read after the run for the spelling it keeps (`verify::seed`).
+            settingsDialog.applyFields()
             Harness.report("git_path " + acts.appPane.gitPathTally())
             window.finishAutoAct()
         }

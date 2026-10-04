@@ -34,6 +34,11 @@ pub(super) struct Outcome {
     /// waited for the save (`quit-save-held`,
     /// `super::shim::held_save_landed`). `None` for every other verb.
     pub(super) held_save_landed: Option<bool>,
+    /// Whether the git path a seeded settings file held is still there as
+    /// written once the app has ended — the box writes back only a value
+    /// that moved (`settings-git-path stored-missing`,
+    /// `super::seed::stored_path_kept`). `None` for every other run.
+    pub(super) stored_path_kept: Option<bool>,
 }
 
 impl Outcome {
@@ -47,6 +52,7 @@ impl Outcome {
             && !self.store_refused
             && (self.must_say.is_none() || self.said)
             && self.held_save_landed.is_none_or(|landed| landed)
+            && self.stored_path_kept.is_none_or(|kept| kept)
     }
 
     /// Whether the failing writes are what the verdict turns on — the one
@@ -56,12 +62,14 @@ impl Outcome {
     }
 }
 
-/// What the run's own lines make of it — and, for the one verb that has
-/// one, what the witness on disk says (`config` is the run's gitconfig).
+/// What the run's own lines make of it — and, for the runs that have one,
+/// what the witness on disk says (`config` is the run's gitconfig,
+/// `config_dir` its settings directory).
 pub(super) fn judge(
     opts: &super::options::Options,
     ran: &super::child::Ran,
     config: &std::path::Path,
+    config_dir: &std::path::Path,
 ) -> Outcome {
     let (status, err_lines, out_lines, timed_out) =
         (&ran.status, &ran.err_lines, &ran.out_lines, ran.timed_out);
@@ -102,6 +110,7 @@ pub(super) fn judge(
                 .any(|l| l.contains(wanted))
         }),
         held_save_landed: super::shim::held_save_landed(&opts.verb, config),
+        stored_path_kept: super::seed::stored_path_kept(&opts.verb, &opts.arg, config_dir),
     }
 }
 
@@ -208,18 +217,7 @@ pub(super) fn announce(
              whether it should have or not."
         );
     }
-    // Said either way, so a reader knows what the pass read.
-    match outcome.held_save_landed {
-        Some(true) => println!(
-            "  witness on disk: the identity the held save wrote is in the run's gitconfig \
-             — the exit waited for the save"
-        ),
-        Some(false) => println!(
-            "  witness on disk: the identity the held save wrote is NOT in the run's gitconfig \
-             — the process ended without waiting for the save, or the save did not land"
-        ),
-        None => {}
-    }
+    say_the_witnesses_on_disk(outcome);
     if outcome.watchdog_expired {
         say_the_watchdog(shot_dir, ran, outcome);
     }
@@ -257,6 +255,33 @@ pub(super) fn announce(
         Ok(())
     } else {
         Err(format!("verify-ui {} failed", opts.verb))
+    }
+}
+
+/// What the files a run left say, for the runs that have such a witness.
+/// Said either way, so a reader knows what the pass read.
+fn say_the_witnesses_on_disk(outcome: &Outcome) {
+    match outcome.held_save_landed {
+        Some(true) => println!(
+            "  witness on disk: the identity the held save wrote is in the run's gitconfig \
+             — the exit waited for the save"
+        ),
+        Some(false) => println!(
+            "  witness on disk: the identity the held save wrote is NOT in the run's gitconfig \
+             — the process ended without waiting for the save, or the save did not land"
+        ),
+        None => {}
+    }
+    match outcome.stored_path_kept {
+        Some(true) => println!(
+            "  witness on disk: the git path the run's settings file was seeded with is there \
+             as written — the box wrote back nothing it only respelled"
+        ),
+        Some(false) => println!(
+            "  witness on disk: the git path the run's settings file was seeded with is NOT \
+             there as written — the box wrote back its own spelling of a value that never moved"
+        ),
+        None => {}
     }
 }
 
@@ -298,6 +323,7 @@ mod tests {
         must_say: None,
         said: true,
         held_save_landed: None,
+        stored_path_kept: None,
     };
 
     #[test]
@@ -333,6 +359,26 @@ mod tests {
         };
         assert!(!left.passed());
         assert!(WELL.passed(), "and every other verb has no such witness");
+    }
+
+    /// A run whose every line held and whose settings file lost the seeded
+    /// spelling wrote the screen's back — what the run is there to catch.
+    #[test]
+    fn the_stored_paths_witness_on_disk_decides_where_it_exists() {
+        assert!(
+            Outcome {
+                stored_path_kept: Some(true),
+                ..WELL
+            }
+            .passed()
+        );
+        assert!(
+            !Outcome {
+                stored_path_kept: Some(false),
+                ..WELL
+            }
+            .passed()
+        );
     }
 
     /// Waiting out the watchdog to discover it would cost the whole

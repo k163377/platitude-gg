@@ -18,15 +18,14 @@ pub(super) fn config(
     // the screen asks a path for its version before storing it
     // (`Hub::resolve_git` falls back to `PATH`; the chapter is the only
     // place that says so).
-    if verb == "settings-git-path" && arg == "stored-missing" {
+    if is_stored_missing(verb, arg) {
         let settings = config_dir.join("settings.toml");
-        // Forward slashes: this is TOML, where a Windows path's
-        // separators would be escapes.
-        let gone = config_dir.join("no-such-git.exe").display().to_string();
-        let gone = gone.replace('\\', "/");
+        let gone = missing_git(config_dir);
+        // Doubled, since in a TOML string a lone `\` is an escape.
+        let escaped = gone.replace('\\', r"\\");
         std::fs::write(
             &settings,
-            format!("version = 1\n\n[defaults]\ngit_path = \"{gone}\"\n"),
+            format!("version = 1\n\n[defaults]\ngit_path = \"{escaped}\"\n"),
         )
         .map_err(|e| format!("could not write {}: {e}", settings.display()))?;
         println!("seeded settings: a git that is not there ({gone})");
@@ -95,6 +94,33 @@ pub(super) fn config(
     Ok(())
 }
 
+fn is_stored_missing(verb: &str, arg: &str) -> bool {
+    verb == "settings-git-path" && arg == "stored-missing"
+}
+
+/// The path `stored-missing` seeds: nothing there, spelled with the OS's
+/// own separators as a hand writes the file. The screen shows them as `/`
+/// (`native=false`) and the file is to keep them ([`stored_path_kept`]).
+fn missing_git(config_dir: &Path) -> String {
+    config_dir.join("no-such-git.exe").display().to_string()
+}
+
+/// Whether the path `stored-missing` seeded is still in the run's
+/// settings file as it was written, read once the app has ended; `None`
+/// for every other run. The run makes the way out's write before it
+/// reports, so a box that wrote its screen spelling back shows here — the
+/// report itself only holds what the screen holds. Either TOML string
+/// form counts, in case a save rewrote the file with the value intact.
+pub(super) fn stored_path_kept(verb: &str, arg: &str, config_dir: &Path) -> Option<bool> {
+    if !is_stored_missing(verb, arg) {
+        return None;
+    }
+    let gone = missing_git(config_dir);
+    let escaped = gone.replace('\\', r"\\");
+    let text = std::fs::read_to_string(config_dir.join("settings.toml")).unwrap_or_default();
+    Some(text.contains(&format!("\"{escaped}\"")) || text.contains(&format!("'{gone}'")))
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -131,6 +157,50 @@ mod tests {
             settings.contains("auto_fetch_minutes = 0"),
             "the seeded settings turn the fetching off: {settings}"
         );
+    }
+
+    /// The witness reads the value, not the file's bytes: a save that kept
+    /// it in TOML's other string form passes, one that respelled it fails.
+    #[test]
+    fn the_stored_path_witness_reads_the_seeded_spelling_back() {
+        let dir = config_dir("seed-stored-missing");
+        super::config(&dir, "settings-git-path", "stored-missing", &[])
+            .expect("the seed is written");
+        assert_eq!(
+            super::stored_path_kept("settings-git-path", "stored-missing", &dir),
+            Some(true),
+            "the seed as written"
+        );
+        assert_eq!(super::stored_path_kept("settings-git-path", "", &dir), None);
+        assert_eq!(
+            super::stored_path_kept("settings-escape", "stored-missing", &dir),
+            None
+        );
+
+        let gone = super::missing_git(&dir);
+        let settings = dir.join("settings.toml");
+        let rewrite = |value: &str| {
+            std::fs::write(
+                &settings,
+                format!("version = 1\n\n[defaults]\ngit_path = {value}\n"),
+            )
+            .expect("the file is rewritten");
+            super::stored_path_kept("settings-git-path", "stored-missing", &dir)
+        };
+        assert_eq!(
+            rewrite(&format!("'{gone}'")),
+            Some(true),
+            "a literal string keeps the value"
+        );
+        assert_eq!(rewrite("\"\""), Some(false), "an emptied box written back");
+        if cfg!(windows) {
+            let slashed = gone.replace('\\', "/");
+            assert_eq!(
+                rewrite(&format!("\"{slashed}\"")),
+                Some(false),
+                "the screen's spelling written back"
+            );
+        }
     }
 
     #[test]

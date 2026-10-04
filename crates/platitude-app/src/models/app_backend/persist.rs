@@ -81,11 +81,13 @@ impl AppBackend {
     ///
     /// Only a value that moved is asked again: re-asking withdraws the
     /// standing restart offer until the answer returns
-    /// ([`Self::settle_restart_offer`]).
+    /// ([`Self::settle_restart_offer`]). Nor is one that did not move
+    /// written: the held value is the file's with the screen's separators,
+    /// and the way out of the screen writes every box back.
     ///
     /// Trimmed here as well as when read from the file
-    /// (`settings::toml::text`), so the box and the file agree before the
-    /// first save.
+    /// (`settings::toml::text`), so the box and the file agree, separators
+    /// aside, before the first save.
     pub(super) fn apply_git_path(&mut self, path: &str) {
         let path = path.trim();
         if self.git_path == path {

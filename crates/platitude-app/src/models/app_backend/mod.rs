@@ -118,9 +118,10 @@ pub struct AppBackend {
     /// What an empty input falls back to and shows as its placeholder
     /// (`session::DEFAULT_LOG_LIMIT`).
     initial_commits_default: i32,
-    /// The git this computer runs, as the settings file holds it: a path,
-    /// or empty for whichever one `PATH` resolves. Application-wide: it is
-    /// about the machine.
+    /// The git this computer runs, as the settings file holds it but with
+    /// the screen's separators (`urlpath::shown_path`): a path, or empty
+    /// for whichever one `PATH` resolves. Application-wide: it is about
+    /// the machine.
     git_path: String,
     /// What the git at [`Self::git_path`] last answered: "checking" while
     /// asked, then "ok" / "old" / "missing" / "failed" ([`version::Probe`]).
@@ -145,8 +146,8 @@ pub struct AppBackend {
     /// `Main.qml`, whose close is the one road out.
     restart_wanted: bool,
     /// Where the git this run spawns is — what the box shows behind an
-    /// empty value. Constant: the binary is settled for the run
-    /// (`Hub::git_program`).
+    /// empty value, with the screen's separators. Constant: the binary is
+    /// settled for the run (`Hub::git_program`).
     git_path_in_use: String,
     /// Assigned pictures (`Assignment`). Only the settings list reads it,
     /// and it is a handful of rows.

@@ -162,9 +162,13 @@ ColumnLayout {
     /// The git box's state in one reading — shown, stored, and what the binary said — none of it readable off a
     /// picture. Automation-only, the same exposure as `GraphPane.view` (rules-refs/app-ui.md).
     function gitPathTally() {
-        // The four flags stay together, ahead of `state=`: each verb-table row claims a run of them as one substring
-        // (`verify::verbs`). `answered` folds `ok` and `old` so the supported minimum and the newest git read alike.
+        // The six flags stay together, ahead of `state=`: each verb-table row claims a run of them as one substring
+        // (`verify::verbs`). `named` is a placeholder there at all — `native` alone passes an empty one. `native` is a
+        // backslash in what the box shows, its value or its placeholder (規約 §パスの区切り). `answered` folds `ok` and
+        // `old` so the supported minimum and the newest git read alike.
         return "shown=" + gitPathField.text + " stored=" + AppBackend.gitPath
+             + " named=" + (gitPathField.placeholderText !== "")
+             + " native=" + (gitPathField.text.includes("\\") || gitPathField.placeholderText.includes("\\"))
              + " answered=" + (AppBackend.gitPathState === "ok" || AppBackend.gitPathState === "old")
              + " offers=" + AppBackend.gitPathOffersRestart
              + " held=" + pane.gitButtonRestarts
@@ -295,7 +299,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 choosing: true
                 // What an empty box is read as: the resolved path, since "the git on PATH" is nowhere a reader can
-                // look (規約 §設定の画面).
+                // look (規約 §設定の画面). Spelled with `/` where it comes in (規約 §パスの区切り).
                 placeholderText: AppBackend.gitPathInUse
                 onPicking: pane.openGitPicker()
             }

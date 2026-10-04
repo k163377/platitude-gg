@@ -90,20 +90,30 @@ pub(super) const TABLE: &[Verb] = &[
     // A path with nothing at its end must be refused as *missing*, not as
     // "it ran and said something else"; `offers=false` keeps the loud
     // button away.
+    //
+    // Every row says `named=true native=false`: the box has a placeholder,
+    // and no backslash in its value or that placeholder, on Windows too —
+    // the placeholder is the OS's path, and `stored-missing` seeds the
+    // file with the OS's separators. That the file keeps them through the
+    // way out's write is read off the file after the run
+    // (`super::super::seed::stored_path_kept`).
     Verb {
         name: "settings-git-path",
         when: &[
-            (Arg::Is(""), "git_path shown= stored= answered=true"),
+            (
+                Arg::Is(""),
+                "git_path shown= stored= named=true native=false answered=true offers=false held=false restart=false",
+            ),
             (
                 Arg::Is("in-use"),
-                "answered=true offers=false held=false restart=false",
+                "named=true native=false answered=true offers=false held=false restart=false",
             ),
             (
                 Arg::Is("other"),
-                "answered=true offers=true held=true restart=false",
+                "named=true native=false answered=true offers=true held=true restart=false",
             ),
         ],
-        plain: "answered=false offers=false held=false restart=false state=missing",
+        plain: "named=true native=false answered=false offers=false held=false restart=false state=missing",
     },
     // The process chapter's two boxes, typed and read back off the store
     // (the tick reads the interval in a unit no box shows). With no

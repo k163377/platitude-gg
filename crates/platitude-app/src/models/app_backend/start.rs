@@ -132,7 +132,13 @@ impl Default for AppBackend {
                 .map_or(0, |count| i32::try_from(count).unwrap_or(i32::MAX)),
             initial_commits_min: platitude_core::session::MIN_LOG_LIMIT as i32,
             initial_commits_default: platitude_core::session::DEFAULT_LOG_LIMIT as i32,
-            git_path: Hub::with(|hub| hub.settings().defaults.git_path.clone()).unwrap_or_default(),
+            // Spelled for the screen where it comes in: a file written by
+            // hand can hold `\`. The file keeps its own spelling — the box
+            // writes back only a value that moved (`apply_git_path`).
+            git_path: Hub::with(|hub| {
+                crate::urlpath::shown_path(&hub.settings().defaults.git_path)
+            })
+            .unwrap_or_default(),
             git_path_on_path: Hub::with(|hub| hub.path_program()).unwrap_or_default(),
             git_path_offers_restart: false,
             git_path_names_the_run: false,
@@ -142,7 +148,9 @@ impl Default for AppBackend {
             git_path_state: String::new(),
             git_path_version: String::new(),
             git_path_error: String::new(),
-            git_path_in_use: Hub::with(|hub| hub.git_program().to_string()).unwrap_or_default(),
+            // The OS's spelling, out of `PATH` or the settings file.
+            git_path_in_use: Hub::with(|hub| crate::urlpath::shown_path(hub.git_program()))
+                .unwrap_or_default(),
             avatars: assignments(),
             avatar_error_kind: String::new(),
             avatar_error_facts: Vec::new(),

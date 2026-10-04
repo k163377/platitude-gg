@@ -250,7 +250,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         repos: &repos,
         opts: &opts,
     })?;
-    let verdict = outcome::judge(&opts, &ran, &config);
+    let verdict = outcome::judge(&opts, &ran, &config, &config_dir);
     let census = if verdict.passed() {
         settle_a_pass(&root, &opts, &ran, beside.as_deref())
     } else {
