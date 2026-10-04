@@ -719,9 +719,13 @@ const TAIL: &str = "  shipped [--no-build]
       build's hooks have been quiet for ten minutes steps down while a
       holder of a build in use — or, when every build is quiet, of a
       higher revision — stands; the last one standing never does. The
-      directory's lock is held for its files alone. Prints the claims
-      as written, each holder's last verdict, when its build's hooks
-      last ran, and what it last made of the desktop app's log.
+      directory's lock is held for its files alone. The holders keep
+      what each asked for, when, and on whose account in .awake/history
+      — a line each time a verdict or the claims it stands on change —
+      for a sleep, or the want of one, to be set against afterwards.
+      Prints the claims as written, each holder's last verdict, when
+      its build's hooks last ran, the last line it wrote in the
+      history, and what it last made of the desktop app's log.
 
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads

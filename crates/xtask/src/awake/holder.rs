@@ -6,7 +6,33 @@ use std::path::Path;
 /// How long the holder goes without reading the claims when none changes:
 /// how late it sees a process start or end, or a transcript grow.
 #[cfg(windows)]
-const TICK: std::time::Duration = std::time::Duration::from_secs(15);
+pub(super) const TICK: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// While the machine is held, how far apart the readings an event asks for
+/// — a claim rewritten, the desktop app's log written — begin, once the
+/// allowance of [`BURST`] is spent. A reading then can only let go, and
+/// letting go can wait; every hook of every session at work rewrites a
+/// claim, and a reading for each is the holder reading without a pause for
+/// as long as any session works. While the machine is not held, no reading
+/// waits: a hold cannot. The tick's readings are not paced, so the holder
+/// beats at least every [`TICK`] and [`PACE`] together — inside
+/// [`HOLDER_STALE`](super::HOLDER_STALE). Kept on a clock that only runs
+/// forward: the system's is set, and set back.
+#[cfg(windows)]
+pub(super) const PACE: std::time::Duration = std::time::Duration::from_secs(5);
+/// The readings a quiet holder answers at once before it paces them, so a
+/// lone turn's stop lets go as it is written; one is earned back each
+/// [`PACE`]. Counted in readings, not in hooks: a hook writes its claim
+/// more than once, and the watcher tells a write's time and its size
+/// apart.
+#[cfg(windows)]
+pub(super) const BURST: u32 = 60;
+
+/// The size the history (`history`) is cut back from, to its newer half:
+/// room for weeks of turns, so a look back over several days finds them
+/// all.
+#[cfg(windows)]
+pub(super) const HISTORY_BYTES: u32 = 4 * 1024 * 1024;
 
 /// `SetThreadExecutionState` flags, written in decimal: PowerShell reads
 /// a hex literal with the top bit set as a negative `Int32`.
@@ -48,7 +74,18 @@ const DELEGATED: &str = "'Agent', 'Task'";
 /// hooks and no other holder wait on it. It reads whenever a claim changes
 /// (the watcher's events queue while a reading runs, so none is missed)
 /// and at least every tick, for what no file says — a process starting or
-/// ending, a transcript growing. It drops the claims whose Claude process
+/// ending, a transcript growing. While it holds the machine, the readings
+/// an event asks for are paced ([`PACE`], past a [`BURST`]): the one thing
+/// such a reading can change is to let go. A transcript's tail is read
+/// again only once the file has grown or been rewritten, so the claim of
+/// a session left open and idle costs a reading no transcript. The
+/// processes are listed (`processes`) twice a reading at most: as it
+/// begins, for the claims' owners, and — once every transcript is read —
+/// for the children of the owners with a shell call. A call's process is
+/// older than the call's result, so the listing its children are read
+/// from must be the younger of the two: one made before the transcripts
+/// would show a call ended with no process, and forget it while its
+/// process runs. It drops the claims whose Claude process
 /// is gone and the tool calls that ended with no process left, names
 /// itself at every reading with its verdict (`holding` / `released`) and
 /// the time, in milliseconds on the system's precise clock, it copied the
@@ -64,6 +101,21 @@ const DELEGATED: &str = "'Agent', 'Task'";
 /// Claude process too. Compatible holder revisions share activity records.
 /// An unknown claim format is left to its own holder and never rewritten.
 /// Files are read as UTF-8, as the hooks write them.
+///
+/// Its name says only what it asks for now. What it asked for, when, and
+/// on whose account goes into `history`, the one file every revision's
+/// holder writes, under the lock: a line each time the verdict changes or
+/// the claims it holds for do — `<ms> r<revision> <pid> holding
+/// <reasons>`, `… released -`, and `… quit -` as it ends, whichever way.
+/// The reasons are sorted and set apart by commas: `turn:<session>` (a
+/// reply or a call of the session's or of a subagent's counts),
+/// `process:<session>` (a shell call's process runs and no `turn` of that
+/// session counts — past its stop, or let through a prompt) and
+/// `wake:<session>` (a wake-up scheduled); `-` stands for a hold kept
+/// because the claims changed under the reading. They change with a
+/// turn's start and end, not with each call. A line that could not be
+/// written is written at the next reading. The file is cut back to its
+/// newer half at [`HISTORY_BYTES`].
 ///
 /// A file another process holds open — a scanner, a reader that lets
 /// others only read — costs a reading at most, never the holder's run: a
@@ -109,7 +161,7 @@ const DELEGATED: &str = "'Agent', 'Task'";
 /// the claim works already moves only its time. A subagent's transcript is
 /// not read for an interruption: what a subagent does after one is not
 /// known, and it may reply on.
-// waits(paced): the lock's retry — `FileStream.Lock` has no blocking form
+// waits(paced): the lock's retry — `FileStream.Lock` has no blocking form — and a held machine's readings, spaced by `PACE` on a clock that only runs forward
 #[cfg(windows)]
 pub(super) const SCRIPT: &str = r#"$ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
@@ -119,6 +171,7 @@ public static class PggAwake {
   [DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint flags);
   [DllImport("kernel32.dll")] static extern void GetSystemTimePreciseAsFileTime(out long time);
   public static long Now() { long time; GetSystemTimePreciseAsFileTime(out time); return (time - 116444736000000000L) / 10000; }
+  public static long Ticks() { return System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 1000); }
 }
 '@
 $dir = '@DIR@'
@@ -132,6 +185,11 @@ $holding = $false
 $previous = 0
 $applied = 0
 $readat = 0
+$told = $null
+$toldWhy = ''
+$paced = [int64]0
+$script:tails = @{}
+@PROCESSES@
 @DESKTOP@
 $desktopPath = [IO.Path]::Combine("$env:LOCALAPPDATA", 'Claude', 'logs', 'main.log')
 if (Test-Path -LiteralPath "$dir\desktop-log.path") { $desktopPath = [IO.File]::ReadAllText("$dir\desktop-log.path").Trim() }
@@ -165,20 +223,51 @@ function Exit-Lock($file) {
   $file.Unlock(0, 1)
   $file.Dispose()
 }
-function Read-Tail($path) {
-  if ((-not $path) -or ($path -eq '-') -or -not (Test-Path -LiteralPath $path)) { return @() }
+function Get-Stamp($line) {
+  if ($line -match '"timestamp":"([^"]+)"') { return [DateTimeOffset]::Parse($Matches[1]).ToUnixTimeMilliseconds() }
+  return [int64]0
+}
+function Read-Tail($path, $earlier) {
+  $tail = @{ Mark = ''; Lines = @(); Ended = @{}; Notice = [int64]0; Last = '' }
+  if ((-not $path) -or ($path -eq '-') -or -not (Test-Path -LiteralPath $path)) { return $tail }
   $stream = [IO.File]::Open($path, 'Open', 'Read', 'ReadWrite, Delete')
   try {
+    $tail.Mark = "$($stream.Length) $([IO.File]::GetLastWriteTimeUtc($path).Ticks)"
+    if ($earlier -and ($earlier.Mark -eq $tail.Mark)) { return $earlier }
     $start = [Math]::Max(0, $stream.Length - 262144)
     [void]$stream.Seek($start, 'Begin')
     $take = [int]($stream.Length - $start)
     $bytes = New-Object byte[] $take
-    return [Text.Encoding]::UTF8.GetString($bytes, 0, $stream.Read($bytes, 0, $take)) -split "`n"
+    $tail.Lines = [Text.Encoding]::UTF8.GetString($bytes, 0, $stream.Read($bytes, 0, $take)) -split "`n"
   } finally { $stream.Dispose() }
+  foreach ($line in $tail.Lines) {
+    if ($line -match '"type":"(user|assistant)"') { $tail.Last = $line }
+    if ($line -notmatch '"type":"user"') { continue }
+    if ($line -match $notice) { $tail.Notice = Get-Stamp $line }
+    $found = [regex]::Matches($line, '"tool_use_id":"([^"]+)"')
+    if ($found.Count -eq 0) { continue }
+    $at = Get-Stamp $line
+    foreach ($one in $found) { $tail.Ended[$one.Groups[1].Value] = $at }
+  }
+  return $tail
 }
 function Get-Tail($path) {
-  if (-not $script:tails.ContainsKey("$path")) { $script:tails["$path"] = @(Read-Tail $path) }
+  if (-not $script:tails.ContainsKey("$path")) { $script:tails["$path"] = Read-Tail $path $script:earlier["$path"] }
   return $script:tails["$path"]
+}
+function Get-Whose($base) {
+  return $base.Substring($base.IndexOf('.') + 1)
+}
+function Add-History($verdict, $reasons) {
+  $path = "$dir\history"
+  try {
+    [IO.File]::AppendAllText($path, "$([PggAwake]::Now()) r$revision $me $verdict $reasons`n")
+    if ((New-Object IO.FileInfo $path).Length -gt @HISTORY@) {
+      $all = [IO.File]::ReadAllText($path)
+      [IO.File]::WriteAllText($path, $all.Substring($all.IndexOf("`n", [int]($all.Length / 2)) + 1))
+    }
+    return $true
+  } catch [IO.IOException], [UnauthorizedAccessException] { return $false }
 }
 function Read-Word($path) {
   return [IO.File]::ReadAllText($path).Trim()
@@ -212,25 +301,6 @@ function Test-Retiring($nowms) {
   }
   return $false
 }
-function Get-Stamp($line) {
-  if ($line -match '"timestamp":"([^"]+)"') { return [DateTimeOffset]::Parse($Matches[1]).ToUnixTimeMilliseconds() }
-  return [int64]0
-}
-function Get-LastTurn($lines) {
-  for ($at = $lines.Length - 1; $at -ge 0; $at--) {
-    if ($lines[$at] -match '"type":"(user|assistant)"') { return $lines[$at] }
-  }
-  return ''
-}
-function Get-NoticeSince($lines, $since) {
-  for ($at = $lines.Length - 1; $at -ge 0; $at--) {
-    if ($lines[$at] -notmatch $notice) { continue }
-    $written = Get-Stamp $lines[$at]
-    if ($written -gt $since) { return $written }
-    return 0
-  }
-  return 0
-}
 function Get-Stop($transcript, $agent) {
   if ((-not $transcript) -or ($transcript -eq '-')) { return [int64]0 }
   $parent = [IO.Path]::GetDirectoryName([IO.Path]::GetDirectoryName($transcript)) + '.jsonl'
@@ -238,7 +308,7 @@ function Get-Stop($transcript, $agent) {
   $launch = ''
   if ((Test-Path -LiteralPath $meta) -and ((Read-Word $meta) -match '"toolUseId":"([^"]+)"')) { $launch = $Matches[1] }
   $stop = [int64]0
-  foreach ($line in Get-Tail $parent) {
+  foreach ($line in (Get-Tail $parent).Lines) {
     if ($line -notmatch '"type":"user"') { continue }
     $named = ($line -match $notice) -and $line.Contains("<task-id>$agent</task-id>")
     $answered = $launch -and $line.Contains("`"tool_use_id`":`"$launch`"") -and ($line -notmatch '"status":"async_launched"')
@@ -247,11 +317,8 @@ function Get-Stop($transcript, $agent) {
   return $stop
 }
 function Get-Children($owner) {
-  if (-not $script:kids.ContainsKey($owner)) {
-    $script:kids[$owner] = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$owner" |
-      Where-Object { $_.Name -ne 'conhost.exe' } |
-      ForEach-Object { ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() })
-  }
+  if ($null -eq $script:spawned) { $script:spawned = Get-Processes }
+  if (-not $script:kids.ContainsKey($owner)) { $script:kids[$owner] = @($script:spawned.Children($owner)) }
   return $script:kids[$owner]
 }
 try {
@@ -259,8 +326,11 @@ try {
     $nowms = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
     $now = [int64][Math]::Floor($nowms / 1000)
     $script:kids = @{}
+    $script:spawned = $null
+    $script:earlier = $script:tails
     $script:tails = @{}
     $keep = $holding
+    $why = @{}
     $seen = $null
     $minded = @{}
     $lock = Enter-Lock
@@ -279,6 +349,7 @@ try {
     if ($null -ne $seen) {
       try {
         $keep = $false
+        $script:processes = Get-Processes
         $entries = @()
         $known = @{}
         foreach ($pair in $seen) {
@@ -293,36 +364,30 @@ try {
             $changes += ,@($claim.FullName, $text, $null)
             continue
           }
-          $owner = [int]$word[1]
-          $process = Get-Process -Id $owner -ErrorAction SilentlyContinue
+          $owner = [uint32]$word[1]
           $mark = "$($claim.Name) $owner"
-          if (($null -eq $process) -or ($process.ProcessName -ne 'claude') -or
-              ($born.ContainsKey($mark) -and $born[$mark] -ne $process.StartTime)) {
+          $birth = [PggProcesses]::Born($owner)
+          if (-not $birth) { $birth = $born[$mark] }
+          if (($script:processes.Image($owner) -ne 'claude.exe') -or ($born[$mark] -and ($born[$mark] -ne $birth))) {
             $changes += ,@($claim.FullName, $text, $null)
             continue
           }
-          $known[$mark] = $process.StartTime
+          $known[$mark] = $birth
           $session, $who = $claim.BaseName -split '~', 2
           if (-not $who) { $who = '-' }
-          $entries += ,@($claim, $text, $word, $session, $who, @(Get-Tail $word[7]))
+          $entries += ,@($claim, $text, $word, $session, $who, (Get-Tail $word[7]))
         }
         $born = $known
         $ended = @{}
         $stopped = @{}
         foreach ($entry in $entries) {
-          $claim, $text, $word, $session, $who, $lines = $entry
+          $claim, $text, $word, $session, $who, $tail = $entry
           if (-not $ended.ContainsKey($session)) { $ended[$session] = @{}; $stopped[$session] = @{} }
-          foreach ($line in $lines) {
-            if ($line -notmatch '"type":"user"') { continue }
-            $found = [regex]::Matches($line, '"tool_use_id":"([^"]+)"')
-            if ($found.Count -eq 0) { continue }
-            $at = Get-Stamp $line
-            foreach ($one in $found) { $ended[$session][$one.Groups[1].Value] = $at }
-          }
+          foreach ($id in $tail.Ended.Keys) { $ended[$session][$id] = $tail.Ended[$id] }
         }
         $counted = @()
         foreach ($entry in $entries) {
-          $claim, $text, $word, $session, $who, $lines = $entry
+          $claim, $text, $word, $session, $who, $tail = $entry
           if ($who -ne '-') {
             $stop = Get-Stop $word[7] $who
             if ($stop -gt [int64]$word[2]) {
@@ -336,9 +401,9 @@ try {
         $calls = @{}
         $requests = @{}
         foreach ($entry in $counted) {
-          $claim, $text, $word, $session, $who, $lines = $entry
+          $claim, $text, $word, $session, $who, $tail = $entry
           if ($who -ne '-') { continue }
-          $owner = [int]$word[1]
+          $owner = [uint32]$word[1]
           $changed = $false
           if ($word[5] -ne '-') {
             $kept = @()
@@ -359,7 +424,7 @@ try {
                 if ($closed -ne 0) { $until = $closed + @SLACK@ }
                 foreach ($started in Get-Children $owner) { if (($started -ge $from) -and ($started -le $until)) { $running = $true } }
               }
-              if ($running) { $keep = $true }
+              if ($running) { $keep = $true; $why["process:$(Get-Whose $session)"] = $true }
               if ($running -or (([int64]$part[5] -eq 0) -and -not $answered)) { $kept += $call } else { $changed = $true }
             }
             $word[5] = '-'
@@ -373,10 +438,9 @@ try {
               $requests[$session][$server] = 1 + [int]$requests[$session][$server]
             }
           }
-          $began = Get-NoticeSince $lines ([int64]$word[2])
-          if ($began -gt 0) {
+          if ($tail.Notice -gt [int64]$word[2]) {
             $word[0] = 'working'
-            $word[2] = "$began"
+            $word[2] = "$($tail.Notice)"
             $changed = $true
           }
           if ($changed) { $changes += ,@($claim.FullName, $text, ("r$format " + (($word[0..7]) -join ' '))) }
@@ -386,17 +450,17 @@ try {
           foreach ($call in $calls[$session]) {
             $part=$call -split ':'
             if (([int64]$part[5] -eq 0) -and -not $ended[$session].ContainsKey($part[1])) {
-              $candidates += @{ Key="$session/$($part[0])/$($part[1])/$($part[4])"; Session=$session.Substring($session.IndexOf('.')+1); Part=$part }
+              $candidates += @{ Key="$session/$($part[0])/$($part[1])/$($part[4])"; Session=(Get-Whose $session); Part=$part }
             }
           }
         }
         Update-DesktopLog $desktop $candidates $nowms
         $runs = @{}
         foreach ($entry in $counted) {
-          $claim, $text, $word, $session, $who, $lines = $entry
-          if ([int64]$word[4] -gt $now) { $keep = $true }
+          $claim, $text, $word, $session, $who, $tail = $entry
+          if ([int64]$word[4] -gt $now) { $keep = $true; $why["wake:$(Get-Whose $session)"] = $true }
           if ($word[0] -ne 'working') { continue }
-          if (($who -eq '-') -and ((Get-LastTurn $lines) -match $interrupted)) { continue }
+          if (($who -eq '-') -and ($tail.Last -match $interrupted)) { continue }
           $open = @()
           foreach ($call in @($calls[$session])) {
             if (-not $call) { continue }
@@ -404,13 +468,13 @@ try {
             if (($part[0] -ne $who) -or ([int64]$part[5] -ne 0) -or $ended[$session].ContainsKey($part[1])) { continue }
             $open += ,$part
           }
-          $bare = $session.Substring($session.IndexOf('.') + 1)
+          $bare = Get-Whose $session
           foreach ($part in $open) {
             $starting = ($delegated -contains $part[2]) -and -not $minded[$bare]
             if ((-not (Get-DesktopAsked $desktop $session $part)) -and ($starting -or ($delegated -notcontains $part[2]))) { $runs[$session] = @($runs[$session]) + $part[2] }
           }
           $fresh = ($nowms - [int64]$word[2]) -lt @TTL@ * 1000
-          if (($open.Count -eq 0) -and $fresh) { $keep = $true }
+          if (($open.Count -eq 0) -and $fresh) { $keep = $true; $why["turn:$bare"] = $true }
         }
         foreach ($session in @($runs.Keys)) {
           $running = 0
@@ -423,7 +487,10 @@ try {
             if ($server) { $held[$server] = 1 + [int]$held[$server] } else { $running++ }
           }
           foreach ($server in $held.Keys) { $running += [Math]::Max(0, $held[$server] - $asking[$server]) }
-          if ($running -gt 0) { $keep = $true }
+          if ($running -gt 0) { $keep = $true; $why["turn:$(Get-Whose $session)"] = $true }
+        }
+        foreach ($reason in @($why.Keys)) {
+          if ($reason.StartsWith('process:') -and $why.ContainsKey("turn:$($reason.Substring(8))")) { $why.Remove($reason) }
         }
         $readat = $readms
       } catch [IO.IOException], [UnauthorizedAccessException] {
@@ -442,7 +509,7 @@ try {
             $file, $was = $pair
             if ((-not (Test-Path -LiteralPath $file.FullName)) -or ((Read-Word $file.FullName) -ne $was)) { $unchanged = $false; break }
           }
-          if (-not $unchanged) { $keep = $true; $changes = @(); $readat = 0 }
+          if (-not $unchanged) { $keep = $true; $changes = @(); $readat = 0; $why = @{} }
           foreach ($change in $changes) {
             $file, $was, $becomes = $change
             if ((Test-Path -LiteralPath $file) -and ((Read-Word $file) -eq $was)) {
@@ -459,17 +526,32 @@ try {
         }
         $verdict = 'released'
         if ($keep) { $verdict = 'holding' }
+        $reasons = '-'
+        if ($keep -and $why.Count) { $reasons = (@($why.Keys) | Sort-Object) -join ',' }
+        if ((($keep -ne $told) -or ($keep -and $why.Count -and ($reasons -ne $toldWhy))) -and (Add-History $verdict $reasons)) {
+          $told = $keep
+          $toldWhy = $reasons
+        }
         Write-Word $name "$me $verdict $readat $previous $applied"
         $transport='polling'
         if ($desktopWatch -and $desktopWatch.EnableRaisingEvents) { $transport='file-events' }
         Write-Word "$dir\desktop-r$revision" "$me $nowms $($desktop.Status) transport=$transport"
       } catch [IO.IOException], [UnauthorizedAccessException] { $keep = $holding }
     } finally { Exit-Lock $lock }
-    [void](Wait-Event -Timeout @TICK@)
+    $woken = Wait-Event -Timeout @TICK@
+    if ($holding -and $woken) {
+      $ahead = $paced - [PggAwake]::Ticks() - @BURST@ * @PACE@
+      if ($ahead -gt 0) { Start-Sleep -Milliseconds $ahead }
+      $paced = [Math]::Max($paced, [PggAwake]::Ticks()) + @PACE@
+    }
     Get-Event | Remove-Event
   }
 } finally {
   [void][PggAwake]::SetThreadExecutionState([uint32]@LET_GO@)
+  try {
+    $parting = Enter-Lock
+    try { [void](Add-History 'quit' '-') } finally { Exit-Lock $parting }
+  } catch [IO.IOException], [UnauthorizedAccessException] { }
   Close-DesktopLog $desktop
   if ($null -ne $desktopWatch) { $desktopWatch.Dispose() }
 }
@@ -480,6 +562,7 @@ try {
 #[cfg(windows)]
 pub(super) fn script(dir: &Path, reserved: u32) -> String {
     SCRIPT
+        .replace("@PROCESSES@", super::processes::SCRIPT)
         .replace("@DESKTOP@", super::desktop::SCRIPT)
         .replace("@DIR@", &dir.display().to_string().replace('\'', "''"))
         .replace("@RESERVED@", &reserved.to_string())
@@ -490,6 +573,9 @@ pub(super) fn script(dir: &Path, reserved: u32) -> String {
         .replace("@RETIRE@", &super::RETIRE_AFTER.as_secs().to_string())
         .replace("@STALE@", &super::HOLDER_STALE.as_secs().to_string())
         .replace("@TICK@", &TICK.as_secs().to_string())
+        .replace("@PACE@", &PACE.as_millis().to_string())
+        .replace("@BURST@", &BURST.to_string())
+        .replace("@HISTORY@", &HISTORY_BYTES.to_string())
         .replace("@SLACK@", &SPAN_SLACK_MS.to_string())
         .replace("@DELEGATED@", DELEGATED)
         .replace("@STARTS_PROCESSES@", STARTS_PROCESSES)

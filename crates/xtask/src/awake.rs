@@ -72,7 +72,9 @@
 //! have not — or, when every build's hooks are quiet, one of a higher
 //! revision: the holder of a build no session runs any more goes, the last
 //! one standing never does, and a hook of the build that went starts it
-//! again. Each hook stamps its build's `hooks-r<n>`.
+//! again. Each hook stamps its build's `hooks-r<n>`. A holder's name says
+//! what it asks for now; what each asked for before, and on whose account,
+//! is in the directory's `history`.
 //!
 //! Every change to the directory is made under its `lock`, by the hooks
 //! and the holders of every revision alike — a byte-range lock both sides
@@ -95,6 +97,7 @@ use crate::locks::Locked;
 mod claim;
 mod desktop;
 mod holder;
+mod processes;
 
 pub(crate) use claim::digest;
 use claim::{Claim, Writer};
@@ -143,6 +146,11 @@ const HOLDER: &str = "holder";
 /// runs the build, for its holder to step down by. The holder's script
 /// names it too.
 const HOOKS: &str = "hooks";
+/// The holders' record of their verdicts, every revision's in the one
+/// file: what each asked for, when, and on whose account, a line a change
+/// (`holder::SCRIPT` says which, and names the file too). A name says
+/// only what stands now.
+const HISTORY: &str = "history";
 const CLAIM: &str = "claim";
 /// What a hook reserving the holder's name writes after its own pid.
 const STARTING: &str = "starting";
@@ -158,7 +166,7 @@ const AGENT: char = '~';
 /// The holder implementation, independent of the activity protocol.
 /// A script change raises this; compatible builds still update the same
 /// claims, so a Stop or a question reaches every holder reading them.
-const REVISION: u32 = 4;
+const REVISION: u32 = 5;
 /// The shared activity protocol, including claim names and bodies. Do not
 /// raise this for a holder change: a protocol change needs a migration,
 /// not a second independent copy of a session's current state.
@@ -570,8 +578,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Each holder's name as it stands, when its build's hooks last ran, and
-/// its last reading of the desktop app's log.
+/// Each holder's name as it stands, when its build's hooks last ran, the
+/// last line it wrote in the history, and its last reading of the desktop
+/// app's log.
 fn show_holders(dir: &Path) {
     let mut holders: Vec<(String, String)> = std::fs::read_dir(dir)
         .into_iter()
@@ -608,10 +617,30 @@ fn show_holders(dir: &Path) {
             ),
             None => println!("  its build's hooks leave no stamp — it never steps down"),
         }
+        if let Some((at, said)) = last_told(dir, revision, pid) {
+            println!(
+                "  it last wrote in the history {}s ago: {said}",
+                now_ms().saturating_sub(at) / 1000
+            );
+        }
         if let Ok(seen) = std::fs::read_to_string(dir.join(format!("{DESKTOP_SEEN}{revision}"))) {
             println!("  desktop app's log, last read: {}", seen.trim());
         }
     }
+}
+
+/// The last line the holder of `revision` running as `pid` wrote in the
+/// history: when, in milliseconds since the epoch, and its verdict and
+/// reasons. Another holder's lines — a build's before this one, one that
+/// lost the name and quit after — are not its.
+fn last_told(dir: &Path, revision: &str, pid: &str) -> Option<(u64, String)> {
+    let text = std::fs::read_to_string(dir.join(HISTORY)).ok()?;
+    let writer = format!("r{revision} {pid} ");
+    text.lines().rev().find_map(|line| {
+        let (at, rest) = line.split_once(' ')?;
+        let said = rest.strip_prefix(&writer)?;
+        Some((at.parse().ok()?, said.to_string()))
+    })
 }
 
 /// `cargo xtask awake log on|off`: whether holders read the desktop app's

@@ -490,13 +490,14 @@ fn the_holder_asks_after_processes_and_transcripts_with_the_lock_let_go() {
             .expect("every lock taken is let go");
         let section = &held[..let_go];
         for slow in [
-            "Get-CimInstance",
+            "Get-Processes",
+            "PggProcesses",
+            "$script:processes",
+            "$script:spawned",
             "Get-Children",
-            "Get-Process",
             "Read-Tail",
             "Get-Tail",
             "Get-Stop",
-            "Get-NoticeSince",
         ] {
             assert!(
                 !section.contains(slow),
@@ -699,22 +700,19 @@ fn the_holder_s_command_fits_a_command_line() {
         line.len()
     );
 }
-/// The holder's script is pinned to its revision: a holder whose name
-/// beats serves every seat's compatible claims, so a script changed
-/// under the same revision leaves the old one running until its last claim
-/// goes.
+/// The holder's script is pinned to its revision, as a holder runs it —
+/// the fragments spliced in and the constants it is started with among
+/// them: a holder whose name beats serves every seat's compatible claims,
+/// so a script changed under the same revision leaves the old one running
+/// until its last claim goes.
 #[test]
 fn the_holder_s_script_is_pinned_to_its_revision() {
     assert_eq!(
         (
             crate::awake::REVISION,
-            digest(&format!(
-                "{}{}",
-                crate::awake::holder::SCRIPT,
-                crate::awake::desktop::SCRIPT
-            ))
+            digest(&crate::awake::holder::script(Path::new(r"C:\pgg"), 0))
         ),
-        (4, "8842f5f934a49a73".to_string()),
+        (5, "12ed9b6724e9886d".to_string()),
         "the holder's script changed: raise REVISION, then pin the new digest here"
     );
 }
@@ -804,6 +802,98 @@ fn a_working_claim_holds_until_its_claude_process_is_gone() {
     assert!(
         !holder_path(&dir).exists(),
         "the holder left its name behind"
+    );
+}
+
+/// What the history tells, in order: each line's verdict and reasons. A
+/// hold kept only because the claims changed under a reading
+/// (`holding -`) says nothing of its own: it is left out, and so is the
+/// line after it when that one only says again what stood before. Any
+/// other repeat stays — a holder that wrote a line a reading would show
+/// here.
+fn told(dir: &Path) -> Vec<String> {
+    let text = std::fs::read_to_string(dir.join(crate::awake::HISTORY)).expect("the history");
+    let mut told: Vec<String> = Vec::new();
+    let mut after_a_kept_hold = false;
+    for line in text.lines() {
+        let said = line
+            .splitn(4, ' ')
+            .nth(3)
+            .expect("a time, a revision and a pid, then what was asked");
+        if said == "holding -" {
+            after_a_kept_hold = true;
+            continue;
+        }
+        let again = told.last().map(String::as_str) == Some(said);
+        if !(after_a_kept_hold && again) {
+            told.push(said.to_string());
+        }
+        after_a_kept_hold = false;
+    }
+    told
+}
+
+/// The last line a holder wrote is its own: the status reads past the
+/// lines of another build's holder, and of one that held the name before
+/// and quit after.
+#[test]
+fn the_status_reads_a_holder_s_own_last_line() {
+    let dir = scratch("last-told");
+    std::fs::write(
+        dir.join(crate::awake::HISTORY),
+        "100 r5 7 holding turn:s\n200 r6 9 holding turn:s\n300 r5 8 holding turn:t\n400 r5 7 quit -\n",
+    )
+    .expect("a history");
+    let last = |revision, pid| crate::awake::last_told(&dir, revision, pid);
+    assert_eq!(last("5", "8"), Some((300, "holding turn:t".to_string())));
+    assert_eq!(last("5", "7"), Some((400, "quit -".to_string())));
+    assert_eq!(last("6", "9"), Some((200, "holding turn:s".to_string())));
+    assert_eq!(last("6", "7"), None, "another build's line was taken");
+}
+
+/// The holder beats at every reading, and goes a tick and then a pace
+/// between two at the most: inside what makes its name stale twice over,
+/// so no hook takes a holder that paces its readings for a dead one.
+#[test]
+fn a_paced_holder_beats_inside_what_makes_its_name_stale() {
+    use crate::awake::holder::{PACE, TICK};
+    assert!(
+        2 * (TICK + PACE) <= crate::awake::HOLDER_STALE,
+        "a tick of {TICK:?} and a pace of {PACE:?} against {:?}",
+        crate::awake::HOLDER_STALE
+    );
+}
+
+/// The holder's name says what it asks for now; its history keeps what it
+/// asked for and on whose account — a line each time the verdict or the
+/// claims it holds for change, and one as it quits — so a sleep, or a
+/// night without one, can be set against it afterwards.
+#[test]
+fn the_history_tells_each_verdict_and_whose_work_it_stood_on() {
+    let dir = scratch("history");
+    let claude = FakeClaude::start(&dir);
+    let pid = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt)
+        .expect("claimed")
+        .expect("a holder started");
+    assert_eq!(next_reading(&dir), holding());
+    apply(&dir, &claim_file("t"), &claude.hook(), Mark::Prompt).expect("another session");
+    assert_eq!(next_reading(&dir), holding());
+    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle).expect("one stops");
+    assert_eq!(next_reading(&dir), holding());
+    apply(&dir, &claim_file("t"), &claude.hook(), Mark::Idle).expect("the other stops");
+    assert_eq!(next_reading(&dir), released());
+    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Gone).expect("a claim goes");
+    apply(&dir, &claim_file("t"), &claude.hook(), Mark::Gone).expect("the last claim goes");
+    quit(pid);
+    assert_eq!(
+        told(&dir),
+        [
+            "holding turn:s",
+            "holding turn:s,turn:t",
+            "holding turn:t",
+            "released -",
+            "quit -"
+        ]
     );
 }
 

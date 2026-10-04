@@ -147,10 +147,20 @@ fn compatible_holders_apply_and_clear_real_windows_requests_together() {
     }
 }
 
-fn once(dir: &std::path::Path, revision: u32, during_query: &str) -> String {
+/// The shipped holder from its directory on — past the type it declares
+/// for itself — as a holder of `revision` in `dir` runs it, with
+/// `during_query` run each time it has listed the processes: once the
+/// claims are copied, and before anything is made of the listing.
+fn shipped(dir: &std::path::Path, revision: u32, during_query: &str) -> String {
     let source = crate::awake::holder::SCRIPT;
     let source = &source[source.find("$dir =").expect("the script's directory")..];
-    let body = source
+    let processes = format!(
+        "{}\n$listing = ${{function:Get-Processes}}\nfunction Get-Processes {{\n  \
+         $table = & $listing\n  {during_query}\n  return $table\n}}",
+        crate::awake::processes::SCRIPT
+    );
+    source
+        .replace("@PROCESSES@", &processes)
         .replace("@DESKTOP@", crate::awake::desktop::SCRIPT)
         .replace("@DIR@", &dir.display().to_string().replace('\'', "''"))
         .replace("@REVISION@", &revision.to_string())
@@ -169,20 +179,31 @@ fn once(dir: &std::path::Path, revision: u32, during_query: &str) -> String {
         .replace("@HOLD@", "2147483649")
         .replace("@LET_GO@", "2147483648")
         .replace("@TICK@", "15")
-        .replace("$holding = $false", "$holding = $true");
+        .replace(
+            "@PACE@",
+            &crate::awake::holder::PACE.as_millis().to_string(),
+        )
+        .replace("@BURST@", &crate::awake::holder::BURST.to_string())
+        .replace(
+            "@HISTORY@",
+            &crate::awake::holder::HISTORY_BYTES.to_string(),
+        )
+}
+
+/// The system's clocks, for the holder's own type in a probe: the time of
+/// day, and the one that only runs forward.
+const REAL_CLOCK: &str = "public static long Now() { return System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); } \
+     public static long Ticks() { return System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 1000); }";
+
+/// Runs `body` — the shipped holder — as the holder of `revision` in
+/// `dir`, with the OS request recorded in place of asked (`Last`), its
+/// clock read off `clock`, and the commands in `stubs` replaced; the probe
+/// ends where a stub throws `PROBE_END`, and answers what it printed.
+fn probe(dir: &std::path::Path, revision: u32, clock: &str, stubs: &str, body: &str) -> String {
     let script = format!(
         r#"$ErrorActionPreference = 'Stop'
-Add-Type 'public static class PggAwake {{ public static uint Last=2147483649; public static uint SetThreadExecutionState(uint flags) {{ Last=flags; return 1; }} public static long Now() {{ return System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); }} }}'
-function Get-CimInstance {{
-  param($ClassName, $Filter)
-  {during_query}
-  return @()
-}}
-function Wait-Event {{
-  param($Timeout)
-  [Console]::WriteLine('REQUEST=' + [PggAwake]::Last)
-  throw 'PROBE_END'
-}}
+Add-Type 'public static class PggAwake {{ public static uint Last=2147483649; public static uint SetThreadExecutionState(uint flags) {{ Last=flags; return 1; }} {clock} }}'
+{stubs}
 [IO.File]::WriteAllText('{}', "$PID")
 try {{
 {body}
@@ -206,6 +227,217 @@ try {{
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+/// One reading of a holder that asks for the machine as it starts, and
+/// what it asks for after it (`REQUEST=`).
+fn once(dir: &std::path::Path, revision: u32, during_query: &str) -> String {
+    let body =
+        shipped(dir, revision, during_query).replace("$holding = $false", "$holding = $true");
+    let stubs = "function Wait-Event {\n  param($Timeout)\n  \
+                 [Console]::WriteLine('REQUEST=' + [PggAwake]::Last)\n  throw 'PROBE_END'\n}";
+    probe(dir, revision, REAL_CLOCK, stubs, &body)
+}
+
+/// How far apart the claims of a probe's stream change, in milliseconds.
+const EVERY_MS: u64 = 100;
+
+/// What a holder makes of `events` claims changing [`EVERY_MS`] apart —
+/// one that asks for the machine as it starts (`held`), or not: how long
+/// it waited after each before it read again, on a clock only the changes
+/// and the waits move.
+fn stream(dir: &std::path::Path, held: bool, events: usize) -> Vec<u64> {
+    let mut body = shipped(dir, crate::awake::REVISION, "");
+    if held {
+        body = body.replace("$holding = $false", "$holding = $true");
+    }
+    // waits(measured): the stand-in for the holder's `Start-Sleep` — nothing sleeps; the wait asked for moves the probe's clock and is printed
+    let stubs = format!(
+        "$script:asked = 0\n\
+         function Wait-Event {{\n  param($Timeout)\n  \
+           if ($script:asked -ge {events}) {{ throw 'PROBE_END' }}\n  \
+           $script:asked++\n  [PggAwake]::Clock += {EVERY_MS}\n  \
+           [Console]::WriteLine('EVENT')\n  return 'a claim changed'\n}}\n\
+         function Start-Sleep {{\n  param([int]$Milliseconds)\n  \
+           [PggAwake]::Clock += $Milliseconds\n  \
+           [Console]::WriteLine(\"SLEPT=$Milliseconds\")\n}}"
+    );
+    // As large as a real clock's milliseconds — past what an `Int32`
+    // holds — while a wait takes an `Int32`, as the real `Start-Sleep`
+    // does.
+    let clock = "public static long Clock=1700000000000; \
+                 public static long Now() { return Clock; } \
+                 public static long Ticks() { return Clock; }";
+    let said = probe(dir, crate::awake::REVISION, clock, &stubs, &body);
+    let mut waits = Vec::new();
+    for line in said.lines() {
+        if line == "EVENT" {
+            waits.push(0);
+        } else if let Some(slept) = line.strip_prefix("SLEPT=") {
+            let last = waits.last_mut().expect("a wait follows a change");
+            *last += slept.parse::<u64>().expect("milliseconds");
+        }
+    }
+    assert_eq!(waits.len(), events, "{said}");
+    waits
+}
+
+/// While it holds the machine a holder answers a burst of changes at once,
+/// then begins one reading each `PACE` — such a reading can only let go,
+/// and every hook of every session at work asks for one. While it does not
+/// hold it, no reading waits: a hold cannot.
+#[test]
+fn a_held_machine_s_readings_are_paced_past_a_burst() {
+    let burst = usize::try_from(crate::awake::holder::BURST).expect("a count");
+    let pace = u64::try_from(crate::awake::holder::PACE.as_millis()).expect("seconds");
+    // The burst lasts a little longer than its count: the stream's own
+    // time earns readings back.
+    let spent = u64::from(crate::awake::holder::BURST) * pace / (pace - EVERY_MS);
+    let events = usize::try_from(spent).expect("a count") + 3;
+    let (held, _claude) = working("paced");
+    let waits = stream(&held, true, events);
+    assert!(
+        waits[..burst].iter().all(|wait| *wait == 0),
+        "a burst waited: {waits:?}"
+    );
+    assert_eq!(
+        waits.last(),
+        Some(&(pace - EVERY_MS)),
+        "past the burst, a reading each pace: {waits:?}"
+    );
+
+    let free = scratch("unpaced");
+    let claude = FakeClaude::start(&free);
+    std::fs::write(
+        free.join(claim_file("s")),
+        format!(
+            "r1 idle {} {} a 0 - - -",
+            claude.pid(),
+            crate::awake::now_ms()
+        ),
+    )
+    .expect("the idle claim");
+    let waits = stream(&free, false, events);
+    assert!(
+        waits.iter().all(|wait| *wait == 0),
+        "a machine not held waited to read: {waits:?}"
+    );
+}
+
+/// A reading lists the processes its calls' children are read from once
+/// it has read the transcripts. A command that starts, and whose result is
+/// written, after the claims' owners were listed still has its process
+/// seen; read off the owners' listing, the result would show the call
+/// ended with no process to it, and the holder would forget a command
+/// that runs.
+#[test]
+fn a_command_started_once_the_owners_are_listed_keeps_its_call() {
+    let dir = scratch("late-process");
+    let mut claude = FakeClaude::start(&dir);
+    let path = super::transcript(&dir.join("s.jsonl"), &[super::REPLY]);
+    let start = crate::awake::now_ms();
+    let claim = dir.join(claim_file("s"));
+    std::fs::write(
+        &claim,
+        format!(
+            "r1 idle {} {start} a 0 -:toolu_b:Bash:x:{start}:0:0 - {}",
+            claude.pid(),
+            path.display()
+        ),
+    )
+    .expect("the stopped session's open call");
+    // waits(paced): the probe's wait for the test's go-ahead — the file ends it
+    let race = "if (-not $script:raced) { $script:raced = $true; \
+                [IO.File]::WriteAllText(\"$dir\\listed\", ''); \
+                while (-not (Test-Path -LiteralPath \"$dir\\started\")) { Start-Sleep -Milliseconds 20 } }";
+    let probe = {
+        let dir = dir.to_path_buf();
+        std::thread::spawn(move || once(&dir, crate::awake::REVISION, race))
+    };
+    crate::wait::until(
+        "the holder's listing of the owners",
+        || dir.join("listed").exists(),
+        |listed| *listed,
+    );
+    let command = claude.run();
+    super::append(
+        &path,
+        &[&format!(
+            r#"{{"type":"user","message":{{"role":"user","content":[{{"tool_use_id":"toolu_b","type":"tool_result","content":"ok"}}]}},"timestamp":"{}"}}"#,
+            super::stamped(crate::awake::now_ms())
+        )],
+    );
+    std::fs::write(dir.join("started"), "").expect("the go-ahead");
+    let observed = probe.join().expect("the probe");
+    assert!(super::alive(command));
+    assert!(
+        observed.contains("REQUEST=2147483649"),
+        "a command started during the reading was let go of: {observed}"
+    );
+    assert!(
+        std::fs::read_to_string(&claim).is_ok_and(|claim| claim.contains("toolu_b")),
+        "the call of a command that runs was forgotten"
+    );
+}
+
+/// The history names what a hold stands on, sorted: a session's turn, a
+/// process running on past a turn, a wake-up scheduled. A process within
+/// a turn that counts is the turn's, and no reason of its own.
+#[test]
+fn the_history_names_what_a_hold_stands_on() {
+    let dir = scratch("reasons");
+    let mut claude = FakeClaude::start(&dir);
+    let start = crate::awake::now_ms();
+    claude.run();
+    let (owner, at) = (claude.pid(), crate::awake::now_ms());
+    for (session, line) in [
+        // In a turn, its shell call open and the call's process running.
+        (
+            "t",
+            format!("r1 working {owner} {at} a 0 -:toolu_t:Bash:x:{start}:0:0 - -"),
+        ),
+        // Stopped, its shell call ended and the call's process running on.
+        (
+            "p",
+            format!("r1 idle {owner} {at} a 0 -:toolu_p:Bash:x:{start}:{at}:0 - -"),
+        ),
+        // Stopped, a wake-up scheduled.
+        (
+            "w",
+            format!("r1 idle {owner} {at} a {} - - -", at / 1000 + 600),
+        ),
+    ] {
+        std::fs::write(dir.join(claim_file(session)), line).expect("a claim");
+    }
+    let observed = once(&dir, crate::awake::REVISION, "");
+    assert!(observed.contains("REQUEST=2147483649"), "{observed}");
+    assert_eq!(
+        super::told(&dir),
+        ["holding process:p,turn:t,wake:w", "quit -"]
+    );
+}
+
+/// The history is cut back to its newer half once it passes its bound, at
+/// a line's start, and the line just written stays.
+#[test]
+fn the_history_is_cut_back_to_its_newer_half() {
+    let (dir, _claude) = working("history-cut");
+    let bound = usize::try_from(crate::awake::holder::HISTORY_BYTES).expect("a size");
+    let old = "1700000000000 r0 1 holding turn:an-older-session\n";
+    let history = dir.join(crate::awake::HISTORY);
+    std::fs::write(&history, old.repeat(bound / old.len() + 1)).expect("a history at its bound");
+    once(&dir, crate::awake::REVISION, "");
+    let text = std::fs::read_to_string(&history).expect("the history");
+    assert!(
+        (bound / 4..bound * 3 / 4).contains(&text.len()),
+        "{} bytes are left of {bound}",
+        text.len()
+    );
+    assert!(text.starts_with(old), "the cut fell inside a line");
+    assert!(
+        super::told(&dir).ends_with(&["holding turn:s".to_string(), "quit -".to_string()]),
+        "the cut took the line it was written for"
+    );
 }
 
 #[test]

@@ -5,7 +5,7 @@
 
 use super::{
     FakeClaude, REPLY, alive, append, claim_file, ended, holding, next_reading, notice, planted,
-    released, scratch, session, stamped, transcript,
+    released, scratch, session, stamped, told, transcript,
 };
 use crate::awake::claim::{State, Writer, digest};
 use crate::awake::{Mark, apply};
@@ -482,6 +482,11 @@ fn a_command_sent_to_the_background_holds_until_it_ends() {
         session(&dir).calls,
         [],
         "the call that left nothing was not forgotten"
+    );
+    assert!(
+        told(&dir).ends_with(&["holding process:s".to_string(), "released -".to_string()]),
+        "the history names the command as what the stopped session held for: {:?}",
+        told(&dir)
     );
 }
 
