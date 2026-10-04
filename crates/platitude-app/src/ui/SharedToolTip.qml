@@ -10,7 +10,7 @@ import platitude.ui
 /// * **The hand can get to them** — it opens beside the hand and flush against the target: a gap is a band the
 ///   pointer crosses while touching neither.
 /// * **It waits** — the site's binding falls as the hand starts walking into the tip, so the tip comes back up and a
-///   beat (`hoverKeepMs`) decides.
+///   beat (`hoverKeepMs`) decides; a target whose ask falls for a reason of its own says so (`tipWithheld`).
 ///
 /// An Item: the Components below are children, and a QtObject has nowhere to put a child.
 Item {
@@ -116,6 +116,14 @@ Item {
     readonly property bool tipTyped: {
         const at = shared.sharedTip.parent
         return at !== null && at.tipTyped === true
+    }
+    /// The target has taken its ask back for a reason of its own — a tab taken up (`TabItemDelegate.tipWithheld`) —
+    /// so the fall is no hand walking into the box, and the box goes for good. Not left to the beat: `wanted` reads a
+    /// hand Qt stops reporting under a press, against a target that travels with that hand. Read off the target like
+    /// `tipPlace`.
+    readonly property bool tipWithheld: {
+        const at = shared.sharedTip.parent
+        return at !== null && at.tipWithheld === true
     }
 
     /// The target's top-left in `host` coordinates. A method, so nothing binds to it — the seat moves with the sizes
@@ -302,6 +310,13 @@ Item {
             if (!shared.wanted())
                 shared.drop()
         }
+    }
+
+    // The target's ask falls and `tipWithheld` rises in one change, heard here in either order: after the fall, this
+    // clears the keeping before `reopen` runs; before it, the close made here is marked as this part's own (`drop`).
+    onTipWithheldChanged: {
+        if (shared.tipWithheld)
+            shared.drop()
     }
 
     // The hand reached the tip: the beat has nothing left to decide. Letting go starts it again.

@@ -68,6 +68,8 @@ Rectangle {
     /// `TabCarry`, since the order changes under a drag.
     property bool held: false
     property real heldX: 0
+    /// The tab in hand takes its tip back, a box already out included (`SharedToolTip.tipWithheld`).
+    readonly property bool tipWithheld: tabItem.held
     /// Pressed with a button the tab answers. Which button means what is the strip's to say, since the same rule is
     /// what the middle-click hook comes through (`TabStrip.pressTab`).
     signal tabPressed(int button)
@@ -102,9 +104,9 @@ Rectangle {
     }
     // The working copy's full path under the hand
     // (デザイン規約 §hover のツールチップ「タブも同じで、hover が必ずフルパスを言う」), read off `pointed` like the mark
-    // so the headless run reaches it the same way (`TabProbe.pointAtTab`). Nothing new opens under a carrying hand
-    // (同§「掴んだ手の下は空のまま」); a tip already up is the shared instance's to keep (`SharedToolTip.wanted`,
-    // P3-確認事項).
+    // so the headless run reaches it the same way (`TabProbe.pointAtTab`). Nothing opens under a carrying hand, and the
+    // box already out goes as the tab is taken up (同§「掴んだ手の下は空のまま」): the ask falling here is no hand
+    // walking into the box, which the shared instance is told through `tipWithheld`.
     ToolTip.visible: tabItem.pointed && !tabItem.held
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: tabItem.copy_path
