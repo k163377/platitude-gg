@@ -1,6 +1,6 @@
 # Claude Desktop の許可ログによるスリープ制御補助
 
-Windows の holder revision 4、activity protocol 1。実装は `crates/xtask/src/awake/desktop.rs`
+Windows の holder revision 5、activity protocol 1。実装は `crates/xtask/src/awake/desktop.rs`
 (holder のスクリプトに埋め込まれる)。
 
 hook が知らせない 2 つの区間を、デスクトップアプリの `main.log` の後追いで補う。
@@ -55,8 +55,10 @@ hook の印(`.awake/hooks-r<n>`)を書かない revision 3 以前の holder は�
 
 ## 診断・復旧
 
-1. <!--call:awake.status-->`awake` で holder ごとに、判定と、ログの最終読取り
-   (`<pid> <時刻 ms> <状態> transport=<file-events|polling>`)を見る。stale な holder の過去の観測を現在の成功と扱わない
+1. <!--call:awake.status-->`awake` で holder ごとに、判定と、その holder が履歴に最後に書いた 1 行
+   (何を理由に保持しているか)と、ログの最終読取り(`<pid> <時刻 ms> <状態> transport=<file-events|polling>`)を見る。
+   stale な holder の過去の観測を現在の成功と扱わない。過去の判定は `.awake/history`
+   ([実測記録](../ci/baseline/awake-control-windows-x64.md#判定の履歴))
 2. <!--call:awake.log.off-->`awake log off` で補助を止める。各 holder は次の読取り(最大 15 秒後)から
    hook だけで判定する。電源設定・hook の記録は変えない
 3. ログの要求・応答・mapping の 3 行を確かめる。入力本文やログ全体は転載しない。
@@ -97,7 +99,7 @@ cargo test -p xtask --bin xtask awake::tests::holder::desktop
 
 2026-09-30。実ログ(`main.log` / `main1.log`)では mapping 46、要求 104 / 応答 104、すべて結び付いた。
 書式の合わない行は 0。初回走査(2 ファイル・約 20 MB)は 449 ms、追記なしの差分読取りは 12 ms(単発)。
-常駐中の holder の CPU は 1 分あたり約 90 ms、ワーキングセットは約 135 MB。
+常駐中の holder の CPU とワーキングセットは[実測記録](../ci/baseline/awake-control-windows-x64.md#holder-の負荷)。
 
 専用テストの最後の 1 本(fixture のログと Claude プロセス、holder と OS 要求は実物):
 
@@ -137,7 +139,7 @@ cargo test -p xtask --bin xtask a_desktop_wait_allows_physical_sleep -- --ignore
 終了時にタイマーと通知の登録を破棄する。
 
 2026-09-30 JST の結果(元の AC スリープ 1800 秒、画面消灯 AC 60 秒)。1 passed、499.16 秒、設定の復元も成功。
-試験に使った holder は revision 3 のもので、保持・解除の判定は現行と同じ(現行は起動時のスクリプトの受け渡しと、使われなくなったビルドの holder が降りる判定が加わる):
+試験に使った holder は revision 3。保持・解除の判定は revision 5 と同じで、revision 5 との違いは、起動時のスクリプトの受け渡し、使われなくなったビルドの holder が降りる判定、保持中の読取りの間引き、判定の履歴:
 
 | 時刻 | 観測 |
 | --- | --- |
