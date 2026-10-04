@@ -22,6 +22,9 @@ Rectangle {
     height: Theme.iconMd
     radius: Theme.radiusSm
     color: markHover.containsMouse ? Theme.bgHover : "transparent"
+    /// On its own line, never over the lines either side; leftward first, off the code it stages
+    /// (`SharedToolTip.tipRowSide`).
+    readonly property string tipRowSide: "left"
     ToolTip.visible: markHover.containsMouse
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: mark.staged ? qsTr("Unstage this line") : qsTr("Stage this line")

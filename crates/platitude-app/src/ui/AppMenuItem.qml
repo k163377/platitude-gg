@@ -214,6 +214,9 @@ MenuItem {
         return words.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;")
     }
 
+    /// Out of the menu, never over its other rows — on the right first, where a sub-menu opens, so a parent menu on the
+    /// left stays readable (`SharedToolTip.tipRowSide`).
+    readonly property string tipRowSide: "right"
     // A blocked row's line comes before the elision's: one tooltip, one delay.
     ToolTip.visible: (menuItem.hovered || menuItem.tipForced)
                      && (menuItem.blocked || itemLabel.truncated

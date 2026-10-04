@@ -138,6 +138,9 @@ Item {
             height: Theme.iconSm
             stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
             tint: Theme.danger
+            /// On its own line, never over the lines either side; rightward, past the line's end and off its code
+            /// (`SharedToolTip.tipRowSide`).
+            readonly property string tipRowSide: "right"
             // Hover only: the press over the code belongs to `DiffTextSelect`.
             ToolTip.visible: noEolHover.containsMouse
             ToolTip.delay: Metrics.tipDelayMs

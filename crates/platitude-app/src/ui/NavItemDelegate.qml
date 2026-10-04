@@ -593,7 +593,9 @@ Item {
     /// the window's one tooltip (rules-refs/app-ui.md 「プールへ戻された delegate は `index` -1 を名乗る」).
     readonly property bool tipPointedAt: navRow.pointedTipRow >= 0 && navRow.pointedTipRow === navRow.index
     // Held down while a menu stands: the pointer is in the menu, and a tip now lands on the rows it is reading
-    // (デザイン規約 §メニュー).
+    // (デザイン規約 §メニュー). Out of the list, never over the rows either side: the left panel has no room on its left,
+    // so its box goes right, and the right panel's to its left (`SharedToolTip.tipRowSide`).
+    readonly property string tipRowSide: "left"
     ToolTip.visible: (navRow.pointed || navRow.tipPointedAt) && !navRow.editing && !navRow.menuStanding
                      && navRow.hoverText !== ""
     ToolTip.delay: Metrics.tipDelayMs

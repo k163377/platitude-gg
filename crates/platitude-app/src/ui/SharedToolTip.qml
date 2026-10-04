@@ -105,6 +105,12 @@ Item {
         const at = shared.sharedTip.parent
         return at !== null && at.tipBeside === true
     }
+    /// The target is a row among rows — a list's, a menu's, a diff's — and names the side its box stands on first,
+    /// `"left"` or `"right"`; empty for any other target. Read off the target like `tipPlace`.
+    readonly property string tipRowSide: {
+        const at = shared.sharedTip.parent
+        return at !== null && at.tipRowSide !== undefined ? at.tipRowSide : ""
+    }
     /// The target's tip answers what is being typed, not a hand (`NavNameBox`'s refusal), so a held scroll bar leaves
     /// it be (`yieldToBar`). Read off the target like `tipPlace`.
     readonly property bool tipTyped: {
@@ -121,7 +127,7 @@ Item {
 
     /// Beside the hand (the target's middle when there is none), inside the window. A tip at least as wide as its
     /// target sits on the target's left edge instead, so neighbouring tabs' tips do not open at the same x
-    /// (規約 §hover のツールチップ).
+    /// (規約 §hover のツールチップ). A row among rows stands it beside the row instead (`rowSeatX`).
     function seatX() {
         const tip = shared.sharedTip
         const at = tip.parent
@@ -134,11 +140,34 @@ Item {
             const last = shared.host.width - tip.implicitWidth - Theme.spaceXs
             return Math.max(Theme.spaceXs, Math.min(beside, last)) - p.x
         }
+        if (shared.tipRowSide !== "")
+            return shared.rowSeatX(tip.width, at, p) - p.x
         const mid = shared.anchorKnown ? shared.anchorX : p.x + at.width / 2
         const want = tip.implicitWidth >= at.width ? p.x : mid - tip.implicitWidth / 2
         const edge = Theme.spaceXs
         const room = shared.host.width - tip.implicitWidth - edge
         return Math.max(edge, Math.min(want, room)) - p.x
+    }
+
+    /// A row's box, in `host` x: flush against the row's named side, else its other side — out of the list, so the rows
+    /// above and below stay readable (規約 §hover のツールチップ「行の的は、行の横に立つ」). When neither outside holds the
+    /// box, it stands on the row itself beside the hand, a step off it: the pointer stays on the row under the step,
+    /// and the box is not under the pointer.
+    function rowSeatX(width, at, p) {
+        const edge = Theme.spaceXs
+        const last = shared.host.width - width - edge
+        const firstLeft = shared.tipRowSide === "left"
+        const leftSeat = p.x - width
+        const rightSeat = p.x + at.width
+        if (leftSeat >= edge && (firstLeft || rightSeat > last))
+            return leftSeat
+        if (rightSeat <= last)
+            return rightSeat
+        const hand = shared.anchorKnown ? shared.anchorX : p.x + at.width / 2
+        const handLeft = hand - edge - width
+        const handRight = hand + edge
+        const goesLeft = firstLeft ? handLeft >= edge : handRight > last
+        return Math.max(edge, Math.min(goesLeft ? handLeft : handRight, last))
     }
 
     /// Flush against the target: above while there is room, else below. When neither fits (a wrapped name in a short
@@ -154,6 +183,12 @@ Item {
         if (shared.tipBeside) {
             const last = shared.host.height - tip.implicitHeight - Theme.spaceXs
             const want = shared.anchorDown ? shared.anchorY - tip.implicitHeight / 2 : p.y
+            return Math.max(Theme.spaceXs, Math.min(want, last)) - p.y
+        }
+        // A row's box: on the row's own band, centred on it — the rows either side keep all but the box's overhang.
+        if (shared.tipRowSide !== "") {
+            const last = shared.host.height - tip.implicitHeight - Theme.spaceXs
+            const want = p.y + (at.height - tip.implicitHeight) / 2
             return Math.max(Theme.spaceXs, Math.min(want, last)) - p.y
         }
         const above = p.y

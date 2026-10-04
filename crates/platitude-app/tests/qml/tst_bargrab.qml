@@ -126,7 +126,9 @@ Item {
             peekCard.close()
             list.contentY = 0
             cardList.contentY = 0
-            tryVerify(() => !shared.sharedTip.visible && !peekCard.visible, undefined,
+            // `keeping` too: the box falls first and is put back a turn later for the beat, so down alone can be read
+            // in between — and the put-back box then stands where the next case's hand goes.
+            tryVerify(() => !shared.sharedTip.visible && !shared.keeping && !peekCard.visible, undefined,
                       "each case starts with nothing out")
             // The rows are laid out a frame after they are added; the bar stands once they overflow.
             tryVerify(() => barOf(list).visible, undefined, "the list has somewhere to go")

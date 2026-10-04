@@ -133,6 +133,8 @@ Rectangle {
     }
     /// The full name, as its row's tip (デザイン規約 §hover のツールチップ); none where the facts open and say it.
     readonly property string tipWords: headPin.opensFacts ? "" : headPin.branchesModel.headName
+    /// Out of the list as its rows' (`NavItemDelegate.tipRowSide`).
+    readonly property string tipRowSide: "left"
     ToolTip.visible: (headRowMouse.containsMouse || headPin.pointed) && headPin.tipWords !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: headPin.tipWords

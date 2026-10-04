@@ -106,6 +106,8 @@ Item {
         onClicked: fileRow.press()
     }
     // Hover always says the path (デザイン規約 §hover のツールチップ), except behind a standing menu (デザイン規約 §メニュー).
+    // Out of the list, never over the rows either side (`SharedToolTip.tipRowSide`).
+    readonly property string tipRowSide: "left"
     ToolTip.visible: (fileMouse.containsMouse || fileRow.tipPointedAt) && !fileRow.menuStanding
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: fileRow.pathText
