@@ -172,6 +172,14 @@ impl RepoTab {
     // same word (`ops::PushOut`).
     qproperty!("refPushAnswer", Member = ref_push_answer, Notify = changed);
     qproperty!("refPushTarget", Member = ref_push_target, Notify = changed);
+    // …and where the working copy a menu asked for answered, with the
+    // folder it was to be made in (`ops::Press`).
+    qproperty!("copyAnswer", Member = copy_answer, Notify = changed);
+    qproperty!(
+        "copyAnswerPath",
+        Member = copy_answer_path,
+        Notify = changed
+    );
     // Meanings, classified in `drain::settle_write`, of the last answer in
     // this notify nobody was waiting for by name; a reader waiting for one
     // answer reads the `writeAnswer*` slots.
@@ -909,6 +917,24 @@ impl RepoTab {
     #[qslot]
     fn drop_stash(&mut self, selector: String) {
         self.stash_drop(selector);
+    }
+
+    /// `git worktree add`: a new working copy at `path`. `mode` says what
+    /// it stands on — `new` (a branch `branch` made at `start`), `branch`
+    /// (the local branch `branch`) or `track` (a local `branch` made off
+    /// the remote branch `start`, following it); `name` is its folder, for
+    /// a refusal's heading. The answer is the page's to wait for
+    /// (`copyAnswer`).
+    #[qslot]
+    fn add_worktree(
+        &mut self,
+        path: String,
+        mode: String,
+        branch: String,
+        start: String,
+        name: String,
+    ) {
+        self.add_copy(path, &mode, branch, start, name);
     }
 
     /// `git worktree remove` (destructive): the copy's row goes at the

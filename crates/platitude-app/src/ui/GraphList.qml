@@ -57,14 +57,16 @@ AppListView {
     // Which row's chip column is a name box, and what has been typed into it.
     property string namingOid: ""
     property string namingText: ""
-    // Which of the three the box is asking for ("branch" / "tag" / "rename").
+    // Which of the four the box is asking for ("branch" / "tag" / "worktree" / "rename").
     property string namingMode: "branch"
     // What a rename box is naming ("branch" / "remote" / "tag", as `renameRow` takes it), so the frame says the kind
-    // (規約 §ref の種別: 枠 = 種別); empty for the two boxes that make a name.
+    // (規約 §ref の種別: 枠 = 種別); empty for the three boxes that make a name.
     property string namingKind: ""
-    // Whether the box's text can be accepted, and why not — decided by the page (`RepoPage.graphNameRefusedWhy`).
+    // Whether the box's text can be accepted, and why not — decided by the page (`RepoPage.graphNameRefusedWhy`) —
+    // and the working copy's folder in that line, which its tip stands the tree mark in front of.
     property bool namingRefused: false
     property string namingRefusedWhy: ""
+    property string namingRefusedMark: ""
     // The two clicks the rows answer with one gesture (デザイン規約 §グラフ行のダブルクリック). One for the whole graph,
     // shared with the chip's card (via `GraphPane.noteRowClick`): a pooled delegate would drop or misplace the wait,
     // and the card opens on the chip's seat, so a second click landing on it must still count as the second.

@@ -98,6 +98,10 @@ Item {
     signal branchHereRequested(string oidHex)
     /// A tag on this row's commit — the same box, opened where the menu was.
     signal tagHereRequested(string oidHex)
+    /// The WORKTREE card's two making rows (`RefWorktreeMenu`): a new branch on this row's commit in a working copy of
+    /// its own — the same box again, opened where the menu was — and the row's own branch out in one.
+    signal copyHereRequested(string oidHex)
+    signal copyAddRequested(string mode, string branch, string start, string path, string name)
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal dropStashRequested(string selector)
     /// The WORKTREE card's `worktree remove`, which takes the copy's row off the screen at the press (`RepoTab`).
@@ -182,6 +186,32 @@ Item {
         }
     }
 
+    /// What the WORKTREE card's two making rows stand on (`RefWorktreeMenu.standOn`'s `making`), asked of the row
+    /// (`offers::copy_rows`) — `held` the copy holding its branch, as `offerOn` found it. A free branch, or a remote
+    /// one with no local branch, goes out as it is to the folder `newCopyFor` names; the folder is looked at here, as
+    /// the menu opens. The same answer `CommitMenuState.askCopyRows` gives the graph row's card.
+    function askCopyRows(kind, full, oidHex, held) {
+        const local = kind === "remote" ? refRowMenu.repoTab.localNameFor(full) : full
+        const offers = GitFacts.copyOffers(
+            kind, full, oidHex, refRowMenu.repoTab.state === "open", refRowMenu.askBusy,
+            refRowMenu.workTree.branch, kind === "branch" || kind === "remote" ? held : "",
+            kind === "remote" && refRowMenu.branchesModel.oidOfName(local) !== "")
+        const checkout = offers.includes("checkout-branch") ? "branch"
+                       : offers.includes("checkout-track") ? "track" : ""
+        const place = checkout === "" ? undefined : refRowMenu.worktreesModel.newCopyFor(local)
+        return {
+            "oid": oidHex,
+            // Only where copies have a place to go (`CommitMenuState.askCopyRows`).
+            "here": offers.includes("here") && refRowMenu.worktreesModel.copiesPlaced(),
+            "checkout": place === undefined ? "" : checkout,
+            "branch": place === undefined ? "" : local,
+            "start": checkout === "track" ? full : "",
+            "path": place === undefined ? "" : place.path,
+            "place": place === undefined ? "" : place.name,
+            "taken": place === undefined ? "" : place.taken
+        }
+    }
+
     /// Opens on that ref, deciding there and then what it offers. Says whether it opened at all: a ref with nothing to
     /// offer — the current branch met as a chip — falls back to the row's own menu.
     ///
@@ -209,11 +239,12 @@ Item {
                                              refRowMenu.repoTab.localNameFor(full))
                    : kind === "worktree" && !GitFacts.samePath(full, refRowMenu.repoTab.repoPath) ? full
                                        : ""
-        // The card names a copy the row itself names or whose branch it is: a remote row leads to the holder of the
-        // same-named local branch, but the copy is not what it names (デザイン規約 §メニュー「カードは名指す ref がある時だけ」).
+        // The card's `worktree remove` stands on a copy the row itself names or whose branch it is: a remote row leads
+        // to the holder of the same-named local branch, but the copy is not what it names (デザイン規約 §メニュー の入れ子).
         const copyAt = copyPath !== undefined ? copyPath : kind === "remote" ? "" : held
         copyMenu.standOn(copyAt === "" ? undefined : refRowMenu.worktreesModel.copyFacts(copyAt),
-                         GitFacts.samePath(copyAt, refRowMenu.repoTab.repoPath), refRowMenu.askBusy)
+                         GitFacts.samePath(copyAt, refRowMenu.repoTab.repoPath), refRowMenu.askBusy,
+                         refRowMenu.askCopyRows(kind, full, oidHex, held))
         // Core's rule (offers::ref_menu), asked once so the answers stand while the menu does.
         const offers = GitFacts.refMenuOffers(
             kind, full, oidHex,
@@ -336,11 +367,14 @@ Item {
                 refRowMenu.deleteEverywhereNow(branch, remoteRef, forced, expect)
         }
         AppMenuSeparator {}
-        // The working copy this row names or leads to; above the TAG card (デザイン規約 §メニュー の入れ子). The same card
-        // the graph row's menu carries.
+        // A copy made off this row, and the working copy this row names or leads to; above the TAG card
+        // (デザイン規約 §メニュー の入れ子). The same card the graph row's menu carries.
         RefWorktreeMenu {
             id: copyMenu
             heldReason: refRowMenu.heldReason
+            onCopyHereRequested: oidHex => refRowMenu.copyHereRequested(oidHex)
+            onCopyAddRequested: (mode, branch, start, path, name) =>
+                refRowMenu.copyAddRequested(mode, branch, start, path, name)
             onRemoveRequested: (path, name) => refRowMenu.removeCopyRequested(path, name)
         }
         AppMenuSeparator {}

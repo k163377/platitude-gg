@@ -411,6 +411,19 @@ FocusScope {
         }
         page.readDiffForAnswer()
     }
+    /// The answer to a working copy a menu asked for — its own answer (`RepoTab.copyAnswer`, -1 for none). Made, the
+    /// tab goes and stands in it, as the box and the row said it would: the copy is where the reader went to work
+    /// (デザイン規約 §作業コピーを作る). Refused, the report comes down over the graph, the log left shut.
+    function absorbCopyAnswer() {
+        const answer = repoTab.copyAnswer
+        if (answer < 0)
+            return
+        if (repoTab.writeAnswerFailed(answer)) {
+            page.tellRefusal(answer)
+            return
+        }
+        page.openRepositoryPathRequested(repoTab.copyAnswerPath)
+    }
     /// The answer to the toolbar's push — its own answer (`RepoTab.pushAnswer`, -1 for none). Only a refusal is the
     /// page's; the button's mark is `PublishFlow.noteWriteAnswer`'s.
     function absorbPushAnswer() {
@@ -874,6 +887,8 @@ FocusScope {
             onSwitchRequested: (kind, name) => page.switchToRef(kind, name)
             onBranchHereRequested: oidHex => page.startBranchAt(oidHex)
             onTagHereRequested: oidHex => page.startTagAt(oidHex)
+            onCopyHereRequested: oidHex => page.startCopyAt(oidHex)
+            onCopyAddRequested: (mode, branch, start, path, name) => page.addCopy(path, mode, branch, start, name)
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onDropStashRequested: selector => page.dropStashNow(selector)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
@@ -936,6 +951,29 @@ FocusScope {
             sidebarPane.beginTagAt(page.refMenuRowKind, page.refMenuRowId, oidHex)
         else
             graphPane.startTagging(oidHex)
+    }
+    /// And a branch on that commit out in a working copy of its own (`Create worktree here…`), the same way.
+    function startCopyAt(oidHex) {
+        if (oidHex === "")
+            return
+        if (page.refMenuInSidebar)
+            sidebarPane.beginCopyAt(page.refMenuRowKind, page.refMenuRowId, oidHex)
+        else
+            graphPane.startCopying(oidHex)
+    }
+    /// What either box sends once a name is typed: the branch made on `oidHex`, out in a copy where `newCopyFor`
+    /// puts it. The box has already turned down every name that cannot go there.
+    function copyFromBox(oidHex, name) {
+        const place = worktreesModel.newCopyFor(name)
+        if (place !== undefined)
+            page.addCopy(place.path, "new", name, oidHex, place.name)
+    }
+    /// The one door to `git worktree add` (both rows and both boxes). Its answer is waited for by name: landed, the
+    /// tab goes and stands in the new copy (`absorbCopyAnswer`).
+    function addCopy(path, mode, branch, start, name) {
+        if (path === "" || repoTab.state !== "open" || page.doorsHeldWhy !== "")
+            return
+        repoTab.addWorktree(path, mode, branch, start, name)
     }
 
     // ---- what the sidebar's rows ask for ---------------------------
@@ -1243,6 +1281,8 @@ FocusScope {
             onSwitchRequested: (kind, name) => page.switchToRef(kind, name)
             // Straight to the graph row: this menu is only ever raised on one.
             onBranchHereRequested: oidHex => graphPane.startNaming(oidHex)
+            onCopyHereRequested: oidHex => graphPane.startCopying(oidHex)
+            onCopyAddRequested: (mode, branch, start, path, name) => page.addCopy(path, mode, branch, start, name)
             onTagHereRequested: oidHex => graphPane.startTagging(oidHex)
             onSquashRequested: oidHex => page.squashCommit(oidHex)
             onDropRequested: oidHex => page.dropCommit(oidHex)
@@ -1302,16 +1342,29 @@ FocusScope {
         if (row >= 0)
             graphPane.showRowSoon(row)
     }
-    /// Whether the graph's name box can be accepted, and the line that says why not (the pane only draws it). Only a
-    /// rename is refused — a box opened empty would come up turning down the reader's arrival
-    /// (§可否・警告の出し場所, `SidebarRowGestures`).
+    /// Whether the graph's name box can be accepted, and the line that says why not (the pane only draws it). A rename
+    /// is refused, and a new copy's name once one is typed — a box opened empty would come up turning down the
+    /// reader's arrival (§可否・警告の出し場所, `SidebarRowGestures`).
     readonly property string graphRenameRemote: graphPane.namingKind !== "remote" ? ""
         : GitFacts.remoteOfRef(graphPane.namingId, repoTab.remoteNames)
     readonly property bool graphNameTaken: graphPane.namingMode === "rename" && page.graphRenameRemote !== ""
         && graphPane.namingText.trim() !== ""
         && remotesModel.oidOfName(page.graphRenameRemote + "/" + graphPane.namingText.trim()) !== ""
+    /// Where the copy named in the graph's box would go (`NavSectionModel.newCopyFor`), asked per keystroke; undefined
+    /// for every other box.
+    readonly property var graphCopyPlace: graphPane.namingMode === "worktree"
+        ? worktreesModel.newCopyFor(graphPane.namingText.trim()) : undefined
+    /// The folder the box's tip stands the tree mark in front of, where the refusal names one (`Words.copyNameMark`).
+    readonly property string graphNameRefusedMark: Words.copyNameMark(page.graphNameRefusedWhy, page.graphCopyPlace)
     readonly property string graphNameRefusedWhy: {
-        if (graphPane.namingOid === "" || graphPane.namingMode !== "rename")
+        if (graphPane.namingOid === "")
+            return ""
+        // A new working copy is warned of what stands in its way before the press — that is the box's whole answer.
+        if (graphPane.namingMode === "worktree")
+            return Words.copyNameRefused(graphPane.namingText,
+                                         branchesModel.oidOfName(graphPane.namingText.trim()) !== "",
+                                         page.graphCopyPlace)
+        if (graphPane.namingMode !== "rename")
             return ""
         // git's answer on this very name; the rest is worked out before asking.
         if (graphPane.namingGitRefusal !== "")
@@ -1326,7 +1379,7 @@ FocusScope {
             return qsTr("Only the letter case differs — on this disk that deletes both names")
         if (page.graphNameTaken)
             return qsTr("%1 already has a branch called that").arg(page.graphRenameRemote)
-        return GitFacts.validRefName(typed) ? "" : qsTr("git will not take this as a name")
+        return GitFacts.validRefName(typed) ? "" : Words.notAName
     }
 
     // ---- double-click on a graph row -------------------------------
@@ -1547,6 +1600,7 @@ FocusScope {
         page.absorbCommitAnswer()
         page.absorbBranchDelete()
         page.absorbStashAnswer()
+        page.absorbCopyAnswer()
         // The status and this answer drain apart: the tree a stash emptied may already be read, with nothing left to
         // ask. No edge of its own — the landing is the edge, and with nothing standing it is a poll it ignores.
         page.leaveWipWhenDone(false)
@@ -2849,6 +2903,7 @@ FocusScope {
                         if (name !== "")
                             repoTab.createTag(name, oidHex)
                     }
+                    onCopyAtRequested: (oidHex, name) => page.copyFromBox(oidHex, name)
                     onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
                     onAddRemoteRequested: publishFlow.startAddRemote()
                 }
@@ -2907,6 +2962,7 @@ FocusScope {
                             onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
                             namingRefused: page.graphNameRefusedWhy !== ""
                             namingRefusedWhy: page.graphNameRefusedWhy
+                            namingRefusedMark: page.graphNameRefusedMark
                             onChipExpandRequested: (oidHex, atRow, records, anchor) =>
                                 rowHost.openRefList(oidHex, atRow, records, anchor)
                             onChipCollapseRequested: anchor => rowHost.closeRefListUnlessEntered(anchor)
@@ -2914,6 +2970,7 @@ FocusScope {
                             onCreateBranchRequested: (oidHex, name) => repoTab.createBranch(name, oidHex, true)
                             // Nothing moves: a tag is left on the commit and the tree stays where it is.
                             onCreateTagRequested: (oidHex, name) => repoTab.createTag(name, oidHex)
+                            onCreateCopyRequested: (oidHex, name) => page.copyFromBox(oidHex, name)
                             onOpenRepositoryRequested: page.openRepositoryPicker()
                             onAskConfirmed: page.answerRowAsk()
                             onAskCancelled: page.stopRowAsk()

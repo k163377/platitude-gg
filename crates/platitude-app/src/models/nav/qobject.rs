@@ -275,6 +275,23 @@ impl NavSectionModel {
         Optional::new(self.copy_of(&path))
     }
 
+    /// Where a new copy for `branch` would be made and whether git would
+    /// make it there (`new_copy`) — what `Create worktree here…`'s box and
+    /// the `worktree add` row stand on. `undefined` before the listing
+    /// names the repository's own copy.
+    #[qslot]
+    fn new_copy_for(&self, branch: String) -> Optional<NewCopy> {
+        Optional::new(self.new_copy(&branch))
+    }
+
+    /// Whether new copies have a place at all (`has_place_for_copies`) —
+    /// not before the listing lands, nor for a bare repository's linked
+    /// copies.
+    #[qslot]
+    fn copies_placed(&self) -> bool {
+        self.has_place_for_copies()
+    }
+
     /// The path of the copy a folder's chip names: `name` standing on
     /// `head` (`copy_standing`); empty where none does.
     #[qslot]

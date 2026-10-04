@@ -96,6 +96,9 @@ impl Default for RepoTab {
             ref_push_out: crate::ops::PushOut::default(),
             ref_push_answer: -1,
             ref_push_target: String::new(),
+            copy_out: crate::ops::Press::default(),
+            copy_answer: -1,
+            copy_answer_path: String::new(),
             diff_reread: crate::ops::DiffReread::default(),
             tree_seen: 0,
             tree_emptied: false,
@@ -290,6 +293,40 @@ impl RepoTab {
         let asked = self.ask_session(|s| s.commit(message.clone(), options));
         self.commit_out
             .asked(asked.map(platitude_core::OperationId::as_u64));
+    }
+
+    /// The add slot's mode word, turned into what core stands the new copy
+    /// on, and the press written down with its folder so the answer can
+    /// say where to go. An unknown word is a caller's bug and makes
+    /// nothing.
+    pub(super) fn add_copy(
+        &mut self,
+        path: String,
+        mode: &str,
+        branch: String,
+        start: String,
+        name: String,
+    ) {
+        use platitude_core::worktrees::CopyOn;
+        let on = match mode {
+            "new" => CopyOn::NewBranch {
+                name: branch,
+                start,
+            },
+            "branch" => CopyOn::Branch(branch),
+            "track" => CopyOn::Tracking {
+                local: branch,
+                remote_ref: start,
+            },
+            other => {
+                tracing::warn!(mode = other, "unknown worktree add mode");
+                return;
+            }
+        };
+        let asked = self.ask_session(|s| s.add_worktree(path.clone(), on.clone(), name.clone()));
+        self.copy_out
+            .asked(asked.map(platitude_core::OperationId::as_u64));
+        self.copy_answer_path = path;
     }
 
     /// The reset slot's mode word, turned into core's enum; an unknown

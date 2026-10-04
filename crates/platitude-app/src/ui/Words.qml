@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import platitude
 
 // Wording that more than one place has to say the same way — a second copy of a sentence drifts from the first.
 QtObject {
@@ -18,6 +19,47 @@ QtObject {
     /// (デザイン規約 §メニュー「入口が違っても同じ操作は同じ文」); the TAG card's `Create tag here…` (`RefTagMenu`) is
     /// worded to match.
     readonly property string createBranchHere: qsTr("Create branch here…")
+    /// The same box's other road: a new branch on this commit, out in a working copy of its own — from both menus
+    /// (デザイン規約 §作業コピーを作る).
+    readonly property string createWorktreeHere: qsTr("Create worktree here…")
+
+    /// A name box's refusal of a name git's rules turn down (`GitFacts.validRefName`) — the graph's box, the left
+    /// menu's, and the new copy's, asked by a branch's rules (`copyNameRefused`, `GitFacts.validBranchName`).
+    readonly property string notAName: qsTr("git will not take this as a name")
+
+    /// Why the name typed into `Create worktree here?` cannot be taken — the box's tip in the graph and in the left
+    /// menu alike, everything git would refuse that this end can see, said before the press. `branchTaken` is whether
+    /// a branch of that name is there; `place` what `NavSectionModel.newCopyFor` answered for it. Empty while nothing
+    /// is typed: a box opened empty would turn the reader's arrival down (デザイン規約 §可否・警告の出し場所).
+    function copyNameRefused(typed, branchTaken, place) {
+        const name = typed.trim()
+        if (name === "")
+            return ""
+        if (!GitFacts.validBranchName(name))
+            return Words.notAName
+        if (branchTaken)
+            return qsTr("A branch called that already exists")
+        return place === undefined ? "" : Words.copyPlaceTaken(place.taken, place.name)
+    }
+
+    /// Why a new working copy cannot go where it would, said by the `worktree add` row's hover and the name box's
+    /// tip alike (`NavSectionModel.newCopyFor`'s `taken`): what is in the way, then the copy's folder behind a dash,
+    /// where the tip stands the tree mark (`copyNameMark`, デザイン規約 §ref の種別「名前の印」).
+    function copyPlaceTaken(taken, name) {
+        switch (taken) {
+        //: %1 is the folder the new working copy would be made in, named as the copy git still lists there.
+        case "listed": return qsTr("Taken by another working copy — %1").arg(name)
+        //: %1 is the folder the new working copy would be made in.
+        case "folder": return qsTr("The folder is not empty — %1").arg(name)
+        default: return ""
+        }
+    }
+    /// The word a copy-making tip stands the tree mark in front of: the folder, where `why` is the sentence
+    /// `copyPlaceTaken` wrote about `place` — asked of the sentence shown, as `RefBranchMenu`'s delete rows ask.
+    function copyNameMark(why, place) {
+        return place !== undefined && why !== "" && why === Words.copyPlaceTaken(place.taken, place.name)
+               ? place.name : ""
+    }
 
     /// Opening a repository, as the graph's empty state, the tab strip's `+` menu and its accessible name offer it.
     readonly property string openRepository: qsTr("Open repository…")
@@ -153,6 +195,8 @@ QtObject {
         case "half-rename": return qsTr("The rename did not finish")
         case "worktree-kept": return qsTr("%1 was not removed").arg(name)
         case "worktree-half": return qsTr("%1 was not removed completely").arg(name)
+        case "worktree-not-added":
+        case "worktree-folder-taken": return qsTr("%1 was not created").arg(name)
         // All seven rewrite refusals: which one it was is the line underneath.
         case "across-merge":
         case "off-branch":
@@ -214,6 +258,10 @@ QtObject {
         // Only when git said it was the changes: its own words end in advice to force it, which nothing here offers.
         case "worktree-kept":
             return qsTr("It has uncommitted changes.")
+        // Turned down here before git ran (`worktrees::add`): nobody to quote. The heading names the folder; this
+        // says what was in the way, as the row's tip did before the press (`copyPlaceTaken`).
+        case "worktree-folder-taken":
+            return qsTr("The folder is not empty.")
         // The rewrite refusals live in `rewriteRefusedWhy`, which the plan's door reads too. Delegated whole: a
         // second copy of that list gets a new refusal on one side only.
         default: return Words.rewriteRefusedWhy(kind)
@@ -250,14 +298,15 @@ QtObject {
     /// デザイン規約 §ref の種別「名前の印」).
     function reportNamesCopy(kind) {
         return kind === "worktree-kept" || kind === "worktree-half"
+            || kind === "worktree-not-added" || kind === "worktree-folder-taken"
     }
 
     /// The colour a report's own hairline wears: `warning` while the gesture is still going (the rename box is open,
     /// or a half-done rename is left standing), `danger` once it is over (デザイン規約 §答えの要らない報せ). A working
-    /// copy git would not remove is `warning` too: the copy still stands, with what kept it there.
+    /// copy git would not remove is `warning` too: the copy still stands, with what kept it there. So is one that was
+    /// not made: what stood in its way was there before the press, which the menus warn of (デザイン規約 §答えの要らない報せ).
     function reportTone(kind) {
-        return kind === "rename" || kind === "half-rename" || kind === "worktree-kept" || kind === "worktree-half"
-            ? "warning" : "danger"
+        return kind === "rename" || kind === "half-rename" || Words.reportNamesCopy(kind) ? "warning" : "danger"
     }
 
     /// What the two sides each did to a conflicted file, from git's two stage letters (デザイン規約 §conflict の種別).

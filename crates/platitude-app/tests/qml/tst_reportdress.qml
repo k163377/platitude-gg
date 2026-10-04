@@ -91,6 +91,21 @@ Item {
             compare(Words.roomInSentence("anything", -1, 2), "", "no seat, no room: drawn as it came")
         }
 
+        /// A copy that was not made: the same yellow, the same mark, in the heading the folder would have been
+        /// (デザイン規約 §作業コピーを作る). git's words come as the reason; where nothing was asked of
+        /// git, the second line is the screen's.
+        function test_a_copy_not_made_is_named_behind_the_tree_mark_in_yellow() {
+            for (const kind of ["worktree-not-added", "worktree-folder-taken"]) {
+                compare(Words.reportTone(kind), "warning", kind)
+                verify(Words.reportNamesCopy(kind), kind)
+                compare(Words.writeReported(kind, "", "hotfix-patch"), "hotfix-patch was not created", kind)
+            }
+            compare(Words.writeReportedWhy("worktree-folder-taken"), "The folder is not empty.")
+            dress("worktree-not-added", "", "hotfix-patch", "fatal: a branch named 'hotfix/patch' already exists")
+            tryVerify(() => bar.settled && bar.markShown)
+            compare(bar.detail, "fatal: a branch named 'hotfix/patch' already exists")
+        }
+
         /// Both arms, because either alone passes against a bar painted one colour.
         function test_the_gesture_that_is_still_going_wears_the_other_colour() {
             compare(Words.reportTone("rename"), "warning")

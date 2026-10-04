@@ -260,7 +260,8 @@ Item {
                 return
             }
             const card = worktreeMenuTimer.card
-            // The repository's own copy has no card (git never removes it): the menu is the whole answer.
+            // A row the card has nothing for (no place for a new copy, nothing to take away): the menu is the whole
+            // answer. The repository's own copy has a card — the rows that make a copy — with no `worktree remove`.
             if (!card.applies && !worktreeMenuTimer.press) {
                 worktreeMenuTimer.stop()
                 Harness.report("worktree_menu copy=" + worktreeMenuTimer.copy + " card=false"

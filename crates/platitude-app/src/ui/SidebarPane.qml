@@ -43,6 +43,8 @@ Rectangle {
     signal branchAtRequested(string oidHex, string name)
     /// The same for a new tag.
     signal tagAtRequested(string oidHex, string name)
+    /// …and for a new branch out in a working copy of its own (`RepoPage.copyFromBox`).
+    signal copyAtRequested(string oidHex, string name)
     /// A row was renamed. `kind` is the section ("branch" / "tag" / "stash"), `id` what git knows the row by.
     signal renameSubmitted(string kind, string id, string name)
     signal foldRequested(bool collapse)
@@ -61,6 +63,8 @@ Rectangle {
         menuOpen: sidebar.menuRaisedOn !== ""
         repoTab: sidebar.repoTab
         remotesModel: sidebar.remotesModel
+        branchesModel: sidebar.branchesModel
+        worktreesModel: sidebar.worktreesModel
     }
     /// Where this panel last saw the hand, in its own coordinates.
     property point handAt: Qt.point(-1, -1)
@@ -122,6 +126,9 @@ Rectangle {
     }
     function beginTagAt(kind, id, oidHex) {
         rowGestures.beginTagAt(kind, id, oidHex)
+    }
+    function beginCopyAt(kind, id, oidHex) {
+        rowGestures.beginCopyAt(kind, id, oidHex)
     }
     function activateRow(kind, name, full, oidHex) {
         rowGestures.activateRow(kind, name, full, oidHex)

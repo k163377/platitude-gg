@@ -77,6 +77,9 @@ impl RepoTab {
         self.ref_push_out = crate::ops::PushOut::default();
         self.ref_push_answer = -1;
         self.ref_push_target = String::new();
+        self.copy_out = crate::ops::Press::default();
+        self.copy_answer = -1;
+        self.copy_answer_path = String::new();
         self.write_report_kind = String::new();
         self.write_report_remote = String::new();
         self.write_report_name = String::new();

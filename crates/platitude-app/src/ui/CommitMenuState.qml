@@ -55,6 +55,36 @@ QtObject {
     /// still too: a hold mark arriving later re-indents every row (`AppMenu.holdIndent`).
     property bool menuTipHeldElsewhere: false
 
+    /// What the WORKTREE card's two making rows stand on (`RefWorktreeMenu.standOn`'s `making`), asked of the commit
+    /// and the name the menu is aimed at (`offers::copy_rows`): any commit takes a new branch; a free branch, or a
+    /// remote one with no local branch, goes out as it is — to the folder `newCopyFor` names, looked at here as the
+    /// menu opens, the row greyed where something is already there.
+    function askCopyRows(kind, name, oidHex) {
+        const local = kind === "remote" ? menuState.repoTab.localNameFor(name) : name
+        const offers = GitFacts.copyOffers(
+            kind, name, oidHex,
+            menuState.repoTab.state === "open",
+            menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
+            menuState.workTree.branch,
+            kind === "branch" || kind === "remote" ? menuState.worktreesModel.worktreeHolding(local) : "",
+            kind === "remote" && menuState.branchesModel.oidOfName(local) !== "")
+        const checkout = offers.includes("checkout-branch") ? "branch"
+                       : offers.includes("checkout-track") ? "track" : ""
+        const place = checkout === "" ? undefined : menuState.worktreesModel.newCopyFor(local)
+        return {
+            "oid": oidHex,
+            // Only where copies have a place to go: a box whose Enter could make nothing is not offered.
+            "here": offers.includes("here") && menuState.worktreesModel.copiesPlaced(),
+            // No place to name (the listing not in yet): no row, rather than one that cannot say where it goes.
+            "checkout": place === undefined ? "" : checkout,
+            "branch": place === undefined ? "" : local,
+            "start": checkout === "track" ? name : "",
+            "path": place === undefined ? "" : place.path,
+            "place": place === undefined ? "" : place.name,
+            "taken": place === undefined ? "" : place.taken
+        }
+    }
+
     /// What the `switch` and `pull` rows read, asked of the name the menu is aimed at. Empty on a row that draws none,
     /// which is what takes both rows off the menu.
     function askRefRows(kind, name, oidHex) {
@@ -98,7 +128,8 @@ QtObject {
     /// What the cards at the foot stand on, aimed at the menu's name — each emptied where that name is another's
     /// kind, so that card holds only what can still be made here. The WORKTREE card stands on the copy a folder's
     /// chip names, or on the one holding the chip's local branch — not a remote chip's, which only leads there
-    /// (`RefRowMenu.offerOn`). Read here, where the models are.
+    /// (`RefRowMenu.offerOn`) — and on what its making rows would make (`askCopyRows`). Read here, where the models
+    /// are.
     function cardFacts(oidHex) {
         const kind = menuState.menu.targetKind
         const branchy = kind === "branch" || kind === "remote"
@@ -109,7 +140,8 @@ QtObject {
             "tag": menuState.tagFacts(kind === "tag" ? "tag" : "", kind === "tag" ? name : "", oidHex),
             "copy": copy === "" ? undefined : menuState.worktreesModel.copyFacts(copy),
             "copyHere": GitFacts.samePath(copy, menuState.repoTab.repoPath),
-            "busy": menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount
+            "busy": menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
+            "making": menuState.askCopyRows(kind, name, oidHex)
         }
     }
 

@@ -15,8 +15,9 @@ Item {
     required property real columnWidth
     /// Waiting out the double-click window after a second click (`RefChip.waiting`).
     required property bool waiting
-    /// This column is a name box right now, and which of the three it asks for ("branch" / "tag" / "rename"). One
-    /// field for all: the two that make a name ask in the placeholder, a rename opens holding the name.
+    /// This column is a name box right now, and which of the four it asks for ("branch" / "tag" / "worktree" /
+    /// "rename"). One field for all: the three that make a name ask in the placeholder, a rename opens holding the
+    /// name.
     required property bool naming
     required property string namingMode
     /// What a rename box is naming ("branch" / "remote" / "tag"), for the frame's tone; empty while making a name.
@@ -24,6 +25,8 @@ Item {
     /// Whether what is typed can be accepted, and why not — the page's answer (デザイン規約 §可否・警告の出し場所).
     required property bool namingRefused
     required property string namingRefusedWhy
+    /// A working copy's folder in that line, empty for none (`RepoPage.graphNameRefusedMark`).
+    required property string namingRefusedMark
 
     /// The chip's card is standing on it (`GraphRowDelegate.listOnThisChip`): the sheets unstack so none peeks out
     /// from under the card.
@@ -110,15 +113,21 @@ Item {
             /// What the box must be able to show, latched as it opens — measured per keystroke, the right edge would
             /// walk out from under the caret.
             property string inkText: ""
+            /// A working copy's folder in the refusal's line, which the shared tip stands the tree mark in front of
+            /// (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別「名前の印」).
+            readonly property string tipMarkWord: chipColumn.namingRefusedMark
             width: Math.max(chipColumn.columnWidth - 2 * Theme.spaceXs, nameField.nameBoxMinW)
             // The frame names the kind (デザイン規約 §ref の種別「枠 = 種別」); a branch's colour is the focus ring's own,
-            // so only a tag differs.
-            focusTone: (chipColumn.namingMode === "rename" ? chipColumn.namingKind : chipColumn.namingMode) === "tag"
-                       ? Theme.refTag : Theme.borderFocus
+            // so a tag differs, and so does a branch made out in another copy — that copy's green, as its chip wears.
+            focusTone: {
+                const kind = chipColumn.namingMode === "rename" ? chipColumn.namingKind : chipColumn.namingMode
+                return kind === "tag" ? Theme.refTag : kind === "worktree" ? Theme.success : Theme.borderFocus
+            }
             // None for a rename, whose box is for the name it opened holding (デザイン規約 §左メニューの所作).
             placeholderText: chipColumn.namingMode === "rename" ? ""
                            : chipColumn.namingMode === "tag" ? qsTr("Create tag here?")
-                                                             : qsTr("Create branch here?")
+                           : chipColumn.namingMode === "worktree" ? qsTr("Create worktree here?")
+                                                                  : qsTr("Create branch here?")
             refused: chipColumn.namingRefused
             ToolTip.visible: nameField.refused && nameField.activeFocus && chipColumn.namingRefusedWhy !== ""
             ToolTip.delay: Metrics.tipDelayMs

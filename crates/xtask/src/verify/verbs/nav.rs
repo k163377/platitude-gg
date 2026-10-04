@@ -247,10 +247,12 @@ pub(super) const TABLE: &[Verb] = &[
                 "worktree_menu copy=detached card=true offered=true blocked=false tip=false \
                  code=worktree remove branch=false held=false cut=false",
             ),
-            // The repository's own copy: its branch's menu, and no card.
+            // The repository's own copy: its branch's menu, and a card that
+            // makes copies but has no `worktree remove` — git never removes it.
             (
                 Arg::Is("repo"),
-                "worktree_menu copy=repo card=false branch=true",
+                "worktree_menu copy=repo card=true offered=false blocked=false tip=false \
+                 code=worktree remove branch=true",
             ),
             (
                 Arg::WithPreset("worktrees"),

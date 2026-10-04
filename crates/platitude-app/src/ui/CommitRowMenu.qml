@@ -96,7 +96,10 @@ Item {
     signal deleteTagRequested(string tag)
     signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere, string expect)
     signal deleteTagEverywhereRequested(string tag, string remote, string expect)
-    /// The WORKTREE card's `worktree remove`, passed straight up.
+    /// The WORKTREE card's three, passed straight up (`RefWorktreeMenu`): the box for a new branch in a copy of its
+    /// own, the row's own branch out in one, and `worktree remove`.
+    signal copyHereRequested(string oidHex)
+    signal copyAddRequested(string mode, string branch, string start, string path, string name)
     signal removeCopyRequested(string path, string name)
     /// The menu went away — and the stacked list it may have been standing on is the pointer's to answer for again.
     signal dismissed()
@@ -129,10 +132,11 @@ Item {
         stashMenu.offer()
     }
     /// `facts` is what the cards stand on, read where the models are (`CommitMenuState.cardFacts`): `branch` and
-    /// `tag`, each already aimed at the target or emptied because the target is the other's kind, and `copy` — the
-    /// working copy the target names or the one holding its branch (undefined for none) — with `copyHere` / `busy`.
+    /// `tag`, each already aimed at the target or emptied because the target is the other's kind, `copy` — the
+    /// working copy the target names or the one holding its branch (undefined for none) — with `copyHere` / `busy`,
+    /// and `making`, the two rows that make a copy (`RefWorktreeMenu.standOn`).
     function offerCommit(facts) {
-        copyCommitMenu.standOn(facts.copy, facts.copyHere, facts.busy)
+        copyCommitMenu.standOn(facts.copy, facts.copyHere, facts.busy, facts.making)
         // Every card stands on its facts before `offer()`: its `applies` decides whether its row counts
         // (`AppMenu.offeredRows`).
         const branchy = rowMenu.targetKind === "branch" || rowMenu.targetKind === "remote"
@@ -334,11 +338,15 @@ Item {
                 rowMenu.deleteEverywhereRequested(branch, remoteRef, forced, expect)
         }
         AppMenuSeparator {}
-        // The same WORKTREE card as the sidebar's, above the TAG card: the copy the chip names, or the one holding the
-        // chip's branch (デザイン規約 §メニュー の入れ子).
+        // The same WORKTREE card as the sidebar's, above the TAG card: `Create worktree here…` always, the chip's
+        // branch out in a copy of its own, and the copy the chip names or the one holding the chip's branch taken away
+        // (デザイン規約 §メニュー の入れ子).
         RefWorktreeMenu {
             id: copyCommitMenu
             heldReason: rowMenu.heldReason
+            onCopyHereRequested: oidHex => rowMenu.copyHereRequested(oidHex)
+            onCopyAddRequested: (mode, branch, start, path, name) =>
+                rowMenu.copyAddRequested(mode, branch, start, path, name)
             onRemoveRequested: (path, name) => rowMenu.removeCopyRequested(path, name)
         }
         AppMenuSeparator {}

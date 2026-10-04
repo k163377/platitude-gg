@@ -16,6 +16,9 @@ Item {
 
     /// What a press asked for, last one wins: the menu runs nothing itself.
     property string asked: ""
+    /// The WORKTREE card's making rows where a case is not about them (`CommitMenuState.askCopyRows`).
+    readonly property var makingNothing: ({ "oid": "", "here": false, "checkout": "", "branch": "", "start": "",
+                                             "path": "", "place": "", "taken": "" })
 
     CommitRowMenu {
         id: menu
@@ -47,6 +50,9 @@ Item {
         onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
             root.asked = "delete-remote-tag " + remote + " " + tag + " " + expect
         onDeleteRemoteRequested: (remoteRef, expect) => root.asked = "delete-remote " + remoteRef + " " + expect
+        onCopyHereRequested: oidHex => root.asked = "copy-here " + oidHex
+        onCopyAddRequested: (mode, branch, start, path, name) =>
+            root.asked = "copy-add " + mode + " " + branch + " " + start + " " + path + " " + name
     }
 
     /// The row wearing that command, read the way the menu reads itself (`AppMenu.offeredRows`), so a row nothing
@@ -208,14 +214,14 @@ Item {
                 {
                     tag: "the chip drew a branch",
                     aim: { targetKind: "branch", targetName: "feature/topic-a" },
-                    facts: { "branch": branchy, "tag": notag },
+                    facts: { "branch": branchy, "tag": notag, "making": root.makingNothing },
                     named: "feature/topic-a",
                     tagNamed: "",
                 },
                 {
                     tag: "the chip drew a tag",
                     aim: { targetKind: "tag", targetName: "v1.0" },
-                    facts: { "branch": empty, "tag": tagged },
+                    facts: { "branch": empty, "tag": tagged, "making": root.makingNothing },
                     named: "",
                     tagNamed: "v1.0",
                 },
@@ -240,6 +246,67 @@ Item {
             menu.menu.dismiss()
         }
 
+        /// The WORKTREE card's two making rows (デザイン規約 §作業コピーを作る): the card stands with
+        /// `Create worktree here…` on a row that names no copy, `worktree add` names the folder it would make and greys
+        /// with the reason where something is in the way there, and both hand up what the menu froze — a remote branch
+        /// sent with the remote one it is made off.
+        function test_the_worktree_card_makes_copies_and_names_where_they_go() {
+            const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
+                            "remoteDrifted": false, "open": false, "merged": "", "offers": [] }
+            const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
+            const making = { "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/topic-a",
+                             "start": "", "path": "C:/work/repo.worktrees/feature-topic-a",
+                             "place": "feature-topic-a", "taken": "" }
+            root.aimAt({})
+            menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": making })
+            const card = menu.copyCard
+            verify(card.applies, "the card stands on a row that names no copy")
+            verify(!card.removeCopyItem.offered, "with nothing to take away")
+            verify(card.copyHereItem.offered)
+            compare(card.copyHereItem.text, "Create worktree here…")
+            card.copyHereItem.triggered()
+            compare(root.asked, "copy-here " + menu.oid)
+
+            const add = card.copyAddItem
+            verify(add.offered)
+            compare(add.code, "worktree add")
+            compare(add.nameMark, "tree")
+            compare(add.markName, "feature-topic-a")
+            compare(add.blockedReason, "")
+            // What the hover says once the folder is cut: the whole line, chip and folder, the folder behind its mark.
+            compare(add.ToolTip.text, "worktree add feature-topic-a")
+            compare(add.tipMarkWord, "feature-topic-a")
+            add.triggered()
+            compare(root.asked,
+                    "copy-add branch feature/topic-a  C:/work/repo.worktrees/feature-topic-a feature-topic-a")
+
+            root.aimAt({ targetKind: "remote", targetName: "origin/feature/remote-only" })
+            menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": {
+                "oid": menu.oid, "here": true, "checkout": "track", "branch": "feature/remote-only",
+                "start": "origin/feature/remote-only", "path": "C:/work/repo.worktrees/feature-remote-only",
+                "place": "feature-remote-only", "taken": "" } })
+            card.copyAddItem.triggered()
+            compare(root.asked, "copy-add track feature/remote-only origin/feature/remote-only "
+                    + "C:/work/repo.worktrees/feature-remote-only feature-remote-only")
+
+            menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": {
+                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/blocked", "start": "",
+                "path": "C:/work/repo.worktrees/feature-blocked", "place": "feature-blocked", "taken": "folder" } })
+            compare(card.copyAddItem.blockedReason, "The folder is not empty — feature-blocked")
+            compare(card.copyAddItem.tipMarkWord, "feature-blocked", "the tip's tree mark stands before the folder")
+
+            menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": {
+                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "fix/listed", "start": "",
+                "path": "C:/work/repo.worktrees/fix-listed", "place": "fix-listed", "taken": "listed" } })
+            compare(card.copyAddItem.blockedReason, "Taken by another working copy — fix-listed")
+            compare(card.copyAddItem.tipMarkWord, "fix-listed")
+
+            menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": root.makingNothing })
+            verify(!card.copyAddItem.offered, "a branch out somewhere has no row, not a grey one")
+            verify(!card.applies, "and a row with nothing to make or take away has no card")
+            menu.menu.dismiss()
+        }
+
         /// The cards' leases come up through this menu as the oids they are — a lease passed on as a flag would
         /// reach git as `true`.
         function test_the_carried_cards_hand_their_leases_up_whole() {
@@ -249,7 +316,7 @@ Item {
                               "tagReach": "origin", "tagHeldBack": "drift", "tagCarriers": "origin", "tagHere": true,
                               "offers": ["branch-here", "integrate", "delete", "push-tag"] }
             root.aimAt({ targetKind: "tag", targetName: "v1.0" })
-            menu.offerCommit({ "branch": empty, "tag": drifted })
+            menu.offerCommit({ "branch": empty, "tag": drifted, "making": root.makingNothing })
             menu.tagCard.pushTagItem.held()
             compare(root.asked, "push origin v1.0 deadbee")
 
@@ -257,7 +324,7 @@ Item {
                            "tagHeldBack": "", "tagCarriers": "origin", "tagHere": true,
                            "offers": ["branch-here", "integrate", "delete", "push-tag", "delete-remote-tag"] }
             root.aimAt({ targetKind: "tag", targetName: "v1.0" })
-            menu.offerCommit({ "branch": empty, "tag": both })
+            menu.offerCommit({ "branch": empty, "tag": both, "making": root.makingNothing })
             menu.tagCard.deleteRemoteTagItem.held()
             compare(root.asked, "delete-remote-tag origin v1.0 " + menu.oid)
 
@@ -266,7 +333,7 @@ Item {
                               "offers": ["delete"] }
             const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
             root.aimAt({ targetKind: "remote", targetName: "origin/main" })
-            menu.offerCommit({ "branch": reading, "tag": notag })
+            menu.offerCommit({ "branch": reading, "tag": notag, "making": root.makingNothing })
             menu.branchCard.deleteItem.held()
             compare(root.asked, "delete-remote origin/main " + menu.oid)
         }

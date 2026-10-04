@@ -67,6 +67,39 @@ impl GitFacts {
         .collect()
     }
 
+    /// The two rows that make a working copy (`offers::copy_rows`), as
+    /// words: `here`, then `checkout-branch` / `checkout-track`. `kind` is
+    /// the row's word, empty on a commit row that draws no name;
+    /// `local_exists` whether a remote row's local branch is there.
+    #[qslot]
+    #[expect(clippy::too_many_arguments)]
+    fn copy_offers(
+        &self,
+        kind: String,
+        full: String,
+        oid_hex: String,
+        open: bool,
+        busy_count: i32,
+        current_branch: String,
+        held_by_worktree: String,
+        local_exists: bool,
+    ) -> Vec<String> {
+        platitude_core::offers::copy_rows(
+            platitude_core::offers::RefKind::from_word(&kind),
+            &full,
+            &oid_hex,
+            open,
+            busy_count,
+            &current_branch,
+            &held_by_worktree,
+            local_exists,
+        )
+        .words()
+        .into_iter()
+        .map(str::to_string)
+        .collect()
+    }
+
     /// The remote half of a remote-tracking name (`origin/main`): the
     /// longest of `remote_names` wins (a remote's name may contain `/`);
     /// where none owns the ref the first slash answers, so the gesture
@@ -393,6 +426,14 @@ impl GitFacts {
     #[qslot]
     fn valid_ref_name(&self, name: String) -> bool {
         platitude_core::tag::is_valid_name(&name)
+    }
+
+    /// The same for a branch alone, which git also refuses to open with `-`
+    /// or to call `HEAD` — what the new copy's box asks, whose name git
+    /// hands on as an option otherwise (`platitude_core::branch`).
+    #[qslot]
+    fn valid_branch_name(&self, name: String) -> bool {
+        platitude_core::branch::is_valid_name(&name)
     }
 
     /// The same for a stash's label: free text on one line.

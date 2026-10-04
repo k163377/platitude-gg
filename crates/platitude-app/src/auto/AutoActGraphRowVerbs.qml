@@ -544,10 +544,12 @@ Item {
                 return
             listMenuTimer.stop()
             // `list=` is read with the menu up: the card has to still stand under it (デザイン規約 §メニュー の例外).
-            // `copy=` / `branch=` / `tag=`: which card the named row brought up is what this gesture decides.
+            // `copy=` / `branch=` / `tag=`: which card the named row brought up is what this gesture decides. The
+            // WORKTREE card stands on every commit (`Create worktree here…`), so `copy=` is whether it stands on a
+            // copy.
             Harness.report("list_menu list=" + refList.opened
                               + " menu=" + commitMenu.opened
-                              + " copy=" + driver.commitCopyCard.applies
+                              + " copy=" + (driver.commitCopyCard.path !== "")
                               + " branch=" + commitBranchCard.applies
                               + " tag=" + commitTagCard.applies
                               + " rows=" + commitMenu.offeredRows)

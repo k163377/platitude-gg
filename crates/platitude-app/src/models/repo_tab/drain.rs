@@ -30,6 +30,8 @@ impl RepoTab {
         self.read_push_out();
         self.ref_push_out.new_notify();
         self.read_ref_push_out();
+        self.copy_out.new_notify();
+        self.read_copy_out();
         self.clear_write_group();
         for msg in batch {
             match msg {
@@ -350,6 +352,10 @@ impl RepoTab {
             self.read_ref_push_out();
             answered_for = true;
         }
+        if self.copy_out.answered(id, at) {
+            self.read_copy_out();
+            answered_for = true;
+        }
         if !answered_for {
             self.fold_into_group(kind, landed, at);
         }
@@ -397,6 +403,16 @@ impl RepoTab {
             .and_then(|at| i32::try_from(at).ok())
             .unwrap_or(-1);
         self.ref_push_target = self.ref_push_out.branch().to_string();
+    }
+
+    /// The same for the working copy a menu asked for. Its folder is the
+    /// press's own, written down as it was asked (`add_copy`).
+    fn read_copy_out(&mut self) {
+        self.copy_answer = self
+            .copy_out
+            .answer()
+            .and_then(|at| i32::try_from(at).ok())
+            .unwrap_or(-1);
     }
 
     /// One answer nobody was waiting for by name, folded into the group

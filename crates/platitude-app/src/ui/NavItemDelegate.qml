@@ -96,12 +96,15 @@ Item {
     property string rowKey: ""
     property string activeKey: ""
     property string editKey: ""
-    /// "rename" (the name is in the box), "branch" or "tag" (a name for a new one on this row's commit).
+    /// "rename" (the name is in the box), "branch", "tag" or "worktree" (a name for a new one on this row's commit —
+    /// the last a branch out in a working copy of its own).
     property string editMode: ""
     /// What has been typed so far, held by the sidebar so a row that scrolls off and back keeps it.
     property string editText: ""
     property bool editRefused: false
     property string editRefusedWhy: ""
+    /// A working copy's folder in that line, which the box's tip marks (`SidebarRowGestures.editRefusedMark`).
+    property string editRefusedMark: ""
     readonly property bool editing: navRow.editKey !== "" && navRow.editKey === navRow.rowKey
     /// The name git knows this row by.
     readonly property string fullName: navRow.full !== "" ? navRow.full : navRow.name
@@ -210,11 +213,12 @@ Item {
             mode: navRow.editMode
             // What the box is naming, which is not always what the row is: `Create tag here…` opens on a branch row
             // too.
-            namesKind: navRow.editMode === "tag" ? "tag"
-                     : navRow.editMode === "branch" ? "branch" : navRow.kindHint
+            namesKind: navRow.editMode === "tag" || navRow.editMode === "branch" || navRow.editMode === "worktree"
+                       ? navRow.editMode : navRow.kindHint
             carried: navRow.editText
             refused: navRow.editRefused
             refusedWhy: navRow.editRefusedWhy
+            refusedMark: navRow.editRefusedMark
             onTyped: text => navRow.editTyped(text)
             onSubmitted: text => navRow.editAccepted(text)
             onCancelled: navRow.editCancelled()

@@ -52,7 +52,79 @@ impl Record for CopyRow {
     }
 }
 
+/// Where a new working copy for a branch would go, and whether something
+/// is already there — what the two rows that make one stand on.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NewCopy {
+    /// git's spelling of the folder (`platitude_core::worktrees::new_copy_path`).
+    pub path: String,
+    /// Its last segment — the copy's name on screen once it is made.
+    pub name: String,
+    /// Why git would not make it there: `listed` (git still lists a copy at
+    /// that path — its folder may be gone), `folder` (something is in the
+    /// folder), or empty where nothing is.
+    pub taken: String,
+}
+
+impl Record for NewCopy {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("path", &self.path)
+            .put("name", &self.name)
+            .put("taken", &self.taken)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            path: field(map, "path")?,
+            name: field(map, "name")?,
+            taken: field(map, "taken")?,
+        })
+    }
+}
+
 impl NavSectionModel {
+    /// Where a new copy for `branch` goes, beside the repository's own copy
+    /// (`MAIN` row). `None` before the listing names that copy, and for an
+    /// empty name.
+    ///
+    /// The folder is looked at on disk here, once per ask: the box asks per
+    /// keystroke and the menu as it opens, which is when the answer is read.
+    pub(super) fn new_copy(&self, branch: &str) -> Option<NewCopy> {
+        let rows = self.copy_rows();
+        let main = rows.iter().find(|row| row.change == MAIN)?;
+        let path = platitude_core::worktrees::new_copy_path(&main.full, branch);
+        if path.is_empty() {
+            return None;
+        }
+        let key = platitude_core::session::same_path_key(&path);
+        let taken = if rows
+            .iter()
+            .any(|row| platitude_core::session::same_path_key(&row.full) == key)
+        {
+            "listed"
+        } else if !platitude_core::worktrees::folder_free(std::path::Path::new(&path)) {
+            "folder"
+        } else {
+            ""
+        };
+        Some(NewCopy {
+            name: crate::urlpath::path_leaf(&path).to_string(),
+            taken: taken.to_string(),
+            path,
+        })
+    }
+
+    /// Whether new copies have a place at all: the listing names the
+    /// repository's own copy, and that copy has a parent to go beside it in
+    /// (`copies_folder`). Nothing on disk is looked at.
+    pub(super) fn has_place_for_copies(&self) -> bool {
+        self.copy_rows().iter().any(|row| {
+            row.change == MAIN && platitude_core::worktrees::copies_folder(&row.full).is_some()
+        })
+    }
+
     /// The card's rows. Empty for every section but the working copies.
     ///
     /// No filter, and no row the section is showing as gone — the copies
@@ -224,6 +296,73 @@ mod tests {
             model.copy_of("C:/work/held").is_none(),
             "going: no card for it"
         );
+    }
+
+    /// A new copy goes beside the repository's own, under its name — the
+    /// tab may stand in another copy, and the place does not move with it.
+    #[test]
+    fn a_new_copy_is_placed_off_the_repositorys_own_copy() {
+        let place = copies().new_copy("feature/login").expect("a place");
+        assert_eq!(place.path, "C:/work/home.worktrees/feature-login");
+        assert_eq!(place.name, "feature-login");
+        assert_eq!(place.taken, "");
+    }
+
+    #[test]
+    fn a_place_git_still_lists_is_taken() {
+        let model = section(
+            "worktrees",
+            Source::Worktrees {
+                list: vec![
+                    copy("C:/work/home", Some("main"), false),
+                    copy("C:/work/home.worktrees/topic", Some("topic"), false),
+                    copy("C:/work/home.worktrees/Fix-Case", Some("fix/case"), false),
+                ],
+                current: "c:/work/home".to_string(),
+            },
+        );
+        assert_eq!(model.new_copy("topic").expect("a place").taken, "listed");
+        // One folder to a disk that does not tell case apart (Windows,
+        // macOS), where git turns the place down as well.
+        assert_eq!(model.new_copy("fix/case").expect("a place").taken, "listed");
+    }
+
+    /// Looked at on disk: something in the folder takes it, an empty
+    /// folder does not (git fills one).
+    #[test]
+    fn a_folder_holding_something_is_taken() {
+        let dir = std::env::temp_dir().join(format!("pgg-new-copy-{}", std::process::id()));
+        let home = dir.join("home").to_string_lossy().replace('\\', "/");
+        let model = section(
+            "worktrees",
+            Source::Worktrees {
+                list: vec![copy(&home, Some("main"), false)],
+                current: home.clone(),
+            },
+        );
+        let place = dir.join("home.worktrees").join("busy");
+        std::fs::create_dir_all(&place).unwrap();
+        let empty = model.new_copy("busy").expect("a place").taken;
+        std::fs::write(place.join("x.txt"), "x").unwrap();
+        let holding = model.new_copy("busy").expect("a place").taken;
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(empty, "");
+        assert_eq!(holding, "folder");
+    }
+
+    #[test]
+    fn no_place_before_the_listing_names_the_repositorys_own_copy() {
+        let model = section(
+            "worktrees",
+            Source::Worktrees {
+                list: vec![copy("C:/work/plain", Some("topic"), false)],
+                current: "c:/work/plain".to_string(),
+            },
+        );
+        assert!(model.new_copy("x").is_none());
+        assert!(!model.has_place_for_copies());
+        assert!(copies().new_copy("").is_none());
+        assert!(copies().has_place_for_copies());
     }
 
     #[test]

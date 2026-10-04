@@ -128,7 +128,7 @@ mod walk;
 mod walk_tests;
 
 use card::CardRows;
-use copy_card::{CopyRow, CopyRows};
+use copy_card::{CopyRow, CopyRows, NewCopy};
 use item::{FOLDED, HELD, NavItem, PRUNABLE, fold_state};
 /// The worktree rows' state words, which `GitFacts` hands to core's card rule.
 pub(crate) use item::{LOCKED, MAIN};

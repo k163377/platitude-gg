@@ -204,6 +204,7 @@ Item {
             namingRefused: rowItem.naming && rowItem.ListView.view
                            ? rowItem.ListView.view.namingRefused : false
             namingRefusedWhy: rowItem.ListView.view ? rowItem.ListView.view.namingRefusedWhy : ""
+            namingRefusedMark: rowItem.ListView.view ? rowItem.ListView.view.namingRefusedMark : ""
             onNamingSubmitted: name => rowItem.ListView.view.namingSubmitted(
                 rowItem.oid_hex, name, rowItem.ListView.view.namingMode)
             onNamingEdited: text => rowItem.ListView.view.namingText = text

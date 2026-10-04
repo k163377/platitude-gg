@@ -340,6 +340,15 @@ pub struct RepoTab {
     /// where this notify carried none of it, and the row it was about.
     ref_push_answer: i32,
     ref_push_target: String,
+    /// The working copy a menu asked git to make, waiting for its own
+    /// answer: landed, the tab goes and stands in it; refused, the report
+    /// is that answer's (`RepoPage.absorbCopyAnswer`). Owned: in the group
+    /// a fetch in the same drain would take the refusal over.
+    copy_out: crate::ops::Press,
+    /// Where that press's answer stands in `write_answers`, or -1 where
+    /// this notify carried none of it, and the folder it was to make.
+    copy_answer: i32,
+    copy_answer_path: String,
     /// That write did not happen, and something outside this application
     /// said so — a protected branch, a rule, a hook, a stale picture of
     /// the remote (デザイン規約 §答えの要らない報せ).

@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The box a sidebar row's name goes into — new branch, new tag or rename, told apart by the mode
-// (`SidebarRowGestures`). Drawn outside the list so it can grow past the pane over the graph, head held where the
-// name's was: a box too narrow for its text asks nothing (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダは全文」).
+// The box a sidebar row's name goes into — new branch, new tag, new branch in a copy of its own or rename, told apart
+// by the mode (`SidebarRowGestures`). Drawn outside the list so it can grow past the pane over the graph, head held
+// where the name's was: a box too narrow for its text asks nothing (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダは全文」).
 SlimField {
     id: box
 
@@ -19,12 +19,16 @@ SlimField {
     property real rowsY: 0
     property real rowsTop: 0
     property real rowsHeight: 0
-    /// Whether this row is being typed into, for what ("branch" / "tag" / "rename"), and with what — held by the
-    /// sidebar, since the delegate is recycled.
+    /// Whether this row is being typed into, for what ("branch" / "tag" / "worktree" / "rename"), and with what — held
+    /// by the sidebar, since the delegate is recycled.
     property bool editing: false
     property string mode: ""
     property string carried: ""
     property string refusedWhy: ""
+    /// A working copy's folder in `refusedWhy`, empty for none: the shared tip stands the tree mark in front of it
+    /// (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別「名前の印」).
+    property string refusedMark: ""
+    readonly property string tipMarkWord: box.refusedMark
     /// The kind of ref being named — the mode, or the row's kind on a rename — which the frame says
     /// (`SlimField.focusTone` — §ref の種別: 枠 = 種別).
     property string namesKind: ""
@@ -69,10 +73,12 @@ SlimField {
          : Math.max(box.seat.width,
                     Math.min(box.wantWidth, box.Window.width - box.x - Theme.spaceXxl))
     font.pixelSize: Theme.fontMd
-    // Only a tag has a colour to say; the others would read as the plain focus ring anyway.
-    focusTone: box.namesKind === "tag" ? Theme.refTag : Theme.borderFocus
+    // A tag has a colour to say, and so does a branch made out in another copy (that copy's green, as the graph's box
+    // wears it — `GraphRowChips`); the others would read as the plain focus ring anyway.
+    focusTone: box.namesKind === "tag" ? Theme.refTag : box.namesKind === "worktree" ? Theme.success : Theme.borderFocus
     placeholderText: box.mode === "branch" ? qsTr("Create branch here?")
-                   : box.mode === "tag" ? qsTr("Create tag here?") : ""
+                   : box.mode === "tag" ? qsTr("Create tag here?")
+                   : box.mode === "worktree" ? qsTr("Create worktree here?") : ""
     onTextEdited: box.typed(box.text)
     // Refused: Enter does nothing, and the frame and tooltip say why.
     onAccepted: {

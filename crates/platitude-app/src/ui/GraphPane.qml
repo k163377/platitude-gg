@@ -102,6 +102,8 @@ Rectangle {
     signal createBranchRequested(string oidHex, string name)
     /// The same box, answered with a tag.
     signal createTagRequested(string oidHex, string name)
+    /// …and with a branch to be made in a working copy of its own (`RepoPage.copyFromBox`).
+    signal createCopyRequested(string oidHex, string name)
     /// The same box, answered with a new name for something that has one. `kind` picks the git command
     /// (`RepoPage.renameRow`).
     signal renameSubmitted(string kind, string id, string name)
@@ -114,6 +116,10 @@ Rectangle {
     }
     function startTagging(oidHex) {
         graphArea.openNameBox(oidHex, "tag", "", "", "")
+    }
+    /// …and `startCopying` for a branch in a new working copy (`Create worktree here…`).
+    function startCopying(oidHex) {
+        graphArea.openNameBox(oidHex, "worktree", "", "", "")
     }
     /// The box opens holding the existing name, to be typed over. `kind` is what git renames ("branch" / "remote" /
     /// "tag"), `id` the ref, `text` the name as typed — a remote branch is typed without its remote, so the two differ.
@@ -167,7 +173,7 @@ Rectangle {
         graphArea.namingId = ""
         graphArea.namingOpenedWith = ""
     }
-    /// The ref a rename box is changing the name of, and the name it came up holding. Empty for the two
+    /// The ref a rename box is changing the name of, and the name it came up holding. Empty for the three
     /// boxes that make a name.
     property string namingId: ""
     property string namingOpenedWith: ""
@@ -179,6 +185,7 @@ Rectangle {
     readonly property alias namingText: graphList.namingText
     property alias namingRefused: graphList.namingRefused
     property alias namingRefusedWhy: graphList.namingRefusedWhy
+    property alias namingRefusedMark: graphList.namingRefusedMark
 
     // ---- looking for a commit --------------------------------------
     /// The card itself — automation-only exposure, like `view`. A run types into its box, but the key that opens it
@@ -435,6 +442,8 @@ Rectangle {
                 return
             if (mode === "tag")
                 graphArea.createTagRequested(oidHex, name)
+            else if (mode === "worktree")
+                graphArea.createCopyRequested(oidHex, name)
             else
                 graphArea.createBranchRequested(oidHex, name)
         }

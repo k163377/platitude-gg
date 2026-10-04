@@ -73,8 +73,8 @@ Item {
     property UpstreamFlow upstreamFlow
     property RemoteDialog remoteDialog
     property AppMenu remoteMenu
-    /// The WORKTREE card in each of the two menus that carry it: the ref menu (a WORKTREES row, a held branch) and the
-    /// graph row's (a copy's chip).
+    /// The WORKTREE card in each of the two menus that carry it: the ref menu and the graph row's, on every row with a
+    /// commit.
     property RefWorktreeMenu refCopyCard
     property RefWorktreeMenu commitCopyCard
     /// The remote the push-default verbs act on, and the mark they wait for before the shot — empty where no mark
