@@ -46,6 +46,46 @@ Item {
     /// `…`, or for a middle cut the head and `…`, split where `Text.ElideMiddle` would at this width.
     readonly property string markText: (line.cutAt === "middle" && line.clipped
                                         ? line.headOf(line.text, middleRuler.elidedText) : "") + "…"
+    /// Where an end cut's mark starts: the far edge of the last character standing whole before it. Cut by the pixel,
+    /// a character stands half under the mark and reads as another (`12` as `1` and a stroke). One binding over what
+    /// moves the answer, since `positionAt` is a call (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
+    readonly property real markAt: {
+        const room = Math.max(0, line.width - markLabel.implicitWidth)
+        if (!line.clipped || line.cutsHead || field.text === "" || field.contentWidth <= 0)
+            return room
+        // Asked on the line's first row: below the line a field answers with its last character.
+        let at = field.positionAt(room, 0)
+        const edge = field.positionToRectangle(at).x
+        // `positionAt` answers the nearer edge, which can be the one past the room. Under a pixel past it is the
+        // character's own air and it stands: a holder that sized the line for a count of characters rounds its sum
+        // apart from the mark's width here, and comes out a fraction short of the last one (`HashPlate.hashWidth`
+        // under a face of fractional advances).
+        if (edge < room + 1 || at <= 0)
+            return Math.min(edge, room)
+        // Back to the edge before it — past every position inside a character of several code units, each of which
+        // answers that character's far edge.
+        let back = edge
+        while (at > 0 && back >= edge)
+            back = field.positionToRectangle(--at).x
+        return Math.min(back, room)
+    }
+    /// How far a head cut draws the words back from the far edge, so the first character past the mark stands whole:
+    /// held hard against that edge, whatever character the mark's end falls in shows its back half. The same binding
+    /// as `markAt`, read off where the words would stand unmoved (not `field.x`, which this feeds).
+    readonly property real tailSlack: {
+        if (!line.cutsHead || field.text === "" || field.contentWidth <= 0)
+            return 0
+        const from = markLabel.implicitWidth - (line.width - field.width)
+        const at = field.positionAt(from, 0)
+        const edge = field.positionToRectangle(at).x
+        // `positionAt` answers the nearer edge, which can be the one the mark still covers — by under a pixel, the
+        // character's own air, and it stands (as `markAt`).
+        const next = edge > from - 1 || at >= field.length ? edge : field.positionToRectangle(at + 1).x
+        return Math.max(0, next - from)
+    }
+    /// How wide the mark is: what a holder that cuts the value back to a word of its own choosing leaves past that word
+    /// (`CommitAuthorRow.dateDayRoom`).
+    readonly property alias markWidth: markLabel.implicitWidth
     /// What is selected right now, for a run that has no pointer to drag with.
     readonly property alias selected: field.selectedText
     /// A value a `SweepPad` walking a card can land a sweep on.
@@ -84,7 +124,7 @@ Item {
     /// hangs off the near edge (negative `field.x`).
     function onLine(item, x, y) {
         const p = line.mapFromItem(item, x, y)
-        return Qt.point(p.x - field.x, Math.max(0, Math.min(line.height - 1, p.y)))
+        return Qt.point(p.x - field.x, Math.max(0, Math.min(line.height - 1, p.y - field.y)))
     }
     function anchorFrom(item, x, y) {
         const p = line.onLine(item, x, y)
@@ -105,7 +145,7 @@ Item {
     implicitHeight: field.implicitHeight
     // The field's own, for a holder that sets words of two faces on one line (`CommitAuthorRow.firstBase` /
     // `secondBase`).
-    baselineOffset: field.baselineOffset
+    baselineOffset: field.y + field.baselineOffset
     clip: line.clipped
 
     Text {
@@ -127,9 +167,15 @@ Item {
 
     TextEdit {
         id: field
-        // Cutting the head: as wide as the words, held against the far edge; the item clips what hangs off.
+        // Cutting the head: as wide as the words, held against the far edge less what stands the first character past
+        // the mark whole (`tailSlack`); the item clips what hangs off.
         width: line.cutsHead ? Math.max(line.width, Math.ceil(ruler.implicitWidth)) : line.width
-        x: line.cutsHead ? line.width - field.width : 0
+        x: line.cutsHead ? line.width - field.width - line.tailSlack : 0
+        // The line in the middle of the box, where a `Label` of the same face stands. A field files the face's leading
+        // under its line (Hiragino Sans: 7px at `fontMd`), so beside a label the words stand half of it high, and an
+        // underline at the box's foot hangs all of it under them. Whole pixels; nothing where the face has no leading,
+        // and nothing for a `markup` line, whose ruler is rich text and carries the leading as the field does.
+        y: Math.floor((field.implicitHeight - ruler.implicitHeight) / 2)
         height: line.height
         text: line.markup !== "" ? line.markup : line.text
         // Pinned: `AutoText` guesses, and a branch called `<b>` would vanish. `markup` is escaped by the caller that
@@ -158,13 +204,13 @@ Item {
     }
 
     // The cut mark, on an opaque patch over the glyphs it cuts, at the end the cut was taken from (the shape `CardText`
-    // draws for its height cap).
+    // draws for its height cap). An end cut's patch runs from the last whole character to the line's end (`markAt`).
     Rectangle {
         visible: line.clipped
         color: line.ground
-        width: markLabel.implicitWidth
+        width: line.cutsHead ? markLabel.implicitWidth : line.width - line.markAt
         height: line.height
-        x: line.cutsHead ? 0 : line.width - width
+        x: line.cutsHead ? 0 : line.markAt
         Rectangle {
             anchors.fill: parent
             color: line.groundOverlay
