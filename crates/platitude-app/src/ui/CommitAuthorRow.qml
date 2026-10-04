@@ -137,19 +137,31 @@ Item {
     readonly property real dateNeed: detailsDate.implicitWidth + dateLine.spacing
         + (coBlock.visible ? Math.ceil(coBlock.implicitWidth) + dateLine.spacing : 0)
     /// Who gives way on the date line when it is short (デザイン規約 §co-author の表示): the credit's name is cut, then
-    /// folded to its face and count, and only then is the date cut from its tail, the minutes first. Measured top down
-    /// — the row less the face and the plate — not off the line, whose items are laid out to these: a floor read off
-    /// the width it holds up would hold it up for good.
+    /// folded to its face and count, and only then does the date give up its time. Measured top down — the row less
+    /// the face and the plate — not off the line, whose items are laid out to these: a floor read off the width it
+    /// holds up would hold it up for good.
     readonly property real textRoom: Math.max(0, rowContent.width - avatarBadge.width - 2 * rowContent.spacing
         - hashPlate.implicitWidth)
-    readonly property real dateRoom: Math.min(detailsDate.implicitWidth, Math.max(0, authorRow.textRoom
-        - dateLine.spacing - (coBlock.visible ? coBlock.foldedWidth + dateLine.spacing : 0)))
-    readonly property real creditRoom: Math.min(Math.ceil(coBlock.implicitWidth), Math.max(coBlock.foldedWidth,
+    /// What the line can spare the date, the credit at its floor.
+    readonly property real dateSpare: Math.max(0, authorRow.textRoom
+        - dateLine.spacing - (coBlock.visible ? coBlock.foldedWidth + dateLine.spacing : 0))
+    /// The date cut back to its day and the mark — the one step it takes: the time goes whole, since a stamp cut
+    /// through its figures reads as another time. Under the day's own width there is only the cut the field makes.
+    readonly property real dateDayRoom: Math.ceil(dayRuler.implicitWidth) + detailsDate.markWidth
+    readonly property real dateRoom: authorRow.dateSpare >= detailsDate.implicitWidth ? detailsDate.implicitWidth
+        : Math.min(authorRow.dateSpare, authorRow.dateDayRoom)
+    readonly property bool dateShort: authorRow.dateRoom < detailsDate.implicitWidth
+    /// The credit stays at its floor while the date is short of its time: what the time gave up is not the name's.
+    readonly property real creditCeiling: authorRow.dateShort ? coBlock.foldedWidth : Math.ceil(coBlock.implicitWidth)
+    readonly property real creditRoom: Math.min(authorRow.creditCeiling, Math.max(coBlock.foldedWidth,
         authorRow.textRoom - authorRow.dateRoom - 2 * dateLine.spacing))
     /// Automation: the date and the credit as laid out, which reach `dateRoom` / `creditRoom` a pass after a width is
     /// handed down.
     readonly property real dateWidth: detailsDate.width
     readonly property real creditWidth: coBlock.width
+    /// …and how the date came out: `whole`, cut back to its `day`, or `cut` by the field under that.
+    readonly property string dateSaid: !detailsDate.clipped ? "whole"
+        : Math.abs(detailsDate.width - authorRow.dateDayRoom) < 0.5 ? "day" : "cut"
     /// Where the date line's drawn words end, in `item`'s x: the credit's stretch, or the date where nobody is
     /// credited.
     function dateWordsEnd(item) {
@@ -326,6 +338,14 @@ Item {
             authorRow.settleAuthorRequested()
     }
 
+    // The stamp's day in the date's own face: the step the date is cut back to (`dateDayRoom`).
+    Text {
+        id: dayRuler
+        visible: false
+        text: Words.stampDay(authorRow.details.authorTime)
+        font.family: Theme.uiFamily
+        font.pixelSize: detailsDate.pixelSize
+    }
     // Takes the presses no control or value took (規約 §右のペインの字は掴める). Declared before the content so it
     // lies beneath it.
     SweepRoom {
@@ -440,7 +460,7 @@ Item {
                     // Without the pair the line is Fixed — a floor the layout cannot go under — and every box in the
                     // pane paints past the window's edge.
                     Layout.fillWidth: true
-                    Layout.maximumWidth: Math.ceil(coBlock.implicitWidth)
+                    Layout.maximumWidth: authorRow.creditCeiling
                     Layout.preferredWidth: authorRow.creditRoom
                     // Folded is as small as it draws: under that its face and count would run into the parents.
                     Layout.minimumWidth: coBlock.foldedWidth

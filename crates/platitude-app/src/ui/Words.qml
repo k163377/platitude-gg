@@ -109,6 +109,11 @@ QtObject {
     function stamp(epochSeconds) {
         return Qt.formatDateTime(new Date(epochSeconds * 1000), "yyyy-MM-dd HH:mm")
     }
+    /// The day that stamp opens with: what a line short of room cuts it back to (`CommitAuthorRow.dateDayRoom`). The
+    /// time goes as one — a stamp cut through its figures reads as another time.
+    function stampDay(epochSeconds) {
+        return Qt.formatDateTime(new Date(epochSeconds * 1000), "yyyy-MM-dd")
+    }
 
     /// Why a copy of a name wears the warning, or why a row cannot reach the other copy: it stands on another commit
     /// than `reference` has it on. One sentence wherever two copies of one name disagree — a tag's holders on the left

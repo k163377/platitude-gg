@@ -3,9 +3,9 @@ import QtTest
 import platitude.ui
 
 // Who gives way on the details pane's date line when the row is short (デザイン規約 §co-author の表示): the credit's
-// name is cut, then folded to the face and its count, and only then is the date cut from its tail — the minutes
-// first. Whatever gives, the line's words stay clear of the parent line beside them, whose two parents always stand.
-// The row is set here by width alone; the pane's floor and the fonts are the app's (`details-align`).
+// name is cut, then folded to the face and its count, and only then does the date give up its time — whole, cut back
+// to its day. Whatever gives, the line's words stay clear of the parent line beside them, whose two parents always
+// stand. The row is set here by width alone; the pane's floor and the fonts are the app's (`details-align`).
 Item {
     id: root
     width: 800
@@ -82,11 +82,38 @@ Item {
             compare(row.matesSaid, "+11", "the count is the same folded")
         }
 
-        // Shorter still, the date is cut from its tail, the credit folded, two parents standing.
+        // Shorter still, the date gives up its time, the credit folded, two parents standing.
         function test_c_past_the_fold_the_date_is_cut_and_nothing_meets() {
             verify(narrowUntil(() => row.dateClipped) > 0, "the date gave way at last")
             verify(row.matesFolded)
             compare(row.plate.parentsShown, 2, "two parents stand")
+        }
+
+        // The time goes as one: from whole the date steps to its day and the mark, and stands there for as long as the
+        // line can spare that much — never at a width that leaves a figure of the time behind. How many widths that is
+        // comes from the face (the time's own width less the mark's), so the walk ends where the room does.
+        function test_d_the_date_gives_up_its_time_whole() {
+            settleAt(root.width)
+            const whole = row.dateRoom
+            const first = narrowUntil(() => row.dateClipped)
+            verify(first > 0)
+            verify(row.dateDayRoom < whole, "the day and the mark are narrower than the stamp")
+            let stood = 0
+            for (let width = first; width > 100; width -= 2) {
+                settleAt(width)
+                if (row.dateSpare < row.dateDayRoom)
+                    break
+                compare(row.dateSaid, "day", "at " + width)
+                // Asked of the field, not of the room that set its width: the mark stands where the day's last
+                // figure ends, which a day measured in another face than the field's would miss.
+                const date = row.fieldFor("date")
+                verify(Math.abs(row.dateDayRoom - date.markWidth - date.markAt) < 1,
+                       "at " + width + " the mark stands at " + date.markAt + ", the day was measured "
+                       + (row.dateDayRoom - date.markWidth) + " wide")
+                verify(row.matesFolded, "the credit stays folded beside a date short of its time, at " + width)
+                stood++
+            }
+            verify(stood > 1, "the day stood across more than one width")
         }
     }
 }
