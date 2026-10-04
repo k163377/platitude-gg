@@ -23,6 +23,7 @@ mod lanes;
 mod linux;
 mod locks;
 mod note;
+mod package;
 mod perf;
 mod png;
 mod qmltest;
@@ -72,6 +73,7 @@ fn main() -> ExitCode {
         Some("corpus") => corpus::run(&args[1..]),
         Some("perf") => perf::run(&args[1..]),
         Some("shipped") => shipped::run(&args[1..]),
+        Some("package") => package::run(&args[1..]),
         Some("linux") => linux::run(&args[1..]),
         Some("seat") => seats::take(&args[1..]),
         Some("seats") => seats::run(&args[1..]),

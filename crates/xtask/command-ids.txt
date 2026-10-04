@@ -29,6 +29,7 @@ linux.runner
 linux.stop
 linux.verify
 linux.witness
+package.snapshot
 perf.measure
 qmltest.run
 replay.lines

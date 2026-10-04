@@ -2,21 +2,22 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   Template for the .app bundle's Info.plist. Two fields are placeholders
-  the packaging step fills in, so this file is not a valid plist as it
+  `cargo xtask package` fills in, so this file is not a valid plist as it
   stands:
 
     @VERSION@    -- the workspace version (Cargo.toml is the source of
                     truth; nothing here restates it)
-    @BUNDLE_ID@  -- reverse-DNS bundle identifier, still undecided
-                    (P5-確認事項). It has to be settled before anything is
-                    signed or notarised, because it is what the signature
-                    and the quarantine record are keyed to.
+    @BUNDLE_ID@  -- the reverse-DNS bundle identifier, which the
+                    signature, the quarantine record and the privacy
+                    grants are keyed to. A snapshot's is not the
+                    release's (crates/xtask/src/package holds both).
 
-  The bundle it belongs in:
+  The bundle it belongs in, before macdeployqt adds Qt:
 
     Platitude GG.app/Contents/
       Info.plist
       MacOS/platitude-gg              <- the binary
+      MacOS/pgg-todo-editor           <- the rebase helper, beside it
       Resources/platitude.icns        <- crates/platitude-app/assets/
 
   CFBundleIconFile carries no extension on purpose: the loader appends

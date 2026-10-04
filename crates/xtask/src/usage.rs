@@ -276,6 +276,33 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       `structure` catches the type names statically; this catches the
       rest, an import of the absent module included.
 
+  package [--out <dir>] [--password-from <variable>] [--no-build]
+      A snapshot of the app as a macOS bundle, on a Mac only: the shipped
+      build and pgg-todo-editor in Platitude GG.app with the icon and the
+      Info.plist (packaging/macos — the workspace version, and the
+      snapshot's identifier, which is not the release's); then macdeployqt
+      deploys the frameworks, the plugins and the QML modules ui/ imports,
+      the offscreen platform goes in beside Cocoa's, and every run path
+      outside the bundle goes. Signed ad hoc and verified, it is started
+      offscreen from inside the bundle and judged as `shipped` judges a
+      build, and then by dyld's own account (DYLD_PRINT_LIBRARIES): an
+      image from neither the bundle nor the system is red. Last, ditto
+      zips it as platitude-gg-snapshot-<day>-<commit>-macos-arm64.zip —
+      or, with a password, hdiutil puts it in an AES-256 .dmg of that
+      name, which must then call itself encrypted and open under the
+      password onto a bundle whose signature still verifies.
+      Not a release: no notices of the bundled licences travel with it,
+      and no Apple identity signs it.
+      options:
+        --out <dir>   where the bundle and the archive go (the bundle is
+                      replaced); left out, this tree's target/package
+        --password-from <variable>
+                      the .dmg instead of the zip, under the password the
+                      variable holds (CI: SNAPSHOT_DMG_PASSWORD, the
+                      repository secret). Never a password on the
+                      command line: hdiutil reads it off its stdin
+        --no-build    package the shipped build already built
+
   verbs
       Which verbs the gate never runs. The gate runs the argument lines
       the census holds, so a verb with no line there is one no change
