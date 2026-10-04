@@ -335,28 +335,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // The verb that prepares what the others start from, on any host
     // (`runner::prepare`).
     if rest.first().is_some_and(|verb| verb == "runner") {
-        // A preparation builds in this checkout's volume at its one
-        // preparation container, so the line names the gate it is under,
-        // which has to be the live one (`runner::owned_by_the_gate`).
-        let [_, name, flag, pid] = rest else {
-            return Err(format!(
-                "`{}` is the gate's own step — it builds in this checkout's volume and \
-                 stands at its one preparation container, so it runs under a gate or not \
-                 at all. Run `cargo xtask gate`. (got {:?})",
-                RUNNER.call,
-                rest[1..].join(" ")
-            ));
-        };
-        if flag != "--gate" {
-            return Err(format!(
-                "linux runner takes `{}` (got {flag:?})",
-                RUNNER.call
-            ));
-        }
-        let pid = pid
-            .parse::<u32>()
-            .map_err(|_| format!("--gate takes the pid of the gate that sent this; got {pid:?}"))?;
-        return runner::prepare(&root, name, pid);
+        return prepare_the_runner(&root, rest);
     }
     // In the container even on Linux: what it asks is whether a stock
     // Ubuntu is enough.
@@ -400,6 +379,32 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     let tag = ensure_image(&root, &stage, rebuild)?;
     in_container(&root, &tag, &command, shell, copy.as_deref(), None)
+}
+
+/// `runner`, typed (`rest` from the verb on). A preparation builds in
+/// this checkout's volume at its one preparation container, so the line
+/// names the gate it is under, which has to be the live one
+/// (`runner::owned_by_the_gate`).
+fn prepare_the_runner(root: &Path, rest: &[String]) -> Result<(), String> {
+    let [_, name, flag, pid] = rest else {
+        return Err(format!(
+            "`{}` is the gate's own step — it builds in this checkout's volume and \
+             stands at its one preparation container, so it runs under a gate or not \
+             at all. Run `cargo xtask gate`. (got {:?})",
+            RUNNER.call,
+            rest[1..].join(" ")
+        ));
+    };
+    if flag != "--gate" {
+        return Err(format!(
+            "linux runner takes `{}` (got {flag:?})",
+            RUNNER.call
+        ));
+    }
+    let pid = pid
+        .parse::<u32>()
+        .map_err(|_| format!("--gate takes the pid of the gate that sent this; got {pid:?}"))?;
+    runner::prepare(root, name, pid)
 }
 
 /// `stop`, typed: the container and the mark are the line's, and
