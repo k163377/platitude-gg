@@ -546,8 +546,8 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       offline-test job run here: it builds the app with the harness and
       the test binaries, then runs ci/offline-test.sh — the suite plus the
       offscreen smoke — in a container with no network at all, which is
-      the property CI reaches with `unshare -n`. That script has no other
-      caller until CI first runs, so this is what keeps it from drifting.
+      the property CI reaches with `unshare -n`. CI runs that script once
+      a push is on GitHub; this is the run of it a desk can make before.
       Both are worth a place in a pre-merge sweep.
       An engine that gives no answer is not an answer: what is asked of
       it is asked under a ceiling, and a line that cannot learn whether

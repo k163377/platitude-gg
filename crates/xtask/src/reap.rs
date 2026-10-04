@@ -184,9 +184,9 @@ pub(crate) fn others_in_this_group() -> Option<Vec<u32>> {
 
 /// Not implemented: a removal on macOS does not refuse and there is no
 /// `/proc`, so this answers "could not be found out" and the caller keeps
-/// what it would have removed. Nothing verifies on a Mac yet (CLAUDE.md
-/// 現在のフェーズ); the first run that does fills this in off `sysctl`'s
-/// `KERN_PROC`.
+/// what it would have removed. The only Mac that verifies is CI's runner,
+/// thrown away with what it kept; a desk that is one fills this in off
+/// `sysctl`'s `KERN_PROC`.
 #[cfg(not(any(target_os = "linux", windows)))]
 pub(crate) fn others_in_this_group() -> Option<Vec<u32>> {
     None
