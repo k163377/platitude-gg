@@ -278,31 +278,7 @@ impl RepoTab {
         let reported = report.is_some();
         let (report_kind, remote, name, reason) = match report {
             Some(report) => (
-                match report.kind {
-                    ReportKind::RemoteDelete => "delete",
-                    ReportKind::RemoteUpdate => "update",
-                    ReportKind::Outdated => "outdated",
-                    ReportKind::Moved => "moved",
-                    ReportKind::MovedDelete => "moved-delete",
-                    ReportKind::TagElsewhere => "tag-elsewhere",
-                    ReportKind::Commit => "commit",
-                    ReportKind::StaleStage => "stale-stage",
-                    ReportKind::StaleUnstage => "stale-unstage",
-                    ReportKind::StaleDiscard => "stale-discard",
-                    ReportKind::ConflictedPart => "conflicted-part",
-                    ReportKind::RenameRefused => "rename",
-                    ReportKind::HalfRenamed => "half-rename",
-                    ReportKind::WorktreeKept => "worktree-kept",
-                    ReportKind::WorktreeHalfRemoved => "worktree-half",
-                    ReportKind::RewriteAcrossMerge => "across-merge",
-                    ReportKind::RewriteOffBranch => "off-branch",
-                    ReportKind::FoldFirstCommit => "fold-first",
-                    ReportKind::RewriteUnfetchedBase => "unfetched-base",
-                    ReportKind::DropAllCommits => "drop-all",
-                    ReportKind::RewriteTipMoved => "tip-moved",
-                    ReportKind::RewriteWhileStanding => "op-standing",
-                }
-                .to_string(),
+                report_word(report.kind).to_string(),
                 report.remote,
                 report.name,
                 report.reason,
@@ -476,5 +452,34 @@ impl RepoTab {
         self.write_report_remote = String::new();
         self.write_report_name = String::new();
         self.write_report_reason = String::new();
+    }
+}
+
+/// The word the page picks a report's two lines by (`Words.writeReported`,
+/// `Words.writeReportedWhy`).
+fn report_word(kind: ReportKind) -> &'static str {
+    match kind {
+        ReportKind::RemoteDelete => "delete",
+        ReportKind::RemoteUpdate => "update",
+        ReportKind::Outdated => "outdated",
+        ReportKind::Moved => "moved",
+        ReportKind::MovedDelete => "moved-delete",
+        ReportKind::TagElsewhere => "tag-elsewhere",
+        ReportKind::Commit => "commit",
+        ReportKind::StaleStage => "stale-stage",
+        ReportKind::StaleUnstage => "stale-unstage",
+        ReportKind::StaleDiscard => "stale-discard",
+        ReportKind::ConflictedPart => "conflicted-part",
+        ReportKind::RenameRefused => "rename",
+        ReportKind::HalfRenamed => "half-rename",
+        ReportKind::WorktreeKept => "worktree-kept",
+        ReportKind::WorktreeHalfRemoved => "worktree-half",
+        ReportKind::RewriteAcrossMerge => "across-merge",
+        ReportKind::RewriteOffBranch => "off-branch",
+        ReportKind::FoldFirstCommit => "fold-first",
+        ReportKind::RewriteUnfetchedBase => "unfetched-base",
+        ReportKind::DropAllCommits => "drop-all",
+        ReportKind::RewriteTipMoved => "tip-moved",
+        ReportKind::RewriteWhileStanding => "op-standing",
     }
 }
