@@ -133,20 +133,31 @@ AppListView {
         const row = navList.openRow()
         return row === null ? -1 : row.index
     }
-    /// Where the list stood when the row opened, put back on close: a row at the foot scrolls the list to show its
-    /// lines (デザイン規約 §左メニューの所作).
+    /// Where the list stood when the row opened, and where the opening last put it: a row at the foot scrolls the list
+    /// to show its lines, and closing gives that back (デザイン規約 §左メニューの所作).
     property real openRestY: 0
+    property real openShownY: 0
+    /// The opening owns the scroll. **Moved a pixel or more by anything else — a wheel, the middle button's drift, a
+    /// row brought into view for a menu — the list is the reader's**: nothing is shown again or given back, or closing
+    /// would undo where they sent it. Less than a pixel is the view rounding the place the opening wrote as it lays its
+    /// rows (`QQuickFlickablePrivate::fixup`; a row's lines need not be whole pixels tall).
     property bool openHeld: false
+    onContentYChanged: {
+        if (navList.openHeld && Math.abs(navList.contentY - navList.openShownY) >= 1)
+            navList.openHeld = false
+    }
     function keepOpenRowInView() {
         if (navList.gestures === null)
             return
-        // Restore first: the key can move straight from one row to the next.
-        if (navList.openHeld)
+        // Give back first: the key can move straight from one row to the next.
+        if (navList.openHeld) {
+            navList.openHeld = false
             navList.contentY = navList.openRestY
-        navList.openHeld = false
+        }
         if (navList.gestures.openKey === "")
             return
         navList.openRestY = navList.contentY
+        navList.openShownY = navList.contentY
         navList.openHeld = true
         navList.revealOpenRow()
     }
@@ -159,8 +170,10 @@ AppListView {
         const row = navList.openRow()
         if (row === null)
             return
-        // Never below where the reader left it — a row that opened in full view moves nothing.
-        navList.contentY = Math.max(navList.openRestY, row.y + row.height - navList.height)
+        // Never below where the reader left it — a row that opened in full view moves nothing. Noted before it is
+        // written, so the write is known for the opening's own.
+        navList.openShownY = Math.max(navList.openRestY, row.y + row.height - navList.height)
+        navList.contentY = navList.openShownY
     }
     onOpenRoomChanged: navList.revealOpenRow()
     onHeightChanged: navList.revealOpenRow()

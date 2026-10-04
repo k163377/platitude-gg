@@ -245,9 +245,9 @@ QtObject {
     /// Nor while a scroll bar is held (`Hand.heldBar`), and taking one closes the open row
     /// (規約 §hover のツールチップ「スクロールバーを掴んだら、hover で開いたものは閉じる」). The rows re-read their hover
     /// only when the hand is heard to move, and nothing is heard while a bar is held: left to the row, the close would
-    /// come after the drag — under another row's name once the delegate is reused, and with the list put back where
-    /// the opening found it (`NavList.keepOpenRowInView`). At the press, the list gives back what the opening took
-    /// before anything is dragged.
+    /// come after the drag — under another row's name once the delegate is reused, and with what the opening scrolled
+    /// never given back (the drag moved the list: `NavList.openHeld`). At the press, the list gives back what the
+    /// opening took before anything is dragged.
     property Connections barWatch: Connections {
         target: Hand
         function onHeldBarChanged() {
