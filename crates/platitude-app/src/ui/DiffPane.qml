@@ -267,6 +267,13 @@ Rectangle {
     readonly property alias headerHand: paneHeader.pad
     /// Automation: whether that band ran out of room for the path — the half a picture of a wide pane cannot answer.
     readonly property alias headerCut: paneHeader.cut
+    /// Automation: how far apart the band's caption and its path stand, baseline to baseline, and the same for the
+    /// first heading's two words (-1 until that row is built) — `PGG_AUTO_ACT=hunk-tools`.
+    function captionApart() { return paneHeader.captionApart() }
+    function hunkWordsApart() {
+        const row = diffList.itemAtIndex(0)
+        return row !== null ? row.hunkWordsApart() : -1
+    }
     /// Automation: the right-click at a place in one column's text, where the menu's answer is settled.
     function askCodeMenu(side, row, at) { textPick.askMenu(side, row, at) }
     /// Automation: the first row holding a removed line, or -1 — what the menu's second word is about. Side by side

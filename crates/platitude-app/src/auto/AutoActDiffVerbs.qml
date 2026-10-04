@@ -237,10 +237,11 @@ Item {
                 renderedBarrier.begin()
                 return
             }
-            // A heading's own row is line -1 (`flatten_patches`).
+            // A heading's own row is line -1 (`flatten_patches`). Its words are judged once the row is built
+            // (`AutoActDriver.headingBarrier`).
             if (act === "hunk-tools") {
                 diffPane.showLineTools(0, -1)
-                renderedBarrier.begin()
+                driver.barrierHeading.start()
                 return
             }
             if (act === "diff-select" || act === "diff-copy"

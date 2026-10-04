@@ -45,6 +45,7 @@ linux	details-parents-card 0 --preset octopus	-	seat= clear= read the card's mea
 linux	details-grow-squeeze 7 --preset edges	-	keeps= reads the description's laid-out height
 linux	diff-band-sweep unstaged:crates/platitude-core/src/session/integration/support/fixtures/refs_join_snapshot.rs --preset longpaths	-	cut= reads whether a long path fits the band
 linux	graph-min --preset co-authors	-	w= min= read the graph column's measured floor
+linux	hunk-tools notes.txt --preset manyhunks	-	level= caption= read the baselines the face gives a label, a field and a held button
 linux	old-git-fold	-	fitted= mark= read the band's measured floor
 linux	tab-pin	-	crushed= reads the tabs' measured widths
 linux	tab-pin-go	-	crushed= reads the tabs' measured widths
@@ -107,7 +108,6 @@ full	file-menu-untracked untracked.txt --preset dirty	discard-many-go c.txt --pr
 full	find feat	find 150 --preset deep	other: The judged string is the completion line itself; its distinct value (basic's WIP row 0, no retreat, clears=false) is unjudged and read by a person (verbs.md).
 full	find-prev 102 --preset deep	find-prev feat	picture: Named visual reason (the last row dissolving at the window's cut, verbs.md); stage 2 sees completion only.
 full	graph-head-back --preset deep	graph-head-go --preset deep-detached	other: Must_say is a prefix of graph-head-go's and is also its own completion wait (line 316). The set's 'absent' half is supplied before a merge by -go through the same binding
-full	hunk-tools notes.txt --preset manyhunks	split-tools notes.txt --preset manyhunks	picture: Lights the heading's words for the picture; the judged line is printed before the act and only says the rows came (non-discriminating).
 full	identity	badges --preset conflict ; quit-save-held	picture: state=missing and dialog=true are implied before a merge by those two; the three false fields are initial defaults. Value: picture of the identity question.
 full	identity-half	identity-tip	held: Which half landed is the core + model answer, both pinned; the dialog staying up over it is waited on before a merge by identity-tip.
 full	key-menu graph:pointer	key-menu graph	held: The turning away (a placed request is not the keyboard's) is tst_keymenu.qml test_a_right_click_names_its_point_and_the_list_turns_it_away; the graph's handler is the one line key-menu graph:request walks.

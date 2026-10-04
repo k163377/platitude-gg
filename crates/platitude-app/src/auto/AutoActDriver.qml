@@ -491,6 +491,26 @@ Item {
         }
     }
     readonly property alias barrierNotice: noticeBarrier
+    /// The diff's first heading lit as under a pointer (`hunk-tools`), waited on until its row is built. `level=` is
+    /// its two words on one line, and `caption=` the band's caption and path on one. Each is a label beside something
+    /// built otherwise (a button deeper by its hold mark, a field), and whether the pair shares a baseline is what the
+    /// face answers for a line — a few pixels apart reads in a picture as the words' own setting. The distances ride
+    /// along for a run that came out false.
+    SampleTimer {
+        id: headingBarrier
+        onTriggered: {
+            const words = diffPane.hunkWordsApart()
+            // -1: the heading's row is not built yet.
+            if (words < 0)
+                return
+            headingBarrier.stop()
+            const caption = diffPane.captionApart()
+            Harness.report("hunk_tools level=" + (words < 1) + " caption=" + (caption < 1)
+                              + " words=" + words + " head=" + caption)
+            driver.complete()
+        }
+    }
+    readonly property alias barrierHeading: headingBarrier
     // Holds `complete` until `menuGoing` has finished its exit transition.
     SampleTimer {
         id: menuGoneBarrier

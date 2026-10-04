@@ -41,6 +41,13 @@ Rectangle {
     signal closeRequested()
     signal splitChosen(bool split)
 
+    /// Automation: how far apart the caption and the path stand, baseline to baseline. A label and a field of one face
+    /// are two boxes where the face has leading (`LineText`), and centred each on its own they read as two lines.
+    function captionApart() {
+        return Math.abs(captionWord.mapToItem(header, 0, captionWord.baselineOffset).y
+                        - titleField.mapToItem(header, 0, titleField.baselineOffset).y)
+    }
+
     implicitHeight: Theme.headerHeight
     color: Theme.bgElevated
     // The row under it can be a hunk heading of the same colour (デザイン規約 §diff の中のステージ).
@@ -63,6 +70,7 @@ Rectangle {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
             Label {
+                id: captionWord
                 text: qsTr("DIFF")
                 font.pixelSize: Theme.fontMd
                 font.weight: Theme.fontWeightStrong

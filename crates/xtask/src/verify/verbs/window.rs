@@ -483,21 +483,26 @@ pub(super) const TABLE: &[Verb] = &[
     // actions keep every word down to the window's floor. `find=true`: the
     // find's word is gone before the three give theirs up, and theirs are
     // never cut to a `…` on the way.
+    //
+    // `boxed=true`: the frames hold the word over the mark. Their depth
+    // follows the UI face's line height, and under a face with short
+    // lines (macOS) it is the floor on what a button stacks that keeps
+    // the frame round both (`TopBar.actionDepth`).
     Verb {
         name: "band-actions",
         when: &[],
-        plain: "band_actions fits=true folded=false deep=true even=true find=true",
+        plain: "band_actions fits=true folded=false deep=true boxed=true even=true find=true",
     },
     // The end of that road: the words given up for the marks at the floor
     // the window has with its left list open — the width they must be
-    // done by. `deep=` is every frame still two lines deep: the fold gives
-    // up the word, not the depth. `even=` is the four cells at one width,
-    // the find's included — it gives its word up first and keeps the
-    // three's width.
+    // done by. `deep=` is every frame still as deep as it was with its
+    // word: the fold gives up the word, not the depth. `even=` is the four
+    // cells at one width, the find's included — it gives its word up first
+    // and keeps the three's width.
     Verb {
         name: "band-actions-fold",
         when: &[],
-        plain: "band_actions fits=true folded=true deep=true even=true find=true",
+        plain: "band_actions fits=true folded=true deep=true boxed=true even=true find=true",
     },
     // The marks with one saying the last go failed. A `!` on a button with
     // no word has only the mark's corner to stand in, so judged is that it
@@ -508,7 +513,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "band-actions-alert",
         when: &[],
-        plain: "band_actions fits=true folded=true deep=true even=true find=true alert=true",
+        plain: "band_actions fits=true folded=true deep=true boxed=true even=true find=true alert=true",
     },
     // The same corner on the other mark, put there by the run of failures
     // that stops the timer. Its own line because the band's `alert=` is the
@@ -521,7 +526,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "band-actions-none",
         when: &[],
-        plain: "band_actions fits=true folded=false deep=true even=true find=false",
+        plain: "band_actions fits=true folded=false deep=true boxed=true even=true find=false",
     },
     // The fourth badge. A run whose shim never reached PATH reads this
     // machine's git and wears no badge; `badge=` is the band's own reading,

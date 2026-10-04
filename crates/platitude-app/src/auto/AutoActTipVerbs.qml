@@ -304,6 +304,9 @@ Item {
                 + " open=" + detailsPane.authorCards.matesCardOpen
                 + " folded=" + detailsPane.messageBlock.matesFolded
                 + " said=" + detailsPane.messageBlock.matesSaid
+                // Unjudged: which step the date beside the credit came out at is the face's answer (`whole` on one
+                // desk, `day` under a wider face at the same pane).
+                + " date=" + detailsPane.messageBlock.valueRow.dateSaid
                 + " pane=" + Math.round(detailsPane.width))
             driver.complete()
         }

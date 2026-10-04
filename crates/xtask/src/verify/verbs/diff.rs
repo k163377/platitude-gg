@@ -178,10 +178,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_row act=line-tools ready=true",
     },
+    // The first heading lit as under a pointer. `level=true`: its two
+    // words stand on one baseline — the held one's button is deeper by its
+    // mark, by an amount the face decides, and a row sets its children by
+    // their tops. `caption=true`: so do the band's caption and the path
+    // beside it, a label and a field, which a face with leading (macOS)
+    // gives two boxes of different depths.
     Verb {
         name: "hunk-tools",
         when: &[],
-        plain: "diff_row act=hunk-tools ready=true",
+        plain: "hunk_tools level=true caption=true",
     },
     // The text picked out of the rows. All four drag the same stretch,
     // from the head of the first line past the first removed one, so

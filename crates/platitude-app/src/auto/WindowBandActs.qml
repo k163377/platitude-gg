@@ -411,8 +411,17 @@ Item {
                     actionsActTimer.pushRequested = true
                     return
                 }
-                if (!topBar.actionAlertShown)
+                if (!topBar.actionAlertShown) {
+                    Awaited.at(Harness.autoAct, "alert")
                     return
+                }
+                // The refusal also brings its report down, and the bar grows into place (`NoticeBar.settled`):
+                // photographed on the mark alone, it is half open. A refusal that raised no report would stand here to
+                // the ceiling, named.
+                if (!window.curPage.noticeCard.settled) {
+                    Awaited.at(Harness.autoAct, "report")
+                    return
+                }
             }
             // The same corner on fetch, which is marked by the run of failures that stops its timer (`stoppedYet`).
             if (Harness.autoAct === "band-actions-stopped") {
@@ -465,11 +474,14 @@ Item {
     function reportBandActions() {
         Harness.report(
             "band_actions fits=" + (window.width >= Math.ceil(window.floorWidth))
-            // The six judged lead together: `must_say` catches only neighbours in one substring. `deep=` is the frames'
-            // depth, which a fold keeps (`TopBar.actionsDeep`); `even=` the four cells' one width (`actionsEven`);
-            // `find=` whether the find has given its word up, which it does before the three (`findFolded`).
+            // The seven judged lead together: `must_say` catches only neighbours in one substring. `deep=` is the
+            // frames' depth, which a fold keeps (`TopBar.actionsDeep`); `boxed=` that depth holding what each button
+            // draws, which the face's line height decides (`actionsBoxed`); `even=` the four cells' one width
+            // (`actionsEven`); `find=` whether the find has given its word up, which it does before the three
+            // (`findFolded`).
             + " folded=" + topBar.actionsFolded
             + " deep=" + topBar.actionsDeep
+            + " boxed=" + topBar.actionsBoxed
             + " even=" + topBar.actionsEven
             + " find=" + topBar.findFolded
             + " alert=" + topBar.actionAlertShown
