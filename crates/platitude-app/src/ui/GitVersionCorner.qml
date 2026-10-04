@@ -3,8 +3,9 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// The git version, and in a worktree build which tree built it (デザイン規約 §アプリ名), in the right pane's corner.
-// Both are fields (規約 §右のペインの字は掴める).
+// What this binary is and the git it drives (デザイン規約 §アプリ名), in the right pane's corner: a release names its
+// tag; any other build the tag it will become, the tree that built it and the commit. One field
+// (規約 §右のペインの字は掴める).
 RowLayout {
     id: gitCorner
 
@@ -15,25 +16,22 @@ RowLayout {
     property bool offered: true
     /// One step, not two: a list's rows already carry their own spacing.
     readonly property real roomNeeded: gitCorner.implicitHeight + Theme.spaceXs
+    /// The pane's width that shows the whole line, a step clear of either edge: the pane's floor is held to it
+    /// (`PageLayout.rightMinWidth`), so no window shape cuts it. Hiding keeps the implicit width, as the height.
+    readonly property real floorWidth: gitCorner.implicitWidth + Theme.spaceXs * 2
+    /// `PGG-v0.1.0`, or `v0.1.0-b-c7b549aa` — the tree only where the build has one, and `?` for a commit the build
+    /// could not read.
+    readonly property string buildName: AppBackend.buildRelease
+                                        ? qsTr("PGG-%1").arg(AppBackend.buildTag)
+                                        : [AppBackend.buildTag, AppBackend.buildTree,
+                                           AppBackend.buildCommit || qsTr("?")].filter(part => part !== "").join("-")
 
-    spacing: Theme.spaceXs
     // Hidden once the list reaches the corner. Hiding keeps the implicit height, so `roomNeeded` cannot oscillate.
     visible: gitCorner.offered && AppBackend.gitVersion !== ""
              && gitCorner.roomLeft >= gitCorner.roomNeeded
 
     LineText {
-        text: qsTr("git %1").arg(AppBackend.gitVersion)
-        color: Theme.textMuted
-        pixelSize: Theme.fontSm
-    }
-    // Drawn, not a glyph: a glyph's spacing is a full-width cell's leftover (規約 §余白).
-    DotMark {
-        visible: AppBackend.buildTree !== ""
-        Layout.alignment: Qt.AlignVCenter
-    }
-    LineText {
-        visible: AppBackend.buildTree !== ""
-        text: AppBackend.buildTree
+        text: qsTr("%1/git %2").arg(gitCorner.buildName).arg(AppBackend.gitVersion)
         color: Theme.textMuted
         pixelSize: Theme.fontSm
     }

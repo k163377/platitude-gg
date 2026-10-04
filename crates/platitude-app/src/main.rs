@@ -39,8 +39,16 @@ fn main() {
     // Before anything else can fail, so a run whose window never comes up
     // still names the tree it was built from.
     let tree = models::build_tree();
+    let build = models::build_id();
     tracing::info!(
         tree = if tree.is_empty() { "-" } else { tree.as_str() },
+        tag = build.tag.as_str(),
+        release = build.release,
+        commit = if build.commit.is_empty() {
+            "-"
+        } else {
+            build.commit.as_str()
+        },
         "build tree"
     );
 

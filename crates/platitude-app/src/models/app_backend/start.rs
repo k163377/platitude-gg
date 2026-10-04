@@ -99,6 +99,7 @@ impl Default for AppBackend {
         // before the window exists; a build without the harness reads no
         // environment (`harness::knobs`).
         let harness = crate::harness::knobs();
+        let build = build_id();
         Self {
             git_state: "checking".into(),
             git_version: String::new(),
@@ -151,6 +152,9 @@ impl Default for AppBackend {
                 .map(|e| format!("*.{e}"))
                 .collect::<Vec<_>>()
                 .join(" "),
+            build_tag: build.tag,
+            build_release: build.release,
+            build_commit: build.commit,
             build_tree: build_tree(),
             already_running: Hub::with(|hub| !hub.held_elsewhere().is_empty()).unwrap_or(false),
             held_elsewhere: Hub::with(|hub| hub.held_elsewhere().to_string()).unwrap_or_default(),

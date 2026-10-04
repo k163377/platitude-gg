@@ -26,7 +26,7 @@ mod tabs;
 mod tabs_tests;
 mod worktree;
 
-pub use app_backend::{AppBackend, build_tree};
+pub use app_backend::{AppBackend, build_id, build_tree};
 pub use clone::CloneModel;
 pub use commands::CommandsModel;
 pub use details::DetailsModel;

@@ -170,6 +170,9 @@ impl AppBackend {
         Notify = avatars_changed
     );
     qproperty!("avatarPatterns", Member = avatar_patterns, Constant);
+    qproperty!("buildTag", Member = build_tag, Constant);
+    qproperty!("buildRelease", Member = build_release, Constant);
+    qproperty!("buildCommit", Member = build_commit, Constant);
     qproperty!("buildTree", Member = build_tree, Constant);
     qproperty!("alreadyRunning", Member = already_running, Constant);
     qproperty!("heldElsewhere", Member = held_elsewhere, Constant);

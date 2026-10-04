@@ -23,6 +23,8 @@ QtObject {
     required property GraphPane graphPane
     required property WipPane wipPane
     required property DetailsPane detailsPane
+    /// Its line is the right pane's other floor.
+    required property GitVersionCorner gitCorner
 
     required property RepoTab repoTab
     required property NavSectionModel worktreeModel
@@ -60,7 +62,9 @@ QtObject {
     // ---- how narrow and how short this page may be laid out ------------
     // The window is held to these (`Main.floorWidth` / `floorHeight`; 規約 §窓の床): past an item's minimum `SplitView`
     // lays the rest out beyond its edge, where nothing scrolls. The numbers are §レイアウト初期値's.
-    readonly property int rightMinWidth: 300
+    /// Wide enough for the whole of the corner's line (`GitVersionCorner.floorWidth`): a build named by a long tree
+    /// name would otherwise run out past the pane's left edge.
+    readonly property real rightMinWidth: Math.max(300, Math.ceil(layout.gitCorner.floorWidth))
     readonly property int panesMinHeight: 200
     /// The three panes' floor: their own, and at least the left menu whole — the log dragged up as far as it goes
     /// stops at the menu's last cell, never over it.

@@ -18,7 +18,7 @@ mod persist;
 mod qobject;
 mod start;
 
-pub use build_id::build_tree;
+pub use build_id::{build_id, build_tree};
 
 use start::{Assignments, assignments, section_open, with_flag, with_layout, with_window};
 // Also used by the settings screen's `GLOBAL` identity chapter.
@@ -162,6 +162,10 @@ pub struct AppBackend {
     /// The picker's patterns, built from the kinds the store accepts so the
     /// two cannot drift. Patterns only: the label is the dialog's.
     avatar_patterns: String,
+    /// The corner's name for this binary (`build_id::BuildId`).
+    build_tag: String,
+    build_release: bool,
+    build_commit: String,
     build_tree: String,
     /// Another process is already using the files this one would have
     /// used, so this window is only here to say so and be dismissed.

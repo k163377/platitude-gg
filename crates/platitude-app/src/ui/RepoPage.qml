@@ -2186,6 +2186,7 @@ FocusScope {
         graphPane: graphPane
         wipPane: wipPane
         detailsPane: detailsPane
+        gitCorner: gitCorner
         repoTab: repoTab
         worktreeModel: worktreeModel
         detailsModel: detailsModel
