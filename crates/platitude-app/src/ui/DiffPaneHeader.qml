@@ -69,34 +69,45 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
-            Label {
-                id: captionWord
-                text: qsTr("DIFF")
-                font.pixelSize: Theme.fontMd
-                font.weight: Theme.fontWeightStrong
-                color: Theme.textSecondary
-            }
-            // The path, in a field the reader can copy from (規約 §右のペインの字は掴める), cut in the middle: both
-            // ends tell a path apart, and the field keeps the whole path, so a copy never carries the `…`.
-            LineText {
-                id: titleField
-                // Takes the slack but no more than the path, or the copy's name after it strands at the far edge.
+            // The band's own words, set on one baseline. A label and a field of one face are two boxes where the face
+            // has leading (`LineText`), and centred in the row each on its own, the half pixel between them rounds two
+            // ways. **In a layout of their own**: a layout does not round what it sets by baseline, so beside
+            // something deeper than the words (the copy's name) they would stand on half pixels.
+            RowLayout {
                 Layout.fillWidth: true
-                Layout.maximumWidth: titleField.implicitWidth
-                text: header.title
-                pixelSize: Theme.fontMd
-                weight: Theme.fontWeightStrong
-                color: Theme.textSecondary
-                cutAt: "middle"
-                ground: Theme.bgElevated
-            }
-            // Whose file: a dash, then the mark and the name, as everywhere a copy is named (デザイン規約
-            // §別の作業コピーを読む). Outside the field, so a copied path stays a path.
-            Label {
-                visible: header.copyName !== ""
-                text: "—"
-                font.pixelSize: Theme.fontMd
-                color: Theme.textSecondary
+                spacing: Theme.spaceXs
+                Label {
+                    id: captionWord
+                    Layout.alignment: Qt.AlignBaseline
+                    text: qsTr("DIFF")
+                    font.pixelSize: Theme.fontMd
+                    font.weight: Theme.fontWeightStrong
+                    color: Theme.textSecondary
+                }
+                // The path, in a field the reader can copy from (規約 §右のペインの字は掴める), cut in the middle: both
+                // ends tell a path apart, and the field keeps the whole path, so a copy never carries the `…`.
+                LineText {
+                    id: titleField
+                    Layout.alignment: Qt.AlignBaseline
+                    // Takes the slack but no more than the path, or the copy's name after it strands at the far edge.
+                    Layout.fillWidth: true
+                    Layout.maximumWidth: titleField.implicitWidth
+                    text: header.title
+                    pixelSize: Theme.fontMd
+                    weight: Theme.fontWeightStrong
+                    color: Theme.textSecondary
+                    cutAt: "middle"
+                    ground: Theme.bgElevated
+                }
+                // Whose file: a dash, then the mark and the name, as everywhere a copy is named (デザイン規約
+                // §別の作業コピーを読む). Outside the field, so a copied path stays a path.
+                Label {
+                    Layout.alignment: Qt.AlignBaseline
+                    visible: header.copyName !== ""
+                    text: "—"
+                    font.pixelSize: Theme.fontMd
+                    color: Theme.textSecondary
+                }
             }
             // A quarter of the band at most, so a long copy name cannot push the path off; it cuts its own middle.
             RowLayout {

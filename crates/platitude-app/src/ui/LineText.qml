@@ -217,8 +217,10 @@ Item {
         }
         Label {
             id: markLabel
-            anchors.fill: parent
-            verticalAlignment: Text.AlignVCenter
+            // On the words' own baseline, not at the patch's middle: the two are half a pixel apart where the face's
+            // leading is odd, and each rounds its own way — the head of a path cut in its middle would stand a pixel
+            // off its tail.
+            y: field.y + field.baselineOffset - markLabel.baselineOffset
             text: line.markText
             color: line.color
             font: field.font
