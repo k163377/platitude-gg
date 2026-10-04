@@ -51,7 +51,49 @@ pub(crate) fn bounded(
     ceiling: Duration,
     said: Option<&Path>,
 ) -> Answer {
-    run_bounded(what, command, ceiling, said, false)
+    run_bounded(what, command, ceiling, said, Stderr::Dropped, Stdin::Null)
+}
+
+/// What a bounded command is given to read.
+#[derive(Clone, Copy)]
+pub(crate) enum Stdin {
+    /// The null device: nothing here answers a prompt.
+    Null,
+    /// A pipe closed as soon as the command stands — an end of input, as
+    /// `Command::output` gives one. For a program that relays its stdin
+    /// and refuses the null device (`linux::engine::in_its_vm`).
+    Closed,
+}
+
+/// Where a bounded command's stderr goes.
+enum Stderr<'a> {
+    Dropped,
+    /// Into the file its stdout is written to.
+    WithStdout,
+    /// Into a file of its own.
+    Apart(&'a Path),
+}
+
+/// [`bounded`], with the command's stderr kept in `refused`, apart from
+/// the answer in `said` — for a listing that is parsed off its stdout
+/// and whose refusal still has to be carried to whoever reads the
+/// failure (`linux::engine`).
+pub(crate) fn bounded_apart(
+    what: &str,
+    command: Command,
+    ceiling: Duration,
+    said: &Path,
+    refused: &Path,
+    stdin: Stdin,
+) -> Answer {
+    run_bounded(
+        what,
+        command,
+        ceiling,
+        Some(said),
+        Stderr::Apart(refused),
+        stdin,
+    )
 }
 
 /// [`bounded`], with the diagnostic's stderr written into the same file
@@ -65,7 +107,14 @@ pub(crate) fn bounded_both_streams(
     ceiling: Duration,
     said: &Path,
 ) -> Answer {
-    run_bounded(what, command, ceiling, Some(said), true)
+    run_bounded(
+        what,
+        command,
+        ceiling,
+        Some(said),
+        Stderr::WithStdout,
+        Stdin::Null,
+    )
 }
 
 fn run_bounded(
@@ -73,30 +122,49 @@ fn run_bounded(
     mut command: Command,
     ceiling: Duration,
     said: Option<&Path>,
-    stderr_too: bool,
+    stderr: Stderr<'_>,
+    stdin: Stdin,
 ) -> Answer {
-    let (stdout, stderr) = match said.map(File::create) {
-        None => (Stdio::null(), Stdio::null()),
-        Some(Ok(file)) if stderr_too => match file.try_clone() {
-            Ok(twin) => (Stdio::from(file), Stdio::from(twin)),
-            Err(error) => {
-                return Answer::Unstarted(format!(
-                    "{what} could not be given a file for what it says: {error}"
-                ));
-            }
-        },
-        Some(Ok(file)) => (Stdio::from(file), Stdio::null()),
-        Some(Err(error)) => {
-            return Answer::Unstarted(format!(
-                "{what} could not be given a file for what it says: {error}"
-            ));
-        }
+    let no_file = |error: std::io::Error| {
+        Answer::Unstarted(format!(
+            "{what} could not be given a file for what it says: {error}"
+        ))
     };
-    command.stdin(Stdio::null()).stdout(stdout).stderr(stderr);
+    let mut stdout = Stdio::null();
+    let mut errors = Stdio::null();
+    if let Some(path) = said {
+        let file = match File::create(path) {
+            Ok(file) => file,
+            Err(error) => return no_file(error),
+        };
+        if matches!(stderr, Stderr::WithStdout) {
+            match file.try_clone() {
+                Ok(twin) => errors = Stdio::from(twin),
+                Err(error) => return no_file(error),
+            }
+        }
+        stdout = Stdio::from(file);
+    }
+    if let Stderr::Apart(path) = stderr {
+        match File::create(path) {
+            Ok(file) => errors = Stdio::from(file),
+            Err(error) => return no_file(error),
+        }
+    }
+    command
+        .stdin(match stdin {
+            Stdin::Null => Stdio::null(),
+            Stdin::Closed => Stdio::piped(),
+        })
+        .stdout(stdout)
+        .stderr(errors);
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => return Answer::Unstarted(format!("{what} could not be started: {error}")),
     };
+    // The writing end of [`Stdin::Closed`]'s pipe: held, it is an input
+    // that never ends.
+    drop(child.stdin.take());
     let mut wait = Wait::new(what, Budget::whole(ceiling), LOOK_AGAIN);
     loop {
         match child.try_wait() {
@@ -477,5 +545,104 @@ mod tests {
         assert!(!task_runner_exists(NO_SUCH_PID));
         assert!(!image_still_at(NO_SUCH_PID, &mine));
         assert_eq!(image_of(NO_SUCH_PID), None);
+    }
+
+    /// A shell's one line, as each system spells it.
+    fn a_shell_saying(windows: &str, unix: &str) -> std::process::Command {
+        let (shell, flag, line) = if cfg!(windows) {
+            ("cmd", "/c", windows)
+        } else {
+            ("sh", "-c", unix)
+        };
+        let mut command = std::process::Command::new(shell);
+        command.args([flag, line]);
+        command
+    }
+
+    /// The answer is parsed off the one file, so the refusal must not be
+    /// in it — and must be somewhere.
+    #[test]
+    fn what_a_command_says_on_stderr_is_kept_apart_from_its_answer() {
+        use super::{Answer, Stdin, bounded_apart};
+
+        let yard = crate::yard::Yard::new("apart");
+        let (said, refused) = (yard.join("said.txt"), yard.join("refused.txt"));
+
+        let answer = bounded_apart(
+            "a command with two things to say",
+            a_shell_saying("echo one& echo two 1>&2", "echo one; echo two >&2"),
+            std::time::Duration::from_secs(60),
+            &said,
+            &refused,
+            Stdin::Null,
+        );
+
+        let Answer::Ended { status, stdout } = answer else {
+            panic!("it did not end: {answer:?}");
+        };
+        assert!(status.success(), "{status}");
+        assert_eq!(stdout.trim(), "one");
+        assert_eq!(
+            std::fs::read_to_string(&refused)
+                .expect("what it said on stderr, on the disk")
+                .trim(),
+            "two"
+        );
+    }
+
+    /// A child that says what its stdin is and then reads it to the end:
+    /// `pipe` or `other`, then `read`. It ends only if a pipe it was
+    /// handed was closed behind it.
+    #[cfg(windows)]
+    fn a_reader_naming_its_stdin() -> std::process::Command {
+        // GetFileType of the standard input handle: 3 is a pipe, and the
+        // null device is a character device.
+        let script = "Add-Type -Namespace Pgg -Name Std -MemberDefinition '\
+            [DllImport(\"kernel32.dll\")] public static extern IntPtr GetStdHandle(int which); \
+            [DllImport(\"kernel32.dll\")] public static extern int GetFileType(IntPtr handle);'
+if ([Pgg.Std]::GetFileType([Pgg.Std]::GetStdHandle(-10)) -eq 3) { 'pipe' } else { 'other' }
+[Console]::In.ReadToEnd() | Out-Null
+'read'";
+        let mut command = std::process::Command::new("powershell");
+        command.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+        command
+    }
+
+    #[cfg(not(windows))]
+    fn a_reader_naming_its_stdin() -> std::process::Command {
+        let mut command = std::process::Command::new("sh");
+        command.args([
+            "-c",
+            "if test -p /dev/stdin; then echo pipe; else echo other; fi; cat >/dev/null; echo read",
+        ]);
+        command
+    }
+
+    /// The command that refuses the null device is handed a pipe, and one
+    /// closed behind it: an input that has ended, not one that never
+    /// does. The other kind is still the null device.
+    #[test]
+    fn a_closed_pipe_is_a_pipe_and_an_input_that_has_ended() {
+        use super::{Answer, Stdin, bounded_apart};
+
+        let yard = crate::yard::Yard::new("closed-pipe");
+        let said_to = |stdin: Stdin| {
+            let answer = bounded_apart(
+                "a reader of its whole input",
+                a_reader_naming_its_stdin(),
+                std::time::Duration::from_secs(60),
+                &yard.join("said.txt"),
+                &yard.join("refused.txt"),
+                stdin,
+            );
+            let Answer::Ended { status, stdout } = answer else {
+                panic!("the reader was left waiting on its input: {answer:?}");
+            };
+            assert!(status.success(), "{status}");
+            stdout.split_whitespace().collect::<Vec<_>>().join(" ")
+        };
+
+        assert_eq!(said_to(Stdin::Closed), "pipe read");
+        assert_eq!(said_to(Stdin::Null), "other read");
     }
 }

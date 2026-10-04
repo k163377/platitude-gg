@@ -523,6 +523,9 @@ const TAIL: &str = "  shipped [--no-build]
       the property CI reaches with `unshare -n`. That script has no other
       caller until CI first runs, so this is what keeps it from drifting.
       Both are worth a place in a pre-merge sweep.
+      An engine that gives no answer is not an answer: what is asked of
+      it is asked under a ceiling, and a line that cannot learn whether
+      its image is built stops there and builds nothing.
       Which image it runs in follows what the command needs: core is
       Ubuntu and the toolchain, app adds Qt, a software GL stack and the
       fonts デザイン規約 names for Ubuntu. The build directory is a volume

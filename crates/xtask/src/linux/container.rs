@@ -278,7 +278,7 @@ pub(crate) fn remove_container(root: &Path, name: &str) -> String {
                 stdout.trim()
             );
             let asked = said.with_file_name(format!("linux-asked-{name}.txt"));
-            match engine::presence(engine::Kind::Container, name, &asked) {
+            match engine::presence(engine::Kind::Container, name, &asked, engine::Asked::Behind) {
                 engine::Presence::Gone => {
                     format!("{name} is not there (gone on its own, or never started)")
                 }

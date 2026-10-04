@@ -460,7 +460,7 @@ pub(crate) fn sweep_the_volume(root: &Path, whatever_the_key_says: bool) -> Resu
     };
     let rest: Vec<String> = told.call.split_whitespace().map(str::to_string).collect();
     let tag = image_tag(root, stage_for(&rest))?;
-    if !image_exists(&tag)? {
+    if !built(root, &tag)? {
         return Err(format!(
             "{tag} is not built, so nothing here has built in the volume either"
         ));
@@ -481,10 +481,41 @@ pub(crate) fn sweep_the_volume(root: &Path, whatever_the_key_says: bool) -> Resu
 
 fn ensure_image(root: &Path, stage: &str, rebuild: bool) -> Result<String, String> {
     let tag = image_tag(root, stage)?;
-    if rebuild || !image_exists(&tag)? {
+    if rebuild || !built(root, &tag)? {
         build_image(root, stage, &tag)?;
     }
     Ok(tag)
+}
+
+/// Whether the engine holds `tag` — an error, never `false`, where it
+/// could not say: an engine that will not answer what it holds is in no
+/// state to build, and a build started on its silence would bury the
+/// trouble under a failure of its own.
+///
+/// The line's first word to the engine, so [`engine::Asked::First`].
+fn built(root: &Path, tag: &str) -> Result<bool, String> {
+    // This process's own: two lines of one tree can be asking at once.
+    let said = root
+        .join("target")
+        .join(format!("linux-image-{}.txt", std::process::id()));
+    if let Some(dir) = said.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    let presence = engine::presence(engine::Kind::Image, tag, &said, engine::Asked::First);
+    let _ = std::fs::remove_file(&said);
+    built_off(tag, presence)
+}
+
+/// [`built`]'s reading of the engine's answer. Pure, so a test holds
+/// that only an answered listing may send a line on to build.
+fn built_off(tag: &str, presence: engine::Presence) -> Result<bool, String> {
+    match presence {
+        engine::Presence::There => Ok(true),
+        engine::Presence::Gone => Ok(false),
+        engine::Presence::Unknown(why) => Err(format!(
+            "could not learn whether {tag} is built, and built nothing in its place — {why}"
+        )),
+    }
 }
 
 /// Cargo's own options that take their value in the next word: in
@@ -615,23 +646,6 @@ fn qt_version(root: &Path) -> Result<String, String> {
     crate::qt::pinned_in(&text).ok_or_else(|| format!("no QT_VERSION in {}", path.display()))
 }
 
-fn image_exists(tag: &str) -> Result<bool, String> {
-    let status = engine::command()
-        .args(["image", "inspect", tag])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map_err(|e| {
-            format!(
-                "failed to run {}: {e}. `cargo xtask linux` needs {}.",
-                engine::NAME,
-                engine::NEEDS
-            )
-        })?;
-    Ok(status.success())
-}
-
 fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
     println!("building {tag} — the first one takes a while");
     // Ahead of the build: one that stops halfway has written cache
@@ -679,45 +693,58 @@ fn stale_images<'a>(listed: &'a str, stage: &str, keep: &BTreeSet<String>) -> Ve
 ///
 /// The engine refuses to remove an image a running container uses, so a
 /// run next door is safe. Every removal is printed. `said` is where the
-/// engine's listings go ([`engine::presence`]).
-fn forget_older_images(listed: &str, stage: &str, keep: &BTreeSet<String>, said: &Path) {
+/// engine's words go ([`engine::presence`]).
+///
+/// An error is an engine that gave no answer: the caller takes nothing
+/// more away ([`housekeeping`]).
+fn forget_older_images(
+    listed: &str,
+    stage: &str,
+    keep: &BTreeSet<String>,
+    said: &Path,
+) -> Result<(), String> {
     for tag in stale_images(listed, stage, keep) {
-        let Ok(done) = engine::command()
-            .args(["image", "rm", tag])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .output()
-        else {
-            return;
-        };
-        if done.status.success() {
-            SHARING_MOVED.store(true, Ordering::Relaxed);
-            println!("removed the older image {tag}");
-            continue;
+        match engine::remove_image(tag, said) {
+            engine::Removal::Done => {
+                SHARING_MOVED.store(true, Ordering::Relaxed);
+                println!("removed the older image {tag}");
+            }
+            engine::Removal::Refused(refused) => {
+                after_a_failed_removal(engine::Kind::Image, tag, &refused, said)?;
+            }
+            engine::Removal::Unanswered(why) => return Err(why),
         }
-        after_a_failed_removal(engine::Kind::Image, tag, &done.stderr, said);
     }
+    Ok(())
 }
 
-/// What a removal that failed left, said: nothing when the object is gone
-/// (the seat next door swept it since the listing — the state wanted), a
-/// line when it is still there, and another when nobody could find out —
-/// an object that could not be asked after is never reported gone.
-fn after_a_failed_removal(kind: engine::Kind, name: &str, refused: &[u8], said: &Path) {
-    let refused = String::from_utf8_lossy(refused);
-    match engine::presence(kind, name, said) {
-        engine::Presence::Gone => {}
-        engine::Presence::There => println!(
-            "left {name} alone — {} would not remove it ({})",
+/// What a removal the engine refused left: nothing said when the object
+/// is gone (the seat next door swept it since the listing — the state
+/// wanted), a line when it is still there. Where the engine could not be
+/// asked, that is the error — an object that could not be asked after is
+/// never reported gone, and the engine is asked for nothing more.
+fn after_a_failed_removal(
+    kind: engine::Kind,
+    name: &str,
+    refused: &str,
+    said: &Path,
+) -> Result<(), String> {
+    match engine::presence(kind, name, said, engine::Asked::Behind) {
+        engine::Presence::Gone => Ok(()),
+        engine::Presence::There => {
+            println!(
+                "left {name} alone — {} would not remove it ({})",
+                engine::NAME,
+                refused.trim()
+            );
+            Ok(())
+        }
+        engine::Presence::Unknown(why) => Err(format!(
+            "did not confirm {name} removed — {} would not remove it ({}), and asking whether \
+             it is still there failed ({why})",
             engine::NAME,
             refused.trim()
-        ),
-        engine::Presence::Unknown(why) => println!(
-            "did not confirm {name} removed — {} would not remove it ({}), and asking whether it \
-             is still there failed ({why})",
-            engine::NAME,
-            refused.trim()
-        ),
+        )),
     }
 }
 
@@ -824,81 +851,84 @@ fn orphan_volumes<'a>(listed: &'a str, names: &BTreeSet<String>) -> Vec<&'a str>
 ///
 /// A volume already gone was swept by another seat; one still mounted
 /// the engine refuses, and that is printed.
-fn housekeeping(root: &Path) {
-    static ONCE: std::sync::Once = std::sync::Once::new();
+///
+/// **An engine that leaves any of it unanswered stops the line**: what
+/// that command left is not known, the next removal would be put to an
+/// engine in the same state, and so would the container this stands
+/// ahead of — which nothing ends when the engine stands silent on it.
+/// The build cache is left untrimmed on that road ([`TrimTheCache`]).
+fn housekeeping(root: &Path) -> Result<(), String> {
+    static KEPT: std::sync::OnceLock<Result<(), String>> = std::sync::OnceLock::new();
     if cfg!(target_os = "linux") || std::env::var_os(IN_CONTAINER).is_some() {
-        return;
+        return Ok(());
     }
-    ONCE.call_once(|| {
+    KEPT.get_or_init(|| {
         let alive = match alive(root) {
             Ok(alive) => alive,
             Err(trouble) => {
                 println!("{trouble} — this run takes no image and no volume away");
-                return;
+                return Ok(());
             }
         };
         // This process's own: two lines of one tree can be at it at once.
         let said = root
             .join("target")
             .join(format!("linux-housekeeping-{}.txt", std::process::id()));
-        forget(&alive, &said);
+        let forgotten = forget(&alive, &said);
         let _ = std::fs::remove_file(&said);
-    });
+        forgotten.map_err(|why| {
+            SHARING_MOVED.store(false, Ordering::Relaxed);
+            format!("started no container: the engine left the housekeeping ahead of it unanswered — {why}")
+        })
+    })
+    .clone()
 }
 
 /// [`housekeeping`]'s removals: the orphan volumes, then the images no
 /// checkout names — nothing off a half-read list (`Alive::tags`), and
-/// `alive` has said which checkout would not answer.
-fn forget(alive: &Alive, said: &Path) {
-    forget_orphan_volumes(&alive.names, said);
+/// `alive` has said which checkout would not answer. It ends at the
+/// first thing the engine gives no answer to.
+///
+/// The listings are asked as a line's first question
+/// ([`engine::Asked::First`]): the wait for the machine's ticket stands
+/// between the image's question and these, long enough for the engine to
+/// have taken its VM down.
+fn forget(alive: &Alive, said: &Path) -> Result<(), String> {
+    forget_orphan_volumes(&alive.names, said)?;
     let Some(keep) = &alive.tags else {
-        return;
+        return Ok(());
     };
-    let Ok(out) = engine::command()
-        .args([
-            "images",
-            "--filter",
-            &format!("reference={IMAGE}"),
-            "--format",
-            "json",
-        ])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-    else {
-        return;
-    };
-    let listed = image_tags(&String::from_utf8_lossy(&out.stdout));
+    let mut list = engine::command();
+    list.args([
+        "images",
+        "--filter",
+        &format!("reference={IMAGE}"),
+        "--format",
+        "json",
+    ]);
+    let listed = image_tags(&engine::listed(list, engine::Asked::First, said)?);
     for stage in STAGES {
-        forget_older_images(&listed, stage, keep, said);
+        forget_older_images(&listed, stage, keep, said)?;
     }
+    Ok(())
 }
 
-fn forget_orphan_volumes(names: &BTreeSet<String>, said: &Path) {
-    let Ok(out) = engine::command()
-        .args(["volume", "ls", "--quiet"])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-    else {
-        return;
-    };
-    let listed = String::from_utf8_lossy(&out.stdout);
+fn forget_orphan_volumes(names: &BTreeSet<String>, said: &Path) -> Result<(), String> {
+    let mut list = engine::command();
+    list.args(["volume", "ls", "--quiet"]);
+    let listed = engine::listed(list, engine::Asked::First, said)?;
     for orphan in orphan_volumes(&listed, names) {
-        let Ok(done) = engine::command()
-            .args(["volume", "rm", orphan])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .output()
-        else {
-            return;
-        };
-        if done.status.success() {
-            println!("removed the orphan volume {orphan} — no checkout here names it");
-            continue;
+        match engine::remove_volume(orphan, said) {
+            engine::Removal::Done => {
+                println!("removed the orphan volume {orphan} — no checkout here names it");
+            }
+            engine::Removal::Refused(refused) => {
+                after_a_failed_removal(engine::Kind::Volume, orphan, &refused, said)?;
+            }
+            engine::Removal::Unanswered(why) => return Err(why),
         }
-        after_a_failed_removal(engine::Kind::Volume, orphan, &done.stderr, said);
     }
+    Ok(())
 }
 
 /// What the build cache may hold of what no image holds. buildkit never
@@ -933,7 +963,13 @@ impl Drop for TrimTheCache {
         if !SHARING_MOVED.load(Ordering::Relaxed) {
             return;
         }
-        match engine::trim_build_cache(CACHE_CEILING) {
+        // This process's own, as [`built`]'s is.
+        let said = crate::tree::workspace_root()
+            .join("target")
+            .join(format!("linux-trim-{}.txt", std::process::id()));
+        let trimmed = engine::trim_build_cache(CACHE_CEILING, &said);
+        let _ = std::fs::remove_file(&said);
+        match trimmed {
             Ok(freed) => println!(
                 "trimmed the unreferenced build cache to {} MiB — freed {freed}",
                 CACHE_CEILING >> 20
@@ -963,7 +999,7 @@ fn in_container(
 ) -> Result<(), String> {
     // Ahead of the mounts below: every host-side container that names a
     // checkout's volumes starts here.
-    housekeeping(root);
+    housekeeping(root)?;
     let mut cmd = carried();
     // The tree's gate note, read-only, for the one line that has to
     // read it late (`runner::note_of`). It cannot come in through

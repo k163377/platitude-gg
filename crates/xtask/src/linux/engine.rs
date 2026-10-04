@@ -19,12 +19,22 @@
 //! a refusal's words to learn what state it left: a removal that failed is
 //! followed by asking whether the object is still there ([`presence`]) —
 //! there, gone, or not known because the engine could not be asked.
+//!
+//! **An engine that gives no answer is not an answer.** Everything short
+//! that is asked of it goes through [`put`]: to its end or to a ceiling,
+//! and a command that exited non-zero, could not be started or ran out
+//! of time comes back as that — with what was asked, when, for how long
+//! and what it said — never as "the object is not there". What the
+//! caller does next is its own (`super::built` builds nothing on it).
+//! Nothing here ends the engine's VM or its session, which every
+//! checkout on the machine shares, and nothing is put twice: the CLI
+//! ending says nothing about what the engine had already taken on.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use crate::subprocess::{Answer, bounded};
+use crate::subprocess::{Answer, Stdin, bounded_apart};
 
 /// What this host's engine is called, in what this crate says.
 pub(crate) const NAME: &str = if cfg!(windows) { "wslc" } else { "docker" };
@@ -92,26 +102,194 @@ pub(crate) fn in_its_vm(program: &str, args: &[&str]) -> Command {
 /// The ceiling has two spellings: wslc's VM carries docker 25, whose
 /// buildx calls it `--keep-storage`; the docker a host installs is past
 /// the rename to `--max-used-space`.
-pub(crate) fn trim_build_cache(ceiling: u64) -> Result<String, String> {
+///
+/// `said` is the file docker's words are written to. A trim past
+/// [`WORKING_CEILING`] is left to the engine: whether it is still at it
+/// in there is not known out here, and it is not asked again.
+pub(crate) fn trim_build_cache(ceiling: u64, said: &Path) -> Result<String, String> {
     let ceiling = ceiling.to_string();
     let flag = if cfg!(windows) {
         "--keep-storage"
     } else {
         "--max-used-space"
     };
-    let out = in_its_vm("docker", &["builder", "prune", "--force", flag, &ceiling])
-        .output()
-        .map_err(|e| format!("could not start {NAME}: {e}"))?;
-    if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    let prune = in_its_vm("docker", &["builder", "prune", "--force", flag, &ceiling]);
+    put(prune, WORKING_CEILING, said, Stdin::Closed)
+        .freed()
+        .map_err(NoAnswer::told)
+}
+
+/// How putting one command to the engine ended.
+#[derive(Debug, PartialEq)]
+enum Put {
+    /// It exited zero: what it wrote.
+    Answered(String),
+    /// It exited non-zero: the account of that, and its stderr alone for
+    /// a caller that goes on to ask what state the refusal left.
+    Refused { account: String, said: String },
+    /// It was still standing at its ceiling: the account. The engine was
+    /// asked and nothing is known.
+    Silent(String),
+    /// It could not be started, or asked after: the account.
+    Unstarted(String),
+}
+
+/// The account of a command that left no answer to read, by what it is
+/// an account of.
+#[derive(Debug, PartialEq)]
+enum NoAnswer {
+    /// The engine itself is in a state: it stood silent, or refused what
+    /// an engine in order does not.
+    OfTheEngine(String),
+    /// The command's own: it never reached the engine, or was refused
+    /// what an engine in order may refuse.
+    OfTheCommand(String),
+}
+
+impl NoAnswer {
+    /// The account as a caller is told it.
+    fn told(self) -> String {
+        match self {
+            NoAnswer::OfTheEngine(account) | NoAnswer::OfTheCommand(account) => account,
+        }
     }
-    let said = String::from_utf8_lossy(&out.stdout);
-    Ok(said
-        .lines()
-        .rev()
-        .find_map(|line| line.trim().strip_prefix("Total:"))
-        .map_or("nothing", str::trim)
-        .to_string())
+}
+
+impl Put {
+    /// Read as a listing: its rows. A listing is not something an engine
+    /// in order refuses, so a refusal is of the engine as a silence is.
+    fn rows(self) -> Result<String, NoAnswer> {
+        match self {
+            Put::Answered(rows) => Ok(rows),
+            Put::Refused { account, .. } | Put::Silent(account) => {
+                Err(NoAnswer::OfTheEngine(account))
+            }
+            Put::Unstarted(account) => Err(NoAnswer::OfTheCommand(account)),
+        }
+    }
+
+    /// Read as a removal: done (`None`), or refused in the words given —
+    /// an engine in order refuses to remove what is in use, and
+    /// [`presence`] is what says the state that left.
+    fn removal(self) -> Result<Option<String>, NoAnswer> {
+        match self {
+            Put::Answered(_) => Ok(None),
+            Put::Refused { said, .. } => Ok(Some(said)),
+            Put::Silent(account) => Err(NoAnswer::OfTheEngine(account)),
+            Put::Unstarted(account) => Err(NoAnswer::OfTheCommand(account)),
+        }
+    }
+
+    /// Read as the build cache's trim: what docker said it freed, off
+    /// its own last line.
+    fn freed(self) -> Result<String, NoAnswer> {
+        match self {
+            Put::Answered(wrote) => Ok(wrote
+                .lines()
+                .rev()
+                .find_map(|line| line.trim().strip_prefix("Total:"))
+                .map_or("nothing", str::trim)
+                .to_string()),
+            Put::Silent(account) => Err(NoAnswer::OfTheEngine(account)),
+            Put::Refused { account, .. } | Put::Unstarted(account) => {
+                Err(NoAnswer::OfTheCommand(account))
+            }
+        }
+    }
+}
+
+/// Runs `command` to its end or to `ceiling`, and answers which — with,
+/// for anything but an answer, the account a reader needs who was not
+/// standing there: the command, when it was put (UTC), how long it stood,
+/// how it ended, and what it said on stderr.
+///
+/// Out of time says only that: the engine gave no answer within the
+/// ceiling. Why is not read off a silence.
+///
+/// `said` takes the command's stdout; its stderr stands beside it while
+/// the command runs and is gone by the time this answers.
+fn put(command: Command, ceiling: Duration, said: &Path, stdin: Stdin) -> Put {
+    let line = spelled(&command);
+    let refused = said.with_extension("refused.txt");
+    let at = clock(crate::note::now_secs());
+    // waits(measured): how long the engine stood, said in the account and judged by nothing
+    let since = std::time::Instant::now();
+    let answer = bounded_apart(&line, command, ceiling, said, &refused, stdin);
+    let stood = since.elapsed().as_secs_f32();
+    let on_stderr = std::fs::read(&refused)
+        .map(|bytes| String::from_utf8_lossy(&bytes).trim().to_string())
+        .unwrap_or_default();
+    let _ = std::fs::remove_file(&refused);
+    account_of(answer, &line, &at, stood, ceiling, on_stderr)
+}
+
+/// [`put`]'s reading of how its command ended: `line` put at `at`, stood
+/// `stood` seconds under `ceiling`, and said `on_stderr`. Pure, so a test
+/// holds what each account carries.
+fn account_of(
+    answer: Answer,
+    line: &str,
+    at: &str,
+    stood: f32,
+    ceiling: Duration,
+    on_stderr: String,
+) -> Put {
+    match answer {
+        Answer::Ended { status, stdout } if status.success() => Put::Answered(stdout),
+        Answer::Ended { status, .. } => Put::Refused {
+            account: format!(
+                "`{line}` exited {:?} after {stood:.1}s (put at {at}) and said: {}",
+                status.code(),
+                if on_stderr.is_empty() {
+                    "nothing on stderr"
+                } else {
+                    &on_stderr
+                }
+            ),
+            said: on_stderr,
+        },
+        Answer::OutOfTime { pid, ended, .. } => Put::Silent(format!(
+            "`{line}` gave no answer within {:.0}s (put at {at}) — the {NAME} process out here \
+             (pid {pid}) was {}; what the engine itself is doing with the command is not known. \
+             On stderr by then: {}",
+            ceiling.as_secs_f32(),
+            match ended {
+                Ok(()) => "ended".to_string(),
+                Err(why) => format!("not ended: {why}"),
+            },
+            if on_stderr.is_empty() {
+                "nothing"
+            } else {
+                &on_stderr
+            }
+        )),
+        Answer::Unstarted(why) => Put::Unstarted(format!(
+            "{why} (put at {at}). `cargo xtask linux` needs {NEEDS}."
+        )),
+    }
+}
+
+/// The command as a reader would type it: the engine's name, not the
+/// path this host found it at.
+fn spelled(command: &Command) -> String {
+    let program = Path::new(command.get_program())
+        .file_stem()
+        .map_or_else(|| NAME.into(), |stem| stem.to_string_lossy());
+    std::iter::once(program)
+        .chain(command.get_args().map(|arg| arg.to_string_lossy()))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A time of day off the epoch's seconds, in UTC — what a log beside
+/// this one is stamped in.
+pub(super) fn clock(secs: u64) -> String {
+    format!(
+        "{:02}:{:02}:{:02}Z",
+        secs / 3600 % 24,
+        secs / 60 % 60,
+        secs % 60
+    )
 }
 
 /// What kind of object [`presence`] asks about.
@@ -134,19 +312,53 @@ pub(crate) enum Presence {
     Unknown(String),
 }
 
-/// How long [`presence`] may take, against a daemon that may be wedged —
-/// a listing is a second when it works.
+/// When a question reaches the engine, which is what bounds it.
+#[derive(Clone, Copy)]
+pub(crate) enum Asked {
+    /// The first thing a line says to the engine: it may find the VM
+    /// being taken down, and wait for that and for the next one's boot.
+    First,
+    /// Behind an answer the engine has just given: a listing is the
+    /// time of one process.
+    Behind,
+}
+
+impl Asked {
+    fn ceiling(self) -> Duration {
+        match self {
+            Asked::First => FIRST_CEILING,
+            Asked::Behind => ASKING_CEILING,
+        }
+    }
+}
+
+/// [`Asked::Behind`]'s ceiling, against a daemon that may be wedged.
 const ASKING_CEILING: Duration = Duration::from_secs(30);
 
-/// Whether `name` is on the engine — asked after a removal that failed,
-/// so the answer is the state and not the words of the refusal.
+/// [`Asked::First`]'s ceiling. Such a question can arrive while the
+/// engine takes its VM down and then has to boot the next; the timeouts
+/// the engine sets on the steps of that (WSL 3.0.1: its two daemons'
+/// stops, the unmount, the VM's exit, the boot, the daemon's readiness)
+/// add up to about three minutes, and this stands above them. A number
+/// and no more: the engine also waits on things it sets no timeout on,
+/// and nothing here tells a slow teardown from one of those — what is
+/// still standing at the ceiling is reported as exactly that.
+const FIRST_CEILING: Duration = Duration::from_secs(300);
+
+/// The ceiling of a command that has the engine delete something (a
+/// volume, an image, build cache): the VM's disk at work, so not a
+/// listing's. One that outlasts it is left alone, never put again.
+const WORKING_CEILING: Duration = Duration::from_secs(300);
+
+/// Whether `name` is on the engine: the state, read off a listing, and
+/// not the words or the exit code of something else that was asked.
 ///
 /// **Off a listing that succeeded, never off an inspect's status**: an
 /// inspect exits non-zero both for an object that is not there and for an
-/// engine that could not be reached (docker exits 1 on a refused
-/// connection), so only a listing the engine answered can say an object
-/// is gone. `said` is the file the listing is written to.
-pub(crate) fn presence(kind: Kind, name: &str, said: &Path) -> Presence {
+/// engine that could not be reached or would not answer, so only a
+/// listing the engine answered can say an object is gone. `said` is the
+/// file the listing is written to.
+pub(crate) fn presence(kind: Kind, name: &str, said: &Path, asked: Asked) -> Presence {
     let mut list = command();
     match kind {
         Kind::Image => list.args([
@@ -159,16 +371,47 @@ pub(crate) fn presence(kind: Kind, name: &str, said: &Path) -> Presence {
         Kind::Volume => list.args(["volume", "ls", "--quiet"]),
         Kind::Container => list.args(["ps", "--all", "--format", "json"]),
     };
-    let listed = match bounded("asking after a removal", list, ASKING_CEILING, Some(said)) {
-        Answer::Ended { status, stdout } if status.success() => Ok(stdout),
-        Answer::Ended { status, .. } => Err(format!("{NAME}'s listing exited {status}")),
-        Answer::OutOfTime { after, .. } => Err(format!(
-            "{NAME}'s listing did not answer within {:.0}s",
-            after.as_secs_f32()
-        )),
-        Answer::Unstarted(why) => Err(why),
-    };
-    read_presence(kind, name, listed)
+    read_presence(kind, name, listed(list, asked, said))
+}
+
+/// A listing the engine answered, or the account of one it did not
+/// ([`put`]). `said` is the file it is written to.
+pub(crate) fn listed(list: Command, asked: Asked, said: &Path) -> Result<String, String> {
+    put(list, asked.ceiling(), said, Stdin::Null)
+        .rows()
+        .map_err(NoAnswer::told)
+}
+
+/// What became of asking the engine to remove something.
+pub(crate) enum Removal {
+    Done,
+    /// The engine said no, in these words — which say nothing of the
+    /// state they left ([`presence`] does).
+    Refused(String),
+    /// No answer: whether the object is still there is not known, and an
+    /// engine in that state is asked for nothing more.
+    Unanswered(String),
+}
+
+/// Removes the image `tag`. `said` is the file the engine's words are
+/// written to.
+pub(crate) fn remove_image(tag: &str, said: &Path) -> Removal {
+    removed(&["image", "rm", tag], said)
+}
+
+/// Removes the volume `name`, as [`remove_image`] does an image.
+pub(crate) fn remove_volume(name: &str, said: &Path) -> Removal {
+    removed(&["volume", "rm", name], said)
+}
+
+fn removed(line: &[&str], said: &Path) -> Removal {
+    let mut rm = command();
+    rm.args(line);
+    match put(rm, WORKING_CEILING, said, Stdin::Null).removal() {
+        Ok(None) => Removal::Done,
+        Ok(Some(refusal)) => Removal::Refused(refusal),
+        Err(none) => Removal::Unanswered(none.told()),
+    }
 }
 
 /// [`presence`]'s reading of a listing, or of a listing that could not be
@@ -240,7 +483,321 @@ pub(crate) fn label(labels: &str, key: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Kind, Presence, field, label, read_presence};
+    use std::path::Path;
+    use std::process::Command;
+    use std::time::Duration;
+
+    use super::{Kind, NoAnswer, Presence, Put, clock, field, label, put, read_presence, spelled};
+    use crate::subprocess::Stdin;
+
+    /// A shell told what the engine's CLI is to do in its place.
+    #[cfg(windows)]
+    fn a_cli_that(windows: &str, _unix: &str) -> Command {
+        let mut command = Command::new("cmd");
+        command.args(["/c", windows]);
+        command
+    }
+
+    #[cfg(not(windows))]
+    fn a_cli_that(_windows: &str, unix: &str) -> Command {
+        let mut command = Command::new("sh");
+        command.args(["-c", unix]);
+        command
+    }
+
+    /// One that stands for ten minutes and says nothing — the program
+    /// itself, no shell in front: ending a shell leaves what it started.
+    #[cfg(windows)]
+    fn a_cli_that_gives_no_answer() -> Command {
+        let mut command = Command::new("ping");
+        command.args(["-n", "600", "127.0.0.1"]);
+        command
+    }
+
+    #[cfg(not(windows))]
+    fn a_cli_that_gives_no_answer() -> Command {
+        let mut command = Command::new("sleep");
+        command.arg("600");
+        command
+    }
+
+    /// One that writes `rows` as its listing, after `before` (a shell's
+    /// own words, one per system).
+    fn a_cli_that_lists(rows: &Path, before: (&str, &str)) -> Command {
+        a_cli_that(
+            &format!("{}type {}", before.0, rows.display()),
+            &format!("{}cat {}", before.1, rows.display()),
+        )
+    }
+
+    /// What a [`NoAnswer`] is an account of, and the account.
+    fn of_the_engine(none: NoAnswer) -> (bool, String) {
+        match none {
+            NoAnswer::OfTheEngine(account) => (true, account),
+            NoAnswer::OfTheCommand(account) => (false, account),
+        }
+    }
+
+    /// The image question put to a stand-in and read by what
+    /// [`super::listed`] and [`super::presence`] read it with. Whether
+    /// the account was of the engine comes back beside the answer.
+    fn image_asked_of(cli: Command, ceiling: Duration, said: &Path) -> (Presence, Option<bool>) {
+        let rows = put(cli, ceiling, said, Stdin::Null)
+            .rows()
+            .map_err(of_the_engine);
+        let whose = rows.as_ref().err().map(|(engine, _)| *engine);
+        let presence = read_presence(
+            Kind::Image,
+            "pgg-linux:app-e48be2d7ba8a8979",
+            rows.map_err(|(_, account)| account),
+        );
+        (presence, whose)
+    }
+
+    /// The silence is said as a silence — no reason is read into it —
+    /// and the process out here is ended and waited for, so the test
+    /// coming back at all is the wait being finite.
+    #[test]
+    fn an_engine_that_gives_no_answer_is_not_an_image_that_is_gone() {
+        let yard = crate::yard::Yard::new("engine-silent");
+        let said = yard.join("said.txt");
+
+        let (asked, of_the_engine) = image_asked_of(
+            a_cli_that_gives_no_answer(),
+            Duration::from_millis(300),
+            &said,
+        );
+
+        let Presence::Unknown(why) = asked else {
+            panic!("a silence was read as an answer: {asked:?}");
+        };
+        assert!(why.contains("gave no answer within"), "{why}");
+        assert!(why.contains("was ended;"), "{why}");
+        assert!(why.contains("put at "), "{why}");
+        assert_eq!(of_the_engine, Some(true), "a silence is the engine's");
+        assert!(
+            !said.with_extension("refused.txt").exists(),
+            "the stderr file outlived the question"
+        );
+    }
+
+    /// What it had said on stderr before it stood still is in the
+    /// account of the silence, beside the command and the time; and a
+    /// silence says how long was waited, never why.
+    #[test]
+    fn what_was_said_before_a_silence_is_carried_with_it() {
+        let stood = super::account_of(
+            crate::subprocess::Answer::OutOfTime {
+                pid: 7,
+                after: Duration::from_secs(300),
+                ended: Ok(()),
+            },
+            "wslc images",
+            "02:32:27Z",
+            300.0,
+            Duration::from_secs(300),
+            "the session is busy".to_string(),
+        );
+
+        let Put::Silent(why) = stood else {
+            panic!("a silence was read as an answer: {stood:?}");
+        };
+        assert!(
+            why.contains("`wslc images` gave no answer within 300s"),
+            "{why}"
+        );
+        assert!(why.contains("put at 02:32:27Z"), "{why}");
+        assert!(
+            why.contains("On stderr by then: the session is busy"),
+            "{why}"
+        );
+    }
+
+    /// A CLI that is not on the machine reached no engine: the account
+    /// says so and what is needed, and is the command's own.
+    #[test]
+    fn a_cli_that_is_not_there_is_not_an_engine_in_a_state() {
+        let yard = crate::yard::Yard::new("engine-unstarted");
+
+        let (asked, of_the_engine) = image_asked_of(
+            Command::new("pgg-no-such-engine-cli"),
+            Duration::from_secs(60),
+            &yard.join("said.txt"),
+        );
+
+        let Presence::Unknown(why) = asked else {
+            panic!("a CLI that never started was read as an answer: {asked:?}");
+        };
+        assert!(why.contains("could not be started"), "{why}");
+        assert!(why.contains(super::NEEDS), "{why}");
+        assert_eq!(of_the_engine, Some(false));
+    }
+
+    /// What wslc answers once its session is going down: at once,
+    /// non-zero, the reason on stderr. All of it reaches the reader, and
+    /// none of it says the image is not there.
+    #[test]
+    fn a_refusal_is_carried_whole_and_says_nothing_of_the_image() {
+        let yard = crate::yard::Yard::new("engine-refusal");
+
+        let (asked, of_the_engine) = image_asked_of(
+            a_cli_that(
+                "echo ERROR_INVALID_STATE 1>&2& exit /b 3",
+                "echo ERROR_INVALID_STATE >&2; exit 3",
+            ),
+            Duration::from_secs(60),
+            &yard.join("said.txt"),
+        );
+
+        let Presence::Unknown(why) = asked else {
+            panic!("a refusal was read as an answer: {asked:?}");
+        };
+        assert!(why.contains("exited Some(3)"), "{why}");
+        assert!(why.contains("ERROR_INVALID_STATE"), "{why}");
+        assert!(why.contains("put at "), "{why}");
+        assert_eq!(
+            of_the_engine,
+            Some(true),
+            "an engine in order refuses no listing"
+        );
+    }
+
+    /// A removal an engine in order may refuse — the image is in use —
+    /// is an answer, in the engine's words; one it stands silent on is
+    /// not, and neither is ever read as done.
+    #[test]
+    fn a_removal_is_done_refused_or_unanswered_and_never_mixed() {
+        let yard = crate::yard::Yard::new("engine-removal");
+        let said = yard.join("said.txt");
+        let within = Duration::from_secs(60);
+
+        assert_eq!(
+            put(
+                a_cli_that("exit /b 0", "exit 0"),
+                within,
+                &said,
+                Stdin::Null
+            )
+            .removal(),
+            Ok(None)
+        );
+        assert_eq!(
+            put(
+                a_cli_that("echo in use 1>&2& exit /b 1", "echo in use >&2; exit 1"),
+                within,
+                &said,
+                Stdin::Null
+            )
+            .removal(),
+            Ok(Some("in use".to_string()))
+        );
+        let silent = put(
+            a_cli_that_gives_no_answer(),
+            Duration::from_millis(300),
+            &said,
+            Stdin::Null,
+        )
+        .removal()
+        .expect_err("a silence was read as a removal");
+        assert!(matches!(silent, NoAnswer::OfTheEngine(_)), "{silent:?}");
+    }
+
+    /// The one answer that may send a line on to build: the engine
+    /// listed, and the tag is not among the rows.
+    #[test]
+    fn a_listing_that_came_back_without_the_image_says_gone() {
+        let yard = crate::yard::Yard::new("engine-absent");
+        let rows = yard.join("rows.txt");
+        std::fs::write(&rows, IMAGE.replace("app-e48be", "app-00000")).expect("the rows");
+
+        assert_eq!(
+            image_asked_of(
+                a_cli_that_lists(&rows, ("", "")),
+                Duration::from_secs(60),
+                &yard.join("said.txt"),
+            ),
+            (Presence::Gone, None)
+        );
+    }
+
+    /// An engine that takes its time — a VM to boot — and then lists is
+    /// answering: the ceiling is no part of what it said.
+    #[test]
+    fn an_answer_that_took_its_time_is_still_the_answer() {
+        let yard = crate::yard::Yard::new("engine-slow");
+        let rows = yard.join("rows.txt");
+        std::fs::write(&rows, IMAGE).expect("the rows");
+
+        assert_eq!(
+            image_asked_of(
+                a_cli_that_lists(&rows, ("ping -n 2 127.0.0.1 >nul& ", "sleep 1; ")),
+                Duration::from_secs(60),
+                &yard.join("said.txt"),
+            ),
+            (Presence::There, None)
+        );
+    }
+
+    /// The trim's road (`super::in_its_vm`'s closed pipe): one put behind
+    /// a failure, to an engine that answers that no better, ends at its
+    /// ceiling too.
+    #[test]
+    fn a_command_put_behind_a_failure_ends_at_its_ceiling_as_well() {
+        let yard = crate::yard::Yard::new("engine-cleanup");
+
+        let trimmed = put(
+            a_cli_that_gives_no_answer(),
+            Duration::from_millis(300),
+            &yard.join("said.txt"),
+            Stdin::Closed,
+        )
+        .freed()
+        .expect_err("a silence was read as a trim");
+
+        let (engine, account) = of_the_engine(trimmed);
+        assert!(account.contains("gave no answer within"), "{account}");
+        assert!(engine, "a silence is the engine's");
+    }
+
+    /// What docker frees is on its last line, and a prune it refuses is
+    /// its own failure, not an engine in a state.
+    #[test]
+    fn a_trim_reads_what_was_freed_off_dockers_last_line() {
+        assert_eq!(
+            Put::Answered("ID RECLAIMABLE\nabc true\nTotal:  1.2GB\n".into()).freed(),
+            Ok("1.2GB".to_string())
+        );
+        assert_eq!(
+            Put::Answered(String::new()).freed(),
+            Ok("nothing".to_string())
+        );
+        let refused = Put::Refused {
+            account: "the account".into(),
+            said: "no".into(),
+        }
+        .freed()
+        .expect_err("a refusal was read as a trim");
+        assert!(matches!(refused, NoAnswer::OfTheCommand(_)), "{refused:?}");
+    }
+
+    /// The first question of a line is given longer than one behind an
+    /// answer: it may wait out a VM going down and the next one's boot.
+    #[test]
+    fn the_first_question_is_given_longer_than_one_behind_an_answer() {
+        assert!(super::Asked::First.ceiling() > super::Asked::Behind.ceiling());
+    }
+
+    #[test]
+    fn an_account_names_the_command_and_the_time_of_day() {
+        let mut list = super::command();
+        list.args(["images", "--format", "json"]);
+        assert_eq!(
+            spelled(&list),
+            format!("{} images --format json", super::NAME)
+        );
+        assert_eq!(clock(0), "00:00:00Z");
+        assert_eq!(clock(86_400 + 3 * 3600 + 25 * 60 + 9), "03:25:09Z");
+    }
 
     /// Lines as both engines print them, cut down.
     const IMAGE: &str = r#"{"Containers":"0","Digest":"<none>","ID":"198209722ed1","Repository":"pgg-linux","Tag":"app-e48be2d7ba8a8979"}"#;

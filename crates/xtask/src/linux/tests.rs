@@ -511,6 +511,26 @@ fn a_container_is_started_carrying_both_marks() {
     );
 }
 
+/// Only a listing the engine answered sends a line on to build. An
+/// engine that would not say — whatever it said instead — stops the line
+/// with the engine's account in it.
+#[test]
+fn an_engine_that_would_not_say_what_it_holds_is_never_asked_to_build() {
+    let tag = "pgg-linux:core-0123456789abcdef";
+    assert_eq!(built_off(tag, engine::Presence::There), Ok(true));
+    assert_eq!(
+        built_off(tag, engine::Presence::Gone),
+        Ok(false),
+        "the one answer that builds"
+    );
+    let account = "`wslc images` exited Some(1) after 0.0s and said: ERROR_INVALID_STATE";
+    let stopped = built_off(tag, engine::Presence::Unknown(account.to_string()))
+        .expect_err("an engine that would not answer was read as holding no image");
+    assert!(stopped.contains(tag), "{stopped}");
+    assert!(stopped.contains(account), "{stopped}");
+    assert!(stopped.contains("built nothing"), "{stopped}");
+}
+
 /// The arguments as the process would see them.
 pub(super) fn args_of(cmd: &Command) -> Vec<String> {
     cmd.get_args()
