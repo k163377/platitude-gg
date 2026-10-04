@@ -18,8 +18,8 @@ AppListView {
     /// Take the panel's spare height. Only the rail's peek wants it, alone in its panel; in the sidebar the ground
     /// at the column's foot takes it (SidebarPane).
     property bool stretch: false
-    /// The sidebar's row gestures, which outlive the delegates and span sections. Null (the WIP file list): no
-    /// gestures, and every call below is skipped.
+    /// The sidebar's row gestures, which outlive the delegates and span sections — handed by every list here (the
+    /// sections and the rail's peek). Null skips every call below.
     property var gestures: null
     /// Whether rows open their facts under themselves (`NavRowFacts`), and the section that knows which working copy
     /// has a branch out (`worktreeHolding`). Separate, since the WORKTREES list opens rows but has nothing to ask it.
@@ -91,6 +91,7 @@ AppListView {
         const row = navList.sectionModel.rowOfName(key.substring(head.length))
         if (row < 0)
             return false
+        navList.haltGlide()
         navList.positionViewAtIndex(row, ListView.Contain)
         // A row the move brought on is built at the next polish; the menu needs it now.
         navList.forceLayout()
@@ -117,8 +118,47 @@ AppListView {
                 return
             // Rows on show only: one behind a filter or a closed folder answers -1.
             const row = navList.sectionModel.rowOfName(key.substring(head.length))
-            if (row >= 0)
+            if (row >= 0) {
+                navList.haltGlide()
                 navList.positionViewAtIndex(row, ListView.Contain)
+            }
+        }
+    }
+
+    // ---- the wheel (rules-refs/app-ui.md「ホイールの 1 ノッチは送られる、跳ばない」) ----------------
+    /// One notch, sent — the left menu's lists glide as the graph does. **Not Flickable's own wheel**: at Qt's default
+    /// deceleration it moves by a timeline that a row closing under it cuts short (the content shrinks,
+    /// `setContentHeight` → `fixupY` rounds the place mid-way and resets the timeline), and closing is what a row the
+    /// wheel takes from under the hand does (`NavItemDelegate.stillPointed`).
+    function sendRows(pixels) {
+        wheelGlide.sendTo(navList.clampY(wheelGlide.at - pixels))
+    }
+    /// Something else is moving the view: the notch in flight stops (`WheelGlide.halt`), or it drags the view back.
+    function haltGlide() {
+        wheelGlide.halt()
+    }
+    WheelGlide {
+        id: wheelGlide
+        view: navList
+    }
+    // The bar's arrows and track glide their steps on this same glide (`AutoScrollBar.stepGlide`).
+    Binding {
+        target: navList.ScrollBar.vertical
+        property: "stepGlide"
+        value: wheelGlide
+    }
+    // Mouse wheels send a fixed number of rows per notch; touchpads keep native Flickable panning.
+    WheelHandler {
+        acceptedDevices: PointerDevice.Mouse
+        onWheel: event => {
+            navList.cancelFlick()
+            navList.sendRows((event.angleDelta.y / 120) * Metrics.wheelRows * Theme.rowHeight)
+        }
+    }
+    Connections {
+        target: navList.hand
+        function onDrifted() {
+            navList.haltGlide()
         }
     }
 
@@ -142,15 +182,16 @@ AppListView {
     /// would undo where they sent it. Less than a pixel is the view rounding the place the opening wrote as it lays its
     /// rows (`QQuickFlickablePrivate::fixup`; a row's lines need not be whole pixels tall).
     property bool openHeld: false
-    /// How often the reader has moved this list, counted while it is moving (`moving`, or the middle button's drift) —
-    /// for the rows, which ask each time whether they are still under the hand (`NavItemDelegate.syncUnder`). **Not
-    /// the list's own writes in between** (an opening shown or given back): those are rows growing and shrinking,
-    /// where the row the hand walked to keeps its rest (デザイン規約 §左メニューの所作「点くのも同じ規則」).
+    /// How often the reader has moved this list, counted while it is moving (a notch's glide or the bar's step,
+    /// `moving`, or the middle button's drift) — for the rows, which ask each time whether they are still under the
+    /// hand (`NavItemDelegate.syncUnder`). **Not the list's own writes in between** (an opening shown or given back):
+    /// those are rows growing and shrinking, where the row the hand walked to keeps its rest
+    /// (デザイン規約 §左メニューの所作「点くのも同じ規則」).
     property int readerMoves: 0
     onContentYChanged: {
         if (navList.openHeld && Math.abs(navList.contentY - navList.openShownY) >= 1)
             navList.openHeld = false
-        if (navList.moving || navList.hand.scrolling)
+        if (wheelGlide.sending || navList.moving || navList.hand.scrolling)
             navList.readerMoves++
     }
     function keepOpenRowInView() {
@@ -159,6 +200,7 @@ AppListView {
         // Give back first: the key can move straight from one row to the next.
         if (navList.openHeld) {
             navList.openHeld = false
+            navList.haltGlide()
             navList.contentY = navList.openRestY
         }
         if (navList.gestures.openKey === "")
@@ -180,7 +222,10 @@ AppListView {
         // Never below where the reader left it — a row that opened in full view moves nothing. Noted before it is
         // written, so the write is known for the opening's own.
         navList.openShownY = Math.max(navList.openRestY, row.y + row.height - navList.height)
-        navList.contentY = navList.openShownY
+        if (navList.contentY !== navList.openShownY) {
+            navList.haltGlide()
+            navList.contentY = navList.openShownY
+        }
     }
     onOpenRoomChanged: navList.revealOpenRow()
     onHeightChanged: navList.revealOpenRow()
@@ -409,7 +454,7 @@ AppListView {
         // (`NavItemDelegate.syncHover`).
         handCounted: navList.gestures !== null
         handMoves: navList.gestures ? navList.gestures.handMoves : 0
-        // Only where the hand is counted: the working tree's rows take Qt's hover itself, which follows the scroll.
+        // Only where the hand is counted (`handCounted`): rows taking Qt's hover themselves follow the scroll with it.
         handAt: navList.gestures ? navList.gestures.handAt : Qt.point(-1, -1)
         readerMoves: navList.gestures ? navList.readerMoves : 0
         editKey: navList.gestures ? navList.gestures.editKey : ""

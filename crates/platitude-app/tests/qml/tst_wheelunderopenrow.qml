@@ -200,15 +200,14 @@ Item {
                       "its lines are built under it")
             return row
         }
-        /// A notch of the wheel up — the rows move down past the hand — and the list come to rest. A beat before the
-        /// notch (QtTest's `delay`): sent at once after the rest, it moved nothing here, the old rows' too, and the
-        /// case would prove nothing. How far it goes is not judged.
+        /// A notch of the wheel up — the rows move down past the hand — sent its whole way: three rows, or to the
+        /// list's top (`NavList.sendRows`). **A row closing on the way does not cut it short**, as Flickable's own
+        /// wheel was cut on Windows (the content shrinking mid-way resets its timeline).
         function wheelUp(y) {
             const view = testCase.view
-            const from = view.contentY
-            mouseWheel(view, testCase.handX, y, 0, 120, Qt.NoButton, Qt.NoModifier, 50)
-            tryVerify(() => view.contentY < from, undefined, "the notch moved the list")
-            tryCompare(view, "moving", false, undefined, "the wheel has come to rest")
+            const to = view.clampY(view.contentY - Metrics.wheelRows * Theme.rowHeight)
+            mouseWheel(view, testCase.handX, y, 0, 120)
+            tryCompare(view, "contentY", to, undefined, "the notch went its whole way")
         }
 
         function test_a_wheel_drops_the_lines_and_keeps_where_it_sent_the_list() {
