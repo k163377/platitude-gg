@@ -113,7 +113,15 @@ impl Sandbox {
             // down whose a branch is, and the session running this suite
             // would lend its own id to every branch made here.
             .env_remove("CLAUDE_CODE_SESSION_ID")
-            .env_remove("CODEX_THREAD_ID");
+            .env_remove("CODEX_THREAD_ID")
+            // Where a landing looks for a session's transcript: the
+            // sandbox's own, never the user's.
+            .env("CLAUDE_CONFIG_DIR", self.claude_config());
+    }
+
+    /// The sandbox's stand-in for Claude Code's config directory.
+    pub fn claude_config(&self) -> PathBuf {
+        self.root.join("claude-config")
     }
 
     pub fn git(&self, dir: &Path, args: &[&str], extra: &[(&str, &str)]) -> Result<String, String> {

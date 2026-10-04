@@ -9,7 +9,7 @@
 # in its own sh, so one file serves all three systems.
 case "$1" in prepared | committed) ;; *) exit 0 ;; esac
 # Beside the installed copy, one file per branch naming the session whose
-# git created it (crates/xtask/src/gate/hooks.rs `creator`). git also runs
+# git created it (crates/xtask/src/gate/hooks.rs `maker`). git also runs
 # this for refs it only moves between its own files — `pack-refs` reads as
 # a creation in packed-refs and a deletion of the loose file — so a branch
 # is created only when it was not there before the transaction, and goes

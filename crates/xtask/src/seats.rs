@@ -11,6 +11,7 @@ use std::time::SystemTime;
 mod claim;
 pub(crate) mod commands;
 pub(crate) mod entry;
+pub(crate) mod start;
 mod survey;
 
 pub(crate) use claim::{

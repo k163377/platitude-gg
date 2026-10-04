@@ -1,16 +1,25 @@
 //! What a landing clears of its own session's making (CLAUDE.md §Git 運用):
 //! the branches the session's git created — the reference-transaction hook
-//! writes each one's creator down (`gate::hooks::creator`) — and the trees
-//! that have one of them out, seats aside. Each goes only when main, or the
-//! branch just landed as it stood before its rebase, holds everything it
-//! holds; a tree also only with no lock, no uncommitted file and nobody in
-//! it. What stays is named: a copy the work made for itself is its
-//! session's to delete, and work main does not hold, kept on purpose, goes
-//! under `keep/`. What another session, the app or the user made is
-//! neither judged nor named — its maker answers for it.
+//! writes each one's maker down (`gate::hooks::maker`) — the branch of the
+//! tree the app made for the session to start in, which the session writes
+//! down as it starts, or else the landing from the session's transcript
+//! (`seats::start`), and the trees that have one of them out, seats aside.
+//! Each goes only when main, or the branch just landed as it stood before
+//! its rebase, holds everything it holds; a tree also only with no lock, no
+//! uncommitted file and nobody in it. What stays is named: a copy the work
+//! made for itself is its session's to delete, and work main does not
+//! hold, kept on purpose, goes under `keep/`.
+//!
+//! A tree the session started in that something still works in is left
+//! behind: the session works in a seat, and what works there — the
+//! terminal tab the app opens in it — outlasts the landing, so any later
+//! landing takes it away once it can, judged as above. Nothing else
+//! another session, the app or the user made is judged or named — its
+//! maker answers for it.
 
 use std::path::{Path, PathBuf};
 
+use crate::gate::hooks::{Made, Maker};
 use crate::seats::{
     Identity, WorktreeBlock, commits_in, dirty_lines, in_rig, roster_letter, same_tree,
     worktree_blocks,
@@ -23,18 +32,36 @@ struct Holder {
     tree: Option<String>,
 }
 
-/// Whose branches this landing judges: the session's that runs it.
-struct Maker {
+/// Whose branches this landing judges: those of the session that runs it,
+/// and those an earlier landing left behind.
+struct Judge {
     common: PathBuf,
     session: String,
 }
 
-impl Maker {
-    fn made(&self, branch: &str) -> bool {
-        !branch.is_empty()
-            && crate::gate::hooks::creator(&self.common, &format!("refs/heads/{branch}")).as_deref()
-                == Some(self.session.as_str())
+impl Judge {
+    /// The ledger's word on `branch`, when it is this landing's to judge.
+    fn judges(&self, branch: &str) -> Option<Maker> {
+        if branch.is_empty() {
+            return None;
+        }
+        let maker = crate::gate::hooks::maker(&self.common, &format!("refs/heads/{branch}"))?;
+        (self.own(&maker) || maker.how == Made::LeftBehind).then_some(maker)
     }
+
+    fn own(&self, maker: &Maker) -> bool {
+        maker.session == self.session
+    }
+}
+
+/// What a sweep says: its lines, and what earlier landings left behind
+/// that still stands, said once at the end — with the branches of this
+/// session's start trees that something still works in, to be left behind.
+#[derive(Default)]
+struct Said {
+    lines: Vec<String>,
+    standing: Vec<String>,
+    busy_starts: Vec<String>,
 }
 
 /// Clears what this session made and holds nothing main does not — nor
@@ -60,39 +87,84 @@ pub(super) fn clear(here: &str, unrebased: Option<&str>, landed: &str) {
             tree: git_query(here, &["rev-parse", &format!("{name}^{{tree}}")]),
         })
         .collect();
-    let maker = Maker {
+    let judge = Judge {
         common: PathBuf::from(common),
         session,
     };
-    for line in sweep(here, &maker, &holders, landed) {
+    for line in sweep(here, &judge, &holders, landed) {
         println!("leftovers: {line}");
     }
 }
 
-fn sweep(here: &str, maker: &Maker, holders: &[Holder], landed: &str) -> Vec<String> {
+fn sweep(here: &str, judge: &Judge, holders: &[Holder], landed: &str) -> Vec<String> {
     let Some(listing) = git_query(here, &["worktree", "list", "--porcelain"]) else {
         return vec!["git could not list the worktrees, so nothing was cleared".to_string()];
     };
-    let mut said = Vec::new();
-    // The first tree listed is the primary checkout, which nothing clears.
-    for tree in worktree_blocks(&listing).iter().skip(1).filter(|tree| {
-        maker.made(&tree.branch)
-            && roster_letter(&tree.path).is_none()
-            && !in_rig(&tree.path)
-            && !same_tree(&tree.path, landed)
-    }) {
-        let name = shown(&tree.path);
-        let head = head_in(&listing, &tree.path);
-        said.push(match take_down_tree(here, tree, head.as_deref(), holders) {
-            Ok(()) => format!(
-                "took away worktree {name} ({}) — main holds all it held",
-                tree.branch
-            ),
-            Err(why) => format!("kept worktree {name} ({}) — {why}", tree.branch),
-        });
+    // Ahead of the judging: what the session's own start may not have
+    // written down.
+    crate::seats::start::adopt(&listing, &judge.session);
+    let mut said = Said::default();
+    trees(here, &listing, judge, holders, landed, &mut said);
+    branches(here, judge, holders, &mut said);
+    let left = leave_behind(judge, &said.busy_starts);
+    said.lines.extend(left);
+    if !said.standing.is_empty() {
+        said.lines.push(format!(
+            "still standing, left behind by earlier landings — their sessions' work, not this \
+             one's to delete: {}",
+            said.standing.join(", ")
+        ));
     }
-    said.extend(branches(here, maker, holders));
-    said
+    said.lines
+}
+
+/// The trees this landing judges, taken down or said to stay.
+fn trees(
+    here: &str,
+    listing: &str,
+    judge: &Judge,
+    holders: &[Holder],
+    landed: &str,
+    said: &mut Said,
+) {
+    // The first tree listed is the primary checkout, which nothing clears.
+    for tree in worktree_blocks(listing).iter().skip(1) {
+        let Some(maker) = judge.judges(&tree.branch) else {
+            continue;
+        };
+        if roster_letter(&tree.path).is_some()
+            || in_rig(&tree.path)
+            || same_tree(&tree.path, landed)
+        {
+            continue;
+        }
+        let name = shown(&tree.path);
+        let head = head_in(listing, &tree.path);
+        let branch = &tree.branch;
+        match (
+            judge.own(&maker),
+            take_down_tree(here, tree, head.as_deref(), holders),
+        ) {
+            (true, Ok(())) => said.lines.push(format!(
+                "took away worktree {name} ({branch}) — main holds all it held"
+            )),
+            (true, Err(stays)) => {
+                said.lines
+                    .push(format!("kept worktree {name} ({branch}) — {}", stays.why()));
+                if maker.how == Made::StartedIn && matches!(stays, Stays::InUse(_)) {
+                    said.busy_starts.push(branch.clone());
+                }
+            }
+            (false, Ok(())) => said.lines.push(format!(
+                "took away worktree {name} ({branch}), which session {} left behind — main \
+                 holds all it held",
+                maker.session
+            )),
+            (false, Err(stays)) => said
+                .standing
+                .push(format!("worktree {name} ({})", stays.why())),
+        }
+    }
 }
 
 /// The commit a tree's HEAD names, as git's list gives it — read there so
@@ -118,22 +190,38 @@ fn shown(path: &str) -> &str {
         .unwrap_or(path)
 }
 
+/// Why a tree stays where it is.
+enum Stays {
+    /// Something works in it: once nothing does, it may go.
+    InUse(String),
+    /// Anything else — its lock, its own work, its files, git's refusal.
+    Kept(String),
+}
+
+impl Stays {
+    fn why(&self) -> &str {
+        match self {
+            Self::InUse(why) | Self::Kept(why) => why,
+        }
+    }
+}
+
 /// Takes a tree off the disk and out of git's list, or answers why not.
 fn take_down_tree(
     here: &str,
     tree: &WorktreeBlock,
     head: Option<&str>,
     holders: &[Holder],
-) -> Result<(), String> {
+) -> Result<(), Stays> {
     if tree.locked {
-        return Err(match tree.reason.as_str() {
+        return Err(Stays::Kept(match tree.reason.as_str() {
             "" => "it is locked".to_string(),
             reason => format!("it is locked ({reason})"),
-        });
+        }));
     }
-    let head = head.ok_or_else(|| "git's list names no HEAD for it".to_string())?;
+    let head = head.ok_or_else(|| Stays::Kept("git's list names no HEAD for it".to_string()))?;
     if !held(here, head, holders) {
-        return Err(own_work(here, head));
+        return Err(Stays::Kept(own_work(here, head)));
     }
     if !Path::new(&tree.path).is_dir() {
         // Its directory went before it; only git's record is left. No
@@ -141,28 +229,30 @@ fn take_down_tree(
         // first.
         return git_query(here, &["worktree", "remove", &tree.path])
             .map(|_| ())
-            .ok_or_else(|| "its directory is gone, and git would not drop its record".to_string());
+            .ok_or_else(|| {
+                Stays::Kept("its directory is gone, and git would not drop its record".to_string())
+            });
     }
     match dirty_lines(&tree.path) {
         Some(0) => {}
-        Some(dirty) => return Err(format!("{dirty} uncommitted file(s)")),
-        None => return Err("git could not read its status".to_string()),
+        Some(dirty) => return Err(Stays::Kept(format!("{dirty} uncommitted file(s)"))),
+        None => return Err(Stays::Kept("git could not read its status".to_string())),
     }
-    let aside = move_aside(&tree.path)?;
+    let aside = move_aside(&tree.path).map_err(Stays::InUse)?;
     // Judged again where nobody can reach it any more: what was written or
     // committed there while it was judged stays with it.
     if let Err(why) = as_judged(&aside, head) {
-        return Err(put_back(&aside, &tree.path, &why));
+        return Err(Stays::Kept(put_back(&aside, &tree.path, &why)));
     }
     // The directory is out of its name, so git drops only its record.
     if git_query(here, &["worktree", "remove", &tree.path]).is_none() {
-        return Err(put_back(
+        return Err(Stays::Kept(put_back(
             &aside,
             &tree.path,
             "git would not drop it from its list",
-        ));
+        )));
     }
-    delete(&aside)
+    delete(&aside).map_err(Stays::Kept)
 }
 
 /// Whether a tree moved aside is still what was judged: clean, its HEAD
@@ -258,10 +348,11 @@ fn delete(aside: &Path) -> Result<(), String> {
         .map_err(|e| format!("its files stay at {} ({e})", aside.display()))
 }
 
-/// This session's branches no tree has out, beside main and the seats'
-/// own: each goes when a holder holds all it holds — deleted only while it
-/// still names the commit that was judged — and the rest are named.
-fn branches(here: &str, maker: &Maker, holders: &[Holder]) -> Vec<String> {
+/// The branches this landing judges that no tree has out, beside main and
+/// the seats' own: each goes when a holder holds all it holds — deleted
+/// only while it still names the commit that was judged — and the rest are
+/// named.
+fn branches(here: &str, judge: &Judge, holders: &[Holder], said: &mut Said) {
     let (Some(listing), Some(refs)) = (
         git_query(here, &["worktree", "list", "--porcelain"]),
         git_query(
@@ -273,7 +364,9 @@ fn branches(here: &str, maker: &Maker, holders: &[Holder]) -> Vec<String> {
             ],
         ),
     ) else {
-        return vec!["git could not list the branches, so none was cleared".to_string()];
+        said.lines
+            .push("git could not list the branches, so none was cleared".to_string());
+        return;
     };
     let out: Vec<String> = worktree_blocks(&listing)
         .into_iter()
@@ -285,38 +378,91 @@ fn branches(here: &str, maker: &Maker, holders: &[Holder]) -> Vec<String> {
         let Some(name) = full.strip_prefix("refs/heads/") else {
             continue;
         };
-        if !swept_branch(name) || !maker.made(name) || out.iter().any(|branch| branch == name) {
+        if !swept_branch(name) || out.iter().any(|branch| branch == name) {
             continue;
         }
-        if !held(here, oid, holders) {
-            kept.push(format!("{name} ({})", own_work(here, oid)));
+        let Some(maker) = judge.judges(name) else {
+            continue;
+        };
+        let stays = if !held(here, oid, holders) {
+            own_work(here, oid)
         } else if git_query(here, &["update-ref", "-d", full, oid]).is_none() {
-            kept.push(format!("{name} (it moved as it was judged)"));
+            "it moved as it was judged".to_string()
         } else {
             // `branch -D` would take its section too; there may be none.
             let _ = git_query(
                 here,
                 &["config", "--remove-section", &format!("branch.{name}")],
             );
-            went.push(format!("{name} (was {})", &oid[..oid.len().min(10)]));
+            let was = &oid[..oid.len().min(10)];
+            went.push(if judge.own(&maker) {
+                format!("{name} (was {was})")
+            } else {
+                format!(
+                    "{name} (was {was}, left behind by session {})",
+                    maker.session
+                )
+            });
+            continue;
+        };
+        if judge.own(&maker) {
+            kept.push(format!("{name} ({stays})"));
+        } else {
+            said.standing.push(format!("branch {name} ({stays})"));
         }
     }
-    let mut said = Vec::new();
     if !went.is_empty() {
-        said.push(format!(
+        said.lines.push(format!(
             "took away branch(es) {} — main holds all they held",
             went.join(", ")
         ));
     }
     if !kept.is_empty() {
-        said.push(format!(
+        said.lines.push(format!(
             "kept branch(es) this session made: {} — a copy the work made for itself is its \
              session's to delete, and work main does not hold, kept on purpose, goes under keep/ \
              (CLAUDE.md §Git 運用)",
             kept.join(", ")
         ));
     }
-    said
+}
+
+/// Hands the trees the app made for this session to start in that
+/// something still works in — the terminal tab the app opens there
+/// outlasts the session's work — to any later landing, with their
+/// branches (`busy`), and says so. A start tree kept for anything else —
+/// its own files, its own commits — stays this session's to answer for.
+fn leave_behind(judge: &Judge, busy: &[String]) -> Option<String> {
+    let mut left = Vec::new();
+    let mut stuck = Vec::new();
+    for branch in busy {
+        match crate::gate::hooks::write_down(
+            &judge.common,
+            &format!("refs/heads/{branch}"),
+            &judge.session,
+            Made::LeftBehind,
+        ) {
+            Ok(()) => left.push(branch.as_str()),
+            Err(why) => stuck.push(format!("{branch} ({why})")),
+        }
+    }
+    let mut said = Vec::new();
+    if !left.is_empty() {
+        said.push(format!(
+            "left {} to whichever landing comes next — the app made it, with its tree, for this \
+             session to start in, and what still works there (the terminal tab the app opens in \
+             it) is not this session's to stop; that landing takes it away once it can",
+            left.join(", ")
+        ));
+    }
+    if !stuck.is_empty() {
+        said.push(format!(
+            "could not leave {} to a later landing, so none will take it away — name it to the \
+             user",
+            stuck.join(", ")
+        ));
+    }
+    (!said.is_empty()).then(|| said.join("; "))
 }
 
 /// Whether a branch is one this sweep judges at all: neither main nor a

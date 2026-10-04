@@ -6,8 +6,10 @@
 //! so one checked-in script (`.githooks/`) guards main against every road a
 //! session can take and none of the user's ([`SESSION`]); the verdict stays
 //! here, where it can be tested. Passing through every update, it is also
-//! where whose a branch is gets written down ([`creator`]), for that
-//! session's landing to clear (`land::leftovers`).
+//! where whose a branch is gets written down ([`maker`]), for that
+//! session's landing to clear (`land::leftovers`); the app's git creates
+//! with no session's mark, so a session started in a tree the app made
+//! writes that one down itself (`seats::start`).
 //!
 //! The installed copy lives beside the repository's own `.git`
 //! (`pgg-gate/hooks/`), where no seat's edit, reset or removal reaches it.
@@ -33,17 +35,83 @@ pub(crate) const SESSION: &str = "CLAUDECODE";
 const HOOKS_DIR: &str = ".githooks";
 const HOOK: &str = "reference-transaction";
 
-/// Where the hook writes down whose a branch is ([`creator`]): beside the
+/// Where the hook writes down whose a branch is ([`maker`]): beside the
 /// installed copy, which the script spells `$(dirname "$0")/../made`.
 const MADE: &str = "made";
 
-/// The session whose git created `reference` (`refs/heads/…`), as the hook
-/// wrote it down: None for a branch no session's git created — the user's
-/// own, the app's — or one created before the hook kept the record.
-pub(crate) fn creator(common: &Path, reference: &str) -> Option<String> {
-    let path = common.join("pgg-gate").join(MADE).join(reference);
-    let id = std::fs::read_to_string(path).ok()?.trim().to_string();
-    (!id.is_empty()).then_some(id)
+/// How a branch came to be a session's: the second line of its record,
+/// which the hook leaves out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Made {
+    /// The session's git created it (the hook).
+    Created,
+    /// The app made it, out in a tree of its own, for the session to start
+    /// in (`seats::start`).
+    StartedIn,
+    /// As [`Made::StartedIn`], and the session's landing could not take it
+    /// away: any later landing does, once it can (`land::leftovers`).
+    LeftBehind,
+}
+
+impl Made {
+    const STARTED_IN: &str = "started-in";
+    const LEFT_BEHIND: &str = "left-behind";
+}
+
+/// Whose a branch is, as the ledger has it.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Maker {
+    pub(crate) session: String,
+    pub(crate) how: Made,
+}
+
+/// The session `reference` (`refs/heads/…`) is written down as: None for a
+/// branch no session made or started in — the user's own, the app's that
+/// nobody started in — or one made before the ledger was kept. A second
+/// line nobody wrote reads as the hook's: the narrowest claim.
+pub(crate) fn maker(common: &Path, reference: &str) -> Option<Maker> {
+    let text = std::fs::read_to_string(record(common, reference)).ok()?;
+    let mut lines = text.lines().map(str::trim);
+    let session = lines.next().filter(|id| !id.is_empty())?.to_string();
+    let how = match lines.next().unwrap_or_default() {
+        Made::STARTED_IN => Made::StartedIn,
+        Made::LEFT_BEHIND => Made::LeftBehind,
+        _ => Made::Created,
+    };
+    Some(Maker { session, how })
+}
+
+/// Writes `reference` down as `session`'s, made `how` — over whatever was
+/// written before. The hook deletes the record with the branch, and a
+/// creation by a git with no session's mark leaves none.
+pub(crate) fn write_down(
+    common: &Path,
+    reference: &str,
+    session: &str,
+    how: Made,
+) -> Result<(), String> {
+    // As the hook takes an id: one that would split the record is none.
+    if session.is_empty()
+        || !session
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(format!("{session:?} is no session id the ledger keeps"));
+    }
+    let word = match how {
+        Made::Created => "",
+        Made::StartedIn => Made::STARTED_IN,
+        Made::LeftBehind => Made::LEFT_BEHIND,
+    };
+    let path = record(common, reference);
+    let parent = path.parent().ok_or("the record has no directory")?;
+    std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    std::fs::write(&path, format!("{session}\n{word}\n"))
+        .map_err(|e| format!("{}: {e}", path.display()))
+}
+
+fn record(common: &Path, reference: &str) -> PathBuf {
+    common.join("pgg-gate").join(MADE).join(reference)
 }
 
 /// Installs the hook beside `.git` and points `core.hooksPath` at it;
@@ -180,23 +248,56 @@ pub(crate) fn verdict(dir: &Path, old: &str, new: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    /// The record the script writes is the one `creator` reads.
+    use super::{Made, Maker, maker, write_down};
+
+    fn by(session: &str, how: Made) -> Option<Maker> {
+        Some(Maker {
+            session: session.to_string(),
+            how,
+        })
+    }
+
+    /// The record the script writes is the one `maker` reads.
     #[test]
     fn the_hook_script_writes_creators_where_they_are_read() {
         let script = include_str!("../../../../.githooks/reference-transaction");
         let spelled = format!("made=\"$(dirname \"$0\")/../{}\"", super::MADE);
         assert!(script.contains(&spelled), "{spelled}");
         // The installed copy stands in `pgg-gate/hooks`, so `..` is the
-        // `pgg-gate` that `creator` joins.
+        // `pgg-gate` that `maker` joins.
         let common = crate::yard::Yard::new("hooks-creator");
         let made = common.join("pgg-gate").join(super::MADE);
         std::fs::create_dir_all(made.join("refs/heads/keep")).expect("the record's directory");
         std::fs::write(made.join("refs/heads/keep/copy"), "session-1\n").expect("a creator");
         assert_eq!(
-            super::creator(&common, "refs/heads/keep/copy").as_deref(),
-            Some("session-1")
+            maker(&common, "refs/heads/keep/copy"),
+            by("session-1", Made::Created)
         );
-        assert_eq!(super::creator(&common, "refs/heads/nobodys"), None);
+        assert_eq!(maker(&common, "refs/heads/nobodys"), None);
+    }
+
+    /// What the greeting and a landing write down reads back as written,
+    /// over what was there; an id that would split the record is refused.
+    #[test]
+    fn a_start_and_a_landing_write_down_what_they_read_back() {
+        let common = crate::yard::Yard::new("hooks-started-in");
+        let branch = "refs/heads/claude/spent-1a2b3c";
+        write_down(&common, branch, "session-1", Made::StartedIn).expect("written down");
+        assert_eq!(maker(&common, branch), by("session-1", Made::StartedIn));
+        write_down(&common, branch, "session-1", Made::LeftBehind).expect("left behind");
+        assert_eq!(maker(&common, branch), by("session-1", Made::LeftBehind));
+        write_down(&common, branch, "session-2", Made::StartedIn).expect("started in again");
+        assert_eq!(maker(&common, branch), by("session-2", Made::StartedIn));
+        for id in ["", "two\nlines", "a b", "../up"] {
+            assert!(
+                write_down(&common, branch, id, Made::StartedIn).is_err(),
+                "{id:?}"
+            );
+        }
+        assert_eq!(maker(&common, branch), by("session-2", Made::StartedIn));
+        let made = common.join("pgg-gate").join(super::MADE).join(branch);
+        std::fs::write(&made, "session-3\nsomething-else\n").expect("a word nobody writes");
+        assert_eq!(maker(&common, branch), by("session-3", Made::Created));
     }
 
     /// The script reads the mark itself, spelled as `SESSION` does, ahead of

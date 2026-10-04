@@ -62,13 +62,35 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
                     println!("{stand}");
                 }
             } else {
-                println!(
-                    "This session runs in worktree '{name}', outside the \
-                     seat roster a-f. Continue this branch's pending work if \
-                     that is what the session is for; otherwise take a seat \
-                     with `cargo xtask seat` and enter the path it prints \
-                     (CLAUDE.md ビルド・テスト). {seats}"
-                );
+                let session = string_field(input, "session_id");
+                match seats::start::write_down(
+                    &root,
+                    &Identity::current(session.as_deref()).session,
+                ) {
+                    Some(Ok(branch)) => println!(
+                        "This session starts in worktree '{name}', which the app made \
+                         for it on {branch}, outside the seat roster a-f: take a seat with \
+                         `cargo xtask seat` and enter the path it prints (CLAUDE.md \
+                         ビルド・テスト). The tree and {branch} are written down as this \
+                         session's, so its landing takes them away — or leaves them to a \
+                         later landing while something still works in them, such as the \
+                         terminal tab the app opens here. {seats}"
+                    ),
+                    Some(Err(why)) => println!(
+                        "This session starts in worktree '{name}', which the app made \
+                         for it, outside the seat roster a-f: take a seat with `cargo \
+                         xtask seat` and enter the path it prints (CLAUDE.md ビルド・テスト). \
+                         The tree could not be written down as this session's ({why}), so \
+                         its landing may leave it: name it to the user if it does. {seats}"
+                    ),
+                    None => println!(
+                        "This session runs in worktree '{name}', outside the \
+                         seat roster a-f. Continue this branch's pending work if \
+                         that is what the session is for; otherwise take a seat \
+                         with `cargo xtask seat` and enter the path it prints \
+                         (CLAUDE.md ビルド・テスト). {seats}"
+                    ),
+                }
             }
         }
     }

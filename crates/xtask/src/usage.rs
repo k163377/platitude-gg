@@ -599,12 +599,19 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       Bare `land` from a seat lands the seat's own branch. Once main
       has moved it clears what the session running it made: the
       branches its git created (the reference-transaction hook writes
-      each one's creator down) and the trees, seats aside, that have
-      one of them out — each when main, or the branch as it stood
-      before its rebase, holds all it holds. A tree with uncommitted
-      files, a lock, work of its own or a process in it stays, and is
-      named with every branch of the session's that stays. What another
-      session, the app or the user made is neither judged nor named.
+      each one's maker down), the branch of the tree the app made for
+      the session to start in (the session writes it down as it
+      starts, or else the landing finds it by where the session's
+      transcript is kept), and the trees, seats aside, that have one
+      of them out — each when main, or the branch as it stood before
+      its rebase, holds all it holds. A tree with uncommitted files, a
+      lock, work of its own or a process in it stays, and is named
+      with every branch of the session's that stays. A tree the
+      session started in that a process still works in is left behind
+      — the terminal tab the app opens there outlasts the session's
+      work — and any later landing judges it the same way and takes it
+      once it can. Nothing else another session, the app or the user
+      made is judged or named.
       The seat's claim goes back to the roster with it, whoever's it
       was: the tree is empty at main's tip, so the letter is free for
       whoever asks next, and a session that goes on working there
