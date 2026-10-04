@@ -80,7 +80,18 @@ pub(crate) static BARE: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-pub(crate) static COMMANDS: &[&command::Command] = &[&RUN, &VERIFY, &RUNNER, &STOP, &BARE];
+pub(crate) static WITNESS: command::Command = command::Command {
+    id: "linux.witness",
+    call: "linux witness",
+    purpose: "keep what stands on this host around a container engine that gives no answer, \
+              before anything ends it",
+    run_in: Where::Either,
+    needs: &["Windows: what it takes is of wslc's session process"],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] =
+    &[&RUN, &VERIFY, &RUNNER, &STOP, &BARE, &WITNESS];
 
 mod bare;
 pub(crate) mod container;
@@ -90,6 +101,7 @@ pub(crate) mod runner;
 mod tested;
 #[cfg(test)]
 mod tests;
+mod witness;
 
 pub(crate) use runner::a_runner_verb;
 pub(crate) use tested::tested_on_linux;
@@ -294,16 +306,22 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if let Some(mark) = &step {
         runner::spelled(mark)?;
     }
-    // `stop`: by hand, what the gate does at a ceiling (`gate::runner`),
-    // for a gate that was killed with a verb still in.
-    if rest.first().is_some_and(|verb| verb == "stop") {
-        return stop(
-            &root,
-            container.as_deref(),
-            step.as_deref(),
-            copy.is_some() || shell,
-            rest,
-        );
+    // Ahead of the ticket: neither builds, and neither may wait for room.
+    match rest.first().map(String::as_str) {
+        // By hand, what the gate does at a ceiling (`gate::runner`), for
+        // a gate that was killed with a verb still in.
+        Some("stop") => {
+            return stop(
+                &root,
+                container.as_deref(),
+                step.as_deref(),
+                copy.is_some() || shell,
+                rest,
+            );
+        }
+        // By hand, what a line takes when the engine gives it no answer.
+        Some("witness") => return witness::by_hand(rest, at != 0),
+        _ => {}
     }
     // A prepared copy starts the task runner's own verbs only; anything
     // else is refused rather than run through cargo with the flag

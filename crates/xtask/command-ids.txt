@@ -28,6 +28,7 @@ linux.run
 linux.runner
 linux.stop
 linux.verify
+linux.witness
 perf.measure
 qmltest.run
 seat.release

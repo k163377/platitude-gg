@@ -147,10 +147,17 @@ enum NoAnswer {
 }
 
 impl NoAnswer {
-    /// The account as a caller is told it.
+    /// The account as a caller is told it. One of the engine carries
+    /// where the witness of that moment is kept ([`super::witness`]):
+    /// the one time the engine's processes are worth a look before
+    /// anything is done about them.
     fn told(self) -> String {
         match self {
-            NoAnswer::OfTheEngine(account) | NoAnswer::OfTheCommand(account) => account,
+            NoAnswer::OfTheCommand(account) => account,
+            NoAnswer::OfTheEngine(account) => {
+                let kept = super::witness::beside(&account);
+                format!("{account}{kept}")
+            }
         }
     }
 }
@@ -530,7 +537,9 @@ mod tests {
         )
     }
 
-    /// What a [`NoAnswer`] is an account of, and the account.
+    /// What a [`NoAnswer`] is an account of, and the account — the two
+    /// things [`NoAnswer::told`] goes by, read without telling it: told,
+    /// an account of the engine takes a look at this machine's real one.
     fn of_the_engine(none: NoAnswer) -> (bool, String) {
         match none {
             NoAnswer::OfTheEngine(account) => (true, account),
@@ -614,7 +623,7 @@ mod tests {
     }
 
     /// A CLI that is not on the machine reached no engine: the account
-    /// says so and what is needed, and is the command's own.
+    /// says so and what is needed, and is nothing to take a witness of.
     #[test]
     fn a_cli_that_is_not_there_is_not_an_engine_in_a_state() {
         let yard = crate::yard::Yard::new("engine-unstarted");

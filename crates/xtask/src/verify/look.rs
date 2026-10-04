@@ -38,6 +38,41 @@ const STALLED_LOOK_CEILING: Duration = Duration::from_secs(1);
 /// reap the app. `stalled` makes the listing a process that never answers
 /// (`--fault-stall-look`), so that line can be checked (`super::faults`).
 pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool) -> Vec<String> {
+    looked(pid, "the app", shot_dir, unordered, stalled, After::Reaped)
+}
+
+/// A look at a process that is not the app and is not reaped behind the
+/// look — the container engine's session process, which every checkout
+/// on the machine shares (`linux::witness`). Its threads and its dump
+/// land in `dir` under the names the app's take, and nothing here
+/// suspends a thread of it ([`After::GoesOn`]).
+pub(crate) fn look_into(pid: u32, whose: &str, dir: &Path) -> Vec<String> {
+    looked(pid, whose, dir, true, false, After::GoesOn)
+}
+
+/// What becomes of the process once it has been looked at, which decides
+/// what a look may do to it. Every look is a process ended at a ceiling,
+/// and one ended between suspending a thread and resuming it leaves that
+/// thread suspended for good.
+#[derive(Clone, Copy, PartialEq)]
+enum After {
+    /// The run that looked reaps it: each thread is suspended for its
+    /// stack, and all of them for as long as the dump is written.
+    Reaped,
+    /// It goes on running. No thread of it is suspended from out here:
+    /// the listing walks no stack, and the dump is written off a
+    /// snapshot — the stacks are in the dump.
+    GoesOn,
+}
+
+fn looked(
+    pid: u32,
+    whose: &str,
+    shot_dir: &Path,
+    unordered: bool,
+    stalled: bool,
+    after: After,
+) -> Vec<String> {
     let threads = if stalled {
         listing(bounded(
             "the thread listing",
@@ -46,7 +81,7 @@ pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool)
             Some(&shot_dir.join(THREADS_FILE)),
         ))
     } else {
-        threads_of(pid, shot_dir)
+        threads_of(pid, shot_dir, after)
     };
     let mut lines = match threads {
         Ok(threads) => {
@@ -68,7 +103,7 @@ pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool)
         )],
     };
     if unordered {
-        lines.push(dump_of(pid, shot_dir));
+        lines.push(dump_of(pid, whose, shot_dir, after));
     }
     lines
 }
@@ -324,18 +359,24 @@ foreach ($thread in $process.Threads) {
     $waiting = ''; if ($thread.ThreadState -eq 'Wait') { $waiting = $thread.WaitReason }
     '{0} {1} {2} {3}@{4} cpu={5}ms' -f $thread.Id, $thread.ThreadState, $waiting, $name, $in, [int]$thread.TotalProcessorTime.TotalMilliseconds
 }
-$began = [PggThreads]::Begin([uint32]PGG_PID)
-foreach ($thread in $process.Threads) {
-    if ($began -ne '') { $walked = $began } else { $walked = [PggThreads]::Walk([uint32]$thread.Id) }
-    'stack {0} {1}' -f $thread.Id, $walked
-}
-[PggThreads]::End()";
+if (PGG_WALK -eq 1) {
+    $began = [PggThreads]::Begin([uint32]PGG_PID)
+    foreach ($thread in $process.Threads) {
+        if ($began -ne '') { $walked = $began } else { $walked = [PggThreads]::Walk([uint32]$thread.Id) }
+        'stack {0} {1}' -f $thread.Id, $walked
+    }
+    [PggThreads]::End()
+}";
 
 /// Every thread of the process ([`LISTING_SCRIPT`]), written whole beside
-/// the pictures ([`THREADS_FILE`]) and read back from there.
+/// the pictures ([`THREADS_FILE`]) and read back from there. The stacks
+/// are walked only of a process about to be reaped ([`After`]): the walk
+/// suspends each thread.
 #[cfg(windows)]
-fn threads_of(pid: u32, shot_dir: &Path) -> Result<Threads, String> {
-    let script = LISTING_SCRIPT.replace("PGG_PID", &pid.to_string());
+fn threads_of(pid: u32, shot_dir: &Path, after: After) -> Result<Threads, String> {
+    let script = LISTING_SCRIPT
+        .replace("PGG_PID", &pid.to_string())
+        .replace("PGG_WALK", if after == After::Reaped { "1" } else { "0" });
     let mut command = Command::new("powershell");
     command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
     listing(bounded(
@@ -349,7 +390,7 @@ fn threads_of(pid: u32, shot_dir: &Path) -> Result<Threads, String> {
 /// The same off `/proc`, with each thread's name. It leaves no file and no
 /// stacks (`/proc/<pid>/task/<tid>/stack` is root's).
 #[cfg(unix)]
-fn threads_of(pid: u32, _shot_dir: &Path) -> Result<Threads, String> {
+fn threads_of(pid: u32, _shot_dir: &Path, _after: After) -> Result<Threads, String> {
     let tasks = std::fs::read_dir(format!("/proc/{pid}/task"))
         .map_err(|error| format!("/proc/{pid}/task could not be read: {error}"))?;
     let mut threads = Vec::new();
@@ -385,9 +426,21 @@ fn threads_of(pid: u32, _shot_dir: &Path) -> Result<Threads, String> {
 /// `rundll32 comsvcs.dll,MiniDump`: its file holds no memory and its own
 /// taker cannot open it (internal-docs/ハング調査.md §次の 1 回で何が読めるか).
 ///
-/// `PGG_PID`, `PGG_PATH` and `PGG_KIND` are filled in by [`dump_of`]; the
-/// path sits in a single-quoted literal, which a temp path has no quote to
-/// break. Exits with the call's Win32 error, zero for a dump written.
+/// `PGG_PID`, `PGG_PATH`, `PGG_KIND` and `PGG_WRITE` are filled in by
+/// [`dump_of`]; the path sits in a single-quoted literal, which a temp
+/// path has no quote to break. Exits with the call's Win32 error, zero
+/// for a dump written.
+///
+/// **Two ways to write it** ([`After`]). `Write` hands the dumper the
+/// process itself, whose threads it suspends for as long as it writes.
+/// `WriteOfASnapshot` hands it a snapshot (`PssCaptureSnapshot`, a clone
+/// of the address space with the threads' contexts): the process is held
+/// for that one call and runs on while the dump is written off the
+/// clone, so a dumper ended at its ceiling leaves it as it was. The
+/// dumper has to be told it was handed a snapshot, which is what the
+/// callback is for (`IsProcessSnapshotCallback` = 16, answered
+/// `S_FALSE`; minidumpapiset.h packs its structures to 4, which puts the
+/// callback's kind at offset 12).
 #[cfg(windows)]
 const DUMP_SCRIPT: &str = "Add-Type -TypeDefinition @'
 using System;
@@ -397,6 +450,15 @@ public static class PggDump {
     [DllImport(\"dbghelp.dll\", SetLastError = true)]
     static extern bool MiniDumpWriteDump(IntPtr process, uint pid, IntPtr file, int kind, \
      IntPtr exception, IntPtr user, IntPtr callback);
+    [DllImport(\"kernel32.dll\")]
+    static extern int PssCaptureSnapshot(IntPtr process, uint capture, uint context, out IntPtr snapshot);
+    [DllImport(\"kernel32.dll\")] static extern int PssFreeSnapshot(IntPtr process, IntPtr snapshot);
+    [DllImport(\"kernel32.dll\")] static extern IntPtr GetCurrentProcess();
+    delegate int Asked(IntPtr param, IntPtr input, IntPtr output);
+    static int ItIsASnapshot(IntPtr param, IntPtr input, IntPtr output) {
+        if (Marshal.ReadInt32(input, 12) == 16) Marshal.WriteInt32(output, 0, 1);
+        return 1;
+    }
     public static int Write(int pid, string path, int kind) {
         var process = System.Diagnostics.Process.GetProcessById(pid);
         using (var file = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None)) {
@@ -404,9 +466,29 @@ public static class PggDump {
              kind, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero) ? 0 : Marshal.GetLastWin32Error();
         }
     }
+    public static int WriteOfASnapshot(int pid, string path, int kind) {
+        var process = System.Diagnostics.Process.GetProcessById(pid);
+        IntPtr snapshot;
+        int captured = PssCaptureSnapshot(process.Handle, 0xAC0003BDu, 0x0010001Fu, out snapshot);
+        if (captured != 0) return captured;
+        Asked asked = ItIsASnapshot;
+        IntPtr callback = Marshal.AllocHGlobal(16);
+        try {
+            Marshal.WriteIntPtr(callback, 0, Marshal.GetFunctionPointerForDelegate(asked));
+            Marshal.WriteIntPtr(callback, 8, IntPtr.Zero);
+            using (var file = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None)) {
+                return MiniDumpWriteDump(snapshot, (uint)pid, file.SafeFileHandle.DangerousGetHandle(), \
+                 kind, IntPtr.Zero, IntPtr.Zero, callback) ? 0 : Marshal.GetLastWin32Error();
+            }
+        } finally {
+            Marshal.FreeHGlobal(callback);
+            PssFreeSnapshot(GetCurrentProcess(), snapshot);
+            GC.KeepAlive(asked);
+        }
+    }
 }
 '@
-exit [PggDump]::Write(PGG_PID, 'PGG_PATH', PGG_KIND)";
+exit [PggDump]::PGG_WRITE(PGG_PID, 'PGG_PATH', PGG_KIND)";
 
 /// `MINIDUMP_TYPE` (minidumpapiset.h): `MiniDumpWithFullMemory` |
 /// `MiniDumpWithHandleData` | `MiniDumpWithThreadInfo`.
@@ -414,19 +496,27 @@ exit [PggDump]::Write(PGG_PID, 'PGG_PATH', PGG_KIND)";
 const DUMP_KIND: u32 = 0x2 | 0x4 | 0x1000;
 
 /// A minidump of the process beside its pictures ([`DUMP_SCRIPT`]).
+/// `whose` names the process in the line this answers.
 #[cfg(windows)]
-fn dump_of(pid: u32, shot_dir: &Path) -> String {
+fn dump_of(pid: u32, whose: &str, shot_dir: &Path, after: After) -> String {
     let path = shot_dir.join(DUMP_FILE);
     let script = DUMP_SCRIPT
         .replace("PGG_PID", &pid.to_string())
         .replace("PGG_PATH", &path.to_string_lossy())
-        .replace("PGG_KIND", &DUMP_KIND.to_string());
+        .replace("PGG_KIND", &DUMP_KIND.to_string())
+        .replace(
+            "PGG_WRITE",
+            match after {
+                After::Reaped => "Write",
+                After::GoesOn => "WriteOfASnapshot",
+            },
+        );
     let mut command = Command::new("powershell");
     command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
     match bounded("the dump", command, DUMP_CEILING, None) {
         Answer::Ended { status, .. } if status.success() => match std::fs::metadata(&path) {
             Ok(meta) => format!(
-                "  a dump of the app: {} ({} MB) — WinDbg: `!analyze -v`, then `~*k` for the thread that stands",
+                "  a dump of {whose}: {} ({} MB) — WinDbg: `!analyze -v`, then `~*k` for the thread that stands",
                 path.display(),
                 meta.len() / (1024 * 1024)
             ),
@@ -464,7 +554,7 @@ fn dump_of(pid: u32, shot_dir: &Path) -> String {
 /// Nothing on the other systems: a core needs a debugger the container
 /// does not carry.
 #[cfg(not(windows))]
-fn dump_of(_pid: u32, _shot_dir: &Path) -> String {
+fn dump_of(_pid: u32, _whose: &str, _shot_dir: &Path, _after: After) -> String {
     "  no dump on this system: the threads above are the whole of the look".to_string()
 }
 
@@ -616,7 +706,7 @@ mod tests {
             .spawn()
             .expect("a process to dump");
 
-        let line = super::dump_of(standing.id(), &dir);
+        let line = super::dump_of(standing.id(), "the app", &dir, super::After::Reaped);
 
         // Ended before anything is asserted, so a red leaves nothing
         // standing.
@@ -637,6 +727,51 @@ mod tests {
         std::fs::remove_dir_all(&dir).expect("the dump is its owner's to remove");
     }
 
+    /// A process that goes on running is dumped off a snapshot: the same
+    /// kind of file, and the process is still there to be ended by the
+    /// test and by nothing before it.
+    #[cfg(windows)]
+    #[test]
+    fn a_process_that_goes_on_is_dumped_off_a_snapshot_and_listed_without_a_walk() {
+        let dir = lanes("dump-snapshot");
+        let mut standing = stand_in()
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .expect("a process to look into");
+
+        let lines = super::look_into(standing.id(), "the stand-in", &dir);
+
+        let alive = matches!(standing.try_wait(), Ok(None));
+        standing
+            .kill()
+            .and_then(|()| standing.wait())
+            .expect("the stand-in ended");
+        assert!(alive, "the look ended the process it was to leave running");
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.starts_with("  a dump of the stand-in:")),
+            "{lines:?}"
+        );
+        assert!(
+            !lines.iter().any(|line| line.contains("stands in:")),
+            "a stack was walked of a process that goes on: {lines:?}"
+        );
+        let dump = std::fs::read(dir.join(super::DUMP_FILE)).expect("the dump");
+        assert_eq!(&dump[..4], b"MDMP", "not a minidump");
+        assert!(
+            dump.len() > 1024 * 1024,
+            "{} bytes is a header alone",
+            dump.len()
+        );
+        let listed = std::fs::read_to_string(dir.join(super::THREADS_FILE)).expect("the listing");
+        assert!(
+            !listed.lines().any(|line| line.starts_with("stack ")),
+            "{listed}"
+        );
+        std::fs::remove_dir_all(&dir).expect("the dump is its owner's to remove");
+    }
+
     /// Every thread carries its description and start module; the
     /// stand-in's main thread starts in its own image.
     #[cfg(windows)]
@@ -648,7 +783,7 @@ mod tests {
             .spawn()
             .expect("a process to list");
 
-        let listed = super::threads_of(standing.id(), &dir);
+        let listed = super::threads_of(standing.id(), &dir, super::After::Reaped);
 
         standing
             .kill()

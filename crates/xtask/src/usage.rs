@@ -525,7 +525,15 @@ const TAIL: &str = "  shipped [--no-build]
       Both are worth a place in a pre-merge sweep.
       An engine that gives no answer is not an answer: what is asked of
       it is asked under a ceiling, and a line that cannot learn whether
-      its image is built stops there and builds nothing.
+      its image is built stops there and builds nothing. The first line
+      to meet a silence keeps what stood on the host — the engine's
+      processes, its session process's threads and memory, the disks'
+      last events — under the temp directory's pgg-engine, and says
+      where; `witness` takes the same by hand, for a wslc seen hanging
+      anywhere else. Take it BEFORE anything ends the session (`wslc
+      system session terminate`, ending wslcsession.exe, a reboot): the
+      README it leaves says what an administrator can add.
+        cargo xtask linux witness
       Which image it runs in follows what the command needs: core is
       Ubuntu and the toolchain, app adds Qt, a software GL stack and the
       fonts デザイン規約 names for Ubuntu. The build directory is a volume

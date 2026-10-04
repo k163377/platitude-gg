@@ -20,6 +20,7 @@ mod wedge;
 
 pub use coverage::run as verbs;
 pub(crate) use faults::run as wedge_check;
+pub(crate) use look::look_into;
 pub(crate) use options::suite_words;
 pub(crate) use ownership::{ResourceClaim, claim_dir, claim_resource, keep, sweep_yesterdays_runs};
 pub use run::run;
