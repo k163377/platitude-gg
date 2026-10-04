@@ -81,11 +81,11 @@ Rectangle {
                     && handWatch.point.position.y === sidebar.handAt.y)
                 return
             sidebar.handAt = handWatch.point.position
-            rowGestures.handStirred()
+            rowGestures.handStirred(handWatch.point.scenePosition)
         }
         onHoveredChanged: {
             sidebar.handAt = Qt.point(-1, -1)
-            rowGestures.handStirred()
+            rowGestures.handStirred(handWatch.hovered ? handWatch.point.scenePosition : Qt.point(-1, -1))
         }
     }
     property alias activeKey: rowGestures.activeKey

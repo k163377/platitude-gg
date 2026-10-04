@@ -142,9 +142,16 @@ AppListView {
     /// would undo where they sent it. Less than a pixel is the view rounding the place the opening wrote as it lays its
     /// rows (`QQuickFlickablePrivate::fixup`; a row's lines need not be whole pixels tall).
     property bool openHeld: false
+    /// How often the reader has moved this list, counted while it is moving (`moving`, or the middle button's drift) —
+    /// for the rows, which ask each time whether they are still under the hand (`NavItemDelegate.syncUnder`). **Not
+    /// the list's own writes in between** (an opening shown or given back): those are rows growing and shrinking,
+    /// where the row the hand walked to keeps its rest (デザイン規約 §左メニューの所作「点くのも同じ規則」).
+    property int readerMoves: 0
     onContentYChanged: {
         if (navList.openHeld && Math.abs(navList.contentY - navList.openShownY) >= 1)
             navList.openHeld = false
+        if (navList.moving || navList.hand.scrolling)
+            navList.readerMoves++
     }
     function keepOpenRowInView() {
         if (navList.gestures === null)
@@ -402,6 +409,9 @@ AppListView {
         // (`NavItemDelegate.syncHover`).
         handCounted: navList.gestures !== null
         handMoves: navList.gestures ? navList.gestures.handMoves : 0
+        // Only where the hand is counted: the working tree's rows take Qt's hover itself, which follows the scroll.
+        handAt: navList.gestures ? navList.gestures.handAt : Qt.point(-1, -1)
+        readerMoves: navList.gestures ? navList.readerMoves : 0
         editKey: navList.gestures ? navList.gestures.editKey : ""
         menuStanding: navList.gestures ? navList.gestures.menuOpen : false
         menuOnOpenRow: navList.gestures ? navList.gestures.menuOpen && navList.gestures.menuFromFacts : false

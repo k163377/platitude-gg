@@ -245,9 +245,58 @@ Item {
     onHandMovesChanged: Qt.callLater(navRow.syncHover)
     /// The one spelling of "the hand is on this row", for both roads to it (the count, and the event).
     function syncHover() {
-        navRow.handOn = rowHover.hovered || navRow.factsPointed
+        // A row the view has pooled is hidden with whatever hover it had (`QQuickItemView` hides it, Qt sends it no
+        // leave): not on screen is not under the hand.
+        navRow.handOn = navRow.visible && (rowHover.hovered || navRow.factsPointed)
+        navRow.underHand = navRow.handOn
+        navRow.slidAway = false
         navRow.pointed = navRow.handOn || navRow.factsTipOut || navRow.factsMenuOut
     }
+    /// Whether this row is still under the hand — what the hand found on its last move, and, each time the reader
+    /// moves the list (`readerMoves`), whether the row's own rectangle still holds the place the hand was last heard
+    /// at (`handAt`, window coordinates). **Weighed by geometry, not Qt's hover**: Qt hands hover out before the view
+    /// lays its rows again, and a row it has just built at a stale place over this one takes the hover from it.
+    /// **It never lights or opens a row on its own** — `stillPointed` needs `pointed`, which is the hand's.
+    property bool underHand: false
+    /// The reader's scroll took this row from under the hand; the hand's next move clears it.
+    property bool slidAway: false
+    property point handAt: Qt.point(-1, -1)
+    property int readerMoves: 0
+    onReaderMovesChanged: Qt.callLater(navRow.syncUnder)
+    function syncUnder() {
+        const on = navRow.visible && navRow.handAt.x >= 0
+            && rowGround.contains(rowGround.mapFromItem(null, navRow.handAt.x, navRow.handAt.y))
+        // `slidAway` first: `underHand` falling takes the tip down, and the row answering that fall before it knows it
+        // slid would keep its lines up a beat for a hand walking into the tip (`pointFacts`).
+        navRow.slidAway = !on
+        navRow.underHand = on
+    }
+    /// Whether what this row puts out — its tip, its open lines — stays out: the row the hand walked onto, still under
+    /// it. **A row that slides out from under a still hand drops them at once** (a wheel: デザイン規約 §hover のツールチップ
+    /// 「的が手の下で動けば hover は外れ、出したものはその瞬間に消える」), and keeps its light until the hand moves
+    /// (§左メニューの所作「手の下から滑り出た行は、手が動くまで点いたまま」). A standing tip or menu of the row's own holds
+    /// it as it holds `pointed` — the hand walked into it — but not once the row has slid away: no hand went there.
+    readonly property bool stillPointed: navRow.pointed && !navRow.slidAway
+        && (navRow.underHand || navRow.factsTipOut || navRow.factsMenuOut)
+    /// A tip or menu of the row's own came or went: the hand is read again — **not on a row that slid away**, whose
+    /// light waits for the hand itself, and Qt's hover would put it out from under a hand that never moved.
+    function syncHeld() {
+        if (!navRow.slidAway)
+            navRow.syncHover()
+    }
+    /// A delegate the view pools is off screen, and one it uses again is another row (`ListView.reuseItems`): what the
+    /// hand found on it does not carry over — its light would land on a row nobody walked to, its rest open it. Only
+    /// where the hand is counted; the working tree's rows take Qt's hover itself.
+    function forgetHand() {
+        if (!navRow.handCounted)
+            return
+        navRow.handOn = false
+        navRow.underHand = false
+        navRow.slidAway = false
+        navRow.pointed = false
+    }
+    ListView.onPooled: navRow.forgetHand()
+    ListView.onReused: navRow.forgetHand()
     /// The hand itself on this row's line or its open lines. **Unlike `pointed`, a standing tip does not count**: the
     /// light stays while the tip does, but what asks for the tip must not, or the tip would hold itself up for good.
     property bool handOn: false
@@ -259,12 +308,12 @@ Item {
     /// row being read**: the tip is a popup that takes the pointer, and closing the row then would take the tip's
     /// target away (デザイン規約 §hover のツールチップ).
     readonly property bool factsTipOut: factsSeat.item ? factsSeat.item.tipShown : false
-    onFactsTipOutChanged: Qt.callLater(navRow.syncHover)
+    onFactsTipOutChanged: Qt.callLater(navRow.syncHeld)
     /// Whether the menu standing was raised on this row while open (`rowPressed`). **The row is still the one being
     /// read**, as with its tip: the menu takes the pointer off the row, and the row reading that as the hand gone would
     /// shrink from under the menu about it (デザイン規約 §左メニューの所作). Once the menu goes, the hand decides again.
     readonly property bool factsMenuOut: navRow.factsOpen && navRow.menuOnOpenRow
-    onFactsMenuOutChanged: Qt.callLater(navRow.syncHover)
+    onFactsMenuOutChanged: Qt.callLater(navRow.syncHeld)
     /// Whether this row holds the wait the name box opens after, and whether a click now would still count as a
     /// double-click's second half — read by headless runs. Both are the sidebar's gesture's answer
     /// (`SidebarRowGestures`).
@@ -346,7 +395,7 @@ Item {
     function pointEol() {
         if (!navRow.eol_mark)
             return
-        if (!navRow.pointed) {
+        if (!navRow.stillPointed) {
             eolRest.stop()
             navRow.eolPointed(navRow.fullName, false)
             return
@@ -361,7 +410,7 @@ Item {
     function pointFacts() {
         if (!navRow.expands)
             return
-        if (navRow.pointed) {
+        if (navRow.stillPointed) {
             factsWait.restart()
             factsKeep.stop()
             return
@@ -369,13 +418,14 @@ Item {
         factsWait.stop()
         // **Except a row whose lines put a tip out, which waits the tip's beat**: walking into the tip leaves these
         // lines, the tip falls and is put back a turn later (`SharedToolTip.reopen`), and closing on that fall would
-        // take its target away (デザイン規約 §hover のツールチップ「hover が出した字は選べて、コピーできる」).
-        if (navRow.factsPath !== "")
+        // take its target away (デザイン規約 §hover のツールチップ「hover が出した字は選べて、コピーできる」). **Not a row
+        // that slid away**: no hand is walking into its tip.
+        if (navRow.factsPath !== "" && !navRow.slidAway)
             factsKeep.restart()
         else
             navRow.factsAsked(false, Qt.point(0, 0))
     }
-    onPointedChanged: {
+    onStillPointedChanged: {
         navRow.pointEol()
         navRow.pointFacts()
     }
@@ -384,7 +434,7 @@ Item {
         id: eolRest
         interval: Metrics.tipDelayMs
         onTriggered: {
-            if (navRow.eol_mark && navRow.pointed)
+            if (navRow.eol_mark && navRow.stillPointed)
                 navRow.eolPointed(navRow.fullName, true)
         }
     }
@@ -618,7 +668,7 @@ Item {
     // (デザイン規約 §メニュー). Out of the list, never over the rows either side: the left panel has no room on its left,
     // so its box goes right, and the right panel's to its left (`SharedToolTip.tipRowSide`).
     readonly property string tipRowSide: "left"
-    ToolTip.visible: (navRow.pointed || navRow.tipPointedAt) && !navRow.editing && !navRow.menuStanding
+    ToolTip.visible: (navRow.stillPointed || navRow.tipPointedAt) && !navRow.editing && !navRow.menuStanding
                      && navRow.hoverText !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: navRow.hoverText
@@ -687,7 +737,7 @@ Item {
     Timer {
         id: factsWait
         interval: Metrics.tipDelayMs
-        onTriggered: if (navRow.pointed) navRow.askFacts(rowHover.point.scenePosition)
+        onTriggered: if (navRow.stillPointed) navRow.askFacts(rowHover.point.scenePosition)
     }
     // The beat a row with a tip out waits before letting go, the tip's own (`Metrics.hoverKeepMs`). **It asks again
     // rather than deciding once**: while the tip stands, the reader is still on this row.
@@ -695,7 +745,7 @@ Item {
         id: factsKeep
         interval: Metrics.hoverKeepMs
         onTriggered: {
-            if (navRow.pointed || navRow.factsTipOut)
+            if (navRow.stillPointed || navRow.factsTipOut)
                 factsKeep.restart()
             else
                 navRow.factsAsked(false, Qt.point(0, 0))
@@ -735,8 +785,9 @@ Item {
             // The one answer that is not a line: where a working copy stands, said on a rest anywhere in the open row.
             path: navRow.factsPath
             // **The rest on the row's own line asks for it too** — walking down to the lines would pay a second rest
-            // for it. Both roads write the same ask, so the box stays up as the hand crosses into the lines.
-            rowPointed: navRow.handOn || navRow.tipPointedAt
+            // for it. Both roads write the same ask, so the box stays up as the hand crosses into the lines. Not once
+            // the row slides out from under the hand (`underHand`).
+            rowPointed: (navRow.handOn && navRow.underHand) || navRow.tipPointedAt
             // Why the row's own name wears the warning, said on a rest on that name alone: the lines under it keep
             // notes of their own. `rowHover` hears only the row's own line — the lines take the pointer off it.
             nameNote: navRow.factsNameNote

@@ -220,7 +220,15 @@ QtObject {
     /// (`NavItemDelegate.syncHover`) — Qt gives hover to whatever arrives under a still pointer, and opening a row
     /// moves the rows around it.
     property int handMoves: 0
-    function handStirred() {
+    /// Where the hand was last heard over the rows, in the window's coordinates: what a row the reader scrolled weighs
+    /// itself against (`NavItemDelegate.syncUnder`) — the hand has not moved, so this still holds. **A leave does not
+    /// clear it** (`at` (-1, -1)): a hand crossing from the panel into the rail's peek is heard entering the one before
+    /// leaving the other (`QQuickDeliveryAgentPrivate::deliverHoverEvent` sends the leaves last), and a row the hand
+    /// has left is not pointed, so a stale place lights and opens nothing.
+    property point handAt: Qt.point(-1, -1)
+    function handStirred(at) {
+        if (at.x >= 0)
+            gestures.handAt = at
         gestures.handMoves++
     }
 

@@ -182,7 +182,7 @@ AppCard {
                 // (`NavItemDelegate.syncHover`): a popup stands outside the panel, whose watch never sees in here.
                 peek.handAt = Qt.point(-1, -1)
                 if (peek.gestures !== null)
-                    peek.gestures.handStirred()
+                    peek.gestures.handStirred(peekHover.hovered ? peekHover.point.scenePosition : Qt.point(-1, -1))
             }
             // By position, not notification, as `SidebarPane` weighs it: a row growing in here reports a fresh point.
             onPointChanged: {
@@ -191,7 +191,7 @@ AppCard {
                     return
                 peek.handAt = peekHover.point.position
                 if (peek.gestures !== null)
-                    peek.gestures.handStirred()
+                    peek.gestures.handStirred(peekHover.point.scenePosition)
             }
         }
         // The section's own band (the tags eye, the remote `+`) without the fold arrow: there is nothing to fold away
