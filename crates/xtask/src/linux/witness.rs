@@ -113,7 +113,8 @@ Not here, because each needs an administrator. They are worth the most BEFORE an
 session - `wslc system session terminate`, ending wslcsession.exe, a reboot - and the first of
 them needs nothing downloaded:
 
-1. Task Manager > Details > wslservice.exe > Create memory dump file.
+1. Task Manager > Details > Create memory dump file, of vmwp.exe (the VM's own process) and
+   of wslservice.exe.
 2. The engine's own trace, from an administrator's PowerShell, with the script of the installed
    version (`wsl --version`; https://github.com/microsoft/WSL, diagnostics/collect-wsl-logs.ps1
    at that tag): `collect-wsl-logs.ps1 -Dump`, left recording for a minute while one
