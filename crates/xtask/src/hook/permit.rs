@@ -221,8 +221,9 @@ fn on_the_boards_clock(secs: u64) -> u128 {
 }
 
 /// Whether a prompt is the user's own words — not a summary carried back
-/// nor a tagged harness event (`<task-notification>`).
-fn is_the_users_own(prompt: &str) -> bool {
+/// nor a tagged harness event (`<task-notification>`, a subagent's
+/// `<agent-message>`).
+pub(super) fn is_the_users_own(prompt: &str) -> bool {
     let text = prompt.trim_start();
     !text.starts_with(CARRIED_CONTEXT) && !opens_a_tag(text)
 }

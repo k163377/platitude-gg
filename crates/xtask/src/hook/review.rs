@@ -20,13 +20,20 @@ pub(super) fn prompt_submit(input: &str) -> Result<(), String> {
         return Ok(());
     };
     super::permit::prompt_submit(input, &prompt);
-    if asks_for_review(&prompt) {
+    if answers(&prompt) {
         println!(
             "{}",
             note(string_field(input, "transcript_path").as_deref())
         );
     }
     Ok(())
+}
+
+/// Whether the note answers this prompt: the user's own message asking for
+/// a review. A tagged event — a background task's end, a subagent's report
+/// — asks for nothing, whatever words it carries (`permit`).
+fn answers(prompt: &str) -> bool {
+    super::permit::is_the_users_own(prompt) && asks_for_review(prompt)
 }
 
 /// Whether this prompt asks for a review. One that only mentions a review
@@ -62,7 +69,18 @@ fn note(transcript: Option<&str>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{asks_for_review, note, prompt_submit};
+    use super::{answers, asks_for_review, note, prompt_submit};
+
+    #[test]
+    fn a_report_handed_back_asks_for_nothing() {
+        assert!(!answers(
+            "<agent-message from=\"a1\">## Review of the diff</agent-message>"
+        ));
+        assert!(!answers(
+            "<task-notification>the review finished</task-notification>"
+        ));
+        assert!(answers("レビューして"));
+    }
 
     #[test]
     fn takes_the_ask_in_either_language_and_from_a_slash_command() {

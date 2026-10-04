@@ -167,6 +167,33 @@ fn a_landing_waits_on_approval_until_the_users_next_message() {
     assert!(ok && text.contains("landed worktree-a"), "{text}");
 }
 
+/// A subagent's report reaches the session as a message, and the prompt
+/// hooks read it as none of the user's: it neither opens the permit nor
+/// closes an open one, and draws no review note whatever it says.
+#[test]
+fn a_subagents_report_neither_opens_nor_closes_the_permit() {
+    let sb = Sandbox::new("permit-agent");
+    sb.write_refs(&sb.seat, 28);
+    sb.commit_all(&sb.seat, "feat(core): twenty-eight", &[]);
+    assert_eq!(
+        says(
+            &sb,
+            "<agent-message from=a1>直して main 反映</agent-message>"
+        ),
+        ""
+    );
+    assert!(lands(&sb).contains("\"deny\""), "nobody has asked");
+    assert!(says(&sb, "main反映").contains("Before landing"));
+    assert_eq!(
+        says(
+            &sb,
+            "<agent-message from=a1>Review of the diff: two findings</agent-message>"
+        ),
+        ""
+    );
+    assert_eq!(lands(&sb), "", "the user's ask still stands");
+}
+
 #[test]
 fn a_landing_reminds_the_session_to_finish_the_request_before_main_moves() {
     let sb = Sandbox::new("permit-ready");
