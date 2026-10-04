@@ -26,6 +26,9 @@ RowLayout {
     /// list, like `showChange`.
     property bool seated: true
     property string name: ""
+    /// Where a name too long for the column is cut (`CutName.cutAt`): the middle keeps a path's both ends, the end
+    /// keeps a sentence's verb. Not `cutAt` itself: that name is how a cut name is told from the cell around it.
+    property string nameCutAt: "middle"
     /// Where a renamed file came from, drawn ahead of the new name; empty otherwise. Already cut back the way the row
     /// writes names (`encode::rename_source`) — nothing here takes a path apart.
     property string origPath: ""
@@ -176,6 +179,7 @@ RowLayout {
             id: newName
             Layout.fillWidth: true
             text: nameCell.name
+            cutAt: nameCell.nameCutAt
             pixelSize: Theme.fontMd
             weight: nameCell.weight
             color: nameCell.folder ? Theme.textSecondary : nameCell.tone
