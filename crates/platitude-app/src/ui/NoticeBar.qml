@@ -102,17 +102,18 @@ Rectangle {
                 readonly property int markRoom:
                     bar.markWord === "" || spaceRuler.advanceWidth <= 0
                     ? 0 : Math.ceil(headMark.inkWidth / spaceRuler.advanceWidth)
+                /// Where the name stands: a heading opens with it (`Words.markSeatIn`).
+                readonly property int markAt: Words.markSeatIn(bar.label, bar.markWord, false)
                 /// Where that gap came out (empty when none). One binding over its inputs, since `charRect` is a call
                 /// (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
                 readonly property rect markSeat: {
-                    const at = bar.label.indexOf(bar.markWord)
-                    if (headingWord.markRoom <= 0 || at < 0 || headingWord.markup === ""
+                    if (headingWord.markRoom <= 0 || headingWord.markAt < 0 || headingWord.markup === ""
                             || headingWord.width <= 0 || headingWord.height <= 0)
                         return Qt.rect(0, 0, 0, 0)
-                    return headingWord.charRect(at + headingWord.markRoom)
+                    return headingWord.charRect(headingWord.markAt + headingWord.markRoom)
                 }
-                markup: headingWord.markRoom > 0 ? Words.roomInSentence(bar.label, bar.markWord, headingWord.markRoom)
-                                                 : ""
+                markup: headingWord.markRoom > 0
+                        ? Words.roomInSentence(bar.label, headingWord.markAt, headingWord.markRoom) : ""
                 color: Theme.textPrimary
                 pixelSize: Theme.fontMd
                 weight: Theme.fontWeightStrong

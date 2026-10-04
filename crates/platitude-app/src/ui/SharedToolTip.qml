@@ -382,19 +382,20 @@ Item {
             readonly property int markRoom:
                 shared.tipMarkWord === "" || spaceRuler.advanceWidth <= 0
                 ? 0 : Math.ceil(tipMark.inkWidth / spaceRuler.advanceWidth)
+            /// Where the name stands: a tip names it last, after its conclusion (`Words.markSeatIn`).
+            readonly property int markAt: Words.markSeatIn(shared.sharedTip.text, shared.tipMarkWord, true)
             /// Where that gap came out (empty when none). One binding over its inputs, since `charRect` is a call
             /// (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
             readonly property rect markSeat: {
-                const at = shared.sharedTip.text.indexOf(shared.tipMarkWord)
-                if (tipWords.markRoom <= 0 || at < 0 || tipWords.markup === ""
+                if (tipWords.markRoom <= 0 || tipWords.markAt < 0 || tipWords.markup === ""
                         || tipWords.width <= 0 || tipWords.height <= 0)
                     return Qt.rect(0, 0, 0, 0)
-                return tipWords.charRect(at + tipWords.markRoom)
+                return tipWords.charRect(tipWords.markAt + tipWords.markRoom)
             }
             // Built here: the pointer step is a colour, which can only ride inside the markup. A tip carries a place
             // or a mark, never both.
             markup: shared.tipMarkWord !== ""
-                    ? Words.roomInSentence(shared.sharedTip.text, shared.tipMarkWord, tipWords.markRoom)
+                    ? Words.roomInSentence(shared.sharedTip.text, tipWords.markAt, tipWords.markRoom)
                     : Words.placeInSentence(shared.sharedTip.text, shared.tipPlace, shared.tipHref,
                                             pointedLink !== "" ? Theme.textSecondary : Theme.textMuted)
             onLinkAsked: href => shared.linkAsked(href)

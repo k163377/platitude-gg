@@ -63,7 +63,7 @@ Item {
             verify(!Words.reportNamesCopy("rename"), "a branch's name wears no tree")
 
             // One space of room, where this font needs two: pinned, or rich text drops it at the block's start.
-            compare(Words.roomInSentence("topic was not removed", "topic", 1), "&nbsp;topic was not removed")
+            compare(Words.roomInSentence("topic was not removed", 0, 1), "&nbsp;topic was not removed")
 
             dress("worktree-kept", "", "topic", "")
             tryVerify(() => bar.settled && bar.markShown && bar.markInk > 0)
@@ -75,6 +75,20 @@ Item {
             dress("update", "origin", "main", "")
             tryVerify(() => bar.settled)
             verify(!bar.markShown, "no copy named, no mark")
+        }
+
+        /// The mark goes in front of the name where the sentence says it — last in a tip, first in a heading — and
+        /// never into a word that only holds the same letters (`copy` and `work` in `working copy`).
+        function test_the_tree_mark_stands_before_the_name_and_nowhere_else() {
+            compare(Words.markSeatIn("Checked out in another working copy — copy", "copy", true), 38)
+            compare(Words.markSeatIn("Checked out in another working copy — work", "work", true), 38)
+            compare(Words.markSeatIn("topic was not removed", "topic", false), 0)
+            compare(Words.markSeatIn("removed was not removed", "removed", false), 0, "a heading's name is its first")
+            compare(Words.markSeatIn("Checked out in another working copy — rework", "work", true), -1,
+                    "the letters, not the word")
+            compare(Words.markSeatIn("Den Ordner topic gibt es", "topic", true), -1, "a translation that moved it: none")
+            compare(Words.markSeatIn("anything", "", true), -1)
+            compare(Words.roomInSentence("anything", -1, 2), "", "no seat, no room: drawn as it came")
         }
 
         /// Both arms, because either alone passes against a bar painted one colour.

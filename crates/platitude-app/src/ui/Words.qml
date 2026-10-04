@@ -337,14 +337,24 @@ QtObject {
              + "<a href=\"" + href + "\"><font color=\"" + tint + "\">" + Words.inked(place) + "</font></a>"
              + Words.inked(sentence.substring(seat + place.length))
     }
-    /// The same sentence with `spaces` of room opened in front of `word`, for a drawn mark to stand in
-    /// (`SharedToolTip`; where the gap lands is `CardText.charRect`'s to answer). `""` where the word is not in the
-    /// sentence — a translation moved it — so the caller draws the sentence as it came, with no mark on the wrong word.
-    /// The room is pinned whole: rich text drops a lone space opening a block (a name that starts the sentence,
-    /// `NoticeBar`), and a breakable one would let a line end between the mark and its name.
-    function roomInSentence(sentence, word, spaces) {
-        const seat = sentence.indexOf(word)
-        if (word === "" || spaces <= 0 || seat < 0)
+    /// Where `word` stands in `sentence` as the name a drawn mark goes in front of: a whole word at the sentence's end
+    /// (`atEnd` — a tooltip names it after its conclusion, `<conclusion> — <name>`, and a cut row's line ends in it)
+    /// or at its start (a report's heading, `<name> was not removed`). -1 anywhere else — a translation that moved
+    /// it, or the same letters inside another word (`old` in `folder`) — so the sentence is drawn as it came, with no
+    /// mark on the wrong word.
+    function markSeatIn(sentence, word, atEnd) {
+        const seat = atEnd ? sentence.length - word.length : 0
+        if (word === "" || seat < 0 || sentence.substring(seat, seat + word.length) !== word)
+            return -1
+        const beside = atEnd ? sentence.charAt(seat - 1) : sentence.charAt(word.length)
+        return beside === "" || beside === " " ? seat : -1
+    }
+    /// The same sentence with `spaces` of room opened at `seat` (`markSeatIn`), for a drawn mark to stand in
+    /// (`SharedToolTip`; where the gap lands is `CardText.charRect`'s to answer). `""` for no seat, so the caller draws
+    /// the sentence as it came. The room is pinned whole: rich text drops a lone space opening a block (a name that
+    /// starts the sentence, `NoticeBar`), and a breakable one would let a line end between the mark and its name.
+    function roomInSentence(sentence, seat, spaces) {
+        if (seat < 0 || spaces <= 0)
             return ""
         return Words.inked(sentence.substring(0, seat)) + "&nbsp;".repeat(spaces) + Words.inked(sentence.substring(seat))
     }
