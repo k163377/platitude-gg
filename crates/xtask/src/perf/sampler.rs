@@ -580,7 +580,7 @@ impl Armed {
             }
             #[cfg(not(any(windows, target_os = "linux")))]
             {
-                let _ = (pid, window);
+                let _ = (pid, window, &mut record);
                 Err("memory sampling is not implemented for this OS".into())
             }
         });

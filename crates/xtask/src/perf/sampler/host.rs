@@ -224,6 +224,13 @@ fn host_sample() -> Result<Host, String> {
     })
 }
 
+/// No counters are read here: `perf::run` refuses an OS without its
+/// samplers before anything waits on the machine.
+#[cfg(not(any(windows, target_os = "linux")))]
+fn host_sample() -> Result<Host, String> {
+    Err("the host counters are not read on this OS".into())
+}
+
 /// `"int=1 k=7 u=8 i=9"` — the whole of what [`host_sample`] says.
 #[cfg(any(windows, test))]
 fn parse_host(line: &str) -> Option<Host> {
