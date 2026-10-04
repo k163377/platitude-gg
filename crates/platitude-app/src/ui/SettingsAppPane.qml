@@ -183,14 +183,19 @@ ColumnLayout {
         gitPicker.open()
     }
 
-    /// Types the way a hand leaves the box: the text, then the edit finished. Writing `AppBackend.gitPath` straight
-    /// would pass with the wiring cut (app-ui.md §UI 自動化).
-    function autoTypeGitPath(path) {
-        gitPathField.text = path
+    /// The chooser's answer, a `file:` URL, put in the box and written — the box's one way in besides the store.
+    function takeGitPick(url) {
+        gitPathField.text = GitFacts.pickedPath(url)
         pane.applyGitPath()
     }
+    /// Answers in the chooser's place, through its door: the box spells a path only as the chooser's answer reads.
+    /// Writing `AppBackend.gitPath` straight would pass with the wiring cut (app-ui.md §UI 自動化).
+    function autoPickGitPath(url) {
+        pane.takeGitPick(url)
+    }
 
-    /// Both process boxes, each typed as `autoTypeGitPath` does. An empty half is an emptied box: the default / off.
+    /// Both process boxes, each typed the way a hand leaves a box: the text, then the edit finished. An empty half is
+    /// an emptied box: the default / off.
     function autoTypeProcesses(concurrency, copiesSecs) {
         concurrencyField.text = concurrency
         pane.applyConcurrency()
@@ -352,10 +357,7 @@ ColumnLayout {
             // The folder is set on the way in (`openGitPicker`), not bound: a dialog re-homing itself mid-walk would
             // take the reader's place away. No name filter: git has no extension off Windows, a wrapper script is fine,
             // and the version written back says whether the choice was a git.
-            onAccepted: {
-                gitPathField.text = GitFacts.pickedPath(selectedFile.toString())
-                pane.applyGitPath()
-            }
+            onAccepted: pane.takeGitPick(selectedFile.toString())
         }
     }
 

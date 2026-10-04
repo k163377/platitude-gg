@@ -71,8 +71,8 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "merge_editor_enter stood=true left=true",
     },
     // Which git the app runs, and what that binary answered. The sentence
-    // under the box takes a subprocess to arrive, so a run shot as it
-    // typed frames "Asking for the version…".
+    // under the box takes a subprocess to arrive, so a run shot as the
+    // path went in frames "Asking for the version…".
     //
     // No argument: box and store empty (a fresh settings directory), and
     // the git on `PATH` answered. Which version is never claimed — the
@@ -80,11 +80,12 @@ pub(super) const TABLE: &[Verb] = &[
     // a run an old one (the `in-use` run included, for the offered shape
     // over a git below the minimum); every row claims its run of flags.
     //
-    // `in-use` types the git already running: that box offers nothing,
-    // however spelled. `other` types the second git (`--other-git`) and
-    // gets the button. `offers=` is the rule the press is guarded by;
-    // `held=` the frozen copy the button was drawn from — `Restart to
-    // apply` over a `holdMs` of zero would fall through under a hand.
+    // `in-use` picks the git already running: that box offers nothing.
+    // `other` picks the second git (`--other-git`) and gets the button.
+    // Both go in as the chooser answers (`autoPickGitPath`). `offers=` is
+    // the rule the press is guarded by; `held=` the frozen copy the button
+    // was drawn from — `Restart to apply` over a `holdMs` of zero would
+    // fall through under a hand.
     //
     // A path with nothing at its end must be refused as *missing*, not as
     // "it ran and said something else"; `offers=false` keeps the loud

@@ -174,17 +174,17 @@ Item {
     }
 
     // PGG_AUTO_ACT=settings-git-path: the application category's `GIT EXECUTABLE` chapter, with the git at the path
-    // having answered. The argument is the path to write, or none for the resting (empty) box.
+    // having answered. The argument is the path to put in the box, or none for the resting (empty) box.
     //
     // The picture cannot judge this: the sentence under the box arrives a subprocess after the box, so a shot at the
-    // typing would frame `Asking for the version…` and read green. The answer itself is waited on and reported.
+    // pick would frame `Asking for the version…` and read green. The answer itself is waited on and reported.
     //
     // Writing the settings file is safe: every run has its own config directory
     // (rules/app-ui.md §UI 自動化「run は自分の環境と状態を建てる」).
     SampleTimer {
         id: gitPathTimer
         running: Harness.autoAct === "settings-git-path"
-        /// The path has been typed (with no argument, nothing is).
+        /// The path has gone in (with no argument, nothing does).
         property bool acted: false
         onTriggered: {
             if (!settingsDialog.opened) {
@@ -193,17 +193,18 @@ Item {
             }
             if (!gitPathTimer.acted) {
                 // `in-use`: the git already running, the one path that does not offer a restart. `other`: the second
-                // git the run was staged with (`--other-git`), which does — on either OS, without naming a path.
+                // git the run was staged with (`--other-git`), which does — on either OS, without naming a path. Each
+                // as the chooser answers it: a URL of the whole path (`Harness.fileUrl`).
                 if (Harness.autoActArg === "in-use")
-                    acts.appPane.autoTypeGitPath(AppBackend.gitPathInUse)
+                    acts.appPane.autoPickGitPath(Harness.fileUrl(AppBackend.gitPathInUse))
                 else if (Harness.autoActArg === "other")
-                    acts.appPane.autoTypeGitPath(Harness.otherGit)
+                    acts.appPane.autoPickGitPath(Harness.fileUrl(Harness.otherGit))
                 else if (Harness.autoActArg !== "")
-                    acts.appPane.autoTypeGitPath(Harness.autoActArg)
+                    acts.appPane.autoPickGitPath(Harness.fileUrl(Harness.autoActArg))
                 gitPathTimer.acted = true
                 return
             }
-            // The screen asks as it opens, so an answer is coming either way; after typing, this is the later ask's.
+            // The screen asks as it opens, so an answer is coming either way; after a pick, this is the later ask's.
             if (AppBackend.gitPathState === "" || AppBackend.gitPathState === "checking")
                 return
             gitPathTimer.stop()
@@ -243,20 +244,20 @@ Item {
     SampleTimer {
         id: gitLeaveTimer
         running: Harness.autoAct === "settings-git-leave"
-        /// The path has been typed, and the way out has been taken.
-        property bool typed: false
+        /// The path has gone in, and the way out has been taken.
+        property bool picked: false
         property bool left: false
         onTriggered: {
             if (!settingsDialog.opened) {
                 settingsDialog.openAt("app")
                 return
             }
-            if (!gitLeaveTimer.typed) {
-                acts.appPane.autoTypeGitPath(Harness.otherGit)
-                gitLeaveTimer.typed = true
+            if (!gitLeaveTimer.picked) {
+                acts.appPane.autoPickGitPath(Harness.fileUrl(Harness.otherGit))
+                gitLeaveTimer.picked = true
                 return
             }
-            // The offer arrives a subprocess after the typing.
+            // The offer arrives a subprocess after the pick.
             if (!AppBackend.gitPathOffersRestart)
                 return
             if (!gitLeaveTimer.left) {

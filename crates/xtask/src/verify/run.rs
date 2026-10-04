@@ -76,8 +76,8 @@ fn gits_for<'a>(
             other: None,
         });
     }
-    // Likewise the second-git runs, which typed without one would wait
-    // out the watchdog for a path never staged. Any version at or above
+    // Likewise the second-git runs: without one they would wait out the
+    // watchdog for a path never staged. Any version at or above
     // the supported minimum; if the minimum passes it, the shots turn red.
     let asks_for_one = opts.verb == "settings-git-leave"
         || (opts.verb == "settings-git-path" && opts.arg == "other");
@@ -196,8 +196,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
             Some(body) => body,
             None => folder_for(&opts.verb, &shot_dir, &path)?,
         },
-        // The seed is the whole of this one (`seed::config`): the field
-        // is never typed into.
+        // The seed is the whole of this one (`seed::config`): nothing is
+        // put in the box.
         false if opts.verb == "settings-git-path" && opts.arg == "stored-missing" => String::new(),
         false => opts.arg.clone(),
     };
