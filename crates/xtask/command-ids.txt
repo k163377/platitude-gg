@@ -47,4 +47,5 @@ sweep.now
 verify.ui
 verify.verbs
 verify.wedge
+versions.agree
 waits.audit

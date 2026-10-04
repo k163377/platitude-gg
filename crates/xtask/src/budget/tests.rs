@@ -528,6 +528,7 @@ fn the_weight_is_read_off_the_command() {
         words(&["cargo", "fmt", "--all", "--", "--check"]),
         words(&["cargo", "run", "-p", "xtask", "--", "structure"]),
         words(&["cargo", "run", "-p", "xtask", "--", "waits"]),
+        words(&["cargo", "run", "-p", "xtask", "--", "versions"]),
         words(&["cargo", "run", "-p", "xtask", "--", "deny"]),
         words(&["cargo", "run", "-p", "xtask", "--", "linux", "qmltest"]),
         words(&["C:/x/target/gate-logs/xtask-runner-7.exe", "docs"]),

@@ -193,6 +193,14 @@ fn always_steps() -> Vec<Step> {
             &["crates", ".claude/rules-refs/structure.md"],
         ),
         step("waits", Side::Host, true, xtask(&["waits"]), &["crates"]),
+        // CI's directory in pieces, for the reason `versions` gives.
+        step(
+            "versions",
+            Side::Host,
+            true,
+            xtask(&["versions"]),
+            &[format!(".{}", "github"), DOCKERFILE.to_string()],
+        ),
         step("docs", Side::Host, true, xtask(&["docs"]), &DOCS),
         // Fails on a census line no verb answers: the app would ignore the
         // name and the run wait out its ceiling silently. Verbs with no

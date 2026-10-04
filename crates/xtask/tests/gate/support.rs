@@ -18,7 +18,7 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 const YARD: &str = "pgg-tests";
 
 /// The steps every gate runs regardless of the diff.
-pub const ALWAYS: [&str; 5] = ["structure", "waits", "docs", "verbs", "fmt"];
+pub const ALWAYS: [&str; 6] = ["structure", "waits", "versions", "docs", "verbs", "fmt"];
 
 /// Runs a command, retrying while the kernel answers that somebody still
 /// holds its image open for writing (`ETXTBSY`).

@@ -17,7 +17,7 @@ cargo xtask <command>
 commands:
   check [--verb <v>]...
       Stage-2 verification (CLAUDE.md 確認は 3 段), with the host and the
-      container running in parallel: structure, waits, docs, qmltest,
+      container running in parallel: structure, waits, versions, docs, qmltest,
       fmt, clippy, the workspace tests and the shipped build here, while
       the container runs test -p platitude-core, qmltest, that same
       clippy for Linux, verify-ui for each --verb, and bare. Clippy runs
@@ -49,7 +49,7 @@ commands:
       moved, the verify-ui verbs whose census names a reached component
       (crates/xtask/verb-census.txt, written by the
       runs themselves), bare when the app moved. The always-steps
-      (structure, waits, docs, verbs, fmt) run every time and first, and
+      (structure, waits, versions, docs, verbs, fmt) run every time and first, and
       a build input that changed (Cargo.toml, Cargo.lock, the toolchain,
       the Dockerfile) makes the reach the whole tree. Then host and
       container sides run in parallel;
@@ -162,6 +162,17 @@ commands:
       timeout, so a silent hang fails by test name, ahead of the CI
       kill. Second step of `check`; subsecond on its own.
 
+  versions
+      The versions the workflows cannot name once, held to their source:
+      every runner name of an OS across CI's workflows and local
+      actions is one release — Ubuntu's the one the container's
+      Dockerfile names in UBUNTU, since the container stands for CI's
+      Linux machine — no runner name is -latest, and every action is at
+      one commit under one release comment. What a file names once (the
+      crates' lock, the toolchain file, Qt's pin, the Dockerfile's
+      AQT_SOURCE that CI's Qt action reads) is not read. Third step of
+      `check` and an always-step of `gate`.
+
   docs [--sync]
       The three ways an edit to internal-docs, .claude/rules,
       .claude/rules-refs or CLAUDE.md tears a block off the list it
@@ -177,7 +188,7 @@ commands:
       what lets a table or a heading indented inside a list stay part of
       it; fenced code and YAML front matter are skipped whole. Structure
       only: how wide a line runs and how a sentence is built are the
-      writer's. Third step of `check` and an always-step of `gate` —
+      writer's. Fourth step of `check` and an always-step of `gate` —
       sixteen files in twenty milliseconds is under the cost of asking a
       stamp whether it still answers. The Write hook says the same thing
       about the one file an edit just landed in, which is where a tear is

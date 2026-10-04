@@ -37,7 +37,8 @@ jobs:
       matrix:
         # Named, not -latest: a new OS release arrives as a commit here. What
         # an image carries (its compilers, its git) still moves under the
-        # name. Ubuntu's is the release ci/linux/Dockerfile's UBUNTU names.
+        # name. Ubuntu's is the release ci/linux/Dockerfile's UBUNTU names,
+        # and `cargo xtask versions` holds every runner name of an OS to one.
         os:
           - &ubuntu ubuntu-24.04
           - windows-2025

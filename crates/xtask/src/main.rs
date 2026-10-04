@@ -39,6 +39,7 @@ mod sweep;
 mod tree;
 mod usage;
 mod verify;
+mod versions;
 mod wait;
 mod waits;
 mod yard;
@@ -57,6 +58,7 @@ fn main() -> ExitCode {
         Some("structure") => structure::run(&args[1..]),
         Some("docs") => docs::run(&args[1..]),
         Some("waits") => waits::run(&args[1..]),
+        Some("versions") => versions::run(&args[1..]),
         Some("qmltest") => qmltest::run(&args[1..]),
         Some("deny") => deny::run(&args[1..]),
         Some("demo-repo") => demo::run(&args[1..]).map(|path| {

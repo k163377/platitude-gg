@@ -75,6 +75,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // the minutes of compiling.
         xtask(&["structure"]),
         xtask(&["waits"]),
+        xtask(&["versions"]),
         xtask(&["docs"]),
         xtask(&["qmltest"]),
         words(&["cargo", "fmt", "--all", "--", "--check"]),
