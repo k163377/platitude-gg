@@ -46,6 +46,8 @@ InkCanvas {
         case "tag": return 10.18
         // Ring and bar, 2.5 to 13.5.
         case "no-entry": return 11
+        // The ring, 2.5 to 13.5; the barb stays inside its ink.
+        case "history": return 11
         // The frame, 2.5 to 13.5.
         case "app-window": return 11
         // The frame, 3 to 13.
@@ -227,6 +229,26 @@ InkCanvas {
             // Three quarters of a ring: the gap is what shows it turning.
             ctx.beginPath()
             ctx.arc(8 * s, 8 * s, 5 * s, -Math.PI / 2, Math.PI)
+            ctx.stroke()
+        } else if (icon.kind === "history") {
+            // Octicons `history-16` on this grid: its 1.5 stroke is ours, so the ring is its centreline (radius 7.25)
+            // brought in to `no-entry`'s 5.5. The ring runs clockwise from the barb (217.4°) round to just under the
+            // left (174.1°); the barb is the filled corner it leaves from, and the hands meet a step left of centre as
+            // the source's do.
+            ctx.lineJoin = "round"
+            ctx.beginPath()
+            ctx.arc(8 * s, 8 * s, 5.5 * s, 217.4 * Math.PI / 180, (174.1 + 360) * Math.PI / 180)
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.moveTo(2.02 * s, 3.4 * s)
+            ctx.lineTo(2.02 * s, 6.48 * s)
+            ctx.lineTo(5.12 * s, 6.48 * s)
+            ctx.closePath()
+            ctx.fill()
+            ctx.beginPath()
+            ctx.moveTo(7.81 * s, 5.53 * s)
+            ctx.lineTo(7.81 * s, 8.19 * s)
+            ctx.lineTo(9.71 * s, 8.95 * s)
             ctx.stroke()
         } else if (icon.kind === "copyicon") {
             // Corner radius 1 of the grid at most: rounder, the two overlapping sheets read as blobs. Paths, since
