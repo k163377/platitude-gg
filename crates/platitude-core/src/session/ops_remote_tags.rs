@@ -5,7 +5,9 @@
 //! remote has to be asked for outright (every other sidebar row reads
 //! `refs/remotes/`), so every write here reads again on its way out.
 
+use super::discard_record::{held_before, record_token};
 use super::*;
+use crate::discards::{self, TagBefore};
 
 /// What one pass over the remotes' tags established.
 #[derive(Debug, Default)]
@@ -165,7 +167,15 @@ impl RepoSession {
                     s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
                         .await;
                 }
-                result
+                // A leased push overwrote what the remote held, as the lease
+                // read it: that goes on the discard record (破棄記録仕様.md §2).
+                if let Some(replaced) = result? {
+                    let keep = record_token();
+                    s.recorded_if(
+                        tag_pushed_over(&exec, &repo, &remote_name, &tag, &replaced, &keep).await,
+                    );
+                }
+                Ok(())
             },
         )
     }
@@ -200,7 +210,12 @@ impl RepoSession {
                     s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
                         .await;
                 }
-                result
+                let held = result?;
+                let keep = record_token();
+                s.recorded_if(
+                    tags_gone(&exec, &repo, &remote_name, &tag, None, held.as_ref(), &keep).await,
+                );
+                Ok(())
             },
         )
     }
@@ -238,7 +253,21 @@ impl RepoSession {
                     s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
                         .await;
                 }
-                result
+                let held = result?;
+                let keep = record_token();
+                s.recorded_if(
+                    tags_gone(
+                        &exec,
+                        &repo,
+                        &remote_name,
+                        &from,
+                        None,
+                        held.as_ref(),
+                        &keep,
+                    )
+                    .await,
+                );
+                Ok(())
             },
         )
     }
@@ -269,6 +298,9 @@ impl RepoSession {
             AfterWrite::Name { status: false },
             &[LeavingRef::Tag(&name)],
             move |exec, repo, cancel| async move {
+                let local = format!("refs/tags/{tag}");
+                let here =
+                    discards::tag_before(&exec, &repo.workdir, &tag, &local, &cancel).await?;
                 let remote_half = remote::delete_remote_tag(
                     &exec,
                     &repo.workdir,
@@ -290,7 +322,24 @@ impl RepoSession {
                     s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
                         .await;
                 }
-                remote_half.and(local_half)
+                // What went: the remote's name as the lease read it, and the
+                // one here with it.
+                if let Ok(held) = &remote_half {
+                    let here = here.filter(|_| local_half.is_ok());
+                    let keep = record_token();
+                    let written = tags_gone(
+                        &exec,
+                        &repo,
+                        &remote_name,
+                        &tag,
+                        here.as_ref(),
+                        held.as_ref(),
+                        &keep,
+                    )
+                    .await;
+                    s.recorded_if(written);
+                }
+                remote_half.map(drop).and(local_half)
             },
         )
     }
@@ -299,8 +348,64 @@ impl RepoSession {
 /// Whether a remote-tag write's answer calls for reading that remote's
 /// tags again: it landed, or the remote was found holding the name elsewhere
 /// ([`crate::ReportKind::is_outdated`]) — the read is what shows where.
-fn tags_moved(result: &Result<(), GitError>) -> bool {
-    result
-        .as_ref()
-        .map_or_else(GitError::is_outdated, |()| true)
+fn tags_moved<T>(result: &Result<T, GitError>) -> bool {
+    result.as_ref().map_or_else(GitError::is_outdated, |_| true)
+}
+
+/// Puts a leased push's overwrite on the record: what the remote held, unless
+/// it was the very object that went up. Whether a line went on.
+async fn tag_pushed_over(
+    exec: &GitExecutor,
+    repo: &RepoInfo,
+    remote_name: &str,
+    tag: &str,
+    replaced: &remote::HeldTag,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let here = format!("refs/tags/{tag}");
+    let sent = discards::tag_before(exec, &repo.workdir, tag, &here, cancel).await?;
+    if sent.is_some_and(|sent| sent.object == replaced.object) {
+        return Ok(false);
+    }
+    let before = held_before(exec, &repo.workdir, tag, replaced, cancel).await?;
+    discards::record_tag_force_push(
+        exec,
+        &repo.workdir,
+        &repo.git_dir,
+        remote_name,
+        &before,
+        cancel,
+    )
+    .await?;
+    Ok(true)
+}
+
+/// Puts a tag's delete on the record: the name here as it was, and the
+/// remote's as the lease read it. Whether a line went on.
+async fn tags_gone(
+    exec: &GitExecutor,
+    repo: &RepoInfo,
+    remote_name: &str,
+    tag: &str,
+    here: Option<&TagBefore>,
+    held: Option<&remote::HeldTag>,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let there = match held {
+        Some(held) => Some(held_before(exec, &repo.workdir, tag, held, cancel).await?),
+        None => None,
+    };
+    if here.is_none() && there.is_none() {
+        return Ok(false);
+    }
+    discards::record_tag_delete(
+        exec,
+        &repo.workdir,
+        &repo.git_dir,
+        here,
+        there.as_ref().map(|there| (remote_name, there)),
+        cancel,
+    )
+    .await?;
+    Ok(true)
 }

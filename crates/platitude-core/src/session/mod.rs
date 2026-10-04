@@ -56,6 +56,7 @@ mod build;
 mod carried;
 mod chips;
 mod details_read;
+mod discard_record;
 mod eol;
 mod event;
 mod feed;

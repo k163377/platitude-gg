@@ -4,6 +4,7 @@
 //! Beside [`super::ops_tree`], which is what a write does to the files.
 
 use super::*;
+use crate::discards;
 
 impl RepoSession {
     /// Creates a branch, optionally switching to it.
@@ -33,7 +34,8 @@ impl RepoSession {
     /// Deletes a branch here. Forced, the commits only it held leave the
     /// graph at once (`session::leaving`); a plain delete takes none with
     /// it — git refuses one whose tip is not merged into its upstream or
-    /// HEAD, and the graph draws both.
+    /// HEAD, and the graph draws both. The branch as it stood, upstream and
+    /// all, goes on the discard record (破棄記録仕様.md §2).
     pub fn delete_branch(self: &Arc<Self>, name: String, force: bool) -> Option<OperationId> {
         let status = self.measures_head(Some(&name), None);
         let names = [LeavingRef::Branch(&name)];
@@ -45,8 +47,22 @@ impl RepoSession {
             AfterWrite::Name { status },
             leaving,
             move |exec, repo, cancel| async move {
+                let before =
+                    discards::branch_before(&exec, &repo.workdir, &target, &cancel).await?;
                 branch::delete(&exec, &repo.workdir, &target, force, &cancel).await?;
                 s.own_config_rewrite();
+                if let Some(before) = before {
+                    let written = discards::record_branch_delete(
+                        &exec,
+                        &repo.workdir,
+                        &repo.git_dir,
+                        &before,
+                        None,
+                        &cancel,
+                    )
+                    .await;
+                    s.recorded(written);
+                }
                 Ok(())
             },
         )
@@ -203,15 +219,33 @@ impl RepoSession {
 
     /// Deletes a tag. What it marked may have nothing else reaching it, so
     /// the UI asks first — and those commits leave the graph at once
-    /// (`session::leaving`).
+    /// (`session::leaving`). The object it named goes on the discard record
+    /// (破棄記録仕様.md §2).
     pub fn delete_tag(self: &Arc<Self>, name: String) -> Option<OperationId> {
         let target = name.clone();
+        let s = Arc::clone(self);
         self.write_taking(
             OperationKind::Tag,
             AfterWrite::Name { status: false },
             &[LeavingRef::Tag(&name)],
             move |exec, repo, cancel| async move {
-                tag::delete(&exec, &repo.workdir, &target, &cancel).await
+                let here = format!("refs/tags/{target}");
+                let before =
+                    discards::tag_before(&exec, &repo.workdir, &target, &here, &cancel).await?;
+                tag::delete(&exec, &repo.workdir, &target, &cancel).await?;
+                if let Some(before) = before {
+                    let written = discards::record_tag_delete(
+                        &exec,
+                        &repo.workdir,
+                        &repo.git_dir,
+                        Some(&before),
+                        None,
+                        &cancel,
+                    )
+                    .await;
+                    s.recorded(written);
+                }
+                Ok(())
             },
         )
     }

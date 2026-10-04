@@ -360,12 +360,32 @@ pub async fn load(
     // new directory's files; `-unormal` would give one `dir/` entry with no
     // per-file diff to stage from. A nested repository still stays one
     // `dir/` entry (rules-refs/core.md「`status` の答えの中で末尾が `/` の path」).
+    load_listing(executor, workdir, "-uall", cancel).await
+}
+
+/// [`load`] without the untracked files, for a write that asks only after
+/// tracked paths: the walk for untracked files is a big tree's larger
+/// part of a status.
+pub async fn load_tracked(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<WorkTreeStatus, GitError> {
+    load_listing(executor, workdir, "-uno", cancel).await
+}
+
+async fn load_listing(
+    executor: &GitExecutor,
+    workdir: &Path,
+    untracked: &str,
+    cancel: &CancellationToken,
+) -> Result<WorkTreeStatus, GitError> {
     let cmd = GitCommand::new().cwd(workdir).args([
         "status",
         "--porcelain=v2",
         "-z",
         "--branch",
-        "-uall",
+        untracked,
     ]);
     let out = executor.run(cmd, cancel).await?;
     parse_status(&out.stdout).map_err(|e| GitError::UnexpectedOutput {

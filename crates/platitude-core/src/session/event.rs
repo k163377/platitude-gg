@@ -391,6 +391,13 @@ pub enum SessionEvent {
     DiscardWalked {
         tip: Option<Oid>,
     },
+    /// What the discard log lists changed under a write: Platitude GG's own
+    /// record gained a line (破棄記録仕様.md §2), or a restore brought parts
+    /// back (§4). `restored` is how each part came back, in order; empty
+    /// for a write's record.
+    DiscardsChanged {
+        restored: Vec<crate::discards::Restored>,
+    },
     /// The queue took a write up: git is about to run it. `id` is the
     /// acceptance's ([`RepoSession::write`]); every later event about
     /// this write carries it.

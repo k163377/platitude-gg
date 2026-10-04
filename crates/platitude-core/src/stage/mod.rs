@@ -8,6 +8,6 @@ mod whole;
 
 pub use self::partial::{apply_partial, discard_partial, hunk_count};
 pub use self::whole::{
-    DiscardSide, discard_chosen, discard_to_head, discard_worktree, remove_untracked, stage_all,
-    stage_paths, unstage_all, unstage_paths,
+    DiscardSide, discard_chosen, discard_rows, discard_to_head, discard_worktree, remove_untracked,
+    stage_all, stage_paths, unstage_all, unstage_paths, with_old_names,
 };

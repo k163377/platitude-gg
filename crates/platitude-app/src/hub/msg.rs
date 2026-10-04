@@ -96,6 +96,12 @@ pub enum TabMsg {
         local: String,
         start: String,
     },
+    /// What the discard log lists changed under a write
+    /// (`SessionEvent::DiscardsChanged`): `restored` is how each part a
+    /// restore brought back came back, empty for a write's record.
+    DiscardsChanged {
+        restored: Vec<platitude_core::discards::Restored>,
+    },
     /// Whether a remote already carries a branch name. The question rides
     /// along: the asking box may be on another name by now.
     RemoteBranch {

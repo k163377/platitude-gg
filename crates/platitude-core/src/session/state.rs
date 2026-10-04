@@ -151,6 +151,10 @@ pub(super) struct WriteRequest {
     /// for the lanes that take no place (`session::write_order`). A request
     /// the queue turns away gives it back by being dropped.
     pub(super) place: Option<super::write_order::Place>,
+    /// Places in the orders of the other working copies the write puts
+    /// work into (a restore of work thrown away there), taken with `place`
+    /// and held as long ([`RepoSession::write_into`]).
+    pub(super) into: Vec<super::write_order::Place>,
     #[expect(
         clippy::type_complexity,
         reason = "a boxed async job needs its shape spelled out"

@@ -185,15 +185,8 @@ pub enum DiscardSide {
     Staged,
 }
 
-/// Discards a chosen set of rows: each side goes by its own command — at
-/// most three for the lot (デザイン規約 §その他の操作) — and a side that
-/// fails stops the run before the next side is touched.
-///
-/// A staged rename is undone by both of its names (see
-/// [`discard_to_head`]). Which staged paths are renames is read from
-/// status here, in the same write: a list made in the UI predates the
-/// writes queued ahead of this one (as in
-/// [`stage_conflicted`](crate::session::RepoSession::stage_conflicted)).
+/// Discards a chosen set of rows: [`with_old_names`], then
+/// [`discard_rows`].
 ///
 /// Destructive — the caller confirms first.
 pub async fn discard_chosen(
@@ -202,35 +195,68 @@ pub async fn discard_chosen(
     choices: &[(String, DiscardSide)],
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
+    let rows = with_old_names(executor, workdir, choices, cancel).await?;
+    discard_rows(executor, workdir, &rows, cancel).await
+}
+
+/// The chosen rows, and each staged rename's old name as a staged row of
+/// its own: a staged rename is undone by both of its names (see
+/// [`discard_to_head`]). Which staged paths are renames is read from
+/// status here, in the write: a list made in the UI predates the writes
+/// queued ahead of this one (as in
+/// [`stage_conflicted`](crate::session::RepoSession::stage_conflicted)).
+pub async fn with_old_names(
+    executor: &GitExecutor,
+    workdir: &Path,
+    choices: &[(String, DiscardSide)],
+    cancel: &CancellationToken,
+) -> Result<Vec<(String, DiscardSide)>, GitError> {
+    let mut rows = choices.to_vec();
+    let chosen: HashSet<&str> = choices
+        .iter()
+        .filter(|(_, side)| *side == DiscardSide::Staged)
+        .map(|(path, _)| path.as_str())
+        .collect();
+    if chosen.is_empty() {
+        return Ok(rows);
+    }
+    let current = status::load_tracked(executor, workdir, cancel).await?;
+    // Renames only: a copy (`C`) carries `orig_path` too, but its source is
+    // a live file with rows of its own — pulling it in would reset a file
+    // the user never chose.
+    rows.extend(current.staged().filter_map(|item| match item {
+        StatusItem::Tracked {
+            path,
+            orig_path: Some(orig),
+            staged: 'R',
+            ..
+        } if chosen.contains(path.as_str()) => Some((orig.clone(), DiscardSide::Staged)),
+        _ => None,
+    }));
+    Ok(rows)
+}
+
+/// Discards rows whose staged renames carry their old names already
+/// ([`with_old_names`]): each side goes by its own command — at most three
+/// for the lot (デザイン規約 §その他の操作) — and a side that fails stops
+/// the run before the next side is touched.
+///
+/// Destructive — the caller confirms first.
+pub async fn discard_rows(
+    executor: &GitExecutor,
+    workdir: &Path,
+    rows: &[(String, DiscardSide)],
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
     let mut unstaged = Vec::new();
     let mut untracked = Vec::new();
     let mut staged = Vec::new();
-    for (path, side) in choices {
+    for (path, side) in rows {
         match side {
             DiscardSide::Unstaged => unstaged.push(path.clone()),
             DiscardSide::Untracked => untracked.push(path.clone()),
             DiscardSide::Staged => staged.push(path.clone()),
         }
-    }
-    if !staged.is_empty() {
-        let current = status::load(executor, workdir, cancel).await?;
-        let chosen: HashSet<&str> = staged.iter().map(String::as_str).collect();
-        // Renames only: a copy (`C`) carries `orig_path` too, but its
-        // source is a live file with rows of its own — pulling it in would
-        // reset a file the user never chose.
-        let old_names: Vec<String> = current
-            .staged()
-            .filter_map(|item| match item {
-                StatusItem::Tracked {
-                    path,
-                    orig_path: Some(orig),
-                    staged: 'R',
-                    ..
-                } if chosen.contains(path.as_str()) => Some(orig.clone()),
-                _ => None,
-            })
-            .collect();
-        staged.extend(old_names);
     }
     discard_worktree(executor, workdir, &unstaged, cancel).await?;
     remove_untracked(executor, workdir, &untracked, cancel).await?;

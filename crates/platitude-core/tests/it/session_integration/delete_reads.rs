@@ -80,7 +80,9 @@ async fn a_branch_delete_reads_the_refs_and_the_graph_and_nothing_else() {
             );
         }
         if name == "side" {
-            assert_eq!(times(&ran, "config"), 0, "{ran:#?}");
+            // The remotes' listing; the delete's own read of the branch's
+            // upstream, for the discard record, is the write's.
+            assert_eq!(times(&ran, "^remote"), 0, "{ran:#?}");
         }
     }
     session.close();

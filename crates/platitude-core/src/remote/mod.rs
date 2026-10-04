@@ -33,7 +33,8 @@ pub use self::pull::pull;
 pub use self::push::{PushForce, PushSpec, plan_current_push, plan_publish, push, push_track};
 pub use self::standing::{PushStanding, PushTrack, push_standing, push_target, pushes_elsewhere};
 pub use self::tags::{
-    RemoteTag, delete_remote_tag, list_tags, parse_ls_remote_tags, push_tag, replace_remote_tag,
+    HeldTag, RemoteTag, delete_remote_tag, list_tags, parse_ls_remote_tags, push_tag,
+    replace_remote_tag,
 };
 
 /// Default time budget for commands that talk to a remote.

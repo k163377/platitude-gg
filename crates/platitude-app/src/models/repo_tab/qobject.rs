@@ -151,6 +151,14 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("writeSeq", Member = write_seq, Notify = changed);
+    // Every change to what the discard log lists (`TabMsg::DiscardsChanged`),
+    // and the same less the restores.
+    qproperty!("discardSeq", Member = discard_seq, Notify = changed);
+    qproperty!("takenSeq", Member = taken_seq, Notify = changed);
+    // Restores that brought something back, and how the last one's work
+    // came back: "whole" | "unstaged" | "stash".
+    qproperty!("restoreSeq", Member = restore_seq, Notify = changed);
+    qproperty!("restoreHow", Member = restore_how, Notify = changed);
     // Where the editor's own commit answered in this notify, or -1 —
     // matched by the press's id, whatever order the answers came in
     // (`ops::Press`).

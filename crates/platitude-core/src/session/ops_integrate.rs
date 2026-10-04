@@ -2,6 +2,7 @@
 //! edits, cherry-pick / revert, and conflict / merge-tool handling.
 
 use super::build::{Replay, Rewrite, rewrite_carrying, run_plan, standing_name};
+use super::discard_record::{rebase_began_on, stopped_rebase_tips};
 use super::*;
 
 /// Numbers every plan ask this process makes, so an answer can say which
@@ -70,12 +71,18 @@ impl RepoSession {
             OperationKind::Rebase,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
+                let before = session.tips_before(&exec, &repo, &cancel).await?;
+                let head = session.moving_off(&exec, &repo, &head(), &cancel).await?;
                 let rewrite = Rewrite::Onto {
                     upstream: &upstream,
                     options: &options,
                 };
                 let landing = rewrite_carrying(&exec, &repo, &rewrite, &cancel).await?;
                 session.note_landing(landing);
+                session
+                    .record_rebase_group(&exec, &repo, before, &cancel)
+                    .await;
+                session.tell_if_left(&exec, &repo, &head, &cancel).await;
                 Ok(())
             },
         )
@@ -114,10 +121,16 @@ impl RepoSession {
                 if state.any() {
                     return Err(report::rewrite_while_standing(standing_name(&state)));
                 }
+                let before = session.tips_before(&exec, &repo, &cancel).await?;
+                let head = session.moving_off(&exec, &repo, &head(), &cancel).await?;
                 let replay = Replay::of(&upstream, &steps, options, &expect_head)?;
                 let landing =
                     rewrite_carrying(&exec, &repo, &Rewrite::Replay(&replay), &cancel).await?;
                 session.note_landing(landing);
+                session
+                    .record_rebase_group(&exec, &repo, before, &cancel)
+                    .await;
+                session.tell_if_left(&exec, &repo, &head, &cancel).await;
                 Ok(())
             },
         )
@@ -191,9 +204,7 @@ impl RepoSession {
                     &cancel,
                 )
                 .await?;
-                let landing = run_plan(&exec, &repo, &plan, &cancel).await?;
-                session.note_landing(landing);
-                Ok(())
+                session.run_plan_told(&exec, &repo, &plan, &cancel).await
             },
         )
     }
@@ -213,9 +224,7 @@ impl RepoSession {
                     &cancel,
                 )
                 .await?;
-                let landing = run_plan(&exec, &repo, &plan, &cancel).await?;
-                session.note_landing(landing);
-                Ok(())
+                session.run_plan_told(&exec, &repo, &plan, &cancel).await
             },
         )
     }
@@ -233,7 +242,9 @@ impl RepoSession {
                         amend: true,
                         ..Default::default()
                     };
-                    return commit::commit(&exec, &repo, &message, options, &cancel).await;
+                    commit::commit(&exec, &repo, &message, options, &cancel).await?;
+                    session.tell_if_left(&exec, &repo, &[head], &cancel).await;
+                    return Ok(());
                 }
                 let plan = sequencer::plan_edit(
                     &exec,
@@ -243,11 +254,27 @@ impl RepoSession {
                     &cancel,
                 )
                 .await?;
-                let landing = run_plan(&exec, &repo, &plan, &cancel).await?;
-                session.note_landing(landing);
-                Ok(())
+                session.run_plan_told(&exec, &repo, &plan, &cancel).await
             },
         )
+    }
+
+    /// Runs a squash / drop / reword plan, the branches it moved together
+    /// and what it moved HEAD off told to the discard log as a rebase's are.
+    async fn run_plan_told(
+        &self,
+        exec: &GitExecutor,
+        repo: &RepoInfo,
+        plan: &sequencer::EditPlan,
+        cancel: &CancellationToken,
+    ) -> Result<(), GitError> {
+        let before = self.tips_before(exec, repo, cancel).await?;
+        let head = self.moving_off(exec, repo, &head(), cancel).await?;
+        let landing = run_plan(exec, repo, plan, cancel).await?;
+        self.note_landing(landing);
+        self.record_rebase_group(exec, repo, before, cancel).await;
+        self.tell_if_left(exec, repo, &head, cancel).await;
+        Ok(())
     }
 
     /// `git cherry-pick <revs>`.
@@ -278,18 +305,33 @@ impl RepoSession {
         )
     }
 
-    /// Continues / aborts / skips whatever operation is in progress.
+    /// Continues / aborts / skips whatever operation is in progress. A
+    /// rebase moving branches together moves them as it finishes, so the
+    /// continue or skip that finishes it puts them on the discard record as
+    /// one (破棄記録仕様.md §2); an abort or a quit moves none.
     pub fn resolve_current(
         self: &Arc<Self>,
         continuation: integrate::Continuation,
     ) -> Option<OperationId> {
+        let session = Arc::clone(self);
         self.write(
             OperationKind::Resolve,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                integrate::resolve_current(&exec, &repo.workdir, continuation, &cancel)
-                    .await
-                    .map(drop)
+                let (before, began) = match continuation {
+                    integrate::Continuation::Continue | integrate::Continuation::Skip => (
+                        stopped_rebase_tips(&repo.git_dir),
+                        rebase_began_on(&repo.git_dir),
+                    ),
+                    integrate::Continuation::Abort | integrate::Continuation::Quit => (None, None),
+                };
+                integrate::resolve_current(&exec, &repo.workdir, continuation, &cancel).await?;
+                session
+                    .record_rebase_group(&exec, &repo, before, &cancel)
+                    .await;
+                let began: Vec<Oid> = began.into_iter().collect();
+                session.tell_if_left(&exec, &repo, &began, &cancel).await;
+                Ok(())
             },
         )
     }
@@ -410,4 +452,10 @@ impl RepoSession {
             },
         )
     }
+}
+
+/// The rev [`RepoSession::moving_off`] reads for a write that moves HEAD's
+/// branch.
+fn head() -> Vec<String> {
+    vec!["HEAD".to_string()]
 }

@@ -84,6 +84,10 @@ pub enum OperationKind {
     Identity,
     /// `git worktree remove`: another working copy taken off the disk.
     Worktree,
+    /// Something the discard log lists, brought back (破棄記録仕様.md §4):
+    /// a branch, a tag, a stash entry, a working copy, or thrown-away work
+    /// put back into its working copy.
+    Restore,
     /// A branch deleted here and on its remote as one write: answers as
     /// a branch write, runs on the remote lane (the second half is a push).
     DeleteBranchEverywhere,
@@ -129,6 +133,7 @@ impl OperationKind {
             Self::Config => "config",
             Self::Identity => "identity",
             Self::Worktree => "worktree",
+            Self::Restore => "restore",
             Self::AutoFetch => "auto-fetch",
             Self::OpenFetch => "open-fetch",
         }
@@ -179,7 +184,8 @@ impl OperationKind {
             | Self::Mergetool
             | Self::Config
             | Self::Identity
-            | Self::Worktree => Lane::Local,
+            | Self::Worktree
+            | Self::Restore => Lane::Local,
         }
     }
 
@@ -221,7 +227,8 @@ impl OperationKind {
             | Self::Mergetool
             | Self::Config
             | Self::Identity
-            | Self::Worktree => true,
+            | Self::Worktree
+            | Self::Restore => true,
         }
     }
 
@@ -308,6 +315,7 @@ mod tests {
             OperationKind::Mergetool,
             OperationKind::Identity,
             OperationKind::Worktree,
+            OperationKind::Restore,
             OperationKind::Remote,
             OperationKind::DeleteBranchEverywhere,
             OperationKind::DeleteTagEverywhere,
@@ -364,6 +372,7 @@ mod tests {
             OperationKind::Mergetool,
             OperationKind::Identity,
             OperationKind::Worktree,
+            OperationKind::Restore,
             OperationKind::Remote,
             OperationKind::Config,
         ] {

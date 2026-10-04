@@ -27,6 +27,30 @@ use super::*;
 /// the last session on a working tree takes its order with it.
 static ORDERS: Mutex<BTreeMap<PathBuf, std::sync::Weak<WriteOrder>>> = Mutex::new(BTreeMap::new());
 
+/// Held while places are taken, in any order: a write with places in two
+/// orders takes both in one instant ([`take_places`]). Taken one at a time,
+/// two such writes could each stand in front of the other in one of the
+/// orders, and wait for each other for good.
+static TAKING: Mutex<()> = Mutex::new(());
+
+/// A place in `own` (where there is one) and in each of `others`, for one
+/// write, taken in one instant (`TAKING`): every write ahead of it in any of
+/// them was accepted before it, so none of those waits for it.
+///
+/// Taken for a write just accepted — inside the call that hands the
+/// write's id back. Taken when the write's turn came round instead, a tab
+/// opened over a running write would step in front of everything still
+/// queued behind it.
+pub(super) fn take_places(
+    own: Option<&Arc<WriteOrder>>,
+    others: &[Arc<WriteOrder>],
+) -> (Option<Place>, Vec<Place>) {
+    let _taking = relock(&TAKING);
+    let own = own.map(|order| order.place_now());
+    let others = others.iter().map(|order| order.place_now()).collect();
+    (own, others)
+}
+
 /// The order for `git_dir`, made if no session is on that tree yet.
 /// Dead entries are swept here, the only moment a new one is added.
 pub(super) fn of(git_dir: &Path) -> Arc<WriteOrder> {
@@ -74,11 +98,8 @@ impl WriteOrder {
         }
     }
 
-    /// Takes the next place for a write just accepted — inside the call
-    /// that hands the write's id back. Taken when the write's turn came
-    /// round instead, a tab opened over a running write would step in
-    /// front of everything still queued behind it.
-    pub(super) fn take_place(self: &Arc<Self>) -> Place {
+    /// The next place, for [`take_places`] alone.
+    fn place_now(self: &Arc<Self>) -> Place {
         let mut held = relock(&self.held);
         held.handed_out += 1;
         let place = held.handed_out;
@@ -163,6 +184,11 @@ pub(super) struct Place {
 }
 
 impl Place {
+    /// The order this is a place in.
+    pub(super) fn order(&self) -> Arc<WriteOrder> {
+        Arc::clone(&self.order)
+    }
+
     /// Waits until this is the write the tree is running, and says what
     /// it is for as long as it holds the front.
     pub(super) async fn granted(&self, operation: Operation) {
@@ -192,11 +218,42 @@ mod tests {
         Operation::new(OperationKind::Commit, AfterWrite::Graph)
     }
 
+    /// A place in `order` alone, as a write on its own tree takes one.
+    fn place_in(order: &Arc<WriteOrder>) -> Place {
+        take_places(Some(order), &[])
+            .0
+            .expect("a place in its own order")
+    }
+
+    /// A write that puts work into another tree too stands behind what was
+    /// accepted there before it, and in front of what is accepted after.
+    #[tokio::test]
+    async fn a_write_in_two_orders_takes_its_turn_in_both() {
+        let (here, there) = (Arc::new(WriteOrder::new()), Arc::new(WriteOrder::new()));
+        let there_first = place_in(&there);
+        let (own, into) = take_places(Some(&here), std::slice::from_ref(&there));
+        let own = own.expect("a place here");
+        let there_after = place_in(&there);
+
+        own.granted(an_operation()).await;
+        assert!(
+            !there.is_front(into[0].place),
+            "it waits there behind what was accepted first"
+        );
+        drop(there_first);
+        into[0].granted(an_operation()).await;
+        assert!(there.is_front(into[0].place));
+        assert!(
+            !there.is_front(there_after.place),
+            "and what was accepted there after waits behind it"
+        );
+    }
+
     #[tokio::test]
     async fn places_are_served_in_the_order_they_were_taken() {
         let order = Arc::new(WriteOrder::new());
-        let first = order.take_place();
-        let second = order.take_place();
+        let first = place_in(&order);
+        let second = place_in(&order);
 
         first.granted(an_operation()).await;
         assert!(
@@ -217,9 +274,9 @@ mod tests {
     #[tokio::test]
     async fn a_place_given_back_from_behind_the_front_blocks_nobody() {
         let order = Arc::new(WriteOrder::new());
-        let running = order.take_place();
-        let refused = order.take_place();
-        let behind = order.take_place();
+        let running = place_in(&order);
+        let refused = place_in(&order);
+        let behind = place_in(&order);
         running.granted(an_operation()).await;
 
         // A write the queue turned away after its place was taken.
@@ -246,7 +303,7 @@ mod tests {
         );
 
         let watching = std::sync::Arc::downgrade(&held);
-        drop(held.take_place());
+        drop(place_in(&held));
         drop(held);
         assert!(
             watching.upgrade().is_none(),

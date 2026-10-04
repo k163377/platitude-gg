@@ -1,6 +1,7 @@
 //! One tab's feed, drained into the properties QML reads.
 
 use super::*;
+use platitude_core::discards::Restored;
 
 impl RepoTab {
     pub(super) fn take_feed(&mut self) {
@@ -177,6 +178,15 @@ impl RepoTab {
                     self.move_ask_start = start;
                     self.move_ask_seq += 1;
                 }
+                TabMsg::DiscardsChanged { restored } => {
+                    self.discard_seq += 1;
+                    if restored.is_empty() {
+                        self.taken_seq += 1;
+                    } else {
+                        self.restore_how = restore_how(&restored).to_string();
+                        self.restore_seq += 1;
+                    }
+                }
                 TabMsg::MergeTools { names, settled } => {
                     self.merge_tools = names;
                     // The fast half arrives first; the indicator turns
@@ -292,6 +302,12 @@ impl RepoTab {
             self.fetch_settled(&error, true);
         }
         let landed = error.is_empty();
+        // A name taken here may be one a restore was to go under, and a
+        // branch or tag made on a lost commit holds it again: the open log
+        // reads again (`RepoTab.discardSeq`).
+        if landed && names_taken(kind) {
+            self.discard_seq += 1;
+        }
         // Puts back the rows a delete took off the screen, by id;
         // `reads_from` is what the listings that remove them for good
         // are measured against (`ops_delete::delete_answered`).
@@ -499,5 +515,30 @@ fn report_word(kind: ReportKind) -> &'static str {
         ReportKind::DropAllCommits => "drop-all",
         ReportKind::RewriteTipMoved => "tip-moved",
         ReportKind::RewriteWhileStanding => "op-standing",
+    }
+}
+
+/// Whether a write of this kind can take a name a discard log's restore
+/// would go under (破棄記録仕様.md §4) — a working copy made takes its
+/// folder and the branch it makes — or hold a lost commit again.
+fn names_taken(kind: OperationKind) -> bool {
+    matches!(
+        kind,
+        OperationKind::Branch
+            | OperationKind::Tag
+            | OperationKind::Checkout
+            | OperationKind::Worktree
+    )
+}
+
+/// How a restore's work came back, as the page words it: the least whole
+/// of its parts.
+fn restore_how(restored: &[Restored]) -> &'static str {
+    if restored.contains(&Restored::AsStash) {
+        "stash"
+    } else if restored.contains(&Restored::Unstaged) {
+        "unstaged"
+    } else {
+        "whole"
     }
 }

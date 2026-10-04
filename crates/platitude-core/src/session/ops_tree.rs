@@ -5,7 +5,9 @@
 //! [`super::ops_stash`].
 
 use super::build::{leave_operation, move_carrying};
+use super::discard_record::{copy_for_reset, copy_of_choices, copy_of_partial};
 use super::*;
+use crate::discards;
 
 impl RepoSession {
     /// `git add` for whole files.
@@ -78,33 +80,43 @@ impl RepoSession {
 
     /// Discards a chosen set of rows as one queued write; a staged rename
     /// takes its source along, read from status inside the write
-    /// ([`stage::discard_chosen`]).
+    /// ([`stage::with_old_names`]). What goes is copied first and put on
+    /// the discard record once it went (破棄記録仕様.md §2.1).
     pub fn discard_chosen(
         self: &Arc<Self>,
         choices: Vec<(String, stage::DiscardSide)>,
     ) -> Option<OperationId> {
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Discard,
             AfterWrite::Tree,
             move |exec, repo, cancel| async move {
-                stage::discard_chosen(&exec, &repo.workdir, &choices, &cancel).await
+                let rows = stage::with_old_names(&exec, &repo.workdir, &choices, &cancel).await?;
+                let copied = copy_of_choices(&exec, &repo, &rows, &cancel).await?;
+                let done = stage::discard_rows(&exec, &repo.workdir, &rows, &cancel).await;
+                s.record_copied(&exec, &repo, copied, done, &cancel).await
             },
         )
     }
 
     /// Throws away part of one file's unstaged diff (hunk / line level).
-    /// The index keeps what is staged (see [`stage::discard_partial`]).
+    /// The index keeps what is staged (see [`stage::discard_partial`]). The
+    /// file is copied first, as [`Self::discard_chosen`] copies.
     pub fn discard_partial(
         self: &Arc<Self>,
         target: DiffTarget,
         selects: Vec<HunkSelect>,
         seen: u64,
     ) -> Option<OperationId> {
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Discard,
             AfterWrite::Tree,
             move |exec, repo, cancel| async move {
-                stage::discard_partial(&exec, &repo, &target, &selects, seen, &cancel).await
+                let copied = copy_of_partial(&exec, &repo, &target, &selects, &cancel).await?;
+                let done =
+                    stage::discard_partial(&exec, &repo, &target, &selects, seen, &cancel).await;
+                s.record_copied(&exec, &repo, copied, done, &cancel).await
             },
         )
     }
@@ -127,17 +139,27 @@ impl RepoSession {
         )
     }
 
-    /// Commits the index (or amends HEAD).
+    /// Commits the index (or amends HEAD — which moves the branch off the
+    /// commit it replaces, told to the discard log where that went).
     pub fn commit(
         self: &Arc<Self>,
         message: String,
         options: CommitOptions,
     ) -> Option<OperationId> {
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Commit,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                commit::commit(&exec, &repo, &message, options, &cancel).await
+                let before = if options.amend {
+                    s.moving_off(&exec, &repo, &["HEAD".to_string()], &cancel)
+                        .await?
+                } else {
+                    Vec::new()
+                };
+                commit::commit(&exec, &repo, &message, options, &cancel).await?;
+                s.tell_if_left(&exec, &repo, &before, &cancel).await;
+                Ok(())
             },
         )
     }
@@ -149,12 +171,20 @@ impl RepoSession {
     /// (touching nothing), the long way — stash, move, put back. Nothing is
     /// asked first: the refusal proved the repository untouched, and every
     /// outcome of the long way is one the stash can undo.
+    ///
+    /// A move off a detached HEAD's own commits, or one that takes a branch
+    /// off its commits (`ForceCreate`), is told to the discard log.
     pub fn checkout(self: &Arc<Self>, target: CheckoutTarget) -> Option<OperationId> {
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Checkout,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                move_carrying(&exec, &repo, &target, &cancel).await
+                let moved = moved_by(&exec, &repo, &target, &cancel).await?;
+                let before = s.moving_off(&exec, &repo, &moved, &cancel).await?;
+                move_carrying(&exec, &repo, &target, &cancel).await?;
+                s.tell_if_left(&exec, &repo, &before, &cancel).await;
+                Ok(())
             },
         )
     }
@@ -169,12 +199,19 @@ impl RepoSession {
         self: &Arc<Self>,
         target: CheckoutTarget,
     ) -> Option<OperationId> {
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Checkout,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 leave_operation(&exec, &repo, &cancel).await?;
-                move_carrying(&exec, &repo, &target, &cancel).await
+                // Read after the operation is put down: what it had made so
+                // far is no part of the log (§1).
+                let moved = moved_by(&exec, &repo, &target, &cancel).await?;
+                let before = s.moving_off(&exec, &repo, &moved, &cancel).await?;
+                move_carrying(&exec, &repo, &target, &cancel).await?;
+                s.tell_if_left(&exec, &repo, &before, &cancel).await;
+                Ok(())
             },
         )
     }
@@ -209,20 +246,39 @@ impl RepoSession {
                     leave_operation(&exec, &repo, &cancel).await?;
                 }
                 let target = CheckoutTarget::ForceCreate { local, start };
-                move_carrying(&exec, &repo, &target, &cancel).await
+                let moved = moved_by(&exec, &repo, &target, &cancel).await?;
+                let before = session.moving_off(&exec, &repo, &moved, &cancel).await?;
+                move_carrying(&exec, &repo, &target, &cancel).await?;
+                session.tell_if_left(&exec, &repo, &before, &cancel).await;
+                Ok(())
             },
         )
     }
 
     /// Moves the current branch to `rev`, carrying the index and the
     /// working tree as far as `mode` says. `ResetMode::Hard` destroys
-    /// uncommitted work, so the UI asks before sending that one.
+    /// uncommitted work, so the UI asks before sending that one — and what
+    /// it destroys is copied first and put on the discard record with the
+    /// move (破棄記録仕様.md §2).
     pub fn reset(self: &Arc<Self>, rev: String, mode: branch::ResetMode) -> Option<OperationId> {
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Reset,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                branch::reset(&exec, &repo.workdir, &rev, mode, &cancel).await
+                let copied = match mode {
+                    branch::ResetMode::Hard => copy_for_reset(&exec, &repo, &rev, &cancel).await?,
+                    _ => None,
+                };
+                let before = s
+                    .moving_off(&exec, &repo, &["HEAD".to_string()], &cancel)
+                    .await?;
+                let done = branch::reset(&exec, &repo.workdir, &rev, mode, &cancel).await;
+                let done = s.record_copied(&exec, &repo, copied, done, &cancel).await;
+                if done.is_ok() {
+                    s.tell_if_left(&exec, &repo, &before, &cancel).await;
+                }
+                done
             },
         )
     }
@@ -252,19 +308,82 @@ impl RepoSession {
     /// Takes another working copy off the disk (`git worktree remove`),
     /// the branch it had out left where it is. `name` is the copy as the
     /// screen names it, for a refusal's heading
-    /// ([`crate::worktrees::remove`]).
+    /// ([`crate::worktrees::remove`]). Where it was and what it had out go
+    /// on the discard record (破棄記録仕様.md §2) — also when the removal
+    /// failed past git's point of no return: a folder it could not delete
+    /// (one a program has open on Windows) fails it after git has taken the
+    /// copy's own HEAD and reflog. A copy on no commit yet takes nothing.
     ///
     /// Moves no ref, so the refs are read first and the rest only where
     /// they moved; the worktree listing that follows every such write
     /// frees the branch and drops a branchless copy's graph row itself
     /// (`refresh_worktrees`).
     pub fn remove_worktree(self: &Arc<Self>, path: String, name: String) -> Option<OperationId> {
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Worktree,
             AfterWrite::Refs,
             move |exec, repo, cancel| async move {
-                crate::worktrees::remove(&exec, &repo.workdir, &path, &name, &cancel).await
+                let listed = crate::worktrees::load(&exec, &repo.workdir, &cancel).await?;
+                let before = listed
+                    .into_iter()
+                    .find(|entry| same_path_key(&entry.path) == same_path_key(&path));
+                let done =
+                    crate::worktrees::remove(&exec, &repo.workdir, &path, &name, &cancel).await;
+                let gone = match &done {
+                    Ok(()) => true,
+                    Err(_) => crate::worktrees::load(&exec, &repo.workdir, &cancel)
+                        .await
+                        .is_ok_and(|listed| {
+                            listed
+                                .iter()
+                                .all(|entry| same_path_key(&entry.path) != same_path_key(&path))
+                        }),
+                };
+                let head = before
+                    .as_ref()
+                    .and_then(|entry| entry.head_hex.as_deref())
+                    .filter(|hex| !Oid::hex_is_zero(hex))
+                    .and_then(|hex| Oid::from_hex_str(hex).ok());
+                if let (true, Some(head)) = (gone, head) {
+                    let branch = before.as_ref().and_then(|entry| entry.branch.as_deref());
+                    let written = discards::record_worktree_remove(
+                        &exec,
+                        &repo.workdir,
+                        &repo.git_dir,
+                        &path,
+                        branch,
+                        &head,
+                        &cancel,
+                    )
+                    .await;
+                    s.recorded(written);
+                }
+                done
             },
         )
     }
+}
+
+/// What a move can leave behind, the revs [`RepoSession::moving_off`]
+/// reads: a detached HEAD's commit — a branch's stays with the branch — and
+/// the branch a `ForceCreate` moves from under it.
+async fn moved_by(
+    exec: &GitExecutor,
+    repo: &RepoInfo,
+    target: &CheckoutTarget,
+    cancel: &CancellationToken,
+) -> Result<Vec<String>, GitError> {
+    let mut revs = Vec::new();
+    let cmd = GitCommand::new()
+        .cwd(&repo.workdir)
+        .args(["symbolic-ref", "--quiet", "HEAD"])
+        .answers_by_code(1);
+    if exec.run_unchecked(cmd, cancel).await?.code != 0 {
+        revs.push("HEAD".to_string());
+    }
+    if let CheckoutTarget::ForceCreate { local, .. } = target {
+        revs.push(format!("refs/heads/{local}"));
+    }
+    Ok(revs)
 }

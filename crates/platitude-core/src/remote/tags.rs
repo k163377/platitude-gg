@@ -53,6 +53,9 @@ pub async fn list_tags(
 /// far-side rule (`[remote rejected]`) reads as a report, as for a branch
 /// (`super::refusal::tag_refusal`, デザイン規約 §答えの要らない報せ) —
 /// `--porcelain` is what makes either readable.
+///
+/// A leased push answers what it replaced: the remote's tag as the lease
+/// read it ([`lease_on`]), `None` for a plain one.
 pub async fn push_tag(
     executor: &GitExecutor,
     workdir: &Path,
@@ -61,26 +64,30 @@ pub async fn push_tag(
     expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
+) -> Result<Option<HeldTag>, GitError> {
     let refspec = format!("refs/tags/{tag}:refs/tags/{tag}");
     let mut cmd = GitCommand::new()
         .cwd(workdir)
         .args(["push", "--porcelain"])
         .timeout(timeout)
         .paced_elsewhere();
+    let mut replaced = None;
     if !expect.is_empty() {
-        cmd = cmd.arg(format!("--force-with-lease=refs/tags/{tag}:{expect}"));
+        let (pinned, there) =
+            lease_on(executor, workdir, remote, tag, expect, timeout, cancel).await?;
+        cmd = cmd.arg(format!("--force-with-lease=refs/tags/{tag}:{pinned}"));
+        replaced = there;
     }
     cmd = cmd.args(["--", remote, &refspec]);
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code == 0 {
-        return Ok(());
+        return Ok(replaced);
     }
     if super::refusal::is_taken(&out.stdout_utf8())
         && holds_same_commit(executor, workdir, remote, tag, timeout, cancel).await?
     {
-        return Ok(());
+        return Ok(None);
     }
     Err(super::refusal::tag_refusal(
         command, &out, remote, tag, false,
@@ -127,8 +134,8 @@ pub async fn delete_remote_tag(
     expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
-    let pinned = lease_on(executor, workdir, remote, tag, expect, timeout, cancel).await?;
+) -> Result<Option<HeldTag>, GitError> {
+    let (pinned, there) = lease_on(executor, workdir, remote, tag, expect, timeout, cancel).await?;
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args([
@@ -145,7 +152,7 @@ pub async fn delete_remote_tag(
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code == 0 {
-        return Ok(());
+        return Ok(there);
     }
     Err(super::refusal::tag_refusal(
         command, &out, remote, tag, true,
@@ -168,16 +175,18 @@ async fn lease_on(
     expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
-) -> Result<String, GitError> {
+) -> Result<(String, Option<HeldTag>), GitError> {
     let there = holding(executor, workdir, remote, tag, timeout, cancel).await?;
-    Ok(pin_for(there.as_ref(), expect))
+    Ok((pin_for(there.as_ref(), expect), there))
 }
 
-/// One tag as one remote holds it now: the ref's own value, and the commit
-/// it peels to (the same oid for a lightweight tag).
-struct Holding {
-    object: Oid,
-    commit: Oid,
+/// One tag as one remote holds it: the ref's own value — a tag object for
+/// an annotated tag, which this repository may never have had — and the
+/// commit it peels to (the same oid for a lightweight tag).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HeldTag {
+    pub object: Oid,
+    pub commit: Oid,
 }
 
 /// What `remote` holds `tag` on where the push goes; `None` where it lacks
@@ -193,7 +202,7 @@ async fn holding(
     tag: &str,
     timeout: Duration,
     cancel: &CancellationToken,
-) -> Result<Option<Holding>, GitError> {
+) -> Result<Option<HeldTag>, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["remote", "get-url", "--push", "--", remote]);
@@ -216,7 +225,7 @@ async fn holding(
 }
 
 /// [`holding`] off the `ls-remote` lines for one tag.
-fn parse_holding(bytes: &[u8], refname: &str) -> Option<Holding> {
+fn parse_holding(bytes: &[u8], refname: &str) -> Option<HeldTag> {
     let mut object = None;
     let mut commit = None;
     for (oid, name) in bytes
@@ -230,14 +239,14 @@ fn parse_holding(bytes: &[u8], refname: &str) -> Option<Holding> {
         }
     }
     let object = object?;
-    Some(Holding {
+    Some(HeldTag {
         object,
         commit: commit.unwrap_or(object),
     })
 }
 
 /// [`lease_on`]'s choice: the remote's object where it peels to `expect`.
-fn pin_for(there: Option<&Holding>, expect: &str) -> String {
+fn pin_for(there: Option<&HeldTag>, expect: &str) -> String {
     match there {
         Some(there) if there.commit.to_hex() == expect => there.object.to_hex(),
         _ => expect.to_string(),
@@ -268,7 +277,7 @@ pub async fn replace_remote_tag(
     expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
+) -> Result<Option<HeldTag>, GitError> {
     push_tag(executor, workdir, remote, to, "", timeout, cancel).await?;
     delete_remote_tag(executor, workdir, remote, from, expect, timeout, cancel).await
 }

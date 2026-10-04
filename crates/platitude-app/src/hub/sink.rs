@@ -408,6 +408,9 @@ impl SessionSink for BridgeSink {
             SessionEvent::MoveNeedsAsk { local, start } => {
                 self.feeds.tab.push(TabMsg::MoveNeedsAsk { local, start })
             }
+            SessionEvent::DiscardsChanged { restored } => {
+                self.feeds.tab.push(TabMsg::DiscardsChanged { restored })
+            }
             SessionEvent::AuthorLoaded { config } => {
                 self.feeds.tab.push(TabMsg::Author {
                     complete: config.identity.is_complete(),

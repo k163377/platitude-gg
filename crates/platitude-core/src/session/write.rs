@@ -61,6 +61,54 @@ impl RepoSession {
         F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
         Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
     {
+        self.accept(kind, after, names, Vec::new(), task)
+    }
+
+    /// [`Self::write`] for one that also puts work into other working
+    /// copies — those whose git directories are `into` (a restore of work
+    /// thrown away there, 破棄記録仕様.md §4). It takes its turn in each of
+    /// their orders as well as its own, from the same instant: what was
+    /// accepted there before it — a commit, a reset, a rebase — runs first,
+    /// and nothing accepted there after it runs under it. The sessions open
+    /// on those copies read them again once it lands.
+    pub(super) fn write_into<F, Fut>(
+        self: &Arc<Self>,
+        kind: OperationKind,
+        after: AfterWrite,
+        into: &[PathBuf],
+        task: F,
+    ) -> Option<OperationId>
+    where
+        F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
+    {
+        let own = self.write_order();
+        let mut orders: Vec<Arc<WriteOrder>> = Vec::new();
+        for git_dir in into {
+            let order = write_order::of(git_dir);
+            let known = own
+                .iter()
+                .chain(&orders)
+                .any(|held| Arc::ptr_eq(held, &order));
+            if !known {
+                orders.push(order);
+            }
+        }
+        self.accept(kind, after, &[], orders, task)
+    }
+
+    fn accept<F, Fut>(
+        self: &Arc<Self>,
+        kind: OperationKind,
+        after: AfterWrite,
+        names: &[LeavingRef<'_>],
+        into: Vec<Arc<WriteOrder>>,
+        task: F,
+    ) -> Option<OperationId>
+    where
+        F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
+    {
         let leaving = if names.is_empty() {
             None
         } else {
@@ -84,11 +132,8 @@ impl RepoSession {
             let _accepting = relock(&self.accepting);
             let operation = Operation::new(kind, after);
             let local = operation.lane == Lane::Local;
-            let place = kind
-                .writes_here()
-                .then(|| self.write_order())
-                .flatten()
-                .map(|order| order.take_place());
+            let own = kind.writes_here().then(|| self.write_order()).flatten();
+            let (place, into) = write_order::take_places(own.as_ref(), &into);
             // Counted before it is sent, so the count can never trail the
             // queue: the loop's decrement pairs with exactly one increment.
             if local {
@@ -103,6 +148,7 @@ impl RepoSession {
             let sent = self.write_tx.send(WriteRequest {
                 operation,
                 place,
+                into,
                 run: Box::new(move |exec, repo, cancel| Box::pin(task(exec, repo, cancel))),
             });
             (operation, local, sent)
@@ -199,6 +245,8 @@ impl RepoSession {
         // under replaying writes, which the poll reads through to count
         // them out (the gate reads the kind held here).
         *relock(&self.write_running) = Some(operation);
+        let into: Vec<Arc<WriteOrder>> =
+            request.into.iter().map(write_order::Place::order).collect();
         // The request's place goes back as it ends; the tree is free from
         // here on.
         self.run_write(request).await;
@@ -213,6 +261,13 @@ impl RepoSession {
         if operation.kind.writes_here() {
             self.tell_the_tree();
         }
+        // The other copies it put work into: every session on them reads
+        // them again, this one being on none.
+        for order in into {
+            for reader in order.others(self) {
+                reader.read_again();
+            }
+        }
         // Nobody tells this session, so it asks itself: a read refused
         // while this write was out has nowhere else to be taken
         // ([`RepoSession::take_the_read_owed`]). Any lane — a push owes it
@@ -224,6 +279,7 @@ impl RepoSession {
         let WriteRequest {
             operation,
             place,
+            into,
             run,
         } = request;
         let Operation {
@@ -233,9 +289,10 @@ impl RepoSession {
             after,
         } = operation;
         // The tree's turn comes before `WriteStarted`, which means git is
-        // running it (`session::write_order`). The place is held to the end
-        // of this function, the reads behind the write included.
-        if let Some(place) = &place {
+        // running it (`session::write_order`), and so does the turn in each
+        // other copy it puts work into. The places are held to the end of
+        // this function, the reads behind the write included.
+        for place in place.iter().chain(&into) {
             place.granted(operation).await;
         }
         let Some(info) = self.repo_info() else {

@@ -243,6 +243,20 @@ pub struct RepoTab {
     /// (`WriteAnswer::stopped`).
     last_write_stopped: bool,
     write_seq: i32,
+    /// Every change to what the discard log lists (`TabMsg::DiscardsChanged`):
+    /// a write that left something only the log reaches, a line on Platitude
+    /// GG's own record, a restore. The page reads the open log again on each
+    /// (破棄記録仕様.md).
+    discard_seq: i32,
+    /// The same, less the restores: what took something away, which the
+    /// page's seat blinks for.
+    taken_seq: i32,
+    /// Restores that brought something back, and how the last one's work
+    /// came back — `"whole"`, `"unstaged"` (its staged half did not go back
+    /// staged) or `"stash"` (it would have conflicted, and waits as a stash
+    /// entry); the least whole of its parts (破棄記録仕様.md §4).
+    restore_seq: i32,
+    restore_how: String,
     /// The one write a run is waiting for, by the id its ask was given,
     /// compared by equality alone (`write_watch`).
     write_watch: WriteWatch,

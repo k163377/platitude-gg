@@ -1,7 +1,9 @@
 //! Remote-facing operations: fetch, the push variants, remote
 //! configuration, and what each remote advertises under `refs/tags/`.
 
+use super::discard_record::{record_pushed_over, record_token, remote_tip};
 use super::*;
+use crate::discards;
 
 impl RepoSession {
     /// `git fetch --prune`; `None` fetches every remote.
@@ -28,7 +30,9 @@ impl RepoSession {
     /// Refreshed as a history move ([`AfterWrite::Graph`]): the
     /// integrating half lands on this branch, its index and working tree.
     /// A stop is not a failure, as with merge and rebase
-    /// (デザイン規約 §進行中の操作から出る).
+    /// (デザイン規約 §進行中の操作から出る). A pull that rebases moves the
+    /// branches the user's `rebase.updateRefs` moves with it, which go on
+    /// the discard record as one (破棄記録仕様.md §2).
     pub fn pull(self: &Arc<Self>) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let session = Arc::clone(self);
@@ -36,8 +40,17 @@ impl RepoSession {
             OperationKind::Pull,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
+                let before = session.tips_before(&exec, &repo, &cancel).await?;
+                let head = session
+                    .moving_off(&exec, &repo, &["HEAD".to_string()], &cancel)
+                    .await?;
                 let landing = remote::pull(&exec, &repo.workdir, timeout, &cancel).await?;
                 session.note_landing(landing);
+                let keep = record_token();
+                session
+                    .record_rebase_group(&exec, &repo, before, &keep)
+                    .await;
+                session.tell_if_left(&exec, &repo, &head, &keep).await;
                 Ok(())
             },
         )
@@ -51,12 +64,51 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let target = spec.remote.clone();
-                let result = remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await;
-                s.catch_up_after(&result, target);
-                result
+                s.push_recorded(&exec, &repo, &spec, timeout, &cancel).await
             },
         )
+    }
+
+    /// Sends `spec`, caught up with where the remote has moved
+    /// ([`Self::catch_up_after`]). A forced push that replaced the remote's
+    /// tip, rather than adding to it, puts the tip it replaced on the
+    /// discard record (破棄記録仕様.md §2) — read before the push: the lease's
+    /// commit, else the remote-tracking ref.
+    async fn push_recorded(
+        self: &Arc<Self>,
+        exec: &GitExecutor,
+        repo: &RepoInfo,
+        spec: &remote::PushSpec,
+        timeout: std::time::Duration,
+        cancel: &CancellationToken,
+    ) -> Result<(), GitError> {
+        let expect = match &spec.force {
+            remote::PushForce::None => None,
+            remote::PushForce::WithLease { expect } => Some(expect.as_deref()),
+            remote::PushForce::Force => Some(None),
+        };
+        let replaced = match expect {
+            Some(expect) => {
+                remote_tip(
+                    exec,
+                    &repo.workdir,
+                    &spec.remote,
+                    &spec.remote_branch,
+                    expect,
+                    cancel,
+                )
+                .await?
+            }
+            None => None,
+        };
+        let result = remote::push(exec, &repo.workdir, spec, timeout, cancel).await;
+        self.catch_up_after(&result, spec.remote.clone());
+        result?;
+        if let Some(replaced) = replaced {
+            let keep = record_token();
+            self.recorded_if(record_pushed_over(exec, repo, &spec.local, &replaced, &keep).await);
+        }
+        Ok(())
     }
 
     /// Fetches when a push was refused for knowing the remote only as it
@@ -100,10 +152,7 @@ impl RepoSession {
                     &cancel,
                 )
                 .await?;
-                let target = spec.remote.clone();
-                let result = remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await;
-                s.catch_up_after(&result, target);
-                result
+                s.push_recorded(&exec, &repo, &spec, timeout, &cancel).await
             },
         )
     }
@@ -134,10 +183,7 @@ impl RepoSession {
                     &cancel,
                 )
                 .await?;
-                let target = spec.remote.clone();
-                let result = remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await;
-                s.catch_up_after(&result, target);
-                result
+                s.push_recorded(&exec, &repo, &spec, timeout, &cancel).await
             },
         )
     }
@@ -294,6 +340,15 @@ impl RepoSession {
             AfterWrite::Name { status },
             &[LeavingRef::Remote(&remote, &branch)],
             move |exec, repo, cancel| async move {
+                let before = remote_tip(
+                    &exec,
+                    &repo.workdir,
+                    &remote_name,
+                    &branch_name,
+                    Some(&expect),
+                    &cancel,
+                )
+                .await?;
                 let result = remote::delete_remote_branch(
                     &exec,
                     &repo.workdir,
@@ -305,7 +360,20 @@ impl RepoSession {
                 )
                 .await;
                 s.catch_up_after(&result, remote_name);
-                result
+                result?;
+                if let Some(before) = before {
+                    let keep = record_token();
+                    let written = discards::record_remote_delete(
+                        &exec,
+                        &repo.workdir,
+                        &repo.git_dir,
+                        &before,
+                        &keep,
+                    )
+                    .await;
+                    s.recorded(written);
+                }
+                Ok(())
             },
         )
     }
@@ -348,6 +416,16 @@ impl RepoSession {
                 LeavingRef::Remote(&names.1, &names.2),
             ],
             move |exec, repo, cancel| async move {
+                let here = discards::branch_before(&exec, &repo.workdir, &branch, &cancel).await?;
+                let there = remote_tip(
+                    &exec,
+                    &repo.workdir,
+                    &remote_name,
+                    &remote_branch,
+                    Some(&expect),
+                    &cancel,
+                )
+                .await?;
                 branch::delete(&exec, &repo.workdir, &branch, force, &cancel).await?;
                 s.own_config_rewrite();
                 let result = remote::delete_remote_branch(
@@ -361,6 +439,21 @@ impl RepoSession {
                 )
                 .await;
                 s.catch_up_after(&result, remote_name);
+                // The branch here went whatever the remote said.
+                if let Some(here) = here {
+                    let there = there.filter(|_| result.is_ok());
+                    let keep = record_token();
+                    let written = discards::record_branch_delete(
+                        &exec,
+                        &repo.workdir,
+                        &repo.git_dir,
+                        &here,
+                        there.as_ref(),
+                        &keep,
+                    )
+                    .await;
+                    s.recorded(written);
+                }
                 result
             },
         )
@@ -424,6 +517,15 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
+                let before = remote_tip(
+                    &exec,
+                    &repo.workdir,
+                    &remote_name,
+                    &from,
+                    Some(&expect),
+                    &cancel,
+                )
+                .await?;
                 let result = remote::replace_remote_branch(
                     &exec,
                     &repo.workdir,
@@ -436,7 +538,20 @@ impl RepoSession {
                 )
                 .await;
                 s.catch_up_after(&result, remote_name);
-                result
+                result?;
+                if let Some(before) = before {
+                    let keep = record_token();
+                    let written = discards::record_remote_delete(
+                        &exec,
+                        &repo.workdir,
+                        &repo.git_dir,
+                        &before,
+                        &keep,
+                    )
+                    .await;
+                    s.recorded(written);
+                }
+                Ok(())
             },
         )
     }

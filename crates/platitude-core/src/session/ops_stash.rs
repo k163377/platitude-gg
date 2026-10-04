@@ -8,6 +8,7 @@
 
 use super::stash_round::conflicts_now;
 use super::*;
+use crate::discards;
 
 impl RepoSession {
     /// Renames a stash entry — stored again under the new label, old entry
@@ -50,14 +51,34 @@ impl RepoSession {
     /// working tree decides (`conflicts_now`) — only if it was settled
     /// beforehand: git refuses outright onto unmerged paths, and the
     /// conflicts standing afterwards are the old ones.
+    ///
+    /// An entry the pop took from the list goes on the discard record
+    /// (破棄記録仕様.md §2); one a conflict left there did not go.
     pub fn stash_pop(self: &Arc<Self>, selector: String) -> Option<OperationId> {
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Stash,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let settled_first = !conflicts_now(&exec, &repo, &cancel).await?;
+                let before =
+                    discards::stash_before(&exec, &repo.workdir, &selector, &cancel).await?;
                 match stash::pop(&exec, &repo.workdir, &selector, &cancel).await {
-                    Ok(()) => Ok(()),
+                    Ok(()) => {
+                        if let Some(before) = before {
+                            let written = discards::record_stash(
+                                &exec,
+                                &repo.workdir,
+                                &repo.git_dir,
+                                &before,
+                                true,
+                                &cancel,
+                            )
+                            .await;
+                            s.recorded(written);
+                        }
+                        Ok(())
+                    }
                     Err(error) => {
                         if settled_first && conflicts_now(&exec, &repo, &cancel).await? {
                             Ok(())
@@ -94,13 +115,30 @@ impl RepoSession {
         )
     }
 
-    /// `git stash drop <selector>`.
+    /// `git stash drop <selector>`; the entry goes on the discard record
+    /// (破棄記録仕様.md §2).
     pub fn stash_drop(self: &Arc<Self>, selector: String) -> Option<OperationId> {
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Stash,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                stash::drop(&exec, &repo.workdir, &selector, &cancel).await
+                let before =
+                    discards::stash_before(&exec, &repo.workdir, &selector, &cancel).await?;
+                stash::drop(&exec, &repo.workdir, &selector, &cancel).await?;
+                if let Some(before) = before {
+                    let written = discards::record_stash(
+                        &exec,
+                        &repo.workdir,
+                        &repo.git_dir,
+                        &before,
+                        false,
+                        &cancel,
+                    )
+                    .await;
+                    s.recorded(written);
+                }
+                Ok(())
             },
         )
     }

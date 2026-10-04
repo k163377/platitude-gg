@@ -310,6 +310,26 @@ pub async fn opened_with(
     (sink, session)
 }
 
+/// [`opened`] on another working copy of a repository — a linked
+/// worktree at `path` — as a tab opened there is.
+pub async fn opened_at(path: &std::path::Path) -> (Arc<CaptureSink>, Arc<RepoSession>) {
+    let sink = CaptureSink::new();
+    let session = RepoSession::open(
+        crate::support::exec::isolated(),
+        tokio::runtime::Handle::current(),
+        path.to_path_buf(),
+        sink.clone(),
+        None,
+    );
+    sink.wait_for("Opened", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::Opened { .. }))
+            .then_some(())
+    })
+    .await;
+    (sink, session)
+}
+
 /// `None` doors is how the application opens.
 fn start(
     repo: &TestRepo,
