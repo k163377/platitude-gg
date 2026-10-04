@@ -38,7 +38,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     result
 }
 
-fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
+/// What the call names: the tree it is run against (`--dir`, else this
+/// runner's own) and the branch, when one is named.
+fn named(args: &[String]) -> Result<(std::path::PathBuf, Option<String>), String> {
     let mut root = crate::tree::workspace_root();
     let mut branch: Option<String> = None;
     let mut at = 0;
@@ -53,6 +55,11 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
         }
         at += 1;
     }
+    Ok((root, branch))
+}
+
+fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
+    let (root, branch) = named(args)?;
     phases.target(&root, "");
     let here = root.to_string_lossy().replace('\\', "/");
     let branch = match branch {
