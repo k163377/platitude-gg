@@ -26,6 +26,7 @@
 | `session::build` の carry(refused → detect → stash) | 追加 3 spawn で 100–300ms |
 | `eol::attrs`(`check-attr` を 200 パスまとめて) | 1 batch 71ms 対 1 パス spawn 42ms |
 | `eol::sample`(index ではなく worktree を読ませた場合) | 24.7s(106k ファイル)対 settled 数本の 42ms |
+| `discards::copy`(破棄の写し。本体の前後に一時の index で組む) | 合成コーパス(tracked 109,652・index 26MB)で本体の上に ファイルの discard 0.31s / hunk 0.41s / staged 0.41s(本体はそれぞれ 0.09 / 0.02 / 0.11s。新しく書いた 26MB を次の git が開く所で +0.4s 跳ねる回がある = Defender の走査と見ている)。index を読み書きする git 1 本 0.07–0.1s(`index.skipHash` 無しで 0.1–0.12s)、一時の index を `read-tree` で始めると 1.3s、index ファイルの複製 10ms。この repo(1,137 ファイル)では本体 20–35ms の上に 0.15–0.19s = git 7–10 本の起動が代金。staged の行と `reset --hard` の写しが読む status は `-uno`(コーパスで `-uall` 0.8–1.6s 対 0.4s) |
 | `eol::worktree`(`ls-files --eol` は worktree ファイルを全部読む) | 120MB のファイル 1 本で 213ms |
 | `conflict::tool`(`mergetool --tool-help`) | 約 8 秒(ウォーム) |
 | `process::executor` の `diff.autoRefreshIndex=false` の代金 | stat が全部動いた 780 ファイルで `status` 72ms、refresh 後なら 28ms |
