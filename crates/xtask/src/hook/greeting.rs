@@ -50,7 +50,12 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
             let name = root.rsplit('/').next().unwrap_or_default();
             if SEATS.contains(&name) {
                 let session = string_field(input, "session_id").unwrap_or_default();
-                if let Some(note) = claim_at_start(&cwd, &session) {
+                // A conversation carried on — compacted, resumed — takes no
+                // claim: its landing handed the seat back, and its next edit
+                // claims it again if the work goes on (`seats::how_claims_move`).
+                if begins(input)
+                    && let Some(note) = claim_at_start(&cwd, &session)
+                {
                     println!("{note}");
                 }
                 if let Some(stand) = seat_stand(&cwd, &seats) {
@@ -68,6 +73,15 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Whether this start begins a conversation (`startup`, `/clear`) rather
+/// than carries one on (`resume`, `compact`).
+fn begins(input: &str) -> bool {
+    !matches!(
+        string_field(input, "source").as_deref(),
+        Some("resume" | "compact")
+    )
 }
 
 /// A session started inside an unclaimed seat claims it (the `claude

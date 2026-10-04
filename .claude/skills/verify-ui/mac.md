@@ -22,6 +22,7 @@ mac の実機は無い。**mac の絵と判定は GitHub Actions の `shots.yml`
   ```
 
   中身は `summary.md`、行ごとの `<番号>-<行>.log` と `<番号>-<行>/app.png`(開いたものがあれば `overlay.png` / `scene.png`)。**ユーザーに見せる絵は board へ**(`cargo xtask shots add`)— ラベルの末尾を `— mac` にすると Windows / Linux の run を置き換えない
+- **land の後に出た mac の絵を、自分から board へ載せない** — push 時の run は main を撮るので land の後に出るが、絵は席の claim を戻さず、claim の無い席からは載らない(CLAUDE.md §Git 運用)。**mac の見た目の承諾が反映の前に要るなら**、席の枝を GitHub に出して `--ref` で撃つかをユーザーに訊く。land 後に mac の絵を見せるのは、ユーザーが求めた時だけ
 - **写るのは offscreen の絵まで** — フォントは CoreText(Hiragino Sans / Menlo。`QT_QPA_FONTDIR` は Windows の話)、描画は Windows と同じ software scene graph。**Cocoa の窓(タイトルバー・ネイティブメニュー・Dock)は写らない**(P5-確認事項 §3.6)
 - **言語は runner のシステム設定で決まる** — Qt は macOS では `LANG` ではなくシステムの言語を読む。英文中の `—` `…` と等幅の和文フォールバックを判定する時は、**日本語と英語の両方で撃って並べる**
 - **赤を見たら先に机で同じ行を撃つ** — `cargo xtask replay --line '<行>'` は机でも同じ道を通る(絵は `target/replay/`、census も board も動かない)。机で緑なら mac の答えが違う — 絵で「実際に切れている」か「判定の閾がフォントに依っている」かを分ける

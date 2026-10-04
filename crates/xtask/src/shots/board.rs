@@ -130,10 +130,7 @@ fn record_with(
     if let Some(refusal) = not_a_seat(&seat) {
         return Err(refusal);
     }
-    // A picture is work, and work holds the seat (`held_by_this_run`).
-    if let Some(note) = crate::seats::held_by_this_run(&seat) {
-        println!("{note}");
-    }
+    crate::seats::may_picture(&seat)?;
     let board = board_dir()?;
     let img = board.join("img");
     let runs = board.join("runs");

@@ -596,12 +596,11 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       approved, so the session asks for that approval and lands on the
       next 反映. The landing that found them leaves the permit waiting
       for that message, so taking them off the board approves nothing.
-      Bare `land` from a seat lands the seat's own branch. The
-      seat's claim goes back to the roster with it: the tree is empty
-      at main's tip, so the letter is free for whoever asks next, and a
-      session that goes on working there claims it back at its next
-      edit. A live claim of another session's stays, and so does a lock
-      written by hand.
+      Bare `land` from a seat lands the seat's own branch.
+      The seat's claim goes back to the roster with it, whoever's it
+      was: the tree is empty at main's tip, so the letter is free for
+      whoever asks next, and a session that goes on working there
+      claims it back at its next edit. A lock written by hand stays.
 
   kill
       Reap this tree's app processes — the ones holding this tree's exe
@@ -648,7 +647,10 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       every open conversation is handed), a tab left open — none of it
       lifts a claim. Three things do. `land` hands the seat back when the
       branch reaches main, whoever's claim was on it; a session that goes
-      on working in the tree takes it again at its next edit or picture.
+      on working in the tree takes it again at its next edit — a picture
+      takes nothing, and none goes up from a seat the session does not
+      hold, nor does a compaction or a resume, which carry a
+      conversation on rather than begin one there.
       `seat release [<letter>]` hands a seat back without landing and
       names what it still carries; the letter is needed only when the
       session holds more than one. And `seat takeover <letter>`, behind

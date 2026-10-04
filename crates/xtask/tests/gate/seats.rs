@@ -126,21 +126,7 @@ fn letter_path(sb: &Sandbox, name: &str) -> PathBuf {
 
 /// A roster letter with a tree of its own at main's tip, unclaimed.
 fn letter(sb: &Sandbox, name: &str) -> PathBuf {
-    let path = letter_path(sb, name);
-    let branch = format!("worktree-{name}");
-    sb.git_ok(
-        &sb.repo,
-        &[
-            "worktree",
-            "add",
-            "-q",
-            "-b",
-            &branch,
-            &slashed(&path),
-            "main",
-        ],
-    );
-    path
+    sb.roster_tree(name, &format!("worktree-{name}"))
 }
 
 /// The same, one commit ahead of main.
@@ -216,20 +202,7 @@ fn shot(sb: &Sandbox, tree: &Path, session: &str) -> (bool, String) {
 /// A run on the board under `letter`, as verify-ui leaves one; answers
 /// the run file.
 fn picture_on_the_board(sb: &Sandbox, letter: &str) -> PathBuf {
-    let board = sb.repo.join(".shots");
-    for dir in ["img", "runs"] {
-        std::fs::create_dir_all(board.join(dir)).expect("board dir");
-    }
-    let stem = format!("1700000000000-{letter}-a-picture");
-    let png = format!("img/{stem}-0-shot.png");
-    std::fs::write(board.join(&png), b"png").expect("picture");
-    let run = board.join("runs").join(format!("{stem}.tsv"));
-    std::fs::write(
-        &run,
-        format!("label\ta picture\nverb\tv\nseat\t{letter}\nat\t1700000000000\nshot\t{png}\tshot.png\t1\t1\t\n"),
-    )
-    .expect("run");
-    run
+    sb.put_up(letter, "a picture", 1_700_000_000_000)
 }
 
 /// Made at main's tip and claimed in the same step.
@@ -561,35 +534,65 @@ fn a_letter_whose_tree_went_missing_is_still_its_sessions() {
     assert_eq!(lock_on(&sb, "b"), "claude-seat mine pid 4242");
 }
 
-/// A letter just landed from stands unclaimed, and the session's next act
-/// there is often a picture of what landed — so a run takes the claim
-/// back, as an edit does. In somebody else's letter it takes nothing and
-/// says so.
+/// A letter just landed from stands unclaimed, and a picture of what
+/// landed would hold it for a session whose work is done (CLAUDE.md §Git
+/// 運用): a run claims nothing, so it goes up only from a letter its
+/// session holds — and never from somebody else's.
 #[test]
-fn a_picture_holds_the_seat_it_was_taken_in() {
+fn a_picture_goes_up_only_from_a_seat_its_session_holds() {
     let sb = Sandbox::new("seat-board-claim");
     let tree = letter(&sb, "b");
+    let runs = sb.repo.join(".shots").join("runs");
+    let on_the_board = || std::fs::read_dir(&runs).map_or(0, Iterator::count);
 
     let (ok, text) = shot(&sb, &tree, "mine");
-    assert!(ok, "{text}");
+    assert!(!ok, "{text}");
     assert!(
-        text.contains("stood unclaimed, and this run claimed it back"),
+        text.contains("carries no claim of this session's"),
         "{text}"
     );
-    assert_eq!(lock_on(&sb, "b"), "claude-seat mine pid 4242");
+    assert_eq!(lock_on(&sb, "b"), "", "a picture claims nothing");
+    assert_eq!(on_the_board(), 0, "{text}");
 
-    // Quiet once the letter is already this session's.
+    lock(&sb, &tree, "claude-seat mine pid 4242");
     let (ok, text) = shot(&sb, &tree, "mine");
-    assert!(ok && !text.contains("claimed it back"), "{text}");
-    assert_eq!(lock_on(&sb, "b"), "claude-seat mine pid 4242");
+    assert!(ok, "{text}");
+    assert_eq!(on_the_board(), 1, "{text}");
 
     let (ok, text) = shot(&sb, &tree, "another");
-    assert!(ok, "{text}");
+    assert!(!ok, "{text}");
     assert!(
         text.contains("seat b is held by session mine (pid 4242)"),
         "{text}"
     );
     assert_eq!(lock_on(&sb, "b"), "claude-seat mine pid 4242");
+    assert_eq!(on_the_board(), 1, "{text}");
+}
+
+/// A seat its landing handed back stays free through a conversation
+/// carried on — a compaction or a resume in it claims nothing, and the
+/// next edit claims it if the work goes on — while a conversation that
+/// begins in it claims it as it starts.
+#[test]
+fn only_a_conversation_beginning_in_a_seat_claims_it_as_it_starts() {
+    let sb = Sandbox::new("seat-start-claim");
+    let tree = letter(&sb, "b");
+    let start = |source: &str| {
+        sb.hook(
+            "session-start",
+            &format!(
+                "{{\"session_id\":\"mine\",\"cwd\":\"{}\",\"hook_event_name\":\"SessionStart\",\
+                 \"source\":\"{source}\"}}",
+                slashed(&tree)
+            ),
+        )
+    };
+    for carried_on in ["compact", "resume"] {
+        start(carried_on);
+        assert_eq!(lock_on(&sb, "b"), "", "a {carried_on} claims nothing");
+    }
+    start("startup");
+    assert_eq!(lock_on(&sb, "b"), "claude-seat mine");
 }
 
 /// Only the seat this session holds is entered or written in, however

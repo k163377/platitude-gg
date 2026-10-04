@@ -13,7 +13,11 @@ cargo xtask shots <command>
       run always says which tree took it — and it has to be a seat a-f,
       because a run leaves the board when its seat's work does and
       nothing outside the roster has such a moment (`cargo xtask seat`
-      hands one over). --label is required — several
+      hands one over). The seat has to be this session's, too: a
+      picture claims nothing, so once a landing hands the seat back no
+      picture goes up from it — what the user has to approve goes up
+      before the landing, which waits for the approval. --label is
+      required — several
       pictures under no name leave nobody able to say which file was
       which change — and the name is written in Japanese, the language
       the board is read in: it is the first thing the reader reads off

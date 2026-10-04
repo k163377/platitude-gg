@@ -447,7 +447,7 @@ fn clear_the_board(listing: &str, branch: &str) {
 /// Whoever's claim it is comes off: a landing is the user's word that the
 /// work is done, and a claim whose session is gone would never be handed
 /// back (`seats::claim`). A session going on here takes the seat back at
-/// its next edit or picture (`seats::held_by_this_run`).
+/// its next edit; a picture takes nothing (`seats::may_picture`).
 fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str) {
     let Some(tree) = landed_claim(trees, branch) else {
         return;
@@ -465,8 +465,9 @@ fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str) {
         &tree.path,
         &format!(
             "it was {was}; this stretch of work landed, so the letter is back on the roster. \
-             Going on in this tree claims it back at the next edit or picture, and `cargo \
-             xtask seat` hands out another if somebody took the letter meanwhile."
+             New work in this tree claims it back at its first edit, and `cargo xtask seat` \
+             hands out another if somebody took the letter meanwhile. A picture claims \
+             nothing: the landed work's pictures do not go up again."
         ),
     );
 }
