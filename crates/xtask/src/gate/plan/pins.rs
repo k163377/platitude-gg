@@ -31,10 +31,17 @@ fn pins() -> [Pin; 5] {
             carries: |line| line.trim_start().starts_with("pub const MINIMUM_GIT"),
         },
         // The base image is the container's git, the oldest supported one
-        // (git最低バージョン整合.md), and its system libraries.
+        // (git最低バージョン整合.md), and its system libraries. Its release
+        // is an ARG's default, as is the aqtinstall that installs Qt.
         Pin {
             path: DOCKERFILE.to_string(),
-            carries: |line| line.trim_start().starts_with("FROM "),
+            carries: |line| {
+                let line = line.trim_start();
+                line.starts_with("FROM ")
+                    || line
+                        .strip_prefix("ARG ")
+                        .is_some_and(|arg| arg.contains('='))
+            },
         },
         // Qt's version, which the container and CI install: the file
         // holds nothing else.
@@ -110,5 +117,23 @@ mod tests {
         let newer = "FROM ubuntu:26.04 AS core\nRUN apt-get install git\nFROM core AS app\n";
         assert_eq!(carried(&docker, before), carried(&docker, packages));
         assert_ne!(carried(&docker, before), carried(&docker, newer));
+    }
+
+    /// A release named by an ARG's default moves with that default; an
+    /// ARG the caller passes in carries nothing of its own.
+    #[test]
+    fn a_release_an_arg_names_is_read_off_its_default() {
+        let docker = pin("Dockerfile");
+        let at = |release: &str, args: &str| {
+            format!("ARG UBUNTU={release}\nFROM ubuntu:${{UBUNTU}} AS core\n{args}RUN true\n")
+        };
+        assert_ne!(
+            carried(&docker, &at("24.04", "")),
+            carried(&docker, &at("26.04", ""))
+        );
+        assert_eq!(
+            carried(&docker, &at("24.04", "")),
+            carried(&docker, &at("24.04", "ARG QT_VERSION\n"))
+        );
     }
 }

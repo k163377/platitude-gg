@@ -1,6 +1,8 @@
 # The Qt this tree pins (.qt-version, the file cargo xtask reads), restored
 # from the cache or installed, and put in front of every later step of the
-# job. A local action: the job checks out first.
+# job. A local action: the job checks out first. The aqtinstall that
+# installs it is the one ci/linux/Dockerfile's AQT_SOURCE names, the
+# container's too.
 name: Qt
 description: Install the Qt this tree pins and point the job's later steps at it
 
@@ -16,6 +18,11 @@ runs:
           echo ".qt-version names no Qt version" >&2
           exit 1
         fi
+        aqt="$(sed -n 's/^ARG AQT_SOURCE="\(.*\)"$/\1/p' ci/linux/Dockerfile)"
+        if [ -z "${aqt}" ]; then
+          echo "ci/linux/Dockerfile names no AQT_SOURCE" >&2
+          exit 1
+        fi
         case "${RUNNER_OS}" in
           Linux) host=linux arch=linux_gcc_64 dir=gcc_64 ;;
           Windows) host=windows arch=win64_msvc2022_64 dir=msvc2022_64 ;;
@@ -27,6 +34,7 @@ runs:
         esac
         {
           echo "version=${version}"
+          echo "aqt=${aqt}"
           echo "host=${host}"
           echo "arch=${arch}"
           echo "root=${RUNNER_TEMP}/qt/${version}/${dir}"
@@ -46,10 +54,7 @@ runs:
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       env:
-        # Windows Qt from 6.11 sits in a folder per toolchain, which no
-        # aqtinstall release reads (3.3.0 asks for qt6_<ver>/qt6_<ver>/Updates.xml):
-        # the commit carries miurahr/aqtinstall#1000, merged after 3.3.0.
-        AQT_SOURCE: "aqtinstall @ git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7"
+        AQT_SOURCE: ${{ steps.pin.outputs.aqt }}
         QT_PIN: ${{ steps.pin.outputs.version }}
         QT_HOST: ${{ steps.pin.outputs.host }}
         QT_ARCH: ${{ steps.pin.outputs.arch }}

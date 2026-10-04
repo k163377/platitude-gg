@@ -248,7 +248,8 @@ fn not_found(pinned: Option<&str>) -> String {
     match (cfg!(windows), pinned) {
         (true, Some(version)) => format!(
             "Qt {version} is not under C:\\Qt and qmake is not on PATH. Install it as CI's \
-             Windows jobs do — aqtinstall from the AQT_SOURCE CI's Qt action pins, then `aqt \
+             Windows jobs do — aqtinstall from the AQT_SOURCE the container's Dockerfile \
+             pins, then `aqt \
              install-qt windows desktop {version} win64_msvc2022_64 -O C:\\Qt` — or set QT_BIN \
              to its bin directory."
         ),

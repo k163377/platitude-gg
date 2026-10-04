@@ -1,14 +1,22 @@
 # `cargo xtask linux <cargo args>` builds this image and runs the workspace
 # inside it — with WSL's own engine (wslc) on Windows, docker elsewhere.
 #
-# ubuntu:24.04: the release CI's Linux jobs name, and its git is the oldest
+# The Ubuntu release both base stages start from. Its git is the oldest
 # git最低バージョン整合.md supports — no other machine here runs it (a
-# GitHub runner of the same release carries a newer one).
-#
+# GitHub runner of the same release carries a newer one). CI's Linux jobs
+# run on this release.
+ARG UBUNTU=24.04
+# aqtinstall as pip takes it, for every Qt install here and in CI (the Qt
+# action reads this line). Windows Qt from 6.11 sits in a folder per
+# toolchain, which no aqtinstall release reads (3.3.0 asks for
+# qt6_<ver>/qt6_<ver>/Updates.xml): the commit carries
+# miurahr/aqtinstall#1000, merged after 3.3.0.
+ARG AQT_SOURCE="aqtinstall @ git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7"
+
 # The core stage stops at git and Rust (platitude-core is Qt-free): without
 # Qt the image builds an order of magnitude faster. `cargo xtask linux`
 # picks core or app.
-FROM ubuntu:24.04 AS core
+FROM ubuntu:${UBUNTU} AS core
 
 ENV DEBIAN_FRONTEND=noninteractive \
     RUSTUP_HOME=/usr/local/rustup \
@@ -71,14 +79,10 @@ WORKDIR /work
 # platform, and the fonts the design tokens name for Ubuntu.
 FROM core AS app
 
-# From the caller: .qt-version pins it and `cargo xtask linux` passes it
-# in — no second copy here.
-ARG QT_VERSION
-
 # The two expensive downloads go first, so editing the library list below
 # never fetches Qt or the fonts again.
 #
-# The fonts and the locale of a Japanese Ubuntu 24.04 desktop, the machine
+# The fonts and the locale of a Japanese Ubuntu desktop, the machine
 # a picture taken here stands for (P5-確認事項 §実測済み). Every desktop
 # install has what ubuntu-desktop-minimal depends on and recommends —
 # fonts-dejavu-core, fonts-noto-cjk (Noto Sans CJK JP and Noto Sans Mono
@@ -105,11 +109,17 @@ RUN apt-get update \
     && localedef --inputfile ja_JP --charmap UTF-8 ja_JP.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
-# A venv: 24.04's system python is externally managed and refuses pip.
+# A venv: the release's system python is externally managed and refuses
+# pip, and pip fetches aqtinstall's commit with the git above.
 # --base is aqt's default spelled out: download.qt.io answers an archive
 # with a redirect to a mirror, which nothing here blocks (CI, behind an
 # egress allowlist, names the origin server). Python goes with the venv in
 # the same layer: nothing past the install runs it.
+#
+# Both ARGs are taken in here, past the fonts: every RUN after an ARG reads
+# it, so one declared above would fetch the fonts again when it moved.
+# QT_VERSION is the caller's: .qt-version pins it and `cargo xtask linux`
+# passes it in — no second copy here.
 #
 # The archives the app and its tests reach and no more: every QML module
 # they import is qtdeclarative's, qtsvg is kept for the image formats, and
@@ -118,10 +128,12 @@ RUN apt-get update \
 # QML load here, loudly. Out of what comes, the static archives (Qt's own
 # tooling; the app links Qt's shared libraries only) and the bill of
 # materials go in the same layer.
+ARG QT_VERSION
+ARG AQT_SOURCE
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends python3-venv \
     && python3 -m venv /opt/aqt \
-    && /opt/aqt/bin/pip install --no-cache-dir aqtinstall \
+    && /opt/aqt/bin/pip install --no-cache-dir "${AQT_SOURCE}" \
     && /opt/aqt/bin/aqt install-qt --base https://download.qt.io/ \
         linux desktop "${QT_VERSION}" linux_gcc_64 -O /opt/qt \
         --archives icu qtbase qtdeclarative qtsvg \
@@ -172,7 +184,7 @@ ENV PATH=/opt/qt/${QT_VERSION}/gcc_64/bin:/usr/local/cargo/bin:/usr/local/sbin:/
 # nothing else installed: the only place that says the built binary runs
 # where it was not built. The QML modules must come too — opened at run
 # time, `ldd` never names them.
-FROM ubuntu:24.04 AS bare
+FROM ubuntu:${UBUNTU} AS bare
 
 ARG QT_VERSION
 ENV DEBIAN_FRONTEND=noninteractive

@@ -35,10 +35,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Named, not -latest: ubuntu-24.04 is the image ci/linux/Dockerfile
-        # stands for, and a new OS release arrives as a commit here. What an
-        # image carries (its compilers, its git) still moves under the name.
-        os: [ubuntu-24.04, windows-2025, macos-26]
+        # Named, not -latest: a new OS release arrives as a commit here. What
+        # an image carries (its compilers, its git) still moves under the
+        # name. Ubuntu's is the release ci/linux/Dockerfile's UBUNTU names.
+        os:
+          - &ubuntu ubuntu-24.04
+          - windows-2025
+          - macos-26
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     steps:
@@ -131,7 +134,7 @@ jobs:
   # All tests and an offscreen app smoke, inside an empty network namespace
   # (internal-docs/実装計画.md §11.3).
   offline-test:
-    runs-on: ubuntu-24.04
+    runs-on: *ubuntu
     timeout-minutes: 120
     steps:
       - *harden
@@ -158,7 +161,7 @@ jobs:
             unshare -n bash ci/offline-test.sh "${BINS[@]}"
 
   deny:
-    runs-on: ubuntu-24.04
+    runs-on: *ubuntu
     timeout-minutes: 15
     steps:
       # static.rust-lang.org: the action's container installs what
