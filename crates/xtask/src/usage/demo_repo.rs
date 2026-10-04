@@ -43,6 +43,16 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         drop-stops       a drop that stops part-way, over a dirty tree
         stashes   three stashes, one with untracked files
         detached  HEAD detached at a tag
+        discards  one entry of every kind the discard log reads, under
+                  forty commits of later work (recover): the moves the
+                  reflogs keep — a rebase, a reset that threw work away
+                  too, an amend, a branch set back by hand, a detached HEAD
+                  left behind, two branches one rebase moved together — and
+                  Platitude GG's own record of the rest — a branch deleted
+                  here and on origin, a remote's branch deleted and one
+                  pushed over, a tag deleted here, on origin, on both at once
+                  and pushed over, a working copy removed, a stash dropped
+                  and one popped, untracked files deleted, files discarded
         rewrite-merge  a merge inside the stretch a rewrite of the tip
                   would replay: the plan turned down before it opens
         octopus   a merge of eight parents on a merge of two, HEAD on the
@@ -126,6 +136,11 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   left there: the only branch whose tip the drawn rows
                   cannot answer for, so its delete row's early answer can
                   only come from git (delete-branch-early-far)
+        discards-deep
+                  deep-parked with `parked` deleted onto Platitude GG's
+                  record: the only discard log entry past the graph's
+                  window, which waits for the graph to walk to it
+                  (recover-open far)
         replay    300 commits on main and one on base that the fork never
                   saw: the only shape where a rebase stands for seconds,
                   so the screen has one to be photographed during

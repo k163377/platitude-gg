@@ -143,7 +143,7 @@ const DEEP_SIDE_MARK: u64 = 100_000;
 
 /// What the parked line is called — the argument a verb aiming at this
 /// shape is given.
-const DEEP_PARKED_BRANCH: &str = "parked";
+pub(super) const DEEP_PARKED_BRANCH: &str = "parked";
 
 /// The parked line's one mark — clear of main's and of the side line's.
 const DEEP_PARKED_MARK: u64 = 200_000;

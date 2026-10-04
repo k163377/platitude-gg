@@ -14,6 +14,9 @@ pub(super) struct DemoRepo {
     global_config: PathBuf,
     base_epoch: u64,
     tick: u64,
+    /// A moment every command is stamped with instead, while set
+    /// ([`DemoRepo::pin_clock`]).
+    pinned: Option<u64>,
 }
 
 const TICK_SECS: u64 = 30 * 60;
@@ -41,6 +44,7 @@ impl DemoRepo {
             global_config: root.join("no-global-config"),
             base_epoch: now.saturating_sub(HISTORY_SECS),
             tick: 0,
+            pinned: None,
         };
         std::fs::create_dir_all(&repo.work).map_err(|e| e.to_string())?;
         repo.git(&["init", "-b", "main"])?;
@@ -63,9 +67,19 @@ impl DemoRepo {
         Ok(())
     }
 
+    /// Stamps every command from here on with `at` (epoch seconds), until
+    /// it is set again — `None` hands the stamps back to the ticking clock.
+    /// For a preset whose dates are what it shows, each where it says.
+    pub(super) fn pin_clock(&mut self, at: Option<u64>) {
+        self.pinned = at;
+    }
+
     pub(super) fn command(&mut self, dir: &Path, args: &[&str]) -> Command {
         self.tick += 1;
-        let stamp = format!("{} +0000", self.base_epoch + self.tick * TICK_SECS);
+        let when = self
+            .pinned
+            .unwrap_or(self.base_epoch + self.tick * TICK_SECS);
+        let stamp = format!("{when} +0000");
         let mut cmd = Command::new("git");
         cmd.args(args)
             .current_dir(dir)

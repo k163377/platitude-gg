@@ -100,6 +100,9 @@ QtObject {
                 "nav-filter", "nav-tip", "nav-jump", "nav-open", "nav-open-foot", "nav-open-then", "nav-open-held",
                 "nav-drag-open", "nav-peek-open", "nav-open-tip", "nav-open-tag", "nav-follow", "nav-follow-lit",
                 "nav-reclick", "nav-reclick-away", "nav-rename-far",
+                // Framed in their own sampler once the fold, the pick's walk, the card or the restore they may ask for
+                // has landed (`AutoActRecoverVerbs`).
+                "recover", "recover-open",
                 // Scrolled in its own sampler a layout pass after the dispatch; the render barrier would photograph
                 // the list where it opened.
                 "nav-pin-edge",

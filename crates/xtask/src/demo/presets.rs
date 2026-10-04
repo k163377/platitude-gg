@@ -13,6 +13,7 @@ use super::conflict::{
     rebase_empty, rebase_staged, revert_clashes,
 };
 use super::deep::{deep, deep_detached, deep_parked, perf, perf_sequence, replay};
+use super::discards::{discards, discards_deep};
 use super::lfs::{lfs, lfs_conflict};
 use super::pictures::{bigpicture, pictures};
 use super::remote::{
@@ -154,6 +155,8 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "drop-stops" => drop_stops(&mut repo)?,
         "stashes" => stashes(&mut repo)?,
         "detached" => detached(&mut repo)?,
+        "discards" => discards(&mut repo)?,
+        "discards-deep" => discards_deep(&mut repo)?,
         "rewrite-merge" => rewrite_merge(&mut repo)?,
         "octopus" => octopus(&mut repo)?,
         "octopus-mates" => octopus_mates(&mut repo)?,

@@ -16,6 +16,7 @@ AutoActNavVerbs 1.0 AutoActNavVerbs.qml
 AutoActPaneVerbs 1.0 AutoActPaneVerbs.qml
 AutoActPlanVerbs 1.0 AutoActPlanVerbs.qml
 AutoActPublishVerbs 1.0 AutoActPublishVerbs.qml
+AutoActRecoverVerbs 1.0 AutoActRecoverVerbs.qml
 AutoActRefVerbs 1.0 AutoActRefVerbs.qml
 AutoActStepVerbs 1.0 AutoActStepVerbs.qml
 AutoActKeyMenuVerbs 1.0 AutoActKeyMenuVerbs.qml

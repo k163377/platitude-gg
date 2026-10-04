@@ -500,6 +500,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActPaneVerbs.qml");
     qrc::embed!("auto/AutoActPlanVerbs.qml");
     qrc::embed!("auto/AutoActPublishVerbs.qml");
+    qrc::embed!("auto/AutoActRecoverVerbs.qml");
     qrc::embed!("auto/AutoActRefVerbs.qml");
     qrc::embed!("auto/AutoActStepVerbs.qml");
     qrc::embed!("auto/AutoActKeyMenuVerbs.qml");

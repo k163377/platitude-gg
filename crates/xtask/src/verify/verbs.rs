@@ -15,6 +15,7 @@ mod graph_walk;
 mod identity;
 mod nav;
 mod panes;
+mod recover;
 mod remote;
 mod sequencer;
 mod stash;
@@ -72,6 +73,7 @@ const TABLES: &[&[Verb]] = &[
     identity::TABLE,
     nav::TABLE,
     panes::TABLE,
+    recover::TABLE,
     remote::TABLE,
     sequencer::TABLE,
     stash::TABLE,
