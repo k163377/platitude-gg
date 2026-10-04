@@ -108,7 +108,12 @@ impl Sandbox {
             .env_remove("PGG_BUDGET_HELD")
             // The gate answers only for a session's git, so the sandbox is
             // a session's whether or not the run that started it is.
-            .env("CLAUDECODE", "1");
+            .env("CLAUDECODE", "1")
+            // Which session a sandbox's git is, a test says: the hook writes
+            // down whose a branch is, and the session running this suite
+            // would lend its own id to every branch made here.
+            .env_remove("CLAUDE_CODE_SESSION_ID")
+            .env_remove("CODEX_THREAD_ID");
     }
 
     pub fn git(&self, dir: &Path, args: &[&str], extra: &[(&str, &str)]) -> Result<String, String> {

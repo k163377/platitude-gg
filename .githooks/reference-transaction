@@ -1,33 +1,62 @@
 #!/bin/sh
-# platitude-gg: refs/heads/main moves only onto a gated commit
-# (internal-docs/反映前テストの機械化.md §git hook).
+# platitude-gg: refs/heads/main moves only onto a gated commit, and each
+# branch a session's git creates is written down as that session's, so that
+# its own landing can clear it (internal-docs/反映前テストの機械化.md §git hook).
 #
 # The installed copy's `tree` names the checkout whose task runner answers;
 # git's environment for the hook is dropped so cargo and git read that tree,
 # not the one the git command ran in. POSIX sh: git for Windows runs hooks
 # in its own sh, so one file serves all three systems.
-[ "$1" = "prepared" ] || exit 0
+case "$1" in prepared | committed) ;; *) exit 0 ;; esac
+# Beside the installed copy, one file per branch naming the session whose
+# git created it (crates/xtask/src/gate/hooks.rs `creator`). git also runs
+# this for refs it only moves between its own files — `pack-refs` reads as
+# a creation in packed-refs and a deletion of the loose file — so a branch
+# is created only when it was not there before the transaction, and goes
+# only when it is not there after. A creation by a git with no session id
+# (the user's own, the app's) leaves the branch nobody's.
+made="$(dirname "$0")/../made"
+id="${CLAUDE_CODE_SESSION_ID:-$CODEX_THREAD_ID}"
+case "$id" in *[!A-Za-z0-9_-]*) id="" ;; esac
+zero() { case "$1" in *[!0]*) return 1 ;; esac; }
+there() { git rev-parse -q --verify "$1" >/dev/null 2>&1; }
+main_old=""
+main_new=""
+while read -r old new ref; do
+  case "$ref" in
+    refs/heads/main)
+      main_old="$old"
+      main_new="$new"
+      ;;
+    refs/heads/*)
+      if [ "$1" = prepared ]; then
+        if zero "$old" && ! zero "$new" && ! there "$ref"; then
+          rm -f "$made/$ref"
+          if [ -n "$id" ]; then
+            mkdir -p "$(dirname "$made/$ref")" && echo "$id" >"$made/$ref"
+          fi
+        fi
+      elif zero "$new" && ! there "$ref"; then
+        rm -f "$made/$ref"
+      fi
+      ;;
+  esac
+done
+[ "$1" = prepared ] && [ -n "$main_new" ] || exit 0
 # Without Claude Code's mark it is the user's git, and their main is theirs
 # to move. Asked ahead of the cargo guard below, which fails closed where
 # cargo is not on PATH (an IDE's git); the verdict reads the same mark
 # (crates/xtask/src/gate/hooks.rs).
 [ -n "$CLAUDECODE" ] || exit 0
-while read -r old new ref; do
-  case "$ref" in
-    refs/heads/main)
-      here="$(dirname "$0")"
-      tree="$(cat "$here/tree" 2>/dev/null)"
-      if [ -z "$tree" ] || ! cd "$tree"; then
-        echo "gate: the tree that installed the hook is gone ($tree) — run \`cargo xtask gate install\` from a tree that has the gate; refs/heads/main stays where it is" >&2
-        exit 1
-      fi
-      unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
-      if ! command -v cargo >/dev/null 2>&1; then
-        echo "gate: cargo is not on PATH here, so the stamp cannot be read — refs/heads/main stays where it is (run the command from a shell that has cargo, or PGG_GATE_SKIP=1 as the user)" >&2
-        exit 1
-      fi
-      exec cargo run --quiet -p xtask --profile hooks -- gate verdict "$old" "$new"
-      ;;
-  esac
-done
-exit 0
+here="$(dirname "$0")"
+tree="$(cat "$here/tree" 2>/dev/null)"
+if [ -z "$tree" ] || ! cd "$tree"; then
+  echo "gate: the tree that installed the hook is gone ($tree) — run \`cargo xtask gate install\` from a tree that has the gate; refs/heads/main stays where it is" >&2
+  exit 1
+fi
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "gate: cargo is not on PATH here, so the stamp cannot be read — refs/heads/main stays where it is (run the command from a shell that has cargo, or PGG_GATE_SKIP=1 as the user)" >&2
+  exit 1
+fi
+exec cargo run --quiet -p xtask --profile hooks -- gate verdict "$main_old" "$main_new"

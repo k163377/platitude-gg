@@ -16,6 +16,7 @@ use crate::seats::{
 use crate::subprocess::git_query;
 
 mod approval;
+mod leftovers;
 mod record;
 mod tags;
 mod versions;
@@ -124,6 +125,9 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     let _turn = turn?;
     prepare_gate(&root, &seat.path)?;
     phases.mark("prepare");
+    // What the branch held before any rebase: a copy taken from it before
+    // its history was rewritten holds nothing this does not (`leftovers`).
+    let unrebased = git_query(&here, &["rev-parse", &format!("refs/heads/{branch}")]);
     if git_query(&here, &["merge-base", "--is-ancestor", "main", &branch]).is_none() {
         println!("{branch} is behind main — rebasing it in {}", seat.path);
         rebase(&seat.path)?;
@@ -157,6 +161,9 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     // rebase may have left a generation of build products behind.
     crate::sweep::at_a_tail(seat_dir, &crate::sweep::Tail::after_a_landing());
     phases.mark("sweep");
+    // Still in the landings' queue, so no other landing sweeps beside it.
+    leftovers::clear(&here, unrebased.as_deref(), &seat.path);
+    phases.mark("leftovers");
     // The claim comes off last: once it does, another session may take the
     // letter, and clearing the board after that would clear its runs.
     clear_the_board(&listing, &branch);

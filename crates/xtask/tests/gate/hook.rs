@@ -100,3 +100,57 @@ fn install_leaves_somebody_elses_hooks_directory_alone() {
         "/somewhere/else"
     );
 }
+
+/// The hook writes down whose git created each branch. A creation counts
+/// only when the branch was not there before, and the record goes only once
+/// the branch is gone: git also runs the hook when it packs refs, as a
+/// creation in packed-refs and a deletion of the loose file. A creation by a
+/// git with no session id leaves the name nobody's.
+#[test]
+fn the_hook_writes_down_which_session_made_a_branch() {
+    let sb = Sandbox::new("hook-made");
+    let creator = |branch: &str| {
+        std::fs::read_to_string(sb.repo.join(".git/pgg-gate/made/refs/heads").join(branch))
+            .ok()
+            .map(|id| id.trim().to_string())
+    };
+    let make = |branch: &str, env: &[(&str, &str)]| {
+        sb.git(&sb.repo, &["branch", branch, "main"], env)
+            .unwrap_or_else(|e| panic!("{branch}: {e}"));
+    };
+    let mine = [("CLAUDE_CODE_SESSION_ID", "mine")];
+    let theirs = [("CLAUDE_CODE_SESSION_ID", "theirs")];
+    make("keep/copy", &mine);
+    make("marker", &theirs);
+    make("nobodys", &[]);
+    make("from-codex", &[("CODEX_THREAD_ID", "thread-1")]);
+    assert_eq!(creator("keep/copy").as_deref(), Some("mine"));
+    assert_eq!(creator("marker").as_deref(), Some("theirs"));
+    assert_eq!(creator("nobodys"), None);
+    assert_eq!(creator("from-codex").as_deref(), Some("thread-1"));
+
+    // Another session's git packs every ref: nothing changes hands.
+    sb.git(
+        &sb.repo,
+        &["pack-refs", "--all"],
+        &[("CLAUDE_CODE_SESSION_ID", "theirs"), ("PGG_GATE_SKIP", "1")],
+    )
+    .expect("the refs packed");
+    assert!(
+        !sb.repo.join(".git/refs/heads/keep/copy").exists(),
+        "the branch was packed, not left loose"
+    );
+    assert_eq!(creator("keep/copy").as_deref(), Some("mine"));
+    assert_eq!(creator("nobodys"), None);
+
+    // Deleted, the record goes; made again, it is the new maker's.
+    sb.git(&sb.repo, &["branch", "-D", "keep/copy"], &mine)
+        .expect("given up");
+    assert_eq!(creator("keep/copy"), None);
+    make("keep/copy", &theirs);
+    assert_eq!(creator("keep/copy").as_deref(), Some("theirs"));
+    sb.git(&sb.repo, &["branch", "-D", "marker"], &[])
+        .expect("deleted by the user");
+    make("marker", &[]);
+    assert_eq!(creator("marker"), None, "the user's own name is nobody's");
+}

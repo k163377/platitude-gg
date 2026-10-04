@@ -5,7 +5,9 @@
 //! through, and a non-zero exit in its `prepared` state aborts the update,
 //! so one checked-in script (`.githooks/`) guards main against every road a
 //! session can take and none of the user's ([`SESSION`]); the verdict stays
-//! here, where it can be tested.
+//! here, where it can be tested. Passing through every update, it is also
+//! where whose a branch is gets written down ([`creator`]), for that
+//! session's landing to clear (`land::leftovers`).
 //!
 //! The installed copy lives beside the repository's own `.git`
 //! (`pgg-gate/hooks/`), where no seat's edit, reset or removal reaches it.
@@ -30,6 +32,19 @@ pub(crate) const SESSION: &str = "CLAUDECODE";
 
 const HOOKS_DIR: &str = ".githooks";
 const HOOK: &str = "reference-transaction";
+
+/// Where the hook writes down whose a branch is ([`creator`]): beside the
+/// installed copy, which the script spells `$(dirname "$0")/../made`.
+const MADE: &str = "made";
+
+/// The session whose git created `reference` (`refs/heads/…`), as the hook
+/// wrote it down: None for a branch no session's git created — the user's
+/// own, the app's — or one created before the hook kept the record.
+pub(crate) fn creator(common: &Path, reference: &str) -> Option<String> {
+    let path = common.join("pgg-gate").join(MADE).join(reference);
+    let id = std::fs::read_to_string(path).ok()?.trim().to_string();
+    (!id.is_empty()).then_some(id)
+}
 
 /// Installs the hook beside `.git` and points `core.hooksPath` at it;
 /// idempotent, and says what it did. `dir` is any tree of the repository.
@@ -165,6 +180,25 @@ pub(crate) fn verdict(dir: &Path, old: &str, new: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    /// The record the script writes is the one `creator` reads.
+    #[test]
+    fn the_hook_script_writes_creators_where_they_are_read() {
+        let script = include_str!("../../../../.githooks/reference-transaction");
+        let spelled = format!("made=\"$(dirname \"$0\")/../{}\"", super::MADE);
+        assert!(script.contains(&spelled), "{spelled}");
+        // The installed copy stands in `pgg-gate/hooks`, so `..` is the
+        // `pgg-gate` that `creator` joins.
+        let common = crate::yard::Yard::new("hooks-creator");
+        let made = common.join("pgg-gate").join(super::MADE);
+        std::fs::create_dir_all(made.join("refs/heads/keep")).expect("the record's directory");
+        std::fs::write(made.join("refs/heads/keep/copy"), "session-1\n").expect("a creator");
+        assert_eq!(
+            super::creator(&common, "refs/heads/keep/copy").as_deref(),
+            Some("session-1")
+        );
+        assert_eq!(super::creator(&common, "refs/heads/nobodys"), None);
+    }
+
     /// The script reads the mark itself, spelled as `SESSION` does, ahead of
     /// its cargo guard.
     #[test]

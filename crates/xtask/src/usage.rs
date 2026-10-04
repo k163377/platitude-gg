@@ -596,7 +596,15 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       approved, so the session asks for that approval and lands on the
       next 反映. The landing that found them leaves the permit waiting
       for that message, so taking them off the board approves nothing.
-      Bare `land` from a seat lands the seat's own branch.
+      Bare `land` from a seat lands the seat's own branch. Once main
+      has moved it clears what the session running it made: the
+      branches its git created (the reference-transaction hook writes
+      each one's creator down) and the trees, seats aside, that have
+      one of them out — each when main, or the branch as it stood
+      before its rebase, holds all it holds. A tree with uncommitted
+      files, a lock, work of its own or a process in it stays, and is
+      named with every branch of the session's that stays. What another
+      session, the app or the user made is neither judged nor named.
       The seat's claim goes back to the roster with it, whoever's it
       was: the tree is empty at main's tip, so the letter is free for
       whoever asks next, and a session that goes on working there
