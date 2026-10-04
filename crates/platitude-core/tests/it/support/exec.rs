@@ -68,6 +68,18 @@ pub fn env() -> (GitExecutor, CancellationToken) {
     (isolated(), CancellationToken::new())
 }
 
+/// [`isolated`] with every commit and reflog line it writes dated `stamp`
+/// (`GIT_AUTHOR_DATE` / `GIT_COMMITTER_DATE`): writes made in one second on
+/// purpose, where a second boundary would decide the answer.
+pub fn dated(stamp: &str) -> GitExecutor {
+    let mut env = isolated_env();
+    env.push((OsString::from("GIT_AUTHOR_DATE"), OsString::from(stamp)));
+    env.push((OsString::from("GIT_COMMITTER_DATE"), OsString::from(stamp)));
+    GitExecutor::new()
+        .with_stock_timeout(super::wait::OVERALL_BUDGET)
+        .with_env(env)
+}
+
 /// The same pair, reporting every invocation to `observer`.
 ///
 /// `kept` is the caller's to say: a test of the command log wants

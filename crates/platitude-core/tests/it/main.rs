@@ -10,6 +10,7 @@ mod clone_integration;
 mod commit_integration;
 mod config_reads;
 mod details_diff;
+mod discards_integration;
 mod edge_strings;
 mod eol_integration;
 mod eol_setting_integration;

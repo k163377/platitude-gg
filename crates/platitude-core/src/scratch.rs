@@ -31,6 +31,30 @@ impl ScratchFile {
         Ok(Self { path })
     }
 
+    /// A fresh name in the same place with nothing there yet, for a file
+    /// git writes itself (a temporary index, `GIT_INDEX_FILE`) — gone with
+    /// the handle if git made it.
+    ///
+    /// The name is this process's own (its pid and count), so whatever is
+    /// there already — the file or git's `.lock` beside it — was left by a
+    /// process gone before this one took its pid, and goes: git would read a
+    /// stale index as where to start.
+    pub fn fresh(git_dir: &Path, tag: &str) -> std::io::Result<Self> {
+        let dir = git_dir.join(DIR_NAME);
+        std::fs::create_dir_all(&dir)?;
+        let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = dir.join(format!("{tag}-{}-{unique}", std::process::id()));
+        let mut lock = path.clone().into_os_string();
+        lock.push(".lock");
+        for left in [path.as_path(), Path::new(&lock)] {
+            match std::fs::remove_file(left) {
+                Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
+                _ => {}
+            }
+        }
+        Ok(Self { path })
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -64,8 +88,13 @@ impl ScratchFile {
 
 impl Drop for ScratchFile {
     fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_file(&self.path) {
-            tracing::debug!(path = %self.path.display(), %error, "scratch file not removed");
+        match std::fs::remove_file(&self.path) {
+            // A fresh name git never wrote to (`Self::fresh`).
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                tracing::debug!(path = %self.path.display(), %error, "scratch file not removed")
+            }
+            Ok(()) => {}
         }
     }
 }
@@ -84,6 +113,26 @@ mod tests {
             path
         };
         assert!(!path.exists(), "dropped handle removes the file");
+    }
+
+    /// What a process gone before this one left under the same name — the
+    /// file and its lock — is not there when the name is handed out.
+    #[test]
+    fn a_fresh_name_has_nothing_left_on_it() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let next = COUNTER.load(Ordering::Relaxed);
+        let left = dir.path().join(DIR_NAME);
+        std::fs::create_dir_all(&left).expect("dir");
+        for at in next..next + 64 {
+            let name = format!("index-{}-{at}", std::process::id());
+            std::fs::write(left.join(&name), b"stale").expect("leftover");
+            std::fs::write(left.join(format!("{name}.lock")), b"stale").expect("lock");
+        }
+        let fresh = ScratchFile::fresh(dir.path(), "index").expect("fresh");
+        assert!(!fresh.path().exists());
+        let mut lock = fresh.path().as_os_str().to_owned();
+        lock.push(".lock");
+        assert!(!Path::new(&lock).exists());
     }
 
     #[test]

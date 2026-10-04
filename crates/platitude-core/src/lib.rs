@@ -11,6 +11,7 @@ pub mod conflict;
 #[cfg(test)]
 mod conflict_tests;
 pub mod details;
+pub mod discards;
 pub mod eol;
 pub mod error;
 pub mod find;
