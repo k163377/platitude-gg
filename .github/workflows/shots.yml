@@ -1,0 +1,144 @@
+# The one OS no desk here has: verify-ui lines replayed on CI's macOS
+# runner, judged as a typed run is, and their pictures kept as an artifact
+# (.claude/skills/verify-ui/mac.md says how to read them). Offscreen, as
+# every verify-ui run is: CoreText's fonts and macOS's own code paths, not
+# the Cocoa window.
+name: Shots
+
+on:
+  # What the fonts decide, on every landing: the lines the container
+  # repeats before a merge (`linux` in crates/xtask/verb-tiers.txt). A
+  # landing that is Markdown alone starts nothing.
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  # Every line the full gate owes, once a week (Sunday 03:17 JST). GitHub
+  # turns a public repository's schedule off after 60 days with no
+  # activity in it; it is turned back on from the Actions page.
+  schedule:
+    - cron: "17 18 * * 6"
+  # Any lines, on any ref that is on GitHub.
+  workflow_dispatch:
+    inputs:
+      lines:
+        description: "verify-ui lines to run, ; between them (band; nav-tip branch:0)"
+        type: string
+        default: ""
+      tier:
+        description: "census lines to run besides: linux (what the fonts decide), merge, all"
+        type: choice
+        options: [none, linux, merge, all]
+        default: none
+      locale:
+        description: "the system language the app runs under"
+        type: choice
+        options: [ja, en]
+        default: ja
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  macos:
+    # A dispatch that names no line and no tier has nothing to run: skipped
+    # here, before a runner is stood up for it.
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.tier != 'none' || inputs.lines != '' }}
+    runs-on: macos-26
+    timeout-minutes: 300
+    env:
+      # A dispatch's own words reach a script as environment, never as text
+      # spliced into it. (Not LINES: a terminal's height, to what reads it.)
+      REPLAY_LINES: ${{ inputs.lines }}
+      REPLAY_TIER: ${{ github.event_name == 'push' && 'linux' || github.event_name == 'schedule' && 'all' || inputs.tier }}
+      REPLAY_LOCALE: ${{ inputs.locale || 'ja' }}
+    steps:
+      - name: Harden runner (egress allowlist)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+            pypi.org:443
+            files.pythonhosted.org:443
+            master.qt.io:443
+            download.qt.io:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rust toolchain
+        run: |
+          rustup update --no-self-update
+          rustup toolchain install --no-self-update
+      - name: Qt
+        uses: ./.github/actions/qt
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          env-vars: QMAKE
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+      # csrutil: whether SIP is on decides which way a build finds Qt's
+      # frameworks (.github/actions/qt), so the run says which it stood on.
+      - name: What this run builds and shoots with
+        run: |
+          sw_vers
+          csrutil status || true
+          rustc --version
+          git --version
+          qmake -query QT_VERSION
+
+      # Qt asks the system, not LANG, which language to shape text in; a
+      # runner comes up in English. Japanese unless a dispatch says
+      # otherwise: the desks and the container are Japanese machines.
+      - name: System language
+        run: |
+          case "${REPLAY_LOCALE}" in
+            en) language=en-US region=en_US ;;
+            *) language=ja-JP region=ja_JP ;;
+          esac
+          defaults write -g AppleLanguages -array "${language}"
+          defaults write -g AppleLocale -string "${region}"
+          defaults read -g AppleLanguages
+          defaults read -g AppleLocale
+
+      # A ceiling of its own, under the job's: a step out of time fails and
+      # the steps after it run in what the job has left, where a job out of
+      # time is cancelled.
+      - name: Replay
+        timeout-minutes: 270
+        run: >
+          cargo run --locked -p xtask -- replay
+          --tier "${REPLAY_TIER}" --line "${REPLAY_LINES}" --out "${RUNNER_TEMP}/shots"
+      # always(), for both steps below: the pictures a run took before it
+      # was cut short — out of time, or cancelled — are still wanted.
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          if [ -f "${RUNNER_TEMP}/shots/summary.md" ]; then
+            cat "${RUNNER_TEMP}/shots/summary.md" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+      # The pictures, the logs and a run's own account of where it stood
+      # (stations.txt, wedge.txt) — nothing else a run stood up beside them
+      # (its settings, a staged copy of git).
+      - name: Keep the pictures
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: shots-macos
+          path: |
+            ${{ runner.temp }}/shots/summary.md
+            ${{ runner.temp }}/shots/*.log
+            ${{ runner.temp }}/shots/*/*.png
+            ${{ runner.temp }}/shots/*/*.txt
+          retention-days: 30

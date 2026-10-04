@@ -67,4 +67,5 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 - 動詞を足す・直す・反復する → [implement.md](implement.md)(壊れない動詞の実装と反復)
 - hover・ツールチップ・カードの絵を撮る → [hover.md](hover.md)(hover の絵の撮り方(仮表示))
 - Linux(コンテナ)で撃つ → [linux.md](linux.md)(Linux(コンテナ)での動確 — Done は両 OS)
+- macOS(CI の runner)で撃つ・mac の絵を読む → [mac.md](mac.md)(macOS での動確 — 机が無いので CI の runner が撃つ)
 - Windows での起動・デバッグ → [windows.md](windows.md)(Windows での実行・デバッグの罠)
