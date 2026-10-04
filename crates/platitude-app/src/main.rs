@@ -276,6 +276,7 @@ fn main() {
     qrc::embed!("ui/SettingsRepoPane.qml");
     qrc::embed!("ui/SettingsSection.qml");
     qrc::embed!("ui/SharedToolTip.qml");
+    qrc::embed!("ui/ShoulderBadge.qml");
     qrc::embed!("ui/SidebarFilterRow.qml");
     qrc::embed!("ui/SidebarPane.qml");
     qrc::embed!("ui/SidebarRowGestures.qml");

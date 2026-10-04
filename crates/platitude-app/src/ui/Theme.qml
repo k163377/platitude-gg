@@ -122,6 +122,9 @@ QtObject {
     readonly property int iconMd: 16
     readonly property int iconLg: 20
     readonly property int iconXl: 24
+    // Not a step: what a mark on another's shoulder never shrinks under. Its size is worked out from the mark it sits
+    // on — half of it — so the sixth number is this floor alone (`ShoulderBadge`; デザイン規約 §寸法 の右肩の印).
+    readonly property int iconBadgeMin: 8
 
     // ================================================================
     // 2. ベーシック(通常モードの窓 — その中に立つダイアログ・メニューも読む)

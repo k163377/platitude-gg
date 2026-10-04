@@ -189,6 +189,7 @@ SettingsGroup 1.0 SettingsGroup.qml
 SettingsRepoPane 1.0 SettingsRepoPane.qml
 SettingsSection 1.0 SettingsSection.qml
 SharedToolTip 1.0 SharedToolTip.qml
+ShoulderBadge 1.0 ShoulderBadge.qml
 SidebarFilterRow 1.0 SidebarFilterRow.qml
 SidebarPane 1.0 SidebarPane.qml
 SidebarRowGestures 1.0 SidebarRowGestures.qml

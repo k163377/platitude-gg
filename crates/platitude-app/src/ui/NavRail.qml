@@ -181,35 +181,21 @@ Rectangle {
                         // the mark's own air is the gap (§余白).
                         width: Theme.iconXl
                         height: Theme.iconXl
-                        // The TAGS header's eye (NavHeader) on the corner, in both states — struck through when off —
-                        // since a badge in one state only reads as absent in the other. Not on an empty section
-                        // (規約 §無効).
-                        NavIcon {
+                        // The TAGS header's eye (NavHeader) on the shoulder, in both states — struck through when
+                        // off — since a badge in one state only reads as absent in the other. Not on an empty section
+                        // (規約 §無効). A `spaceXs` in and up from the corner: centred on it, half the badge would sit
+                        // in the cell above (デザイン規約 §左メニューを畳む).
+                        ShoulderBadge {
                             visible: cell.taggable && !cell.empty
                             kind: rail.tagsShown ? "eye" : "eye-off"
                             tint: sectionIcon.tint
-                            width: Theme.iconSm
-                            height: Theme.iconSm
-                            // A `spaceXs` in and up from the corner: centred on it, half the badge would sit in the
-                            // cell above (デザイン規約 §左メニューを畳む).
-                            anchors.horizontalCenter: parent.right
-                            anchors.horizontalCenterOffset: -Theme.spaceXs
-                            anchors.top: parent.top
-                            anchors.topMargin: -Theme.spaceXs
                         }
-                        // The band's `+` (NavHeader), while the section is empty; it keeps the section's colour over
-                        // the greyed mark (規約 §無効).
-                        NavIcon {
+                        // The band's `+` (NavHeader), while the section is empty, in the eye's seat; it keeps the
+                        // section's colour over the greyed mark (規約 §無効).
+                        ShoulderBadge {
                             visible: cell.addable
                             kind: "plus"
                             tint: cell.addLive ? cell.modelData.tint : Theme.textMuted
-                            width: Theme.iconSm
-                            height: Theme.iconSm
-                            // The eye's seat exactly (規約 §左メニューを畳む).
-                            anchors.horizontalCenter: parent.right
-                            anchors.horizontalCenterOffset: -Theme.spaceXs
-                            anchors.top: parent.top
-                            anchors.topMargin: -Theme.spaceXs
                         }
                     }
                     // Caption and count at once, so the caption's colour (NavHeader).
