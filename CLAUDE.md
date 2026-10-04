@@ -52,7 +52,7 @@
 
 - **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**。残作業と要判断は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読む**。配布準備期の検証項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 - 性能 4 項目は net で予算内。**メモリだけ gross が予算の縁を越える**(正体は絵文字 1 文字が呼ぶフォントのフォールバック探索。数値と読み方は [実測記録](ci/baseline/perf-windows-x64.md))。改善の残件は P3-確認事項 §性能
-- CI(3OS + 完全オフライン job、mac の撮影 `shots.yml`)は記述済み・**未実行(push で走る)**。初回検証は P5-確認事項 §3.5 / §3.6。mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ(mac の絵は verify-ui スキル mac.md)、実機検証は Phase 5 ゲート
+- CI(3OS + 完全オフライン job、mac の撮影 `shots.yml`)は **main への push で走る**。runner の上で分かっている事と残りは P5-確認事項 §3.5 / §3.6。mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ(mac の絵は verify-ui スキル mac.md)、実機検証は Phase 5 ゲート
 
 ## 規約の置き場所と本ファイルの運用
 
