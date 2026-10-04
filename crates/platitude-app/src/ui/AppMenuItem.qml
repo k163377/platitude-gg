@@ -101,9 +101,13 @@ MenuItem {
     readonly property string blockedWhy:
         menuItem.blockedReason !== "" ? menuItem.blockedReason : menuItem.menuHeldReason
     readonly property bool blocked: menuItem.blockedWhy !== ""
-    /// A working copy's folder inside that line; the shared tooltip stands the tree mark against it
-    /// (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別).
-    property string tipMarkWord: ""
+    /// A working copy's folder inside the row's own reason (`blockedReason`); empty for none.
+    property string reasonMarkWord: ""
+    /// The word the shared tooltip stands the tree mark against (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別
+    /// 「ツールチップだけは字の中」): the folder in the reason, or the folder this row names behind the tree mark, which the
+    /// hover gives back whole when it is cut.
+    readonly property string tipMarkWord: menuItem.blocked ? menuItem.reasonMarkWord
+                                        : menuItem.nameMark === "tree" ? menuItem.markName : ""
 
     /// Automation: show the tooltip with no pointer behind it, through the binding the hover drives
     /// (verify-ui §hover の絵の撮り方).
@@ -222,11 +226,11 @@ MenuItem {
                      && (menuItem.blocked || itemLabel.truncated
                          || (menuItem.namesMark && markNameLabel.truncated))
     ToolTip.delay: Metrics.tipDelayMs
-    // The whole line, marked name included — a cut name is what the hover is there to give back.
+    // The whole line, marked name included — a cut name is what the hover is there to give back, behind a chip too
+    // (`worktree remove`).
     ToolTip.text: menuItem.blocked ? menuItem.blockedWhy
-                : menuItem.code !== "" ? menuItem.code + " " + menuItem.text
-                : menuItem.namesMark ? menuItem.text + " " + menuItem.markName
-                : menuItem.text
+                : [menuItem.code, menuItem.text, menuItem.namesMark ? menuItem.markName : ""]
+                  .filter(words => words !== "").join(" ")
 
     // The hold mark, in the seat `holdIndent` leaves on every row (デザイン規約 §長押し).
     HoldIcon {

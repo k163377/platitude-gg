@@ -113,9 +113,12 @@ Item {
             compare(menu.switchItem.markName, "topic")
             compare(menu.switchItem.nameMark, "tree")
             verify(menu.switchItem.namesMark)
+            compare(menu.switchItem.ToolTip.text, "Open topic", "a cut folder comes back whole on the hover")
+            compare(menu.switchItem.tipMarkWord, "topic", "behind the mark it wears on the row")
             root.aimAt({ canSwitch: true })
             compare(menu.switchItem.code, "switch", "an ordinary move is the command it runs")
             verify(!menu.switchItem.namesMark)
+            compare(menu.switchItem.tipMarkWord, "")
         }
 
         /// Which kind the press is sent as is this file's alone, and the two roads part on it

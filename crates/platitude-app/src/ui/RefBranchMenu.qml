@@ -214,7 +214,7 @@ AppMenu {
                      : state.heldByWorktree !== "" ? branchCard.blockedByWorktree
                      : branchCard.deleteBlockedWhileBusy
         // Asked of the sentence this row shows, not of the state: a row blocked for another reason names no copy.
-        tipMarkWord: refDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
+        reasonMarkWord: refDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
         holdMs: heldRow ? Metrics.holdMs : 0
         // A branch's plain delete keeps the menu up: git's answer lands on this row.
         staysOpen: branchRow
@@ -276,7 +276,7 @@ AppMenu {
                      : state.remoteDrifted ? Words.differsFrom(state.remoteCounterpart)
                      : branchCard.deleteBlockedWhileBusy
         // As on the local row.
-        tipMarkWord: refBothDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
+        reasonMarkWord: refBothDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
         holdMs: Metrics.holdMs
         // Danger once the local half runs as `-D`: it throws away commits that live nowhere else (デザイン規約 §状態).
         holdTone: refBothDeleteItem.forces ? Theme.danger : Theme.warning
