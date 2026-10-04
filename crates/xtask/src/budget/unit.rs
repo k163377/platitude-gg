@@ -133,7 +133,7 @@ impl Admitted {
 /// what it started without a parameter threaded down to it.
 ///
 /// Only a command that is itself one unit sets it. A runner of steps (the
-/// gate, `check`) holds many tickets from a [`Pool`] and records through
+/// gate, `check`, `replay`) holds many tickets from a [`Pool`] and records through
 /// each step's own (`check::run_step`); through [`standalone`] its later
 /// steps would write at a ticket already taken down.
 static MINE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
@@ -196,11 +196,11 @@ pub(crate) const HELD: &str = "PGG_BUDGET_HELD";
 /// container command, `shipped`).
 ///
 /// Tickets are taken only at a runner's steps (`gate::step::run_one`,
-/// `gate::runner`, `check::run_side`) and at the top of a standalone
-/// command; everything below carries its parent's ([`under`]). That is
-/// answered before looking for a repository: inside a container there may
-/// be no road to the ledger. Nothing nests inside a standalone ticket, so
-/// no unit is counted twice.
+/// `gate::runner`, `check::run_side`, `replay::run_line`) and at the top
+/// of a standalone command; everything below carries its parent's
+/// ([`under`]). That is answered before looking for a repository: inside a
+/// container there may be no road to the ledger. Nothing nests inside a
+/// standalone ticket, so no unit is counted twice.
 pub(crate) fn standalone(
     tree: &Path,
     weight: u32,

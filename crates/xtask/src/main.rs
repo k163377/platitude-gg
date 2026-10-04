@@ -28,6 +28,7 @@ mod png;
 mod qmltest;
 mod qt;
 mod reap;
+mod replay;
 mod seats;
 mod shipped;
 mod shots;
@@ -63,6 +64,7 @@ fn main() -> ExitCode {
             println!("{}", path.display());
         }),
         Some("verify-ui") => verify::run(&args[1..]),
+        Some("replay") => replay::run(&args[1..]),
         Some("verbs") => verify::verbs(&args[1..]),
         Some("wedge-check") => verify::wedge_check(&args[1..]),
         Some("corpus") => corpus::run(&args[1..]),

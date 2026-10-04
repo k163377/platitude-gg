@@ -31,6 +31,7 @@ linux.verify
 linux.witness
 perf.measure
 qmltest.run
+replay.lines
 seat.release
 seat.roster
 seat.take

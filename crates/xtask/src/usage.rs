@@ -227,7 +227,33 @@ commands:
 ";
 
 // No `"\` continuation on the opening line (see `demo_repo`).
-const TAIL: &str = "  shipped [--no-build]
+const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line>']...
+         [--out <dir>] [--no-build]
+      Runs verify-ui lines again on the machine this stands on, one after
+      another, and gathers every run's pictures and log under one
+      directory with a summary.md beside them — what CI's macOS job runs
+      (.github/workflows/shots.yml), where no gate stands and the
+      pictures have to travel to be looked at. Each line is one
+      verify-ui, judged as a typed run is; the lines build the release
+      until one has gone green and the rest reuse it. A red line stops
+      none of the others, unless what went red is the build they all
+      read: the lines left are then named in the summary, not run.
+      Nothing here writes the census or the board.
+      options:
+        --tier <t>    the census lines to run: linux (the tier table's
+                      rows judged on what the fonts decide), merge (every
+                      line a gate owes before a merge), all (every line
+                      the full gate owes); none takes no census line
+        --line <l>    a line to run besides, as it would follow verify-ui;
+                      one value may hold several with ; between them
+        --out <dir>   where the pictures and logs go: a directory that
+                      holds nothing yet, which replay never empties.
+                      Left out, it is this tree's target/replay, taken
+                      down and stood up again by every run, one run at a
+                      time
+        --no-build    reuse the release already built
+
+  shipped [--no-build]
       Starts the build nobody else here makes: `cargo build --profile
       shipped` (target/shipped/) with no features, which is the one
       without the verification harness. Offscreen, bounded, reaped — a
