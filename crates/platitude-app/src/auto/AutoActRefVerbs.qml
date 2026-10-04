@@ -326,6 +326,7 @@ Item {
             Harness.report(
             "delete_blocked code=" + acts.blockedTipRow.code
             + " tip=" + acts.blockedTipRow.ToolTip.visible
+            + " aside=" + driver.tipAside(acts.blockedTipRow.ToolTip.toolTip)
             // The holding copy's folder (`RefBranchMenu.holderLeaf`), empty on other rows — the sentence itself is
             // tst_branchcard's to judge.
             + " holder=" + refBranchCard.holderLeaf

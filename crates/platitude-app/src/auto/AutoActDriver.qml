@@ -99,6 +99,14 @@ Item {
         }
         return -1
     }
+    /// Whether the shared tooltip stands clear of its target sideways — beside the row rather than over the rows
+    /// above and below it (規約 §hover のツールチップ「行の的は、行の横に立つ」). Read off the instance's drawn seat, not the rule.
+    function tipAside(tip) {
+        const at = tip.parent
+        if (at === null || !tip.visible)
+            return false
+        return tip.x + tip.width <= 0 || tip.x >= at.width
+    }
     /// Where a TAG card's rows reach, in the one report line both entrances' verbs say it with
     /// (`AutoActRefVerbs.reachWords`).
     function tagReachWords(card) {

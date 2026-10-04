@@ -106,7 +106,7 @@ pub(super) const TABLE: &[Verb] = &[
             // the remote the row would reach (`Words.differsFrom`).
             (
                 Arg::Ends(":drift:tip"),
-                "delete_blocked code=push --delete tip=true holder= reason=Differs from origin",
+                "delete_blocked code=push --delete tip=true aside=true holder= reason=Differs from origin",
             ),
             // One reading, both halves in one line: the push row's second
             // form, and the two rows reaching the remote name greyed

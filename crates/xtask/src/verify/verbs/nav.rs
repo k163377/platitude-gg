@@ -196,21 +196,21 @@ pub(super) const TABLE: &[Verb] = &[
             // sentence names that reading, so the row is this one run.
             (
                 Arg::Is(":remote"),
-                "delete_blocked code=push --delete tip=true holder= \
+                "delete_blocked code=push --delete tip=true aside=true holder= \
                  reason=Differs from origin/main",
             ),
             (
                 Arg::Ends(":remote"),
-                "delete_blocked code=push --delete tip=true holder= reason=Differs from ",
+                "delete_blocked code=push --delete tip=true aside=true holder= reason=Differs from ",
             ),
             // `holder=` is the folder of the copy holding this branch —
             // the witness that the card looked the copy up.
             (
                 Arg::Is("feature/topic-a"),
-                "delete_blocked code=branch --delete tip=true holder=topic",
+                "delete_blocked code=branch --delete tip=true aside=true holder=topic",
             ),
         ],
-        plain: "delete_blocked code=branch --delete tip=true",
+        plain: "delete_blocked code=branch --delete tip=true aside=true",
     },
     // A working copy's WORKTREE card, raised from its WORKTREES row. The
     // picture shows a greyed row; only the line says it is out rather
@@ -307,15 +307,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[
             (
                 Arg::Is("carried:topic-tree"),
-                "path_tip pane=carried tree=true tip=true text=src",
+                "path_tip pane=carried tree=true tip=true aside=true text=src",
             ),
             (
                 Arg::Is("carried:topic"),
-                "path_tip pane=carried tree=false tip=true text=src/topic.txt",
+                "path_tip pane=carried tree=false tip=true aside=true text=src/topic.txt",
             ),
-            (Arg::Ends("-tree"), "tree=true tip=true"),
+            (Arg::Ends("-tree"), "tree=true tip=true aside=true"),
         ],
-        plain: "tree=false tip=true",
+        plain: "tree=false tip=true aside=true",
     },
     // The same tooltip copied: `copied=` is the whole tip read back out of
     // a selection on it, false the moment the words stop being a field (a
@@ -350,9 +350,9 @@ pub(super) const TABLE: &[Verb] = &[
         name: "nav-tip",
         when: &[(
             Arg::Is("branch:2"),
-            "lit=true wants=true tip=true open=false text=team/backend",
+            "lit=true wants=true tip=true open=false aside=true text=team/backend",
         )],
-        plain: "lit=true wants=true tip=true",
+        plain: "lit=true wants=true tip=true open=false aside=true",
     },
     // Where one click on a left-panel row leads. The window opens with a
     // row already lit, so a graph that jumped and one that never moved

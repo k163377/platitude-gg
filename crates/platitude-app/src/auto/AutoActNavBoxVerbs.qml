@@ -791,6 +791,8 @@ Item {
                    : "")
                 // Whether what opened is inside what the list shows (true wherever there was room under the row).
                 + (navTipTimer.opens ? " shown=" + navProbe.rowFactsShown() : "")
+                // Off its rows (`AutoActDriver.tipAside`); after the fold and the facts, which read as one run each.
+                + " aside=" + driver.tipAside(tip)
                 + " text=" + (tip.visible ? tip.text : "")
                 // After a text that may carry anything, so the judged four above stay one substring.
                 + (navTipTimer.opens ? " seat=" + sidebarPane.rowFactsGeom() : "")
