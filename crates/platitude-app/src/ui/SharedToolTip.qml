@@ -93,10 +93,18 @@ Item {
         tip.margins = -1
         // The style's policy reads a press on the tip — a selection starting — as a press outside the target.
         tip.closePolicy = Popup.CloseOnEscape
-        // Bindings: a popup is not its final size in the frame it gets its words, and assigned, a tip above its
-        // target would come out one tip too low (rules-refs/app-ui.md「出す前に採寸する」).
-        tip.x = Qt.binding(shared.seatX)
-        tip.y = Qt.binding(shared.seatY)
+        shared.seat()
+    }
+
+    /// Binds the seat, again at every coming out (`freeze`). Bindings: a popup is not its final size in the frame it
+    /// gets its words, and assigned, a tip above its target would come out one tip too low
+    /// (rules-refs/app-ui.md「出す前に採寸する」). Again: where the target stands is a call (`targetAt`) they do not
+    /// follow, so a target moved while its box was down, under a hand back on the column it rested on (the row, for a
+    /// box beside its target), changes nothing they read, and the box would come out where the target stood when they
+    /// last ran. Not for a box the beat puts back (`reopen`): the hand may be walking into it where it stands.
+    function seat() {
+        shared.sharedTip.x = Qt.binding(shared.seatX)
+        shared.sharedTip.y = Qt.binding(shared.seatY)
     }
 
     /// The target asks for the tip beside it, not over its own words (`NavRowFacts`). Read off the target like
@@ -127,7 +135,7 @@ Item {
     }
 
     /// The target's top-left in `host` coordinates. A method, so nothing binds to it — the seat moves with the sizes
-    /// and the anchor.
+    /// and the anchor, and is read against the target's place again each time a box comes out (`seat`).
     function targetAt() {
         const at = shared.sharedTip.parent
         return at !== null ? at.mapToItem(shared.host, 0, 0) : Qt.point(0, 0)
@@ -211,6 +219,7 @@ Item {
         keep.stop()
         shared.standing = shared.sharedTip.parent
         shared.readAnchor()
+        shared.seat()
         Qt.callLater(shared.settleAnchor)
     }
     function settleAnchor() {

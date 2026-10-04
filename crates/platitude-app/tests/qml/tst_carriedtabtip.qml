@@ -190,6 +190,7 @@ Item {
             const tab = tabs.itemAtIndex(0)
             const at = tipOnFirstTab()
             verify(shared.sharedTip.width < tab.width, "a box narrower than its tab, so it stands on the hand")
+            verify(boxOff(at.x) <= 1, "the first box stands on the hand that rested: " + boxOff(at.x) + " off")
             // Slow enough that the carried tab still covers the press point a beat after the taking up.
             takeUp(at, 6)
             const rested = heldAt

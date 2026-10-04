@@ -76,11 +76,20 @@ Item {
         function init() {
             // A corner neither row reaches, and the beat the box leaves on.
             mouseMove(root, root.width - 1, root.height - 1)
-            tryVerify(() => !shared.sharedTip.visible, undefined, "each walk starts with nothing out")
+            // Not only down: a box that fell is put back a turn later (`SharedToolTip.reopen`), so "down" alone can be
+            // read in that gap.
+            tryVerify(() => !shared.sharedTip.visible && !shared.keeping, undefined,
+                      "each walk starts with nothing out")
         }
 
         function middleOf(row) {
             return row.y + row.height / 2
+        }
+
+        /// How far the box's middle stands off `x`, in the window.
+        function boxOff(x) {
+            const ground = shared.sharedTip.background
+            return Math.abs(ground.mapToItem(root, ground.width / 2, 0).x - x)
         }
 
         // Qt would hand the box to a neighbour for free; every target waits its own rest instead
@@ -139,6 +148,28 @@ Item {
             mouseMove(root, aside.x + tip.x + tip.width / 2, at)
             tryVerify(() => shared.pointed && tip.visible, undefined,
                       "a hand that only went sideways is inside the box, and the box is still out")
+        }
+
+        // A target that moved while its box was down, under a hand back on the pixel it rested on: nothing the seat's
+        // bindings read has changed, and the box still comes out on the hand, not where the row stood the last time
+        // (デザイン規約 §hover のツールチップ「手の傍に」).
+        function test_e_a_box_comes_out_against_where_its_target_stands_now() {
+            const tip = shared.sharedTip
+            const at = Qt.point(150, middleOf(rowA))
+            mouseMove(root, at.x, at.y)
+            tryVerify(() => tip.visible && tip.parent === rowA, undefined, "the rest on the row opens its box")
+            verify(tip.width < rowA.width, "a box narrower than its row, so it stands on the hand")
+            verify(boxOff(at.x) <= 1, "on the hand: " + boxOff(at.x) + " off")
+            mouseMove(root, root.width - 1, root.height - 1)
+            tryVerify(() => !tip.visible && !shared.keeping, undefined, "down once the hand has gone, and let go")
+            try {
+                rowA.x = 40
+                mouseMove(root, at.x, at.y)
+                tryVerify(() => tip.visible && tip.parent === rowA, undefined, "out again on the row that moved")
+                verify(boxOff(at.x) <= 1, "on the hand again, with the row's move taken in: " + boxOff(at.x) + " off")
+            } finally {
+                rowA.x = 0
+            }
         }
     }
 }
