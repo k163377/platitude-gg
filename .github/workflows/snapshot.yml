@@ -1,0 +1,83 @@
+# A snapshot of the app for a Mac, by hand: the full test of the commit,
+# and beside it the bundle `cargo xtask package` makes, kept as this run's
+# artifact. Not a release (P5-確認事項 §3.5): no notices of the bundled
+# licences travel with it and no Apple identity signs it, so what the run
+# keeps is a DMG only the password opens — whoever can read a run of this
+# public repository can take its files.
+name: Snapshot build (macOS, not a release)
+run-name: Snapshot · ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # The run's verdict on the commit. The bundle does not wait for it: the
+  # census on macOS takes the most of an hour, and one red line there
+  # would keep a bundle from being looked at.
+  full:
+    uses: ./.github/workflows/full.yml
+
+  package:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Harden runner (egress allowlist)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+            pypi.org:443
+            files.pythonhosted.org:443
+            master.qt.io:443
+            download.qt.io:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rust toolchain
+        run: rustup toolchain install --no-self-update
+      - name: Qt
+        uses: ./.github/actions/qt
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          env-vars: QMAKE
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+      - name: What this run builds and packages with
+        run: |
+          sw_vers
+          rustc --version
+          qmake -query QT_VERSION
+
+      # The password reaches the command as a variable it names, never as
+      # text on its line.
+      - name: Package
+        env:
+          SNAPSHOT_DMG_PASSWORD: ${{ secrets.SNAPSHOT_DMG_PASSWORD }}
+        run: >
+          cargo run --locked -p xtask -- package
+          --out "${RUNNER_TEMP}/package" --password-from SNAPSHOT_DMG_PASSWORD
+      # As the file it is, not zipped again: the artifact is the .dmg, named
+      # after it.
+      - name: Keep the DMG
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          path: ${{ runner.temp }}/package/*.dmg
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
