@@ -217,13 +217,12 @@ Item {
         }
         facts.row.rowPressed(button, modifiers)
     }
-    /// The menu asked for on line `row` (-1 for none of them). It is the row's, and keeps these lines up: they are
-    /// what it is about (デザイン規約 §左メニューの所作). A line naming a remote on its own — a TAGS row's carrier
-    /// (`NavFacts.carrierLine`'s `aim`) — hands that remote to the menu to act on. What a right-click calls, and the
-    /// one way in for a run (PGG_AUTO_ACT=tag-line-menu).
+    /// The menu asked for on line `row` (-1 for none of them). It is the row's, which keeps these lines up as it does
+    /// for its own line: they are what it is about (`NavItemDelegate.rowPressed`). A line naming a remote on its own
+    /// — a TAGS row's carrier (`NavFacts.carrierLine`'s `aim`) — hands that remote to the menu to act on. What a
+    /// right-click calls, and the one way in for a run (PGG_AUTO_ACT=tag-line-menu).
     function lineMenu(row, modifiers) {
         const aim = row >= 0 && row < facts.lines.length ? (facts.lines[row].aim || "") : ""
-        facts.row.factsMenuAsked()
         facts.row.rowPressed(Qt.RightButton, modifiers === undefined ? Qt.NoModifier : modifiers, aim)
     }
     /// Which line a point is on, in this item's coordinates — each line's seat and half the gap either side — or -1.

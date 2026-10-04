@@ -224,11 +224,15 @@ QtObject {
         gestures.handMoves++
     }
 
-    /// A menu raised from the open row's own lines, which keeps them open — it is about that row. Every other menu
-    /// closes them, or they would move rows under the hand reading the menu.
+    /// A menu raised on the open row — its own line or its lines — which keeps it open: it is about that row. Every
+    /// other menu closes it, or it would move rows under the hand reading the menu.
     property bool menuFromFacts: false
     function noteMenuFromFacts() {
         gestures.menuFromFacts = true
+    }
+    /// The menu so noted did not open (`NavItemDelegate.rowPressed`): nothing will close to clear the note.
+    function dropMenuFromFacts() {
+        gestures.menuFromFacts = false
     }
     /// Nothing opens over a name box or under a menu: opening moves the rows under both (デザイン規約 §左メニューの所作).
     onEditKeyChanged: if (gestures.editKey !== "") gestures.openKey = ""

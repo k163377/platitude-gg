@@ -16,7 +16,7 @@ Item {
     property int presses: 0
     property int doubles: 0
 
-    /// The four calls the part makes of its row.
+    /// The three calls the part makes of its row.
     Item {
         id: stubRow
         function followFact(to) {
@@ -27,8 +27,6 @@ Item {
         }
         function rowDoubled(button) {
             root.doubles++
-        }
-        function factsMenuAsked() {
         }
     }
 

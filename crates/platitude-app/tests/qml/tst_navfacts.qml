@@ -448,6 +448,39 @@ Item {
             row.destroy()
         }
 
+        /// A menu raised on the open row is one about it, which keeps it open (`factsMenuAsked`) — from the row's own
+        /// line under a real right-click as from its lines; a closed row's menu is any other menu. Said once per menu
+        /// (the lines go through the same press), and before the ask.
+        function test_a_menu_raised_on_the_open_row_keeps_it_open() {
+            root.sectionUpstream = ""
+            root.copyHolding = ""
+            const row = root.openRow(root.rowOf({ "kindHint": "branch", "name": "solo", "full": "solo",
+                                                  "oid_hex": "e5" }))
+            verify(row.factsItem !== null)
+            let menus = 0
+            let kept = 0
+            // What had been said when the ask went up: the menu's opening is what reads the note
+            // (`SidebarRowGestures.onMenuOpenChanged`), so a note after the ask comes too late.
+            let keptAtAsk = -1
+            row.refMenuRequested.connect(() => {
+                menus++
+                keptAtAsk = kept
+            })
+            row.factsMenuAsked.connect(() => kept++)
+            mouseClick(row, row.width / 2, row.lineHeight / 2, Qt.RightButton)
+            compare(menus, 1, "the menu, off the row's own line")
+            compare(kept, 1, "raised on the open row")
+            compare(keptAtAsk, 1, "said before the ask")
+            row.factsItem.lineMenu(-1)
+            compare(menus, 2, "the menu, off its lines")
+            compare(kept, 2, "raised on the open row, once")
+            row.openKey = ""
+            mouseClick(row, row.width / 2, row.lineHeight / 2, Qt.RightButton)
+            compare(menus, 3, "a closed row's menu")
+            compare(kept, 2, "keeps nothing open")
+            row.destroy()
+        }
+
         /// A name only a remote has has no copy here to weigh, so nothing is asked and its grey stays.
         function test_a_tag_only_a_remote_has_weighs_no_copy_here() {
             root.sectionCarried = [{ "remote": "fork", "apart": false }]

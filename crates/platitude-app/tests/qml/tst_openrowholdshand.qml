@@ -19,6 +19,17 @@ Item {
 
     /// Empty leaves the line going nowhere; a commit makes it a target (`NavFacts.place`), which lays a band over it.
     property string readingAt: ""
+    /// The page's menu, cut down: raised at the hand by the row's ask (`RepoPage.openRefMenu`) unless nothing is on
+    /// offer (`refuse`, as `AppMenu.offer` with an empty menu), and whether the row said it was raised on it while open
+    /// (`SidebarRowGestures.menuFromFacts`, which goes with the menu).
+    property bool refuse: false
+    property bool menuFromRow: false
+    Popup {
+        id: menu
+        width: 160
+        height: Theme.rowHeight * 6
+        onClosed: root.menuFromRow = false
+    }
 
     // Stand-ins that give the row one line to walk into; the table itself is read in `tst_navfacts.qml`.
     QtObject {
@@ -97,6 +108,17 @@ Item {
             handMoves: panel.handMoves
             // `SidebarRowGestures.openFacts` / `closeFacts`, cut down: the key the row hands up becomes the open one.
             onFactsAsked: (open, at) => row.openKey = open ? row.rowKey : ""
+            menuStanding: menu.visible
+            menuOnOpenRow: menu.visible && root.menuFromRow
+            onFactsMenuAsked: root.menuFromRow = true
+            onFactsMenuRefused: root.menuFromRow = false
+            onRefMenuRequested: {
+                if (root.refuse)
+                    return
+                menu.x = panel.handAt.x
+                menu.y = panel.handAt.y
+                menu.open()
+            }
         }
     }
 
@@ -106,13 +128,16 @@ Item {
         when: windowShown
 
         /// Built per case and taken down however the case ended — a leftover row is what the next case's hand would
-        /// land on.
+        /// land on, and a leftover menu takes the hand off every row under it.
         property Item row: null
         function init() {
             root.readingAt = ""
+            root.refuse = false
             testCase.row = rowMaker.createObject(panel)
         }
         function cleanup() {
+            menu.close()
+            root.menuFromRow = false
             testCase.row.destroy()
             testCase.row = null
         }
@@ -175,6 +200,54 @@ Item {
             verify(row.factsItem.lineAimed(0), "on the line, the line is lit")
             compare(row.pointed, true, "and the hand on it is the hand on the row")
             compare(row.factsOpen, true, "so the lines stay out under it")
+        }
+
+        /// A menu raised on the open row is about it (デザイン規約 §左メニューの所作): the hand going into the menu and
+        /// down it, past the row's foot, has not left the row while the menu stands. Once the menu goes, the hand
+        /// decides again — here it is off the row, which closes.
+        function test_a_menu_raised_on_the_open_row_holds_it_while_it_stands() {
+            const row = testCase.row
+            row.oid_hex = "0de"
+            const x = panel.width / 2
+            mouseMove(panel, x, Theme.rowHeight / 2)
+            tryCompare(row, "factsOpen", true, undefined, "the row opens under the hand")
+            tryVerify(() => row.factsItem !== null && row.factsItem.height > 0, undefined, "and its lines stand")
+
+            mouseClick(panel, x, Theme.rowHeight / 2, Qt.RightButton)
+            verify(menu.visible, "the right-click on the row's own line raised its menu")
+            const heard = panel.handMoves
+            mouseMove(panel, x + Theme.spaceSm, Theme.rowHeight / 2 + Theme.spaceSm)
+            mouseMove(panel, x + Theme.spaceSm, row.height + Theme.rowHeight)
+            // A row with nothing to say on a rest lets go the turn its hover is read (`pointFacts`), so that turn is
+            // the answer.
+            testCase.turnPassed()
+            compare(row.factsOpen, true, "the row the menu is about stays open under it")
+            verify(panel.handMoves > heard, "with the panel hearing the hand move, so the row was asked again")
+
+            menu.close()
+            tryCompare(row, "factsOpen", false, undefined, "once the menu goes, the hand off the row closes it")
+        }
+
+        /// A menu asked for on the open row that does not open (nothing on offer) leaves no note behind: the next menu,
+        /// raised elsewhere, holds nothing open, and the hand leaving the row closes it as usual.
+        function test_a_refused_menu_leaves_nothing_holding_the_row() {
+            const row = testCase.row
+            row.oid_hex = "0de"
+            const x = panel.width / 2
+            mouseMove(panel, x, Theme.rowHeight / 2)
+            tryCompare(row, "factsOpen", true, undefined, "the row opens under the hand")
+
+            root.refuse = true
+            mouseClick(panel, x, Theme.rowHeight / 2, Qt.RightButton)
+            verify(!menu.visible, "nothing was on offer, so no menu stands")
+            compare(root.menuFromRow, false, "and the ask took its note back")
+
+            // A menu raised elsewhere, away from the row; the hand goes there.
+            menu.x = Theme.spaceSm
+            menu.y = row.height + Theme.rowHeight
+            menu.open()
+            mouseMove(panel, x, row.height + Theme.rowHeight * 2)
+            tryCompare(row, "factsOpen", false, undefined, "the row closes as the hand leaves it")
         }
     }
 }

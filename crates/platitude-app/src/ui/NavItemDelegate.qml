@@ -43,6 +43,9 @@ Item {
     property bool pointed: false
     /// A right-click menu of the page's is standing over this list.
     property bool menuStanding: false
+    /// That menu was raised on the panel's open row (`SidebarRowGestures.menuFromFacts`) — held by the gestures, since
+    /// the delegate showing that row may be another by the time it goes.
+    property bool menuOnOpenRow: false
     property string kindHint: "branch"
     /// The remote pushes go to, empty where none is marked (`RepoTab.pushDefault`).
     property string markedRemote: ""
@@ -243,7 +246,7 @@ Item {
     /// The one spelling of "the hand is on this row", for both roads to it (the count, and the event).
     function syncHover() {
         navRow.handOn = rowHover.hovered || navRow.factsPointed
-        navRow.pointed = navRow.handOn || navRow.factsTipOut
+        navRow.pointed = navRow.handOn || navRow.factsTipOut || navRow.factsMenuOut
     }
     /// The hand itself on this row's line or its open lines. **Unlike `pointed`, a standing tip does not count**: the
     /// light stays while the tip does, but what asks for the tip must not, or the tip would hold itself up for good.
@@ -257,6 +260,11 @@ Item {
     /// target away (デザイン規約 §hover のツールチップ).
     readonly property bool factsTipOut: factsSeat.item ? factsSeat.item.tipShown : false
     onFactsTipOutChanged: Qt.callLater(navRow.syncHover)
+    /// Whether the menu standing was raised on this row while open (`rowPressed`). **The row is still the one being
+    /// read**, as with its tip: the menu takes the pointer off the row, and the row reading that as the hand gone would
+    /// shrink from under the menu about it (デザイン規約 §左メニューの所作). Once the menu goes, the hand decides again.
+    readonly property bool factsMenuOut: navRow.factsOpen && navRow.menuOnOpenRow
+    onFactsMenuOutChanged: Qt.callLater(navRow.syncHover)
     /// Whether this row holds the wait the name box opens after, and whether a click now would still count as a
     /// double-click's second half — read by headless runs. Both are the sidebar's gesture's answer
     /// (`SidebarRowGestures`).
@@ -468,9 +476,18 @@ Item {
                         || navRow.kindHint === "remote"
                         || navRow.kindHint === "tag"
                         || navRow.kindHint === "stash"
-                        || navRow.kindHint === "worktree"))
+                        || navRow.kindHint === "worktree")) {
+                // Raised on the open row — its own line or its lines — the menu is about that row and keeps it open
+                // (デザイン規約 §左メニューの所作). Said before the ask, which the menu's opening reads.
+                if (navRow.factsOpen)
+                    navRow.factsMenuAsked()
                 navRow.refMenuRequested(navRow.name, navRow.fullName, navRow.oid_hex, aim === undefined ? "" : aim)
-            else if (!navRow.folder && navRow.kindHint === "wt")
+                // **The ask is answered before it returns**: the menu stands, or nothing was on offer and it stayed
+                // shut (`AppMenu.offer` — a tag row while any write runs). A note no menu followed would keep this row
+                // open under the next menu raised elsewhere, so it is taken back.
+                if (navRow.factsOpen && !navRow.menuStanding)
+                    navRow.factsMenuRefused()
+            } else if (!navRow.folder && navRow.kindHint === "wt")
                 navRow.fileMenuRequested(navRow.bucket, navRow.fullName)
             else if (navRow.isRemoteRow)
                 navRow.remoteMenuRequested(navRow.fullName)
@@ -517,9 +534,10 @@ Item {
     /// This row's facts are asked for, or let go of, at the place the pointer was standing; the pane holds which row
     /// is open.
     signal factsAsked(bool open, point at)
-    /// The menu about to be raised was asked for from those facts, so it is not one that takes them down
-    /// (`NavRowFacts.handClicked`).
+    /// The menu about to be raised was asked for on this row while it is open, so it is not one that takes it down
+    /// (`rowPressed`) — and, when it did not open after all, that note is taken back.
     signal factsMenuAsked()
+    signal factsMenuRefused()
     /// A line of those facts going somewhere of its own was pressed: the graph goes to the commit it names
     /// (`NavFacts.place`), and this row — the one the press was in — is the one last clicked
     /// (`SidebarRowGestures.followLine`).

@@ -391,6 +391,7 @@ AppListView {
         handMoves: navList.gestures ? navList.gestures.handMoves : 0
         editKey: navList.gestures ? navList.gestures.editKey : ""
         menuStanding: navList.gestures ? navList.gestures.menuOpen : false
+        menuOnOpenRow: navList.gestures ? navList.gestures.menuOpen && navList.gestures.menuFromFacts : false
         editMode: navList.gestures ? navList.gestures.editMode : ""
         editText: navList.gestures ? navList.gestures.editText : ""
         editRefused: navList.gestures ? navList.gestures.editRefused : false
@@ -418,6 +419,10 @@ AppListView {
         onFactsMenuAsked: {
             if (navList.gestures)
                 navList.gestures.noteMenuFromFacts()
+        }
+        onFactsMenuRefused: {
+            if (navList.gestures)
+                navList.gestures.dropMenuFromFacts()
         }
         onFactsFollowed: (key, oidHex) => {
             if (navList.gestures)

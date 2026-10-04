@@ -166,9 +166,6 @@ Rectangle {
     }
     function rowDoubled(button) {
     }
-    /// No menu here, so none to keep the lines up for (`NavRowFacts`).
-    function factsMenuAsked() {
-    }
     /// A facts line pressed, answered as the row's (`NavItemDelegate.followFact`).
     function followFact(to) {
         if (headPin.gestures !== null)
