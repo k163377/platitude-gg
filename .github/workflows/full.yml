@@ -17,11 +17,14 @@ on:
   pull_request:
     paths-ignore: ["**.md"]
   # What the light check leaves out, and what moves with no commit — the
-  # runners' images, the advisories: Sunday 03:17 JST. GitHub turns a
+  # runners' images, the advisories: Friday 19:00 JST, the hour Dependabot
+  # runs here (dependabot.yml) and in jackson-module-kogera. GitHub may
+  # start a run set on the hour late, or drop it under load, and turns a
   # public repository's schedule off after 60 days with no activity in it;
   # it is turned back on from the Actions page.
   schedule:
-    - cron: "17 18 * * 6"
+    - cron: "0 19 * * 5"
+      timezone: Asia/Tokyo
   workflow_dispatch:
   # The snapshot build's (snapshot.yml).
   workflow_call:

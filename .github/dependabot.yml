@@ -11,8 +11,13 @@ updates:
     directories:
       - /
       - /.github/actions/qt
+    # Friday 19:00 JST, the hour jackson-module-kogera's Dependabot runs;
+    # the full test's schedule (full.yml) is the same hour.
     schedule:
       interval: weekly
+      day: friday
+      time: "19:00"
+      timezone: Asia/Tokyo
     groups:
       actions:
         patterns: ["*"]
