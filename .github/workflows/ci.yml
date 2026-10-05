@@ -163,10 +163,16 @@ jobs:
         run: |
           cargo build --locked -p platitude-app --features automation
           cargo test --locked --workspace --no-run
+      # The list goes through a file, not `< <(…)`: a process substitution's
+      # exit status is lost, and a list cut short would run as if it were
+      # whole. As the step's own pipeline it fails under the job's pipefail
+      # (`shell: bash` above).
       - name: Run tests in an empty network namespace
         run: |
-          mapfile -t BINS < <(cargo test --locked --workspace --no-run --message-format=json \
-            | jq -r 'select(.reason == "compiler-artifact" and .profile.test == true) | .executable | select(. != null)')
+          cargo test --locked --workspace --no-run --message-format=json \
+            | jq -r 'select(.reason == "compiler-artifact" and .profile.test == true) | .executable | select(. != null)' \
+            > "${RUNNER_TEMP}/test-bins.txt"
+          mapfile -t BINS < "${RUNNER_TEMP}/test-bins.txt"
           echo "collected ${#BINS[@]} test binaries"
           sudo -E env "PATH=${PATH}" "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}" \
             PGG_SMOKE_BIN="$(pwd)/target/debug/platitude-gg" \
