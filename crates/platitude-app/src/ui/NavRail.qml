@@ -98,6 +98,19 @@ Rectangle {
     /// The ground under the last number, which a cell otherwise keeps none of (デザイン規約 §左メニューを畳む). The last
     /// cell's own, so its wash and its hand reach down to what lies under the rail.
     readonly property int tailRoom: Theme.spaceXs / 2
+    /// The foot of a cell's mark box. The number's line stands on the cell's foot and reaches `spaceXs` up into the
+    /// box — the mark's air under its ink and the line's own would make the gap inside the pair wider than between
+    /// cells — so all the cell's slack goes above the mark (デザイン規約 §左メニューを畳む).
+    readonly property int markFoot: rail.cellHeight - Theme.fontSmLine + Theme.spaceXs
+
+    /// Where a count's ink starts in its cell, inside the number's line: centred between the mark's box and half a step
+    /// over the line's foot, the odd pixel of room above it (デザイン規約 §左メニューを畳む). Asked of the ink, not left
+    /// to the face: a line's baseline falls its ascent down — at 12px about 11px in Hiragino Sans (macOS), 13 in Yu
+    /// Gothic UI, 14 in Noto Sans JP — and the shallow one lifts the digits into the mark.
+    function countInkTop(ink) {
+        const room = rail.cellHeight - Theme.spaceXs / 2 - rail.markFoot - ink.tightBoundingRect.height
+        return rail.markFoot + Math.ceil(room / 2)
+    }
     /// The fold block and every cell. The rail is not clipped, so a pane shorter than this draws the last cells over
     /// what lies under it (`SidebarPane.floorHeight`).
     readonly property int wholeHeight: Theme.headerHeight + rail.sections.length * rail.cellHeight + rail.tailRoom
@@ -161,52 +174,52 @@ Rectangle {
                 ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: Words.addRemote
 
-                Column {
-                    // All the slack above the mark, none under the number, so the fold block to the first mark is
-                    // the same gap as between cells (デザイン規約 §左メニューを畳む).
+                NavIcon {
+                    id: sectionIcon
                     anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.top: parent.top
-                    anchors.topMargin: Theme.spaceXs
-                    // Negative: the mark's air under its ink and the digit's leading would make the gap inside the
-                    // pair wider than between cells (デザイン規約 §左メニューを畳む).
-                    spacing: -Theme.spaceXs
-                    NavIcon {
-                        id: sectionIcon
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        kind: cell.modelData.icon
-                        // Off the graph drops a step (デザイン規約 §暗く落とした段). Empty is unavailable, so grey —
-                        // REMOTES included; its `+` keeps its colour.
-                        tint: cell.empty ? Theme.textMuted : cell.offGraph ? Theme.refTagDim : cell.modelData.tint
-                        // The cell's remainder above the number (デザイン規約 §寸法), with no padding around the box:
-                        // the mark's own air is the gap (§余白).
-                        width: Theme.iconXl
-                        height: Theme.iconXl
-                        // The TAGS header's eye (NavHeader) on the shoulder, in both states — struck through when
-                        // off — since a badge in one state only reads as absent in the other. Not on an empty section
-                        // (規約 §無効). A `spaceXs` in and up from the corner: centred on it, half the badge would sit
-                        // in the cell above (デザイン規約 §左メニューを畳む).
-                        ShoulderBadge {
-                            visible: cell.taggable && !cell.empty
-                            kind: rail.tagsShown ? "eye" : "eye-off"
-                            tint: sectionIcon.tint
-                        }
-                        // The band's `+` (NavHeader), while the section is empty, in the eye's seat; it keeps the
-                        // section's colour over the greyed mark (規約 §無効).
-                        ShoulderBadge {
-                            visible: cell.addable
-                            kind: "plus"
-                            tint: cell.addLive ? cell.modelData.tint : Theme.textMuted
-                        }
+                    // Hung from `markFoot`: all the slack above the mark, so the fold block to the first mark is the
+                    // same gap as between cells (デザイン規約 §左メニューを畳む).
+                    y: rail.markFoot - sectionIcon.height
+                    kind: cell.modelData.icon
+                    // Off the graph drops a step (デザイン規約 §暗く落とした段). Empty is unavailable, so grey —
+                    // REMOTES included; its `+` keeps its colour.
+                    tint: cell.empty ? Theme.textMuted : cell.offGraph ? Theme.refTagDim : cell.modelData.tint
+                    // The cell's remainder above the number (デザイン規約 §寸法), with no padding around the box: the
+                    // mark's own air is the gap (§余白).
+                    width: Theme.iconXl
+                    height: Theme.iconXl
+                    // The TAGS header's eye (NavHeader) on the shoulder, in both states — struck through when off —
+                    // since a badge in one state only reads as absent in the other. Not on an empty section (規約 §無効).
+                    // A `spaceXs` in and up from the corner: centred on it, half the badge would sit in the cell above
+                    // (デザイン規約 §左メニューを畳む).
+                    ShoulderBadge {
+                        visible: cell.taggable && !cell.empty
+                        kind: rail.tagsShown ? "eye" : "eye-off"
+                        tint: sectionIcon.tint
                     }
-                    // Caption and count at once, so the caption's colour (NavHeader).
-                    Label {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: cell.sectionCount
-                        color: cell.empty ? Theme.textMuted : Theme.textSecondary
-                        font.pixelSize: Theme.fontSm
-                        lineHeightMode: Text.FixedHeight
-                        lineHeight: Theme.fontSmLine
+                    // The band's `+` (NavHeader), while the section is empty, in the eye's seat; it keeps the section's
+                    // colour over the greyed mark (規約 §無効).
+                    ShoulderBadge {
+                        visible: cell.addable
+                        kind: "plus"
+                        tint: cell.addLive ? cell.modelData.tint : Theme.textMuted
                     }
+                }
+                // Caption and count at once, so the caption's colour (NavHeader). Seated by its ink (`countInkTop`), in
+                // whole pixels: a half pixel smears the digits.
+                Label {
+                    id: countLabel
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: Math.round(rail.countInkTop(countInk) - countLabel.baselineOffset - countInk.tightBoundingRect.y)
+                    text: cell.sectionCount
+                    color: cell.empty ? Theme.textMuted : Theme.textSecondary
+                    font.pixelSize: Theme.fontSm
+                }
+                // Every digit, so the counts stand level whatever they hold.
+                TextMetrics {
+                    id: countInk
+                    font: countLabel.font
+                    text: "0123456789"
                 }
                 // Passive, so the list it opened keeps its own hover.
                 HoverHandler {
