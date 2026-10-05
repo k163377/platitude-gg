@@ -166,7 +166,7 @@ const AGENT: char = '~';
 /// The holder implementation, independent of the activity protocol.
 /// A script change raises this; compatible builds still update the same
 /// claims, so a Stop or a question reaches every holder reading them.
-const REVISION: u32 = 5;
+const REVISION: u32 = 6;
 /// The shared activity protocol, including claim names and bodies. Do not
 /// raise this for a holder change: a protocol change needs a migration,
 /// not a second independent copy of a session's current state.

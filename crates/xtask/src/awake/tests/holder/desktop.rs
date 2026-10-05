@@ -87,6 +87,51 @@ Check ($fetch.Part[6] -eq '1') 'permission hook evidence was overwritten'
     );
 }
 
+/// Desktop names its own dialogs by kind (`browser:open_file`), not by the
+/// tool that raised one: `preview_start` and `browser_batch` open files and
+/// sites as `navigate` does, and computer use asks for its apps.
+#[test]
+fn a_desktop_dialog_binds_to_any_call_of_the_server_that_raised_it() {
+    probe(
+        r#"
+function Ask($id, $kind, $second) {
+  Append ($emitted.Replace('request1',$id).Replace('browser:open_file',$kind).Replace('18:58:35',"18:58:$second"))
+}
+$preview=Candidate 's' '-' 'preview1' 'mcp__Claude_Browser__preview_start' '0' ($at-1000)
+Update-DesktopLog $state @($preview) $at
+Check (Asked $preview) $state.Status
+Append $answered
+Update-DesktopLog $state @($preview) ($at+1)
+Check (-not (Asked $preview)) 'the grant did not resume preview_start'
+$batch=Candidate 's' '-' 'batch1' 'mcp__Claude_Browser__browser_batch' '0' ($at+1000)
+$access=Candidate 's' '-' 'access1' 'mcp__computer-use__request_access' '0' ($at+1000)
+Ask 'site-request' 'browser:open_site' '36'
+Update-DesktopLog $state @($batch,$access) ($at+2)
+Check (Asked $batch) $state.Status
+Check (-not (Asked $access)) 'a browser dialog was bound across servers'
+$chrome=Candidate 's' '-' 'chrome1' 'mcp__claude-in-chrome__navigate' '0' ($at+2000)
+$access=Candidate 's' '-' 'access2' 'mcp__computer-use__request_access' '0' ($at+2000)
+Ask 'chrome-request' 'browser:domain_transition' '37'
+Ask 'access-request' 'computer:request_access' '37'
+Update-DesktopLog $state @($chrome,$access) ($at+3)
+Check (Asked $chrome) $state.Status
+Check (Asked $access) $state.Status
+$navigate=Candidate 's' '-' 'nav1' 'mcp__Claude_Browser__navigate' '0' ($at+3000)
+Ask 'stray-access' 'computer:request_access' '38'
+Update-DesktopLog $state @($navigate) ($at+4)
+Check (-not (Asked $navigate)) 'a computer-use dialog was bound to a browser call'
+Check ($state.Status -match 'unmapped=1') $state.Status
+$screen=Candidate 's' '-' 'screen1' 'mcp__computer-use__screenshot' '0' ($at+4000)
+$shell=Candidate 's' '-' 'shell1' 'Bash' '0' ($at+4000)
+Ask 'stray-file' 'browser:open_file' '39'
+Update-DesktopLog $state @($screen,$shell) ($at+5)
+Check (-not (Asked $screen)) 'a browser dialog was bound to a computer-use call'
+Check (-not (Asked $shell)) 'a browser dialog was bound to a call outside the browser'
+Check ($state.Status -match 'unmapped=1') $state.Status
+"#,
+    );
+}
+
 #[test]
 fn ambiguous_subagents_and_unknown_decisions_never_guess_a_call() {
     probe(

@@ -100,7 +100,14 @@ function Test-DesktopTool($logged, $called) {
   # Permission for AskUserQuestion is not the person's answer to it.
   if ($called -eq 'AskUserQuestion') { return $false }
   if ($logged -eq $called) { return $true }
-  return ($logged -eq 'browser:open_file') -and ($called -eq 'mcp__Claude_Browser__navigate')
+  # Desktop names its own dialogs by kind, not by the tool that raised one:
+  # opening a file asks from navigate, preview_start and browser_batch alike.
+  $servers = switch -Regex ($logged) {
+    '^browser:' { 'mcp__Claude_Browser__', 'mcp__claude-in-chrome__' }
+    '^computer:' { 'mcp__computer-use__' }
+  }
+  foreach ($server in $servers) { if ($called.StartsWith($server)) { return $true } }
+  return $false
 }
 function Update-DesktopLog($state, $candidates, $nowms) {
   $state.Overlay=@{}
