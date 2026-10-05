@@ -52,6 +52,37 @@ fn a_lint_threshold_owes_clippy_alone() {
     );
 }
 
+/// Nothing reads a configuration's comments: a change to them alone owes
+/// what a document's does, even in the file that otherwise owes
+/// everything.
+#[test]
+fn a_comment_in_a_configuration_owes_nothing() {
+    let sb = Sandbox::new("toml-comment");
+    sb.write(&sb.seat, "Cargo.toml", "# The workspace.\n[workspace]\n");
+    sb.write(
+        &sb.seat,
+        "rust-toolchain.toml",
+        "[toolchain]\n# The release.\nchannel = \"stable\"\n",
+    );
+    sb.commit_all(&sb.seat, "docs: the workspace", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(!text.contains("everything"), "{text}");
+    assert!(text.contains("no step reads these"), "{text}");
+    sb.gate_ok(&sb.seat, &[]);
+    assert!(without_always(&sb.ran()).is_empty());
+
+    // A line of a multi-line string may start with `#`: a file holding one
+    // is read as changed.
+    let quoting =
+        |line: &str| format!("[workspace]\n[workspace.metadata]\nnote = \"\"\"\n{line}\n\"\"\"\n");
+    sb.write(&sb.seat, "Cargo.toml", &quoting("# one"));
+    let quoted = sb.commit_all(&sb.seat, "chore: a note", &[]);
+    sb.write(&sb.seat, "Cargo.toml", &quoting("# two"));
+    sb.commit_all(&sb.seat, "chore: another note", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--main", &quoted, "--dry-run"]);
+    assert!(text.contains("everything (Cargo.toml)"), "{text}");
+}
+
 /// A crate's manifest is read by every compile of the crate, and its
 /// readers' through it; not by a crate that reads none of it.
 #[test]

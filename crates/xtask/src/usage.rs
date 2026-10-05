@@ -57,9 +57,9 @@ commands:
       (structure, waits, versions, docs, verbs, fmt) run every time and first;
       a build input that changed (Cargo.toml, Cargo.lock, the toolchain,
       cargo's configuration, a vendored crate) makes the reach the whole
-      tree, the Dockerfile the container's side of it, and clippy.toml
-      every crate's clippy. Then host and container sides run in
-      parallel;
+      tree, the Dockerfile the container's side of it, clippy.toml every
+      crate's clippy, and a TOML change to comments alone nothing. Then
+      host and container sides run in parallel;
       each step is stamped by the object ids of what it reads, so a
       second run of one commit runs nothing and a rebase reruns only
       what main's move touched. The verify-ui verbs of a side share

@@ -254,10 +254,11 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     spent.graph_reused = loaded.reused;
     spent.graph_cache = loaded.note;
     let g = loaded.graph;
-    // Documents stay in the reported diff but select no tests.
+    // Documents stay in the reported diff but select no tests, and so do
+    // the comments of a configuration.
     let executable_changes: Vec<String> = changed
         .iter()
-        .filter(|file| !graph::is_markdown(file))
+        .filter(|file| !graph::is_markdown(file) && !comments_only(&here, &base, &head, file))
         .cloned()
         .collect();
     let (host, container) = scopes(dir, ask, &here, &base, &head, &executable_changes);
@@ -478,6 +479,39 @@ fn scopes(
         _ => host.clone(),
     };
     (host, container)
+}
+
+/// A TOML file the branch changed in its comments alone: no build, tool or
+/// test reads a comment. Read as whole lines — a `#` after a value may
+/// sit in a string — and never in a file holding a multi-line string,
+/// where a line of the string may start with one.
+fn comments_only(here: &str, base: &str, head: &str, file: &str) -> bool {
+    if !file.ends_with(".toml") {
+        return false;
+    }
+    // As stored: `git_query` trims and turns backslashes, which would
+    // read a change to a value's backslash as no change.
+    let settings = |rev: &str| {
+        let mut show = std::process::Command::new("git");
+        show.arg("-C")
+            .arg(here)
+            .args(["show", &format!("{rev}:{file}")]);
+        let shown = run_captured(&mut show)
+            .ok()
+            .filter(|o| o.status.success())?;
+        let text = String::from_utf8_lossy(&shown.stdout);
+        if text.contains("\"\"\"") || text.contains("'''") {
+            return None;
+        }
+        Some(
+            text.lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                .map(str::to_string)
+                .collect::<Vec<String>>(),
+        )
+    };
+    matches!((settings(base), settings(head)), (Some(old), Some(new)) if old == new)
 }
 
 /// What each side selects from, and what the change itself reaches on the
