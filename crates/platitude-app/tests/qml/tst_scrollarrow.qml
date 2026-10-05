@@ -4,9 +4,10 @@ import QtTest
 import platitude.ui
 
 // The arrows at the two ends of an upright bar (デザイン規約 §スクロールバーの矢印): how much of the bar they take on a
-// box of any height, what a press, a hold and a slide off do, that a real press reaches them, and that in a message
-// box the grip leaves the down arrow its whole end and taking the bar takes the box over. Each check waits for the view
-// to have moved; no clock is read.
+// box of any height, what a press, a hold and a slide off do, that a real press reaches them, that on a surface gliding
+// its wheel (a message box, the left menu) a step rides that glide, and that in a message box the grip leaves the down
+// arrow its whole end and taking the bar takes the box over. Each check waits for the view to have moved; no clock is
+// read.
 Item {
     id: root
     width: 640
@@ -61,6 +62,16 @@ Item {
         room: 200
         readOnly: true
     }
+    // A section of the left menu, which glides its wheel notches (`NavList.sendRows`) and hands that glide to its bar.
+    ListModel { id: navRows }
+    NavList {
+        id: navList
+        x: 160
+        y: 320
+        width: 150
+        height: 150
+        sectionModel: navRows
+    }
 
     TestCase {
         name: "ScrollArrow"
@@ -68,26 +79,37 @@ Item {
 
         readonly property var floatBar: floatList.ScrollBar.vertical
         readonly property var paneBar: paneList.ScrollBar.vertical
+        readonly property var navBar: navList.ScrollBar.vertical
 
         function initTestCase() {
             for (let i = 0; i < 200; i++)
                 rows.append({})
+            // Every field a sidebar row reads, as the sections hand them.
+            for (let i = 0; i < 40; i++)
+                navRows.append({
+                    "name": "b" + i, "full": "b" + i, "oid_hex": "", "change": "", "bucket": "", "orig_path": "",
+                    "orig_name": "", "is_head": false, "has_remote": false, "only_remote": false, "has_pr": false,
+                    "depth": 0, "folder": false, "eol_mark": false, "ahead": 0, "behind": 0
+                })
             desc.text = Array.from({ length: 40 }, (_, i) => "line " + i).join("\n")
-            tryVerify(() => floatBar.visible && paneBar.visible && desc.bar.visible)
+            tryVerify(() => floatBar.visible && paneBar.visible && desc.bar.visible && navBar.visible)
         }
         function init() {
             floatList.height = 300
             paneList.height = 300
             floatList.contentY = 0
             paneList.contentY = 0
+            navList.contentY = 0
         }
         function cleanup() {
             floatBar.releaseArrow()
             paneBar.releaseArrow()
             desc.bar.releaseArrow()
+            navBar.releaseArrow()
             paneBar.releaseTrack()
+            navBar.releaseTrack()
             // A step still gliding would carry on into the next test's reset.
-            for (const bar of [floatBar, paneBar, desc.bar])
+            for (const bar of [floatBar, paneBar, desc.bar, navBar])
                 bar.stepGlide.halt()
         }
 
@@ -250,6 +272,28 @@ Item {
             desc.bar.releaseArrow()
             desc.rollBy(-120)
             tryCompare(desc, "textAt", Metrics.arrowStep + desc.wheelStep)
+        }
+
+        /// The left menu's bar steps on the list's own wheel glide too: a notch down straight after an arrow's step is
+        /// measured from where the step is going. Two glides of their own would each run to their own aim, and the
+        /// notch would land where it would have from the top.
+        function test_a_notch_after_a_left_menu_arrow_adds_to_its_step() {
+            const notch = Metrics.wheelRows * Theme.rowHeight
+            navBar.pressArrow(1)
+            navBar.releaseArrow()
+            navList.sendRows(-notch)
+            tryCompare(navList, "contentY", Metrics.arrowStep + notch)
+        }
+
+        /// And a page from the left menu's track stops with the list's glide: every hand that halts it (a row brought
+        /// into view, an opening shown or given back, the middle button's drift — `NavList.haltGlide`) halts the page,
+        /// or the page drags the list on to where it was going.
+        function test_halting_the_left_menus_glide_halts_a_page_from_its_track() {
+            verify(navBar.pressTrack(navBar.height - navBar.arrowEnd - 2))
+            navBar.releaseTrack()
+            verify(navBar.stepping, "the page is gliding")
+            navList.haltGlide()
+            verify(!navBar.stepping, "and stopped with the list's glide")
         }
 
         /// Slid off the bar before the pause is over, the run never starts, and a hand coming back does not start it
