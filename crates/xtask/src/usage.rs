@@ -48,7 +48,10 @@ commands:
       the app's QML or entry point
       moved, the verify-ui verbs whose census names a reached component
       (crates/xtask/verb-census.txt, written by the
-      runs themselves), bare when the app moved. The always-steps
+      runs themselves), bare when the app moved. A file read as it stands
+      — named in a string, a bin a test shoots — moves no code: it owes
+      its readers' tests and the verbs whose census names what they show,
+      not clippy or the harness's every verb. The always-steps
       (structure, waits, versions, docs, verbs, fmt) run every time and first, and
       a build input that changed (Cargo.toml, Cargo.lock, the toolchain,
       the Dockerfile) makes the reach the whole tree. Then host and

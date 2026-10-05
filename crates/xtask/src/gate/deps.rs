@@ -153,14 +153,12 @@ fn probe(g: &Graph, changed: &[String], why: &[String], show: bool) {
         changed.len(),
         reach.len()
     );
-    // A file the product reaches as data a tool reads did not change
-    // (`graph::Carried`); the plan selects by the difference.
-    let as_data = |file: &String| {
-        if reach.get(file) == Some(&Carried::AsProductFile) {
-            " (as a product file the tool reads)"
-        } else {
-            ""
-        }
+    // A file a change reaches as data did not change (`graph::Carried`);
+    // the plan selects by the difference.
+    let as_data = |file: &String| match reach.get(file) {
+        Some(Carried::AsProductFile) => " (as a product file the tool reads)",
+        Some(Carried::AsData) => " (as data its reader takes)",
+        _ => "",
     };
     for target in why {
         match g.why(changed, target) {

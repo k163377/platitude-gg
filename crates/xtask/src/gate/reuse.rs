@@ -20,7 +20,7 @@ use crate::subprocess::{common_git_dir, git_query};
 
 /// The format the file is written in. A reader that does not know this
 /// number reads nothing.
-const VERSION: &str = "graph-cache 3";
+const VERSION: &str = "graph-cache 4";
 
 /// How many built graphs a repository keeps: more than the commit at hand
 /// and its parent, so a seat rebasing onto a tree another seat has read
@@ -164,8 +164,10 @@ fn sweep(shelf: &Path) {
 
 /// One record per line, fields tab-separated: `M` a module, `D` a file
 /// and everything it reads, `B` a reader and the files it reads as a
-/// binding alone (`graph::Resolved`), `U` a path that resolved nowhere. Tabs
-/// because a workspace path can hold a space and never one of these.
+/// binding alone (`graph::Resolved`), `T` a reader and the files it takes
+/// as data alone (`graph::Carried::AsData`), `U` a path that resolved
+/// nowhere. Tabs because a workspace path can hold a space and never one
+/// of these.
 fn write(graph: &Graph) -> String {
     let mut out = String::from(VERSION);
     out.push('\n');
@@ -188,14 +190,17 @@ fn write(graph: &Graph) -> String {
         }
         out.push('\n');
     }
-    for (reader, bound) in &graph.bindings {
-        out.push_str("B\t");
-        out.push_str(reader);
-        for file in bound {
+    for (tag, readers) in [("B", &graph.bindings), ("T", &graph.read_as_data)] {
+        for (reader, files) in readers {
+            out.push_str(tag);
             out.push('\t');
-            out.push_str(file);
+            out.push_str(reader);
+            for file in files {
+                out.push('\t');
+                out.push_str(file);
+            }
+            out.push('\n');
         }
-        out.push('\n');
     }
     for (file, path) in &graph.unresolved {
         out.push_str(&format!("U\t{file}\t{path}\n"));
@@ -260,6 +265,11 @@ fn read(text: &str) -> Option<Graph> {
                 let bound: BTreeSet<String> = fields.map(str::to_string).collect();
                 graph.bindings.insert(reader, bound);
             }
+            "T" => {
+                let reader = fields.next()?.to_string();
+                let data: BTreeSet<String> = fields.map(str::to_string).collect();
+                graph.read_as_data.insert(reader, data);
+            }
             "U" => {
                 let file = fields.next()?.to_string();
                 graph.unresolved.push((file, fields.next()?.to_string()));
@@ -313,7 +323,7 @@ pub(crate) fn graph_of(dir: &Path) -> Result<Loaded, String> {
 }
 
 /// What a graph read back must answer the same as the one written: the
-/// four things everything downstream asks it (`plan`, `deps`).
+/// things everything downstream asks it (`plan`, `deps`).
 #[cfg(test)]
 fn same(one: &Graph, other: &Graph) -> Result<(), String> {
     if one.deps != other.deps {
@@ -324,6 +334,9 @@ fn same(one: &Graph, other: &Graph) -> Result<(), String> {
     }
     if one.bindings != other.bindings {
         return Err("the bindings differ".into());
+    }
+    if one.read_as_data != other.read_as_data {
+        return Err("the reads as data differ".into());
     }
     if one.unresolved != other.unresolved {
         return Err("the unresolved paths differ".into());

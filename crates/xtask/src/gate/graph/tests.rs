@@ -240,12 +240,15 @@ fn a_test_that_shoots_a_binary_reads_the_binary() {
     }
 }
 
-/// The graph `edges` draw, read both ways, with the integration
-/// binaries' modules named.
-fn drawn(edges: &[(&str, &str)], sandboxed: &[&str]) -> super::Graph {
+/// The graph `code` and `data` draw, read both ways, with the
+/// integration binaries' modules named.
+fn drawn(code: &[(&str, &str)], data: &[(&str, &str)], sandboxed: &[&str]) -> super::Graph {
     let mut g = super::Graph::default();
-    for (from, to) in edges {
+    for (from, to) in code {
         g.edge(from, to);
+    }
+    for (from, to) in data {
+        g.data_edge(from, to);
     }
     for file in sandboxed {
         g.modules.insert(
@@ -282,13 +285,12 @@ fn a_product_file_read_off_the_disk_stops_at_an_integration_binary() {
     let shooter = format!("crates/{}/tests/probe/main.rs", "xtask");
     let script = format!("{}/probe-hook", ".githooks");
     let g = drawn(
+        &[(&bin, &tool), (&core_it, &core)],
         &[
             (&ui, &qml),
             (&tool, &ui),
             (&tool, &script),
-            (&bin, &tool),
             (&shooter, &bin),
-            (&core_it, &core),
         ],
         &[&shooter, &core_it],
     );
@@ -301,27 +303,33 @@ fn a_product_file_read_off_the_disk_stops_at_an_integration_binary() {
             "{owed}: {from_the_product:?}"
         );
     }
-    // The product's own directory changed; the tool only reads it.
-    assert_eq!(from_the_product[&ui], Carried::Whole);
+    // The directory holds the file as it stands; the tool reads the
+    // product's files, and its own code is not built from them.
+    assert_eq!(from_the_product[&ui], Carried::AsData);
     assert_eq!(from_the_product[&tool], Carried::AsProductFile);
     assert_eq!(from_the_product[&bin], Carried::AsProductFile);
     assert!(
         !from_the_product.contains_key(&shooter),
         "a sandboxed binary is no reader of the product's files: {from_the_product:?}"
     );
+    // The binary reads the hook off the real tree and runs the tool:
+    // both reach it, as data — its own code is not built from either.
     for changed in [&script, &tool] {
         assert_eq!(
             reach(&[changed]).get(&shooter),
-            Some(&Carried::Whole),
+            Some(&Carried::AsData),
             "{changed} is read or run by the binary itself"
         );
     }
+    assert_eq!(reach(&[&tool])[&bin], Carried::Whole, "built from it");
+    assert_eq!(reach(&[&script])[&bin], Carried::AsData);
     assert!(reach(&[&core]).contains_key(&core_it), "compiled in");
-    // Handed on whole by one path, the binary is owed whatever else
+    // Handed on more by one path, the binary is owed whatever else
     // handed the same file less.
     let both = reach(&[&qml, &tool]);
     assert!(both.contains_key(&shooter));
     assert_eq!(both[&tool], Carried::Whole);
+    assert_eq!(both[&shooter], Carried::AsData);
     assert_eq!(
         g.why(&[qml.clone(), tool.clone()], &shooter),
         Some(vec![tool.clone(), bin.clone(), shooter.clone()])
@@ -428,6 +436,37 @@ fn nothing_reads_a_file_of_cis() {
     for file in files {
         let reach = g.reach(std::slice::from_ref(&file));
         assert_eq!(reach.keys().collect::<Vec<_>>(), [&file]);
+    }
+}
+
+/// Two paths the tree as it stands has into the verify harness, neither
+/// of them through code the harness is built from: the container's
+/// recipe, read by its driver; and the runner's own entry, which the
+/// gate suite shoots and whose text the yard's test reads. Both owe the
+/// tests of what they reach and no step a change to the harness's code
+/// owes (`plan::steps` selects the verbs by `Whole`).
+#[test]
+fn a_file_read_as_it_stands_hands_the_harness_data_alone() {
+    let root = crate::tree::workspace_root();
+    let g = build(&root).expect("the graph of this tree");
+    // In pieces: whole, each name would be this file reading it.
+    let harness = ["verify", "demo"].map(|part| format!("crates/{}/src/{part}/", "xtask"));
+    for changed in [
+        format!("ci/{}/Dockerfile", "linux"),
+        format!("crates/{}/src/structure.rs", "xtask"),
+    ] {
+        let reach = g.reach(std::slice::from_ref(&changed));
+        let in_harness: Vec<(&String, &Carried)> = reach
+            .iter()
+            .filter(|(file, _)| harness.iter().any(|dir| file.starts_with(dir)))
+            .collect();
+        assert!(!in_harness.is_empty(), "{changed}: {reach:?}");
+        assert!(
+            in_harness
+                .iter()
+                .all(|(_, carried)| **carried < Carried::Whole),
+            "{changed} reaches the harness as code: {in_harness:?}"
+        );
     }
 }
 

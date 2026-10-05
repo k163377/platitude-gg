@@ -62,6 +62,10 @@ pub(crate) struct Graph {
     /// reader -> the files it reads only as the `pub use` that binds a
     /// name it takes to the file defining it ([`Resolved::bindings`]).
     pub(crate) bindings: BTreeMap<String, BTreeSet<String>>,
+    /// reader -> the files it takes only as they stand: named in a string,
+    /// a snapshot its tests compare against, a bin its tests shoot, and
+    /// what a directory node holds ([`Carried::AsData`]).
+    pub(crate) read_as_data: BTreeMap<String, BTreeSet<String>>,
     pub unresolved: Vec<(String, String)>,
     /// `#[qobject]` type names the app defines -> file.
     app_types: BTreeMap<String, String>,
@@ -69,25 +73,33 @@ pub(crate) struct Graph {
 
 /// How much of a change a file is handed.
 ///
-/// The product reaches the tooling only as files a tool reads off the disk
-/// (nothing outside the product compiles it), and an integration binary
-/// points its tool at a sandbox it laid out itself, so a product change
-/// handed on that way stops at an integration binary's modules. Everything
-/// else is handed on whole, including a non-product file a binary reads
-/// off the real tree (the hook script `tests/gate` copies into its
-/// sandbox). Without the stop, every app or core change would owe the
-/// gate's sandbox tests on both sides, since the census reads the app.
+/// Code that names a file in a string, or shoots a binary, takes the file
+/// as it stands — bytes off the disk, a program to run — and its own code
+/// does not change with it, nor does the code of anything reading that
+/// code ([`Graph::read_as_data`]). So such a reader, and every reader past it,
+/// is handed the change as data.
 ///
-/// The selection reads the difference too: a tool file handed
-/// `AsProductFile` did not change, so a step that file's name selects
-/// (the verbs through `verify` / `demo`, `qmltest` through its runner,
-/// the wedge through its record) is owed only by a file handed `Whole`,
-/// and so is clippy, which reads code alone; the tool's own tests are
-/// owed either way — a test of the tool may read the data.
+/// The product reaches the tooling only that way (nothing outside the
+/// product compiles it), and an integration binary points its tool at a
+/// sandbox it laid out itself, so a product change handed on to a tool
+/// stops at an integration binary's modules. Any other data goes on into
+/// them: a binary reads a non-product file off the real tree (the hook
+/// script `tests/gate` copies into its sandbox) and runs the real bin.
+/// Without the stop, every app or core change would owe the gate's
+/// sandbox tests on both sides, since the census reads the app.
+///
+/// The selection reads the difference too: a file handed data did not
+/// change, so a step that file's name selects (the verbs through
+/// `verify` / `demo`, `qmltest` through its runner, the wedge through its
+/// record) is owed only by a file handed `Whole`, and so is clippy, which
+/// reads code alone; the tests of a file handed data are owed either way
+/// — a test of it may read the data.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Carried {
     /// A product file, as a tool that does not build it reads it.
     AsProductFile,
+    /// A file read as it stands, and the code that reads that code.
+    AsData,
     /// The change itself, or code built from it.
     Whole,
 }
@@ -134,6 +146,7 @@ pub(crate) fn is_markdown(file: &str) -> bool {
 }
 
 impl Graph {
+    /// `from` reads `to` as code; a read as data of the same file gives way.
     fn edge(&mut self, from: &str, to: &str) {
         if from == to || is_markdown(to) {
             return;
@@ -142,6 +155,41 @@ impl Graph {
             .entry(from.to_string())
             .or_default()
             .insert(to.to_string());
+        if let Some(data) = self.read_as_data.get_mut(from) {
+            data.remove(to);
+            if data.is_empty() {
+                self.read_as_data.remove(from);
+            }
+        }
+    }
+
+    /// `from` takes `to` as it stands ([`Carried::AsData`]), unless it
+    /// already reads it as code.
+    fn data_edge(&mut self, from: &str, to: &str) {
+        if from == to || is_markdown(to) || self.reads_as_code(from, to) {
+            return;
+        }
+        self.deps
+            .entry(from.to_string())
+            .or_default()
+            .insert(to.to_string());
+        self.read_as_data
+            .entry(from.to_string())
+            .or_default()
+            .insert(to.to_string());
+    }
+
+    fn reads_as_code(&self, reader: &str, file: &str) -> bool {
+        self.deps
+            .get(reader)
+            .is_some_and(|read| read.contains(file))
+            && !self.takes_as_data(reader, file)
+    }
+
+    fn takes_as_data(&self, reader: &str, file: &str) -> bool {
+        self.read_as_data
+            .get(reader)
+            .is_some_and(|data| data.contains(file))
     }
 
     /// Everything that reads one of `changed`, transitively, plus
@@ -212,18 +260,20 @@ impl Graph {
         if file.ends_with(".qml") && !(reader.ends_with(".qml") || reader.ends_with('/')) {
             return None;
         }
-        let carried = if carried == Carried::Whole && as_data(file, reader) {
+        let carried = if as_data(file, reader) {
             Carried::AsProductFile
+        } else if self.takes_as_data(reader, file) {
+            carried.min(Carried::AsData)
         } else {
             carried
         };
         // A `pub use` passes code, not data: the reader is owed the binding's
         // own change and nothing the binding's file reads elsewhere
         // (`Resolved`).
-        if carried == Carried::AsProductFile && self.bound_only(reader, file) {
+        if carried != Carried::Whole && self.bound_only(reader, file) {
             return None;
         }
-        (carried == Carried::Whole || !self.sandboxed(reader)).then_some(carried)
+        (carried != Carried::AsProductFile || !self.sandboxed(reader)).then_some(carried)
     }
 
     /// Whether `reader` reads `file` only as the `pub use` that binds a
@@ -353,7 +403,7 @@ pub(crate) fn build(root: &Path) -> Result<Graph, String> {
         let bodies = string_bodies(raw);
         if g.modules.get(file).is_some_and(|m| m.test_binary.is_none()) {
             for target in literal_paths(root, file, &bodies) {
-                g.edge(file, &target);
+                g.data_edge(file, &target);
             }
         }
         // cargo hands a test the built bin by name, within the package only.
@@ -364,7 +414,7 @@ pub(crate) fn build(root: &Path) -> Result<Graph, String> {
             .unwrap_or_default();
         for name in bin_exe_names(&bodies) {
             match g.binaries.get(&(package.clone(), name.clone())).cloned() {
-                Some(bin) => g.edge(file, &bin),
+                Some(bin) => g.data_edge(file, &bin),
                 None => g
                     .unresolved
                     .push((file.clone(), format!("{BIN_EXE}{name}"))),
@@ -1333,7 +1383,7 @@ fn snapshots(root: &Path, g: &mut Graph) -> Result<(), String> {
             }
         };
         if let Some(owner) = owner {
-            g.edge(&owner, &snap);
+            g.data_edge(&owner, &snap);
         }
     }
     Ok(())
@@ -1412,7 +1462,7 @@ fn directories(root: &Path, g: &mut Graph) -> Result<(), String> {
         let mut files = Vec::new();
         collect(root, &root.join(&dir), "", &mut files)?;
         for file in files {
-            g.edge(&dir, &file);
+            g.data_edge(&dir, &file);
         }
     }
     Ok(())

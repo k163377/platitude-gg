@@ -310,8 +310,14 @@ fn wedge_steps(reach: &Reach, whole: bool) -> Vec<Step> {
     let inputs = record_of_a_wedge();
     // Its xtask files read the product tree, so any product change
     // reaches them as data (`graph::Carried`); what stops a stopped run
-    // from being readable is a change to their code.
-    let moved = |file: &String| reach.get(file) == Some(&Carried::Whole);
+    // from being readable is a change to their code — and, for the app's,
+    // to what the app builds in with it (the harness's QML module).
+    let product = app();
+    let moved = |file: &String| match reach.get(file) {
+        Some(Carried::Whole) => true,
+        Some(Carried::AsData) => under(file, &product),
+        _ => false,
+    };
     if !whole && !inputs.iter().any(moved) {
         return Vec::new();
     }
