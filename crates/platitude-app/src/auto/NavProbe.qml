@@ -79,6 +79,37 @@ QtObject {
     readonly property real peekY: probe.peek.y
     readonly property real peekBottom: probe.peek.y + probe.peek.height
 
+    /// `countsInk`'s ruler, given each count's font in turn.
+    property FontMetrics countFace: FontMetrics {}
+    /// PGG_AUTO_ACT=nav-fold: whether every count on the rail has its ink under its mark's box, centred in the room down
+    /// to half a step over the cell's foot (デザイン規約 §左メニューを畳む), with the span the counts' ink takes in their
+    /// cells. Read off each laid-out label and the ink of what it says — not the digits the rail seats them by — since
+    /// where a line's ink falls is the face's answer. Centred: the room over the ink and the room under it part by no
+    /// more than the odd pixel the room gives above, and half a pixel for the label's whole-pixel place.
+    function countsInk() {
+        const cells = probe.rail.autoCells
+        const floor = probe.rail.cellHeight - Theme.spaceXs / 2
+        const span = { clear: cells.count > 0, top: Infinity, bottom: -Infinity }
+        for (let i = 0; i < cells.count; i++) {
+            const cell = cells.itemAt(i)
+            if (cell === null) {
+                span.clear = false
+                continue
+            }
+            const count = cell.autoCount
+            probe.countFace.font = count.font
+            const ink = probe.countFace.tightBoundingRect(count.text)
+            const top = count.y + count.baselineOffset + ink.y
+            const mark = cell.autoMark
+            const over = top - (mark.y + mark.height)
+            const under = floor - (top + ink.height)
+            span.clear = span.clear && over >= 0 && Math.abs(over - under) <= 1.5
+            span.top = Math.min(span.top, top)
+            span.bottom = Math.max(span.bottom, top + ink.height)
+        }
+        return span
+    }
+
     /// PGG_AUTO_ACT=nav-tip: rest the pointer on one section's row, through the same `pointedTipRow` the file lists
     /// carry.
     function listOf(kind) {

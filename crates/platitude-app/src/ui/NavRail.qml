@@ -115,6 +115,10 @@ Rectangle {
     /// what lies under it (`SidebarPane.floorHeight`).
     readonly property int wholeHeight: Theme.headerHeight + rail.sections.length * rail.cellHeight + rail.tailRoom
 
+    /// Automation-only, like `GraphPane.view` (rules-refs/app-ui.md): the cells, each handing over its mark and its
+    /// count (PGG_AUTO_ACT=nav-fold).
+    readonly property alias autoCells: cells
+
     /// Where a section's cell sits, for the smoke hooks.
     function topOf(kind) {
         for (let i = 0; i < rail.sections.length; i++) {
@@ -144,6 +148,7 @@ Rectangle {
         }
 
         Repeater {
+            id: cells
             model: rail.sections
             delegate: Rectangle {
                 id: cell
@@ -161,6 +166,9 @@ Rectangle {
                 readonly property bool addable: rail.addableAt(cell.modelData.kind)
                 /// …and whether it can now; while the doors are held the `+` stays, greyed (規約 §無効).
                 readonly property bool addLive: cell.addable && !rail.addHeld
+                /// Automation: the mark and the count, for `NavProbe.countsInk`.
+                readonly property alias autoMark: sectionIcon
+                readonly property alias autoCount: countLabel
 
                 width: Theme.railWidth
                 height: rail.cellHeight + (cell.index === rail.sections.length - 1 ? rail.tailRoom : 0)

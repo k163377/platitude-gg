@@ -519,6 +519,7 @@ Item {
             if (acts.peekGoneWanted && sidebarPane.peekSection.visible)
                 return
             navRailTimer.stop()
+            const counts = navProbe.countsInk()
             Harness.report(
             // The first three are neighbours so one `must_say` substring judges them (デザイン規約 §左メニューを畳む).
             "nav_rail collapsed=" + page.sidebarCollapsed
@@ -531,7 +532,10 @@ Item {
             + " top=" + Math.round(navProbe.peekY)
             + " cell=" + Math.round(sidebarPane.peekTop)
             + " end=" + Math.round(navProbe.peekBottom)
-            + " pane=" + Math.round(sidebarPane.height))
+            + " pane=" + Math.round(sidebarPane.height)
+            // The counts clear of their marks, and where their ink fell in the cells, for a run that came out false.
+            + " counts=" + counts.clear
+            + " ink=" + counts.top.toFixed(1) + ":" + counts.bottom.toFixed(1))
             driver.complete()
         }
     }

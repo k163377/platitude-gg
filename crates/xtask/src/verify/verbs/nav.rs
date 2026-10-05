@@ -755,6 +755,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "aimed=true hand=true open=true",
     },
+    // The folded rail's counts each under its mark: where a line's ink
+    // falls is the face's answer (at 12px the baseline drops about 11px
+    // in Hiragino Sans on macOS, 13 in Yu Gothic UI, 14 in Noto Sans JP),
+    // so the rail seats them by ink, and `counts=` reads the ink of what
+    // each one says: under its mark's box and centred in the room below
+    // it. A count that climbed into the mark frames as a smudge under it.
+    // `ink=` is where the ink fell, for a run that came out false.
+    Verb {
+        name: "nav-fold",
+        when: &[],
+        plain: "counts=true",
+    },
     // The same opening inside the folded rail's popup: `peek=true` is the
     // popup surviving the rows under it moving.
     Verb {

@@ -46,6 +46,7 @@ linux	details-grow-squeeze 7 --preset edges	-	keeps= reads the description's lai
 linux	diff-band-sweep unstaged:crates/platitude-core/src/session/integration/support/fixtures/refs_join_snapshot.rs --preset longpaths	-	cut= reads whether a long path fits the band
 linux	graph-min --preset co-authors	-	w= min= read the graph column's measured floor
 linux	hunk-tools notes.txt --preset manyhunks	-	level= caption= read the baselines the face gives a label, a field and a held button
+linux	nav-fold	-	counts= reads where the face puts the folded rail's counts under their marks
 linux	old-git-fold	-	fitted= mark= read the band's measured floor
 linux	tab-pin	-	crushed= reads the tabs' measured widths
 linux	tab-pin-go	-	crushed= reads the tabs' measured widths
