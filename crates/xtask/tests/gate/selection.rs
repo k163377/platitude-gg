@@ -565,6 +565,51 @@ fn an_xtask_change_leaves_the_app_alone_and_runs_on_both_sides() {
     );
 }
 
+/// A module declared for Windows alone is no code of the container's: a
+/// change to it owes the container nothing, and the host what it owes
+/// wherever the host compiles it.
+#[test]
+fn a_module_compiled_on_windows_alone_owes_the_container_nothing() {
+    let sb = Sandbox::new("windows-only");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/main.rs",
+        "mod models;\n#[cfg(windows)]\nmod win32;\nfn main() {}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/models.rs",
+        "use platitude_core::stash;\n#[cfg(windows)]\nuse crate::win32;\npub struct StashModel;\n\
+         #[qobject]\nimpl StashModel {}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/win32.rs",
+        "pub fn frame() {}\n",
+    );
+    let base = sb.commit_all(&sb.seat, "feat(app): a frame of Windows'", &[]);
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/win32.rs",
+        "pub fn frame() { let _ = 1; }\n",
+    );
+    sb.commit_all(&sb.seat, "fix(app): the frame", &[]);
+    sb.gate_ok(&sb.seat, &["--main", &base]);
+    let ran = without_always(&sb.ran());
+    let on_the_container: Vec<&String> = ran
+        .iter()
+        .filter(|id| id.contains("linux") || *id == "bare")
+        .collect();
+    assert!(on_the_container.is_empty(), "{on_the_container:?}");
+    if cfg!(windows) {
+        for owed in ["clippy platitude-app", "verify stash --preset basic"] {
+            assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
+        }
+    } else {
+        assert!(ran.is_empty(), "{ran:?}");
+    }
+}
+
 /// The graph is read off the tree, so a removed source has no readers it
 /// can name (`Main.qml` naming the pane resolves to nothing): everything
 /// is the one reach that cannot miss them.

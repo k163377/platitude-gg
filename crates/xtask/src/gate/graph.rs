@@ -66,6 +66,9 @@ pub(crate) struct Graph {
     /// a snapshot its tests compare against, a bin its tests shoot, and
     /// what a directory node holds ([`Carried::AsData`]).
     pub(crate) read_as_data: BTreeMap<String, BTreeSet<String>>,
+    /// module file -> the `cfg` predicates on the target system its `mod`
+    /// declaration stands under, and its ancestors' ([`cfg_holds`]).
+    pub(crate) only_on: BTreeMap<String, Vec<String>>,
     pub unresolved: Vec<(String, String)>,
     /// `#[qobject]` type names the app defines -> file.
     app_types: BTreeMap<String, String>,
@@ -198,18 +201,41 @@ impl Graph {
     /// reading the QML tree off the disk), and a product file read off
     /// the disk stops at an integration binary ([`Carried`]).
     pub(crate) fn reach(&self, changed: &[String]) -> Reach {
+        Self::most(self.walk(changed, None))
+    }
+
+    /// [`Graph::reach`] as a build for `os` (`std::env::consts::OS`) reads
+    /// it: a module compiled only elsewhere is no code of this system's,
+    /// so it is not in the reach and no code reading it is handed anything
+    /// by it. What reads it as it stands still is (a test opening it).
+    pub(crate) fn reach_on(&self, changed: &[String], os: &str) -> Reach {
+        let mut reach = Self::most(self.walk(changed, Some(os)));
+        reach.retain(|file, _| self.compiled_on(file, os));
+        reach
+    }
+
+    fn most(handed: BTreeMap<Handed, Option<Handed>>) -> Reach {
         let mut reach = Reach::new();
-        for (file, carried) in self.walk(changed).into_keys() {
+        for (file, carried) in handed.into_keys() {
             let most = reach.entry(file).or_insert(carried);
             *most = (*most).max(carried);
         }
         reach
     }
 
+    /// Whether a build for `os` compiles `file`: every predicate its
+    /// declarations stand under holds there, or says nothing of the
+    /// system.
+    pub(crate) fn compiled_on(&self, file: &str, os: &str) -> bool {
+        self.only_on
+            .get(file)
+            .is_none_or(|predicates| predicates.iter().all(|p| cfg_holds(p, os) != Some(false)))
+    }
+
     /// How `target` got into the reach of `changed`: the chain of readers
     /// from a changed file to it, when there is one.
     pub(crate) fn why(&self, changed: &[String], target: &str) -> Option<Vec<String>> {
-        let handed = self.walk(changed);
+        let handed = self.walk(changed, None);
         let mut at = handed
             .keys()
             .filter(|(file, _)| file == target)
@@ -225,8 +251,9 @@ impl Graph {
     }
 
     /// The reach, breadth first: each file under the most it was handed,
-    /// against the file that handed it on (none for a changed file).
-    fn walk(&self, changed: &[String]) -> BTreeMap<Handed, Option<Handed>> {
+    /// against the file that handed it on (none for a changed file); on
+    /// `os`, as [`Graph::reach_on`] reads it.
+    fn walk(&self, changed: &[String], os: Option<&str>) -> BTreeMap<Handed, Option<Handed>> {
         let mut handed: BTreeMap<Handed, Option<Handed>> = BTreeMap::new();
         let mut most: BTreeMap<String, Carried> = BTreeMap::new();
         let mut queue: std::collections::VecDeque<Handed> = std::collections::VecDeque::new();
@@ -241,6 +268,11 @@ impl Graph {
                 continue;
             };
             for reader in readers {
+                if os.is_some_and(|os| {
+                    !self.compiled_on(&file, os) && !self.takes_as_data(reader, &file)
+                }) {
+                    continue;
+                }
                 let Some(next) = self.hands_on(&file, carried, reader) else {
                     continue;
                 };
@@ -589,10 +621,19 @@ fn walk_modules(root: &Path, file: &str, module: Module, g: &mut Graph) -> Resul
         )
     };
     let mut explicit: Option<String> = None;
+    let mut gated: Vec<String> = Vec::new();
     for line in text.lines() {
         let line = line.trim();
         if let Some(rest) = line.strip_prefix("#[path = \"") {
             explicit = rest.split('"').next().map(str::to_string);
+            continue;
+        }
+        if let Some(predicate) = line
+            .strip_prefix("#[cfg(")
+            .and_then(|rest| rest.strip_suffix(")]"))
+            .filter(|predicate| cfg_holds(predicate, "").is_some())
+        {
+            gated.push(predicate.to_string());
             continue;
         }
         if line.starts_with("#[") {
@@ -600,8 +641,11 @@ fn walk_modules(root: &Path, file: &str, module: Module, g: &mut Graph) -> Resul
         }
         let Some(child) = mod_declaration(line) else {
             explicit = None;
+            gated.clear();
             continue;
         };
+        let mut only_on = g.only_on.get(file).cloned().unwrap_or_default();
+        only_on.append(&mut gated);
         let candidates: Vec<std::path::PathBuf> = match explicit.take() {
             Some(named) => vec![lexical(&parent.join(named))],
             None => vec![
@@ -623,9 +667,43 @@ fn walk_modules(root: &Path, file: &str, module: Module, g: &mut Graph) -> Resul
             .entry(file.to_string())
             .or_default()
             .insert(child.to_string());
+        // A file two trees declare is compiled wherever either does: under
+        // another condition, the graph reads it as compiled everywhere.
+        if !g.modules.contains_key(&found) && !only_on.is_empty() {
+            g.only_on.insert(found.clone(), only_on);
+        } else if g.only_on.get(&found).is_none_or(|first| *first != only_on) {
+            g.only_on.remove(&found);
+        }
         walk_modules(root, &found, sub, g)?;
     }
     Ok(())
+}
+
+/// Whether a `#[cfg(…)]` predicate holds on `os` (as
+/// `std::env::consts::OS` names it); `None` for one that is not about
+/// the target system alone, which the graph reads as compiled everywhere.
+fn cfg_holds(predicate: &str, os: &str) -> Option<bool> {
+    let predicate = predicate.trim();
+    if let Some(inner) = predicate
+        .strip_prefix("not(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        return cfg_holds(inner, os).map(|holds| !holds);
+    }
+    match predicate {
+        "windows" => Some(os == "windows"),
+        "unix" => Some(os != "windows"),
+        _ => {
+            let named = predicate
+                .strip_prefix("target_os")?
+                .trim_start()
+                .strip_prefix('=')?
+                .trim()
+                .strip_prefix('"')?
+                .strip_suffix('"')?;
+            Some(os == named)
+        }
+    }
 }
 
 /// `path` with its `.` and `..` components folded away, so a file two

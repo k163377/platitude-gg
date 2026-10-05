@@ -133,6 +133,9 @@ const QT_PIN: &str = ".qt-version";
 /// What the container's image is built from (`linux::image_tag`), in the
 /// key of every step that runs in it: a new Qt is a new image.
 const IMAGE: [&str; 2] = [DOCKERFILE, QT_PIN];
+/// The system the container's side compiles for, as
+/// `std::env::consts::OS` names it there.
+const CONTAINER_OS: &str = "linux";
 /// The dependency policy, which nothing in the source graph reads.
 const DENY: &str = "deny.toml";
 /// The crates the workspace `Cargo.toml` patches in (`[patch.crates-io]`):
@@ -481,8 +484,9 @@ struct Reaches {
     container: Reach,
 }
 
-/// What the change reaches; a side owing everything selects from every
-/// file, since a build input widens only what runs.
+/// What the change reaches, each side read for the code its own system
+/// compiles (`graph::Graph::reach_on`); a side owing everything selects
+/// from every file, since a build input widens only what runs.
 fn reaches(
     g: &graph::Graph,
     dir: &Path,
@@ -490,7 +494,7 @@ fn reaches(
     container: &Scope,
     changed: &[String],
 ) -> Result<Reaches, String> {
-    let touched = g.reach(changed);
+    let touched = g.reach_on(changed, std::env::consts::OS);
     let every = if host.everything.is_some() || container.everything.is_some() {
         Some(every_file(g, dir)?)
     } else {
@@ -502,7 +506,7 @@ fn reaches(
     };
     let on_the_container = match (&container.everything, every) {
         (Some(_), Some(every)) => every,
-        _ => touched.clone(),
+        _ => g.reach_on(changed, CONTAINER_OS),
     };
     Ok(Reaches {
         touched,

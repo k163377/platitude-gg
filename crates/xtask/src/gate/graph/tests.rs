@@ -470,6 +470,94 @@ fn a_file_read_as_it_stands_hands_the_harness_data_alone() {
     }
 }
 
+/// The predicates on the target system, as `std::env::consts::OS`
+/// names it; any other says nothing of the system.
+#[test]
+fn a_cfg_on_the_system_is_read_and_any_other_is_not() {
+    use super::cfg_holds;
+    assert_eq!(cfg_holds("windows", "windows"), Some(true));
+    assert_eq!(cfg_holds("windows", "linux"), Some(false));
+    assert_eq!(cfg_holds("unix", "macos"), Some(true));
+    assert_eq!(cfg_holds("not(windows)", "linux"), Some(true));
+    assert_eq!(cfg_holds("target_os = \"linux\"", "linux"), Some(true));
+    assert_eq!(cfg_holds("target_os = \"macos\"", "linux"), Some(false));
+    assert_eq!(
+        cfg_holds("not(target_os = \"windows\")", "windows"),
+        Some(false)
+    );
+    assert_eq!(cfg_holds("test", "linux"), None);
+    assert_eq!(cfg_holds("feature = \"automation\"", "windows"), None);
+    assert_eq!(cfg_holds("all(windows, test)", "linux"), None);
+}
+
+/// On a system that does not compile a module, the module is not in the
+/// reach and hands its code readers nothing; a reader of it as it
+/// stands is still handed it.
+#[test]
+fn a_module_another_system_alone_compiles_reaches_no_code_here() {
+    let api = "crates/probe/src/api.rs".to_string();
+    let win32 = "crates/probe/src/win32.rs".to_string();
+    let model = "crates/probe/src/model.rs".to_string();
+    let lister = "crates/probe/src/lister.rs".to_string();
+    let mut g = drawn(&[(&api, &win32), (&model, &api)], &[(&lister, &win32)], &[]);
+    g.only_on.insert(win32.clone(), vec!["windows".to_string()]);
+    let changed = std::slice::from_ref(&win32);
+    let on_windows = g.reach_on(changed, "windows");
+    for owed in [&win32, &api, &model, &lister] {
+        assert!(on_windows.contains_key(owed), "{owed}: {on_windows:?}");
+    }
+    let on_linux = g.reach_on(changed, "linux");
+    assert_eq!(
+        on_linux.into_iter().collect::<Vec<_>>(),
+        vec![(lister.clone(), Carried::AsData)]
+    );
+    // A change compiled everywhere reaches the module's readers there.
+    assert!(
+        g.reach_on(std::slice::from_ref(&api), "linux")
+            .contains_key(&model)
+    );
+}
+
+/// A file two trees declare under two conditions is compiled wherever
+/// either holds, which the graph reads as everywhere.
+#[test]
+fn a_file_two_trees_declare_apart_is_compiled_wherever_either_does() {
+    let tree = crate::yard::Yard::new("graph-cfg");
+    let write = |file: &str, text: &str| {
+        let path = tree.join(file);
+        std::fs::create_dir_all(path.parent().expect("a parent")).expect("the directory");
+        std::fs::write(path, text).expect("the file");
+    };
+    write(
+        "crates/probe/src/main.rs",
+        "#[cfg(windows)]\n#[path = \"shared.rs\"]\nmod near;\nfn main() {}\n",
+    );
+    write(
+        "crates/probe/src/bin/other.rs",
+        "#[cfg(unix)]\n#[path = \"../shared.rs\"]\nmod far;\nfn main() {}\n",
+    );
+    write("crates/probe/src/shared.rs", "pub fn shared() {}\n");
+    let g = build(&tree).expect("the graph of the probe tree");
+    for os in ["windows", "linux"] {
+        assert!(g.compiled_on("crates/probe/src/shared.rs", os), "{os}");
+    }
+}
+
+/// The app's window frame is declared for Windows alone, and with it every
+/// module under it; a model beside it is compiled everywhere.
+#[test]
+fn the_window_frame_is_compiled_on_windows_alone() {
+    let root = crate::tree::workspace_root();
+    let g = build(&root).expect("the graph of this tree");
+    // In pieces: whole, each name would be this file reading it.
+    let app = format!("crates/{}", "platitude-app");
+    let window = format!("{app}/src/winframe/win32/{}", "frame.rs");
+    assert!(g.compiled_on(&window, "windows"));
+    assert!(!g.compiled_on(&window, "linux"));
+    let model = format!("{app}/src/models/{}", "facts.rs");
+    assert!(g.compiled_on(&model, "linux"));
+}
+
 #[test]
 fn a_path_declared_up_the_tree_folds_to_the_files_own_name() {
     use std::path::{Path, PathBuf};

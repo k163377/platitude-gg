@@ -165,7 +165,8 @@ fn sweep(shelf: &Path) {
 /// One record per line, fields tab-separated: `M` a module, `D` a file
 /// and everything it reads, `B` a reader and the files it reads as a
 /// binding alone (`graph::Resolved`), `T` a reader and the files it takes
-/// as data alone (`graph::Carried::AsData`), `U` a path that resolved
+/// as data alone (`graph::Carried::AsData`), `O` a module and the `cfg`
+/// predicates on the system it is compiled under, `U` a path that resolved
 /// nowhere. Tabs because a workspace path can hold a space and never one
 /// of these.
 fn write(graph: &Graph) -> String {
@@ -201,6 +202,15 @@ fn write(graph: &Graph) -> String {
             }
             out.push('\n');
         }
+    }
+    for (file, predicates) in &graph.only_on {
+        out.push_str("O\t");
+        out.push_str(file);
+        for predicate in predicates {
+            out.push('\t');
+            out.push_str(predicate);
+        }
+        out.push('\n');
     }
     for (file, path) in &graph.unresolved {
         out.push_str(&format!("U\t{file}\t{path}\n"));
@@ -270,6 +280,12 @@ fn read(text: &str) -> Option<Graph> {
                 let data: BTreeSet<String> = fields.map(str::to_string).collect();
                 graph.read_as_data.insert(reader, data);
             }
+            "O" => {
+                let file = fields.next()?.to_string();
+                graph
+                    .only_on
+                    .insert(file, fields.map(str::to_string).collect());
+            }
             "U" => {
                 let file = fields.next()?.to_string();
                 graph.unresolved.push((file, fields.next()?.to_string()));
@@ -337,6 +353,9 @@ fn same(one: &Graph, other: &Graph) -> Result<(), String> {
     }
     if one.read_as_data != other.read_as_data {
         return Err("the reads as data differ".into());
+    }
+    if one.only_on != other.only_on {
+        return Err("the systems a module is compiled on differ".into());
     }
     if one.unresolved != other.unresolved {
         return Err("the unresolved paths differ".into());
