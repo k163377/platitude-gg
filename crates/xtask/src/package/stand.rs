@@ -218,8 +218,10 @@ fn judge(stood: &Stood, app: &Path) -> Result<String, String> {
     if failed_to_load > 0 {
         return Err(format!(
             "the bundle could not load its QML — {failed_to_load} line(s) above. A QML module \
-             the bundle does not carry is the usual cause: macdeployqt's account above says \
-             what it deployed (-qmldir)"
+             the bundle does not carry is the usual cause: it carries the modules QML_MODULES in \
+             crates/xtask/src/package/contents.rs names — the lines before the run say they were \
+             put in by that list and held to it — and leaves out the ones QML_LEFT_OUT and \
+             QML_UNREACHED name, each with why"
         ));
     }
     if !stood.lines.iter().any(|l| l.contains(STARTED)) {

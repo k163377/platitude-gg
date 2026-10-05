@@ -285,21 +285,41 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       rest, an import of the absent module included.
 
   package [--out <dir>] [--password-from <variable>] [--no-build]
-      A snapshot of the app as a macOS bundle, on a Mac only: the shipped
-      build and pgg-todo-editor in Platitude GG.app with the icon and the
-      Info.plist (packaging/macos — the workspace version, and the
-      snapshot's identifier, which is not the release's); then macdeployqt
-      deploys the frameworks, the plugins and the QML modules ui/ imports,
-      the offscreen platform goes in beside Cocoa's, and every run path
-      outside the bundle goes. Signed ad hoc and verified, it is started
-      offscreen from inside the bundle and judged as `shipped` judges a
-      build — its `window loaded` waited for, then the window standing —
-      and then by dyld's own account (DYLD_PRINT_LIBRARIES): an image
-      from neither the bundle nor the system is red. Last, ditto
-      zips it as platitude-gg-snapshot-<day>-<commit>-macos-arm64.zip —
-      or, with a password, hdiutil puts it in an AES-256 .dmg of that
-      name, which must then call itself encrypted and open under the
-      password onto a bundle whose signature still verifies.
+      A snapshot of the app as a macOS bundle, on a Mac only, holding of
+      Qt only what the lists in crates/xtask/src/package/contents.rs name.
+      First, qmlimportscanner reads ui/ twice. As it is written
+      (no -importPath), each of Qt's modules ui/ imports must be one the
+      bundle carries; followed through Qt's modules (-importPath at Qt's
+      qml), each module reached must be in a directory of Qt's qml and
+      either carried or listed as reached and left out, with why, and
+      each module carried or so listed must be reached. Each miss is red,
+      by name, and so is anything the scanner says on stderr: a file it
+      could not read drops out of its answer, imports and all. Then the
+      shipped build and pgg-todo-editor go in Platitude GG.app with the
+      icon and the Info.plist (packaging/macos — the workspace version,
+      and the snapshot's identifier, which is not the release's). xtask
+      puts in the Qt plugins the lists name (the Cocoa and offscreen
+      platforms; the gif, ico, jpeg and svg image formats) and the QML
+      modules they name — a module's plugin in Contents/PlugIns/quick,
+      linked from its directory — and strips each library (-x) as
+      macdeployqt strips its own. macdeployqt then runs inside the bundle
+      with -no-plugins and no -qmldir, and brings only the frameworks the
+      app and those libraries load. The app's binary and each library
+      xtask put in keep one run path, inside the bundle, and
+      pgg-todo-editor none; qt.conf says where the plugins and the QML
+      modules are (Plugins = PlugIns, QmlImports = Resources/qml). Before
+      the signature, the bundle's Frameworks, PlugIns and QML modules are
+      held to the lists exactly, and each module's plugin to its qmldir:
+      one more or one fewer is red, by name. Signed ad hoc and verified,
+      it is started offscreen from inside the bundle and judged as
+      `shipped` judges a build — its `window loaded` waited for, then the
+      window standing — and then by dyld's own account
+      (DYLD_PRINT_LIBRARIES): an image from neither the bundle nor the
+      system is red. Last, ditto zips it as
+      platitude-gg-snapshot-<day>-<commit>-macos-arm64.zip — or, with a
+      password, hdiutil puts it in an AES-256 .dmg of that name, which
+      must then call itself encrypted and open under the password onto a
+      bundle whose signature still verifies.
       Not a release: no notices of the bundled licences travel with it,
       and no Apple identity signs it.
       options:
