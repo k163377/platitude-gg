@@ -270,6 +270,14 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       without the verification harness. Offscreen, bounded, reaped — a
       shipped build has no watchdog of its own, because that is a
       harness knob.
+      Green is the app's own line once Main.qml loaded, `window loaded`,
+      waited for as long as the load takes, and the window still up a
+      short stand after it. Anything short of that is red, worded by
+      where it fell short: Qt's line that the QML would not load, no
+      `build tree` (the app never got going), an exit before the stand
+      is out, or the ceiling, which only names a load that never ends —
+      how long a load takes is the machine's, so no stretch of clock
+      stands in for the line.
       What it is for is the failure only this build has: a QML file in
       `platitude.ui` that reaches into `platitude.auto` resolves in every
       build this runner drives and loads nothing in the shipped one.
@@ -285,8 +293,9 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       the offscreen platform goes in beside Cocoa's, and every run path
       outside the bundle goes. Signed ad hoc and verified, it is started
       offscreen from inside the bundle and judged as `shipped` judges a
-      build, and then by dyld's own account (DYLD_PRINT_LIBRARIES): an
-      image from neither the bundle nor the system is red. Last, ditto
+      build — its `window loaded` waited for, then the window standing —
+      and then by dyld's own account (DYLD_PRINT_LIBRARIES): an image
+      from neither the bundle nor the system is red. Last, ditto
       zips it as platitude-gg-snapshot-<day>-<commit>-macos-arm64.zip —
       or, with a password, hdiutil puts it in an AES-256 .dmg of that
       name, which must then call itself encrypted and open under the

@@ -61,16 +61,11 @@ impl Said {
 }
 
 /// Drains a pipe on its own thread, so a chatty child never blocks on a
-/// full pipe while the parent waits for it to exit. The clock of
-/// [`Said::at`] starts here, within microseconds of the spawn.
-pub(crate) fn collect<R: Read + Send + 'static>(reader: R) -> std::thread::JoinHandle<Said> {
-    collect_marking(reader, std::sync::Arc::default(), |_| false)
-}
-
-/// The same, raising `mark` the moment a line `when` recognises arrives,
-/// so the parent's wait can end on a verdict already decided: QML that
-/// would not load leaves a windowless app in its event loop until the
-/// ceiling (`verify::child`).
+/// full pipe while the parent waits for it to exit, and raises `mark` the
+/// moment a line `when` recognises arrives, so the parent's wait can end
+/// on that line: a verdict already decided (`verify::child`: Qt saying the
+/// QML would not load) or the word it waits for (`shipped`: the window
+/// loaded). The clock of [`Said::at`] starts here, with the reader.
 pub(crate) fn collect_marking<R: Read + Send + 'static>(
     reader: R,
     mark: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -102,9 +97,13 @@ mod tests {
     /// for the wrong one.
     #[test]
     fn every_line_is_timed_at_its_own_index() {
-        let said = super::collect(std::io::Cursor::new(b"one\ntwo\nthree".to_vec()))
-            .join()
-            .expect("the reader to finish");
+        let said = super::collect_marking(
+            std::io::Cursor::new(b"one\ntwo\nthree".to_vec()),
+            std::sync::Arc::default(),
+            |_| false,
+        )
+        .join()
+        .expect("the reader to finish");
 
         assert_eq!(said.lines.len(), 3, "{:?}", said.lines);
         assert_eq!(said.at.len(), said.lines.len());
