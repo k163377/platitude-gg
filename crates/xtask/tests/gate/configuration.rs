@@ -1,6 +1,6 @@
-//! What a change to a configuration owes — the workspace's build,
-//! clippy's settings, the dependency policy: each the steps that read it,
-//! and no more.
+//! What a change to a configuration owes — the workspace's build, a
+//! crate's manifest, clippy's settings, the dependency policy: each the
+//! steps that read it, and no more.
 
 use crate::support::{Sandbox, set, without_always};
 
@@ -50,6 +50,42 @@ fn a_lint_threshold_owes_clippy_alone() {
             "clippy-linux xtask",
         ])
     );
+}
+
+/// A crate's manifest is read by every compile of the crate, and its
+/// readers' through it; not by a crate that reads none of it.
+#[test]
+fn a_crates_manifest_owes_that_crate_and_its_readers() {
+    let sb = Sandbox::new("manifest");
+    let manifest = "crates/platitude-core/Cargo.toml";
+    sb.write(&sb.seat, manifest, "[package]\nname = \"platitude-core\"\n");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/Cargo.toml",
+        "[package]\nname = \"xtask\"\n",
+    );
+    let base = sb.commit_all(&sb.seat, "chore: manifests", &[]);
+    sb.write(
+        &sb.seat,
+        manifest,
+        "[package]\nname = \"platitude-core\"\n[features]\nprobe = []\n",
+    );
+    sb.commit_all(&sb.seat, "feat(core): a feature", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--main", &base, "--dry-run"]);
+    assert!(!text.contains("everything"), "{text}");
+    sb.gate_ok(&sb.seat, &["--main", &base]);
+    let ran = without_always(&sb.ran());
+    for owed in [
+        "clippy platitude-core",
+        "clippy-linux platitude-core",
+        "clippy platitude-app",
+        "test it (all)",
+        "deny",
+    ] {
+        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
+    }
+    let tool: Vec<&String> = ran.iter().filter(|id| id.contains("xtask")).collect();
+    assert!(tool.is_empty(), "{tool:?}");
 }
 
 #[test]

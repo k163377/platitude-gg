@@ -558,6 +558,63 @@ fn the_window_frame_is_compiled_on_windows_alone() {
     assert!(g.compiled_on(&model, "linux"));
 }
 
+/// A module reads its package's manifest and build script, and the
+/// script reads what it hands the linker.
+#[test]
+fn a_crate_is_built_from_its_manifest_and_script() {
+    let root = crate::tree::workspace_root();
+    let g = build(&root).expect("the graph of this tree");
+    // In pieces: whole, each name would be this file reading it.
+    let app = format!("crates/{}", "platitude-app");
+    let script = format!("{app}/{}", "build.rs");
+    let model = format!("{app}/src/models/{}", "facts.rs");
+    for read in [format!("{app}/{}", "Cargo.toml"), script.clone()] {
+        assert!(
+            g.deps
+                .get(&model)
+                .is_some_and(|reads| reads.contains(&read)),
+            "{model} is compiled as {read} says"
+        );
+    }
+    let resource = format!("{app}/assets/{}", "platitude.res");
+    assert!(
+        g.deps
+            .get(&script)
+            .is_some_and(|reads| reads.contains(&resource)),
+        "{script} hands the linker {resource}"
+    );
+}
+
+/// Taken out, a file has no edge left: what still names it is found by
+/// its strings — the window icon the Windows frame embeds, the hook the
+/// gate embeds and the directory node that held it.
+#[test]
+fn what_names_a_file_taken_out_is_read_off_its_strings() {
+    let root = crate::tree::workspace_root();
+    let g = build(&root).expect("the graph of this tree");
+    // In pieces: whole, each name would be this file reading it.
+    let app = format!("crates/{}", "platitude-app");
+    let cases = [
+        (
+            format!("{app}/assets/{}", "icon-20.png"),
+            vec![format!("{app}/src/winframe/win32/{}", "icon.rs")],
+        ),
+        (
+            format!("{}/{}", ".githooks", "reference-transaction"),
+            vec![
+                format!("{}/", ".githooks"),
+                format!("crates/xtask/src/gate/{}", "hooks.rs"),
+            ],
+        ),
+    ];
+    for (gone, readers) in cases {
+        let named = g.naming(&root, &[gone.clone()].into());
+        for reader in readers {
+            assert!(named.contains(&reader), "{gone}: {named:?}");
+        }
+    }
+}
+
 #[test]
 fn a_path_declared_up_the_tree_folds_to_the_files_own_name() {
     use std::path::{Path, PathBuf};

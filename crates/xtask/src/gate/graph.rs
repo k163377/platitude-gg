@@ -232,6 +232,46 @@ impl Graph {
             .is_none_or(|predicates| predicates.iter().all(|p| cfg_holds(p, os) != Some(false)))
     }
 
+    /// What read `gone` — files the tree under `root` no longer holds, which
+    /// no edge read off it leads to ([`literal_paths`] resolves only what is
+    /// there): every module a string of which still names one, as
+    /// [`literal_paths`] would have resolved it, and every directory node
+    /// that held one.
+    pub(crate) fn naming(&self, root: &Path, gone: &BTreeSet<String>) -> BTreeSet<String> {
+        let mut readers: BTreeSet<String> = self
+            .rdeps
+            .keys()
+            .filter(|node| node.ends_with('/') && gone.iter().any(|file| file.starts_with(*node)))
+            .cloned()
+            .collect();
+        // An integration binary's strings lay out its own sandbox (`build`).
+        let modules = self
+            .modules
+            .iter()
+            .filter(|(_, module)| module.test_binary.is_none());
+        for (file, _) in modules {
+            let Ok(text) = std::fs::read_to_string(root.join(file)) else {
+                continue;
+            };
+            let names_one = string_bodies(&text)
+                .iter()
+                .filter(|literal| path_shaped(literal))
+                .any(|literal| {
+                    literal_bases(file).iter().any(|base| {
+                        let named = lexical(&base.join(literal))
+                            .display()
+                            .to_string()
+                            .replace('\\', "/");
+                        gone.contains(&named)
+                    })
+                });
+            if names_one {
+                readers.insert(file.clone());
+            }
+        }
+        readers
+    }
+
     /// How `target` got into the reach of `changed`: the chain of readers
     /// from a changed file to it, when there is one.
     pub(crate) fn why(&self, changed: &[String], target: &str) -> Option<Vec<String>> {
@@ -453,6 +493,22 @@ pub(crate) fn build(root: &Path) -> Result<Graph, String> {
             }
         }
     }
+    // Every module is compiled as its package's manifest and build script
+    // say — features, lints, what the script hands rustc and the linker —
+    // so a change to either is a change to each.
+    let modules: Vec<(String, String)> = g
+        .modules
+        .iter()
+        .map(|(file, module)| (file.clone(), module.package.clone()))
+        .collect();
+    for (file, package) in modules {
+        for built_by in ["Cargo.toml", "build.rs"] {
+            let read = format!("crates/{package}/{built_by}");
+            if root.join(&read).is_file() {
+                g.edge(&file, &read);
+            }
+        }
+    }
     snapshots(root, &mut g)?;
     qml(root, &mut g)?;
     directories(root, &mut g)?;
@@ -538,8 +594,9 @@ fn rust_files_in(dir: &Path) -> Vec<std::path::PathBuf> {
 
 /// The crate roots of one package, each walked into the module index:
 /// the lib, the bins (`src/main.rs` and each `src/bin/*.rs`, a crate
-/// apiece), and the integration binaries — every file directly under
-/// tests/ and every `tests/<name>/main.rs` (core's `it`, the gate's own).
+/// apiece), the build script, and the integration binaries — every file
+/// directly under tests/ and every `tests/<name>/main.rs` (core's `it`,
+/// the gate's own).
 fn roots_of(root: &Path, dir: &Path, package: &str, g: &mut Graph) -> Result<(), String> {
     let ident = package.replace('-', "_");
     // The root files, spelled in pieces: a whole path in a string here
@@ -565,6 +622,9 @@ fn roots_of(root: &Path, dir: &Path, package: &str, g: &mut Graph) -> Result<(),
         // would resolve into the bin.
         roots.push((file, format!("{ident}::{}", name.replace('-', "_")), None));
     }
+    // A crate of its own, as a bin is: what it names in its strings (the
+    // files it hands the linker) is read like any module's.
+    roots.push((dir.join("build.rs"), format!("{ident}::build_script"), None));
     for file in rust_files_in(&dir.join("tests")) {
         let stem = stem_of(&file.display().to_string());
         roots.push((file, format!("{ident}::{stem}"), Some(stem)));
@@ -609,7 +669,9 @@ fn walk_modules(root: &Path, file: &str, module: Module, g: &mut Graph) -> Resul
         .map(|n| n.to_string_lossy())
         .unwrap_or_default();
     let parent = path.parent().unwrap_or(Path::new(""));
-    let owns_dir = matches!(name.as_ref(), "mod.rs" | "lib.rs" | "main.rs");
+    // A crate root — the lib, a bin, the build script, a test binary —
+    // declares its children beside it, as a `mod.rs` does.
+    let owns_dir = module.path.is_empty() || name == "mod.rs";
     let children_dir = if owns_dir {
         parent.to_path_buf()
     } else {
@@ -1290,23 +1352,11 @@ fn self_relative(g: &Graph, path: &[String]) -> Vec<String> {
 /// a dot) — `"crates"` alone would otherwise pull in the world.
 fn literal_paths(root: &Path, file: &str, bodies: &[String]) -> Vec<String> {
     let mut out = Vec::new();
-    let file_dir = Path::new(file).parent().unwrap_or(Path::new(""));
-    let crate_dir: std::path::PathBuf = Path::new(file).iter().take(2).collect();
     let Ok(real_root) = root.canonicalize() else {
         return out;
     };
-    for literal in bodies {
-        let literal = literal.as_str();
-        if literal.len() < 3
-            || literal.len() > 200
-            || !(literal.contains('/') || literal.contains('.'))
-            || literal.contains(' ')
-            || literal.starts_with("http")
-            || literal.contains("::")
-        {
-            continue;
-        }
-        for base in [file_dir, crate_dir.as_path(), Path::new("")] {
+    for literal in bodies.iter().filter(|literal| path_shaped(literal)) {
+        for base in literal_bases(file) {
             let candidate = root.join(base).join(literal);
             if !candidate.exists() {
                 continue;
@@ -1343,6 +1393,27 @@ fn literal_paths(root: &Path, file: &str, bodies: &[String]) -> Vec<String> {
         }
     }
     out
+}
+
+/// Whether a string literal may name a path: [`literal_paths`]' test.
+fn path_shaped(literal: &str) -> bool {
+    !(literal.len() < 3
+        || literal.len() > 200
+        || !(literal.contains('/') || literal.contains('.'))
+        || literal.contains(' ')
+        || literal.starts_with("http")
+        || literal.contains("::"))
+}
+
+/// What a path `file` names is resolved against, in turn: its own
+/// directory, its crate, and the workspace root.
+fn literal_bases(file: &str) -> [std::path::PathBuf; 3] {
+    let path = Path::new(file);
+    [
+        path.parent().unwrap_or(Path::new("")).to_path_buf(),
+        path.iter().take(2).collect(),
+        std::path::PathBuf::new(),
+    ]
 }
 
 /// The prefix of the variable cargo sets per bin of a package, holding the

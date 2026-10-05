@@ -13,9 +13,11 @@ use std::process::Command;
 
 const GIVEN_COMMIT: &str = "PLATITUDE_GIVEN_COMMIT";
 const GIVEN_TAGS: &str = "PLATITUDE_GIVEN_TAGS";
+/// The compiled resource, beside the manifest.
+const RESOURCE: &str = "assets/platitude.res";
 
 fn main() {
-    println!("cargo:rerun-if-changed=assets/platitude.res");
+    println!("cargo:rerun-if-changed={RESOURCE}");
     stamp_commit();
     link_resource();
 }
@@ -89,15 +91,18 @@ fn link_resource() {
     let Ok(root) = std::env::var("CARGO_MANIFEST_DIR") else {
         return;
     };
-    let res = std::path::Path::new(&root)
-        .join("assets")
-        .join("platitude.res");
+    // Part by part, so the linker is handed the system's own separators.
+    let res = RESOURCE
+        .split('/')
+        .fold(std::path::PathBuf::from(&root), |path, part| {
+            path.join(part)
+        });
     if res.is_file() {
         // Bins only: the test harnesses link without a resource.
         println!("cargo:rustc-link-arg-bins={}", res.display());
     } else {
         println!(
-            "cargo:warning=assets/platitude.res is missing, so the exe keeps the shell's generic icon and is named after its own file"
+            "cargo:warning={RESOURCE} is missing, so the exe keeps the shell's generic icon and is named after its own file"
         );
     }
 }

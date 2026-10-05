@@ -51,8 +51,9 @@ commands:
       runs themselves), bare when the app moved. A file read as it stands
       — named in a string, a bin a test shoots — moves no code: it owes
       its readers' tests and the verbs whose census names what they show,
-      not clippy or the harness's every verb. A module one system alone
-      compiles owes the other side nothing. The always-steps
+      not clippy or the harness's every verb; taken out, it owes what
+      still names it. A module one system alone compiles owes the other
+      side nothing. The always-steps
       (structure, waits, versions, docs, verbs, fmt) run every time and first;
       a build input that changed (Cargo.toml, Cargo.lock, the toolchain,
       cargo's configuration, a vendored crate) makes the reach the whole

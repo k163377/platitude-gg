@@ -411,17 +411,14 @@ fn parse_ls_tree(listing: &[u8]) -> BTreeMap<String, String> {
 }
 
 /// A file every build reads and no graph of the sources sees: a change to
-/// it is a change to everything. clippy's configuration is clippy's
-/// (`steps::select`), and the container's image its own side's
+/// it is a change to everything. A crate's own manifest and build script
+/// are its modules' reading (`graph::build`), clippy's configuration is
+/// clippy's (`steps::select`), and the container's image its own side's
 /// ([`scopes`]).
 fn moves_everything(file: &str) -> bool {
     matches!(file, "Cargo.toml" | "Cargo.lock" | "rust-toolchain.toml")
         || file.starts_with(".cargo/")
         || under(file, VENDOR)
-        || (file.starts_with("crates/")
-            && (file.ends_with("/Cargo.toml") || file.ends_with("/build.rs")))
-        // What the app's build script links in: no source names it.
-        || file.starts_with("crates/platitude-app/assets/")
 }
 
 /// What each side owes beyond the reach: the host's, and the container's.
@@ -501,7 +498,8 @@ fn reaches(
     container: &Scope,
     changed: &[String],
 ) -> Result<Reaches, String> {
-    let touched = g.reach_on(changed, std::env::consts::OS);
+    let moved = with_readers_of_the_gone(g, dir, changed);
+    let touched = g.reach_on(&moved, std::env::consts::OS);
     let every = if host.everything.is_some() || container.everything.is_some() {
         Some(every_file(g, dir)?)
     } else {
@@ -513,13 +511,30 @@ fn reaches(
     };
     let on_the_container = match (&container.everything, every) {
         (Some(_), Some(every)) => every,
-        _ => g.reach_on(changed, CONTAINER_OS),
+        _ => g.reach_on(&moved, CONTAINER_OS),
     };
     Ok(Reaches {
         touched,
         host: on_the_host,
         container: on_the_container,
     })
+}
+
+/// `changed`, and what still names a file of it the tree no longer holds
+/// (`graph::Graph::naming`): read off the tree, the graph has no edge to
+/// that file, and a build embedding it breaks with its reader unchanged —
+/// so the reader is owed as changed, on the systems that compile it.
+fn with_readers_of_the_gone(g: &graph::Graph, dir: &Path, changed: &[String]) -> Vec<String> {
+    let gone: BTreeSet<String> = changed
+        .iter()
+        .filter(|file| !dir.join(file).exists())
+        .cloned()
+        .collect();
+    let mut moved = changed.to_vec();
+    if !gone.is_empty() {
+        moved.extend(g.naming(dir, &gone));
+    }
+    moved
 }
 
 /// A source the tree no longer holds: the graph, read off the tree, has no
