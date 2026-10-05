@@ -86,6 +86,9 @@ Item {
     readonly property int tabStripFloorW:
         menuButton.width + plusButton.width + tabs.grabRun
         + 2 * (tabMetrics.tabPadL + tabMetrics.markRoomMin + tabStrip.tabTitleMinW)
+    /// Where the names' baseline stands, in the strip's y: words on the band's row stand on it with them
+    /// (`BandStateGroup.lineBaseline`; 規約 §ウィンドウの縁「バッジの箱」). Read off `titleLine`, laid out as a name is.
+    readonly property real titleBaseline: titleLine.y + titleLine.baselineOffset
 
     signal openRepositoryRequested()
     signal cloneRepositoryRequested()
@@ -522,6 +525,16 @@ Item {
             tint: Theme.textPrimary
         }
         onClicked: tabStrip.openRepositoryRequested()
+    }
+    // A name's line, never drawn: each tab centres its name's line in the strip's height (`CutName`), so this one,
+    // centred the same way in the same face, stands where every name's baseline does (`titleBaseline`). Here rather
+    // than read off a tab: the band's badges can stand with no tab open.
+    Label {
+        id: titleLine
+        visible: false
+        anchors.verticalCenter: parent.verticalCenter
+        text: "x"
+        font.pixelSize: Theme.fontMd
     }
     // The empty band past the last tab. `winframe::hit_test` answers HTCAPTION here, so presses never reach the scene;
     // the scene only says where it is.

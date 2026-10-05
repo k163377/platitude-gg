@@ -135,8 +135,10 @@ Item {
             // mirror is room the words do not have, and they run past the group's own cell.
             + " shadow=" + topBar.bandShadowAgrees
             + " tint=" + acts.stateTint
-            // A folded group as wide as its mark and no wider (`BandStateGroup.markFitted`).
+            // A folded group as wide as its mark and no wider (`BandStateGroup.markFitted`), its frame a badge's depth
+            // (`markDeep`).
             + " fitted=" + topBar.stateMarkFitted
+            + " deep=" + topBar.stateMarkDeep
             + " cap=" + topBar.stateCapW
             + " groupW=" + topBar.stateGroupW
             + " badgeMin=" + topBar.stateBadgeMinW
@@ -328,8 +330,10 @@ Item {
                 + " mark=" + topBar.stateMarkShown
                 + " tint=" + acts.stateTint
                 // Whether the folded group is its mark's width: kept at its words' room it leaves empty band beside
-                // the mark, which a picture reads as a fat grab run.
+                // the mark, which a picture reads as a fat grab run. Whether its frame is a badge's depth: one the
+                // band's depth lies along the band's edges, and a cropped picture reads that as the band's own line.
                 + " fitted=" + topBar.stateMarkFitted
+                + " deep=" + topBar.stateMarkDeep
                 + " cap=" + topBar.stateCapW
                 + " version=" + AppBackend.gitVersion
                 + " min=" + AppBackend.minimumGit
@@ -392,6 +396,7 @@ Item {
                 + " mark=" + topBar.stateMarkShown
                 + " tint=" + acts.stateTint
                 + " fitted=" + topBar.stateMarkFitted
+                + " deep=" + topBar.stateMarkDeep
                 + " rows=" + topBar.stateCardRows
                 + " cap=" + topBar.stateCapW
                 + " w=" + window.width)

@@ -50,10 +50,11 @@ Item {
         tabRunAvail: 400
         tabCount: 1
         controlPadding: 6
-        controlHeight: 24
         cellFolded: false
+        // Off the pixel grid, as a name's centred line can stand: the boxes have to land on it whole.
+        lineBaseline: 25.6
         width: 400
-        height: 24
+        height: Theme.toolbarHeight
     }
 
     /// The floor measured again outside the group: a group handing its share-out some other number would report
@@ -75,6 +76,7 @@ Item {
             group.width = 400
             group.room = Qt.binding(() => group.width)
             group.windowAtFloor = false
+            group.cellFolded = false
             group.tabContentWidth = 100
             group.tabRunAvail = 400
             group.tabCount = 1
@@ -85,21 +87,37 @@ Item {
             graph.stale = false
         }
 
-        function badgesDrawn() {
+        function badgesStanding() {
             for (let i = 0; i < group.children.length; i++) {
                 const row = group.children[i]
                 if (!row.visible || row.children === undefined)
                     continue
-                let widths = []
+                let badges = []
                 for (let j = 0; j < row.children.length; j++) {
                     const badge = row.children[j]
                     if (badge.visible && badge.naturalW !== undefined)
-                        widths.push(badge.width)
+                        badges.push(badge)
                 }
-                if (widths.length > 0)
-                    return widths
+                if (badges.length > 0)
+                    return badges
             }
             return []
+        }
+
+        function badgesDrawn() {
+            return badgesStanding().map(badge => badge.width)
+        }
+
+        /// The first word drawn in a badge: the one item in its words' row with a baseline.
+        function firstWord(badge) {
+            for (let i = 0; i < badge.children.length; i++) {
+                const row = badge.children[i]
+                for (let j = 0; row.children !== undefined && j < row.children.length; j++) {
+                    if (row.children[j].visible && row.children[j].baselineOffset > 0)
+                        return row.children[j]
+                }
+            }
+            return null
         }
 
         /// The widest width at which the group has folded — swept, since the boundary in pixels is the platform
@@ -240,6 +258,61 @@ Item {
             verify(!group.opBadgeShown)
             verify(!group.stateShown, "with nothing the matter the group is not there at all")
             verify(!group.visible)
+        }
+
+        /// The folded mark's frame as drawn: the one bordered box in a cell standing in the group (folded, the badges'
+        /// row is down).
+        function markFrame() {
+            for (let i = 0; i < group.children.length; i++) {
+                const cell = group.children[i]
+                if (!cell.visible || cell.children === undefined)
+                    continue
+                for (let j = 0; j < cell.children.length; j++) {
+                    const box = cell.children[j]
+                    if (box.border !== undefined && box.border.width > 0)
+                        return box
+                }
+            }
+            return null
+        }
+
+        /// The words stand on the band's line, a whole pixel, and each box is cut round the capitals: as much air
+        /// over them as under the baseline (規約 §ウィンドウの縁「バッジの箱」). The baseline is the drawn word's own;
+        /// the cap height is the second measurer's.
+        function test_the_words_stand_on_the_bands_line_in_a_box_cut_round_the_capitals() {
+            const badges = badgesStanding()
+            compare(badges.length, 2, "the stopped operation and its conflicts")
+            const line = Math.round(group.lineBaseline)
+            for (const badge of badges) {
+                const word = firstWord(badge)
+                verify(word !== null, "the badge draws a word")
+                compare(word.mapToItem(group, 0, word.baselineOffset).y, line, "on the band's line: " + word.text)
+                const top = badge.mapToItem(group, 0, 0).y
+                compare(top, Math.round(top), "the box on whole pixels: " + word.text)
+                const over = line - witness.capRows - (top + Theme.borderWidth)
+                const under = top + badge.height - Theme.borderWidth - line
+                compare(over, under, "as much air over the capitals as under the baseline: " + word.text)
+                verify(badge.height <= Theme.iconXl, "within the band's box step: " + badge.height)
+            }
+        }
+
+        /// Folded, the frame is the badges' box where they stood, in the band's own cell and in an end cell alike: a
+        /// frame the cell's depth lies along the band's top and bottom edges (規約 §ウィンドウの縁「畳んだ `…` の箱」).
+        /// Read against the second measurer, not the group's `foldedDepth`.
+        function test_the_folded_mark_keeps_the_badges_box_clear_of_the_bands_edges() {
+            const standing = badgesStanding()[0].mapToItem(group, 0, 0).y
+            group.windowAtFloor = true
+            verify(group.stateMarkShown)
+            for (const endCell of [false, true]) {
+                group.cellFolded = endCell
+                const frame = markFrame()
+                verify(frame !== null, "the folded mark draws its frame (end cell: " + endCell + ")")
+                compare(frame.height, witness.depth, "a badge's depth (end cell: " + endCell + ")")
+                compare(frame.mapToItem(group, 0, 0).y, standing,
+                        "where the badges stood (end cell: " + endCell + ")")
+                verify(frame.height < group.height, "clear of the band's edges")
+                verify(group.markDeep, "and the run's reading agrees")
+            }
         }
 
         function test_the_window_on_its_floor_takes_the_words() {

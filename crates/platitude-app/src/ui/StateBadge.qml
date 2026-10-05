@@ -18,31 +18,36 @@ Rectangle {
     /// Whether this badge is also a way somewhere. Only the identity one is, narrowed or not
     /// (デザイン規約 §ウィンドウの縁「押せる行は identity だけ」).
     property bool pressable: false
+    /// The box every badge is cut to (`BandStateMetrics`): its depth, and where the words' line stands in it.
+    required property BandStateMetrics box
     signal pressed()
     default property alias content: badgeRowInner.data
 
     implicitWidth: badge.naturalW
     width: Math.min(badge.naturalW, badge.cap)
-    height: Theme.iconLg
+    height: badge.box.depth
     radius: Theme.radiusSm
     color: badge.filled ? Theme.danger : badge.pressable && badgeHover.hovered ? Theme.bgHover : "transparent"
     border.color: badge.filled ? "transparent" : badge.tint
     border.width: badge.filled ? 0 : Theme.borderWidth
+    // On the box, not the words' line below: the line is shallower than the box.
+    HoverHandler {
+        id: badgeHover
+        enabled: badge.pressable
+    }
+    TapHandler {
+        enabled: badge.pressable
+        onTapped: badge.pressed()
+    }
+    // The words' line, not the box: the box is cut round the capitals, and a line centred in it rides high or low by
+    // the face's descent.
     RowLayout {
         id: badgeRowInner
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
         anchors.leftMargin: Theme.spaceXs
         anchors.rightMargin: Theme.spaceXs
+        y: badge.box.wordTop
         spacing: Theme.spaceXs
-        // Handlers: an `Item` handed to a layout is given a seat in it, and the word beside it loses that room
-        // (rules-refs/app-ui.md「`Layout` の子の hover は `HoverHandler`」).
-        HoverHandler {
-            id: badgeHover
-            enabled: badge.pressable
-        }
-        TapHandler {
-            enabled: badge.pressable
-            onTapped: badge.pressed()
-        }
     }
 }

@@ -33,6 +33,22 @@ Item {
     readonly property int staleW: Math.ceil(mStale.implicitWidth) + 2 * Theme.spaceXs
     readonly property int lfsW: Math.ceil(mLfs.implicitWidth) + 2 * Theme.spaceXs
 
+    /// The badge box, the band's and the card's alike (規約 §ウィンドウの縁「バッジの箱」). The words are capitals only,
+    /// so the box is cut round the capitals' ink — the line's descent is air no letter uses: as much air over the cap
+    /// height as under the baseline, the most of it that fits in the band's box step (`iconXl`, the `+`'s wash). Whole
+    /// pixels, so the frame's lines stay sharp and the two airs come out equal.
+    readonly property int capRows: Math.round(stateFont.capitalHeight)
+    readonly property int air: Math.floor((Theme.iconXl - 2 * Theme.borderWidth - metrics.capRows) / 2)
+    readonly property int depth: metrics.capRows + 2 * metrics.air + 2 * Theme.borderWidth
+    /// Where the words' baseline stands, down from the box's top.
+    readonly property int wordBase: Theme.borderWidth + metrics.air + metrics.capRows
+    /// Where a word's line goes in the box so its baseline lands on `wordBase`, for words laid out by a row (a row
+    /// cannot be anchored by a baseline).
+    readonly property real wordTop: metrics.wordBase - stateFont.ascent
+    /// Where the capitals' middle stands, down from the top of a word's line: the drawn dot between two words sits on
+    /// it (`DotMark`).
+    readonly property real capMiddle: stateFont.ascent - metrics.capRows / 2
+
     /// The narrowest a badge is drawn with words in it. Settled by `settleMinW`: `advanceWidth` is a method, so a
     /// binding on it holds the default font's answer (rules-refs/app-ui.md「`FontMetrics.advanceWidth()` も同じ側」).
     /// Counted in `n`s, not `averageCharacterWidth` (rules-refs/app-ui.md「字数の床の値付けは実測の字送り」).

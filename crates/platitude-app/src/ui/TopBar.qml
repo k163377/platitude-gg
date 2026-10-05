@@ -58,6 +58,8 @@ Rectangle {
     readonly property int stateGroupW: stateGroup.stateGroupW
     /// …and whether a folded group is as wide as its mark and no wider (`BandStateGroup.markFitted`).
     readonly property bool stateMarkFitted: stateGroup.markFitted
+    /// …and whether its frame is a badge's depth (`BandStateGroup.markDeep`).
+    readonly property bool stateMarkDeep: stateGroup.markDeep
     /// …and whether the band laid out with the words (`bandAsked`) hands the strip and the group together what the
     /// real one does — the two rows share every other cell, so a cell the shadow does not mirror is the difference.
     readonly property bool bandShadowAgrees:
@@ -504,14 +506,17 @@ Rectangle {
             tabContentWidth: tabStrip.contentWidth
             tabRunAvail: Math.max(0, tabStrip.runAvail + stripAsked.width - tabStrip.width)
             tabCount: tabStrip.tabCount
-            // Measured off the fetch button: a target's size is the padding a Fusion `ToolButton` keeps around its
+            // Measured off the fetch button: a target's width is the padding a Fusion `ToolButton` keeps around its
             // content, which the theme has no number for. Its `padding`, not the two sides — those carry the shared
             // box's slack (`ActionButton.slack`) and would move this group whenever fetch changed its wording.
             controlPadding: fetchButton.padding
-            controlHeight: fetchButton.implicitHeight
             cellFolded: topBar.actionsFolded
+            // Both run the band's depth from its top, so the strip's y is the group's.
+            lineBaseline: tabStrip.titleBaseline
             Layout.fillWidth: true
-            Layout.fillHeight: stateGroup.cellFolded
+            // The band's depth for the target and the card's seat under it; the boxes keep their own
+            // (`BandStateGroup.foldedDepth`).
+            Layout.fillHeight: true
             // **Folded, the mark's cell and not a pixel more** (規約 §ウィンドウの縁「畳んだ群が帯から取るのは印の箱だけ」).
             Layout.maximumWidth: stateGroup.folded ? stateGroup.foldedWidth : stateGroup.naturalWidth
             Layout.minimumWidth: stateGroup.foldedWidth

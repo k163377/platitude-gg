@@ -38,6 +38,9 @@ AppCard {
     /// What was said about the walk that gave up, where anybody said anything (`GraphModel.error`).
     property string staleWhy: ""
 
+    /// The box the band's badges are cut to: the card draws them in the same one (規約 §ウィンドウの縁「バッジの箱」).
+    required property BandStateMetrics box
+
     /// The identity row is pressable (デザイン規約 §ウィンドウの縁「押せる行は identity だけ」).
     signal identityRequested()
 
@@ -118,12 +121,14 @@ AppCard {
                 border.color: Theme.warning
                 border.width: Theme.borderWidth
                 radius: Theme.radiusSm
-                implicitHeight: Theme.iconLg
+                implicitHeight: stateCard.box.depth
                 implicitWidth: opLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
+                // The words' line where the box puts it: a row has no baseline to anchor by.
                 RowLayout {
                     id: opLabel
-                    anchors.centerIn: parent
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: stateCard.box.wordTop
                     spacing: Theme.spaceXs
                     Label {
                         text: stateCard.opText
@@ -132,11 +137,13 @@ AppCard {
                         font.weight: Theme.fontWeightStrong
                     }
                     // Bisect runs alongside and shares the badge. The dot is drawn — a typed one would put a
-                    // full-width cell inside the badge (規約 §余白).
+                    // full-width cell inside the badge (規約 §余白) — on the capitals' middle, as the band's.
                     DotMark {
+                        id: opDot
                         visible: stateCard.opAlso !== ""
                         tint: Theme.warning
-                        Layout.alignment: Qt.AlignVCenter
+                        Layout.alignment: Qt.AlignTop
+                        Layout.topMargin: stateCard.box.capMiddle - opDot.implicitHeight / 2
                     }
                     Label {
                         visible: stateCard.opAlso !== ""
@@ -170,12 +177,14 @@ AppCard {
                 id: conflictBadge
                 color: Theme.danger
                 radius: Theme.radiusSm
-                implicitHeight: Theme.iconLg
+                implicitHeight: stateCard.box.depth
                 implicitWidth: conflictLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
                 Label {
                     id: conflictLabel
-                    anchors.centerIn: parent
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.baseline: parent.top
+                    anchors.baselineOffset: stateCard.box.wordBase
                     text: Words.badgeConflicts
                     color: Theme.textOnAccent
                     font.pixelSize: Theme.fontSm
@@ -203,7 +212,7 @@ AppCard {
                 border.color: Theme.warning
                 border.width: Theme.borderWidth
                 radius: Theme.radiusSm
-                implicitHeight: Theme.iconLg
+                implicitHeight: stateCard.box.depth
                 implicitWidth: identityLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
                 Rectangle {
@@ -214,7 +223,9 @@ AppCard {
                 }
                 Label {
                     id: identityLabel
-                    anchors.centerIn: parent
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.baseline: parent.top
+                    anchors.baselineOffset: stateCard.box.wordBase
                     text: Words.badgeSetIdentity
                     color: Theme.warning
                     font.pixelSize: Theme.fontSm
@@ -250,12 +261,14 @@ AppCard {
                 border.color: Theme.danger
                 border.width: Theme.borderWidth
                 radius: Theme.radiusSm
-                implicitHeight: Theme.iconLg
+                implicitHeight: stateCard.box.depth
                 implicitWidth: staleLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
                 Label {
                     id: staleLabel
-                    anchors.centerIn: parent
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.baseline: parent.top
+                    anchors.baselineOffset: stateCard.box.wordBase
                     text: Words.badgeStaleGraph
                     color: Theme.danger
                     font.pixelSize: Theme.fontSm
@@ -284,12 +297,14 @@ AppCard {
                 border.color: Theme.warning
                 border.width: Theme.borderWidth
                 radius: Theme.radiusSm
-                implicitHeight: Theme.iconLg
+                implicitHeight: stateCard.box.depth
                 implicitWidth: lfsLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
                 Label {
                     id: lfsLabel
-                    anchors.centerIn: parent
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.baseline: parent.top
+                    anchors.baselineOffset: stateCard.box.wordBase
                     text: Words.badgeNoLfs
                     color: Theme.warning
                     font.pixelSize: Theme.fontSm
@@ -318,12 +333,14 @@ AppCard {
                 border.color: Theme.warning
                 border.width: Theme.borderWidth
                 radius: Theme.radiusSm
-                implicitHeight: Theme.iconLg
+                implicitHeight: stateCard.box.depth
                 implicitWidth: oldGitLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
                 Label {
                     id: oldGitLabel
-                    anchors.centerIn: parent
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.baseline: parent.top
+                    anchors.baselineOffset: stateCard.box.wordBase
                     text: Words.badgeOldGit
                     color: Theme.warning
                     font.pixelSize: Theme.fontSm

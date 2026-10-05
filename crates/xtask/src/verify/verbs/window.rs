@@ -383,8 +383,11 @@ pub(super) const TABLE: &[Verb] = &[
     //
     // `floor`: `fitted=true` is the group cut to its mark's cell — a folded
     // group that kept its words' width stands empty band beside the mark,
-    // read as a wider grab run. `narrowed=` is left out: the share-out
-    // under the fold is the fonts' answer, not this row's.
+    // read as a wider grab run. `deep=true` is the mark's frame at a
+    // badge's depth — the cell runs the band's depth, and a frame drawn
+    // that deep lies along the band's top and bottom edges. `narrowed=`
+    // is left out: the share-out under the fold is the fonts' answer, not
+    // this row's.
     //
     // `shadow=true` on every row: the shape is decided on a second
     // laying-out of the band with the words kept (`TopBar`'s `bandAsked`),
@@ -402,7 +405,7 @@ pub(super) const TABLE: &[Verb] = &[
             ),
             (
                 Arg::Starts("floor"),
-                "words=false mark=true shadow=true tint=danger fitted=true",
+                "words=false mark=true shadow=true tint=danger fitted=true deep=true",
             ),
         ],
         plain: "op=true conflicts=true identity=true oldGit=false narrowed=false words=true \
@@ -548,12 +551,12 @@ pub(super) const TABLE: &[Verb] = &[
     // came up frames as a band with room to spare, and three dots' colour
     // is not for a cropped screenshot to settle. `tint=` names which rule
     // painted it (デザイン規約「色は最も重い状態が決める」); a red mark over a
-    // lone warning is that rule failing silently. `fitted=true` as in
-    // `badges`' `floor`.
+    // lone warning is that rule failing silently. `fitted=true` and
+    // `deep=true` as in `badges`' `floor`.
     Verb {
         name: "old-git-fold",
         when: &[],
-        plain: "mark=true tint=warning fitted=true",
+        plain: "mark=true tint=warning fitted=true deep=true",
     },
     // The badge files for a missing Git LFS raise, over `--preset lfs`
     // (three such files beside a text change). `count=` is the model's —
@@ -565,7 +568,8 @@ pub(super) const TABLE: &[Verb] = &[
         name: "no-lfs",
         when: &[(
             Arg::Starts("floor"),
-            "no-lfs badge=true card=false count=3 words=false mark=true tint=warning fitted=true",
+            "no-lfs badge=true card=false count=3 words=false mark=true tint=warning fitted=true \
+             deep=true",
         )],
         plain: "no-lfs badge=true card=false count=3 words=true mark=false",
     },
@@ -577,10 +581,10 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(
             Arg::Starts("floor"),
             "no-lfs badge=true card=true count=3 words=false mark=true tint=warning fitted=true \
-             rows=lfs cap=",
+             deep=true rows=lfs cap=",
         )],
         plain: "no-lfs badge=true card=true count=3 words=true mark=false tint=warning \
-                fitted=true rows=lfs cap=",
+                fitted=true deep=true rows=lfs cap=",
     },
     // All six of the band's badges at once, over `--preset lfs-conflict`
     // (a stopped merge with one file for LFS beside it), an old git and
@@ -596,7 +600,7 @@ pub(super) const TABLE: &[Verb] = &[
             ),
             (
                 Arg::Starts("floor"),
-                "words=false mark=true shadow=true tint=danger fitted=true",
+                "words=false mark=true shadow=true tint=danger fitted=true deep=true",
             ),
         ],
         plain: "stale=true lfs=true op=true conflicts=true identity=true oldGit=true \

@@ -21,13 +21,16 @@ Item {
     property real tabContentWidth: 0
     property real tabRunAvail: 0
     property int tabCount: 0
-    /// The padding and height of the neighbouring buttons, handed in: the theme has no number for a Fusion
-    /// `ToolButton`'s padding.
+    /// The padding of the operation panel's buttons, handed in: the theme has no number for a Fusion `ToolButton`'s
+    /// padding.
     property real controlPadding: 0
-    property real controlHeight: 0
-    /// The neighbouring buttons have folded into the band's end cells (`TopBar.actionsFolded`), and the mark follows
-    /// them (規約 §ウィンドウの縁「その 2 つは 1 つの箱の高さに揃える」).
+    /// The operation panel's buttons have folded into end cells (`TopBar.actionsFolded`), and the mark follows them
+    /// (規約 §ウィンドウの縁「畳んだ `…` の箱」).
     property bool cellFolded: false
+    /// Where the band's line of words stands, in this group's y: the tab names' baseline (`TabStrip.titleBaseline`).
+    /// The badges' words stand on it with them, and the boxes are cut round the words from there
+    /// (規約 §ウィンドウの縁「バッジの箱」).
+    required property real lineBaseline
 
     /// What can be the matter here, one expression each, read by both the mark and the card (`BandStateCard`) so the
     /// two cannot disagree about whether there is anything to open.
@@ -90,6 +93,13 @@ Item {
         - Theme.spaceXs
     readonly property real foldedWidth: stateGroup.cellFolded
         ? Theme.railWidth : stateMark.implicitWidth + 2 * stateGroup.controlPadding
+    /// The folded mark's frame: as deep as the badges it stands for, and where they stand — folding gives up the words,
+    /// not the box (規約 §ウィンドウの縁「畳んだ `…` の箱」). The cell runs the band's depth; a frame that deep lies
+    /// along the band's top and bottom edges and reads as a box glued to the window.
+    readonly property real foldedDepth: opBadge.height
+    /// Where every badge's box stands: its words' baseline on the band's line. Whole pixels, so the frame's lines stay
+    /// sharp.
+    readonly property int boxTop: Math.round(stateGroup.lineBaseline) - badgeMetrics.wordBase
     /// Each badge box's ceiling once they give way together; `Number.MAX_VALUE` is "nothing is narrowed". Settled by
     /// hand (`settleCap`).
     property real cap: Number.MAX_VALUE
@@ -98,6 +108,10 @@ Item {
     property real room: stateGroup.width
     /// Automation: whether a folded group is exactly its mark's width (`old-git-fold`).
     readonly property bool markFitted: !stateGroup.folded || Math.abs(stateGroup.width - stateToggle.width) < 1
+    /// Automation: whether a folded mark's frame is a badge's depth (`old-git-fold`). It catches a frame drawn off some
+    /// other depth — the cell's, a neighbour's — but follows the badge box wherever that goes, and says nothing of
+    /// where the frame stands: both are `tst_bandgroup.qml`'s.
+    readonly property bool markDeep: !stateGroup.folded || Math.abs(markFrame.height - opBadge.height) < 0.5
     /// Whether the words are given up. Bound, not settled: two of the conditions change without the width moving.
     /// Every input is read here in the expression — a read inside the share's body takes no dependency.
     readonly property bool folded: share.folded(stateGroup.cap, stateGroup.tabContentWidth,
@@ -157,7 +171,7 @@ Item {
     onTabRunAvailChanged: stateGroup.settleCap()
 
     visible: stateGroup.stateShown
-    implicitHeight: stateGroup.controlHeight
+    implicitHeight: stateGroup.foldedDepth
     // The row shares out by what each item asks for above its floor, so ask for the words — and folded, for the mark
     // alone, or the words' width stands empty beside it (デザイン規約 §ウィンドウの縁「タブと群は同時に譲る」).
     implicitWidth: stateGroup.folded ? stateGroup.foldedWidth : stateGroup.naturalWidth
@@ -193,11 +207,12 @@ Item {
         id: badgeRow
         visible: !stateGroup.folded
         anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
+        y: stateGroup.boxTop
         spacing: Theme.spaceXs
 
         StateBadge {
             id: opBadge
+            box: badgeMetrics
             visible: stateGroup.opBadgeShown
             naturalW: stateGroup.opBadgeW
             cap: stateGroup.cap
@@ -212,11 +227,14 @@ Item {
                 // Rounded up, here and below (rules-refs/app-ui.md「自然幅の上限は切り上げる」).
                 Layout.maximumWidth: Math.ceil(implicitWidth)
             }
-            // Drawn — a typed middle dot would put a full-width cell in the badge (規約 §余白).
+            // Drawn — a typed middle dot would put a full-width cell in the badge (規約 §余白). On the capitals' middle,
+            // not the line's: the words beside it are capitals only.
             DotMark {
+                id: opDot
                 visible: stateGroup.stateWt !== null && stateGroup.stateWt.opAlso !== ""
                 tint: Theme.warning
-                Layout.alignment: Qt.AlignVCenter
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: badgeMetrics.capMiddle - opDot.implicitHeight / 2
             }
             Label {
                 visible: stateGroup.stateWt !== null && stateGroup.stateWt.opAlso !== ""
@@ -236,6 +254,7 @@ Item {
         }
         StateBadge {
             id: conflictBadge
+            box: badgeMetrics
             visible: stateGroup.conflictBadgeShown
             naturalW: stateGroup.conflictBadgeW
             cap: stateGroup.cap
@@ -252,6 +271,7 @@ Item {
         }
         StateBadge {
             id: identityBadge
+            box: badgeMetrics
             visible: stateGroup.identityBadgeShown
             naturalW: stateGroup.identityBadgeW
             cap: stateGroup.cap
@@ -270,6 +290,7 @@ Item {
         // Outlined `danger`, and ahead of `OLD GIT` (規約 §ウィンドウの縁).
         StateBadge {
             id: staleBadge
+            box: badgeMetrics
             visible: stateGroup.staleBadgeShown
             naturalW: stateGroup.staleBadgeW
             cap: stateGroup.cap
@@ -288,6 +309,7 @@ Item {
         // (規約 §ウィンドウの縁).
         StateBadge {
             id: lfsBadge
+            box: badgeMetrics
             visible: stateGroup.lfsBadgeShown
             naturalW: stateGroup.lfsBadgeW
             cap: stateGroup.cap
@@ -303,6 +325,7 @@ Item {
         }
         StateBadge {
             id: oldGitBadge
+            box: badgeMetrics
             visible: stateGroup.oldGitBadgeShown
             naturalW: stateGroup.oldGitBadgeW
             cap: stateGroup.cap
@@ -326,26 +349,34 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         implicitWidth: stateGroup.foldedWidth
-        height: stateGroup.cellFolded ? stateGroup.height : stateGroup.controlHeight
+        // The band's depth is the target; the frame is the badges' box, where they stand (`foldedDepth` / `boxTop`).
+        height: stateGroup.height
         width: implicitWidth
         radius: Theme.radiusSm
-        color: stateMouse.containsMouse ? Theme.bgHover : "transparent"
+        // In an end cell the wash fills the cell, as the folded buttons' do; elsewhere it stays in the frame
+        // (規約 §当たり判定「広げるのは判定だけ」).
+        color: stateGroup.cellFolded && stateMouse.containsMouse ? Theme.bgHover : "transparent"
         Accessible.role: Accessible.Button
         Accessible.name: qsTr("What needs attention here")
-        // The frame keeps the neighbours' box height inside a full-height cell (`ActionButton.frameInset`).
         Rectangle {
-            anchors.fill: parent
-            anchors.topMargin: stateGroup.cellFolded
-                ? Math.max(0, (stateToggle.height - stateGroup.controlHeight) / 2) : 0
-            anchors.bottomMargin: anchors.topMargin
-            color: "transparent"
+            id: markFrame
+            anchors.left: parent.left
+            anchors.right: parent.right
+            y: stateGroup.boxTop
+            height: stateGroup.foldedDepth
+            color: !stateGroup.cellFolded && stateMouse.containsMouse ? Theme.bgHover : "transparent"
             border.width: Theme.borderWidth
             border.color: stateGroup.tint
             radius: Theme.radiusSm
         }
+        // On the band's line, as the words it stands for (規約 §操作パネル「印は字と同じくベースラインに立てる」):
+        // the frame is cut round the words' capitals from that line, and a centred line puts the dots wherever the
+        // face's descent leaves them. The face's own report of the dots' ink is no help — Noto Sans JP's spans 7px.
         Label {
             id: stateMark
-            anchors.centerIn: parent
+            anchors.horizontalCenter: markFrame.horizontalCenter
+            anchors.baseline: parent.top
+            anchors.baselineOffset: Math.round(stateGroup.lineBaseline)
             text: "…"
             font.pixelSize: Theme.fontMd
             font.weight: Theme.fontWeightStrong
@@ -366,6 +397,7 @@ Item {
         // pointer crosses touching neither card nor mark (規約 §hover のツールチップ).
         x: stateGroup.width - width
         y: stateGroup.height
+        box: badgeMetrics
         opText: stateGroup.stateWt !== null ? stateGroup.stateWt.opText : ""
         opAlso: stateGroup.stateWt !== null ? stateGroup.stateWt.opAlso : ""
         opStep: stateGroup.stateWt !== null ? stateGroup.stateWt.opStep : 0
