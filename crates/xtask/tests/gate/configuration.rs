@@ -1,15 +1,16 @@
-//! What a change to a configuration owes — the workspace's build inputs
-//! and the dependency policy.
+//! What a change to a configuration owes — the workspace's build,
+//! clippy's settings, the dependency policy: each the steps that read it,
+//! and no more.
 
 use crate::support::{Sandbox, set, without_always};
 
 #[test]
 fn a_build_input_change_owes_everything() {
     let sb = Sandbox::new("build-input");
-    sb.write(&sb.seat, "clippy.toml", "too-many-lines-threshold = 100\n");
-    sb.commit_all(&sb.seat, "chore: a lint threshold", &[]);
+    sb.write(&sb.seat, "Cargo.toml", "[workspace]\nresolver = \"2\"\n");
+    sb.commit_all(&sb.seat, "chore: the resolver", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
-    assert!(text.contains("everything (clippy.toml)"), "{text}");
+    assert!(text.contains("everything (Cargo.toml)"), "{text}");
     assert!(!text.contains("the full tier"), "{text}");
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
@@ -28,6 +29,27 @@ fn a_build_input_change_owes_everything() {
     ] {
         assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
     }
+}
+
+/// clippy's configuration is read by clippy alone: every crate's, on
+/// both sides, and nothing a test or a build reads.
+#[test]
+fn a_lint_threshold_owes_clippy_alone() {
+    let sb = Sandbox::new("clippy-config");
+    sb.write(&sb.seat, "clippy.toml", "too-many-lines-threshold = 100\n");
+    sb.commit_all(&sb.seat, "chore: a lint threshold", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    assert_eq!(
+        without_always(&sb.ran()),
+        set(&[
+            "clippy platitude-app",
+            "clippy platitude-core",
+            "clippy xtask",
+            "clippy-linux platitude-app",
+            "clippy-linux platitude-core",
+            "clippy-linux xtask",
+        ])
+    );
 }
 
 #[test]

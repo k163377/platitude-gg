@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use super::{
-    Ask, CARGO, Counted, DENY, DOCKERFILE, DOCS, IMAGE, QMLTEST, Reading, Side, Step, app, core,
-    harness, qml_dirs, under,
+    Ask, CARGO, Counted, DOCKERFILE, DOCS, IMAGE, QMLTEST, Reading, Side, Step, app, clippy_config,
+    core, deny_policy, harness, qml_dirs, under,
 };
 use crate::gate::census;
 use crate::gate::graph::{Carried, Graph, Reach, stem_of};
@@ -167,11 +167,18 @@ pub(super) fn select(
     changed: &[String],
     ask: &Ask<'_>,
 ) -> (Vec<Step>, Counted) {
-    let sorted = sort(g, reach, read.whole, read.worn);
+    let mut sorted = sort(g, reach, read.whole, read.worn);
     let mut steps = always_steps();
     steps.extend(deny_steps(g, changed, read.whole));
     steps.extend(qmltest_steps(reach, read.whole));
     steps.extend(wedge_steps(reach, read.whole));
+    // Its configuration is clippy's alone, read by every crate's run and
+    // by nothing a test or a build reads.
+    if changed.contains(&clippy_config()) {
+        sorted
+            .rust_moved
+            .extend(g.modules.values().map(|module| module.package.clone()));
+    }
     steps.extend(clippy_steps(&sorted));
     steps.extend(unit_steps(g, &sorted));
     steps.extend(it_steps(g, &sorted));
@@ -216,32 +223,28 @@ fn always_steps() -> Vec<Step> {
     ]
 }
 
-/// cargo-deny over the resolved graph. `deny.toml` is named on its own
-/// because nothing in the source graph reads it; every other way the
-/// closure moves is a manifest, which already sets `whole`
-/// (`moves_everything`). Ahead of every build, so a forbidden crate is
-/// said in seconds.
+/// cargo-deny over the resolved graph, owed by a change to what it reads
+/// — the policy, which nothing in the source graph reads, and every way
+/// the closure moves. Ahead of every build, so a forbidden crate is said
+/// in seconds.
 ///
 /// Host only: the policy names no `targets` and takes `all-features`, so
 /// every OS reads the same crates.
 fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
-    if !whole && !changed.iter().any(|f| f == DENY) {
-        return Vec::new();
-    }
     // The manifests carry what the lock does not: a license field and the
     // features a dependency is taken with — a patched-in crate's among
     // them; cargo's configuration ([`CARGO`]) can patch a dependency or
     // replace its source.
-    let mut inputs: BTreeSet<String> = CARGO
-        .into_iter()
-        .chain([DENY])
-        .map(str::to_string)
-        .collect();
+    let mut inputs: BTreeSet<String> = CARGO.into_iter().map(str::to_string).collect();
+    inputs.insert(deny_policy());
     inputs.extend(
         g.modules
             .values()
             .map(|module| format!("crates/{}/Cargo.toml", module.package)),
     );
+    if !whole && !changed.iter().any(|f| inputs.iter().any(|i| under(f, i))) {
+        return Vec::new();
+    }
     let inputs: Vec<String> = inputs.into_iter().collect();
     vec![step("deny", Side::Host, false, xtask(&["deny"]), &inputs)]
 }
@@ -351,7 +354,7 @@ fn clippy_steps(sorted: &Sorted) -> Vec<Step> {
             "-D",
             "warnings",
         ]));
-        let inputs = cargo_inputs(&[&crate_dir, "clippy.toml"]);
+        let inputs = cargo_inputs(&[&crate_dir, &clippy_config()]);
         let id = format!("clippy {package}");
         steps.push(step(&id, Side::Host, false, clippy.clone(), &inputs));
         let mut linux = xtask(&["linux"]);

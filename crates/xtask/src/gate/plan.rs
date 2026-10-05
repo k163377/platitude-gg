@@ -137,7 +137,15 @@ const IMAGE: [&str; 2] = [DOCKERFILE, QT_PIN];
 /// `std::env::consts::OS` names it there.
 const CONTAINER_OS: &str = "linux";
 /// The dependency policy, which nothing in the source graph reads.
-const DENY: &str = "deny.toml";
+/// Spelled in pieces, as [`clippy_config`] is: a name here is a step's input,
+/// and whole it would make this file a reader of the policy.
+fn deny_policy() -> String {
+    format!("{}.toml", "deny")
+}
+/// clippy's own configuration, which only clippy reads.
+fn clippy_config() -> String {
+    format!("{}.toml", "clippy")
+}
 /// The crates the workspace `Cargo.toml` patches in (`[patch.crates-io]`):
 /// built into whatever depends on them, read by no graph of the sources.
 const VENDOR: &str = "vendor";
@@ -403,13 +411,12 @@ fn parse_ls_tree(listing: &[u8]) -> BTreeMap<String, String> {
 }
 
 /// A file every build reads and no graph of the sources sees: a change to
-/// it is a change to everything. The container's image is its own side's
+/// it is a change to everything. clippy's configuration is clippy's
+/// (`steps::select`), and the container's image its own side's
 /// ([`scopes`]).
 fn moves_everything(file: &str) -> bool {
-    matches!(
-        file,
-        "Cargo.toml" | "Cargo.lock" | "rust-toolchain.toml" | "clippy.toml"
-    ) || file.starts_with(".cargo/")
+    matches!(file, "Cargo.toml" | "Cargo.lock" | "rust-toolchain.toml")
+        || file.starts_with(".cargo/")
         || under(file, VENDOR)
         || (file.starts_with("crates/")
             && (file.ends_with("/Cargo.toml") || file.ends_with("/build.rs")))
