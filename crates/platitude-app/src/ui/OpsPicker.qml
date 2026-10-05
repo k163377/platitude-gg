@@ -127,8 +127,8 @@ HoverToolButton {
     /// The one column both lines' marks stand in, as wide as the wider mark, so the words after them start on one x.
     readonly property int markColumn: Math.max(picker.kindSize, picker.noteSeat)
     /// The air the chevron keeps inside its square on each side, **measured at rest** — measured turned, the steps
-    /// would change as the card opens and the names would move under the hand. From the middle out, not `inkRight`:
-    /// a centred kind has no `inkRight` entry and would report its whole box.
+    /// would change as the card opens and the names would move under the hand. From the middle out: the ink is centred
+    /// in its square.
     readonly property real markAir:
         (picker.markSeat - (mark.inkGrid / 16 * mark.width + mark.stroke)) / 2
     /// The air between the box's leading edge and the chevron's ink.

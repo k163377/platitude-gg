@@ -40,7 +40,7 @@ InkCanvas {
         case "remote": return 12.9
         // The rings' outer edges, 3.2 to 12.8.
         case "branch": return 9.6
-        // 6 to 10 across. Every caller turns it a quarter, so its turned width is `inkTallGrid`.
+        // 6 to 10 across, pointing right. A quarter turn reads `inkTallGrid` instead.
         case "chevron": return 4
         // The 7.2 square turned 45°: its diagonal.
         case "tag": return 10.18
@@ -73,8 +73,8 @@ InkCanvas {
         default: return icon.inkGrid
         }
     }
-    /// Where that ink stands in the grid — its right edge here, its top in `inkTopGrid` — for a mark set against a
-    /// corner (`SignatureMark`).
+    /// Where that ink stands in the grid — its right edge here, its top in `inkTopGrid` — for a mark set against an
+    /// edge or a corner (`SignatureMark`, a card's arrow).
     readonly property real inkRightGrid: {
         switch (icon.kind) {
         // The tick's high end; `bang`'s dot, 8 plus its radius.
@@ -87,6 +87,8 @@ InkCanvas {
         case "remote": return 14.6
         // The cursor's far end.
         case "terminal": return 13
+        // The point, unturned: a card's arrow ends there (`AppMenuItem.arrow`).
+        case "chevron": return 10
         default: return 16
         }
     }
@@ -367,8 +369,9 @@ InkCanvas {
             ctx.closePath()
             ctx.stroke()
         } else if (icon.kind === "chevron") {
-            // One of `chevrons`' pair, for "opens a list" — the pair moves a pane's edge, and one mark cannot mean
-            // two things. Same grid and stroke as the `spinner` ring `AppCombo` swaps it with.
+            // One of `chevrons`' pair, for "opens a list" — a fold, a combo's list, a menu's card. The pair moves a
+            // pane's edge, and one mark cannot mean two things. Same grid and stroke as the `spinner` ring `AppCombo`
+            // swaps it with.
             ctx.lineJoin = "round"
             ctx.beginPath()
             ctx.moveTo(6 * s, 4 * s)

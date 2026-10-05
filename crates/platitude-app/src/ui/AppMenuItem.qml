@@ -341,8 +341,7 @@ MenuItem {
             textFormat: menuItem.refWords !== "" ? Text.StyledText : Text.PlainText
             elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
-            // Clear of the submenu arrow the style paints over the right edge (the note, when there is one, sits last
-            // instead).
+            // Clear of the card's arrow (`arrow`) at the right edge (the note, when there is one, sits last instead).
             rightPadding: !noteLabel.visible && menuItem.subMenu && menuItem.arrow
                           ? menuItem.arrow.width + Theme.spaceXs : 0
             // A heading takes the sidebar section band's weight, not its ink: a row that opens a card to its right is
@@ -447,6 +446,31 @@ MenuItem {
             rightPadding: menuItem.subMenu && menuItem.arrow ? menuItem.arrow.width + Theme.spaceXs : 0
             color: Theme.warning
             font.pixelSize: Theme.fontSm
+        }
+    }
+
+    // A row that opens a card ends in `>`: `chevron` as drawn, the mark `AppCombo` turns down for its list, on the
+    // left menu's row grid (デザイン規約 §メニュー の入れ子). Its ink ends where the right-set words of other rows end
+    // (a note, a track): on the right padding. The item is the room the words of such a row keep clear, `iconLg`
+    // wide — where that row is a card's widest, the card's width is measured off it. The mark is built only on the
+    // rows that wear it (rules-refs の「行のデリゲートが見せない部品は消す」): a card builds a row per branch.
+    arrow: Item {
+        x: menuItem.width - width - menuItem.rightPadding
+        y: (menuItem.height - height) / 2
+        width: Theme.iconLg
+        height: Theme.iconSm
+        Loader {
+            id: arrowSeat
+            active: menuItem.subMenu !== null
+            x: parent.width - (arrowSeat.item ? arrowSeat.item.inkRight : 0)
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: Metrics.opticalDrop
+            sourceComponent: NavIcon {
+                width: Theme.iconSm
+                height: Theme.iconSm
+                kind: "chevron"
+                tint: !menuItem.enabled || menuItem.blocked ? Theme.textMuted : Theme.textSecondary
+            }
         }
     }
 
