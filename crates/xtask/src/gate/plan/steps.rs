@@ -598,7 +598,9 @@ fn binary_steps(
         linux_step.release = true;
         steps.push(linux_step);
     }
-    if binary_moved || changed.iter().any(|f| f == DOCKERFILE) {
+    // The image it runs in moving is the container's whole reach
+    // (`plan::scopes`), which moves the binary too.
+    if binary_moved {
         let mut bare_inputs = binary_inputs;
         bare_inputs.push("crates/xtask/src/linux".to_string());
         bare_inputs.extend(IMAGE.map(String::from));

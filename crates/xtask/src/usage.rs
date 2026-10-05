@@ -52,9 +52,10 @@ commands:
       — named in a string, a bin a test shoots — moves no code: it owes
       its readers' tests and the verbs whose census names what they show,
       not clippy or the harness's every verb. The always-steps
-      (structure, waits, versions, docs, verbs, fmt) run every time and first, and
+      (structure, waits, versions, docs, verbs, fmt) run every time and first;
       a build input that changed (Cargo.toml, Cargo.lock, the toolchain,
-      the Dockerfile) makes the reach the whole tree. Then host and
+      cargo's configuration, a vendored crate) makes the reach the whole
+      tree, and the Dockerfile the container's side of it. Then host and
       container sides run in parallel;
       each step is stamped by the object ids of what it reads, so a
       second run of one commit runs nothing and a rebase reruns only

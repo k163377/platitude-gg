@@ -2,7 +2,8 @@
 //! the toolchain's, Qt's, and the oldest git it supports. A branch that
 //! moves one owes the full tier, not the reach of its diff: a new version
 //! breaks what no source edge leads to (反映前テストの機械化.md
-//! §版を動かす変更は段 3).
+//! §版を動かす変更は段 3). It owes it where that version is built and
+//! run: the oldest git is the container's alone.
 
 use super::{DOCKERFILE, QT_PIN, core};
 use crate::subprocess::git_query;
@@ -11,6 +12,15 @@ use crate::subprocess::git_query;
 struct Pin {
     path: String,
     carries: fn(&str) -> bool,
+    /// Built and run in the container alone; the host's git is not the
+    /// oldest one and its system is not the image's.
+    container_only: bool,
+}
+
+/// A version the branch moves, and where it owes the full tier.
+pub(super) struct Moved {
+    pub why: String,
+    pub container_only: bool,
 }
 
 /// The core file spelled in pieces for the reason `plan::core` gives.
@@ -21,18 +31,23 @@ fn pins() -> [Pin; 5] {
         Pin {
             path: "Cargo.lock".to_string(),
             carries: |_| true,
+            container_only: false,
         },
         Pin {
             path: "rust-toolchain.toml".to_string(),
             carries: |_| true,
+            container_only: false,
         },
+        // The floor the product guarantees, which the container's git is
+        // (git最低バージョン整合.md); the host runs a newer one.
         Pin {
             path: format!("{}/src/version.rs", core()),
             carries: |line| line.trim_start().starts_with("pub const MINIMUM_GIT"),
+            container_only: true,
         },
-        // The base image is the container's git, the oldest supported one
-        // (git最低バージョン整合.md), and its system libraries. Its release
-        // is an ARG's default, as is the aqtinstall that installs Qt.
+        // The base image is the container's git, the oldest supported one,
+        // and its system libraries. Its release is an ARG's default, as is
+        // the aqtinstall that installs Qt there.
         Pin {
             path: DOCKERFILE.to_string(),
             carries: |line| {
@@ -42,31 +57,39 @@ fn pins() -> [Pin; 5] {
                         .strip_prefix("ARG ")
                         .is_some_and(|arg| arg.contains('='))
             },
+            container_only: true,
         },
-        // Qt's version, which the container and CI install: the file
-        // holds nothing else.
+        // Qt's version, which a desk, the container and CI install
+        // (`qt::PIN`): the file holds nothing else.
         Pin {
             path: QT_PIN.to_string(),
             carries: |_| true,
+            container_only: false,
         },
     ]
 }
 
-/// The first pin the branch moves between `base` and `head`, said as the
-/// reason the gate runs the full tier. A side git cannot show (the file
-/// added or taken out) counts as a move.
-pub(super) fn moved(here: &str, base: &str, head: &str, changed: &[String]) -> Option<String> {
-    pins()
+/// The version the branch moves between `base` and `head` that owes the
+/// most — one both sides are built with before one the container alone
+/// is — said as the reason the gate runs the full tier. A side git cannot
+/// show (the file added or taken out) counts as a move.
+pub(super) fn moved(here: &str, base: &str, head: &str, changed: &[String]) -> Option<Moved> {
+    let mut moved: Vec<Pin> = pins()
         .into_iter()
         .filter(|pin| changed.contains(&pin.path))
-        .find(|pin| {
+        .filter(|pin| {
             let at = |rev: &str| git_query(here, &["show", &format!("{rev}:{}", pin.path)]);
             match (at(base), at(head)) {
                 (Some(old), Some(new)) => carried(pin, &old) != carried(pin, &new),
                 _ => true,
             }
         })
-        .map(|pin| format!("{} moves a version", pin.path))
+        .collect();
+    moved.sort_by_key(|pin| pin.container_only);
+    moved.into_iter().next().map(|pin| Moved {
+        why: format!("{} moves a version", pin.path),
+        container_only: pin.container_only,
+    })
 }
 
 fn carried<'a>(pin: &Pin, text: &'a str) -> Vec<&'a str> {

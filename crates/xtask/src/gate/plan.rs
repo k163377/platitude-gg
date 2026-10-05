@@ -52,6 +52,17 @@ pub(crate) struct Required {
     pub cached: bool,
 }
 
+/// What one side owes beyond the reach of the diff.
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
+pub(crate) struct Scope {
+    /// Every file in the tree counted as reached, and why: `--all`, a
+    /// moved version, or the build input that changed.
+    pub everything: Option<String>,
+    /// The full tier's steps (`periodic`, every census line): `--all`, or
+    /// a moved version ([`pins`]) before a merge.
+    pub full: bool,
+}
+
 pub(crate) struct Plan {
     pub dir: PathBuf,
     pub head: String,
@@ -65,12 +76,10 @@ pub(crate) struct Plan {
     /// another tree stamps while this run queues (`gate::step::run_one`
     /// looks again).
     pub fresh: bool,
-    /// Every file in the tree counted as reached, and why: `--all`, a
-    /// moved version, or the build input that changed.
-    pub everything: Option<String>,
-    /// The full tier's steps (`periodic`, every census line on both sides):
-    /// `--all`, or a moved version ([`pins`]) before a merge.
-    pub full: bool,
+    pub host: Scope,
+    /// The host's, and more where the change is the container's own: the
+    /// files its image is built from, or a version it alone runs.
+    pub container: Scope,
     pub changed: Vec<String>,
     pub reach: BTreeSet<String>,
     pub required: Vec<Required>,
@@ -240,55 +249,44 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         .filter(|file| !graph::is_markdown(file))
         .cloned()
         .collect();
-    // The daily tier stays the host's quick half; stage 2 owes the full
-    // tier for a new version.
-    let pinned = if ask.all || ask.host_only {
-        None
-    } else {
-        pins::moved(&here, &base, &head, &executable_changes)
-    };
-    let full = ask.all || pinned.is_some();
-    let everything = if ask.all {
-        Some("--all".to_string())
-    } else if pinned.is_some() {
-        pinned
-    } else if let Some(input) = executable_changes.iter().find(|f| moves_everything(f)) {
-        Some(input.clone())
-    } else {
-        executable_changes
-            .iter()
-            .find(|f| gone_source(dir, f))
-            .map(|f| format!("{f} is gone"))
-    };
-    // What the change itself reaches is what has to be shown; a build
-    // input widens only what runs.
-    let touched = g.reach(&executable_changes);
-    let reach = if everything.is_some() {
-        every_file(&g, dir)?
-    } else {
-        touched.clone()
-    };
+    let (host, container) = scopes(dir, ask, &here, &base, &head, &executable_changes);
+    let Reaches {
+        touched,
+        host: reach,
+        container: container_reach,
+    } = reaches(&g, dir, &host, &container, &executable_changes)?;
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let census = Census::load(dir)?;
     let tiers = Tiers::load(dir)?;
     let worn = census::worn_by(dir);
     spent.census = at.elapsed();
-    let read = Reading {
+    let read = |scope: &Scope| Reading {
         dir,
         census: &census,
         tiers: &tiers,
         worn: &worn,
-        whole: everything.is_some(),
-        full,
+        whole: scope.everything.is_some(),
+        full: scope.full,
     };
     let (
-        steps,
+        mut steps,
         Counted {
             shadow: verbs_in_shadow,
             left: verbs_left,
         },
-    ) = select(&g, &read, &reach, &executable_changes, ask);
+    ) = select(&g, &read(&host), &reach, &executable_changes, ask);
+    if !ask.host_only && (container != host || container_reach != reach) {
+        let (theirs, _) = select(
+            &g,
+            &read(&container),
+            &container_reach,
+            &executable_changes,
+            ask,
+        );
+        steps.retain(|step| step.side == Side::Host);
+        steps.extend(theirs.into_iter().filter(|step| step.side == Side::Linux));
+    }
     let store = Store::open(dir)?;
     let required = owed(&here, &head, &store, steps, ask, spent)?;
     let uncovered = uncovered(dir, &census, &touched, &worn);
@@ -312,8 +310,8 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         onto_main,
         host_only: ask.host_only,
         fresh: ask.fresh,
-        everything,
-        full,
+        host,
+        container,
         changed,
         reach: reach.into_keys().collect(),
         required,
@@ -402,17 +400,115 @@ fn parse_ls_tree(listing: &[u8]) -> BTreeMap<String, String> {
 }
 
 /// A file every build reads and no graph of the sources sees: a change to
-/// it is a change to everything.
+/// it is a change to everything. The container's image is its own side's
+/// ([`scopes`]).
 fn moves_everything(file: &str) -> bool {
     matches!(
         file,
-        "Cargo.toml" | "Cargo.lock" | "rust-toolchain.toml" | "clippy.toml" | DOCKERFILE
+        "Cargo.toml" | "Cargo.lock" | "rust-toolchain.toml" | "clippy.toml"
     ) || file.starts_with(".cargo/")
         || under(file, VENDOR)
         || (file.starts_with("crates/")
             && (file.ends_with("/Cargo.toml") || file.ends_with("/build.rs")))
         // What the app's build script links in: no source names it.
         || file.starts_with("crates/platitude-app/assets/")
+}
+
+/// What each side owes beyond the reach: the host's, and the container's.
+/// The daily tier stays the host's quick half; stage 2 owes the full tier
+/// for a new version, on the side built with it ([`pins`]).
+fn scopes(
+    dir: &Path,
+    ask: &Ask<'_>,
+    here: &str,
+    base: &str,
+    head: &str,
+    changed: &[String],
+) -> (Scope, Scope) {
+    if ask.all {
+        let all = Scope {
+            everything: Some("--all".to_string()),
+            full: true,
+        };
+        return (all.clone(), all);
+    }
+    let pinned = if ask.host_only {
+        None
+    } else {
+        pins::moved(here, base, head, changed)
+    };
+    let host = match &pinned {
+        Some(moved) if !moved.container_only => Scope {
+            everything: Some(moved.why.clone()),
+            full: true,
+        },
+        _ => Scope {
+            everything: changed
+                .iter()
+                .find(|f| moves_everything(f))
+                .cloned()
+                .or_else(|| {
+                    changed
+                        .iter()
+                        .find(|f| gone_source(dir, f))
+                        .map(|f| format!("{f} is gone"))
+                }),
+            full: false,
+        },
+    };
+    let container = match pinned {
+        Some(moved) if !host.full => Scope {
+            everything: Some(moved.why),
+            full: true,
+        },
+        _ if host.everything.is_none() => Scope {
+            everything: changed
+                .iter()
+                .find(|f| IMAGE.contains(&f.as_str()))
+                .map(|f| format!("{f} builds its image")),
+            full: false,
+        },
+        _ => host.clone(),
+    };
+    (host, container)
+}
+
+/// What each side selects from, and what the change itself reaches on the
+/// host — what has to be shown.
+struct Reaches {
+    touched: Reach,
+    host: Reach,
+    container: Reach,
+}
+
+/// What the change reaches; a side owing everything selects from every
+/// file, since a build input widens only what runs.
+fn reaches(
+    g: &graph::Graph,
+    dir: &Path,
+    host: &Scope,
+    container: &Scope,
+    changed: &[String],
+) -> Result<Reaches, String> {
+    let touched = g.reach(changed);
+    let every = if host.everything.is_some() || container.everything.is_some() {
+        Some(every_file(g, dir)?)
+    } else {
+        None
+    };
+    let on_the_host = match (&host.everything, &every) {
+        (Some(_), Some(every)) => every.clone(),
+        _ => touched.clone(),
+    };
+    let on_the_container = match (&container.everything, every) {
+        (Some(_), Some(every)) => every,
+        _ => touched.clone(),
+    };
+    Ok(Reaches {
+        touched,
+        host: on_the_host,
+        container: on_the_container,
+    })
 }
 
 /// A source the tree no longer holds: the graph, read off the tree, has no
@@ -446,7 +542,7 @@ struct Reading<'a> {
     tiers: &'a Tiers,
     worn: &'a BTreeMap<String, BTreeSet<String>>,
     whole: bool,
-    /// Owes the full tier ([`Plan::full`]).
+    /// Owes the full tier ([`Scope::full`]).
     full: bool,
 }
 
@@ -514,29 +610,8 @@ fn cache_key(ids: &BTreeMap<String, String>, step: &Step) -> String {
 /// The plan as the gate prints it; `keys` adds each cached-or-run step's
 /// key (a dry run's: what a change of a step's inputs moves).
 pub(crate) fn describe(plan: &Plan, keys: bool) -> String {
-    let short = |sha: &str| sha.chars().take(10).collect::<String>();
-    let mut out = format!(
-        "gate: HEAD {} against main {} (base {}): {}{}{}{}\n",
-        short(&plan.head),
-        short(&plan.main),
-        short(&plan.base),
-        if plan.onto_main {
-            "on main"
-        } else {
-            "off main — a pseudo-run; land rebases and gates again"
-        },
-        if plan.host_only {
-            ", host side only"
-        } else {
-            ""
-        },
-        match &plan.everything {
-            Some(why) => format!(", everything ({why})"),
-            None => String::new(),
-        },
-        if plan.full { ", the full tier" } else { "" }
-    );
-    if plan.everything.is_some() {
+    let mut out = headline(plan);
+    if plan.host.everything.is_some() {
         out.push_str(&format!(
             "changed ({}); reach: every file ({})\n",
             plan.changed.len(),
@@ -589,10 +664,18 @@ pub(crate) fn describe(plan: &Plan, keys: bool) -> String {
         .iter()
         .filter(|r| r.step.id.starts_with("verify-linux "))
         .count();
-    if plan.verbs_in_shadow > 0 || chosen > 0 {
+    if plan.verbs_in_shadow > 0 || chosen > 0 || on_linux > 0 {
+        // The container's lines are the host's own unless its side owes
+        // more than the host's does; what waits for the full gate is the
+        // host's count.
+        let (container, left) = if plan.container == plan.host {
+            (format!("{on_linux} of them on the container too"), "")
+        } else {
+            (format!("{on_linux} on the container"), " on the host")
+        };
         out.push_str(&format!(
-            "verbs: {chosen} selected, {on_linux} of them on the container too; {} left to the \
-             full gate ({}); shadow candidate: {} (final census only, not used to skip runs)\n",
+            "verbs: {chosen} selected, {container}; {} left{left} to the full gate ({}); shadow \
+             candidate: {} (final census only, not used to skip runs)\n",
             plan.verbs_left,
             super::tiers::FILE,
             plan.verbs_in_shadow
@@ -603,6 +686,50 @@ pub(crate) fn describe(plan: &Plan, keys: bool) -> String {
         out.push_str(&step_row(r, keys));
     }
     out
+}
+
+/// The first line of [`describe`]: what is gated against what, and what
+/// each side owes beyond the reach — the container's said apart when it
+/// owes more than the host's.
+fn headline(plan: &Plan) -> String {
+    let short = |sha: &str| sha.chars().take(10).collect::<String>();
+    let scope = |scope: &Scope| {
+        let mut said: Vec<String> = Vec::new();
+        if let Some(why) = &scope.everything {
+            said.push(format!("everything ({why})"));
+        }
+        if scope.full {
+            said.push("the full tier".to_string());
+        }
+        said
+    };
+    let mut standing = vec![
+        if plan.onto_main {
+            "on main"
+        } else {
+            "off main — a pseudo-run; land rebases and gates again"
+        }
+        .to_string(),
+    ];
+    if plan.host_only {
+        standing.push("host side only".to_string());
+    }
+    standing.extend(scope(&plan.host));
+    let mut line = format!(
+        "gate: HEAD {} against main {} (base {}): {}",
+        short(&plan.head),
+        short(&plan.main),
+        short(&plan.base),
+        standing.join(", ")
+    );
+    if !plan.host_only && plan.container != plan.host {
+        line.push_str(&format!(
+            "; the container: {}",
+            scope(&plan.container).join(", ")
+        ));
+    }
+    line.push('\n');
+    line
 }
 
 /// One step of [`describe`]: where it stands, its side, and its key.
