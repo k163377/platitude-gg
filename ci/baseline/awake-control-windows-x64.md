@@ -1,6 +1,6 @@
 # Windows のスリープ保持: 実測
 
-2026-10-04。holder revision 5、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
+2026-10-05。holder revision 6、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
 デスクトップアプリのログによる補助と実スリープ試験の記録は [ログ補助](../../internal-docs/awake-ログ補助.md)。
 
 ## 判定
@@ -14,8 +14,8 @@
 ## 実 API 試験
 
 `awake::tests::holder::coordination::compatible_holders_apply_and_clear_real_windows_requests_together`。
-テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r5)と、
-同じスクリプトで holder 名だけ r6 にした互換ビルドを同時に動かす。OS API は置き換えない。
+テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r6)と、
+同じスクリプトで holder 名だけ r7 にした互換ビルドを同時に動かす。OS API は置き換えない。
 session / hook の入力は fixture で、Claude 本体ではない。
 
 `SetThreadExecutionState` の非 0 の戻り値は、成功とそのスレッドの直前の状態を示す
@@ -23,24 +23,24 @@ session / hook の入力は fixture で、Claude 本体ではない。
 両 holder とも保持時の戻り値は `0x80000000`、解除時は `0x80000001` —— system の継続要求を設定・解除でき、
 display の継続要求は加えていない。
 
-| 遷移 | r5(WMI 起動) | r6(互換ビルド) |
+| 遷移 | r6(WMI 起動) | r7(互換ビルド) |
 | --- | ---: | ---: |
-| 最初の Prompt → 保持 | 1906 ms | 1138 ms |
-| s が Stop、t は質問待ち → 解除 | 15 ms | 47 ms |
-| t の質問への回答 → 保持 | 47 ms | 23 ms |
-| t も Stop → 解除 | 54 ms | 34 ms |
+| 最初の Prompt → 保持 | 2747 ms | 2208 ms |
+| s が Stop、t は質問待ち → 解除 | 62 ms | 24 ms |
+| t の質問への回答 → 保持 | 30 ms | 70 ms |
+| t も Stop → 解除 | 47 ms | 91 ms |
 
 質問待ちになる前から s が作業中なら、t の質問だけでは解除しないことも同じテストで確かめる。
 数値は単発の観測値で、遅延の上限ではない。最初の保持は
 WMI の起動と PowerShell の C# 型のコンパイルを含み、成立するまで保持の無い区間がある ——
 「呼び出しの実行前に必ず保持済み」の保証には使えない。
 
-使われなくなったビルドの holder は `a_started_holder_of_a_quiet_build_quits` で確かめる。WMI で起動した r5 の
-hook の印(`hooks-r5`)を 10 分より前に戻し、hook が動いている r6 と並べると、r5 は次の読取りで名前を外して
-プロセスごと終わり、claim は残り、r6 が保持を続けた。降りる判定そのものは、holder 本体を 1 回だけ読ませる試験で
+使われなくなったビルドの holder は `a_started_holder_of_a_quiet_build_quits` で確かめる。WMI で起動した r6 の
+hook の印(`hooks-r6`)を 10 分より前に戻し、hook が動いている r7 と並べると、r6 は次の読取りで名前を外して
+プロセスごと終わり、claim は残り、r7 が保持を続けた。降りる判定そのものは、holder 本体を 1 回だけ読ませる試験で
 場合分けする(使用中の別ビルドがある / 1 本だけ / 全部静か / 相手の心拍が古い)。
 
-awake の Windows テストは **81 passed / 0 failed / 3 ignored**(37.49 秒。律速は tick 待ちを 2 回含むテストで、
+awake の Windows テストは **86 passed / 0 failed / 3 ignored**(39.64 秒。律速は tick 待ちを 2 回含むテストで、
 他席の負荷で 38〜54 秒に揺れる)。
 ignored は、親テストが専用環境で呼ぶ子プロセスの入口 2 本と、手動の実スリープ試験 1 本。子コマンドの背景実行、
 質問・許可待ち、複数セッション、subagent、通知、所有者の終了、読取りの妨害、同時起動、hook のパイプの解放、
@@ -56,7 +56,9 @@ event が途切れない。保持している間の読取りは解除しかで�
 `holder::PACE`。数えるのは進むだけの時計)。保持していない間の読取りは待たせない。15 秒周期の読取り
 (プロセスの開始・終了、transcript の伸び)は別枠で、心拍の間隔は最長でも 20 秒強。
 
-本番の `.awake`(claim 8 件、うち作業中 3 セッション)で、猶予を使い切った後の 187 秒:
+本番の `.awake`(claim 8 件、うち作業中 3 セッション)で、猶予を使い切った後の 187 秒(revision 5。
+revision 6 との差はログ補助の許可画面の扱い —— 結び付ける呼び出しの範囲、claim を確かめられなかった読取りの
+結び付けの決め直し、中断の行 —— だけで、読取りの回数と中身は同じ):
 
 | | 値 |
 | --- | ---: |
@@ -101,7 +103,7 @@ System ログのスリープ(Kernel-Power 42 / Power-Troubleshooter 1)33 回を�
 
 ## 判定の履歴
 
-holder(revision 5)の判定は `.awake/history` に残る。全 revision の holder が同じ 1 本へ、判定か、
+holder(revision 5 以降)の判定は `.awake/history` に残る。全 revision の holder が同じ 1 本へ、判定か、
 保持の理由の組が変わるたびに 1 行書く。行の形(session の id は略記):
 
 ```text
