@@ -1,13 +1,17 @@
-//! The steps, in the order each needs the one before: the build, the
-//! bundle's skeleton, Qt's deployment (`macdeployqt`), the run paths, the
-//! signature, a stand from the bundle alone, and the archive. Every tool
-//! after the build is Qt's or the Mac's own (Xcode's command line tools).
+//! The steps, in the order each needs the one before: the app's imports
+//! held to the bundle's lists, the build, the bundle's skeleton, Qt — the
+//! plugins and QML modules the lists name, then the frameworks they and the
+//! app load (`macdeployqt`) — the run paths, the bundle held to the lists,
+//! the signature, a stand from the bundle alone, and the archive. Every
+//! tool after the build is Qt's or the Mac's own (Xcode's command line
+//! tools).
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::bundle;
+use super::contents;
 use super::wrap::{Wrap, wrap};
 use crate::subprocess::run_captured;
 
@@ -19,7 +23,7 @@ const HELPER: &str = "pgg-todo-editor";
 /// Where the bundle's own binaries find their frameworks.
 const FROM_MACOS: &str = "@executable_path/../Frameworks";
 
-/// Where a platform plugin, two levels under `Contents/PlugIns`, finds them.
+/// Where a plugin, two levels under `Contents/PlugIns`, finds them.
 const FROM_PLUGINS: &str = "@loader_path/../../Frameworks";
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
@@ -71,6 +75,9 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         "package",
     )?;
     let qt = crate::qt::this_tree()?;
+    // Before the build: an import the bundle would not carry costs nothing
+    // to find.
+    imports(&qt, &root)?;
     let path = crate::qt::path_with_qt()?;
     let exe = crate::app_build::shipped_exe(
         &root,
@@ -87,7 +94,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         .map_err(|e| format!("could not resolve {}: {e}", out.display()))?;
     let app = out.join(bundle::APP);
     let main = skeleton(&root, &exe, &app)?;
-    deploy(&qt, &root, &app, &main)?;
+    deploy(&qt, &app, &main)?;
     sign(&app)?;
     super::stand::stand(&app, &main, password_from.map(String::as_str))?;
     let wrapped = wrap(&root, &out, &app, &how)?;
@@ -103,31 +110,166 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Qt into the bundle: what macdeployqt finds the app needs — frameworks,
-/// plugins, and the QML modules `ui/` imports — then the offscreen
-/// platform, and the run paths of every binary in it kept inside.
-///
-/// macdeployqt resolves the app's `@rpath` names against the binary's own
-/// run paths and its own Qt's library directory, deletes the run paths it
-/// used and adds `@executable_path/../Frameworks` in their place. It does
-/// not touch the helper (no dylib, no Qt), nor a plugin copied in after it.
-fn deploy(qt: &crate::qt::Qt, root: &Path, app: &Path, main: &Path) -> Result<(), String> {
-    println!("deploying Qt {} into the bundle…", qt.version);
+/// The app's imports as Qt's own scanner reads them, held to the lists:
+/// once as `ui/` writes them, where each must be carried, and once followed
+/// through Qt's modules, where each one reached is carried or left out on
+/// purpose.
+fn imports(qt: &crate::qt::Qt, root: &Path) -> Result<(), String> {
+    let scanner = format!("{}/libexec/qmlimportscanner", qt.prefix);
     let ui = root.join("crates/platitude-app/src/ui");
-    tool(
-        &qt.bin.join("macdeployqt"),
-        &[
-            app.as_os_str(),
-            OsStr::new(&format!("-qmldir={}", ui.display())),
-            OsStr::new("-verbose=2"),
-        ],
+    let qml = Path::new(&qt.prefix).join("qml");
+    let root_path = OsStr::new("-rootPath");
+    let import_path = OsStr::new("-importPath");
+    let written = scan(&scanner, &[root_path, ui.as_os_str()])?;
+    let reached = scan(
+        &scanner,
+        &[root_path, ui.as_os_str(), import_path, qml.as_os_str()],
     )?;
-    let offscreen = offscreen(qt, app)?;
+    let mut parted = contents::written(&contents::scanned(&written)?);
+    parted.extend(contents::reached(&contents::scanned(&reached)?));
+    if parted.is_empty() {
+        println!(
+            "ui/ imports only modules the bundle carries, and each module they reach is carried \
+             or left out on purpose"
+        );
+        return Ok(());
+    }
+    Err(format!(
+        "ui/'s imports and the lists in crates/xtask/src/package/contents.rs part — an import \
+         ui/ took up, or a Qt that moved what a module imports:\n  {}",
+        parted.join("\n  ")
+    ))
+}
+
+/// qmlimportscanner's answer. A file it cannot read it names on stderr,
+/// still answering for the rest with nothing of that file's — so anything
+/// on stderr is red: the imports it hides are the ones the lists would miss.
+fn scan(scanner: &str, args: &[&OsStr]) -> Result<String, String> {
+    let output = run_captured(Command::new(scanner).args(args))?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !output.status.success() || !stderr.trim().is_empty() {
+        return Err(format!(
+            "{scanner} {args:?} did not read every file ({}): {}",
+            output.status,
+            stderr.trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Qt into the bundle: the plugins and QML modules the lists name, then the
+/// frameworks they and the app load, every run path kept inside, `qt.conf`,
+/// and the whole held to the lists.
+///
+/// macdeployqt deploys for every dylib already in the bundle beside the app
+/// (shared.cpp's `findAppLibraries`), so the plugins go in first. With
+/// `-no-plugins` it adds no plugin and with no `-qmldir` no module — but it
+/// looks for imports itself where the directory it runs in holds a `.qml`,
+/// so it runs in the bundle's own. It resolves the `@rpath` names against
+/// the app's run paths and its own Qt's library directory, and swaps any
+/// run path it used for `@executable_path/../Frameworks` — the app's; a
+/// plugin's, relative to where Qt keeps the plugin, resolves to none it
+/// used, and [`keep_inside`] sets it.
+fn deploy(qt: &crate::qt::Qt, app: &Path, main: &Path) -> Result<(), String> {
+    println!("deploying Qt {} into the bundle…", qt.version);
+    let libraries = place(qt, app)?;
+    finished(
+        Command::new(qt.bin.join("macdeployqt"))
+            .args([
+                app.as_os_str(),
+                OsStr::new("-no-plugins"),
+                OsStr::new("-verbose=2"),
+            ])
+            .current_dir(app),
+    )?;
     keep_inside(main, Some(FROM_MACOS))?;
     keep_inside(&main.with_file_name(HELPER), None)?;
-    keep_inside(&offscreen, Some(FROM_PLUGINS))?;
+    for library in &libraries {
+        keep_inside(library, Some(FROM_PLUGINS))?;
+    }
+    let conf = app.join("Contents/Resources/qt.conf");
+    std::fs::write(&conf, contents::QT_CONF)
+        .map_err(|e| format!("could not write {}: {e}", conf.display()))?;
+    held(app)?;
     println!("{}", said("otool", &[OsStr::new("-L"), main.as_os_str()])?);
     Ok(())
+}
+
+/// The lists' plugins and modules, put where macdeployqt puts its own: a
+/// plugin under `Contents/PlugIns`; a module's files under
+/// `Contents/Resources/qml`, but for its plugin, which goes in
+/// `Contents/PlugIns/quick` with a link to it left in its place — codesign
+/// signs code under PlugIns and refuses it among resources. Answers every
+/// library put in.
+fn place(qt: &crate::qt::Qt, app: &Path) -> Result<Vec<PathBuf>, String> {
+    let prefix = Path::new(&qt.prefix);
+    let inside = app.join("Contents");
+    let mut libraries = Vec::new();
+    for plugin in contents::QT_PLUGINS {
+        let to = inside.join("PlugIns").join(plugin);
+        make_dir(to.parent().unwrap_or(inside.as_path()))?;
+        copy(&prefix.join("plugins").join(plugin), &to)?;
+        libraries.push(to);
+    }
+    let quick = inside.join("PlugIns/quick");
+    make_dir(&quick)?;
+    for module in contents::QML_MODULES {
+        let dir = contents::module_dir(module);
+        let from = prefix.join("qml").join(&dir);
+        let to = inside.join("Resources/qml").join(&dir);
+        make_dir(&to)?;
+        let unreadable = |e: std::io::Error| format!("could not read {}: {e}", from.display());
+        for entry in std::fs::read_dir(&from).map_err(unreadable)? {
+            let entry = entry.map_err(unreadable)?;
+            let source = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            // A directory under a module's is another module, or Qt Design
+            // Studio's.
+            if !source.is_file() {
+                continue;
+            }
+            match contents::goes(&name) {
+                contents::Goes::WithModule => copy(&source, &to.join(&name))?,
+                contents::Goes::Quick => {
+                    let library = quick.join(&name);
+                    copy(&source, &library)?;
+                    link(&contents::plugin_link(module, &name), &to.join(&name))?;
+                    libraries.push(library);
+                }
+                contents::Goes::Nowhere => {}
+            }
+        }
+    }
+    // As macdeployqt strips what it copies itself.
+    for library in &libraries {
+        tool(Path::new("strip"), &[OsStr::new("-x"), library.as_os_str()])?;
+    }
+    println!(
+        "put in {} Qt plugins and {} QML modules, by the lists",
+        contents::QT_PLUGINS.len(),
+        contents::QML_MODULES.len()
+    );
+    Ok(libraries)
+}
+
+/// The bundle held to the lists before it is signed: a Qt that moved what a
+/// plugin or a module brings is red here, by name.
+fn held(app: &Path) -> Result<(), String> {
+    let parted = contents::parted(&contents::carried(app)?);
+    if parted.is_empty() {
+        println!(
+            "the bundle carries what the lists name: {} frameworks, {} Qt plugins, {} QML modules",
+            contents::FRAMEWORKS.len(),
+            contents::QT_PLUGINS.len(),
+            contents::QML_MODULES.len()
+        );
+        return Ok(());
+    }
+    Err(format!(
+        "the bundle and the lists in crates/xtask/src/package/contents.rs part — a Qt that moved \
+         what a plugin or a module brings:\n  {}",
+        parted.join("\n  ")
+    ))
 }
 
 /// Ad hoc: Apple silicon runs nothing unsigned, and every tool before this
@@ -185,25 +327,13 @@ fn skeleton(root: &Path, exe: &Path, app: &Path) -> Result<PathBuf, String> {
     Ok(main)
 }
 
-/// The offscreen platform the stand runs on, which macdeployqt does not
-/// deploy (it takes Cocoa's): copied in beside Cocoa's. It stays — a
-/// snapshot can be started headless the way every run here is.
-fn offscreen(qt: &crate::qt::Qt, app: &Path) -> Result<PathBuf, String> {
-    let from = Path::new(&qt.prefix).join("plugins/platforms/libqoffscreen.dylib");
-    let dir = app.join("Contents/PlugIns/platforms");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
-    let to = dir.join("libqoffscreen.dylib");
-    copy(&from, &to)?;
-    Ok(to)
-}
-
-/// Leaves `binary` with no run path outside the bundle (the build names the
-/// Qt it links against as one, on every binary it links), and with
-/// `inside` among those left where it loads frameworks.
+/// Leaves `binary` with `inside` for its one run path, or with none: the
+/// build names the Qt it links against as one on every binary it links, and
+/// Qt's plugins name the way back to where Qt keeps its libraries.
 fn keep_inside(binary: &Path, inside: Option<&str>) -> Result<(), String> {
     let listed = said("otool", &[OsStr::new("-l"), binary.as_os_str()])?;
     let paths = bundle::rpaths(&listed);
-    for path in paths.iter().filter(|path| !path.starts_with('@')) {
+    for path in paths.iter().filter(|path| Some(path.as_str()) != inside) {
         tool(
             Path::new("install_name_tool"),
             &[
@@ -232,20 +362,39 @@ fn copy(from: &Path, to: &Path) -> Result<(), String> {
         .map_err(|e| format!("could not copy {} to {}: {e}", from.display(), to.display()))
 }
 
+fn make_dir(dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))
+}
+
+/// A link at `at` to `target`, relative to where it stands.
+#[cfg(unix)]
+fn link(target: &str, at: &Path) -> Result<(), String> {
+    std::os::unix::fs::symlink(target, at)
+        .map_err(|e| format!("could not link {} to {target}: {e}", at.display()))
+}
+
+#[cfg(not(unix))]
+fn link(target: &str, at: &Path) -> Result<(), String> {
+    Err(format!(
+        "could not link {} to {target}: a bundle is made on a Mac",
+        at.display()
+    ))
+}
+
 /// Runs a tool to its end, its account shown as it goes; a failure is red.
 pub(super) fn tool(program: &Path, args: &[&OsStr]) -> Result<(), String> {
-    let status = Command::new(program)
-        .args(args)
+    finished(Command::new(program).args(args))
+}
+
+/// [`tool`], for a command made ready already.
+fn finished(command: &mut Command) -> Result<(), String> {
+    let status = command
         .status()
-        .map_err(|e| format!("could not run {}: {e}", program.display()))?;
+        .map_err(|e| format!("could not run {command:?}: {e}"))?;
     if status.success() {
         Ok(())
     } else {
-        Err(format!(
-            "{} {:?} failed ({status})",
-            program.display(),
-            args
-        ))
+        Err(format!("{command:?} failed ({status})"))
     }
 }
 
