@@ -7,8 +7,8 @@
 /// tests run on the image's Qt-free stage. The app holds some as well;
 /// before a merge Linux reaches it through `clippy-linux` (every target, so
 /// its tests compile), the container's verbs, qmltest and `bare`, and its
-/// own tests run there only in CI and `linux offline`. Read by the sweep as
-/// well (`crate::sweep::tested_here`).
+/// own tests run there only in CI's full set. Read by the sweep as well
+/// (`crate::sweep::tested_here`).
 pub(crate) fn tested_on_linux(package: &str) -> bool {
     matches!(package, "platitude-core" | "xtask")
 }

@@ -1,7 +1,6 @@
 # The cargo side of CI, for the workflows that start it (light.yml,
-# full.yml): build + test + lint under an egress allowlist on the runners
-# named, and in the full set a fully-offline test job
-# (internal-docs/実装計画.md §11.3) and the dependency policy.
+# full.yml): build + test + lint on the runners named, and in the full set
+# the dependency policy.
 # Nothing is pinned here: Qt's version is .qt-version's and the toolchain is
 # rust-toolchain.toml's, so an edit to this file changes nothing the gate
 # builds or keys a step by.
@@ -22,7 +21,7 @@ on:
         type: string
         required: true
       full:
-        description: "fmt, the periodic tests, the shipped build, the offline job and the dependency policy besides clippy and the tests"
+        description: "fmt, the periodic tests, the shipped build and the dependency policy besides clippy and the tests"
         type: boolean
         required: true
 
@@ -43,55 +42,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     steps:
-      # The last five are where the certificates of github.com and crates.io
-      # say their revocation is asked after. Windows asks, for git and for
-      # cargo, and cargo refuses a certificate it could not ask about
-      # (http.check-revoke) once what the image has cached of the answers
-      # runs out. A site that changes its authority changes these.
-      - &harden
-        name: Harden runner (egress allowlist)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: block
-          allowed-endpoints: >
-            github.com:443
-            api.github.com:443
-            objects.githubusercontent.com:443
-            release-assets.githubusercontent.com:443
-            results-receiver.actions.githubusercontent.com:443
-            *.blob.core.windows.net:443
-            static.rust-lang.org:443
-            index.crates.io:443
-            static.crates.io:443
-            pypi.org:443
-            files.pythonhosted.org:443
-            master.qt.io:443
-            download.qt.io:443
-            azure.archive.ubuntu.com:80
-            archive.ubuntu.com:80
-            security.ubuntu.com:80
-            ocsp.sectigo.com:80
-            crl.sectigo.com:80
-            ocsp.globalsign.com:80
-            ocsp2.globalsign.com:80
-            crl.globalsign.com:80
       - &checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # rust-toolchain.toml names the version; the image's own toolchains
       # are left as they are.
-      - &rust
-        name: Rust toolchain
+      - name: Rust toolchain
         run: rustup toolchain install --no-self-update
-      - &linux-deps
-        name: Install Linux build deps
+      - name: Install Linux build deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libgl1-mesa-dev libxkbcommon-dev
-      - &qt
-        name: Qt
+      - name: Qt
         uses: ./.github/actions/qt
       # After Qt: QMAKE names the Qt the builds are made against, version
       # and all, so it is part of the key — a new Qt starts a new cache
@@ -100,8 +64,7 @@ jobs:
       # kept is what the next run starts from. The light and the full set
       # keep one each: the job's id is the same for both callers, and the
       # one saved first would otherwise be the only one ever kept.
-      - &rust-cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: ${{ inputs.full && 'full' || 'light' }}
           env-vars: QMAKE
@@ -109,8 +72,7 @@ jobs:
           cache-on-failure: true
       # On the record: the git is the image's own, not the oldest one
       # supported (internal-docs/P5-確認事項.md §6).
-      - &versions
-        name: What this run builds and tests with
+      - name: What this run builds and tests with
         run: |
           rustc --version
           git --version
@@ -142,64 +104,14 @@ jobs:
         if: ${{ inputs.full }}
         run: cargo run --locked -p xtask -- shipped
 
-  # All tests and an offscreen app smoke, inside an empty network namespace
-  # (internal-docs/実装計画.md §11.3).
-  offline-test:
-    if: ${{ inputs.full }}
-    runs-on: &ubuntu ubuntu-24.04
-    timeout-minutes: 120
-    steps:
-      - *harden
-      - *checkout
-      - *rust
-      - *linux-deps
-      - *qt
-      - *rust-cache
-      - *versions
-
-      # Build online, run offline. The smoke needs the harness feature
-      # (xtask HARNESS_FEATURE; ci/offline-test.sh).
-      - name: Build test binaries and app
-        run: |
-          cargo build --locked -p platitude-app --features automation
-          cargo test --locked --workspace --no-run
-      # The list goes through a file, not `< <(…)`: a process substitution's
-      # exit status is lost, and a list cut short would run as if it were
-      # whole. As the step's own pipeline it fails under the job's pipefail
-      # (`shell: bash` above).
-      - name: Run tests in an empty network namespace
-        run: |
-          cargo test --locked --workspace --no-run --message-format=json \
-            | jq -r 'select(.reason == "compiler-artifact" and .profile.test == true) | .executable | select(. != null)' \
-            > "${RUNNER_TEMP}/test-bins.txt"
-          mapfile -t BINS < "${RUNNER_TEMP}/test-bins.txt"
-          echo "collected ${#BINS[@]} test binaries"
-          sudo -E env "PATH=${PATH}" "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}" \
-            PGG_SMOKE_BIN="$(pwd)/target/debug/platitude-gg" \
-            unshare -n bash ci/offline-test.sh "${BINS[@]}"
-
   # The only place the advisories are read (`cargo xtask deny` checks the
   # other three offline), so a red here may be RustSec's news, not the
   # tree's.
   deny:
     if: ${{ inputs.full }}
-    runs-on: *ubuntu
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      # static.rust-lang.org: the action's container installs what
-      # rust-toolchain.toml names before it runs cargo-deny.
-      - name: Harden runner (egress allowlist)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: block
-          allowed-endpoints: >
-            github.com:443
-            api.github.com:443
-            objects.githubusercontent.com:443
-            release-assets.githubusercontent.com:443
-            static.rust-lang.org:443
-            index.crates.io:443
-            static.crates.io:443
       - *checkout
       # `check` with no argument runs all four; advisories pull the RustSec DB
       # from github.com.

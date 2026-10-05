@@ -5,8 +5,8 @@
 //! `cargo xtask <verb>` in there ([`super::command_line`]), and a full
 //! gate is five hundred of them, each a cargo resolving /work's manifests
 //! and lock across the mount before the verb runs — the host's
-//! `gate::runner` one boundary further in. `linux test`, `clippy`, `bare`
-//! and `offline` are cargo's work and stay cargo's.
+//! `gate::runner` one boundary further in. `linux test`, `clippy` and
+//! `bare` are cargo's work and stay cargo's.
 //!
 //! **Whose directory, and whose lock.** `/work/target` is this
 //! checkout's own volume on the engine (`super::volume`). The build takes that

@@ -1,8 +1,8 @@
 //! The gate's own container: the one the Linux side's verbs go into by
 //! the engine's `exec`, instead of a container apiece. It is owned by the gate
 //! that prepared the copy they start from (`runner`) and taken down when
-//! that gate's side is over. The cargo steps, `bare` and `offline` keep a
-//! container of their own: different images, mounts or network.
+//! that gate's side is over. The cargo steps and `bare` keep a container of
+//! their own: different images or mounts.
 //!
 //! **What is shared and what is not.** The side's mounts are carried
 //! once. Each verb has its own environment and its own `/out` leaf under

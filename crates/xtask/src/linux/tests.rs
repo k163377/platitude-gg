@@ -621,7 +621,7 @@ fn an_engine_that_would_not_say_what_it_holds_is_never_asked_to_build() {
 }
 
 /// The arguments as the process would see them.
-pub(super) fn args_of(cmd: &Command) -> Vec<String> {
+fn args_of(cmd: &Command) -> Vec<String> {
     cmd.get_args()
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect()

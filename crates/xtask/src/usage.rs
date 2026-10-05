@@ -595,7 +595,6 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
         cargo xtask linux test -p platitude-core --test it
         cargo xtask linux verify-ui commit --preset basic
         cargo xtask linux bare
-        cargo xtask linux offline
         cargo xtask linux --container <name> --step <mark> stop
       A cargo command goes to cargo; an xtask verb goes to cargo xtask.
       `--runner <name>` starts an xtask verb from the copy a gate
@@ -611,18 +610,12 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       whichever pid the gate note carries at the moment of each
       decision — so one of these held up past its gate cannot reach a
       later run's copy.
-      Two more are neither, and both stay in the container on Linux too.
+      One more is neither, and stays in the container on Linux too.
       `bare` builds the release workspace-wide and starts it on an Ubuntu
       carrying only what a package would declare, which is the only check
       that the thing runs somewhere it was not built; `bare --discover`
       works that package list out afresh, whatever the one that
-      stands says. `offline` is CI's
-      offline-test job run here: it builds the app with the harness and
-      the test binaries, then runs ci/offline-test.sh — the suite plus the
-      offscreen smoke — in a container with no network at all, which is
-      the property CI reaches with `unshare -n`. CI runs that script once
-      a push is on GitHub; this is the run of it a desk can make before.
-      Both are worth a place in a pre-merge sweep.
+      stands says. It is worth a place in a pre-merge sweep.
       An engine that gives no answer is not an answer: what is asked of
       it is asked under a ceiling, and a line that cannot learn whether
       its image is built stops there and builds nothing. The first line

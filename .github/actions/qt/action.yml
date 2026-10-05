@@ -61,8 +61,8 @@ runs:
       # pipx, not pip: the runners' own Python refuses a global install
       # (PEP 668) on macOS. --base names Qt's origin server, which hands out
       # the archives itself: download.qt.io answers an archive with a redirect
-      # to whichever mirror is near, off the egress allowlist. The checksums
-      # still come from download.qt.io (aqt's trusted mirror).
+      # to whichever mirror is near, a different one from run to run. The
+      # checksums still come from download.qt.io (aqt's trusted mirror).
       run: |
         pipx run --spec "${AQT_SOURCE}" aqt install-qt --base https://master.qt.io/ \
           "${QT_HOST}" desktop "${QT_PIN}" "${QT_ARCH}" -O "${RUNNER_TEMP}/qt"

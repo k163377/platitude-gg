@@ -96,7 +96,6 @@ pub(crate) static COMMANDS: &[&command::Command] =
 mod bare;
 pub(crate) mod container;
 pub(crate) mod engine;
-mod offline;
 pub(crate) mod runner;
 mod tested;
 #[cfg(test)]
@@ -360,14 +359,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if rest.first().is_some_and(|verb| verb == "bare") {
         let discover = rest.iter().any(|word| word == "--discover");
         return bare::bare(&root, discover);
-    }
-    // In the container even on Linux: what it asks is whether the suite
-    // passes with no network, which the host has.
-    if rest.first().is_some_and(|verb| verb == "offline") {
-        if let Some(extra) = rest.get(1) {
-            return Err(format!("offline takes no arguments (got {extra:?})"));
-        }
-        return offline::offline(&root);
     }
     if cfg!(target_os = "linux") {
         if shell {

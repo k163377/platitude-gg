@@ -113,9 +113,8 @@ RUN apt-get update \
 # A venv: the release's system python is externally managed and refuses
 # pip, and pip fetches aqtinstall's commit with the git above.
 # --base is aqt's default spelled out: download.qt.io answers an archive
-# with a redirect to a mirror, which nothing here blocks (CI, behind an
-# egress allowlist, names the origin server). Python goes with the venv in
-# the same layer: nothing past the install runs it.
+# with a redirect to a mirror (CI names the origin server instead). Python
+# goes with the venv in the same layer: nothing past the install runs it.
 #
 # Both ARGs are taken in here, past the fonts: every RUN after an ARG reads
 # it, so one declared above would fetch the fonts again when it moved.
