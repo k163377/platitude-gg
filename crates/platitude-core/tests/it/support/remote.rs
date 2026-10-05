@@ -1,5 +1,5 @@
 //! Offline "remote" fixtures: a bare repository served over `file://`
-//! (実装計画 §11.3).
+//! (実装計画 §10).
 
 use std::path::PathBuf;
 

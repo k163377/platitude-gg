@@ -237,7 +237,7 @@ impl TestRepo {
     }
 
     /// `file://` URL of this repository, so remote-protocol paths can be
-    /// exercised without a network (実装計画 §11.3).
+    /// exercised without a network (実装計画 §10).
     pub fn file_url(&self) -> String {
         let mut p = self.path.to_string_lossy().replace('\\', "/");
         // Windows paths start with a drive letter; the URL needs a root.

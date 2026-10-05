@@ -1,5 +1,5 @@
 //! Remote traffic, exercised entirely offline: the remote is a `file://`
-//! URL of a second local repository (実装計画 §11.3).
+//! URL of a second local repository (実装計画 §10).
 //!
 //! What git alone decides about that traffic is in [`periodic`].
 

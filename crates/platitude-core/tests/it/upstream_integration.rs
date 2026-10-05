@@ -212,7 +212,7 @@ async fn an_upstream_the_next_push_has_to_make_is_recorded_all_the_same() {
 /// `RepoSession::point_upstream_and_push` writes the pair first rather
 /// than use `push --set-upstream`, which records it only on a push that
 /// landed (デザイン規約 §手元の改名の後のリモート). The remote is a path to
-/// nothing: no network (実装計画 §11.3).
+/// nothing: no network (実装計画 §10).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_push_the_far_side_turns_down_still_leaves_the_upstream_written() {
     let mut repo = TestRepo::init();

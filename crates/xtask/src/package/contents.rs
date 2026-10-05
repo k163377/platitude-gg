@@ -30,7 +30,7 @@ pub(super) const QT_PLUGINS: [&str; 6] = [
 
 /// Why the network plugins stay out. QtNetwork itself comes, as a library
 /// QtQml loads.
-const NETWORK: &str = "a network plugin: none goes in (実装計画 §11.2 ②)";
+const NETWORK: &str = "a network plugin: none goes in (実装計画 §11.2)";
 
 /// The plugin directories macdeployqt fills that stay out, and why — each
 /// reason what the thing is, then why the bundle does without it.

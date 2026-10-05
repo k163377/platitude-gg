@@ -1,7 +1,7 @@
 //! Where a push goes when the repository decides it
 //! (`remote.pushDefault`), and the remote the repository calls origin —
 //! that key with `checkout.defaultRemote` beside it — against real git,
-//! with `file://` remotes so nothing leaves the machine (実装計画 §11.3).
+//! with `file://` remotes so nothing leaves the machine (実装計画 §10).
 //!
 //! Only what git alone can answer: the four reads come back with what git
 //! holds — at every scope, and for a branch whose name is a regex — and a

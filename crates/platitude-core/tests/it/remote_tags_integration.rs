@@ -1,5 +1,5 @@
 //! What a tag says about the remote, end to end and entirely offline: the
-//! remote is a `file://` URL of a second local repository (実装計画 §11.3).
+//! remote is a `file://` URL of a second local repository (実装計画 §10).
 //!
 //! - `fetch --prune` re-creates a deleted local tag whose commit it can
 //!   reach, so "only on the remote" needs a commit out of the fetch's reach

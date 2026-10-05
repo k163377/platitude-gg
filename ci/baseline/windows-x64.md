@@ -1,6 +1,6 @@
 # ネットワーク非通信 baseline 実測（Windows x64）— Phase 0
 
-実装計画 §11.2 の CI 照合の元データ。P0 スパイク（`spike/`）の windeployqt 配布物を実測したもの。
+実装計画 §11.2 の前提(既定ビルドの Qt では配布物に通信の経路が残る)の根拠。P0 スパイク（`spike/`）の windeployqt 配布物を実測したもの。
 
 - 計測対象: `pgg_spike.exe`（qtbridge 0.2.0 / Qt 6.10.3 msvc2022_64 / rustc 1.97.1, release）
 - deploy コマンド: `windeployqt --release --compiler-runtime --no-translations --qmldir spike/src <exe>`
@@ -31,9 +31,9 @@ VCRUNTIME140.dll  api-ms-win-crt-{runtime,heap,math,stdio,locale}-l1-1-0.dll
 
 ### 帰結
 
-計画の「**Qt6Network を同梱しない**」は Qt Quick 構成では**成立しない**
+「**Qt6Network を同梱しない**」は既定ビルドの Qt の Qt Quick 構成では**成立しない**
 （Qt6Qml/Qt6Quick がロード時に要求するため、DLL を除くと起動不能になる）。
-主張の立て方は実装計画 §11.2。
+外すのは Qt のカスタムビルド — 実装計画 §11.2。
 
 ## 3. 同梱 DLL / プラグイン一覧（P5 allowlist の種）
 

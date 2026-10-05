@@ -1,5 +1,5 @@
 //! `git clone`, offline: the far side is a `file://` URL of a local
-//! repository (実装計画 §11.3). git's own refusals are in [`periodic`].
+//! repository (実装計画 §10). git's own refusals are in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
