@@ -235,6 +235,80 @@ async fn source_text_reads_the_side_the_commit_has() {
     assert_eq!(source.as_deref(), Some("fn main() {\n    work();\n}\n"));
 }
 
+/// A Rust file twice [`preview::SOURCE_BYTE_CAP`]: where the read stops,
+/// git is still writing the rest into a full pipe, so the read's own stop
+/// ends the row. Just over the cap, the chunk that passes it is git's last:
+/// a reader behind (a loaded machine) reads on to git's exit in the same
+/// turn, and the row ends `Exited(0)` — the answer still too big.
+fn over_the_cap() -> String {
+    let line = "let x = 1;\n";
+    line.repeat(2 * usize::try_from(preview::SOURCE_BYTE_CAP).unwrap() / line.len())
+}
+
+/// A blob over the cap is not read to its end: the read stops where it
+/// passes the cap (the row ends `Cancelled`, not on git's exit), and the
+/// other side is not read in its place.
+#[tokio::test]
+async fn a_blob_over_the_cap_is_not_read_to_its_end() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("big.rs", "fn main() {}\n", "small");
+    repo.commit_file("big.rs", &over_the_cap(), "big");
+    let head = repo.git(&["rev-parse", "HEAD"]);
+    let parent = repo.git(&["rev-parse", "HEAD^"]);
+
+    let (executor, log, cancel) = crate::support::exec::logged();
+    let source = preview::source_text(
+        &executor,
+        &repo.path,
+        &DiffTarget::Commit {
+            oid: Oid::from_hex_str(&head).unwrap(),
+            parent: Some(Oid::from_hex_str(&parent).unwrap()),
+            path: "big.rs".to_string(),
+            orig_path: None,
+        },
+        &cancel,
+    )
+    .await;
+    assert_eq!(source, None, "no colours are read against it");
+    assert_eq!(
+        log.ends_of(&["cat-file", "blob"]),
+        [platitude_core::process::CommandEnd::Cancelled],
+        "one read, stopped at the cap"
+    );
+    assert_eq!(
+        log.ends_of(&["rev-parse", "--verify"]).len(),
+        1,
+        "the older side is not asked for"
+    );
+}
+
+/// A working file over the cap is the side the diff shows: the index's
+/// copy is a different file, and colouring by it would colour the rows
+/// against text they are not.
+#[tokio::test]
+async fn a_working_file_over_the_cap_reads_no_other_side() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("big.rs", "fn main() {}\n", "small");
+    repo.write_file("big.rs", &over_the_cap());
+
+    let (executor, log, cancel) = crate::support::exec::logged();
+    let source = preview::source_text(
+        &executor,
+        &repo.path,
+        &DiffTarget::Unstaged {
+            path: "big.rs".to_string(),
+        },
+        &cancel,
+    )
+    .await;
+    assert_eq!(source, None);
+    assert!(
+        log.ends_of(&["git"]).is_empty(),
+        "nothing was read from git: {:?}",
+        log.0.lock().unwrap()
+    );
+}
+
 #[tokio::test]
 async fn renamed_image_reads_the_old_side_from_orig_path() {
     let mut repo = TestRepo::init();

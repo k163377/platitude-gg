@@ -321,8 +321,9 @@ pub const SOURCE_BYTE_CAP: u64 = 4 * 1024 * 1024;
 /// UTF-8, or is over [`SOURCE_BYTE_CAP`] — each hunk's colours then start
 /// clean.
 ///
-/// The blob side is not size-probed first: a `cat-file -s` would spawn a
-/// process to save the rare oversized read.
+/// Only a side that is not there sends the read to the other one: a side
+/// over the cap is the one the rows show, and the other side's text would
+/// colour them against a file they are not.
 pub async fn source_text(
     executor: &GitExecutor,
     workdir: &Path,
@@ -330,15 +331,27 @@ pub async fn source_text(
     cancel: &CancellationToken,
 ) -> Option<String> {
     let (old, new) = side_sources(workdir, target);
-    let bytes = match read_source(executor, workdir, &new, cancel).await {
-        Some(bytes) => bytes,
-        None => read_source(executor, workdir, &old, cancel).await?,
+    let read = match read_source(executor, workdir, &new, cancel).await {
+        Source::Absent => read_source(executor, workdir, &old, cancel).await,
+        read => read,
     };
-    if bytes.len() as u64 > SOURCE_BYTE_CAP {
-        tracing::debug!(bytes = bytes.len(), "file too big to read colours against");
-        return None;
+    match read {
+        Source::Text(bytes) => String::from_utf8(bytes).ok(),
+        Source::TooBig => {
+            tracing::debug!("file too big to read colours against");
+            None
+        }
+        Source::Absent => None,
     }
-    String::from_utf8(bytes).ok()
+}
+
+/// What one side gave [`source_text`].
+enum Source {
+    /// Not there, or not readable: the other side may stand in.
+    Absent,
+    /// Over [`SOURCE_BYTE_CAP`], and not read to its end.
+    TooBig,
+    Text(Vec<u8>),
 }
 
 async fn read_source(
@@ -346,26 +359,63 @@ async fn read_source(
     workdir: &Path,
     source: &SideSource,
     cancel: &CancellationToken,
-) -> Option<Vec<u8>> {
+) -> Source {
     match source {
         SideSource::Blob { spec, .. } => {
             if !blob_is_there(executor, workdir, spec, cancel).await {
-                return None;
+                return Source::Absent;
             }
-            let cmd = GitCommand::new()
-                .cwd(workdir)
-                .args(["cat-file", "blob"])
-                .arg(spec);
-            let out = executor.run_unchecked(cmd, cancel).await.ok()?;
-            (out.code == 0).then_some(out.stdout)
+            read_capped_blob(executor, workdir, spec, cancel).await
         }
-        SideSource::WorkTree(path) => {
-            if tokio::fs::metadata(path).await.ok()?.len() > SOURCE_BYTE_CAP {
-                return None;
+        SideSource::WorkTree(path) => match tokio::fs::metadata(path).await {
+            Ok(meta) if meta.len() > SOURCE_BYTE_CAP => Source::TooBig,
+            Ok(_) => match tokio::fs::read(path).await {
+                Ok(bytes) => Source::Text(bytes),
+                Err(_) => Source::Absent,
+            },
+            Err(_) => Source::Absent,
+        },
+        SideSource::Absent => Source::Absent,
+    }
+}
+
+/// `cat-file blob`, stopped once it has passed [`SOURCE_BYTE_CAP`]: no
+/// size is asked first (a `cat-file -s` is a process for every side, to
+/// save the rare oversized one), and what is over the cap is never held.
+/// The stop is this read's own token, a child of the caller's, so the
+/// row ends `Cancelled` and the caller's token is left as it was.
+async fn read_capped_blob(
+    executor: &GitExecutor,
+    workdir: &Path,
+    spec: &str,
+    cancel: &CancellationToken,
+) -> Source {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["cat-file", "blob"])
+        .arg(spec);
+    let stop = cancel.child_token();
+    let cap = usize::try_from(SOURCE_BYTE_CAP).unwrap_or(usize::MAX);
+    let mut bytes = Vec::new();
+    let mut over = false;
+    let read = executor
+        .run_streaming(cmd, &stop, &mut |chunk: &[u8]| {
+            if over {
+                return;
             }
-            tokio::fs::read(path).await.ok()
-        }
-        SideSource::Absent => None,
+            if bytes.len() + chunk.len() > cap {
+                over = true;
+                bytes = Vec::new();
+                stop.cancel();
+                return;
+            }
+            bytes.extend_from_slice(chunk);
+        })
+        .await;
+    match read {
+        _ if over => Source::TooBig,
+        Ok(_) => Source::Text(bytes),
+        Err(_) => Source::Absent,
     }
 }
 
