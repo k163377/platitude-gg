@@ -25,8 +25,16 @@ Item {
     property color cornerAlertTone: seat.tint
 
     readonly property bool paired: seat.kind !== "" && seat.holdMs > 0
-    /// How far the two are set apart across the slash.
+    /// How much wider than one half the seat is (`implicitWidth`): the two halves' ink stands inside it.
     readonly property int spread: Theme.iconMd - Theme.spaceXs
+    /// How far along the slash sets the two apart: `spread` and half a gap more — the air each half carries inside its
+    /// box, so the ink of push's mark and the ring fits the seat with the boxes a pixel past it at either end
+    /// (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
+    readonly property int pairAlong: seat.spread + Theme.spaceXs / 2
+    /// How far down: the pair stands no deeper than a lone mark at the panel's step (`iconLg` — moves with
+    /// `ActionButton.stackStep`), so a frame held to the word over the mark (`ActionButton.stackDepth`, which macOS's
+    /// short lines make the frame's depth) keeps air under the ring.
+    readonly property int pairDown: Theme.iconLg - Theme.iconSm
     /// The icon's step. A held button keeps `iconMd`: the fraction is two `iconSm` halves with no room to give. A
     /// caller may raise it where a folded two-line button's mark grows into the word's line (`ActionButton.stacked`).
     property int step: seat.besideWord && seat.holdMs <= 0 ? Theme.iconSm : Theme.iconMd
@@ -69,15 +77,16 @@ Item {
         tint: seat.tint
         spinning: seat.busy
     }
-    // Over the seat, so the icon under it keeps the step and centre it had with the word.
+    // Over the seat, so the icon under it keeps the step and centre it had with the word. On the fraction's box while
+    // that is drawn: the folded seat is deeper than the pair, and on the seat's corner the mark floats clear of it.
     NavIcon {
         visible: seat.cornerAlert
         kind: "bang"
         tint: seat.cornerAlertTone
         width: Theme.iconSm
         height: Theme.iconSm
-        x: parent.width - width + Theme.spaceXs / 2
-        y: -Theme.spaceXs
+        x: (pair.visible ? pair.x + pair.width : parent.width) - width + Theme.spaceXs / 2
+        y: (pair.visible ? pair.y : 0) - Theme.spaceXs
     }
     // A held button with no icon wears only the hold mark, at the row's start (デザイン規約 §長押し).
     HoldIcon {
@@ -90,8 +99,12 @@ Item {
     }
     // A held button with an icon wears both as a fraction across a slash: the hold mark alone would cost `push -f` the
     // icon that says it is a push (デザイン規約 §長押し).
+    // Centred at its own size whatever the step: the folded seat is deeper, and the halves keep their distance in it.
     Item {
-        anchors.fill: parent
+        id: pair
+        width: Theme.iconSm + seat.pairAlong
+        height: Theme.iconSm + seat.pairDown
+        anchors.centerIn: parent
         visible: seat.paired && !seat.busy
         NavIcon {
             kind: seat.kind
@@ -112,8 +125,8 @@ Item {
             tint: seat.tint
             width: Theme.iconSm
             height: Theme.iconSm
-            x: seat.spread
-            y: parent.height - Theme.iconSm
+            x: seat.pairAlong
+            y: seat.pairDown
         }
     }
 }

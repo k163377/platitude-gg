@@ -7,8 +7,8 @@ import platitude.ui
 // - here alone: the kind's mark
 // - a remote's alone: for a tag, the tag a step down with the cloud on its shoulder (`ShoulderBadge`) — a remote's
 //   branch is the cloud itself, REMOTES' mark
-// - here and on a remote at once: the kind over the cloud across a slash — two things taken, two marks —
-//   `ActionButtonSeat`'s fraction a step down, wider than one mark by `pairSpread`
+// - here and on a remote at once: the kind over the cloud across a slash — two things taken, two marks — a fraction
+//   like `ActionButtonSeat`'s in `iconXs` halves, wider than one mark by `pairSpread`
 Item {
     id: mark
 
@@ -38,7 +38,7 @@ Item {
             tint: Theme.textSecondary
         }
     }
-    // The halves a step under the mark they stand for, apart across the slash as the hold's fraction is.
+    // The halves a step under the mark they stand for, at opposite corners of the pair's box across the slash.
     Item {
         visible: mark.paired
         anchors.fill: parent
