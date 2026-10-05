@@ -123,6 +123,9 @@ pub struct RepoSession {
     /// answers: reads of different trees finish in any order, and the pane
     /// would show whichever finished last — the copy the reader stepped off.
     pub(super) carried_read: Latest,
+    /// Which other copy the read-only pane stands on, and which reading of
+    /// it the pane holds (`carried::Pane`).
+    pub(super) carried_pane: super::carried::Pane,
     /// Line-ending baselines already sampled, keyed by (directory,
     /// extension) — what a house style is scoped to.
     ///

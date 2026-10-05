@@ -152,17 +152,16 @@ token も cache も更新されない。効かせるには status のたびに i
 `index.lock` を握る側へ戻ることになり、それは巡回が他所の木を読める前提(rules-refs/core.md の
 `--no-optional-locks` の項)を崩す。
 
-## ペインが立っているコピーの二重読み
+## ペインが立っているコピーの読み
 
-**ペインが 1 つのコピーを開いている間、そのコピーだけが tick ごとに 2 度読まれる** —— 行の集計の
-pass(全コピー)と、ペインのファイル一覧(`RepoSession::read_carried_status` を `RepoPage.pollCarried`
-が同じ tick で撃つ)。**どちらも同じ `status --porcelain=v2 -z --branch -uall`** で、同じ background
-の枠を分け合う。
+**ペインが 1 つのコピーを開いている間も、tick ごとの読みはコピー 1 つに `status` 1 本** —— 行の集計の
+pass(全コピー)が、ペインの立つコピーの `status --porcelain=v2 -z --branch -uall` をペインの一覧へも
+配る(`carried::Pane`)。ペインが自分で読む(`RepoSession::read_carried_status`)のは、選んだ瞬間・
+フォーカス復帰・pass が始まらなかった tick だけ。
 
-- **代金は status 1 本ぶん**: 製品条件のコピー 1 で **405 / 418ms**(5 回の min / 中央、max 442 =
-  §`status` の高速化機構 と同じ probe)。8 コピーの pass は 9 本になり、
-  そのコピー 1 つだけを見れば読みは 2 倍
-- 採否は [P3-確認事項.md](../../internal-docs/P3-確認事項.md) §別 worktree の未コミット行
+- **ペインが自分で読む 1 本の代金は status 1 本ぶん**: 製品条件のコピー 1 で **405 / 418ms**(5 回の
+  min / 中央、max 442 = §`status` の高速化機構 と同じ probe)。**フォーカス復帰は pass も撃つ**ので、
+  その時だけそのコピーは 2 度読まれる(8 コピーなら 9 本)
 - **verify-ui の run が持つのは別の時間**: あちらは `GIT_CONFIG_NOSYSTEM=1` で system の
   gitconfig を読まない環境なので、**同じコピーの status が 6.1–6.9s**(同じ日・同じ機械・
   `carried-read` を `--repo <corpus>` で撃った 2 run の全 status。8 コピーの pass は 25–26s)。

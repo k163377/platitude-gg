@@ -73,25 +73,37 @@ pub fn copies_interval_secs(asked: u32) -> u32 {
 ///
 /// Skips this window's own copy, a bare entry and a prunable one (the
 /// directory is gone).
+///
+/// `pane` is the copy the read-only pane stands on, if one does: its
+/// `status` is the pane's file list too, so it goes there the moment it is
+/// read — before the clean copies are left out, a copy gone clean being a
+/// list the pane has to hear — and its read is asked for first.
 pub(super) async fn read_all(
     executor: &GitExecutor,
     worktrees: &[WorktreeEntry],
     here: &Path,
     cancel: &CancellationToken,
+    pane: Option<PaneRead>,
 ) -> Vec<Carried> {
     // git prints its own separators and case: compare keys
     // (`joins::same_path_key`).
     let here = crate::session::joins::same_path_key(&here.to_string_lossy());
-    let mine: Vec<&WorktreeEntry> = worktrees
+    let mut mine: Vec<(usize, &WorktreeEntry)> = worktrees
         .iter()
         .filter(|w| carries_a_tree(w) && crate::session::joins::same_path_key(&w.path) != here)
+        .enumerate()
         .collect();
     if mine.is_empty() {
         return Vec::new();
     }
+    // The pane's copy first: the background queue serves in the order
+    // asked. Stable, and `at` keeps the listing's order for the rows.
+    if let Some(pane) = &pane {
+        mine.sort_by_key(|(_, w)| crate::session::joins::same_path_key(&w.path) != pane.key);
+    }
     let started = std::time::Instant::now();
     let mut set = tokio::task::JoinSet::new();
-    for (at, entry) in mine.iter().enumerate() {
+    for &(at, entry) in &mine {
         let executor = executor.clone();
         let cancel = cancel.clone();
         let path = std::path::PathBuf::from(&entry.path);
@@ -101,10 +113,21 @@ pub(super) async fn read_all(
             .head_hex
             .as_deref()
             .and_then(|hex| Oid::from_hex_str(hex.trim()).ok());
+        let pane = pane
+            .as_ref()
+            .filter(|pane| crate::session::joins::same_path_key(&entry.path) == pane.key)
+            .cloned();
         set.spawn(async move {
             let head = head?;
             let status = crate::status::load(&executor, &path, &cancel).await.ok()?;
-            if !status.is_dirty() {
+            let dirty = status.is_dirty();
+            // Counted once per path, because the pane the row leads to
+            // lists paths (`Kinds::folded`).
+            let kinds = Kinds::folded(&status);
+            if let Some(pane) = pane {
+                (pane.hand)(status);
+            }
+            if !dirty {
                 return None;
             }
             Some((
@@ -113,9 +136,7 @@ pub(super) async fn read_all(
                     name,
                     path: shown_path,
                     head,
-                    // Counted once per path, because the pane the row
-                    // leads to lists paths (`Kinds::folded`).
-                    kinds: Kinds::folded(&status),
+                    kinds,
                 },
             ))
         });
@@ -139,6 +160,100 @@ pub(super) async fn read_all(
     // walked again, and a shuffled set would cost a `git log` for nothing.
     found.sort_by_key(|(at, _)| *at);
     found.into_iter().map(|(_, wip)| wip).collect()
+}
+
+/// The pane's copy as a pass reads it ([`read_all`]): which copy, and
+/// where its `status` goes.
+#[derive(Clone)]
+pub(super) struct PaneRead {
+    /// `joins::same_path_key` of the copy.
+    key: String,
+    hand: std::sync::Arc<dyn Fn(crate::status::WorkTreeStatus) + Send + Sync>,
+}
+
+/// Which other copy the read-only pane stands on, and which reading of it
+/// the pane was last handed — what the pass over the copies and the
+/// pane's own reads both answer to.
+///
+/// Every read of the copy takes a number when it is asked, and only one
+/// numbered above the reading handed last is handed: the pass's read waits
+/// behind the background queue, and landing after a read the pane asked
+/// later it would put the older list back. Stepping onto a copy counts as
+/// a reading of it, so nothing asked before the step is handed — a pass
+/// asked before the pane stepped off a copy and back included.
+#[derive(Default)]
+pub(super) struct Pane(std::sync::Mutex<PaneState>);
+
+#[derive(Default)]
+struct PaneState {
+    asks: u64,
+    standing: Option<Standing>,
+}
+
+struct Standing {
+    key: String,
+    path: String,
+    name: String,
+    /// The number of the reading handed last — before the first, the one
+    /// below the read the pane stepped on with.
+    handed: u64,
+}
+
+impl Pane {
+    /// Stands the pane on the copy at `path` (shown as `name`), answering
+    /// its key and the number of the read asked with it. Another copy
+    /// starts at this read: what was asked of it before is not handed.
+    fn stand(&self, path: &str, name: &str) -> (String, u64) {
+        let key = crate::session::joins::same_path_key(path);
+        let mut state = super::relock(&self.0);
+        state.asks += 1;
+        let number = state.asks;
+        match &mut state.standing {
+            Some(standing) if standing.key == key => {
+                standing.path = path.to_string();
+                standing.name = name.to_string();
+            }
+            standing => {
+                *standing = Some(Standing {
+                    key: key.clone(),
+                    path: path.to_string(),
+                    name: name.to_string(),
+                    handed: number - 1,
+                });
+            }
+        }
+        (key, number)
+    }
+
+    /// The copy the pane stands on and a number for a pass's read of it;
+    /// `None` while it stands on none.
+    fn ask(&self) -> Option<(String, u64)> {
+        let mut state = super::relock(&self.0);
+        state.asks += 1;
+        let number = state.asks;
+        state
+            .standing
+            .as_ref()
+            .map(|standing| (standing.key.clone(), number))
+    }
+
+    /// Takes a reading of the copy `key` asked as `number` for the pane,
+    /// answering the path and name it is shown under — `None` where the
+    /// pane stands elsewhere now, or holds a reading asked later.
+    fn take(&self, key: &str, number: u64) -> Option<(String, String)> {
+        let mut state = super::relock(&self.0);
+        let standing = state.standing.as_mut().filter(|s| s.key == key)?;
+        if number <= standing.handed {
+            return None;
+        }
+        standing.handed = number;
+        Some((standing.path.clone(), standing.name.clone()))
+    }
+
+    /// The pane is about this window's own tree again.
+    fn leave(&self) {
+        super::relock(&self.0).standing = None;
+    }
 }
 
 /// Whether the other copies are read, what the last pass left, and the
@@ -291,11 +406,20 @@ impl super::RepoSession {
         // After the permit, so at most one ticket is ever out: the pass
         // the turning-off stops is the one running.
         let ticket = self.copies.begin(&self.root_cancel)?;
+        // The pane's copy, numbered at the ask like the pane's own reads.
+        let pane = self.carried_pane.ask().map(|(key, number)| {
+            let s = std::sync::Arc::clone(self);
+            let hand_key = key.clone();
+            PaneRead {
+                key,
+                hand: std::sync::Arc::new(move |status| s.hand_carried(&hand_key, number, status)),
+            }
+        });
         let (tell, told) = tokio::sync::oneshot::channel();
         let s = std::sync::Arc::clone(self);
         self.runtime.spawn(async move {
             let _permit = permit;
-            let outcome = s.pass_over_copies(&workdir, &ticket).await;
+            let outcome = s.pass_over_copies(&workdir, &ticket, pane).await;
             if tell.send(outcome).is_err() {
                 tracing::trace!("nobody was waiting on the pass over the other copies");
             }
@@ -303,11 +427,13 @@ impl super::RepoSession {
         Some(CarriedPass { told })
     }
 
-    /// One pass: the listing, a `status` per copy, and the landing.
+    /// One pass: the listing, a `status` per copy (the pane's copy handed
+    /// to the pane as it lands), and the landing.
     async fn pass_over_copies(
         self: &std::sync::Arc<Self>,
         workdir: &Path,
         ticket: &PassTicket,
+        pane: Option<PaneRead>,
     ) -> CarriedOutcome {
         // Its own listing: one process, instead of keeping a copy of the
         // worktree pass's in step.
@@ -319,7 +445,14 @@ impl super::RepoSession {
         // Recorded before the reads, so a reading is never newer than the
         // listing it is drawn against (`RepoSession::note_copy_heads`).
         self.note_copy_heads(&worktrees, workdir);
-        let carried = read_all(&self.exec_background, &worktrees, workdir, &ticket.cancel).await;
+        let carried = read_all(
+            &self.exec_background,
+            &worktrees,
+            workdir,
+            &ticket.cancel,
+            pane,
+        )
+        .await;
         // Reads stopped part-way are dropped: what they left out would
         // come down as copies with nothing to show.
         if ticket.cancel.is_cancelled() {
@@ -344,17 +477,21 @@ impl super::RepoSession {
         }
     }
 
-    /// Reads the file list of one other working copy, fresh, for the pane
-    /// about to show it (the pass keeps only the rows' tallies). Read-only:
-    /// the pane has every write control down on another copy.
+    /// Stands the read-only pane on one other working copy and reads its
+    /// file list, fresh — for the pane about to show it, and for a window
+    /// coming back. Read-only: the pane has every write control down on
+    /// another copy.
     ///
-    /// The last ask wins (`carried_read`): the reads are of different
-    /// trees, and the screen must answer the row the reader is on.
+    /// While it stands there, the pass over the copies hands it the same
+    /// list from its own read of that copy ([`read_all`]), so the copies'
+    /// tick reads the copy once; this read is for the moment of stepping
+    /// on, which cannot wait for the next tick.
     ///
-    /// A copy whose pane is open is read twice per tick, pass and pane
-    /// (ci/baseline/git-slots-windows-x64.md §ペインが立っているコピーの二重読み);
-    /// whether the list can ride on the pass's answer is undecided.
+    /// The last ask wins (`carried_read` stops the read the pane stepped
+    /// off), and the pane is handed only a reading of the copy it stands
+    /// on, asked after the one it holds ([`Pane`]).
     pub fn read_carried_status(self: &std::sync::Arc<Self>, path: String, name: String) {
+        let (key, number) = self.carried_pane.stand(&path, &name);
         let s = std::sync::Arc::clone(self);
         let cancel = self.carried_read.begin(&self.root_cancel);
         self.runtime.spawn(async move {
@@ -367,9 +504,23 @@ impl super::RepoSession {
             if cancel.is_cancelled() {
                 return;
             }
-            s.sink
-                .event(crate::session::SessionEvent::CarriedStatusLoaded { path, name, status });
+            s.hand_carried(&key, number, status);
         });
+    }
+
+    /// The pane is about this window's own tree again: no pass hands it
+    /// another copy's list from here on.
+    pub fn leave_carried_status(&self) {
+        self.carried_pane.leave();
+    }
+
+    /// Hands the pane a reading of the copy `key`, asked as `number`, if it
+    /// still stands there and holds nothing asked later.
+    fn hand_carried(&self, key: &str, number: u64, status: crate::status::WorkTreeStatus) {
+        if let Some((path, name)) = self.carried_pane.take(key, number) {
+            self.sink
+                .event(crate::session::SessionEvent::CarriedStatusLoaded { path, name, status });
+        }
     }
 
     /// Whether the other copies are read at all — the settings' "never"
@@ -446,6 +597,47 @@ mod tests {
         assert!(
             copies.begin(&root).is_none(),
             "and no pass begins while the copies are off"
+        );
+    }
+
+    #[test]
+    fn the_pane_takes_only_the_newest_reading_of_the_copy_it_stands_on() {
+        let pane = Pane::default();
+        assert_eq!(
+            pane.ask(),
+            None,
+            "standing on no copy, a pass hands nothing"
+        );
+        let (a, first) = pane.stand("/copies/a", "a");
+        let (_, pass) = pane.ask().expect("standing on a");
+        let (_, again) = pane.stand("/copies/a", "a");
+        assert!(pane.take(&a, again).is_some(), "the newest read is handed");
+        assert_eq!(
+            pane.take(&a, pass),
+            None,
+            "a pass asked before it, landing after, would put an older list back"
+        );
+        assert_eq!(pane.take(&a, first), None);
+
+        let (b, on_b) = pane.stand("/copies/b", "b");
+        assert_eq!(
+            pane.take(&a, pass),
+            None,
+            "the copy stepped off is nobody's to show"
+        );
+        let (_, back) = pane.stand("/copies/a", "a");
+        assert_eq!(
+            pane.take(&a, pass),
+            None,
+            "a pass asked before the step back loses to the step back's read"
+        );
+        assert_eq!(pane.take(&b, on_b), None, "nor is b, stepped off");
+        assert!(pane.take(&a, back).is_some());
+        pane.leave();
+        assert_eq!(
+            pane.take(&a, back + 1),
+            None,
+            "a pane put away is handed nothing"
         );
     }
 

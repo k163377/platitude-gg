@@ -578,19 +578,30 @@ impl RepoTab {
     }
 
     /// What the other copies are carrying, on a slower tick of its own: a
-    /// whole `status` per copy (`RepoSession::refresh_carried`).
+    /// whole `status` per copy (`RepoSession::refresh_carried`). Answers
+    /// whether a pass began — one that did hands the pane the copy it
+    /// stands on, one that did not (the last still out, the copies off)
+    /// leaves the pane to read its own (`RepoPage.pollCarried`).
     #[qslot]
-    fn refresh_carried(&mut self) {
-        self.with_session(|s| s.refresh_carried());
+    fn refresh_carried(&mut self) -> bool {
+        crate::hub::from_session(self.tab_id, |s| s.refresh_carried().is_some()).unwrap_or(false)
     }
 
     /// What one other copy is holding, file by file — the pane's read,
-    /// asked when a copy's row is selected and again on the copies' tick
-    /// while it stands open. Apart from that tick's tallies, because it
-    /// has to be up the moment the pane opens.
+    /// asked when a copy's row is selected, when the window comes back,
+    /// and on the copies' tick when no pass began. It stands the pane on
+    /// that copy: the copies' pass hands the pane the copy's list from
+    /// there on.
     #[qslot]
     fn read_carried_status(&mut self, path: String, name: String) {
         self.with_session(|s| s.read_carried_status(path, name));
+    }
+
+    /// The pane is about this window's own tree again: no pass hands it
+    /// another copy's list (`RepoSession::leave_carried_status`).
+    #[qslot]
+    fn leave_carried_status(&mut self) {
+        self.with_session(|s| s.leave_carried_status());
     }
 
     /// The fast tick while a replaying write is out: how far it has got,

@@ -215,6 +215,8 @@ FocusScope {
     function dropCarried() {
         page.carriedPath = ""
         page.carriedName = ""
+        // Or the copies' pass goes on handing the pane a list nobody shows.
+        repoTab.leaveCarriedStatus()
     }
     /// Follows the copy being read across a graph pass, and lets go where the copy has gone clean and taken its row.
     /// **Addressed by the copy**: rows move under a rebuild, and all of them wear the all-zero id.
@@ -1879,11 +1881,13 @@ FocusScope {
         return diffModel.refreshWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
     /// The copies' tick over the copy being read: its file list and its open file. Off the page's tick — a `status` of
-    /// another tree is too dear for it (`RepoSession::refresh_carried`). Returns whether it asked, as `pollDiff`.
-    function pollCarried() {
+    /// another tree is too dear for it (`RepoSession::refresh_carried`). `readList` is false beside a pass that began:
+    /// the pass reads that copy with the rest and hands the pane its list. Returns whether it asked, as `pollDiff`.
+    function pollCarried(readList) {
         if (page.carriedPath === "")
             return false
-        repoTab.readCarriedStatus(page.carriedPath, page.carriedName)
+        if (readList)
+            repoTab.readCarriedStatus(page.carriedPath, page.carriedName)
         if (page.diffShown && page.diffKind !== "commit" && !diffModel.loading)
             diffModel.refreshCarried(page.carriedPath, page.diffKind, page.diffPath, page.diffOrigPath)
         return true
@@ -2511,9 +2515,9 @@ FocusScope {
         if (page.visible && repoTab.state === "open") {
             repoTab.refreshQuick()
             // The window coming back is when an outside change is most likely waiting, so the file on screen is asked
-            // too — and the copy the pane stands on (`pollCarried` reads that one only; the rest are the slow tick's).
+            // too — and the copy the pane stands on, read at once rather than when the pass beside it gets to it.
             page.pollDiff()
-            page.pollCarried()
+            page.pollCarried(true)
         }
     }
 
@@ -2534,12 +2538,9 @@ FocusScope {
         interval: AppBackend.copiesIntervalMs
         repeat: true
         running: page.onScreen && page.visible && repoTab.state === "open" && AppBackend.copiesIntervalMs > 0
-        onTriggered: {
-            repoTab.refreshCarried()
-            // …and the copy being read, file by file: the rows need only the tallies, the pane needs the list
-            // (`pollCarried`).
-            page.pollCarried()
-        }
+        // A pass that begins reads the copy being read with the rest and hands the pane its list; one that does not (the
+        // last still out) leaves the pane to read its own (`pollCarried`).
+        onTriggered: page.pollCarried(!repoTab.refreshCarried())
     }
     // The badge counting a running replay out, on its own tick: two file reads, no process (デザイン規約
     // §進行中・長押しの定数). Only while the write is out — the status tick says when the operation ended;

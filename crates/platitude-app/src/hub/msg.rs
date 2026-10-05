@@ -379,8 +379,8 @@ pub struct OpProgressMsg {
 /// that is about the tree this window can write.
 #[derive(Debug)]
 pub struct CarriedStatusMsg {
-    /// The copy this is about, as git printed its path. The page drops
-    /// any copy but the one it is showing.
+    /// The copy this is about, as git printed its path. Only the copy the
+    /// pane stands on is sent (`RepoSession::read_carried_status`).
     pub at: String,
     /// The copy's own name, for the band that says whose files these are.
     pub name: String,
