@@ -362,6 +362,9 @@ fn main() {
         drop(app);
         std::process::exit(1);
     }
+    // What `cargo xtask shipped` and `package` wait for, word for word: a
+    // load's warnings, or their absence, say nothing of whether it ended.
+    tracing::info!("window loaded");
     let code = app.pin_mut().exec();
 
     harness::station(harness::Station::LeftEventLoop);
