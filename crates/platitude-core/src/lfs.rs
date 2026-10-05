@@ -4,10 +4,11 @@
 //! is git's and Git LFS's (デザイン規約 §ウィンドウの縁 の `NO LFS`).
 //!
 //! Without Git LFS the filter is either undefined (git stores the whole
-//! file where a pointer belonged) or defined and failing (`git add`
-//! stops). Either way the files are the ones `.gitattributes` gives
-//! `filter=lfs`, so that is what is counted; which of the two happens is
-//! git's to say when it happens.
+//! file where a pointer belonged) or defined and failing — which `git add`
+//! takes whole too, unless the filter is required (it stops). Either way
+//! the files are the ones `.gitattributes` gives `filter=lfs`, so that is
+//! what is counted; only the required filter's are the ones a discard
+//! cannot copy ([`required`]).
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -37,7 +38,8 @@ pub fn stages_content(item: &StatusItem) -> bool {
     }
 }
 
-/// How many of `paths` git's attributes give `filter=lfs`.
+/// Which of `paths` git's attributes give `filter=lfs` — each once, in the
+/// order given.
 ///
 /// Every attribute source counts (`.gitattributes` at any depth,
 /// `info/attributes`, `core.attributesFile`), which is why git is asked
@@ -47,8 +49,10 @@ pub async fn filtered(
     workdir: &Path,
     paths: &[String],
     cancel: &CancellationToken,
-) -> Result<usize, GitError> {
-    let mut count = 0;
+) -> Result<Vec<String>, GitError> {
+    let mut found = Vec::new();
+    // A path named twice is found once, whichever batch names it again.
+    let mut seen: HashSet<Vec<u8>> = HashSet::new();
     let mut rest = paths;
     while !rest.is_empty() {
         let mut bytes = 0;
@@ -70,18 +74,42 @@ pub async fn filtered(
             cmd = cmd.arg(p.as_str());
         }
         let out = executor.run(cmd, cancel).await?;
-        // `-z` prints a `path\0filter\0value\0` triple per path. A path
-        // named twice is counted once.
-        let mut seen: HashSet<&[u8]> = HashSet::new();
+        // `-z` prints a `path\0filter\0value\0` triple per path, the path
+        // as it was handed in.
         let fields: Vec<&[u8]> = out.stdout.split(|b| *b == 0).collect();
         for triple in fields.chunks(3) {
-            if let [path, _, b"lfs"] = triple {
-                seen.insert(path);
+            if let [path, _, b"lfs"] = triple
+                && seen.insert(path.to_vec())
+            {
+                found.push(String::from_utf8_lossy(path).into_owned());
             }
         }
-        count += seen.len();
     }
-    Ok(count)
+    Ok(found)
+}
+
+/// Whether `filter.lfs.required` is set — what `git lfs install` writes.
+/// It decides what `git add` does with a file the filter cannot clean
+/// (gitattributes(5)): refuse it where the filter is required, take it
+/// whole where it is not. So it is the one way a pending file that needs
+/// Git LFS cannot be copied by a discard (破棄記録仕様.md §2.1).
+///
+/// A value git cannot read as a boolean answers false here (the read exits
+/// 128); git itself dies on it in every command that cleans or smudges a
+/// file — `add` and `restore` alike — whatever the attributes say.
+pub async fn required(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let cmd = GitCommand::new().cwd(workdir).answers_by_code(1).args([
+        "config",
+        "--type=bool",
+        "--get",
+        "filter.lfs.required",
+    ]);
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    Ok(out.code == 0 && out.stdout.trim_ascii() == b"true")
 }
 
 /// Whether git can run Git LFS here: `git lfs version` answers, where a

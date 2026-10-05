@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use qtbridge::{QmlObject, qobject};
@@ -149,6 +150,16 @@ pub struct WorkTreeModel {
     /// Pending files that need Git LFS where git cannot run it — the band's
     /// `NO LFS` (デザイン規約 §ウィンドウの縁). 0 wherever git runs it.
     lfs_needed: i32,
+    /// Of those, the paths a discard could not copy (the filter is
+    /// required): a discard of one is not brought back, so it is held in
+    /// `danger` rather than `warning` (`GitFacts.discardUnrecorded`,
+    /// デザイン規約 §長押し).
+    not_copied: Vec<String>,
+    /// Whether what a `reset --hard` takes holds such a path — read off
+    /// the status, so the untracked ones do not count: most survive the
+    /// reset, and the ones in the way of where it goes are not known until
+    /// it is aimed (P3-確認事項 §触らないと決めたもの).
+    hard_reset_not_copied: bool,
     /// File-list rows of each change kind, for the graph's uncommitted row
     /// (`status::Kinds`), off this status at no git of its own. Conflicts
     /// are `conflict_count`.
@@ -276,6 +287,12 @@ impl WorkTreeModel {
         Notify = changed
     );
     qproperty!("lfsNeeded", Member = lfs_needed, Notify = changed);
+    qproperty!("notCopied", Member = not_copied, Notify = changed);
+    qproperty!(
+        "hardResetNotCopied",
+        Member = hard_reset_not_copied,
+        Notify = changed
+    );
     qproperty!("wipAdded", Member = wip_added, Notify = changed);
     qproperty!("wipModified", Member = wip_modified, Notify = changed);
     qproperty!("wipDeleted", Member = wip_deleted, Notify = changed);
@@ -387,6 +404,8 @@ impl WorkTreeModel {
         self.merge_tool = String::new();
         self.eol_staged_count = 0;
         self.lfs_needed = 0;
+        self.not_copied = Vec::new();
+        self.hard_reset_not_copied = false;
         self.wip_added = 0;
         self.wip_modified = 0;
         self.wip_deleted = 0;
@@ -455,6 +474,7 @@ impl WorkTreeModel {
             push_track,
             eol_marks,
             lfs_needed,
+            not_copied,
             stop,
         } = msg;
         self.side_ours = sides.ours;
@@ -464,6 +484,14 @@ impl WorkTreeModel {
         self.eol_staged_count =
             i32::try_from(eol_marks.iter().filter(|m| m.staged).count()).unwrap_or(i32::MAX);
         self.lfs_needed = i32::try_from(lfs_needed).unwrap_or(i32::MAX);
+        // A set, not a scan: both lists can run to every pending file.
+        let refused: HashSet<&str> = not_copied.iter().map(String::as_str).collect();
+        self.hard_reset_not_copied = !refused.is_empty()
+            && status.items.iter().any(|item| {
+                !matches!(item, platitude_core::status::StatusItem::Untracked { .. })
+                    && refused.contains(item.path())
+            });
+        self.not_copied = not_copied.as_ref().clone();
         // HEAD is not read off here — it has its own message, ahead of
         // this one (`StateMsg::Head`). Kept: which report and branch the
         // counts were read with (`settle`).
@@ -692,6 +720,7 @@ mod tests {
             push_track: platitude_core::remote::PushTrack::default(),
             eol_marks: Arc::new(Vec::new()),
             lfs_needed: 0,
+            not_copied: Arc::new(Vec::new()),
             stop: platitude_core::integrate::RebaseStop::default(),
         }))
     }
@@ -714,6 +743,50 @@ mod tests {
         assert_eq!(model.head_seq, 1);
         assert!(!model.unborn);
         assert_eq!(model.stash_standing, "clean");
+    }
+
+    /// A status carrying paths a discard cannot copy.
+    fn with_not_copied(msg: StateMsg, paths: &[&str]) -> StateMsg {
+        let StateMsg::Status(mut status) = msg else {
+            panic!("a status message");
+        };
+        status.not_copied = Arc::new(paths.iter().map(|p| (*p).to_string()).collect());
+        StateMsg::Status(status)
+    }
+
+    /// The paths are held for the discards to ask of, and `reset --hard`
+    /// counts only the ones it takes: an untracked file survives it.
+    #[test]
+    fn a_reset_hard_loses_an_uncopied_file_only_where_it_takes_it() {
+        let changed = StatusItem::Tracked {
+            staged: '.',
+            unstaged: 'M',
+            path: "kept.psd".to_string(),
+            orig_path: None,
+        };
+        let new = StatusItem::Untracked {
+            path: "new.psd".to_string(),
+        };
+        let mut model = WorkTreeModel::default();
+        model.absorb(vec![
+            head(ROOT, 1),
+            with_not_copied(status(vec![changed.clone(), new.clone()]), &["new.psd"]),
+        ]);
+        assert_eq!(model.not_copied, ["new.psd"]);
+        assert!(!model.hard_reset_not_copied, "the untracked file survives");
+
+        model.absorb(vec![with_not_copied(
+            status(vec![changed, new]),
+            &["kept.psd", "new.psd"],
+        )]);
+        assert!(
+            model.hard_reset_not_copied,
+            "the changed file goes uncopied"
+        );
+
+        model.absorb(vec![status(Vec::new())]);
+        assert!(model.not_copied.is_empty());
+        assert!(!model.hard_reset_not_copied);
     }
 
     #[test]

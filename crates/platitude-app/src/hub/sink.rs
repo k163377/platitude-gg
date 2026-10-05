@@ -234,6 +234,7 @@ impl SessionSink for BridgeSink {
                 push_track,
                 eol_marks,
                 lfs_needed,
+                not_copied,
                 stop,
             } => {
                 // One copy per WIP list: each answers about the whole tree
@@ -256,6 +257,7 @@ impl SessionSink for BridgeSink {
                         push_track: push_track.clone(),
                         eol_marks: Arc::clone(&eol_marks),
                         lfs_needed,
+                        not_copied: Arc::clone(&not_copied),
                         stop: stop.clone(),
                     });
                 }
@@ -274,6 +276,7 @@ impl SessionSink for BridgeSink {
                         push_track,
                         eol_marks,
                         lfs_needed,
+                        not_copied,
                         stop,
                     })));
             }

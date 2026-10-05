@@ -183,6 +183,11 @@ pub enum SessionEvent {
         /// wherever it can, or where nothing pending needs it
         /// ([`crate::lfs`]).
         lfs_needed: usize,
+        /// Of those, the paths a discard could not copy — the filter is
+        /// required, so `git add` refuses them ([`crate::lfs::required`],
+        /// 破棄記録仕様.md §2.1): their discard is not brought back. Empty
+        /// wherever the filter is not required. Shared like `eol_marks`.
+        not_copied: Arc<Vec<String>>,
         /// Why a standing rebase stopped: the tree alone cannot tell an
         /// `edit` stop from an empty one, and the exit card's words and
         /// `--skip`'s cost turn on which (デザイン規約 §進行中の操作から出る).

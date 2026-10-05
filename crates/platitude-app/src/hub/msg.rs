@@ -422,6 +422,9 @@ pub struct StatusMsg {
     pub eol_marks: Arc<Vec<platitude_core::session::EolMark>>,
     /// Pending files that need Git LFS where git cannot run it.
     pub lfs_needed: usize,
+    /// Of those, the paths a discard could not copy (the filter is
+    /// required): their discard is not brought back.
+    pub not_copied: Arc<Vec<String>>,
     /// Why a standing rebase is standing — the `edit` stop that a clean
     /// tree cannot be told from an empty stop by. Default while none is.
     pub stop: platitude_core::integrate::RebaseStop,

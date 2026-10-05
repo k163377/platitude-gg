@@ -142,11 +142,11 @@ pub struct RepoSession {
     /// Set when the marks are worth re-reading whatever status says: a
     /// write landed, or the tab has only just opened.
     pub(super) eol_marks_stale: std::sync::atomic::AtomicBool,
-    /// Pending files that need Git LFS where git cannot run it, repeated
-    /// by every status read until they are counted again
-    /// (`RepoSession::lfs_needed`).
-    pub(super) lfs_needed: std::sync::atomic::AtomicUsize,
-    /// Set when that count could not be had, so the next tick counts again.
+    /// What Git LFS asks of the pending files where git cannot run it,
+    /// repeated by every status read until it is read again
+    /// (`RepoSession::lfs_needs`).
+    pub(super) lfs_held: Mutex<super::lfs::LfsNeeds>,
+    /// Set when that reading could not be had, so the next tick reads again.
     pub(super) lfs_unsettled: std::sync::atomic::AtomicBool,
     /// Whether git runs Git LFS here — kept once it does, dropped when it
     /// does not, so only a yes saves the next asking.

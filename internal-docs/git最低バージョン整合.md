@@ -51,7 +51,7 @@
 | `clone` | `[--] <repository> <directory>` | 古参(v2.43.0 の synopsis に `[--]` を確認) |
 | `commit` | `--amend` / `--allow-empty` / `--reset-author` / `--no-edit` / `--cleanup=whitespace` / `--file` | 2.43.0 ✓ |
 | `commit-tree` | `-p` / `-m` | 古参(1.7.6) |
-| `config` | `--get` / `--get-regexp` / `-z` / `--global` / `--local` / `--show-scope` / `--unset` / 書き込みは旧形式 `config <key> <value>` | 古参 + **`--show-scope` は 2.26** ✓。`--unset` の exit 5(元から無い)も 2.43 実測。**印が書くキー `checkout.defaultRemote` は 2.19**(`remote.pushDefault` は古参) |
+| `config` | `--get` / `--get-regexp` / `-z` / `--global` / `--local` / `--show-scope` / `--unset` / `--type=bool`(`filter.lfs.required` を真偽値として読む)/ 書き込みは旧形式 `config <key> <value>` | 古参 + **`--show-scope` は 2.26** ✓ + **`--type=bool` は 2.18** ✓(Linux コンテナの `lfs_integration` が 2.43 で読む)。`--unset` の exit 5(元から無い)も 2.43 実測。**印が書くキー `checkout.defaultRemote` は 2.19**(`remote.pushDefault` は古参) |
 | `diff` | `--cached` / `--no-ext-diff` / `--find-renames` / `--no-renames` / `--name-status` / `--diff-filter=` / `-z` / `--no-index` / `--end-of-options`(`reset --hard` が書き潰す untracked) | 古参(`--no-index` 1.5.1、`--end-of-options` 2.24) |
 | `diff-tree` | `-r` / `--no-commit-id` / `-z` / `--name-status` / `--name-only` / `--diff-filter=A` / `--find-renames` / `--no-renames` / `--root` / `--no-ext-diff` / `-p` / `--binary` / `--full-index` / `--no-color`(破棄記録の復元のパッチ)/ `--end-of-options` | 2.43.0 ✓ |
 | `fetch` | `--prune` / `--all` | 古参(1.6.5 / 1.6.6) |

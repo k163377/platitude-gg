@@ -25,11 +25,18 @@ use crate::support::session::{CaptureSink, opened};
 
 const LFS_LINE: &str = "filter=lfs diff=lfs merge=lfs -text";
 
-async fn filtered(repo: &TestRepo, paths: &[String]) -> usize {
+async fn filtered(repo: &TestRepo, paths: &[String]) -> Vec<String> {
     let (executor, cancel) = env();
     lfs::filtered(&executor, &repo.path, paths, &cancel)
         .await
         .expect("read the filter attribute")
+}
+
+async fn required(repo: &TestRepo) -> bool {
+    let (executor, cancel) = env();
+    lfs::required(&executor, &repo.path, &cancel)
+        .await
+        .expect("read filter.lfs.required")
 }
 
 // ------------------------------------------------------------- attributes
@@ -61,9 +68,36 @@ async fn every_attribute_source_that_gives_the_lfs_filter_counts() {
     // `sheet.bin` is outside the directory whose file names it.
     assert_eq!(
         filtered(&repo, &paths).await,
-        4,
-        "cover.psd, art/cover.psd, art/sheet.bin, intro.mp4"
+        ["cover.psd", "art/cover.psd", "art/sheet.bin", "intro.mp4"].map(String::from)
     );
+}
+
+/// A path handed in twice is found once — beside itself, and again past
+/// one command line, where the second naming goes in a later batch.
+#[tokio::test]
+async fn a_path_named_twice_is_found_once() {
+    let mut repo = TestRepo::init();
+    repo.write_file(".gitattributes", &format!("*.psd {LFS_LINE}\n"));
+    repo.commit_file("README.md", "readme\n", "root");
+    let deep = "layers/".repeat(30);
+    let mut paths = ["a.psd", "b.txt", "a.psd"].map(String::from).to_vec();
+    paths.extend((0..200).map(|i| format!("{deep}layer-{i}.txt")));
+    paths.push("a.psd".to_string());
+    assert!(paths.iter().map(|p| p.len() + 1).sum::<usize>() > 32_767);
+
+    assert_eq!(filtered(&repo, &paths).await, ["a.psd".to_string()]);
+}
+
+/// `filter.lfs.required` read as git reads a boolean: unset is not
+/// required, and so is a false spelled any way git accepts.
+#[tokio::test]
+async fn whether_the_lfs_filter_is_required_is_the_config_read_as_a_boolean() {
+    let mut repo = TestRepo::init();
+    assert!(!required(&repo).await, "unset");
+    repo.git(&["config", "filter.lfs.required", "yes"]);
+    assert!(required(&repo).await, "a true spelled `yes`");
+    repo.git(&["config", "filter.lfs.required", "off"]);
+    assert!(!required(&repo).await, "a false spelled `off`");
 }
 
 /// Paths long enough that one command line cannot hold them all — several
@@ -78,7 +112,7 @@ async fn paths_past_one_command_line_are_all_counted() {
     let paths: Vec<String> = (0..600).map(|i| format!("{deep}layer-{i}.psd")).collect();
     assert!(paths.iter().map(|p| p.len() + 1).sum::<usize>() > 3 * 32_767);
 
-    assert_eq!(filtered(&repo, &paths).await, 600);
+    assert_eq!(filtered(&repo, &paths).await.len(), 600);
 }
 
 /// What `git lfs version` says on this machine, read by hand beside the
@@ -199,6 +233,63 @@ async fn the_status_counts_what_needs_lfs_where_git_cannot_run_it() {
     let (sink, session) = opened(&repo).await;
 
     counted(&sink, "the two files counted", 2).await;
+    session.close();
+}
+
+/// The paths a discard could not copy, as the last status carried them,
+/// sorted.
+fn last_not_copied(events: &[SessionEvent]) -> Option<Vec<String>> {
+    events.iter().rev().find_map(|e| match e {
+        SessionEvent::StatusLoaded { not_copied, .. } => {
+            let mut paths = not_copied.as_ref().clone();
+            paths.sort();
+            Some(paths)
+        }
+        _ => None,
+    })
+}
+
+/// Where the filter is required — what `git lfs install` writes — the
+/// files it would have to clean are the ones a discard cannot copy: `git
+/// add` refuses them (`discards_integration::recording`).
+///
+/// The filter here runs (`cat`) and only `lfs::runs` says it does not: a
+/// required filter that really fails stops `git status` itself wherever git
+/// has to clean a file to read the tree (a rename, a racy entry —
+/// `fatal: <path>: clean filter 'lfs' failed`), and this repository has
+/// both.
+#[tokio::test]
+#[mry::lock(lfs::runs)]
+async fn a_required_filter_names_the_files_a_discard_cannot_copy() {
+    lfs::mock_runs().returns_with(|| Ok(false));
+    let mut repo = lfs_repo();
+    repo.git(&["config", "filter.lfs.clean", "cat"]);
+    repo.git(&["config", "filter.lfs.required", "true"]);
+    let (sink, session) = opened(&repo).await;
+
+    counted(&sink, "the two files counted", 2).await;
+    assert_eq!(
+        last_not_copied(&sink.events.lock().unwrap()),
+        Some(vec!["kept.psd".to_string(), "new.psd".to_string()])
+    );
+    session.close();
+}
+
+/// Where the filter is not required, the same files are counted for the
+/// badge and none is named: git takes a file its filter cannot clean whole,
+/// so a discard copies it.
+#[tokio::test]
+#[mry::lock(lfs::runs)]
+async fn a_filter_that_is_not_required_names_nothing_a_discard_cannot_copy() {
+    lfs::mock_runs().returns_with(|| Ok(false));
+    let repo = lfs_repo();
+    let (sink, session) = opened(&repo).await;
+
+    counted(&sink, "the two files counted", 2).await;
+    assert_eq!(
+        last_not_copied(&sink.events.lock().unwrap()),
+        Some(Vec::new())
+    );
     session.close();
 }
 

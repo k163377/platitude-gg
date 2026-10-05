@@ -10,6 +10,7 @@
 //! (ci/baseline/code-costs-windows-x64.md) — so neither `refs/stash`, the
 //! index nor the working tree is touched.
 
+use std::collections::HashSet;
 use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
@@ -116,6 +117,24 @@ enum Before {
 struct Sides {
     index: Oid,
     work: Oid,
+}
+
+/// Whether a discard of `paths` goes on the record whole, decided before it
+/// is offered: nothing is recorded while HEAD has no commit (§2.1), and a
+/// path git cannot take is left out of the copy ([`copy_work`]). The paths
+/// it cannot take that can be known beforehand are the ones a status names
+/// `not_copied` (a required LFS filter where LFS cannot run,
+/// [`crate::lfs::required`]); the others — another required filter, an
+/// encoding it cannot convert — are found by trying, and named afterwards
+/// under `Not-copied:`. The screen holds a discard this answers no to in
+/// `danger`, the rest in `warning` (デザイン規約 §長押し).
+pub fn recorded_whole(unborn: bool, not_copied: &[String], paths: &[String]) -> bool {
+    if unborn {
+        return false;
+    }
+    // A set, not a scan: both lists can run to every pending file.
+    let refused: HashSet<&str> = not_copied.iter().map(String::as_str).collect();
+    !paths.iter().any(|path| refused.contains(path.as_str()))
 }
 
 /// Reads what `of`'s paths hold before the write throws it away (§2.1), to
@@ -625,5 +644,35 @@ impl IndexCopy {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::recorded_whole;
+
+    fn names(paths: &[&str]) -> Vec<String> {
+        paths.iter().map(|p| (*p).to_string()).collect()
+    }
+
+    #[test]
+    fn a_discard_is_recorded_whole_unless_a_path_cannot_be_copied() {
+        let not_copied = names(&["art/cover.psd"]);
+        assert!(recorded_whole(
+            false,
+            &not_copied,
+            &names(&["a.txt", "b.txt"])
+        ));
+        assert!(!recorded_whole(
+            false,
+            &not_copied,
+            &names(&["a.txt", "art/cover.psd"])
+        ));
+        assert!(recorded_whole(false, &[], &names(&["art/cover.psd"])));
+    }
+
+    #[test]
+    fn nothing_is_recorded_before_the_first_commit() {
+        assert!(!recorded_whole(true, &[], &names(&["a.txt"])));
     }
 }

@@ -35,6 +35,21 @@ impl GitFacts {
         crate::encode::shown_matches(&shown, &line)
     }
 
+    /// Whether a discard of `paths` leaves something the discard record does
+    /// not keep — no record before the first commit, and a path the status
+    /// names `not_copied` is left out of the copy
+    /// (`discards::recorded_whole`). Such a discard is held in `danger`, the
+    /// rest in `warning` (デザイン規約 §長押し).
+    #[qslot]
+    fn discard_unrecorded(
+        &self,
+        unborn: bool,
+        not_copied: Vec<String>,
+        paths: Vec<String>,
+    ) -> bool {
+        !platitude_core::discards::recorded_whole(unborn, &not_copied, &paths)
+    }
+
     /// `chips` less the ones `gone` names by key.
     #[qslot]
     fn chips_shown(&self, chips: Chips, gone: Vec<String>) -> Chips {

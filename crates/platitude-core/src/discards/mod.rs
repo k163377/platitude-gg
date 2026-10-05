@@ -30,7 +30,7 @@ mod record;
 mod records;
 mod restore;
 
-pub use copy::{Copied, CopyOf, CopyOperation, copy_work, record_copy};
+pub use copy::{Copied, CopyOf, CopyOperation, copy_work, record_copy, recorded_whole};
 pub use read::read_repo;
 pub use record::{
     BranchBefore, RemoteTip, StashBefore, TagBefore, branch_before, commit_of,
