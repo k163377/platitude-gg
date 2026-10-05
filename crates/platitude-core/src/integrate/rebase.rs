@@ -156,68 +156,30 @@ pub struct RebaseStop {
     pub oid: String,
 }
 
-/// Reads why the standing rebase stopped and how far it got, in one
+/// Reads why the standing rebase stopped and how far it got, without a
 /// process — it runs once per status tick for the life of a stop. Only
-/// worth asking while [`opstate::detect`] says one is standing; with none,
-/// everything comes back default.
+/// worth asking while [`opstate::detect_at`] says one is standing; with
+/// none, everything comes back default. `git_dir` as for
+/// [`rebase_progress`].
 ///
 /// Progress reads both backends; the stop's reason reads only the merge
 /// side — the apply backend has no `edit` to stop at.
-pub async fn rebase_standing(
-    executor: &GitExecutor,
-    workdir: &Path,
-    cancel: &CancellationToken,
-) -> Result<(Option<crate::conflict::Progress>, RebaseStop), GitError> {
-    let mut cmd = GitCommand::new().cwd(workdir).arg("rev-parse");
-    for rel in [
-        "rebase-merge/msgnum",
-        "rebase-merge/end",
-        "rebase-apply/next",
-        "rebase-apply/last",
-        "rebase-merge/amend",
-    ] {
-        cmd = cmd.args(["--git-path", rel]);
-    }
-    let out = executor.run(cmd, cancel).await?;
-    let text = out.stdout_utf8();
-    // `--git-path` prints paths relative to the workdir or absolute;
-    // joining handles both.
-    let paths: Vec<std::path::PathBuf> = text
-        .lines()
-        .map(|rel| workdir.join(rel.trim_end()))
-        .collect();
-    let count = |at: usize| -> Option<u32> {
-        std::fs::read_to_string(paths.get(at)?)
-            .ok()?
-            .trim()
-            .parse()
-            .ok()
-    };
-    let mut progress = None;
-    for pair in [(0, 1), (2, 3)] {
-        if let (Some(current), Some(total)) = (count(pair.0), count(pair.1))
-            && total > 0
-        {
-            progress = Some(crate::conflict::Progress { current, total });
-            break;
-        }
-    }
+#[must_use]
+pub fn rebase_standing(git_dir: &Path) -> (Option<crate::conflict::Progress>, RebaseStop) {
     // A marker there but unreadable still says `editing` — it errs toward
     // holding `--skip` back (`skip_is_free`).
-    let amend = paths.get(4);
-    let editing = amend.is_some_and(|p| p.exists());
-    let oid = amend
-        .and_then(|p| std::fs::read_to_string(p).ok())
+    let amend = git_dir.join("rebase-merge/amend");
+    let editing = amend.exists();
+    let oid = std::fs::read_to_string(&amend)
         .map(|s| s.trim().to_string())
         .unwrap_or_default();
-    Ok((progress, RebaseStop { editing, oid }))
+    (rebase_progress(git_dir), RebaseStop { editing, oid })
 }
 
-/// The same count as [`rebase_standing`], read without a process — for a
-/// replay still running, whose number the screen counts out several times
-/// a second. `git_dir` is the work tree's own git directory as `repo::open`
-/// resolved it (linked worktrees included), which is where its rebase
-/// state lives.
+/// How far the standing rebase has got — for a replay still running too,
+/// whose number the screen counts out several times a second. `git_dir` is
+/// the work tree's own git directory as `repo::open` resolved it (linked
+/// worktrees included), which is where its rebase state lives.
 ///
 /// `None` both for no standing rebase and for unreadable files: either way
 /// there is nothing to count yet.

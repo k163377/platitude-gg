@@ -129,12 +129,6 @@ struct Inner {
     /// the WIP row leashes these as well as HEAD. With `wip_dirty` it
     /// decides that row: either makes it, either moving rebuilds the graph.
     merge_incoming: Vec<Oid>,
-    /// Why the standing rebase stopped, as the last read that could tell
-    /// left it: a read of git's markers can fail transiently, and one tick
-    /// answering "not an `edit` stop" would turn the exit card's `--skip`
-    /// from a hold into a click (`offers::skip_is_free`). Cleared by the
-    /// first read that finds no rebase standing.
-    rebase_stop: integrate::RebaseStop,
     /// The merge tool as the last status read that asked for it saw it,
     /// repeated by the reads that did not ask.
     merge_tool: String,
@@ -279,14 +273,6 @@ impl Standing {
 
     pub(super) fn merge_incoming(&self) -> Vec<Oid> {
         self.lock().merge_incoming.clone()
-    }
-
-    pub(super) fn rebase_stop(&self) -> integrate::RebaseStop {
-        self.lock().rebase_stop.clone()
-    }
-
-    pub(super) fn set_rebase_stop(&self, stop: integrate::RebaseStop) {
-        self.lock().rebase_stop = stop;
     }
 
     pub(super) fn merge_tool(&self) -> String {

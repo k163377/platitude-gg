@@ -116,47 +116,32 @@ pub struct Sides {
 ///
 /// `branch` is the current branch as the caller's status read it (`None`
 /// detached: no name), handed in so each tick does not read HEAD again.
+/// `git_dir` is the working copy's own (`RepoInfo::git_dir`), where the
+/// rebase keeps its state.
 pub async fn sides(
     executor: &GitExecutor,
     workdir: &Path,
+    git_dir: &Path,
     op: InProgress,
     branch: Option<&str>,
     cancel: &CancellationToken,
-) -> Result<Sides, GitError> {
+) -> Sides {
     if op == InProgress::Rebase {
         // Either backend may hold the rebase (one begun at the command line
-        // may be `apply`); one `rev-parse` resolves all four paths.
-        let mut cmd = GitCommand::new().cwd(workdir).arg("rev-parse");
-        for rel in [
-            "rebase-merge/head-name",
-            "rebase-merge/onto",
-            "rebase-apply/head-name",
-            "rebase-apply/onto",
-        ] {
-            cmd = cmd.args(["--git-path", rel]);
-        }
-        let out = executor.run(cmd, cancel).await?;
-        let mut values = [const { String::new() }; 4];
-        for (slot, line) in values.iter_mut().zip(out.stdout_utf8().lines()) {
-            *slot = std::fs::read_to_string(workdir.join(line.trim_end()))
-                .map(|s| s.trim().to_string())
-                .unwrap_or_default();
-        }
-        let [merge_head, merge_onto, apply_head, apply_onto] = values;
-        let head_name = if merge_head.is_empty() {
-            apply_head
-        } else {
-            merge_head
+        // may be `apply`).
+        let either = |name: &str| {
+            let merge = git_file(git_dir, &format!("rebase-merge/{name}"));
+            if merge.is_empty() {
+                git_file(git_dir, &format!("rebase-apply/{name}"))
+            } else {
+                merge
+            }
         };
-        let onto = if merge_onto.is_empty() {
-            apply_onto
-        } else {
-            merge_onto
-        };
-        return Ok(Sides {
+        let onto = either("onto");
+        return Sides {
             ours: name_of(executor, workdir, &onto, cancel).await,
-            theirs: short_ref(&head_name),
-        });
+            theirs: short_ref(&either("head-name")),
+        };
     }
 
     let ours = branch.unwrap_or_default().to_string();
@@ -167,29 +152,18 @@ pub async fn sides(
         // Answered above; an empty rev names nothing.
         InProgress::Rebase => "",
     };
-    Ok(Sides {
+    Sides {
         ours,
         theirs: name_of(executor, workdir, pseudo_ref, cancel).await,
-    })
+    }
 }
 
-/// Reads a file in the git directory, empty when it is not there. The
-/// path is asked for: a worktree's git directory is not
-/// `<workdir>/.git`.
-pub(crate) async fn git_file(
-    executor: &GitExecutor,
-    workdir: &Path,
-    rel: &str,
-    cancel: &CancellationToken,
-) -> String {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        .args(["rev-parse", "--git-path", rel]);
-    let Ok(out) = executor.run(cmd, cancel).await else {
-        return String::new();
-    };
-    let path = out.stdout_utf8().trim().to_string();
-    std::fs::read_to_string(workdir.join(path))
+/// Reads a file of the working copy's own git directory, trimmed, empty
+/// when it is not there. Only for the per-copy state a stopped operation
+/// keeps (`opstate`'s module doc): what lives in the common directory —
+/// config, refs, hooks — is not under a linked copy's `git_dir`.
+pub(crate) fn git_file(git_dir: &Path, rel: &str) -> String {
+    std::fs::read_to_string(git_dir.join(rel))
         .map(|s| s.trim().to_string())
         .unwrap_or_default()
 }

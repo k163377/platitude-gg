@@ -28,6 +28,7 @@ mod published;
 mod query;
 mod rebuild;
 mod standing_op;
+mod standing_reads;
 mod stream;
 mod window;
 mod write_order;

@@ -13,6 +13,10 @@ use super::*;
 /// What a standing operation adds to a status
 /// ([`RepoSession::read_standing_op`]).
 struct StandingOp {
+    /// How far a standing rebase has got, and why it stopped — default
+    /// where none stands.
+    progress: Option<conflict::Progress>,
+    stop: integrate::RebaseStop,
     sides: conflict::Sides,
     /// The message a stopped merge is about to record; empty unless one
     /// is standing.
@@ -45,66 +49,51 @@ impl RepoSession {
         });
     }
 
-    /// What the badge and the exit card read of a standing rebase — the
-    /// counter and the stop — or the resting pair where none is standing.
-    ///
-    /// A read that could not tell keeps the stop it had: a tick answering
-    /// `editing: false` mid-`edit` stop would hand the exit card's `--skip`
-    /// back its plain click, which cannot be taken back (`Standing`). The
-    /// counter is not kept — a stale N/M reads as progress that happened.
-    async fn rebase_standing_held(
-        &self,
-        workdir: &std::path::Path,
-        rebasing: bool,
-        cancel: &tokio_util::sync::CancellationToken,
-    ) -> (Option<conflict::Progress>, integrate::RebaseStop) {
-        if !rebasing {
-            self.standing
-                .set_rebase_stop(integrate::RebaseStop::default());
-            return (None, integrate::RebaseStop::default());
-        }
-        match integrate::rebase_standing(&self.executor, workdir, cancel).await {
-            Ok((progress, stop)) => {
-                self.standing.set_rebase_stop(stop.clone());
-                (progress, stop)
-            }
-            Err(_) => (None, self.standing.rebase_stop()),
-        }
-    }
-
-    /// Read only while something is stopped; the message and the parents
-    /// only for a stopped merge, the one operation finished from the
-    /// commit box.
+    /// Read only while something is stopped; the count and the stop only
+    /// for a rebase, the message and the parents only for a stopped merge,
+    /// the one operation finished from the commit box. Names cost a
+    /// `name-rev`; the rest are file reads under the copy's own git
+    /// directory (`RepoInfo::git_dir`).
     async fn read_standing_op(
         &self,
-        workdir: &std::path::Path,
+        paths: (&std::path::Path, &std::path::Path),
         status: &WorkTreeStatus,
         op_state: &OpState,
         cancel: &CancellationToken,
     ) -> StandingOp {
+        let (workdir, git_dir) = paths;
+        let (progress, stop) = if op_state.rebasing {
+            integrate::rebase_standing(git_dir)
+        } else {
+            Default::default()
+        };
         let sides = match integrate::InProgress::from_state(op_state) {
-            Some(op) => conflict::sides(
-                &self.executor,
-                workdir,
-                op,
-                status.branch_head.as_deref(),
-                cancel,
-            )
-            .await
-            .unwrap_or_default(),
+            Some(op) => {
+                conflict::sides(
+                    &self.executor,
+                    workdir,
+                    git_dir,
+                    op,
+                    status.branch_head.as_deref(),
+                    cancel,
+                )
+                .await
+            }
             None => conflict::Sides::default(),
         };
         let op_message = if op_state.merging {
-            integrate::stopped_message(&self.executor, workdir, cancel).await
+            integrate::stopped_message(git_dir)
         } else {
             String::new()
         };
         let incoming = if op_state.merging {
-            opstate::merge_heads(&self.executor, workdir, cancel).await
+            opstate::merge_heads(git_dir)
         } else {
             Some(Vec::new())
         };
         StandingOp {
+            progress,
+            stop,
             sides,
             op_message,
             incoming,
@@ -175,16 +164,19 @@ impl RepoSession {
     /// The rebuild is the caller's: after a write it knows whether one is
     /// needed anyway, and rebuilding on both counts would do it twice.
     pub(super) async fn publish_status(self: &Arc<Self>) -> Reread {
-        let Some(workdir) = self.workdir() else {
+        // Both paths from one reading of the record: the operation's
+        // markers are the working copy's own, under its git directory.
+        let Some(info) = self.repo_info() else {
             return Reread::Failed;
         };
+        let (workdir, git_dir) = (info.workdir, info.git_dir);
         // Stamped before git is spawned, as in the refs read (`Standing`).
         let looked = self.standing.stamp();
         let cancel = self.root_cancel.clone();
         let status = status::load(&self.executor, &workdir, &cancel).await;
-        let op = opstate::detect(&self.executor, &workdir, &cancel).await;
-        match (status, op) {
-            (Ok(status), Ok(op_state)) => {
+        match status {
+            Ok(status) => {
+                let op_state = opstate::detect_at(&git_dir);
                 // Fenced by a write that ended after this looked: read
                 // again, since the write re-reads the tree only where it
                 // moved refs (a fetch that brought nothing would leave this
@@ -193,17 +185,14 @@ impl RepoSession {
                     self.read_status_from(self.status_read.stamp());
                     return Reread::Same;
                 }
-                // Counter and stop ride one spawn: this runs every tick for
-                // the life of a stop (`integrate::rebase_standing`).
-                let (progress, stop) = self
-                    .rebase_standing_held(&workdir, op_state.rebasing, &cancel)
-                    .await;
                 let StandingOp {
+                    progress,
+                    stop,
                     sides,
                     op_message,
                     incoming,
                 } = self
-                    .read_standing_op(&workdir, &status, &op_state, &cancel)
+                    .read_standing_op((&workdir, &git_dir), &status, &op_state, &cancel)
                     .await;
                 // Named only where there is a conflict to open, or the
                 // settings field asked (once per opening).
@@ -296,7 +285,7 @@ impl RepoSession {
                 });
                 if flipped { Reread::Moved } else { Reread::Same }
             }
-            (Err(e), _) | (_, Err(e)) => {
+            Err(e) => {
                 self.fail(FollowUp::Status.label(), e);
                 Reread::Failed
             }

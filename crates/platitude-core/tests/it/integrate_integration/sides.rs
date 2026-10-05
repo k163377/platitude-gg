@@ -15,9 +15,15 @@ async fn sides_names_each_side_by_what_it_actually_is() {
     integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
         .await
         .expect("conflict");
-    let s = conflict::sides(&exec, &repo.path, InProgress::Merge, Some("main"), &cancel)
-        .await
-        .expect("sides");
+    let s = conflict::sides(
+        &exec,
+        &repo.path,
+        &repo.path.join(".git"),
+        InProgress::Merge,
+        Some("main"),
+        &cancel,
+    )
+    .await;
     assert_eq!(s.ours, "main", "the branch the status read HEAD on");
     assert_eq!(s.theirs, "side");
 
@@ -34,9 +40,15 @@ async fn sides_names_each_side_by_what_it_actually_is() {
     .await
     .expect("a stop is an answer, not a failure");
     // Handed what a status reads of HEAD mid-rebase: the branch replayed.
-    let s = conflict::sides(&exec, &repo.path, InProgress::Rebase, Some("side"), &cancel)
-        .await
-        .expect("sides");
+    let s = conflict::sides(
+        &exec,
+        &repo.path,
+        &repo.path.join(".git"),
+        InProgress::Rebase,
+        Some("side"),
+        &cancel,
+    )
+    .await;
     assert_eq!(s.ours, "main", "the upstream being landed on");
     assert_eq!(s.theirs, "side", "the branch being replayed");
 
@@ -47,12 +59,12 @@ async fn sides_names_each_side_by_what_it_actually_is() {
     let s = conflict::sides(
         &exec,
         &repo.path,
+        &repo.path.join(".git"),
         InProgress::CherryPick,
         Some("main"),
         &cancel,
     )
-    .await
-    .expect("sides");
+    .await;
     assert_eq!(s.ours, "main");
     assert_eq!(s.theirs, "side");
 }
@@ -72,9 +84,15 @@ async fn a_side_no_branch_reaches_is_left_unnamed() {
     integrate::cherry_pick(&exec, &repo.path, &[orphan], &cancel)
         .await
         .expect("a conflict is a landing, not a failure");
-    let s = conflict::sides(&exec, &repo.path, InProgress::CherryPick, None, &cancel)
-        .await
-        .expect("sides");
+    let s = conflict::sides(
+        &exec,
+        &repo.path,
+        &repo.path.join(".git"),
+        InProgress::CherryPick,
+        None,
+        &cancel,
+    )
+    .await;
     assert_eq!(s.ours, "", "detached names no side of its own");
     assert_eq!(s.theirs, "", "git says `undefined`, which is not a name");
 }

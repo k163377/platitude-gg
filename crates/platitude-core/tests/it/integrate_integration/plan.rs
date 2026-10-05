@@ -214,9 +214,7 @@ async fn an_edit_stop_says_so_and_names_the_commit_it_sits_on() {
     .expect("rebase");
     assert!(matches!(outcome, RebaseOutcome::Stopped), "{outcome:?}");
 
-    let (progress, stop) = integrate::rebase_standing(&exec, &repo.path, &cancel)
-        .await
-        .expect("stop");
+    let (progress, stop) = integrate::rebase_standing(&repo.path.join(".git"));
     assert!(stop.editing, "the amend marker is what says edit");
     assert!(!stop.oid.is_empty(), "git names the commit it stopped on");
     assert_eq!(
@@ -274,9 +272,7 @@ async fn an_edit_stop_after_a_reword_names_the_replayed_commit_not_the_todos() {
 
     let head = repo.git(&["rev-parse", "HEAD"]).trim().to_string();
     assert_ne!(head, ids[3], "the replay gave the edited commit a new id");
-    let (_, stop) = integrate::rebase_standing(&exec, &repo.path, &cancel)
-        .await
-        .expect("stop");
+    let (_, stop) = integrate::rebase_standing(&repo.path.join(".git"));
     assert!(stop.editing);
     assert_eq!(
         stop.oid, head,
@@ -291,9 +287,7 @@ async fn an_edit_stop_after_a_reword_names_the_replayed_commit_not_the_todos() {
     repo.git(&["commit", "--amend", "-m", "fourth amended"]);
     let amended = repo.git(&["rev-parse", "HEAD"]).trim().to_string();
     assert_ne!(amended, head);
-    let (_, after) = integrate::rebase_standing(&exec, &repo.path, &cancel)
-        .await
-        .expect("stop after the amend");
+    let (_, after) = integrate::rebase_standing(&repo.path.join(".git"));
     assert!(after.editing, "the stop still stands");
     assert_eq!(after.oid, head, "and still names where it stopped");
     repo.git(&["commit", "--amend", "-m", "fourth amended twice"]);
@@ -350,9 +344,7 @@ async fn a_conflict_stop_is_not_an_edit_stop() {
     .expect("rebase");
     assert!(matches!(outcome, RebaseOutcome::Stopped), "{outcome:?}");
 
-    let (_, stop) = integrate::rebase_standing(&exec, &repo.path, &cancel)
-        .await
-        .expect("stop");
+    let (_, stop) = integrate::rebase_standing(&repo.path.join(".git"));
     assert!(!stop.editing, "a conflicted stop carries no amend marker");
 
     integrate::resolve_current(&exec, &repo.path, integrate::Continuation::Abort, &cancel)

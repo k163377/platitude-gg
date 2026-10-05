@@ -67,12 +67,10 @@ pub async fn merge(
 /// (デザイン規約 §進行中の操作から出る). Comment lines go because
 /// `commit::commit` uses `--cleanup=whitespace`, which keeps them; a moved
 /// `core.commentChar` leaves them in the box, where they can be deleted.
-pub async fn stopped_message(
-    executor: &GitExecutor,
-    workdir: &Path,
-    cancel: &CancellationToken,
-) -> String {
-    let raw = crate::conflict::git_file(executor, workdir, "MERGE_MSG", cancel).await;
+/// `git_dir` is the working copy's own (`RepoInfo::git_dir`).
+#[must_use]
+pub fn stopped_message(git_dir: &Path) -> String {
+    let raw = crate::conflict::git_file(git_dir, "MERGE_MSG");
     let kept: Vec<&str> = raw.lines().filter(|l| !l.starts_with('#')).collect();
     kept.join("\n").trim().to_string()
 }

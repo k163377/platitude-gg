@@ -1,6 +1,10 @@
 //! Detection of in-progress repository operations (rebase / merge /
-//! cherry-pick / revert / bisect) by marker files, resolved with
-//! `rev-parse --git-path` (correct for worktrees and split git dirs).
+//! cherry-pick / revert / bisect) by marker files.
+//!
+//! Every marker is the working copy's own (gitrepository-layout puts none
+//! of them in the common directory): a caller holding the git directory
+//! `repo::open` resolved reads them under it ([`detect_at`]), one holding
+//! only a working tree asks `rev-parse --git-path` ([`detect`]).
 
 use std::path::Path;
 
@@ -61,17 +65,12 @@ pub async fn sequence_pending(
 /// and make one failed read rebuild the graph twice. A caller that cannot
 /// tell keeps what it had. What the sides are *called* is
 /// [`crate::conflict::sides`].
-pub async fn merge_heads(
-    executor: &GitExecutor,
-    workdir: &Path,
-    cancel: &CancellationToken,
-) -> Option<Vec<crate::oid::Oid>> {
-    let heads: Vec<crate::oid::Oid> =
-        crate::conflict::git_file(executor, workdir, "MERGE_HEAD", cancel)
-            .await
-            .lines()
-            .filter_map(|line| crate::oid::Oid::from_hex_str(line.trim()).ok())
-            .collect();
+#[must_use]
+pub fn merge_heads(git_dir: &Path) -> Option<Vec<crate::oid::Oid>> {
+    let heads: Vec<crate::oid::Oid> = crate::conflict::git_file(git_dir, "MERGE_HEAD")
+        .lines()
+        .filter_map(|line| crate::oid::Oid::from_hex_str(line.trim()).ok())
+        .collect();
     (!heads.is_empty()).then_some(heads)
 }
 

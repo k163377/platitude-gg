@@ -153,7 +153,7 @@ async fn a_stopped_merge_finished_by_committing_records_what_continue_would() {
         integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
             .await
             .expect("conflict");
-        let waiting = integrate::stopped_message(&exec, &repo.path, &cancel).await;
+        let waiting = integrate::stopped_message(&repo.path.join(".git"));
         assert_eq!(waiting, "Merge branch 'side'", "git's comment lines go");
 
         std::fs::write(repo.path.join("f.txt"), "resolved\n").expect("resolve");
@@ -222,7 +222,7 @@ async fn merge_heads_says_nothing_read_rather_than_no_sides() {
     let repo = conflicting_branches();
     let (exec, cancel) = env();
     assert_eq!(
-        opstate::merge_heads(&exec, &repo.path, &cancel).await,
+        opstate::merge_heads(&repo.path.join(".git")),
         None,
         "no merge is standing, so there is no MERGE_HEAD to read"
     );
@@ -230,9 +230,8 @@ async fn merge_heads_says_nothing_read_rather_than_no_sides() {
     integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
         .await
         .expect("conflict");
-    let sides = opstate::merge_heads(&exec, &repo.path, &cancel)
-        .await
-        .expect("a standing merge names its side");
+    let sides =
+        opstate::merge_heads(&repo.path.join(".git")).expect("a standing merge names its side");
     let mut repo = repo;
     assert_eq!(
         sides.iter().map(Oid::to_hex).collect::<Vec<_>>(),

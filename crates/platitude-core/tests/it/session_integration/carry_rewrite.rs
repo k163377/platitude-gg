@@ -34,8 +34,9 @@ async fn squash_and_reword_run_through_the_write_queue() {
 
 /// The route a rewrite took, as the commands it issued.
 ///
-/// Matched from the front: a plain `contains` counts the stopped rebase's
-/// `rev-parse --git-path rebase-merge/msgnum` status read as a fourth rebase.
+/// Matched from the front: a plain `contains` counts the stop's own check,
+/// `rev-parse --git-path rebase-merge …` (`opstate::detect`), as a fourth
+/// rebase.
 fn rewrite_route(sink: &CaptureSink) -> Vec<&'static str> {
     let mut out = Vec::new();
     for event in sink.events.lock().unwrap().iter() {
