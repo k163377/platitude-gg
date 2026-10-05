@@ -44,7 +44,7 @@ InkCanvas {
         case "chevron": return 4
         // The 7.2 square turned 45°: its diagonal.
         case "tag": return 10.18
-        // Ring and bar, 2.5 to 13.5.
+        // The ring, 2.5 to 13.5; the bar stays inside it.
         case "no-entry": return 11
         // The ring, 2.5 to 13.5; the barb stays inside its ink.
         case "history": return 11
@@ -516,11 +516,14 @@ InkCanvas {
             ctx.lineTo(11.89 * s, 11.89 * s)
             ctx.stroke()
         } else if (icon.kind === "no-entry") {
-            // `no`'s ring with the bar laid flat — the road sign for "this ends here" (規約 §行末の改行が無いこと).
+            // `no`'s ring with a flat bar standing free inside it — the road sign for "this ends here", in the
+            // proportions of GitHub's octicon `no-entry` (規約 §行末の改行が無いこと). **The bar's ink stops a stroke
+            // short of the ring's inner edge**: run out to the ring like `no`'s slash, its round ends land on the
+            // ring's outer edge and the bar reads as poking through it.
             ctx.beginPath()
             ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)
-            ctx.moveTo(2.5 * s, 8 * s)
-            ctx.lineTo(13.5 * s, 8 * s)
+            ctx.moveTo(5.5 * s, 8 * s)
+            ctx.lineTo(10.5 * s, 8 * s)
             ctx.stroke()
         } else if (icon.kind === "clock") {
             ctx.beginPath()
