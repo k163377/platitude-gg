@@ -60,6 +60,9 @@ Item {
     /// How many uncommitted files `--hard` takes besides the commits (`status::Counts::hard_reset_takes`); 0 on a
     /// clean tree.
     required property int hardResetTakes
+    /// Whether what `--hard` takes holds a file the discard record cannot copy (`WorkTreeModel.hardResetNotCopied`),
+    /// which holds the row in `danger` (デザイン規約 §長押し の色の表).
+    required property bool hardResetNotCopied
     /// git's answers about the branch card's delete (refusal, landing, early check), live while the card stands —
     /// passed straight through to `RefBranchMenu`.
     property string refusedDelete: ""
@@ -294,7 +297,7 @@ Item {
                 onTriggered: rowMenu.resetRequested("mixed")
             }
             // Held. The sentence is about the commits; the note says the tracked uncommitted changes go too, which
-            // nothing else on screen says and the reflog does not keep (規約 §ブランチを過去のコミットへ戻す).
+            // nothing else on screen says (規約 §ブランチを過去のコミットへ戻す).
             AppMenuItem {
                 id: hardResetItem
                 code: "--hard"
@@ -302,6 +305,9 @@ Item {
                 // Two words and no count: `%n … file(s)` would show `(s)` verbatim, since no translation loads.
                 note: rowMenu.hardResetTakes > 0 ? qsTr("uncommitted too") : ""
                 holdMs: Metrics.holdMs
+                // The commits come back from the branch's reflog and the uncommitted changes from the discard
+                // record's copy — unless a file in them is one the copy cannot take (デザイン規約 §長押し の色の表).
+                holdTone: rowMenu.hardResetNotCopied ? Theme.danger : Theme.warning
                 onHeld: {
                     // Qt's `dismiss()`: this card and the menu it hangs off go together.
                     resetMenu.dismiss()

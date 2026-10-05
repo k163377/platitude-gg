@@ -128,7 +128,10 @@ MenuItem {
     /// A gesture is under way, the fill's slide back included (`HoldDriver.gesturing`) — the latch for a row dressed
     /// from an answer other than the length (`RefBranchMenu`'s `Delete both`).
     readonly property alias gesturing: holdDrive.gesturing
-    property color holdTone: Theme.danger
+    /// What a held row wears — word, chip, mark and fill. `warning`: what a hold here throws away is brought back from
+    /// the discard record. **A row that cannot be brought back names `danger` itself** (デザイン規約 §長押し の色の表) —
+    /// so a new held row never takes the stronger warning by leaving this out.
+    property color holdTone: Theme.warning
     /// Held all the way down.
     signal held()
     /// Automation: run the hold to its end without a press behind it — on a row a hand could hold.

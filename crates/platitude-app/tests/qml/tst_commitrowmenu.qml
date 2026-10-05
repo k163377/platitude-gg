@@ -39,6 +39,7 @@ Item {
         canPull: true
         pullBlocked: false
         hardResetTakes: 0
+        hardResetNotCopied: false
         onSwitchRequested: (kind, name) => root.asked = "switch " + kind + " " + name
         onCherryPickRequested: oidHex => root.asked = "cherry-pick " + oidHex
         onRevertRequested: oidHex => root.asked = "revert " + oidHex
@@ -70,7 +71,8 @@ Item {
     function aimAt(fields) {
         const all = { "targetKind": "branch", "targetName": "feature/topic-a", "canSwitch": true,
                       "switchAsks": false, "heldLeaf": "", "canPull": true, "pullBlocked": false,
-                      "published": false, "canIntegrate": true, "canSequence": true, "hardResetTakes": 0 }
+                      "published": false, "canIntegrate": true, "canSequence": true, "hardResetTakes": 0,
+                      "hardResetNotCopied": false }
         for (const key in fields)
             all[key] = fields[key]
         for (const key in all)
@@ -181,6 +183,18 @@ Item {
             compare(root.row("rebase").note, Words.rewritesPushed)
             verify(root.row("rebase").offered, "the row goes on being a row")
             compare(root.row("rebase").blockedReason, "")
+        }
+
+        /// The held rows wear `warning` — what they throw away comes back from the discard record — and `--hard`
+        /// takes `danger` only where a file it takes is one the record cannot copy (デザイン規約 §長押し の色の表).
+        function test_a_held_row_warns_and_only_an_uncopied_reset_is_danger() {
+            root.aimAt({ hardResetTakes: 2 })
+            verify(Qt.colorEqual(menu.hardResetRow.holdTone, Theme.warning), "copied whole")
+            verify(Qt.colorEqual(menu.dropItem.holdTone, Theme.warning), "a dropped commit")
+            verify(Qt.colorEqual(menu.stashDropItem.holdTone, Theme.warning), "a dropped stash")
+
+            root.aimAt({ hardResetTakes: 2, hardResetNotCopied: true })
+            verify(Qt.colorEqual(menu.hardResetRow.holdTone, Theme.danger), "a file the copy cannot take")
         }
 
         /// They ask less of the repository than the rest (offers::commit_menu `sequence`).

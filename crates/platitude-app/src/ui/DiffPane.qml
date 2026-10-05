@@ -28,6 +28,10 @@ Rectangle {
     property int sideColorTheirs: -1
     // A write is running: staging buttons disable.
     property bool busy: false
+    /// Whether a discard of this file leaves something the discard record does not keep — before the first commit,
+    /// or under a required LFS filter that cannot run (`GitFacts.discardUnrecorded`). `Discard hunk` is held in
+    /// `danger` then, in `warning` otherwise (デザイン規約 §長押し の色の表).
+    property bool discardUnrecorded: false
     /// False for a file read out of another working copy, which reads the way a commit's file does (デザイン規約
     /// §別の作業コピーを読む): no whole-file word, no hunk or line seats. Not disabled — not offered: staging belongs
     /// to the copy that holds the index.
@@ -498,6 +502,7 @@ Rectangle {
                 partial: diffPane.partial
                 staged: diffPane.staged
                 busy: diffPane.busy
+                discardUnrecorded: diffPane.discardUnrecorded
                 numberW: metrics.numberW
                 sidesTold: diffPane.sidesTold
                 oursColor: diffPane.sideColor("ours")

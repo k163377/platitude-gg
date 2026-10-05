@@ -63,6 +63,8 @@ Rectangle {
     /// Which way a write on this diff goes, and whether one is running.
     required property bool staged
     required property bool busy
+    /// Whether discarding here goes unrecorded (`DiffPane.discardUnrecorded`), which decides `Discard hunk`'s colour.
+    required property bool discardUnrecorded
     /// How wide a line number is (`DiffTextMetrics.numberW`).
     required property int numberW
     /// Whether the two sides are told apart by colour, and the two colours — properties, so the pane is not asked
@@ -457,13 +459,16 @@ Rectangle {
             // row: a frame around one word in a heading reads as a box come loose.
             ActionButton {
                 id: discardHunkButton
+                /// `warning` — the hunk comes back from the discard record — unless this file's discard goes
+                /// unrecorded (デザイン規約 §長押し の色の表).
+                readonly property color discardTone: diffRow.discardUnrecorded ? Theme.danger : Theme.warning
                 visible: !diffRow.staged
                 text: qsTr("Discard hunk")
                 font.pixelSize: Theme.fontSm
                 // Asleep until the pointer is on this heading (デザイン規約 §diff の中のステージ); the hold mark still says
                 // it is held.
-                tone: diffRow.underPointer ? Theme.danger : Theme.textSecondary
-                holdTone: Theme.danger
+                tone: diffRow.underPointer ? discardHunkButton.discardTone : Theme.textSecondary
+                holdTone: discardHunkButton.discardTone
                 holdMs: Metrics.holdMs
                 enabled: !diffRow.busy
                 // Which hunk of which reading (`HoldDriver.premise`): the pane re-reads itself behind every write, and

@@ -24,7 +24,9 @@ Item {
     /// The length the press under way was given, else the live one (`HoldDriver.armedMs`). A tag worked out from the
     /// same answer reads this, so the wording holds under a hand already on the row.
     readonly property alias armedMs: holdDrive.armedMs
-    property color holdTone: Theme.danger
+    /// `warning` unless the row names `danger` itself — the card's held rows do: what they throw away is the work of
+    /// the stopped operation, which the discard record does not keep (デザイン規約 §長押し の色の表).
+    property color holdTone: Theme.warning
     /// The width this row's chip asks the card's shared column to hold, so every sentence starts on the same x.
     readonly property real codeColSeat: codeLabel.implicitWidth
     /// The column the card settled on.

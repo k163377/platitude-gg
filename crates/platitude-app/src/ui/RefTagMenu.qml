@@ -145,7 +145,6 @@ AppMenu {
         growsForText: false
         offered: state.kind === "tag" && state.canDelete
         holdMs: Metrics.holdMs
-        holdTone: Theme.danger
         onHeld: {
             tagMenu.dismiss()
             tagMenu.deleteTagRequested(state.refId)

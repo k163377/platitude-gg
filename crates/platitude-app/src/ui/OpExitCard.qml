@@ -172,6 +172,8 @@ Rectangle {
             enabled: opExitCard.repoTab.busyCount === 0
             // Held only where a real commit is lost (デザイン規約 §長押し); an emptied commit's stop loses nothing.
             holdMs: opExitCard.skipIsFree ? 0 : Metrics.holdMs
+            // The work done on this stop goes with it, and the discard record keeps none of a stopped operation's.
+            holdTone: Theme.danger
             onPicked: opExitCard.repoTab.resolveOperation("skip")
         }
         OpExitRow {
@@ -196,6 +198,8 @@ Rectangle {
             visible: !opExitCard.workTree.opMerging
             enabled: opExitCard.repoTab.busyCount === 0
             holdMs: Metrics.holdMs
+            // Everything the operation did since it started goes, none of it on the discard record.
+            holdTone: Theme.danger
             onPicked: opExitCard.repoTab.resolveOperation("abort")
         }
         // A merge's only way out (`bare`): the commit button's shape in red, so the two read as the pair that finishes

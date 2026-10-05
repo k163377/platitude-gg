@@ -158,9 +158,11 @@ Item {
 
             card.forceDeleteBranch = "feature/topic-a"
             verify(card.deleteItem.holdMs > 0, "a click is no longer enough")
-            compare(card.deleteItem.holdTone, Theme.danger, "what goes lives nowhere else")
+            // Commits nothing else reaches, but the discard record brings them back with the name
+            // (デザイン規約 §長押し の色の表): the warning, not the danger.
+            compare(card.deleteItem.holdTone, Theme.warning, "what goes comes back from the record")
             compare(card.deleteBothItem.note, "not merged")
-            compare(card.deleteBothItem.holdTone, Theme.danger, "so the pair is danger too")
+            compare(card.deleteBothItem.holdTone, Theme.warning, "so the pair stays the warning too")
             // With no press under way, the chip and the note already say what the row now runs.
             compare(card.deleteItem.code, "branch -D")
             compare(card.deleteItem.note, "not merged")

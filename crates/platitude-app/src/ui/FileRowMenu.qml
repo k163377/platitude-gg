@@ -63,14 +63,19 @@ Item {
     function planDiscard() {
         const rows = fileRowMenu.wipPane.chosenRows()
         const keys = []
-        for (let i = 0; i < rows.length; i++)
+        const paths = []
+        for (let i = 0; i < rows.length; i++) {
             keys.push(rows[i].bucket + ":" + rows[i].fullName)
+            paths.push(rows[i].fullName)
+        }
         fileRowMenu.sendPaths(keys)
         fileRowMenu.repoTab.planDiscard()
         return {
             keys: keys,
             count: fileRowMenu.repoTab.discardCount,
-            only: fileRowMenu.repoTab.discardOnly
+            only: fileRowMenu.repoTab.discardOnly,
+            // Answered before the row is shown, as the colour has to be (デザイン規約 §長押し).
+            unrecorded: GitFacts.discardUnrecorded(fileRowMenu.workTree.unborn, fileRowMenu.workTree.notCopied, paths)
         }
     }
     function discardWords(plan) {
@@ -169,13 +174,15 @@ Item {
             }
         }
         // Held (デザイン規約 §長押し). On a file changed on both sides the unstaged row keeps what is staged, the staged
-        // row takes the lot.
+        // row takes the lot. `warning`: what goes comes back from the discard record's copy — `danger` where it would
+        // not (before the first commit, a file the copy cannot take; デザイン規約 §長押し の色の表).
         AppMenuItem {
             id: fileDiscardItem
             text: fileRowMenu.discardWords(fileRowMenu.plan)
             note: fileRowMenu.discardNote(fileRowMenu.plan)
             offered: fileRowMenu.bucket !== "conflicts" && fileRowMenu.canWrite
             holdMs: Metrics.holdMs
+            holdTone: fileRowMenu.plan && fileRowMenu.plan.unrecorded ? Theme.danger : Theme.warning
             onHeld: {
                 fileMenu.close()
                 fileRowMenu.discardChosenNow(fileRowMenu.plan)

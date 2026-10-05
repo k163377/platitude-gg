@@ -1274,6 +1274,7 @@ FocusScope {
             canBranchHere: commitMenuState.menuCanBranchHere
             stashCanWrite: commitMenuState.menuStashCanWrite
             hardResetTakes: commitMenuState.menuHardResetTakes
+            hardResetNotCopied: commitMenuState.menuHardResetNotCopied
             tipHeldElsewhere: commitMenuState.menuTipHeldElsewhere
             // git's answers to the branch card's delete, live while the card stands (`RefBranchMenu`).
             refusedDelete: repoTab.branchDeleteRefused
@@ -3268,6 +3269,8 @@ FocusScope {
                             sideColorOurs: page.sideColorOurs
                             sideColorTheirs: page.sideColorTheirs
                             busy: page.diffSettling
+                            discardUnrecorded: GitFacts.discardUnrecorded(workTree.unborn, workTree.notCopied,
+                                                                          [page.diffPath])
                             menuStanding: page.menuStanding
                             onCloseRequested: page.closeDiffToGraph()
                             onCopyRequested: text => clipboard.copy(text)

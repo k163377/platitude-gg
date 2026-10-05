@@ -342,7 +342,6 @@ Item {
             code: "drop"
             offered: refRowMenu.kind === "stash" && refRowMenu.canDelete
             holdMs: Metrics.holdMs
-            holdTone: Theme.danger
             onHeld: {
                 refMenu.dismiss()
                 refRowMenu.dropStashRequested(refRowMenu.refId)

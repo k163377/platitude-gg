@@ -218,8 +218,9 @@ AppMenu {
         holdMs: heldRow ? Metrics.holdMs : 0
         // A branch's plain delete keeps the menu up: git's answer lands on this row.
         staysOpen: branchRow
-        // Reaching past this machine is the warning tone; throwing away what is in hand is danger (デザイン規約 §状態).
-        holdTone: remoteRow ? Theme.warning : Theme.danger
+        // `warning` both ways: a remote's name stands back up here, and a local branch's tip and upstream come back
+        // from the discard record (デザイン規約 §長押し の色の表).
+        holdTone: Theme.warning
         onPicked: branchCard.deleteRequested(state.kind, state.refId, state.refName, state.refOid)
         onHeld: {
             branchCard.dismiss()
@@ -278,8 +279,9 @@ AppMenu {
         // As on the local row.
         reasonMarkWord: refBothDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
         holdMs: Metrics.holdMs
-        // Danger once the local half runs as `-D`: it throws away commits that live nowhere else (デザイン規約 §状態).
-        holdTone: refBothDeleteItem.forces ? Theme.danger : Theme.warning
+        // `warning` whether the local half runs as `-d` or `-D`: the commits only it reached come back from the discard
+        // record with the name (デザイン規約 §長押し の色の表).
+        holdTone: Theme.warning
         onHeld: {
             branchCard.dismiss()
             // One write with one answer, so one thing to put back.

@@ -51,6 +51,9 @@ QtObject {
     /// How many files the `--hard` row would take besides the commits — held still with the rest, since its tag
     /// widens the card (デザイン規約 §メニュー).
     property int menuHardResetTakes: 0
+    /// Whether those files hold one the discard record cannot copy — held still for the same reason: it dresses the
+    /// row.
+    property bool menuHardResetNotCopied: false
     /// Whether anything besides this branch still reaches the tip, which decides whether the drop row is held. Held
     /// still too: a hold mark arriving later re-indents every row (`AppMenu.holdIndent`).
     property bool menuTipHeldElsewhere: false
@@ -235,6 +238,7 @@ QtObject {
         }
         menuState.menuPublished = menuState.graphModel.publishedAt(oidHex)
         menuState.menuHardResetTakes = menuState.workTree.hardResetTakes
+        menuState.menuHardResetNotCopied = menuState.workTree.hardResetNotCopied
         menuState.menuTipHeldElsewhere = menuState.workTree.headReachedElsewhere
         menuState.menuCanSequence = offers.includes("sequence")
         menuState.menuCanIntegrate = offers.includes("integrate")
