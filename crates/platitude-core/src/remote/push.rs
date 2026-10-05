@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-use super::list::{config_value, current_branch};
+use super::list::current_branch;
 use super::marks::{PushMarks, push_marks};
 use super::refusal::refusal;
 use super::standing::PushTrack;
@@ -64,39 +64,32 @@ pub async fn plan_current_push(
     cancel: &CancellationToken,
 ) -> Result<PushSpec, GitError> {
     let branch = current_branch(executor, workdir, cancel).await?;
-    let tracks = config_value(
-        executor,
-        workdir,
-        &format!("branch.{branch}.remote"),
-        cancel,
-    )
-    .await?;
-    let merge = config_value(executor, workdir, &format!("branch.{branch}.merge"), cancel).await?;
-
-    // Read fresh: the marks can move in a terminal between two of this
-    // application's reads. The same read as the status tick, so the two
-    // cannot drift apart.
+    // Read fresh, all four keys in one process: they can move in a
+    // terminal between two of this application's reads. The same read as
+    // the status tick, so the two cannot drift apart.
     let marks = push_marks(executor, workdir, &branch, cancel).await?;
 
-    decide_push(&branch, tracks, merge, marks, fallback_remote, force)
+    decide_push(&branch, marks, fallback_remote, force)
 }
 
-/// What the four reads above come to: the destination, the name the
+/// What the keys read above come to: the destination, the name the
 /// branch goes under there, and whether this push records an upstream.
 ///
-/// Pure so this module's tests can walk every arrangement of the three
-/// keys; through git each would cost a clone and two bare repositories.
+/// Pure so this module's tests can walk every arrangement of the keys;
+/// through git each would cost a clone and two bare repositories.
 fn decide_push(
     branch: &str,
-    tracks: Option<String>,
-    merge: Option<String>,
     marks: PushMarks,
     fallback_remote: &str,
     force: PushForce,
 ) -> Result<PushSpec, GitError> {
-    let pushes_to = marks
-        .push_remote
-        .or_else(|| marks.push_default.map(|marked| marked.remote));
+    let PushMarks {
+        push_remote,
+        push_default,
+        tracks,
+        merge,
+    } = marks;
+    let pushes_to = push_remote.or_else(|| push_default.map(|marked| marked.remote));
 
     let remote = match pushes_to.or_else(|| tracks.clone()) {
         Some(remote) => remote,
@@ -301,14 +294,14 @@ mod tests {
         let some = |value: &str| (!value.is_empty()).then(|| value.to_string());
         decide_push(
             branch,
-            some(tracks),
-            some(merge),
             PushMarks {
                 push_remote: some(push_remote),
                 push_default: some(push_default).map(|remote| PushDefault {
                     remote,
                     local: true,
                 }),
+                tracks: some(tracks),
+                merge: some(merge),
             },
             fallback,
             PushForce::None,

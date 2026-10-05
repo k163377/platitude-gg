@@ -167,36 +167,6 @@ pub(super) async fn current_branch(
     Ok(name)
 }
 
-/// One configuration value, or `None` when the key is unset.
-pub(super) async fn config_value(
-    executor: &GitExecutor,
-    workdir: &Path,
-    key: &str,
-    cancel: &CancellationToken,
-) -> Result<Option<String>, GitError> {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        // Exit 1: the key is unset.
-        .answers_by_code(1)
-        .args(["config", "--get", "--", key]);
-    let out = executor.run_unchecked(cmd, cancel).await?;
-    match out.code {
-        0 => {
-            let value = out.stdout_utf8().trim().to_string();
-            Ok((!value.is_empty()).then_some(value))
-        }
-        // Only 1 is "unset"; anything else (128 on an unreadable config)
-        // is a failure: a push planned on a misread "unset" rewrites
-        // upstreams.
-        1 => Ok(None),
-        code => Err(GitError::Failed {
-            command: format!("git config --get -- {key}"),
-            code,
-            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
-        }),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

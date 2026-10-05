@@ -213,6 +213,28 @@ async fn a_metacharacter_branch_reads_its_own_mark() {
     assert_eq!(plan.remote_branch, "wip.v2+x", "the branch's own name");
 }
 
+/// The upstream is read through the same escaped pattern: the decoy's
+/// keys are written last, so an unescaped read would take them as this
+/// branch's effective values.
+#[tokio::test]
+async fn a_metacharacter_branch_reads_its_own_upstream() {
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
+    let (exec, cancel) = env();
+
+    repo.git(&["switch", "--create", "wip.v2+x"]);
+    repo.git(&["config", "branch.wip.v2+x.remote", "origin"]);
+    repo.git(&["config", "branch.wip.v2+x.merge", "refs/heads/far"]);
+    repo.git(&["config", "branch.wipAv22x.remote", "fork"]);
+    repo.git(&["config", "branch.wipAv22x.merge", "refs/heads/decoy"]);
+
+    let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
+        .await
+        .expect("a plan");
+    assert_eq!(plan.remote, "origin");
+    assert_eq!(plan.remote_branch, "far", "the branch's own upstream name");
+    assert!(!plan.set_upstream, "it tracks something already");
+}
+
 /// A mark in the user's global configuration, the scope the label can go
 /// stale in: the read sees its level, the label spells what the send
 /// resolves, and the marks git weighs above it still win.

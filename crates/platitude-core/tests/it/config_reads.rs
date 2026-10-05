@@ -118,13 +118,9 @@ async fn planning_a_push_answers_by_code() {
     );
     assert_eq!(
         config_reads(&log),
-        // `branch.<name>.remote`, `branch.<name>.merge`, then
-        // `branch.<name>.pushRemote` and `remote.pushDefault` in one process.
-        vec![
-            CommandEnd::Answered(1),
-            CommandEnd::Answered(1),
-            CommandEnd::Answered(1)
-        ]
+        // `branch.<name>.remote`, `.merge` and `.pushRemote`, and
+        // `remote.pushDefault`, in one process.
+        vec![CommandEnd::Answered(1)]
     );
 }
 

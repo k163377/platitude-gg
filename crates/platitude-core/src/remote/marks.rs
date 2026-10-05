@@ -123,12 +123,13 @@ fn each_scoped_record(bytes: &[u8], mut each: impl FnMut(&str, &str, Option<&str
     }
 }
 
-/// Both marks at once: the branch's own `branch.<branch>.pushRemote`, and
-/// the repository's [`PushDefault`] beside it.
+/// Every key a push of the branch is resolved from: the branch's own
+/// `branch.<branch>.pushRemote`, the repository's [`PushDefault`] beside
+/// it, and what the branch tracks (`branch.<branch>.remote` / `.merge`).
 ///
-/// The one reader of the branch key, shared by [`super::plan_current_push`]
-/// and the status tick: a second spelling lets the label name a remote the
-/// push never goes to
+/// The one reader of the branch keys, shared by
+/// [`super::plan_current_push`] and the status tick: a second spelling lets
+/// the label name a remote the push never goes to
 /// (rules-refs/core.md「push の印の読みは `remote::push_marks` 1 本だけ」).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PushMarks {
@@ -137,14 +138,21 @@ pub struct PushMarks {
     pub push_remote: Option<String>,
     /// The repository's mark, with the level that set it.
     pub push_default: Option<PushDefault>,
+    /// `branch.<branch>.remote`: the remote the branch tracks.
+    pub tracks: Option<String>,
+    /// `branch.<branch>.merge`: the branch it tracks there, as a full ref.
+    pub merge: Option<String>,
 }
 
-/// Reads both marks with one `--get-regexp` over the two exact keys.
+/// Reads every [`PushMarks`] key with one `--get-regexp` over the exact
+/// keys, at the moment of asking — a terminal can move any of them
+/// between two of this application's reads.
 ///
 /// Keys arrive with section and variable lower-cased and the branch name
 /// as written. The branch name is escaped into the regex
 /// (`config::regexp_literal`): unescaped, `wip.v2+x` picks up
-/// `wipAv22x`'s mark.
+/// `wipAv22x`'s keys. A key set at several levels answers with its last
+/// record, as `--get` does.
 pub async fn push_marks(
     executor: &GitExecutor,
     workdir: &Path,
@@ -152,7 +160,7 @@ pub async fn push_marks(
     cancel: &CancellationToken,
 ) -> Result<PushMarks, GitError> {
     let pattern = format!(
-        r"^(branch\.{}\.pushremote|remote\.pushdefault)$",
+        r"^(branch\.{}\.(pushremote|remote|merge)|remote\.pushdefault)$",
         config::regexp_literal(branch)
     );
     let cmd = GitCommand::new()
@@ -164,9 +172,11 @@ pub async fn push_marks(
     match out.code {
         0 => Ok(parse_push_marks(branch, &out.stdout)),
         1 => Ok(PushMarks::default()),
+        // Only 1 is "unset"; anything else (an unreadable config) is a
+        // failure: a push planned on a misread "unset" rewrites upstreams.
         code => Err(GitError::Failed {
             command: format!(
-                "git config --get-regexp branch.{branch}.pushRemote remote.pushDefault"
+                "git config --get-regexp branch.{branch}.pushRemote/remote/merge remote.pushDefault"
             ),
             code,
             stderr: out.failure_message(),
@@ -175,14 +185,26 @@ pub async fn push_marks(
 }
 
 fn parse_push_marks(branch: &str, bytes: &[u8]) -> PushMarks {
-    let branch_key = format!("branch.{branch}.pushremote");
     let mut marks = PushMarks::default();
     each_scoped_record(bytes, |scope, key, value| {
-        if key == branch_key {
-            marks.push_remote = value.map(str::to_string);
-        } else if key == "remote.pushdefault" {
+        if key == "remote.pushdefault" {
             marks.push_default = value.map(|remote| PushDefault::at(scope, remote));
+            return;
         }
+        let Some(variable) = key
+            .strip_prefix("branch.")
+            .and_then(|rest| rest.strip_prefix(branch))
+            .and_then(|rest| rest.strip_prefix('.'))
+        else {
+            return;
+        };
+        let slot = match variable {
+            "pushremote" => &mut marks.push_remote,
+            "remote" => &mut marks.tracks,
+            "merge" => &mut marks.merge,
+            _ => return,
+        };
+        *slot = value.map(str::to_string);
     });
     marks
 }
