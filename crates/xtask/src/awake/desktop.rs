@@ -60,6 +60,11 @@ function Read-DesktopLine($state, $line) {
   if ($body -match '^Received permission response for ([\w-]+): ([\w-]+) \(tool: ([\w:.-]+)\)$') {
     $state.Answers[$Matches[1]] = @{ Decision=$Matches[2]; Tool=$Matches[3]; At=$at }; return
   }
+  # A dialog taken down unanswered — its CLI process ended under it — no
+  # longer waits on anybody.
+  if ($body -match '^Permission request ([\w-]+) for ([\w:.-]+) aborted$') {
+    $state.Answers[$Matches[1]] = @{ Decision='aborted'; Tool=$Matches[2]; At=$at }; return
+  }
   if ($body -match 'permission request|permission response|Mapping internal session') { $state.Warning='unrecognized-log-format' }
 }
 function Read-DesktopFiles($state) {
@@ -94,7 +99,7 @@ function Read-DesktopFiles($state) {
       $lines=$text -split "`n"
       $cursor.Tail=$lines[-1]
       for ($i=0; $i -lt $lines.Length-1; $i++) {
-        if ($lines[$i].Contains('permission') -or $lines[$i].Contains('Mapping internal session')) { Read-DesktopLine $state $lines[$i] }
+        if (($lines[$i].IndexOf('permission', [StringComparison]::OrdinalIgnoreCase) -ge 0) -or $lines[$i].Contains('Mapping internal session')) { Read-DesktopLine $state $lines[$i] }
       }
       if ($cursor.Tail.Length -gt 1048576) { throw 'log-line-too-long' }
     }
@@ -159,7 +164,7 @@ function Update-DesktopLog($state, $candidates, $nowms) {
       $asked=$true
       if ($answer) {
         if (($answer.Tool -ne $request.Tool) -or ($answer.At -lt $request.At)) { $unknown++; $blocked[$key]=$true; continue }
-        if ($answer.Decision -in @('once','always')) { $asked=$false }
+        if ($answer.Decision -in @('once','always','aborted')) { $asked=$false }
         else { $unknown++; $blocked[$key]=$true; continue }
       }
       # Every pending dialog on this call must resolve before resuming.

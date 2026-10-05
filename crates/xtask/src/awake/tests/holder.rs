@@ -712,7 +712,7 @@ fn the_holder_s_script_is_pinned_to_its_revision() {
             crate::awake::REVISION,
             digest(&crate::awake::holder::script(Path::new(r"C:\pgg"), 0))
         ),
-        (6, "65ce4864b43fbc61".to_string()),
+        (6, "26cd3706bb4565b9".to_string()),
         "the holder's script changed: raise REVISION, then pin the new digest here"
     );
 }

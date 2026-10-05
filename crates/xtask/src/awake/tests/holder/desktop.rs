@@ -247,6 +247,22 @@ Check (-not (Asked $other)) 'undone ambiguity picked the call left'
     );
 }
 
+/// A dialog taken down unanswered — its CLI process ended under it — no
+/// longer waits on anybody.
+#[test]
+fn an_aborted_dialog_no_longer_waits() {
+    probe(
+        r#"
+Update-DesktopLog $state @($call) $at
+Check (Asked $call) $state.Status
+Append '2026-09-29 19:42:04 [info] Permission request request1 for browser:open_file aborted'
+Update-DesktopLog $state @($call) ($at+1)
+Check (-not (Asked $call)) $state.Status
+Check ($state.Status -match '^watching .*unknown=0') $state.Status
+"#,
+    );
+}
+
 #[test]
 fn ambiguous_subagents_and_unknown_decisions_never_guess_a_call() {
     probe(
