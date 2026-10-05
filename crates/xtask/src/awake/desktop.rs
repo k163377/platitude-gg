@@ -20,7 +20,7 @@ public static class PggDesktopLog {
 '@
 function New-DesktopLog($path) {
   return @{ Path=$path; Files=@{}; Sessions=@{}; Requests=@{}; Answers=@{}; Asked=@{};
-    Overlay=@{}; Status='starting'; Warning=''; Enabled=$false; Seen=0 }
+    Overlay=@{}; Decided=@(); Status='starting'; Warning=''; Enabled=$false; Seen=0 }
 }
 function Close-DesktopLog($state) {
   foreach ($file in $state.Files.Values) { $file.Reader.Dispose() }
@@ -29,7 +29,18 @@ function Close-DesktopLog($state) {
 function Reset-DesktopLog($state) {
   Close-DesktopLog $state
   $state.Sessions=@{}; $state.Requests=@{}; $state.Answers=@{}; $state.Asked=@{}
-  $state.Overlay=@{}; $state.Enabled=$false; $state.Warning=''
+  $state.Overlay=@{}; $state.Decided=@(); $state.Enabled=$false; $state.Warning=''
+}
+# A reading binds from the claims it copied at its start; a call that
+# started and asked after the copy is missing from them, so what a reading
+# bound is bound again unless it found its claims unchanged at its end.
+# Ambiguity stands: a second choice made as candidates end could pick the
+# call that runs.
+function Undo-DesktopDecisions($state) {
+  foreach ($id in $state.Decided) {
+    if ($state.Requests.ContainsKey($id)) { $state.Requests[$id].Bound='' }
+  }
+  $state.Decided=@()
 }
 function Read-DesktopLine($state, $line) {
   if ($line -notmatch '^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[info\] (.*)\r?$') { return }
@@ -110,7 +121,7 @@ function Test-DesktopTool($logged, $called) {
   return $false
 }
 function Update-DesktopLog($state, $candidates, $nowms) {
-  $state.Overlay=@{}
+  $state.Overlay=@{}; $state.Decided=@()
   if (Test-Path -LiteralPath "$dir\desktop-log.off") {
     Reset-DesktopLog $state; $state.Status='disabled'; return
   }
@@ -132,7 +143,7 @@ function Update-DesktopLog($state, $candidates, $nowms) {
           ($_.Session -eq $cli) -and ([int64]$_.Part[4] -le $request.At+999) -and
           (Test-DesktopTool $request.Tool $_.Part[2])
         })
-        if ($matchesCall.Count -eq 1) { $request.Bound=$matchesCall[0].Key }
+        if ($matchesCall.Count -eq 1) { $request.Bound=$matchesCall[0].Key; $state.Decided += $id }
         elseif ($matchesCall.Count -gt 1) { $request.Ambiguous=$true }
       }
       if ($request.Ambiguous) { $ambiguous++; continue }

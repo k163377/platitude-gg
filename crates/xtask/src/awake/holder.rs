@@ -496,6 +496,7 @@ try {
       } catch [IO.IOException], [UnauthorizedAccessException] {
         $seen = $null
         $keep = $holding
+        Undo-DesktopDecisions $desktop
       }
     }
     $lock = Enter-Lock
@@ -509,7 +510,8 @@ try {
             $file, $was = $pair
             if ((-not (Test-Path -LiteralPath $file.FullName)) -or ((Read-Word $file.FullName) -ne $was)) { $unchanged = $false; break }
           }
-          if (-not $unchanged) { $keep = $true; $changes = @(); $readat = 0; $why = @{} }
+          if (-not $unchanged) { $keep = $true; $changes = @(); $readat = 0; $why = @{}; Undo-DesktopDecisions $desktop }
+          $desktop.Decided = @()
           foreach ($change in $changes) {
             $file, $was, $becomes = $change
             if ((Test-Path -LiteralPath $file) -and ((Read-Word $file) -eq $was)) {
@@ -536,7 +538,7 @@ try {
         $transport='polling'
         if ($desktopWatch -and $desktopWatch.EnableRaisingEvents) { $transport='file-events' }
         Write-Word "$dir\desktop-r$revision" "$me $nowms $($desktop.Status) transport=$transport"
-      } catch [IO.IOException], [UnauthorizedAccessException] { $keep = $holding }
+      } catch [IO.IOException], [UnauthorizedAccessException] { $keep = $holding; Undo-DesktopDecisions $desktop }
     } finally { Exit-Lock $lock }
     $woken = Wait-Event -Timeout @TICK@
     if ($holding -and $woken) {

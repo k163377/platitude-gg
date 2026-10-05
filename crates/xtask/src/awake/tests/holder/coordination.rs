@@ -151,7 +151,7 @@ fn compatible_holders_apply_and_clear_real_windows_requests_together() {
 /// for itself — as a holder of `revision` in `dir` runs it, with
 /// `during_query` run each time it has listed the processes: once the
 /// claims are copied, and before anything is made of the listing.
-fn shipped(dir: &std::path::Path, revision: u32, during_query: &str) -> String {
+pub(super) fn shipped(dir: &std::path::Path, revision: u32, during_query: &str) -> String {
     let source = crate::awake::holder::SCRIPT;
     let source = &source[source.find("$dir =").expect("the script's directory")..];
     let processes = format!(
@@ -192,14 +192,20 @@ fn shipped(dir: &std::path::Path, revision: u32, during_query: &str) -> String {
 
 /// The system's clocks, for the holder's own type in a probe: the time of
 /// day, and the one that only runs forward.
-const REAL_CLOCK: &str = "public static long Now() { return System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); } \
+pub(super) const REAL_CLOCK: &str = "public static long Now() { return System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); } \
      public static long Ticks() { return System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 1000); }";
 
 /// Runs `body` — the shipped holder — as the holder of `revision` in
 /// `dir`, with the OS request recorded in place of asked (`Last`), its
 /// clock read off `clock`, and the commands in `stubs` replaced; the probe
 /// ends where a stub throws `PROBE_END`, and answers what it printed.
-fn probe(dir: &std::path::Path, revision: u32, clock: &str, stubs: &str, body: &str) -> String {
+pub(super) fn probe(
+    dir: &std::path::Path,
+    revision: u32,
+    clock: &str,
+    stubs: &str,
+    body: &str,
+) -> String {
     let script = format!(
         r#"$ErrorActionPreference = 'Stop'
 Add-Type 'public static class PggAwake {{ public static uint Last=2147483649; public static uint SetThreadExecutionState(uint flags) {{ Last=flags; return 1; }} {clock} }}'

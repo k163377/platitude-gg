@@ -132,6 +132,121 @@ Check ($state.Status -match 'unmapped=1') $state.Status
     );
 }
 
+/// A reading binds a dialog from the claims it copied at its start, and a
+/// call can start and ask within the reading, after the copy, while the
+/// call before it still shows open there — a screenshot, then a navigate
+/// that opens a file. What a reading bound from claims that changed under
+/// it is bound again from the next reading's.
+#[test]
+fn a_dialog_bound_from_claims_that_changed_is_bound_again() {
+    let said = stale_reading("desktop-stale", false);
+    assert!(
+        said.contains("READING1=2147483649 watching overlay=1"),
+        "the first reading did not bind the screenshot: {said}"
+    );
+    assert!(
+        said.contains("READING2=2147483648 watching overlay=1"),
+        "the navigate waiting for a person was counted as work: {said}"
+    );
+}
+
+/// A reading that could not compare its claims — a reader held the name —
+/// never confirmed what it bound either.
+#[test]
+fn a_dialog_bound_by_a_reading_that_could_not_check_is_bound_again() {
+    let said = stale_reading("desktop-unchecked", true);
+    assert!(
+        said.contains("READING1=2147483649 watching overlay=1"),
+        "the first reading did not bind the screenshot: {said}"
+    );
+    assert!(
+        said.contains("READING2=2147483648 watching overlay=1"),
+        "the navigate waiting for a person was counted as work: {said}"
+    );
+}
+
+/// Two readings of the shipped holder over one session: the screenshot's
+/// call is open in the claims the first copies; once copied, the navigate
+/// replaces it and asks. With `unchecked` the first reading's comparison
+/// of its claims fails as an unreadable name does. What each reading asked
+/// for and made of the log is printed as `READING<n>=`.
+fn stale_reading(stem: &str, unchecked: bool) -> String {
+    let dir = scratch(stem);
+    std::fs::remove_file(dir.join(crate::awake::DESKTOP_OFF)).expect("enable supplement");
+    let log = dir.join("main.log");
+    std::fs::write(&log, "").expect("the fixture log");
+    std::fs::write(
+        dir.join("desktop-log.path"),
+        log.to_string_lossy().as_bytes(),
+    )
+    .expect("the isolated log path");
+    let claude = FakeClaude::start(&dir);
+    let claim = dir.join(claim_file("s"));
+    let start = crate::awake::now_ms() - 5000;
+    let pid = claude.pid();
+    std::fs::write(
+        &claim,
+        format!(
+            "r1 working {pid} {start} a 0 -:shot:mcp__Claude_Browser__computer:x:{start}:0:0 - -"
+        ),
+    )
+    .expect("the screenshot's call");
+    let quoted = |path: &std::path::Path| path.display().to_string().replace('\'', "''");
+    let race = format!(
+        "if (-not $script:raced) {{ $script:raced = $true; \
+         $s = [DateTime]::Now; $t = ([DateTimeOffset]$s).ToUnixTimeMilliseconds(); \
+         [IO.File]::WriteAllText('{claim}', \"r1 working {pid} ${{t}} a 0 -:nav:mcp__Claude_Browser__navigate:x:${{t}}:0:0 - -\"); \
+         $stamp = $s.ToString('yyyy-MM-dd HH:mm:ss', [Globalization.CultureInfo]::InvariantCulture); \
+         [IO.File]::AppendAllText('{log}', \"$stamp [info] Mapping internal session local_s to CLI session s`n$stamp [info] Emitted tool permission request stale for browser:open_file in session local_s`n\") }}",
+        claim = quoted(&claim),
+        log = quoted(&log),
+    );
+    let revision = crate::awake::REVISION;
+    let mut body = super::coordination::shipped(&dir, revision, &race)
+        .replace("$holding = $false", "$holding = $true");
+    let mut stubs = String::from(
+        "$script:readings = 0\nfunction Wait-Event {\n  param($Timeout)\n  \
+         $script:readings++\n  \
+         [Console]::WriteLine(\"READING$($script:readings)=\" + [PggAwake]::Last + ' ' + $desktop.Status)\n  \
+         if ($script:readings -lt 2) { return 'a claim changed' }\n  throw 'PROBE_END'\n}\n",
+    );
+    if unchecked {
+        assert_eq!(body.matches("function Test-Named {").count(), 1);
+        body = body.replace("function Test-Named {", "function Test-NamedShipped {");
+        // The first reading's second look at its name, where it compares
+        // its claims.
+        stubs.push_str(
+            "$script:named = 0\nfunction Test-Named {\n  $script:named++\n  \
+             if ($script:named -eq 2) { throw [IO.IOException]::new('a reader holds the name') }\n  \
+             return (Test-NamedShipped)\n}\n",
+        );
+    }
+    super::coordination::probe(
+        &dir,
+        revision,
+        super::coordination::REAL_CLOCK,
+        &stubs,
+        &body,
+    )
+}
+
+/// Ambiguity stands through a reading whose bindings were undone: chosen
+/// again as candidates end, it could fall on the call that runs.
+#[test]
+fn ambiguity_outlives_a_reading_whose_bindings_were_undone() {
+    probe(
+        r#"
+$other=Candidate 's' 'agent1' 'call2' 'mcp__Claude_Browser__navigate' '0' ($at-1000)
+Update-DesktopLog $state @($call,$other) $at
+Check ($state.Status -match 'ambiguous=1') $state.Status
+Undo-DesktopDecisions $state
+Update-DesktopLog $state @($other) ($at+1)
+Check ($state.Status -match '^watching .*ambiguous=1') $state.Status
+Check (-not (Asked $other)) 'undone ambiguity picked the call left'
+"#,
+    );
+}
+
 #[test]
 fn ambiguous_subagents_and_unknown_decisions_never_guess_a_call() {
     probe(
