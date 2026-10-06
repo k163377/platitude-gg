@@ -104,12 +104,15 @@ Rectangle {
     readonly property int markFoot: rail.cellHeight - Theme.fontSmLine + Theme.spaceXs
 
     /// Where a count's ink starts in its cell, inside the number's line: centred between the mark's box and half a step
-    /// over the line's foot, the odd pixel of room above it (デザイン規約 §左メニューを畳む). Asked of the ink, not left
-    /// to the face: a line's baseline falls its ascent down — at 12px about 11px in Hiragino Sans (macOS), 13 in Yu
-    /// Gothic UI, 14 in Noto Sans JP — and the shallow one lifts the digits into the mark.
+    /// over the line's foot (デザイン規約 §左メニューを畳む). Asked of the ink, not left to the face: a line's baseline
+    /// falls its ascent down — at 12px about 11px in Hiragino Sans (macOS), 13 in Yu Gothic UI, 14 in Noto Sans JP —
+    /// and the shallow one lifts the digits into the mark. Exact, fraction and all; the label's whole-pixel place
+    /// rounds it, a half down the cell, so the odd pixel of a whole room goes above. The room is halved as it is: a
+    /// face whose ink is a fraction short of it (Hiragino Sans's digits, 9.8px in 10) has no pixel to give, and a
+    /// fraction counted as one pushes the ink under the room's foot.
     function countInkTop(ink) {
         const room = rail.cellHeight - Theme.spaceXs / 2 - rail.markFoot - ink.tightBoundingRect.height
-        return rail.markFoot + Math.ceil(room / 2)
+        return rail.markFoot + room / 2
     }
     /// The fold block and every cell. The rail is not clipped, so a pane shorter than this draws the last cells over
     /// what lies under it (`SidebarPane.floorHeight`).
@@ -214,7 +217,8 @@ Rectangle {
                     }
                 }
                 // Caption and count at once, so the caption's colour (NavHeader). Seated by its ink (`countInkTop`), in
-                // whole pixels: a half pixel smears the digits.
+                // whole pixels: a half pixel smears the digits. `Math.round` takes a half down the cell
+                // (`countInkTop` says why that way).
                 Label {
                     id: countLabel
                     anchors.horizontalCenter: parent.horizontalCenter
