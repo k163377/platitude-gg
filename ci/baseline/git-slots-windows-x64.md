@@ -89,7 +89,8 @@ A = 背景と elsewhere が `max(1, n/2)`、B = `max(1, n/4)`。巡回 5 秒・�
 - `git_concurrency` = **`process::default_concurrency()` = 機械のスレッド数 / 3 を 4..=8 に収めた数**
   — 床 4 は §枠の床、天井 8 は 16 との差が無いことから(§巡回と重なった時)
 - **`Limits::of(n)` = 全体 n・click の予約 n − max(1, n/4)** — §予約の分け方
-- `copies_interval_secs` = **30**(1 周 2.5–3.6s に対して 1 割の duty)
+- `copies_interval_secs` = **30** — 他コピーを固定の間隔で読む時の既定(1 周 2.5–3.6s に対して 1 割の duty)。
+  既定の読み方は自動(重さで間隔を決める — ci/baseline/poll-cost-windows-x64.md)
 - `OVERTAKEN_LIMIT` = **4**(全 pass が 8 コピーを読み切っている = aging が足りない兆候は出ていない)
 
 ## 操作 1 回の内訳 — 枠待ち / プロセス起動 / git の仕事
