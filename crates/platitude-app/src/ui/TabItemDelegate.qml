@@ -11,11 +11,11 @@ Rectangle {
     required property int index
     required property int tab_id
     required property string title
-    /// The working copy this tab stands in: the path the hover puts out, and — for a linked copy — its folder name,
-    /// drawn after the title (デザイン規約 §タブの所作). The name is empty in the repository's own copy, which draws
+    /// The worktree this tab stands in: the path the hover puts out, and — for a linked worktree — its folder name,
+    /// drawn after the title (デザイン規約 §タブの所作). The name is empty in the repository's own worktree, which draws
     /// no run and wears the band's ordinary blue.
-    required property string copy_path
-    required property string copy_name
+    required property string worktree_path
+    required property string worktree_name
     /// The strip's own model: the one question a tab asks of it, and the one thing the mark does to it.
     required property var tabsModel
     /// What every name in the strip is capped at right now, the shortest one is cut to, the length a name stops being
@@ -32,11 +32,11 @@ Rectangle {
     /// The strip's shared arithmetic (`TabMetrics`): what a tab costs, the seat its mark stands in, and how a short
     /// name is eased. One object, so the strip and the tab cannot disagree.
     required property var metrics
-    /// The name and the copy's run (`TabTreeMark`) uncut — one number against the strip's one cap, which the tab
+    /// The name and the worktree's run (`TabTreeMark`) uncut — one number against the strip's one cap, which the tab
     /// splits between the two (`nameSplit`).
     readonly property real nameNatW: Math.ceil(tabTitle.implicitWidth) + treeRun.naturalWidth
-    /// How it is spent: the name first, the copy's run out of what is left, and that run gone whole before a letter
-    /// of the name is cut (`TabShare.splitName`).
+    /// How it is spent: the name first, the worktree's run out of what is left, and that run gone whole before a
+    /// letter of the name is cut (`TabShare.splitName`).
     readonly property var nameSplit: tabItem.metrics.share.splitName(
         Math.ceil(tabTitle.implicitWidth), treeRun.naturalWidth, treeRun.floorWidth, tabItem.titleCap)
     readonly property real titleW: tabItem.nameSplit.titleW
@@ -83,33 +83,33 @@ Rectangle {
     /// `TabStrip.middleClickTab` notes).
     signal frontChanged(bool front)
 
-    // Name, copy run, near step, mark room and easing. The name is rounded up so this and `settleTitleCap` agree on
+    // Name, worktree run, near step, mark room and easing. The name is rounded up so this and `settleTitleCap` agree on
     // what a tab costs, or the strip scrolls by the fractions they disagree about.
     width: tabItem.titleW + tabItem.treeW
         + tabItem.metrics.tabPadL + tabItem.markRoom + tabItem.titleEase
     height: tabItem.stripHeight
     // Over the tabs it is carried past, which it covers until it has taken half of one.
     z: tabItem.held ? 1 : 0
-    // The tab in front paints its own ground, which says which copy it stands in (デザイン規約 §タブの所作).
+    // The tab in front paints its own ground, which says which worktree it stands in (デザイン規約 §タブの所作).
     color: tabItem.current ? tabItem.groundColor : "transparent"
     /// What the tab in front is painted in, and the line along its bottom edge. Read by the fade over the mark and
     /// by the stand-in as well, so a strip that has scrolled says one thing (`TabPin`).
-    readonly property color groundColor: tabItem.copy_name === "" ? Theme.bgSelected : Theme.bgHereTree
-    readonly property color ruleColor: tabItem.copy_name === "" ? Theme.accent : Theme.textHereTree
+    readonly property color groundColor: tabItem.worktree_name === "" ? Theme.bgSelected : Theme.bgHereTree
+    readonly property color ruleColor: tabItem.worktree_name === "" ? Theme.accent : Theme.textHereTree
     // Drawn where the hand has it, as a transform: the view owns a delegate's place and rewrites it at every layout,
     // and an offset from that place keeps the tab under the hand across the very moves it is causing.
     transform: Translate {
         id: heldShift
         x: tabItem.held ? tabItem.heldX - tabItem.x : 0
     }
-    // The working copy's full path under the hand
+    // The worktree's full path under the hand
     // (デザイン規約 §hover のツールチップ「タブも同じで、hover が必ずフルパスを言う」), read off `pointed` like the mark
     // so the headless run reaches it the same way (`TabProbe.pointAtTab`). Nothing opens under a carrying hand, and the
     // box already out goes as the tab is taken up (同§「掴んだ手の下は空のまま」): the ask falling here is no hand
     // walking into the box, which the shared instance is told through `tipWithheld`.
     ToolTip.visible: tabItem.pointed && !tabItem.held
     ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: tabItem.copy_path
+    ToolTip.text: tabItem.worktree_path
     onCurrentChanged: tabItem.frontChanged(tabItem.current)
     // A tab born in front never announces `current` changing, and the stand-in would have nothing to draw from.
     Component.onCompleted: if (tabItem.current) tabItem.frontChanged(true)
@@ -183,8 +183,8 @@ Rectangle {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         anchors.leftMargin: tabItem.metrics.tabPadL + tabItem.titleEase - tabItem.easeRight
-        // What the split left the name (`nameSplit`), not what the margins leave: the copy's run stands between this
-        // and the mark.
+        // What the split left the name (`nameSplit`), not what the margins leave: the worktree's run stands between
+        // this and the mark.
         width: tabItem.titleW
         text: tabItem.title
         // The other half of the easing: a short name's letters set a little apart. Off the letter count, since the
@@ -193,14 +193,14 @@ Rectangle {
         weight: tabItem.current ? Theme.fontWeightStrong : Font.Normal
         color: Theme.textPrimary
     }
-    // The linked copy this tab stands in, after its name, on every such tab in front or not (デザイン規約 §タブの所作).
+    // The linked worktree this tab stands in, after its name, on every such tab in front or not (デザイン規約 §タブの所作).
     TabTreeMark {
         id: treeRun
         anchors.left: tabTitle.right
         anchors.verticalCenter: parent.verticalCenter
         width: tabItem.treeW
         visible: tabItem.treeW > 0
-        name: tabItem.copy_name
+        name: tabItem.worktree_name
         metrics: tabItem.metrics
         minNameW: tabItem.titleMinW
     }

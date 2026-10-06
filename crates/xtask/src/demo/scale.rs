@@ -9,7 +9,8 @@ use super::repo::{DemoRepo, file_url};
 /// out, so the smaller wall is the shared one.
 const REF_WALL: usize = 250;
 /// Bytes a file name here may have: the component limit is 255 on both,
-/// but the whole worktree path has to fit MAX_PATH under a temp directory.
+/// but a file's whole path, worktree and all, has to fit MAX_PATH under a
+/// temp directory.
 const PATH_ROOM: usize = 120;
 
 /// `head`, then kanji until the whole is exactly `bytes` long, so the last

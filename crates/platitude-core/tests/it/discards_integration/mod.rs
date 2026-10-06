@@ -21,7 +21,7 @@ async fn read(repo: &TestRepo) -> Vec<Discard> {
     read_at(&repo.path).await
 }
 
-/// The reading from the working copy at `path`.
+/// The reading from the worktree at `path`.
 async fn read_at(path: &Path) -> Vec<Discard> {
     let (executor, cancel) = env();
     discards::read_repo(&executor, path, Some(2000), &cancel)
@@ -45,7 +45,7 @@ fn git_dir(repo: &TestRepo) -> PathBuf {
     repo.path.join(".git")
 }
 
-/// Whether `path` names the folder `dir` is: git writes a working copy's
+/// Whether `path` names the folder `dir` is: git writes a worktree's
 /// path in full where the temp folder is spelled short on Windows.
 fn same_dir(path: &str, dir: &Path) -> bool {
     std::fs::canonicalize(path).ok() == std::fs::canonicalize(dir).ok()

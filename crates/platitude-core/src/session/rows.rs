@@ -260,13 +260,13 @@ fn make_row(
     }
 }
 
-/// The rows for the other working copies, handed out as the walk reaches
+/// The rows for the other worktrees, handed out as the walk reaches
 /// the commit each stands on.
 ///
 /// A row stands above every synthetic row on the same commit (uncommitted
 /// work is about to become a commit, a stash is not), so it is handed out
 /// at whichever arrives first: the commit, or a stash built on it — a
-/// stash sorts above its base by date. A copy whose HEAD is outside the
+/// stash sorts above its base by date. A worktree whose HEAD is outside the
 /// window draws nothing.
 pub(super) struct CarriedRows(Vec<crate::session::Carried>);
 
@@ -297,13 +297,13 @@ impl CarriedRows {
     pub(super) fn take_at(&mut self, anchor: &Oid, builder: &mut GraphBuilder) -> Vec<LogRow> {
         let anchor = *anchor;
         let mut out = Vec::new();
-        // `retain`: a copy handed out here is gone from the set, so a
+        // `retain`: a worktree handed out here is gone from the set, so a
         // stash and its base cannot both draw it.
         self.0.retain(|wip| {
             if wip.head != anchor {
                 return true;
             }
-            // No chip (デザイン規約 §未コミット行が名乗るもの): the copy
+            // No chip (デザイン規約 §未コミット行が名乗るもの): the worktree
             // rides on the row, for its words and for the pane it opens.
             let mut row = wip_row(&wip.head, &[], builder);
             row.carried = Some(wip.clone());

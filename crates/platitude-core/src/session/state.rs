@@ -184,7 +184,7 @@ pub(super) struct WorktreeRead {
     pub(super) news: super::joins::WorktreeNews,
 }
 
-/// A queued write: what it is, where it stands in its working tree's
+/// A queued write: what it is, where it stands in its worktree's
 /// order, and what to run.
 pub(super) struct WriteRequest {
     pub(super) operation: Operation,
@@ -192,7 +192,7 @@ pub(super) struct WriteRequest {
     /// for the lanes that take no place (`session::write_order`). A request
     /// the queue turns away gives it back by being dropped.
     pub(super) place: Option<super::write_order::Place>,
-    /// Places in the orders of the other working copies the write puts
+    /// Places in the orders of the other worktrees the write puts
     /// work into (a restore of work thrown away there), taken with `place`
     /// and held as long ([`RepoSession::write_into`]).
     pub(super) into: Vec<super::write_order::Place>,

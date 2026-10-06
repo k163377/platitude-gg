@@ -89,31 +89,31 @@ pub(crate) fn app_workdir() -> std::path::PathBuf {
 }
 
 /// The four bounds as the settings hold them: this tree's floor and
-/// ceiling, then the other copies'.
+/// ceiling, then the other worktrees'.
 fn pace_bounds() -> (i32, i32, i32, i32) {
     let defaults = Hub::with(|hub| hub.settings().defaults.clone()).unwrap_or_default();
     (
         defaults.refresh_floor_secs as i32,
         defaults.refresh_ceiling_secs as i32,
-        defaults.copies_floor_secs as i32,
-        defaults.copies_ceiling_secs as i32,
+        defaults.worktrees_floor_secs as i32,
+        defaults.worktrees_ceiling_secs as i32,
     )
 }
 
-fn copies_reading() -> (String, i32) {
+fn worktrees_reading() -> (String, i32) {
     Hub::with(|hub| {
         let defaults = &hub.settings().defaults;
         (
-            defaults.copies_reading.word().to_string(),
-            defaults.copies_interval_secs as i32,
+            defaults.worktrees_reading.word().to_string(),
+            defaults.worktrees_interval_secs as i32,
         )
     })
     .unwrap_or_else(|| {
         (
-            platitude_core::settings::CopiesReading::default()
+            platitude_core::settings::WorktreesReading::default()
                 .word()
                 .to_string(),
-            platitude_core::session::COPIES_INTERVAL_DEFAULT_SECS as i32,
+            platitude_core::session::WORKTREES_INTERVAL_DEFAULT_SECS as i32,
         )
     })
 }
@@ -148,14 +148,14 @@ impl Default for AppBackend {
                 .unwrap_or(platitude_core::process::default_concurrency() as i32),
             git_concurrency_max: platitude_core::process::MAX_CONCURRENCY as i32,
             git_concurrency_default: platitude_core::process::default_concurrency() as i32,
-            copies_reading: copies_reading().0,
-            copies_interval_secs: copies_reading().1,
-            copies_interval_min: platitude_core::session::COPIES_INTERVAL_MIN_SECS as i32,
-            copies_interval_max: platitude_core::session::COPIES_INTERVAL_MAX_SECS as i32,
+            worktrees_reading: worktrees_reading().0,
+            worktrees_interval_secs: worktrees_reading().1,
+            worktrees_interval_min: platitude_core::session::WORKTREES_INTERVAL_MIN_SECS as i32,
+            worktrees_interval_max: platitude_core::session::WORKTREES_INTERVAL_MAX_SECS as i32,
             refresh_floor_secs: pace_bounds().0,
             refresh_ceiling_secs: pace_bounds().1,
-            copies_floor_secs: pace_bounds().2,
-            copies_ceiling_secs: pace_bounds().3,
+            worktrees_floor_secs: pace_bounds().2,
+            worktrees_ceiling_secs: pace_bounds().3,
             pace_min_secs: platitude_core::session::PACE_MIN_SECS as i32,
             pace_max_secs: platitude_core::session::PACE_MAX_SECS as i32,
             initial_commits: Hub::with(|hub| hub.settings().defaults.initial_commits)

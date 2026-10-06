@@ -345,7 +345,7 @@ Item {
     }
 
     /// The names at natural width, hidden: the strip's own labels are the ones being capped, so they cannot be what
-    /// the cap is measured from. Same font and weight as drawn, and including a linked copy's run (`TabTreeMark`) —
+    /// the cap is measured from. Same font and weight as drawn, and including a linked worktree's run (`TabTreeMark`) —
     /// it is part of what the tab would draw whole.
     Repeater {
         id: titleMeasure
@@ -355,7 +355,7 @@ Item {
             id: measured
             required property int index
             required property string title
-            required property string copy_name
+            required property string worktree_name
 
             /// Both runs together: the one number the run is handed out by.
             readonly property real natW: Math.ceil(nameLabel.implicitWidth) + treeMeasure.naturalWidth
@@ -373,7 +373,7 @@ Item {
             }
             TabTreeMark {
                 id: treeMeasure
-                name: measured.copy_name
+                name: measured.worktree_name
                 metrics: tabMetrics
             }
         }

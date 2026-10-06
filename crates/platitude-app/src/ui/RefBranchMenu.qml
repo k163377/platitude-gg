@@ -31,11 +31,11 @@ AppMenu {
     readonly property alias deleteAnswered: state.deleteAnswered
     readonly property alias deleteMerged: state.deleteMerged
     /// Whether the delete row has an answer coming at all (off the rows, or asked of git). False when the delete is
-    /// out (current branch, held by another working copy, busy); frozen at open, so no answer comes later either.
+    /// out (current branch, held by another worktree, busy); frozen at open, so no answer comes later either.
     /// Only the automation reads it, as "did the input land".
     readonly property alias deleteAsked: state.deleteAsked
-    /// The folder the other working copy stands in, as the blocked row names it. The automation reads this as the
-    /// witness that the copy was looked up.
+    /// The folder the other worktree stands in, as the blocked row names it. The automation reads this as the
+    /// witness that the worktree was looked up.
     readonly property alias holderLeaf: state.holderLeaf
 
     /// The branch git has just refused to delete while this card stands, so the delete row turns into the held `-D`
@@ -78,7 +78,7 @@ AppMenu {
         /// That reading stands on another commit, so the two rows that reach it say why.
         property bool remoteDrifted: false
         property string heldByWorktree: ""
-        /// The leaf of the path git prints for that copy, cut at the entrance.
+        /// The leaf of the path git prints for that worktree, cut at the entrance.
         property string holderLeaf: ""
         property bool canDelete: false
         property bool canDeleteRemote: false
@@ -92,7 +92,7 @@ AppMenu {
     }
 
     /// Freezes the card on that branch. `facts` is what the carrying menu read for it: `heldByWorktree` the other
-    /// working copy holding this row's local branch and `holderLeaf` its folder, `remoteCounterpart` the reading a
+    /// worktree holding this row's local branch and `holderLeaf` its folder, `remoteCounterpart` the reading a
     /// local branch speaks for, `remoteCounterpartOid` its commit and `remoteDrifted` whether that stands on another
     /// commit, `offers` core's words,
     /// `open` whether the tab is, and `merged` what the drawn rows say about the plain delete (`yes` / `no`, empty
@@ -213,7 +213,7 @@ AppMenu {
                      : state.onCurrentBranch ? branchCard.deleteBlockedOnCurrent
                      : state.heldByWorktree !== "" ? branchCard.blockedByWorktree
                      : branchCard.deleteBlockedWhileBusy
-        // Asked of the sentence this row shows, not of the state: a row blocked for another reason names no copy.
+        // Asked of the sentence this row shows, not of the state: a row blocked for another reason names no worktree.
         reasonMarkWord: refDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
         holdMs: heldRow ? Metrics.holdMs : 0
         // A branch's plain delete keeps the menu up: git's answer lands on this row.

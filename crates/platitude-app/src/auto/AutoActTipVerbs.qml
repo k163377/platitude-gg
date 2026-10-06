@@ -40,9 +40,9 @@ Item {
             stashTipTimer.start()
         } else if (act === "path-tip") {
             // Row 0 is the elided leaf, or the folder chain with `-tree`. The argument picks the pane as `corner`
-            // does, plus `carried:<copy>`, named because its rows share the all-zero id (`driver.rowOfCopy`). A copy
-            // whose folder ends in `-tree` would be misread; the presets hold none. `@<row>` points at a later row, one
-            // with rows on both sides.
+            // does, plus `carried:<worktree>`, named because its rows share the all-zero id (`driver.rowOfWorktree`).
+            // A worktree whose folder ends in `-tree` would be misread; the presets hold none. `@<row>` points at a
+            // later row, one with rows on both sides.
             const rowAt = ("" + arg).indexOf("@")
             pathTipTimer.row = rowAt >= 0 ? Number(("" + arg).slice(rowAt + 1)) : 0
             const named = rowAt >= 0 ? ("" + arg).slice(0, rowAt) : "" + arg
@@ -51,7 +51,7 @@ Item {
             pathTipTimer.carried = pane.startsWith("carried:") ? pane.slice(8) : ""
             pathTipTimer.wipSide = pane === "" || pane === "wip"
             if (pathTipTimer.carried !== "") {
-                // The copy is stood on by the timer's first tick; its list does not exist before that.
+                // The worktree is stood on by the timer's first tick; its list does not exist before that.
                 page.setWipTreeView(wantsTree)
             } else if (pathTipTimer.wipSide) {
                 page.showWip()
@@ -151,16 +151,16 @@ Item {
     SampleTimer {
         id: pathTipTimer
         property bool wipSide: true
-        /// The copy this run is pointing into, empty for the two panes of this window's own tree.
+        /// The worktree this run is pointing into, empty for the two panes of this window's own tree.
         property string carried: ""
         /// The row pointed at.
         property int row: 0
         property bool stood: false
         onTriggered: {
             if (pathTipTimer.carried !== "") {
-                if (!pathTipTimer.standOnCopy())
+                if (!pathTipTimer.standOnWorktree())
                     return
-                // Until the copy's own files arrive the pane holds this window's.
+                // Until the worktree's own files arrive the pane holds this window's.
                 const files = page.wipUnstaged
                 if (page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0)
                     return
@@ -182,14 +182,14 @@ Item {
                 detailsPane.pointedTipRow = pathTipTimer.row
             pathTipReport.start()
         }
-        /// Presses the copy's graph row once, so the row's own decision is taken (verify-ui §壊れない動詞の実装と反復).
+        /// Presses the worktree's graph row once, so the row's own decision is taken (verify-ui §壊れない動詞の実装と反復).
         /// Answers whether the pane is standing on it.
-        function standOnCopy() {
+        function standOnWorktree() {
             if (pathTipTimer.stood)
                 return true
             if (graphModel.finishCount === 0 || !workingTree.loaded)
                 return false
-            const row = driver.rowOfCopy(pathTipTimer.carried)
+            const row = driver.rowOfWorktree(pathTipTimer.carried)
             if (row < 0)
                 return false
             const item = graphPane.view.itemAtIndex(row)

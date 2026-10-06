@@ -200,7 +200,7 @@ mod periodic {
             .await
             .expect("status");
         assert_eq!(s.staged().count(), 2, "index survives");
-        assert_eq!(s.unstaged().count(), 0, "worktree matches the index");
+        assert_eq!(s.unstaged().count(), 0, "working tree matches the index");
     }
 
     #[tokio::test]

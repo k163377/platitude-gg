@@ -38,8 +38,8 @@ RowLayout {
     /// A mark on the name's shoulder (`ActionButton.alert`'s kind), outside the layout so nothing in the row moves.
     property bool marked: false
     property color markTint: Theme.warning
-    /// A `NavIcon.kind` for the seat that is not a change code: a locked copy's padlock, a gone folder's bang, the
-    /// WORKTREES mark on a branch another copy has out. Only one of fold arrow, change code and this ever draws.
+    /// A `NavIcon.kind` for the seat that is not a change code: a locked worktree's padlock, a gone folder's bang, the
+    /// WORKTREES mark on a branch another worktree has out. Only one of fold arrow, change code and this ever draws.
     property string seatMark: ""
     property color seatTint: Theme.textSecondary
     /// Whether the name is in the row at all; the seat stays, so a box opening over the name (`NavItemDelegate`'s

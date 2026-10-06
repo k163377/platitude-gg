@@ -169,7 +169,7 @@ pub struct DiffModel {
     /// git named the path unmerged and printed nothing else (one side is
     /// gone): no rows, and that is the answer.
     unmerged: bool,
-    /// The path is a repository of its own in the working copy: never any
+    /// The path is a repository of its own in the working tree: never any
     /// rows; the pane says what a stage of it would record
     /// (`platitude_core::details::embedded`).
     embedded: bool,
@@ -209,7 +209,7 @@ pub struct DiffModel {
     ending_scope: String,
     ending_ext: String,
     current_key: String,
-    /// Which working copy the open diff was read from, empty for this
+    /// Which worktree the open diff was read from, empty for this
     /// window's own tree — whose file it is, which the key does not say
     /// (`begin_request_in`). It aims a re-read, and the pane refuses every
     /// write while it is set.

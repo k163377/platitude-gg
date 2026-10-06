@@ -28,12 +28,12 @@ fn times(commands: &[String], needle: &str) -> usize {
 
 /// Opened, with every read the opening started over, and the background
 /// reads recorded from here on. Answers where the record starts. The
-/// copies' pass first: one that lands moved asks for a walk, which the
+/// worktrees' pass first: one that lands moved asks for a walk, which the
 /// graph's boundary then closes too.
 async fn settled(sink: &CaptureSink, session: &Arc<RepoSession>) -> usize {
     sink.opening_settled(session).await;
     bounded(
-        "the opening's other copies",
+        "the opening's other worktrees",
         session.wait_for_carried_pass(),
     )
     .await;
@@ -246,29 +246,29 @@ async fn a_commit_lists_the_stashes_once() {
     session.close();
 }
 
-/// A copy on no branch is a row only the walk puts there: removing it is
+/// A worktree on no branch is a row only the walk puts there: removing it is
 /// walked once, with the listing that no longer has it — not before the
 /// listing and again after.
 #[tokio::test(flavor = "multi_thread")]
-async fn removing_a_copy_on_no_branch_walks_once() {
+async fn removing_a_worktree_on_no_branch_walks_once() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
-    let copy = repo.path.with_file_name("loose");
-    let copy_arg = copy.to_string_lossy().into_owned();
-    repo.git(&["worktree", "add", "--detach", &copy_arg]);
+    let worktree = repo.path.with_file_name("loose");
+    let worktree_arg = worktree.to_string_lossy().into_owned();
+    repo.git(&["worktree", "add", "--detach", &worktree_arg]);
     repo.git(&[
         "-C",
-        &copy_arg,
+        &worktree_arg,
         "commit",
         "--allow-empty",
         "-m",
-        "only the copy has this",
+        "only the worktree has this",
     ]);
     let (sink, session) = opened(&repo).await;
     let from = settled(&sink, &session).await;
 
     let id = session
-        .remove_worktree(copy_arg.clone(), "loose".into())
+        .remove_worktree(worktree_arg.clone(), "loose".into())
         .expect("accepted");
     assert_eq!(write_settled(&sink, id).await, []);
     let ran = commands_since(&sink, from);
@@ -295,7 +295,7 @@ async fn coming_back_to_a_commit_made_outside_reads_each_thing_once() {
 
     session.refresh_quick();
     reads_over(&session).await;
-    bounded("the other copies", session.wait_for_carried_pass()).await;
+    bounded("the other worktrees", session.wait_for_carried_pass()).await;
     let ran = commands_since(&sink, from);
     for (needle, expected) in [
         ("for-each-ref", 1),
@@ -318,7 +318,7 @@ async fn coming_back_to_nothing_new_walks_nothing() {
 
     session.refresh_quick();
     reads_over(&session).await;
-    bounded("the other copies", session.wait_for_carried_pass()).await;
+    bounded("the other worktrees", session.wait_for_carried_pass()).await;
     let ran = commands_since(&sink, from);
     for (needle, expected) in [("stash list", 1), ("log -z", 0)] {
         assert_eq!(times(&ran, needle), expected, "`{needle}`: {ran:#?}");
@@ -339,7 +339,7 @@ async fn a_stash_dropped_outside_is_walked_off_when_the_window_comes_back() {
 
     session.refresh_quick();
     reads_over(&session).await;
-    bounded("the other copies", session.wait_for_carried_pass()).await;
+    bounded("the other worktrees", session.wait_for_carried_pass()).await;
     let ran = commands_since(&sink, from);
     assert_eq!(times(&ran, "log -z"), 1, "{ran:#?}");
     assert_eq!(
@@ -405,15 +405,15 @@ async fn asked_paced_read(sink: &CaptureSink, session: &Arc<RepoSession>, from: 
     session.set_pace_bounds(PaceBounds {
         own_floor: hour,
         own_ceiling: hour,
-        copy_floor: hour,
-        copy_ceiling: hour,
+        worktree_floor: hour,
+        worktree_ceiling: hour,
     });
     session.set_paced(true);
     session.poll_now();
     sink.wait_for("this tree's paced read", |events| {
         events[from..]
             .iter()
-            .any(|e| matches!(e, SessionEvent::PacedRead { copy: None }))
+            .any(|e| matches!(e, SessionEvent::PacedRead { worktree: None }))
             .then_some(())
     })
     .await;

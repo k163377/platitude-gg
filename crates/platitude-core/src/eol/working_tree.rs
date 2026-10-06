@@ -10,7 +10,7 @@ use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 use super::Eol;
 
 /// Files above this size are not sampled: `ls-files --eol` reads the whole
-/// worktree file to fill its `w/` column, so what one costs is its own
+/// working-tree file to fill its `w/` column, so what one costs is its own
 /// bytes (ci/baseline/code-costs-windows-x64.md).
 const SAMPLE_MAX_BYTES: u64 = 1 << 20;
 
@@ -59,11 +59,11 @@ pub fn working_tree_shapes(stdout: &[u8]) -> Vec<(String, Shape)> {
         let Some((columns, path)) = text.split_once('\t') else {
             continue;
         };
-        let worktree = columns
+        let working_tree = columns
             .split_whitespace()
             .find_map(|c| c.strip_prefix("w/"))
             .unwrap_or_default();
-        let shape = match worktree {
+        let shape = match working_tree {
             "lf" => Shape::Uniform(Eol::Lf),
             "crlf" => Shape::Uniform(Eol::Crlf),
             "mixed" => Shape::Mixed,
@@ -74,7 +74,7 @@ pub fn working_tree_shapes(stdout: &[u8]) -> Vec<(String, Shape)> {
     out
 }
 
-/// The worktree ending of each path git can name one for, with the index it
+/// The working-tree ending of each path git can name one for, with the index it
 /// came in at. Unusable samples are simply absent.
 pub(super) async fn working_tree_endings(
     executor: &GitExecutor,

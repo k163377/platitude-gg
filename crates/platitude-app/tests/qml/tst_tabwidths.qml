@@ -45,8 +45,8 @@ Item {
         index: 0
         tab_id: 1
         title: "platitude-gg"
-        copy_path: "/home/someone/src/platitude-gg"
-        copy_name: ""
+        worktree_path: "/home/someone/src/platitude-gg"
+        worktree_name: ""
         tabsModel: tabsModel
         metrics: metrics
         bandColor: Theme.bgBase
@@ -58,15 +58,15 @@ Item {
         fadeW: 30
     }
 
-    /// The same tab standing in a linked working copy (デザイン規約 §タブの所作). Its own instance: flipping the copy
+    /// The same tab standing in a linked worktree (デザイン規約 §タブの所作). Its own instance: flipping the worktree
     /// on the tab above would leave the cases before it reading a different tab.
     TabItemDelegate {
         id: standing
         index: 1
         tab_id: 2
         title: "platitude-gg"
-        copy_path: "/home/someone/src/trees/topic"
-        copy_name: "topic"
+        worktree_path: "/home/someone/src/trees/topic"
+        worktree_name: "topic"
         tabsModel: tabsModel
         metrics: metrics
         bandColor: Theme.bgBase
@@ -306,12 +306,12 @@ Item {
                    "a short name spends its eased air on that side and still stops short of the mark")
         }
 
-        // ---- the copy a tab is standing in --------------------------------------
+        // ---- the worktree a tab is standing in ----------------------------------
         //
-        // The cap goes to the name first; the copy's run takes what is left and goes whole before a letter of the
+        // The cap goes to the name first; the worktree's run takes what is left and goes whole before a letter of the
         // name is cut (デザイン規約 §ウィンドウの縁 の譲る順 2 段目).
 
-        function test_the_cap_is_spent_on_the_name_first_and_the_copy_takes_what_is_left() {
+        function test_the_cap_is_spent_on_the_name_first_and_the_worktree_takes_what_is_left() {
             split(200, 100, 40, "room for both, so both are whole")
             split(140, 100, 40, "and exactly the room for both")
             split(135, 100, 35, "short of it, the run gives way and the name does not")
@@ -337,16 +337,16 @@ Item {
             compare(got.treeW, treeW, why)
         }
 
-        function test_a_tab_in_the_repositorys_own_copy_draws_nothing_after_its_name() {
+        function test_a_tab_in_the_repositorys_own_worktree_draws_nothing_after_its_name() {
             const name = nameIn(tab)
             compare(tab.treeW, 0)
             compare(tab.width, name.implicitWidth + metrics.tabPadL + tab.markRoom + tab.titleEase)
         }
 
-        function test_the_run_naming_the_copy_is_given_up_before_the_name_is_cut() {
+        function test_the_run_naming_the_worktree_is_given_up_before_the_name_is_cut() {
             const name = nameIn(standing)
             standing.titleCap = 400
-            verify(standing.treeW > 0, "room to spare, so the copy is named")
+            verify(standing.treeW > 0, "room to spare, so the worktree is named")
             compare(standing.width,
                     name.implicitWidth + standing.treeW + metrics.tabPadL + standing.markRoom + standing.titleEase)
             const named = standing.width

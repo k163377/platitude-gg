@@ -8,8 +8,8 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-/// `git clone <url> <into>`, where `into` is the folder the working
-/// copy becomes.
+/// `git clone <url> <into>`, where `into` is the folder the worktree
+/// becomes.
 ///
 /// The destination is always named, or the caller would have to parse
 /// git's human-facing `Cloning into '…'`

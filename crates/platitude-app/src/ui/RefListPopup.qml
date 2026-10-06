@@ -29,7 +29,7 @@ AppCard {
     /// signal here — both go in at the graph's own row (`rowClicks`).
     signal chose(var chip)
     /// One was right-clicked: the graph row's menu is asked for, aimed at that record (デザイン規約 §グラフ行の右クリック).
-    /// Every row has it, those leading nowhere included: a tag deletes fine, a working copy's folder has its WORKTREE
+    /// Every row has it, those leading nowhere included: a tag deletes fine, a worktree's folder has its WORKTREE
     /// card, and a marker naming no ref aims it at nothing (`RepoPage.openRowMenu`).
     signal menuAsked(var chip)
     /// The name a row opens under itself was pressed (`RefChip.mateFollowed`). `to` is a `NavFacts.place` on another
@@ -263,8 +263,8 @@ AppCard {
                 // nowhere too (§タグのダブルクリックは入力欄へ).
                 readonly property bool current:
                     refRow.modelData.kind === "branch" && refRow.modelData.name === refList.currentBranch
-                // The two markers (a detached HEAD, a working copy with no branch here) name no ref, and git refuses
-                // the move to a branch another copy has out (§無効). Only the move comes off: the chip keeps its
+                // The two markers (a detached HEAD, a worktree with no branch here) name no ref, and git refuses
+                // the move to a branch another worktree has out (§無効). Only the move comes off: the chip keeps its
                 // colour, or the detached HEAD would be amber on the row and grey in its card.
                 readonly property bool unavailable:
                     refRow.modelData.kind === "head" || refRow.modelData.kind === "worktree" || refRow.modelData.held

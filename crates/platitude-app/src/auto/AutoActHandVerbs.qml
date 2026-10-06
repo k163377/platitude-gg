@@ -273,16 +273,16 @@ Item {
             down: view.contentY < view.clampY(Number.MAX_VALUE) - 1
         }
     }
-    /// Another copy's files, opened by pressing its graph row (as `carried-read` does); preset `carried-many` overfills
-    /// the pane.
+    /// Another worktree's files, opened by pressing its graph row (as `carried-read` does); preset `carried-many`
+    /// overfills the pane.
     function carriedSeat() {
         if (page.carriedPath === "") {
-            const row = driver.rowOfCopy("here")
+            const row = driver.rowOfWorktree("here")
             const item = row >= 0 ? graphPane.view.itemAtIndex(row) : null
             if (!item)
-                return acts.waiting("the copy's row")
+                return acts.waiting("the worktree's row")
             item.leftClick(Qt.NoModifier)
-            return acts.waiting("the copy's pane")
+            return acts.waiting("the worktree's pane")
         }
         return acts.listSeat(carriedPane.view)
     }

@@ -249,7 +249,7 @@ Item {
     //
     // Also waited out: the WORKTREES listing read after the write, and the walk behind it. The listing is a read of
     // its own, landing apart from the status that raises the edit marker (`session::write::settle_after`), so a shot
-    // on the status alone can name the main copy by the branch the stop left; the walk comes after both, and draws
+    // on the status alone can name the main worktree by the branch the stop left; the walk comes after both, and draws
     // the working-tree row the standing operation holds open (`PageSettled`).
     SampleTimer {
         id: planEditStopTimer
@@ -282,9 +282,9 @@ Item {
                               // is what it stops for (デザイン規約 §進行中の操作から出る). Read off the drawn items.
                               + " box=" + wipPane.commitBlock.messageSeat.visible
                               + " button=" + wipPane.commitBlock.commitSeat.visible
-                              // The stop leaves HEAD on no branch, so the main copy's WORKTREES row is named by its
-                              // folder again (デザイン規約 §左メニューの所作) — once the listing behind the write is in.
-                              + " home=" + driver.navProbe.homeCopyName()
+                              // The stop leaves HEAD on no branch, so the main worktree's WORKTREES row is named by
+                              // its folder again (デザイン規約 §左メニューの所作) — once the listing behind the write is in.
+                              + " home=" + driver.navProbe.homeWorktreeName()
                               + " op=" + workingTree.opText)
             if (planOpenTimer.act !== "rebase-edit-stop-out") {
                 renderedBarrier.begin()

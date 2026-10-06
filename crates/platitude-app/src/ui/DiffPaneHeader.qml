@@ -16,11 +16,11 @@ Rectangle {
     required property bool fromWorkingTree
     required property bool staged
     /// Whether the file is this window's own to write (`DiffPane.writable`); the stage word stands only then
-    /// (デザイン規約 §別の作業コピーを読む).
+    /// (デザイン規約 §別の worktree を読む).
     required property bool writable
-    /// The copy the file belongs to, where it is not this window's — said after the path, which leads
-    /// (デザイン規約 §別の作業コピーを読む).
-    required property string copyName
+    /// The worktree the file belongs to, where it is not this window's — said after the path, which leads
+    /// (デザイン規約 §別の worktree を読む).
+    required property string worktreeName
     required property bool conflicted
     required property bool busy
     /// Whether the rows are read as two columns (`DiffModel.split`) — what the toggle shows
@@ -65,14 +65,14 @@ Rectangle {
         anchors.leftMargin: Theme.spaceSm
         anchors.rightMargin: Theme.spaceSm
         spacing: Theme.spaceSm
-        // Caption and path with no separator between them; the band's one separator is the dash before the copy.
+        // Caption and path with no separator between them; the band's one separator is the dash before the worktree.
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
             // The band's own words, set on one baseline. A label and a field of one face are two boxes where the face
             // has leading (`LineText`), and centred in the row each on its own, the half pixel between them rounds two
             // ways. **In a layout of their own**: a layout does not round what it sets by baseline, so beside
-            // something deeper than the words (the copy's name) they would stand on half pixels.
+            // something deeper than the words (the worktree's name) they would stand on half pixels.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
@@ -89,7 +89,8 @@ Rectangle {
                 LineText {
                     id: titleField
                     Layout.alignment: Qt.AlignBaseline
-                    // Takes the slack but no more than the path, or the copy's name after it strands at the far edge.
+                    // Takes the slack but no more than the path, or the worktree's name after it strands at the far
+                    // edge.
                     Layout.fillWidth: true
                     Layout.maximumWidth: titleField.implicitWidth
                     text: header.title
@@ -99,29 +100,29 @@ Rectangle {
                     cutAt: "middle"
                     ground: Theme.bgElevated
                 }
-                // Whose file: a dash, then the mark and the name, as everywhere a copy is named (デザイン規約
-                // §別の作業コピーを読む). Outside the field, so a copied path stays a path.
+                // Whose file: a dash, then the mark and the name, as everywhere a worktree is named (デザイン規約
+                // §別の worktree を読む). Outside the field, so a copied path stays a path.
                 Label {
                     Layout.alignment: Qt.AlignBaseline
-                    visible: header.copyName !== ""
+                    visible: header.worktreeName !== ""
                     text: "—"
                     font.pixelSize: Theme.fontMd
                     color: Theme.textSecondary
                 }
             }
-            // A quarter of the band at most, so a long copy name cannot push the path off; it cuts its own middle.
+            // A quarter of the band at most, so a long worktree name cannot push the path off; it cuts its own middle.
             RowLayout {
-                visible: header.copyName !== ""
+                visible: header.worktreeName !== ""
                 // A nested layout fills by default; the slack is the path's.
                 Layout.fillWidth: false
                 Layout.maximumWidth: header.width / 4
                 spacing: 0
                 Item {
-                    Layout.preferredWidth: copyMark.inkWidth
+                    Layout.preferredWidth: worktreeMark.inkWidth
                     Layout.preferredHeight: Theme.iconSm
                     Layout.alignment: Qt.AlignVCenter
                     NavIcon {
-                        id: copyMark
+                        id: worktreeMark
                         anchors.centerIn: parent
                         kind: "tree"
                         tint: Theme.textSecondary
@@ -132,7 +133,7 @@ Rectangle {
                 CutName {
                     Layout.fillWidth: true
                     Layout.preferredHeight: Theme.rowHeight
-                    text: header.copyName
+                    text: header.worktreeName
                     pixelSize: Theme.fontMd
                     weight: Theme.fontWeightStrong
                     // The band's colour, not a step quieter: the name is part of the phrase, not an aside.

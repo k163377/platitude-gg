@@ -130,10 +130,10 @@ async fn open_rejects_a_bare_repository_as_bare() {
     );
 }
 
-/// The two halves the strip needs to tell "another copy of what is already
-/// open" from "another repository" (デザイン規約 §タブの所作).
+/// The two halves the strip needs to tell "another worktree of what is
+/// already open" from "another repository" (デザイン規約 §タブの所作).
 #[tokio::test]
-async fn place_names_the_copy_and_the_repository_it_hangs_off() {
+async fn place_names_the_worktree_and_the_repository_it_hangs_off() {
     let mut repo_dir = TestRepo::init();
     repo_dir.commit_file("a.txt", "hello\n", "initial");
     let linked = repo_dir.path.with_file_name("linked");
@@ -141,14 +141,17 @@ async fn place_names_the_copy_and_the_repository_it_hangs_off() {
 
     let (executor, cancel) = env();
     let main = bounded(
-        "place the copy",
+        "place the worktree",
         repo::place(&executor, &repo_dir.path, &cancel),
     )
     .await
     .unwrap();
-    let hung = bounded("place the copy", repo::place(&executor, &linked, &cancel))
-        .await
-        .unwrap();
+    let hung = bounded(
+        "place the worktree",
+        repo::place(&executor, &linked, &cancel),
+    )
+    .await
+    .unwrap();
 
     let real = |path: &std::path::Path| std::fs::canonicalize(path).unwrap();
     assert_eq!(real(&main.info.workdir), real(&repo_dir.path));
@@ -156,17 +159,17 @@ async fn place_names_the_copy_and_the_repository_it_hangs_off() {
     assert_eq!(
         real(&main.repo),
         real(&repo_dir.path),
-        "the repository's own copy names it"
+        "the repository's own worktree names it"
     );
     assert_eq!(
         real(&hung.repo),
         real(&repo_dir.path),
-        "and the linked copy answers with the same one"
+        "and the linked worktree answers with the same one"
     );
 }
 
 #[tokio::test]
-async fn place_from_a_subdirectory_answers_for_the_copy_around_it() {
+async fn place_from_a_subdirectory_answers_for_the_worktree_around_it() {
     let mut repo_dir = TestRepo::init();
     repo_dir.commit_file("sub/dir/file.txt", "x\n", "nested");
     let linked = repo_dir.path.with_file_name("linked");
@@ -174,7 +177,7 @@ async fn place_from_a_subdirectory_answers_for_the_copy_around_it() {
 
     let (executor, cancel) = env();
     let deep = linked.join("sub").join("dir");
-    let place = bounded("place the copy", repo::place(&executor, &deep, &cancel))
+    let place = bounded("place the worktree", repo::place(&executor, &deep, &cancel))
         .await
         .unwrap();
 
@@ -251,7 +254,7 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
 
 /// A read must leave `.git/index.lock` alone: a write dies where it cannot
 /// take it, and reads run beside writes (the queue orders only writes,
-/// `session::write`). A work-tree `git diff` refreshes the index under
+/// `session::write`). A working-tree `git diff` refreshes the index under
 /// that lock unless the fixed arguments say not to; `--no-optional-locks`
 /// does not reach `diff`.
 #[tokio::test]
@@ -275,7 +278,7 @@ async fn a_working_tree_read_leaves_the_index_untouched() {
 
     let (executor, cancel) = env();
     let out = bounded(
-        "the work tree diff",
+        "the working tree diff",
         executor.run(
             GitCommand::new()
                 .cwd(&repo_dir.path)

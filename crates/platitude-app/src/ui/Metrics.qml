@@ -78,7 +78,7 @@ QtObject {
     // How often the repository is read while the page is on screen is the session's, not a constant here: the pace
     // follows how heavy the reads are (`session::pace`).
     // The badge's `n/m` while a replay runs. It reads two files and starts no process; faster than this costs the
-    // notify side — the work tree model's one `changed()` re-pulls every binding on the page.
+    // notify side — the working tree model's one `changed()` re-pulls every binding on the page.
     readonly property int opProgressMs: 250
     // Wide enough that a long-press fill crossing it reads as progress.
     readonly property int menuMinW: 160

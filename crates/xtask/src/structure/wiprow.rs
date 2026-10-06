@@ -1,9 +1,9 @@
 //! Refuses the working tree's question (`GitFacts.wipOid`) asked of a row
 //! taken out of the graph by index (.claude/rules-refs/app-ui.md
-//! 「作業コピーの行は全部 git の all-zero id を着ている」). A row somebody
+//! 「worktree の行は全部 git の all-zero id を着ている」). A row somebody
 //! is on — a click's, a selection's, a reword's — is left alone: there the
-//! question is what kind of row it is, and a copy's row answers it as truly
-//! as ours.
+//! question is what kind of row it is, and another worktree's row answers
+//! it as truly as ours.
 //!
 //! **The source is walked in the order it is written**, one character at
 //! a time: a `{` opens a scope and a `}` closes it wherever they are. Read
@@ -35,7 +35,7 @@ const OF_THE_ID: &[&str] = &["wipOid"];
 const DECLARES: &[&str] = &["const", "let", "var"];
 /// Where a failing line sends its reader.
 const RULE: &str =
-    ".claude/rules-refs/app-ui.md「作業コピーの行は全部 git の all-zero id を着ている」";
+    ".claude/rules-refs/app-ui.md「worktree の行は全部 git の all-zero id を着ている」";
 
 /// One failure per line that asks a row read by index what kind of row it
 /// is, and how many QML files were read.
@@ -56,7 +56,7 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
             for (line, asked) in findings(&text) {
                 failures.push(format!(
                     "{tree}/{shown}:{line}: asks `{asked}(` of a row taken out of the graph by \
-                     index — every working copy's row wears the same all-zero id, so the answer is \
+                     index — every worktree's row wears the same all-zero id, so the answer is \
                      a neighbour's as readily as this window's. The graph says which row is ours \
                      (`GraphModel.wipRow`) and which is the newest real commit \
                      (`GraphModel.newestCommitRow`) ({RULE})"

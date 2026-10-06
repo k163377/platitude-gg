@@ -102,23 +102,23 @@ pub struct AppBackend {
     git_concurrency: i32,
     git_concurrency_max: i32,
     git_concurrency_default: i32,
-    /// How the other working copies are read for uncommitted work, as the
-    /// settings file spells it (`settings::CopiesReading::word`).
-    copies_reading: String,
+    /// How the other worktrees are read for uncommitted work, as the
+    /// settings file spells it (`settings::WorktreesReading::word`).
+    worktrees_reading: String,
     /// The fixed interval, in seconds — kept while another reading is
     /// chosen. Floor and ceiling are core's
-    /// (`session::copies_interval_secs`).
-    copies_interval_secs: i32,
-    copies_interval_min: i32,
-    copies_interval_max: i32,
+    /// (`session::worktrees_interval_secs`).
+    worktrees_interval_secs: i32,
+    worktrees_interval_min: i32,
+    worktrees_interval_max: i32,
     /// The shortest and the longest interval a repository on screen is read
-    /// again at, and the same pair for each other copy read automatically
+    /// again at, and the same pair for each other worktree read automatically
     /// (`session::pace`). The range is core's (`session::pace_bounds_secs`);
     /// an emptied box is the default, which is core's too.
     refresh_floor_secs: i32,
     refresh_ceiling_secs: i32,
-    copies_floor_secs: i32,
-    copies_ceiling_secs: i32,
+    worktrees_floor_secs: i32,
+    worktrees_ceiling_secs: i32,
     pace_min_secs: i32,
     pace_max_secs: i32,
     /// Commits a graph opens with; 0 is the whole history (the screen's own

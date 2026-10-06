@@ -10,7 +10,7 @@ pub enum Row {
     Remote,
     Tag,
     Stash,
-    /// A working copy, by its path as git lists it.
+    /// A worktree, by its path as git lists it.
     Worktree,
 }
 

@@ -445,30 +445,30 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
                 said=The rename did not finish",
     },
-    // Another working copy's uncommitted work, as a pane of its own.
+    // Another worktree's uncommitted work, as a pane of its own.
     // `files=` / `tally=` agree only because both fold a path's two sides
     // into one (`Bucket::Whole` / `Kinds::folded`); `cut=` / `tip=` are a
     // name too long for the band; `stageFile=` / `pieces=` the diff
     // offering no whole-file word or hunk seat. `topic` holds one path
     // staged then written again (per side it would read 2 twice), `here`
-    // two untracked files (the only copy the arrows can step in), and the
+    // two untracked files (the only worktree the arrows can step in), and the
     // third a name past the pane's floor (the only one cut).
     Verb {
         name: "carried-read",
         when: &[
             (
                 Arg::Is("here"),
-                "carried_read copy=here files=2 tally=2,0,0,0,0,0 lit=true litRows=1 \
+                "carried_read worktree=here files=2 tally=2,0,0,0,0,0 lit=true litRows=1 \
                  cut=false tip=false stepped=true stageFile=false pieces=false",
             ),
             (
                 Arg::Starts("an-extremely-long"),
-                "carried_read copy=an-extremely-long-working-copy-name-for-the-edge-case \
+                "carried_read worktree=an-extremely-long-worktree-folder-name-for-the-edge-case \
                  files=1 tally=0,1,0,0,0,0 lit=true litRows=1 cut=true tip=true stepped=false \
                  stageFile=false pieces=false",
             ),
         ],
-        plain: "carried_read copy=topic files=1 tally=0,1,0,0,0,0 lit=true litRows=1 \
+        plain: "carried_read worktree=topic files=1 tally=0,1,0,0,0,0 lit=true litRows=1 \
                 cut=false tip=false stepped=false stageFile=false pieces=false",
     },
     // The same pane at rest, where picking the row leaves a reader.
@@ -477,7 +477,7 @@ pub(super) const TABLE: &[Verb] = &[
     // above, whose one open file lights the top row either way.
     // `folderPath=`: the model folds by `<run>:<path>`, so a folder row
     // handed the fold key says `whole:src`, and the hover is the only
-    // place the path is spelled out. Empty on the copy whose files are all
+    // place the path is spelled out. Empty on the worktree whose files are all
     // at the root, which is why the claim is made on the other two.
     // `corner=` is the version in the pane's foot, which this pane lends
     // like the commit pane; `corner` cannot claim it, since that verb picks
@@ -487,14 +487,14 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[
             (
                 Arg::Is("here"),
-                "carried_stand copy=here files=2 litRows=0 reading=false corner=true folderPath=",
+                "carried_stand worktree=here files=2 litRows=0 reading=false corner=true folderPath=",
             ),
             (
                 Arg::Starts("an-extremely-long"),
-                "carried_stand copy=an-extremely-long-working-copy-name-for-the-edge-case \
+                "carried_stand worktree=an-extremely-long-worktree-folder-name-for-the-edge-case \
                  files=1 litRows=0 reading=false corner=true folderPath=docs",
             ),
         ],
-        plain: "carried_stand copy=topic files=1 litRows=0 reading=false corner=true folderPath=src",
+        plain: "carried_stand worktree=topic files=1 litRows=0 reading=false corner=true folderPath=src",
     },
 ];

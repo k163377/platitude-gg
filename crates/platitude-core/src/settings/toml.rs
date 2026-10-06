@@ -193,39 +193,26 @@ pub(super) fn concurrency(table: &Table, key: &str) -> Option<u32> {
         .map(crate::process::concurrency)
 }
 
-/// How the other working copies are read (`copies_reading`) and the fixed
-/// interval (`copies_interval_secs`, clamped by
-/// `session::copies_interval_secs`, like `minutes`), each falling back on
+/// How the other worktrees are read (`worktrees_reading`) and the fixed
+/// interval (`worktrees_interval_secs`, clamped by
+/// `session::worktrees_interval_secs`, like `minutes`), each falling back on
 /// its own to `fallback`.
-///
-/// A file without the reading was written before it was a choice of its
-/// own, when the interval alone said it: `0` was off, and any other number
-/// that interval, fixed. Both are carried over as the person chose them —
-/// a number that happens to equal the old default is a choice all the
-/// same, not consent to the automatic pace.
-pub(super) fn copies(
+pub(super) fn worktrees(
     table: &Table,
-    fallback: (crate::settings::prefs::CopiesReading, u32),
-) -> (crate::settings::prefs::CopiesReading, u32) {
-    use crate::settings::prefs::CopiesReading;
-    let interval = table
-        .get("copies_interval_secs")
-        .and_then(Value::as_integer)
-        .filter(|v| *v >= 0)
-        .map(|v| u32::try_from(v).unwrap_or(u32::MAX));
+    fallback: (crate::settings::prefs::WorktreesReading, u32),
+) -> (crate::settings::prefs::WorktreesReading, u32) {
+    use crate::settings::prefs::WorktreesReading;
     let reading = table
-        .get("copies_reading")
+        .get("worktrees_reading")
         .and_then(Value::as_str)
-        .and_then(CopiesReading::from_word)
-        .or(match interval {
-            Some(0) => Some(CopiesReading::Off),
-            Some(_) => Some(CopiesReading::Fixed),
-            None => None,
-        })
+        .and_then(WorktreesReading::from_word)
         .unwrap_or(fallback.0);
-    let interval = interval
+    let interval = table
+        .get("worktrees_interval_secs")
+        .and_then(Value::as_integer)
         .filter(|v| *v > 0)
-        .map(crate::session::copies_interval_secs)
+        .map(|v| u32::try_from(v).unwrap_or(u32::MAX))
+        .map(crate::session::worktrees_interval_secs)
         .unwrap_or(fallback.1);
     (reading, interval)
 }
@@ -269,7 +256,7 @@ mod tests {
     use crate::settings::testkit::dir_store;
     use crate::settings::{STATE_FILE, Settings, State, TabRecord, TabsState};
 
-    /// One tab standing in the repository's own working copy.
+    /// One tab standing in the repository's own worktree.
     fn one_tab(path: &str) -> TabsState {
         TabsState {
             tabs: vec![TabRecord {

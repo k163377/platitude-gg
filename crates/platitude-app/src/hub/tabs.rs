@@ -12,13 +12,13 @@ enum PageAfter {
     /// are destroyed (`RepoPageStack`).
     TakenDown,
     /// It stays and reads the next session on this tab — the tab
-    /// standing in another working copy (`Hub::restand_tab`).
+    /// standing in another worktree (`Hub::restand_tab`).
     Standing,
 }
 
 impl Hub {
-    /// Asks where `path` opens, without opening anything: the working
-    /// copy the folder is in, and its repository
+    /// Asks where `path` opens, without opening anything: the worktree
+    /// the folder is in, and its repository
     /// ([`platitude_core::repo::place`]). Every road in asks this, and no
     /// tab is shown until it answers (デザイン規約 §タブの所作
     /// 「判定は 1 か所に置く」).
@@ -87,7 +87,7 @@ impl Hub {
     }
 
     /// Opens a repository in a new tab; returns the tab id. `home` is
-    /// the repository's own working copy — the same for every copy of
+    /// the repository's own worktree — the same for every worktree of
     /// one repository, and equal to `path` for a tab standing in it.
     pub fn open_tab(&mut self, path: PathBuf, home: PathBuf) -> Option<i32> {
         let id = self.reserve_tab(path, home)?;
@@ -119,26 +119,26 @@ impl Hub {
         Some(id)
     }
 
-    /// Where a tab whose copy would not open is stood back: the
-    /// repository's own working copy, `None` for a tab already in it
+    /// Where a tab whose worktree would not open is stood back: the
+    /// repository's own worktree, `None` for a tab already in it
     /// (デザイン規約 §タブの所作「立てない所へは立たない」).
     ///
     /// Asked by the `RepoTab` drain before a refusal is shown, by tab id —
     /// the one thing a page knows about itself; and on every opening, for
     /// the picker's folder (`RepoTab::picker_folder_url`).
-    pub fn home_copy(&self, id: i32) -> Option<String> {
+    pub fn home_worktree(&self, id: i32) -> Option<String> {
         let tab = self.tabs.get(&id)?;
         (tab.home != tab.path).then(|| tab.home.to_string_lossy().into_owned())
     }
 
-    /// Stands a tab in another working copy of the repository it shows:
+    /// Stands a tab in another worktree of the repository it shows:
     /// the same tab id, pointed at `path` and read again from there
-    /// (`TabsModel::switch_copy`). Answers whether the tab is this hub's.
+    /// (`TabsModel::switch_worktree`). Answers whether the tab is this hub's.
     ///
     /// Keeping the id keeps the page (`RepoPageStack`): the new session's
     /// first walk replaces the graph in one go ([`FirstPass::Swapped`]),
-    /// and the page drops what the copy owned itself (`RepoPage.leaveCopy`).
-    /// Drafts stay, filed per copy (`Tab::drafts`); `Tab::home` stays, as
+    /// and the page drops what the worktree owned itself (`RepoPage.leaveWorktree`).
+    /// Drafts stay, filed per worktree (`Tab::drafts`); `Tab::home` stays, as
     /// the repository does not move. A tab off the front holds no session
     /// and is read when it comes to the front.
     pub fn restand_tab(&mut self, id: i32, path: PathBuf) -> bool {
@@ -153,7 +153,11 @@ impl Hub {
         if standing {
             self.open_session(id, FirstPass::Swapped);
         }
-        tracing::info!(tab = id, standing, "repository tab stood in another copy");
+        tracing::info!(
+            tab = id,
+            standing,
+            "repository tab stood in another worktree"
+        );
         true
     }
 
@@ -283,7 +287,7 @@ impl Hub {
             PageAfter::TakenDown => tab.feeds.release_all(),
             // The invokers stay: the page attaches once, when built, and
             // would be left attached to nothing. Queued reads are the old
-            // copy's; the log's messages stay.
+            // worktree's; the log's messages stay.
             PageAfter::Standing => tab.feeds.clear_queued_reads(),
         }
         // Rows a delete took off go back and the lists' drawn readings
@@ -295,17 +299,17 @@ impl Hub {
         true
     }
 
-    /// Files a tab's commit editor words under the copy it stands in (see
+    /// Files a tab's commit editor words under the worktree it stands in (see
     /// [`Draft`]). An empty draft is filed too — otherwise a cleared
     /// message would come back.
     pub fn hold_draft(&mut self, id: i32, draft: Draft) {
         if let Some(tab) = self.tabs.get_mut(&id) {
-            let copy = tab.path.to_string_lossy().into_owned();
-            tab.drafts.insert(copy, draft);
+            let worktree = tab.path.to_string_lossy().into_owned();
+            tab.drafts.insert(worktree, draft);
         }
     }
 
-    /// What was typed in the copy this tab stands in; empty for none, or
+    /// What was typed in the worktree this tab stands in; empty for none, or
     /// for an unknown tab.
     pub fn draft(&self, id: i32) -> Draft {
         self.tabs
@@ -336,7 +340,7 @@ impl Hub {
     /// can start then, so zero pending means the queue is done.
     ///
     /// Only the waiting is the hub's: a reopened session queues behind
-    /// this write through the working tree's order
+    /// this write through the worktree's order
     /// (`platitude_core::session::write_order`), not through this handle.
     fn park_writes_of(&mut self, session: &Arc<RepoSession>) {
         if session.local_writes_pending() == 0 {
@@ -482,7 +486,7 @@ fn apply_repo_settings(session: &Arc<RepoSession>, applied: &platitude_core::set
     session.set_auto_fetch(minutes_to_interval(applied.auto_fetch_minutes));
     session.set_network_timeout(std::time::Duration::from_secs(applied.network_timeout_secs));
     // Off holds for an opening's pass too, not only the page's pace.
-    session.set_copies_pace(applied.copies_pace());
+    session.set_worktrees_pace(applied.worktrees_pace());
     session.set_pace_bounds(applied.pace_bounds());
     // Walks nothing twice on a new session: with no workdir yet the
     // restart returns, and the opening's own `restart_log` reads this.

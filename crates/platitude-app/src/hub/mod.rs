@@ -70,11 +70,11 @@ struct Tab {
     /// taking its place (`platitude_core::session::DrawnGraph`); `None` at
     /// every other moment.
     drawn: Option<DrawnGraph>,
-    /// The working copy the tab stands in: what a session opens, and the
+    /// The worktree the tab stands in: what a session opens, and the
     /// key of `drafts`.
     path: PathBuf,
-    /// The repository's own working copy, where a tab whose copy will not
-    /// open is stood back (`Hub::home_copy`). Equal to `path` when there
+    /// The repository's own worktree, where a tab whose worktree will not
+    /// open is stood back (`Hub::home_worktree`). Equal to `path` when there
     /// is nowhere further back to go.
     home: PathBuf,
     feeds: Arc<Feeds>,
@@ -82,8 +82,8 @@ struct Tab {
     /// shut it (`BridgeSink::retired`): a write the close lets run on
     /// answers late, into feeds that outlive the session.
     sink: Option<Arc<sink::BridgeSink>>,
-    /// Held across a release (see [`Draft`]), one per working copy this
-    /// tab has stood in: a message is about what one copy has staged.
+    /// Held across a release (see [`Draft`]), one per worktree this
+    /// tab has stood in: a message is about what one worktree has staged.
     /// `Hub::restand_tab` leaves the map as it is — the reader comes back.
     drafts: HashMap<String, Draft>,
     /// The rows a delete has taken off the screen and the write they wait

@@ -166,7 +166,7 @@ AppMenu {
             /// The branch's whole name — what the row is pressed for, where `text` is the segment it says.
             property string full: ""
             // The mark is about the row, not a heading: the WORKTREES section's own, where the left menu stands it
-            // (`NavRowBody.seatMark`). The press still lands — on that copy (`switchToRef`).
+            // (`NavRowBody.seatMark`). The press still lands — on that worktree (`switchToRef`).
             headed: false
             markTint: Theme.success
             onTriggered: card.branchPicked(leaf.full)

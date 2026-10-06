@@ -35,15 +35,15 @@ Item {
             window.finishAutoAct()
         }
     }
-    /// `folder=` names this machine, so `beside_copy=` is what is judged: whether the picker came up in the folder
-    /// holding the copy the tab stands in (`RepoTab.picker_folder_url`; the cases are verbs.md `open-picker`).
-    /// Compared as paths, not as text — a space arrives percent-encoded — and the copy's folder is the product's own
-    /// conversion's to find (`GitFacts.folderUrlOf`), not split here. No page, no copy: `false`.
+    /// `folder=` names this machine, so `beside_worktree=` is what is judged: whether the picker came up in the folder
+    /// holding the worktree the tab stands in (`RepoTab.picker_folder_url`; the cases are verbs.md `open-picker`).
+    /// Compared as paths, not as text — a space arrives percent-encoded — and the worktree's folder is the product's
+    /// own conversion's to find (`GitFacts.folderUrlOf`), not split here. No page, no worktree: `false`.
     function pickerLine() {
-        return "picker beside_copy=" + acts.pickerIsBesideCopy()
+        return "picker beside_worktree=" + acts.pickerIsBesideWorktree()
                 + " folder=" + folderDialog.currentFolder
     }
-    function pickerIsBesideCopy() {
+    function pickerIsBesideWorktree() {
         const page = window.curPage
         if (page === null || page.pageTab.repoPath === "")
             return false

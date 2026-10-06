@@ -197,7 +197,7 @@ Item {
                     "whole": acts.topBar.frontTabWhole,
                     "pinGone": !acts.topBar.tabPinShown,
                     "open": page !== null && page.pageTab.state === "open",
-                    "worktree": page !== null && page.pageWorkingTree.loaded,
+                    "workingTree": page !== null && page.pageWorkingTree.loaded,
                     "graph": page !== null && page.pageGraph.finishCount !== 0
                 })) {
                 // The strip's account of the ask when it changes, so a run stuck here says whether the ask was
@@ -252,7 +252,7 @@ Item {
                         "whole": acts.topBar.frontTabWhole,
                         "pinGone": !acts.topBar.tabPinShown,
                         "open": page !== null && page.pageTab.state === "open",
-                        "worktree": page !== null && page.pageWorkingTree.loaded,
+                        "workingTree": page !== null && page.pageWorkingTree.loaded,
                         "graph": page !== null && page.pageGraph.finishCount !== 0
                     })) {
                     // The ask's account meanwhile, as in `tab-open-go`.

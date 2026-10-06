@@ -34,7 +34,7 @@ Rectangle {
     signal rowMenuOpenRequested(string oidHex, var chip)
     /// A row was double-clicked. `chip` is the chip it shows; null when the row shows no branch at all.
     signal rowSwitchRequested(string oidHex, var chip)
-    /// Another working copy's uncommitted row was opened (see `GraphList`).
+    /// Another worktree's uncommitted row was opened (see `GraphList`).
     signal carriedOpenRequested(string path)
     /// The chip whose stacked list the page has out (null when none). Rows read it through the view
     /// (`GraphRowDelegate.listOnThisChip`).
@@ -102,8 +102,8 @@ Rectangle {
     signal createBranchRequested(string oidHex, string name)
     /// The same box, answered with a tag.
     signal createTagRequested(string oidHex, string name)
-    /// …and with a branch to be made in a working copy of its own (`RepoPage.copyFromBox`).
-    signal createCopyRequested(string oidHex, string name)
+    /// …and with a branch to be made in a worktree of its own (`RepoPage.worktreeFromBox`).
+    signal createWorktreeRequested(string oidHex, string name)
     /// The same box, answered with a new name for something that has one. `kind` picks the git command
     /// (`RepoPage.renameRow`).
     signal renameSubmitted(string kind, string id, string name)
@@ -117,8 +117,8 @@ Rectangle {
     function startTagging(oidHex) {
         graphArea.openNameBox(oidHex, "tag", "", "", "")
     }
-    /// …and `startCopying` for a branch in a new working copy (`Create worktree here…`).
-    function startCopying(oidHex) {
+    /// …and `startWorktreeNaming` for a branch in a new worktree (`Create worktree here…`).
+    function startWorktreeNaming(oidHex) {
         graphArea.openNameBox(oidHex, "worktree", "", "", "")
     }
     /// The box opens holding the existing name, to be typed over. `kind` is what git renames ("branch" / "remote" /
@@ -443,7 +443,7 @@ Rectangle {
             if (mode === "tag")
                 graphArea.createTagRequested(oidHex, name)
             else if (mode === "worktree")
-                graphArea.createCopyRequested(oidHex, name)
+                graphArea.createWorktreeRequested(oidHex, name)
             else
                 graphArea.createBranchRequested(oidHex, name)
         }

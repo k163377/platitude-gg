@@ -71,7 +71,7 @@ pub enum GitError {
 
     /// The given path is not inside a git repository (or does not exist).
     ///
-    /// `bare`: it is a repository, but one with no work tree to show. The
+    /// `bare`: it is a repository, but one with no working tree to show. The
     /// screen words that differently and cannot tell it from git's text.
     #[error("not a git repository: {}", path.display())]
     NotARepository {

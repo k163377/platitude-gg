@@ -31,7 +31,7 @@ const REFUSED: &str = ".pgg-template-refused";
 
 /// Copies the template for `preset` into `root`, building it first if
 /// missing. Falls back to building in `root` when there is no template to
-/// be had (refused, copy failed, swept away). Answers the work tree, as
+/// be had (refused, copy failed, swept away). Answers the worktree, as
 /// [`super::presets::build`] does.
 pub(super) fn build_or_copy(root: &Path, preset: &str, name: &str) -> Result<PathBuf, String> {
     let leaf = leaf(preset, name);
@@ -324,7 +324,7 @@ fn is_marker(rest: &Path) -> bool {
     rest == Path::new(READY) || rest == Path::new(REFUSED)
 }
 
-/// Whether `path` is one of git's own files: under a work tree's `.git`,
+/// Whether `path` is one of git's own files: under a worktree's `.git`,
 /// or under a bare repository (a preset's `origin.git`). A bare
 /// repository is recognised by its contents, not its name: a `foo.git`
 /// directory without them could be committed content.

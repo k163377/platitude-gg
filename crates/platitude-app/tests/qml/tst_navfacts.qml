@@ -31,7 +31,7 @@ Item {
     property string branchGone: ""
     property int branchAhead: 0
     property int branchBehind: 0
-    property string copyHolding: ""
+    property string holdingWorktree: ""
     property string sectionReadingAt: "a1"
     property string branchAt: "b2"
     property string branchReadingAt: "c3"
@@ -50,7 +50,7 @@ Item {
             return root.sectionHereApart
         }
     }
-    /// A working copy's row asks it about the branch it holds; a remote-tracking row, where the branch reading it
+    /// A worktree's row asks it about the branch it holds; a remote-tracking row, where the branch reading it
     /// stands.
     QtObject {
         id: branches
@@ -62,9 +62,9 @@ Item {
         function oidOfName(name) { return root.branchAt }
     }
     QtObject {
-        id: copies
-        function worktreeHolding(name) { return root.copyHolding }
-        function headOfCopy(path) { return "" }
+        id: worktrees
+        function worktreeHolding(name) { return root.holdingWorktree }
+        function headOfWorktree(path) { return "" }
     }
 
     /// Built per case rather than reconfigured: `gatherFacts` freezes what it read, so a reused row would pass on the
@@ -85,7 +85,7 @@ Item {
             opensFacts: true
             sectionModel: sections
             branchesModel: branches
-            worktreesModel: copies
+            worktreesModel: worktrees
         }
     }
 
@@ -187,24 +187,24 @@ Item {
         /// Asked of the table itself: a row here cannot reach `heldBy` (the note at the top). What it pins is the
         /// colour — the mark names a WORKTREES row, so it wears that section's colour (デザイン規約 §ref の種別), and no
         /// picture judges it.
-        function test_the_copy_holding_a_branch_is_named_in_the_worktrees_colour() {
-            const held = NavFacts.place("worktree", "C:/copies/topic", "d4")
+        function test_the_worktree_holding_a_branch_is_named_in_the_worktrees_colour() {
+            const held = NavFacts.place("worktree", "C:/worktrees/topic", "d4")
             const lines = NavFacts.lines("branch", { "heldBy": "topic", "heldTo": held, "upstream": "",
                                                      "gone": false, "ahead": 0, "behind": 0 })
-            compare(lines.length, 1, "the copy, and no reading to measure against")
+            compare(lines.length, 1, "the worktree, and no reading to measure against")
             compare(lines[0].mark, "tree")
             compare(lines[0].markTint, Theme.success, "the WORKTREES section's own colour")
             compare(lines[0].text, "topic")
             compare(lines[0].tone, Theme.textSecondary, "the name is the quiet half of the line")
-            // Keyed by the path (`NavList.keyOf`): two copies can share a leaf.
-            compare(lines[0].to.key, "worktree:C:/copies/topic")
+            // Keyed by the path (`NavList.keyOf`): two worktrees can share a leaf.
+            compare(lines[0].to.key, "worktree:C:/worktrees/topic")
             compare(lines[0].to.oid, "d4")
         }
 
         /// A line nobody filled is left out rather than drawn empty.
         function test_a_branch_with_nothing_beside_it_opens_on_its_name() {
             root.sectionUpstream = ""
-            root.copyHolding = ""
+            root.holdingWorktree = ""
             const row = root.rowOf({ "kindHint": "branch", "name": "solo", "full": "solo" })
             verify(row.gatherFacts())
             compare(row.factsName, "solo")
@@ -217,7 +217,7 @@ Item {
         /// The branch comes from the section's reverse lookup; its measure is this row's own, read from the far side.
         function test_a_remote_row_leads_with_the_branch_that_reads_it() {
             root.sectionTracked = "main"
-            root.copyHolding = ""
+            root.holdingWorktree = ""
             const row = root.rowOf({ "kindHint": "remote", "name": "origin/main",
                                      "full": "origin/main", "ahead": 1 })
             verify(row.gatherFacts())
@@ -242,20 +242,20 @@ Item {
 
         // ---- WORKTREES -----------------------------------------------
 
-        /// Asked of the branches' section: a copy's own list carries no upstream roles, so its row's `ahead` /
+        /// Asked of the branches' section: a worktree's own list carries no upstream roles, so its row's `ahead` /
         /// `behind` are not the answer.
-        function test_a_working_copy_says_of_its_branch_what_that_branchs_row_would() {
+        function test_a_worktree_says_of_its_branch_what_that_branchs_row_would() {
             root.sectionUpstream = "origin/not-this-one"
             root.branchUpstream = "origin/feature/topic-a"
             root.branchGone = ""
             root.branchAhead = 4
             root.branchBehind = 5
             const row = root.rowOf({ "kindHint": "worktree", "name": "topic",
-                                     "full": "C:/copies/topic", "bucket": "feature/topic-a",
+                                     "full": "C:/worktrees/topic", "bucket": "feature/topic-a",
                                      "ahead": 9, "behind": 9 })
             verify(row.gatherFacts())
             compare(row.factsName, "topic", "the folder it is named by")
-            compare(row.factsPath, "C:/copies/topic")
+            compare(row.factsPath, "C:/worktrees/topic")
             compare(row.factsBranch, "feature/topic-a")
             compare(row.factsUpstream, "origin/feature/topic-a", "the branches' answer, not the section's")
             compare(row.factsAhead, 4, "and its counts, not the row's own roles")
@@ -278,8 +278,8 @@ Item {
             root.branchUpstream = ""
             root.branchGone = ""
             const gone = root.rowOf({ "kindHint": "worktree", "name": "gone",
-                                      "full": "C:/copies/gone", "bucket": "gone/branch",
-                                      "change": "PRUNABLE", "orig_path": "C:/copies/gone" })
+                                      "full": "C:/worktrees/gone", "bucket": "gone/branch",
+                                      "change": "PRUNABLE", "orig_path": "C:/worktrees/gone" })
             verify(gone.gatherFacts())
             compare(gone.factsState, "PRUNABLE")
             compare(gone.factsLines.length, 2, "the branch it holds, then the warning")
@@ -289,7 +289,7 @@ Item {
             gone.destroy()
 
             const locked = root.rowOf({ "kindHint": "worktree", "name": "hotfix",
-                                        "full": "C:/copies/hotfix", "bucket": "hotfix/urgent",
+                                        "full": "C:/worktrees/hotfix", "bucket": "hotfix/urgent",
                                         "change": "LOCKED", "orig_path": "somebody's reason" })
             verify(locked.gatherFacts())
             compare(locked.factsState, "LOCKED")
@@ -298,9 +298,9 @@ Item {
             locked.destroy()
         }
 
-        /// The main checkout is named by its branch (`NavRowBody.homeCopy`), so the far column stays empty and no
+        /// The main checkout is named by its branch (`NavRowBody.homeWorktree`), so the far column stays empty and no
         /// line repeats the branch. On a detached HEAD it falls back to its folder.
-        function test_the_repositorys_own_copy_is_named_by_the_branch_it_has_out() {
+        function test_the_repositorys_own_worktree_is_named_by_the_branch_it_has_out() {
             root.branchUpstream = ""
             root.branchGone = ""
             const home = root.rowOf({ "kindHint": "worktree", "name": "repo", "full": "C:/work/repo",
@@ -319,10 +319,10 @@ Item {
             compare(fallen[0].text, "repo", "its folder, where it holds no branch to be named by")
             loose.destroy()
 
-            const linked = root.rowOf({ "kindHint": "worktree", "name": "topic", "full": "C:/copies/topic",
+            const linked = root.rowOf({ "kindHint": "worktree", "name": "topic", "full": "C:/worktrees/topic",
                                         "bucket": "feature/topic-a" })
             const both = root.drawn(linked, "cutAt")
-            compare(both.length, 2, "every other copy is named by its folder and shows its branch beside it")
+            compare(both.length, 2, "every other worktree is named by its folder and shows its branch beside it")
             compare(both[0].text, "topic")
             compare(both[1].text, "feature/topic-a")
             linked.destroy()
@@ -453,7 +453,7 @@ Item {
         /// (the lines go through the same press), and before the ask.
         function test_a_menu_raised_on_the_open_row_keeps_it_open() {
             root.sectionUpstream = ""
-            root.copyHolding = ""
+            root.holdingWorktree = ""
             const row = root.openRow(root.rowOf({ "kindHint": "branch", "name": "solo", "full": "solo",
                                                   "oid_hex": "e5" }))
             verify(row.factsItem !== null)
@@ -512,37 +512,37 @@ Item {
 
         /// Two ways to one commit are one target (`NavFacts.joined`): a line going where the row stands is the row's
         /// own, and one going where the line above goes shares its band. Asked of the table, since a row here cannot
-        /// carry the copy's line (the note at the top).
+        /// carry the worktree's line (the note at the top).
         function test_lines_going_to_one_place_are_one_target() {
             const own = NavFacts.joined([{ "to": { "key": "worktree:C:/c", "oid": "r0" } },
                                          { "to": { "key": "remote:origin/x", "oid": "u1" } }], "r0")
-            compare(own[0].to, null, "the copy standing where the row does is the row's own")
+            compare(own[0].to, null, "the worktree standing where the row does is the row's own")
             compare(own[1].to.oid, "u1", "the reading elsewhere goes there")
             compare(own[1].withAbove, false, "and has a band of its own")
 
             const pair = NavFacts.joined([{ "to": { "key": "branch:x", "oid": "c2" } },
                                           { "to": { "key": "worktree:C:/c", "oid": "c2" } }], "r1")
             compare(pair[0].withAbove, false)
-            compare(pair[1].withAbove, true, "the copy holding that branch shares its band")
+            compare(pair[1].withAbove, true, "the worktree holding that branch shares its band")
 
             const apart = NavFacts.joined([{ "to": null }, { "to": { "key": "remote:origin/x", "oid": "u1" } }], "r1")
             compare(apart[1].withAbove, false, "a line going nowhere joins nothing to it")
         }
 
-        /// The same rule through real rows: a working copy, and a remote-tracking row level with its branch.
+        /// The same rule through real rows: a worktree, and a remote-tracking row level with its branch.
         function test_a_line_standing_where_its_row_does_is_the_rows_own() {
             root.branchUpstream = "origin/feature/topic-a"
             root.branchGone = ""
-            const copy = root.rowOf({ "kindHint": "worktree", "name": "topic", "full": "C:/copies/topic",
-                                      "bucket": "feature/topic-a", "oid_hex": root.branchAt })
-            verify(copy.gatherFacts())
-            compare(copy.factsLines[0].text, "feature/topic-a")
-            compare(copy.factsLines[0].to, null, "the branch the copy holds is where the copy stands")
-            compare(copy.factsLines[1].to.oid, "c3", "the reading goes elsewhere")
-            copy.destroy()
+            const worktree = root.rowOf({ "kindHint": "worktree", "name": "topic", "full": "C:/worktrees/topic",
+                                          "bucket": "feature/topic-a", "oid_hex": root.branchAt })
+            verify(worktree.gatherFacts())
+            compare(worktree.factsLines[0].text, "feature/topic-a")
+            compare(worktree.factsLines[0].to, null, "the branch the worktree holds is where the worktree stands")
+            compare(worktree.factsLines[1].to.oid, "c3", "the reading goes elsewhere")
+            worktree.destroy()
 
             root.sectionTracked = "main"
-            root.copyHolding = ""
+            root.holdingWorktree = ""
             const level = root.rowOf({ "kindHint": "remote", "name": "origin/main", "full": "origin/main",
                                        "oid_hex": root.branchAt })
             verify(level.gatherFacts())
@@ -611,7 +611,7 @@ Item {
             root.branchAhead = 4
             root.branchBehind = 5
             const row = root.openRow(root.rowOf({
-                "kindHint": "worktree", "name": "topic", "full": "C:/copies/topic",
+                "kindHint": "worktree", "name": "topic", "full": "C:/worktrees/topic",
                 "bucket": "feature/topic-a" }))
             verify(row.factsOpen, "the row has itself open")
             verify(row.factsItem !== null, "and the card is built under it")
@@ -632,9 +632,9 @@ Item {
             row.destroy()
         }
 
-        /// The main copy opens no line for its branch, so the branch's measure rides the row's own line — and only
+        /// The main worktree opens no line for its branch, so the branch's measure rides the row's own line — and only
         /// while open: closed, the row says what it is and nothing more.
-        function test_the_repositorys_own_copy_draws_its_branchs_measure_only_while_open() {
+        function test_the_repositorys_own_worktree_draws_its_branchs_measure_only_while_open() {
             root.branchUpstream = "origin/main"
             root.branchGone = ""
             root.branchAhead = 6
@@ -648,7 +648,7 @@ Item {
             const measures = root.measuresUnder(home)
             compare(measures.length, 1, "open, one measure")
             verify(measures[0].parent.visible, "on the row's own line")
-            compare(measures[0].ahead, 6, "counting the branch the copy has out")
+            compare(measures[0].ahead, 6, "counting the branch the worktree has out")
             compare(measures[0].behind, 0)
 
             home.openKey = ""
@@ -656,7 +656,7 @@ Item {
             compare(root.measuresUnder(home).length, 0, "and gone again once the row closes")
             home.destroy()
 
-            // Detached, the copy is named by its folder and has no branch to measure.
+            // Detached, the worktree is named by its folder and has no branch to measure.
             const loose = root.openRow(root.rowOf({ "kindHint": "worktree", "name": "repo", "full": "C:/work/repo",
                                                     "bucket": "", "change": "MAIN" }))
             compare(root.measuresUnder(loose).length, 0)
@@ -666,7 +666,7 @@ Item {
         /// The card is sized over the lines it was handed, so a blank one would be an empty row to look past.
         function test_a_row_with_nothing_to_add_draws_no_lines() {
             root.sectionUpstream = ""
-            root.copyHolding = ""
+            root.holdingWorktree = ""
             const row = root.openRow(root.rowOf({ "kindHint": "branch", "name": "solo", "full": "solo" }))
             verify(row.factsOpen)
             verify(row.factsItem !== null)

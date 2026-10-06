@@ -116,9 +116,9 @@ pub struct ChosenRow {
 
 pub type ChosenRows = Listed<ChosenRow>;
 
-/// The six counts a working copy's uncommitted row shows, in the order
-/// both sides draw them. A copy's row carries its own; this window's row
-/// reads the view's.
+/// The six counts a worktree's uncommitted row shows, in the order
+/// both sides draw them. Another worktree's row carries its own; this
+/// window's row reads the view's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Tally {
     pub added: i32,

@@ -190,7 +190,11 @@ mod periodic {
             .expect("unstage");
         let (staged, unstaged, _) = buckets(&repo).await;
         assert_eq!(staged, vec!["new.txt"]);
-        assert_eq!(unstaged, vec!["a.txt"], "worktree edit survives unstaging");
+        assert_eq!(
+            unstaged,
+            vec!["a.txt"],
+            "working-tree edit survives unstaging"
+        );
     }
 
     /// Discarding from the staged side takes both sides with it, whatever
@@ -205,7 +209,7 @@ mod periodic {
         repo.commit_file("moved.txt", "move me\n", "second");
         repo.write_file("kept.txt", "staged\n");
         repo.git(&["add", "--", "kept.txt"]);
-        // Staged on both sides: the worktree has gone on past the index.
+        // Staged on both sides: the working tree has gone on past the index.
         repo.write_file("kept.txt", "and dirty\n");
         repo.write_file("fresh.txt", "brand new\n");
         repo.git(&["add", "--", "fresh.txt"]);

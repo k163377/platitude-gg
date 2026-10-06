@@ -32,16 +32,16 @@ Rectangle {
     /// or under a required LFS filter that cannot run (`GitFacts.discardUnrecorded`). `Discard hunk` is held in
     /// `danger` then, in `warning` otherwise (デザイン規約 §長押し の色の表).
     property bool discardUnrecorded: false
-    /// False for a file read out of another working copy, which reads the way a commit's file does (デザイン規約
-    /// §別の作業コピーを読む): no whole-file word, no hunk or line seats. Not disabled — not offered: staging belongs
-    /// to the copy that holds the index.
+    /// False for a file read out of another worktree, which reads the way a commit's file does (デザイン規約
+    /// §別の worktree を読む): no whole-file word, no hunk or line seats. Not disabled — not offered: staging belongs
+    /// to the worktree that holds the index.
     property bool writable: true
-    /// The copy the file was read from, where it is not this window's — said in the band before the path: while a
+    /// The worktree the file was read from, where it is not this window's — said in the band before the path: while a
     /// diff is open nothing else on screen can say whose file it is.
-    property string copyName: ""
+    property string worktreeName: ""
     /// Whether a hunk and a line can be staged on their own. Not on a new file — its one hunk is the whole file
     /// (デザイン規約 §diff の中のステージ) — nor a conflicted one, whose combined diff `git apply` refuses (and so does
-    /// core, `stage::refuse_combined`); both keep the header's one word. Nor on another working copy's file.
+    /// core, `stage::refuse_combined`); both keep the header's one word. Nor on another worktree's file.
     readonly property bool partial: diffPane.fromWorkingTree && diffPane.writable
                                     && !diffPane.diffModel.isNewFile && !diffPane.combined
 
@@ -264,7 +264,7 @@ Rectangle {
     /// can name (`diff-sweep`).
     readonly property alias textHand: textPick
     /// Automation: whether the band's word takes a press (`DiffPaneHeader.stageOffered`), and whether a hunk or a line
-    /// puts a seat out — both false on another working copy's file (`carried-read`).
+    /// puts a seat out — both false on another worktree's file (`carried-read`).
     readonly property alias stageOffered: paneHeader.stageOffered
     readonly property bool piecesOffered: diffPane.partial
     /// Automation: the band's own hand, which drags over the path from the air beside it (`diff-band-sweep`).
@@ -397,7 +397,7 @@ Rectangle {
             conflicted: diffPane.conflicted
             busy: diffPane.busy
             writable: diffPane.writable
-            copyName: diffPane.copyName
+            worktreeName: diffPane.worktreeName
             split: diffPane.split
             onStageFileRequested: diffPane.stageFileRequested()
             onCloseRequested: diffPane.closeRequested()

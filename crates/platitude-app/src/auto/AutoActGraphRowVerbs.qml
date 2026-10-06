@@ -544,12 +544,12 @@ Item {
                 return
             listMenuTimer.stop()
             // `list=` is read with the menu up: the card has to still stand under it (デザイン規約 §メニュー の例外).
-            // `copy=` / `branch=` / `tag=`: which card the named row brought up is what this gesture decides. The
-            // WORKTREE card stands on every commit (`Create worktree here…`), so `copy=` is whether it stands on a
-            // copy.
+            // `worktree=` / `branch=` / `tag=`: which card the named row brought up is what this gesture decides. The
+            // WORKTREE card stands on every commit (`Create worktree here…`), so `worktree=` is whether it stands on a
+            // worktree.
             Harness.report("list_menu list=" + refList.opened
                               + " menu=" + commitMenu.opened
-                              + " copy=" + (driver.commitCopyCard.path !== "")
+                              + " worktree=" + (driver.commitWorktreeCard.path !== "")
                               + " branch=" + commitBranchCard.applies
                               + " tag=" + commitTagCard.applies
                               + " rows=" + commitMenu.offeredRows)
@@ -716,11 +716,11 @@ Item {
     SampleTimer {
         id: rowCardTimer
         /// The commit the card was asked of, so its row can be asked back whether it is lit — by commit, as the row
-        /// answers (`GraphRowDelegate.cardOnThisRow`): another copy's rows land on a pass of their own and can shift
-        /// the row number between the hover and this read.
+        /// answers (`GraphRowDelegate.cardOnThisRow`): another worktree's rows land on a pass of their own and can
+        /// shift the row number between the hover and this read.
         property string oidHex: ""
         /// The row number instead, for a row with no commit of its own (`byNumber`): the working tree's and every
-        /// copy's row share the all-zero id.
+        /// other worktree's row share the all-zero id.
         property int row: 0
         property bool byNumber: false
         onTriggered: {

@@ -39,11 +39,11 @@ QtObject {
         return Math.max(air / 2, Math.min(air, tabShare.markRoomFull - markRoom))
     }
 
-    /// How one tab spends the cap between its two runs: the repository's name, then the linked copy's
-    /// (`TabTreeMark`). The name is served first (デザイン規約 §ウィンドウの縁 の譲る順), so the copy's run is gone
+    /// How one tab spends the cap between its two runs: the repository's name, then the linked worktree's
+    /// (`TabTreeMark`). The name is served first (デザイン規約 §ウィンドウの縁 の譲る順), so the worktree's run is gone
     /// before a letter of the name is cut.
     ///
-    /// Under `treeFloor` (`TabTreeMark.floorWidth`) the run goes whole, mark and all: a copy name without its mark
+    /// Under `treeFloor` (`TabTreeMark.floorWidth`) the run goes whole, mark and all: a worktree name without its mark
     /// reads as the repository's name carrying on.
     ///
     /// A tab that drops the run comes out narrower than its share by under that floor, left as band at the strip's

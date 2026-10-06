@@ -144,10 +144,10 @@ Item {
                     driver.barrierNotice.start()
             }
         } else if (act === "wip-landing-stopped") {
-            // The stop's working-tree landing, read in a pass that carries every other copy's row and none of this
-            // window's. The run is started into that arrangement (`xtask::verify::child`, `harness::faults`) because
-            // which of the walk and the status arrives first is otherwise the scheduler's. The press needs a clean
-            // tree: a replay is refused over uncommitted work.
+            // The stop's working-tree landing, read in a pass that carries every other worktree's row and none of
+            // this window's. The run is started into that arrangement (`xtask::verify::child`, `harness::faults`)
+            // because which of the walk and the status arrives first is otherwise the scheduler's. The press needs a
+            // clean tree: a replay is refused over uncommitted work.
             const clash = arg === "" ? "side/clash" : arg
             page.openRefMenu("branch", clash, clash, branchesModel.oidOfName(clash))
             stoppedLandingTimer.start()
@@ -260,8 +260,8 @@ Item {
     }
     // Both moments of the stop's landing in one line, since neither means anything alone: `owed=` / `early=` are the
     // page after a pass that beat the status was offered the landing and turned it down; `wip=` is the pass carrying
-    // ours landing on this window's tree. Every copy's row wears the same all-zero id, so taking row 0's id for ours
-    // lands the press on a copy.
+    // ours landing on this window's tree. Every worktree's row wears the same all-zero id, so taking row 0's id for
+    // ours lands the press on another worktree's.
     SampleTimer {
         id: stoppedLandingTimer
         property bool read: false
@@ -270,7 +270,7 @@ Item {
         property int owedAt: -1
         property bool owed: false
         property bool early: false
-        property bool earlyCopy: false
+        property bool earlyWorktree: false
         /// For a run not started with the hold up (both harness calls answer whether it was): says so and stops.
         function refuse() {
             stoppedLandingTimer.stop()
@@ -284,8 +284,8 @@ Item {
                         || graphModel.loading || !page.pageLanding)
                     return
                 // Ask for the pass: under the hold nothing else brings one (our row appearing normally does, and a
-                // stopped replay moves no branch). It lands with every other copy's row and none of ours — the pass
-                // the landing has to turn down.
+                // stopped replay moves no branch). It lands with every other worktree's row and none of ours — the
+                // pass the landing has to turn down.
                 if (!graphModel.walkAgainWhileHeld()) {
                     stoppedLandingTimer.refuse()
                     return
@@ -293,7 +293,7 @@ Item {
                 stoppedLandingTimer.owedAt = graphModel.finishCount
                 return
             }
-            // Then that pass, led by a neighbour copy's row (`GraphModel.carriedTop`); a pass without one on top
+            // Then that pass, led by a neighbour worktree's row (`GraphModel.carriedTop`); a pass without one on top
             // cannot catch the misreading, so it is read past.
             if (!stoppedLandingTimer.read) {
                 if (graphModel.loading || graphModel.finishCount <= stoppedLandingTimer.owedAt
@@ -302,7 +302,7 @@ Item {
                 stoppedLandingTimer.read = true
                 stoppedLandingTimer.owed = page.pageLanding
                 stoppedLandingTimer.early = page.wipShown
-                stoppedLandingTimer.earlyCopy = page.carriedPath !== ""
+                stoppedLandingTimer.earlyWorktree = page.carriedPath !== ""
                 if (!graphModel.letTheWorkingTreeRowThrough())
                     stoppedLandingTimer.refuse()
                 return
@@ -312,9 +312,9 @@ Item {
             stoppedLandingTimer.stop()
             Harness.report("wip_stop_landing held=true otherTop=true owed=" + stoppedLandingTimer.owed
                               + " early=" + stoppedLandingTimer.early
-                              + " earlyCopy=" + stoppedLandingTimer.earlyCopy
+                              + " earlyWorktree=" + stoppedLandingTimer.earlyWorktree
                               + " wip=" + page.wipShown
-                              + " copy=" + (page.carriedPath !== "")
+                              + " worktree=" + (page.carriedPath !== "")
                               + " op=" + workingTree.opText
                               // This landing moves the highlight without activating a row (`tryPendingWipSelect`).
                               + " lit=" + graphPane.view.currentIndex)
@@ -512,9 +512,9 @@ Item {
                 + " error=" + (repoTab.lastError !== "")
                 + " log=" + page.commandsOpen
                 + " cont=" + wipPane.offersOpExit("--continue")
-                // A replay stops on no branch, and the main copy's WORKTREES row is named by its folder
+                // A replay stops on no branch, and the main worktree's WORKTREES row is named by its folder
                 // (デザイン規約 §左メニューの所作); a pick or a revert stops on the branch.
-                + " home=" + driver.navProbe.homeCopyName()
+                + " home=" + driver.navProbe.homeWorktreeName()
                 // Where carried work went: git's words are not raised over the stop, so only the count and the
                 // stash row say it (規約 §未コミット変更がある状態で履歴を書き換える).
                 + " stashes=" + stashesModel.total

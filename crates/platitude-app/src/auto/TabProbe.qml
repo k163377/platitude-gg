@@ -28,12 +28,12 @@ QtObject {
         return n
     }
 
-    /// Whether any tab is standing in `path` — titles cannot tell, as every demo working tree has the same name. The
-    /// copy, not the repository: the one that moves when a tab is stood elsewhere (`TabItem.copy_path`).
+    /// Whether any tab is standing in `path` — titles cannot tell, as every demo worktree has the same name. The
+    /// worktree, not the repository: the one that moves when a tab is stood elsewhere (`TabItem.worktree_path`).
     function hasTabPath(path) {
         for (let i = 0; i < probe.view.count; i++) {
             const tab = probe.view.itemAtIndex(i)
-            if (tab && tab.copy_path === path)
+            if (tab && tab.worktree_path === path)
                 return true
         }
         return false
@@ -44,24 +44,24 @@ QtObject {
         for (let i = 0; i < probe.view.count; i++) {
             const tab = probe.view.itemAtIndex(i)
             if (tab)
-                paths.push(tab.copy_path)
+                paths.push(tab.worktree_path)
         }
         return paths.join(",")
     }
 
-    /// What each tab says after its name — the copy it stands in, or nothing for the repository's own
-    /// (`TabItemDelegate.copy_name`). A picture cannot tell a name dropped for want of room from none, hence
+    /// What each tab says after its name — the worktree it stands in, or nothing for the repository's own
+    /// (`TabItemDelegate.worktree_name`). A picture cannot tell a name dropped for want of room from none, hence
     /// `tabTreeWidths`.
     function tabTrees() {
         let names = []
         for (let i = 0; i < probe.view.count; i++) {
             const tab = probe.view.itemAtIndex(i)
-            names.push(tab ? tab.copy_name : "")
+            names.push(tab ? tab.worktree_name : "")
         }
         return names.join(",")
     }
 
-    /// How wide the copy run came out on each tab, in strip order — 0 where none is drawn.
+    /// How wide the worktree-name run came out on each tab, in strip order — 0 where none is drawn.
     function tabTreeWidths() {
         let widths = []
         for (let i = 0; i < probe.view.count; i++) {
@@ -84,7 +84,7 @@ QtObject {
     /// The path a tab was opened with, spelled the way the strip has it (`PGG_AUTO_ACT=open-again`).
     function tabPathAt(index) {
         const tab = probe.view.itemAtIndex(index)
-        return tab ? tab.copy_path : ""
+        return tab ? tab.worktree_path : ""
     }
 
     /// Every tab's width, in strip order (`PGG_AUTO_ACT=tab-widths`).

@@ -103,21 +103,21 @@ Rectangle {
     readonly property bool recRemote: rec.hasRemote
     readonly property bool recPr: rec.hasPr
     readonly property bool recHere: rec.here
-    // Another working copy has this branch out (the green frame). Read off the record, which is rebuilt with the ref
+    // Another worktree has this branch out (the green frame). Read off the record, which is rebuilt with the ref
     // joins, so the chip repaints with them.
     readonly property bool recHeld: rec.held
-    // `git worktree lock` is on the copy standing here; only records a copy stands on carry it.
+    // `git worktree lock` is on the worktree standing here; only records a worktree stands on carry it.
     readonly property bool recLocked: rec.locked
     // Name, and the remotes it was read from when it was not read here.
     readonly property string recName: rec.name
     readonly property string recWhere: rec.remote
     // One slot, one mark: the cloud, or the PR mark instead (規約 §グラフ行のダブルクリック).
     readonly property bool hasBadge: recRemote || recPr
-    /// The padlock ahead of the name: the copy standing here is locked (デザイン規約 §ref の種別). That a copy stands
-    /// here at all is the frame's green. Same mark and colour as the WORKTREES row (`NavRowBody`).
+    /// The padlock ahead of the name: the worktree standing here is locked (デザイン規約 §ref の種別). That a worktree
+    /// stands here at all is the frame's green. Same mark and colour as the WORKTREES row (`NavRowBody`).
     readonly property bool hasLock: chip.recLocked
-    /// The tree ahead of a name that is a working copy's folder, not a ref: bare, it would read as a branch
-    /// (デザイン規約 §ref の種別). Never with the padlock, which already says "working copy".
+    /// The tree ahead of a name that is a worktree's folder, not a ref: bare, it would read as a branch
+    /// (デザイン規約 §ref の種別). Never with the padlock, which already says "worktree".
     readonly property bool hasTree: chip.recKind === "worktree" && !chip.recLocked
     /// One seat for the padlock or the tree.
     readonly property bool hasMark: chip.hasLock || chip.hasTree
@@ -125,7 +125,7 @@ Rectangle {
     /// `kindKeyOf` has to be added here.
     readonly property var kindKeys: ["head", "local", "worktree", "remote", "tag", "tagdim"]
     /// Which frame colour a record wears, as a word: the stack counts colours and `color` values do not compare, so
-    /// [`kindColourFor`] turns the word into ink. A branch another working copy holds wears the copy's colour.
+    /// [`kindColourFor`] turns the word into ink. A branch another worktree holds wears the worktree's colour.
     function kindKeyOf(rec) {
         if (rec.held)
             return "worktree"
@@ -135,8 +135,8 @@ Rectangle {
             return "remote"
         if (rec.kind === "head")
             return "head"
-        // A copy standing here with no branch out shares the held branch's key: one sheet per colour, and a key of
-        // its own over the same ink would draw two sheets nobody can tell apart (§重ね表示).
+        // A worktree standing here with no branch out shares the held branch's key: one sheet per colour, and a key
+        // of its own over the same ink would draw two sheets nobody can tell apart (§重ね表示).
         if (rec.kind === "worktree")
             return "worktree"
         return "local"
@@ -158,7 +158,7 @@ Rectangle {
     readonly property color kindColor: chip.kindColourFor(chip.kindKey)
     // Where it is. Grey, not textMuted, for what this repository does not hold: it can still be reached (§無効 is for
     // what cannot). The detached HEAD keeps its state colour; the current branch is `textLink`, as in the sidebar. A
-    // branch another copy holds keeps the ordinary ink: the frame already says where the copy is.
+    // branch another worktree holds keeps the ordinary ink: the frame already says where the worktree is.
     readonly property color nameColor: recKind === "head" ? Theme.warning
                                        : recHead ? Theme.textLink
                                        : !recHere ? Theme.textSecondary

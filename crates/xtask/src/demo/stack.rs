@@ -21,9 +21,9 @@ const PILED_TAGS: u32 = 41;
 /// |------|-----------------------|-------|
 /// | `main` `next` `side` | the branch, its own remote (folded, so the badge is on the name), a second local, a remote of its own and a tag | 4 |
 /// | `pile` `heap` `bank` | one branch and forty-one tags — the row the count is for, and the one the fan cannot answer | 2 |
-/// | `wide` `deep` `tall` | two locals, one of them held by another working copy, a remote and a tag | 5 |
+/// | `wide` `deep` `tall` | two locals, one of them held by another worktree, a remote and a tag | 5 |
 /// | `spot` `mark` `note` | a local, a remote and a tag | 3 |
-/// | `stem` `leaf` `root` | a local and one another working copy holds | 2 |
+/// | `stem` `leaf` `root` | a local and one another worktree holds | 2 |
 /// | `origin/theirs-a` … | a remote branch, and a tag only origin has | 2 |
 /// | `v1.1` `v2.1` `v3.1` | tags and nothing else — the colour repeated | 2 |
 /// | `only` `lone` `solo` | one local branch | 1 |
@@ -91,10 +91,10 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
         repo.commit(
             "src/held.txt",
             &body,
-            "feat: a local branch and one another copy holds",
+            "feat: a local branch and one another worktree holds",
         )?;
         repo.git(&["branch", name])?;
-        // Checked out in another working copy, which puts the green frame
+        // Checked out in another worktree, which puts the green frame
         // on it. Added here, so the branch starts on this row.
         let held = format!("{name}-held");
         let at = format!("../{held}");
@@ -207,7 +207,7 @@ fn stack_published(repo: &mut DemoRepo) -> Result<(), String> {
 /// the newest.
 ///
 /// Six cards on the top row — the marker, a local branch, one another
-/// working copy holds, a remote with no counterpart here, a tag, and the
+/// worktree holds, a remote with no counterpart here, a tag, and the
 /// far half of a tag that moved. That is the ceiling: only the front
 /// card's colour may repeat (`RefChipStack.sheets`), and the marker
 /// cannot. The two rows under it carry the same five without the marker.

@@ -213,31 +213,32 @@ Item {
         window.finishAutoAct()
     }
 
-    // PGG_AUTO_ACT=ops-stand / ops-stand-repos / ops-stand-copies [<filter>] / ops-branch / ops-branch-folder <path>:
-    // the cards the repository's and the branch's names open. Rows are counted, since an empty card looks like one
-    // whose rows were all left out (`AppMenu.offeredRows`), and the opening name's lit / turned is read, since under
-    // the hand that pressed it the name looks the same whether or not the card keeps it lit.
+    // PGG_AUTO_ACT=ops-stand / ops-stand-repos / ops-stand-worktrees [<filter>] / ops-branch /
+    // ops-branch-folder <path>: the cards the repository's and the branch's names open. Rows are counted, since an
+    // empty card looks like one whose rows were all left out (`AppMenu.offeredRows`), and the opening name's lit /
+    // turned is read, since under the hand that pressed it the name looks the same whether or not the card keeps it
+    // lit.
     SampleTimer {
         id: opsDoorTimer
         running: Harness.autoAct === "ops-stand" || Harness.autoAct === "ops-stand-repos"
-                 || Harness.autoAct === "ops-stand-copies" || Harness.autoAct === "ops-branch"
+                 || Harness.autoAct === "ops-stand-worktrees" || Harness.autoAct === "ops-branch"
                  || Harness.autoAct === "ops-branch-folder"
         /// Which step this run is on: the card, then the tier inside it.
         property int opened: 0
         /// Whether a folder of the branch card was there to be opened (`ops-branch-folder`).
         property bool folderAsked: false
         onTriggered: {
-            // Both listings, not a beat: they land on separate reads. Every repository lists its own copy, so zero
-            // worktrees is a listing not yet landed.
+            // Both listings, not a beat: they land on separate reads. Every repository lists its own worktree, so
+            // zero worktrees is a listing not yet landed.
             if (!window.visible || topBar.width <= 0 || window.curPage === null
                     || !window.curPage.pageRefsLoaded
                     || window.curPage.pageWorktrees.total <= 0)
                 return
             const branchDoor = Harness.autoAct === "ops-branch" || Harness.autoAct === "ops-branch-folder"
             if (opsDoorTimer.opened === 0) {
-                // The left menu filtered first (as `NavProbe.typeFilter` does): a copy filtered out of sight there is
-                // still one the card offers.
-                if (Harness.autoAct === "ops-stand-copies" && Harness.autoActArg !== "")
+                // The left menu filtered first (as `NavProbe.typeFilter` does): a worktree filtered out of sight there
+                // is still one the card offers.
+                if (Harness.autoAct === "ops-stand-worktrees" && Harness.autoActArg !== "")
                     window.curPage.pageSidebar.autoSections.filterText = Harness.autoActArg
                 opsDoorTimer.opened = 1
                 // Asked for once, and reported however it went: `offerHere` turns away an empty card, so re-asking
@@ -251,8 +252,8 @@ Item {
             if (opsDoorTimer.opened === 1 && !branchDoor && topBar.standMenuOpen) {
                 if (Harness.autoAct === "ops-stand-repos")
                     topBar.openStandRepos()
-                if (Harness.autoAct === "ops-stand-copies")
-                    topBar.openStandCopies()
+                if (Harness.autoAct === "ops-stand-worktrees")
+                    topBar.openStandWorktrees()
             }
             if (opsDoorTimer.opened === 1 && Harness.autoAct === "ops-branch-folder" && topBar.branchMenuOpen) {
                 opsDoorTimer.opened = 2
@@ -274,9 +275,9 @@ Item {
                 + " yield=" + chrome.captionYielded
                 + " folder=" + topBar.branchFolderOpen
                 + " repos=" + topBar.standRepoRows
-                // The copies the left menu shows — the other half of `copies=` under a filter.
+                // The worktrees the left menu shows — the other half of `worktrees=` under a filter.
                 + " listed=" + window.curPage.pageWorktrees.shown()
-                + " copies=" + topBar.standCopyRows
+                + " worktrees=" + topBar.standWorktreeRows
                 + " branches=" + topBar.branchMenuRows)
             window.finishAutoAct()
         }

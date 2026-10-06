@@ -131,11 +131,11 @@ Item {
         } else if (act === "wip-lanes") {
             wipLanesTimer.start()
         } else if (act === "carried-read") {
-            // The argument is the copy: in one an untracked file has no pieces to stage anyway, so only the staged
+            // The argument is the worktree: in one an untracked file has no pieces to stage anyway, so only the staged
             // edit makes "no hunk puts a seat out" a claim about this pane.
             carriedReadTimer.start()
         } else if (act === "carried-stand") {
-            // The same pane with nothing read yet — the argument is the copy, as above.
+            // The same pane with nothing read yet — the argument is the worktree, as above.
             carriedStandTimer.start()
         } else if (act === "wip-tally") {
             // The kinds must add up to `rows` (`status::Kinds` counts rows); a drift means two statuses were read.
@@ -294,15 +294,15 @@ Item {
             driver.barrierNotice.start()
         }
     }
-    // Another working copy's uncommitted row read in this window, with every writing control down
-    // (P3-確認事項 §別 worktree の未コミット行). Every field is read off the output side — built from `writable`,
+    // Another worktree's uncommitted row read in this window, with every writing control down
+    // (P3-確認事項 §別の worktree の未コミット行). Every field is read off the output side — built from `writable`,
     // each would go green with the disabling unwired (app-ui.md §UI 自動化).
     SampleTimer {
         id: carriedReadTimer
         property bool asked: false
         property bool opened: false
-        /// The step to the next file: made, whether it moved, and from which file. A one-file copy steps and stays,
-        /// so no move is waited for there.
+        /// The step to the next file: made, whether it moved, and from which file. A one-file worktree steps and
+        /// stays, so no move is waited for there.
         property bool walked: false
         property bool moved: false
         property string leftPath: ""
@@ -310,7 +310,7 @@ Item {
             if (graphModel.finishCount === 0 || !workingTree.loaded)
                 return
             if (!carriedReadTimer.asked) {
-                const row = driver.rowOfCopy(Harness.autoActArg)
+                const row = driver.rowOfWorktree(Harness.autoActArg)
                 if (row < 0)
                     return
                 // Through the row itself, so the row's own decision is the one taken (verify-ui §壊れない動詞の実装と反復).
@@ -321,7 +321,7 @@ Item {
                 carriedReadTimer.asked = true
                 return
             }
-            // Until the copy's own files arrive the lists hold this window's.
+            // Until the worktree's own files arrive the lists hold this window's.
             const files = page.wipUnstaged
             if (page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0)
                 return
@@ -370,14 +370,14 @@ Item {
             const stepped = driver.carriedPane.filesWalk.stepFile(1, false)
             carriedReadTimer.walked = true
             carriedReadTimer.moved = stepped
-            // The preset's copy holds one path staged and written again, so `files=1` and a `tally=` of one are the
-            // fold (per side both would be two). `cut=`/`tip=`: the band cuts the long name, its hover carries it.
+            // The preset's worktree holds one path staged and written again, so `files=1` and a `tally=` of one are
+            // the fold (per side both would be two). `cut=`/`tip=`: the band cuts the long name, its hover carries it.
             // `lines=` goes last, past what the table pins (`verify::outcome` matches a substring). The tally is in
             // the order the row draws it.
             const tally = graphModel.carriedTally(page.selectedRow)
             const counts = tally ? [tally.added, tally.modified, tally.deleted,
                                     tally.renamed, tally.copied, tally.conflicted] : []
-            Harness.report("carried_read copy=" + files.carriedName
+            Harness.report("carried_read worktree=" + files.carriedName
                               + " files=" + files.total
                               + " tally=" + counts.join(",")
                               + " lit=" + lit
@@ -391,7 +391,7 @@ Item {
         }
     }
     // The same pane at rest, nothing read: `litRows=` must be 0 here, which `carried-read` cannot show. The corner is
-    // claimed here too — `corner` cannot reach another copy's pane.
+    // claimed here too — `corner` cannot reach another worktree's pane.
     SampleTimer {
         id: carriedStandTimer
         property bool asked: false
@@ -411,7 +411,7 @@ Item {
                 return
             if (!carriedStandTimer.asked) {
                 // The same road in as `carried-read`.
-                const row = driver.rowOfCopy(Harness.autoActArg)
+                const row = driver.rowOfWorktree(Harness.autoActArg)
                 if (row < 0)
                     return
                 const item = graphPane.view.itemAtIndex(row)
@@ -421,7 +421,7 @@ Item {
                 carriedStandTimer.asked = true
                 return
             }
-            // The copy's own files arrived and their rows built: until then nothing is lit or bare.
+            // The worktree's own files arrived and their rows built: until then nothing is lit or bare.
             const files = page.wipUnstaged
             if (page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0)
                 return
@@ -429,7 +429,7 @@ Item {
                 return
             carriedStandTimer.stop()
             // `corner=` is the label's own visibility; the room it was handed would go green with the binding cut.
-            Harness.report("carried_stand copy=" + files.carriedName
+            Harness.report("carried_stand worktree=" + files.carriedName
                               + " files=" + files.total
                               + " litRows=" + driver.carriedPane.filesWalk.litRows()
                               + " reading=" + page.diffShown

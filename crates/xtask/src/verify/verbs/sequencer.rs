@@ -58,7 +58,7 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "write_stopped wip=true conflicts=true error=false log=false cont=true",
     },
-    // A replay stops on no branch: `home=` is the main copy's WORKTREES
+    // A replay stops on no branch: `home=` is the main worktree's WORKTREES
     // row named by its folder, which only the listing read after the
     // write says (the one before names the branch).
     Verb {
@@ -191,8 +191,8 @@ pub(super) const TABLE: &[Verb] = &[
     // like the emptied-commit stop (デザイン規約 §フル interactive rebase).
     // `box=` / `button=`: the one stepping stop that keeps the message
     // boxes and the commit button, since amending is what it stops for.
-    // `home=`: the main copy's WORKTREES row, on no branch now, is named by
-    // its folder; the branch it left is the listing from before the write.
+    // `home=`: the main worktree's WORKTREES row, on no branch now, is named
+    // by its folder; the branch it left is the listing from before the write.
     Verb {
         name: "rebase-edit-stop",
         when: &[],
@@ -247,7 +247,7 @@ pub(super) const TABLE: &[Verb] = &[
     // and every other exit-card row. Over a clean tree the face it stood
     // on is empty once the operation is gone, so a reader left on it
     // frames like one taken to the commit — `wip=` and `op=` are the claim.
-    // `home=`: the main copy's WORKTREES row names its branch again, which
+    // `home=`: the main worktree's WORKTREES row names its branch again, which
     // only the listing read after the write can say.
     Verb {
         name: "rebase-edit-stop-out",

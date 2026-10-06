@@ -96,10 +96,10 @@ impl DiffModel {
         self.begin_request_in(String::new(), title, target);
     }
 
-    /// The same, for a file in another working copy — `at` is that copy's
+    /// The same, for a file in another worktree — `at` is that worktree's
     /// path, empty for this window's own tree.
     ///
-    /// `at` is part of "the same file" (`same_file`): a copy's file shares
+    /// `at` is part of "the same file" (`same_file`): another worktree's file shares
     /// its path with this window's, so without it a step between them
     /// would read as a re-read and keep the rows and the reader's place.
     pub(super) fn begin_request_in(&mut self, at: String, title: String, target: DiffTarget) {

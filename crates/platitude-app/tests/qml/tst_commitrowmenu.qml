@@ -16,7 +16,7 @@ Item {
 
     /// What a press asked for, last one wins: the menu runs nothing itself.
     property string asked: ""
-    /// The WORKTREE card's making rows where a case is not about them (`CommitMenuState.askCopyRows`).
+    /// The WORKTREE card's making rows where a case is not about them (`CommitMenuState.askWorktreeRows`).
     readonly property var makingNothing: ({ "oid": "", "here": false, "checkout": "", "branch": "", "start": "",
                                              "path": "", "place": "", "taken": "" })
 
@@ -51,9 +51,9 @@ Item {
         onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
             root.asked = "delete-remote-tag " + remote + " " + tag + " " + expect
         onDeleteRemoteRequested: (remoteRef, expect) => root.asked = "delete-remote " + remoteRef + " " + expect
-        onCopyHereRequested: oidHex => root.asked = "copy-here " + oidHex
-        onCopyAddRequested: (mode, branch, start, path, name) =>
-            root.asked = "copy-add " + mode + " " + branch + " " + start + " " + path + " " + name
+        onWorktreeHereRequested: oidHex => root.asked = "worktree-here " + oidHex
+        onWorktreeAddRequested: (mode, branch, start, path, name) =>
+            root.asked = "worktree-add " + mode + " " + branch + " " + start + " " + path + " " + name
     }
 
     /// The row wearing that command, read the way the menu reads itself (`AppMenu.offeredRows`), so a row nothing
@@ -97,7 +97,7 @@ Item {
                     asks: true,
                 },
                 {
-                    tag: "one another copy holds",
+                    tag: "one another worktree holds",
                     fields: { canSwitch: true, heldLeaf: "topic" },
                     offered: true,
                     asks: false,
@@ -112,9 +112,9 @@ Item {
             compare(menu.switchItem.blockedReason, "", "a move that cannot be made is not a greyed row")
         }
 
-        /// The press opens that copy and asks nothing, so the words are all that is read before it
-        /// (offers::SwitchAction::OpenHolder). The mark is the WORKTREES one that copy wears everywhere.
-        function test_a_held_branch_names_the_copy_instead_of_a_command() {
+        /// The press opens that worktree and asks nothing, so the words are all that is read before it
+        /// (offers::SwitchAction::OpenHolder). The mark is the WORKTREES one that worktree wears everywhere.
+        function test_a_held_branch_names_the_worktree_instead_of_a_command() {
             root.aimAt({ canSwitch: true, heldLeaf: "topic" })
             compare(menu.switchItem.code, "", "there is no git command for opening a worktree")
             compare(menu.switchItem.text, "Open")
@@ -260,11 +260,11 @@ Item {
             menu.menu.dismiss()
         }
 
-        /// The WORKTREE card's two making rows (デザイン規約 §作業コピーを作る): the card stands with
-        /// `Create worktree here…` on a row that names no copy, `worktree add` names the folder it would make and greys
-        /// with the reason where something is in the way there, and both hand up what the menu froze — a remote branch
-        /// sent with the remote one it is made off.
-        function test_the_worktree_card_makes_copies_and_names_where_they_go() {
+        /// The WORKTREE card's two making rows (デザイン規約 §worktree を作る): the card stands with
+        /// `Create worktree here…` on a row that names no worktree, `worktree add` names the folder it would make and
+        /// greys with the reason where something is in the way there, and both hand up what the menu froze — a remote
+        /// branch sent with the remote one it is made off.
+        function test_the_worktree_card_makes_worktrees_and_names_where_they_go() {
             const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
                             "remoteDrifted": false, "open": false, "merged": "", "offers": [] }
             const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
@@ -273,15 +273,15 @@ Item {
                              "place": "feature-topic-a", "taken": "" }
             root.aimAt({})
             menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": making })
-            const card = menu.copyCard
-            verify(card.applies, "the card stands on a row that names no copy")
-            verify(!card.removeCopyItem.offered, "with nothing to take away")
-            verify(card.copyHereItem.offered)
-            compare(card.copyHereItem.text, "Create worktree here…")
-            card.copyHereItem.triggered()
-            compare(root.asked, "copy-here " + menu.oid)
+            const card = menu.worktreeCard
+            verify(card.applies, "the card stands on a row that names no worktree")
+            verify(!card.removeWorktreeItem.offered, "with nothing to take away")
+            verify(card.worktreeHereItem.offered)
+            compare(card.worktreeHereItem.text, "Create worktree here…")
+            card.worktreeHereItem.triggered()
+            compare(root.asked, "worktree-here " + menu.oid)
 
-            const add = card.copyAddItem
+            const add = card.worktreeAddItem
             verify(add.offered)
             compare(add.code, "worktree add")
             compare(add.nameMark, "tree")
@@ -292,31 +292,31 @@ Item {
             compare(add.tipMarkWord, "feature-topic-a")
             add.triggered()
             compare(root.asked,
-                    "copy-add branch feature/topic-a  C:/work/repo.worktrees/feature-topic-a feature-topic-a")
+                    "worktree-add branch feature/topic-a  C:/work/repo.worktrees/feature-topic-a feature-topic-a")
 
             root.aimAt({ targetKind: "remote", targetName: "origin/feature/remote-only" })
             menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": {
                 "oid": menu.oid, "here": true, "checkout": "track", "branch": "feature/remote-only",
                 "start": "origin/feature/remote-only", "path": "C:/work/repo.worktrees/feature-remote-only",
                 "place": "feature-remote-only", "taken": "" } })
-            card.copyAddItem.triggered()
-            compare(root.asked, "copy-add track feature/remote-only origin/feature/remote-only "
+            card.worktreeAddItem.triggered()
+            compare(root.asked, "worktree-add track feature/remote-only origin/feature/remote-only "
                     + "C:/work/repo.worktrees/feature-remote-only feature-remote-only")
 
             menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": {
                 "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/blocked", "start": "",
                 "path": "C:/work/repo.worktrees/feature-blocked", "place": "feature-blocked", "taken": "folder" } })
-            compare(card.copyAddItem.blockedReason, "The folder is not empty — feature-blocked")
-            compare(card.copyAddItem.tipMarkWord, "feature-blocked", "the tip's tree mark stands before the folder")
+            compare(card.worktreeAddItem.blockedReason, "The folder is not empty — feature-blocked")
+            compare(card.worktreeAddItem.tipMarkWord, "feature-blocked", "the tip's tree mark stands before the folder")
 
             menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": {
                 "oid": menu.oid, "here": true, "checkout": "branch", "branch": "fix/listed", "start": "",
                 "path": "C:/work/repo.worktrees/fix-listed", "place": "fix-listed", "taken": "listed" } })
-            compare(card.copyAddItem.blockedReason, "Taken by another worktree — fix-listed")
-            compare(card.copyAddItem.tipMarkWord, "fix-listed")
+            compare(card.worktreeAddItem.blockedReason, "Taken by another worktree — fix-listed")
+            compare(card.worktreeAddItem.tipMarkWord, "fix-listed")
 
             menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": root.makingNothing })
-            verify(!card.copyAddItem.offered, "a branch out somewhere has no row, not a grey one")
+            verify(!card.worktreeAddItem.offered, "a branch out somewhere has no row, not a grey one")
             verify(!card.applies, "and a row with nothing to make or take away has no card")
             menu.menu.dismiss()
         }

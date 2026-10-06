@@ -26,15 +26,15 @@ Item {
     readonly property var held: root.chip("branch", "spike", { "held": true })
     readonly property var heldLocked: root.chip("branch", "spike", { "held": true, "locked": true })
     readonly property var remote: root.chip("remote", "origin/preview", { "here": false })
-    /// A working copy on this commit with no branch out (デザイン規約 §ref の種別).
-    readonly property var copy: root.chip("worktree", "rig")
-    readonly property var copyLocked: root.chip("worktree", "rig", { "locked": true })
+    /// A worktree on this commit with no branch out (デザイン規約 §ref の種別).
+    readonly property var worktree: root.chip("worktree", "rig")
+    readonly property var worktreeLocked: root.chip("worktree", "rig", { "locked": true })
     readonly property var tagHere: root.chip("tag", "v1.0")
     readonly property var tagHere2: root.chip("tag", "v1.1")
     readonly property var tagAway: root.chip("tag", "v2.0", { "hasRemote": true, "here": false })
 
-    /// Held by a locked copy and on a remote: the worst-dressed card, both marks at once, which the column's floor is
-    /// measured on.
+    /// Held by a locked worktree and on a remote: the worst-dressed card, both marks at once, which the column's floor
+    /// is measured on.
     readonly property var dressed: root.chip("branch", "feature/a-name-far-too-long-for-any-column",
                                              { "hasRemote": true, "held": true, "locked": true })
 
@@ -103,7 +103,7 @@ Item {
             compare(stack.sheets, ["tag", "tagdim"])
         }
 
-        // A held branch says where that copy is — what the reader has to see first.
+        // A held branch says where that worktree is — what the reader has to see first.
         function test_a_held_branch_is_its_own_colour() {
             stack.records = [root.local2, root.held]
             compare(stack.sheets, ["worktree"])
@@ -111,54 +111,54 @@ Item {
             compare(stack.sheets, ["local"])
         }
 
-        // Another working copy on this commit is one colour, with a branch out or not (デザイン規約 §ref の種別).
-        function test_a_copy_with_no_branch_reads_as_the_branch_a_copy_holds() {
-            stack.records = [root.copy]
+        // Another worktree on this commit is one colour, with a branch out or not (デザイン規約 §ref の種別).
+        function test_a_worktree_with_no_branch_reads_as_the_branch_a_worktree_holds() {
+            stack.records = [root.worktree]
             compare(stack.sheets, [])
-            stack.records = [root.local2, root.copy]
+            stack.records = [root.local2, root.worktree]
             compare(stack.sheets, ["worktree"])
-            stack.records = [root.held, root.copy, root.local2]
+            stack.records = [root.held, root.worktree, root.local2]
             compare(stack.sheets, ["worktree", "local"], "the two are one colour, so one sheet")
         }
 
         // The front card's own colour is the one a fan may repeat (デザイン規約 §重ね表示). Read with the front card's
-        // key: a single `worktree` sheet is also what one copy plus one other colour comes to.
-        function test_two_copies_on_one_commit_put_a_green_sheet_behind_a_green_card() {
-            stack.records = [root.held, root.copy]
-            compare(stack.chipItem.kindKeyOf(stack.records[0]), "worktree", "the card in front is not a copy's")
-            compare(stack.sheets, ["worktree"], "the second copy drew no sheet of its own colour")
+        // key: a single `worktree` sheet is also what one worktree plus one other colour comes to.
+        function test_two_worktrees_on_one_commit_put_a_green_sheet_behind_a_green_card() {
+            stack.records = [root.held, root.worktree]
+            compare(stack.chipItem.kindKeyOf(stack.records[0]), "worktree", "the card in front is not a worktree's")
+            compare(stack.sheets, ["worktree"], "the second worktree drew no sheet of its own colour")
             // A third is the same single sheet; the card's `+N` says how many.
-            stack.records = [root.held, root.heldLocked, root.copy]
+            stack.records = [root.held, root.heldLocked, root.worktree]
             compare(stack.sheets, ["worktree"])
         }
 
         // The tree mark belongs to the name, not the state: a held branch's name is still a branch's
         // (デザイン規約 §ref の種別).
         function test_only_the_chip_naming_a_folder_wears_the_tree_mark() {
-            stack.records = [root.copy]
-            verify(stack.chipItem.hasTree, "the copy's own name came out with nothing saying it is a folder")
-            // The padlock takes the seat: only a working copy can be locked, so it says what the tree says, and the
+            stack.records = [root.worktree]
+            verify(stack.chipItem.hasTree, "the worktree's own name came out with nothing saying it is a folder")
+            // The padlock takes the seat: only a worktree can be locked, so it says what the tree says, and the
             // frame is too short for both.
-            stack.records = [root.copyLocked]
-            verify(stack.chipItem.hasLock && !stack.chipItem.hasTree, "a locked copy wore both marks")
+            stack.records = [root.worktreeLocked]
+            verify(stack.chipItem.hasLock && !stack.chipItem.hasTree, "a locked worktree wore both marks")
             stack.records = [root.held]
             verify(!stack.chipItem.hasTree, "a branch is not a folder, whoever has it out")
             stack.records = [root.current]
             verify(!stack.chipItem.hasTree)
         }
 
-        // The padlock is the copy's, on either shape a copy takes (デザイン規約 §ref の種別). The colour does not move
-        // with it: a locked copy is still a copy.
-        function test_the_padlock_stands_on_a_locked_copy_and_nowhere_else() {
+        // The padlock is the worktree's, on either shape a worktree takes (デザイン規約 §ref の種別). The colour does not
+        // move with it: a locked worktree is still a worktree.
+        function test_the_padlock_stands_on_a_locked_worktree_and_nowhere_else() {
             stack.records = [root.held]
             verify(!stack.chipItem.hasLock, "an unlocked holder put a padlock on the card")
             stack.records = [root.heldLocked]
             verify(stack.chipItem.hasLock, "the locked holder's card wears no padlock")
-            stack.records = [root.copy]
+            stack.records = [root.worktree]
             verify(!stack.chipItem.hasLock)
-            stack.records = [root.copyLocked]
-            verify(stack.chipItem.hasLock, "the marker for a locked copy wears no padlock")
-            stack.records = [root.local2, root.heldLocked, root.copyLocked]
+            stack.records = [root.worktreeLocked]
+            verify(stack.chipItem.hasLock, "the marker for a locked worktree wears no padlock")
+            stack.records = [root.local2, root.heldLocked, root.worktreeLocked]
             compare(stack.sheets, ["worktree"], "the lock is not a colour of its own")
         }
 
@@ -170,7 +170,7 @@ Item {
         // The deepest row a detached HEAD can draw: the marker cannot repeat, so one sheet per other colour.
         function test_every_colour_at_once_is_one_sheet_apiece() {
             stack.records = [root.head, root.current, root.local2, root.held,
-                             root.remote, root.copy, root.tagHere, root.tagAway]
+                             root.remote, root.worktree, root.tagHere, root.tagAway]
             compare(stack.sheets, ["local", "worktree", "remote", "tag", "tagdim"])
             compare(stack.sheets.length, stack.maxSheets)
         }

@@ -370,7 +370,7 @@ Item {
     // PGG_AUTO_ACT=commands-select / commands-copy: a drag from the head of the first row to the end of the last —
     // all three columns and more than one row — then, for `-copy`, Ctrl+C. **`perRow=` is the claim**: one clipboard
     // line per row. Tab-led lines are not counted: they are git's words under a failure, and which commands fail is
-    // not the run's (a container reading the tree's real working copy gets `not a git repository`).
+    // not the run's (a container reading the tree's real worktree gets `not a git repository`).
     //
     // Behind the write barrier: the two writes that fill the log are still queued when this starts. Everything is
     // read in the branch that acts (rules/app-ui.md §UI 自動化).

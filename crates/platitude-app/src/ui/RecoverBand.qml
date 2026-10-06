@@ -69,8 +69,8 @@ Rectangle {
             }
             CardText {
                 Layout.fillWidth: true
-                text: band.entry === null || band.entry.copy === ""
-                      ? band.when : qsTr("%1 · in %2").arg(band.when).arg(band.entry.copy)
+                text: band.entry === null || band.entry.worktree === ""
+                      ? band.when : qsTr("%1 · in %2").arg(band.when).arg(band.entry.worktree)
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
             }

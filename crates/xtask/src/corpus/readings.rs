@@ -13,7 +13,7 @@ pub(super) fn readings(at: &Path) -> Result<(), String> {
     tags(at)?;
     branch_tree(at)?;
     println!("profile: startup/status (tracked tree, index and ignored paths)");
-    worktree(at)?;
+    working_tree(at)?;
     println!("profile: graph/scroll (lanes, chips, visible text and font coverage)");
     graph(at)?;
     window(at)?;
@@ -170,7 +170,7 @@ fn tags(at: &Path) -> Result<(), String> {
 /// reference clone's `core.fsmonitor`, which makes its status slower
 /// (ci/baseline/code-costs-windows-x64.md §コーパス生成) and would time a
 /// daemon's health on the day.
-fn worktree(at: &Path) -> Result<(), String> {
+fn working_tree(at: &Path) -> Result<(), String> {
     let tracked = git(at, &["ls-files"])?.lines().count();
     let index = std::fs::metadata(at.join(".git").join("index"))
         .map(|meta| meta.len())
@@ -236,7 +236,7 @@ fn worktree(at: &Path) -> Result<(), String> {
         if midx { " + a multi-pack-index" } else { "" }
     );
     println!(
-        "  worktree {tracked} files in {dirs} dirs | index {}MB | status {:.2}s | {} objects in {}",
+        "  working tree {tracked} files in {dirs} dirs | index {}MB | status {:.2}s | {} objects in {}",
         index / 1_000_000,
         status.as_secs_f64(),
         read("in-pack:"),

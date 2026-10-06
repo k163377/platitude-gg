@@ -178,7 +178,7 @@ Item {
             chipMenuTimer.start()
         } else if (act === "delete-blocked-tip") {
             // Forced through the property the real hover writes. The argument picks why the delete row is out: none
-            // is the current branch, a name is one another working copy has checked out. `<branch>:remote` aims at
+            // is the current branch, a name is one another worktree has checked out. `<branch>:remote` aims at
             // the row reaching the remote reading, out when the two names stand on different commits while the
             // local row may be pressable (デザイン規約 §左メニューの所作 の削除の表).
             const wantsRemote = arg.endsWith(":remote")
@@ -327,7 +327,7 @@ Item {
             "delete_blocked code=" + acts.blockedTipRow.code
             + " tip=" + acts.blockedTipRow.ToolTip.visible
             + " aside=" + driver.tipAside(acts.blockedTipRow.ToolTip.toolTip)
-            // The holding copy's folder (`RefBranchMenu.holderLeaf`), empty on other rows — the sentence itself is
+            // The holding worktree's folder (`RefBranchMenu.holderLeaf`), empty on other rows — the sentence itself is
             // tst_branchcard's to judge.
             + " holder=" + refBranchCard.holderLeaf
             + " reason=" + acts.blockedTipRow.blockedReason)

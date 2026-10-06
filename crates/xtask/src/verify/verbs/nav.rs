@@ -187,7 +187,7 @@ pub(super) const TABLE: &[Verb] = &[
     // are read by `tests/qml/tst_branchcard.qml`; only `:remote` claims its
     // own here. A window adds the two lookups the rows are told apart by,
     // one run each: `:remote` that `upstreamDrifted` arrived, `worktrees`
-    // that the copy holding the branch did. No run on the current branch:
+    // that the worktree holding the branch did. No run on the current branch:
     // `current` is core's own word, so that row stands on no lookup.
     Verb {
         name: "delete-blocked-tip",
@@ -203,8 +203,8 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Ends(":remote"),
                 "delete_blocked code=push --delete tip=true aside=true holder= reason=Differs from ",
             ),
-            // `holder=` is the folder of the copy holding this branch —
-            // the witness that the card looked the copy up.
+            // `holder=` is the folder of the worktree holding this branch —
+            // the witness that the card looked the worktree up.
             (
                 Arg::Is("feature/topic-a"),
                 "delete_blocked code=branch --delete tip=true aside=true holder=topic",
@@ -212,46 +212,47 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "delete_blocked code=branch --delete tip=true aside=true",
     },
-    // A working copy's WORKTREE card, raised from its WORKTREES row. The
+    // A worktree's WORKTREE card, raised from its WORKTREES row. The
     // picture shows a greyed row; only the line says it is out rather
     // than pale, which sentence its hover gives, and whether the menu
-    // stands on the branch the copy has out (`branch=`) — the two locks of
-    // `--preset worktrees` (with and without a reason), a copy on a branch
-    // and one on none. `held=false`: the row is a click; `cut=false`: the
-    // folder came out whole, which a Linux font once missed by a pixel.
-    // `longnames`' copy is cut on purpose: its forced hover gives the whole
-    // line back. `says=` is the tip's text.
+    // stands on the branch the worktree has out (`branch=`) — the two locks
+    // of `--preset worktrees` (with and without a reason), a worktree on a
+    // branch and one on none. `held=false`: the row is a click; `cut=false`:
+    // the folder came out whole, which a Linux font once missed by a pixel.
+    // `longnames`' worktree is cut on purpose: its forced hover gives the
+    // whole line back. `says=` is the tip's text.
     Verb {
         name: "worktree-menu",
         when: &[
             (
-                Arg::Is("a-very-long-working-copy-folder-name"),
-                "worktree_menu copy=a-very-long-working-copy-folder-name card=true offered=true \
+                Arg::Is("a-very-long-linked-worktree-folder-name"),
+                "worktree_menu worktree=a-very-long-linked-worktree-folder-name card=true offered=true \
                  blocked=false tip=true code=worktree remove branch=true held=false cut=true \
-                 says=worktree remove a-very-long-working-copy-folder-name",
+                 says=worktree remove a-very-long-linked-worktree-folder-name",
             ),
             (
                 Arg::Is("hotfix"),
-                "worktree_menu copy=hotfix card=true offered=true blocked=true tip=true \
+                "worktree_menu worktree=hotfix card=true offered=true blocked=true tip=true \
                  code=worktree remove branch=true held=false cut=false \
                  says=Locked — release run is using this checkout",
             ),
             (
                 Arg::Is("spike"),
-                "worktree_menu copy=spike card=true offered=true blocked=true tip=true \
+                "worktree_menu worktree=spike card=true offered=true blocked=true tip=true \
                  code=worktree remove branch=true held=false cut=false \
                  says=This worktree is locked",
             ),
             (
                 Arg::Is("detached"),
-                "worktree_menu copy=detached card=true offered=true blocked=false tip=false \
+                "worktree_menu worktree=detached card=true offered=true blocked=false tip=false \
                  code=worktree remove branch=false held=false cut=false",
             ),
-            // The repository's own copy: its branch's menu, and a card that
-            // makes copies but has no `worktree remove` — git never removes it.
+            // The repository's own worktree: its branch's menu, and a card
+            // that makes worktrees but has no `worktree remove` — git never
+            // removes it.
             (
                 Arg::Is("repo"),
-                "worktree_menu copy=repo card=true offered=false blocked=false tip=false \
+                "worktree_menu worktree=repo card=true offered=false blocked=false tip=false \
                  code=worktree remove branch=true",
             ),
             (
@@ -259,43 +260,43 @@ pub(super) const TABLE: &[Verb] = &[
                 "card=true offered=true blocked=false tip=false code=worktree remove",
             ),
         ],
-        // No preset: a copy of `demo-repo worktrees` opened with `--repo`
-        // is the one this tab stands in (verbs.md).
+        // No preset: a worktree of `demo-repo worktrees` opened with
+        // `--repo` is the one this tab stands in (verbs.md).
         plain: "card=true offered=true blocked=true tip=true code=worktree remove branch=true \
                 held=false cut=false says=This tab is showing this worktree",
     },
-    // The same card from the graph: the row the copy stands on, its menu
-    // aimed at the copy's folder chip (`detached`) or at the branch chip
-    // of the copy that has it out (`topic`). `:go` presses it, and the
-    // copy leaves the list as from the sidebar.
+    // The same card from the graph: the row the worktree stands on, its
+    // menu aimed at the worktree's folder chip (`detached`) or at the
+    // branch chip of the worktree that has it out (`topic`). `:go` presses
+    // it, and the worktree leaves the list as from the sidebar.
     Verb {
         name: "worktree-graph",
         when: &[
             (Arg::Ends(":go"), "worktree_gone row=-1 log=false"),
             (
                 Arg::Is("detached"),
-                "worktree_menu copy=detached card=true offered=true blocked=false tip=false \
+                "worktree_menu worktree=detached card=true offered=true blocked=false tip=false \
                  code=worktree remove branch=false held=false cut=false",
             ),
             (
                 Arg::Is("topic"),
-                "worktree_menu copy=topic card=true offered=true blocked=false tip=false \
+                "worktree_menu worktree=topic card=true offered=true blocked=false tip=false \
                  code=worktree remove branch=true held=false cut=false",
             ),
         ],
         plain: "card=true offered=true code=worktree remove",
     },
-    // The copy leaves the list for good (`row=-1` once the listing that
+    // The worktree leaves the list for good (`row=-1` once the listing that
     // saw the removal is drawn), and a landing raises no log.
     Verb {
         name: "worktree-remove",
         when: &[],
         plain: "worktree_gone row=-1 log=false",
     },
-    // git keeps a copy holding work: the report bar in the gesture's
+    // git keeps a worktree holding work: the report bar in the gesture's
     // colour, the log left shut. `why=true` is the screen's own sentence
     // — git's ends in advice to force it; `mark=true` the tree mark in
-    // front of the copy's name in the heading.
+    // front of the worktree's name in the heading.
     Verb {
         name: "worktree-remove-refused",
         when: &[(
@@ -305,13 +306,14 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false",
     },
-    // The two rows that make a working copy, on the WORKTREE card
-    // (デザイン規約 §作業コピーを作る — `card=` is that card opened).
+    // The two rows that make a worktree, on the WORKTREE card
+    // (デザイン規約 §worktree を作る — `card=` is that card opened).
     // `here=` is `Create worktree here…`, on every row with a commit;
-    // `add=` is `worktree add`, on a branch no copy has out — not on the
-    // tree's own branch (`main`) nor one another copy holds (`worktrees`'
-    // `feature/topic-a`, whose `switch` row opens that copy instead).
-    // `folder=` is where it would go, and `copy-places` puts something in
+    // `add=` is `worktree add`, on a branch no worktree has out — not on
+    // the tree's own branch (`main`) nor one another worktree holds
+    // (`worktrees`' `feature/topic-a`, whose `switch` row opens that
+    // worktree instead).
+    // `folder=` is where it would go, and `worktree-places` puts something in
     // the way of two branches: the row is greyed and its forced hover says
     // which — a greyed row and a pale one are a picture apart, the
     // sentence none. Its one long branch is cut on the row (`cut=`), and
@@ -323,43 +325,43 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[
             (
                 Arg::Is("branch:feature/blocked"),
-                "copy_menu card=true here=true add=true folder=feature-blocked blocked=true tip=true \
+                "worktree_add_menu card=true here=true add=true folder=feature-blocked blocked=true tip=true \
                  aside=true mark=feature-blocked cut=false \
                  says=The folder is not empty — feature-blocked",
             ),
             (
                 Arg::Is("branch:fix/listed"),
-                "copy_menu card=true here=true add=true folder=fix-listed blocked=true tip=true \
+                "worktree_add_menu card=true here=true add=true folder=fix-listed blocked=true tip=true \
                  aside=true mark=fix-listed cut=false \
                  says=Taken by another worktree — fix-listed",
             ),
             (
                 Arg::Has("long-enough"),
-                "copy_menu card=true here=true add=true \
+                "worktree_add_menu card=true here=true add=true \
                  folder=feature-a-name-long-enough-to-cut-its-folder blocked=false tip=true aside=true \
                  mark=feature-a-name-long-enough-to-cut-its-folder cut=true \
                  says=worktree add feature-a-name-long-enough-to-cut-its-folder",
             ),
             (
                 Arg::WithPreset("worktrees"),
-                "copy_menu card=true here=true add=false folder= blocked=false",
+                "worktree_add_menu card=true here=true add=false folder= blocked=false",
             ),
             (
                 Arg::Is("branch:main"),
-                "copy_menu card=true here=true add=false folder= blocked=false",
+                "worktree_add_menu card=true here=true add=false folder= blocked=false",
             ),
             // A tag has no branch to take out: only the new one.
             (
                 Arg::Starts("tag:"),
-                "copy_menu card=true here=true add=false folder= blocked=false",
+                "worktree_add_menu card=true here=true add=false folder= blocked=false",
             ),
             (
                 Arg::Has("remote-only"),
-                "copy_menu card=true here=true add=true folder=feature-remote-only blocked=false tip=false \
+                "worktree_add_menu card=true here=true add=true folder=feature-remote-only blocked=false tip=false \
                  aside=false mark= cut=false",
             ),
         ],
-        plain: "copy_menu card=true here=true add=true folder=feature-topic-a blocked=false tip=false \
+        plain: "worktree_add_menu card=true here=true add=true folder=feature-topic-a blocked=false tip=false \
                 aside=false mark= cut=false",
     },
     // The box `Create worktree here…` opens, and what it turns down before
@@ -373,56 +375,56 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[
             (
                 Arg::Ends("=feature-blocked"),
-                "copy_box where=graph open=true mode=worktree refused=true tip=true \
+                "worktree_box where=graph open=true mode=worktree refused=true tip=true \
                  mark=feature-blocked why=The folder is not empty — feature-blocked",
             ),
             (
                 Arg::Ends("=feature/free"),
-                "copy_box where=graph open=true mode=worktree refused=true tip=true mark= \
+                "worktree_box where=graph open=true mode=worktree refused=true tip=true mark= \
                  why=A branch called that already exists",
             ),
             // A name opening with `-`, which git would run as an option of
             // its own `git branch` (`branch::is_valid_name`).
             (
                 Arg::Ends("=-m"),
-                "copy_box where=graph open=true mode=worktree refused=true tip=true mark= \
+                "worktree_box where=graph open=true mode=worktree refused=true tip=true mark= \
                  why=git will not take this as a name",
             ),
             (
                 Arg::Ends("@graph"),
-                "copy_box where=graph open=true mode=worktree refused=false tip=false mark= why=",
+                "worktree_box where=graph open=true mode=worktree refused=false tip=false mark= why=",
             ),
         ],
-        plain: "copy_box where=nav open=true mode=worktree refused=false tip=false mark= why=",
+        plain: "worktree_box where=nav open=true mode=worktree refused=false tip=false mark= why=",
     },
-    // A copy made and the tab stood in it: the folder the rule names, the
+    // A worktree made and the tab stood in it: the folder the rule names, the
     // branch out in it, one tab (the tab moved, not grew), the page kept,
     // and no log raised by the landing.
     Verb {
         name: "worktree-new",
         when: &[(
             Arg::Ends("=feature/next"),
-            "copy_made stood=true copy=feature-next branch=feature/next tabs=1 kept=true \
+            "worktree_made stood=true worktree=feature-next branch=feature/next tabs=1 kept=true \
              log=false",
         )],
-        plain: "copy_made stood=true copy=hotfix-patch branch=hotfix/patch tabs=1 kept=true \
+        plain: "worktree_made stood=true worktree=hotfix-patch branch=hotfix/patch tabs=1 kept=true \
                 log=false",
     },
-    // The row's own branch out in a new copy: a local branch as it is, a
+    // The row's own branch out in a new worktree: a local branch as it is, a
     // remote one with no local branch made local and following it.
     Verb {
         name: "worktree-add",
         when: &[(
             Arg::Has("remote-only"),
-            "copy_made stood=true copy=feature-remote-only branch=feature/remote-only tabs=1 \
+            "worktree_made stood=true worktree=feature-remote-only branch=feature/remote-only tabs=1 \
              kept=true log=false",
         )],
-        plain: "copy_made stood=true copy=feature-topic-a branch=feature/topic-a tabs=1 \
+        plain: "worktree_made stood=true worktree=feature-topic-a branch=feature/topic-a tabs=1 \
                 kept=true log=false",
     },
-    // A name taken between the box and git: the copy was not made, said
+    // A name taken between the box and git: the worktree was not made, said
     // over the graph in the gesture's colour with the log left shut
-    // (デザイン規約 §作業コピーを作る), the heading naming the folder behind its tree mark.
+    // (デザイン規約 §worktree を作る), the heading naming the folder behind its tree mark.
     Verb {
         name: "worktree-new-refused",
         when: &[],
@@ -435,7 +437,7 @@ pub(super) const TABLE: &[Verb] = &[
     // carried pane is also claimed by its words: its model folds by
     // `<run>:<path>` and keeps the path beside it, so a folder row handed
     // the fold key says `whole:src`, and the hover is the only place the
-    // path is spelled out. `topic` is the copy whose one file is nested.
+    // path is spelled out. `topic` is the worktree whose one file is nested.
     Verb {
         name: "path-tip",
         when: &[
@@ -653,7 +655,7 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "tag_reach reach=",
     },
-    // The rest that opened a row, held, with the working copy's path as
+    // The rest that opened a row, held, with the worktree's path as
     // the tip. `open=`: a tip over a row that never opened is the shared
     // instance answering for something else. `same=` is the box's words
     // against what the row asks for (`NavRowFacts.said`) — an empty box

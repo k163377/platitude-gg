@@ -47,20 +47,20 @@ Item {
             bar.label = Words.writeReported(kind, remote, name)
             bar.detail = reason !== "" ? reason : Words.writeReportedWhy(kind, remote, name)
             bar.tone = Words.reportTone(kind)
-            bar.markWord = Words.reportNamesCopy(kind) ? name : ""
+            bar.markWord = Words.reportNamesWorktree(kind) ? name : ""
             bar.open = true
         }
 
-        /// A working copy the removal left standing: the gesture's colour, and the copy's name in the heading behind
-        /// the tree mark every copy's name wears (デザイン規約 §ref の種別「名前の印」). Both kinds, and a report naming
-        /// no copy, since a bar that marks every heading passes the first half alone.
-        function test_a_copy_git_kept_is_named_behind_the_tree_mark() {
+        /// A worktree the removal left standing: the gesture's colour, and the worktree's name in the heading behind
+        /// the tree mark every worktree's name wears (デザイン規約 §ref の種別「名前の印」). Both kinds, and a report
+        /// naming no worktree, since a bar that marks every heading passes the first half alone.
+        function test_a_worktree_git_kept_is_named_behind_the_tree_mark() {
             compare(Words.reportTone("worktree-kept"), "warning")
             compare(Words.reportTone("worktree-half"), "warning")
             compare(Words.writeReported("worktree-kept", "", "topic"), "topic was not removed")
             compare(Words.writeReported("worktree-half", "", "topic"), "topic was not removed completely")
             compare(Words.writeReportedWhy("worktree-kept"), "It has uncommitted changes.")
-            verify(!Words.reportNamesCopy("rename"), "a branch's name wears no tree")
+            verify(!Words.reportNamesWorktree("rename"), "a branch's name wears no tree")
 
             // One space of room, where this font needs two: pinned, or rich text drops it at the block's start.
             compare(Words.roomInSentence("topic was not removed", 0, 1), "&nbsp;topic was not removed")
@@ -74,7 +74,7 @@ Item {
 
             dress("update", "origin", "main", "")
             tryVerify(() => bar.settled)
-            verify(!bar.markShown, "no copy named, no mark")
+            verify(!bar.markShown, "no worktree named, no mark")
         }
 
         /// The mark goes in front of the name where the sentence says it — last in a tip, first in a heading — and
@@ -91,13 +91,13 @@ Item {
             compare(Words.roomInSentence("anything", -1, 2), "", "no seat, no room: drawn as it came")
         }
 
-        /// A copy that was not made: the same yellow, the same mark, in the heading the folder would have been
-        /// (デザイン規約 §作業コピーを作る). git's words come as the reason; where nothing was asked of
+        /// A worktree that was not made: the same yellow, the same mark, in the heading the folder would have been
+        /// (デザイン規約 §worktree を作る). git's words come as the reason; where nothing was asked of
         /// git, the second line is the screen's.
-        function test_a_copy_not_made_is_named_behind_the_tree_mark_in_yellow() {
+        function test_a_worktree_not_made_is_named_behind_the_tree_mark_in_yellow() {
             for (const kind of ["worktree-not-added", "worktree-folder-taken"]) {
                 compare(Words.reportTone(kind), "warning", kind)
-                verify(Words.reportNamesCopy(kind), kind)
+                verify(Words.reportNamesWorktree(kind), kind)
                 compare(Words.writeReported(kind, "", "hotfix-patch"), "hotfix-patch was not created", kind)
             }
             compare(Words.writeReportedWhy("worktree-folder-taken"), "The folder is not empty.")

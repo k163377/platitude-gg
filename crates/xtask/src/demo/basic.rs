@@ -113,7 +113,7 @@ pub(super) fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Repositories of their own inside the working copy, which `status`
+/// Repositories of their own inside the working tree, which `status`
 /// lists as one `vendor/nest/` entry whatever it is asked about untracked
 /// files.
 ///

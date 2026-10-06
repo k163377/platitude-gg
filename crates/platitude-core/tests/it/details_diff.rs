@@ -155,7 +155,7 @@ async fn staged_and_unstaged_diffs_are_separate() {
     repo.commit_file("f.txt", "committed\n", "base");
     repo.write_file("f.txt", "staged version\n");
     repo.git(&["add", "--", "f.txt"]);
-    repo.write_file("f.txt", "worktree version\n");
+    repo.write_file("f.txt", "working tree version\n");
 
     let (executor, cancel) = env();
 
@@ -194,7 +194,7 @@ async fn staged_and_unstaged_diffs_are_separate() {
         .filter(|l| l.kind == DiffLineKind::Addition)
         .map(|l| l.text.as_str())
         .collect();
-    assert_eq!(unstaged_adds, vec!["worktree version"]);
+    assert_eq!(unstaged_adds, vec!["working tree version"]);
 }
 
 #[tokio::test]

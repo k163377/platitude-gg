@@ -10,7 +10,7 @@ impl TabsModel {
         }
     }
 
-    /// Where the working copy at `path` already stands in the strip, by
+    /// Where the worktree at `path` already stands in the strip, by
     /// `repo::open_key` (each road in spells one folder differently).
     ///
     /// One filesystem lookup per tab, paid only when someone asks for a
@@ -19,7 +19,7 @@ impl TabsModel {
         let key = platitude_core::repo::open_key(path);
         self.items
             .iter()
-            .position(|t| platitude_core::repo::open_key(&t.copy_path) == key)
+            .position(|t| platitude_core::repo::open_key(&t.worktree_path) == key)
     }
 
     /// Takes a folder somebody asked for: moves to it where the strip
@@ -27,7 +27,7 @@ impl TabsModel {
     /// (`Hub::place_repo`).
     ///
     /// Only the same folder is answered without git: a folder deeper in a
-    /// tree or a linked copy looks like nothing in the strip until git has
+    /// tree or a linked worktree looks like nothing in the strip until git has
     /// placed it.
     pub(super) fn ask(&mut self, path: String, picked: bool) {
         // Trimmed and spelled once here, so the tab keeps the string it was
@@ -82,12 +82,12 @@ impl TabsModel {
     pub(super) fn land(&mut self, ask: &Ask, msg: OpenMsg) {
         match msg {
             OpenMsg::Placed { place } => {
-                let copy = crate::urlpath::shown_path(&place.info.workdir.to_string_lossy());
+                let worktree = crate::urlpath::shown_path(&place.info.workdir.to_string_lossy());
                 let repo = crate::urlpath::shown_path(&place.repo.to_string_lossy());
-                match landing_for(&self.items, &copy, &repo) {
+                match landing_for(&self.items, &worktree, &repo) {
                     Landing::Show(at) => self.show(at),
-                    Landing::Switch(at) => self.switch_copy(at, copy),
-                    Landing::New => self.open_new(copy, repo),
+                    Landing::Switch(at) => self.switch_worktree(at, worktree),
+                    Landing::New => self.open_new(worktree, repo),
                 }
             }
             OpenMsg::Refused {
@@ -113,18 +113,18 @@ impl TabsModel {
         }
     }
 
-    /// Puts a tab for `copy` at the end of the strip and moves to it.
-    pub(super) fn open_new(&mut self, copy: String, repo: String) {
+    /// Puts a tab for `worktree` at the end of the strip and moves to it.
+    pub(super) fn open_new(&mut self, worktree: String, repo: String) {
         let title = title_of(&repo);
         let Some(Some(tab_id)) = Hub::with(|hub| {
             hub.open_tab(
-                std::path::PathBuf::from(&copy),
+                std::path::PathBuf::from(&worktree),
                 std::path::PathBuf::from(&repo),
             )
         }) else {
             return;
         };
-        self.push(TabItem::standing(tab_id, title, repo, copy));
+        self.push(TabItem::standing(tab_id, title, repo, worktree));
         self.settle_titles();
         self.leave_front();
         self.current_index = self.items.len() as i32 - 1;
@@ -133,16 +133,16 @@ impl TabsModel {
         self.front_tab_asked();
     }
 
-    /// Stands the tab at `at` in another working copy of the repository
+    /// Stands the tab at `at` in another worktree of the repository
     /// it shows, and moves to it
     /// (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」).
     ///
     /// The row is rewritten in place and keeps its id, which keeps the
-    /// page (`RepoPageStack`): the copies share every commit and ref, so
+    /// page (`RepoPageStack`): the worktrees share every commit and ref, so
     /// the graph stands while the session under it is swapped
-    /// (`Hub::restand_tab`). The title stays; only `TabItem::copy_name`
+    /// (`Hub::restand_tab`). The title stays; only `TabItem::worktree_name`
     /// moves.
-    pub(super) fn switch_copy(&mut self, at: usize, copy: String) {
+    pub(super) fn switch_worktree(&mut self, at: usize, worktree: String) {
         let Some(item) = self.items.get(at) else {
             return;
         };
@@ -152,35 +152,36 @@ impl TabsModel {
         // has no page or session — it is only pointed elsewhere.
         let front = usize::try_from(self.current_index).ok() == Some(at);
         if front {
-            // Before the hub moves: drafts are filed under the copy they
+            // Before the hub moves: drafts are filed under the worktree they
             // were written in (`Hub::hold_draft`).
-            self.leaving_copy(at as i32);
+            self.leaving_worktree(at as i32);
         } else {
             self.leave_front();
         }
-        if Hub::with(|hub| hub.restand_tab(standing, std::path::PathBuf::from(&copy))) != Some(true)
+        if Hub::with(|hub| hub.restand_tab(standing, std::path::PathBuf::from(&worktree)))
+            != Some(true)
         {
             return;
         }
         if let Some(item) = self.items.get_mut(at) {
-            item.stand_in(copy);
+            item.stand_in(worktree);
         }
         self.notify_runs([(at, at)]);
         self.current_index = at as i32;
         self.report();
         self.current_index_changed();
         if front {
-            // After the hub, so the page restores the new copy's words.
-            self.stood_copy(at as i32);
+            // After the hub, so the page restores the new worktree's words.
+            self.stood_worktree(at as i32);
         }
         self.front_tab_asked();
     }
 
     /// Stands the tab holding `tab_id` back in the repository's own
-    /// working copy, because the linked one would not open
+    /// worktree, because the linked one would not open
     /// (デザイン規約 §タブの所作「立てない所へは立たない」).
     ///
-    /// Not through [`landing_for`] or git: the tab and its home copy are
+    /// Not through [`landing_for`] or git: the tab and its home worktree are
     /// already known. Silent for a tab already home — there is nowhere
     /// further back, so its failure is shown (`RepoTab` decides).
     pub(super) fn stand_home(&mut self, tab_id: i32) {
@@ -190,11 +191,11 @@ impl TabsModel {
         let Some(item) = self.items.get(at) else {
             return;
         };
-        if item.copy_path == item.repo_path {
+        if item.worktree_path == item.repo_path {
             return;
         }
         let home = item.repo_path.clone();
-        self.switch_copy(at, home);
+        self.switch_worktree(at, home);
     }
 
     /// Moves the strip to the tab at `position` and asks the band to
@@ -228,7 +229,7 @@ impl TabsModel {
     }
 
     /// Names the front row's tab (`current_tab_id`) and its repository and
-    /// copy (`current_repo_name` / `current_copy_name`). Called from
+    /// worktree (`current_repo_name` / `current_worktree_name`). Called from
     /// [`TabsModel::report`], so every act on the strip ends here.
     ///
     /// Each signal goes out only when what it names changes, so a
@@ -238,14 +239,14 @@ impl TabsModel {
             .ok()
             .and_then(|at| self.items.get(at));
         let id = front.map_or(-1, |tab| tab.tab_id);
-        let (repo_name, copy_name) = front.map_or_else(Default::default, |tab| {
-            (title_of(&tab.repo_path), tab.copy_name.clone())
+        let (repo_name, worktree_name) = front.map_or_else(Default::default, |tab| {
+            (title_of(&tab.repo_path), tab.worktree_name.clone())
         });
         // The names before the row's own signal: whatever reads the tab
         // in front off it finds the names already said.
-        if repo_name != self.current_repo_name || copy_name != self.current_copy_name {
+        if repo_name != self.current_repo_name || worktree_name != self.current_worktree_name {
             self.current_repo_name = repo_name;
-            self.current_copy_name = copy_name;
+            self.current_worktree_name = worktree_name;
             self.front_names_changed();
         }
         if id != self.current_tab_id {
@@ -270,12 +271,12 @@ impl TabsModel {
         // equals the one on disk.
         //
         // Both paths go down: a restored tab is not opened until looked
-        // at, so nothing else says which repository a copy hangs off.
+        // at, so nothing else says which repository a worktree hangs off.
         let tabs = self
             .items
             .iter()
             .map(|t| platitude_core::settings::TabRecord {
-                path: platitude_core::settings::repo_key(&t.copy_path),
+                path: platitude_core::settings::repo_key(&t.worktree_path),
                 repo: platitude_core::settings::repo_key(&t.repo_path),
             })
             .collect::<Vec<_>>();
@@ -286,7 +287,7 @@ impl TabsModel {
     /// Lists the strip for the readers that want it whole (`open_repos`),
     /// from [`report`] so every act lands here.
     ///
-    /// The name is the tab's; the path is the copy the tab stands in, in
+    /// The name is the tab's; the path is the worktree the tab stands in, in
     /// the row's own spelling — what the reader hands back on picking a
     /// name, and where git is run.
     ///
@@ -297,7 +298,7 @@ impl TabsModel {
                 .iter()
                 .map(|item| OpenRepo {
                     name: item.title.clone(),
-                    path: item.copy_path.clone(),
+                    path: item.worktree_path.clone(),
                 })
                 .collect(),
         );
@@ -311,11 +312,11 @@ impl TabsModel {
 /// What a folder that opens does to the strip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Landing {
-    /// The very copy standing in this tab: the strip moves to it and
+    /// The very worktree standing in this tab: the strip moves to it and
     /// nothing is read again.
     Show(usize),
-    /// Another working copy of the repository this tab is showing: the
-    /// strip moves to it and stands it in the copy asked for.
+    /// Another worktree of the repository this tab is showing: the
+    /// strip moves to it and stands it in the worktree asked for.
     Switch(usize),
     /// A repository the strip is not showing.
     New,
@@ -325,13 +326,14 @@ pub(super) enum Landing {
 /// repository already open?" (デザイン規約 §タブの所作 「判定は 1 か所に
 /// 置く」), for every road in and for restored tabs.
 ///
-/// `copy` and `repo` are git's [`platitude_core::repo::Place`], compared
-/// by `repo::open_key`. The copy is looked for first: switching a tab into
-/// the copy it already stands in would re-read the repository for nothing.
-pub(super) fn landing_for(items: &[TabItem], copy: &str, repo: &str) -> Landing {
+/// `worktree` and `repo` are git's [`platitude_core::repo::Place`], compared
+/// by `repo::open_key`. The worktree is looked for first: switching a tab
+/// into the worktree it already stands in would re-read the repository for
+/// nothing.
+pub(super) fn landing_for(items: &[TabItem], worktree: &str, repo: &str) -> Landing {
     let key = platitude_core::repo::open_key;
-    let standing = key(copy);
-    if let Some(at) = items.iter().position(|t| key(&t.copy_path) == standing) {
+    let standing = key(worktree);
+    if let Some(at) = items.iter().position(|t| key(&t.worktree_path) == standing) {
         return Landing::Show(at);
     }
     let showing = key(repo);
@@ -373,47 +375,61 @@ pub(crate) fn index_after_move(current: i32, from: usize, to: usize) -> i32 {
 mod tests {
     use super::*;
 
-    fn tab(repo: &str, copy: &str) -> TabItem {
-        TabItem::standing(1, "repo".to_string(), repo.to_string(), copy.to_string())
+    fn tab(repo: &str, worktree: &str) -> TabItem {
+        TabItem::standing(
+            1,
+            "repo".to_string(),
+            repo.to_string(),
+            worktree.to_string(),
+        )
     }
 
     #[test]
-    fn only_a_linked_copy_is_named_after_the_repository() {
-        assert_eq!(tab("C:/one", "C:/one").copy_name, "");
-        assert_eq!(tab("C:/two", "C:/elsewhere/wt").copy_name, "wt");
+    fn only_a_linked_worktree_is_named_after_the_repository() {
+        assert_eq!(tab("C:/one", "C:/one").worktree_name, "");
+        assert_eq!(
+            tab("C:/two", "C:/elsewhere/worktree").worktree_name,
+            "worktree"
+        );
     }
 
     #[cfg(windows)]
     #[test]
-    fn a_windows_copy_is_named_whichever_separator_wrote_it() {
-        assert_eq!(tab("C:/two", r"C:\elsewhere\wt").copy_name, "wt");
-    }
-
-    #[test]
-    fn one_folder_spelled_two_ways_names_no_copy() {
-        assert_eq!(tab("C:/one", "C:/one/").copy_name, "");
-        assert_eq!(tab("C:/one/", "C:/one").copy_name, "");
-    }
-
-    #[test]
-    fn the_copy_a_tab_is_standing_in_is_that_tab() {
-        let strip = [tab("C:/one", "C:/one"), tab("C:/two", "C:/two/wt")];
-        assert_eq!(landing_for(&strip, "C:/one", "C:/one"), Landing::Show(0));
-        assert_eq!(landing_for(&strip, "C:/two/wt", "C:/two"), Landing::Show(1));
-    }
-
-    #[test]
-    fn another_copy_of_an_open_repository_moves_the_tab_into_it() {
-        let strip = [tab("C:/one", "C:/one"), tab("C:/two", "C:/two/wt")];
+    fn a_windows_worktree_is_named_whichever_separator_wrote_it() {
         assert_eq!(
-            landing_for(&strip, "C:/elsewhere/wt", "C:/one"),
+            tab("C:/two", r"C:\elsewhere\worktree").worktree_name,
+            "worktree"
+        );
+    }
+
+    #[test]
+    fn one_folder_spelled_two_ways_names_no_worktree() {
+        assert_eq!(tab("C:/one", "C:/one/").worktree_name, "");
+        assert_eq!(tab("C:/one/", "C:/one").worktree_name, "");
+    }
+
+    #[test]
+    fn the_worktree_a_tab_is_standing_in_is_that_tab() {
+        let strip = [tab("C:/one", "C:/one"), tab("C:/two", "C:/two/worktree")];
+        assert_eq!(landing_for(&strip, "C:/one", "C:/one"), Landing::Show(0));
+        assert_eq!(
+            landing_for(&strip, "C:/two/worktree", "C:/two"),
+            Landing::Show(1)
+        );
+    }
+
+    #[test]
+    fn another_worktree_of_an_open_repository_moves_the_tab_into_it() {
+        let strip = [tab("C:/one", "C:/one"), tab("C:/two", "C:/two/worktree")];
+        assert_eq!(
+            landing_for(&strip, "C:/elsewhere/worktree", "C:/one"),
             Landing::Switch(0),
-            "a linked copy of the repository the first tab is showing"
+            "a linked worktree of the repository the first tab is showing"
         );
         assert_eq!(
             landing_for(&strip, "C:/two", "C:/two"),
             Landing::Switch(1),
-            "and the repository's own copy, from a tab standing in a linked one"
+            "and the repository's own worktree, from a tab standing in a linked one"
         );
     }
 

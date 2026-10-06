@@ -1,5 +1,5 @@
 //! Drives the page's pace (`session::pace`): starts this tree's reads and
-//! the other copies' when the rules say, meters each one
+//! the other worktrees' when the rules say, meters each one
 //! (`process::Meter`), and hands the rules its end.
 //!
 //! One task per session, from the first time the page is paced to the
@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::graph_refresh::PollTicket;
-use super::pace::{At, CopiesPace, PaceBounds, Pacer, Start};
+use super::pace::{At, PaceBounds, Pacer, Start, WorktreesPace};
 use super::{RepoSession, SessionEvent, StashRead, relock};
 use crate::process::Meter;
 
@@ -28,7 +28,7 @@ pub(super) struct Pacing {
 impl Default for Pacing {
     fn default() -> Self {
         Self {
-            rules: Mutex::new(Pacer::new(CopiesPace::Auto)),
+            rules: Mutex::new(Pacer::new(WorktreesPace::Auto)),
             origin: std::time::Instant::now(),
             stirred: tokio::sync::Notify::new(),
             driving: AtomicBool::new(false),
@@ -59,7 +59,7 @@ impl Pacing {
 
 impl RepoSession {
     /// Whether the page is on screen to be read for: this tree on its pace,
-    /// and the other copies on theirs (`session::pace`). Off stops starting
+    /// and the other worktrees on theirs (`session::pace`). Off stops starting
     /// reads and forgets nothing; on again reads at once whatever fell due.
     pub fn set_paced(self: &Arc<Self>, paced: bool) {
         self.pacing.change(|rules, at| rules.set_active(paced, at));
@@ -71,15 +71,15 @@ impl RepoSession {
 
     /// Something likely moved outside — the window came back: this tree is
     /// read now (or as the read under way ends), with its stashes, which no
-    /// other paced read covers (`Start::Own`), and so is the copy the pane
-    /// stands on, its row and its list from one `status`. The other copies
-    /// keep their pace.
+    /// other paced read covers (`Start::Own`), and so is the worktree the
+    /// pane stands on, its row and its list from one `status`. The other
+    /// worktrees keep their pace.
     pub fn poll_now(self: &Arc<Self>) {
         let pane = self.carried_pane.standing();
         self.pacing.change(|rules, at| {
             rules.ask_now(at);
             if let Some(key) = &pane {
-                rules.copy_stale(key, at);
+                rules.worktree_stale(key, at);
             }
         });
     }
@@ -118,9 +118,9 @@ impl RepoSession {
                             .pacing
                             .change(|rules, at| rules.own_refused(at, with_stashes)),
                     },
-                    Start::Copy(key) => {
+                    Start::Worktree(key) => {
                         self.runtime
-                            .spawn(async move { s.paced_copy(key, at).await });
+                            .spawn(async move { s.paced_worktree(key, at).await });
                     }
                 }
             }
@@ -159,16 +159,17 @@ impl RepoSession {
         );
         drop(ended);
         if self.keeps_what_it_reads() {
-            self.sink.event(SessionEvent::PacedRead { copy: None });
+            self.sink.event(SessionEvent::PacedRead { worktree: None });
         }
     }
 
     async fn read_own_tree(self: &Arc<Self>, with_stashes: bool, ticket: PollTicket) {
         // The listing rides this read: the WORKTREES rows, the mark saying
-        // a branch is another copy's, and which copies there are to read.
-        // The walk waits for it, so it draws the copies against where the
-        // listing says they stand now — a copy that has committed since its
-        // reading is asked for again by that walk (`relay::carried_current`).
+        // a branch is another worktree's, and which worktrees there are to
+        // read. The walk waits for it, so it draws the worktrees against
+        // where the listing says they stand now — a worktree that has
+        // committed since its reading is asked for again by that walk
+        // (`relay::carried_current`).
         let listings = async {
             if with_stashes {
                 self.read_listings().await
@@ -183,26 +184,27 @@ impl RepoSession {
         drop(poll);
     }
 
-    async fn paced_copy(self: Arc<Self>, key: String, began: At) {
-        let mut ended = CopyEnded {
+    async fn paced_worktree(self: Arc<Self>, key: String, began: At) {
+        let mut ended = WorktreeEnded {
             session: Arc::clone(&self),
             key,
             began,
             read: None,
         };
-        let Some((path, weight)) = self.read_paced_copy(&ended.key).await else {
+        let Some((path, weight)) = self.read_paced_worktree(&ended.key).await else {
             return;
         };
         tracing::debug!(
-            copy = %path,
+            worktree = %path,
             weight_ms = weight.map(|w| w.as_millis() as u64),
-            "paced read of another copy"
+            "paced read of another worktree"
         );
         ended.read = Some(weight);
         drop(ended);
         if self.keeps_what_it_reads() {
-            self.sink
-                .event(SessionEvent::PacedRead { copy: Some(path) });
+            self.sink.event(SessionEvent::PacedRead {
+                worktree: Some(path),
+            });
         }
     }
 }
@@ -223,21 +225,21 @@ impl Drop for OwnEnded {
     }
 }
 
-/// Tells the rules a copy's read ended — or never began, when `read` is
+/// Tells the rules a worktree's read ended — or never began, when `read` is
 /// still `None` — however its task ends, as [`OwnEnded`] does.
-struct CopyEnded {
+struct WorktreeEnded {
     session: Arc<RepoSession>,
     key: String,
     began: At,
     read: Option<Option<Duration>>,
 }
 
-impl Drop for CopyEnded {
+impl Drop for WorktreeEnded {
     fn drop(&mut self) {
         let (key, began, read) = (&self.key, self.began, self.read);
         self.session.pacing.change(|rules, _| match read {
-            Some(weight) => rules.copy_ended(key, began, weight),
-            None => rules.copy_skipped(key),
+            Some(weight) => rules.worktree_ended(key, began, weight),
+            None => rules.worktree_skipped(key),
         });
     }
 }

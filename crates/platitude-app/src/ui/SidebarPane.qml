@@ -46,8 +46,8 @@ Rectangle {
     signal branchAtRequested(string oidHex, string name)
     /// The same for a new tag.
     signal tagAtRequested(string oidHex, string name)
-    /// …and for a new branch out in a working copy of its own (`RepoPage.copyFromBox`).
-    signal copyAtRequested(string oidHex, string name)
+    /// …and for a new branch out in a worktree of its own (`RepoPage.worktreeFromBox`).
+    signal worktreeAtRequested(string oidHex, string name)
     /// A row was renamed. `kind` is the section ("branch" / "tag" / "stash"), `id` what git knows the row by.
     signal renameSubmitted(string kind, string id, string name)
     signal foldRequested(bool collapse)
@@ -130,8 +130,8 @@ Rectangle {
     function beginTagAt(kind, id, oidHex) {
         rowGestures.beginTagAt(kind, id, oidHex)
     }
-    function beginCopyAt(kind, id, oidHex) {
-        rowGestures.beginCopyAt(kind, id, oidHex)
+    function beginWorktreeAt(kind, id, oidHex) {
+        rowGestures.beginWorktreeAt(kind, id, oidHex)
     }
     function activateRow(kind, name, full, oidHex) {
         rowGestures.activateRow(kind, name, full, oidHex)

@@ -487,7 +487,7 @@ fn init_tracing() {
 #[cfg(feature = "automation")]
 fn embed_harness_qml() {
     qrc::embed!("auto/AutoActCompletion.qml");
-    qrc::embed!("auto/AutoActCopyVerbs.qml");
+    qrc::embed!("auto/AutoActWorktreeVerbs.qml");
     qrc::embed!("auto/AutoActDetailsVerbs.qml");
     qrc::embed!("auto/AutoActDiffVerbs.qml");
     qrc::embed!("auto/AutoActDriver.qml");

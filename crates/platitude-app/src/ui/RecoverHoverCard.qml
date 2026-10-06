@@ -19,13 +19,13 @@ AppCard {
     property string when: ""
     /// How wide the words may run before they wrap: a share of the window, set by the owner.
     property real textWidth: 0
-    /// The lines under the title: what it took, then where, when that was another working copy.
+    /// The lines under the title: what it took, then where, when that was another worktree.
     readonly property var facts: {
         if (card.entry === null)
             return []
         const lines = card.entry.parts.map(part => part.text)
-        if (card.entry.copy !== "")
-            lines.push(qsTr("In %1").arg(card.entry.copy))
+        if (card.entry.worktree !== "")
+            lines.push(qsTr("In %1").arg(card.entry.worktree))
         return lines
     }
 

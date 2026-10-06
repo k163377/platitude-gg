@@ -218,7 +218,7 @@ QtObject {
         const list = probe.listOf(kind)
         return !!list && list.rowWashLit(row)
     }
-    /// PGG_AUTO_ACT=nav-open / nav-open-tip: the supplement the open row is asking for — a working copy's path
+    /// PGG_AUTO_ACT=nav-open / nav-open-tip: the supplement the open row is asking for — a worktree's path
     /// (`NavRowFacts.says`). The ask, not the box: the box follows a rest later, so a run holds the shared instance
     /// against this before reading its line. Empty where the row keeps nothing or no row is open.
     function factsSays() {
@@ -308,9 +308,9 @@ QtObject {
         const list = probe.listOf(kind)
         return list ? list.rowNameAt(row) : ""
     }
-    /// PGG_AUTO_ACT=rebase-edit-stop: the name the repository's own working copy draws on its WORKTREES row — its
+    /// PGG_AUTO_ACT=rebase-edit-stop: the name the repository's own worktree draws on its WORKTREES row — its
     /// branch, or its folder while it stands on none (デザイン規約 §左メニューの所作). Empty while that row is unbuilt.
-    function homeCopyName() {
+    function homeWorktreeName() {
         const list = probe.listOf("worktree")
         for (let at = 0; list && at < list.count; at++) {
             const row = list.itemAtIndex(at)

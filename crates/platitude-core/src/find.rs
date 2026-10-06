@@ -32,7 +32,7 @@ pub struct Query {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Row<'a> {
     /// Full object name in lowercase hex, as the row wears it. A row that
-    /// is not a commit (every working copy's row) wears git's all-zero id
+    /// is not a commit (every worktree's row) wears git's all-zero id
     /// and matches nothing at all.
     pub oid_hex: &'a str,
     /// The first line of the message; the description is not searched
@@ -73,7 +73,7 @@ impl Query {
 
     /// Whether this row is one of the answers.
     pub fn matches(&self, row: &Row<'_>) -> bool {
-        // A working copy's row wears the all-zero id (`Row::oid_hex`),
+        // A worktree's row wears the all-zero id (`Row::oid_hex`),
         // which would otherwise answer `0000`.
         if Oid::hex_is_zero(row.oid_hex) {
             return false;
@@ -284,7 +284,7 @@ mod tests {
 
     #[test]
     fn a_row_that_is_not_a_commit_matches_nothing() {
-        // Every working copy's row wears git's all-zero id.
+        // Every worktree's row wears git's all-zero id.
         let zero = "0".repeat(40);
         let wip = Row {
             oid_hex: &zero,

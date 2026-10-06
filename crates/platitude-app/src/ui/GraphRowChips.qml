@@ -25,7 +25,7 @@ Item {
     /// Whether what is typed can be accepted, and why not — the page's answer (デザイン規約 §可否・警告の出し場所).
     required property bool namingRefused
     required property string namingRefusedWhy
-    /// A working copy's folder in that line, empty for none (`RepoPage.graphNameRefusedMark`).
+    /// A worktree's folder in that line, empty for none (`RepoPage.graphNameRefusedMark`).
     required property string namingRefusedMark
 
     /// The chip's card is standing on it (`GraphRowDelegate.listOnThisChip`): the sheets unstack so none peeks out
@@ -113,12 +113,13 @@ Item {
             /// What the box must be able to show, latched as it opens — measured per keystroke, the right edge would
             /// walk out from under the caret.
             property string inkText: ""
-            /// A working copy's folder in the refusal's line, which the shared tip stands the tree mark in front of
+            /// A worktree's folder in the refusal's line, which the shared tip stands the tree mark in front of
             /// (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別「名前の印」).
             readonly property string tipMarkWord: chipColumn.namingRefusedMark
             width: Math.max(chipColumn.columnWidth - 2 * Theme.spaceXs, nameField.nameBoxMinW)
             // The frame names the kind (デザイン規約 §ref の種別「枠 = 種別」); a branch's colour is the focus ring's own,
-            // so a tag differs, and so does a branch made out in another copy — that copy's green, as its chip wears.
+            // so a tag differs, and so does a branch made out in another worktree — that worktree's green, as its chip
+            // wears.
             focusTone: {
                 const kind = chipColumn.namingMode === "rename" ? chipColumn.namingKind : chipColumn.namingMode
                 return kind === "tag" ? Theme.refTag : kind === "worktree" ? Theme.success : Theme.borderFocus

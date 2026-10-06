@@ -394,7 +394,7 @@ impl RepoSession {
     /// refreshes.
     ///
     /// Skipped while the previous poll is still going (a slow repository
-    /// polls less often) and while any write of this working tree runs
+    /// polls less often) and while any write of this worktree runs
     /// ([`RepoSession::tree_write`]): a session reopened over a closed
     /// tab's write would otherwise publish the tree mid-write. The session
     /// finishing such a write calls this on the others.
@@ -411,7 +411,7 @@ impl RepoSession {
     }
 
     /// Reads the repository again because a write landed in it — from
-    /// this session or another on the same working tree
+    /// this session or another on the same worktree
     /// ([`RepoSession::tell_the_tree`]).
     ///
     /// Owed, unlike a clock tick: the read holding the slot began before
@@ -512,7 +512,7 @@ impl RepoSession {
         self.forget_what_the_config_decides();
         // Every read can call for a rebuild, but one walk serves them all,
         // after all of them: an external commit moves a ref *and* cleans
-        // the tree, and a copy taken or a stash dropped outside moves
+        // the tree, and a worktree taken or a stash dropped outside moves
         // neither — the listings are their only word.
         let (refs, tree, (stashes, listed)) =
             tokio::join!(self.read_refs(), self.read_status(), listings);

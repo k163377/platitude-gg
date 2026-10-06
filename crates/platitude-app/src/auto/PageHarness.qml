@@ -24,7 +24,7 @@ Item {
     required property var branchesModel
     required property var remotesModel
     required property var unstagedModel
-    /// The working copies (WORKTREES), apart from `unstagedModel` — this tab's own changed files.
+    /// The worktrees (WORKTREES).
     required property var worktreesModel
     required property var stashesModel
     required property var tagsModel
@@ -140,12 +140,12 @@ Item {
             upstreamFlow: harness.upstreamFlow
             remoteDialog: harness.publishFlow.dialog
             remoteMenu: harness.remoteRowMenu.menu
-            refCopyCard: harness.refRowMenu.copyCard
-            commitCopyCard: harness.commitRowMenu.copyCard
-            refCopyHereItem: harness.refRowMenu.copyCard.copyHereItem
-            refCopyAddItem: harness.refRowMenu.copyCard.copyAddItem
-            commitCopyHereItem: harness.commitRowMenu.copyCard.copyHereItem
-            commitCopyAddItem: harness.commitRowMenu.copyCard.copyAddItem
+            refWorktreeCard: harness.refRowMenu.worktreeCard
+            commitWorktreeCard: harness.commitRowMenu.worktreeCard
+            refWorktreeHereItem: harness.refRowMenu.worktreeCard.worktreeHereItem
+            refWorktreeAddItem: harness.refRowMenu.worktreeCard.worktreeAddItem
+            commitWorktreeHereItem: harness.commitRowMenu.worktreeCard.worktreeHereItem
+            commitWorktreeAddItem: harness.commitRowMenu.worktreeCard.worktreeAddItem
             refList: harness.rowHost.listPopup
             rowCard: harness.rowHost.hoverCard
             rowHost: harness.rowHost

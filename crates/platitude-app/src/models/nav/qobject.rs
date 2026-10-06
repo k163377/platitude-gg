@@ -109,7 +109,7 @@ impl NavSectionModel {
     pub(super) fn stashes_settled(&mut self);
 
     /// A worktree listing arrived, whether or not it moved anything — a
-    /// listing of its own, as the stashes' is: the copy a removal took
+    /// listing of its own, as the stashes' is: the worktree a removal took
     /// away waits on it.
     #[qsignal]
     pub(super) fn worktrees_settled(&mut self);
@@ -133,19 +133,19 @@ impl NavSectionModel {
         self.attach_working_tree_feed(tab_id, run);
     }
 
-    /// Wires this instance to **another** working copy's changed files, as
+    /// Wires this instance to **another** worktree's changed files, as
     /// one list (why: `attach_carried_feed`).
     #[qslot]
     fn attach_carried(&mut self, tab_id: i32) {
         self.attach_carried_feed(tab_id);
     }
 
-    /// The tab now stands in another working copy (`Hub::restand_tab`): a
+    /// The tab now stands in another worktree (`Hub::restand_tab`): a
     /// file list goes back to waiting, not to empty — no rows would read
-    /// as a clean tree of a copy not yet read (`Source::Waiting`).
+    /// as a clean tree of a worktree not yet read (`Source::Waiting`).
     ///
     /// Not for the sections a repository owns (branches, remotes, tags,
-    /// stashes, worktrees): linked copies share them, so they stay drawn.
+    /// stashes, worktrees): linked worktrees share them, so they stay drawn.
     #[qslot]
     fn restand(&mut self) {
         self.take(Source::Waiting);
@@ -200,7 +200,7 @@ impl NavSectionModel {
         self.changed();
     }
 
-    /// Switches the worktree list between tree and flat-path display.
+    /// Switches the working-tree list between tree and flat-path display.
     #[qslot]
     fn set_tree_view(&mut self, tree: bool) {
         if self.tree_view == tree {
@@ -260,43 +260,43 @@ impl NavSectionModel {
         CardRows::new(self.level_rows(&path))
     }
 
-    /// The operation panel's WORKTREE card (`copy_rows`), read as it opens
+    /// The operation panel's WORKTREE card (`worktree_rows`), read as it opens
     /// (デザイン規約 §メニュー).
     #[qslot]
-    fn copy_card(&self) -> CopyRows {
-        CopyRows::new(self.copy_rows())
+    fn worktree_card(&self) -> WorktreeRows {
+        WorktreeRows::new(self.worktree_rows())
     }
 
-    /// The copy at `path` as its row says it (`copy_of`) — what the
+    /// The worktree at `path` as its row says it (`worktree_of`) — what the
     /// WORKTREE card of a menu stands on, read as the menu opens.
     /// `undefined` for a path not listed, or listed as going.
     #[qslot]
-    fn copy_facts(&self, path: String) -> Optional<CopyRow> {
-        Optional::new(self.copy_of(&path))
+    fn worktree_facts(&self, path: String) -> Optional<WorktreeRow> {
+        Optional::new(self.worktree_of(&path))
     }
 
-    /// Where a new copy for `branch` would be made and whether git would
-    /// make it there (`new_copy`) — what `Create worktree here…`'s box and
+    /// Where a new worktree for `branch` would be made and whether git would
+    /// make it there (`new_worktree`) — what `Create worktree here…`'s box and
     /// the `worktree add` row stand on. `undefined` before the listing
-    /// names the repository's own copy.
+    /// names the repository's own worktree.
     #[qslot]
-    fn new_copy_for(&self, branch: String) -> Optional<NewCopy> {
-        Optional::new(self.new_copy(&branch))
+    fn new_worktree_for(&self, branch: String) -> Optional<NewWorktree> {
+        Optional::new(self.new_worktree(&branch))
     }
 
-    /// Whether new copies have a place at all (`has_place_for_copies`) —
+    /// Whether new worktrees have a place at all (`has_place_for_worktrees`) —
     /// not before the listing lands, nor for a bare repository's linked
-    /// copies.
+    /// worktrees.
     #[qslot]
-    fn copies_placed(&self) -> bool {
-        self.has_place_for_copies()
+    fn worktrees_placed(&self) -> bool {
+        self.has_place_for_worktrees()
     }
 
-    /// The path of the copy a folder's chip names: `name` standing on
-    /// `head` (`copy_standing`); empty where none does.
+    /// The path of the worktree a folder's chip names: `name` standing on
+    /// `head` (`worktree_standing`); empty where none does.
     #[qslot]
-    fn copy_at(&self, name: String, head: String) -> String {
-        self.copy_standing(&name, &head)
+    fn worktree_at(&self, name: String, head: String) -> String {
+        self.worktree_standing(&name, &head)
     }
 
     /// Which row on show this ref sits on; -1 when it is on none. What a
@@ -336,7 +336,7 @@ impl NavSectionModel {
     ///
     /// A name, as the row's own slot carries it (`models::nav::field` の
     /// `Role::Bucket`). Asked by rows naming somebody else's branch — a
-    /// working copy's row says of its branch what the BRANCHES row would
+    /// worktree's row says of its branch what the BRANCHES row would
     /// (デザイン規約 §左メニューの所作).
     #[qslot]
     pub(super) fn upstream_gone_of(&self, name: String) -> String {
@@ -350,7 +350,7 @@ impl NavSectionModel {
     /// the last fetch — the pair its own row draws (`models::nav::field` の
     /// `Role::Ahead`). Zero where level, untracked, or not in this section.
     ///
-    /// For rows naming somebody else's branch, e.g. a working copy's
+    /// For rows naming somebody else's branch, e.g. a worktree's
     /// (デザイン規約 §左メニューの所作). A slot, not a role: only this
     /// section can answer for a name, so it is read once as the row opens
     /// and a fetch landing meanwhile does not move it.
@@ -528,7 +528,7 @@ impl NavSectionModel {
         )
     }
 
-    /// The other working copy holding this branch, by the path git lists
+    /// The other worktree holding this branch, by the path git lists
     /// it under; empty when no other one has it out.
     ///
     /// git refuses to switch to or delete a branch another worktree has
@@ -542,15 +542,15 @@ impl NavSectionModel {
         self.worktree_with(&branch)
     }
 
-    /// Where the working copy at `path` is standing — the HEAD git listed
+    /// Where the worktree at `path` is standing — the HEAD git listed
     /// with the entry, as hex; empty for a path this listing does not hold
     /// and for a bare entry.
     ///
-    /// By path, not name: two copies can share a leaf name under different
+    /// By path, not name: two worktrees can share a leaf name under different
     /// parents (`RepoPage.carriedPath`). What the page lands on when the
-    /// copy it was reading commits (`settleCarriedAfterPass`).
+    /// worktree it was reading commits (`settleCarriedAfterPass`).
     #[qslot]
-    pub(super) fn head_of_copy(&self, path: String) -> String {
+    pub(super) fn head_of_worktree(&self, path: String) -> String {
         self.told(Role::Full, &path, Role::OidHex)
     }
 

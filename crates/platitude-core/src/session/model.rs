@@ -35,9 +35,9 @@ pub enum LabelKind {
     Head,
     LocalBranch,
     RemoteBranch,
-    /// Another working copy standing on this commit with no branch out — a
-    /// synthetic chip like `Head`. A copy with a branch out is said by that
-    /// branch's chip instead (`RefLabel::held_elsewhere`).
+    /// Another worktree standing on this commit with no branch out — a
+    /// synthetic chip like `Head`. A worktree with a branch out is said by
+    /// that branch's chip instead (`RefLabel::held_elsewhere`).
     ///
     /// Before `Tag`: the tags must stay the tail of a commit's run for the
     /// TAGS eye's cut ([`LabelIndex::cut`]).
@@ -63,12 +63,13 @@ pub struct RefLabel {
     /// so this is what tells a drift's two same-named chips apart on the
     /// hover card.
     pub remote: String,
-    /// Another working copy has this branch checked out — the same bit as
+    /// Another worktree has this branch checked out — the same bit as
     /// `BranchItem::held_elsewhere`. The chip draws its green frame off
     /// this (デザイン規約 §ref の種別).
     pub held_elsewhere: bool,
-    /// `git worktree lock` is on the copy standing here — the branch's
-    /// holder, or the `Worktree` marker's copy. False where no copy stands.
+    /// `git worktree lock` is on the worktree standing here — the branch's
+    /// holder, or the `Worktree` marker's worktree. False where no worktree
+    /// stands.
     pub locked: bool,
 }
 
@@ -183,7 +184,7 @@ pub enum RelaidRow {
         labels: Vec<RefLabel>,
     },
     /// A row made fresh from the readings: this window's uncommitted row,
-    /// or another working copy's.
+    /// or another worktree's.
     Made(Box<LogRow>),
 }
 
@@ -224,7 +225,7 @@ pub struct LogRow {
     /// row. Not for drawing (`segments` is): for asking about a range
     /// ([`crate::publish::range_rewrites_published`]).
     pub parents: Box<[Oid]>,
-    /// The other working copy this uncommitted row is about; `None` on
+    /// The other worktree this uncommitted row is about; `None` on
     /// commits, stashes and this window's own uncommitted row. This is the
     /// row's identity, since every uncommitted row carries the all-zero id
     /// (`session::carried`).

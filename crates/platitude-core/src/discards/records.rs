@@ -6,8 +6,8 @@
 //!   (§2.1), its `Operation:` one of `discard`, `hunk`, `lines`,
 //!   `untracked`, `reset --hard`;
 //! - **a note** of anything else — a commit whose first parent is what was
-//!   taken (a branch's tip, a stash entry, the commit a tag or a working
-//!   copy stood on) and whose trailers say what to put back.
+//!   taken (a branch's tip, a stash entry, the commit a tag or a worktree
+//!   stood on) and whose trailers say what to put back.
 //!
 //! A note `restored` names a part of a record already brought back, which
 //! is not read as a part again (`entries`).
@@ -239,7 +239,7 @@ mod tests {
     fn a_line_reads_its_value_time_parents_trailers_and_paths() {
         let block = format!(
             "{COPY}\u{1f}refs/pgg/discards@{{1790976391}}\u{1f}{BASE} {INDEX} {UNTRACKED}\
-             \u{1f}Operation: discard\u{1d}Working-copy: C:/work/repo\u{1d}Branch: main\
+             \u{1f}Operation: discard\u{1d}Worktree-path: C:/work/repo\u{1d}Branch: main\
              \u{1d}Not-copied: big.bin\u{1d}Not-copied: other.bin\
              \n\n 1 file changed, 1 insertion(+), 1 deletion(-)\n"
         );
@@ -249,7 +249,7 @@ mod tests {
             (1790976391, 1, 3)
         );
         assert!(line.is_copy());
-        assert_eq!(line.get("Working-copy"), "C:/work/repo");
+        assert_eq!(line.get("Worktree-path"), "C:/work/repo");
         assert_eq!(line.all("Not-copied"), vec!["big.bin", "other.bin"]);
     }
 

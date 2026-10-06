@@ -183,7 +183,7 @@ impl DiffModel {
         self.begin_request(path, target);
     }
 
-    /// The same read aimed at another working copy — `at` is its path
+    /// The same read aimed at another worktree — `at` is its path
     /// (the read-only pane; `RepoSession::load_carried_diff`).
     #[qslot]
     fn request_carried(&mut self, at: String, bucket: String, path: String, orig_path: String) {
@@ -191,9 +191,10 @@ impl DiffModel {
         self.begin_request_in(at, path, target);
     }
 
-    /// `refresh_working_tree` for a carried diff, on the copies' slower tick.
-    /// Aimed where the rows came from — the ordinary re-read would put this
-    /// window's file of that name in a pane showing another copy's.
+    /// `refresh_working_tree` for a carried diff, on the other worktrees'
+    /// slower tick. Aimed where the rows came from — the ordinary re-read
+    /// would put this window's file of that name in a pane showing another
+    /// worktree's.
     #[qslot]
     fn refresh_carried(
         &mut self,

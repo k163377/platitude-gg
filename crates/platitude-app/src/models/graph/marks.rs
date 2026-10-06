@@ -70,7 +70,7 @@ impl GraphModel {
         // tree anybody has.
         let count = |n: usize| i32::try_from(n).unwrap_or(i32::MAX);
         // Filed by the index the delegate asks with. All six written even
-        // when zero: none at all is what says a row is not a copy's
+        // when zero: none at all is what says a row is not another worktree's
         // (`carried_tally`).
         if let Some(carried) = carried {
             let k = &carried.kinds;

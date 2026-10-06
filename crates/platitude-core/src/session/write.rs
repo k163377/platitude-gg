@@ -11,7 +11,7 @@
 //! command under the request carries the id, so a consumer matches its
 //! own write by id, not by arrival order (`crate::operation`).
 //!
-//! **One queue per session, one order per working tree.** A session
+//! **One queue per session, one order per worktree.** A session
 //! closed mid-write keeps that write running, and a tab reopened over it
 //! is a second session on the same index, so acceptance takes a place in
 //! the tree's order as well as an id (`session::write_order`):
@@ -64,13 +64,13 @@ impl RepoSession {
         self.accept(kind, after, names, Vec::new(), task)
     }
 
-    /// [`Self::write`] for one that also puts work into other working
-    /// copies — those whose git directories are `into` (a restore of work
+    /// [`Self::write`] for one that also puts work into other worktrees —
+    /// those whose git directories are `into` (a restore of work
     /// thrown away there, 破棄記録仕様.md §4). It takes its turn in each of
     /// their orders as well as its own, from the same instant: what was
     /// accepted there before it — a commit, a reset, a rebase — runs first,
     /// and nothing accepted there after it runs under it. The sessions open
-    /// on those copies read them again once it lands.
+    /// on those worktrees read them again once it lands.
     pub(super) fn write_into<F, Fut>(
         self: &Arc<Self>,
         kind: OperationKind,
@@ -118,7 +118,7 @@ impl RepoSession {
         // The place in the tree's order is taken inside the call that
         // hands the id back, so a tab opened over a running write cannot
         // step in front of it (`session::write_order`). Taken by what
-        // changes this copy ([`OperationKind::writes_here`]), not by lane:
+        // changes this worktree ([`OperationKind::writes_here`]), not by lane:
         // a composite delete is network-paced yet takes a ref away here.
         //
         // **Numbered, placed and queued under one lock.** The loop serves
@@ -178,7 +178,7 @@ impl RepoSession {
         *relock(&self.write_running)
     }
 
-    /// The write being run in this working tree, by this session or
+    /// The write being run in this worktree, by this session or
     /// another sharing it — what the poll's gate reads
     /// ([`RepoSession::refresh_poll`]). Gating on this session's write
     /// alone would let a reopened tab read between another session's
@@ -193,7 +193,7 @@ impl RepoSession {
         }
     }
 
-    /// Tells every other session on this working tree to read it again;
+    /// Tells every other session on this worktree to read it again;
     /// their polls kept out while this write held the front
     /// ([`Self::tree_write`]). Called once the place is back — told
     /// earlier, a session skips the tick as still being written.
@@ -261,7 +261,7 @@ impl RepoSession {
         if operation.kind.writes_here() {
             self.tell_the_tree();
         }
-        // The other copies it put work into: every session on them reads
+        // The other worktrees it put work into: every session on them reads
         // them again, this one being on none.
         for order in into {
             for reader in order.others(self) {
@@ -290,7 +290,7 @@ impl RepoSession {
         } = operation;
         // The tree's turn comes before `WriteStarted`, which means git is
         // running it (`session::write_order`), and so does the turn in each
-        // other copy it puts work into. The places are held to the end of
+        // other worktree it puts work into. The places are held to the end of
         // this function, the reads behind the write included.
         for place in place.iter().chain(&into) {
             place.granted(operation).await;
@@ -423,7 +423,7 @@ impl RepoSession {
         // moved it: a write reaching the tree or the history can bring a
         // new `.gitattributes` or a remote; a config write the remotes
         // (its file's stamp drops the rest — `forget_what_the_config_decides`).
-        // A fetch, a delete and a copy taken away reach neither.
+        // A fetch, a delete and a worktree taken away reach neither.
         match after {
             AfterWrite::Tree | AfterWrite::Snapshots | AfterWrite::Graph | AfterWrite::Author => {
                 self.forget_derived();

@@ -24,7 +24,7 @@
 //!   which is what tells it apart from "some lines changed".
 //! - `\ No newline at end of file` follows the line it is about and belongs
 //!   to that line's side — old, new, or both.
-//! - Under `core.autocrlf=true` a worktree turned to CRLF diffs empty (git
+//! - Under `core.autocrlf=true` a working tree turned to CRLF diffs empty (git
 //!   compares in index space) and an untracked CRLF file renders through
 //!   `--no-index` already normalised, so these cases mostly cannot arise —
 //!   correctly. The exception is an index blob that already holds CRs:

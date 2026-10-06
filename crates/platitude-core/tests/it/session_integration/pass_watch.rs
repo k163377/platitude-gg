@@ -235,8 +235,8 @@ async fn a_paced_read_whose_walk_falls_over_still_ends_for_the_pace() {
     session.set_pace_bounds(PaceBounds {
         own_floor: hour,
         own_ceiling: hour,
-        copy_floor: hour,
-        copy_ceiling: hour,
+        worktree_floor: hour,
+        worktree_ceiling: hour,
     });
     session.set_paced(true);
     // A commit made outside, so the read walks.
@@ -256,7 +256,7 @@ async fn a_paced_read_whose_walk_falls_over_still_ends_for_the_pace() {
     sink.wait_for("the next read of this tree", |events| {
         events
             .iter()
-            .any(|event| matches!(event, SessionEvent::PacedRead { copy: None }))
+            .any(|event| matches!(event, SessionEvent::PacedRead { worktree: None }))
             .then_some(())
     })
     .await;

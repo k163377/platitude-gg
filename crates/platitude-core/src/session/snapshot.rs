@@ -243,7 +243,7 @@ pub struct BranchItem {
     /// the graph ([`crate::refs::RemoteBranches::folded_into_local`]).
     /// False where there is no reading.
     pub upstream_drifted: bool,
-    /// Another working copy has this branch checked out, so git refuses
+    /// Another worktree has this branch checked out, so git refuses
     /// `switch` and `branch --delete` for it — locked or not (a lock stops
     /// a different set of commands). A `bool`: it rides on every branch.
     ///

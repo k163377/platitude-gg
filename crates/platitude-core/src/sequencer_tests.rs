@@ -100,7 +100,7 @@ fn render_and_parse_round_trip() {
 }
 
 /// Real `--update-refs` todo (git 2.51): one line per local branch inside
-/// the range, none for the tag, and a comment where another working copy
+/// the range, none for the tag, and a comment where another worktree
 /// has the branch checked out.
 const GENERATED: &str = "\
 pick 987d296 # c2

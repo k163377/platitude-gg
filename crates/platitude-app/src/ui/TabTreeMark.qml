@@ -3,8 +3,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// The run a tab draws after the repository's name while it stands in a linked working copy: the WORKTREES mark and
-// the copy's folder name (デザイン規約 §タブの所作). Drawn by both the tab and its stand-in.
+// The run a tab draws after the repository's name while it stands in a linked worktree: the WORKTREES mark and
+// the worktree's folder name (デザイン規約 §タブの所作). Drawn by both the tab and its stand-in.
 //
 // The mark is what parts the two names — without it the run reads as the repository's name carrying on — so the run
 // is dropped whole rather than drawn without it (`floorWidth`, `TabShare.splitName`).
@@ -13,7 +13,8 @@ import platitude.ui
 Item {
     id: treeRun
 
-    /// The copy's folder name (`TabItem.copy_name`); empty for the repository's own copy, and then nothing is drawn.
+    /// The worktree's folder name (`TabItem.worktree_name`); empty for the repository's own worktree, and then nothing
+    /// is drawn.
     property string name: ""
     /// The strip's shared arithmetic (`TabMetrics`): `treeSeat` and `treeRunGap`.
     required property var metrics

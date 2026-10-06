@@ -2,7 +2,7 @@
 //! git's own reflogs and Platitude GG's own record, and how each is brought
 //! back (§4).
 //!
-//! - **The reflogs**: every local branch's, and every working copy's HEAD —
+//! - **The reflogs**: every local branch's, and every worktree's HEAD —
 //!   a reset, an amend, a rebase, a branch set by hand, a detached HEAD
 //!   left behind, and the deletes another tool wrote into HEAD's reflog
 //!   (`moves`). HEAD's reflog keeps what a branch's own lost with the
@@ -11,10 +11,10 @@
 //!   only a move that left commits no ref reaches is listed: both are
 //!   answered off one walk of the commits the reflogs name that HEAD, the
 //!   branches, the remote-tracking branches, the tags, the stash and the
-//!   other copies' detached HEADs do not reach (`lost`).
+//!   other worktrees' detached HEADs do not reach (`lost`).
 //! - **The record** ([`RECORD_REF`]): what git keeps no line for — copies
 //!   of uncommitted work thrown away, stashes dropped, names deleted,
-//!   working copies removed, remote tips overwritten (`record` writes it,
+//!   worktrees removed, remote tips overwritten (`record` writes it,
 //!   `records` reads it).
 //!
 //! A handful of git processes whatever the repository holds: the listing,
@@ -57,7 +57,7 @@ pub enum DiscardKind {
     /// The branch set somewhere by hand (`branch --force`,
     /// `switch --force-create` — Platitude GG's `Move here`).
     Moved,
-    /// A working copy left a detached HEAD.
+    /// A worktree left a detached HEAD.
     LeftDetached,
     /// A branch deleted: by Platitude GG (the record, its remote side too
     /// where both went), or by another tool that wrote it into HEAD's reflog
@@ -73,7 +73,7 @@ pub enum DiscardKind {
     PoppedStash,
     /// A tag deleted, here or on a remote too.
     DeletedTag,
-    /// A working copy removed.
+    /// A worktree removed.
     RemovedWorktree,
     /// A branch deleted on a remote only.
     DeletedRemoteBranch,
@@ -91,10 +91,10 @@ pub enum DiscardKind {
 /// on what was taken carrying what to put back in its trailers (`record`).
 pub const RECORD_REF: &str = "refs/pgg/discards";
 
-/// What the record's `Worktree:` names the main working copy by (§2.1): no
+/// What the record's `Worktree:` names the main worktree by (§2.1): no
 /// name git gives a linked one under `$GIT_DIR/worktrees/` — those are a
-/// folder's name, and a linked copy may well sit in a folder `main`.
-const MAIN_COPY: &str = ".";
+/// folder's name, and a linked worktree may well sit in a folder `main`.
+const MAIN_WORKTREE: &str = ".";
 
 /// One thing an entry brings back, and as what (§4). Names are the ones the
 /// restore would take now: the old one where it is free, else with
@@ -111,7 +111,7 @@ pub enum Restore {
     /// A tag `name` on `object` (an annotated tag's object comes back as
     /// the same tag).
     Tag { name: String, object: Oid },
-    /// A working copy at `path`, on `branch` or detached at `head`.
+    /// A worktree at `path`, on `branch` or detached at `head`.
     Worktree {
         path: String,
         branch: Option<String>,
@@ -119,11 +119,11 @@ pub enum Restore {
     },
     /// The stash entry `commit` put back in the list as `message`.
     Stash { commit: Oid, message: String },
-    /// The copy `copy` of thrown-away work put back into the working copy at
+    /// The copy `copy` of thrown-away work put back into the worktree at
     /// `path`: as it was staged where that goes, unstaged where only that
-    /// goes, else as a stash entry (§4). `git_dir` is that copy's git
+    /// goes, else as a stash entry (§4). `git_dir` is that worktree's git
     /// directory as a session opened there names it — the write order the
-    /// restore waits its turn in — empty where the copy is gone.
+    /// restore waits its turn in — empty where the worktree is gone.
     Changes {
         copy: Oid,
         path: String,
@@ -171,7 +171,7 @@ impl Stands {
 pub struct Part {
     pub restore: Restore,
     /// Where it stands on the graph: a branch's old tip, the copy, the
-    /// stash, the commit a name or a working copy stood on.
+    /// stash, the commit a name or a worktree stood on.
     pub tip: Oid,
     pub look: Look,
     /// The commits only `tip` reaches, in `rev-list` order; empty where it
@@ -199,15 +199,15 @@ pub struct Part {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Discard {
     pub kind: DiscardKind,
-    /// What it happened to: the branch, the tag, the working copy's folder
+    /// What it happened to: the branch, the tag, the worktree's folder
     /// (and a detached HEAD's), the stash's message; for thrown-away work
     /// the branch it was on, empty while detached.
     pub name: String,
     /// The remote it reached, for what went from a remote; empty otherwise.
     pub remote: String,
-    /// The working copy it happened in when that is not the one this
-    /// session reads from; empty otherwise (a branch is every copy's).
-    pub copy: String,
+    /// The worktree it happened in when that is not the one this
+    /// session reads from; empty otherwise (a branch is every worktree's).
+    pub worktree: String,
     /// When it happened, epoch seconds: the line git or the record wrote.
     pub at: i64,
     /// What it brings back, one part each; never empty. More than one for
@@ -304,7 +304,7 @@ mod tests {
             kind,
             name: branches.join(", "),
             remote: String::new(),
-            copy: String::new(),
+            worktree: String::new(),
             at: 0,
             parts,
         }

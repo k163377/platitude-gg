@@ -52,7 +52,7 @@ impl RepoSession {
     /// Read only while something is stopped; the count and the stop only
     /// for a rebase, the message and the parents only for a stopped merge,
     /// the one operation finished from the commit box. Names cost a
-    /// `name-rev`; the rest are file reads under the copy's own git
+    /// `name-rev`; the rest are file reads under the worktree's own git
     /// directory (`RepoInfo::git_dir`).
     async fn read_standing_op(
         &self,
@@ -165,7 +165,7 @@ impl RepoSession {
     /// needed anyway, and rebuilding on both counts would do it twice.
     pub(super) async fn publish_status(self: &Arc<Self>) -> Reread {
         // Both paths from one reading of the record: the operation's
-        // markers are the working copy's own, under its git directory.
+        // markers are the worktree's own, under its git directory.
         let Some(info) = self.repo_info() else {
             return Reread::Failed;
         };

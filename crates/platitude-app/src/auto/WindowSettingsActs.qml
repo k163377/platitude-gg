@@ -242,8 +242,8 @@ Item {
 
     // PGG_AUTO_ACT=settings-refresh <floor>:<ceiling>:<reading>:<first>:<second>: the application category's `REFRESH`
     // chapter worked through the pane's own doors (`SettingsAppPane.autoTypeRefresh`) — this repository's two boxes, the
-    // other copies' chooser (`auto` / `fixed` / `off`), then the boxes that reading shows (`first` and `second` are the
-    // two bounds, or `first` the one interval). An empty part is left as it is. The store's own answer is the line
+    // other worktrees' chooser (`auto` / `fixed` / `off`), then the boxes that reading shows (`first` and `second` are
+    // the two bounds, or `first` the one interval). An empty part is left as it is. The store's own answer is the line
     // judged, with which boxes stand beside the chooser.
     SampleTimer {
         id: refreshTimer

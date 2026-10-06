@@ -123,7 +123,7 @@ mod periodic {
     #[tokio::test]
     #[ignore = "what core.autocrlf converts on the way to a patch: not worth the pre-merge run"]
     async fn git_converting_on_the_way_in_leaves_nothing_to_warn_about() {
-        // git compares in index space, so a worktree turned to CRLF diffs
+        // git compares in index space, so a working tree turned to CRLF diffs
         // empty (status still calls it modified): the conversion is git's,
         // working as configured.
         let mut repo = TestRepo::init_autocrlf();

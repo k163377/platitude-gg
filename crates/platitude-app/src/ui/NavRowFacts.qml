@@ -25,11 +25,12 @@ Item {
     /// note, to, withAbove}` — `to` is where a press on it takes the graph, null where it goes nowhere of its own
     /// (`NavFacts.place`), and `withAbove` says it shares the band of the line above (`NavFacts.joined`).
     property var lines: []
-    /// WORKTREES only: the working copy's path — said as the supplement, not as a line (デザイン規約 §左メニューの所作).
+    /// WORKTREES only: the worktree's path — said as the supplement, not as a line (デザイン規約 §左メニューの所作).
     /// Empty on every other kind of row.
     property string path: ""
     /// The hand is on the row's own line (`NavItemDelegate.handOn`) — the other road to the same supplement: hovering
-    /// the copy's name asks for its path too. One box for both, so the hand crosses between them without it going down.
+    /// the worktree's name asks for its path too. One box for both, so the hand crosses between them without it going
+    /// down.
     property bool rowPointed: false
     /// TAGS only: why the row's own name wears the warning (`NavFacts.answers`), said while the hand rests on that
     /// line alone (`nameRested`) — not on these lines, which keep notes of their own. Empty where it wears none.

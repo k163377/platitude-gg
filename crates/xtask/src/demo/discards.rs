@@ -19,7 +19,7 @@ const RECORD_REF: &str = "refs/pgg/discards";
 /// deleted here and on a remote holding another tip, a remote's branch
 /// deleted and one pushed over, a tag deleted here, on a remote, and pushed
 /// over — then forty commits of later work, which put what the older
-/// entries took down the graph, and last a working copy removed, a stash
+/// entries took down the graph, and last a worktree removed, a stash
 /// dropped and one popped, and the copies: untracked files deleted, and
 /// files discarded.
 ///
@@ -334,7 +334,7 @@ fn tag_notes(repo: &mut DemoRepo, clock: &Clock) -> Result<(), String> {
     )
 }
 
-/// A working copy removed, a stash dropped and one popped, untracked files
+/// A worktree removed, a stash dropped and one popped, untracked files
 /// deleted, and — newest — files discarded.
 fn the_rest(repo: &mut DemoRepo, clock: &Clock) -> Result<(), String> {
     repo.pin_clock(Some(clock.ago(HOUR * 30)));
@@ -349,7 +349,7 @@ fn the_rest(repo: &mut DemoRepo, clock: &Clock) -> Result<(), String> {
         &format!("remove worktree {side_path}"),
         &[
             ("Operation", "remove worktree"),
-            ("Working-copy", &side_path),
+            ("Worktree-path", &side_path),
             ("Branch", "side/notes"),
         ],
     )?;
@@ -431,11 +431,11 @@ fn copy(
     let count = tracked.len() + untracked.len();
     let summary = format!("{operation} {count} paths on main");
     let work = repo.work.to_string_lossy().replace('\\', "/");
-    // `Worktree:` names the copy as git does, so a run's copy of the
+    // `Worktree:` names the worktree as git does, so a run's copy of the
     // template reads the work as its own (`template` moves the repository).
     let mut trailers = vec![
         ("Operation", operation),
-        ("Working-copy", work.as_str()),
+        ("Worktree-path", work.as_str()),
         ("Worktree", "."),
         ("Branch", "main"),
     ];

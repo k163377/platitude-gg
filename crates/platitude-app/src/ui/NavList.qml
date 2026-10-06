@@ -23,11 +23,11 @@ AppListView {
     /// The sidebar's row gestures, which outlive the delegates and span sections — handed by every list here (the
     /// sections and the rail's peek). Null skips every call below.
     property var gestures: null
-    /// Whether rows open their facts under themselves (`NavRowFacts`), and the section that knows which working copy
+    /// Whether rows open their facts under themselves (`NavRowFacts`), and the section that knows which worktree
     /// has a branch out (`worktreeHolding`). Separate, since the WORKTREES list opens rows but has nothing to ask it.
     property bool offersFacts: false
     property var worktreesModel: null
-    /// BRANCHES, for rows that speak of another's branch: a working copy's held branch, and the local branch reading
+    /// BRANCHES, for rows that speak of another's branch: a worktree's held branch, and the local branch reading
     /// a remote-tracking one (デザイン規約 §左メニューの所作). Null elsewhere.
     property var branchesModel: null
     /// TAGS only: the remote tag rows act on (`RepoTab.defaultRemote`), which an open tag row reads the others
@@ -323,8 +323,8 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.name : ""
     }
-    /// What that row draws as its name (PGG_AUTO_ACT=rebase-edit-stop) — the main copy's row draws its branch in place
-    /// of `name` where it has one (`NavRowBody.shownName`). Empty on an unbuilt row.
+    /// What that row draws as its name (PGG_AUTO_ACT=rebase-edit-stop) — the main worktree's row draws its branch in
+    /// place of `name` where it has one (`NavRowBody.shownName`). Empty on an unbuilt row.
     function rowShownNameAt(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.shownName : ""
@@ -353,7 +353,7 @@ AppListView {
         const row = navList.openRow()
         // The free fields (`why=` lock reason, then `path=`) come last: a claim is read as one substring
         // (`verify/verbs/nav.rs`), so everything judged stands ahead of them. `track=` is what the lines draw — on
-        // a working copy's row, the branch it holds (`NavItemDelegate.factsAhead`).
+        // a worktree's row, the branch it holds (`NavItemDelegate.factsAhead`).
         return row === null ? ""
              : row.factsName + " local=" + row.factsLocal
                + " track=" + (row.factsBranch !== "" ? row.factsAhead : row.ahead)

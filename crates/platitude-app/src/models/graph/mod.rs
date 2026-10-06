@@ -25,7 +25,7 @@ mod stream;
 use item::{ChosenRow, ChosenRows, GraphRowItem, Tally, to_row_item};
 use marks::RowMark;
 
-/// What a row of another working copy's uncommitted work answers when the
+/// What a row of another worktree's uncommitted work answers when the
 /// delegate asks: whose it is, where it is, and its six tallies. Beside
 /// the items, since `GraphRowItem` has spent all fifteen fields.
 #[derive(Default, Clone)]
@@ -42,7 +42,7 @@ pub struct GraphModel {
     marks: Vec<RowMark>,
     /// The parent ids the spans in `marks` point into, flattened.
     parent_oids: Vec<Oid>,
-    /// Rows of other working copies' uncommitted work, by row index — a
+    /// Rows of other worktrees' uncommitted work, by row index — a
     /// handful, where the window is thousands.
     carried: std::collections::HashMap<usize, CarriedRow>,
     /// Bumped whenever `carried` is written. The delegate reads it beside
@@ -99,7 +99,7 @@ pub struct GraphModel {
     /// the first status, so the two disagreeing means the graph is one read
     /// behind. Settled with the footer, once the pass is whole.
     wip_row: bool,
-    /// Whether the row this pass left first is another working copy's —
+    /// Whether the row this pass left first is another worktree's —
     /// the other half of [`Self::wip_row`]'s answer.
     carried_top: bool,
     /// Model resets (streaming restarts only — in-place replacements do

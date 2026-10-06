@@ -82,8 +82,8 @@ pub trait PassHooks: Send + Sync + 'static {
     ///
     /// **The one arrangement a repository cannot be walked into**: which
     /// of walk and status arrives first is the scheduler's, and the readers
-    /// landing on the working tree answer for the pass that lost — every
-    /// other working copy has a row, this window none, all wearing the
+    /// landing on the working-tree row answer for the pass that lost — every
+    /// other worktree has a row, this window none, all wearing the
     /// all-zero id. `false` for everything but a harness.
     ///
     /// **While it is up, every pass is published** (`RepoSession::run_swap_pass`

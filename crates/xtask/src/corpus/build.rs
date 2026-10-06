@@ -234,7 +234,7 @@ fn fill(at: &Path, clock: &mut Clock) -> Result<(), String> {
     git(at, &["config", "maintenance.auto", "false"])?;
     git(at, &["config", "fetch.writeCommitGraph", "false"])?;
     let newest = import(at, clock)?;
-    // fast-import writes no work tree: without this every tracked file
+    // fast-import writes no working tree: without this every tracked file
     // reads as deleted.
     git(at, &["reset", "--hard", "main"])?;
     clock.mark("checkout");

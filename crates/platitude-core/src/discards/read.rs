@@ -1,4 +1,4 @@
-//! The reading as a whole: the working copies, the record and the names
+//! The reading as a whole: the worktrees, the record and the names
 //! taken side by side, then one walk of every reflog, then one walk of what
 //! they and the record name that no ref reaches.
 
@@ -18,18 +18,18 @@ use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor};
 use crate::worktrees::WorktreeEntry;
 
-/// A working copy whose HEAD reflog is read.
-struct Copy {
-    /// [`super::MAIN_COPY`], or its name under `$GIT_DIR/worktrees/` — what
+/// A worktree whose HEAD reflog is read.
+struct Worktree {
+    /// [`super::MAIN_WORKTREE`], or its name under `$GIT_DIR/worktrees/` — what
     /// the record's `Worktree:` names it by — and where it stands now.
     id: String,
     path: String,
-    /// The ref that names its HEAD from the copy the session stands in.
+    /// The ref that names its HEAD from the worktree the session stands in.
     head: String,
     /// The branch it has out; `None` while detached.
     on: Option<String>,
     folder: String,
-    /// How an entry names it: empty for the copy the session stands in.
+    /// How an entry names it: empty for the worktree the session stands in.
     label: String,
     /// The commit a detached HEAD holds, which no branch may.
     detached_at: Option<Oid>,
@@ -52,18 +52,18 @@ pub async fn read_repo(
         taken_names(executor, workdir, cancel),
         stash_entries(executor, workdir, cancel),
     )?;
-    let copies = copies_of(listed, workdir);
-    let mut reflogs = reflogs(executor, workdir, &copies, cancel).await?;
+    let worktrees = worktrees_of(listed, workdir);
+    let mut reflogs = reflogs(executor, workdir, &worktrees, cancel).await?;
     if let Some(limit) = limit {
         reflogs.values_mut().for_each(|lines| lines.truncate(limit));
     }
     let mut by_head = Vec::new();
-    for copy in &copies {
-        if let Some(lines) = reflogs.remove(&copy.head) {
+    for worktree in &worktrees {
+        if let Some(lines) = reflogs.remove(&worktree.head) {
             by_head.extend(head_moves(
-                &copy.folder,
-                &copy.label,
-                copy.on.as_deref(),
+                &worktree.folder,
+                &worktree.label,
+                worktree.on.as_deref(),
                 &lines,
             ));
         }
@@ -83,18 +83,18 @@ pub async fn read_repo(
         .collect();
     // Every stash entry holds what it stood on, not only the newest one
     // `refs/stash` names (§3).
-    let held: Vec<Oid> = copies
+    let held: Vec<Oid> = worktrees
         .iter()
-        .filter_map(|copy| copy.detached_at)
+        .filter_map(|worktree| worktree.detached_at)
         .chain(stashed)
         .collect();
     let walked = unreached(executor, workdir, &starts, &held, cancel).await?;
     let settled = settle(by_branch, by_head, &walked);
     let here = Here {
         workdir: std::fs::canonicalize(workdir).ok(),
-        copies: copies
+        worktrees: worktrees
             .iter()
-            .map(|copy| (copy.id.clone(), copy.path.clone()))
+            .map(|worktree| (worktree.id.clone(), worktree.path.clone()))
             .collect(),
         walked: &walked,
         taken: &taken,
@@ -102,17 +102,17 @@ pub async fn read_repo(
     };
     let mut found = entries(settled, &recorded.lines, &here);
     mark_absent(executor, workdir, &mut found, cancel).await?;
-    name_copies(executor, &mut found, cancel).await?;
+    name_worktrees(executor, &mut found, cancel).await?;
     found.sort_by_key(|d| Reverse(d.at));
     Ok(found)
 }
 
-/// Names each working copy a part puts work back into by its git directory
-/// as a session opened there names it ([`super::restore::copy_at`]): the key
-/// of that copy's write order, which the restore takes its turn in (§4).
-/// Once per copy; a copy gone — a folder left where it stood included — is
+/// Names each worktree a part puts work back into by its git directory
+/// as a session opened there names it ([`super::restore::worktree_at`]): the key
+/// of that worktree's write order, which the restore takes its turn in (§4).
+/// Once per worktree; a worktree gone — a folder left where it stood included — is
 /// named by nothing.
-async fn name_copies(
+async fn name_worktrees(
     executor: &GitExecutor,
     found: &mut [Discard],
     cancel: &CancellationToken,
@@ -126,7 +126,7 @@ async fn name_copies(
             git_dir.clone_from(known);
             continue;
         }
-        let dir = super::restore::copy_at(executor, path, cancel)
+        let dir = super::restore::worktree_at(executor, path, cancel)
             .await?
             .unwrap_or_default();
         named.insert(path.clone(), dir.clone());
@@ -230,11 +230,11 @@ async fn taken_names(
     Ok(taken)
 }
 
-/// The copies with a HEAD reflog to read: not bare, the folder still
+/// The worktrees with a HEAD reflog to read: not bare, the folder still
 /// there. The one `workdir` stands in reads as `HEAD`, the others by the
-/// names git gives every copy's HEAD (`main-worktree/HEAD`,
+/// names git gives every worktree's HEAD (`main-worktree/HEAD`,
 /// `worktrees/<id>/HEAD` — git-worktree(1) §REFS).
-fn copies_of(listed: Vec<WorktreeEntry>, workdir: &Path) -> Vec<Copy> {
+fn worktrees_of(listed: Vec<WorktreeEntry>, workdir: &Path) -> Vec<Worktree> {
     let here = std::fs::canonicalize(workdir).ok();
     listed
         .into_iter()
@@ -247,7 +247,7 @@ fn copies_of(listed: Vec<WorktreeEntry>, workdir: &Path) -> Vec<Copy> {
                 .unwrap_or_default();
             let is_here = here.is_some() && std::fs::canonicalize(&path).ok() == here;
             let id = if entry.main {
-                super::MAIN_COPY.to_string()
+                super::MAIN_WORKTREE.to_string()
             } else {
                 linked_id(&path)?
             };
@@ -263,7 +263,7 @@ fn copies_of(listed: Vec<WorktreeEntry>, workdir: &Path) -> Vec<Copy> {
                 .as_deref()
                 .filter(|_| entry.detached)
                 .and_then(|hex| Oid::from_hex_str(hex).ok());
-            Some(Copy {
+            Some(Worktree {
                 id,
                 path: entry.path,
                 head,
@@ -280,7 +280,7 @@ fn copies_of(listed: Vec<WorktreeEntry>, workdir: &Path) -> Vec<Copy> {
         .collect()
 }
 
-/// A linked copy's name under `$GIT_DIR/worktrees/`: the last part of the
+/// A linked worktree's name under `$GIT_DIR/worktrees/`: the last part of the
 /// `gitdir:` its `.git` file points to (gitrepository-layout(5)).
 fn linked_id(path: &Path) -> Option<String> {
     let text = std::fs::read_to_string(path.join(".git")).ok()?;
@@ -293,13 +293,13 @@ fn linked_id(path: &Path) -> Option<String> {
     )
 }
 
-/// Every branch's reflog and every copy's HEAD reflog in one `log -g`, by
+/// Every branch's reflog and every worktree's HEAD reflog in one `log -g`, by
 /// ref: each ref's lines newest first. A ref with no reflog has no lines;
 /// an unborn HEAD is passed over (`--ignore-missing`).
 async fn reflogs(
     executor: &GitExecutor,
     workdir: &Path,
-    copies: &[Copy],
+    worktrees: &[Worktree],
     cancel: &CancellationToken,
 ) -> Result<BTreeMap<String, Vec<Line>>, GitError> {
     let cmd = GitCommand::new()
@@ -312,7 +312,7 @@ async fn reflogs(
             "--format=%H%x1f%gD%x1f%gs",
             "--branches",
         ])
-        .args(copies.iter().map(|copy| copy.head.as_str()))
+        .args(worktrees.iter().map(|worktree| worktree.head.as_str()))
         .arg("--");
     let out = executor.run(cmd, cancel).await?;
     let mut by_ref: BTreeMap<String, Vec<Line>> = BTreeMap::new();
@@ -369,7 +369,7 @@ mod tests {
         Move {
             kind,
             name: name.to_string(),
-            copy: String::new(),
+            worktree: String::new(),
             at,
             old: oid(old),
             new: oid(new),

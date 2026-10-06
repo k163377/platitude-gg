@@ -7,7 +7,7 @@
 //! Every body that could be delegated has been: the feed's answers to
 //! `drain`, staging and discard to `ops_stage`, conflicts to
 //! `ops_conflict`, remotes to `ops_remote`, config to `ops_config`,
-//! deletes to `ops_delete`, standing in another copy to `restand`, commit
+//! deletes to `ops_delete`, standing in another worktree to `restand`, commit
 //! and reset to `state`, the awaited write to `write_watch`.
 //!
 //! The only way shorter is fewer slots: a pure rule that reads nothing
@@ -159,10 +159,10 @@ impl RepoTab {
     // came back: "whole" | "unstaged" | "stash".
     qproperty!("restoreSeq", Member = restore_seq, Notify = changed);
     qproperty!("restoreHow", Member = restore_how, Notify = changed);
-    // This tree's paced reads that have ended, and the other copies whose
+    // This tree's paced reads that have ended, and the other worktrees whose
     // paced read ended in this notify (`TabMsg::PacedRead`).
     qproperty!("pacedSeq", Member = paced_seq, Notify = changed);
-    qproperty!("pacedCopies", Member = paced_copies, Notify = changed);
+    qproperty!("pacedWorktrees", Member = paced_worktrees, Notify = changed);
     // Where the editor's own commit answered in this notify, or -1 —
     // matched by the press's id, whatever order the answers came in
     // (`ops::Press`).
@@ -184,12 +184,12 @@ impl RepoTab {
     // same word (`ops::PushOut`).
     qproperty!("refPushAnswer", Member = ref_push_answer, Notify = changed);
     qproperty!("refPushTarget", Member = ref_push_target, Notify = changed);
-    // …and where the working copy a menu asked for answered, with the
+    // …and where the worktree a menu asked for answered, with the
     // folder it was to be made in (`ops::Press`).
-    qproperty!("copyAnswer", Member = copy_answer, Notify = changed);
+    qproperty!("worktreeAnswer", Member = worktree_answer, Notify = changed);
     qproperty!(
-        "copyAnswerPath",
-        Member = copy_answer_path,
+        "worktreeAnswerPath",
+        Member = worktree_answer_path,
         Notify = changed
     );
     // Meanings, classified in `drain::settle_write`, of the last answer in
@@ -252,8 +252,8 @@ impl RepoTab {
     #[qsignal]
     pub(super) fn changed(&mut self);
 
-    /// The copy this tab stands in would not open, and the repository has
-    /// its own to stand in instead (`Hub::home_copy`); the strip moves the
+    /// The worktree this tab stands in would not open, and the repository has
+    /// its own to stand in instead (`Hub::home_worktree`); the strip moves the
     /// tab (`TabsModel::standTabHome`).
     ///
     /// Whoever hears it answers a turn later (`RepoPage`): it is emitted
@@ -523,12 +523,12 @@ impl RepoTab {
         Hub::with(|hub| hub.release_tab(id));
     }
 
-    /// The tab is standing in another working copy of the repository it
+    /// The tab is standing in another worktree of the repository it
     /// is showing (`Hub::restand_tab`), and the page is staying. What goes
-    /// and what stays is `forget_the_copy`'s.
+    /// and what stays is `forget_the_worktree`'s.
     #[qslot]
     fn restand(&mut self) {
-        self.forget_the_copy();
+        self.forget_the_worktree();
         self.changed();
     }
 
@@ -566,7 +566,7 @@ impl RepoTab {
         self.take_feed()
     }
 
-    /// Refs, status, the listings and a pass over the other copies, with
+    /// Refs, status, the listings and a pass over the other worktrees, with
     /// one walk (`RepoSession::refresh_quick`) — for the harness; a page on
     /// screen is read at its pace (`setPaced`).
     #[qslot]
@@ -575,7 +575,7 @@ impl RepoTab {
     }
 
     /// Whether the page is on screen to be read for: this tree and the
-    /// other copies are then read on the session's pace
+    /// other worktrees are then read on the session's pace
     /// (`RepoSession::set_paced`), and each read that ends says so
     /// (`pacedRead`).
     #[qslot]
@@ -584,23 +584,23 @@ impl RepoTab {
     }
 
     /// The window came back: this tree now, with its stashes
-    /// (`RepoSession::poll_now`). The other copies keep their pace.
+    /// (`RepoSession::poll_now`). The other worktrees keep their pace.
     #[qslot]
     fn poll_now(&mut self) {
         self.with_session(|s| s.poll_now());
     }
 
-    /// What one other copy is holding, file by file — the pane's read,
-    /// asked when a copy's row is selected and when the window comes back.
-    /// It stands the pane on that copy: each read of the copy hands the
-    /// pane its list from there on.
+    /// What one other worktree is holding, file by file — the pane's read,
+    /// asked when a worktree's row is selected and when the window comes
+    /// back. It stands the pane on that worktree: each read of the worktree
+    /// hands the pane its list from there on.
     #[qslot]
     fn read_carried_status(&mut self, path: String, name: String) {
         self.with_session(|s| s.read_carried_status(path, name));
     }
 
     /// The pane is about this window's own tree again: no read of the
-    /// copies hands it another copy's list
+    /// other worktrees hands it another worktree's list
     /// (`RepoSession::leave_carried_status`).
     #[qslot]
     fn leave_carried_status(&mut self) {
@@ -941,12 +941,12 @@ impl RepoTab {
         self.stash_drop(selector);
     }
 
-    /// `git worktree add`: a new working copy at `path`. `mode` says what
+    /// `git worktree add`: a new worktree at `path`. `mode` says what
     /// it stands on — `new` (a branch `branch` made at `start`), `branch`
     /// (the local branch `branch`) or `track` (a local `branch` made off
     /// the remote branch `start`, following it); `name` is its folder, for
     /// a refusal's heading. The answer is the page's to wait for
-    /// (`copyAnswer`).
+    /// (`worktreeAnswer`).
     #[qslot]
     fn add_worktree(
         &mut self,
@@ -956,10 +956,10 @@ impl RepoTab {
         start: String,
         name: String,
     ) {
-        self.add_copy(path, &mode, branch, start, name);
+        self.worktree_add(path, &mode, branch, start, name);
     }
 
-    /// `git worktree remove` (destructive): the copy's row goes at the
+    /// `git worktree remove` (destructive): the worktree's row goes at the
     /// press. `name` is the row's own word for it, for a refusal's heading.
     #[qslot]
     fn remove_worktree(&mut self, path: String, name: String) {

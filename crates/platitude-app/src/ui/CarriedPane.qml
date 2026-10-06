@@ -5,16 +5,16 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// Right pane, another working copy's uncommitted work: whose it is and what it is holding. Built on the commit pane,
-// not the WIP pane — it can only be read (デザイン規約 §別の作業コピーを読む).
+// Right pane, another worktree's uncommitted work: whose it is and what it is holding. Built on the commit pane,
+// not the WIP pane — it can only be read (デザイン規約 §別の worktree を読む).
 //
-// One list, one row per path (`models::nav::Bucket::Whole`): the staged / unstaged split is that copy's index, which
-// nothing here moves.
+// One list, one row per path (`models::nav::Bucket::Whole`): the staged / unstaged split is that worktree's index,
+// which nothing here moves.
 ColumnLayout {
     id: carriedPane
 
-    /// The copy's name — the folder's last segment, the same one the row's chip carries.
-    required property string copyName
+    /// The worktree's name — the folder's last segment, the same one the row's chip carries.
+    required property string worktreeName
     /// Its changed files, one row per path (`NavSectionModel` on the `whole` run).
     required property var files
     /// Which of them the middle pane is reading. Both halves: the walk matches a row by the pair, and the rows still
@@ -57,7 +57,7 @@ ColumnLayout {
         onLanded: (bucket, path, origPath) => carriedPane.fileWalked(bucket, path, origPath)
     }
 
-    // Whose copy this is, and nothing else; the band under it says what it holds.
+    // Whose worktree this is, and nothing else; the band under it says what it holds.
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: Theme.headerHeight
@@ -74,13 +74,13 @@ ColumnLayout {
                 font.weight: Theme.fontWeightStrong
                 color: Theme.textSecondary
             }
-            // A dash, not `on` (規約 §別の作業コピーを読む), and as a character (規約 §寸法「字で出ていた記号は 5 種」).
+            // A dash, not `on` (規約 §別の worktree を読む), and as a character (規約 §寸法「字で出ていた記号は 5 種」).
             Label {
                 text: "—"
                 font.pixelSize: Theme.fontMd
                 color: Theme.textSecondary
             }
-            // The mark and the name are one word (規約 §別の作業コピーを読む): the seat is the mark's own ink, so its
+            // The mark and the name are one word (規約 §別の worktree を読む): the seat is the mark's own ink, so its
             // box's spare air does not read as a gap.
             RowLayout {
                 Layout.fillWidth: true
@@ -98,7 +98,7 @@ ColumnLayout {
                         height: Theme.iconSm
                     }
                 }
-                // Cut in the middle, whole on the hover (規約 §別の作業コピーを読む) — the only place the whole name
+                // Cut in the middle, whole on the hover (規約 §別の worktree を読む) — the only place the whole name
                 // is, so the seat takes a pointer.
                 Item {
                     id: nameSeat
@@ -107,22 +107,22 @@ ColumnLayout {
                     CutName {
                         id: nameLabel
                         anchors.fill: parent
-                        text: carriedPane.copyName
+                        text: carriedPane.worktreeName
                         pixelSize: Theme.fontMd
                         weight: Theme.fontWeightStrong
-                        // The caption's colour: the band is one phrase (規約 §別の作業コピーを読む).
+                        // The caption's colour: the band is one phrase (規約 §別の worktree を読む).
                         color: Theme.textSecondary
                     }
                     HoverHandler { id: nameHover }
                     ToolTip.visible: (nameHover.hovered || carriedPane.namePointedAt) && nameLabel.cutting
                     ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: carriedPane.copyName
+                    ToolTip.text: carriedPane.worktreeName
                 }
             }
         }
     }
 
-    // What that copy is holding, in the words this window's own pane uses.
+    // What that worktree is holding, in the words this window's own pane uses.
     DetailsChangesBand {
         Layout.fillWidth: true
         caption: qsTr("UNCOMMITTED CHANGES")

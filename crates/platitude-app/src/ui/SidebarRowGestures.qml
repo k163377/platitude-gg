@@ -13,8 +13,8 @@ QtObject {
     required property Item host
     required property RepoTab repoTab
     required property NavSectionModel remotesModel
-    /// Asked by the new copy's box: whether its name is a branch already, and what is where the copy would go
-    /// (`Words.copyNameRefused`).
+    /// Asked by the new worktree's box: whether its name is a branch already, and what is where the worktree would go
+    /// (`Words.worktreeNameRefused`).
     required property NavSectionModel branchesModel
     required property NavSectionModel worktreesModel
 
@@ -58,26 +58,26 @@ QtObject {
     readonly property bool editTaken: gestures.editMode === "rename" && gestures.editRemote !== ""
         && gestures.editText.trim() !== ""
         && gestures.remotesModel.oidOfName(gestures.editRemote + "/" + gestures.editText.trim()) !== ""
-    /// A new branch / tag / copy box still empty since it opened. Not refused: the frame answers for what was typed
+    /// A new branch / tag / worktree box still empty since it opened. Not refused: the frame answers for what was typed
     /// (デザイン規約 §可否・警告の出し場所), and nothing has been. A rename rubbed out to nothing is refused.
     readonly property bool editUnanswered:
         (gestures.editMode === "branch" || gestures.editMode === "tag" || gestures.editMode === "worktree")
         && gestures.editText.trim() === ""
-    /// Where the copy named in the box would go (`NavSectionModel.newCopyFor`), asked per keystroke; undefined for
-    /// every other box.
-    readonly property var editCopyPlace: gestures.editMode !== "worktree" ? undefined
-        : gestures.worktreesModel.newCopyFor(gestures.editText.trim())
-    /// What stands in a new copy's way, said before the press — the graph's box says the same
-    /// (`Words.copyNameRefused`).
-    readonly property string editCopyWhy: gestures.editMode !== "worktree" ? ""
-        : Words.copyNameRefused(gestures.editText,
+    /// Where the worktree named in the box would go (`NavSectionModel.newWorktreeFor`), asked per keystroke; undefined
+    /// for every other box.
+    readonly property var editWorktreePlace: gestures.editMode !== "worktree" ? undefined
+        : gestures.worktreesModel.newWorktreeFor(gestures.editText.trim())
+    /// What stands in a new worktree's way, said before the press — the graph's box says the same
+    /// (`Words.worktreeNameRefused`).
+    readonly property string editWorktreeWhy: gestures.editMode !== "worktree" ? ""
+        : Words.worktreeNameRefused(gestures.editText,
                                 gestures.branchesModel.oidOfName(gestures.editText.trim()) !== "",
-                                gestures.editCopyPlace)
+                                gestures.editWorktreePlace)
     /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free text).
     readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
         && (gestures.editTaken
             || gestures.editCaseOnly
-            || gestures.editCopyWhy !== ""
+            || gestures.editWorktreeWhy !== ""
             || gestures.editGitRefusal !== ""
             || !(gestures.editKind === "stash"
                  ? GitFacts.validStashMessage(gestures.editText)
@@ -95,8 +95,8 @@ QtObject {
           ? gestures.editGitRefusal
         : gestures.editText.trim() === ""
           ? qsTr("A name is needed")
-          : gestures.editCopyWhy !== ""
-            ? gestures.editCopyWhy
+          : gestures.editWorktreeWhy !== ""
+            ? gestures.editWorktreeWhy
           : gestures.editCaseOnly
             ? qsTr("Only the letter case differs — on this disk that deletes both names")
           : gestures.editTaken
@@ -104,9 +104,10 @@ QtObject {
             : gestures.editKind === "stash"
               ? qsTr("One line, and nothing invisible in it")
               : Words.notAName
-    /// The working copy's folder in that line, which the box's tip stands the tree mark in front of
-    /// (`Words.copyNameMark`); empty where the line names none.
-    readonly property string editRefusedMark: Words.copyNameMark(gestures.editRefusedWhy, gestures.editCopyPlace)
+    /// The worktree's folder in that line, which the box's tip stands the tree mark in front of
+    /// (`Words.worktreeNameMark`); empty where the line names none.
+    readonly property string editRefusedMark: Words.worktreeNameMark(gestures.editRefusedWhy,
+                                                                     gestures.editWorktreePlace)
 
     function startEdit(kind, key, mode, id, oid, text) {
         // The one door into the box (the second click and the menu's four `begin*`), so the hold is asked here: a box
@@ -150,7 +151,7 @@ QtObject {
         }
         if (mode === "worktree") {
             gestures.stopEdit()
-            gestures.host.copyAtRequested(oid, text.trim())
+            gestures.host.worktreeAtRequested(oid, text.trim())
             return
         }
         if (mode === "tag") {
@@ -287,7 +288,7 @@ QtObject {
     /// Double-click: where the row leads (デザイン規約 §左メニューの所作).
     function activateRow(kind, name, full, oidHex) {
         // Held: a switch and the tag row's new-branch box, which write. A worktree row goes through — moving to another
-        // working copy writes nothing, and the running write outlives the page that asked for it
+        // worktree writes nothing, and the running write outlives the page that asked for it
         // (`RepoSession::close`, デザイン規約 §左メニューの所作 の replay の段).
         if (gestures.held && kind !== "worktree")
             return
@@ -313,8 +314,8 @@ QtObject {
     function beginTagAt(kind, id, oidHex) {
         gestures.startEdit(kind, kind + ":" + id, "tag", id, oidHex, "")
     }
-    /// …and for a new branch out in a working copy of its own (`Create worktree here…`).
-    function beginCopyAt(kind, id, oidHex) {
+    /// …and for a new branch out in a worktree of its own (`Create worktree here…`).
+    function beginWorktreeAt(kind, id, oidHex) {
         gestures.startEdit(kind, kind + ":" + id, "worktree", id, oidHex, "")
     }
 }

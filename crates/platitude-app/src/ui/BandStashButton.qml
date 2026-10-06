@@ -22,8 +22,8 @@ ActionButton {
     // The canvas inside the frame, like the two beside it (`BandFetchButton`).
     faceColor: Theme.bgSurface
     // No `!`, hold or ring (デザイン規約 §変更を退避する). Down while a rebase plan is composed (its run button is the one
-    // write), and while the pane reads another working copy — a press would set aside *this* window's changes
-    // (P3-確認事項 §別 worktree の未コミット行).
+    // write), and while the pane reads another worktree — a press would set aside *this* window's changes
+    // (P3-確認事項 §別の worktree の未コミット行).
     enabled: stashButton.mode === "ready" && stashButton.curPage.pageTab.busyCount === 0
              && !stashButton.curPage.planShown && stashButton.curPage.wipWritable
     tip: {

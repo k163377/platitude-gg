@@ -3,7 +3,7 @@
 //!
 //! Off the sessions on purpose: only the tab in front has a session
 //! (`RepoPageStack`), and the settings screen offers every repository in
-//! the strip — so the reads and the write are spawned against a work tree
+//! the strip — so the reads and the write are spawned against a worktree's
 //! path, as `AppBackend`'s identity read is. git's own lock on the file it
 //! writes makes that safe beside a session's write queue.
 //!

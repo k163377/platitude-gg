@@ -7,7 +7,7 @@ use super::*;
 /// in waits for one (デザイン規約 §タブの所作「判定は 1 か所に置く」).
 #[derive(Debug)]
 pub enum OpenMsg {
-    /// The working copy the folder is in, and its repository
+    /// The worktree the folder is in, and its repository
     /// ([`platitude_core::repo::Place`]).
     Placed { place: platitude_core::repo::Place },
     /// `kind` is `plain` / `bare` / `other`, the three the tab's failure
@@ -56,10 +56,10 @@ pub enum TabMsg {
     /// write, whose `kind` says which write it was.
     WriteStopped,
     /// A read the page's pace started has ended (`SessionEvent::PacedRead`):
-    /// this tree's where `copy` is `None`, else that copy's, by the path git
+    /// this tree's where `worktree` is `None`, else that worktree's, by the path git
     /// printed.
     PacedRead {
-        copy: Option<String>,
+        worktree: Option<String>,
     },
     /// A write started / ended. A failed write also arrives as an
     /// `OpError`; `error` is here too so an editor can tell whether its
@@ -241,8 +241,8 @@ pub struct StashList {
     pub looked: u64,
 }
 
-/// The working copies, and when the read that listed them looked
-/// (`SessionEvent::WorktreesLoaded`) — a removed copy's row waits on it, as
+/// The worktrees, and when the read that listed them looked
+/// (`SessionEvent::WorktreesLoaded`) — a removed worktree's row waits on it, as
 /// a dropped stash waits on [`StashList`].
 #[derive(Debug)]
 pub struct WorktreeList {
@@ -380,15 +380,15 @@ pub struct OpProgressMsg {
     pub looked: u64,
 }
 
-/// What another working copy is holding, for the read-only pane
+/// What another worktree is holding, for the read-only pane
 /// (`SessionEvent::CarriedStatusLoaded`). Not a [`StatusMsg`]: the rest of
 /// that is about the tree this window can write.
 #[derive(Debug)]
 pub struct CarriedStatusMsg {
-    /// The copy this is about, as git printed its path. Only the copy the
-    /// pane stands on is sent (`RepoSession::read_carried_status`).
+    /// The worktree this is about, as git printed its path. Only the
+    /// worktree the pane stands on is sent (`RepoSession::read_carried_status`).
     pub at: String,
-    /// The copy's own name, for the band that says whose files these are.
+    /// The worktree's own name, for the band that says whose files these are.
     pub name: String,
     pub status: WorkingTreeStatus,
 }
@@ -475,8 +475,8 @@ pub enum DiffMsg {
         /// What changed inside each row (`intraline`), ahead of the colours.
         marks: Arc<platitude_core::intraline::IntraMarks>,
         /// The commit a stage of this row would point at, for the one row
-        /// that has no patch: a repository of its own inside the working
-        /// copy (`details::embedded`).
+        /// that has no patch: a repository of its own inside the working tree
+        /// (`details::embedded`).
         embedded: Option<platitude_core::details::Embedded>,
     },
     /// Colours for the lines of the diff named by `target`, addressed the

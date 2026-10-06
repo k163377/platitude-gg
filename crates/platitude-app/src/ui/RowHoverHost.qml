@@ -178,7 +178,7 @@ Item {
         return out
     }
     /// The line one record opens under itself — the left panel's line, from the same `NavFacts`. None for a
-    /// counterpart already a row of this card (same commit = level), and none for the working copy holding the
+    /// counterpart already a row of this card (same commit = level), and none for the worktree holding the
     /// branch: the chip's frame already says it (デザイン規約 §ref の種別).
     function mateOf(chip, here, oidHex) {
         const name = chip.name

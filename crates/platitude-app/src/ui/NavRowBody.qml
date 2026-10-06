@@ -23,17 +23,17 @@ RowLayout {
     /// below the row's own line (`NameCell.whole`).
     readonly property Item nameWhole: nameCell.wholeField
     readonly property real nameWholeOver: nameCell.wholeOver
-    /// The repository's own working copy (`models::nav::item::MAIN`): named by its branch, told apart by the house.
-    readonly property bool homeCopy: body.row.kindHint === "worktree" && body.row.change === "MAIN"
+    /// The repository's own worktree (`models::nav::item::MAIN`): named by its branch, told apart by the house.
+    readonly property bool homeWorktree: body.row.kindHint === "worktree" && body.row.change === "MAIN"
     /// The branch that row is named by. Empty when detached (git lists no `branch` line), and the folder name stands
     /// instead — else the row is a house and a blank.
-    readonly property string homeName: body.homeCopy ? body.row.bucket : ""
-    /// The name this row draws: the main copy's branch, else the row's own (`homeName`).
+    readonly property string homeName: body.homeWorktree ? body.row.bucket : ""
+    /// The name this row draws: the main worktree's branch, else the row's own (`homeName`).
     readonly property string shownName: body.homeName !== "" ? body.homeName : body.row.name
-    /// The colour of "this window stands here": `textLink` as for a branch (the main copy is named by one), and a
-    /// linked copy's `textHereTree` (デザイン規約 §ref の種別).
+    /// The colour of "this window stands here": `textLink` as for a branch (the main worktree is named by one), and a
+    /// linked worktree's `textHereTree` (デザイン規約 §ref の種別).
     readonly property color hereTone:
-        body.row.kindHint === "worktree" && !body.homeCopy ? Theme.textHereTree : Theme.textLink
+        body.row.kindHint === "worktree" && !body.homeWorktree ? Theme.textHereTree : Theme.textLink
     /// Whether this section has a mark seat — not STASHES / TAGS (デザイン規約 §余白「印の立たないセクションは席を取らない」).
     readonly property bool seated: body.row.kindHint !== "stash" && body.row.kindHint !== "tag"
 
@@ -49,7 +49,7 @@ RowLayout {
         showName: !body.row.editing
         seated: body.seated
         // Open, the name shows whole in its place and wraps down (`NameCell.whole`) — the name this row draws, so the
-        // main copy's branch.
+        // main worktree's branch.
         whole: !body.row.factsOpen ? ""
              : body.homeName !== "" ? body.homeName : body.row.factsName
         folder: body.row.folder
@@ -57,10 +57,10 @@ RowLayout {
         // A sidebar folder keeps its fold state in the change slot it has no change code for (`models::nav::item`).
         folded: body.row.change === "FOLDED"
         showChange: body.row.kindHint === "file"
-        // A worktree's state rides the change slot (`models::nav::item`): lock, prunable `!`, or the main copy's house
-        // (git never locks or prunes the main one, so they never contend). A branch another copy holds wears `tree`,
-        // not the padlock, which means `git worktree lock`. Open, `tree` goes (the lines name that copy) but a copy's
-        // own state stays, so it does not flicker under the pointer.
+        // A worktree's state rides the change slot (`models::nav::item`): lock, prunable `!`, or the main worktree's
+        // house (git never locks or prunes the main one, so they never contend). A branch another worktree holds wears
+        // `tree`, not the padlock, which means `git worktree lock`. Open, `tree` goes (the lines name that worktree)
+        // but a worktree's own state stays, so it does not flicker under the pointer.
         seatMark: body.row.kindHint === "branch"
                     ? (body.row.change === "HELD" && !body.row.factsOpen ? "tree" : "")
                 : body.row.kindHint !== "worktree" ? ""
@@ -71,7 +71,7 @@ RowLayout {
         seatTint: body.row.change === "PRUNABLE" ? Theme.warning
                 : nameCell.seatMark === "tree" ? Theme.success
                 : Theme.textSecondary
-        // The main copy is named by its branch, in the name's place (デザイン規約 §左メニューの所作; `homeName`).
+        // The main worktree is named by its branch, in the name's place (デザイン規約 §左メニューの所作; `homeName`).
         name: body.shownName
         // A staged rename's source, as the commit's file list shows it. Not `orig_path`, which a folder row uses for
         // its own path.
@@ -93,11 +93,11 @@ RowLayout {
         Layout.fillHeight: true
     }
     // A linked worktree's branch, right-aligned; `CutName` keeps the column's edge. Not while the open lines name it,
-    // not on a detached copy (a word here reads as a branch), and not on the main copy, already named by it
+    // not on a detached worktree (a word here reads as a branch), and not on the main worktree, already named by it
     // (デザイン規約 §左メニューの所作).
     Loader {
         id: branchSeat
-        active: !body.row.folder && body.row.kindHint === "worktree" && body.row.bucket !== "" && !body.homeCopy
+        active: !body.row.folder && body.row.kindHint === "worktree" && body.row.bucket !== "" && !body.homeWorktree
                 && !(body.row.factsOpen && body.row.factsBranch !== "")
         visible: branchSeat.active
         Layout.maximumWidth: body.row.listWidth / 2
@@ -108,12 +108,12 @@ RowLayout {
         }
     }
     // Every branch's distance from its upstream (`models::nav` の `Role::Ahead` rides each row); none when level or
-    // untracked (デザイン規約 §左メニューの所作). The main copy, named by its branch and opening no line for it, draws
-    // that branch's measure here only while open — the counts it read as it opened (`NavFacts.answers`).
+    // untracked (デザイン規約 §左メニューの所作). The main worktree, named by its branch and opening no line for it,
+    // draws that branch's measure here only while open — the counts it read as it opened (`NavFacts.answers`).
     Loader {
         id: trackSeat
-        readonly property int ahead: body.homeCopy ? body.row.factsAhead : body.row.ahead
-        readonly property int behind: body.homeCopy ? body.row.factsBehind : body.row.behind
+        readonly property int ahead: body.homeWorktree ? body.row.factsAhead : body.row.ahead
+        readonly property int behind: body.homeWorktree ? body.row.factsBehind : body.row.behind
         active: !body.row.folder && (trackSeat.ahead > 0 || trackSeat.behind > 0)
                 && (body.row.kindHint === "branch" || (body.homeName !== "" && body.row.factsOpen))
         visible: trackSeat.active

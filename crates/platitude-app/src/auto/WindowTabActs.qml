@@ -21,7 +21,7 @@ Item {
     required property Item mainUi
     required property Item gate
 
-    /// Whether `page` is reading the working copy at `path`, asked of the session's own answer (`RepoTab.repoPath`).
+    /// Whether `page` is reading the worktree at `path`, asked of the session's own answer (`RepoTab.repoPath`).
     /// Case-folded as `nav/drain.rs` does: `git worktree list` and `rev-parse --show-toplevel` can spell one folder
     /// in different letter case on Windows.
     function standsIn(page, path) {
@@ -41,8 +41,8 @@ Item {
         acts.standReset = page.pageGraph.resetCount
         acts.standLogged = page.pageCommands.rowsHeld()
     }
-    /// Whether a graph pass landed after the press. Reported, not waited on: two copies whose rows agree send no pass
-    /// (`platitude_core::session::DrawnGraph`); the run waits on `PageSettled`.
+    /// Whether a graph pass landed after the press. Reported, not waited on: two worktrees whose rows agree send no
+    /// pass (`platitude_core::session::DrawnGraph`); the run waits on `PageSettled`.
     function standDrew(page) {
         return page.pageGraph.finishCount > acts.standFinished
     }
@@ -231,7 +231,7 @@ Item {
         }
     }
 
-    // Another working copy's uncommitted row, double-clicked, stands this tab in that copy (デザイン規約 §タブの所作).
+    // Another worktree's uncommitted row, double-clicked, stands this tab in that worktree (デザイン規約 §タブの所作).
     // Window-level because the landing is the strip's answer: the page stays.
     SampleTimer {
         id: carriedOpenTimer
@@ -239,7 +239,8 @@ Item {
         property bool asked: false
         property int beforeCount: -1
         property string wanted: ""
-        /// The first row of another copy's uncommitted work, or -1. Off the model: a row off screen has no delegate.
+        /// The first row of another worktree's uncommitted work, or -1. Off the model: a row off screen has no
+        /// delegate.
         function carriedRow(graph) {
             for (let row = 0; row < graph.rowTotal; row++) {
                 if (graph.carriedName(row) !== "")
@@ -268,15 +269,15 @@ Item {
                 carriedOpenTimer.asked = true
                 return
             }
-            // The strip did not grow, and the page in front reads the asked copy — neither shows in a picture.
+            // The strip did not grow, and the page in front reads the asked worktree — neither shows in a picture.
             if (pageRepeater.count !== carriedOpenTimer.beforeCount)
                 return
             const front = window.curPage
             if (front === null || front.pageTab.state !== "open"
                     || !PageSettled.settled(front)
                     || !acts.standsIn(front, carriedOpenTimer.wanted)
-                    // …and the graph no longer draws the arrived copy as another's (`GraphModel.carriedRowOf`):
-                    // settled cannot see it, as both copies are dirty in this preset.
+                    // …and the graph no longer draws the arrived worktree as another's (`GraphModel.carriedRowOf`):
+                    // settled cannot see it, as both worktrees are dirty in this preset.
                     || front.pageGraph.carriedRowOf(carriedOpenTimer.wanted) >= 0)
                 return
             stop()
@@ -291,7 +292,7 @@ Item {
         }
     }
 
-    // A WORKTREES row stands this tab in that working copy — the carried row's landing, by the left menu's door
+    // A WORKTREES row stands this tab in that worktree — the carried row's landing, by the left menu's door
     // (デザイン規約 §左メニューの所作). Window-level for the reason above.
     SampleTimer {
         id: worktreeStandTimer
@@ -316,7 +317,8 @@ Item {
                     }
                     return
                 }
-                // The argument is a WORKTREES row, default 1 = the first linked copy (row 0 is the copy stood in).
+                // The argument is a WORKTREES row, default 1 = the first linked worktree (row 0 is the worktree
+                // stood in).
                 const trees = page.pageSidebar.worktreesModel
                 const row = Harness.autoActArg === "" ? 1 : Number(Harness.autoActArg)
                 if (trees.shown() <= row)
@@ -328,7 +330,7 @@ Item {
                 worktreeStandTimer.beforeCount = pageRepeater.count
                 acts.holdStand(page)
                 // The pane's own door — the one the row's double-click calls (`SidebarRowGestures.activateRow`).
-                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfCopy(full))
+                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfWorktree(full))
                 worktreeStandTimer.asked = true
                 return
             }
@@ -352,33 +354,34 @@ Item {
         }
     }
 
-    // A copy made from a menu stands this tab in it (デザイン規約 §作業コピーを作る): the page presses
-    // (`AutoActCopyVerbs`) and the landing is read here, the page being stood elsewhere by it. Taken as the tab first
-    // settles — the press comes several beats later, and the move behind it takes git's answer and two more processes.
+    // A worktree made from a menu stands this tab in it (デザイン規約 §worktree を作る): the page presses
+    // (`AutoActWorktreeVerbs`) and the landing is read here, the page being stood elsewhere by it. Taken as the tab
+    // first settles — the press comes several beats later, and the move behind it takes git's answer and two more
+    // processes.
     SampleTimer {
-        id: copyMadeTimer
+        id: worktreeMadeTimer
         running: Harness.autoAct === "worktree-new" || Harness.autoAct === "worktree-add"
         property string from: ""
         onTriggered: {
             const page = window.curPage
             if (page === null || page.pageTab.state !== "open")
                 return
-            if (copyMadeTimer.from === "") {
+            if (worktreeMadeTimer.from === "") {
                 // Settled, as the page's own verb waits to be before it presses: the opening's graph still landing
                 // would count as the graph thrown away (`standKept`).
                 if (!PageSettled.settled(page))
                     return
-                copyMadeTimer.from = page.pageTab.repoPath
+                worktreeMadeTimer.from = page.pageTab.repoPath
                 acts.holdStand(page)
                 return
             }
-            if (acts.standsIn(page, copyMadeTimer.from) || !PageSettled.settled(page)
+            if (acts.standsIn(page, worktreeMadeTimer.from) || !PageSettled.settled(page)
                     || page.pageWorkingTree.branch === "")
                 return
             stop()
             const where = page.pageTab.repoPath
-            Harness.report("copy_made stood=" + !acts.standsIn(page, copyMadeTimer.from)
-                              + " copy=" + GitFacts.pathLeaf(where)
+            Harness.report("worktree_made stood=" + !acts.standsIn(page, worktreeMadeTimer.from)
+                              + " worktree=" + GitFacts.pathLeaf(where)
                               + " branch=" + page.pageWorkingTree.branch
                               + " tabs=" + pageRepeater.count
                               + " kept=" + acts.standKept(page)
@@ -388,32 +391,32 @@ Item {
         }
     }
 
-    // …and away and back: unsent words are filed under the copy they were written in
+    // …and away and back: unsent words are filed under the worktree they were written in
     // (デザイン規約 §タブの所作「未コミットのコミットメッセージは立ち位置ごとに憶える」). `kept=` (one page
     // throughout) is what makes `back=` a put-back rather than never taken away.
     SampleTimer {
-        id: copyDraftTimer
-        running: Harness.autoAct === "copy-draft"
-        /// 0 = write and leave, 1 = read the other copy's empty box and come back, 2 = read the words again.
+        id: worktreeDraftTimer
+        running: Harness.autoAct === "worktree-draft"
+        /// 0 = write and leave, 1 = read the other worktree's empty box and come back, 2 = read the words again.
         property int step: 0
         /// Words no repository can produce.
-        readonly property string typed: "chore: words written in one working copy"
-        /// The copy they were written in, and the one stood in between.
+        readonly property string typed: "chore: words written in one worktree"
+        /// The worktree they were written in, and the one stood in between.
         property string home: ""
         property string away: ""
         property bool awayEmpty: false
         /// Whether the tab has answered for where it now stands (`RepoTab.standing`).
-        function settled(page, copy) {
+        function settled(page, worktree) {
             return page !== null && page.pageTab.state === "open" && !page.pageTab.standing
-                   && page.pageWorkingTree.loaded && acts.standsIn(page, copy)
+                   && page.pageWorkingTree.loaded && acts.standsIn(page, worktree)
         }
-        /// The WORKTREES row naming `copy`, activated the way a double-click does. Answers whether it was there.
-        function standIn(page, copy) {
+        /// The WORKTREES row naming `worktree`, activated the way a double-click does. Answers whether it was there.
+        function standIn(page, worktree) {
             const trees = page.pageSidebar.worktreesModel
             for (let row = 0; row < trees.shown(); row++) {
                 const full = trees.fullAt(row)
-                if (full !== "" && full.toLowerCase() === copy.toLowerCase()) {
-                    page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfCopy(full))
+                if (full !== "" && full.toLowerCase() === worktree.toLowerCase()) {
+                    page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfWorktree(full))
                     return true
                 }
             }
@@ -424,50 +427,50 @@ Item {
             if (page === null || page.pageTab.state !== "open" || page.pageTab.standing
                     || !page.pageWorkingTree.loaded || page.pageGraph.finishCount === 0)
                 return
-            if (copyDraftTimer.step === 0) {
+            if (worktreeDraftTimer.step === 0) {
                 const trees = page.pageSidebar.worktreesModel
                 if (trees.shown() < 2)
                     return
                 const full = trees.fullAt(1)
                 if (full === "" || acts.standsIn(page, full))
                     return
-                copyDraftTimer.home = page.pageTab.repoPath
-                copyDraftTimer.away = full
-                page.pageWip.setMessage(copyDraftTimer.typed, "")
+                worktreeDraftTimer.home = page.pageTab.repoPath
+                worktreeDraftTimer.away = full
+                page.pageWip.setMessage(worktreeDraftTimer.typed, "")
                 acts.holdStand(page)
-                if (!copyDraftTimer.standIn(page, full))
+                if (!worktreeDraftTimer.standIn(page, full))
                     return
-                copyDraftTimer.step = 1
+                worktreeDraftTimer.step = 1
                 return
             }
-            if (copyDraftTimer.step === 1) {
-                if (!copyDraftTimer.settled(page, copyDraftTimer.away))
+            if (worktreeDraftTimer.step === 1) {
+                if (!worktreeDraftTimer.settled(page, worktreeDraftTimer.away))
                     return
-                copyDraftTimer.awayEmpty = page.pageWip.subjectText === "" && page.pageWip.bodyText === ""
-                if (!copyDraftTimer.standIn(page, copyDraftTimer.home))
+                worktreeDraftTimer.awayEmpty = page.pageWip.subjectText === "" && page.pageWip.bodyText === ""
+                if (!worktreeDraftTimer.standIn(page, worktreeDraftTimer.home))
                     return
-                copyDraftTimer.step = 2
+                worktreeDraftTimer.step = 2
                 return
             }
-            if (!copyDraftTimer.settled(page, copyDraftTimer.home))
+            if (!worktreeDraftTimer.settled(page, worktreeDraftTimer.home))
                 return
             stop()
-            Harness.report("copy_draft empty=" + copyDraftTimer.awayEmpty
-                              + " back=" + (page.pageWip.subjectText === copyDraftTimer.typed)
+            Harness.report("worktree_draft empty=" + worktreeDraftTimer.awayEmpty
+                              + " back=" + (page.pageWip.subjectText === worktreeDraftTimer.typed)
                               // …and the pane holding them is the one on screen, the same half `tab-carry` reads.
                               + " wip=" + page.wipShown
                               + " kept=" + acts.standKept(page)
-                              + " away=" + copyDraftTimer.away)
+                              + " away=" + worktreeDraftTimer.away)
             window.finishAutoAct()
         }
     }
 
-    // The hover over a tab standing in a linked copy says that copy's path, not the repository's
+    // The hover over a tab standing in a linked worktree says that worktree's path, not the repository's
     // (デザイン規約 §hover のツールチップ).
     SampleTimer {
         id: worktreeTipTimer
         running: Harness.autoAct === "worktree-tip"
-        /// 0 = stand this tab in a linked copy, 1 = put the hand on it, 2 = read what came out.
+        /// 0 = stand this tab in a linked worktree, 1 = put the hand on it, 2 = read what came out.
         property int step: 0
         property string wanted: ""
         onTriggered: {
@@ -484,7 +487,7 @@ Item {
                     return
                 worktreeTipTimer.wanted = full
                 worktreeTipTimer.step = 1
-                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfCopy(full))
+                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfWorktree(full))
                 return
             }
             if (worktreeTipTimer.step === 1) {
@@ -501,30 +504,30 @@ Item {
             if (!tip.visible)
                 return
             stop()
-            // `copy=` is the claim; `native=` is the spelling, read as `tab-name` reads it.
+            // `worktree=` is the claim; `native=` is the spelling, read as `tab-name` reads it.
             Harness.report("worktree_tip tip=" + tip.visible
-                              + " copy=" + (tip.text.toLowerCase() === worktreeTipTimer.wanted.toLowerCase())
+                              + " worktree=" + (tip.text.toLowerCase() === worktreeTipTimer.wanted.toLowerCase())
                               + " native=" + tip.text.includes("\\")
                               + " said=" + tip.text)
             window.finishAutoAct()
         }
     }
 
-    // The copy-name run on a tab stays with it, and coming back stands the reader in that copy again
+    // The worktree-name run on a tab stays with it, and coming back stands the reader in that worktree again
     // (デザイン規約 §タブの所作). The argument picks the landing: `away` (the tab not in front) or `back` (default).
     // At `away` the tab left behind has no page (`Hub::release_tab`), so the strip's row answers (`TabProbe.tabTrees`).
     //
-    // Two repositories, the linked copies in front: `--preset basic --preset worktrees`.
+    // Two repositories, the linked worktrees in front: `--preset basic --preset worktrees`.
     SampleTimer {
         id: worktreeKeptTimer
         running: Harness.autoAct === "worktree-kept"
-        /// 0 = stand this tab in a linked copy, 1 = wait for it, 2 = leave it, 3 = come back to it.
+        /// 0 = stand this tab in a linked worktree, 1 = wait for it, 2 = leave it, 3 = come back to it.
         property int step: 0
-        /// The strip index of the tab that was stood, and the copy it was stood in.
+        /// The strip index of the tab that was stood, and the worktree it was stood in.
         property int seat: -1
         property string wanted: ""
-        /// `[<row>][:away]` — the WORKTREES row to stand in (default the first linked copy), and whether to stop away.
-        /// A long-named copy (`8`) makes the strip cut the run.
+        /// `[<row>][:away]` — the WORKTREES row to stand in (default the first linked worktree), and whether to stop
+        /// away. A long-named worktree (`8`) makes the strip cut the run.
         readonly property int row: {
             const named = Number((Harness.autoActArg || "").split(":")[0])
             return Number.isInteger(named) && named > 0 ? named : 1
@@ -542,7 +545,7 @@ Item {
                                             && trees[worktreeKeptTimer.seat] !== "")
                               + " front=" + (tabsModel.currentIndex === worktreeKeptTimer.seat)
                               + " stood=" + acts.standsIn(page, worktreeKeptTimer.wanted)
-                              // `kept=` is off the model, which names the copy even after the strip gave the run up
+                              // `kept=` is off the model, which names the worktree even after the strip gave the run up
                               // for room; 0 here is that (デザイン規約 §ウィンドウの縁 の譲る順).
                               + " wide=" + tabProbe.tabTreeWidths()
                               + " says=" + tabProbe.tabTrees()
@@ -567,7 +570,7 @@ Item {
                 worktreeKeptTimer.wanted = full
                 worktreeKeptTimer.seat = tabsModel.currentIndex
                 worktreeKeptTimer.step = 1
-                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfCopy(full))
+                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfWorktree(full))
                 return
             }
             if (worktreeKeptTimer.step === 1) {

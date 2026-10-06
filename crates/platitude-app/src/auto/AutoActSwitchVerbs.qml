@@ -60,9 +60,10 @@ Item {
             page.switchToRef("branch", landing[0])
             switchLandsTimer.start()
         } else if (act === "switch-held") {
-            // A branch another working copy holds: the press stands the tab in that copy and raises nothing
-            // (`offers::SwitchAction::OpenHolder`). The copy is read before the press — after it this page is that
-            // copy and would answer with itself. Entered by `switchToRef`: the claim is that this road ends in no bar.
+            // A branch another worktree holds: the press stands the tab in that worktree and raises nothing
+            // (`offers::SwitchAction::OpenHolder`). The worktree is read before the press — after it this page is
+            // that worktree and would answer with itself. Entered by `switchToRef`: the claim is that this road ends
+            // in no bar.
             switchHeldTimer.wanted = sidebarPane.worktreesModel.worktreeHolding(arg)
             page.switchToRef("branch", arg)
             switchHeldTimer.start()

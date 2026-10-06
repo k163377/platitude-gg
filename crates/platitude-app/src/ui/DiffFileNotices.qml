@@ -78,7 +78,7 @@ ColumnLayout {
         newSize: notices.diffModel.previewNewSize
     }
     // -- an embedded git repository: no patch, ever. It names the commit staging would record (core
-    //    `details::embedded`); what staging costs is git's to say (デザイン規約 §作業コピーの中の別リポジトリ).
+    //    `details::embedded`); what staging costs is git's to say (デザイン規約 §作業ツリーの中の別リポジトリ).
     Label {
         visible: notices.diffModel.embedded
         Layout.margins: Theme.spaceSm

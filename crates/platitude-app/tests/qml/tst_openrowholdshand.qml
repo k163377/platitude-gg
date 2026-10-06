@@ -49,9 +49,9 @@ Item {
         function oidOfName(name) { return "" }
     }
     QtObject {
-        id: copies
+        id: worktrees
         function worktreeHolding(name) { return "" }
-        function headOfCopy(path) { return "" }
+        function headOfWorktree(path) { return "" }
     }
 
     Item {
@@ -102,7 +102,7 @@ Item {
             opensFacts: true
             sectionModel: sections
             branchesModel: branches
-            worktreesModel: copies
+            worktreesModel: worktrees
             // The panel counts the hand for this row, as the sidebar's lists do (`NavList`).
             handCounted: true
             handMoves: panel.handMoves

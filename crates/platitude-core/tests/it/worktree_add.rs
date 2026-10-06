@@ -1,4 +1,4 @@
-//! Making another working copy, against real git: the three things one can
+//! Making another worktree, against real git: the three things one can
 //! stand on, and the report each refusal is.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
@@ -10,9 +10,9 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use crate::support::remote::origin_and_clone;
 use platitude_core::report::ReportKind;
-use platitude_core::worktrees::{self, CopyOn};
+use platitude_core::worktrees::{self, WorktreeOn};
 
-/// Two commits on `main`, and `free` — a branch no copy has out — on the
+/// Two commits on `main`, and `free` — a branch no worktree has out — on the
 /// first. Answers the second commit's id.
 fn two_commits() -> (TestRepo, String) {
     let mut repo = TestRepo::init();
@@ -26,20 +26,24 @@ fn beside(repo: &TestRepo, leaf: &str) -> PathBuf {
     repo.path.with_file_name(leaf)
 }
 
-fn listed(repo: &mut TestRepo, copy: &Path) -> bool {
-    let leaf = copy.file_name().unwrap().to_string_lossy().into_owned();
+fn listed(repo: &mut TestRepo, worktree: &Path) -> bool {
+    let leaf = worktree.file_name().unwrap().to_string_lossy().into_owned();
     repo.git(&["worktree", "list", "--porcelain"])
         .lines()
         .any(|l| l.starts_with("worktree ") && l.ends_with(&leaf))
 }
 
-async fn add(repo: &TestRepo, copy: &Path, on: &CopyOn) -> Result<(), platitude_core::GitError> {
+async fn add(
+    repo: &TestRepo,
+    worktree: &Path,
+    on: &WorktreeOn,
+) -> Result<(), platitude_core::GitError> {
     let (exec, cancel) = env();
-    let name = copy.file_name().unwrap().to_string_lossy().into_owned();
+    let name = worktree.file_name().unwrap().to_string_lossy().into_owned();
     worktrees::add(
         &exec,
         &repo.path,
-        &copy.to_string_lossy(),
+        &worktree.to_string_lossy(),
         on,
         &name,
         &cancel,
@@ -47,46 +51,46 @@ async fn add(repo: &TestRepo, copy: &Path, on: &CopyOn) -> Result<(), platitude_
     .await
 }
 
-/// A branch made for the copy, on the commit asked for — not on HEAD.
+/// A branch made for the worktree, on the commit asked for — not on HEAD.
 #[tokio::test]
 async fn a_new_branch_is_made_where_it_was_asked_for() {
     let (mut repo, _tip) = two_commits();
     let root = repo.git(&["rev-parse", "HEAD~1"]);
-    let copy = beside(&repo, "fresh");
+    let worktree = beside(&repo, "fresh");
 
     add(
         &repo,
-        &copy,
-        &CopyOn::NewBranch {
+        &worktree,
+        &WorktreeOn::NewBranch {
             name: "feature/fresh".to_string(),
             start: root.clone(),
         },
     )
     .await
-    .expect("git makes the copy");
+    .expect("git makes the worktree");
 
-    assert!(listed(&mut repo, &copy));
+    assert!(listed(&mut repo, &worktree));
     assert_eq!(repo.git(&["rev-parse", "feature/fresh"]), root);
     assert_eq!(
-        repo.git_in(&copy, &["symbolic-ref", "--short", "HEAD"]),
+        repo.git_in(&worktree, &["symbolic-ref", "--short", "HEAD"]),
         "feature/fresh",
-        "the copy has the new branch out"
+        "the worktree has the new branch out"
     );
 }
 
 /// An existing branch is checked out as it is: no branch is made.
 #[tokio::test]
-async fn an_existing_branch_is_checked_out_in_the_new_copy() {
+async fn an_existing_branch_is_checked_out_in_the_new_worktree() {
     let (mut repo, _tip) = two_commits();
-    let copy = beside(&repo, "freecopy");
+    let worktree = beside(&repo, "freeworktree");
     let before = repo.git(&["for-each-ref", "--format=%(refname)", "refs/heads"]);
 
-    add(&repo, &copy, &CopyOn::Branch("free".to_string()))
+    add(&repo, &worktree, &WorktreeOn::Branch("free".to_string()))
         .await
-        .expect("git makes the copy");
+        .expect("git makes the worktree");
 
     assert_eq!(
-        repo.git_in(&copy, &["symbolic-ref", "--short", "HEAD"]),
+        repo.git_in(&worktree, &["symbolic-ref", "--short", "HEAD"]),
         "free"
     );
     assert_eq!(
@@ -106,21 +110,21 @@ async fn a_remote_branch_gets_a_local_one_that_follows_it() {
     // A local branch spelled like the remote one makes `origin/topic`
     // ambiguous to git; the full name is not.
     clone.git(&["branch", "origin/topic"]);
-    let copy = beside(&clone, "topic");
+    let worktree = beside(&clone, "topic");
 
     add(
         &clone,
-        &copy,
-        &CopyOn::Tracking {
+        &worktree,
+        &WorktreeOn::Tracking {
             local: "topic".to_string(),
             remote_ref: "origin/topic".to_string(),
         },
     )
     .await
-    .expect("git makes the copy");
+    .expect("git makes the worktree");
 
     assert_eq!(
-        clone.git_in(&copy, &["symbolic-ref", "--short", "HEAD"]),
+        clone.git_in(&worktree, &["symbolic-ref", "--short", "HEAD"]),
         "topic"
     );
     assert_eq!(
@@ -129,19 +133,19 @@ async fn a_remote_branch_gets_a_local_one_that_follows_it() {
     );
 }
 
-/// The one the menus cannot see coming — another copy took the branch
+/// The one the menus cannot see coming — another worktree took the branch
 /// after they opened: a report under the folder's name, in git's words,
 /// with its progress line left out.
 #[tokio::test]
-async fn a_branch_out_in_another_copy_is_a_report_in_gits_words() {
+async fn a_branch_out_in_another_worktree_is_a_report_in_gits_words() {
     let (mut repo, _tip) = two_commits();
     let holder = beside(&repo, "holder");
     repo.git(&["worktree", "add", &holder.to_string_lossy(), "free"]);
-    let copy = beside(&repo, "again");
+    let worktree = beside(&repo, "again");
 
-    let err = add(&repo, &copy, &CopyOn::Branch("free".to_string()))
+    let err = add(&repo, &worktree, &WorktreeOn::Branch("free".to_string()))
         .await
-        .expect_err("git keeps a branch to one copy");
+        .expect_err("git keeps a branch to one worktree");
 
     let report = err.report().expect("a refusal is a report");
     assert_eq!(report.kind, ReportKind::WorktreeNotAdded);
@@ -157,7 +161,7 @@ async fn a_branch_out_in_another_copy_is_a_report_in_gits_words() {
         err.to_string().contains("Preparing worktree"),
         "the log keeps all of it: {err}"
     );
-    assert!(!copy.exists(), "nothing was made");
+    assert!(!worktree.exists(), "nothing was made");
 }
 
 /// What git does with a folder that holds something: it makes the `-b`
@@ -165,9 +169,9 @@ async fn a_branch_out_in_another_copy_is_a_report_in_gits_words() {
 #[test]
 fn git_makes_the_branch_before_it_turns_the_folder_down() {
     let (mut repo, _tip) = two_commits();
-    let copy = beside(&repo, "occupied");
-    std::fs::create_dir_all(&copy).unwrap();
-    std::fs::write(copy.join("mine.txt"), "mine\n").unwrap();
+    let worktree = beside(&repo, "occupied");
+    std::fs::create_dir_all(&worktree).unwrap();
+    std::fs::write(worktree.join("mine.txt"), "mine\n").unwrap();
 
     repo.git_expect_failure(&[
         "worktree",
@@ -175,7 +179,7 @@ fn git_makes_the_branch_before_it_turns_the_folder_down() {
         "-b",
         "occ",
         "--",
-        &copy.to_string_lossy(),
+        &worktree.to_string_lossy(),
     ]);
 
     assert!(repo.git_ok(&["rev-parse", "--verify", "--quiet", "refs/heads/occ"]));
@@ -183,13 +187,19 @@ fn git_makes_the_branch_before_it_turns_the_folder_down() {
 
 /// The same for a place git still lists, its folder taken away by hand:
 /// the branch is made, then the place turned down. The menus say this one
-/// before the press (`NavSectionModel.newCopyFor`'s `listed`).
+/// before the press (`NavSectionModel.newWorktreeFor`'s `listed`).
 #[test]
 fn git_makes_the_branch_before_it_turns_a_listed_place_down() {
     let (mut repo, _tip) = two_commits();
-    let copy = beside(&repo, "gone");
-    repo.git(&["worktree", "add", "--detach", "--", &copy.to_string_lossy()]);
-    std::fs::remove_dir_all(&copy).unwrap();
+    let worktree = beside(&repo, "gone");
+    repo.git(&[
+        "worktree",
+        "add",
+        "--detach",
+        "--",
+        &worktree.to_string_lossy(),
+    ]);
+    std::fs::remove_dir_all(&worktree).unwrap();
 
     repo.git_expect_failure(&[
         "worktree",
@@ -197,7 +207,7 @@ fn git_makes_the_branch_before_it_turns_a_listed_place_down() {
         "-b",
         "lst",
         "--",
-        &copy.to_string_lossy(),
+        &worktree.to_string_lossy(),
     ]);
 
     assert!(repo.git_ok(&["rev-parse", "--verify", "--quiet", "refs/heads/lst"]));
@@ -208,14 +218,14 @@ fn git_makes_the_branch_before_it_turns_a_listed_place_down() {
 #[tokio::test]
 async fn a_folder_holding_something_is_turned_down_before_git() {
     let (mut repo, tip) = two_commits();
-    let copy = beside(&repo, "occupied");
-    std::fs::create_dir_all(&copy).unwrap();
-    std::fs::write(copy.join("mine.txt"), "mine\n").unwrap();
+    let worktree = beside(&repo, "occupied");
+    std::fs::create_dir_all(&worktree).unwrap();
+    std::fs::write(worktree.join("mine.txt"), "mine\n").unwrap();
 
     let err = add(
         &repo,
-        &copy,
-        &CopyOn::NewBranch {
+        &worktree,
+        &WorktreeOn::NewBranch {
             name: "occ".to_string(),
             start: tip,
         },
@@ -231,7 +241,7 @@ async fn a_folder_holding_something_is_turned_down_before_git() {
         matches!(err, platitude_core::GitError::Withheld { .. }),
         "git was never asked: {err}"
     );
-    assert!(copy.join("mine.txt").exists());
+    assert!(worktree.join("mine.txt").exists());
     assert!(
         !repo.git_ok(&["rev-parse", "--verify", "--quiet", "refs/heads/occ"]),
         "no branch was left behind"
@@ -245,7 +255,7 @@ async fn a_folder_holding_something_is_turned_down_before_git() {
 fn git_hands_a_dash_led_name_to_its_branch_as_an_option() {
     let (mut repo, _tip) = two_commits();
     let root = repo.git(&["rev-parse", "HEAD~1"]);
-    let copy = beside(&repo, "dashed");
+    let worktree = beside(&repo, "dashed");
 
     repo.git_expect_failure(&[
         "worktree",
@@ -253,7 +263,7 @@ fn git_hands_a_dash_led_name_to_its_branch_as_an_option() {
         "-b",
         "-m",
         "--",
-        &copy.to_string_lossy(),
+        &worktree.to_string_lossy(),
         &root,
     ]);
 
@@ -271,19 +281,19 @@ fn git_hands_a_dash_led_name_to_its_branch_as_an_option() {
 #[tokio::test]
 async fn a_dash_led_name_is_turned_down_before_git() {
     let (mut repo, tip) = two_commits();
-    let copy = beside(&repo, "dashed");
+    let worktree = beside(&repo, "dashed");
 
     for on in [
-        CopyOn::NewBranch {
+        WorktreeOn::NewBranch {
             name: "-m".to_string(),
             start: tip.clone(),
         },
-        CopyOn::Tracking {
+        WorktreeOn::Tracking {
             local: "-m".to_string(),
             remote_ref: "origin/main".to_string(),
         },
     ] {
-        let err = add(&repo, &copy, &on)
+        let err = add(&repo, &worktree, &on)
             .await
             .expect_err("git would take the name for an option");
         assert!(
@@ -293,7 +303,7 @@ async fn a_dash_led_name_is_turned_down_before_git() {
     }
 
     assert_eq!(repo.git(&["symbolic-ref", "--short", "HEAD"]), "main");
-    assert!(!copy.exists());
+    assert!(!worktree.exists());
 }
 
 /// The branch name rules are git's own for a branch: a tag's, less a name
@@ -325,13 +335,13 @@ fn the_branch_name_rules_are_the_ones_git_applies() {
 #[tokio::test]
 async fn an_empty_folder_is_filled() {
     let (mut repo, tip) = two_commits();
-    let copy = beside(&repo, "empty");
-    std::fs::create_dir_all(&copy).unwrap();
+    let worktree = beside(&repo, "empty");
+    std::fs::create_dir_all(&worktree).unwrap();
 
     add(
         &repo,
-        &copy,
-        &CopyOn::NewBranch {
+        &worktree,
+        &WorktreeOn::NewBranch {
             name: "emp".to_string(),
             start: tip,
         },
@@ -339,19 +349,19 @@ async fn an_empty_folder_is_filled() {
     .await
     .expect("git takes an empty folder");
 
-    assert!(listed(&mut repo, &copy));
+    assert!(listed(&mut repo, &worktree));
 }
 
 /// git's advice to the terminal is not quoted.
 #[tokio::test]
 async fn a_hint_is_not_quoted() {
     let (repo, tip) = two_commits();
-    let copy = beside(&repo, "bad");
+    let worktree = beside(&repo, "bad");
 
     let err = add(
         &repo,
-        &copy,
-        &CopyOn::NewBranch {
+        &worktree,
+        &WorktreeOn::NewBranch {
             name: "a..b".to_string(),
             start: tip,
         },

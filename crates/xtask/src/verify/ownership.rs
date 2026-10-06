@@ -333,7 +333,8 @@ mod tests {
         let run = super::claim_dir(&base, "run").expect("a run directory");
         let kept = super::claim_dir(&base, "by-hand").expect("a hand-built directory");
         super::keep(&kept).expect("the mark a hand-built tree carries");
-        std::fs::write(kept.join("repo"), b"the tree a person means to open").expect("a work tree");
+        std::fs::write(kept.join("repo"), b"the tree a person means to open")
+            .expect("a file in the hand-built tree");
         let age = super::RUN_LITTER_AGE;
         // waits(measured): the clock is handed to the sweep under test, which reads no other
         let now = std::time::SystemTime::now();

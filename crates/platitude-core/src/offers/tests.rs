@@ -209,7 +209,7 @@ fn a_pull_asks_the_same_standing_the_rows_that_integrate_ask() {
 }
 
 #[test]
-fn a_branch_out_in_another_copy_keeps_switch_and_asks_nothing() {
+fn a_branch_out_in_another_worktree_keeps_switch_and_asks_nothing() {
     let offers = ref_menu(
         RefKind::Branch,
         "feat",
@@ -227,7 +227,7 @@ fn a_branch_out_in_another_copy_keeps_switch_and_asks_nothing() {
         "here",
         "",
     );
-    assert!(offers.switch_to, "the press goes through to that copy");
+    assert!(offers.switch_to, "the press goes through to that worktree");
     assert!(
         !offers.switch_asks,
         "it leads somewhere instead of asking, and the row's words say where"
@@ -236,8 +236,8 @@ fn a_branch_out_in_another_copy_keeps_switch_and_asks_nothing() {
 }
 
 #[test]
-fn a_branch_out_in_another_copy_asks_nothing_while_an_operation_stands() {
-    // The press opens that copy and leaves the stopped operation alone
+fn a_branch_out_in_another_worktree_asks_nothing_while_an_operation_stands() {
+    // The press opens that worktree and leaves the stopped operation alone
     // (デザイン規約 §進行中の操作から出る「`!` は着ない」).
     for (op, conflicts) in [("CHERRY-PICKING", 0), ("REBASE 1/3", 2), ("", 1)] {
         for (kind, full) in [(RefKind::Branch, "feat"), (RefKind::Remote, "origin/feat")] {
@@ -254,7 +254,7 @@ fn a_branch_out_in_another_copy_asks_nothing_while_an_operation_stands() {
             );
             assert!(
                 !asks("C:/work/other"),
-                "{full} with {op:?} / {conflicts}: a held row leads to its copy instead"
+                "{full} with {op:?} / {conflicts}: a held row leads to its worktree instead"
             );
         }
     }
@@ -284,7 +284,7 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
     assert!(offers.delete);
     assert!(
         !offers.switch_asks,
-        "the move lands on the held branch, which is a road to that copy and not a question"
+        "the move lands on the held branch, which is a road to that worktree and not a question"
     );
 }
 

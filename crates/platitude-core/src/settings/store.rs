@@ -173,7 +173,7 @@ mod tests {
         Claim, Defaults, LayoutState, Sections, TabRecord, TabsState, WindowState,
     };
 
-    /// A tab standing in the repository's own working copy.
+    /// A tab standing in the repository's own worktree.
     fn stood_in(path: &str) -> TabRecord {
         TabRecord {
             path: path.to_string(),
@@ -241,12 +241,12 @@ mod tests {
                 initial_commits: Some(4000),
                 git_path: "C:/tools/git/cmd/git.exe".into(),
                 git_concurrency: 8,
-                copies_reading: crate::settings::prefs::CopiesReading::Fixed,
-                copies_interval_secs: 45,
+                worktrees_reading: crate::settings::prefs::WorktreesReading::Fixed,
+                worktrees_interval_secs: 45,
                 refresh_floor_secs: 3,
                 refresh_ceiling_secs: 20,
-                copies_floor_secs: 10,
-                copies_ceiling_secs: 60,
+                worktrees_floor_secs: 10,
+                worktrees_ceiling_secs: 60,
             },
             avatars: crate::avatar::Avatars::from_values(&[toml::Value::Table({
                 let mut t = Table::new();
@@ -272,7 +272,7 @@ mod tests {
             layout: LayoutState::default(),
             tabs: TabsState {
                 tabs: vec![
-                    // A linked working copy (`TabRecord::repo`).
+                    // A linked worktree (`TabRecord::repo`).
                     TabRecord {
                         path: r"C:\Users\me\platitude-gg\.claude\worktrees\c".into(),
                         repo: r"C:\Users\me\platitude-gg".into(),

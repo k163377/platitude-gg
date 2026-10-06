@@ -33,17 +33,17 @@ impl NavSectionModel {
             "staged" => &feeds.status_nav_staged,
             "unstaged" => &feeds.status_nav_unstaged,
             other => {
-                tracing::warn!(run = other, "unknown worktree bucket run");
+                tracing::warn!(run = other, "unknown working-tree bucket run");
                 return;
             }
         };
         self.status_feed = Some(attached(feed, invoker));
     }
 
-    /// The list that shows another working copy's changes
+    /// The list that shows another worktree's changes
     /// ([`crate::hub::CarriedStatusMsg`]). One list where this window's
     /// tree has three ([`super::Bucket::Whole`]): the three split by the
-    /// index, and nothing here moves that copy's index. A separate instance
+    /// index, and nothing here moves that worktree's index. A separate instance
     /// all the same — both trees are fed while the pane shows either.
     pub(super) fn attach_carried_feed(&mut self, tab_id: i32) {
         self.tab_id = tab_id;

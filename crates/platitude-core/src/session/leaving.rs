@@ -136,7 +136,8 @@ impl crate::mem::Footprint for Walked {
 /// asked (`--date-order` never puts a parent above a child).
 ///
 /// A row goes only where every child that reaches it went, and nothing
-/// stands on the row itself (`held`: another name, HEAD, a stash, a copy).
+/// stands on the row itself (`held`: another name, HEAD, a stash, a
+/// worktree).
 /// A row the tips do not reach stays, and so does all it reaches: what no
 /// name is known to hold is kept, not guessed away.
 pub(super) fn doomed(
@@ -194,7 +195,7 @@ pub(super) struct Holders {
 
 impl Holders {
     /// Whether anything but `leaving` stands on `oid`: a name the walk
-    /// starts from, HEAD, a stash, a merge's other side or a copy on no
+    /// starts from, HEAD, a stash, a merge's other side or a worktree on no
     /// branch — the walk's own starting points (`walk::walk_command`).
     pub(super) fn hold(
         &self,
@@ -279,9 +280,9 @@ pub(super) fn lay_walked(
         if gone.contains(&row.oid) {
             continue;
         }
-        let (copies, lanes) = laying.commit(&row.oid, parents, row.stash, row.provisional);
-        for copy in copies {
-            laid.made(copy);
+        let (worktree_rows, lanes) = laying.commit(&row.oid, parents, row.stash, row.provisional);
+        for worktree_row in worktree_rows {
+            laid.made(worktree_row);
         }
         let chips = labels.labels_of(&row.oid, tags).to_vec();
         laid.prints
@@ -404,7 +405,7 @@ impl RepoSession {
                 .worktree_holders()
                 .detached
                 .iter()
-                .map(|copy| copy.oid)
+                .map(|worktree| worktree.oid)
                 .collect(),
             shown_tips: self.shown_tips(),
             tags: self.tags_shown(),

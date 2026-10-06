@@ -327,7 +327,7 @@ fn an_unnamed_row_stands_nothing_in() {
 }
 
 /// The working tree's buckets have rows, but nothing takes one away ahead
-/// of git; the working copies' section (`worktrees`) does.
+/// of git; the worktrees' section (`worktrees`) does.
 #[test]
 fn only_the_five_sections_that_draw_a_stood_in_row_are_named() {
     assert_eq!(Row::drawn_by("branches"), Some(Row::Branch));
@@ -338,10 +338,10 @@ fn only_the_five_sections_that_draw_a_stood_in_row_are_named() {
     assert_eq!(Row::drawn_by("files"), None);
 }
 
-/// A removed copy's row is read off the worktree listing, which runs
+/// A removed worktree's row is read off the worktree listing, which runs
 /// beside the refs read: the refs catching up answers for nothing.
 #[test]
-fn a_removed_copy_waits_for_its_own_listing() {
+fn a_removed_worktree_waits_for_its_own_listing() {
     let mut gone = StandIn::default();
     gone.asked(&[(Row::Worktree, "C:/work/topic")], Some(OURS));
     gone.answered(OURS, false, FENCE);

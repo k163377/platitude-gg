@@ -228,14 +228,18 @@ fn a_tag_holds_only_where_the_walk_starts_from_it() {
 }
 
 #[test]
-fn head_a_stash_a_merge_side_and_a_copy_hold_what_they_stand_on() {
+fn head_a_stash_a_merge_side_and_a_worktree_hold_what_they_stand_on() {
     let none = LabelIndex::default();
     let nothing = HashSet::new();
     let plain = holders(Vec::new(), true);
     assert!(!plain.hold(&oid(5), false, &none, &nothing));
     assert!(plain.hold(&oid(5), true, &none, &nothing), "a stash");
     assert!(held(&plain, vec![label("HEAD", LabelKind::Head)], &[]));
-    assert!(held(&plain, vec![label("copy", LabelKind::Worktree)], &[]));
+    assert!(held(
+        &plain,
+        vec![label("worktree", LabelKind::Worktree)],
+        &[]
+    ));
     for standing in [
         Holders {
             head_tip: Some(oid(5)),

@@ -458,7 +458,7 @@ pub enum Embedded {
     Unborn,
 }
 
-/// What a repository inside the working copy (`vendor/nest/`) is standing
+/// What a repository inside the working tree (`vendor/nest/`) is standing
 /// on — a `git add` of it writes a gitlink naming that commit.
 ///
 /// `rev-parse` walks up, so a directory that is not a repository of its own

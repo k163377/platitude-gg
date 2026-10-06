@@ -30,10 +30,10 @@ pub struct Chip {
     /// the name's colour (デザイン規約 §ref の種別). False for a remote
     /// branch, and for a tag only a remote has.
     pub here: bool,
-    /// Another working copy has this branch checked out — the green
+    /// Another worktree has this branch checked out — the green
     /// frame, and why git refuses a `switch` onto it.
     pub held: bool,
-    /// `git worktree lock` is on that copy — the padlock beside the name.
+    /// `git worktree lock` is on that worktree — the padlock beside the name.
     pub locked: bool,
     /// Whose reading this is, when it is not this repository's: the
     /// remotes carrying a tag, comma-separated. Empty for everything else.
@@ -69,7 +69,7 @@ pub fn kind_from_word(word: &str) -> Option<LabelKind> {
 
 /// The kind a chip's word names *as a ref the menus can act on*: the
 /// same word for a branch, a remote branch and a tag, and `""` for the
-/// two markers (the detached HEAD, a working copy with no branch out),
+/// two markers (the detached HEAD, a worktree with no branch out),
 /// which name no ref.
 pub fn ref_kind_word(word: &str) -> &'static str {
     match kind_from_word(word) {
@@ -81,7 +81,7 @@ pub fn ref_kind_word(word: &str) -> &'static str {
 }
 
 /// The kind a chip's word aims a right-click menu at: [`ref_kind_word`],
-/// and `worktree` for a working copy with no branch out — it has a menu
+/// and `worktree` for a worktree with no branch out — it has a menu
 /// (its WORKTREE card) though no name the rename or switch gestures take.
 /// `""` for the detached HEAD.
 pub fn menu_kind_word(word: &str) -> &'static str {
@@ -254,7 +254,7 @@ mod tests {
         assert!(chips[1].held && chips[1].locked);
         assert!(!chips[2].here);
         assert_eq!(chips[2].remote, "origin, fork");
-        // A branchless copy's marker carries the padlock alone: it names
+        // A branchless worktree's marker carries the padlock alone: it names
         // no branch, so `held` stays down (the kind puts the frame on it).
         assert!(chips[3].locked && !chips[3].held);
         assert_eq!(
@@ -314,14 +314,14 @@ mod tests {
         assert_eq!(ref_kind_word("remote"), "remote");
         assert_eq!(ref_kind_word("tag"), "tag");
         assert_eq!(ref_kind_word("head"), "", "nothing to act on");
-        assert_eq!(ref_kind_word("worktree"), "", "nor is a working copy");
+        assert_eq!(ref_kind_word("worktree"), "", "nor is a worktree");
         assert_eq!(ref_kind_word(""), "");
     }
 
-    /// A working copy's chip opens a menu (its card) and still names no
+    /// A worktree's chip opens a menu (its card) and still names no
     /// ref: the rename and switch gestures read `ref_kind_word`.
     #[test]
-    fn a_working_copys_chip_aims_a_menu_and_the_head_marker_none() {
+    fn a_worktrees_chip_aims_a_menu_and_the_head_marker_none() {
         assert_eq!(menu_kind_word("worktree"), "worktree");
         assert_eq!(menu_kind_word("branch"), "branch");
         assert_eq!(menu_kind_word("tag"), "tag");

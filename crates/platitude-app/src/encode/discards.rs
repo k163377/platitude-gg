@@ -11,13 +11,13 @@ use super::wire::{Fields, Listed, Record, field};
 pub struct DiscardRow {
     /// What it was, by [`kind_word`].
     pub kind: String,
-    /// What it happened to: the branch, the tag, the working copy's folder,
+    /// What it happened to: the branch, the tag, the worktree's folder,
     /// the stash's message; for thrown-away work the branch it was on.
     pub name: String,
     /// The remote it reached, for what went from a remote; empty otherwise.
     pub remote: String,
-    /// The working copy it happened in when that is not this one.
-    pub copy: String,
+    /// The worktree it happened in when that is not this one.
+    pub worktree: String,
     /// When git or the record wrote the line, epoch seconds.
     pub at: i64,
     /// How many commits only it reaches — what the graph draws dashed.
@@ -33,12 +33,12 @@ pub struct DiscardRow {
 pub struct DiscardPart {
     /// `branch` | `tag` | `worktree` | `stash` | `changes`.
     pub restore: String,
-    /// The name it comes back under — the branch, the tag; a working
-    /// copy's path; a stash's message; for thrown-away work the folder of
-    /// the working copy it goes back into.
+    /// The name it comes back under — the branch, the tag; a worktree's
+    /// path; a stash's message; for thrown-away work the folder of
+    /// the worktree it goes back into.
     pub name: String,
     /// What it comes back with: a branch's upstream (`origin/main`), the
-    /// branch a working copy had out; empty otherwise.
+    /// branch a worktree had out; empty otherwise.
     pub with: String,
     /// How its tip draws on the graph: `commit` | `uncommitted` | `stash`.
     pub look: String,
@@ -64,7 +64,7 @@ pub fn discard_rows(found: &[Discard]) -> DiscardRows {
                 kind: kind_word(discard.kind).to_string(),
                 name: discard.name.clone(),
                 remote: discard.remote.clone(),
-                copy: discard.copy.clone(),
+                worktree: discard.worktree.clone(),
                 at: discard.at,
                 lost: count(discard.lost().len()),
                 parts: Listed::new(discard.parts.iter().map(part_row).collect()),
@@ -165,7 +165,7 @@ impl Record for DiscardRow {
             .put("kind", &self.kind)
             .put("name", &self.name)
             .put("remote", &self.remote)
-            .put("copy", &self.copy)
+            .put("worktree", &self.worktree)
             .put("at", &self.at)
             .put("lost", &self.lost)
             .put("parts", &self.parts)
@@ -178,7 +178,7 @@ impl Record for DiscardRow {
             kind: field(map, "kind")?,
             name: field(map, "name")?,
             remote: field(map, "remote")?,
-            copy: field(map, "copy")?,
+            worktree: field(map, "worktree")?,
             at: field(map, "at")?,
             lost: field(map, "lost")?,
             parts: field(map, "parts")?,

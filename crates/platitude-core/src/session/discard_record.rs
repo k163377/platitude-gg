@@ -164,7 +164,7 @@ impl RepoSession {
     /// stops the rest, as the first step of a composite write does, and its
     /// refusal is the write's.
     ///
-    /// Work goes back into the copy it was thrown out of, which may be
+    /// Work goes back into the worktree it was thrown out of, which may be
     /// another than this session's: the restore waits its turn there too
     /// ([`Self::write_into`]), so a commit accepted there first does not
     /// take in what comes back.
@@ -477,7 +477,7 @@ pub(super) async fn held_before(
 /// stood when it began: git's own list of them (`rebase-merge/update-refs`,
 /// three lines a branch — its name, its tip before, its tip after) and the
 /// branch being rebased (`head-name`, `orig-head`). `None` where no rebase
-/// that moves others stands. Read off the files under the copy's own git
+/// that moves others stands. Read off the files under the worktree's own git
 /// directory, where its rebase keeps them.
 pub(super) fn stopped_rebase_tips(git_dir: &Path) -> Option<HashMap<String, Oid>> {
     let state = git_dir.join("rebase-merge");

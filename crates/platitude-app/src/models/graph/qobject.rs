@@ -189,10 +189,10 @@ impl GraphModel {
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.graph, invoker);
     }
 
-    /// The tab now stands in another working copy of the same repository,
+    /// The tab now stands in another worktree of the same repository,
     /// with a swapped session (`Hub::restand_tab`).
     ///
-    /// The rows stay: linked copies share every commit and ref, and the
+    /// The rows stay: linked worktrees share every commit and ref, and the
     /// new session's first pass arrives as one replacement that keeps the
     /// reader's place ([`FirstPass::Swapped`]). So does `generation`: the
     /// new session counts on from this graph's record
@@ -326,7 +326,7 @@ impl GraphModel {
         super::item::newest_commit_row(&self.rows).map_or(-1, |i| i as i32)
     }
 
-    /// What another working copy's uncommitted row shows beside its words:
+    /// What another worktree's uncommitted row shows beside its words:
     /// its six tallies, or none for every other row. By row index, not off
     /// the view — the view's tallies are this window's own.
     #[qslot]
@@ -338,7 +338,7 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
-    /// Where the working copy a row is about lives — what a double-click
+    /// Where the worktree a row is about lives — what a double-click
     /// on it opens in a tab of its own. Empty for every other row.
     #[qslot]
     fn carried_path(&self, row: i32) -> String {
@@ -349,7 +349,7 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
-    /// The name of the working copy a row is about, or empty where the
+    /// The name of the worktree a row is about, or empty where the
     /// row is not one of theirs — what the read-only gestures branch on.
     #[qslot]
     fn carried_name(&self, row: i32) -> String {
@@ -360,8 +360,8 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
-    /// Which row a working copy's uncommitted work stands on now, or -1
-    /// (the copy has gone clean). Every such row carries git's all-zero id,
+    /// Which row a worktree's uncommitted work stands on now, or -1
+    /// (the worktree has gone clean). Every such row carries git's all-zero id,
     /// as this window's own does, so a pane on one follows it across a
     /// rebuild by path (`RepoPage.settleCarriedAfterPass`).
     #[qslot]

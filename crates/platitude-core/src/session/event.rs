@@ -124,25 +124,25 @@ pub enum SessionEvent {
         /// pointer (an unmoved repository rebuilds nothing).
         looked: u64,
     },
-    /// What another working copy is holding, read because somebody is
+    /// What another worktree is holding, read because somebody is
     /// looking at its row (`RepoSession::read_carried_status`). Not
     /// [`SessionEvent::StatusLoaded`], which everything about this
     /// window's own tree hangs off.
     CarriedStatusLoaded {
-        /// The copy this is about; the pane drops a read that lands after
-        /// it moved on to another.
+        /// The worktree this is about; the pane drops a read that lands
+        /// after it moved on to another.
         path: String,
-        /// The name the header says — the copy's own.
+        /// The name the header says — the worktree's own.
         name: String,
         status: WorkingTreeStatus,
     },
     /// A read the page's pace started has ended (`session::pacer`): this
-    /// tree's when `copy` is `None`, else another working copy's, by the
+    /// tree's when `worktree` is `None`, else another worktree's, by the
     /// path git printed for it. What the page follows with the file on
     /// screen — a status that did not move says nothing about a file whose
     /// bytes did.
     PacedRead {
-        copy: Option<String>,
+        worktree: Option<String>,
     },
     StatusLoaded {
         status: WorkingTreeStatus,
@@ -323,7 +323,7 @@ pub enum SessionEvent {
     WorktreesLoaded {
         worktrees: Vec<crate::worktrees::WorktreeEntry>,
         /// When this listing looked, as [`Self::StashesLoaded`]: a removed
-        /// copy's row waits on a listing that saw the removal.
+        /// worktree's row waits on a listing that saw the removal.
         looked: u64,
     },
     DetailsLoaded {
@@ -365,7 +365,7 @@ pub enum SessionEvent {
         /// the first thing a reader looks for.
         marks: Arc<crate::intraline::IntraMarks>,
         /// For the one row that has no patch at all — a repository of its
-        /// own inside the working copy — the commit a stage of it would
+        /// own inside the working tree — the commit a stage of it would
         /// point at (`details::embedded`). `None` for every other target.
         embedded: Option<crate::details::Embedded>,
     },

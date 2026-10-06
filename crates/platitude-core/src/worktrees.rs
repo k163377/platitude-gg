@@ -27,10 +27,10 @@ pub struct WorktreeEntry {
     /// Why git would drop it, in git's own words (`gitdir file points to
     /// non-existent location`). Empty when `prunable` is false.
     pub prune_reason: String,
-    /// The repository's own working copy. git has no attribute for it:
+    /// The repository's own worktree. git has no attribute for it:
     /// the listing opens on it wherever it is run from (git-worktree(1)).
     /// A bare repository's bare entry takes that place and is still the
-    /// main one; the caller drops it for having no working copy.
+    /// main one; the caller drops it for having no working tree.
     pub main: bool,
 }
 
@@ -130,15 +130,15 @@ pub async fn load(
     })
 }
 
-/// What a new working copy is made to stand on. Always a branch: every
+/// What a new worktree is made to stand on. Always a branch: every
 /// road into one from the screen lands on a branch, as a move does
 /// (デザイン規約 §ブランチ・コミットへの移動「この GUI の行き先は必ずブランチ」).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CopyOn {
+pub enum WorktreeOn {
     /// A branch made for it at `start` (`-b`) — the commit, tag or ref the
     /// menu was opened on.
     NewBranch { name: String, start: String },
-    /// A local branch no working copy has out.
+    /// A local branch no worktree has out.
     Branch(String),
     /// A local branch made off a remote one and set to follow it (`--track
     /// -b`), as `switch` does for a remote branch with no local one.
@@ -148,11 +148,11 @@ pub enum CopyOn {
 }
 
 /// `git worktree add`: a new folder at `path` with `on` checked out in it.
-/// `name` is the copy as the screen names it (its folder), which a
+/// `name` is the worktree as the screen names it (its folder), which a
 /// refusal's heading is written from.
 ///
 /// Unforced, so git keeps everything it refuses for — a folder already
-/// there, a branch another copy has out, a name taken or malformed. The
+/// there, a branch another worktree has out, a name taken or malformed. The
 /// menus answer those before the press; what reaches git anyway is a
 /// report ([`crate::report::worktree_not_added`]).
 ///
@@ -171,13 +171,13 @@ pub async fn add(
     executor: &GitExecutor,
     workdir: &Path,
     path: &str,
-    on: &CopyOn,
+    on: &WorktreeOn,
     name: &str,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let made = match on {
-        CopyOn::NewBranch { name, .. } | CopyOn::Tracking { local: name, .. } => Some(name),
-        CopyOn::Branch(_) => None,
+        WorktreeOn::NewBranch { name, .. } | WorktreeOn::Tracking { local: name, .. } => Some(name),
+        WorktreeOn::Branch(_) => None,
     };
     if let Some(made) = made.filter(|made| crate::branch::reads_as_option(made)) {
         return Err(GitError::Rejected {
@@ -189,9 +189,9 @@ pub async fn add(
     }
     let cmd = GitCommand::new().cwd(workdir).args(["worktree", "add"]);
     let cmd = match on {
-        CopyOn::NewBranch { name, start } => cmd.args(["-b", name.as_str(), "--", path, start]),
-        CopyOn::Branch(branch) => cmd.args(["--", path, branch.as_str()]),
-        CopyOn::Tracking { local, remote_ref } => cmd.args([
+        WorktreeOn::NewBranch { name, start } => cmd.args(["-b", name.as_str(), "--", path, start]),
+        WorktreeOn::Branch(branch) => cmd.args(["--", path, branch.as_str()]),
+        WorktreeOn::Tracking { local, remote_ref } => cmd.args([
             "--track",
             "-b",
             local.as_str(),
@@ -208,32 +208,32 @@ pub async fn add(
     }
 }
 
-/// The folder every working copy made here lives in: beside the
-/// repository's own copy `main`, of the repository's name with `.worktrees`
+/// The folder every worktree made here lives in: beside the
+/// repository's own worktree `main`, of the repository's name with `.worktrees`
 /// after it (git's paths, `/` throughout). `None` for a `main` with no
 /// parent.
 #[must_use]
-pub fn copies_folder(main: &str) -> Option<String> {
+pub fn worktrees_folder(main: &str) -> Option<String> {
     match main.trim_end_matches('/').rsplit_once('/') {
         Some((parent, repo)) if !repo.is_empty() => Some(format!("{parent}/{repo}.worktrees")),
         _ => None,
     }
 }
 
-/// Where a new working copy for `branch` goes: in `copies_folder`, as the
-/// branch's name with each `/` a `-` — so the folder a copy is named by on
+/// Where a new worktree for `branch` goes: in `worktrees_folder`, as the
+/// branch's name with each `/` a `-` — so the folder a worktree is named by on
 /// screen spells its whole branch. Empty for a `main` with no parent or a
 /// branch with no name.
 #[must_use]
-pub fn new_copy_path(main: &str, branch: &str) -> String {
+pub fn new_worktree_path(main: &str, branch: &str) -> String {
     let folder = branch.replace('/', "-");
-    match copies_folder(main) {
+    match worktrees_folder(main) {
         Some(root) if !folder.is_empty() => format!("{root}/{folder}"),
         _ => String::new(),
     }
 }
 
-/// Whether git would make a copy at `path`: nothing there, or a folder
+/// Whether git would make a worktree at `path`: nothing there, or a folder
 /// with nothing in it (git-worktree(1) takes either). A file, or a folder
 /// that cannot be read, is taken.
 #[must_use]
@@ -245,7 +245,7 @@ pub fn folder_free(path: &Path) -> bool {
 }
 
 /// `git worktree remove -- <path>`: the folder and git's record of it. The
-/// branch it had out stays. `name` is the copy as the screen names it,
+/// branch it had out stays. `name` is the worktree as the screen names it,
 /// which a refusal's heading is written from.
 ///
 /// Unforced, so git keeps what it refuses for (uncommitted changes, a
@@ -290,7 +290,7 @@ mod tests {
             "HEAD 1111111111111111111111111111111111111111",
             "branch refs/heads/main",
             "",
-            "worktree C:/repo/.claude/worktrees/wt-1",
+            "worktree C:/repo/.claude/worktrees/worktree-1",
             "HEAD 2222222222222222222222222222222222222222",
             "detached",
             "",
@@ -306,7 +306,7 @@ mod tests {
 
     /// Every entry but the first answers no, the bare one included.
     #[test]
-    fn the_entry_git_opens_the_listing_with_is_the_main_working_copy() {
+    fn the_entry_git_opens_the_listing_with_is_the_main_worktree() {
         let bytes = z(&[
             "worktree C:/repo",
             "HEAD 1111111111111111111111111111111111111111",
@@ -321,7 +321,13 @@ mod tests {
         assert!(list[0].main);
         assert!(!list[1].main);
 
-        let bare = z(&["worktree /srv/repo.git", "bare", "", "worktree /srv/wt", ""]);
+        let bare = z(&[
+            "worktree /srv/repo.git",
+            "bare",
+            "",
+            "worktree /srv/worktree",
+            "",
+        ]);
         let list = parse_worktrees(&bare).unwrap();
         assert!(list[0].main && list[0].bare);
         assert!(!list[1].main);
@@ -333,7 +339,7 @@ mod tests {
             "worktree /srv/repo.git",
             "bare",
             "",
-            "worktree /srv/wt",
+            "worktree /srv/worktree",
             "HEAD 3333333333333333333333333333333333333333",
             "branch refs/heads/dev",
             "locked reason text",
@@ -350,25 +356,25 @@ mod tests {
     #[test]
     fn parses_every_state_of_a_real_listing() {
         let bytes = z(&[
-            "worktree C:/tmp/wtprobe/main",
+            "worktree C:/tmp/worktree-probe/main",
             "HEAD 8cd5289c16c24ae01dd41d6a1a4afec20f6ba99d",
             "branch refs/heads/master",
             "",
-            "worktree C:/tmp/wtprobe/wt-det",
+            "worktree C:/tmp/worktree-probe/worktree-det",
             "HEAD 8cd5289c16c24ae01dd41d6a1a4afec20f6ba99d",
             "detached",
             "",
-            "worktree C:/tmp/wtprobe/wt-gone",
+            "worktree C:/tmp/worktree-probe/worktree-gone",
             "HEAD 8cd5289c16c24ae01dd41d6a1a4afec20f6ba99d",
             "branch refs/heads/gone",
             "prunable gitdir file points to non-existent location",
             "",
-            "worktree C:/tmp/wtprobe/wt-lock",
+            "worktree C:/tmp/worktree-probe/worktree-lock",
             "HEAD 8cd5289c16c24ae01dd41d6a1a4afec20f6ba99d",
             "branch refs/heads/locked",
             "locked seat held by claude",
             "",
-            "worktree C:/tmp/wtprobe/wt-lock2",
+            "worktree C:/tmp/worktree-probe/worktree-lock2",
             "HEAD 8cd5289c16c24ae01dd41d6a1a4afec20f6ba99d",
             "branch refs/heads/locked2",
             "locked",
@@ -395,7 +401,7 @@ mod tests {
     #[test]
     fn an_attribute_that_only_starts_like_a_flag_is_ignored() {
         let bytes = z(&[
-            "worktree /srv/wt",
+            "worktree /srv/worktree",
             "HEAD 3333333333333333333333333333333333333333",
             "lockedness whatever",
             "prunableness whatever",
@@ -407,25 +413,25 @@ mod tests {
     }
 
     #[test]
-    fn a_new_copy_goes_under_the_repositorys_worktrees_folder_by_its_branch() {
+    fn a_new_worktree_goes_under_the_repositorys_worktrees_folder_by_its_branch() {
         assert_eq!(
-            new_copy_path("C:/work/platitude-gg", "feature/login"),
+            new_worktree_path("C:/work/platitude-gg", "feature/login"),
             "C:/work/platitude-gg.worktrees/feature-login"
         );
         assert_eq!(
-            new_copy_path("/srv/repo/", "fix"),
+            new_worktree_path("/srv/repo/", "fix"),
             "/srv/repo.worktrees/fix"
         );
-        assert_eq!(new_copy_path("C:/repo", "x"), "C:/repo.worktrees/x");
+        assert_eq!(new_worktree_path("C:/repo", "x"), "C:/repo.worktrees/x");
     }
 
     #[test]
     fn no_place_without_a_parent_or_a_name() {
-        assert_eq!(new_copy_path("repo", "x"), "");
-        assert_eq!(copies_folder("repo"), None);
-        assert_eq!(new_copy_path("C:/work/repo", ""), "");
+        assert_eq!(new_worktree_path("repo", "x"), "");
+        assert_eq!(worktrees_folder("repo"), None);
+        assert_eq!(new_worktree_path("C:/work/repo", ""), "");
         assert_eq!(
-            copies_folder("C:/work/repo").as_deref(),
+            worktrees_folder("C:/work/repo").as_deref(),
             Some("C:/work/repo.worktrees")
         );
     }

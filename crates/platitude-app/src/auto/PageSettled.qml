@@ -46,7 +46,7 @@ QtObject {
         const graph = page.pageGraph
         const owed = []
         if (!page.pageWorkingTree.loaded)
-            owed.push("worktree")
+            owed.push("workingTree")
         if (!page.pageRefsLoaded)
             owed.push("refs")
         if (!(graph.finishCount > 0))

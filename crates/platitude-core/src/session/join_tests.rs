@@ -10,7 +10,7 @@ use super::joins::{RefJoins, WorktreeHolders, build_label_map, build_snapshot};
 use super::*;
 use crate::remote::RemoteTag;
 
-/// One working copy: no branch is held anywhere else.
+/// One worktree: no branch is held anywhere else.
 fn held_by_nobody() -> WorktreeHolders {
     WorktreeHolders::default()
 }
@@ -253,7 +253,7 @@ fn the_graph_cloud_on_a_branch_follows_the_fold() {
 /// One bit for both halves: a chip offering a move the row refused would
 /// be two answers to one question.
 #[test]
-fn a_branch_another_copy_holds_is_marked_on_the_row_and_the_chip() {
+fn a_branch_another_worktree_holds_is_marked_on_the_row_and_the_chip() {
     let refs = vec![branch("main", oid(1)), branch("feature/topic-a", oid(2))];
     let remote_tags = index_of("origin", Vec::new());
     let mut held = WorktreeHolders::default();
@@ -267,7 +267,7 @@ fn a_branch_another_copy_holds_is_marked_on_the_row_and_the_chip() {
         .find(|b| b.short == "feature/topic-a")
         .expect("the branch is listed");
     assert!(topic.held_elsewhere);
-    // The copy this session is in never reaches the set, so the branch
+    // The worktree this session is in never reaches the set, so the branch
     // the reader is standing on is not marked (`note_worktree_holders`).
     let main = snapshot
         .locals
@@ -281,14 +281,14 @@ fn a_branch_another_copy_holds_is_marked_on_the_row_and_the_chip() {
     assert!(!map.labels_of(&oid(1), true)[0].held_elsewhere);
     assert!(
         !map.labels_of(&oid(2), true)[0].locked,
-        "the copy holding it was not locked, so the chip wears no padlock"
+        "the worktree holding it was not locked, so the chip wears no padlock"
     );
 }
 
 /// The lock rides with the held mark: one lookup answers both
 /// (デザイン規約 §ref の種別).
 #[test]
-fn a_locked_copy_puts_the_padlock_on_the_branch_it_holds() {
+fn a_locked_worktree_puts_the_padlock_on_the_branch_it_holds() {
     let refs = vec![branch("main", oid(1)), branch("hotfix/urgent", oid(2))];
     let remote_tags = index_of("origin", Vec::new());
     let mut held = WorktreeHolders::default();
@@ -304,7 +304,7 @@ fn a_locked_copy_puts_the_padlock_on_the_branch_it_holds() {
 
 /// No ref there could carry the mark a held branch's chip wears.
 #[test]
-fn a_copy_standing_on_no_branch_gets_a_chip_of_its_own() {
+fn a_worktree_standing_on_no_branch_gets_a_chip_of_its_own() {
     let refs = vec![branch("main", oid(1)), tag("v1", oid(2), false)];
     let remote_tags = index_of("origin", Vec::new());
     let mut held = WorktreeHolders::default();
@@ -317,15 +317,15 @@ fn a_copy_standing_on_no_branch_gets_a_chip_of_its_own() {
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
 
     let run = map.labels_of(&oid(2), true);
-    let copy = run
+    let worktree = run
         .iter()
         .find(|l| l.kind == LabelKind::Worktree)
-        .expect("the copy is on the row it is standing on");
-    assert_eq!(copy.text.as_str(), "spike");
-    assert!(!copy.held_elsewhere, "it names no branch to be holding");
+        .expect("the worktree is on the row it is standing on");
+    assert_eq!(worktree.text.as_str(), "spike");
+    assert!(!worktree.held_elsewhere, "it names no branch to be holding");
     assert!(
-        copy.locked,
-        "the padlock is the copy's, whether or not it has a branch out"
+        worktree.locked,
+        "the padlock is the worktree's, whether or not it has a branch out"
     );
     assert!(
         !map.labels_of(&oid(1), true)
@@ -338,7 +338,7 @@ fn a_copy_standing_on_no_branch_gets_a_chip_of_its_own() {
         map.labels_of(&oid(2), false)
             .iter()
             .any(|l| l.kind == LabelKind::Worktree),
-        "the eye takes the tag and leaves the working copy"
+        "the eye takes the tag and leaves the worktree"
     );
 }
 

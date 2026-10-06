@@ -14,10 +14,10 @@ pub enum SwitchAction {
     /// marker, or a tag — moving onto one could only detach HEAD, so its
     /// row offers a branch at its commit instead.
     None,
-    /// The branch is checked out in another working copy: git refuses the
+    /// The branch is checked out in another worktree: git refuses the
     /// move outright (`fatal: '<branch>' is already used by worktree at
     /// …`), locked or not, and no stash or leaving an operation clears it.
-    /// So the press stands the tab in that copy (デザイン規約
+    /// So the press stands the tab in that worktree (デザイン規約
     /// §進行中の操作から出る) without asking: that writes nothing and is
     /// one press back.
     OpenHolder,
@@ -49,7 +49,7 @@ impl SwitchAction {
 /// The action itself. `kind` is the word the chip goes out under
 /// (`branch` / `remote` — every other kind moves nothing); `local` the
 /// local branch the move lands on (for `remote`, the remote ref's local
-/// name); `held_by_worktree` the other working copy holding that local
+/// name); `held_by_worktree` the other worktree holding that local
 /// branch, empty when none does; `local_oid` that branch's commit, empty
 /// when no such branch exists.
 pub fn switch_action(

@@ -12,7 +12,7 @@ pub(super) enum Source {
     Remotes(Arc<platitude_core::session::RefsSnapshot>),
     Tags(Arc<platitude_core::session::RefsSnapshot>),
     Stashes(Vec<platitude_core::stash::StashEntry>),
-    /// The working copies, and which one this window shows (no entry says).
+    /// The worktrees, and which one this window shows (no entry says).
     Worktrees {
         list: Vec<platitude_core::worktrees::WorktreeEntry>,
         current: String,
@@ -282,8 +282,8 @@ pub(super) enum Bucket {
     Untracked,
     Staged,
     /// Every changed path once, whichever sides it changed on — how
-    /// another working copy's changes are shown, since the stage split
-    /// belongs to that copy's index (デザイン規約 §別の作業コピーを読む).
+    /// another worktree's changes are shown, since the stage split
+    /// belongs to that worktree's index (デザイン規約 §別の worktree を読む).
     Whole,
 }
 
@@ -324,7 +324,7 @@ impl Bucket {
     }
 
     /// The same for a `Whole` row: the index where anything is staged,
-    /// the working tree otherwise — the nearer answer to what the copy
+    /// the working tree otherwise — the nearer answer to what the worktree
     /// has.
     pub(super) fn routing_of(self, item: &platitude_core::status::StatusItem) -> &'static str {
         use platitude_core::status::StatusItem;
@@ -357,7 +357,7 @@ pub(super) enum Entry<'a> {
     Stash(&'a platitude_core::stash::StashEntry),
     Worktree {
         entry: &'a platitude_core::worktrees::WorktreeEntry,
-        /// The working copy this window is showing, spelled the way
+        /// The worktree this window is showing, spelled the way
         /// `path` is compared (forward slashes, lower case).
         current: &'a str,
     },
@@ -412,7 +412,7 @@ pub(super) fn letters_of(item: &platitude_core::status::StatusItem, bucket: Buck
         (StatusItem::Tracked { unstaged, .. }, Bucket::Unstaged) => unstaged.to_string(),
         (StatusItem::Tracked { staged, .. }, Bucket::Staged) => staged.to_string(),
         (StatusItem::Untracked { .. }, _) => "?".to_string(),
-        // The index's letter where it has one (デザイン規約 §別の作業コピーを読む).
+        // The index's letter where it has one (デザイン規約 §別の worktree を読む).
         (
             StatusItem::Tracked {
                 staged, unstaged, ..
@@ -453,10 +453,10 @@ mod tests {
         }
     }
 
-    /// Another copy's list: every path once, with the index's letter where
+    /// Another worktree's list: every path once, with the index's letter where
     /// it has one. The fixture's `MM` `src/b.txt` is the case that matters.
     #[test]
-    fn a_copys_list_holds_every_path_once() {
+    fn a_worktrees_list_holds_every_path_once() {
         let status = pending();
         let Source::Files { order, .. } = Source::whole_files(status.clone()) else {
             panic!("whole_files builds a file source");

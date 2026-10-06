@@ -137,7 +137,7 @@ impl RowPrint {
         published.hash(&mut h);
         parents.hash(&mut h);
         provisional.hash(&mut h);
-        // Another copy staging one more file moves nothing else on its row
+        // Another worktree staging one more file moves nothing else on its row
         // (its id is all-zero whatever it holds).
         if let Some(carried) = carried {
             carried.name.hash(&mut h);
@@ -248,8 +248,8 @@ mod tests {
                 "carried",
                 Box::new(|r| {
                     r.carried = Some(crate::session::Carried {
-                        name: "wt".into(),
-                        path: "/tmp/wt".into(),
+                        name: "worktree".into(),
+                        path: "/tmp/worktree".into(),
                         head: oid('d'),
                         kinds: crate::status::Kinds {
                             modified: 1,

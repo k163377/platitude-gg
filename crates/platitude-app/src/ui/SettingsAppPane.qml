@@ -209,9 +209,9 @@ ColumnLayout {
         return "concurrency=" + AppBackend.gitConcurrency
                + " default=" + (AppBackend.gitConcurrency === AppBackend.gitConcurrencyDefault)
     }
-    /// The `REFRESH` chapter worked the way a hand works it: this repository's two boxes, the copies' reading through
-    /// the chooser's own door (`pickCopiesReading`), then the boxes that reading shows — the two bounds, or the one
-    /// interval. An empty part is left alone.
+    /// The `REFRESH` chapter worked the way a hand works it: this repository's two boxes, the worktrees' reading
+    /// through the chooser's own door (`pickWorktreesReading`), then the boxes that reading shows — the two bounds, or
+    /// the one interval. An empty part is left alone.
     function autoTypeRefresh(floor, ceiling, reading, first, second) {
         if (floor !== "" || ceiling !== "") {
             if (floor !== "")
@@ -221,16 +221,16 @@ ColumnLayout {
             pane.applyRefreshBounds()
         }
         if (reading !== "")
-            pane.pickCopiesReading(pane.copiesValues.indexOf(reading))
-        if (AppBackend.copiesReading === "fixed" && first !== "") {
-            copiesField.text = first
-            pane.applyCopies()
-        } else if (AppBackend.copiesReading === "auto" && (first !== "" || second !== "")) {
+            pane.pickWorktreesReading(pane.worktreesValues.indexOf(reading))
+        if (AppBackend.worktreesReading === "fixed" && first !== "") {
+            worktreesField.text = first
+            pane.applyWorktrees()
+        } else if (AppBackend.worktreesReading === "auto" && (first !== "" || second !== "")) {
             if (first !== "")
-                copiesFloorField.text = first
+                worktreesFloorField.text = first
             if (second !== "")
-                copiesCeilingField.text = second
-            pane.applyCopiesBounds()
+                worktreesCeilingField.text = second
+            pane.applyWorktreesBounds()
         }
     }
     /// The four bound boxes holding these texts as the way out is taken: typed and never finished, an empty one
@@ -238,33 +238,34 @@ ColumnLayout {
     function autoLeaveBounds(floor, ceiling, first, second) {
         refreshFloorField.text = floor
         refreshCeilingField.text = ceiling
-        copiesFloorField.text = first
-        copiesCeilingField.text = second
+        worktreesFloorField.text = first
+        worktreesCeilingField.text = second
     }
     /// What the store holds for that chapter.
     function refreshStore() {
         return "refresh=" + AppBackend.refreshFloorSecs + "-" + AppBackend.refreshCeilingSecs
-               + " copies=" + AppBackend.copiesReading
-               + " copies_bounds=" + AppBackend.copiesFloorSecs + "-" + AppBackend.copiesCeilingSecs
-               + " copies_secs=" + AppBackend.copiesIntervalSecs
+               + " worktrees=" + AppBackend.worktreesReading
+               + " worktrees_bounds=" + AppBackend.worktreesFloorSecs + "-" + AppBackend.worktreesCeilingSecs
+               + " worktrees_secs=" + AppBackend.worktreesIntervalSecs
     }
     /// The store, with what the chooser shows and which boxes stand beside it — a box that is not there is an absence
     /// a picture leaves to the eye.
     function refreshTally() {
-        const boxes = copiesFloorField.visible ? "bounds" : copiesField.visible ? "every" : "none"
-        return pane.refreshStore() + " shown=" + copiesChooser.wanted + " boxes=" + boxes
+        const boxes = worktreesFloorField.visible ? "bounds" : worktreesField.visible ? "every" : "none"
+        return pane.refreshStore() + " shown=" + worktreesChooser.wanted + " boxes=" + boxes
     }
 
-    /// The readings and their words at matching indexes (`settings::CopiesReading::word`).
-    readonly property var copiesValues: ["auto", "fixed", "off"]
-    readonly property var copiesWords: [qsTr("Automatic"), qsTr("Fixed"), qsTr("Off")]
+    /// The readings and their words at matching indexes (`settings::WorktreesReading::word`).
+    readonly property var worktreesValues: ["auto", "fixed", "off"]
+    readonly property var worktreesWords: [qsTr("Automatic"), qsTr("Fixed"), qsTr("Off")]
     /// Picking the row at `index`; the chooser's handler is one line onto it, so a run takes the same road as a hand.
     /// The box's number goes with it, so a number typed and not yet finished is not lost to the pick.
-    function pickCopiesReading(index) {
+    function pickWorktreesReading(index) {
         if (index < 0)
             return
-        AppBackend.setCopiesReading(pane.copiesValues[index], copiesField.text === "" ? 0 : Number(copiesField.text))
-        copiesField.text = String(AppBackend.copiesIntervalSecs)
+        AppBackend.setWorktreesReading(pane.worktreesValues[index],
+                                       worktreesField.text === "" ? 0 : Number(worktreesField.text))
+        worktreesField.text = String(AppBackend.worktreesIntervalSecs)
     }
 
     /// Puts the fields back to what the store says, for the screen that just opened.
@@ -272,8 +273,8 @@ ColumnLayout {
         fetchField.text = AppBackend.autoFetchMinutes > 0 ? String(AppBackend.autoFetchMinutes) : ""
         concurrencyField.text = String(AppBackend.gitConcurrency)
         pane.showRefreshBounds()
-        pane.showCopiesBounds()
-        copiesField.text = String(AppBackend.copiesIntervalSecs)
+        pane.showWorktreesBounds()
+        worktreesField.text = String(AppBackend.worktreesIntervalSecs)
         wholeHistoryBox.checked = AppBackend.initialCommits === 0
         commitsField.text = AppBackend.initialCommits > 0 ? String(AppBackend.initialCommits) : ""
         gitPathField.text = AppBackend.gitPath
@@ -305,9 +306,10 @@ ColumnLayout {
         AppBackend.setGitConcurrency(concurrencyField.text === "" ? 0 : Number(concurrencyField.text))
     }
     // The fixed interval, kept whichever reading is chosen. Empty keeps the number held, and the box shows it again.
-    function applyCopies() {
-        AppBackend.setCopiesReading(AppBackend.copiesReading, copiesField.text === "" ? 0 : Number(copiesField.text))
-        copiesField.text = String(AppBackend.copiesIntervalSecs)
+    function applyWorktrees() {
+        AppBackend.setWorktreesReading(AppBackend.worktreesReading,
+                                       worktreesField.text === "" ? 0 : Number(worktreesField.text))
+        worktreesField.text = String(AppBackend.worktreesIntervalSecs)
     }
     // A pair is written whole: the ceiling is held to the floor by core (`session::pace_bounds_secs`), so its boxes
     // show what came back. Empty is that bound's default. Each pair puts back only its own boxes — the way out writes
@@ -316,9 +318,9 @@ ColumnLayout {
         AppBackend.setRefreshBounds(pane.boxSecs(refreshFloorField), pane.boxSecs(refreshCeilingField))
         pane.showRefreshBounds()
     }
-    function applyCopiesBounds() {
-        AppBackend.setCopiesBounds(pane.boxSecs(copiesFloorField), pane.boxSecs(copiesCeilingField))
-        pane.showCopiesBounds()
+    function applyWorktreesBounds() {
+        AppBackend.setWorktreesBounds(pane.boxSecs(worktreesFloorField), pane.boxSecs(worktreesCeilingField))
+        pane.showWorktreesBounds()
     }
     function boxSecs(field) {
         return field.text === "" ? 0 : Number(field.text)
@@ -327,9 +329,9 @@ ColumnLayout {
         refreshFloorField.text = String(AppBackend.refreshFloorSecs)
         refreshCeilingField.text = String(AppBackend.refreshCeilingSecs)
     }
-    function showCopiesBounds() {
-        copiesFloorField.text = String(AppBackend.copiesFloorSecs)
-        copiesCeilingField.text = String(AppBackend.copiesCeilingSecs)
+    function showWorktreesBounds() {
+        worktreesFloorField.text = String(AppBackend.worktreesFloorSecs)
+        worktreesCeilingField.text = String(AppBackend.worktreesCeilingSecs)
     }
     // Two controls, one value: the box asks for no window at all (core's `0`); the field answers only while the box
     // is clear, empty being the default. Written from `applyFields` too, as `applyConcurrency` is.
@@ -347,8 +349,8 @@ ColumnLayout {
     function applyFields() {
         pane.applyFetch()
         pane.applyRefreshBounds()
-        pane.applyCopies()
-        pane.applyCopiesBounds()
+        pane.applyWorktrees()
+        pane.applyWorktreesBounds()
         pane.applyConcurrency()
         pane.applyCommits()
         pane.applyGitPath()
@@ -491,7 +493,7 @@ ColumnLayout {
         HelpText {
             text: qsTr("Applies to all repositories. Automatic intervals adapt to how long refreshes take. Shorter intervals update sooner but use more resources.")
         }
-        // Both rows are a mode, then its boxes, in the same columns. This copy is always read automatically, so its
+        // Both rows are a mode, then its boxes, in the same columns. This worktree is always read automatically, so its
         // mode is a word standing where the other row's chooser stands, its letters where the chooser's letters are.
         LabeledField {
             caption: qsTr("Current worktree")
@@ -499,8 +501,8 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm
                 LineText {
-                    Layout.leftMargin: copiesChooser.leftPadding + copiesChooser.contentItem.leftPadding
-                    Layout.preferredWidth: copiesChooser.implicitWidth - Layout.leftMargin
+                    Layout.leftMargin: worktreesChooser.leftPadding + worktreesChooser.contentItem.leftPadding
+                    Layout.preferredWidth: worktreesChooser.implicitWidth - Layout.leftMargin
                     text: qsTr("Automatic")
                     color: Theme.textPrimary
                 }
@@ -544,58 +546,58 @@ ColumnLayout {
                 spacing: Theme.spaceSm
                 // Picking only: these three are the whole set (デザイン規約 §選ぶ欄と打つ欄).
                 AppCombo {
-                    id: copiesChooser
+                    id: worktreesChooser
                     implicitWidth: fetchField.implicitWidth
                     pickOnly: true
-                    model: pane.copiesWords
-                    wanted: pane.copiesWords[Math.max(0, pane.copiesValues.indexOf(AppBackend.copiesReading))]
-                    onActivated: index => pane.pickCopiesReading(index)
+                    model: pane.worktreesWords
+                    wanted: pane.worktreesWords[Math.max(0, pane.worktreesValues.indexOf(AppBackend.worktreesReading))]
+                    onActivated: index => pane.pickWorktreesReading(index)
                 }
                 // Each reading shows only the boxes it reads: the two bounds, the one interval, or none — `Off`
-                // reads no copy at all, and a number beside it would say otherwise.
+                // reads no worktree at all, and a number beside it would say otherwise.
                 FormField {
-                    id: copiesFloorField
-                    visible: AppBackend.copiesReading === "auto"
+                    id: worktreesFloorField
+                    visible: AppBackend.worktreesReading === "auto"
                     implicitWidth: fetchField.implicitWidth
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
                         bottom: AppBackend.paceMinSecs
                         top: AppBackend.paceMaxSecs
                     }
-                    onEditingFinished: pane.applyCopiesBounds()
+                    onEditingFinished: pane.applyWorktreesBounds()
                     onAccepted: pane.accepted()
                 }
                 LineText {
-                    visible: copiesFloorField.visible
+                    visible: worktreesFloorField.visible
                     text: qsTr("to")
                     color: Theme.textSecondary
                 }
                 FormField {
-                    id: copiesCeilingField
-                    visible: copiesFloorField.visible
+                    id: worktreesCeilingField
+                    visible: worktreesFloorField.visible
                     implicitWidth: fetchField.implicitWidth
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
                         bottom: AppBackend.paceMinSecs
                         top: AppBackend.paceMaxSecs
                     }
-                    onEditingFinished: pane.applyCopiesBounds()
+                    onEditingFinished: pane.applyWorktreesBounds()
                     onAccepted: pane.accepted()
                 }
                 FormField {
-                    id: copiesField
-                    visible: AppBackend.copiesReading === "fixed"
+                    id: worktreesField
+                    visible: AppBackend.worktreesReading === "fixed"
                     implicitWidth: fetchField.implicitWidth
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
-                        bottom: AppBackend.copiesIntervalMin
-                        top: AppBackend.copiesIntervalMax
+                        bottom: AppBackend.worktreesIntervalMin
+                        top: AppBackend.worktreesIntervalMax
                     }
-                    onEditingFinished: pane.applyCopies()
+                    onEditingFinished: pane.applyWorktrees()
                     onAccepted: pane.accepted()
                 }
                 LineText {
-                    visible: copiesFloorField.visible || copiesField.visible
+                    visible: worktreesFloorField.visible || worktreesField.visible
                     text: qsTr("seconds")
                     color: Theme.textSecondary
                 }

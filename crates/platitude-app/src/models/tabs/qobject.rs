@@ -17,7 +17,7 @@ impl TabsModel {
         Member = current_tab_id,
         Notify = current_index_changed
     );
-    // Their own signal: standing the front tab in another copy changes
+    // Their own signal: standing the front tab in another worktree changes
     // them without moving the front.
     qproperty!(
         "currentRepoName",
@@ -25,8 +25,8 @@ impl TabsModel {
         Notify = front_names_changed
     );
     qproperty!(
-        "currentCopyName",
-        Member = current_copy_name,
+        "currentWorktreeName",
+        Member = current_worktree_name,
         Notify = front_names_changed
     );
 
@@ -64,20 +64,20 @@ impl TabsModel {
     #[qsignal]
     pub(super) fn leaving_tab(&mut self, index: i32);
 
-    /// The row at `index` is about to stand in another working copy, its
-    /// page staying (`TabsModel::switch_copy`).
+    /// The row at `index` is about to stand in another worktree, its
+    /// page staying (`TabsModel::switch_worktree`).
     ///
     /// Emitted *before* the hub moves: the commit editor's words are filed
-    /// under the copy they were written in. Whatever else the page holds
-    /// for the copy being left goes here too; the graph and panes are the
+    /// under the worktree they were written in. Whatever else the page holds
+    /// for the worktree being left goes here too; the graph and panes are the
     /// repository's and stay.
     #[qsignal]
-    pub(super) fn leaving_copy(&mut self, index: i32);
+    pub(super) fn leaving_worktree(&mut self, index: i32);
 
-    /// The other side of `leaving_copy`: the tab at `index` now stands in
-    /// the asked-for copy, and its session is opening.
+    /// The other side of `leaving_worktree`: the tab at `index` now stands in
+    /// the asked-for worktree, and its session is opening.
     #[qsignal]
-    pub(super) fn stood_copy(&mut self, index: i32);
+    pub(super) fn stood_worktree(&mut self, index: i32);
 
     /// Somebody asked to be shown the repository now in front, so the band
     /// travels to that tab's seat (デザイン規約 §タブの所作).
@@ -114,7 +114,7 @@ impl TabsModel {
     }
 
     /// Opens a plain filesystem path (a worktree row, the pill naming the
-    /// copy holding a branch, `PGG_AUTO_OPEN`); a refusal shows on the
+    /// worktree holding a branch, `PGG_AUTO_OPEN`); a refusal shows on the
     /// tab's failure screen (`Ask::picked`).
     #[qslot]
     fn open_repository_path(&mut self, path: String) {
@@ -157,32 +157,32 @@ impl TabsModel {
             // Spelled for the screen as `TabsModel::ask` does: a
             // hand-edited file may not use `/`, and the hover reads what
             // the tab keeps.
-            let copy = crate::urlpath::shown_path(&saved_tab.path);
+            let worktree = crate::urlpath::shown_path(&saved_tab.path);
             let repo = crate::urlpath::shown_path(&saved_tab.repo);
-            // A linked copy that has gone falls back to the repository's
+            // A linked worktree that has gone falls back to the repository's
             // own (デザイン規約 §タブの所作「立てない所へは立たない」);
             // only a gone repository drops the tab.
-            let copy = if std::path::Path::new(&copy).is_dir() {
-                copy
+            let worktree = if std::path::Path::new(&worktree).is_dir() {
+                worktree
             } else {
                 repo.clone()
             };
-            let copy_buf = std::path::PathBuf::from(&copy);
-            if !copy_buf.is_dir() {
-                tracing::info!(path = %copy, "restored tab dropped: not there any more");
+            let worktree_buf = std::path::PathBuf::from(&worktree);
+            if !worktree_buf.is_dir() {
+                tracing::info!(path = %worktree, "restored tab dropped: not there any more");
                 if position < saved.active {
                     wanted = wanted.saturating_sub(1);
                 }
                 continue;
             }
             // A file can name one repository twice (one folder spelled two
-            // ways, or two copies of it); only the first is put back, as
+            // ways, or two worktrees of it); only the first is put back, as
             // opening would. git is not asked: the file holds what a run
             // wrote when it did ask (`settings::TabRecord`).
             if let Landing::Show(held) | Landing::Switch(held) =
-                landing_for(&self.items, &copy, &repo)
+                landing_for(&self.items, &worktree, &repo)
             {
-                tracing::info!(path = %copy, "restored tab dropped: already open");
+                tracing::info!(path = %worktree, "restored tab dropped: already open");
                 if position == saved.active {
                     wanted_held = Some(held);
                 } else if position < saved.active {
@@ -192,11 +192,11 @@ impl TabsModel {
             }
             let title = title_of(&repo);
             let Some(Some(tab_id)) =
-                Hub::with(|hub| hub.reserve_tab(copy_buf, std::path::PathBuf::from(&repo)))
+                Hub::with(|hub| hub.reserve_tab(worktree_buf, std::path::PathBuf::from(&repo)))
             else {
                 continue;
             };
-            self.push(TabItem::standing(tab_id, title, repo, copy));
+            self.push(TabItem::standing(tab_id, title, repo, worktree));
         }
         // Once the whole strip stands: a name settled against half of it
         // misses namesakes still to arrive.
@@ -210,7 +210,7 @@ impl TabsModel {
         self.front_tab_asked();
     }
 
-    /// A tab's copy would not open, so it is stood back in the
+    /// A tab's worktree would not open, so it is stood back in the
     /// repository's own (`TabsModel::stand_home`). The page asks before
     /// showing the refusal, so no failure screen flashes
     /// (`RepoTab::stand_home_asked`).

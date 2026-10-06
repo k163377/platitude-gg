@@ -1,5 +1,5 @@
 //! What a delete reads behind itself: the refs and the graph. Not the tree,
-//! the stash list or the working copies, which no delete reaches — unless
+//! the stash list or the worktrees, which no delete reaches — unless
 //! the name was what HEAD is measured against (`AfterWrite::Name`).
 
 use platitude_core::session::{Recording, SessionEvent};

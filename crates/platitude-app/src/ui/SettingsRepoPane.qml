@@ -5,7 +5,7 @@ import platitude.ui
 
 // The `REPOSITORY OVERRIDE` group of the settings screen's `Git` category: which repository, and what it writes into
 // its own configuration (規約 §設定の画面). A file of its own: a whole group with models behind it. Only the tab in
-// front has a session (`RepoPageStack`), so reads and writes go through models handed a work tree path
+// front has a session (`RepoPageStack`), so reads and writes go through models handed a worktree path
 // (`RepoConfigModel`).
 ColumnLayout {
     id: pane

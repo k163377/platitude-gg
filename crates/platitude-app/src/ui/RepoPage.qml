@@ -17,8 +17,8 @@ FocusScope {
 
     /// The blank page's "Open repository…" button (folder picker).
     signal openRepositoryPicker()
-    /// A working copy asked for by path (a WORKTREES row, `openHolder`): a copy of this repository stands this tab in
-    /// it (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」).
+    /// A worktree asked for by path (a WORKTREES row, `openHolder`): a worktree of this repository stands this tab
+    /// in it (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」).
     signal openRepositoryPathRequested(string path)
     /// PGG_AUTO_ACT=settings wants the window's settings dialog open for the screenshot.
     signal settingsDialogRequested()
@@ -30,7 +30,7 @@ FocusScope {
     signal perfFinished()
     /// The failed-open screen's "Close tab" button.
     signal closeTabRequested()
-    /// The working copy this tab is standing in would not open, and the repository has its own one to stand in
+    /// The worktree this tab is standing in would not open, and the repository has its own one to stand in
     /// instead (`RepoTab.standHomeAsked`). The strip is what moves the tab.
     signal standHomeRequested()
 
@@ -148,7 +148,7 @@ FocusScope {
     // Selected stash row's reflog selector ("" = not a stash).
     property string selectedStashRef: ""
     function showWip() {
-        // This window's tree: every road here is about it, and `openWipFor` alone puts a copy back afterwards.
+        // This window's tree: every road here is about it, and `openWipFor` alone puts a worktree back afterwards.
         page.dropCarried()
         page.wipShown = true
         page.pendingHeadSelect = false
@@ -162,16 +162,16 @@ FocusScope {
         page.closeDiff()
     }
 
-    // ---- which working copy the WIP pane is about ---------------------
+    // ---- which worktree the WIP pane is about ---------------------
     //
-    // **Every uncommitted row carries git's all-zero id**, ours and other copies' alike
-    // (P3-確認事項 §別 worktree の未コミット行), so the copy is named by its path. **Empty means this window's own
+    // **Every uncommitted row carries git's all-zero id**, ours and other worktrees' alike
+    // (P3-確認事項 §別の worktree の未コミット行), so the worktree is named by its path. **Empty means this window's own
     // tree, and only then can anything here be written.**
     property string carriedPath: ""
     property string carriedName: ""
     /// Whether the pane may write what it shows — the one property every write control reads (デザイン規約 §無効).
     readonly property bool wipWritable: page.carriedPath === ""
-    /// The list the right pane shows: our unstaged run, or another copy's one folded list (`CarriedPane`). Every
+    /// The list the right pane shows: our unstaged run, or another worktree's one folded list (`CarriedPane`). Every
     /// question about the files on screen goes here; both answer alike, being built from one whole status
     /// (`models::nav::Source::files`).
     readonly property var wipUnstaged: page.wipWritable ? unstagedModel : carriedModel
@@ -180,33 +180,34 @@ FocusScope {
     function setDiffSplit(split) {
         diffModel.setSplit(split)
     }
-    /// Tree or flat paths, for our three lists and the copy's one at once: the choice is the pane's, so stepping onto
-    /// another copy and back keeps it, and one answer is saved at close.
+    /// Tree or flat paths, for our three lists and the worktree's one at once: the choice is the pane's, so stepping
+    /// onto another worktree and back keeps it, and one answer is saved at close.
     function setWipTreeView(tree) {
         conflictsModel.setTreeView(tree)
         unstagedModel.setTreeView(tree)
         stagedModel.setTreeView(tree)
         carriedModel.setTreeView(tree)
     }
-    /// Opens the WIP pane on whichever working copy row `row` is — this window's own, or another copy's.
+    /// Opens the WIP pane on whichever worktree row `row` is — this window's own, or another worktree's.
     function openWipFor(row) {
         const at = row >= 0 ? graphModel.carriedPath(row) : ""
-        // Already the copy being read: clearing the pane would close the file opened from it under the clicking hand.
+        // Already the worktree being read: clearing the pane would close the file opened from it under the clicking
+        // hand.
         if (at !== "" && at === page.carriedPath) {
             page.wipShown = true
             return
         }
-        // The list's light names a file of the copy being left, which the arriving copy may also have. Our own row
-        // to itself is not a step.
+        // The list's light names a file of the worktree being left, which the arriving worktree may also have. Our
+        // own row to itself is not a step.
         if (at !== page.carriedPath)
             wipPane.clearChoice()
         page.showWip()
         if (at !== "")
-            page.standOnCopy(at, graphModel.carriedName(row))
+            page.standOnWorktree(at, graphModel.carriedName(row))
     }
-    /// Points the pane at one copy and reads its files; that copy's paced reads keep them current while it stands
-    /// (`pollCarried`).
-    function standOnCopy(at, name) {
+    /// Points the pane at one worktree and reads its files; that worktree's paced reads keep them current while it
+    /// stands (`pollCarried`).
+    function standOnWorktree(at, name) {
         page.carriedPath = at
         page.carriedName = name
         repoTab.readCarriedStatus(at, name)
@@ -215,11 +216,11 @@ FocusScope {
     function dropCarried() {
         page.carriedPath = ""
         page.carriedName = ""
-        // Or the copy's reads go on handing the pane a list nobody shows.
+        // Or the worktree's reads go on handing the pane a list nobody shows.
         repoTab.leaveCarriedStatus()
     }
-    /// Follows the copy being read across a graph pass, and lets go where the copy has gone clean and taken its row.
-    /// **Addressed by the copy**: rows move under a rebuild, and all of them wear the all-zero id.
+    /// Follows the worktree being read across a graph pass, and lets go where the worktree has gone clean and taken
+    /// its row. **Addressed by the worktree**: rows move under a rebuild, and all of them wear the all-zero id.
     function settleCarriedAfterPass() {
         if (page.carriedPath === "")
             return
@@ -229,9 +230,10 @@ FocusScope {
             graphPane.setCurrentRow(row)
             return
         }
-        // The copy committed or stashed: **land where that copy now stands** — the row named a copy, not a branch
-        // (`NavSectionModel.headOfCopy`). A listing a tick behind lands on its previous HEAD, still its own history.
-        const head = worktreesModel.headOfCopy(page.carriedPath)
+        // The worktree committed or stashed: **land where that worktree now stands** — the row named a worktree, not
+        // a branch (`NavSectionModel.headOfWorktree`). A listing a tick behind lands on its previous HEAD, still its
+        // own history.
+        const head = worktreesModel.headOfWorktree(page.carriedPath)
         const headRow = head === "" ? -1 : graphModel.rowOf(head)
         page.dropCarried()
         page.wipShown = false
@@ -241,7 +243,7 @@ FocusScope {
             page.activateRow(graphModel.oidAt(headRow), headRow)
             return
         }
-        // The copy is gone from the listing (removed, pruned, or bare): fall back to the opening default.
+        // The worktree is gone from the listing (removed, pruned, or bare): fall back to the opening default.
         page.trySelectDefault()
     }
 
@@ -250,7 +252,7 @@ FocusScope {
     // Whether a remote already has HEAD's commit — the amend's `already pushed`. Kept beside HEAD by the session, so a
     // HEAD that moved wears no answer about the commit it left.
     readonly property bool headPublished: workingTree.headPublished
-    /// Whether the tab was standing in another working copy at the last drain (`RepoTab.standing`). Every property of
+    /// Whether the tab was standing in another worktree at the last drain (`RepoTab.standing`). Every property of
     /// that model shares one notify, so the edge is seen only by keeping the last value
     /// (rules-refs/app-ui.md「『まだ答えが無い』と値 0 / false を分ける」).
     property bool wasStanding: false
@@ -377,7 +379,7 @@ FocusScope {
     // An amend runs straight even when HEAD is pushed (デザイン規約 §長押し「ローカルの履歴書き換えはクリック」). The
     // slot records the queue's id itself (`ops::Press`).
     function commitNow() {
-        // Another copy's changes show in `CarriedPane`, which has no commit button; this is the belt under it.
+        // Another worktree's changes show in `CarriedPane`, which has no commit button; this is the belt under it.
         if (!page.wipWritable)
             return
         repoTab.commit(wipPane.outgoingSubject, wipPane.outgoingBody, page.amending, wipPane.resetAuthor)
@@ -414,18 +416,18 @@ FocusScope {
         }
         page.readDiffForAnswer()
     }
-    /// The answer to a working copy a menu asked for — its own answer (`RepoTab.copyAnswer`, -1 for none). Made, the
-    /// tab goes and stands in it, as the box and the row said it would: the copy is where the reader went to work
-    /// (デザイン規約 §作業コピーを作る). Refused, the report comes down over the graph, the log left shut.
-    function absorbCopyAnswer() {
-        const answer = repoTab.copyAnswer
+    /// The answer to a worktree a menu asked for — its own answer (`RepoTab.worktreeAnswer`, -1 for none). Made, the
+    /// tab goes and stands in it, as the box and the row said it would: the worktree is where the reader went to work
+    /// (デザイン規約 §worktree を作る). Refused, the report comes down over the graph, the log left shut.
+    function absorbWorktreeAnswer() {
+        const answer = repoTab.worktreeAnswer
         if (answer < 0)
             return
         if (repoTab.writeAnswerFailed(answer)) {
             page.tellRefusal(answer)
             return
         }
-        page.openRepositoryPathRequested(repoTab.copyAnswerPath)
+        page.openRepositoryPathRequested(repoTab.worktreeAnswerPath)
     }
     /// The answer to the toolbar's push — its own answer (`RepoTab.pushAnswer`, -1 for none). Only a refusal is the
     /// page's; the button's mark is `PublishFlow.noteWriteAnswer`'s.
@@ -549,9 +551,9 @@ FocusScope {
         if (chip)
             page.switchToRef(chip.kind, chip.name)
     }
-    // A branch another working copy holds is the one refusal no stash or put-down can clear (offers::SwitchAction), so
-    // **the press goes to that copy** (`openRepositoryPathRequested`). Unasked — it writes nothing; the worded rows
-    // name the copy first (`RefRowMenu` の `Open`, デザイン規約 §進行中の操作から出る).
+    // A branch another worktree holds is the one refusal no stash or put-down can clear (offers::SwitchAction), so
+    // **the press goes to that worktree** (`openRepositoryPathRequested`). Unasked — it writes nothing; the worded
+    // rows name the worktree first (`RefRowMenu` の `Open`, デザイン規約 §進行中の操作から出る).
     function openHolder(local) {
         const held = worktreesModel.worktreeHolding(local)
         if (held !== "")
@@ -561,10 +563,10 @@ FocusScope {
     /// turned away, which the headless double press reads (動詞 `switch-remote-twice`): from outside, both presses
     /// look alike.
     function switchToRef(kind, name, leaving) {
-        // A working copy on no branch, named by its path (the menus' `Open`, `RefRowMenu.offerOn`): the tab goes and
+        // A worktree on no branch, named by its path (the menus' `Open`, `RefRowMenu.offerOn`): the tab goes and
         // stands in it, as its WORKTREES row's double-click does — ahead of the gate below, since it writes nothing.
         if (kind === "worktree") {
-            if (worktreesModel.copyFacts(name) === undefined)
+            if (worktreesModel.worktreeFacts(name) === undefined)
                 return false
             page.openRepositoryPathRequested(name)
             return true
@@ -893,12 +895,13 @@ FocusScope {
             onSwitchRequested: (kind, name) => page.switchToRef(kind, name)
             onBranchHereRequested: oidHex => page.startBranchAt(oidHex)
             onTagHereRequested: oidHex => page.startTagAt(oidHex)
-            onCopyHereRequested: oidHex => page.startCopyAt(oidHex)
-            onCopyAddRequested: (mode, branch, start, path, name) => page.addCopy(path, mode, branch, start, name)
+            onWorktreeHereRequested: oidHex => page.startWorktreeAt(oidHex)
+            onWorktreeAddRequested: (mode, branch, start, path, name) =>
+                                        page.addWorktreeAt(path, mode, branch, start, name)
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onDropStashRequested: selector => page.dropStashNow(selector)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
-            onRemoveCopyRequested: (path, name) => repoTab.removeWorktree(path, name)
+            onRemoveWorktreeRequested: (path, name) => repoTab.removeWorktree(path, name)
         }
     }
     // What a remote itself offers. Its own menu: a remote is repository configuration, and the ref menu is about
@@ -926,9 +929,9 @@ FocusScope {
     property string refMenuRowKind: ""
     property string refMenuRowId: ""
     /// The one door into that menu: the sidebar's rows (`inSidebar`) and the automation, whose calls without it take
-    /// the graph's side. Says whether it opened. A working copy's row names its copy (`full` is its path), which carries its own
-    /// card (`RefRowMenu.offerOn`). `aim` is a remote the reader named on its own (a TAGS row's carrier line), which
-    /// the menu then acts on.
+    /// the graph's side. Says whether it opened. A worktree's row names that worktree (`full` is its path), which
+    /// carries its own card (`RefRowMenu.offerOn`). `aim` is a remote the reader named on its own (a TAGS row's
+    /// carrier line), which the menu then acts on.
     function openRefMenu(kind, name, full, oidHex, inSidebar, aim) {
         page.refMenuInSidebar = inSidebar === true
         page.refMenuRowKind = kind
@@ -958,25 +961,25 @@ FocusScope {
         else
             graphPane.startTagging(oidHex)
     }
-    /// And a branch on that commit out in a working copy of its own (`Create worktree here…`), the same way.
-    function startCopyAt(oidHex) {
+    /// And a branch on that commit out in a worktree of its own (`Create worktree here…`), the same way.
+    function startWorktreeAt(oidHex) {
         if (oidHex === "")
             return
         if (page.refMenuInSidebar)
-            sidebarPane.beginCopyAt(page.refMenuRowKind, page.refMenuRowId, oidHex)
+            sidebarPane.beginWorktreeAt(page.refMenuRowKind, page.refMenuRowId, oidHex)
         else
-            graphPane.startCopying(oidHex)
+            graphPane.startWorktreeNaming(oidHex)
     }
-    /// What either box sends once a name is typed: the branch made on `oidHex`, out in a copy where `newCopyFor`
-    /// puts it. The box has already turned down every name that cannot go there.
-    function copyFromBox(oidHex, name) {
-        const place = worktreesModel.newCopyFor(name)
+    /// What either box sends once a name is typed: the branch made on `oidHex`, out in a worktree where
+    /// `newWorktreeFor` puts it. The box has already turned down every name that cannot go there.
+    function worktreeFromBox(oidHex, name) {
+        const place = worktreesModel.newWorktreeFor(name)
         if (place !== undefined)
-            page.addCopy(place.path, "new", name, oidHex, place.name)
+            page.addWorktreeAt(place.path, "new", name, oidHex, place.name)
     }
     /// The one door to `git worktree add` (both rows and both boxes). Its answer is waited for by name: landed, the
-    /// tab goes and stands in the new copy (`absorbCopyAnswer`).
-    function addCopy(path, mode, branch, start, name) {
+    /// tab goes and stands in the new worktree (`absorbWorktreeAnswer`).
+    function addWorktreeAt(path, mode, branch, start, name) {
         if (path === "" || repoTab.state !== "open" || page.doorsHeldWhy !== "")
             return
         repoTab.addWorktree(path, mode, branch, start, name)
@@ -1138,7 +1141,7 @@ FocusScope {
         page.syncGone()
     }
     onGoneStashChanged: stashesModel.setHidden(page.goneStash)
-    // No chip: a working copy is marked on the graph by its checkout, which the listing that proves it gone redraws.
+    // No chip: a worktree is marked on the graph by its checkout, which the listing that proves it gone redraws.
     onGoneWorktreeChanged: worktreesModel.setHidden(page.goneWorktree)
 
     /// Automation: holds a row taken away before git answers, for its picture — asked before the press, since a demo
@@ -1209,7 +1212,7 @@ FocusScope {
 
     // ---- context menu on a graph row -------------------------------
     /// The first chip a graph row draws (what a right-click hands over — `GraphRowDelegate.menuChip`), for callers with
-    /// no row in hand; null where it draws neither a ref nor a working copy's folder. Chips already taken off screen
+    /// no row in hand; null where it draws neither a ref nor a worktree's folder. Chips already taken off screen
     /// are filtered as the delegate does, so a gone name puts no card up (デザイン規約 §消す操作は先に画面から消す).
     function rowChipAt(oidHex) {
         const row = graphModel.rowOf(oidHex)
@@ -1234,8 +1237,9 @@ FocusScope {
         commitMenuSeat.active = true
         const menu = commitMenuSeat.item
         const kind = named ? GitFacts.menuKind(named.kind) : ""
-        // A folder's chip carries only the folder: the copy is the one of that name standing on this commit.
-        const target = kind === "" ? "" : kind === "worktree" ? worktreesModel.copyAt(named.name, oidHex) : named.name
+        // A folder's chip carries only the folder: the worktree is the one of that name standing on this commit.
+        const target = kind === "" ? ""
+                     : kind === "worktree" ? worktreesModel.worktreeAt(named.name, oidHex) : named.name
         menu.targetKind = target === "" ? "" : kind
         menu.targetName = target
         commitMenuState.openRowMenu(oidHex)
@@ -1288,8 +1292,9 @@ FocusScope {
             onSwitchRequested: (kind, name) => page.switchToRef(kind, name)
             // Straight to the graph row: this menu is only ever raised on one.
             onBranchHereRequested: oidHex => graphPane.startNaming(oidHex)
-            onCopyHereRequested: oidHex => graphPane.startCopying(oidHex)
-            onCopyAddRequested: (mode, branch, start, path, name) => page.addCopy(path, mode, branch, start, name)
+            onWorktreeHereRequested: oidHex => graphPane.startWorktreeNaming(oidHex)
+            onWorktreeAddRequested: (mode, branch, start, path, name) =>
+                                        page.addWorktreeAt(path, mode, branch, start, name)
             onTagHereRequested: oidHex => graphPane.startTagging(oidHex)
             onSquashRequested: oidHex => page.squashCommit(oidHex)
             onDropRequested: oidHex => page.dropCommit(oidHex)
@@ -1301,7 +1306,7 @@ FocusScope {
             // The branch card's own rows, answered where the ref menu's are.
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
-            onRemoveCopyRequested: (path, name) => repoTab.removeWorktree(path, name)
+            onRemoveWorktreeRequested: (path, name) => repoTab.removeWorktree(path, name)
             // The remote-ref deletes go through `CommitMenuState`, beside the lookups their cards read.
             onCherryPickRequested: oidHex => repoTab.cherryPick(oidHex)
             onRevertRequested: oidHex => repoTab.revert(oidHex)
@@ -1350,27 +1355,29 @@ FocusScope {
             graphPane.showRowSoon(row)
     }
     /// Whether the graph's name box can be accepted, and the line that says why not (the pane only draws it). A rename
-    /// is refused, and a new copy's name once one is typed — a box opened empty would come up turning down the
+    /// is refused, and a new worktree's name once one is typed — a box opened empty would come up turning down the
     /// reader's arrival (§可否・警告の出し場所, `SidebarRowGestures`).
     readonly property string graphRenameRemote: graphPane.namingKind !== "remote" ? ""
         : GitFacts.remoteOfRef(graphPane.namingId, repoTab.remoteNames)
     readonly property bool graphNameTaken: graphPane.namingMode === "rename" && page.graphRenameRemote !== ""
         && graphPane.namingText.trim() !== ""
         && remotesModel.oidOfName(page.graphRenameRemote + "/" + graphPane.namingText.trim()) !== ""
-    /// Where the copy named in the graph's box would go (`NavSectionModel.newCopyFor`), asked per keystroke; undefined
-    /// for every other box.
-    readonly property var graphCopyPlace: graphPane.namingMode === "worktree"
-        ? worktreesModel.newCopyFor(graphPane.namingText.trim()) : undefined
-    /// The folder the box's tip stands the tree mark in front of, where the refusal names one (`Words.copyNameMark`).
-    readonly property string graphNameRefusedMark: Words.copyNameMark(page.graphNameRefusedWhy, page.graphCopyPlace)
+    /// Where the worktree named in the graph's box would go (`NavSectionModel.newWorktreeFor`), asked per keystroke;
+    /// undefined for every other box.
+    readonly property var graphWorktreePlace: graphPane.namingMode === "worktree"
+        ? worktreesModel.newWorktreeFor(graphPane.namingText.trim()) : undefined
+    /// The folder the box's tip stands the tree mark in front of, where the refusal names one
+    /// (`Words.worktreeNameMark`).
+    readonly property string graphNameRefusedMark: Words.worktreeNameMark(page.graphNameRefusedWhy,
+                                                                          page.graphWorktreePlace)
     readonly property string graphNameRefusedWhy: {
         if (graphPane.namingOid === "")
             return ""
-        // A new working copy is warned of what stands in its way before the press — that is the box's whole answer.
+        // A new worktree is warned of what stands in its way before the press — that is the box's whole answer.
         if (graphPane.namingMode === "worktree")
-            return Words.copyNameRefused(graphPane.namingText,
+            return Words.worktreeNameRefused(graphPane.namingText,
                                          branchesModel.oidOfName(graphPane.namingText.trim()) !== "",
-                                         page.graphCopyPlace)
+                                         page.graphWorktreePlace)
         if (graphPane.namingMode !== "rename")
             return ""
         // git's answer on this very name; the rest is worked out before asking.
@@ -1551,14 +1558,14 @@ FocusScope {
         page.showNotice(Words.writeReported(kind, remote, name),
                         reason !== "" ? reason : Words.writeReportedWhy(kind, remote, name),
                         Words.reportTone(kind),
-                        Words.reportNamesCopy(kind) ? name : "")
+                        Words.reportNamesWorktree(kind) ? name : "")
     }
     /// Automation only: git's answer to a write has been taken all the way — bar raised, mark down, standing questions
     /// cleared. What it was about rides the signal: a drain can bring several reports, so the tab holds none to read
     /// back.
     signal writeReported(string kind, string remote, string name)
     /// `label` is what did not happen, `detail` the refuser's words, `tone` the state colour, if any; `markWord` the
-    /// working copy's name in `label` that wears the tree mark, left out for none (`NoticeBar.markWord`).
+    /// worktree's name in `label` that wears the tree mark, left out for none (`NoticeBar.markWord`).
     function showNotice(label, detail, tone, markWord) {
         // Dressed, then raised — so nothing is written on a bar the reader can see (`NoticeBar.open`).
         noticeBar.label = label
@@ -1608,7 +1615,7 @@ FocusScope {
         page.absorbCommitAnswer()
         page.absorbBranchDelete()
         page.absorbStashAnswer()
-        page.absorbCopyAnswer()
+        page.absorbWorktreeAnswer()
         // The status and this answer drain apart: the tree a stash emptied may already be read, with nothing left to
         // ask. No edge of its own — the landing is the edge, and with nothing standing it is a poll it ignores.
         page.leaveWipWhenDone(false)
@@ -1763,14 +1770,14 @@ FocusScope {
         page.diffOrigPath = origPath
         page.diffFromWorkingTree = kind !== "commit"
         page.diffChange = kind === "conflicts" ? page.wipUnstaged.changeOf(path) : ""
-        // The list's light follows the pane when it moves itself. Only this window's own tree: a carried copy's path
-        // picked here would aim this tree's presses at it (`WipPane.readOne`).
+        // The list's light follows the pane when it moves itself. Only this window's own tree: a carried worktree's
+        // path picked here would aim this tree's presses at it (`WipPane.readOne`).
         if (kind !== "commit" && page.wipWritable)
             wipPane.readOne(kind, path)
         if (kind === "commit")
             page.askCommitDiff(path, origPath)
         else if (page.carriedPath !== "")
-            // Read-only, aimed at the copy the rows came from (`RepoSession::load_carried_diff`).
+            // Read-only, aimed at the worktree the rows came from (`RepoSession::load_carried_diff`).
             diffModel.requestCarried(page.carriedPath, kind, path, origPath)
         else
             diffModel.requestWorkingTree(kind, path, origPath)
@@ -1803,7 +1810,7 @@ FocusScope {
     }
     // Stages (or unstages) one hunk, or one line of it, by indices into the diff on screen.
     function stageSelection(hunk, line) {
-        // The seats these come from are not offered on another copy's file (`DiffPane.partial`); this is the belt.
+        // The seats these come from are not offered on another worktree's file (`DiffPane.partial`); this is the belt.
         if (!page.wipWritable)
             return
         // The fingerprint rides along: the write refuses to apply indices to drifted bytes. `diffAwaits` is set here,
@@ -1864,7 +1871,7 @@ FocusScope {
     /// The tree moved, so the open file is stale — whoever moved it (デザイン規約 §diff の中のステージ
     /// 「作業ツリーが動いたら diff を読み直す」). The callers already know the tree moved.
     function reloadDiff() {
-        // Nothing this window writes moves another copy's file; that copy's own paced reads keep it current
+        // Nothing this window writes moves another worktree's file; that worktree's own paced reads keep it current
         // (`pollCarried`).
         if (!page.diffShown || page.diffKind === "commit" || !page.wipWritable)
             return
@@ -1877,15 +1884,15 @@ FocusScope {
     function pollDiff() {
         if (!page.diffShown || page.diffKind === "commit" || page.diffSettling)
             return false
-        // A copy's file is re-read with that copy's reads, aimed at the copy — through here it would read *this*
-        // window's file of that name into a pane showing somebody else's (`pollCarried`).
+        // A worktree's file is re-read with that worktree's reads, aimed at the worktree — through here it would read
+        // *this* window's file of that name into a pane showing somebody else's (`pollCarried`).
         if (!page.wipWritable)
             return false
         return diffModel.refreshWorkingTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
-    /// The open file of the copy being read: after each paced read of that copy, which handed the pane its list as it
-    /// read the row (`RepoSession::read_carried_status`), and when the window comes back. Returns whether it asked, as
-    /// `pollDiff`.
+    /// The open file of the worktree being read: after each paced read of that worktree, which handed the pane its
+    /// list as it read the row (`RepoSession::read_carried_status`), and when the window comes back. Returns whether it
+    /// asked, as `pollDiff`.
     function pollCarried() {
         if (page.carriedPath === "")
             return false
@@ -1931,8 +1938,8 @@ FocusScope {
     readonly property var pageGraph: graphModel
     /// Automation only, like `pageWip`: `carried-open` asks this page for a row and reads the landing in the window.
     readonly property alias pageGraphPane: graphPane
-    /// Automation only, the same way (`worktree-stand`: a WORKTREES row stands the tab in that copy, and the landing
-    /// is the window's).
+    /// Automation only, the same way (`worktree-stand`: a WORKTREES row stands the tab in that worktree, and the
+    /// landing is the window's).
     readonly property alias pageSidebar: sidebarPane
     /// Whether the refs listing has landed — the read that also settles how many remotes there are, and so what the
     /// band's fetch button may be (`fetch-tip`).
@@ -2150,7 +2157,7 @@ FocusScope {
         page.jumpToRef(graphModel.oidAt(row))
     }
     /// Per part of the picked entry, whether what it would bring back is on the graph (破棄記録仕様.md §4): its tip a
-    /// row the walk has drawn, or work put back into a working copy, which no window holds back. Empty until the walk
+    /// row the walk has drawn, or work put back into a worktree, which no window holds back. Empty until the walk
     /// that took the entry has landed (`GraphModel.provisionalWalked`) — before it, an undrawn tip is not yet walked,
     /// not out of reach. Read again as the graph's rows move — a press on `Load more` walks toward it.
     property var recoverReach: []
@@ -2197,7 +2204,7 @@ FocusScope {
     }
     property string recoverLanding: ""
     /// A restore taken and not answered yet: the band's buttons wait for the answer, not for the write to start — one
-    /// waiting its turn in another copy's order (破棄記録仕様.md §4) has not started, and a second press would bring
+    /// waiting its turn in another worktree's order (破棄記録仕様.md §4) has not started, and a second press would bring
     /// the same part back twice. Set by the press's answer, as `diffAwaits` is.
     property bool recoverAwaits: false
     /// A restore came back: what it stood is selected, and work that did not come back as it was thrown away says
@@ -2287,9 +2294,9 @@ FocusScope {
     NavSectionModel { id: conflictsModel }
     NavSectionModel { id: unstagedModel }
     NavSectionModel { id: stagedModel }
-    // Another working copy's changes (`page.carriedPath`), kept apart: this window's own status arrives on its own
-    // tick and would take the copy's rows, and the reader's place, with it. One list, not three: the split is the
-    // index's, and nothing here moves that copy's index (`CarriedPane`).
+    // Another worktree's changes (`page.carriedPath`), kept apart: this window's own status arrives on its own
+    // tick and would take the worktree's rows, and the reader's place, with it. One list, not three: the split is the
+    // index's, and nothing here moves that worktree's index (`CarriedPane`).
     NavSectionModel { id: carriedModel }
     NavSectionModel { id: worktreesModel }
     NavSectionModel { id: stashesModel }
@@ -2310,24 +2317,24 @@ FocusScope {
         repoTab.release()
     }
 
-    /// What this page owes on its way into another working copy (`TabsModel::leaving_copy`). The page stays — graph,
-    /// refs and panes are the repository's, shared by linked copies (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」);
-    /// what goes is what the left copy owned. Called while that copy is still behind the tab, so the hub files the
-    /// draft under it (`Hub::hold_draft`).
-    function leaveCopy() {
+    /// What this page owes on its way into another worktree (`TabsModel::leaving_worktree`). The page stays — graph,
+    /// refs and panes are the repository's, shared by linked worktrees
+    /// (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」); what goes is what the left worktree owned. Called while
+    /// that worktree is still behind the tab, so the hub files the draft under it (`Hub::hold_draft`).
+    function leaveWorktree() {
         if (page.blank)
             return
         repoTab.holdDraft(wipPane.subjectText, wipPane.bodyText, page.amending)
-        // Words left standing would be read as the arrived copy's (`restoreDraft` puts back only what it finds).
+        // Words left standing would be read as the arrived worktree's (`restoreDraft` puts back only what it finds).
         page.amending = false
         wipPane.setAmendChecked(false)
         wipPane.clearMessage()
         // A plan is composed against one working tree and would be replayed in it.
         if (page.planShown)
             planModel.cancelPlan()
-        // The pane goes back to this tab's own tree — which is about to be the copy it was reading.
+        // The pane goes back to this tab's own tree — which is about to be the worktree it was reading.
         page.dropCarried()
-        // A working-tree diff goes with the tree. A commit's stays (linked copies share the rows), but a read still
+        // A working-tree diff goes with the tree. A commit's stays (linked worktrees share the rows), but a read still
         // out died with the session: noted before the close below clears what was being read, and asked again
         // (`standSettled`).
         page.owedDiff = page.diffShown && page.diffKind === "commit" && diffModel.loading
@@ -2352,13 +2359,13 @@ FocusScope {
         page.rewordRow = -1
         page.planRunOut = false
         // The discard log's entry was walked by that session (`GraphModel.restand` takes it off the rows), and an open
-        // list is that copy's reading: it reads again once the copy arrived at has settled (`standSettled`).
+        // list is that worktree's reading: it reads again once the worktree arrived at has settled (`standSettled`).
         page.recoverPick = -1
         page.recoverTipPending = ""
         page.recoverLanding = ""
         page.recoverReach = []
         page.owedDiscards = page.recoverOpen
-        // What the models hold of that copy, each by its own rule (the `restand` slots).
+        // What the models hold of that worktree, each by its own rule (the `restand` slots).
         repoTab.restand()
         graphModel.restand()
         workingTree.restand()
@@ -2366,14 +2373,14 @@ FocusScope {
         unstagedModel.restand()
         stagedModel.restand()
         carriedModel.restand()
-        // The command log is not reset: its rows name their session (`CommandMsg`), and a write the left copy is still
-        // running ends in its own row (`BridgeSink::retire_reads`).
+        // The command log is not reset: its rows name their session (`CommandMsg`), and a write the left worktree is
+        // still running ends in its own row (`BridgeSink::retire_reads`).
     }
 
-    /// The tab now stands in the asked-for copy and its session is opening (`TabsModel::stood_copy`). The words only:
-    /// other reads wait for `standSettled` — asked earlier they reach a session with no repository open and get
+    /// The tab now stands in the asked-for worktree and its session is opening (`TabsModel::stood_worktree`). The words
+    /// only: other reads wait for `standSettled` — asked earlier they reach a session with no repository open and get
     /// nothing (`RepoSession::load_details`).
-    function standInCopy() {
+    function standInWorktree() {
         if (page.blank)
             return
         page.restoreDraft()
@@ -2383,15 +2390,16 @@ FocusScope {
             commandsModel.setBackgroundReads(true)
     }
 
-    /// Reads that died with the closed session (`leaveCopy`): the details, the open commit file, and the open discard
-    /// log, which was that copy's reading.
+    /// Reads that died with the closed session (`leaveWorktree`): the details, the open commit file, and the open
+    /// discard log, which was that worktree's reading.
     property bool owedDetails: false
     property bool owedDiff: false
     property bool owedDiscards: false
 
     /// The new session has said where it is (`RepoTab.standing` going down), so the reads that died with the last are
-    /// asked again — only those: a commit is the same in every linked copy (the rule `activateRow` keeps for the
-    /// commit already open). The details were noted on leaving; the signature shows it by not being the selection's.
+    /// asked again — only those: a commit is the same in every linked worktree (the rule `activateRow` keeps for
+    /// the commit already open). The details were noted on leaving; the signature shows it by not being the
+    /// selection's.
     function standSettled() {
         if (page.owedDiscards) {
             page.owedDiscards = false
@@ -2517,9 +2525,9 @@ FocusScope {
     onFocusEpochChanged: {
         if (page.visible && repoTab.state === "open") {
             // The window coming back is when an outside change is most likely waiting: this tree now, with its stashes
-            // (the file on screen follows that read — `absorbPacedReads`), and of the other copies only the one the
+            // (the file on screen follows that read — `absorbPacedReads`), and of the other worktrees only the one the
             // pane stands on, its row and its list at once rather than at its turn (`RepoSession::poll_now`). The rest
-            // keep their pace. That copy's open file is asked now; its list follows the copy's read.
+            // keep their pace. That worktree's open file is asked now; its list follows the worktree's read.
             repoTab.pollNow()
             page.pollCarried()
         }
@@ -2528,23 +2536,24 @@ FocusScope {
     /// True while the window is on screen (see Main.qml): the page shown there has its repository read on the
     /// session's pace, so a commit made in a terminal or by an agent turns up on its own.
     property bool onScreen: false
-    /// What the session is told (`RepoSession::set_paced`): this tree and the other copies are read at its pace while
-    /// this holds. Only the tab in front — the others are let go of and read again when switched to. Not while the tab
-    /// stands in another copy: the session behind it is being replaced, and the new one is told as it opens.
+    /// What the session is told (`RepoSession::set_paced`): this tree and the other worktrees are read at its pace
+    /// while this holds. Only the tab in front — the others are let go of and read again when switched to. Not while
+    /// the tab stands in another worktree: the session behind it is being replaced, and the new one is told as it
+    /// opens.
     readonly property bool paced: page.onScreen && page.visible && repoTab.state === "open" && !repoTab.standing
     onPacedChanged: repoTab.setPaced(page.paced)
-    /// Paced reads that ended, as the tab counts them (`RepoTab.pacedSeq` / `pacedCopies`).
+    /// Paced reads that ended, as the tab counts them (`RepoTab.pacedSeq` / `pacedWorktrees`).
     property int seenPacedSeq: 0
     /// Each paced read of this tree is followed by the file on screen — a status that did not move says nothing about
-    /// a file whose bytes did (`pollDiff`); a read of the copy the pane stands on by that copy's open file — the read
-    /// handed the pane its list already (`pollCarried`). A turn later: this runs inside the tab's notify, and both
-    /// reach back into the tab.
+    /// a file whose bytes did (`pollDiff`); a read of the worktree the pane stands on by that worktree's open file —
+    /// the read handed the pane its list already (`pollCarried`). A turn later: this runs inside the tab's notify, and
+    /// both reach back into the tab.
     function absorbPacedReads() {
         if (repoTab.pacedSeq !== page.seenPacedSeq) {
             page.seenPacedSeq = repoTab.pacedSeq
             Qt.callLater(page.pollDiff)
         }
-        if (page.carriedPath !== "" && repoTab.pacedCopies.indexOf(page.carriedPath) >= 0)
+        if (page.carriedPath !== "" && repoTab.pacedWorktrees.indexOf(page.carriedPath) >= 0)
             Qt.callLater(page.pollCarried)
     }
     // The badge counting a running replay out, on its own tick: two file reads, no process (デザイン規約
@@ -2710,8 +2719,8 @@ FocusScope {
     property string anchorOid: ""
     property int anchorRow: -1
     function rememberAnchor() {
-        // Past however many working-tree rows stand over it — ours and one per other copy, all with the all-zero id,
-        // so skipping one leaves the anchor on another (`GraphModel.newestCommitRow` holds the rule).
+        // Past however many working-tree rows stand over it — ours and one per other worktree, all with the all-zero
+        // id, so skipping one leaves the anchor on another (`GraphModel.newestCommitRow` holds the rule).
         const row = graphModel.newestCommitRow()
         page.anchorOid = row < 0 ? "" : graphModel.oidAt(row)
         page.anchorRow = row
@@ -2759,7 +2768,7 @@ FocusScope {
         // `treeClean`'s guard. `loaded` latches on the first status, so this holds off only a page's opening moment.
         if (!workingTree.loaded)
             return
-        // **A pane about another working copy is that copy's face** — its changes are still there, so nobody is walked
+        // **A pane about another worktree is that worktree's face** — its changes are still there, so nobody is walked
         // off it. The landing below stays armed for the reader coming back to their own row.
         if (!page.wipWritable)
             return
@@ -2806,8 +2815,8 @@ FocusScope {
     function tryPendingWipSelect() {
         if (!page.pendingWipSelect)
             return
-        // Until the walk has prepended our row, row 0 is the commit that was on top or a neighbour copy's row with the
-        // same all-zero id — so ask the graph (`GraphModel.wipRow`, the one place ours is told from theirs).
+        // Until the walk has prepended our row, row 0 is the commit that was on top or a neighbour worktree's row with
+        // the same all-zero id — so ask the graph (`GraphModel.wipRow`, the one place ours is told from theirs).
         if (!graphModel.wipRow)
             return
         page.pendingWipSelect = false
@@ -2871,12 +2880,12 @@ FocusScope {
             page.chosenAnchorOid = oidHex
         }
         // **The working tree's row is not a hash**: nothing can be skipped for it, it shows whatever the tree is now.
-        // Which tree is the row's answer — several copies' rows wear the same all-zero id (`openWipFor`).
+        // Which tree is the row's answer — several worktrees' rows wear the same all-zero id (`openWipFor`).
         if (GitFacts.wipOid(oidHex)) {
             page.openWipFor(row)
             return
         }
-        // A commit is nobody's working copy, so the pane stops being about one.
+        // A commit is nobody's worktree, so the pane stops being about one.
         page.dropCarried()
         // The commit already open: its details and signature answer a hash, which cannot change, so nothing is asked
         // again — the rename gesture's second click is exactly this click (デザイン規約 §グラフ行のダブルクリック).
@@ -3025,8 +3034,8 @@ FocusScope {
             page.listingDrawn()
         }
     }
-    // The working copies on a word of their own too: their listing follows the write apart from the refs', and a
-    // removed copy's row answers only to it.
+    // The worktrees on a word of their own too: their listing follows the write apart from the refs', and a
+    // removed worktree's row answers only to it.
     Connections {
         target: worktreesModel
         function onWorktreesSettled() {
@@ -3072,7 +3081,7 @@ FocusScope {
         }
     }
     Connections {
-        // Whichever list the pane is showing: the file the diff is on belongs to the copy those rows came from, and
+        // Whichever list the pane is showing: the file the diff is on belongs to the worktree those rows came from, and
         // so does the side the pane would move to when it runs out (`followEmptySide`).
         target: page.wipUnstaged
         function onChanged() {
@@ -3160,7 +3169,7 @@ FocusScope {
                         if (name !== "")
                             repoTab.createTag(name, oidHex)
                     }
-                    onCopyAtRequested: (oidHex, name) => page.copyFromBox(oidHex, name)
+                    onWorktreeAtRequested: (oidHex, name) => page.worktreeFromBox(oidHex, name)
                     onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
                     onAddRemoteRequested: publishFlow.startAddRemote()
                 }
@@ -3228,8 +3237,8 @@ FocusScope {
                             }
                             onRowMenuOpenRequested: (oidHex, chip) => page.openRowMenu(oidHex, chip)
                             onRowSwitchRequested: (oidHex, chip) => page.rowDoubleClicked(oidHex, chip)
-                            // The same door the WORKTREES row opens: the tab stands in that copy, where its changes
-                            // can be staged.
+                            // The same door the WORKTREES row opens: the tab stands in that worktree, where its
+                            // changes can be staged.
                             onCarriedOpenRequested: path => page.openRepositoryPathRequested(path)
                             onRowRenameRequested: (oidHex, chip) => page.startRename(oidHex, chip)
                             onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
@@ -3243,7 +3252,7 @@ FocusScope {
                             onCreateBranchRequested: (oidHex, name) => repoTab.createBranch(name, oidHex, true)
                             // Nothing moves: a tag is left on the commit and the tree stays where it is.
                             onCreateTagRequested: (oidHex, name) => repoTab.createTag(name, oidHex)
-                            onCreateCopyRequested: (oidHex, name) => page.copyFromBox(oidHex, name)
+                            onCreateWorktreeRequested: (oidHex, name) => page.worktreeFromBox(oidHex, name)
                             onOpenRepositoryRequested: page.openRepositoryPicker()
                             onAskConfirmed: page.answerRowAsk()
                             onAskCancelled: page.stopRowAsk()
@@ -3258,10 +3267,10 @@ FocusScope {
                             conflictChange: page.diffChange
                             // Read where the file is, and staged only where this window is the one holding it.
                             writable: page.wipWritable
-                            copyName: page.carriedName
+                            worktreeName: page.carriedName
                             // The two swap over during a rebase; the model is where that is already answered. What
-                            // *this* window is in the middle of, so a copy's conflicted file falls back to git's own
-                            // two words the way its rows do (`WipBucketPane`).
+                            // *this* window is in the middle of, so a worktree's conflicted file falls back to git's
+                            // own two words the way its rows do (`WipBucketPane`).
                             sideOurs: page.wipWritable ? workingTree.sideOurs : ""
                             sideTheirs: page.wipWritable ? workingTree.sideTheirs : ""
                             sideColorOurs: page.sideColorOurs
@@ -3319,8 +3328,9 @@ FocusScope {
                         // corner's own property — a `visible` here replaces the one it draws itself by.
                         offered: !page.planActive
                         // One of the three panes is on screen, and each measures its own file list. **The carried
-                        // copy's is asked for its own room**: the tree's pane never lends the corner (its foot is the
-                        // commit button's), so read through it a reader of another copy would get no version at all.
+                        // worktree's is asked for its own room**: the tree's pane never lends the corner (its foot is
+                        // the commit button's), so read through it a reader of another worktree would get no version
+                        // at all.
                         roomLeft: !page.wipShown ? detailsPane.bottomRoom
                                 : page.wipWritable ? wipPane.bottomRoom : carriedPane.bottomRoom
                         anchors.right: parent.right
@@ -3331,13 +3341,13 @@ FocusScope {
                         z: 1
                     }
 
-                    // Another working copy's changes are a pane of their own (デザイン規約 §別の作業コピーを読む): they
+                    // Another worktree's changes are a pane of their own (デザイン規約 §別の worktree を読む): they
                     // can only be read, which is what the commit pane is shaped for.
                     CarriedPane {
                         id: carriedPane
                         anchors.fill: parent
                         visible: page.wipShown && !page.wipWritable
-                        copyName: page.carriedName
+                        worktreeName: page.carriedName
                         files: carriedModel
                         readBucket: page.diffFromWorkingTree ? page.diffKind : ""
                         readPath: page.diffFromWorkingTree ? page.diffPath : ""

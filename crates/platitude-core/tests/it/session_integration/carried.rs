@@ -1,5 +1,5 @@
-//! The other copies' rows against a real second working copy: the pass
-//! that reads them, and what turning the copies off does to a pass in
+//! The other worktrees' rows against a real second worktree: the pass
+//! that reads them, and what turning the worktrees off does to a pass in
 //! flight.
 //!
 //! A slot the test holds keeps the pass on the queue, so the turning-off
@@ -12,20 +12,20 @@ use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened_with, scenario};
 use crate::support::wait::bounded;
 use platitude_core::process::{Limits, Pace, Priority, Slots};
-use platitude_core::session::{CarriedOutcome, CopiesPace, Recording, SessionEvent};
+use platitude_core::session::{CarriedOutcome, Recording, SessionEvent, WorktreesPace};
 
-/// A second working copy of `repo` beside it, carrying an untracked
+/// A second worktree of `repo` beside it, carrying an untracked
 /// file — a row for the graph to draw, leashed to the commit both
-/// copies stand on.
-fn a_copy_beside(repo: &mut TestRepo) {
-    let copy = repo.path.with_file_name("copy");
-    let at = copy.to_string_lossy().into_owned();
-    repo.git(&["worktree", "add", "-b", "copy", &at]);
-    std::fs::write(copy.join("carried.txt"), "u\n").expect("a file in the copy");
+/// worktrees stand on.
+fn a_worktree_beside(repo: &mut TestRepo) {
+    let worktree = repo.path.with_file_name("worktree");
+    let at = worktree.to_string_lossy().into_owned();
+    repo.git(&["worktree", "add", "-b", "worktree", &at]);
+    std::fs::write(worktree.join("carried.txt"), "u\n").expect("a file in the worktree");
 }
 
-/// A graph pass's generation, and whether any of its rows is another copy's.
-fn copy_drawn(event: &SessionEvent) -> Option<(u64, bool)> {
+/// A graph pass's generation, and whether any of its rows is another worktree's.
+fn worktree_drawn(event: &SessionEvent) -> Option<(u64, bool)> {
     let (generation, rows) = match event {
         SessionEvent::LogChunk { generation, rows }
         | SessionEvent::LogReplaced {
@@ -36,46 +36,46 @@ fn copy_drawn(event: &SessionEvent) -> Option<(u64, bool)> {
     Some((generation, rows.iter().any(|r| r.carried.is_some())))
 }
 
-/// The generation of the first graph pass whose rows draw another copy.
-fn draws_a_copy(events: &[SessionEvent]) -> Option<u64> {
+/// The generation of the first graph pass whose rows draw another worktree.
+fn draws_a_worktree(events: &[SessionEvent]) -> Option<u64> {
     events
         .iter()
-        .filter_map(copy_drawn)
+        .filter_map(worktree_drawn)
         .find_map(|(generation, drawn)| drawn.then_some(generation))
 }
 
-fn pass_draws_a_copy(events: &[SessionEvent], generation: u64) -> bool {
+fn pass_draws_a_worktree(events: &[SessionEvent], generation: u64) -> bool {
     events
         .iter()
-        .filter_map(copy_drawn)
+        .filter_map(worktree_drawn)
         .any(|(at, drawn)| at == generation && drawn)
 }
 
-/// A pass that landed after the switch would put the copy's row back up,
+/// A pass that landed after the switch would put the worktree's row back up,
 /// with the tick stopped and nothing left to take it down again.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_pass_in_flight_when_the_copies_are_turned_off_lands_nothing() {
+async fn a_pass_in_flight_when_the_worktrees_are_turned_off_lands_nothing() {
     let (mut repo, _head) = scenario();
-    a_copy_beside(&mut repo);
+    a_worktree_beside(&mut repo);
     let slots = Arc::new(Slots::new(Limits {
         total: 1,
         reserve: 0,
     }));
     let exec = crate::support::exec::isolated().scheduled(Arc::clone(&slots));
     let (sink, session) = opened_with(&repo, exec).await;
-    let with_copy = sink
-        .wait_for("a graph drawing the copy's row", draws_a_copy)
+    let with_worktree = sink
+        .wait_for("a graph drawing the worktree's row", draws_a_worktree)
         .await;
     // Let the opening's pass and the walk it asked for land, so what
     // follows is the test's own subject.
     bounded(
-        "the opening's pass over the copies",
+        "the opening's pass over the worktrees",
         session.wait_for_carried_pass(),
     )
     .await;
     sink.pass_after(
-        "the pass drawing the copy's row",
-        with_copy.saturating_sub(1),
+        "the pass drawing the worktree's row",
+        with_worktree.saturating_sub(1),
     )
     .await;
 
@@ -87,10 +87,10 @@ async fn a_pass_in_flight_when_the_copies_are_turned_off_lands_nothing() {
     .expect("the pool is free");
     let pass = session
         .refresh_carried()
-        .expect("a pass begins: the copies are read and none is out");
+        .expect("a pass begins: the worktrees are read and none is out");
     // Both queued behind the held slot: the rows come down, the walk is
     // asked for again.
-    session.set_copies_pace(CopiesPace::Off);
+    session.set_worktrees_pace(WorktreesPace::Off);
     drop(held);
     assert_eq!(
         bounded("the pass", pass.outcome()).await,
@@ -98,24 +98,24 @@ async fn a_pass_in_flight_when_the_copies_are_turned_off_lands_nothing() {
         "the pass begun before the turning lands nothing"
     );
     let after = sink
-        .pass_after("the graph without the copy's row", with_copy)
+        .pass_after("the graph without the worktree's row", with_worktree)
         .await;
     {
         let events = sink.events.lock().unwrap();
         assert!(
-            !pass_draws_a_copy(&events, after.generation),
+            !pass_draws_a_worktree(&events, after.generation),
             "the rows stayed down"
         );
     }
     bounded("the pass's end", session.wait_for_carried_pass()).await;
     assert!(
         session.refresh_carried().is_none(),
-        "and no pass begins while the copies are off"
+        "and no pass begins while the worktrees are off"
     );
     session.close();
 }
 
-/// What the pane was handed, by copy name, and whether each list was dirty.
+/// What the pane was handed, by worktree name, and whether each list was dirty.
 fn handed_in(events: &[SessionEvent]) -> Vec<(String, bool)> {
     events
         .iter()
@@ -143,7 +143,7 @@ fn ran_since(sink: &CaptureSink, from: usize) -> Vec<String> {
         .collect()
 }
 
-/// A copy's path as `git worktree list` prints it — the spelling the app
+/// A worktree's path as `git worktree list` prints it — the spelling the app
 /// stands the pane on (`Carried::path`), which a temp path spelled by
 /// hand need not match (a short 8.3 name on Windows).
 fn listed_path(repo: &mut TestRepo, name: &str) -> String {
@@ -151,21 +151,21 @@ fn listed_path(repo: &mut TestRepo, name: &str) -> String {
         .lines()
         .filter_map(|line| line.strip_prefix("worktree "))
         .find(|path| path.ends_with(&format!("/{name}")))
-        .expect("the copy is listed")
+        .expect("the worktree is listed")
         .to_string()
 }
 
-/// Opened beside one copy carrying a file, with the opening's pass over,
-/// and the pane standing on that copy with its own read in.
-async fn standing_on_the_copy(
+/// Opened beside one worktree carrying a file, with the opening's pass over,
+/// and the pane standing on that worktree with its own read in.
+async fn standing_on_the_worktree(
     repo: &mut TestRepo,
     exec: platitude_core::process::GitExecutor,
 ) -> (Arc<CaptureSink>, Arc<platitude_core::session::RepoSession>) {
     let (sink, session) = opened_with(repo, exec).await;
     sink.opening_settled(&session).await;
     bounded("the opening's pass", session.wait_for_carried_pass()).await;
-    let at = listed_path(repo, "copy");
-    session.read_carried_status(at, "copy".into());
+    let at = listed_path(repo, "worktree");
+    session.read_carried_status(at, "worktree".into());
     sink.wait_for("the pane's own read", |events| {
         (!handed_in(events).is_empty()).then_some(())
     })
@@ -173,14 +173,15 @@ async fn standing_on_the_copy(
     (sink, session)
 }
 
-/// The pass reads the copy the pane stands on with the rest — the same
-/// `status` — so it hands the pane its list, and the copies' tick reads
-/// that copy once, not once for the rows and again for the pane.
+/// The pass reads the worktree the pane stands on with the rest — the same
+/// `status` — so it hands the pane its list, and the worktrees' tick reads
+/// that worktree once, not once for the rows and again for the pane.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_pass_hands_the_pane_the_copy_it_stands_on() {
+async fn a_pass_hands_the_pane_the_worktree_it_stands_on() {
     let (mut repo, _head) = scenario();
-    a_copy_beside(&mut repo);
-    let (sink, session) = standing_on_the_copy(&mut repo, crate::support::exec::isolated()).await;
+    a_worktree_beside(&mut repo);
+    let (sink, session) =
+        standing_on_the_worktree(&mut repo, crate::support::exec::isolated()).await;
 
     session.set_recording(Recording::WithBackground);
     let from = sink.events.lock().unwrap().len();
@@ -192,7 +193,7 @@ async fn a_pass_hands_the_pane_the_copy_it_stands_on() {
         ),
         "the pass landed"
     );
-    assert_eq!(handed(&sink, from), [("copy".to_string(), true)]);
+    assert_eq!(handed(&sink, from), [("worktree".to_string(), true)]);
     let ran = ran_since(&sink, from);
     assert_eq!(
         ran.iter()
@@ -204,41 +205,42 @@ async fn a_pass_hands_the_pane_the_copy_it_stands_on() {
     session.close();
 }
 
-/// A copy gone clean drops its row, yet the pane standing on it still
-/// hears so: an empty list, handed before the pass leaves clean copies out.
+/// A worktree gone clean drops its row, yet the pane standing on it still
+/// hears so: an empty list, handed before the pass leaves clean worktrees out.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_copy_gone_clean_is_handed_its_empty_list() {
+async fn a_worktree_gone_clean_is_handed_its_empty_list() {
     let (mut repo, _head) = scenario();
-    a_copy_beside(&mut repo);
-    let (sink, session) = standing_on_the_copy(&mut repo, crate::support::exec::isolated()).await;
-    let copy = repo.path.with_file_name("copy");
-    std::fs::remove_file(copy.join("carried.txt")).expect("the copy goes clean");
+    a_worktree_beside(&mut repo);
+    let (sink, session) =
+        standing_on_the_worktree(&mut repo, crate::support::exec::isolated()).await;
+    let worktree = repo.path.with_file_name("worktree");
+    std::fs::remove_file(worktree.join("carried.txt")).expect("the worktree goes clean");
 
     let from = sink.events.lock().unwrap().len();
     let pass = session.refresh_carried().expect("a pass begins");
     bounded("the pass", pass.outcome()).await;
-    assert_eq!(handed(&sink, from), [("copy".to_string(), false)]);
+    assert_eq!(handed(&sink, from), [("worktree".to_string(), false)]);
     session.close();
 }
 
-/// A pass asked while the pane stood on one copy, reading after it moved
-/// to another, hands neither: not the copy left — its files would show
+/// A pass asked while the pane stood on one worktree, reading after it moved
+/// to another, hands neither: not the worktree left — its files would show
 /// under the other's name — and not the other, which the pane's own read
 /// answers.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_pass_hands_nothing_to_a_pane_that_moved_on() {
     let (mut repo, _head) = scenario();
-    a_copy_beside(&mut repo);
+    a_worktree_beside(&mut repo);
     let other = repo.path.with_file_name("other");
     let other_at = other.to_string_lossy().into_owned();
     repo.git(&["worktree", "add", "-b", "other", &other_at]);
-    std::fs::write(other.join("other.txt"), "o\n").expect("a file in the other copy");
+    std::fs::write(other.join("other.txt"), "o\n").expect("a file in the other worktree");
     let slots = Arc::new(Slots::new(Limits {
         total: 1,
         reserve: 0,
     }));
     let exec = crate::support::exec::isolated().scheduled(Arc::clone(&slots));
-    let (sink, session) = standing_on_the_copy(&mut repo, exec).await;
+    let (sink, session) = standing_on_the_worktree(&mut repo, exec).await;
 
     let from = sink.events.lock().unwrap().len();
     // The pass and the pane's next read queue behind the held slot, so the
@@ -253,7 +255,7 @@ async fn a_pass_hands_nothing_to_a_pane_that_moved_on() {
     session.read_carried_status(listed_path(&mut repo, "other"), "other".into());
     drop(held);
     bounded("the pass", pass.outcome()).await;
-    sink.wait_for("the pane's read of the other copy", |events| {
+    sink.wait_for("the pane's read of the other worktree", |events| {
         handed_in(&events[from..])
             .iter()
             .any(|(name, _)| name == "other")

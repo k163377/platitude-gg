@@ -5,7 +5,7 @@
 //! base is what went and nothing else: a hunk thrown out of a file whose
 //! other hunks stayed comes back alone, beside them or without them.
 //!
-//! Read in temporary indexes begun from a copy of the working copy's own
+//! Read in temporary indexes begun from a copy of the worktree's own
 //! index file — its bytes, where `read-tree` would write every entry anew
 //! (ci/baseline/code-costs-windows-x64.md) — so neither `refs/stash`, the
 //! index nor the working tree is touched.
@@ -61,7 +61,7 @@ impl CopyOperation {
 #[derive(Debug, Clone, Copy)]
 pub struct CopyOf<'a> {
     pub workdir: &'a Path,
-    /// The copy's own git directory: its index, and the temporary ones.
+    /// The worktree's own git directory: its index, and the temporary ones.
     pub git_dir: &'a Path,
     /// Tracked paths, as the index and the working tree hold them.
     pub tracked: &'a [String],
@@ -290,7 +290,7 @@ pub async fn record_copy(
     }
     let mut trailers = vec![
         ("Operation", copied.operation.word().to_string()),
-        ("Working-copy", workdir.to_string_lossy().into_owned()),
+        ("Worktree-path", workdir.to_string_lossy().into_owned()),
         ("Worktree", worktree_id(git_dir)),
     ];
     if let Some(branch) = &copied.branch {
@@ -483,7 +483,7 @@ struct IndexCopy {
 }
 
 impl IndexCopy {
-    /// One begun from what the working copy's own index holds now: a copy
+    /// One begun from what the worktree's own index holds now: a copy
     /// of its file, dated as the file is. With no index file yet, HEAD's
     /// tree is read in.
     ///

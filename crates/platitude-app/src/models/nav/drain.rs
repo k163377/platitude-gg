@@ -92,10 +92,10 @@ impl NavSectionModel {
                 .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
                 .unwrap_or_default();
             worktrees_arrived = true;
-            // The same stamp, for the listing a removed copy waits on.
+            // The same stamp, for the listing a removed worktree waits on.
             crate::hub::listing_applied(self.tab_id, &self.section, list.looked);
             self.looked = list.looked;
-            // A bare entry has no working copy to show.
+            // A bare entry has no working tree to show.
             let list = list.entries.into_iter().filter(|w| !w.bare).collect();
             arrived |= self.take(Source::Worktrees { list, current });
         }

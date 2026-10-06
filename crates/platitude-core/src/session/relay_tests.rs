@@ -105,34 +105,34 @@ fn the_uncommitted_row_can_be_taken_off_a_graph_that_was_walked_with_it() {
 }
 
 #[test]
-fn a_copy_is_laid_where_its_reading_puts_it_now() {
-    let copy = |head: u8| Carried {
+fn a_worktree_is_laid_where_its_reading_puts_it_now() {
+    let worktree = |head: u8| Carried {
         name: "seat".into(),
         path: "/tmp/seat".to_string(),
         head: oid(head),
         kinds: Kinds::default(),
     };
 
-    let (was, _) = lay(history(), &standing(None, vec![copy(1)]), Some(oid(3)));
+    let (was, _) = lay(history(), &standing(None, vec![worktree(1)]), Some(oid(3)));
     let at_one = was
         .iter()
         .position(|r| r.carried.is_some())
-        .expect("the copy drew no row");
+        .expect("the worktree drew no row");
     assert_eq!(
         was[at_one + 1].oid_hex,
         oid(1).to_hex(),
         "the row is not above the commit its reading names"
     );
 
-    let (now, _) = lay(was, &standing(None, vec![copy(3)]), Some(oid(3)));
+    let (now, _) = lay(was, &standing(None, vec![worktree(3)]), Some(oid(3)));
     let at_three = now
         .iter()
         .position(|r| r.carried.is_some())
-        .expect("the copy drew no row after it moved");
+        .expect("the worktree drew no row after it moved");
     assert_eq!(
         now[at_three + 1].oid_hex,
         oid(3).to_hex(),
-        "the row stayed on the commit the copy left"
+        "the row stayed on the commit the worktree left"
     );
     assert_eq!(
         now.iter().filter(|r| r.carried.is_some()).count(),
@@ -154,7 +154,7 @@ fn the_row_stands_alone_where_there_is_no_commit_to_leash_to() {
     );
 }
 
-/// The listing learns a copy committed long before its `status` reading
+/// The listing learns a worktree committed long before its `status` reading
 /// does; until the next reading lands, the stale one draws nothing.
 #[test]
 fn a_reading_the_listing_has_moved_past_draws_nothing() {
@@ -180,7 +180,7 @@ fn a_reading_the_listing_has_moved_past_draws_nothing() {
     assert_eq!(
         still_where_the_listing_says(&readings, &unlisted).len(),
         2,
-        "a copy the listing has not named yet lost its row"
+        "a worktree the listing has not named yet lost its row"
     );
 }
 

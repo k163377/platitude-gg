@@ -51,13 +51,13 @@ fn a_row_with_no_object_is_not_in_the_map_from_commit_to_row() {
     assert_eq!(unborn.tracked_oids(), 0, "nothing to wait for either");
 }
 
-/// Another working copy's row, drawn above the commit that copy stands
-/// on, may not move any commit's lane or colour: a copy picked up on
+/// Another worktree's row, drawn above the commit that worktree stands
+/// on, may not move any commit's lane or colour: a worktree picked up on
 /// window focus would re-colour chains under the reader's eyes
-/// (P3-確認事項 §別 worktree の未コミット行). Covers a commit a lane
+/// (P3-確認事項 §別の worktree の未コミット行). Covers a commit a lane
 /// already waits for (`02`, HEAD) and tips nothing waits for (`04`, `06`).
 #[test]
-fn a_row_for_another_copy_moves_no_lane_and_no_colour() {
+fn a_row_for_another_worktree_moves_no_lane_and_no_colour() {
     fn lanes_and_colours(insert_above: &[u8]) -> Vec<(u8, u16, u8)> {
         let mut pool = StrPool::new();
         let mut b = GraphBuilder::new();

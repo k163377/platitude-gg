@@ -936,16 +936,16 @@ async fn the_older_of_two_reads_of_one_file_publishes_nothing() {
     session.close();
 }
 
-/// The pane reads other working copies' files under the same paths, so a
-/// read's file is keyed by the copy as well as the path.
+/// The pane reads other worktrees' files under the same paths, so a
+/// read's file is keyed by the worktree as well as the path.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_copys_file_is_not_the_same_file_as_ours_of_that_name() {
+async fn a_worktrees_file_is_not_the_same_file_as_ours_of_that_name() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "one\n", "root");
     repo.write_file("f.txt", "ours\n");
-    let other = repo.path.parent().expect("a parent").join("other-copy");
+    let other = repo.path.parent().expect("a parent").join("other-worktree");
     repo.git(&["worktree", "add", "--detach", &other.to_string_lossy()]);
-    std::fs::write(other.join("f.txt"), "theirs\n").expect("write the copy's file");
+    std::fs::write(other.join("f.txt"), "theirs\n").expect("write the worktree's file");
 
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
@@ -953,7 +953,7 @@ async fn a_copys_file_is_not_the_same_file_as_ours_of_that_name() {
         path: "f.txt".to_string(),
     };
 
-    // Ours, then the copy's: a reader stepping onto another copy's row.
+    // Ours, then the worktree's: a reader stepping onto another worktree's row.
     session.load_diff(target.clone());
     diffs_reach(&sink, "f.txt", 1).await;
     session.load_carried_diff(other.to_string_lossy().to_string(), target.clone());
@@ -961,12 +961,12 @@ async fn a_copys_file_is_not_the_same_file_as_ours_of_that_name() {
     let published = diffs_of(&sink, "f.txt");
     assert_ne!(
         published[0], published[1],
-        "the two copies hold different bytes under that name"
+        "the two worktrees hold different bytes under that name"
     );
 
-    // Ours is typed over into the copy's bytes. Keyed by the path alone, the
-    // re-read below would match the copy's record and call our file
-    // unmoved, leaving the copy's rows on the pane.
+    // Ours is typed over into the worktree's bytes. Keyed by the path alone, the
+    // re-read below would match the worktree's record and call our file
+    // unmoved, leaving the worktree's rows on the pane.
     repo.write_file("f.txt", "theirs\n");
     assert_eq!(
         crate::support::wait::bounded(
@@ -975,7 +975,7 @@ async fn a_copys_file_is_not_the_same_file_as_ours_of_that_name() {
         )
         .await,
         DiffReadOutcome::Sent,
-        "the re-read of our file was answered against the copy's fingerprint"
+        "the re-read of our file was answered against the worktree's fingerprint"
     );
     assert_eq!(
         diffs_of(&sink, "f.txt").len(),
@@ -985,27 +985,31 @@ async fn a_copys_file_is_not_the_same_file_as_ours_of_that_name() {
     session.close();
 }
 
-/// Copy reads take different times, and the pane shows the copy stepped
-/// onto last.
+/// Worktree reads take different times, and the pane shows the worktree
+/// stepped onto last.
 #[tokio::test(flavor = "multi_thread")]
-async fn the_copy_asked_about_last_is_the_one_the_pane_is_handed() {
+async fn the_worktree_asked_about_last_is_the_one_the_pane_is_handed() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "one\n", "root");
-    let first = repo.path.parent().expect("a parent").join("first-copy");
-    let second = repo.path.parent().expect("a parent").join("second-copy");
+    let first = repo.path.parent().expect("a parent").join("first-worktree");
+    let second = repo
+        .path
+        .parent()
+        .expect("a parent")
+        .join("second-worktree");
     repo.git(&["worktree", "add", "--detach", &first.to_string_lossy()]);
     repo.git(&["worktree", "add", "--detach", &second.to_string_lossy()]);
-    std::fs::write(first.join("f.txt"), "first\n").expect("write the first copy's file");
-    std::fs::write(second.join("f.txt"), "second\n").expect("write the second copy's file");
+    std::fs::write(first.join("f.txt"), "first\n").expect("write the first worktree's file");
+    std::fs::write(second.join("f.txt"), "second\n").expect("write the second worktree's file");
 
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
     let at = |p: &std::path::Path| p.to_string_lossy().to_string();
-    session.read_carried_status(at(&first), "first-copy".to_string());
-    session.read_carried_status(at(&second), "second-copy".to_string());
+    session.read_carried_status(at(&first), "first-worktree".to_string());
+    session.read_carried_status(at(&second), "second-worktree".to_string());
 
     let carried = sink
-        .wait_for("the copy the pane is showing", |events| {
+        .wait_for("the worktree the pane is showing", |events| {
             events
                 .iter()
                 .filter_map(|e| match e {
@@ -1016,11 +1020,11 @@ async fn the_copy_asked_about_last_is_the_one_the_pane_is_handed() {
         })
         .await;
     assert_eq!(
-        carried, "second-copy",
+        carried, "second-worktree",
         "the read the reader stepped off was left on screen"
     );
     // Passed before it starts: the second ask takes the slot on the caller's
-    // thread, so the copy stepped off spends no `status` (`session::latest`).
+    // thread, so the worktree stepped off spends no `status` (`session::latest`).
     let names: Vec<String> = sink
         .events
         .lock()
@@ -1033,8 +1037,8 @@ async fn the_copy_asked_about_last_is_the_one_the_pane_is_handed() {
         .collect();
     assert_eq!(
         names,
-        vec!["second-copy".to_string()],
-        "the copy the reader stepped off answered as well"
+        vec!["second-worktree".to_string()],
+        "the worktree the reader stepped off answered as well"
     );
     session.close();
 }

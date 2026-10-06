@@ -546,12 +546,12 @@ impl RepoSession {
     ///
     /// One rebuild for all of them: asked apiece, a commit made outside
     /// (a ref moved, the tree came clean) asked twice, the second taking
-    /// the first's walk over part-way. The other copies' pass stays apart:
-    /// a status per copy, too slow to wait on (its rows ask for their own
-    /// walk as they land).
+    /// the first's walk over part-way. The other worktrees' pass stays
+    /// apart: a status per worktree, too slow to wait on (its rows ask for
+    /// their own walk as they land).
     pub fn refresh_quick(self: &Arc<Self>) {
         self.settle_snapshots(true);
-        // A refresh asked by hand reads every copy as well.
+        // A refresh asked by hand reads every worktree as well.
         self.refresh_carried();
     }
 

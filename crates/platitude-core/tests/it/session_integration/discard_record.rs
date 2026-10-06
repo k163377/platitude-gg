@@ -258,8 +258,8 @@ async fn a_staged_rename_comes_back_with_both_its_names() {
     session.close();
 }
 
-/// Work thrown away in a linked working copy and brought back from the
-/// main one waits its turn there: a commit accepted in that copy before
+/// Work thrown away in a linked worktree and brought back from the
+/// main one waits its turn there: a commit accepted in that worktree before
 /// the restore takes in only what was staged for it, and the work comes
 /// back staged behind it (破棄記録仕様.md §4). The commit is held by a hook
 /// across the restore's acceptance; the witness is the moment the restore
@@ -267,7 +267,7 @@ async fn a_staged_rename_comes_back_with_both_its_names() {
 /// would let a restore that did not wait pass, since the hook lets go
 /// before such a restore gets to the index.
 #[tokio::test(flavor = "multi_thread")]
-async fn work_brought_back_into_another_copy_waits_for_its_commit() {
+async fn work_brought_back_into_another_worktree_waits_for_its_commit() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "1\n", "c1");
     repo.commit_file("g.txt", "1\n", "c2");
@@ -302,7 +302,7 @@ async fn work_brought_back_into_another_copy_waits_for_its_commit() {
     let entry = found
         .iter()
         .find(|entry| entry.kind == DiscardKind::Discarded)
-        .expect("the linked copy's discard is listed here");
+        .expect("the linked worktree's discard is listed here");
     let started_after = std::sync::Arc::new(std::sync::Mutex::new(None::<bool>));
     {
         let (seen, commit_sink) = (started_after.clone(), side_sink.clone());
@@ -458,10 +458,10 @@ async fn a_repository_inside_stays_off_the_record() {
     session.close();
 }
 
-/// A working copy on no commit yet takes nothing with it: its removal is no
+/// A worktree on no commit yet takes nothing with it: its removal is no
 /// entry, and no failure of the record either.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_working_copy_on_no_commit_goes_off_the_record() {
+async fn a_worktree_on_no_commit_goes_off_the_record() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "1\n", "c1");
     let side = repo.path.with_file_name("side");
@@ -474,13 +474,13 @@ async fn a_working_copy_on_no_commit_goes_off_the_record() {
         &side.to_string_lossy(),
     ]);
     // As the screen has it: the path git lists, which is the one the
-    // removal finds the copy's HEAD by.
-    let copies = repo.git(&["worktree", "list", "--porcelain"]);
-    let side_path = copies
+    // removal finds the worktree's HEAD by.
+    let worktrees = repo.git(&["worktree", "list", "--porcelain"]);
+    let side_path = worktrees
         .lines()
         .filter_map(|line| line.strip_prefix("worktree "))
         .find(|path| path.ends_with("side"))
-        .expect("the copy is listed")
+        .expect("the worktree is listed")
         .to_string();
     let (sink, session) = opened(&repo).await;
 

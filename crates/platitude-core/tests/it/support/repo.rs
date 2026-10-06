@@ -213,7 +213,7 @@ impl TestRepo {
             .expect("spawn git")
     }
 
-    /// Writes a file (creating parent dirs) relative to the work tree.
+    /// Writes a file (creating parent dirs) relative to the working tree.
     pub fn write_file(&self, rel: &str, content: &str) {
         let p = self.path.join(rel);
         if let Some(parent) = p.parent() {

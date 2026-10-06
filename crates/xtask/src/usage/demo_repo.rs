@@ -11,7 +11,7 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   the bottom of them: where the stand-in for it sits when
                   a fold at any level closes over its row (nav-open head)
         dirty     every WIP bucket: staged, unstaged, untracked, renamed
-        embedded  two repositories of their own in the working copy, one
+        embedded  two repositories of their own in the working tree, one
                   with a commit and one without — the entries git answers
                   with as `vendor/nest/` and will not open
         eol       all four line-ending cases, in a directory of LF files
@@ -51,7 +51,7 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   Platitude GG's own record of the rest — a branch deleted
                   here and on origin, a remote's branch deleted and one
                   pushed over, a tag deleted here, on origin, on both at once
-                  and pushed over, a working copy removed, a stash dropped
+                  and pushed over, a worktree removed, a stash dropped
                   and one popped, untracked files deleted, files discarded
         rewrite-merge  a merge inside the stretch a rewrite of the tip
                   would replay: the plan turned down before it opens
@@ -146,7 +146,7 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   so the screen has one to be photographed during
                   (replay-running)
         edges     every string at both ends of what git allows, in Japanese
-        long      a message, a commit and a work tree that all run past
+        long      a message, a commit and a working tree that all run past
                   the pane they are shown in (80 files, 60-odd unstaged)
         spread    41 commits of three files each: the one shape where a
                   choice of commits overflows in both directions at once,
@@ -181,47 +181,47 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         widelines one unstaged file whose lines run far past the pane:
                   the only shape with anywhere sideways to go, so the
                   only one the diff's own bar comes out on (code-send)
-        worktrees six linked working copies, one in each state git can
+        worktrees six linked worktrees, one in each state git can
                   report: ordinary, detached, locked with a reason,
                   locked without one, one whose folder is gone, and one
                   whose folder and branch both run past the pane
-        carried   other working copies holding uncommitted work, so the
+        carried   other worktrees holding uncommitted work, so the
                   rows they draw have something to say: one standing
                   where this window stands (its row goes above the stash
                   on the same commit, holding an untracked file), one on
                   a branch further down holding a staged edit, and one
                   clean (no row at all)
         carried-many  carried, with forty more untracked files in the
-                  copy standing where this window stands: the one shape
-                  the pane reading another copy scrolls in (middle-hand
+                  worktree standing where this window stands: the one shape
+                  the pane reading another worktree scrolls in (middle-hand
                   carried)
-        worktree-detached  one linked copy, detached, with a commit made
-                  in it: the one shape where a working copy stands
+        worktree-detached  one linked worktree, detached, with a commit made
+                  in it: the one shape where a worktree stands
                   somewhere no branch, tag or remote reaches (nav-jump)
-        nested-copy  one linked copy kept in a folder of its own below
-                  the root (copies/nested): the one shape where the
-                  folder above the copy and the folder above the
-                  repository are not the same folder (open-picker copy)
+        nested-worktree  one linked worktree kept in a folder of its own below
+                  the root (worktrees/nested): the one shape where the
+                  folder above the worktree and the folder above the
+                  repository are not the same folder (open-picker worktree)
         tracked-elsewhere  a branch that reads a remote and is checked
-                  out in another copy, one commit past that reading: the
+                  out in another worktree, one commit past that reading: the
                   one shape where a REMOTES row opens on all three of
                   its lines (nav-open)
-        copy-places  where new working copies would go, two of them in
+        worktree-places  where new worktrees would go, two of them in
                   the way before the press: feature/blocked's folder
-                  holds a file, git still lists a copy at fix/listed's,
+                  holds a file, git still lists a worktree at fix/listed's,
                   and feature/free's is free — as is the folder of one
                   branch named too long for the menu row to hold
                   (worktree-add-menu, worktree-box)
         longnames every name the operation panel writes, long enough to
                   be cut — a branch ahead and behind its upstream, and a
-                  copy with a folder of its own (ops-panel <width>,
+                  worktree with a folder of its own (ops-panel <width>,
                   band-actions)
         panel     the operation panel's cards with something in every
                   column: a folder of two branches (topic/), one alone,
                   one parted from its upstream both ways, two held by
-                  other copies (one of them locked), and main two ahead
+                  other worktrees (one of them locked), and main two ahead
                   of origin/main (ops-branch, ops-branch-pick,
-                  ops-stand-copies)
+                  ops-stand-worktrees)
         pictures  a picture in every bucket the diff pane previews from:
                   a logo changed in the tree (art/logo.png), a vector
                   mark changed beside it (art/mark.svg — rows and

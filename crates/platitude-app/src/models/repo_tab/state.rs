@@ -82,7 +82,7 @@ impl Default for RepoTab {
             restore_seq: 0,
             restore_how: String::new(),
             paced_seq: 0,
-            paced_copies: Vec::new(),
+            paced_worktrees: Vec::new(),
             write_watch: crate::models::repo_tab::WriteWatch::default(),
             write_refused: false,
             write_stale_diff: false,
@@ -102,9 +102,9 @@ impl Default for RepoTab {
             ref_push_out: crate::ops::PushOut::default(),
             ref_push_answer: -1,
             ref_push_target: String::new(),
-            copy_out: crate::ops::Press::default(),
-            copy_answer: -1,
-            copy_answer_path: String::new(),
+            worktree_out: crate::ops::Press::default(),
+            worktree_answer: -1,
+            worktree_answer_path: String::new(),
             diff_reread: crate::ops::DiffReread::default(),
             tree_seen: 0,
             tree_emptied: false,
@@ -151,7 +151,7 @@ impl RepoTab {
         asked
     }
 
-    /// The session of the copy this tab was stood in has answered (open
+    /// The session of the worktree this tab was stood in has answered (open
     /// or not), so the count `RepoTab::restand` took goes back. Guarded:
     /// every opening calls it, and one nobody stood for holds no count.
     pub(super) fn stood(&mut self) {
@@ -301,11 +301,11 @@ impl RepoTab {
             .asked(asked.map(platitude_core::OperationId::as_u64));
     }
 
-    /// The add slot's mode word, turned into what core stands the new copy
+    /// The add slot's mode word, turned into what core stands the new worktree
     /// on, and the press written down with its folder so the answer can
     /// say where to go. An unknown word is a caller's bug and makes
     /// nothing.
-    pub(super) fn add_copy(
+    pub(super) fn worktree_add(
         &mut self,
         path: String,
         mode: &str,
@@ -313,14 +313,14 @@ impl RepoTab {
         start: String,
         name: String,
     ) {
-        use platitude_core::worktrees::CopyOn;
+        use platitude_core::worktrees::WorktreeOn;
         let on = match mode {
-            "new" => CopyOn::NewBranch {
+            "new" => WorktreeOn::NewBranch {
                 name: branch,
                 start,
             },
-            "branch" => CopyOn::Branch(branch),
-            "track" => CopyOn::Tracking {
+            "branch" => WorktreeOn::Branch(branch),
+            "track" => WorktreeOn::Tracking {
                 local: branch,
                 remote_ref: start,
             },
@@ -330,9 +330,9 @@ impl RepoTab {
             }
         };
         let asked = self.ask_session(|s| s.add_worktree(path.clone(), on.clone(), name.clone()));
-        self.copy_out
+        self.worktree_out
             .asked(asked.map(platitude_core::OperationId::as_u64));
-        self.copy_answer_path = path;
+        self.worktree_answer_path = path;
     }
 
     /// The reset slot's mode word, turned into core's enum; an unknown

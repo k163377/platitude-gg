@@ -29,14 +29,14 @@ pub(super) struct Taken {
     pub(super) tags: HashSet<String>,
 }
 
-/// Where the session reads from, so an entry from another working copy
+/// Where the session reads from, so an entry from another worktree
 /// says which.
 pub(super) struct Here<'a> {
     pub(super) workdir: Option<PathBuf>,
-    /// Where each working copy stands now, by what the record's `Worktree:`
-    /// names it ([`super::MAIN_COPY`], or its name under
+    /// Where each worktree stands now, by what the record's `Worktree:`
+    /// names it ([`super::MAIN_WORKTREE`], or its name under
     /// `$GIT_DIR/worktrees/`).
-    pub(super) copies: HashMap<String, String>,
+    pub(super) worktrees: HashMap<String, String>,
     pub(super) walked: &'a Walked,
     pub(super) taken: &'a Taken,
     /// `(record line, part)` a `restored` note names.
@@ -60,7 +60,7 @@ pub(super) fn entries(moves: Vec<Settled>, lines: &[Line], here: &Here<'_>) -> V
             kind: settled.found.kind,
             name: settled.found.name,
             remote: String::new(),
-            copy: settled.found.copy,
+            worktree: settled.found.worktree,
             at: settled.found.at,
             parts: vec![part],
         });
@@ -76,7 +76,7 @@ fn from_line(line: &Line, moves: &mut [Option<Settled>], here: &Here<'_>) -> Opt
         kind: DiscardKind::Reset,
         name: String::new(),
         remote: line.get("Remote").to_string(),
-        copy: String::new(),
+        worktree: String::new(),
         at: line.at,
         parts: Vec::new(),
     };
@@ -146,27 +146,27 @@ impl Reading<'_> {
             _ => DiscardKind::Discarded,
         };
         entry.name = line.get("Branch").to_string();
-        // The copy where it stands now — the one the record names, moved
+        // The worktree where it stands now — the one the record names, moved
         // since or not — else where the record says it was.
         let path = self
             .here
-            .copies
+            .worktrees
             .get(line.get("Worktree"))
-            .map_or_else(|| line.get("Working-copy").to_string(), Clone::clone);
-        entry.copy = copy_label(&path, self.here);
+            .map_or_else(|| line.get("Worktree-path").to_string(), Clone::clone);
+        entry.worktree = worktree_label(&path, self.here);
         let named: Vec<(&str, Oid, Oid)> =
             line.all("Moved").into_iter().filter_map(moved_of).collect();
         let reset = take_moves(moves, &named).into_iter().next();
         if let Some(reset) = reset {
             entry.name = reset.found.name.clone();
-            entry.copy = reset.found.copy.clone();
+            entry.worktree = reset.found.worktree.clone();
             entry.parts.push(branch_part(&reset, names));
         }
         entry.parts.push(Part {
             restore: Restore::Changes {
                 copy: line.value,
                 path,
-                // Named once the list is read whole (`read::name_copies`).
+                // Named once the list is read whole (`read::name_worktrees`).
                 git_dir: String::new(),
             },
             tip: line.value,
@@ -280,17 +280,17 @@ impl Reading<'_> {
         }
     }
 
-    /// A working copy removed: back where it was, on what it had out.
+    /// A worktree removed: back where it was, on what it had out.
     fn worktree(&self, entry: &mut Discard) -> Option<()> {
         let line = self.line;
         entry.kind = DiscardKind::RemovedWorktree;
-        let path = line.get("Working-copy");
+        let path = line.get("Worktree-path");
         entry.name = folder_of(path);
         let head = self.first?;
         let free = free_name(path, &|candidate: &str| Path::new(candidate).exists());
         // On the branch it had out while that branch stands; gone, git would
         // make one of its name off a remote's (`worktree add` guesses), so
-        // the copy comes back detached on the commit it stood on.
+        // the worktree comes back detached on the commit it stood on.
         let branch = Some(line.get("Branch"))
             .filter(|branch| self.here.taken.branches.contains(*branch))
             .map(str::to_string);
@@ -518,9 +518,9 @@ fn moved_of(value: &str) -> Option<(&str, Oid, Oid)> {
     Some((reference, old, new))
 }
 
-/// How an entry names the working copy at `path`: its folder, or nothing
+/// How an entry names the worktree at `path`: its folder, or nothing
 /// for the one the session reads from.
-fn copy_label(path: &str, here: &Here<'_>) -> String {
+fn worktree_label(path: &str, here: &Here<'_>) -> String {
     let canonical = std::fs::canonicalize(path).ok();
     if canonical.is_some() && canonical == here.workdir {
         String::new()
@@ -566,7 +566,7 @@ mod tests {
             found: Move {
                 kind,
                 name: name.to_string(),
-                copy: String::new(),
+                worktree: String::new(),
                 at: 90,
                 old: oid(old),
                 new: oid(new),
@@ -583,7 +583,7 @@ mod tests {
     ) -> Here<'a> {
         Here {
             workdir: None,
-            copies: HashMap::new(),
+            worktrees: HashMap::new(),
             walked,
             taken,
             restored,

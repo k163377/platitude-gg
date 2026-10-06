@@ -1,7 +1,7 @@
-//! What a status read spends on the operation a copy has stopped: file
-//! reads under the copy's own git directory, which the opening resolved
+//! What a status read spends on the operation a worktree has stopped: file
+//! reads under the worktree's own git directory, which the opening resolved
 //! (`RepoInfo::git_dir`) — no `rev-parse --git-path` per read, and in a
-//! linked copy its own directory, not the main copy's.
+//! linked worktree its own directory, not the main worktree's.
 
 use platitude_core::session::{Recording, RepoSession, SessionEvent};
 use std::sync::Arc;
@@ -131,38 +131,41 @@ async fn a_stopped_rebase_is_read_without_asking_git_where_its_files_are() {
     session.close();
 }
 
-/// Each copy stands for itself: the main copy stopped mid-rebase, the
+/// Each worktree stands for itself: the main worktree stopped mid-rebase, the
 /// linked one mid-merge, and neither tab says the other's.
 #[tokio::test(flavor = "multi_thread")]
-async fn each_working_copy_reads_its_own_stopped_operation() {
+async fn each_worktree_reads_its_own_stopped_operation() {
     let mut repo = conflicting_branches();
     let linked = repo.path.with_file_name("linked");
     let linked_arg = linked.to_string_lossy().into_owned();
     repo.git(&["worktree", "add", "-b", "topic", &linked_arg, "main"]);
     assert!(
         !repo.git_ok(&["-C", &linked_arg, "merge", "side"]),
-        "the linked copy's merge stops on the conflict"
+        "the linked worktree's merge stops on the conflict"
     );
     repo.git_expect_failure(&["rebase", "side"]);
 
     let (main_sink, main) = opened(&repo).await;
     main_sink.opening_settled(&main).await;
-    let (linked_sink, copy) = opened_at(&linked).await;
-    linked_sink.opening_settled(&copy).await;
+    let (linked_sink, worktree) = opened_at(&linked).await;
+    linked_sink.opening_settled(&worktree).await;
 
     let here = last_standing(&main_sink);
-    assert!(here.rebasing && !here.merging, "main copy: {here:?}");
-    assert_eq!(here.progress, Some((1, 1)), "main copy: {here:?}");
-    assert!(here.op_message.is_empty(), "main copy: {here:?}");
+    assert!(here.rebasing && !here.merging, "main worktree: {here:?}");
+    assert_eq!(here.progress, Some((1, 1)), "main worktree: {here:?}");
+    assert!(here.op_message.is_empty(), "main worktree: {here:?}");
 
     let there = last_standing(&linked_sink);
-    assert!(there.merging && !there.rebasing, "linked copy: {there:?}");
-    assert_eq!(there.progress, None, "linked copy: {there:?}");
-    assert_eq!(there.theirs, "side", "linked copy: {there:?}");
+    assert!(
+        there.merging && !there.rebasing,
+        "linked worktree: {there:?}"
+    );
+    assert_eq!(there.progress, None, "linked worktree: {there:?}");
+    assert_eq!(there.theirs, "side", "linked worktree: {there:?}");
     assert!(
         there.op_message.contains("Merge branch 'side'"),
-        "linked copy: {there:?}"
+        "linked worktree: {there:?}"
     );
     main.close();
-    copy.close();
+    worktree.close();
 }

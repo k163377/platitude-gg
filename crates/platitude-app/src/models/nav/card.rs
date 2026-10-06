@@ -24,7 +24,7 @@ pub struct CardRow {
     /// the folder's card is made (`OpsBranchMenu` makes it on open), so a
     /// folder with nothing to offer drops its row unopened.
     pub offers: bool,
-    /// Another working copy has it out (`item::HELD`).
+    /// Another worktree has it out (`item::HELD`).
     pub held: bool,
     pub ahead: i32,
     pub behind: i32,

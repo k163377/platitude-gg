@@ -73,16 +73,16 @@ impl RepoSession {
         self.runtime.spawn(self.read_diff(target));
     }
 
-    /// The same read aimed at another working copy: one of the files the
+    /// The same read aimed at another worktree: one of the files the
     /// read-only pane is listing (`RepoSession::read_carried_status`).
     ///
-    /// Everything a diff is made of is asked of a working copy by path,
+    /// Everything a diff is made of is asked of a worktree by path,
     /// so only the aim differs. It shares the pane's epoch with the
     /// ordinary reads, so a click either way passes the read in flight.
     ///
     /// Nothing here can be staged from: the pane has every write control
-    /// down while showing another copy, and the fingerprint a partial
-    /// stage is verified against is recorded under the copy it was read
+    /// down while showing another worktree, and the fingerprint a partial
+    /// stage is verified against is recorded under the worktree it was read
     /// from (`last_diff`), so a carried selection matches nothing here.
     pub fn load_carried_diff(self: &Arc<Self>, at: String, target: DiffTarget) {
         let s = Arc::clone(self);
@@ -234,7 +234,7 @@ impl RepoSession {
 
     /// The fingerprint the pane was last handed for `target` in `workdir`,
     /// or `None` when what it holds is a diff of something else — another
-    /// file, or the same path in another working copy.
+    /// file, or the same path in another worktree.
     pub(super) fn diff_seen(&self, workdir: &Path, target: &DiffTarget) -> Option<u64> {
         let slot = relock(&self.last_diff);
         slot.as_ref()

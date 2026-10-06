@@ -12,7 +12,7 @@ Item {
     required property var graphModel
     /// A question is standing over a row.
     required property bool asking
-    /// A step came to rest on a row: read it. The row travels with the id, since every working copy's uncommitted row
+    /// A step came to rest on a row: read it. The row travels with the id, since every worktree's uncommitted row
     /// carries the all-zero one (`RepoPage.openWipFor`).
     signal activated(string oidHex, int atRow)
 

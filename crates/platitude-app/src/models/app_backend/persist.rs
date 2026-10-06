@@ -53,41 +53,43 @@ impl AppBackend {
         self.settings_changed();
     }
 
-    /// Sets how the other working copies are read for uncommitted work —
+    /// Sets how the other worktrees are read for uncommitted work —
     /// automatically, at a fixed interval, or not at all — and the fixed
     /// interval, which is kept whichever is chosen. A word that names no
     /// reading leaves the reading as it is. Zero seconds (the blank input)
     /// keeps the number held; the range is core's
-    /// (`session::copies_interval_secs`), as above.
-    pub(super) fn apply_copies_reading(&mut self, reading: &str, secs: i32) {
-        let chosen = platitude_core::settings::CopiesReading::from_word(reading)
-            .or_else(|| platitude_core::settings::CopiesReading::from_word(&self.copies_reading))
+    /// (`session::worktrees_interval_secs`), as above.
+    pub(super) fn apply_worktrees_reading(&mut self, reading: &str, secs: i32) {
+        let chosen = platitude_core::settings::WorktreesReading::from_word(reading)
+            .or_else(|| {
+                platitude_core::settings::WorktreesReading::from_word(&self.worktrees_reading)
+            })
             .unwrap_or_default();
         let asked = match secs.max(0).unsigned_abs() {
-            0 => self.copies_interval_secs.max(0).unsigned_abs(),
+            0 => self.worktrees_interval_secs.max(0).unsigned_abs(),
             secs => secs,
         };
-        let asked = platitude_core::session::copies_interval_secs(asked);
+        let asked = platitude_core::session::worktrees_interval_secs(asked);
         let secs = asked as i32;
-        if self.copies_reading == chosen.word() && self.copies_interval_secs == secs {
+        if self.worktrees_reading == chosen.word() && self.worktrees_interval_secs == secs {
             return;
         }
-        self.copies_reading = chosen.word().to_string();
-        self.copies_interval_secs = secs;
-        Hub::with(|hub| hub.set_copies_reading(chosen, asked));
+        self.worktrees_reading = chosen.word().to_string();
+        self.worktrees_interval_secs = secs;
+        Hub::with(|hub| hub.set_worktrees_reading(chosen, asked));
         self.settings_changed();
     }
 
     /// Sets the shortest and the longest interval a repository on screen is
-    /// read again at (`refresh`) and the same pair for each other copy read
-    /// automatically (`copies`); `None` leaves a pair as it is, and zero (an
-    /// emptied box) is that bound's default. The range — and a ceiling
-    /// never under its floor — is core's (`session::pace_bounds_secs`), as
-    /// above.
+    /// read again at (`refresh`) and the same pair for each other worktree
+    /// read automatically (`worktrees`); `None` leaves a pair as it is, and
+    /// zero (an emptied box) is that bound's default. The range — and a
+    /// ceiling never under its floor — is core's
+    /// (`session::pace_bounds_secs`), as above.
     pub(super) fn apply_pace_bounds(
         &mut self,
         refresh: Option<(i32, i32)>,
-        copies: Option<(i32, i32)>,
+        worktrees: Option<(i32, i32)>,
     ) {
         let fallback = platitude_core::settings::Defaults::default();
         let held = |secs: i32| secs.max(0).unsigned_abs();
@@ -109,20 +111,26 @@ impl AppBackend {
             ),
             (fallback.refresh_floor_secs, fallback.refresh_ceiling_secs),
         );
-        let copies = pair(
-            copies,
-            (held(self.copies_floor_secs), held(self.copies_ceiling_secs)),
-            (fallback.copies_floor_secs, fallback.copies_ceiling_secs),
+        let worktrees = pair(
+            worktrees,
+            (
+                held(self.worktrees_floor_secs),
+                held(self.worktrees_ceiling_secs),
+            ),
+            (
+                fallback.worktrees_floor_secs,
+                fallback.worktrees_ceiling_secs,
+            ),
         );
         let as_i32 = |(floor, ceiling): (u32, u32)| (floor as i32, ceiling as i32);
         let unchanged = as_i32(refresh) == (self.refresh_floor_secs, self.refresh_ceiling_secs)
-            && as_i32(copies) == (self.copies_floor_secs, self.copies_ceiling_secs);
+            && as_i32(worktrees) == (self.worktrees_floor_secs, self.worktrees_ceiling_secs);
         if unchanged {
             return;
         }
         (self.refresh_floor_secs, self.refresh_ceiling_secs) = as_i32(refresh);
-        (self.copies_floor_secs, self.copies_ceiling_secs) = as_i32(copies);
-        Hub::with(|hub| hub.set_pace_bounds(refresh, copies));
+        (self.worktrees_floor_secs, self.worktrees_ceiling_secs) = as_i32(worktrees);
+        Hub::with(|hub| hub.set_pace_bounds(refresh, worktrees));
         self.settings_changed();
     }
 

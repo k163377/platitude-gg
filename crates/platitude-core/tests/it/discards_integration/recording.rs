@@ -111,7 +111,7 @@ async fn a_copy_holds_the_staged_the_unstaged_and_the_untracked_apart() {
     let found = read(&repo).await;
     let discarded = one(&found, DiscardKind::Discarded);
     assert_eq!(
-        (discarded.name.as_str(), discarded.copy.as_str()),
+        (discarded.name.as_str(), discarded.worktree.as_str()),
         ("main", "")
     );
     let part = &discarded.parts[0];
@@ -483,10 +483,10 @@ async fn a_deleted_tag_comes_back_on_its_own_object() {
     );
 }
 
-/// A working copy removed comes back where it was, on the branch it had
+/// A worktree removed comes back where it was, on the branch it had
 /// out.
 #[tokio::test]
-async fn a_removed_working_copy_comes_back_where_it_was() {
+async fn a_removed_worktree_comes_back_where_it_was() {
     let mut repo = TestRepo::init();
     let c1 = repo.commit_file_id("a.txt", "1\n", "c1");
     let side = repo.path.with_file_name("side");

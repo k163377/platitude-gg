@@ -22,7 +22,7 @@ Item {
             return made
         }
         function row(kind, name, parts, remote) {
-            return { kind: kind, name: name, remote: remote === undefined ? "" : remote, copy: "", at: 0, lost: 0,
+            return { kind: kind, name: name, remote: remote === undefined ? "" : remote, worktree: "", at: 0, lost: 0,
                      parts: parts }
         }
 
@@ -83,8 +83,8 @@ Item {
             compare(shown.restoredAs(tag), "as tag v1")
             const stash = part("stash", { name: "On main: try", look: "stash", files: 1 })
             compare(shown.restoredAs(stash), "back to the stashes")
-            const copy = part("worktree", { name: "C:/work/side", with: "side-work" })
-            compare(shown.restoredAs(copy), "as a worktree there, on side-work")
+            const worktree = part("worktree", { name: "C:/work/side", with: "side-work" })
+            compare(shown.restoredAs(worktree), "as a worktree there, on side-work")
         }
 
         // Where it was taken, in the mark (P3-確認事項 §破棄記録と復元): a remote's tag alone wears the cloud on the

@@ -376,7 +376,7 @@ fn the_short_sections_read_out_of_what_arrived() {
             lock_reason: String::new(),
             prunable: false,
             prune_reason: String::new(),
-            // A real listing always opens with the repository's own copy.
+            // A real listing always opens with the repository's own worktree.
             main: path.ends_with("repo"),
         }
     };
@@ -445,7 +445,7 @@ fn a_worktree_row_wears_the_state_of_its_checkout() {
         },
     );
     model.arrange();
-    // The main copy wears the house and has no words: nobody took it.
+    // The main worktree wears the house and has no words: nobody took it.
     assert_eq!(says(&model, 0, Role::Change), "MAIN");
     assert_eq!(says(&model, 0, Role::OrigPath), "");
     assert_eq!(says(&model, 1, Role::Change), "");
@@ -512,7 +512,7 @@ fn a_branch_and_the_reading_it_names_answer_the_same_pair() {
 
 /// One field, one mark, whichever section the row is in (`item::HELD`).
 #[test]
-fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
+fn a_branch_another_worktree_holds_wears_the_state_in_the_shared_slot() {
     let local = |short: &str, held: bool| platitude_core::session::BranchItem {
         short: short.into(),
         full: format!("refs/heads/{short}").into(),
@@ -603,7 +603,7 @@ fn a_branch_carries_the_upstream_that_is_not_here_in_the_shared_slot() {
 /// What the `switch` / `branch --delete` rows ask before offering
 /// (`worktree_holding`).
 #[test]
-fn the_worktree_holding_a_branch_answers_for_every_other_copy() {
+fn the_worktree_holding_a_branch_answers_for_every_other_worktree() {
     let entry = |path: &str, branch: Option<&str>| platitude_core::worktrees::WorktreeEntry {
         path: path.to_string(),
         branch: branch.map(str::to_string),
@@ -630,7 +630,7 @@ fn the_worktree_holding_a_branch_answers_for_every_other_copy() {
     );
     model.arrange();
     assert_eq!(model.worktree_holding("topic".to_string()), "C:/work/other");
-    // The copy this window is in refuses nothing — moving onto the
+    // The worktree this window is in refuses nothing — moving onto the
     // branch it already has out is a no-op.
     assert_eq!(model.worktree_holding("main".to_string()), "");
     assert_eq!(model.worktree_holding("nobody".to_string()), "");

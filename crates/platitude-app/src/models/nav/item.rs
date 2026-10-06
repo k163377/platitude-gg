@@ -20,7 +20,7 @@ pub struct NavItem {
     /// guarded by `folder`.
     pub(super) change: String,
     pub(super) bucket: String,
-    /// Display grouping of worktree rows: untracked files count as
+    /// Display grouping of working-tree rows: untracked files count as
     /// `unstaged` here while `bucket` keeps the real routing for diffs
     /// and staging.
     pub(super) group: String,
@@ -77,11 +77,11 @@ pub const LOCKED: &str = "LOCKED";
 /// `git worktree prune` would drop this entry — the folder it names is
 /// gone from where git's administrative file says it is.
 pub const PRUNABLE: &str = "PRUNABLE";
-/// The repository's own working copy (`WorktreeEntry::main`). Last of
+/// The repository's own worktree (`WorktreeEntry::main`). Last of
 /// the three, and the two above never land on it: git refuses
-/// `worktree lock` on it, and `worktree prune` looks only at linked copies.
+/// `worktree lock` on it, and `worktree prune` looks only at linked worktrees.
 pub const MAIN: &str = "MAIN";
-/// What a **branch** row puts in the slot: another working copy has it
+/// What a **branch** row puts in the slot: another worktree has it
 /// checked out, so no move can land here (`BranchItem::held_elsewhere`) —
 /// the question the WORKTREES rows' marks answer, so it shares their seat.
 pub const HELD: &str = "HELD";

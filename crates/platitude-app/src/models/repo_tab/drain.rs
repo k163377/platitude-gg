@@ -21,7 +21,7 @@ impl RepoTab {
         // alike: a classification read a second time sequences the screen
         // twice off one answer.
         self.write_answers.clear();
-        self.paced_copies.clear();
+        self.paced_worktrees.clear();
         self.commit_out.new_notify();
         self.read_commit_out();
         self.branch_delete_out.new_notify();
@@ -32,8 +32,8 @@ impl RepoTab {
         self.read_push_out();
         self.ref_push_out.new_notify();
         self.read_ref_push_out();
-        self.copy_out.new_notify();
-        self.read_copy_out();
+        self.worktree_out.new_notify();
+        self.read_worktree_out();
         self.clear_write_group();
         for msg in batch {
             match msg {
@@ -41,9 +41,9 @@ impl RepoTab {
                     self.state = "open".into();
                     self.title = title;
                     // The picker opens beside the repository, not the
-                    // linked copy the tab stands in (`Hub::home_copy`) —
-                    // the copies' folder holds only copies of this one.
-                    let beside = Hub::with(|hub| hub.home_copy(self.tab_id))
+                    // linked worktree the tab stands in (`Hub::home_worktree`) —
+                    // the worktrees' folder holds only worktrees of this one.
+                    let beside = Hub::with(|hub| hub.home_worktree(self.tab_id))
                         .flatten()
                         .unwrap_or_else(|| path.clone());
                     self.picker_folder_url = picker_folder_url(std::path::Path::new(&beside));
@@ -55,14 +55,14 @@ impl RepoTab {
                     path,
                     message,
                 } => {
-                    // A linked copy that would not open is stood back in
+                    // A linked worktree that would not open is stood back in
                     // the repository's own one, silently (デザイン規約
                     // §タブの所作「立てない所へは立たない」); only a refusal
                     // with nowhere left to fall reaches the screen. The
                     // doors stay held (`RepoTab::stood`): let go of here,
-                    // they would open for a turn on no copy before the
+                    // they would open for a turn on no worktree before the
                     // next stand.
-                    if Hub::with(|hub| hub.home_copy(self.tab_id))
+                    if Hub::with(|hub| hub.home_worktree(self.tab_id))
                         .flatten()
                         .is_some()
                     {
@@ -199,8 +199,12 @@ impl RepoTab {
                 // Arrives between this write's start and its end, so the
                 // flag is already standing when the answer below is read.
                 TabMsg::WriteStopped => self.last_write_stopped = true,
-                TabMsg::PacedRead { copy: None } => self.paced_seq = self.paced_seq.wrapping_add(1),
-                TabMsg::PacedRead { copy: Some(path) } => self.paced_copies.push(path),
+                TabMsg::PacedRead { worktree: None } => {
+                    self.paced_seq = self.paced_seq.wrapping_add(1)
+                }
+                TabMsg::PacedRead {
+                    worktree: Some(path),
+                } => self.paced_worktrees.push(path),
                 TabMsg::WriteState {
                     id,
                     kind,
@@ -372,8 +376,8 @@ impl RepoTab {
             self.read_ref_push_out();
             answered_for = true;
         }
-        if self.copy_out.answered(id, at) {
-            self.read_copy_out();
+        if self.worktree_out.answered(id, at) {
+            self.read_worktree_out();
             answered_for = true;
         }
         if !answered_for {
@@ -425,11 +429,11 @@ impl RepoTab {
         self.ref_push_target = self.ref_push_out.branch().to_string();
     }
 
-    /// The same for the working copy a menu asked for. Its folder is the
-    /// press's own, written down as it was asked (`add_copy`).
-    fn read_copy_out(&mut self) {
-        self.copy_answer = self
-            .copy_out
+    /// The same for the worktree a menu asked for. Its folder is the
+    /// press's own, written down as it was asked (`worktree_add`).
+    fn read_worktree_out(&mut self) {
+        self.worktree_answer = self
+            .worktree_out
             .answer()
             .and_then(|at| i32::try_from(at).ok())
             .unwrap_or(-1);
@@ -523,7 +527,7 @@ fn report_word(kind: ReportKind) -> &'static str {
 }
 
 /// Whether a write of this kind can take a name a discard log's restore
-/// would go under (破棄記録仕様.md §4) — a working copy made takes its
+/// would go under (破棄記録仕様.md §4) — a worktree made takes its
 /// folder and the branch it makes — or hold a lost commit again.
 fn names_taken(kind: OperationKind) -> bool {
     matches!(

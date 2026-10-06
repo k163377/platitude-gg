@@ -160,11 +160,11 @@ async fn work_comes_back_as_it_was_staged() {
     assert_eq!(repo.git(&["show", ":a.txt"]), "2");
 }
 
-/// The copy names the working copy it came from as git does, so work
+/// The copy names the worktree it came from as git does, so work
 /// thrown out of a repository that moved since goes back into it where it
-/// stands now — and into nowhere, said so, once the copy is gone.
+/// stands now — and into nowhere, said so, once the worktree is gone.
 #[tokio::test]
-async fn work_goes_back_into_its_copy_where_it_stands_now() {
+async fn work_goes_back_into_its_worktree_where_it_stands_now() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "1\n", "c1");
     repo.write_file("a.txt", "2\n");
@@ -179,7 +179,7 @@ async fn work_goes_back_into_its_copy_where_it_stands_now() {
         matches!(&part.restore, Restore::Changes { path, .. } if same_dir(path, &repo.path)),
         "{part:?}"
     );
-    assert_eq!(found[0].copy, "", "the copy read from");
+    assert_eq!(found[0].worktree, "", "the worktree read from");
     assert_eq!(restored(&repo, &part.restore).await, Restored::Whole);
     assert_eq!(repo.git(&["status", "--porcelain=v1"]), "M a.txt");
 
@@ -199,10 +199,10 @@ async fn work_goes_back_into_its_copy_where_it_stands_now() {
     assert!(refused.to_string().contains("is gone"), "{refused}");
 }
 
-/// The main working copy is named apart from every linked one — one in a
+/// The main worktree is named apart from every linked one — one in a
 /// folder `main` too — so its work goes back into it.
 #[tokio::test]
-async fn the_main_copys_work_goes_back_into_it_beside_a_copy_in_main() {
+async fn the_main_worktrees_work_goes_back_into_it_beside_a_worktree_in_main() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "1\n", "c1");
     let linked = repo.path.with_file_name("main");
@@ -286,11 +286,11 @@ async fn a_staged_half_the_working_tree_held_comes_back_unstaged() {
     assert_eq!(repo.git(&["show", ":f.txt"]), "1\nX\n3\n4\n5\n6\n7\n8");
 }
 
-/// A folder left where a working copy was removed is no working copy: work
+/// A folder left where a worktree was removed is no worktree: work
 /// thrown away there is refused, not "put back" into the repository the
 /// folder sits in — which would answer for the folder and take nothing.
 #[tokio::test]
-async fn work_into_a_folder_left_by_a_removed_copy_is_refused() {
+async fn work_into_a_folder_left_by_a_removed_worktree_is_refused() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "1\n", "c1");
     let inner = repo.path.join("inner");
@@ -335,7 +335,7 @@ async fn work_into_a_folder_left_by_a_removed_copy_is_refused() {
     assert!(refused.is_err(), "{refused:?}");
 }
 
-/// Work that would not go on over what the working copy holds now is not
+/// Work that would not go on over what the worktree holds now is not
 /// put in it: it waits as a stash entry holding the same differences — the
 /// same tree over the same bases — the working tree untouched.
 #[tokio::test]
@@ -500,7 +500,7 @@ async fn a_file_where_a_folder_would_go_keeps_the_work_out() {
     );
 }
 
-/// A merge standing in the copy keeps the work out: its staged half would
+/// A merge standing in the worktree keeps the work out: its staged half would
 /// go into the merge's commit.
 #[tokio::test]
 async fn a_merge_standing_keeps_the_work_out() {
@@ -710,9 +710,9 @@ async fn a_tag_comes_back_as_its_own_object() {
 }
 
 /// A branch with its upstream, a tag on its own object, a stash entry with
-/// its message and a working copy on its branch — each git's own write.
+/// its message and a worktree on its branch — each git's own write.
 #[tokio::test]
-async fn names_a_stash_and_a_working_copy_come_back_as_git_writes_them() {
+async fn names_a_stash_and_a_worktree_come_back_as_git_writes_them() {
     let mut repo = TestRepo::init();
     let c1 = repo.commit_file_id("a.txt", "1\n", "c1");
     repo.git(&["tag", "--annotate", "-m", "first", "v1"]);

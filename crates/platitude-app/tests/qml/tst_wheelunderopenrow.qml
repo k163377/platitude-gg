@@ -21,7 +21,7 @@ Item {
     ToolTip.policy: ToolTip.Manual
 
     /// The section's model, cut down: rows by name, and one upstream line under every branch (`NavFacts.answers`) —
-    /// also what a working copy's row asks about the branch it holds, as the branches' section would answer.
+    /// also what a worktree's row asks about the branch it holds, as the branches' section would answer.
     component Rows: ListModel {
         function rowOfName(name) {
             for (let i = 0; i < count; ++i) {
@@ -52,10 +52,10 @@ Item {
     Rows {
         id: rows
     }
-    /// WORKTREES, for the one case on a row whose lines put a tip out (its path): each copy holds the branch of its
+    /// WORKTREES, for the one case on a row whose lines put a tip out (its path): each worktree holds the branch of its
     /// own name, so it has lines to open.
     Rows {
-        id: copies
+        id: worktrees
     }
 
     /// `SidebarRowGestures`, cut down: the key a row hands up becomes the open one, and the hand is counted.
@@ -120,12 +120,12 @@ Item {
         /// WORKTREES in the same place, shown for the one case on it — a list of its own, as in the sidebar: a view
         /// handed another model keeps rows it uses again on the old model's names.
         NavList {
-            id: copyList
+            id: worktreeList
             width: 260
             height: Theme.rowHeight * 5
             expanded: false
-            sectionModel: copies
-            branchesModel: copies
+            sectionModel: worktrees
+            branchesModel: worktrees
             gestures: gestures
             offersFacts: true
             kindHint: "worktree"
@@ -154,8 +154,8 @@ Item {
                     "orig_name": "", "is_head": false, "has_remote": false, "only_remote": false, "has_pr": false,
                     "depth": 0, "folder": i === testCase.folderRow, "eol_mark": false, "ahead": 0, "behind": 0
                 })
-                // A copy's row is named by its folder and carries the branch it holds in `bucket` (`NavFacts`).
-                copies.append({
+                // A worktree's row is named by its folder and carries the branch it holds in `bucket` (`NavFacts`).
+                worktrees.append({
                     "name": "w" + name, "full": "w" + name, "oid_hex": "", "change": "", "bucket": name,
                     "orig_path": "", "orig_name": "", "is_head": false, "has_remote": false, "only_remote": false,
                     "has_pr": false, "depth": 0, "folder": false, "eol_mark": false, "ahead": 0, "behind": 0
@@ -170,7 +170,7 @@ Item {
         /// And ends with the list as it began: BRANCHES, the height of five rows.
         function cleanup() {
             testCase.handOff()
-            copyList.expanded = false
+            worktreeList.expanded = false
             list.expanded = true
             testCase.view = list
             list.height = Theme.rowHeight * 5
@@ -249,12 +249,12 @@ Item {
             verify(row.washLit, "and the row keeps its light until the hand moves")
         }
 
-        /// A row whose lines have put a tip out (a working copy's path) is held by that tip while the hand walks into
+        /// A row whose lines have put a tip out (a worktree's path) is held by that tip while the hand walks into
         /// it — not when the reader's scroll takes the row away: its lines and the tip go at once, its light stays.
         function test_a_row_holding_its_path_tip_drops_it_with_its_lines() {
             list.expanded = false
-            copyList.expanded = true
-            testCase.view = copyList
+            worktreeList.expanded = true
+            testCase.view = worktreeList
             testCase.scrollTo(Theme.rowHeight * 5)
             const handY = Theme.rowHeight + 3
             const row = testCase.restAt(handY)
@@ -270,11 +270,11 @@ Item {
             row.factsTipOutChanged.connect(note)
             // A flick, not the wheel: QtTest's own tip stands over the row's line, where the hand is (the app's stands
             // beside the list — `SharedToolTip.tipBeside`), and would take the notch.
-            const from = copyList.contentY
-            copyList.flick(0, 600)
-            tryCompare(copyList, "moving", false, undefined, "the flick has come to rest")
+            const from = worktreeList.contentY
+            worktreeList.flick(0, 600)
+            tryCompare(worktreeList, "moving", false, undefined, "the flick has come to rest")
             row.factsTipOutChanged.disconnect(note)
-            verify(copyList.contentY < from, "the flick moved the rows down past the hand")
+            verify(worktreeList.contentY < from, "the flick moved the rows down past the hand")
             compare(openAsTipWent, "", "the path went with the lines — none left up a beat")
             compare(gestures.openKey, "", "the row slid out from under the hand and its lines went")
             testCase.turnPassed()

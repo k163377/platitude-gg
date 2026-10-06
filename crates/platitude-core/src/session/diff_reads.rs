@@ -188,7 +188,7 @@ impl RepoSession {
         }
     }
 
-    /// The same re-read aimed at another working copy, for the read-only
+    /// The same re-read aimed at another worktree, for the read-only
     /// pane's own tick ([`Self::load_carried_diff`]).
     pub fn refresh_carried_diff(self: &Arc<Self>, at: String, target: DiffTarget) {
         self.runtime.spawn(self.reread(PathBuf::from(at), target));

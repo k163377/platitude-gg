@@ -100,8 +100,8 @@ fn keeps_seats(dir: &str) -> bool {
 }
 
 /// Whether the tree a worktree verb names is a seat of *this* roster;
-/// corpus copies, topical trees and throwaways go through even when laid
-/// out the same way.
+/// the corpus's worktrees, topical trees and throwaways go through even
+/// when laid out the same way.
 ///
 /// The base (`-C <dir>` / a `cd`) is resolved too: left relative, it
 /// leaves the target relative, which names no seat and lets the line

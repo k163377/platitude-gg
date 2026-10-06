@@ -178,7 +178,7 @@ pub fn rebase_standing(git_dir: &Path) -> (Option<crate::conflict::Progress>, Re
 
 /// How far the standing rebase has got — for a replay still running too,
 /// whose number the screen counts out several times a second. `git_dir` is
-/// the work tree's own git directory as `repo::open` resolved it (linked
+/// the worktree's own git directory as `repo::open` resolved it (linked
 /// worktrees included), which is where its rebase state lives.
 ///
 /// `None` both for no standing rebase and for unreadable files: either way

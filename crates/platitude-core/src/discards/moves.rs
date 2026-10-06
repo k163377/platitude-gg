@@ -18,7 +18,7 @@ pub(super) struct Move {
     pub(super) kind: DiscardKind,
     /// The branch it moved; empty for a move made on a detached HEAD.
     pub(super) name: String,
-    pub(super) copy: String,
+    pub(super) worktree: String,
     pub(super) at: i64,
     pub(super) old: Oid,
     pub(super) new: Oid,
@@ -62,7 +62,7 @@ pub(super) fn branch_moves(branch: &str, lines: &[Line]) -> Vec<Move> {
             (line.new != before.new).then(|| Move {
                 kind,
                 name: branch.to_string(),
-                copy: String::new(),
+                worktree: String::new(),
                 at: line.at,
                 old: before.new,
                 new: line.new,
@@ -72,7 +72,7 @@ pub(super) fn branch_moves(branch: &str, lines: &[Line]) -> Vec<Move> {
         .collect()
 }
 
-/// The lines of a copy's HEAD reflog that may have taken commits away: the
+/// The lines of a worktree's HEAD reflog that may have taken commits away: the
 /// branch moves its branch's own reflog holds (and loses with the branch),
 /// a detached HEAD left behind, and the deletes another tool wrote here.
 ///
@@ -84,10 +84,15 @@ pub(super) fn branch_moves(branch: &str, lines: &[Line]) -> Vec<Move> {
 /// The lines between a rebase's return and its start are its own work —
 /// its picks, and what an `exec` it ran wrote (a reword's
 /// `commit (amend)`): only the start is asked about (§1: what an operation
-/// did on its way is not listed). `folder` names the copy for a detached
-/// HEAD left behind; `copy` is how an entry names the copy (empty for the
-/// one the session stands in).
-pub(super) fn head_moves(folder: &str, copy: &str, on: Option<&str>, lines: &[Line]) -> Vec<Move> {
+/// did on its way is not listed). `folder` names the worktree for a detached
+/// HEAD left behind; `worktree` is how an entry names the worktree (empty for
+/// the one the session stands in).
+pub(super) fn head_moves(
+    folder: &str,
+    worktree: &str,
+    on: Option<&str>,
+    lines: &[Line],
+) -> Vec<Move> {
     let mut out = Vec::new();
     let mut standing = on.map(str::to_string);
     let mut in_rebase = false;
@@ -95,7 +100,7 @@ pub(super) fn head_moves(folder: &str, copy: &str, on: Option<&str>, lines: &[Li
         let made = |kind, name: &str, old: Oid, detached: bool| Move {
             kind,
             name: name.to_string(),
-            copy: copy.to_string(),
+            worktree: worktree.to_string(),
             at: line.at,
             old,
             new: line.new,
@@ -370,7 +375,7 @@ mod tests {
         let leaves = head_moves("c", "c", Some("main"), &lines);
         assert_eq!(leaves.len(), 1);
         assert_eq!(
-            (leaves[0].kind, leaves[0].old, leaves[0].copy.as_str()),
+            (leaves[0].kind, leaves[0].old, leaves[0].worktree.as_str()),
             (DiscardKind::LeftDetached, oid(A), "c")
         );
     }

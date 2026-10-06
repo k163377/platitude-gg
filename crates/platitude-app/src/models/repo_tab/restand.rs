@@ -1,23 +1,23 @@
-//! What a tab lets go of when it is stood in another working copy of
+//! What a tab lets go of when it is stood in another worktree of
 //! the repository it is showing (`RepoTab::restand`).
 
 use super::*;
 
 impl RepoTab {
-    /// Back to before the copy being left was read.
+    /// Back to before the worktree being left was read.
     ///
-    /// What stays is what the repository answered, which a linked copy
+    /// What stays is what the repository answered, which a linked worktree
     /// answers the same: who this tab is and what it is called, identity
     /// and signing settings, remotes, merge tools, the eye on the tags and
     /// a commit's signature. Everything else goes, and a field added to
-    /// this model belongs here — it is the copy's, or an answer the
+    /// this model belongs here — it is the worktree's, or an answer the
     /// retired sink never delivers (`Hub::let_go_of_session`).
     /// `write_seq`, `move_ask_seq` and `paced_seq` stay too: the staying
     /// page reads them as rises (`RepoPage.seenWriteSeq`).
     ///
     /// Written out, not `*self = Self::default()`: dropping the value
     /// deletes its QObject, and the next slot call aborts ("No proxy").
-    pub(super) fn forget_the_copy(&mut self) {
+    pub(super) fn forget_the_worktree(&mut self) {
         self.error = String::new();
         self.error_kind = String::new();
         self.error_path = String::new();
@@ -77,16 +77,16 @@ impl RepoTab {
         self.ref_push_out = crate::ops::PushOut::default();
         self.ref_push_answer = -1;
         self.ref_push_target = String::new();
-        self.copy_out = crate::ops::Press::default();
-        self.copy_answer = -1;
-        self.copy_answer_path = String::new();
+        self.worktree_out = crate::ops::Press::default();
+        self.worktree_answer = -1;
+        self.worktree_answer_path = String::new();
         self.write_report_kind = String::new();
         self.write_report_remote = String::new();
         self.write_report_name = String::new();
         self.write_report_reason = String::new();
         self.move_ask_local = String::new();
         self.move_ask_start = String::new();
-        self.paced_copies = Vec::new();
+        self.paced_worktrees = Vec::new();
         self.auto_fetch_running = false;
         self.fetch_failures = 0;
         self.fetch_log_raised = false;

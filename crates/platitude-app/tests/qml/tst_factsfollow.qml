@@ -34,7 +34,7 @@ Item {
         id: facts
         width: 300
         row: stubRow
-        // The table's shape (`NavFacts.lines`): a line naming a branch, the copy holding it — the same commit, so
+        // The table's shape (`NavFacts.lines`): a line naming a branch, the worktree holding it — the same commit, so
         // the one band (`withAbove`) — and one naming nothing.
         lines: [{ "mark": "branch", "markTint": Theme.accent, "text": "main", "tone": Theme.textSecondary,
                   "ahead": 0, "behind": 0, "note": "", "to": { "key": "branch:main", "oid": "abc" },
@@ -65,13 +65,13 @@ Item {
             compare(root.presses, 0, "and not as the row's own click")
         }
 
-        /// The copy holding the branch is where the branch is, so a hand on either lights both.
+        /// The worktree holding the branch is where the branch is, so a hand on either lights both.
         function test_two_lines_going_to_one_place_are_one_band() {
-            const copy = facts.lineWordsMiddle(1)
-            mouseMove(facts, copy.x, copy.y)
-            tryVerify(() => facts.lineAimed(1), undefined, "the copy's line is lit")
+            const worktree = facts.lineWordsMiddle(1)
+            mouseMove(facts, worktree.x, worktree.y)
+            tryVerify(() => facts.lineAimed(1), undefined, "the worktree's line is lit")
             verify(facts.lineAimed(0), "and the branch's line with it, in the one band")
-            mouseClick(facts, copy.x, copy.y)
+            mouseClick(facts, worktree.x, worktree.y)
             compare(root.followed, ["branch:main"], "the press goes where the band goes")
             compare(root.presses, 0)
         }

@@ -64,7 +64,7 @@ impl GitFacts {
     }
 
     /// What a right-click on a chip of that word aims the menu at: the ref
-    /// kinds, and `worktree` for a working copy's folder chip — a copy has a
+    /// kinds, and `worktree` for a worktree's folder chip — a worktree has a
     /// menu (its WORKTREE card), where it has no name to rename or switch
     /// to (`ref_kind`). `""` for the detached HEAD.
     #[qslot]
@@ -72,8 +72,8 @@ impl GitFacts {
         crate::encode::menu_kind_word(&kind).to_string()
     }
 
-    /// What the WORKTREE card offers for one copy (`RefWorktreeMenu.standOn`):
-    /// `state` is the copy's row word (`models::nav::item` — `MAIN` /
+    /// What the WORKTREE card offers for one worktree (`RefWorktreeMenu.standOn`):
+    /// `state` is the worktree's row word (`models::nav::item` — `MAIN` /
     /// `LOCKED` / `PRUNABLE` / empty), `here` whether the tab stands in it.
     #[qslot]
     fn worktree_card_offers(&self, state: String, here: bool, busy_count: i32) -> Vec<String> {
@@ -89,13 +89,13 @@ impl GitFacts {
         .collect()
     }
 
-    /// The two rows that make a working copy (`offers::copy_rows`), as
+    /// The two rows that make a worktree (`offers::worktree_rows`), as
     /// words: `here`, then `checkout-branch` / `checkout-track`. `kind` is
     /// the row's word, empty on a commit row that draws no name;
     /// `local_exists` whether a remote row's local branch is there.
     #[qslot]
     #[expect(clippy::too_many_arguments)]
-    fn copy_offers(
+    fn worktree_offers(
         &self,
         kind: String,
         full: String,
@@ -106,7 +106,7 @@ impl GitFacts {
         held_by_worktree: String,
         local_exists: bool,
     ) -> Vec<String> {
-        platitude_core::offers::copy_rows(
+        platitude_core::offers::worktree_rows(
             platitude_core::offers::RefKind::from_word(&kind),
             &full,
             &oid_hex,
@@ -451,7 +451,7 @@ impl GitFacts {
     }
 
     /// The same for a branch alone, which git also refuses to open with `-`
-    /// or to call `HEAD` — what the new copy's box asks, whose name git
+    /// or to call `HEAD` — what the new worktree's box asks, whose name git
     /// hands on as an option otherwise (`platitude_core::branch`).
     #[qslot]
     fn valid_branch_name(&self, name: String) -> bool {

@@ -227,7 +227,7 @@ async fn every_command_of_a_compound_write_carries_its_id() {
     session.close();
 }
 
-/// A detached working copy made in a terminal reaches the graph only
+/// A detached worktree made in a terminal reaches the graph only
 /// through the walk the worktree listing asks for, and the write whose
 /// listing found it is not settled until that walk answers. The walk is
 /// parked from inside (`PassDoors`), so "not settled" is read off a pass
@@ -241,7 +241,7 @@ async fn a_write_is_not_settled_until_the_reads_its_listings_asked_for_have_land
 
     // Taken outside the window, with a commit of its own: no ref moves,
     // and the commit is in the graph only if the listing's walk names it.
-    let elsewhere = tempfile::tempdir().expect("a folder for the copy");
+    let elsewhere = tempfile::tempdir().expect("a folder for the worktree");
     let spike = elsewhere.path().join("spike");
     repo.git(&["worktree", "add", "--detach", &spike.to_string_lossy()]);
     std::fs::write(spike.join("idea.txt"), "an idea\n").expect("write the spike's file");

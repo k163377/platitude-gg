@@ -1,6 +1,6 @@
 //! Laying a walked graph out again with the synthetic rows as the
 //! readings have them now — this window's uncommitted row and every
-//! other working copy's.
+//! other worktree's.
 //!
 //! Whether the uncommitted row stands is the status's to say and the
 //! walk's to draw, and the two are separate processes that land in
@@ -30,12 +30,12 @@ pub(super) struct Standing {
 impl RepoSession {
     /// What the synthetic rows stand on right now.
     ///
-    /// A copy the listing has already moved past draws nothing, and its
-    /// reading is asked for again on the spot: the listing learns a copy
-    /// committed long before that copy's `status` reading does, and drawn
-    /// from the older reading the row would stand on a commit the copy
-    /// has left. The pass does not wait for that read — this window's
-    /// graph would be paced by another working tree
+    /// A worktree the listing has already moved past draws nothing, and its
+    /// reading is asked for again on the spot: the listing learns a worktree
+    /// committed long before that worktree's `status` reading does, and
+    /// drawn from the older reading the row would stand on a commit the
+    /// worktree has left. The pass does not wait for that read — this
+    /// window's graph would be paced by another worktree
     /// (デザイン規約 §未コミット行が名乗るもの).
     pub(super) fn standing_rows(self: &Arc<Self>) -> Standing {
         Standing {
@@ -44,13 +44,13 @@ impl RepoSession {
         }
     }
 
-    /// Where the copies stood when a listing last named them, and which
-    /// copies there are to read (`carried::Copies`, `session::pace`).
+    /// Where the worktrees stood when a listing last named them, and which
+    /// worktrees there are to read (`carried::OtherWorktrees`, `session::pace`).
     ///
-    /// Every listing writes it, the copies pass's own included
-    /// (`carried::pass_over_copies`): a record older than a reading would
-    /// drop the row of a copy whose reading is the fresher of the two.
-    pub(super) fn note_copy_heads(
+    /// Every listing writes it, the worktree pass's own included
+    /// (`carried::pass_over_worktrees`): a record older than a reading would
+    /// drop the row of a worktree whose reading is the fresher of the two.
+    pub(super) fn note_worktree_heads(
         &self,
         worktrees: &[crate::worktrees::WorktreeEntry],
         workdir: &Path,
@@ -64,18 +64,18 @@ impl RepoSession {
                 Some((super::joins::same_path_key(&w.path), oid))
             })
             .collect();
-        *relock(&self.copy_heads) = Arc::new(heads);
+        *relock(&self.worktree_heads) = Arc::new(heads);
         let listed = super::carried::listed(worktrees, workdir);
         let keys: Vec<String> = listed.iter().map(|c| c.key.clone()).collect();
-        self.copies.list(listed);
+        self.other_worktrees.list(listed);
         self.pacing.change(|rules, at| rules.list(&keys, at));
     }
 
     /// The readings the rows may be drawn from — see [`Self::standing_rows`]
     /// for why one can be left out. The walk asks this too, so a pass and
-    /// the laying that follows it draw the same copies.
+    /// the laying that follows it draw the same worktrees.
     pub(super) fn carried_current(self: &Arc<Self>) -> Arc<Vec<Carried>> {
-        let listed = Arc::clone(&relock(&self.copy_heads));
+        let listed = Arc::clone(&relock(&self.worktree_heads));
         let readings = self.carried();
         // Before the first listing nothing can be behind.
         if listed.is_empty() {
@@ -83,17 +83,17 @@ impl RepoSession {
         } else {
             let current = still_where_the_listing_says(&readings, &listed);
             if current.len() != readings.len() {
-                self.read_copies_behind(&readings, &current);
+                self.read_worktrees_behind(&readings, &current);
             }
             Arc::new(current)
         }
     }
 
     /// Asks again for the readings the listing has moved past: due at once
-    /// where the page paces its copies, else a pass of their own — a
+    /// where the page paces its worktrees, else a pass of their own — a
     /// second ask while one runs is dropped, so asking costs nothing
     /// (`RepoSession::refresh_carried`).
-    fn read_copies_behind(self: &Arc<Self>, readings: &[Carried], current: &[Carried]) {
+    fn read_worktrees_behind(self: &Arc<Self>, readings: &[Carried], current: &[Carried]) {
         let behind: Vec<String> = readings
             .iter()
             .filter(|r| !current.iter().any(|c| c.path == r.path))
@@ -102,7 +102,7 @@ impl RepoSession {
         let paced = self.pacing.change(|rules, at| {
             if rules.active() {
                 for key in &behind {
-                    rules.copy_stale(key, at);
+                    rules.worktree_stale(key, at);
                 }
             }
             rules.active()
@@ -237,7 +237,7 @@ impl Laying {
         self.top.take()
     }
 
-    /// Lays one commit: the copies' rows owed above it, and its lanes —
+    /// Lays one commit: the worktrees' rows owed above it, and its lanes —
     /// dashed for a stash and for a provisional commit, as the walk drew
     /// them (`rows::StreamItem::row`).
     pub(super) fn commit(
@@ -247,7 +247,7 @@ impl Laying {
         stash: bool,
         provisional: bool,
     ) -> (Vec<LogRow>, GraphRow) {
-        // A copy standing here draws above the commit, and a stash asks
+        // A worktree standing here draws above the commit, and a stash asks
         // with the commit it was taken on (`CarriedRows`).
         let anchor = if stash {
             parents.first().copied()
@@ -265,15 +265,15 @@ impl Laying {
     }
 }
 
-/// Every working copy's uncommitted row carries the all-zero id, which no
+/// Every worktree's uncommitted row carries the all-zero id, which no
 /// commit can.
 fn is_synthetic(row: &LogRow) -> bool {
     crate::oid::Oid::hex_is_zero(&row.oid_hex)
 }
 
-/// The readings still describing where the listing says each copy is.
+/// The readings still describing where the listing says each worktree is.
 ///
-/// A copy the listing does not name is kept: one taken since the last
+/// A worktree the listing does not name is kept: one taken since the last
 /// listing has a reading and no entry yet.
 pub(super) fn still_where_the_listing_says(
     readings: &[Carried],

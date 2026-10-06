@@ -17,7 +17,7 @@ pub enum ObjectFormat {
 /// A validated repository location.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoInfo {
-    /// Absolute path of the work tree root.
+    /// Absolute path of the working tree root.
     pub workdir: PathBuf,
     /// Absolute path of the `.git` directory (may live elsewhere for
     /// worktrees).
@@ -29,7 +29,7 @@ pub struct RepoInfo {
     pub object_format: ObjectFormat,
 }
 
-/// Validates that `path` is inside a git work tree and resolves its root.
+/// Validates that `path` is inside a git working tree and resolves its root.
 pub async fn open(
     executor: &GitExecutor,
     path: &Path,
@@ -115,25 +115,25 @@ async fn is_bare(executor: &GitExecutor, path: &Path, cancel: &CancellationToken
     }
 }
 
-/// Where a folder opens: the working copy it is in, and the repository
-/// that copy belongs to.
+/// Where a folder opens: the worktree it is in, and the repository
+/// that worktree belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Place {
     /// What git answered about the folder itself; `workdir` is the root of
-    /// the working copy it sits in.
+    /// the worktree it sits in.
     pub info: RepoInfo,
-    /// The repository's own working copy — what a tab is named after.
-    /// Every copy of one repository answers the same path
+    /// The repository's own worktree — what a tab is named after.
+    /// Every worktree of one repository answers the same path
     /// ([`crate::worktrees::WorktreeEntry::main`]). A bare repository puts
     /// its bare directory here, the only name it has.
     pub repo: PathBuf,
 }
 
-/// [`open`], and the repository the working copy it found belongs to —
-/// what tells linked copies of one repository from two repositories
+/// [`open`], and the repository the worktree it found belongs to —
+/// what tells linked worktrees of one repository from two repositories
 /// (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」).
 ///
-/// A listing git will not give does not stop the opening: the copy then
+/// A listing git will not give does not stop the opening: the worktree then
 /// stands for itself.
 pub async fn place(
     executor: &GitExecutor,
@@ -147,7 +147,7 @@ pub async fn place(
             .find(|entry| entry.main)
             .map_or_else(|| info.workdir.clone(), |entry| PathBuf::from(entry.path)),
         Err(error) => {
-            tracing::warn!(%error, path = %info.workdir.display(), "no worktree listing: the copy stands for itself");
+            tracing::warn!(%error, path = %info.workdir.display(), "no worktree listing: the worktree stands for itself");
             info.workdir.clone()
         }
     };

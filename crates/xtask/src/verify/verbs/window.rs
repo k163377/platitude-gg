@@ -62,15 +62,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "quit_save dialog=true window=true vetoes=1 busy=true held=1",
     },
-    // Another copy's uncommitted row standing this tab in that copy.
+    // Another worktree's uncommitted row standing this tab in that worktree.
     // Whether the strip grew a second tab (`grew=`) or the tab it had
     // moved in (`stood=`) are the two answers this verb tells apart
     // (デザイン規約 §タブの所作). `kept=`: the page that asked is the page
-    // that arrived, its graph never emptied — the copy switch swaps the
+    // that arrived, its graph never emptied — the worktree switch swaps the
     // session under a standing page and replaces the rows in one go
-    // (`Hub::restand_tab`). `drew=`: another copy's uncommitted row becomes
-    // this tree's own, so the graph is swapped, where a copy with the same
-    // picture swaps nothing (`worktree-stand`); both are read against the
+    // (`Hub::restand_tab`). `drew=`: another worktree's uncommitted row
+    // becomes this tree's own, so the graph is swapped, where a worktree with
+    // the same picture swaps nothing (`worktree-stand`); both are read against the
     // record of the graph the new session is handed (`session::DrawnGraph`).
     Verb {
         name: "carried-open",
@@ -78,36 +78,36 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "carried_open tabs=1 grew=false stood=true drew=true kept=true",
     },
     // The same landing by the left menu's door: one tab before and after,
-    // and the copy the row named is the one the session opened. `log=` is
-    // the second thing the page keeps — the command log is this window's
-    // record, and the arrived copy numbers its commands from one without
-    // touching the rows the left copy put there (`CommandMsg::run`).
+    // and the worktree the row named is the one the session opened. `log=`
+    // is the second thing the page keeps — the command log is this window's
+    // record, and the arrived worktree numbers its commands from one without
+    // touching the rows the left worktree put there (`CommandMsg::run`).
     Verb {
         name: "worktree-stand",
         when: &[],
         plain: "worktree_stand tabs=1 grew=false stood=true drew=false kept=true log=true",
     },
-    // Away and back: `empty=` is the arrived copy not wearing the words
+    // Away and back: `empty=` is the arrived worktree not wearing the words
     // typed in the one left, `back=` those words in the box again, `wip=`
     // the pane holding them being the one on screen.
     Verb {
-        name: "copy-draft",
+        name: "worktree-draft",
         when: &[],
-        plain: "copy_draft empty=true back=true wip=true kept=true",
+        plain: "worktree_draft empty=true back=true wip=true kept=true",
     },
-    // The path under the hand on such a tab. `copy=`: the words name the
-    // copy the tab stands in, not the repository it is named after — they
+    // The path under the hand on such a tab. `worktree=`: the words name the
+    // worktree the tab stands in, not the repository it is named after — they
     // differ only on a tab that has been stood somewhere. `tip=` is the
     // hover having opened.
     Verb {
         name: "worktree-tip",
         when: &[],
-        plain: "worktree_tip tip=true copy=true native=false",
+        plain: "worktree_tip tip=true worktree=true native=false",
     },
-    // The same landing, left and come back to. `kept=` is that copy still
-    // drawn on the tab, read off the strip because the tab left has no page
-    // to ask. `front=` is which of the two landings the picture is of;
-    // `stood=` the copy come back to, which only the return can answer.
+    // The same landing, left and come back to. `kept=` is that worktree
+    // still drawn on the tab, read off the strip because the tab left has no
+    // page to ask. `front=` is which of the two landings the picture is of;
+    // `stood=` the worktree come back to, which only the return can answer.
     Verb {
         name: "worktree-kept",
         when: &[(
@@ -120,7 +120,7 @@ pub(super) const TABLE: &[Verb] = &[
     // half means anything alone. `sessions=1` with two tabs open is the
     // release itself — the tab left behind holds no repository. `folded=` /
     // `log=` are the layout left on the last tab, found on the next;
-    // `empty=` / `back=` / `wip=` are `copy-draft`'s, with the page thrown
+    // `empty=` / `back=` / `wip=` are `worktree-draft`'s, with the page thrown
     // away and read again in between.
     Verb {
         name: "tab-carry",
@@ -298,14 +298,14 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // With a filter typed into the left menu first, the tier still opens
     // while the section lists nothing: the card is a way to move, not the
-    // list being read (`NavSectionModel.copyCard`).
+    // list being read (`NavSectionModel.worktreeCard`).
     Verb {
-        name: "ops-stand-copies",
+        name: "ops-stand-worktrees",
         when: &[(
             Arg::Is("zzz"),
-            "ops_door open=true tier=copies lit=true turned=true yield=true folder= repos=0 listed=0 copies=",
+            "ops_door open=true tier=worktrees lit=true turned=true yield=true folder= repos=0 listed=0 worktrees=",
         )],
-        plain: "ops_door open=true tier=copies lit=true turned=true yield=true",
+        plain: "ops_door open=true tier=worktrees lit=true turned=true yield=true",
     },
     // The branch door, which offers every local branch this repository
     // has bar the one the window is on, filed the way the left menu files
@@ -334,7 +334,7 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "ops_door open=true tier=folder lit=true turned=true yield=true",
     },
     // A row of each card pressed, judged where the press lands — the
-    // branch the panel names, the copy the tab reads, the tab in front.
+    // branch the panel names, the worktree the tab reads, the tab in front.
     // `landed=` is the claim: a row that closes its card and reaches
     // nothing looks the same. `card=none` is the card gone with the press.
     Verb {
@@ -343,9 +343,9 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "ops_pick door=branch found=true landed=true card=none",
     },
     Verb {
-        name: "ops-copy-pick",
+        name: "ops-worktree-pick",
         when: &[],
-        plain: "ops_pick door=copy found=true landed=true card=none",
+        plain: "ops_pick door=worktree found=true landed=true card=none",
     },
     // `named=true`: the panel names the tab it moved to in the press itself,
     // before that tab has read a thing — the names were the page's answer,
@@ -455,22 +455,22 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "graph_stale badge=true stopped=true stale=false tint=danger card=true",
     },
     // Where the page lands when the pass it opened on carries every other
-    // copy's row and none of its own — the arrangement the run is started
+    // worktree's row and none of its own — the arrangement the run is started
     // into, since which of the walk and the first status arrives first is
     // the scheduler's.
     //
-    // `early=` / `earlyCopy=` are the page while the row was held back
-    // (nothing opened, nothing stood on a copy); `wip=` is the pass
+    // `early=` / `earlyWorktree=` are the page while the row was held back
+    // (nothing opened, nothing stood on a worktree); `wip=` is the pass
     // carrying ours landing on this window's tree. `held=true` is the hold
     // answering for itself, so a run in the ordinary order cannot pass as
     // this one. `otherTop=true`: the held-back pass led with a neighbour
-    // copy's row, the row the misreading takes — without it a graph with
+    // worktree's row, the row the misreading takes — without it a graph with
     // no all-zero row on top passes without asking the question. `row=` is
     // where the landing put the reader.
     Verb {
         name: "wip-landing",
         when: &[],
-        plain: "wip_landing held=true otherTop=true early=false earlyCopy=false wip=true copy=false row=0",
+        plain: "wip_landing held=true otherTop=true early=false earlyWorktree=false wip=true worktree=false row=0",
     },
     // The landing a stopped operation owes, in the same arrangement.
     // `owed=true` is the move decided and held while the row was out; the
@@ -479,7 +479,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "wip-landing-stopped",
         when: &[],
-        plain: "wip_stop_landing held=true otherTop=true owed=true early=false earlyCopy=false wip=true copy=false op=REBASING lit=0",
+        plain: "wip_stop_landing held=true otherTop=true owed=true early=false earlyWorktree=false wip=true worktree=false op=REBASING lit=0",
     },
     // The panel's three actions at the last cell that still has a word in
     // it: a band shot at one width says nothing about where its shape was
@@ -621,14 +621,15 @@ pub(super) const TABLE: &[Verb] = &[
     // photograph (`popups=0`), so the line is the whole evidence. It comes
     // up beside the repository already open (rules-refs/app-ui.md).
     //
-    // `beside_copy=` reads the folder without knowing the machine's paths:
-    // whether the picker came up in the folder the copy sits in. The plain
-    // run stands in the repository's own copy, where the two folders are
-    // one; `copy` stands in a linked one kept below the root
-    // (`Route::NestedCopy`), where the picker leaves the copy's folder.
+    // `beside_worktree=` reads the folder without knowing the machine's paths:
+    // whether the picker came up in the folder the worktree sits in. The
+    // plain run stands in the repository's own worktree, where the two
+    // folders are one; `worktree` stands in a linked one kept below the root
+    // (`Route::NestedWorktree`), where the picker leaves the worktree's
+    // folder.
     Verb {
         name: "open-picker",
-        when: &[(Arg::Is("copy"), "picker beside_copy=false")],
-        plain: "picker beside_copy=true",
+        when: &[(Arg::Is("worktree"), "picker beside_worktree=false")],
+        plain: "picker beside_worktree=true",
     },
 ];

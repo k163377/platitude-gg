@@ -1,5 +1,5 @@
 //! The pace of the reads a page makes on its own: when this window's tree
-//! is read again, and when each other working copy is. Rules only — no
+//! is read again, and when each other worktree is. Rules only — no
 //! clock and no I/O; the driver is `session::pacer`, and every moment here
 //! is a [`Duration`] since the driver's origin.
 //!
@@ -16,10 +16,11 @@
 //! alone takes longer than the ceiling is followed by the next as soon as
 //! it ends and [`OWN_REST`] has passed.
 //!
-//! This tree comes first. The other copies are read one at a time, in the
-//! gaps between this tree's reads; a copy that does not fit a gap waits
-//! for the end of this tree's next read once, then goes whether it fits or
-//! not ([`Pacer::starts`]), so a copy slower than the gap is still read.
+//! This tree comes first. The other worktrees are read one at a time, in
+//! the gaps between this tree's reads; a worktree that does not fit a gap
+//! waits for the end of this tree's next read once, then goes whether it
+//! fits or not ([`Pacer::starts`]), so a worktree slower than the gap is
+//! still read.
 
 use std::time::Duration;
 
@@ -38,12 +39,12 @@ pub const OWN_CEILING: Duration = Duration::from_secs(15);
 /// asks for reads that close together.
 pub const OWN_REST: Duration = Duration::from_secs(3);
 
-/// The other copies' default floor: none is read again sooner than this
+/// The other worktrees' default floor: none is read again sooner than this
 /// after its last read began.
-pub const COPY_FLOOR: Duration = Duration::from_secs(5);
+pub const WORKTREE_FLOOR: Duration = Duration::from_secs(5);
 /// Their default ceiling: nor later than this, where the reads of all of
 /// them fit in it.
-pub const COPY_CEILING: Duration = Duration::from_secs(45);
+pub const WORKTREE_CEILING: Duration = Duration::from_secs(45);
 
 /// The shortest floor a setting can ask for.
 pub const PACE_MIN_SECS: u32 = 1;
@@ -67,8 +68,8 @@ pub fn pace_bounds_secs(floor: u32, ceiling: u32) -> (u32, u32) {
 pub struct PaceBounds {
     pub own_floor: Duration,
     pub own_ceiling: Duration,
-    pub copy_floor: Duration,
-    pub copy_ceiling: Duration,
+    pub worktree_floor: Duration,
+    pub worktree_ceiling: Duration,
 }
 
 impl Default for PaceBounds {
@@ -76,8 +77,8 @@ impl Default for PaceBounds {
         Self {
             own_floor: OWN_FLOOR,
             own_ceiling: OWN_CEILING,
-            copy_floor: COPY_FLOOR,
-            copy_ceiling: COPY_CEILING,
+            worktree_floor: WORKTREE_FLOOR,
+            worktree_ceiling: WORKTREE_CEILING,
         }
     }
 }
@@ -89,12 +90,12 @@ impl Default for PaceBounds {
 /// performance budget's size reaches the ceiling
 /// (ci/baseline/poll-cost-windows-x64.md).
 pub const OWN_SHARE: f64 = 0.05;
-/// The share all the other copies' reads may keep children alive,
-/// divided between them evenly: each copy's interval is its weight times
-/// the count, over this. Set so the budget-sized tree with a few copies
-/// costs what it did before the copies were paced, and a small one reads
-/// its copies at the floor (same record).
-pub const COPY_SHARE: f64 = 0.06;
+/// The share all the other worktrees' reads may keep children alive,
+/// divided between them evenly: each worktree's interval is its weight
+/// times the count, over this. Set so the budget-sized tree with a few
+/// worktrees costs what it did before the worktrees were paced, and a small
+/// one reads its worktrees at the floor (same record).
+pub const WORKTREE_SHARE: f64 = 0.06;
 /// What a light read takes off the weight held: the weight after it is the
 /// larger of the read and this much of the weight before. Three light
 /// reads in a row bring a weight down to a third.
@@ -118,13 +119,13 @@ impl Estimate {
     }
 }
 
-/// How the other copies are read (`settings::CopiesReading`).
+/// How the other worktrees are read (`settings::WorktreesReading`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CopiesPace {
+pub enum WorktreesPace {
     Off,
-    /// Every copy at this interval, whatever its weight.
+    /// Every worktree at this interval, whatever its weight.
     Fixed(Duration),
-    /// Each copy at an interval its weight sets ([`COPY_SHARE`]).
+    /// Each worktree at an interval its weight sets ([`WORKTREE_SHARE`]).
     Auto,
 }
 
@@ -134,13 +135,13 @@ pub(super) enum Start {
     /// This tree's read; `with_stashes` when the window came back since
     /// a read last listed them — no other paced read does.
     Own { with_stashes: bool },
-    /// One other copy's, by its key (`joins::same_path_key`).
-    Copy(String),
+    /// One other worktree's, by its key (`joins::same_path_key`).
+    Worktree(String),
 }
 
-/// One other working copy, as the pace sees it.
+/// One other worktree, as the pace sees it.
 #[derive(Debug, Clone)]
-struct OtherCopy {
+struct OtherWorktree {
     key: String,
     estimate: Estimate,
     /// When its last read began; `None` before the first.
@@ -152,7 +153,7 @@ struct OtherCopy {
     /// That read has ended: it goes next, fitting or not.
     forced: bool,
     /// When it was last asked for at once (its reading is behind the
-    /// listing, the window came back to its pane, or the copies were turned
+    /// listing, the window came back to its pane, or the worktrees were turned
     /// back on): a new pace does not push it out, and an ask its own read
     /// began before is still owed when that read ends.
     asked: Option<At>,
@@ -182,24 +183,24 @@ pub(super) struct Pacer {
     /// The page is on screen to be read for.
     active: bool,
     own: Own,
-    /// In the listing's order, which breaks ties between copies due at the
-    /// same moment.
-    copies: Vec<OtherCopy>,
-    /// The copy being read; one at a time.
+    /// In the listing's order, which breaks ties between worktrees due at
+    /// the same moment.
+    worktrees: Vec<OtherWorktree>,
+    /// The worktree being read; one at a time.
     reading: Option<String>,
-    /// A pass over every copy is out (`RepoSession::refresh_carried`), and
+    /// A pass over every worktree is out (`RepoSession::refresh_carried`), and
     /// starts none of its own.
     passing: bool,
-    pace: CopiesPace,
+    pace: WorktreesPace,
     bounds: PaceBounds,
 }
 
 impl Pacer {
-    pub(super) fn new(pace: CopiesPace) -> Self {
+    pub(super) fn new(pace: WorktreesPace) -> Self {
         Self {
             active: false,
             own: Own::default(),
-            copies: Vec::new(),
+            worktrees: Vec::new(),
             reading: None,
             passing: false,
             pace,
@@ -214,7 +215,7 @@ impl Pacer {
     pub(super) fn set_bounds(&mut self, bounds: PaceBounds) {
         self.bounds = bounds;
         self.plan_own_again();
-        self.plan_copies_again();
+        self.plan_worktrees_again();
     }
 
     /// The opening read everything at `at`: this tree's next read is an
@@ -249,22 +250,22 @@ impl Pacer {
         }
     }
 
-    /// How the copies are read, with the waits already set planned again as
-    /// [`Self::set_bounds`] plans them. Turned back on, every copy is due at
-    /// once: the off took their rows down. The session's pass usually reads
-    /// them first (`RepoSession::set_copies_pace`); this reads them where
-    /// that pass could not begin.
-    pub(super) fn set_pace(&mut self, pace: CopiesPace, at: At) {
-        let was_off = self.pace == CopiesPace::Off;
+    /// How the worktrees are read, with the waits already set planned again
+    /// as [`Self::set_bounds`] plans them. Turned back on, every worktree is
+    /// due at once: the off took their rows down. The session's pass usually
+    /// reads them first (`RepoSession::set_worktrees_pace`); this reads them
+    /// where that pass could not begin.
+    pub(super) fn set_pace(&mut self, pace: WorktreesPace, at: At) {
+        let was_off = self.pace == WorktreesPace::Off;
         self.pace = pace;
-        if was_off && pace != CopiesPace::Off {
-            for copy in &mut self.copies {
-                copy.due = copy.due.min(at);
-                copy.asked = Some(at);
-                copy.held = false;
+        if was_off && pace != WorktreesPace::Off {
+            for worktree in &mut self.worktrees {
+                worktree.due = worktree.due.min(at);
+                worktree.asked = Some(at);
+                worktree.held = false;
             }
         }
-        self.plan_copies_again();
+        self.plan_worktrees_again();
     }
 
     /// Whether the page is on screen to be read for.
@@ -272,14 +273,14 @@ impl Pacer {
         self.active
     }
 
-    /// The copies a listing named, by key, in its order. A copy new to the
-    /// pace is due at once; one no longer listed is forgotten.
+    /// The worktrees a listing named, by key, in its order. A worktree new
+    /// to the pace is due at once; one no longer listed is forgotten.
     pub(super) fn list(&mut self, keys: &[String], at: At) {
         let mut kept = Vec::with_capacity(keys.len());
         for key in keys {
-            let copy = match self.copies.iter().position(|c| &c.key == key) {
-                Some(found) => self.copies.swap_remove(found),
-                None => OtherCopy {
+            let worktree = match self.worktrees.iter().position(|c| &c.key == key) {
+                Some(found) => self.worktrees.swap_remove(found),
+                None => OtherWorktree {
                     key: key.clone(),
                     estimate: Estimate::default(),
                     started: None,
@@ -289,22 +290,22 @@ impl Pacer {
                     asked: None,
                 },
             };
-            kept.push(copy);
+            kept.push(worktree);
         }
-        self.copies = kept;
+        self.worktrees = kept;
     }
 
-    /// A copy's reading is behind where the listing says it stands, or the
-    /// window came back to the pane standing on it: due at once.
-    pub(super) fn copy_stale(&mut self, key: &str, at: At) {
-        if let Some(copy) = self.copies.iter_mut().find(|c| c.key == key) {
-            copy.due = copy.due.min(at);
-            copy.asked = Some(at);
+    /// A worktree's reading is behind where the listing says it stands, or
+    /// the window came back to the pane standing on it: due at once.
+    pub(super) fn worktree_stale(&mut self, key: &str, at: At) {
+        if let Some(worktree) = self.worktrees.iter_mut().find(|c| c.key == key) {
+            worktree.due = worktree.due.min(at);
+            worktree.asked = Some(at);
         }
     }
 
     /// What to start at `at`, marked as started: this tree's read when it
-    /// is due, and at most one copy's.
+    /// is due, and at most one worktree's.
     pub(super) fn starts(&mut self, at: At) -> Vec<Start> {
         let mut starts = Vec::new();
         if !self.active {
@@ -318,15 +319,15 @@ impl Pacer {
                 with_stashes: std::mem::take(&mut self.own.stashes),
             });
         }
-        if let Some(key) = self.next_copy(at) {
+        if let Some(key) = self.next_worktree(at) {
             self.reading = Some(key.clone());
-            if let Some(copy) = self.copies.iter_mut().find(|c| c.key == key) {
-                copy.started = Some(at);
-                copy.held = false;
-                copy.forced = false;
-                copy.asked = None;
+            if let Some(worktree) = self.worktrees.iter_mut().find(|c| c.key == key) {
+                worktree.started = Some(at);
+                worktree.held = false;
+                worktree.forced = false;
+                worktree.asked = None;
             }
-            starts.push(Start::Copy(key));
+            starts.push(Start::Worktree(key));
         }
         starts
     }
@@ -338,13 +339,17 @@ impl Pacer {
             return None;
         }
         let own = (!self.own.running).then_some(self.own.due);
-        let copy = if self.reads_copies() && self.reading.is_none() && !self.passing {
-            self.copies.iter().filter(|c| !c.held).map(|c| c.due).min()
+        let worktree = if self.reads_worktrees() && self.reading.is_none() && !self.passing {
+            self.worktrees
+                .iter()
+                .filter(|c| !c.held)
+                .map(|c| c.due)
+                .min()
         } else {
             None
         };
-        match (own, copy) {
-            (Some(own), Some(copy)) => Some(own.min(copy)),
+        match (own, worktree) {
+            (Some(own), Some(worktree)) => Some(own.min(worktree)),
             (one, other) => one.or(other),
         }
     }
@@ -365,9 +370,9 @@ impl Pacer {
         } else {
             (started + self.own_interval()).max(self.own.rested)
         };
-        for copy in &mut self.copies {
-            if std::mem::take(&mut copy.held) {
-                copy.forced = true;
+        for worktree in &mut self.worktrees {
+            if std::mem::take(&mut worktree.held) {
+                worktree.forced = true;
             }
         }
     }
@@ -381,30 +386,30 @@ impl Pacer {
         self.own.stashes |= with_stashes;
     }
 
-    /// A copy's read, begun at `began`, ended (`weight` as for
+    /// A worktree's read, begun at `began`, ended (`weight` as for
     /// [`Self::own_ended`]) — one this pace started, or one a pass made.
-    pub(super) fn copy_ended(&mut self, key: &str, began: At, weight: Option<Duration>) {
+    pub(super) fn worktree_ended(&mut self, key: &str, began: At, weight: Option<Duration>) {
         if self.reading.as_deref() == Some(key) {
             self.reading = None;
         }
-        let count = self.copies.len();
+        let count = self.worktrees.len();
         let (pace, bounds) = (self.pace, self.bounds);
-        if let Some(copy) = self.copies.iter_mut().find(|c| c.key == key) {
+        if let Some(worktree) = self.worktrees.iter_mut().find(|c| c.key == key) {
             if let Some(weight) = weight {
-                copy.estimate.observe(weight);
+                worktree.estimate.observe(weight);
             }
-            copy.started = Some(began);
-            copy.held = false;
-            copy.forced = false;
+            worktree.started = Some(began);
+            worktree.held = false;
+            worktree.forced = false;
             // Asked for after this read began — the listing moved past it
             // meanwhile: this read answered the asks before it, not that one.
-            if copy.asked.is_some_and(|asked| asked > began) {
-                copy.due = began;
+            if worktree.asked.is_some_and(|asked| asked > began) {
+                worktree.due = began;
             } else {
-                copy.asked = None;
-                copy.due = began
-                    + copy_target(pace, bounds, copy.estimate, count)
-                        .unwrap_or(bounds.copy_ceiling);
+                worktree.asked = None;
+                worktree.due = began
+                    + worktree_target(pace, bounds, worktree.estimate, count)
+                        .unwrap_or(bounds.worktree_ceiling);
             }
         }
     }
@@ -422,45 +427,45 @@ impl Pacer {
         }
     }
 
-    /// The copies' waits, planned again the same way: from where each last
-    /// read began. A copy never read is due already, the one being read
-    /// plans its next as it ends, and one asked for at once stays asked.
-    fn plan_copies_again(&mut self) {
-        let count = self.copies.len();
+    /// The worktrees' waits, planned again the same way: from where each
+    /// last read began. A worktree never read is due already, the one being
+    /// read plans its next as it ends, and one asked for at once stays asked.
+    fn plan_worktrees_again(&mut self) {
+        let count = self.worktrees.len();
         let (pace, bounds) = (self.pace, self.bounds);
-        for copy in &mut self.copies {
-            if copy.asked.is_some() || self.reading.as_deref() == Some(copy.key.as_str()) {
+        for worktree in &mut self.worktrees {
+            if worktree.asked.is_some() || self.reading.as_deref() == Some(worktree.key.as_str()) {
                 continue;
             }
-            if let Some(started) = copy.started {
-                copy.due = started
-                    + copy_target(pace, bounds, copy.estimate, count)
-                        .unwrap_or(bounds.copy_ceiling);
+            if let Some(started) = worktree.started {
+                worktree.due = started
+                    + worktree_target(pace, bounds, worktree.estimate, count)
+                        .unwrap_or(bounds.worktree_ceiling);
             }
         }
     }
 
-    /// A copy's read never began (a pass took the copies meanwhile): it
-    /// stays due, and waits for the end of this tree's next read as a held
-    /// copy does — asked again at once, it would be turned away again for
-    /// as long as the pass lasts.
-    pub(super) fn copy_skipped(&mut self, key: &str) {
+    /// A worktree's read never began (a pass took the worktrees meanwhile):
+    /// it stays due, and waits for the end of this tree's next read as a
+    /// held worktree does — asked again at once, it would be turned away
+    /// again for as long as the pass lasts.
+    pub(super) fn worktree_skipped(&mut self, key: &str) {
         if self.reading.as_deref() == Some(key) {
             self.reading = None;
         }
-        if let Some(copy) = self.copies.iter_mut().find(|c| c.key == key) {
-            copy.held = true;
+        if let Some(worktree) = self.worktrees.iter_mut().find(|c| c.key == key) {
+            worktree.held = true;
         }
     }
 
-    /// A pass over every copy began or ended; its reads are reported one by
-    /// one through [`Self::copy_ended`].
+    /// A pass over every worktree began or ended; its reads are reported one
+    /// by one through [`Self::worktree_ended`].
     pub(super) fn set_passing(&mut self, passing: bool) {
         self.passing = passing;
     }
 
-    fn reads_copies(&self) -> bool {
-        self.pace != CopiesPace::Off && !self.copies.is_empty()
+    fn reads_worktrees(&self) -> bool {
+        self.pace != WorktreesPace::Off && !self.worktrees.is_empty()
     }
 
     fn own_interval(&self) -> Duration {
@@ -486,65 +491,66 @@ impl Pacer {
         }
     }
 
-    /// The copy to read now, if any: the one longest overdue that is forced,
-    /// fits before this tree's next read, or would pass its ceiling waiting
-    /// for that read to end. A due copy that does none of these is held —
-    /// a copy never read among them, since nothing says it would fit.
-    fn next_copy(&mut self, at: At) -> Option<String> {
-        if !self.reads_copies() || self.reading.is_some() || self.passing {
+    /// The worktree to read now, if any: the one longest overdue that is
+    /// forced, fits before this tree's next read, or would pass its ceiling
+    /// waiting for that read to end. A due worktree that does none of these
+    /// is held — a worktree never read among them, since nothing says it
+    /// would fit.
+    fn next_worktree(&mut self, at: At) -> Option<String> {
+        if !self.reads_worktrees() || self.reading.is_some() || self.passing {
             return None;
         }
-        // A held copy waits for this tree's read to end, whatever wakes the
-        // pace meanwhile; that end forces it.
-        let mut due: Vec<usize> = (0..self.copies.len())
-            .filter(|&i| self.copies[i].due <= at && !self.copies[i].held)
+        // A held worktree waits for this tree's read to end, whatever wakes
+        // the pace meanwhile; that end forces it.
+        let mut due: Vec<usize> = (0..self.worktrees.len())
+            .filter(|&i| self.worktrees[i].due <= at && !self.worktrees[i].held)
             .collect();
-        due.sort_by_key(|&i| (!self.copies[i].forced, self.copies[i].due));
+        due.sort_by_key(|&i| (!self.worktrees[i].forced, self.worktrees[i].due));
         let free_at = self.own_free_at(at);
         let next_own = (!self.own.running).then_some(self.own.due);
-        let count = self.copies.len();
+        let count = self.worktrees.len();
         for i in due {
-            let copy = &self.copies[i];
-            if copy.forced {
-                return Some(copy.key.clone());
+            let worktree = &self.worktrees[i];
+            if worktree.forced {
+                return Some(worktree.key.clone());
             }
-            let fits = match (copy.estimate.weight(), next_own) {
+            let fits = match (worktree.estimate.weight(), next_own) {
                 (Some(weight), Some(next)) => at + weight <= next,
                 _ => false,
             };
-            let past_its_ceiling = copy.started.is_some_and(|started| {
-                let ceiling = self.bounds.copy_ceiling;
-                let ceiling = copy_target(self.pace, self.bounds, copy.estimate, count)
+            let past_its_ceiling = worktree.started.is_some_and(|started| {
+                let ceiling = self.bounds.worktree_ceiling;
+                let ceiling = worktree_target(self.pace, self.bounds, worktree.estimate, count)
                     .unwrap_or(ceiling)
                     .max(ceiling);
                 free_at > started + ceiling
             });
             if fits || past_its_ceiling {
-                return Some(copy.key.clone());
+                return Some(worktree.key.clone());
             }
-            self.copies[i].held = true;
+            self.worktrees[i].held = true;
         }
         None
     }
 }
 
-/// The interval one copy is read at; `None` where the copies are off.
-fn copy_target(
-    pace: CopiesPace,
+/// The interval one worktree is read at; `None` where the worktrees are off.
+fn worktree_target(
+    pace: WorktreesPace,
     bounds: PaceBounds,
     estimate: Estimate,
     count: usize,
 ) -> Option<Duration> {
     match pace {
-        CopiesPace::Off => None,
-        CopiesPace::Fixed(every) => Some(every),
-        CopiesPace::Auto => Some(match estimate.weight() {
-            None => bounds.copy_floor,
+        WorktreesPace::Off => None,
+        WorktreesPace::Fixed(every) => Some(every),
+        WorktreesPace::Auto => Some(match estimate.weight() {
+            None => bounds.worktree_floor,
             Some(weight) => {
                 let count = u32::try_from(count.max(1)).unwrap_or(u32::MAX);
                 (weight * count)
-                    .div_f64(COPY_SHARE)
-                    .clamp(bounds.copy_floor, bounds.copy_ceiling)
+                    .div_f64(WORKTREE_SHARE)
+                    .clamp(bounds.worktree_floor, bounds.worktree_ceiling)
             }
         }),
     }

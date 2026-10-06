@@ -183,12 +183,13 @@ Item {
             navRailTimer.start()
         } else if (act === "worktree-menu" || act === "worktree-remove" || act === "worktree-remove-refused"
                    || act === "worktree-graph") {
-            // A working copy's WORKTREE card, raised where a hand raises it: its WORKTREES row's right-click (the row's
+            // A worktree's WORKTREE card, raised where a hand raises it: its WORKTREES row's right-click (the row's
             // own press), or the graph row its chip is on (`worktree-graph`, the row's own right-click door). The
-            // argument is the copy's folder, `:go` on the graph one to press. The menu verb stands the card (a greyed
-            // row wears its tip); the others press `worktree remove` — landing, or refused by git into the report bar.
+            // argument is the worktree's folder, `:go` on the graph one to press. The menu verb stands the card (a
+            // greyed row wears its tip); the others press `worktree remove` — landing, or refused by git into the
+            // report bar.
             const go = arg.endsWith(":go")
-            worktreeMenuTimer.copy = go ? arg.slice(0, -3) : arg
+            worktreeMenuTimer.worktree = go ? arg.slice(0, -3) : arg
             worktreeMenuTimer.onGraph = act === "worktree-graph"
             worktreeMenuTimer.press = act === "worktree-remove" || act === "worktree-remove-refused" || go
             worktreeMenuTimer.refused = act === "worktree-remove-refused"
@@ -199,11 +200,11 @@ Item {
         return true
     }
 
-    // ---- a working copy's card (デザイン規約 §左メニューの所作 の削除の表) ----
+    // ---- a worktree's card (デザイン規約 §左メニューの所作 の削除の表) ----
     readonly property var worktreesModel: driver.worktreesModel
     readonly property var refMenu: driver.refMenu
-    /// The WORKTREES row showing the copy called `name`, -1 while none does.
-    function copyRow(name) {
+    /// The WORKTREES row showing the worktree called `name`, -1 while none does.
+    function worktreeRow(name) {
         const list = navProbe.listOf("worktree")
         if (!list)
             return -1
@@ -222,15 +223,15 @@ Item {
     }
     SampleTimer {
         id: worktreeMenuTimer
-        property string copy: ""
+        property string worktree: ""
         property bool onGraph: false
         property bool press: false
         property bool refused: false
         readonly property var menu: worktreeMenuTimer.onGraph ? acts.commitMenu : acts.refMenu
-        readonly property var card: worktreeMenuTimer.onGraph ? driver.commitCopyCard : driver.refCopyCard
+        readonly property var card: worktreeMenuTimer.onGraph ? driver.commitWorktreeCard : driver.refWorktreeCard
         /// Raises the menu, through the row's own door. False while the row is not there yet.
         function raise() {
-            const at = acts.copyRow(worktreeMenuTimer.copy)
+            const at = acts.worktreeRow(worktreeMenuTimer.worktree)
             if (at < 0)
                 return false
             if (!worktreeMenuTimer.onGraph) {
@@ -240,9 +241,9 @@ Item {
                 acts.standMenuOn(acts.refMenu, list.itemAtIndex(at))
                 return true
             }
-            // The graph row the copy stands on, pressed where its own right-click goes: the menu aimed at the row's
+            // The graph row the worktree stands on, pressed where its own right-click goes: the menu aimed at the row's
             // first chip (`GraphRowDelegate.menuChip`).
-            const facts = worktreesModel.copyFacts(worktreesModel.fullAt(at))
+            const facts = worktreesModel.worktreeFacts(worktreesModel.fullAt(at))
             const row = facts === undefined ? -1 : graphModel.rowOf(facts.head)
             const item = row < 0 ? null : graphPane.view.itemAtIndex(row)
             if (item === null)
@@ -260,11 +261,12 @@ Item {
                 return
             }
             const card = worktreeMenuTimer.card
-            // A row the card has nothing for (no place for a new copy, nothing to take away): the menu is the whole
-            // answer. The repository's own copy has a card — the rows that make a copy — with no `worktree remove`.
+            // A row the card has nothing for (no place for a new worktree, nothing to take away): the menu is the
+            // whole answer. The repository's own worktree has a card — the rows that make a worktree — with no
+            // `worktree remove`.
             if (!card.applies && !worktreeMenuTimer.press) {
                 worktreeMenuTimer.stop()
-                Harness.report("worktree_menu copy=" + worktreeMenuTimer.copy + " card=false"
+                Harness.report("worktree_menu worktree=" + worktreeMenuTimer.worktree + " card=false"
                                   + " branch=" + (worktreeMenuTimer.onGraph ? driver.commitBranchCard.applies
                                                                             : driver.refBranchCard.applies))
                 driver.complete()
@@ -275,7 +277,7 @@ Item {
                 worktreeMenuTimer.menu.openSub(card)
                 return
             }
-            const item = card.removeCopyItem
+            const item = card.removeWorktreeItem
             if (!worktreeMenuTimer.press) {
                 // A greyed row says why on its hover alone, and a cut folder comes back whole on it.
                 // A row not on offer has no hover, and its folder no room to be cut in.
@@ -283,13 +285,14 @@ Item {
                 if (!Awaited.all("worktree_menu", { "tip_beside": driver.rowTipStood(item, wants) }))
                     return
                 worktreeMenuTimer.stop()
-                Harness.report("worktree_menu copy=" + worktreeMenuTimer.copy
+                Harness.report("worktree_menu worktree=" + worktreeMenuTimer.worktree
                                   + " card=" + card.opened
                                   + " offered=" + item.offered
                                   + " blocked=" + item.blocked
                                   + " tip=" + item.ToolTip.visible
                                   + " code=" + item.code
-                                  // Whether the menu stands on the branch the copy has out, which brings the BRANCH card.
+                                  // Whether the menu stands on the branch the worktree has out, which brings the
+                                  // BRANCH card.
                                   + " branch=" + (worktreeMenuTimer.onGraph ? driver.commitBranchCard.applies
                                                                             : driver.refBranchCard.applies)
                                   + " held=" + (item.holdMs > 0)
@@ -308,24 +311,24 @@ Item {
                 worktreeMenuTimer.menu.dismiss()
                 return true
             })
-            // git keeps the copy and says why: the bar is the answer, and the log stays shut (`write_notice log=`).
+            // git keeps the worktree and says why: the bar is the answer, and the log stays shut (`write_notice log=`).
             if (worktreeMenuTimer.refused)
                 driver.barrierNotice.start()
             else
                 worktreeGoneTimer.start()
         }
     }
-    // A removed copy, judged on the list it leaves: gone at the press and still gone once git's listing is in.
+    // A removed worktree, judged on the list it leaves: gone at the press and still gone once git's listing is in.
     SampleTimer {
         id: worktreeGoneTimer
         onTriggered: {
             if (!driver.wroteAndSettled() || repoTab.goneWorktree !== "")
                 return
             worktreeGoneTimer.stop()
-            // The judged two first; the copy and the count are the preset's.
-            Harness.report("worktree_gone row=" + acts.copyRow(worktreeMenuTimer.copy)
+            // The judged two first; the worktree and the count are the preset's.
+            Harness.report("worktree_gone row=" + acts.worktreeRow(worktreeMenuTimer.worktree)
                               + " log=" + page.commandsOpen
-                              + " copy=" + worktreeMenuTimer.copy
+                              + " worktree=" + worktreeMenuTimer.worktree
                               + " total=" + worktreesModel.total)
             renderedBarrier.begin()
         }
@@ -698,8 +701,9 @@ Item {
                 return
             const at = graphModel.rowOf(acts.jumpWant)
             // A commit the walk never reached is an answer: the page had settled before the click (`PageSettled`), so
-            // the row will not arrive. Not so another copy's HEAD: the walk that draws it follows the copies' listing,
-            // which the settle does not wait for. A row the model has but the view has not laid out yet is waited for.
+            // the row will not arrive. Not so another worktree's HEAD: the walk that draws it follows the worktrees'
+            // listing, which the settle does not wait for. A row the model has but the view has not laid out yet is
+            // waited for.
             const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
             if (!Awaited.all("nav_jump", { "row": at >= 0 || jumpTimer.kind !== "worktree",
                                            "laid": at < 0 || !!item }))

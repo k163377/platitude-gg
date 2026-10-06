@@ -41,7 +41,7 @@ pub use patch::{colors, colors_cached, colors_quick, deep, knows};
 /// reading of the same text starts near its hunks.
 ///
 /// Handed back by [`colors_cached`]; worth keeping wherever the same file
-/// is read again (every partial stage re-reads the unchanged worktree
+/// is read again (every partial stage re-reads the unchanged working-tree
 /// file). A cache built over different text is not used — the source
 /// hash rides inside.
 pub struct LexCache {

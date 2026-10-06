@@ -269,7 +269,7 @@ mod tests {
     use crate::refusing;
 
     /// Not even the read of HEAD: every command here reads a missing
-    /// pathspec as the whole work tree, and `git clean -f -d --` on its own
+    /// pathspec as the whole working tree, and `git clean -f -d --` on its own
     /// would delete every untracked file.
     #[tokio::test]
     async fn an_empty_selection_runs_nothing() {
@@ -286,7 +286,7 @@ mod tests {
             .expect("unstage");
         discard_working_tree(&exec, workdir, &none, &cancel)
             .await
-            .expect("discard worktree");
+            .expect("discard working tree");
         discard_to_head(&exec, workdir, &none, &cancel)
             .await
             .expect("discard to head");

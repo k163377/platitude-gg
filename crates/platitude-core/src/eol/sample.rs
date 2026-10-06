@@ -150,7 +150,7 @@ enum Group {
 }
 
 /// Index paths, optionally under one directory. The index only — asking for
-/// endings here would read every worktree file in the repository, where the
+/// endings here would read every working-tree file in the repository, where the
 /// picked few cost one process (ci/baseline/code-costs-windows-x64.md).
 async fn list(
     executor: &GitExecutor,

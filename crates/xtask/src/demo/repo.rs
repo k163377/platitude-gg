@@ -225,7 +225,7 @@ impl DemoRepo {
         self.root.join("origin.git")
     }
 
-    /// A second clone of the bare repository `bare` beside the work tree,
+    /// A second clone of the bare repository `bare` beside the worktree,
     /// under somebody else's name: where the commits this one lacks come
     /// from. Answers where it is.
     pub(super) fn seeder(&mut self, bare: &str) -> Result<PathBuf, String> {
@@ -251,7 +251,7 @@ impl DemoRepo {
         Ok(())
     }
 
-    /// Replaces the work tree with a `--depth` clone of its own origin,
+    /// Replaces the worktree with a `--depth` clone of its own origin,
     /// which has to have been pushed to first.
     ///
     /// A `.git/shallow` written over a full object store does not do: core
@@ -261,7 +261,7 @@ impl DemoRepo {
         let name = self
             .work
             .file_name()
-            .ok_or("the work tree has no name to clone back into")?
+            .ok_or("the worktree has no name to clone back into")?
             .to_string_lossy()
             .to_string();
         let url = file_url(&self.origin_bare());

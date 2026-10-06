@@ -60,7 +60,7 @@ Rectangle {
     /// The words an entry shows, which the filter reads: what it did, where, what it took, and when — as the row
     /// writes its time and as its card does.
     function wordsOf(entry) {
-        const words = [entry.title, entry.copy]
+        const words = [entry.title, entry.worktree]
         for (let i = 0; i < entry.parts.length; i++)
             words.push(entry.parts[i].text)
         words.push(pane.words.ago(entry.at, pane.now), pane.words.whenWords(entry.at, pane.now))

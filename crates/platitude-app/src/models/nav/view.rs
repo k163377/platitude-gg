@@ -169,7 +169,7 @@ impl NavSectionModel {
         self.run.is_empty() || self.run_of(at) == self.run
     }
 
-    /// The memory report's name for this list — one per worktree run, so
+    /// The memory report's name for this list — one per working-tree run, so
     /// three lists do not read as one that grew.
     fn named(&self) -> String {
         if self.run.is_empty() {
@@ -262,9 +262,9 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
-    /// The path of the other working copy holding `branch` (contract on
+    /// The path of the other worktree holding `branch` (contract on
     /// the `worktree_holding` slot). Not `told`: two fields decide it — the
-    /// row's branch, and not being this window's own copy.
+    /// row's branch, and not being this window's own worktree.
     pub(super) fn worktree_with(&self, branch: &str) -> String {
         if branch.is_empty() || self.section != "worktrees" {
             return String::new();

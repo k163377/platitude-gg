@@ -1,4 +1,4 @@
-//! One working tree, one write order — held apart from the sessions
+//! One worktree, one write order — held apart from the sessions
 //! writing to it.
 //!
 //! A session closed mid-write keeps that write running
@@ -24,7 +24,7 @@ use std::collections::VecDeque;
 use super::*;
 
 /// Every order this process has handed out, by git directory. Weak, so
-/// the last session on a working tree takes its order with it.
+/// the last session on a worktree takes its order with it.
 static ORDERS: Mutex<BTreeMap<PathBuf, std::sync::Weak<WriteOrder>>> = Mutex::new(BTreeMap::new());
 
 /// Held while places are taken, in any order: a write with places in two
@@ -64,7 +64,7 @@ pub(super) fn of(git_dir: &Path) -> Arc<WriteOrder> {
     order
 }
 
-/// The order the local writes of one working tree run in.
+/// The order the local writes of one worktree run in.
 pub(super) struct WriteOrder {
     held: Mutex<Held>,
     /// Rung whenever the front of the order moved. The value says
@@ -174,7 +174,7 @@ impl WriteOrder {
     }
 }
 
-/// A write's place in its working tree's order, held from acceptance
+/// A write's place in its worktree's order, held from acceptance
 /// until the write and the reads behind it are done. Given back by
 /// dropping it, whichever way the write ended, so a place can never be
 /// left blocking the tree.

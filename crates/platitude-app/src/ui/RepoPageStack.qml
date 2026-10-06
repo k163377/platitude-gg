@@ -50,17 +50,17 @@ StackLayout {
             if (leaving !== null)
                 leaving.leaveFront()
         }
-        // A switch to another working copy of the same repository keeps the page (the tab id does not move); it drops
-        // what the old copy owned between these two (`RepoPage.leaveCopy` / `standInCopy`).
-        function onLeavingCopy(index) {
+        // A switch to another worktree of the same repository keeps the page (the tab id does not move); it drops
+        // what the old worktree owned between these two (`RepoPage.leaveWorktree` / `standInWorktree`).
+        function onLeavingWorktree(index) {
             const leaving = stack.pageAt(index)
             if (leaving !== null)
-                leaving.leaveCopy()
+                leaving.leaveWorktree()
         }
-        function onStoodCopy(index) {
+        function onStoodWorktree(index) {
             const stood = stack.pageAt(index)
             if (stood !== null)
-                stood.standInCopy()
+                stood.standInWorktree()
         }
     }
 

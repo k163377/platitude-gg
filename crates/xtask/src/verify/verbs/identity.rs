@@ -128,29 +128,29 @@ pub(super) const TABLE: &[Verb] = &[
     // The refresh chapter, worked and read back off the store, with what
     // the chooser shows and which boxes stand beside it (a box that is not
     // there is an absence a picture leaves to the eye). A fresh store reads
-    // at the default bounds and reads the copies automatically; a ceiling
-    // typed under its floor comes back as the floor.
+    // at the default bounds and reads the other worktrees automatically; a
+    // ceiling typed under its floor comes back as the floor.
     Verb {
         name: "settings-refresh",
         when: &[
             (
                 Arg::Is("2:30:auto:3:90"),
-                "settings_refresh refresh=2-30 copies=auto copies_bounds=3-90 copies_secs=30 shown=Automatic boxes=bounds",
+                "settings_refresh refresh=2-30 worktrees=auto worktrees_bounds=3-90 worktrees_secs=30 shown=Automatic boxes=bounds",
             ),
             (
                 Arg::Is("::fixed:20"),
-                "settings_refresh refresh=5-15 copies=fixed copies_bounds=5-45 copies_secs=20 shown=Fixed boxes=every",
+                "settings_refresh refresh=5-15 worktrees=fixed worktrees_bounds=5-45 worktrees_secs=20 shown=Fixed boxes=every",
             ),
             (
                 Arg::Is("::off"),
-                "settings_refresh refresh=5-15 copies=off copies_bounds=5-45 copies_secs=30 shown=Off boxes=none",
+                "settings_refresh refresh=5-15 worktrees=off worktrees_bounds=5-45 worktrees_secs=30 shown=Off boxes=none",
             ),
             (
                 Arg::Is("20:10"),
-                "settings_refresh refresh=20-20 copies=auto",
+                "settings_refresh refresh=20-20 worktrees=auto",
             ),
         ],
-        plain: "settings_refresh refresh=5-15 copies=auto copies_bounds=5-45 copies_secs=30 shown=Automatic boxes=bounds",
+        plain: "settings_refresh refresh=5-15 worktrees=auto worktrees_bounds=5-45 worktrees_secs=30 shown=Automatic boxes=bounds",
     },
     // The way out over the chapter's bound boxes left unfinished, both
     // pairs set off their defaults first (7-20, 9-60): what each box held
@@ -160,9 +160,9 @@ pub(super) const TABLE: &[Verb] = &[
         name: "settings-refresh-leave",
         when: &[(
             Arg::Is("3::7:"),
-            "settings_refresh_leave refresh=3-15 copies=auto copies_bounds=7-45 copies_secs=30 open=false",
+            "settings_refresh_leave refresh=3-15 worktrees=auto worktrees_bounds=7-45 worktrees_secs=30 open=false",
         )],
-        plain: "settings_refresh_leave refresh=5-15 copies=auto copies_bounds=5-45 copies_secs=30 open=false",
+        plain: "settings_refresh_leave refresh=5-15 worktrees=auto worktrees_bounds=5-45 worktrees_secs=30 open=false",
     },
     // The way out taken over a git waiting to be applied: the screen
     // still stands with its mark turned, and what holds it must be the

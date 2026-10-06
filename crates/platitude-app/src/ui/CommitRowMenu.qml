@@ -20,12 +20,12 @@ Item {
     property string heldReason: ""
 
     /// The name this menu is aimed at: the one the chip draws, or the one pressed in the chip's stacked list. `kind`
-    /// is `branch` / `remote` / `tag`, or `worktree` for a working copy's folder chip — its name then the copy's path —
+    /// is `branch` / `remote` / `tag`, or `worktree` for a worktree's folder chip — its name then the worktree's path —
     /// and empty on a row that draws neither (デザイン規約 §グラフ行の右クリック).
     property string targetKind: ""
     property string targetName: ""
     /// What merge / rebase are handed: the name where the row draws one — a merge by name says so in the commit it
-    /// writes, and one by id does not. A copy's path is no ref, so the commit.
+    /// writes, and one by id does not. A worktree's path is no ref, so the commit.
     readonly property string integrateRef:
         rowMenu.targetName !== "" && rowMenu.targetKind !== "worktree" ? rowMenu.targetName : rowMenu.oid
     /// The branch every one of these rows makes its sentence about (規約 §履歴を合流させる).
@@ -50,7 +50,7 @@ Item {
     /// Whether the row's name is somewhere to move to, and whether that move asks first (`offers::ref_menu`).
     required property bool canSwitch
     required property bool switchAsks
-    /// …or leads to the working copy holding that name instead: that copy's folder (`RefRowMenu.heldLeaf`).
+    /// …or leads to the worktree holding that name instead: that worktree's folder (`RefRowMenu.heldLeaf`).
     required property string heldLeaf
     /// And whether that name has a far side to pull from — the third answer off those same rules.
     required property bool canPull
@@ -99,11 +99,11 @@ Item {
     signal deleteTagRequested(string tag)
     signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere, string expect)
     signal deleteTagEverywhereRequested(string tag, string remote, string expect)
-    /// The WORKTREE card's three, passed straight up (`RefWorktreeMenu`): the box for a new branch in a copy of its
-    /// own, the row's own branch out in one, and `worktree remove`.
-    signal copyHereRequested(string oidHex)
-    signal copyAddRequested(string mode, string branch, string start, string path, string name)
-    signal removeCopyRequested(string path, string name)
+    /// The WORKTREE card's three, passed straight up (`RefWorktreeMenu`): the box for a new branch in a worktree of
+    /// its own, the row's own branch out in one, and `worktree remove`.
+    signal worktreeHereRequested(string oidHex)
+    signal worktreeAddRequested(string mode, string branch, string start, string path, string name)
+    signal removeWorktreeRequested(string path, string name)
     /// The menu went away — and the stacked list it may have been standing on is the pointer's to answer for again.
     signal dismissed()
 
@@ -124,7 +124,7 @@ Item {
     readonly property alias hardResetRow: hardResetItem
     /// The three cards the rows above hang behind (`AppMenu.openSub`).
     readonly property alias branchCard: branchCommitMenu
-    readonly property alias copyCard: copyCommitMenu
+    readonly property alias worktreeCard: worktreeCommitMenu
     readonly property alias tagCard: tagCommitMenu
 
     anchors.fill: parent
@@ -135,11 +135,11 @@ Item {
         stashMenu.offer()
     }
     /// `facts` is what the cards stand on, read where the models are (`CommitMenuState.cardFacts`): `branch` and
-    /// `tag`, each already aimed at the target or emptied because the target is the other's kind, `copy` — the
-    /// working copy the target names or the one holding its branch (undefined for none) — with `copyHere` / `busy`,
-    /// and `making`, the two rows that make a copy (`RefWorktreeMenu.standOn`).
+    /// `tag`, each already aimed at the target or emptied because the target is the other's kind, `worktree` — the
+    /// worktree the target names or the one holding its branch (undefined for none) — with `worktreeHere` / `busy`,
+    /// and `making`, the two rows that make a worktree (`RefWorktreeMenu.standOn`).
     function offerCommit(facts) {
-        copyCommitMenu.standOn(facts.copy, facts.copyHere, facts.busy, facts.making)
+        worktreeCommitMenu.standOn(facts.worktree, facts.worktreeHere, facts.busy, facts.making)
         // Every card stands on its facts before `offer()`: its `applies` decides whether its row counts
         // (`AppMenu.offeredRows`).
         const branchy = rowMenu.targetKind === "branch" || rowMenu.targetKind === "remote"
@@ -197,10 +197,10 @@ Item {
         // leave HEAD on no branch.
         AppMenuItem {
             id: switchCommitItem
-            // A branch another working copy holds leads to that copy, in the same words and seat as the sidebar's row
+            // A branch another worktree holds leads to that worktree, in the same words and seat as the sidebar's row
             // (デザイン規約 §メニュー).
             code: rowMenu.heldLeaf === "" ? "switch" : ""
-            //: The row that leads to the working copy holding this branch; the folder's name follows it.
+            //: The row that leads to the worktree holding this branch; the folder's name follows it.
             text: rowMenu.heldLeaf === "" ? "" : qsTr("Open")
             nameMark: rowMenu.heldLeaf === "" ? "" : "tree"
             nameMarkTint: Theme.success
@@ -345,15 +345,15 @@ Item {
         }
         AppMenuSeparator {}
         // The same WORKTREE card as the sidebar's, above the TAG card: `Create worktree here…` always, the chip's
-        // branch out in a copy of its own, and the copy the chip names or the one holding the chip's branch taken away
-        // (デザイン規約 §メニュー の入れ子).
+        // branch out in a worktree of its own, and the worktree the chip names or the one holding the chip's branch
+        // taken away (デザイン規約 §メニュー の入れ子).
         RefWorktreeMenu {
-            id: copyCommitMenu
+            id: worktreeCommitMenu
             heldReason: rowMenu.heldReason
-            onCopyHereRequested: oidHex => rowMenu.copyHereRequested(oidHex)
-            onCopyAddRequested: (mode, branch, start, path, name) =>
-                rowMenu.copyAddRequested(mode, branch, start, path, name)
-            onRemoveRequested: (path, name) => rowMenu.removeCopyRequested(path, name)
+            onWorktreeHereRequested: oidHex => rowMenu.worktreeHereRequested(oidHex)
+            onWorktreeAddRequested: (mode, branch, start, path, name) =>
+                rowMenu.worktreeAddRequested(mode, branch, start, path, name)
+            onRemoveRequested: (path, name) => rowMenu.removeWorktreeRequested(path, name)
         }
         AppMenuSeparator {}
         // The same TAG card as the sidebar's: `Create tag here…` always, and the tag's own rows where the row draws

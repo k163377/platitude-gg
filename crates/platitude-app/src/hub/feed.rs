@@ -162,9 +162,9 @@ pub struct Feeds {
     pub status_nav_conflicts: Arc<Feed<StatusMsg>>,
     pub status_nav_unstaged: Arc<Feed<StatusMsg>>,
     pub status_nav_staged: Arc<Feed<StatusMsg>>,
-    /// The list of another copy the pane is showing (`CarriedStatusMsg`).
+    /// The list of another worktree the pane is showing (`CarriedStatusMsg`).
     /// One list where this window's own tree has three — nothing here can
-    /// move that copy's index — and a feed of its own: shared, this
+    /// move that worktree's index — and a feed of its own: shared, this
     /// window's status tick would take the other's rows off the screen.
     pub carried_nav: Arc<Feed<CarriedStatusMsg>>,
     pub stash: Arc<Feed<super::StashList>>,

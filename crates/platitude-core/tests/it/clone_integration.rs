@@ -27,7 +27,7 @@ async fn a_clone_lands_in_the_folder_it_was_named() {
     assert_eq!(
         std::fs::read_to_string(into.join("a.txt")).unwrap(),
         "one\n",
-        "the working copy is checked out"
+        "the working tree is checked out"
     );
     platitude_core::repo::open(&exec, &into, &cancel)
         .await

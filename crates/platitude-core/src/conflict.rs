@@ -116,7 +116,7 @@ pub struct Sides {
 ///
 /// `branch` is the current branch as the caller's status read it (`None`
 /// detached: no name), handed in so each tick does not read HEAD again.
-/// `git_dir` is the working copy's own (`RepoInfo::git_dir`), where the
+/// `git_dir` is the worktree's own (`RepoInfo::git_dir`), where the
 /// rebase keeps its state.
 pub async fn sides(
     executor: &GitExecutor,
@@ -158,10 +158,10 @@ pub async fn sides(
     }
 }
 
-/// Reads a file of the working copy's own git directory, trimmed, empty
-/// when it is not there. Only for the per-copy state a stopped operation
+/// Reads a file of the worktree's own git directory, trimmed, empty
+/// when it is not there. Only for the per-worktree state a stopped operation
 /// keeps (`opstate`'s module doc): what lives in the common directory —
-/// config, refs, hooks — is not under a linked copy's `git_dir`.
+/// config, refs, hooks — is not under a linked worktree's `git_dir`.
 pub(crate) fn git_file(git_dir: &Path, rel: &str) -> String {
     std::fs::read_to_string(git_dir.join(rel))
         .map(|s| s.trim().to_string())

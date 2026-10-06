@@ -34,7 +34,7 @@ HoverToolButton {
     /// Counts against the upstream, drawn as `HeadTrack`; both zero draws nothing.
     property int ahead: 0
     property int behind: 0
-    /// The working copy, set after the name as one run — tree mark + folder name, a step down and quieter, as the tab
+    /// The worktree, set after the name as one run — tree mark + folder name, a step down and quieter, as the tab
     /// draws it (デザイン規約 §タブの所作). Empty draws none.
     property string trail: ""
     /// How many pixels narrower than whole the row asks this picker to be (the order between pickers is the row's —
@@ -52,7 +52,7 @@ HoverToolButton {
         : Math.max(0, Math.ceil(noteRuler.advanceWidth) - Math.ceil(noteFloorRuler.advanceWidth))
     /// The width the lines are cut to: the longer line less what was asked, never under the wider floor.
     readonly property real textRoom: picker.textWhole - Math.min(Math.max(0, picker.given), picker.slack)
-    /// …and what that takes off each run: the first line gives the copy's run before the name
+    /// …and what that takes off each run: the first line gives the worktree's run before the name
     /// (規約 §操作パネル の譲る順).
     readonly property real lineOneShort: Math.max(0, picker.lineOneWhole - picker.textRoom)
     readonly property real trailGiven: Math.min(picker.lineOneShort, picker.trailSlack)
@@ -288,7 +288,7 @@ HoverToolButton {
                          : picker.saying ? picker.tone
                          : Theme.textMuted
                 }
-                // The working copy's run (`trail`): one step before the mark, none after it.
+                // The worktree's run (`trail`): one step before the mark, none after it.
                 NavIcon {
                     id: trailMark
                     Layout.leftMargin: picker.gap

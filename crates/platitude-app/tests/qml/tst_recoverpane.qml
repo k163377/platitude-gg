@@ -64,7 +64,7 @@ Item {
         /// Two minutes before the moment the list reads its times against.
         function entry(title) {
             return { kind: "reset", mark: "branch", tint: Theme.accent, title: title, at: page.recoverNow - 120,
-                     copy: "", parts: [{ mark: "branch", tint: Theme.accent, text: "2 commits",
+                     worktree: "", parts: [{ mark: "branch", tint: Theme.accent, text: "2 commits",
                                          restore: "as branch main-pgg-restored", look: "commit" }] }
         }
 

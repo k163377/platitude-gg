@@ -16,7 +16,7 @@ MenuItem {
     /// A short warning tag after the row's words ("already pushed"); the row still runs on click.
     property string note: ""
 
-    /// A second name after the row's own — the working copy a tab is in, drawn the way the tab draws it
+    /// A second name after the row's own — the worktree a tab is in, drawn the way the tab draws it
     /// (デザイン規約 §タブの所作). Empty draws none.
     property string trail: ""
 
@@ -36,8 +36,9 @@ MenuItem {
     property string markKind: ""
     property color markTint: Theme.textSecondary
     readonly property bool heads: menuItem.markKind !== ""
-    /// Whether that mark makes this row a heading. False for a mark about the row itself (a copy's padlock, the house,
-    /// the tree — the marks `NavRowBody.seatMark` gives): dressed as a heading it reads as a title with nothing under.
+    /// Whether that mark makes this row a heading. False for a mark about the row itself (a worktree's padlock, the
+    /// house, the tree — the marks `NavRowBody.seatMark` gives): dressed as a heading it reads as a title with nothing
+    /// under.
     property bool headed: true
     readonly property bool titled: menuItem.heads && menuItem.headed
     /// Whether this row's menu keeps the left menu's seat on every row (`AppMenu.seatWorn`), so every name on the card
@@ -62,7 +63,7 @@ MenuItem {
     property bool badgeGone: false
     readonly property bool badged: menuItem.remoteBadge || menuItem.badgePr || menuItem.badgeGone
 
-    /// A name ending the row's words, with its kind's mark against it — a working copy's folder behind the WORKTREES
+    /// A name ending the row's words, with its kind's mark against it — a worktree's folder behind the WORKTREES
     /// mark (`RefRowMenu`'s `Open`). It always ends them: a mark is drawn, not written, so it cannot take a sentence's
     /// seat the way a coloured name can (`refWords`).
     property string nameMark: ""
@@ -71,7 +72,7 @@ MenuItem {
     readonly property bool namesMark: menuItem.nameMark !== "" && menuItem.markName !== ""
     /// Automation: whether that name lost its tail — a picture a pixel short and one whole read alike at a glance.
     readonly property bool nameCut: menuItem.namesMark && markNameLabel.truncated
-    /// A fact about the row in the left menu's far column — the branch a working copy has out
+    /// A fact about the row in the left menu's far column — the branch a worktree has out
     /// (`NavRowBody.branchSeat`). Empty draws none.
     property string sideName: ""
     /// The step in front of `nameMark`: a mark inside a word is a letter (デザイン規約 §余白), so a word's step less the
@@ -101,7 +102,7 @@ MenuItem {
     readonly property string blockedWhy:
         menuItem.blockedReason !== "" ? menuItem.blockedReason : menuItem.menuHeldReason
     readonly property bool blocked: menuItem.blockedWhy !== ""
-    /// A working copy's folder inside the row's own reason (`blockedReason`); empty for none.
+    /// A worktree's folder inside the row's own reason (`blockedReason`); empty for none.
     property string reasonMarkWord: ""
     /// The word the shared tooltip stands the tree mark against (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別
     /// 「ツールチップだけは字の中」): the folder in the reason, or the folder this row names behind the tree mark, which the

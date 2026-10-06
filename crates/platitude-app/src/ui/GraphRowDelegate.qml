@@ -102,9 +102,9 @@ Item {
         view.model.carriedRevision
         return view.model.carriedName(rowItem.index)
     }
-    // A row about a copy this window is not open on. **It selects like any other row and opens that copy read-only**
-    // (`leftClick`) — the only tree this window can write is its own (`RepoPage.wipWritable`); the copy's writes are
-    // in its own tab, which the double-click opens (デザイン規約 §別の作業コピーを読む).
+    // A row about a worktree this window is not open on. **It selects like any other row and opens that worktree
+    // read-only** (`leftClick`) — the only tree this window can write is its own (`RepoPage.wipWritable`); the
+    // worktree's writes are in its own tab, which the double-click opens (デザイン規約 §別の worktree を読む).
     readonly property bool carried: rowItem.carriedName !== ""
     // Its six tallies (`GraphModel::carried_tally` — `{added, modified, deleted, renamed, copied, conflicted}`), and
     // nothing on every other row.
@@ -114,7 +114,7 @@ Item {
         rowItem.ListView.view.model.carriedRevision
         return rowItem.ListView.view.model.carriedTally(rowItem.index)
     }
-    // The six counts an uncommitted row shows: another copy's off its row, this window's off the view.
+    // The six counts an uncommitted row shows: another worktree's off its row, this window's off the view.
     readonly property var shownTally: {
         if (rowItem.carriedTally)
             return rowItem.carriedTally
@@ -144,12 +144,12 @@ Item {
     // **The name this row draws**: the chip's first record, whatever kind. The spaced second click renames it and a
     // right-click aims the menu's cards at it — one answer, so the row cannot rename one name and offer another.
     // **Not `primaryChip`**: a tag leads nowhere but can still be renamed (デザイン規約 §左メニューの所作). The two
-    // markers (the detached HEAD, a working copy standing here) name no ref, so they answer null.
+    // markers (the detached HEAD, a worktree standing here) name no ref, so they answer null.
     readonly property var renameChip:
         rowItem.labelRecords.length > 0 && GitFacts.refKind(rowItem.labelRecords[0].kind) !== ""
             ? rowItem.labelRecords[0] : null
-    // **What a right-click aims the menu's cards at**: the same first record, and a working copy's folder chip too —
-    // a copy has a card (its WORKTREE card) though no name to rename (デザイン規約 §グラフ行の右クリック).
+    // **What a right-click aims the menu's cards at**: the same first record, and a worktree's folder chip too —
+    // a worktree has a card (its WORKTREE card) though no name to rename (デザイン規約 §グラフ行の右クリック).
     readonly property var menuChip:
         rowItem.labelRecords.length > 0 && GitFacts.menuKind(rowItem.labelRecords[0].kind) !== ""
             ? rowItem.labelRecords[0] : null
@@ -207,14 +207,14 @@ Item {
     }
 
     readonly property real labelsW: ListView.view ? ListView.view.labelWidth : Metrics.labelColW
-    /// What a copy's uncommitted row may spend on its words and name (only that row reads it). **Measured off the row
-    /// and the view's column widths, not off the message column**: a layout handed more than its cell holds grows past
-    /// the pane, so a ceiling read off that column moves out of the way of what it caps. **Every term of the message
-    /// column is in it**, as in `GraphPane.subjectTextX`: move one of those and this moves too.
+    /// What a worktree's uncommitted row may spend on its words and name (only that row reads it). **Measured off the
+    /// row and the view's column widths, not off the message column**: a layout handed more than its cell holds grows
+    /// past the pane, so a ceiling read off that column moves out of the way of what it caps. **Every term of the
+    /// message column is in it**, as in `GraphPane.subjectTextX`: move one of those and this moves too.
     readonly property real wipRoom:
         rowItem.width - rowItem.labelsW - (ListView.view ? ListView.view.graphColWidth : 0)
         - 2 * Theme.spaceSm - 2 * Theme.borderWidth - 5 * Theme.spaceXs - tallySeat.implicitWidth
-    /// What is left of that for the copy's name. **The dash and the mark are measured where they are drawn**
+    /// What is left of that for the worktree's name. **The dash and the mark are measured where they are drawn**
     /// (`furnitureW`), never written down: the dash's width is the font's, the mark's seat its ink (規約 §余白).
     /// **The words never cut**, so the whole overrun is the name's (規約 §未コミット行が名乗るもの).
     readonly property real carriedNameMax:
@@ -347,7 +347,7 @@ Item {
                                 height: Theme.iconSm
                             }
                         }
-                        // Cut in the middle, as this copy's name is everywhere (規約 §別の作業コピーを読む).
+                        // Cut in the middle, as this worktree's name is everywhere (規約 §別の worktree を読む).
                         CutName {
                             Layout.maximumWidth: rowItem.carriedNameMax
                             text: rowItem.carriedName
@@ -466,7 +466,7 @@ Item {
         // graph brought under a still hand (`handHeld`).
         if (!view || rowItem.renameWaiting || rowItem.handHeld)
             return
-        // Another copy's row has no commit behind it: its card would come up empty, stamped `1970-01-01`
+        // Another worktree's row has no commit behind it: its card would come up empty, stamped `1970-01-01`
         // (規約 §hover のツールチップ「ツールチップが立つのは、足すものが在る的だけ」).
         if (rowItem.carried)
             return
@@ -491,8 +491,8 @@ Item {
     /// A left press, as this row answers one — **at the press, not at the release**: answered at the release, the row
     /// sits unlit while the button is down. Named so that a run with no pointer can press the row itself.
     function leftClick(modifiers) {
-        // Another copy's row: the page is handed the row number, since every uncommitted row carries the same all-zero
-        // id (`RepoPage.openWipFor`). A held modifier chooses nothing — these rows are not commits.
+        // Another worktree's row: the page is handed the row number, since every uncommitted row carries the same
+        // all-zero id (`RepoPage.openWipFor`). A held modifier chooses nothing — these rows are not commits.
         if (rowItem.carried) {
             rowItem.claimRow(Qt.NoModifier)
             return
@@ -519,7 +519,7 @@ Item {
         // (`ReclickGesture.hush`).
         if (rowItem.ListView.view.clicksHushed)
             return false
-        // **Another copy's row opens that copy in a tab of its own** — the same door as the WORKTREES row
+        // **Another worktree's row opens that worktree in a tab of its own** — the same door as the WORKTREES row
         // (`SidebarRowGestures.activateRow`), and the only place its files can be staged and committed.
         if (rowItem.carried) {
             const path = rowItem.ListView.view.model.carriedPath(rowItem.index)

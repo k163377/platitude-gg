@@ -95,19 +95,27 @@ impl AppBackend {
         Member = git_concurrency_default,
         Constant
     );
-    // "auto" | "fixed" | "off" (`settings::CopiesReading::word`).
+    // "auto" | "fixed" | "off" (`settings::WorktreesReading::word`).
     qproperty!(
-        "copiesReading",
-        Member = copies_reading,
+        "worktreesReading",
+        Member = worktrees_reading,
         Notify = settings_changed
     );
     qproperty!(
-        "copiesIntervalSecs",
-        Member = copies_interval_secs,
+        "worktreesIntervalSecs",
+        Member = worktrees_interval_secs,
         Notify = settings_changed
     );
-    qproperty!("copiesIntervalMin", Member = copies_interval_min, Constant);
-    qproperty!("copiesIntervalMax", Member = copies_interval_max, Constant);
+    qproperty!(
+        "worktreesIntervalMin",
+        Member = worktrees_interval_min,
+        Constant
+    );
+    qproperty!(
+        "worktreesIntervalMax",
+        Member = worktrees_interval_max,
+        Constant
+    );
     // The floors and ceilings of the reads while a repository is on screen
     // (`session::pace`), and the range a box can ask for.
     qproperty!(
@@ -121,13 +129,13 @@ impl AppBackend {
         Notify = settings_changed
     );
     qproperty!(
-        "copiesFloorSecs",
-        Member = copies_floor_secs,
+        "worktreesFloorSecs",
+        Member = worktrees_floor_secs,
         Notify = settings_changed
     );
     qproperty!(
-        "copiesCeilingSecs",
-        Member = copies_ceiling_secs,
+        "worktreesCeilingSecs",
+        Member = worktrees_ceiling_secs,
         Notify = settings_changed
     );
     qproperty!("paceMinSecs", Member = pace_min_secs, Constant);
@@ -260,11 +268,11 @@ impl AppBackend {
         self.apply_git_concurrency(concurrency);
     }
 
-    /// How the other copies are read — `reading` as the file spells it —
+    /// How the other worktrees are read — `reading` as the file spells it —
     /// and the fixed interval in seconds, kept whatever is chosen.
     #[qslot]
-    fn set_copies_reading(&mut self, reading: String, secs: i32) {
-        self.apply_copies_reading(&reading, secs);
+    fn set_worktrees_reading(&mut self, reading: String, secs: i32) {
+        self.apply_worktrees_reading(&reading, secs);
     }
 
     /// The shortest and the longest interval a repository on screen is
@@ -274,9 +282,9 @@ impl AppBackend {
         self.apply_pace_bounds(Some((floor, ceiling)), None);
     }
 
-    /// The same pair for each other copy read automatically.
+    /// The same pair for each other worktree read automatically.
     #[qslot]
-    fn set_copies_bounds(&mut self, floor: i32, ceiling: i32) {
+    fn set_worktrees_bounds(&mut self, floor: i32, ceiling: i32) {
         self.apply_pace_bounds(None, Some((floor, ceiling)));
     }
 

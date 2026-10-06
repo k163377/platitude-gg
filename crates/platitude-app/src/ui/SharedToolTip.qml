@@ -35,7 +35,7 @@ Item {
         const at = shared.sharedTip.parent
         return at !== null && at.tipHref !== undefined ? at.tipHref : ""
     }
-    /// The word the drawn tree mark stands in front of (a working copy's name, 規約 §ref の種別), read off the target
+    /// The word the drawn tree mark stands in front of (a worktree's name, 規約 §ref の種別), read off the target
     /// like the two above; the markup opens a gap for the mark (`Words.roomInSentence`).
     readonly property string tipMarkWord: {
         const at = shared.sharedTip.parent

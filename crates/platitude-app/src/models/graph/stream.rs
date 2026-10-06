@@ -336,9 +336,9 @@ impl GraphModel {
         self.truncated = truncated;
         self.finish_count += 1;
         // Read off the rows: only they say which of the overtaking passes
-        // is on screen. Not by the zero id alone — a copy's row carries it
-        // too (`GraphModel::carried_row_of`), and a pass that put one first
-        // would read as up to date while one read behind.
+        // is on screen. Not by the zero id alone — another worktree's row
+        // carries it too (`GraphModel::carried_row_of`), and a pass that put
+        // one first would read as up to date while one read behind.
         self.carried_top = self.carried.contains_key(&0);
         self.wip_row = !self.carried_top
             && self
@@ -370,7 +370,7 @@ mod tests {
     use super::super::item::GraphRowItem;
     use super::super::{CarriedRow, GraphModel};
 
-    /// A row wearing git's all-zero id, as every working copy's
+    /// A row wearing git's all-zero id, as every worktree's
     /// uncommitted row does.
     fn zero_row() -> GraphRowItem {
         GraphRowItem {
@@ -386,13 +386,13 @@ mod tests {
         }
     }
 
-    /// Settles one pass over `rows`; `copies` are the indexes
+    /// Settles one pass over `rows`; `worktrees` are the indexes
     /// `extend_marks` would file as a neighbour's.
-    fn pass(model: &mut GraphModel, rows: Vec<GraphRowItem>, copies: &[usize]) {
+    fn pass(model: &mut GraphModel, rows: Vec<GraphRowItem>, worktrees: &[usize]) {
         let total = rows.len();
         model.clear_marks();
         model.rows = rows;
-        for at in copies {
+        for at in worktrees {
             model.carried.insert(*at, CarriedRow::default());
         }
         model.settle_footer(
@@ -407,23 +407,23 @@ mod tests {
     /// carries its row. A pass that beat the first status carries the
     /// neighbours' zero-id rows and not ours; read by the id alone, it
     /// would let the landings (`RepoPage.trySelectDefault`,
-    /// `RepoPage.tryPendingWipSelect`) take a copy's row.
+    /// `RepoPage.tryPendingWipSelect`) take another worktree's row.
     #[test]
     fn a_pass_that_beat_the_status_carries_no_row_this_window_can_land_on() {
         let mut model = GraphModel::default();
 
-        // The walk, ahead of this window's first status: the copies have
-        // rows and we have none.
+        // The walk, ahead of this window's first status: the other
+        // worktrees have rows and we have none.
         pass(
             &mut model,
             vec![zero_row(), zero_row(), commit_row("a1")],
             &[0, 1],
         );
-        assert!(!model.wip_row, "a neighbour copy's row stood in for ours");
+        assert!(!model.wip_row, "another worktree's row stood in for ours");
         assert!(model.carried_top, "whose the leading row was went unsaid");
 
         // The status lands and asks for the walk again. Ours is prepended,
-        // and the copies' rows are still there under it.
+        // and the other worktrees' rows are still there under it.
         pass(
             &mut model,
             vec![zero_row(), zero_row(), zero_row(), commit_row("a1")],

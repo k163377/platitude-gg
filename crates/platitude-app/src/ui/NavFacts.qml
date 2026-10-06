@@ -8,8 +8,8 @@ import platitude.ui
 /// (デザイン規約 §左メニューの所作). What each section says is here, not in the shared list, row and lines
 /// (`NavList` / `NavItemDelegate` / `NavRowFacts` / `NavFactLine`), so none of them tests which section it is in.
 ///
-/// The relations are one read from different ends — a branch names its copy and its reading, a remote-tracking ref
-/// the branch reading it and that branch's copy, a working copy its branch — so the lines are the same parts in a
+/// The relations are one read from different ends — a branch names its worktree and its reading, a remote-tracking
+/// ref the branch reading it and that branch's worktree, a worktree its branch — so the lines are the same parts in a
 /// different order.
 QtObject {
     id: navFacts
@@ -26,7 +26,7 @@ QtObject {
     function answers(row) {
         const leaf = !row.folder
         const kind = row.kindHint
-        // The branch measured against this reading, or — on a working copy's row — the branch that copy holds. Both
+        // The branch measured against this reading, or — on a worktree's row — the branch that worktree holds. Both
         // name a BRANCHES row.
         const local = kind === "remote" && leaf && row.sectionModel !== null
                     ? row.sectionModel.trackedBy(row.fullName) : ""
@@ -50,8 +50,8 @@ QtObject {
         // Who that reading belongs to, as the note of a holder apart from it names them; empty where the remotes
         // disagree and nobody decides (`NavSectionModel.tagWeighedAgainst`).
         const by = tagged ? row.sectionModel.tagWeighedAgainst(row.fullName, row.pushRemote) : ""
-        // The copy holding the branch this row is about: its own on a BRANCHES row, the one named above on a
-        // REMOTES row. A working copy's row asks nobody — it is the copy.
+        // The worktree holding the branch this row is about: its own on a BRANCHES row, the one named above on a
+        // REMOTES row. A worktree's row asks nobody — it is the worktree.
         const holds = kind === "branch" ? row.fullName : kind === "remote" ? local : ""
         const held = row.folder || holds === "" || row.worktreesModel === null ? ""
                    : row.worktreesModel.worktreeHolding(holds)
@@ -63,7 +63,7 @@ QtObject {
         const named = local !== "" ? local : branch
         const tip = named === "" || row.branchesModel === null ? "" : row.branchesModel.oidOfName(named)
         return {
-            // A working copy is named by its folder and lives at a path; every other row is named by its full name.
+            // A worktree is named by its folder and lives at a path; every other row is named by its full name.
             "name": kind === "worktree" && leaf ? row.name : row.fullName,
             "path": kind === "worktree" && leaf ? row.fullName : "",
             "remotes": remotes,
@@ -87,7 +87,7 @@ QtObject {
             "at": row.oid_hex,
             // Where a press on the line naming each of them goes (`place`).
             "branchTo": navFacts.place("branch", named, tip),
-            "heldTo": held === "" ? null : navFacts.place("worktree", held, row.worktreesModel.headOfCopy(held)),
+            "heldTo": held === "" ? null : navFacts.place("worktree", held, row.worktreesModel.headOfWorktree(held)),
             "upstreamTo": navFacts.place("remote", upstream, reading),
             // The branch's measure: its own row carries it as a role (a fetch moves it); a row naming another's asks.
             "ahead": asked !== "" ? row.branchesModel.aheadOf(asked) : row.ahead,
@@ -100,10 +100,11 @@ QtObject {
 
     /// Those answers as the lines they draw, in reading order — the table. A line nobody filled is left out.
     function lines(kind, a) {
-        const drawn = kind === "branch" ? [navFacts.copyLine(a), navFacts.readingLine(a)]
-                    : kind === "remote" ? [navFacts.branchLine(a.local, a, a.branchTo), navFacts.copyLine(a)]
-                    // The repository's own copy is already named by its branch (`NavRowBody.homeCopy`), so the line
-                    // naming it again is left out; its measure goes to the row's own line (`NavRowBody`'s track seat).
+        const drawn = kind === "branch" ? [navFacts.worktreeLine(a), navFacts.readingLine(a)]
+                    : kind === "remote" ? [navFacts.branchLine(a.local, a, a.branchTo), navFacts.worktreeLine(a)]
+                    // The repository's own worktree is already named by its branch (`NavRowBody.homeWorktree`), so
+                    // the line naming it again is left out; its measure goes to the row's own line (`NavRowBody`'s
+                    // track seat).
                     : kind === "worktree" ? [a.state === "MAIN" ? null : navFacts.branchLine(a.branch, a, a.branchTo),
                                              navFacts.readingLine(a), navFacts.stateLine(a)]
                     // One line per remote carrying the tag — the one section whose lines are a list.
@@ -140,9 +141,9 @@ QtObject {
              : { "mark": "branch", "markTint": Theme.accent, "text": name, "tone": Theme.textSecondary,
                  "ahead": a.ahead, "behind": a.behind, "note": "", "to": to }
     }
-    /// The working copy holding the branch this row is about, in the WORKTREES section's mark and colour
+    /// The worktree holding the branch this row is about, in the WORKTREES section's mark and colour
     /// (規約 §ref の種別).
-    function copyLine(a) {
+    function worktreeLine(a) {
         return a.heldBy === "" ? null
              : { "mark": "tree", "markTint": Theme.success, "text": a.heldBy,
                  "tone": Theme.textSecondary, "ahead": 0, "behind": 0, "note": "", "to": a.heldTo }

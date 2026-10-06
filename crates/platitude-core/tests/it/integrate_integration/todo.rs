@@ -132,7 +132,7 @@ async fn the_helper_is_found_beside_the_other_binaries() {
 
 /// `--update-refs` works because git's own todo is kept: git writes the
 /// `update-ref` lines itself, none for a tag, a branch outside the range, or
-/// one another working copy has checked out. A helper that overwrote the
+/// one another worktree has checked out. A helper that overwrote the
 /// whole file would drop them and the flag would move nothing
 /// (デザイン規約 §フル interactive rebase); working the set out here would be
 /// a second copy of git's rule.
@@ -144,12 +144,12 @@ async fn update_refs_moves_the_branches_git_named_and_no_others() {
     repo.commit_file("c.txt", "three\n", "c3");
     repo.commit_file("d.txt", "four\n", "c4");
     // Inside the range the rebase replays, outside it, on a tag, and on a
-    // branch a second working copy is standing on.
+    // branch a second worktree is standing on.
     repo.git(&["branch", "inside", "HEAD~1"]);
     repo.git(&["branch", "outside", "HEAD~3"]);
     repo.git(&["tag", "t-inside", "HEAD~1"]);
     repo.git(&["branch", "held", "HEAD~2"]);
-    let elsewhere = repo.path.with_file_name("held-copy");
+    let elsewhere = repo.path.with_file_name("held-worktree");
     let at = elsewhere.to_string_lossy().into_owned();
     repo.git(&["worktree", "add", &at, "held"]);
     let was_inside = repo.git(&["rev-parse", "inside"]);
@@ -205,7 +205,7 @@ async fn update_refs_moves_the_branches_git_named_and_no_others() {
     assert_eq!(
         repo.git(&["rev-parse", "held"]),
         was_held,
-        "the branch another working copy has checked out is left where it was — \
+        "the branch another worktree has checked out is left where it was — \
          git writes no line for one, and this end does not write one either"
     );
     assert_eq!(repo.git(&["rev-parse", "outside"]), was_outside);

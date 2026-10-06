@@ -77,8 +77,8 @@ Item {
             dragOpenTimer.acted = false
             dragOpenTimer.start()
         } else if (act === "nav-open-tip") {
-            // The rest that opens a row, held on: the row opens, and a rest later the supplement it keeps (a working
-            // copy's path) follows from the same unmoved hand (デザイン規約 §左メニューの所作).
+            // The rest that opens a row, held on: the row opens, and a rest later the supplement it keeps (a worktree's
+            // path) follows from the same unmoved hand (デザイン規約 §左メニューの所作).
             const parts = ("" + arg).split(":")
             openTipTimer.kind = parts[0] === "" ? "worktree" : parts[0]
             openTipTimer.row = parts.length > 1 ? Number(parts[1]) : 3
@@ -452,7 +452,7 @@ Item {
             driver.complete()
         }
     }
-    // PGG_AUTO_ACT=nav-open-tip: the working copy's path the open row keeps for the hand that opened it. The picture
+    // PGG_AUTO_ACT=nav-open-tip: the worktree's path the open row keeps for the hand that opened it. The picture
     // shows the words; `says=` is the same path read off the row, so a tip drawn from anywhere else fails to match.
     SampleTimer {
         id: openTipTimer
@@ -732,7 +732,7 @@ Item {
                     navTipTimer.stood = geom
                     return
                 }
-                // Nor until the supplement (a working copy's path) has answered either way: it comes up a rest after
+                // Nor until the supplement (a worktree's path) has answered either way: it comes up a rest after
                 // the lines, and read in between the picture has it half out on one run and not at all on the next.
                 if (!navTipTimer.acted && (navProbe.factsSays() !== "") !== tip.visible)
                     return

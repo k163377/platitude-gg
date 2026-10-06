@@ -337,7 +337,7 @@ pub async fn record_tag_force_push(
     .await
 }
 
-/// Notes a working copy removed: where it was, and what it had out.
+/// Notes a worktree removed: where it was, and what it had out.
 pub async fn record_worktree_remove(
     executor: &GitExecutor,
     workdir: &Path,
@@ -349,7 +349,7 @@ pub async fn record_worktree_remove(
 ) -> Result<(), GitError> {
     let mut trailers = vec![
         ("Operation", "remove worktree".to_string()),
-        ("Working-copy", path.to_string()),
+        ("Worktree-path", path.to_string()),
     ];
     if let Some(branch) = branch {
         trailers.push(("Branch", branch.to_string()));
@@ -456,10 +456,10 @@ pub async fn record_restored(
     .await
 }
 
-/// Which working copy a git directory is (§2.1 `Worktree:`): the main one
-/// ([`super::MAIN_COPY`]), or a linked copy's name under
+/// Which worktree a git directory is (§2.1 `Worktree:`): the main one
+/// ([`super::MAIN_WORKTREE`]), or a linked worktree's name under
 /// `$GIT_DIR/worktrees/` — what still names it after its folder moved
-/// (gitrepository-layout(5)), where `Working-copy:` says where it was.
+/// (gitrepository-layout(5)), where `Worktree-path:` says where it was.
 pub(super) fn worktree_id(git_dir: &Path) -> String {
     let linked = git_dir
         .parent()
@@ -467,7 +467,7 @@ pub(super) fn worktree_id(git_dir: &Path) -> String {
         .is_some_and(|parent| parent == "worktrees");
     match git_dir.file_name() {
         Some(id) if linked => id.to_string_lossy().into_owned(),
-        _ => super::MAIN_COPY.to_string(),
+        _ => super::MAIN_WORKTREE.to_string(),
     }
 }
 

@@ -9,7 +9,7 @@ AppDialog {
     id: openFailedDialog
 
     /// What was picked, and what git made of it: `plain` (no repository here or in any folder above), `bare` (one with
-    /// no work tree), or `other` (git had trouble of its own — `message` is its answer).
+    /// no working tree), or `other` (git had trouble of its own — `message` is its answer).
     property string path: ""
     property string kind: ""
     property string message: ""

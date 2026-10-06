@@ -23,7 +23,7 @@ use crate::process::{GitCommand, GitExecutor};
 pub(super) const TIPS_PER_WALK: usize = 200;
 
 /// The commits `starts` reach that HEAD, the branches, the remote-tracking
-/// branches, the tags, the stash and `held` (the other copies' detached
+/// branches, the tags, the stash and `held` (the other worktrees' detached
 /// HEADs) do not, each with its parents, in `rev-list` order. A start gc
 /// has taken is passed over (`--ignore-missing`).
 pub(super) async fn unreached(

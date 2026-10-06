@@ -7,7 +7,7 @@ pub struct RepoSession {
     /// Reads and refreshes: recorded in the command log only while
     /// background recording is on.
     pub(super) executor: GitExecutor,
-    /// The reads nobody is waiting on — the other copies' status, the
+    /// The reads nobody is waiting on — the other worktrees' status, the
     /// walk behind a chip, the remote tags — served last and kept out of
     /// the click's reserve (`process::Priority::Background`); off the log
     /// like `executor`. The poll's reads stay on `executor`: the front
@@ -77,8 +77,8 @@ pub struct RepoSession {
     /// a poll tick over an untouched file sends nothing.
     ///
     /// One slot, because one pane asks; a read for another target reads as
-    /// "not the one held" and publishes. The working copy is part of the
-    /// key: the same path in another copy is another file
+    /// "not the one held" and publishes. The worktree is part of the
+    /// key: the same path in another worktree is another file
     /// (`RepoSession::load_carried_diff`).
     ///
     /// Written where the event goes out: a fingerprint the pane never
@@ -118,12 +118,13 @@ pub struct RepoSession {
     /// for the rare pass that could not read it off its rows
     /// ([`RepoSession::settle_head_published`]).
     pub(super) head_published_read: Latest,
-    /// One read of another working copy's files at a time
+    /// One read of another worktree's files at a time
     /// ([`RepoSession::read_carried_status`]), which also orders the
     /// answers: reads of different trees finish in any order, and the pane
-    /// would show whichever finished last — the copy the reader stepped off.
+    /// would show whichever finished last — the worktree the reader stepped
+    /// off.
     pub(super) carried_read: Latest,
-    /// Which other copy the read-only pane stands on, and which reading of
+    /// Which other worktree the read-only pane stands on, and which reading of
     /// it the pane holds (`carried::Pane`).
     pub(super) carried_pane: super::carried::Pane,
     /// Line-ending baselines already sampled, keyed by (directory,
@@ -132,7 +133,7 @@ pub struct RepoSession {
     /// `None` is a cached "unknown": it cost the same reads as knowing.
     /// Emptied by a write that reaches the tree or the history and when refs
     /// move, since either can bring a new `.gitattributes` or new neighbours
-    /// (a fetch, a config write, a delete or a copy taken away cannot).
+    /// (a fetch, a config write, a delete or a worktree taken away cannot).
     pub(super) eol_baselines: Mutex<HashMap<(String, String), Option<crate::eol::Baseline>>>,
     /// Whether git normalises line endings here (`core.autocrlf`).
     pub(super) eol_normalises: Derived<bool>,
@@ -188,21 +189,21 @@ pub struct RepoSession {
     /// One permit, held by a running poll: a tick that arrives while the
     /// previous one is still reading is dropped.
     pub(super) poll_slot: Arc<tokio::sync::Semaphore>,
-    /// A read this session owes the working tree: a write landed in it
+    /// A read this session owes the worktree: a write landed in it
     /// while this session was already reading, so the read holding the
     /// slot began before that write and cannot answer for it
     /// ([`RepoSession::read_again`]). Remembered, because a refused clock
     /// tick comes round again and a write's news does not.
     pub(super) read_owed: std::sync::atomic::AtomicBool,
-    /// One permit for a read of the other copies — one copy's, or a pass
-    /// over all of them — so two never run at once.
+    /// One permit for a read of the other worktrees — one worktree's, or a
+    /// pass over all of them — so two never run at once.
     pub(super) carried_slot: Arc<tokio::sync::Semaphore>,
-    /// Whether the other copies are read at all (`set_copies_pace` — the
+    /// Whether the other worktrees are read at all (`set_worktrees_pace` — the
     /// settings' "off", which holds for the page's pace and an opening
     /// alike), which there are, what their reads left and the read in
-    /// flight, under one lock (`carried::Copies`).
-    pub(super) copies: super::carried::Copies,
-    /// When this tree and the other copies are read while the page is on
+    /// flight, under one lock (`carried::OtherWorktrees`).
+    pub(super) other_worktrees: super::carried::OtherWorktrees,
+    /// When this tree and the other worktrees are read while the page is on
     /// screen (`session::pacer`).
     pub(super) pacing: super::pacer::Pacing,
     /// One pass in flight per snapshot, for the reads asked for from more
@@ -216,7 +217,7 @@ pub struct RepoSession {
     pub(super) worktrees_read: ReadFlight<WorktreeRead>,
     /// Submission end of the write queue (`session::write`).
     pub(super) write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
-    /// The order this working tree's local writes run in, shared with
+    /// The order this worktree's local writes run in, shared with
     /// every other session on the same tree (`session::write_order`).
     /// `None` until the repository is open.
     pub(super) write_order: Mutex<Option<Arc<WriteOrder>>>,
@@ -248,26 +249,26 @@ pub struct RepoSession {
     /// Bumped whenever the index above became different readings, so the
     /// join key can cover it without walking the entries.
     pub(super) remote_tag_gen: AtomicU64,
-    /// The branches other working copies have checked out, as the last
+    /// The branches other worktrees have checked out, as the last
     /// worktree read left them. Read by the ref joins so the sidebar rows
     /// and the graph chips get one answer between them; shared as the tag
     /// index is.
     pub(super) worktree_holders: Mutex<Arc<super::joins::WorktreeHolders>>,
-    /// Where each other working copy's HEAD stood when the listing last
+    /// Where each other worktree's HEAD stood when the listing last
     /// named it, by the key its path is compared on (`joins::same_path_key`).
     ///
-    /// The listing runs on the page's tick and learns that a copy has
-    /// committed long before that copy's own `status` reading does
+    /// The listing runs on the page's tick and learns that a worktree has
+    /// committed long before that worktree's own `status` reading does
     /// (`session::carried`); a row drawn from the older reading would
-    /// stand on a commit the copy has left (`relay::Standing`).
+    /// stand on a commit the worktree has left (`relay::Standing`).
     ///
     /// Kept apart from [`Self::worktree_holders`], which decides whether
     /// the refs are read and the graph walked again: folded in there, every
-    /// commit in a neighbouring copy would spend a full refs listing to say
+    /// commit in a neighbouring worktree would spend a full refs listing to say
     /// nothing (`joins::note_worktree_holders`).
-    pub(super) copy_heads: Mutex<Arc<std::collections::HashMap<String, Oid>>>,
+    pub(super) worktree_heads: Mutex<Arc<std::collections::HashMap<String, Oid>>>,
     /// Bumped when the worktree holders became a different set: taking or
-    /// giving back a working copy moves no ref, so nothing else in the join
+    /// giving back a worktree moves no ref, so nothing else in the join
     /// key would notice.
     pub(super) worktree_gen: AtomicU64,
     /// One permit for the background remote-tags read, so a second
@@ -379,7 +380,7 @@ impl RepoSession {
     /// and the network-paced requests in the tail die on this cancel.
     /// Idempotent.
     ///
-    /// Those writes keep their places in the working tree's order
+    /// Those writes keep their places in the worktree's order
     /// (`session::write_order`): a session opened over this one queues
     /// behind them, and giving them back would let it overtake. What is
     /// given up is the reading half — off the list of pages the tree
@@ -393,12 +394,12 @@ impl RepoSession {
         self.forget_the_screens_copy();
     }
 
-    /// This working tree's write order, once the repository is open.
+    /// This worktree's write order, once the repository is open.
     pub(super) fn write_order(&self) -> Option<Arc<WriteOrder>> {
         relock(&self.write_order).clone()
     }
 
-    /// Puts this session on its working tree's order, and on the list of
+    /// Puts this session on its worktree's order, and on the list of
     /// pages told when a write lands in that tree.
     ///
     /// Before the `Opened` event on purpose: that event is what lets the

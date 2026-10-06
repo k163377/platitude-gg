@@ -51,24 +51,24 @@ pub enum ReportKind {
     /// made and the old one is still there. The one report about something
     /// half done, hence its state colour (デザイン規約 §状態「進行中で対処が要る」).
     HalfRenamed,
-    /// A working copy `git worktree remove` would not take away — nothing
+    /// A worktree `git worktree remove` would not take away — nothing
     /// was deleted. The reason is empty where it was uncommitted changes:
     /// git's words end in advice to force it, which the screen does not
     /// offer, so it writes its own (as [`Self::Outdated`]).
     WorktreeKept,
-    /// A working copy git took off its list but could not empty: git goes
+    /// A worktree git took off its list but could not empty: git goes
     /// on to drop its record after a folder it could not delete in full
     /// (a file held open is the usual cause on Windows). Half done, as
     /// [`Self::HalfRenamed`].
     WorktreeHalfRemoved,
-    /// A working copy `git worktree add` would not make — the place still
-    /// listed for another copy, the branch out in another copy or its name
-    /// taken, between the menu opening and git: the menus answer each before
-    /// the press. git takes back the copy it began; a `-b` branch it made
-    /// before turning the place down, or before a checkout that failed,
-    /// stays.
+    /// A worktree `git worktree add` would not make — the place still
+    /// listed for another worktree, the branch out in another worktree or its
+    /// name taken, between the menu opening and git: the menus answer each
+    /// before the press. git takes back the worktree it began; a `-b` branch
+    /// it made before turning the place down, or before a checkout that
+    /// failed, stays.
     WorktreeNotAdded,
-    /// The folder a new working copy was to go in holds something — turned
+    /// The folder a new worktree was to go in holds something — turned
     /// down here, before git, which would have made the branch first
     /// ([`crate::worktrees::add`]). Nothing was made, and there is nobody
     /// to quote.
@@ -180,7 +180,7 @@ pub fn half_renamed(name: &str, from: crate::error::GitError) -> crate::error::G
 /// words since `worktree remove` came in, 2.17).
 const WORKTREE_UNCLEAN: &str = "contains modified or untracked files";
 
-/// A working copy git did not take away, from its answer to
+/// A worktree git did not take away, from its answer to
 /// `worktree remove`. git's `die()` exits 128 before anything is deleted;
 /// any other failure came after the folder's deletion began, and git drops
 /// its record regardless (builtin/worktree.c `remove_worktree`).
@@ -204,8 +204,8 @@ pub fn worktree_not_removed(
     }
 }
 
-/// A working copy git did not make, from its answer to `worktree add`,
-/// quoted down to what it said about the copy: the `Preparing worktree`
+/// A worktree git did not make, from its answer to `worktree add`,
+/// quoted down to what it said about the worktree: the `Preparing worktree`
 /// line is its progress, and a `hint:` is advice to the terminal
 /// (デザイン規約 §答えの要らない報せ「`hint:` は引用しない」).
 #[must_use]
@@ -232,7 +232,7 @@ pub fn worktree_not_added(
     }
 }
 
-/// A working copy turned down before git ran: its folder is not empty.
+/// A worktree turned down before git ran: its folder is not empty.
 /// `path` is only the log's record.
 #[must_use]
 pub fn worktree_folder_taken(name: &str, path: &str) -> crate::error::GitError {
@@ -385,7 +385,7 @@ mod tests {
         );
     }
 
-    /// Copied off a real run (git 2.55.0.windows.3, the copy git itself
+    /// Copied off a real run (git 2.55.0.windows.3, the worktree git itself
     /// was running in): the entry went and the folder stayed. Past `die()`,
     /// so git's words are all there is to say which file held on.
     #[test]
@@ -393,16 +393,17 @@ mod tests {
         let out = crate::process::GitOutput {
             code: 255,
             stdout: Vec::new(),
-            stderr: b"error: failed to delete 'C:/t/wtrm/wt-cur': Permission denied\n".to_vec(),
+            stderr: b"error: failed to delete 'C:/t/worktree-rm/worktree-cur': Permission denied\n"
+                .to_vec(),
         };
-        let err = worktree_not_removed("wt-cur", "git worktree remove".to_string(), &out);
+        let err = worktree_not_removed("worktree-cur", "git worktree remove".to_string(), &out);
 
         let report = err.report().expect("a report");
         assert_eq!(report.kind, ReportKind::WorktreeHalfRemoved);
-        assert_eq!(report.name, "wt-cur");
+        assert_eq!(report.name, "worktree-cur");
         assert_eq!(
             report.reason,
-            "error: failed to delete 'C:/t/wtrm/wt-cur': Permission denied"
+            "error: failed to delete 'C:/t/worktree-rm/worktree-cur': Permission denied"
         );
     }
 

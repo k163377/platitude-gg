@@ -53,7 +53,7 @@ QtObject {
         if (layout.page.blank)
             return
         layout.repoTab.setTagsShown(AppBackend.startTagsShown())
-        // Through the page: the choice also holds for another working copy's lists, which the page hands the pane.
+        // Through the page: the choice also holds for another worktree's lists, which the page hands the pane.
         layout.page.setWipTreeView(AppBackend.startWipTree())
         layout.detailsModel.setTreeView(AppBackend.startDetailsTree())
         layout.page.setDiffSplit(AppBackend.startDiffSplit())

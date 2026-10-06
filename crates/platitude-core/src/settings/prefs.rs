@@ -4,24 +4,24 @@ use toml::{Table, Value};
 
 use super::SCHEMA_VERSION;
 use super::toml::{
-    clamp_to_i64, concurrency, copies, initial_commits, minutes, pace_pair, sub_table, text,
-    timeout_secs,
+    clamp_to_i64, concurrency, initial_commits, minutes, pace_pair, sub_table, text, timeout_secs,
+    worktrees,
 };
 
-/// How the other working copies of a repository are read for uncommitted
+/// How the other worktrees of a repository are read for uncommitted
 /// work (`session::pace`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum CopiesReading {
-    /// Each copy at an interval its weight sets — what a fresh file starts
+pub enum WorktreesReading {
+    /// Each worktree at an interval its weight sets — what a fresh file starts
     /// with.
     #[default]
     Auto,
-    /// Every copy at [`Defaults::copies_interval_secs`].
+    /// Every worktree at [`Defaults::worktrees_interval_secs`].
     Fixed,
     Off,
 }
 
-impl CopiesReading {
+impl WorktreesReading {
     /// As the file spells it.
     #[must_use]
     pub fn word(self) -> &'static str {
@@ -63,20 +63,20 @@ pub struct Defaults {
     /// How many git processes the application runs at once, across every
     /// repository (`process::Limits::of`).
     pub git_concurrency: u32,
-    /// How the other working copies of a repository are read — one
-    /// `git status` per copy per read (`session::carried`).
-    pub copies_reading: CopiesReading,
-    /// Seconds between reads of each other copy where the reading is
-    /// [`CopiesReading::Fixed`]; kept while another is chosen, so choosing
+    /// How the other worktrees of a repository are read — one
+    /// `git status` per worktree per read (`session::carried`).
+    pub worktrees_reading: WorktreesReading,
+    /// Seconds between reads of each other worktree where the reading is
+    /// [`WorktreesReading::Fixed`]; kept while another is chosen, so choosing
     /// it again brings the number back.
-    pub copies_interval_secs: u32,
+    pub worktrees_interval_secs: u32,
     /// The shortest and the longest interval a repository on screen is read
     /// again at (`session::pace`), through `session::pace_bounds_secs`.
     pub refresh_floor_secs: u32,
     pub refresh_ceiling_secs: u32,
-    /// The same pair for each other copy read automatically.
-    pub copies_floor_secs: u32,
-    pub copies_ceiling_secs: u32,
+    /// The same pair for each other worktree read automatically.
+    pub worktrees_floor_secs: u32,
+    pub worktrees_ceiling_secs: u32,
 }
 
 impl Default for Defaults {
@@ -87,12 +87,12 @@ impl Default for Defaults {
             initial_commits: Some(crate::session::DEFAULT_LOG_LIMIT),
             git_path: String::new(),
             git_concurrency: crate::process::default_concurrency(),
-            copies_reading: CopiesReading::default(),
-            copies_interval_secs: crate::session::COPIES_INTERVAL_DEFAULT_SECS,
+            worktrees_reading: WorktreesReading::default(),
+            worktrees_interval_secs: crate::session::WORKTREES_INTERVAL_DEFAULT_SECS,
             refresh_floor_secs: secs_of(crate::session::OWN_FLOOR),
             refresh_ceiling_secs: secs_of(crate::session::OWN_CEILING),
-            copies_floor_secs: secs_of(crate::session::COPY_FLOOR),
-            copies_ceiling_secs: secs_of(crate::session::COPY_CEILING),
+            worktrees_floor_secs: secs_of(crate::session::WORKTREE_FLOOR),
+            worktrees_ceiling_secs: secs_of(crate::session::WORKTREE_CEILING),
         }
     }
 }
@@ -109,20 +109,20 @@ impl Defaults {
         crate::session::PaceBounds {
             own_floor: secs(self.refresh_floor_secs),
             own_ceiling: secs(self.refresh_ceiling_secs),
-            copy_floor: secs(self.copies_floor_secs),
-            copy_ceiling: secs(self.copies_ceiling_secs),
+            worktree_floor: secs(self.worktrees_floor_secs),
+            worktree_ceiling: secs(self.worktrees_ceiling_secs),
         }
     }
 
-    /// What the session paces the other copies by.
+    /// What the session paces the other worktrees by.
     #[must_use]
-    pub fn copies_pace(&self) -> crate::session::CopiesPace {
-        match self.copies_reading {
-            CopiesReading::Auto => crate::session::CopiesPace::Auto,
-            CopiesReading::Fixed => crate::session::CopiesPace::Fixed(
-                std::time::Duration::from_secs(self.copies_interval_secs.into()),
+    pub fn worktrees_pace(&self) -> crate::session::WorktreesPace {
+        match self.worktrees_reading {
+            WorktreesReading::Auto => crate::session::WorktreesPace::Auto,
+            WorktreesReading::Fixed => crate::session::WorktreesPace::Fixed(
+                std::time::Duration::from_secs(self.worktrees_interval_secs.into()),
             ),
-            CopiesReading::Off => crate::session::CopiesPace::Off,
+            WorktreesReading::Off => crate::session::WorktreesPace::Off,
         }
     }
 }
@@ -145,17 +145,22 @@ impl Settings {
         let fallback = Defaults::default();
         let defaults = match sub_table(table, "defaults") {
             Some(t) => {
-                let (copies_reading, copies_interval_secs) =
-                    copies(t, (fallback.copies_reading, fallback.copies_interval_secs));
+                let (worktrees_reading, worktrees_interval_secs) = worktrees(
+                    t,
+                    (fallback.worktrees_reading, fallback.worktrees_interval_secs),
+                );
                 let (refresh_floor_secs, refresh_ceiling_secs) = pace_pair(
                     t,
                     ("refresh_floor_secs", "refresh_ceiling_secs"),
                     (fallback.refresh_floor_secs, fallback.refresh_ceiling_secs),
                 );
-                let (copies_floor_secs, copies_ceiling_secs) = pace_pair(
+                let (worktrees_floor_secs, worktrees_ceiling_secs) = pace_pair(
                     t,
-                    ("copies_floor_secs", "copies_ceiling_secs"),
-                    (fallback.copies_floor_secs, fallback.copies_ceiling_secs),
+                    ("worktrees_floor_secs", "worktrees_ceiling_secs"),
+                    (
+                        fallback.worktrees_floor_secs,
+                        fallback.worktrees_ceiling_secs,
+                    ),
                 );
                 Defaults {
                     auto_fetch_minutes: minutes(t, "auto_fetch_minutes")
@@ -167,12 +172,12 @@ impl Settings {
                     git_path: text(t, "git_path").unwrap_or(fallback.git_path),
                     git_concurrency: concurrency(t, "git_concurrency")
                         .unwrap_or(fallback.git_concurrency),
-                    copies_reading,
-                    copies_interval_secs,
+                    worktrees_reading,
+                    worktrees_interval_secs,
                     refresh_floor_secs,
                     refresh_ceiling_secs,
-                    copies_floor_secs,
-                    copies_ceiling_secs,
+                    worktrees_floor_secs,
+                    worktrees_ceiling_secs,
                 }
             }
             None => fallback,
@@ -214,21 +219,24 @@ impl Settings {
             "git_concurrency".into(),
             Value::Integer(self.defaults.git_concurrency.into()),
         );
-        // Both, always: a file without the reading is read as one written
-        // before it was a choice of its own (`toml::copies`).
+        // Both, always: the interval stays for a return to `Fixed` while
+        // another reading stands.
         defaults.insert(
-            "copies_reading".into(),
-            Value::String(self.defaults.copies_reading.word().into()),
+            "worktrees_reading".into(),
+            Value::String(self.defaults.worktrees_reading.word().into()),
         );
         defaults.insert(
-            "copies_interval_secs".into(),
-            Value::Integer(self.defaults.copies_interval_secs.into()),
+            "worktrees_interval_secs".into(),
+            Value::Integer(self.defaults.worktrees_interval_secs.into()),
         );
         for (key, secs) in [
             ("refresh_floor_secs", self.defaults.refresh_floor_secs),
             ("refresh_ceiling_secs", self.defaults.refresh_ceiling_secs),
-            ("copies_floor_secs", self.defaults.copies_floor_secs),
-            ("copies_ceiling_secs", self.defaults.copies_ceiling_secs),
+            ("worktrees_floor_secs", self.defaults.worktrees_floor_secs),
+            (
+                "worktrees_ceiling_secs",
+                self.defaults.worktrees_ceiling_secs,
+            ),
         ] {
             defaults.insert(key.into(), Value::Integer(secs.into()));
         }
@@ -426,63 +434,44 @@ network_timeout_secs = 9
         assert_eq!(Settings::from_table(&settings.to_table()), settings);
     }
 
-    fn copies_from(text: &str) -> (CopiesReading, u32) {
+    fn worktrees_from(text: &str) -> (WorktreesReading, u32) {
         let defaults = defaults_from(text);
-        (defaults.copies_reading, defaults.copies_interval_secs)
+        (defaults.worktrees_reading, defaults.worktrees_interval_secs)
     }
 
-    /// A file from before the reading was a choice of its own keeps what
-    /// its number said; only a file that says nothing reads automatically.
     #[test]
-    fn a_file_from_before_the_reading_keeps_its_off_and_its_number() {
+    fn a_file_that_names_no_reading_reads_automatically() {
         assert_eq!(
-            copies_from("[defaults]\ncopies_interval_secs = 0\n"),
+            worktrees_from("[defaults]\nauto_fetch_minutes = 5\n"),
             (
-                CopiesReading::Off,
-                crate::session::COPIES_INTERVAL_DEFAULT_SECS
-            ),
-            "zero was off, and the number to bring back is the default"
+                WorktreesReading::Auto,
+                crate::session::WORKTREES_INTERVAL_DEFAULT_SECS
+            )
         );
         assert_eq!(
-            copies_from(&format!(
-                "[defaults]\ncopies_interval_secs = {}\n",
-                crate::session::COPIES_INTERVAL_DEFAULT_SECS
-            )),
-            (
-                CopiesReading::Fixed,
-                crate::session::COPIES_INTERVAL_DEFAULT_SECS
-            ),
-            "a number equal to the old default is a fixed choice all the same"
-        );
-        assert_eq!(
-            copies_from("[defaults]\ncopies_interval_secs = 3600\n"),
-            (CopiesReading::Fixed, 3600)
-        );
-        assert_eq!(
-            copies_from("[defaults]\nauto_fetch_minutes = 5\n"),
-            (
-                CopiesReading::Auto,
-                crate::session::COPIES_INTERVAL_DEFAULT_SECS
-            ),
-            "a file that says nothing reads automatically"
+            worktrees_from("[defaults]\nworktrees_interval_secs = 3600\n"),
+            (WorktreesReading::Auto, 3600),
+            "the number alone is the interval kept for `Fixed`, not a reading"
         );
     }
 
     /// A number under the floor is the floor, so a file cannot ask for a
-    /// `status` per copy every second; a reading the file names wins over
-    /// what its number would have said.
+    /// `status` per worktree every second.
     #[test]
     fn the_floors_and_ceilings_survive_the_file_and_a_ceiling_never_sits_under_its_floor() {
         let defaults = defaults_from(
             "[defaults]\nrefresh_floor_secs = 2\nrefresh_ceiling_secs = 30\n\
-             copies_floor_secs = 20\ncopies_ceiling_secs = 10\n",
+             worktrees_floor_secs = 20\nworktrees_ceiling_secs = 10\n",
         );
         assert_eq!(
             (defaults.refresh_floor_secs, defaults.refresh_ceiling_secs),
             (2, 30)
         );
         assert_eq!(
-            (defaults.copies_floor_secs, defaults.copies_ceiling_secs),
+            (
+                defaults.worktrees_floor_secs,
+                defaults.worktrees_ceiling_secs
+            ),
             (20, 20),
             "a ceiling written under its floor is the floor"
         );
@@ -492,8 +481,8 @@ network_timeout_secs = 9
             defaults: Defaults {
                 refresh_floor_secs: 1,
                 refresh_ceiling_secs: 90,
-                copies_floor_secs: 7,
-                copies_ceiling_secs: 600,
+                worktrees_floor_secs: 7,
+                worktrees_ceiling_secs: 600,
                 ..Defaults::default()
             },
             ..Settings::default()
@@ -502,35 +491,41 @@ network_timeout_secs = 9
     }
 
     #[test]
-    fn the_copies_reading_and_its_number_survive_the_file() {
+    fn the_worktrees_reading_and_its_number_survive_the_file() {
         assert_eq!(
-            copies_from("[defaults]\ncopies_reading = \"fixed\"\ncopies_interval_secs = 1\n"),
+            worktrees_from(
+                "[defaults]\nworktrees_reading = \"fixed\"\nworktrees_interval_secs = 1\n"
+            ),
             (
-                CopiesReading::Fixed,
-                crate::session::COPIES_INTERVAL_MIN_SECS
+                WorktreesReading::Fixed,
+                crate::session::WORKTREES_INTERVAL_MIN_SECS
             )
         );
         assert_eq!(
-            copies_from("[defaults]\ncopies_reading = \"auto\"\ncopies_interval_secs = 0\n"),
+            worktrees_from(
+                "[defaults]\nworktrees_reading = \"auto\"\nworktrees_interval_secs = 0\n"
+            ),
             (
-                CopiesReading::Auto,
-                crate::session::COPIES_INTERVAL_DEFAULT_SECS
+                WorktreesReading::Auto,
+                crate::session::WORKTREES_INTERVAL_DEFAULT_SECS
             )
         );
         assert_eq!(
-            copies_from("[defaults]\ncopies_reading = \"sometimes\"\ncopies_interval_secs = 20\n"),
-            (CopiesReading::Fixed, 20),
-            "a reading that is no word falls back to what the number says"
+            worktrees_from(
+                "[defaults]\nworktrees_reading = \"sometimes\"\nworktrees_interval_secs = 20\n"
+            ),
+            (WorktreesReading::Auto, 20),
+            "a reading that is no word falls back to the default, and the number stays"
         );
         for reading in [
-            CopiesReading::Auto,
-            CopiesReading::Fixed,
-            CopiesReading::Off,
+            WorktreesReading::Auto,
+            WorktreesReading::Fixed,
+            WorktreesReading::Off,
         ] {
             let settings = Settings {
                 defaults: Defaults {
-                    copies_reading: reading,
-                    copies_interval_secs: 90,
+                    worktrees_reading: reading,
+                    worktrees_interval_secs: 90,
                     ..Defaults::default()
                 },
                 ..Settings::default()

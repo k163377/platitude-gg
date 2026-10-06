@@ -63,7 +63,7 @@ AppListView {
     // (規約 §ref の種別: 枠 = 種別); empty for the three boxes that make a name.
     property string namingKind: ""
     // Whether the box's text can be accepted, and why not — decided by the page (`RepoPage.graphNameRefusedWhy`) —
-    // and the working copy's folder in that line, which its tip stands the tree mark in front of.
+    // and the worktree's folder in that line, which its tip stands the tree mark in front of.
     property bool namingRefused: false
     property string namingRefusedWhy: ""
     property string namingRefusedMark: ""
@@ -126,7 +126,7 @@ AppListView {
     /// (デザイン規約 §グラフ行の右クリック).
     signal rowMenuRequested(string oidHex, var chip)
     signal rowSwitchRequested(string oidHex, var chip)
-    /// Another working copy's uncommitted row was opened: the repository's tab moves onto that copy
+    /// Another worktree's uncommitted row was opened: the repository's tab moves onto that worktree
     /// (`tabs::strip::landing_for`).
     signal carriedOpenRequested(string path)
     /// A second click, late enough to rule out a double-click: rename the chip's first ref, whatever its kind.

@@ -3,7 +3,7 @@
 //! conditions (ci/baseline/git-slots-windows-x64.md §プロセス再利用).
 //!
 //! - `status` as the application runs it, then with the untracked cache,
-//!   fsmonitor, and both — in a working copy, since switching either on
+//!   fsmonitor, and both — in a worktree, since switching either on
 //!   writes the index and the corpus is read only.
 //! - `cat-file blob` a process each, against one resident `--batch`.
 //! - The existence probe (`preview::blob_is_there`), against a resident
@@ -44,18 +44,18 @@ const ROUNDS: usize = 5;
 /// Object reads per variant.
 const READS: usize = 20;
 
-pub(super) fn run(corpus: &Path, copy: &Path) -> Result<(), String> {
-    if !copy.join(".git").exists() {
+pub(super) fn run(corpus: &Path, worktree: &Path) -> Result<(), String> {
+    if !worktree.join(".git").exists() {
         return Err(format!(
-            "{} is not there: stand a copy first (cargo xtask corpus --copies 1)",
-            copy.display()
+            "{} is not there: stand a worktree first (cargo xtask corpus --worktrees 1)",
+            worktree.display()
         ));
     }
     let (oid, path) = newest_file(corpus)?;
     println!("probe: {}", corpus.display());
-    println!("  index-writing variants run in {}", copy.display());
+    println!("  index-writing variants run in {}", worktree.display());
     println!("  object read: {oid}:{path}");
-    status_table(copy)?;
+    status_table(worktree)?;
     object_table(corpus, &format!("{oid}:{path}"))?;
     Ok(())
 }
@@ -87,26 +87,26 @@ fn newest_file(at: &Path) -> Result<(String, String), String> {
     Err("HEAD changes no file to open".into())
 }
 
-fn status_table(copy: &Path) -> Result<(), String> {
+fn status_table(worktree: &Path) -> Result<(), String> {
     println!("status (min / median of {ROUNDS}, wall clock, product conditions):");
-    let base = rounds(|| timed(copy, &[], &STATUS));
+    let base = rounds(|| timed(worktree, &[], &STATUS));
     say("as the application runs it", &base);
 
     // The untracked cache, switched on and filled by one status allowed to
     // write the index: what is timed is a cache the product finds and only
     // reads.
-    git(copy, &[], &["update-index", "--untracked-cache"])?;
+    git(worktree, &[], &["update-index", "--untracked-cache"])?;
     git(
-        copy,
+        worktree,
         &[("GIT_OPTIONAL_LOCKS", "1")],
         &["status", "--porcelain=v2", "-uall"],
     )?;
-    let cached = rounds(|| timed(copy, &[], &STATUS));
+    let cached = rounds(|| timed(worktree, &[], &STATUS));
     say(
         "untracked cache on, filled once with the index writable",
         &cached,
     );
-    git(copy, &[], &["update-index", "--no-untracked-cache"])?;
+    git(worktree, &[], &["update-index", "--no-untracked-cache"])?;
 
     // fsmonitor answers what changed since the index's token, which the
     // product never writes back: every later status asks "since the first
@@ -115,21 +115,21 @@ fn status_table(copy: &Path) -> Result<(), String> {
     let fsmonitor_args: Vec<&str> = fsmonitor.iter().flat_map(|(a, b)| [*a, *b]).collect();
     let mut starting = fsmonitor_args.clone();
     starting.extend(STATUS);
-    let first = timed_env(copy, &[("GIT_OPTIONAL_LOCKS", "1")], &starting);
+    let first = timed_env(worktree, &[("GIT_OPTIONAL_LOCKS", "1")], &starting);
     println!(
         "  fsmonitor: the first status, daemon starting, index writable: {} ms",
         first.as_millis()
     );
-    let monitored = rounds(|| timed(copy, &[], &starting));
+    let monitored = rounds(|| timed(worktree, &[], &starting));
     say("fsmonitor on, token from that first look", &monitored);
 
-    git(copy, &[], &["update-index", "--untracked-cache"])?;
-    git(copy, &[("GIT_OPTIONAL_LOCKS", "1")], &starting)?;
-    let both = rounds(|| timed(copy, &[], &starting));
+    git(worktree, &[], &["update-index", "--untracked-cache"])?;
+    git(worktree, &[("GIT_OPTIONAL_LOCKS", "1")], &starting)?;
+    let both = rounds(|| timed(worktree, &[], &starting));
     say("fsmonitor and the untracked cache, both filled once", &both);
-    git(copy, &[], &["update-index", "--no-untracked-cache"])?;
+    git(worktree, &[], &["update-index", "--no-untracked-cache"])?;
     // Stopped, so nothing this probe started outlives it.
-    if let Err(error) = git(copy, &[], &["fsmonitor--daemon", "stop"]) {
+    if let Err(error) = git(worktree, &[], &["fsmonitor--daemon", "stop"]) {
         println!("  (fsmonitor daemon stop: {error})");
     }
     Ok(())

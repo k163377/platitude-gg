@@ -15,7 +15,7 @@ pub(super) struct BridgeSink {
     /// goes nowhere.
     pub(super) retired: std::sync::atomic::AtomicBool,
     /// The same for a page that stays (`Hub::restand_tab`): reads about the
-    /// copy being left are dropped, but the command log still hears how a
+    /// worktree being left are dropped, but the command log still hears how a
     /// write that ran on ended — its row is on screen.
     retired_for_reads: std::sync::atomic::AtomicBool,
     /// The refs snapshot the tab last had its remotes from. A quiet tick
@@ -212,7 +212,7 @@ impl SessionSink for BridgeSink {
                     .refs_tags
                     .push_coalescing(RefsMsg::Snapshot { snapshot, looked });
             }
-            // One consumer, unlike the three below: another copy's changes
+            // One consumer, unlike the three below: another worktree's changes
             // are one run of paths (`models::nav::Bucket::Whole`).
             SessionEvent::CarriedStatusLoaded { path, name, status } => {
                 self.feeds.carried_nav.push_replace(CarriedStatusMsg {
@@ -221,7 +221,9 @@ impl SessionSink for BridgeSink {
                     status,
                 });
             }
-            SessionEvent::PacedRead { copy } => self.feeds.tab.push(TabMsg::PacedRead { copy }),
+            SessionEvent::PacedRead { worktree } => {
+                self.feeds.tab.push(TabMsg::PacedRead { worktree })
+            }
             SessionEvent::StatusLoaded {
                 status,
                 head_seq,

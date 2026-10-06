@@ -117,7 +117,7 @@ fn deep_history(repo: &mut DemoRepo, side: SideLine) -> Result<(), String> {
         }
     }
     repo.git_stdin(&["fast-import", "--quiet"], &stream)?;
-    // fast-import writes the ref and nothing else: the work tree is still
+    // fast-import writes the ref and nothing else: the working tree is still
     // the empty one `init` left.
     repo.git(&["reset", "--hard", "main"])?;
     Ok(())

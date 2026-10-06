@@ -61,7 +61,7 @@ impl NavSectionModel {
                     !self.head_name.is_empty() && branch.short.as_str() == self.head_name
                 }
                 Entry::Remote(_) => false,
-                // The working copy this window shows.
+                // The worktree this window shows.
                 Entry::Worktree { entry, current } => {
                     entry.path.replace('\\', "/").to_lowercase() == current
                 }

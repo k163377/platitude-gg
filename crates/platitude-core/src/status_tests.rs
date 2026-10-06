@@ -29,7 +29,7 @@ fn a_file_changed_on_both_sides_is_two_rows() {
     assert_eq!(kinds.total(), 2);
 }
 
-/// Another copy's pane lists one row per path, and its tally has to agree
+/// Another worktree's pane lists one row per path, and its tally has to agree
 /// with it (`Kinds`).
 #[test]
 fn a_file_changed_on_both_sides_is_one_row_folded() {

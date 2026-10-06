@@ -45,7 +45,7 @@ const FIXED_ARGS: [&str; 9] = [
     // records.
     "-c",
     "log.showSignature=false",
-    // A work-tree `git diff` refreshes the index under `.git/index.lock`
+    // A working-tree `git diff` refreshes the index under `.git/index.lock`
     // unless this says not to (`--no-optional-locks` does not reach
     // diff), and a poll's diff on that lock kills a concurrent commit.
     // No answer changes (rules-refs/core.md の `diff.autoRefreshIndex` の行).

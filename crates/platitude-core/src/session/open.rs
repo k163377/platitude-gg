@@ -14,7 +14,7 @@ pub enum FirstPass {
     #[default]
     Streamed,
     /// The consumer already shows this repository's graph, read from
-    /// another working copy that shares its refs and objects
+    /// another worktree that shares its refs and objects
     /// (`Hub::restand_tab`): build off-screen and swap in whole, so the
     /// reader keeps their place.
     Swapped,
@@ -60,7 +60,7 @@ impl RepoSession {
     }
 
     /// [`RepoSession::open`] for a consumer already showing this
-    /// repository's graph from another working copy
+    /// repository's graph from another worktree
     /// ([`FirstPass::Swapped`]); `drawn` comes from the session being
     /// closed ([`DrawnGraph`]).
     pub fn open_standing_in(
@@ -192,7 +192,7 @@ impl RepoSession {
             poll_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             read_owed: std::sync::atomic::AtomicBool::new(false),
             carried_slot: Arc::new(tokio::sync::Semaphore::new(1)),
-            copies: super::carried::Copies::default(),
+            other_worktrees: super::carried::OtherWorktrees::default(),
             pacing: super::pacer::Pacing::default(),
             refs_read: ReadFlight::default(),
             status_read: ReadFlight::default(),
@@ -209,7 +209,7 @@ impl RepoSession {
             remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::default())),
             remote_tag_gen: AtomicU64::new(0),
             worktree_holders: Mutex::new(Arc::new(super::joins::WorktreeHolders::default())),
-            copy_heads: Mutex::new(Arc::new(std::collections::HashMap::new())),
+            worktree_heads: Mutex::new(Arc::new(std::collections::HashMap::new())),
             worktree_gen: AtomicU64::new(0),
             remote_tags_slot: super::auto_fetch::RemoteTagSlot::default(),
             head_reach_slot: Arc::new(tokio::sync::Semaphore::new(1)),

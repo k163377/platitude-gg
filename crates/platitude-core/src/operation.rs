@@ -67,7 +67,7 @@ pub enum OperationKind {
     Push,
     Fetch,
     /// `git pull`: one command that reaches the network and then moves
-    /// this copy's own branch, so it is supervised as a remote write and
+    /// this worktree's own branch, so it is supervised as a remote write and
     /// ordered as a local one.
     Pull,
     Remote,
@@ -82,11 +82,11 @@ pub enum OperationKind {
     Mergetool,
     Config,
     Identity,
-    /// `git worktree remove`: another working copy taken off the disk.
+    /// `git worktree remove`: another worktree taken off the disk.
     Worktree,
     /// Something the discard log lists, brought back (破棄記録仕様.md §4):
-    /// a branch, a tag, a stash entry, a working copy, or thrown-away work
-    /// put back into its working copy.
+    /// a branch, a tag, a stash entry, a worktree, or thrown-away work
+    /// put back into its worktree.
     Restore,
     /// A branch deleted here and on its remote as one write: answers as
     /// a branch write, runs on the remote lane (the second half is a push).
@@ -189,8 +189,8 @@ impl OperationKind {
         }
     }
 
-    /// Whether a write of this kind changes what this copy holds (its
-    /// index, its own refs, a standing operation), so the working tree's
+    /// Whether a write of this kind changes what this worktree holds (its
+    /// index, its own refs, a standing operation), so the worktree's
     /// order serves it in turn (`session::write_order`).
     ///
     /// **Not read off [`Self::lane`]**, which says how a write is

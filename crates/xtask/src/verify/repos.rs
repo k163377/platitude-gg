@@ -138,21 +138,21 @@ fn preset_repos(presets: &[String], named: bool) -> Result<Vec<PathBuf>, String>
     Ok(made)
 }
 
-/// The linked working copy the `nested-copy` preset keeps below its
+/// The linked worktree the `nested-worktree` preset keeps below its
 /// root — the one fixture whose opened folder is not the repository's
 /// own.
-fn nested_copy_repo() -> Result<Vec<PathBuf>, String> {
-    let work = crate::demo::create("nested-copy", None)?;
+fn nested_worktree_repo() -> Result<Vec<PathBuf>, String> {
+    let work = crate::demo::create("nested-worktree", None)?;
     let root = work
         .parent()
         .ok_or_else(|| format!("no root above {}", work.display()))?;
-    let copy = root.join(crate::demo::NESTED_COPY);
+    let worktree = root.join(crate::demo::NESTED_WORKTREE);
     println!(
-        "demo repo (nested-copy): {} in {}",
-        copy.display(),
+        "demo repo (nested-worktree): {} in {}",
+        worktree.display(),
         work.display()
     );
-    Ok(vec![copy])
+    Ok(vec![worktree])
 }
 
 /// The strip the `tab-name` verb is run against (デザイン規約 §タブの所作):
@@ -367,7 +367,7 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
             Route::Strip(Some(count)) => tab_width_repos(count)?,
             Route::Colliding => tab_name_repos()?,
             Route::BandStrip(count) => band_state_repos(count, &opts.preset)?,
-            Route::NestedCopy => nested_copy_repo()?,
+            Route::NestedWorktree => nested_worktree_repo()?,
             Route::Presets => preset_repos(&opts.preset, false)?,
             Route::NamedPresets => preset_repos(&opts.preset, true)?,
         }
@@ -389,10 +389,10 @@ enum Route {
     Colliding,
     /// A strip with the run's own preset on the tab in front.
     BandStrip(usize),
-    /// The `nested-copy` preset's linked working copy, the one fixture
-    /// copy that does not sit beside its repository. `--preset` is not
+    /// The `nested-worktree` preset's linked worktree, the one fixture
+    /// worktree that does not sit beside its repository. `--preset` is not
     /// read — the shape is the fixture.
-    NestedCopy,
+    NestedWorktree,
     /// One fresh demo repository per preset, [`DEFAULT_PRESET`] where the
     /// run names none.
     Presets,
@@ -405,8 +405,8 @@ enum Route {
 fn route_of(verb: &str, arg: &str) -> Result<Route, String> {
     Ok(match verb {
         // The folder the picker comes up in is the repository's, which
-        // only a copy away from it can tell.
-        "open-picker" if arg == "copy" => Route::NestedCopy,
+        // only a worktree away from it can tell.
+        "open-picker" if arg == "worktree" => Route::NestedWorktree,
         "tab-widths" => Route::Strip(None),
         // The argument names the tab the hand is on, so the count is
         // fixed here rather than taken from `tab-widths`' state names.

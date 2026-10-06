@@ -100,13 +100,13 @@ Item {
     property string activeKey: ""
     property string editKey: ""
     /// "rename" (the name is in the box), "branch", "tag" or "worktree" (a name for a new one on this row's commit —
-    /// the last a branch out in a working copy of its own).
+    /// the last a branch out in a worktree of its own).
     property string editMode: ""
     /// What has been typed so far, held by the sidebar so a row that scrolls off and back keeps it.
     property string editText: ""
     property bool editRefused: false
     property string editRefusedWhy: ""
-    /// A working copy's folder in that line, which the box's tip marks (`SidebarRowGestures.editRefusedMark`).
+    /// A worktree's folder in that line, which the box's tip marks (`SidebarRowGestures.editRefusedMark`).
     property string editRefusedMark: ""
     readonly property bool editing: navRow.editKey !== "" && navRow.editKey === navRow.rowKey
     /// The name git knows this row by.
@@ -465,7 +465,7 @@ Item {
     readonly property Item nameField: rowLayout.nameWhole
     readonly property string nameTook: navRow.nameField ? navRow.nameField.selected : ""
     readonly property bool nameCaret: !!navRow.nameField && navRow.nameField.hasCaret
-    /// The name the row draws — the main copy's row draws its branch where it has one (`NavRowBody.shownName`).
+    /// The name the row draws — the main worktree's row draws its branch where it has one (`NavRowBody.shownName`).
     readonly property string shownName: rowLayout.shownName
 
     /// A press on the row's **own line** (the open lines answer theirs in `NavRowFacts`). One that never moves is a
@@ -521,7 +521,7 @@ Item {
     /// line of those names on its own, the menu's to act on (`refMenuRequested`).
     function rowPressed(button, modifiers, aim) {
         if (button === Qt.RightButton) {
-            // Only rows with operations behind them open a menu. A working copy's is the ref menu too: the branch it has
+            // Only rows with operations behind them open a menu. A worktree's is the ref menu too: the branch it has
             // out, or its commit, and its own card (デザイン規約 §左メニューの所作).
             if (!navRow.folder && navRow.oid_hex !== ""
                     && (navRow.kindHint === "branch"
@@ -598,10 +598,10 @@ Item {
         navRow.factsFollowed(navRow.rowKey, to.oid)
     }
     /// Where this row's answers come off: its own section's model (`upstreamOf`) and the worktrees' section
-    /// (`worktreeHolding`), the only one holding the working copies.
+    /// (`worktreeHolding`), the only one holding the worktrees.
     property var sectionModel: null
     property var worktreesModel: null
-    /// The branches' own section, which a working copy's row asks about the branch it holds (`upstreamOf` /
+    /// The branches' own section, which a worktree's row asks about the branch it holds (`upstreamOf` /
     /// `upstreamGoneOf`) — what that branch's own row would say of itself. Null in every other list.
     property var branchesModel: null
     /// TAGS only: the remote this window's tag rows act on, the reading a tag's open lines are read against
@@ -784,7 +784,7 @@ Item {
             row: navRow
             // Already in reading order (`NavFacts.lines`); the lines know nothing of which section they are in.
             lines: navRow.factsLines
-            // The one answer that is not a line: where a working copy stands, said on a rest anywhere in the open row.
+            // The one answer that is not a line: where a worktree stands, said on a rest anywhere in the open row.
             path: navRow.factsPath
             // **The rest on the row's own line asks for it too** — walking down to the lines would pay a second rest
             // for it. Both roads write the same ask, so the box stays up as the hand crosses into the lines. Not once

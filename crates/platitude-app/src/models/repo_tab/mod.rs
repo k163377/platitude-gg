@@ -65,8 +65,8 @@ pub struct RepoTab {
     title: String,
     repo_path: String,
     /// Where the picker opens, as a URL: the folder holding the
-    /// repository's own working copy (`Hub::home_copy`), not a linked
-    /// copy's — repositories sit side by side.
+    /// repository's own worktree (`Hub::home_worktree`), not a linked
+    /// worktree's — repositories sit side by side.
     picker_folder_url: String,
     /// Why the repository would not open, in git's words. Read only on
     /// the `other` kind — the heading names the other two.
@@ -85,7 +85,7 @@ pub struct RepoTab {
     /// but requests can queue up).
     busy_count: i32,
     busy_op: String,
-    /// The tab moved to another working copy and the new session has not
+    /// The tab moved to another worktree and the new session has not
     /// said where it is yet (`Hub::restand_tab`).
     ///
     /// Counted in `busy_count` while it lasts, so every door waits: a
@@ -260,10 +260,10 @@ pub struct RepoTab {
     /// This tree's paced reads that have ended (`TabMsg::PacedRead`): the
     /// page reads the file on screen again after each.
     paced_seq: i32,
-    /// The other copies whose paced read ended in this notify, by the path
-    /// git printed: the page reads a copy's pane again when its copy is
+    /// The other worktrees whose paced read ended in this notify, by the path
+    /// git printed: the page reads a worktree's pane again when its worktree is
     /// among them. Emptied by every notify.
-    paced_copies: Vec<String>,
+    paced_worktrees: Vec<String>,
     /// The one write a run is waiting for, by the id its ask was given,
     /// compared by equality alone (`write_watch`).
     write_watch: WriteWatch,
@@ -361,15 +361,15 @@ pub struct RepoTab {
     /// where this notify carried none of it, and the row it was about.
     ref_push_answer: i32,
     ref_push_target: String,
-    /// The working copy a menu asked git to make, waiting for its own
+    /// The worktree a menu asked git to make, waiting for its own
     /// answer: landed, the tab goes and stands in it; refused, the report
-    /// is that answer's (`RepoPage.absorbCopyAnswer`). Owned: in the group
+    /// is that answer's (`RepoPage.absorbWorktreeAnswer`). Owned: in the group
     /// a fetch in the same drain would take the refusal over.
-    copy_out: crate::ops::Press,
+    worktree_out: crate::ops::Press,
     /// Where that press's answer stands in `write_answers`, or -1 where
     /// this notify carried none of it, and the folder it was to make.
-    copy_answer: i32,
-    copy_answer_path: String,
+    worktree_answer: i32,
+    worktree_answer_path: String,
     /// That write did not happen, and something outside this application
     /// said so — a protected branch, a rule, a hook, a stale picture of
     /// the remote (デザイン規約 §答えの要らない報せ).

@@ -242,28 +242,28 @@ Item {
             acts.reportStale()
         }
     }
-    // PGG_AUTO_ACT=wip-landing: where the page lands when the pass it opened on carries every other working copy's row
+    // PGG_AUTO_ACT=wip-landing: where the page lands when the pass it opened on carries every other worktree's row
     // and none of its own. The run starts with the hold raised (`--preset carried`, `xtask::verify::child`): which of
     // the walk and the first status comes first is the scheduler's.
     //
     // A window verb, because the page never settles while the hold is up (`PageSettled` refuses rows that disagree
     // with the status), so a page verb would wait out its watchdog (`AutoActDriver`'s baseline).
     //
-    // Every copy's row wears the same all-zero id, so a reader that took row 0 for ours stands the page on a copy
-    // nobody asked for — `early=` / `earlyCopy=`, read before the hold comes down.
+    // Every worktree's row wears the same all-zero id, so a reader that took row 0 for ours stands the page on a
+    // worktree nobody asked for — `early=` / `earlyWorktree=`, read before the hold comes down.
     SampleTimer {
         id: wipLandingTimer
         running: Harness.autoAct === "wip-landing"
         property bool read: false
         property bool early: false
-        property bool earlyCopy: false
+        property bool earlyWorktree: false
         onTriggered: {
             const page = acts.window.curPage
             if (!page)
                 return
             const graph = page.pageGraph
             if (!wipLandingTimer.read) {
-                // The raced pass: the tree is dirty, a pass has finished, and its top row is a neighbour copy's
+                // The raced pass: the tree is dirty, a pass has finished, and its top row is a neighbour worktree's
                 // (`GraphModel.carriedTop`). Over a pass with no all-zero row, row 0 reads correctly and the verb
                 // would pass without the misreading ever in front of the page.
                 if (!page.pageWorkingTree.loaded || !page.pageWorkingTree.wipRowStands
@@ -271,7 +271,7 @@ Item {
                     return
                 wipLandingTimer.read = true
                 wipLandingTimer.early = page.wipShown
-                wipLandingTimer.earlyCopy = page.carriedPath !== ""
+                wipLandingTimer.earlyWorktree = page.carriedPath !== ""
                 // `held=` is the hold answering for itself: otherwise a run could pass on the ordinary order.
                 if (!graph.letTheWorkingTreeRowThrough()) {
                     stop()
@@ -284,9 +284,9 @@ Item {
                 return
             stop()
             Harness.report("wip_landing held=true otherTop=true early=" + wipLandingTimer.early
-                              + " earlyCopy=" + wipLandingTimer.earlyCopy
+                              + " earlyWorktree=" + wipLandingTimer.earlyWorktree
                               + " wip=" + page.wipShown
-                              + " copy=" + (page.carriedPath !== "")
+                              + " worktree=" + (page.carriedPath !== "")
                               + " row=" + page.selectedRow)
             window.finishAutoAct()
         }

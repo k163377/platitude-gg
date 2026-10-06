@@ -1,4 +1,4 @@
-//! Moving the working copy: where the move landed, what it carried, and
+//! Switching the worktree to another branch: where it landed, what it carried, and
 //! the bars that come down to ask before it happens.
 
 use super::{Arg, Verb};
@@ -143,8 +143,8 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "switch_stopped code=stash accept= hold=false bang=false op= branch=main log=false",
     },
     // The one nothing here can clear, so not a question: the press stands
-    // the tab in the copy that has the branch. `bar=false` catches a
-    // question bar raised instead — a run that only waited for the copy
+    // the tab in the worktree that has the branch. `bar=false` catches a
+    // question bar raised instead — a run that only waited for the worktree
     // would sit out its ceiling saying nothing about why.
     Verb {
         name: "switch-held",

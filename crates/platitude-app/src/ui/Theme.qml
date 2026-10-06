@@ -134,7 +134,7 @@ QtObject {
     // A separate axis from the state colours: a kind, not a state (デザイン規約 §ref の種別).
     readonly property color refTag: "#D946EF"
 
-    // ---- colors: which working copy the reader is standing in ----
+    // ---- colors: which worktree the reader is standing in ----
     // The WORKTREES green a step up the ramp: Tailwind green 500 over `success`'s 600 (デザイン規約 §ref の種別).
     // CIEDE2000 9.6 from `success`, no narrower than 9.5 under any CVD type (Machado 2009 severity 1.0): over the 8.8
     // floor (§暗く落とした段).

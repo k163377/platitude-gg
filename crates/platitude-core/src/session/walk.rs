@@ -109,7 +109,7 @@ impl RepoSession {
         let pending_row = self.pending_commit();
         let incoming = pending_row.as_deref().unwrap_or_default();
 
-        // Detached working copies, off the worktree read — the only
+        // Detached worktrees, off the worktree read — the only
         // listing that names them (`note_worktree_holders`).
         let standing = self.worktree_holders();
         let detached = detached_oids(&standing);
@@ -390,18 +390,22 @@ impl RepoSession {
     }
 }
 
-/// Where the other working copies stand when they stand on no branch, as
+/// Where the other worktrees stand when they stand on no branch, as
 /// the walk wants them.
 fn detached_oids(standing: &super::joins::WorktreeHolders) -> Vec<Oid> {
-    standing.detached.iter().map(|copy| copy.oid).collect()
+    standing
+        .detached
+        .iter()
+        .map(|worktree| worktree.oid)
+        .collect()
 }
 
 /// The walk both passes run: the same commits in the same order through
 /// the same window.
 ///
 /// A stash may vanish between the listing and the walk, so the oids that
-/// join it are asked for with `--ignore-missing` — and so may a working
-/// copy, which is listed by a read of its own.
+/// join it are asked for with `--ignore-missing` — and so may a worktree,
+/// which is listed by a read of its own.
 fn walk_command(
     workdir: &std::path::Path,
     options: LogOptions,
@@ -421,12 +425,12 @@ fn walk_command(
     if let Some(limit) = options.limit {
         cmd = cmd.arg(format!("--max-count={limit}"));
     }
-    // Stashes, merge sides and detached copies are named by id: none is
+    // Stashes, merge sides and detached worktrees are named by id: none is
     // under `--branches` / `--remotes` (a merge of a tag, `FETCH_HEAD` or a
     // since-deleted branch is reachable by nothing else), and each is a row
     // somebody can be sent to (デザイン規約 §左メニューの所作).
     //
-    // `HEAD` is this window's own: another copy's is in the walk only if
+    // `HEAD` is this window's own: another worktree's is in the walk only if
     // named here. So are the discard log's picked entry's tips, which only
     // a reflog or the record reaches (`session::shown_discard`); gc may have
     // taken them.

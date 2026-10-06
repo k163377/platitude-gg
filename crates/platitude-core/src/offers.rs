@@ -17,15 +17,15 @@ pub use moves::{
 
 /// The kind of ref a menu row stands on, in the words the chip records
 /// carry (`branch` / `remote` / `tag` / `stash`), and `worktree` for a
-/// working copy on no branch (its WORKTREES row, or its folder's chip).
+/// worktree on no branch (its WORKTREES row, or its folder's chip).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefKind {
     Branch,
     Remote,
     Tag,
     Stash,
-    /// Another working copy, named by its path. What the row leads to is
-    /// that copy: `held_by_worktree` in [`ref_menu`] is its own path while
+    /// Another worktree, named by its path. What the row leads to is
+    /// that worktree: `held_by_worktree` in [`ref_menu`] is its own path while
     /// it is not the one the tab stands in.
     Worktree,
 }
@@ -89,11 +89,11 @@ impl TagSides {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RefMenuOffers {
     /// `switch` lands somewhere else: a branch (local or remote) other than
-    /// the current one. A branch another working copy holds keeps this
-    /// offer — the row leads to that copy ([`SwitchAction::OpenHolder`]).
+    /// the current one. A branch another worktree holds keeps this
+    /// offer — the row leads to that worktree ([`SwitchAction::OpenHolder`]).
     pub switch_to: bool,
     /// That move asks first: an operation or unmerged files to clear (the
-    /// `!` in the row's mark seat). A branch another working copy holds
+    /// `!` in the row's mark seat). A branch another worktree holds
     /// asks nothing and wears no mark (デザイン規約 §進行中の操作から出る).
     pub switch_asks: bool,
     /// A new branch on this row's commit — any ref but a stash, the
@@ -103,7 +103,7 @@ pub struct RefMenuOffers {
     /// merge / rebase with this row as the far side: needs a current
     /// branch to move, and a row that is not it.
     pub integrate_from: bool,
-    /// `git pull` — the branch the working tree is on, brought in line
+    /// `git pull` — the branch the worktree is on, brought in line
     /// with its upstream.
     ///
     /// Offered on exactly the two ends of that comparison (the current
@@ -114,7 +114,7 @@ pub struct RefMenuOffers {
     /// information (デザイン規約 §メニュー「対象が存在しない」は席ごと消える).
     pub pull: bool,
     /// The everyday delete. git refuses the branch the tree is on or one
-    /// any other working copy has checked out (`cannot delete branch …
+    /// any other worktree has checked out (`cannot delete branch …
     /// used by worktree at …`), locked or not.
     pub delete: bool,
     /// The branch's remote reading, deleted without touching the local
@@ -135,7 +135,7 @@ pub struct RefMenuOffers {
     pub delete_tag_everywhere: bool,
     /// Which remote branch this local one is measured against. Local
     /// branches only, given a remote to ask about; the current branch and
-    /// one another working copy holds take it too — this writes
+    /// one another worktree holds take it too — this writes
     /// configuration, not the branch.
     pub set_upstream: bool,
     /// The row is the branch HEAD is on — what the delete rows' refusal
@@ -194,7 +194,7 @@ impl RefMenuOffers {
 /// is the tab-lifecycle gate (as [`crate::remote::push_standing`] holds
 /// it); `op_text` is the operation badge, empty exactly when nothing is
 /// standing (bisect counts); `held_by_worktree` is the path of the other
-/// working copy holding this row's branch, empty when none does;
+/// worktree holding this row's branch, empty when none does;
 /// `remote_counterpart` is the remote reading a local branch carries;
 /// `remote_drifted` says that reading stands on another commit
 /// ([`crate::session::BranchItem::upstream_drifted`] /
@@ -237,7 +237,7 @@ pub fn ref_menu(
     let tag_here = sides.is_none_or(TagSides::here);
     let tag_on_remote = sides.is_some_and(TagSides::on_remote);
     RefMenuOffers {
-        // A working copy leads to itself — unless the tab already stands
+        // A worktree leads to itself — unless the tab already stands
         // in it, which is when the caller hands no holder.
         switch_to: (branchy && full != current_branch) || (kind == RefKind::Worktree && held),
         switch_asks: !held && (op_standing || conflict_count > 0),
@@ -262,7 +262,7 @@ pub fn ref_menu(
                 RefKind::Remote => full == current_upstream,
                 RefKind::Tag | RefKind::Stash | RefKind::Worktree => false,
             },
-        // A working copy's own delete is the WORKTREE card's
+        // A worktree's own delete is the WORKTREE card's
         // ([`worktree_card`]).
         delete: !busy
             && kind != RefKind::Worktree
@@ -373,18 +373,18 @@ pub fn commit_menu(
 pub enum RemoveOut {
     /// `git worktree lock`: git refuses until it is unlocked.
     Locked,
-    /// The tab stands in that copy: git runs inside the folder it would be
+    /// The tab stands in that worktree: git runs inside the folder it would be
     /// deleting, and on Windows stops part-way through it.
     Here,
     /// Another write is out.
     Busy,
 }
 
-/// What the WORKTREE card offers for one working copy, decided as the
+/// What the WORKTREE card offers for one worktree, decided as the
 /// menu opens (`RefWorktreeMenu.standOn`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WorktreeCardOffers {
-    /// `worktree remove` has a row: every copy but the repository's own,
+    /// `worktree remove` has a row: every worktree but the repository's own,
     /// which git never removes (`is a main working tree`).
     pub remove: bool,
     /// Why that row is greyed, where it is; the lock first, since it is the
@@ -410,7 +410,7 @@ impl WorktreeCardOffers {
     }
 }
 
-/// The WORKTREE card's rule. `main` is the repository's own copy, `here`
+/// The WORKTREE card's rule. `main` is the repository's own worktree, `here`
 /// the one the asking tab stands in.
 pub fn worktree_card(main: bool, locked: bool, here: bool, busy_count: i32) -> WorktreeCardOffers {
     if main {
@@ -431,32 +431,32 @@ pub fn worktree_card(main: bool, locked: bool, here: bool, busy_count: i32) -> W
     }
 }
 
-/// What a new working copy can be made to stand on, from the row a menu
-/// was opened on: the two rows that make one (デザイン規約 §作業コピーを作る).
+/// What a new worktree can be made to stand on, from the row a menu
+/// was opened on: the two rows that make one (デザイン規約 §worktree を作る).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct CopyOffers {
+pub struct WorktreeOffers {
     /// `Create worktree here…` — a new branch on this row's commit, out in
-    /// a new copy. Any row with a commit but a stash, mid-operation too:
-    /// nothing in this copy is touched, so it is the one way to start on
+    /// a new worktree. Any row with a commit but a stash, mid-operation too:
+    /// nothing in this worktree is touched, so it is the one way to start on
     /// another branch while one is stopped here.
     pub here: bool,
-    /// `worktree add` — the row's own branch out in a new copy, where git
+    /// `worktree add` — the row's own branch out in a new worktree, where git
     /// would take it.
-    pub checkout: Option<CopyCheckout>,
+    pub checkout: Option<WorktreeCheckout>,
 }
 
-/// How the row's branch goes out in the new copy.
+/// How the row's branch goes out in the new worktree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CopyCheckout {
-    /// A local branch no copy has out: checked out as it is.
+pub enum WorktreeCheckout {
+    /// A local branch no worktree has out: checked out as it is.
     Branch,
     /// A remote branch with no local one of its name: a local one is made
     /// to follow it, as `switch` makes one.
     Track,
 }
 
-impl CopyOffers {
-    /// The offers as words, the shape `GitFacts.copyOffers` answers with:
+impl WorktreeOffers {
+    /// The offers as words, the shape `GitFacts.worktreeOffers` answers with:
     /// `here`, then `checkout-branch` / `checkout-track`.
     pub fn words(&self) -> Vec<&'static str> {
         let mut words: Vec<&'static str> = Vec::new();
@@ -464,8 +464,8 @@ impl CopyOffers {
             words.push("here");
         }
         match self.checkout {
-            Some(CopyCheckout::Branch) => words.push("checkout-branch"),
-            Some(CopyCheckout::Track) => words.push("checkout-track"),
+            Some(WorktreeCheckout::Branch) => words.push("checkout-branch"),
+            Some(WorktreeCheckout::Track) => words.push("checkout-track"),
             None => {}
         }
         words
@@ -473,17 +473,17 @@ impl CopyOffers {
 }
 
 /// The rule. `kind` is the row's (`None` on a commit row that draws no
-/// name); `held_by_worktree` the copy holding the row's branch, a remote
+/// name); `held_by_worktree` the worktree holding the row's branch, a remote
 /// row's through the local branch of its name, as in [`ref_menu`];
 /// `local_exists` whether a remote row's local branch is there already.
 ///
-/// The branch the tree is on and one another copy has out are git's to
+/// The branch the tree is on and one another worktree has out are git's to
 /// refuse (`is already used by worktree at`), so they offer no
 /// `worktree add` — the `switch` row's `Open` leads to the holder. A
 /// remote branch whose local one exists leaves it to that branch's own
-/// row: making the copy off the remote would mean moving the local one.
+/// row: making the worktree off the remote would mean moving the local one.
 #[expect(clippy::too_many_arguments)]
-pub fn copy_rows(
+pub fn worktree_rows(
     kind: Option<RefKind>,
     full: &str,
     oid_hex: &str,
@@ -492,15 +492,15 @@ pub fn copy_rows(
     current_branch: &str,
     held_by_worktree: &str,
     local_exists: bool,
-) -> CopyOffers {
+) -> WorktreeOffers {
     let free = open && busy_count <= 0;
     let held = !held_by_worktree.is_empty();
     let checkout = match kind {
-        Some(RefKind::Branch) if !held && full != current_branch => Some(CopyCheckout::Branch),
-        Some(RefKind::Remote) if !held && !local_exists => Some(CopyCheckout::Track),
+        Some(RefKind::Branch) if !held && full != current_branch => Some(WorktreeCheckout::Branch),
+        Some(RefKind::Remote) if !held && !local_exists => Some(WorktreeCheckout::Track),
         _ => None,
     };
-    CopyOffers {
+    WorktreeOffers {
         here: free && !oid_hex.is_empty() && kind != Some(RefKind::Stash),
         checkout: checkout.filter(|_| free && !full.is_empty()),
     }

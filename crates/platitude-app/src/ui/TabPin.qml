@@ -58,8 +58,8 @@ Rectangle {
     readonly property color deepGround: Theme.bgBase
     readonly property color deepGone:
         Qt.rgba(tabPin.deepGround.r, tabPin.deepGround.g, tabPin.deepGround.b, 0)
-    /// The linked copy the tab in front stands in; empty for the repository's own copy (no second run).
-    readonly property string treeName: tabPin.frontTab ? tabPin.frontTab.copy_name : ""
+    /// The linked worktree the tab in front stands in; empty for the repository's own worktree (no second run).
+    readonly property string treeName: tabPin.frontTab ? tabPin.frontTab.worktree_name : ""
     /// The two runs and the cap spent between them, as the rows settle them (`TabShare.splitName`).
     readonly property real nameNatW: Math.ceil(pinTitle.implicitWidth) + pinTree.naturalWidth
     readonly property var nameSplit: tabPin.metrics.share.splitName(
@@ -92,10 +92,10 @@ Rectangle {
     // Dressed as the tab it stands for, and opaque: the strip runs underneath. No rule on its edge
     // (デザイン規約 §タブの所作「縦の境は地が言う」); what the strip does past that edge is `pinDissolve`.
     color: tabPin.frontTab ? tabPin.frontTab.groundColor : Theme.bgSelected
-    // The working copy's full path, as the tab says it (デザイン規約 §hover のツールチップ).
+    // The worktree's full path, as the tab says it (デザイン規約 §hover のツールチップ).
     ToolTip.visible: tabPin.pointed
     ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: tabPin.frontTab ? tabPin.frontTab.copy_path : ""
+    ToolTip.text: tabPin.frontTab ? tabPin.frontTab.worktree_path : ""
     HoverHandler {
         id: pinHover
         onHoveredChanged: tabPin.pointed = pinHover.hovered

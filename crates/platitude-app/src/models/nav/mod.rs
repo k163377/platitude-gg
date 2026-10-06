@@ -105,7 +105,6 @@ impl From<platitude_core::session::TagMenuFacts> for TagMenu {
 
 mod attach;
 mod card;
-mod copy_card;
 mod drain;
 #[cfg(test)]
 mod drain_tests;
@@ -126,19 +125,20 @@ mod view_tests;
 mod walk;
 #[cfg(test)]
 mod walk_tests;
+mod worktree_card;
 
 use card::CardRows;
-use copy_card::{CopyRow, CopyRows, NewCopy};
 use item::{FOLDED, HELD, NavItem, PRUNABLE, fold_state};
 /// The worktree rows' state words, which `GitFacts` hands to core's card rule.
 pub(crate) use item::{LOCKED, MAIN};
 use role::{Arranged, Role, Row, Value};
 use source::{Bucket, Entry, Source, letters_of, pr_key};
+use worktree_card::{NewWorktree, WorktreeRow, WorktreeRows};
 
 #[derive(Default)]
 pub struct NavSectionModel {
     section: String,
-    /// Worktree sections only: the one bucket run this list shows —
+    /// File sections only: the one bucket run this list shows —
     /// `conflicts` / `unstaged` / `staged`. It narrows what is **shown**
     /// and nothing else: every run's list holds the whole status, so the
     /// answers a page asks about a file (`told` / `holds` / `beside`) are
@@ -168,7 +168,7 @@ pub struct NavSectionModel {
     /// Rows on screen — what filtering, folding and the run leave shown.
     /// A property because the pane's share of room is bound to it.
     shown_total: i32,
-    /// Worktree sections only: files in this list's bucket run — the
+    /// File sections only: files in this list's bucket run — the
     /// number its heading wears, counted by the rule the rows follow
     /// (`Bucket::run`: untracked as unstaged).
     run_files: i32,
@@ -217,10 +217,10 @@ pub struct NavSectionModel {
     /// repository (`session::Standing::stamp`) — measured against a
     /// write's `reads_from`, which tells a listing that saw the write from
     /// one in flight as it ended. A session's own count: the tab stood in
-    /// another copy counts from the start again, and this holds the old
+    /// another worktree counts from the start again, and this holds the old
     /// session's number until the new one's first listing lands.
     looked: u64,
-    /// Worktree section only: tree vs flat-path display. The page's
+    /// File sections only: tree vs flat-path display. The page's
     /// restore (`PageLayout.applySavedLayout` → `set_tree_view`) is the
     /// sole writer — rules-refs/app-ui.md「保存フラグの復元は 1 書き手」;
     /// the derive-`Default` false is never on screen.
@@ -248,11 +248,11 @@ pub struct NavSectionModel {
     refs_feed: Option<Arc<Feed<RefsMsg>>>,
     status_feed: Option<Arc<Feed<StatusMsg>>>,
     carried_feed: Option<Arc<Feed<CarriedStatusMsg>>>,
-    /// Which copy the rows came from, empty for this window's own tree.
-    /// Read back by the page as proof its switch of copy has landed, so a
+    /// Which worktree the rows came from, empty for this window's own tree.
+    /// Read back by the page as proof its switch of worktree has landed, so a
     /// pane refusing writes refuses them over the files it actually shows.
     carried_at: String,
-    /// That copy's name, as the band says it.
+    /// That worktree's name, as the band says it.
     carried_name: String,
     stash_feed: Option<Arc<Feed<crate::hub::StashList>>>,
     worktrees_feed: Option<Arc<Feed<crate::hub::WorktreeList>>>,

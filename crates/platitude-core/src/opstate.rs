@@ -1,7 +1,7 @@
 //! Detection of in-progress repository operations (rebase / merge /
 //! cherry-pick / revert / bisect) by marker files.
 //!
-//! Every marker is the working copy's own (gitrepository-layout puts none
+//! Every marker is the worktree's own (gitrepository-layout puts none
 //! of them in the common directory): a caller holding the git directory
 //! `repo::open` resolved reads them under it ([`detect_at`]), one holding
 //! only a working tree asks `rev-parse --git-path` ([`detect`]).

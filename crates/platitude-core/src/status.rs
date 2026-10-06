@@ -157,7 +157,7 @@ impl Counts {
 /// How many rows of each change kind a working-tree list holds, counted
 /// the way that list is built so the tally and the list agree:
 /// [`Kinds::of`] for this window's pane, which lists a path once per side
-/// it changed on, and [`Kinds::folded`] for another copy's pane, which
+/// it changed on, and [`Kinds::folded`] for another worktree's pane, which
 /// cannot move that index and lists one row per path. The kinds are the
 /// file rows' letters (`models::nav` builds a row per side; `ChangeIcon`
 /// reads the letter).
@@ -191,7 +191,7 @@ impl Kinds {
         kinds
     }
 
-    /// The same six counted once per path, for another copy's pane
+    /// The same six counted once per path, for another worktree's pane
     /// ([`Kinds`]).
     pub fn folded(status: &WorkingTreeStatus) -> Self {
         let mut kinds = Self::default();

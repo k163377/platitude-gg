@@ -102,12 +102,12 @@ const MAX_TABS: usize = 64;
 /// One tab as the last run left it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TabRecord {
-    /// The working copy the tab stood in — the folder opened again.
+    /// The worktree the tab stood in — the folder opened again.
     pub path: String,
-    /// The repository that copy belongs to, which names the tab
-    /// (`repo::Place::repo`). Written beside the path: for a linked copy
+    /// The repository that worktree belongs to, which names the tab
+    /// (`repo::Place::repo`). Written beside the path: for a linked worktree
     /// the strip cannot work it out without asking git, and a restored
-    /// tab is not opened until it is looked at. The copy's own path where
+    /// tab is not opened until it is looked at. The worktree's own path where
     /// the file does not say.
     pub repo: String,
 }
@@ -378,17 +378,17 @@ graph_lanes_width = 3
     /// The two lists are read by position, so a blank in the paths takes
     /// its repository with it.
     #[test]
-    fn a_tab_keeps_the_repository_its_copy_hangs_off() {
+    fn a_tab_keeps_the_repository_its_worktree_hangs_off() {
         let dir = tempfile::tempdir().expect("tempdir");
         std::fs::write(
             dir.path().join(STATE_FILE),
-            "[tabs]\nactive = 0\npaths = ['C:/a/wt', '', 'C:/b']\nrepos = ['C:/a', 'C:/gone', 'C:/b']\n",
+            "[tabs]\nactive = 0\npaths = ['C:/a/worktree', '', 'C:/b']\nrepos = ['C:/a', 'C:/gone', 'C:/b']\n",
         )
         .expect("write");
         let tabs = dir_store(dir.path()).load_state().tabs;
         assert_eq!(
             paths_of(&tabs),
-            vec!["C:/a/wt".to_string(), "C:/b".to_string()]
+            vec!["C:/a/worktree".to_string(), "C:/b".to_string()]
         );
         assert_eq!(
             tabs.tabs.iter().map(|t| t.repo.clone()).collect::<Vec<_>>(),
@@ -397,7 +397,7 @@ graph_lanes_width = 3
     }
 
     #[test]
-    fn a_file_with_no_repositories_names_each_tab_after_its_own_copy() {
+    fn a_file_with_no_repositories_names_each_tab_after_its_own_worktree() {
         let dir = tempfile::tempdir().expect("tempdir");
         std::fs::write(
             dir.path().join(STATE_FILE),

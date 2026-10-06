@@ -40,8 +40,8 @@ Item {
             tabRows.move(from, to, 1)
         }
         function closeTab(id) {}
-        ListElement { tab_id: 1; title: "platitude-gg"; copy_path: "/src/pg"; copy_name: "" }
-        ListElement { tab_id: 2; title: "sealed-class"; copy_path: "/src/sc"; copy_name: "" }
+        ListElement { tab_id: 1; title: "platitude-gg"; worktree_path: "/src/pg"; worktree_name: "" }
+        ListElement { tab_id: 2; title: "sealed-class"; worktree_path: "/src/sc"; worktree_name: "" }
     }
 
     TabMetrics { id: tabMetrics }

@@ -76,28 +76,31 @@ impl Hub {
         self.save_settings_now();
     }
 
-    /// Records how other working copies are read for uncommitted work,
+    /// Records how other worktrees are read for uncommitted work,
     /// puts it in force on every open tab and saves. `secs` is the fixed
-    /// interval, through `session::copies_interval_secs` (the range).
-    pub fn set_copies_reading(
+    /// interval, through `session::worktrees_interval_secs` (the range).
+    pub fn set_worktrees_reading(
         &mut self,
-        reading: platitude_core::settings::CopiesReading,
+        reading: platitude_core::settings::WorktreesReading,
         secs: u32,
     ) {
-        self.settings.defaults.copies_reading = reading;
-        self.settings.defaults.copies_interval_secs = secs;
+        self.settings.defaults.worktrees_reading = reading;
+        self.settings.defaults.worktrees_interval_secs = secs;
         self.reapply_settings();
         self.save_settings_now();
     }
 
     /// Records the shortest and the longest interval a repository on screen
-    /// is read again at, and the same pair for its other copies; puts them
+    /// is read again at, and the same pair for its other worktrees; puts them
     /// in force on every open tab and saves. Each pair has been through
     /// `session::pace_bounds_secs` (the range).
-    pub fn set_pace_bounds(&mut self, refresh: (u32, u32), copies: (u32, u32)) {
+    pub fn set_pace_bounds(&mut self, refresh: (u32, u32), worktrees: (u32, u32)) {
         let defaults = &mut self.settings.defaults;
         (defaults.refresh_floor_secs, defaults.refresh_ceiling_secs) = refresh;
-        (defaults.copies_floor_secs, defaults.copies_ceiling_secs) = copies;
+        (
+            defaults.worktrees_floor_secs,
+            defaults.worktrees_ceiling_secs,
+        ) = worktrees;
         self.reapply_settings();
         self.save_settings_now();
     }

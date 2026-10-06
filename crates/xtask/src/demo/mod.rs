@@ -22,7 +22,7 @@ mod worktrees;
 
 pub(crate) use presets::{claim_root, claimed_roots};
 pub use presets::{create, create_named, run};
-pub(crate) use worktrees::NESTED_COPY;
+pub(crate) use worktrees::NESTED_WORKTREE;
 
 use crate::command::{self, Permission, Where};
 

@@ -4,7 +4,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The operation panel's cards, a row of each pressed: branch, copy, repository. What is judged is the landing,
+/// The operation panel's cards, a row of each pressed: branch, worktree, repository. What is judged is the landing,
 /// because a row that closes its card and reaches nothing frames like a row still on its way.
 // `Item`, not `QtObject`: rules-refs/app-ui.md「ドライバの root は `Item`」.
 Item {
@@ -15,11 +15,11 @@ Item {
     required property Repeater pageRepeater
     required property TopBar topBar
 
-    // PGG_AUTO_ACT=ops-branch-pick <branch> / ops-copy-pick <folder> / ops-repo-pick: the card opened the way a
+    // PGG_AUTO_ACT=ops-branch-pick <branch> / ops-worktree-pick <folder> / ops-repo-pick: the card opened the way a
     // press on its name opens it, the row pressed, and the window read where the press put it.
     SampleTimer {
         id: pickTimer
-        running: Harness.autoAct === "ops-branch-pick" || Harness.autoAct === "ops-copy-pick"
+        running: Harness.autoAct === "ops-branch-pick" || Harness.autoAct === "ops-worktree-pick"
                  || Harness.autoAct === "ops-repo-pick"
         /// 0 = open the card, 1 = open its tier (the repository's two), 2 = press the row, 3 = wait for the landing.
         property int step: 0
@@ -41,7 +41,7 @@ Item {
             if (!acts.window.visible || page === null)
                 return
             const door = Harness.autoAct === "ops-branch-pick" ? "branch"
-                       : Harness.autoAct === "ops-copy-pick" ? "copy" : "repo"
+                       : Harness.autoAct === "ops-worktree-pick" ? "worktree" : "repo"
             if (pickTimer.step === 0) {
                 if (!acts.ready(page))
                     return
@@ -62,7 +62,7 @@ Item {
             if (pickTimer.step === 1) {
                 if (!acts.topBar.standMenuOpen)
                     return
-                const opened = door === "copy" ? acts.topBar.openStandCopies() : acts.topBar.openStandRepos()
+                const opened = door === "worktree" ? acts.topBar.openStandWorktrees() : acts.topBar.openStandRepos()
                 pickTimer.step = 2
                 Harness.report("ops_pick step=tier door=" + door + " opened=" + opened)
                 return
@@ -70,7 +70,7 @@ Item {
             if (pickTimer.step === 2) {
                 // Card and tab read in the turn that presses, not the tick that opened the card: a read landing
                 // between the two can start something the move is then refused over.
-                const wanted = door === "branch" ? "branch" : door === "copy" ? "copies" : "repos"
+                const wanted = door === "branch" ? "branch" : door === "worktree" ? "worktrees" : "repos"
                 if (acts.topBar.standDoor !== wanted || !acts.ready(page))
                     return
                 pickTimer.from = door === "branch" ? acts.topBar.branchName : page.pageTab.repoPath
@@ -79,8 +79,8 @@ Item {
                 let pressed = false
                 if (door === "branch") {
                     pressed = acts.topBar.pickBranchRow(Harness.autoActArg)
-                } else if (door === "copy") {
-                    pressed = acts.topBar.pickCopyRow(Harness.autoActArg)
+                } else if (door === "worktree") {
+                    pressed = acts.topBar.pickWorktreeRow(Harness.autoActArg)
                 } else {
                     for (let i = 0; i < acts.pageRepeater.count && !pressed; i++) {
                         if (i === acts.tabsModel.currentIndex)
@@ -113,7 +113,7 @@ Item {
             if (door === "repo" && pickTimer.headAt === 0 && acts.topBar.branchName !== "")
                 // waits(measured): the other end of `headMs=`, to the sampler's tick — printed and compared with nothing
                 pickTimer.headAt = Date.now()
-            // A move turned away (a worded refusal, or a copy that would not open) is an answer too, not a ceiling.
+            // A move turned away (a worded refusal, or a worktree that would not open) is an answer too, not a ceiling.
             const refused = page.pageTab.state === "error"
                             || (page.pageTab.lastError !== "" && page.pageTab.lastError !== pickTimer.errorBefore)
             if (!refused && (!acts.landed(door, page) || (door === "repo" && pickTimer.pressShot === 0)))
@@ -135,13 +135,13 @@ Item {
             return false
         if (door === "branch")
             return acts.topBar.branchName === Harness.autoActArg
-        if (door === "copy")
+        if (door === "worktree")
             return GitFacts.pathLeaf(page.pageTab.repoPath) === Harness.autoActArg
         return acts.tabsModel.currentIndex === pickTimer.wantedTab
     }
 
     function names() {
-        return acts.topBar.repoName + "/" + acts.topBar.copyName
+        return acts.topBar.repoName + "/" + acts.topBar.worktreeName
     }
 
     function finish(door, found) {

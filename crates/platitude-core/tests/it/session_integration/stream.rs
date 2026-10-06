@@ -200,12 +200,12 @@ async fn an_independent_history_sits_where_its_date_puts_it() {
     session.close();
 }
 
-/// A commit made in a detached working copy: `git log` reads only its own
+/// A commit made in a detached worktree: `git log` reads only its own
 /// tree's HEAD and no ref points here, so the row exists only because the
 /// worktree read names it (`note_worktree_holders` → `walk_command`), and
 /// its chip is all that says whose it is (デザイン規約 §ref の種別).
 #[tokio::test(flavor = "multi_thread")]
-async fn a_commit_only_a_detached_copy_holds_is_a_row_with_its_own_chip() {
+async fn a_commit_only_a_detached_worktree_holds_is_a_row_with_its_own_chip() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "first");
     repo.commit_file("a.txt", "two\n", "second");
@@ -220,7 +220,7 @@ async fn a_commit_only_a_detached_copy_holds_is_a_row_with_its_own_chip() {
     // The worktree read comes in behind the first walk; this waits for the
     // walk it asks for.
     let seen = sink
-        .wait_for("the row the copy is standing on", |evs| {
+        .wait_for("the row the worktree is standing on", |evs| {
             let rows = crate::support::replay_graph(evs);
             rows.values()
                 .find(|r| r.oid_hex == only_theirs)
@@ -232,11 +232,11 @@ async fn a_commit_only_a_detached_copy_holds_is_a_row_with_its_own_chip() {
         .labels
         .iter()
         .find(|l| l.kind == platitude_core::session::LabelKind::Worktree)
-        .unwrap_or_else(|| panic!("no chip says whose copy it is: {:?}", seen.labels));
+        .unwrap_or_else(|| panic!("no chip says whose worktree it is: {:?}", seen.labels));
     assert_eq!(
         chip.text.as_str(),
         "spike",
-        "the chip carries the copy's name"
+        "the chip carries the worktree's name"
     );
     assert!(
         !chip.held_elsewhere,

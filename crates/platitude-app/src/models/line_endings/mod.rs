@@ -2,11 +2,11 @@
 //!
 //! That file and no other: the settings screen writes `core.autocrlf` into
 //! the picked repository only (規約 §設定の画面), so this model asks git
-//! `--local` about a work tree.
+//! `--local` about a worktree.
 //!
 //! Off the sessions, as `repo_config` is: only the tab in front has one
 //! (`RepoPageStack`) and the screen offers every repository in the strip,
-//! so the reads and the write are spawned against a work tree path. git's
+//! so the reads and the write are spawned against a worktree's path. git's
 //! own lock on the file makes that safe beside a session's write queue,
 //! and an open session picks the write up on its next poll
 //! (`RepoSession::forget_what_the_config_decides`).
@@ -40,7 +40,7 @@ enum EolMsg {
 }
 
 pub struct LineEndingsModel {
-    /// The work tree the reads and the write run in; empty until the
+    /// The worktree the reads and the write run in; empty until the
     /// screen names one (`"idle"`).
     repo_path: String,
     /// The read's `"idle" | "reading" | "ready" | "error"`; a pick keeps

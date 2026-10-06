@@ -93,7 +93,7 @@ impl RepoTab {
         fingerprint: String,
     ) -> bool {
         let Some(target) = crate::encode::working_tree_target(&kind, &path, &orig_path) else {
-            tracing::warn!(kind, "selection staging asked for a non-worktree diff");
+            tracing::warn!(kind, "selection staging asked for a non-working-tree diff");
             return false;
         };
         let selects = crate::encode::hunk_selection(hunk, line);
@@ -122,7 +122,7 @@ impl RepoTab {
         fingerprint: String,
     ) -> bool {
         let Some(target) = crate::encode::working_tree_target(&kind, &path, &orig_path) else {
-            tracing::warn!(kind, "selection discard asked for a non-worktree diff");
+            tracing::warn!(kind, "selection discard asked for a non-working-tree diff");
             return false;
         };
         let selects = crate::encode::hunk_selection(hunk, line);

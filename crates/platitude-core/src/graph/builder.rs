@@ -236,7 +236,7 @@ impl GraphBuilder {
         let row = self.next_row;
         self.next_row += 1;
         let lane = self.find_free_lane();
-        // Where a lane already waits for `parent` (another copy's row, a
+        // Where a lane already waits for `parent` (another worktree's row, a
         // stash on the same commit), the commit comes out in that lane's
         // colour anyway: a fresh one from the round robin would reach no
         // chain and shift every later chain along the palette

@@ -310,7 +310,7 @@ pub async fn opened_with(
     (sink, session)
 }
 
-/// [`opened`] on another working copy of a repository — a linked
+/// [`opened`] on another worktree of a repository — a linked
 /// worktree at `path` — as a tab opened there is.
 pub async fn opened_at(path: &std::path::Path) -> (Arc<CaptureSink>, Arc<RepoSession>) {
     let sink = CaptureSink::new();

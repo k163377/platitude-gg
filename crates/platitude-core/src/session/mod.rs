@@ -11,7 +11,7 @@
 //! One repository can have more than one session at a time — a tab closed
 //! mid-write outlives its page, and the tab reopened over it is a second
 //! session on the same index. The queue is the session's; the *order* it
-//! serves in belongs to the working tree (`session::write_order`).
+//! serves in belongs to the worktree (`session::write_order`).
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -111,8 +111,8 @@ mod write_order;
 
 pub use auto_fetch::OpenFetch;
 pub use carried::{
-    COPIES_INTERVAL_DEFAULT_SECS, COPIES_INTERVAL_MAX_SECS, COPIES_INTERVAL_MIN_SECS, Carried,
-    CarriedOutcome, CarriedPass, copies_interval_secs,
+    Carried, CarriedOutcome, CarriedPass, WORKTREES_INTERVAL_DEFAULT_SECS,
+    WORKTREES_INTERVAL_MAX_SECS, WORKTREES_INTERVAL_MIN_SECS, worktrees_interval_secs,
 };
 pub use details_read::{DetailsOutcome, DetailsTask, SelectionRead};
 use diff_reads::{DiffEpoch, Rereads};
@@ -130,8 +130,8 @@ pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel, RelaidRow};
 pub use open::{DrawnGraph, FirstPass};
 pub use pace::{
-    COPY_CEILING, COPY_FLOOR, CopiesPace, OWN_CEILING, OWN_FLOOR, OWN_REST, PACE_MAX_SECS,
-    PACE_MIN_SECS, PaceBounds, pace_bounds_secs,
+    OWN_CEILING, OWN_FLOOR, OWN_REST, PACE_MAX_SECS, PACE_MIN_SECS, PaceBounds, WORKTREE_CEILING,
+    WORKTREE_FLOOR, WorktreesPace, pace_bounds_secs,
 };
 use pass_watch::PassWatch;
 pub use pass_watch::{PassHooks, PassStep};
@@ -256,14 +256,14 @@ pub enum AfterWrite {
     /// the app, and a walk of the history on almost every auto-fetch tick
     /// (ci/baseline/code-costs-windows-x64.md §git のプロセス代). Nothing
     /// derived is dropped and no listing is read: a fetch reaches no config,
-    /// attributes, stash or working copy.
+    /// attributes, stash or worktree.
     ///
     /// Only for a write that touches refs alone: the status event also
     /// carries the push marks and the merge tool, `git config` reads the
     /// refs key does not see.
     Refs,
-    /// A working copy taken off the disk: the copies' listing, and what it
-    /// asks for — the joins, and a walk where a copy on no branch went
+    /// A worktree taken off the disk: the worktrees' listing, and what it
+    /// asks for — the joins, and a walk where a worktree on no branch went
     /// (its commits are rows only the walk names) — with the refs read
     /// first and the tree only where they moved, as for [`Self::Refs`].
     Worktrees,
@@ -273,8 +273,8 @@ pub enum AfterWrite {
     Config,
     /// A name taken away — a branch or a tag, here or on a remote: the refs
     /// and the graph. Nothing else such a write reaches is read again: not
-    /// the tree, the stashes or the working copies (git refuses to delete a
-    /// branch any copy has out), nor what the config decides (a delete
+    /// the tree, the stashes or the worktrees (git refuses to delete a
+    /// branch any worktree has out), nor what the config decides (a delete
     /// edits `branch.<name>.*` alone — [`RepoSession::own_config_rewrite`]).
     ///
     /// `status` where the name was what HEAD is measured against

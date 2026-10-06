@@ -263,7 +263,7 @@ fn track_of(repo: &mut TestRepo, branch: &str) -> String {
 
 /// What the pre-merge run leaves out: git's own rules around an upstream —
 /// what `branch --delete` measures "merged" against, and that a branch
-/// another working copy holds still takes an upstream. The reads of ours
+/// another worktree holds still takes an upstream. The reads of ours
 /// they meet are held pre-merge (`is_merged_into`'s two answers in
 /// `branch_integration::unmerged_branch_needs_the_forced_delete` and
 /// `session_integration::query`, `set_upstream`'s command line above).
@@ -391,12 +391,12 @@ mod periodic {
         assert!(!repo.git(&["branch", "--list", "topic"]).contains("topic"));
     }
 
-    /// A branch another working copy has checked out still takes an
+    /// A branch another worktree has checked out still takes an
     /// upstream, though its delete is refused; which rows that leaves is
     /// `offers::ref_menu`'s answer.
     #[tokio::test]
     #[ignore = "git letting a held branch take an upstream: not worth the pre-merge run"]
-    async fn a_branch_another_working_copy_holds_still_takes_an_upstream() {
+    async fn a_branch_another_worktree_holds_still_takes_an_upstream() {
         let mut origin = TestRepo::init();
         origin.commit_file("a.txt", "one\n", "root");
 
@@ -412,7 +412,7 @@ mod periodic {
 
         branch::set_upstream(&exec, &clone.path, "topic", "origin", "main", &cancel)
             .await
-            .expect("the other working copy is no refusal here");
+            .expect("the other worktree is no refusal here");
         assert_eq!(
             upstream_of(&mut clone, "topic").as_deref(),
             Some("refs/remotes/origin/main")

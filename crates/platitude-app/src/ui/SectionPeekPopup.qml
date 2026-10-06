@@ -215,7 +215,7 @@ AppCard {
             expanded: true
             kindHint: peek.kind
             gestures: peek.gestures
-            // Rows open under themselves as in the sections — all but STASHES, which keeps the tooltip. Working copies
+            // Rows open under themselves as in the sections — all but STASHES, which keeps the tooltip. Worktrees
             // are read off their own section whichever list the row is in.
             offersFacts: peek.kind === "branch" || peek.kind === "remote" || peek.kind === "worktree"
                          || peek.kind === "tag"

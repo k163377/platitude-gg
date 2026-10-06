@@ -21,7 +21,7 @@ Item {
     property NavSectionModel branchesModel
     property NavSectionModel remotesModel
     property NavSectionModel unstagedModel
-    /// The working copies (WORKTREES).
+    /// The worktrees (WORKTREES).
     property NavSectionModel worktreesModel
     property NavSectionModel stashesModel
     property NavSectionModel tagsModel
@@ -75,13 +75,13 @@ Item {
     property AppMenu remoteMenu
     /// The WORKTREE card in each of the two menus that carry it: the ref menu and the graph row's, on every row with a
     /// commit.
-    property RefWorktreeMenu refCopyCard
-    property RefWorktreeMenu commitCopyCard
-    /// The two rows that make a working copy, on each of those two cards (`AutoActCopyVerbs`).
-    property AppMenuItem refCopyHereItem
-    property AppMenuItem refCopyAddItem
-    property AppMenuItem commitCopyHereItem
-    property AppMenuItem commitCopyAddItem
+    property RefWorktreeMenu refWorktreeCard
+    property RefWorktreeMenu commitWorktreeCard
+    /// The two rows that make a worktree, on each of those two cards (`AutoActWorktreeVerbs`).
+    property AppMenuItem refWorktreeHereItem
+    property AppMenuItem refWorktreeAddItem
+    property AppMenuItem commitWorktreeHereItem
+    property AppMenuItem commitWorktreeAddItem
     /// The remote the push-default verbs act on, and the mark they wait for before the shot — empty where no mark
     /// is asked to move.
     property string remoteTarget: ""
@@ -94,10 +94,10 @@ Item {
     /// nothing is selected — a sampler copying it without the first half photographs a stale card.
     readonly property bool cardSettled: page.selectedOid !== "" && detailsModel.shaHex === page.selectedOid
 
-    /// The graph row another working copy's uncommitted work stands on, or -1 while the graph holds none of it.
-    /// Asked of the model by the copy's name (`GraphModel.carriedName`): a row off screen has no delegate, and all
+    /// The graph row another worktree's uncommitted work stands on, or -1 while the graph holds none of it.
+    /// Asked of the model by the worktree's name (`GraphModel.carriedName`): a row off screen has no delegate, and all
     /// these rows answer to the same all-zero id.
-    function rowOfCopy(name) {
+    function rowOfWorktree(name) {
         for (let row = 0; row < graphModel.rowTotal; row++) {
             if (graphModel.carriedName(row) === name)
                 return row
@@ -242,12 +242,12 @@ Item {
         const oid = graphModel.oidAt(0)
         if (oid === "")
             return "none"
-        // The graph's own word, not the id: every working copy's row wears the all-zero id
-        // (rules-refs/app-ui.md「作業コピーの行は全部 git の all-zero id を着ている」).
+        // The graph's own word, not the id: every worktree's row wears the all-zero id
+        // (rules-refs/app-ui.md「worktree の行は全部 git の all-zero id を着ている」).
         if (graphModel.wipRow)
             return "wip"
         if (graphModel.carriedTop)
-            return "copy"
+            return "carried"
         return graphModel.stashRefOf(oid) !== "" ? "stash" : "commit"
     }
 
@@ -486,7 +486,7 @@ Item {
                               + (noticeBarrier.saysPlan ? " plan=" + page.planActive : "")
                               // Last, because it is a sentence.
                               + " said=" + page.noticeCard.label
-                              // …but for the one report whose heading names a working copy: whether the tree mark
+                              // …but for the one report whose heading names a worktree: whether the tree mark
                               // found the name (`NoticeBar.markWord`). Absent elsewhere, so no other line moves.
                               + (page.noticeCard.markWord !== "" ? " mark=" + page.noticeCard.markShown : ""))
             driver.complete()
@@ -640,7 +640,7 @@ Item {
     AutoActDiffVerbs { id: diffVerbs; driver: driver }
     AutoActSplitVerbs { id: splitVerbs; driver: driver }
     AutoActHandVerbs { id: handVerbs; driver: driver }
-    AutoActCopyVerbs { id: copyVerbs; driver: driver }
+    AutoActWorktreeVerbs { id: worktreeVerbs; driver: driver }
     AutoActRecoverVerbs { id: recoverVerbs; driver: driver }
 
     function runAutoAct() {
@@ -670,7 +670,7 @@ Item {
             || diffVerbs.run(act, arg)
             || splitVerbs.run(act, arg)
             || handVerbs.run(act, arg)
-            || copyVerbs.run(act, arg)
+            || worktreeVerbs.run(act, arg)
             || recoverVerbs.run(act, arg)
         if (!known && !driver.completionDeferred && !driver.writeExpected) {
             // A misspelling: window verbs are in the completion ledger, so a verb known to neither is

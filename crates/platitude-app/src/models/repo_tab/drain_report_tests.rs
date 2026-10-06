@@ -186,15 +186,15 @@ fn the_plan_door_names_the_same_refused_history_the_same_way() {
     }
 }
 
-/// A working copy a menu asked for answers to its own press, over the
+/// A worktree a menu asked for answers to its own press, over the
 /// fetch beside it, with its report and the folder it was to be made in:
 /// the page stands the tab there on a landing and reports a refusal
-/// without the log (`RepoPage.absorbCopyAnswer`).
+/// without the log (`RepoPage.absorbWorktreeAnswer`).
 #[test]
-fn the_copy_a_menu_asked_for_is_answered_by_name_with_its_report() {
+fn the_worktree_a_menu_asked_for_is_answered_by_name_with_its_report() {
     let mut tab = RepoTab::default();
-    tab.copy_out.asked(Some(7));
-    tab.copy_answer_path = "C:/work/repo.worktrees/hotfix-patch".into();
+    tab.worktree_out.asked(Some(7));
+    tab.worktree_answer_path = "C:/work/repo.worktrees/hotfix-patch".into();
     let refused = platitude_core::WriteReport::about(
         ReportKind::WorktreeNotAdded,
         "hotfix-patch",
@@ -210,13 +210,13 @@ fn the_copy_a_menu_asked_for_is_answered_by_name_with_its_report() {
         reads_from: 0,
     }]);
     let answer = tab
-        .write_answer_at(tab.copy_answer)
+        .write_answer_at(tab.worktree_answer)
         .expect("its own answer");
     assert!(answer.failed);
     assert_eq!(answer.report_kind, "worktree-not-added");
     assert_eq!(answer.report_name, "hotfix-patch");
     assert_eq!(
-        tab.copy_answer_path, "C:/work/repo.worktrees/hotfix-patch",
+        tab.worktree_answer_path, "C:/work/repo.worktrees/hotfix-patch",
         "the folder the press was for"
     );
     assert_eq!(
@@ -228,5 +228,5 @@ fn the_copy_a_menu_asked_for_is_answered_by_name_with_its_report() {
         names: Vec::new(),
         settled: true,
     }]);
-    assert_eq!(tab.copy_answer, -1, "told once");
+    assert_eq!(tab.worktree_answer, -1, "told once");
 }

@@ -17,7 +17,7 @@ Rectangle {
     property string detail: ""
     /// Which state, if any, this report is in — `danger` / `warning` / empty (`Words.reportTone`).
     property string tone: ""
-    /// The word in the heading that is a working copy's name, which wears the tree mark in front of it (デザイン規約
+    /// The word in the heading that is a worktree's name, which wears the tree mark in front of it (デザイン規約
     /// §ref の種別「名前の印」); empty for none. Set in the heading's own text, so a translation that moves the word
     /// leaves the sentence plain (`Words.roomInSentence`).
     property string markWord: ""
@@ -93,7 +93,7 @@ Rectangle {
             spacing: Theme.spaceXs
             // **Wrapped, never cut** (デザイン規約 §答えの要らない報せ): the heading names a branch and a remote. A
             // `CardText`, since only a text field answers where a character stands — what the tree mark in front of a
-            // working copy's name is set against (as `SharedToolTip`).
+            // worktree's name is set against (as `SharedToolTip`).
             CardText {
                 id: headingWord
                 Layout.fillWidth: true

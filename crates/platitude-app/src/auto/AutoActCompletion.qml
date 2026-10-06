@@ -128,10 +128,10 @@ QtObject {
                 "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both", "tag-refused",
                 "tag-chip-menu", "tag-line-menu",
                 // The menu and its WORKTREE card open from a sampler once the row is laid out; the pressing ones click
-                // from there and wait for the list the copy leaves, or for the bar git's refusal comes down in.
+                // from there and wait for the list the worktree leaves, or for the bar git's refusal comes down in.
                 "worktree-menu", "worktree-remove", "worktree-remove-refused", "worktree-graph",
-                // The same for the rows that make a copy (`AutoActCopyVerbs`); the two that land stand the tab in the
-                // new copy, which the window reads (`WindowTabActs`).
+                // The same for the rows that make a worktree (`AutoActWorktreeVerbs`); the two that land stand the tab
+                // in the new worktree, which the window reads (`WindowTabActs`).
                 "worktree-add-menu", "worktree-box", "worktree-new-refused", "worktree-add", "worktree-new",
                 "nav-add-remote", "push-default", "push-target", "push-hover", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
@@ -220,8 +220,8 @@ QtObject {
                 "graph-tail", "graph-tail-more",
                 "graph-head", "graph-head-below", "graph-head-back",
                 "graph-head-go", "graph-head-lit", "wip-lanes",
-                // Three arrivals behind the press, each from a different tree: the copy's row, its file list, and one
-                // of its files. `carried-stand` waits out the first two and the rows built from them.
+                // Three arrivals behind the press, each from a different tree: the worktree's row, its file list, and
+                // one of its files. `carried-stand` waits out the first two and the rows built from them.
                 "carried-read", "carried-stand",
                 "divider-refuse", "commands-fail-shut", "commands-escape",
                 "commands-select", "commands-copy", "commands-sweep",
@@ -269,8 +269,8 @@ QtObject {
                 "quit-save-held",
                 "open-fail-tab-bare", "open-fail-tab-log", "open-fail-sweep", "identity",
                 "identity-half", "identity-tip", "band", "app-menu", "app-menu-reclick", "tab-widths",
-                "ops-panel", "ops-stand", "ops-stand-repos", "ops-stand-copies", "ops-branch",
-                "ops-branch-folder", "ops-branch-pick", "ops-copy-pick", "ops-repo-pick",
+                "ops-panel", "ops-stand", "ops-stand-repos", "ops-stand-worktrees", "ops-branch",
+                "ops-branch-folder", "ops-branch-pick", "ops-worktree-pick", "ops-repo-pick",
                 "tab-mark", "tab-name", "tab-drag", "tab-hold", "tab-edge", "tab-carry",
                 "tab-pin", "tab-pin-go", "tab-open-go", "tab-open-moved-on",
                 "window-fill", "solo", "gate-sweep", "window-floor",

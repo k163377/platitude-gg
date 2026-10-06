@@ -76,7 +76,7 @@ ColumnLayout {
     signal fileMenuRequested(string bucket, string path)
 
     /// Tree or flat paths — one choice for all three lists. **The page applies it**: the choice outlives this pane,
-    /// and the pane another working copy is read in has the same toggle (`RepoPage.setWipTreeView`).
+    /// and the pane another worktree is read in has the same toggle (`RepoPage.setWipTreeView`).
     signal treeViewChosen(bool tree)
 
     /// Automation: run one of the stopped operation's held rows to its end, named by its flag (`OpExitCard`).

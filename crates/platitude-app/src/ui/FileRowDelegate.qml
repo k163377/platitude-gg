@@ -16,14 +16,14 @@ Item {
     readonly property string nameText: model.name ?? ""
     /// The whole path — what a diff is asked for by, what the hover says, what the walk finds a row by. **Its own
     /// property**, as `NameCell.folded` is: a commit's changed files spell it `path` (`models::details::FileItem`,
-    /// the answer below), a working copy's `full` (`models::nav::Role`), so that pane says so. A role the model does
+    /// the answer below), a worktree's `full` (`models::nav::Role`), so that pane says so. A role the model does
     /// not answer reads back `undefined` silently — every row then holds the same empty string and lights together.
     property string pathText: model.path ?? ""
     /// Which side of the index this row's bytes are on, empty for a commit's changed files. Half of what addresses
     /// the file (`Bucket::routing_of`): the page opens the diff by the pair.
     property string bucket: ""
     /// What a folder row folds by — its own key: a commit's files keep one field for both (the answer here), a
-    /// working copy's model folds by `<run>:<path>`, so that pane says which is which.
+    /// worktree's model folds by `<run>:<path>`, so that pane says which is which.
     property string foldKey: fileRow.pathText
     readonly property string origPathText: model.orig_path ?? ""
     /// The source written the way this row writes names — what the row shows; `origPathText` addresses the diff.

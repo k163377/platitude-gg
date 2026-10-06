@@ -1,10 +1,10 @@
 //! Bringing back one part of what an entry took away (破棄記録仕様.md §4).
-//! Each is git's own write for the thing: a branch, a tag, a working copy,
+//! Each is git's own write for the thing: a branch, a tag, a worktree,
 //! a stash entry — and the copy of thrown-away work, put back the first way
 //! that takes it whole.
 //!
-//! What is written is the operated working copy (where the work was thrown
-//! away), the shared refs and a new working copy; never another copy's
+//! What is written is the operated worktree (where the work was thrown
+//! away), the shared refs and a new worktree; never another worktree's
 //! files (§4).
 
 use std::path::{Path, PathBuf};
@@ -20,20 +20,20 @@ use crate::scratch::ScratchFile;
 /// How a part came back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Restored {
-    /// As the thing it was: the branch, tag, working copy or stash entry,
+    /// As the thing it was: the branch, tag, worktree or stash entry,
     /// or the work applied as it had been staged.
     Whole,
     /// The work applied, all of it unstaged: its staged half did not go
     /// back as it was, and the working tree's side held all it did.
     Unstaged,
-    /// The work could not go into the working copy whole without a
+    /// The work could not go into the worktree whole without a
     /// conflict, so it waits as a stash entry instead (§4: on the commit it
     /// stood on, dated now).
     AsStash,
 }
 
 /// Brings back `part`. A refusal is git's, as the write's error (§4: a
-/// branch another copy has out, a commit gc took …).
+/// branch another worktree has out, a commit gc took …).
 pub async fn restore(
     executor: &GitExecutor,
     workdir: &Path,
@@ -82,9 +82,9 @@ pub async fn restore(
             Ok(Restored::Whole)
         }
         Restore::Changes { copy, path, .. } => {
-            // Into the copy the work was thrown out of, and no other (§4);
+            // Into the worktree the work was thrown out of, and no other (§4);
             // gone, it has nowhere to go.
-            if copy_at(executor, path, cancel).await?.is_none() {
+            if worktree_at(executor, path, cancel).await?.is_none() {
                 return Err(GitError::Rejected {
                     message: format!("The worktree the changes came from is gone: {path}"),
                 });
@@ -94,13 +94,13 @@ pub async fn restore(
     }
 }
 
-/// The git directory of the working copy whose top folder is `path`, as a
+/// The git directory of the worktree whose top folder is `path`, as a
 /// session opened there names it (`rev-parse --absolute-git-dir`, as
-/// `repo::open` asks) — none where no working copy stands there: the folder
+/// `repo::open` asks) — none where no worktree stands there: the folder
 /// is gone, or it is a folder left where one was removed, which git takes
 /// for a folder of whatever repository holds it (and `git apply` there
 /// passes over every path outside it, answering 0).
-pub(super) async fn copy_at(
+pub(super) async fn worktree_at(
     executor: &GitExecutor,
     path: &str,
     cancel: &CancellationToken,
@@ -127,32 +127,32 @@ pub(super) async fn copy_at(
     Ok(topped.then(|| git_dir.trim_end().to_string()))
 }
 
-/// Puts the copy back into the working copy at `copy_path` (§4): its
+/// Puts the copy back into the worktree at `worktree_path` (§4): its
 /// differences from what the discard left — the index's, the working
 /// tree's and the untracked files — applied where they go on over what is
 /// there now, the staged half as it was staged; the working tree's alone
 /// where the staged half no longer goes on but the working tree's side
 /// holds all it did ([`work_holds_the_staged`]); else a stash entry holding
 /// the same differences. Nothing goes in over an operation standing in the
-/// copy: its staged half would go into what that commits.
+/// worktree: its staged half would go into what that commits.
 ///
 /// `git apply` writes all of a patch or none of it, so a refusal leaves the
 /// index and the working tree as they were.
 async fn changes(
     executor: &GitExecutor,
-    copy_path: &Path,
+    worktree_path: &Path,
     copy: &Oid,
     cancel: &CancellationToken,
 ) -> Result<Restored, GitError> {
-    let standing = crate::opstate::detect(executor, copy_path, cancel).await?;
+    let standing = crate::opstate::detect(executor, worktree_path, cancel).await?;
     let quiet =
         !(standing.rebasing || standing.merging || standing.cherry_picking || standing.reverting);
-    if quiet && let Some(restored) = put_back(executor, copy_path, copy, cancel).await? {
+    if quiet && let Some(restored) = put_back(executor, worktree_path, copy, cancel).await? {
         return Ok(restored);
     }
-    let message = subject_of(executor, copy_path, copy, cancel).await?;
-    let entry = redated(executor, copy_path, copy, cancel).await?;
-    store(executor, copy_path, &entry, &message, cancel).await?;
+    let message = subject_of(executor, worktree_path, copy, cancel).await?;
+    let entry = redated(executor, worktree_path, copy, cancel).await?;
+    store(executor, worktree_path, &entry, &message, cancel).await?;
     Ok(Restored::AsStash)
 }
 
@@ -389,7 +389,7 @@ async fn patch_of(
     Ok(executor.run(cmd, cancel).await?.stdout)
 }
 
-/// `git apply <options> <patch>` in the working copy: whether it went on.
+/// `git apply <options> <patch>` in the worktree: whether it went on.
 /// Line endings are taken as they come, whatever `core.safecrlf` says, and
 /// whitespace as it is, whatever `apply.whitespace` says — a restore puts
 /// back what was there.
@@ -409,7 +409,7 @@ async fn applied(
     Ok(executor.run_unchecked(cmd, cancel).await?.code == 0)
 }
 
-/// The working copy's own git directory, in full: where the patches wait.
+/// The worktree's own git directory, in full: where the patches wait.
 async fn absolute_git_dir(
     executor: &GitExecutor,
     cwd: &Path,

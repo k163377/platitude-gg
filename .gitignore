@@ -8,8 +8,8 @@ target/
 # seat measures one corpus; the next `corpus` regenerates it if deleted.
 .pgg-perf-corpus/
 .pgg-perf-corpus.partial-*/
-# Its extra working copies (cargo xtask corpus --copies).
-.pgg-perf-corpus-copy-*/
+# Its extra worktrees (cargo xtask corpus --worktrees).
+.pgg-perf-corpus-worktree-*/
 
 # Hook ledgers, one file per session, beside this .git so every seat's
 # sessions share them: task chips (hook chips), recent shell lines (hook

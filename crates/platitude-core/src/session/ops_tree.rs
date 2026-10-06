@@ -21,7 +21,7 @@ impl RepoSession {
         )
     }
 
-    /// `git add --all` for the whole work tree, untracked included.
+    /// `git add --all` for the whole working tree, untracked included.
     pub fn stage_all(self: &Arc<Self>) -> Option<OperationId> {
         self.write(
             OperationKind::Stage,
@@ -283,17 +283,17 @@ impl RepoSession {
         )
     }
 
-    /// Makes a new working copy at `path` with `on` out in it (`git
-    /// worktree add`). `name` is the copy as the screen names it, for a
+    /// Makes a new worktree at `path` with `on` out in it (`git
+    /// worktree add`). `name` is the worktree as the screen names it, for a
     /// refusal's heading ([`crate::worktrees::add`]).
     ///
     /// The graph is read again behind it — a new branch is a new chip —
     /// and the worktree listing that follows every such write brings the
-    /// copy's row.
+    /// worktree's row.
     pub fn add_worktree(
         self: &Arc<Self>,
         path: String,
-        on: crate::worktrees::CopyOn,
+        on: crate::worktrees::WorktreeOn,
         name: String,
     ) -> Option<OperationId> {
         self.write(
@@ -305,18 +305,19 @@ impl RepoSession {
         )
     }
 
-    /// Takes another working copy off the disk (`git worktree remove`),
-    /// the branch it had out left where it is. `name` is the copy as the
+    /// Takes another worktree off the disk (`git worktree remove`),
+    /// the branch it had out left where it is. `name` is the worktree as the
     /// screen names it, for a refusal's heading
     /// ([`crate::worktrees::remove`]). Where it was and what it had out go
     /// on the discard record (破棄記録仕様.md §2) — also when the removal
     /// failed past git's point of no return: a folder it could not delete
     /// (one a program has open on Windows) fails it after git has taken the
-    /// copy's own HEAD and reflog. A copy on no commit yet takes nothing.
+    /// worktree's own HEAD and reflog. A worktree on no commit yet takes
+    /// nothing.
     ///
     /// Moves no ref, so the refs are read first and the tree only where
     /// they moved; the listing behind it frees the branch, and drops a
-    /// branchless copy's graph row with the one walk the write makes
+    /// branchless worktree's graph row with the one walk the write makes
     /// (`AfterWrite::Worktrees`).
     pub fn remove_worktree(self: &Arc<Self>, path: String, name: String) -> Option<OperationId> {
         let s = Arc::clone(self);

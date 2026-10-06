@@ -1,5 +1,5 @@
 //! The working tree's own shapes, as real git spells them back. The pre-merge
-//! part reads what the pane says of a repository inside the working copy
+//! part reads what the pane says of a repository inside the working tree
 //! (`details::embedded`); how `status` lists one is git's answer, recorded
 //! in [`periodic`].
 
@@ -24,7 +24,7 @@ fn embedded_repo(repo: &mut TestRepo, rel: &str, commit: bool) {
     }
 }
 
-/// What the row of a repository inside the working copy (one `dir/`
+/// What the row of a repository inside the working tree (one `dir/`
 /// entry, [`periodic`]) shows instead of a patch: the commit a `git add`
 /// would point at, since `--no-index` against a directory prints nothing.
 #[tokio::test]
@@ -92,14 +92,14 @@ async fn a_directory_that_is_no_repository_of_its_own_says_nothing() {
 }
 
 /// Left out of the pre-merge run: how `status` lists a repository inside
-/// the working copy, which is git's boundary (`-uall` on a plain directory
+/// the working tree, which is git's boundary (`-uall` on a plain directory
 /// is held by `stage_integration::partial::stage_part_of_an_untracked_file`).
 /// Run by the full gate (`-- --ignored ::periodic::`).
 mod periodic {
     use super::*;
 
     /// `-uall` opens every other new directory into its files; a repository
-    /// inside the working copy comes back as the single entry `nest/`,
+    /// inside the working tree comes back as the single entry `nest/`,
     /// trailing slash and all.
     ///
     /// That slash decides how `platitude_app::models::pathtree`, which cuts
@@ -107,7 +107,7 @@ mod periodic {
     /// nameless row inside it.
     #[tokio::test]
     #[ignore = "git's boundary at a nested repository: not worth the pre-merge run"]
-    async fn a_repository_inside_the_working_copy_stays_one_entry() {
+    async fn a_repository_inside_the_working_tree_stays_one_entry() {
         let mut repo = TestRepo::init();
         repo.commit_file("a.txt", "1\n", "root");
         // For contrast: a plain new directory is listed file by file.

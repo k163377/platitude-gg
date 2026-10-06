@@ -154,7 +154,7 @@ ColumnLayout {
     NavList {
         id: branchList
         sectionModel: sections.branchesModel
-        // Rows open their facts; the working copies' model says which copy holds each branch.
+        // Rows open their facts; the worktrees' model says which worktree holds each branch.
         offersFacts: true
         worktreesModel: sections.worktreesModel
         expanded: branchHead.showsRows
@@ -216,7 +216,7 @@ ColumnLayout {
         expanded: remoteHead.showsRows
         kindHint: "remote"
         gestures: sections.gestures
-        // Rows open like BRANCHES ones and name a branch: the working copies' model says which copy holds it…
+        // Rows open like BRANCHES ones and name a branch: the worktrees' model says which worktree holds it…
         offersFacts: true
         worktreesModel: sections.worktreesModel
         // …and the branches model where it stands, for a press on its name.
@@ -245,8 +245,8 @@ ColumnLayout {
         expanded: worktreeHead.showsRows
         kindHint: "worktree"
         gestures: sections.gestures
-        // Rows open with the branch the copy holds, read off BRANCHES. **No working copies' model**: a row here *is*
-        // a working copy.
+        // Rows open with the branch the worktree holds, read off BRANCHES. **No worktrees' model**: a row here *is*
+        // a worktree.
         offersFacts: true
         branchesModel: sections.branchesModel
         Layout.verticalStretchFactor: sections.sectionPull

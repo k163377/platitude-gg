@@ -14,7 +14,7 @@ QtObject {
     required property RepoTab repoTab
     required property WorkingTreeModel workingTree
     required property GraphModel graphModel
-    /// Which working copy has a branch checked out — what the `switch` row needs beyond the commit's own rules.
+    /// Which worktree has a branch checked out — what the `switch` row needs beyond the commit's own rules.
     required property NavSectionModel worktreesModel
     /// What the cards at the foot need worked out for them: the reading a branch carries and where a tag stands
     /// (`cardFacts`).
@@ -40,7 +40,7 @@ QtObject {
     /// Whether the row's name is somewhere to move to, and whether the press asks first (`offers::ref_menu`).
     property bool menuCanSwitch: false
     property bool menuSwitchAsks: false
-    /// …or leads to another working copy instead: the folder of the one holding that name, empty when none does
+    /// …or leads to another worktree instead: the folder of the one holding that name, empty when none does
     /// (`RefRowMenu.heldLeaf`).
     property string menuHeldLeaf: ""
     /// Whether that name has a far side a `git pull` would go to (the same `offers::ref_menu` ask).
@@ -59,12 +59,12 @@ QtObject {
     property bool menuTipHeldElsewhere: false
 
     /// What the WORKTREE card's two making rows stand on (`RefWorktreeMenu.standOn`'s `making`), asked of the commit
-    /// and the name the menu is aimed at (`offers::copy_rows`): any commit takes a new branch; a free branch, or a
-    /// remote one with no local branch, goes out as it is — to the folder `newCopyFor` names, looked at here as the
+    /// and the name the menu is aimed at (`offers::worktree_rows`): any commit takes a new branch; a free branch, or a
+    /// remote one with no local branch, goes out as it is — to the folder `newWorktreeFor` names, looked at here as the
     /// menu opens, the row greyed where something is already there.
-    function askCopyRows(kind, name, oidHex) {
+    function askWorktreeRows(kind, name, oidHex) {
         const local = kind === "remote" ? menuState.repoTab.localNameFor(name) : name
-        const offers = GitFacts.copyOffers(
+        const offers = GitFacts.worktreeOffers(
             kind, name, oidHex,
             menuState.repoTab.state === "open",
             menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
@@ -73,11 +73,11 @@ QtObject {
             kind === "remote" && menuState.branchesModel.oidOfName(local) !== "")
         const checkout = offers.includes("checkout-branch") ? "branch"
                        : offers.includes("checkout-track") ? "track" : ""
-        const place = checkout === "" ? undefined : menuState.worktreesModel.newCopyFor(local)
+        const place = checkout === "" ? undefined : menuState.worktreesModel.newWorktreeFor(local)
         return {
             "oid": oidHex,
-            // Only where copies have a place to go: a box whose Enter could make nothing is not offered.
-            "here": offers.includes("here") && menuState.worktreesModel.copiesPlaced(),
+            // Only where worktrees have a place to go: a box whose Enter could make nothing is not offered.
+            "here": offers.includes("here") && menuState.worktreesModel.worktreesPlaced(),
             // No place to name (the listing not in yet): no row, rather than one that cannot say where it goes.
             "checkout": place === undefined ? "" : checkout,
             "branch": place === undefined ? "" : local,
@@ -98,7 +98,7 @@ QtObject {
         menuState.menuPullBlocked = false
         if (kind !== "branch" && kind !== "remote" && kind !== "worktree")
             return
-        const held = menuState.copyLeadingFrom(kind, name)
+        const held = menuState.worktreeLeadingFrom(kind, name)
         const offers = GitFacts.refMenuOffers(
             kind, name, oidHex,
             menuState.repoTab.state === "open",
@@ -116,9 +116,9 @@ QtObject {
         menuState.menuPullBlocked = menuState.menuCanPull && menuState.workingTree.pullBlocked
     }
 
-    /// The other working copy the menu's name leads to: the one holding the branch (a remote row through the local
-    /// branch of the same name), or the copy a folder's chip names — unless this tab stands in it. Empty for none.
-    function copyLeadingFrom(kind, name) {
+    /// The other worktree the menu's name leads to: the one holding the branch (a remote row through the local
+    /// branch of the same name), or the worktree a folder's chip names — unless this tab stands in it. Empty for none.
+    function worktreeLeadingFrom(kind, name) {
         if (kind === "branch")
             return menuState.worktreesModel.worktreeHolding(name)
         if (kind === "remote")
@@ -129,22 +129,22 @@ QtObject {
     }
 
     /// What the cards at the foot stand on, aimed at the menu's name — each emptied where that name is another's
-    /// kind, so that card holds only what can still be made here. The WORKTREE card stands on the copy a folder's
-    /// chip names, or on the one holding the chip's local branch — not a remote chip's, which only leads there
-    /// (`RefRowMenu.offerOn`) — and on what its making rows would make (`askCopyRows`). Read here, where the models
+    /// kind, so that card holds only what can still be made here. The WORKTREE card stands on the worktree a
+    /// folder's chip names, or on the one holding the chip's local branch — not a remote chip's, which only leads there
+    /// (`RefRowMenu.offerOn`) — and on what its making rows would make (`askWorktreeRows`). Read here, where the models
     /// are.
     function cardFacts(oidHex) {
         const kind = menuState.menu.targetKind
         const branchy = kind === "branch" || kind === "remote"
         const name = menuState.menu.targetName
-        const copy = kind === "worktree" ? name : kind === "branch" ? menuState.copyLeadingFrom(kind, name) : ""
+        const worktree = kind === "worktree" ? name : kind === "branch" ? menuState.worktreeLeadingFrom(kind, name) : ""
         return {
             "branch": menuState.branchFacts(branchy ? kind : "", branchy ? name : "", oidHex),
             "tag": menuState.tagFacts(kind === "tag" ? "tag" : "", kind === "tag" ? name : "", oidHex),
-            "copy": copy === "" ? undefined : menuState.worktreesModel.copyFacts(copy),
-            "copyHere": GitFacts.samePath(copy, menuState.repoTab.repoPath),
+            "worktree": worktree === "" ? undefined : menuState.worktreesModel.worktreeFacts(worktree),
+            "worktreeHere": GitFacts.samePath(worktree, menuState.repoTab.repoPath),
             "busy": menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
-            "making": menuState.askCopyRows(kind, name, oidHex)
+            "making": menuState.askWorktreeRows(kind, name, oidHex)
         }
     }
 

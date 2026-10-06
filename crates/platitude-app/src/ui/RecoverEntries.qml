@@ -2,8 +2,8 @@ import QtQuick
 import platitude.ui
 
 // What the discard log's rows say (破棄記録仕様.md §3): one operation that took something away, as the model reads it —
-// `{kind, name, remote, copy, at, lost, parts, byPart}`, each part `{restore, name, with, look, tip, remote, lost,
-// files, notCopied}` (`DiscardModel.rows`). The rows draw `{mark, tint, badged, paired, title, at, copy, parts,
+// `{kind, name, remote, worktree, at, lost, parts, byPart}`, each part `{restore, name, with, look, tip, remote, lost,
+// files, notCopied}` (`DiscardModel.rows`). The rows draw `{mark, tint, badged, paired, title, at, worktree, parts,
 // byPart}`, each part `{mark, tint, badged, text, restore}` (`RecoverPane`, `RecoverBand`, `RecoverHoverCard`, the
 // marks through `RecoverMark`) — the words are said here, where they can be translated.
 //
@@ -149,7 +149,7 @@ QtObject {
         }
     }
     /// What one part took: the commits only its tip reaches, the work a copy holds, the stash by its message, the
-    /// working copy by where it was, the tag by its commit.
+    /// worktree by where it was, the tag by its commit.
     function takenOf(row, part) {
         switch (part.restore) {
         case "changes": {
@@ -173,8 +173,8 @@ QtObject {
         }
     }
     /// What the restore makes of it (破棄記録仕様.md §4) — a branch at the old tip under its own name where that is
-    /// free and with the suffix where it is not, the tag on its own object, the working copy where it was, the stash
-    /// back in the list, the work back in the copy it was thrown out of.
+    /// free and with the suffix where it is not, the tag on its own object, the worktree where it was, the stash
+    /// back in the list, the work back in the worktree it was thrown out of.
     function restoredAs(part) {
         switch (part.restore) {
         case "changes":
@@ -222,7 +222,7 @@ QtObject {
             paired: where === "both",
             title: shown.titleOf(row),
             at: row.at,
-            copy: row.copy,
+            worktree: row.worktree,
             parts: row.parts.map(part => shown.partOf(row, part)),
             byPart: row.byPart
         }

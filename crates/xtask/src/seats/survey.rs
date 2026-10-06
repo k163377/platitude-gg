@@ -266,7 +266,7 @@ fn seat_row(seat: &Seat) -> ([String; 6], String) {
         state.branch.clone()
     };
     let count = |value: Option<u32>| value.map_or("?".to_string(), |value| value.to_string());
-    // A letter with no tree has no working copy: its figures are absent
+    // A letter with no tree has no worktree: its figures are absent
     // (`-`), not unreadable (`?`), and it must not read "(not created)",
     // which hides its branch's work.
     let (at_main, dirty, age) = match state.on_disk {

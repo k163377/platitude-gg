@@ -17,13 +17,13 @@
 //! the dates and strings are fixed (`shape`).
 
 mod build;
-mod copies;
 mod probe;
 mod readings;
 mod remotes;
 mod shape;
 mod stream;
 mod tree;
+mod worktrees;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -72,10 +72,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
                     args.get(i).ok_or("--against needs a repository")?,
                 ));
             }
-            "--copies" => {
+            "--worktrees" => {
                 i += 1;
                 wanted = Some(args.get(i).and_then(|n| n.parse::<usize>().ok()).ok_or(
-                    "--copies takes how many working copies stand beside the corpus, 0 for none",
+                    "--worktrees takes how many worktrees stand beside the corpus, 0 for none",
                 )?);
             }
             other => return Err(format!("corpus does not take {other:?}")),
@@ -84,7 +84,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     if let Some(other) = reference {
         if force || path.is_some() || wanted.is_some() {
-            return Err("--against only reads: drop --force, --path or --copies".to_string());
+            return Err("--against only reads: drop --force, --path or --worktrees".to_string());
         }
         return against(&other);
     }
@@ -101,10 +101,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         build(&at)?;
     }
     if let Some(count) = wanted {
-        copies::set_copies(&at, count)?;
+        worktrees::set_worktrees(&at, count)?;
     }
     if probe {
-        return probe::run(&at, &copies::copy_path(&at, 1));
+        return probe::run(&at, &worktrees::nth_worktree_path(&at, 1));
     }
     report(&at)
 }
@@ -152,11 +152,11 @@ fn beside(common: &str) -> Option<PathBuf> {
 fn report(at: &Path) -> Result<(), String> {
     let refs = git(at, &["show-ref"])?;
     let commits = git(at, &["rev-list", "--all", "--count"])?;
-    // The copies' branches (`copies::stand_copies`) are not counted, but
+    // The worktrees' branches (`worktrees::stand_worktrees`) are not counted, but
     // stay in the token a run is compared under.
     let counted = refs
         .lines()
-        .filter(|l| !l.is_empty() && !l.contains(" refs/heads/pgg-copy-"))
+        .filter(|l| !l.is_empty() && !l.contains(" refs/heads/pgg-worktree-"))
         .count();
     holds_its_shape(commits.trim(), counted, at)?;
     println!("corpus: {}", at.display());
@@ -179,7 +179,7 @@ fn report(at: &Path) -> Result<(), String> {
 /// definition (window, lane, chip).
 ///
 /// Read only: the reference is somebody's working clone, so nothing here
-/// writes to it, down to the status (`readings::worktree`).
+/// writes to it, down to the status (`readings::working_tree`).
 fn against(at: &Path) -> Result<(), String> {
     let refs = git(at, &["show-ref"])?;
     let commits = git(at, &["rev-list", "--all", "--count"])?;

@@ -25,7 +25,7 @@ impl RepoSession {
         )
     }
 
-    /// `git pull`: the branch the working tree is on and its upstream.
+    /// `git pull`: the branch the worktree is on and its upstream.
     ///
     /// Refreshed as a history move ([`AfterWrite::Graph`]): the
     /// integrating half lands on this branch, its index and working tree.

@@ -55,7 +55,7 @@ async fn each_move_off_a_tip_is_one_entry_with_what_only_it_held() {
 
     let left = one(&found, DiscardKind::LeftDetached);
     assert_eq!(
-        (left.parts[0].tip, left.lost(), left.copy.as_str()),
+        (left.parts[0].tip, left.lost(), left.worktree.as_str()),
         (oid(&d1), vec![oid(&d1)], "")
     );
 }
@@ -227,12 +227,12 @@ async fn a_delete_another_tool_wrote_is_an_entry() {
     );
 }
 
-/// Another working copy's HEAD is read from this one, and this one's from
+/// Another worktree's HEAD is read from this one, and this one's from
 /// it: what it left detached is one entry, named for it where it is not
-/// the copy read from — and the commit its detached HEAD stands on, which
+/// the worktree read from — and the commit its detached HEAD stands on, which
 /// no branch holds, is no one's loss.
 #[tokio::test]
-async fn another_copys_detached_head_is_read_from_either_copy() {
+async fn another_worktrees_detached_head_is_read_from_either_worktree() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "1\n", "c1");
     let side = repo.path.with_file_name("side");
@@ -253,7 +253,7 @@ async fn another_copys_detached_head_is_read_from_either_copy() {
         assert_eq!(found.len(), 1, "{found:#?}");
         let left = one(&found, DiscardKind::LeftDetached);
         assert_eq!(
-            (left.copy.as_str(), left.lost()),
+            (left.worktree.as_str(), left.lost()),
             (named, vec![oid(&d2)]),
             "read from {from:?}: d1 is side's HEAD"
         );

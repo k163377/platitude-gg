@@ -10,7 +10,7 @@ use crate::urlpath::file_url_to_path;
 use super::{impl_move_notified, impl_notify_runs, push_run, qml_register, tab_name};
 
 /// One tab of the strip as the settings list offers it: its shown name
-/// and the work tree path git is run in.
+/// and the path of the worktree git is run in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenRepo {
     pub name: String,
@@ -51,61 +51,61 @@ use strip::{Landing, landing_for, title_of};
 pub struct TabItem {
     tab_id: i32,
     title: String,
-    /// The repository's own working copy: what the tab is named after and
+    /// The repository's own worktree: what the tab is named after and
     /// what says whether two folders are one repository
-    /// (`repo::Place::repo`). Not what git is run in — that is `copy_path`.
+    /// (`repo::Place::repo`). Not what git is run in — that is `worktree_path`.
     repo_path: String,
-    /// The working copy the tab stands in (`repo_path` or one of its
-    /// linked copies): what the session opens, and what the hover shows
+    /// The worktree the tab stands in (`repo_path` or one of its
+    /// linked worktrees): what the session opens, and what the hover shows
     /// (デザイン規約 §hover のツールチップ).
-    copy_path: String,
-    /// That copy's folder name, empty in the repository's own — which
+    worktree_path: String,
+    /// That worktree's folder name, empty in the repository's own — which
     /// says whether the strip draws anything after the name
-    /// ([`copy_name_of`]; デザイン規約 §タブの所作).
-    copy_name: String,
+    /// ([`worktree_name_of`]; デザイン規約 §タブの所作).
+    worktree_name: String,
 }
 
 impl TabItem {
-    /// One row of the strip: the repository whose own working copy is
-    /// `repo`, standing in `copy`. The one door rows are made through, so
-    /// no road that opens a tab can leave `copy_name` out.
-    fn standing(tab_id: i32, title: String, repo: String, copy: String) -> Self {
+    /// One row of the strip: the repository whose own worktree is
+    /// `repo`, standing in `worktree`. The one door rows are made through, so
+    /// no road that opens a tab can leave `worktree_name` out.
+    fn standing(tab_id: i32, title: String, repo: String, worktree: String) -> Self {
         Self {
             tab_id,
             title,
-            copy_name: copy_name_of(&repo, &copy),
+            worktree_name: worktree_name_of(&repo, &worktree),
             repo_path: repo,
-            copy_path: copy,
+            worktree_path: worktree,
         }
     }
 
-    /// Stands this row in another working copy of the same repository
-    /// (`TabsModel::switch_copy`). The repository, title and id stay: the
+    /// Stands this row in another worktree of the same repository
+    /// (`TabsModel::switch_worktree`). The repository, title and id stay: the
     /// page is built on the id (`Hub::restand_tab`).
-    fn stand_in(&mut self, copy: String) {
-        self.copy_name = copy_name_of(&self.repo_path, &copy);
-        self.copy_path = copy;
+    fn stand_in(&mut self, worktree: String) {
+        self.worktree_name = worktree_name_of(&self.repo_path, &worktree);
+        self.worktree_path = worktree;
     }
 }
 
-/// What the strip says after the name: the linked copy's folder name,
-/// empty for the repository's own copy.
+/// What the strip says after the name: the linked worktree's folder name,
+/// empty for the repository's own worktree.
 ///
 /// Compared by `repo::open_key`, not `==`: a tab put back from the file
 /// carries whatever spellings were written down.
-fn copy_name_of(repo: &str, copy: &str) -> String {
+fn worktree_name_of(repo: &str, worktree: &str) -> String {
     let key = platitude_core::repo::open_key;
-    if key(repo) == key(copy) {
+    if key(repo) == key(worktree) {
         return String::new();
     }
-    crate::urlpath::path_leaf(copy).to_string()
+    crate::urlpath::path_leaf(worktree).to_string()
 }
 
 /// A folder somebody asked for, waiting on git to say where it opens
 /// (`TabsModel::ask`).
 struct Ask {
     /// The folder as handed over — what a refusal names, having no
-    /// working copy to name instead.
+    /// worktree to name instead.
     path: String,
     /// Asked from the folder picker, so a refusal goes back to it; every
     /// other road shows the refusal on the tab's failure screen
@@ -123,7 +123,7 @@ pub struct TabsModel {
     /// `currentIndex` moves, and a page keyed off the row is rebuilt in
     /// that gap with its session already open, never to read again.
     current_tab_id: i32,
-    /// The front tab's repository and copy names (`TabItem::copy_name`),
+    /// The front tab's repository and worktree names (`TabItem::worktree_name`),
     /// for the operation panel. Settled with the row, so the panel does
     /// not wait on the page's own git answer.
     ///
@@ -131,7 +131,7 @@ pub struct TabsModel {
     /// one grows a parent folder beside a namesake (`tab_name::names_for`),
     /// and the panel has none.
     current_repo_name: String,
-    current_copy_name: String,
+    current_worktree_name: String,
     /// The strip as one list (`OpenRepo` per tab), for the settings
     /// screen's repository chooser: a list bound to a property cannot walk
     /// the model's rows, and a picked name has to lead back to a path.
@@ -157,7 +157,7 @@ impl Default for TabsModel {
             current_index: -1,
             current_tab_id: -1,
             current_repo_name: String::new(),
-            current_copy_name: String::new(),
+            current_worktree_name: String::new(),
             open_repos: OpenRepos::default(),
             asks: Arc::new(Feed::default()),
             attached: false,

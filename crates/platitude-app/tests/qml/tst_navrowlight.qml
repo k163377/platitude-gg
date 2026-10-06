@@ -116,7 +116,7 @@ Item {
             verify(!below.pointed, "and nothing else takes it")
         }
 
-        /// A working copy's path is the one answer its row cannot show, so the rest on the row's own name puts it
+        /// A worktree's path is the one answer its row cannot show, so the rest on the row's own name puts it
         /// out — walking down to the lines would be a second rest for it (デザイン規約 §左メニューの所作).
         function test_the_rest_on_the_rows_own_line_asks_for_the_supplement() {
             rows.firstOpen = false
@@ -134,7 +134,7 @@ Item {
             mouseMove(top, 100, Theme.rowHeight / 2)
             root.handMoves++
             tryVerify(() => top.factsItem.says === top.factsPath, undefined,
-                      "the hand on the row's own line asks for where the copy stands")
+                      "the hand on the row's own line asks for where the worktree stands")
             tryVerify(() => top.factsTipOut, undefined, "and the box comes out on the rest already taken")
         }
 

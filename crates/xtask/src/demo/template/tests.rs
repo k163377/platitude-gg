@@ -18,7 +18,7 @@ fn run_leaf(work: &Path) -> String {
     work.parent()
         .and_then(Path::file_name)
         .map(|name| name.to_string_lossy().to_string())
-        .expect("a work tree stands in a run's root")
+        .expect("a worktree stands in a run's root")
 }
 
 /// Every file under `dir` that names `needle`.
@@ -109,7 +109,7 @@ fn only_gits_own_files_name_the_directory_they_were_built_in() {
         "tags",
         "worktrees",
         "worktree-detached",
-        "nested-copy",
+        "nested-worktree",
         "stashes",
         "shallow",
     ] {

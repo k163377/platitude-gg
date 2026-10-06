@@ -320,14 +320,14 @@ impl WorkingTreeModel {
         self.progress_feed = crate::hub::attach_feed(tab_id, |f| &f.op_progress, invoker);
     }
 
-    /// The tab now stands in another working copy (`Hub::restand_tab`):
-    /// every answer here was the old copy's, so all of it goes back to
+    /// The tab now stands in another worktree (`Hub::restand_tab`):
+    /// every answer here was the old worktree's, so all of it goes back to
     /// before the first status — `loaded` included, so the counts do not
     /// read as clean before the new status lands. The feeds and the tab
     /// are kept: the next session pushes to the same ones.
     #[qslot]
     fn restand(&mut self) {
-        self.forget_the_copy();
+        self.forget_the_worktree();
         self.changed();
     }
 
@@ -355,7 +355,7 @@ impl WorkingTreeModel {
     /// Written out, not `*self = Self::default()`: the bridge deletes the
     /// QObject when the value it is keyed to is dropped, and the next slot
     /// call aborts with "No proxy" (qtbridge `QObjectHolder`).
-    fn forget_the_copy(&mut self) {
+    fn forget_the_worktree(&mut self) {
         self.loaded = false;
         self.head_known = false;
         self.branch = String::new();
@@ -1101,10 +1101,10 @@ mod tests {
     }
 
     #[test]
-    fn a_new_copy_counts_its_stamps_from_the_start() {
+    fn a_new_worktree_counts_its_stamps_from_the_start() {
         let mut model = WorkingTreeModel::default();
         ticked(&mut model, 50, 3, 10);
-        model.forget_the_copy();
+        model.forget_the_worktree();
         ticked(&mut model, 1, 2, 4);
         assert_eq!((model.op_step, model.op_steps), (2, 4));
     }

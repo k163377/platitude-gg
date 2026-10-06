@@ -22,42 +22,42 @@ struct World {
     pacer: Pacer,
     at: Duration,
     own_weights: OwnWeights,
-    copy_weights: HashMap<String, Duration>,
+    worktree_weights: HashMap<String, Duration>,
     /// The read under way and when it ends.
     own_end: Option<(Duration, Duration)>,
-    copy_end: Option<(String, Duration, Duration)>,
+    worktree_end: Option<(String, Duration, Duration)>,
     own_starts: Vec<Duration>,
-    copy_starts: Vec<(String, Duration)>,
+    worktree_starts: Vec<(String, Duration)>,
     /// When this tree's reads ended.
     own_ends: Vec<Duration>,
 }
 
 impl World {
-    fn new(pace: CopiesPace, own_weights: OwnWeights) -> Self {
+    fn new(pace: WorktreesPace, own_weights: OwnWeights) -> Self {
         let mut pacer = Pacer::new(pace);
         pacer.set_active(true, Duration::ZERO);
         Self {
             pacer,
             at: Duration::ZERO,
             own_weights,
-            copy_weights: HashMap::new(),
+            worktree_weights: HashMap::new(),
             own_end: None,
-            copy_end: None,
+            worktree_end: None,
             own_starts: Vec::new(),
-            copy_starts: Vec::new(),
+            worktree_starts: Vec::new(),
             own_ends: Vec::new(),
         }
     }
 
     fn steady(weight: Duration) -> Self {
-        Self::new(CopiesPace::Auto, Box::new(move |_| weight))
+        Self::new(WorktreesPace::Auto, Box::new(move |_| weight))
     }
 
-    fn with_copies(mut self, copies: &[(&str, Duration)]) -> Self {
-        let keys: Vec<String> = copies.iter().map(|(k, _)| (*k).to_string()).collect();
+    fn with_worktrees(mut self, worktrees: &[(&str, Duration)]) -> Self {
+        let keys: Vec<String> = worktrees.iter().map(|(k, _)| (*k).to_string()).collect();
         self.pacer.list(&keys, self.at);
-        for (key, weight) in copies {
-            self.copy_weights.insert((*key).to_string(), *weight);
+        for (key, weight) in worktrees {
+            self.worktree_weights.insert((*key).to_string(), *weight);
         }
         self
     }
@@ -71,10 +71,10 @@ impl World {
                     self.own_starts.push(self.at);
                     self.own_end = Some((self.at + weight, weight));
                 }
-                Start::Copy(key) => {
-                    let weight = self.copy_weights[&key];
-                    self.copy_starts.push((key.clone(), self.at));
-                    self.copy_end = Some((key, self.at, self.at + weight));
+                Start::Worktree(key) => {
+                    let weight = self.worktree_weights[&key];
+                    self.worktree_starts.push((key.clone(), self.at));
+                    self.worktree_end = Some((key, self.at, self.at + weight));
                 }
             }
         }
@@ -91,9 +91,9 @@ impl World {
         loop {
             self.start_due();
             let own_end = self.own_end.map(|(end, _)| end);
-            let copy_end = self.copy_end.as_ref().map(|(_, _, end)| *end);
+            let worktree_end = self.worktree_end.as_ref().map(|(_, _, end)| *end);
             let wake = self.pacer.next_wake().map(&late);
-            let next = [own_end, copy_end, wake]
+            let next = [own_end, worktree_end, wake]
                 .into_iter()
                 .flatten()
                 .min()
@@ -110,12 +110,12 @@ impl World {
                 self.own_ends.push(end);
                 self.pacer.own_ended(end, Some(weight));
             }
-            if let Some((key, began, end)) = self.copy_end.clone()
+            if let Some((key, began, end)) = self.worktree_end.clone()
                 && end <= self.at
             {
-                self.copy_end = None;
-                let weight = self.copy_weights[&key];
-                self.pacer.copy_ended(&key, began, Some(weight));
+                self.worktree_end = None;
+                let weight = self.worktree_weights[&key];
+                self.pacer.worktree_ended(&key, began, Some(weight));
             }
         }
     }
@@ -125,16 +125,16 @@ impl World {
         self.own_starts.windows(2).map(|w| w[1] - w[0]).collect()
     }
 
-    fn copy_starts_of(&self, key: &str) -> Vec<Duration> {
-        self.copy_starts
+    fn worktree_starts_of(&self, key: &str) -> Vec<Duration> {
+        self.worktree_starts
             .iter()
             .filter(|(k, _)| k == key)
             .map(|(_, at)| *at)
             .collect()
     }
 
-    fn copy_gaps(&self, key: &str) -> Vec<Duration> {
-        let starts = self.copy_starts_of(key);
+    fn worktree_gaps(&self, key: &str) -> Vec<Duration> {
+        let starts = self.worktree_starts_of(key);
         starts.windows(2).map(|w| w[1] - w[0]).collect()
     }
 }
@@ -203,7 +203,7 @@ fn a_read_longer_than_the_ceiling_is_followed_after_the_rest() {
 #[test]
 fn light_reads_among_heavy_ones_do_not_bring_the_pace_back() {
     let pattern = [ms(50), ms(900), ms(900)];
-    let mut world = World::new(CopiesPace::Auto, Box::new(move |n| pattern[n % 3]));
+    let mut world = World::new(WorktreesPace::Auto, Box::new(move |n| pattern[n % 3]));
     world.run_until(secs(600));
     let gaps = world.own_gaps();
     // From the first heavy read on, the light one in each three takes the
@@ -221,7 +221,7 @@ fn a_sudden_crowd_pushes_the_pace_out_at_once_and_it_comes_back_in_steps() {
     let crowded = OWN_CEILING.mul_f64(OWN_SHARE) * 4 / 5;
     let light = ms(20);
     let weights = move |n: usize| if (5..10).contains(&n) { crowded } else { light };
-    let mut world = World::new(CopiesPace::Auto, Box::new(weights));
+    let mut world = World::new(WorktreesPace::Auto, Box::new(weights));
     world.run_until(secs(400));
     let gaps = world.own_gaps();
     assert!(
@@ -283,7 +283,7 @@ fn asked_again_during_a_read_starts_the_next_as_it_ends() {
 
 #[test]
 fn the_opening_counts_as_a_read_begun() {
-    let mut pacer = Pacer::new(CopiesPace::Auto);
+    let mut pacer = Pacer::new(WorktreesPace::Auto);
     pacer.opened(Duration::ZERO);
     pacer.set_active(true, secs(1));
     assert!(
@@ -313,39 +313,42 @@ fn a_page_off_screen_reads_nothing_and_back_on_reads_what_fell_due() {
 }
 
 #[test]
-fn a_slow_copy_does_not_hold_back_the_fast_ones() {
+fn a_slow_worktree_does_not_hold_back_the_fast_ones() {
     let slow = secs(3);
     let mut world =
-        World::steady(ms(50)).with_copies(&[("a", ms(100)), ("b", ms(100)), ("c", slow)]);
+        World::steady(ms(50)).with_worktrees(&[("a", ms(100)), ("b", ms(100)), ("c", slow)]);
     world.run_until(secs(600));
     for fast in ["a", "b"] {
-        let gaps = world.copy_gaps(fast);
+        let gaps = world.worktree_gaps(fast);
         assert!(gaps.len() > 30, "{fast} is read again and again: {gaps:?}");
         assert!(
-            gaps.iter().all(|gap| *gap <= COPY_FLOOR + OWN_FLOOR + slow),
-            "{fast} waits for the slow copy one read at most: {gaps:?}"
+            gaps.iter()
+                .all(|gap| *gap <= WORKTREE_FLOOR + OWN_FLOOR + slow),
+            "{fast} waits for the slow worktree one read at most: {gaps:?}"
         );
     }
-    let slow_gaps = world.copy_gaps("c");
+    let slow_gaps = world.worktree_gaps("c");
     assert!(
         slow_gaps.len() > 5,
-        "the slow copy is read too: {slow_gaps:?}"
+        "the slow worktree is read too: {slow_gaps:?}"
     );
     assert!(
-        slow_gaps.iter().all(|gap| *gap <= COPY_CEILING + OWN_FLOOR),
+        slow_gaps
+            .iter()
+            .all(|gap| *gap <= WORKTREE_CEILING + OWN_FLOOR),
         "within its ceiling, give or take this tree's read: {slow_gaps:?}"
     );
     assert!(
-        slow_gaps.iter().all(|gap| *gap >= COPY_CEILING),
+        slow_gaps.iter().all(|gap| *gap >= WORKTREE_CEILING),
         "and no sooner: its weight sets it there: {slow_gaps:?}"
     );
 }
 
 #[test]
-fn a_copy_slower_than_the_gap_is_read_after_this_tree_s_read() {
-    let mut world = World::steady(ms(50)).with_copies(&[("slow", secs(6))]);
+fn a_worktree_slower_than_the_gap_is_read_after_this_tree_s_read() {
+    let mut world = World::steady(ms(50)).with_worktrees(&[("slow", secs(6))]);
     world.run_until(secs(600));
-    let starts = world.copy_starts_of("slow");
+    let starts = world.worktree_starts_of("slow");
     assert!(starts.len() > 5, "read again and again: {starts:?}");
     for start in &starts {
         assert!(
@@ -360,7 +363,7 @@ fn a_copy_slower_than_the_gap_is_read_after_this_tree_s_read() {
 /// read does — whether it starts at the ask or as the read under way ends.
 #[test]
 fn a_read_asked_for_at_once_says_so_and_a_paced_one_does_not() {
-    let mut pacer = Pacer::new(CopiesPace::Off);
+    let mut pacer = Pacer::new(WorktreesPace::Off);
     pacer.opened(Duration::ZERO);
     pacer.set_active(true, Duration::ZERO);
     pacer.ask_now(secs(1));
@@ -390,7 +393,7 @@ fn a_read_asked_for_at_once_says_so_and_a_paced_one_does_not() {
 /// the next time the window comes back.
 #[test]
 fn stashes_a_turned_away_read_was_to_list_go_to_the_next() {
-    let mut pacer = Pacer::new(CopiesPace::Off);
+    let mut pacer = Pacer::new(WorktreesPace::Off);
     pacer.opened(Duration::ZERO);
     pacer.set_active(true, Duration::ZERO);
     pacer.ask_now(secs(1));
@@ -411,7 +414,7 @@ fn stashes_a_turned_away_read_was_to_list_go_to_the_next() {
 /// before it.
 #[test]
 fn the_opening_keeps_a_read_already_asked_for() {
-    let mut pacer = Pacer::new(CopiesPace::Off);
+    let mut pacer = Pacer::new(WorktreesPace::Off);
     pacer.set_active(true, Duration::ZERO);
     pacer.ask_now(Duration::ZERO);
     pacer.opened(ms(10));
@@ -421,23 +424,23 @@ fn the_opening_keeps_a_read_already_asked_for() {
     );
 }
 
-/// A copy asked for again while its own read runs — the listing moved past
-/// that read — is due again as the read ends; one asked for before its read
-/// began is answered by it.
+/// A worktree asked for again while its own read runs — the listing moved
+/// past that read — is due again as the read ends; one asked for before its
+/// read began is answered by it.
 #[test]
-fn a_copy_asked_for_during_its_read_is_due_again_as_it_ends() {
-    let mut pacer = Pacer::new(CopiesPace::Auto);
+fn a_worktree_asked_for_during_its_read_is_due_again_as_it_ends() {
+    let mut pacer = Pacer::new(WorktreesPace::Auto);
     pacer.opened(Duration::ZERO);
     pacer.set_active(true, Duration::ZERO);
     pacer.list(&["a".to_string()], Duration::ZERO);
-    pacer.copy_stale("a", secs(1));
-    pacer.copy_ended("a", secs(2), Some(ms(10)));
+    pacer.worktree_stale("a", secs(1));
+    pacer.worktree_ended("a", secs(2), Some(ms(10)));
     assert!(
         pacer.next_wake().is_some_and(|wake| wake > secs(2)),
         "asked before the read began, the read answered it"
     );
-    pacer.copy_stale("a", secs(4));
-    pacer.copy_ended("a", secs(3), Some(ms(10)));
+    pacer.worktree_stale("a", secs(4));
+    pacer.worktree_ended("a", secs(3), Some(ms(10)));
     assert_eq!(
         pacer.next_wake(),
         Some(secs(3)),
@@ -446,8 +449,8 @@ fn a_copy_asked_for_during_its_read_is_due_again_as_it_ends() {
 }
 
 #[test]
-fn a_copy_never_read_waits_for_this_tree_s_read_once() {
-    let mut pacer = Pacer::new(CopiesPace::Auto);
+fn a_worktree_never_read_waits_for_this_tree_s_read_once() {
+    let mut pacer = Pacer::new(WorktreesPace::Auto);
     pacer.opened(Duration::ZERO);
     pacer.set_active(true, secs(1));
     pacer.list(&["new".to_string()], secs(1));
@@ -464,48 +467,49 @@ fn a_copy_never_read_waits_for_this_tree_s_read_once() {
     pacer.own_ended(OWN_FLOOR + ms(10), Some(ms(10)));
     assert_eq!(
         pacer.starts(OWN_FLOOR + ms(10)),
-        vec![Start::Copy("new".to_string())],
+        vec![Start::Worktree("new".to_string())],
         "it goes as this tree's read ends"
     );
 }
 
 #[test]
-fn a_copy_that_would_pass_its_ceiling_waiting_goes_now() {
-    let mut pacer = Pacer::new(CopiesPace::Auto);
+fn a_worktree_that_would_pass_its_ceiling_waiting_goes_now() {
+    let mut pacer = Pacer::new(WorktreesPace::Auto);
     pacer.set_active(true, Duration::ZERO);
     pacer.list(&["c".to_string()], Duration::ZERO);
     // Read once, heavily, at 0: it falls due at its ceiling.
-    pacer.copy_ended("c", Duration::ZERO, Some(secs(20)));
-    // This tree's read is overdue by then and starts beside it: the copy
+    pacer.worktree_ended("c", Duration::ZERO, Some(secs(20)));
+    // This tree's read is overdue by then and starts beside it: the worktree
     // would wait for that read's end, a second past its ceiling.
     pacer.own_ended(Duration::ZERO, Some(secs(1)));
-    let due = COPY_CEILING;
+    let due = WORKTREE_CEILING;
     let starts = pacer.starts(due);
     assert!(
-        starts.contains(&Start::Copy("c".to_string())),
+        starts.contains(&Start::Worktree("c".to_string())),
         "waiting for this tree's next read would pass the ceiling: {starts:?}"
     );
 }
 
 #[test]
-fn copies_spread_out_as_they_grow_in_number() {
+fn worktrees_spread_out_as_they_grow_in_number() {
     let weight = ms(300);
     let few: Vec<(String, Duration)> = (0..3).map(|i| (format!("c{i}"), weight)).collect();
     let many: Vec<(String, Duration)> = (0..12).map(|i| (format!("c{i}"), weight)).collect();
-    let gaps_of = |copies: &[(String, Duration)]| {
-        let named: Vec<(&str, Duration)> = copies.iter().map(|(k, w)| (k.as_str(), *w)).collect();
-        let mut world = World::steady(ms(50)).with_copies(&named);
+    let gaps_of = |worktrees: &[(String, Duration)]| {
+        let named: Vec<(&str, Duration)> =
+            worktrees.iter().map(|(k, w)| (k.as_str(), *w)).collect();
+        let mut world = World::steady(ms(50)).with_worktrees(&named);
         world.run_until(secs(900));
-        world.copy_gaps("c0")
+        world.worktree_gaps("c0")
     };
     let few_gaps = gaps_of(&few);
     let many_gaps = gaps_of(&many);
     let few_target = (weight * 3)
-        .div_f64(COPY_SHARE)
-        .clamp(COPY_FLOOR, COPY_CEILING);
+        .div_f64(WORKTREE_SHARE)
+        .clamp(WORKTREE_FLOOR, WORKTREE_CEILING);
     let many_target = (weight * 12)
-        .div_f64(COPY_SHARE)
-        .clamp(COPY_FLOOR, COPY_CEILING);
+        .div_f64(WORKTREE_SHARE)
+        .clamp(WORKTREE_FLOOR, WORKTREE_CEILING);
     assert!(few_target < many_target, "the count means something here");
     assert!(
         few_gaps
@@ -518,23 +522,24 @@ fn copies_spread_out_as_they_grow_in_number() {
         many_gaps
             .iter()
             .skip(1)
-            .all(|gap| *gap >= many_target && *gap <= COPY_CEILING + OWN_FLOOR),
+            .all(|gap| *gap >= many_target && *gap <= WORKTREE_CEILING + OWN_FLOOR),
         "{many_gaps:?}"
     );
 }
 
 #[test]
-fn off_reads_no_copy_and_fixed_ignores_the_weight() {
-    let mut off = World::new(CopiesPace::Off, Box::new(|_| ms(50))).with_copies(&[("a", ms(10))]);
+fn off_reads_no_worktree_and_fixed_ignores_the_weight() {
+    let mut off =
+        World::new(WorktreesPace::Off, Box::new(|_| ms(50))).with_worktrees(&[("a", ms(10))]);
     off.run_until(secs(120));
-    assert!(off.copy_starts.is_empty());
+    assert!(off.worktree_starts.is_empty());
     assert!(off.own_starts.len() > 10, "this tree is read all the same");
 
     let every = secs(20);
-    let mut fixed =
-        World::new(CopiesPace::Fixed(every), Box::new(|_| ms(50))).with_copies(&[("a", secs(2))]);
+    let mut fixed = World::new(WorktreesPace::Fixed(every), Box::new(|_| ms(50)))
+        .with_worktrees(&[("a", secs(2))]);
     fixed.run_until(secs(300));
-    let gaps = fixed.copy_gaps("a");
+    let gaps = fixed.worktree_gaps("a");
     assert!(
         gaps.iter()
             .all(|gap| *gap >= every && *gap <= every + OWN_FLOOR),
@@ -543,35 +548,35 @@ fn off_reads_no_copy_and_fixed_ignores_the_weight() {
 }
 
 #[test]
-fn a_pass_over_the_copies_starts_none_of_the_pace_s_own() {
-    let mut pacer = Pacer::new(CopiesPace::Auto);
+fn a_pass_over_the_worktrees_starts_none_of_the_pace_s_own() {
+    let mut pacer = Pacer::new(WorktreesPace::Auto);
     pacer.set_active(true, Duration::ZERO);
     pacer.list(&["a".to_string()], Duration::ZERO);
-    pacer.copy_ended("a", Duration::ZERO, Some(ms(10)));
+    pacer.worktree_ended("a", Duration::ZERO, Some(ms(10)));
     pacer.set_passing(true);
     assert!(
         !pacer
-            .starts(COPY_CEILING)
-            .contains(&Start::Copy("a".to_string())),
+            .starts(WORKTREE_CEILING)
+            .contains(&Start::Worktree("a".to_string())),
         "the pass is reading them"
     );
     // The pass read it at the ceiling: due again a floor later (this
     // tree's read began then too, and is still out).
-    pacer.copy_ended("a", COPY_CEILING, Some(ms(10)));
+    pacer.worktree_ended("a", WORKTREE_CEILING, Some(ms(10)));
     pacer.set_passing(false);
-    assert_eq!(pacer.next_wake(), Some(COPY_CEILING + COPY_FLOOR));
+    assert_eq!(pacer.next_wake(), Some(WORKTREE_CEILING + WORKTREE_FLOOR));
 }
 
-/// Turned away before it began (a pass took the copies between the start
-/// and the read), a copy is not asked for again at once: that would be
+/// Turned away before it began (a pass took the worktrees between the start
+/// and the read), a worktree is not asked for again at once: that would be
 /// turned away again for as long as the pass lasts.
 #[test]
-fn a_copy_turned_away_before_its_read_waits_for_this_tree_s_read() {
-    let mut pacer = Pacer::new(CopiesPace::Auto);
+fn a_worktree_turned_away_before_its_read_waits_for_this_tree_s_read() {
+    let mut pacer = Pacer::new(WorktreesPace::Auto);
     pacer.set_active(true, Duration::ZERO);
     pacer.list(&["a".to_string()], Duration::ZERO);
-    pacer.copy_ended("a", Duration::ZERO, Some(ms(10)));
-    // This tree's next read falls due after the copy's.
+    pacer.worktree_ended("a", Duration::ZERO, Some(ms(10)));
+    // This tree's next read falls due after the worktree's.
     let own_weight = (OWN_FLOOR * 2).mul_f64(OWN_SHARE);
     assert_eq!(
         pacer.starts(Duration::ZERO),
@@ -580,9 +585,9 @@ fn a_copy_turned_away_before_its_read_waits_for_this_tree_s_read() {
         }]
     );
     pacer.own_ended(Duration::ZERO, Some(own_weight));
-    let due = COPY_FLOOR;
-    assert_eq!(pacer.starts(due), vec![Start::Copy("a".to_string())]);
-    pacer.copy_skipped("a");
+    let due = WORKTREE_FLOOR;
+    assert_eq!(pacer.starts(due), vec![Start::Worktree("a".to_string())]);
+    pacer.worktree_skipped("a");
     let next_own = own_interval_for(own_weight);
     assert_eq!(
         pacer.next_wake(),
@@ -599,23 +604,24 @@ fn a_copy_turned_away_before_its_read_waits_for_this_tree_s_read() {
     pacer.own_ended(next_own + ms(10), Some(own_weight));
     assert_eq!(
         pacer.starts(next_own + ms(10)),
-        vec![Start::Copy("a".to_string())],
+        vec![Start::Worktree("a".to_string())],
         "and goes as this tree's next read ends"
     );
 }
 
 /// A floor set lower reads a light tree sooner; a ceiling set higher lets
-/// a heavy one wait longer — and a copy's interval keeps to its own pair.
+/// a heavy one wait longer — and a worktree's interval keeps to its own
+/// pair.
 #[test]
 fn the_floors_and_ceilings_a_person_sets_are_the_ones_kept() {
     let bounds = PaceBounds {
         own_floor: secs(2),
         own_ceiling: secs(60),
-        copy_floor: secs(3),
-        copy_ceiling: secs(90),
+        worktree_floor: secs(3),
+        worktree_ceiling: secs(90),
     };
     let read = ms(20);
-    let mut light = World::steady(read).with_copies(&[("a", ms(10))]);
+    let mut light = World::steady(read).with_worktrees(&[("a", ms(10))]);
     light.pacer.set_bounds(bounds);
     light.run_until(secs(120));
     // The rest is never more than the floor, so a floor under it is kept,
@@ -631,12 +637,12 @@ fn the_floors_and_ceilings_a_person_sets_are_the_ones_kept() {
     );
     assert!(
         light
-            .copy_gaps("a")
+            .worktree_gaps("a")
             .iter()
             .skip(1)
             .all(|gap| *gap >= secs(3) && *gap <= secs(3) + secs(2)),
         "{:?}",
-        light.copy_gaps("a")
+        light.worktree_gaps("a")
     );
 
     let mut heavy = World::steady(secs(2));
@@ -671,10 +677,10 @@ fn a_pair_asked_for_is_held_in_range_with_the_ceiling_never_under_the_floor() {
     assert_eq!(pace_bounds_secs(5, 15), (5, 15));
 }
 
-/// This tree waiting long on a slow pace, and a copy on an hour's fixed
+/// This tree waiting long on a slow pace, and a worktree on an hour's fixed
 /// interval: the reads fall due where the pace would have put them.
 fn waiting_long() -> Pacer {
-    let mut pacer = Pacer::new(CopiesPace::Fixed(secs(3600)));
+    let mut pacer = Pacer::new(WorktreesPace::Fixed(secs(3600)));
     let slow = PaceBounds {
         own_floor: secs(60),
         own_ceiling: secs(60),
@@ -684,22 +690,22 @@ fn waiting_long() -> Pacer {
     pacer.opened(Duration::ZERO);
     pacer.set_active(true, Duration::ZERO);
     pacer.list(&["a".to_string()], Duration::ZERO);
-    pacer.copy_ended("a", Duration::ZERO, Some(ms(10)));
+    pacer.worktree_ended("a", Duration::ZERO, Some(ms(10)));
     assert_eq!(pacer.next_wake(), Some(secs(60)), "the long wait is set");
     pacer
 }
 
-/// A copy read an hour apart, turned to read automatically ten seconds
+/// A worktree read an hour apart, turned to read automatically ten seconds
 /// in: it is due where the automatic pace puts it from its last read, not
 /// at the hour.
 #[test]
-fn a_wait_already_set_is_planned_again_when_the_copies_reading_changes() {
+fn a_wait_already_set_is_planned_again_when_the_worktrees_reading_changes() {
     let mut pacer = waiting_long();
-    pacer.set_pace(CopiesPace::Auto, secs(10));
-    assert_eq!(pacer.next_wake(), Some(COPY_FLOOR));
+    pacer.set_pace(WorktreesPace::Auto, secs(10));
+    assert_eq!(pacer.next_wake(), Some(WORKTREE_FLOOR));
     assert_eq!(
         pacer.starts(secs(10)),
-        vec![Start::Copy("a".to_string())],
+        vec![Start::Worktree("a".to_string())],
         "overdue under the new reading, it is read now"
     );
 }
@@ -712,37 +718,38 @@ fn a_wait_already_set_is_planned_again_when_the_bounds_change() {
     pacer.set_bounds(PaceBounds::default());
     assert_eq!(pacer.next_wake(), Some(OWN_FLOOR));
 
-    // This tree kept on its long wait, so only the copy's bounds move.
+    // This tree kept on its long wait, so only the worktree's bounds move.
     let own_slow = PaceBounds {
         own_floor: secs(60),
         own_ceiling: secs(60),
         ..PaceBounds::default()
     };
-    let mut copies = Pacer::new(CopiesPace::Auto);
-    copies.set_bounds(PaceBounds {
-        copy_floor: secs(3600),
-        copy_ceiling: secs(3600),
+    let mut worktrees = Pacer::new(WorktreesPace::Auto);
+    worktrees.set_bounds(PaceBounds {
+        worktree_floor: secs(3600),
+        worktree_ceiling: secs(3600),
         ..own_slow
     });
-    copies.opened(Duration::ZERO);
-    copies.set_active(true, Duration::ZERO);
-    copies.list(&["a".to_string()], Duration::ZERO);
-    copies.copy_ended("a", Duration::ZERO, Some(ms(10)));
-    assert_eq!(copies.next_wake(), Some(secs(60)));
-    copies.set_bounds(own_slow);
+    worktrees.opened(Duration::ZERO);
+    worktrees.set_active(true, Duration::ZERO);
+    worktrees.list(&["a".to_string()], Duration::ZERO);
+    worktrees.worktree_ended("a", Duration::ZERO, Some(ms(10)));
+    assert_eq!(worktrees.next_wake(), Some(secs(60)));
+    worktrees.set_bounds(own_slow);
     assert_eq!(
-        copies.starts(secs(10)),
-        vec![Start::Copy("a".to_string())],
-        "the copy is overdue under the shorter bounds"
+        worktrees.starts(secs(10)),
+        vec![Start::Worktree("a".to_string())],
+        "the worktree is overdue under the shorter bounds"
     );
 }
 
-/// Turned off and on again, the copies' rows came down with the off: each
-/// copy is read again at once (one at a time, as ever) to put them back.
+/// Turned off and on again, the worktrees' rows came down with the off:
+/// each worktree is read again at once (one at a time, as ever) to put
+/// them back.
 #[test]
-fn copies_turned_back_on_are_due_at_once() {
+fn worktrees_turned_back_on_are_due_at_once() {
     let mut pacer = waiting_long();
-    pacer.set_pace(CopiesPace::Off, secs(1));
-    pacer.set_pace(CopiesPace::Auto, secs(2));
+    pacer.set_pace(WorktreesPace::Off, secs(1));
+    pacer.set_pace(WorktreesPace::Auto, secs(2));
     assert_eq!(pacer.next_wake(), Some(secs(2)));
 }

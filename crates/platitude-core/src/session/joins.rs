@@ -21,21 +21,21 @@ pub(super) struct RefJoins<'a> {
     held: &'a WorktreeHolders,
 }
 
-/// What the working copies other than this session's are standing on, as
+/// What the worktrees other than this session's are standing on, as
 /// of the last worktree read.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct WorktreeHolders {
     /// The branches they have out, by short name, each with whether the
-    /// copy holding it is locked. One map rather than two sets, so a name
+    /// worktree holding it is locked. One map rather than two sets, so a name
     /// cannot be locked without being held.
     pub branches: std::collections::HashMap<String, bool>,
-    /// The copies standing on no branch. These carry their commit, since
+    /// The worktrees standing on no branch. These carry their commit, since
     /// only the worktree listing names it — which is also why the walk is
     /// told about them (`walk_command`).
     pub detached: Vec<DetachedCheckout>,
 }
 
-/// One working copy standing on no branch. `name` is what its WORKTREES
+/// One worktree standing on no branch. `name` is what its WORKTREES
 /// row shows (`shown_name`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetachedCheckout {
@@ -115,13 +115,13 @@ impl<'a> RefJoins<'a> {
         self.holder_of(r).is_some()
     }
 
-    /// Whether the copy holding this branch is locked — the chip's padlock
+    /// Whether the worktree holding this branch is locked — the chip's padlock
     /// (デザイン規約 §ref の種別).
     fn held_locked(&self, r: &RefEntry) -> bool {
         self.holder_of(r) == Some(true)
     }
 
-    /// `Some(locked)` while another copy has this branch out.
+    /// `Some(locked)` while another worktree has this branch out.
     fn holder_of(&self, r: &RefEntry) -> Option<bool> {
         if r.kind != RefKind::LocalBranch {
             return None;
@@ -217,20 +217,20 @@ pub(super) fn build_label_map(
                 is_head: true,
                 here: true,
                 remote: String::new(),
-                // This window's own copy, which the holders never carry.
+                // This window's own worktree, which the holders never carry.
                 held_elsewhere: false,
                 locked: false,
             },
         ));
     }
-    // Copies on no branch only: one with a branch is said by that
+    // Worktrees on no branch only: one with a branch is said by that
     // branch's chip (`held_elsewhere`), and this session's own is the
     // marker above.
-    for copy in joins.detached() {
+    for worktree in joins.detached() {
         pairs.push((
-            copy.oid,
+            worktree.oid,
             RefLabel {
-                text: copy.name.clone(),
+                text: worktree.name.clone(),
                 kind: LabelKind::Worktree,
                 has_remote: false,
                 is_head: false,
@@ -239,7 +239,7 @@ pub(super) fn build_label_map(
                 // This chip names no branch; its green frame comes from
                 // its kind.
                 held_elsewhere: false,
-                locked: copy.locked,
+                locked: worktree.locked,
             },
         ));
     }
@@ -454,7 +454,7 @@ pub(super) fn build_snapshot(
 
 /// What feeds the joins.
 impl RepoSession {
-    /// Files away which branches the *other* working copies have out, and
+    /// Files away which branches the *other* worktrees have out, and
     /// says so to the ref joins by bumping their generation. This window's
     /// own is left out: marking it would mark the row every reader stands on.
     ///
@@ -467,28 +467,28 @@ impl RepoSession {
         workdir: &Path,
     ) -> WorktreeNews {
         let here = same_path_key(&workdir.to_string_lossy());
-        self.note_copy_heads(worktrees, workdir);
+        self.note_worktree_heads(worktrees, workdir);
         let mine = worktrees
             .iter()
             .filter(|w| !w.bare && same_path_key(&w.path) != here);
         let mut fresh = WorktreeHolders::default();
-        for copy in mine {
-            match &copy.branch {
+        for worktree in mine {
+            match &worktree.branch {
                 Some(branch) => {
-                    fresh.branches.insert(branch.clone(), copy.locked);
+                    fresh.branches.insert(branch.clone(), worktree.locked);
                 }
                 // Only a bare entry lacks a `HEAD` line, and bare ones are
                 // filtered out above.
                 None => {
-                    if let Some(oid) = copy
+                    if let Some(oid) = worktree
                         .head_hex
                         .as_deref()
                         .and_then(|hex| Oid::from_hex_str(hex.trim()).ok())
                     {
                         fresh.detached.push(DetachedCheckout {
                             oid,
-                            name: shown_name(&copy.path),
-                            locked: copy.locked,
+                            name: shown_name(&worktree.path),
+                            locked: worktree.locked,
                         });
                     }
                 }
@@ -504,7 +504,7 @@ impl RepoSession {
         if **held == fresh {
             return WorktreeNews::default();
         }
-        // Re-walk only for the detached copies, which the walk names
+        // Re-walk only for the detached worktrees, which the walk names
         // itself; a branch taken or given back changes chips alone.
         let news = WorktreeNews {
             joins: true,
@@ -526,14 +526,14 @@ impl RepoSession {
 /// walk is a git process over the whole history.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(super) struct WorktreeNews {
-    /// The marks and the chips: something a working copy holds moved.
+    /// The marks and the chips: something a worktree holds moved.
     pub(super) joins: bool,
-    /// A copy standing on no branch moved; those commits are in the graph
+    /// A worktree standing on no branch moved; those commits are in the graph
     /// only because the walk names them (`walk_command`).
     pub(super) walk: bool,
 }
 
-/// The last segment of a working copy's path — what its WORKTREES row
+/// The last segment of a worktree's path — what its WORKTREES row
 /// shows (`models::nav`). Cut on both separators: git prints its own.
 pub(super) fn shown_name(path: &str) -> crate::Name {
     path.rsplit(['/', '\\'])

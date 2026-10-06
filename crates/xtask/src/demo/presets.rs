@@ -28,8 +28,8 @@ use super::signing::{errsig, signed};
 use super::stack::{stack, stack_max};
 use super::tags::{manytags, tagonly, tagremotes, tags};
 use super::worktrees::{
-    carried, carried_clashing, carried_many, copy_places, long_names, nested_copy, panel,
-    tracked_elsewhere, worktree_detached, worktrees,
+    carried, carried_clashing, carried_many, long_names, nested_worktree, panel, tracked_elsewhere,
+    worktree_detached, worktree_places, worktrees,
 };
 
 pub fn run(args: &[String]) -> Result<PathBuf, String> {
@@ -106,8 +106,8 @@ pub(super) fn base() -> PathBuf {
     std::env::temp_dir().join("pgg-demo")
 }
 
-/// Builds `preset` with the work tree called `name` — a tab is titled
-/// after its work-tree folder (`models::tab_name`).
+/// Builds `preset` with the worktree called `name` — a tab is titled
+/// after its worktree folder (`models::tab_name`).
 ///
 /// A claimed root is a copy of the preset's template (`template`); an
 /// `--at` root is built in directly, since a template's paths are under
@@ -208,9 +208,9 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "carried-many" => carried_many(&mut repo)?,
         "carried-clashing" => carried_clashing(&mut repo)?,
         "worktree-detached" => worktree_detached(&mut repo)?,
-        "nested-copy" => nested_copy(&mut repo)?,
+        "nested-worktree" => nested_worktree(&mut repo)?,
         "tracked-elsewhere" => tracked_elsewhere(&mut repo)?,
-        "copy-places" => copy_places(&mut repo)?,
+        "worktree-places" => worktree_places(&mut repo)?,
         "pictures" => pictures(&mut repo)?,
         "bigpicture" => bigpicture(&mut repo)?,
         "empty" => {}

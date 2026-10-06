@@ -1,4 +1,4 @@
-//! Two sessions, one working tree (`session::write_order`): the order
+//! Two sessions, one worktree (`session::write_order`): the order
 //! their writes run in, what each may read while the other is writing,
 //! and what a session closed mid-write lets go of.
 //!
