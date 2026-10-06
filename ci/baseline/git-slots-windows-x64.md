@@ -8,19 +8,20 @@
 
 ## 条件
 
-- 対象: `cargo xtask corpus` の合成リポジトリに **`cargo xtask corpus --copies 8` で 8 つの
-  作業コピーを建てた状態**(各 109,652 ファイルのチェックアウト + untracked 1 ファイル)。
+- 対象: `cargo xtask corpus` の合成リポジトリに **`cargo xtask corpus --worktrees 8` で 8 つの
+  worktree を建てた状態**(各 109,652 ファイルのチェックアウト + untracked 1 ファイル)。
   枝が 8 本増えるので **corpus token は `fb3d090c4261f4500bd61c8db7389485d515feab`(refs 50,012)**
-  — perf 記録の token とは別物で、この記録の中でだけ比較する
+  — perf 記録の token とは別物で、この記録の中でだけ比較する。**この token は `corpus --worktrees 8` では
+  再現しない**(枝名が token に入る)ので、撃ち直す時は表を丸ごと取り直す
 - 撃ち方(1 変種 1 行。下の 3 つの表はどれも同じ exe — 予約の分け方の A/B だけが 2 本を交互に撃つ):
 
   ```
-  PGG_ALLOW_GUI=1 cargo xtask perf --repo <corpus> --corpus fb3d090c… --at <commit> --runs 3 --no-font-walk --allow-noisy --cases <cases.tsv> --cycles 12 --setting git_concurrency=<N> --setting copies_interval_secs=<秒> --label slots-quiet-<N>
+  PGG_ALLOW_GUI=1 cargo xtask perf --repo <corpus> --corpus fb3d090c… --at <commit> --runs 3 --no-font-walk --allow-noisy --cases <cases.tsv> --cycles 12 --setting git_concurrency=<N> --setting worktrees_interval_secs=<秒> --label slots-quiet-<N>
   ```
 
   `cases.tsv` は `cargo xtask corpus` が印刷する 2 行(`newest` = HEAD `e512482e`、76 ファイル変更・
   開くのは 34,059 バイトの java / `second` = その下の行 `336dd534`)。**1 変種 24 操作 × 3 run = 72 操作**
-  (2 コミット × 12 周の行選択 → details → diff)。`copies_interval_secs` は 5(操作と巡回を
+  (2 コミット × 12 周の行選択 → details → diff)。`worktrees_interval_secs` は 5(操作と巡回を
   重ねるための間隔)/ 30(出荷既定)/ 0(巡回なし)の 3 通り
 - 機械: perf 記録と同じ台(Ryzen 9 9900X 12C/24T、DISPLAY2 180Hz、RTX 3070 D3D11、git 2.55、
   Qt 6.10.3)。**静かな机** — 他セッションのビルドもコンテナも無く、WSL は落としてある(空き 15GB
@@ -33,7 +34,7 @@
 
 ## 枠の床 — 巡回を止めた机で、クリックが詰まらないのは何本からか
 
-`copies_interval_secs=0`(他コピーを読まない)。背景が 1 本も走らないので、**測っているのは
+`worktrees_interval_secs=0`(他の worktree を読まない)。背景が 1 本も走らないので、**測っているのは
 `total` だけ**(interactive かつ手元ペースのコマンドは reserve の外の枠も取れる = `State::eligible`)。
 
 | 枠 N | details p50(newest / second)| diff p50(newest / second)| 100ms 超(72 操作中)| 起動→グラフ min–中央–max(うち walk)|
@@ -49,9 +50,9 @@
 - **3 本で中央値は戻り、裾は 4 本以上で収まる**(100ms 超 13.9% → 8.3% → 2.8%)
 - **起動も枠 2 本で伸びる**(walk 614ms 対 162ms)— 開幕は refs / status / walk が同時に走る
 
-## 巡回と重なった時(5 秒ごとに 8 コピー)
+## 巡回と重なった時(5 秒ごとに 8 worktree)
 
-`copies_interval_secs=5`。1 周が 2.5〜3.6 秒なので**操作の半分以上が巡回と重なる**。
+`worktrees_interval_secs=5`。1 周が 2.5〜3.6 秒なので**操作の半分以上が巡回と重なる**。
 
 | N(背景の幅 K)| details p50(newest / second)| diff p50(newest / second)| 100ms 超 | 巡回 1 周 min–中央–max [ms] |
 |---|---|---|---|---|
@@ -82,20 +83,20 @@ A = 背景と elsewhere が `max(1, n/2)`、B = `max(1, n/4)`。巡回 5 秒・�
 - **効くのは予約が 3 本に届く所**(N=4)。details の 100ms 超が 13.5% → 2.1%、max が 818 → 106ms
 - **N=8 では中立**(予約は元から 4 本)。裾の差は 1 サンプル 24 操作の揺れの中
 - **代金は巡回の 1 周**(N=8 で +8%、N=4 で +31%)。出荷既定の 30 秒間隔に対して duty 9% → 12% で、
-  **1 周のたびに 8 コピー全部を読み切ることは変わらない**(`carrying=8` が全 pass)
+  **1 周のたびに 8 worktree 全部を読み切ることは変わらない**(`carrying=8` が全 pass)
 
 ## 既定値(この実測で決めた)
 
 - `git_concurrency` = **`process::default_concurrency()` = 機械のスレッド数 / 3 を 4..=8 に収めた数**
   — 床 4 は §枠の床、天井 8 は 16 との差が無いことから(§巡回と重なった時)
 - **`Limits::of(n)` = 全体 n・click の予約 n − max(1, n/4)** — §予約の分け方
-- `copies_interval_secs` = **30** — 他コピーを固定の間隔で読む時の既定(1 周 2.5–3.6s に対して 1 割の duty)。
+- `worktrees_interval_secs` = **30** — 他の worktree を固定の間隔で読む時の既定(1 周 2.5–3.6s に対して 1 割の duty)。
   既定の読み方は自動(重さで間隔を決める — ci/baseline/poll-cost-windows-x64.md)
-- `OVERTAKEN_LIMIT` = **4**(全 pass が 8 コピーを読み切っている = aging が足りない兆候は出ていない)
+- `OVERTAKEN_LIMIT` = **4**(全 pass が 8 worktree を読み切っている = aging が足りない兆候は出ていない)
 
 ## 操作 1 回の内訳 — 枠待ち / プロセス起動 / git の仕事
 
-巡回を止め(`copies_interval_secs=0`)、既定の N(この台で 8)で `--log debug` を付けた 2 run
+巡回を止め(`worktrees_interval_secs=0`)、既定の N(この台で 8)で `--log debug` を付けた 2 run
 (12 操作 × 2)。executor が 1 コマンドごとに残す `waited_ms`(枠待ち)・`spawn_ms`
 (`CreateProcess` の呼び出し)・`elapsed_ms`(spawn → reap)。
 
@@ -137,7 +138,7 @@ A = 背景と elsewhere が `max(1, n/2)`、B = `max(1, n/4)`。巡回 5 秒・�
 
 ## `status` の高速化機構 — untracked cache / fsmonitor
 
-同じ probe。**製品と同じ `GIT_OPTIONAL_LOCKS=0` + `--no-optional-locks`** で、コピー 1(index を
+同じ probe。**製品と同じ `GIT_OPTIONAL_LOCKS=0` + `--no-optional-locks`** で、worktree 1(index を
 書く変種のため)に対する `status --porcelain=v2 -z --branch -uall` を 5 回。機構を入れる書き込み
 (`update-index --untracked-cache`、初回の status)は錠ありで 1 度だけ行い、その後は製品条件で測る。
 
@@ -149,30 +150,30 @@ A = 背景と elsewhere が `max(1, n/2)`、B = `max(1, n/4)`。巡回 5 秒・�
 | fsmonitor + untracked cache、どちらも 1 度満たしてから | 383 / 393(418)|
 
 **結論: 現状のまま**。**どれも製品条件の誤差の中**。製品条件では index が二度と書かれないので
-token も cache も更新されない。効かせるには status のたびに index を書く = 他の作業コピーの
+token も cache も更新されない。効かせるには status のたびに index を書く = 他の worktree の
 `index.lock` を握る側へ戻ることになり、それは巡回が他所の木を読める前提(rules-refs/core.md の
 `--no-optional-locks` の項)を崩す。
 
-## ペインが立っているコピーの読み
+## ペインが立っている worktree の読み
 
-**ペインが 1 つのコピーを開いている間も、tick ごとの読みはコピー 1 つに `status` 1 本** —— 行の集計の
-pass(全コピー)が、ペインの立つコピーの `status --porcelain=v2 -z --branch -uall` をペインの一覧へも
+**ペインが 1 つの worktree を開いている間も、tick ごとの読みは worktree 1 つに `status` 1 本** —— 行の集計の
+pass(すべての worktree)が、ペインの立つ worktree の `status --porcelain=v2 -z --branch -uall` をペインの一覧へも
 配る(`carried::Pane`)。ペインが自分で読む(`RepoSession::read_carried_status`)のは、選んだ瞬間・
 フォーカス復帰・pass が始まらなかった tick だけ。
 
-- **ペインが自分で読む 1 本の代金は status 1 本ぶん**: 製品条件のコピー 1 で **405 / 418ms**(5 回の
+- **ペインが自分で読む 1 本の代金は status 1 本ぶん**: 製品条件の worktree 1 で **405 / 418ms**(5 回の
   min / 中央、max 442 = §`status` の高速化機構 と同じ probe)。**フォーカス復帰は pass も撃つ**ので、
-  その時だけそのコピーは 2 度読まれる(8 コピーなら 9 本)
+  その時だけその worktree は 2 度読まれる(8 worktree なら 9 本)
 - **verify-ui の run が持つのは別の時間**: あちらは `GIT_CONFIG_NOSYSTEM=1` で system の
-  gitconfig を読まない環境なので、**同じコピーの status が 6.1–6.9s**(同じ日・同じ機械・
-  `carried-read` を `--repo <corpus>` で撃った 2 run の全 status。8 コピーの pass は 25–26s)。
+  gitconfig を読まない環境なので、**同じ worktree の status が 6.1–6.9s**(同じ日・同じ機械・
+  `carried-read` を `--repo <corpus>` で撃った 2 run の全 status。8 worktree の pass は 25–26s)。
   この機械の system config は `core.fscache = true` を持つが、**どの設定がこの差かの切り分けは
   していない**
 
 ## 再実行
 
-**入口で `cargo xtask corpus --copies 8`**(8 × 109,652 ファイルのチェックアウトで数分)→ §条件 の 1 行 →
-**出口で `cargo xtask corpus --copies 0`**(立てたままだと corpus token がこの記録の側に固定され、
+**入口で `cargo xtask corpus --worktrees 8`**(8 × 109,652 ファイルのチェックアウトで数分)→ §条件 の 1 行 →
+**出口で `cargo xtask corpus --worktrees 0`**(立てたままだと corpus token がこの記録の側に固定され、
 [perf-windows-x64.md](perf-windows-x64.md) §判定 を撃ち直せない)。内訳は同じ行に `--log debug --runs 2 --cycles 6`、probe は
-`cargo xtask corpus --probe`(コピー 1 が要る = 入口を通っていれば立っている)。**変種を跨いで比べるなら
+`cargo xtask corpus --probe`(worktree 1 が要る = 入口を通っていれば立っている)。**変種を跨いで比べるなら
 同じ座りで背中合わせに撮る**(§条件 の最後 — p95 と max は run の揺れで動く)。

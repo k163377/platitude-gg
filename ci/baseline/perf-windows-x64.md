@@ -100,9 +100,10 @@ PGG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印
 
 ## 操作 1 点の内訳 — 読み / 適用 / 描画
 
-**別の座り** — **`corpus --copies 8` の作業コピーが立ったコーパス**
+**別の座り** — **`corpus --worktrees 8` の worktree が立ったコーパス**
 (token `fb3d090c4261f4500bd61c8db7389485d515feab`、refs 50,012)に `--allow-noisy` で撃った
-3 run。開幕の巡回がグラフと機械を取り合う条件なので、
+3 run(**この token は `corpus --worktrees 8` では再現しない** —— 枝名が token に入るので、撃ち直す時は
+この節を丸ごと取り直す)。開幕の巡回がグラフと機械を取り合う条件なので、
 **読むのは割り方**。
 
 3 段に割る 3 つの印は、要求した時刻からの経過として全部 app が言う —— `… request round trip`
