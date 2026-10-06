@@ -114,7 +114,7 @@ pub async fn unstage_paths(
 
 /// `git restore --worktree -- <paths>`: throws away unstaged modifications
 /// of tracked files. Destructive — the caller confirms first.
-pub async fn discard_worktree(
+pub async fn discard_working_tree(
     executor: &GitExecutor,
     workdir: &Path,
     paths: &[String],
@@ -258,7 +258,7 @@ pub async fn discard_rows(
             DiscardSide::Staged => staged.push(path.clone()),
         }
     }
-    discard_worktree(executor, workdir, &unstaged, cancel).await?;
+    discard_working_tree(executor, workdir, &unstaged, cancel).await?;
     remove_untracked(executor, workdir, &untracked, cancel).await?;
     discard_to_head(executor, workdir, &staged, cancel).await
 }
@@ -284,7 +284,7 @@ mod tests {
         unstage_paths(&exec, workdir, &none, &cancel)
             .await
             .expect("unstage");
-        discard_worktree(&exec, workdir, &none, &cancel)
+        discard_working_tree(&exec, workdir, &none, &cancel)
             .await
             .expect("discard worktree");
         discard_to_head(&exec, workdir, &none, &cancel)

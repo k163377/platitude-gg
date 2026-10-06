@@ -17,7 +17,7 @@ ColumnLayout {
     /// walk crosses buckets.
     required property var pane
     required property var repoTab
-    required property var workTree
+    required property var workingTree
     /// This bucket's rows (`NavSectionModel` attached to this run).
     required property var model
     /// Automation's stand-in pointer row (PGG_AUTO_ACT=path-tip): the pane's row less the rows above this bucket, so
@@ -48,7 +48,7 @@ ColumnLayout {
         Layout.fillWidth: true
         section: bucketPane.section
         repoTab: bucketPane.repoTab
-        workTree: bucketPane.workTree
+        workingTree: bucketPane.workingTree
         bucketModel: bucketPane.model
     }
     AppListView {
@@ -67,11 +67,11 @@ ColumnLayout {
         Keys.onMenuPressed: event => event.accepted = bucketPane.pane.menuFromKeys()
         delegate: NavItemDelegate {
             listWidth: bucketList.width
-            kindHint: "wt"
+            kindHint: "file"
             showStage: true
             chosen: bucketPane.pane.isChosen(bucket, fullName)
-            sideOurs: bucketPane.workTree.sideOurs
-            sideTheirs: bucketPane.workTree.sideTheirs
+            sideOurs: bucketPane.workingTree.sideOurs
+            sideTheirs: bucketPane.workingTree.sideTheirs
             pointedTipRow: bucketPane.tipRow
             menuStanding: bucketPane.pane.menuStanding
             pointedEolPath: bucketPane.pane.pointedEolPath

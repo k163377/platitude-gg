@@ -14,7 +14,7 @@ Rectangle {
     /// Which bucket this heads: `conflicts` / `unstaged` / `staged`.
     required property string section
     required property var repoTab
-    required property var workTree
+    required property var workingTree
     /// This bucket's rows.
     required property var bucketModel
     /// Files in this bucket as the list counts them (`NavSectionModel.runFiles`) — untracked ride in unstaged, a rule
@@ -62,7 +62,7 @@ Rectangle {
         // The tool's wait, in the whole-bucket button's seat (規約 §conflict を外部ツールへ渡す).
         Label {
             visible: bucketHeader.waitingForTool
-            text: qsTr("Waiting for %1").arg(bucketHeader.workTree.mergeTool)
+            text: qsTr("Waiting for %1").arg(bucketHeader.workingTree.mergeTool)
             font.pixelSize: Theme.fontMd
             color: Theme.textSecondary
         }

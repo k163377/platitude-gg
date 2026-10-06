@@ -15,7 +15,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workTree: driver.workTree
+    readonly property var workingTree: driver.workingTree
     readonly property var graphModel: driver.graphModel
     readonly property var branchesModel: driver.branchesModel
     readonly property var tagsModel: driver.tagsModel
@@ -55,7 +55,7 @@ Item {
                    || act === "edit-message-leave"
                    || act === "edit-message-focus" || act === "edit-message-away") {
             // HEAD's own: the only row that takes typing (`offers::message_edit`), branch or not.
-            page.jumpToRef(workTree.headOid)
+            page.jumpToRef(workingTree.headOid)
             rewordTimer.start()
         } else if (act === "cherry-pick" || act === "cherry-pick-stops") {
             const pickOid = driver.autoActOid(arg)
@@ -87,9 +87,9 @@ Item {
             // `tagged=`: the row's tag is there exactly when there is something to lose, so it holds on a clean
             // fixture and a dirty one alike. `note=` carries spaces, so it goes last.
             Harness.report("reset_row tagged="
-                              + ((hardResetItem.note !== "") === (workTree.hardResetTakes > 0))
-                              + " files=" + workTree.hardResetTakes
-                              + " untracked=" + workTree.untrackedCount
+                              + ((hardResetItem.note !== "") === (workingTree.hardResetTakes > 0))
+                              + " files=" + workingTree.hardResetTakes
+                              + " untracked=" + workingTree.untrackedCount
                               + " note=" + hardResetItem.note)
             if (act === "reset-hard") {
                 resetLandedTimer.begin(wipeTo, "hard")
@@ -102,7 +102,7 @@ Item {
             let menuOid = arg
             if (menuOid === "")
                 menuOid = graphModel.oidAt(
-                    graphModel.rowOf(workTree.headOid) + 1)
+                    graphModel.rowOf(workingTree.headOid) + 1)
             page.openRowMenu(menuOid)
             if (act === "reset-menu")
                 resetMenu.offer()
@@ -124,7 +124,7 @@ Item {
                               + " " + dropCommitItem.text
                               + " oid=" + commitMenuState.menuOid.substring(0, 8)
                               + " hold=" + (dropCommitItem.holdMs > 0)
-                              + " reached=" + workTree.headReachedElsewhere)
+                              + " reached=" + workingTree.headReachedElsewhere)
             if (act !== "drop-commit") {
                 // "drop-stops" stops with the work still in the stash it took (`write_stopped stashes=`).
                 if (act === "drop-stops")
@@ -219,7 +219,7 @@ Item {
     /// Which commit the reset verbs take the branch back to. With nothing given, the row under HEAD's: a reset to
     /// where the branch already stands moves nothing, so its landing would never come.
     function resetTarget(arg) {
-        return arg === "" ? graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
+        return arg === "" ? graphModel.oidAt(graphModel.rowOf(workingTree.headOid) + 1)
                           : driver.autoActOid(arg)
     }
 
@@ -239,7 +239,7 @@ Item {
         id: replayRunningTimer
         onTriggered: {
             // Queued is not out: git writes nothing to count until it is actually replaying.
-            if (!repoTab.replaying || workTree.opSteps === 0 || workTree.opStep === 0)
+            if (!repoTab.replaying || workingTree.opSteps === 0 || workingTree.opStep === 0)
                 return
             replayRunningTimer.stop()
             page.autoReplayHeld = true
@@ -249,12 +249,12 @@ Item {
             const seat = graphPane.mapToItem(null, graphPane.width / 6, graphPane.height / 3)
             win.holdWaitHand(seat.x, seat.y)
             // That a range is being counted at all, not which step: the step is whatever git had reached.
-            const counted = workTree.opStep > 0 && workTree.opStep <= workTree.opSteps
-                            && workTree.opSteps > 1
-            Harness.report("replay_running op=" + workTree.opText + " counted=" + counted
+            const counted = workingTree.opStep > 0 && workingTree.opStep <= workingTree.opSteps
+                            && workingTree.opSteps > 1
+            Harness.report("replay_running op=" + workingTree.opText + " counted=" + counted
                               + " ring=" + win.waitRingShown
                               + " held=" + page.replayRunning
-                              + " step=" + workTree.opStep + " steps=" + workTree.opSteps)
+                              + " step=" + workingTree.opStep + " steps=" + workingTree.opSteps)
             renderedBarrier.begin()
         }
     }
@@ -280,7 +280,7 @@ Item {
         onTriggered: {
             // First the stop: answered, an operation standing with its status in, the landing armed.
             if (stoppedLandingTimer.owedAt < 0) {
-                if (repoTab.busyCount !== 0 || workTree.opText === "" || !workTree.wipRowStands
+                if (repoTab.busyCount !== 0 || workingTree.opText === "" || !workingTree.wipRowStands
                         || graphModel.loading || !page.pageLanding)
                     return
                 // Ask for the pass: under the hold nothing else brings one (our row appearing normally does, and a
@@ -315,7 +315,7 @@ Item {
                               + " earlyCopy=" + stoppedLandingTimer.earlyCopy
                               + " wip=" + page.wipShown
                               + " copy=" + (page.carriedPath !== "")
-                              + " op=" + workTree.opText
+                              + " op=" + workingTree.opText
                               // This landing moves the highlight without activating a row (`tryPendingWipSelect`).
                               + " lit=" + graphPane.view.currentIndex)
             driver.complete()
@@ -330,14 +330,14 @@ Item {
         onTriggered: {
             if (repoTab.busyCount !== 0)
                 return
-            const branch = workTree.branch
+            const branch = workingTree.branch
             if (!refMenu.opened)
                 page.openRefMenu("branch", branch, branch, branchesModel.oidOfName(branch))
             if (!refMenu.opened || !refPullItem.offered)
                 return
             pullPressTimer.stop()
             // Read back as `pull-ahead`'s `moved=`: a picture cannot say whether a graph was redrawn or never touched.
-            driver.headOidBefore = workTree.headOid
+            driver.headOidBefore = workingTree.headOid
             if (pullPressTimer.after === "pull-go")
                 tipLandedTimer.begin()
             driver.pressWrite(pullPressTimer.after, () => {
@@ -368,7 +368,7 @@ Item {
             pullAheadTimer.stop()
             Harness.report("pull_ahead refused=" + repoTab.writeRefused
                               + " log=" + page.commandsShown
-                              + " moved=" + (workTree.headOid !== driver.headOidBefore))
+                              + " moved=" + (workingTree.headOid !== driver.headOidBefore))
             driver.complete()
         }
     }
@@ -389,17 +389,17 @@ Item {
             // commit selected before the press — for a merge from a ref row, the old tip.
             if (tipLandedTimer.answeredOp === "" || page.pendingHeadSelect
                     || repoTab.busyCount !== 0 || row < 0
-                    || !graphPane.rowOnScreen(row) || page.selectedOid !== workTree.headOid
+                    || !graphPane.rowOnScreen(row) || page.selectedOid !== workingTree.headOid
                     || !driver.cardSettled)
                 return
             tipLandedTimer.stop()
             Harness.report(
                 "tip_landed follows="
-                + (page.selectedOid !== "" && page.selectedOid === workTree.headOid)
+                + (page.selectedOid !== "" && page.selectedOid === workingTree.headOid)
                 + " onscreen=" + (row >= 0 && graphPane.rowOnScreen(row))
                 // Right after the pair above: `must_say` reads the three as one string.
                 + " op=" + tipLandedTimer.answeredOp
-                + " head=" + workTree.headOid.substring(0, 8)
+                + " head=" + workingTree.headOid.substring(0, 8)
                 + " selected=" + page.selectedOid.substring(0, 8)
                 + " row=" + row)
             driver.complete()
@@ -451,12 +451,13 @@ Item {
             resetLandedTimer.start()
         }
         onTriggered: {
-            // The write's own status, by the number its answer named (`WorkTreeModel.statusSeq`): the refs read moves
-            // HEAD ahead of the status that follows (`session::write::run_write`), and `--hard` is judged on the tree.
+            // The write's own status, by the number its answer named (`WorkingTreeModel.statusSeq`): the refs read
+            // moves HEAD ahead of the status that follows (`session::write::run_write`), and `--hard` is judged on the
+            // tree.
             // A status counted before the write cannot reach that number.
             if (repoTab.busyCount !== 0 || resetLandedTimer.armed === 0
-                    || workTree.headOid !== resetLandedTimer.target
-                    || workTree.statusSeq < resetLandedTimer.armed)
+                    || workingTree.headOid !== resetLandedTimer.target
+                    || workingTree.statusSeq < resetLandedTimer.armed)
                 return
             const row = graphModel.rowOf(resetLandedTimer.target)
             if (row < 0 || !driver.cardSettled)
@@ -465,9 +466,9 @@ Item {
             // No `moved=`: the wait above is that claim, and a field read off the same condition could never be false.
             Harness.report(
                 "reset_landed mode=" + resetLandedTimer.mode
-                + " files=" + workTree.hardResetTakes
-                + " untracked=" + workTree.untrackedCount
-                + " head=" + workTree.headOid.substring(0, 8)
+                + " files=" + workingTree.hardResetTakes
+                + " untracked=" + workingTree.untrackedCount
+                + " head=" + workingTree.headOid.substring(0, 8)
                 + " row=" + row + " rows=" + graphModel.rowTotal)
             driver.complete()
         }
@@ -477,19 +478,19 @@ Item {
     SampleTimer {
         id: mergeStoppedTimer
         onTriggered: {
-            if (repoTab.busyCount !== 0 || !page.wipShown || workTree.conflictCount === 0)
+            if (repoTab.busyCount !== 0 || !page.wipShown || workingTree.conflictCount === 0)
                 return
             mergeStoppedTimer.stop()
             Harness.report(
                 "merge_stopped wip=" + page.wipShown
-                + " conflicts=" + (workTree.conflictCount > 0)
+                + " conflicts=" + (workingTree.conflictCount > 0)
                 + " error=" + (repoTab.lastError !== "")
                 + " log=" + page.commandsOpen
                 // The box holds what the merge will record; the button under it stays the only door (`cont=false`).
-                + " msg=" + (workTree.opSubject !== "" && wipPane.subjectText === workTree.opSubject)
+                + " msg=" + (workingTree.opSubject !== "" && wipPane.subjectText === workingTree.opSubject)
                 + " cont=" + wipPane.offersOpExit("--continue")
-                + " op=" + workTree.opText
-                + " files=" + workTree.conflictCount)
+                + " op=" + workingTree.opText
+                + " files=" + workingTree.conflictCount)
             driver.complete()
         }
     }
@@ -502,12 +503,12 @@ Item {
             // The whole write barrier: the stash and worktree listings are reads of their own, landing apart from
             // the status that says the stop, and only the write's settle says both are in
             // (`session::write::settle_after`).
-            if (!driver.wroteAndSettled() || !page.wipShown || workTree.conflictCount === 0)
+            if (!driver.wroteAndSettled() || !page.wipShown || workingTree.conflictCount === 0)
                 return
             opStoppedTimer.stop()
             Harness.report(
                 "write_stopped wip=" + page.wipShown
-                + " conflicts=" + (workTree.conflictCount > 0)
+                + " conflicts=" + (workingTree.conflictCount > 0)
                 + " error=" + (repoTab.lastError !== "")
                 + " log=" + page.commandsOpen
                 + " cont=" + wipPane.offersOpExit("--continue")
@@ -517,8 +518,8 @@ Item {
                 // Where carried work went: git's words are not raised over the stop, so only the count and the
                 // stash row say it (規約 §未コミット変更がある状態で履歴を書き換える).
                 + " stashes=" + stashesModel.total
-                + " op=" + workTree.opText
-                + " files=" + workTree.conflictCount)
+                + " op=" + workingTree.opText
+                + " files=" + workingTree.conflictCount)
             driver.complete()
         }
     }

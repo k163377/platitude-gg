@@ -285,7 +285,7 @@ fn a_tag_row_says_which_sides_its_name_stands_on() {
 }
 #[test]
 fn a_file_row_reads_out_of_the_status() {
-    let mut model = section("worktree", Source::files(pending()));
+    let mut model = section("files", Source::files(pending()));
     model.tree_view = false;
     model.arrange();
 

@@ -243,7 +243,7 @@ fn garbage_entry_is_fatal() {
 }
 
 /// Real git's `--porcelain=v2 -z` bytes under tests/fixtures/, regenerated
-/// only by `worktree_state::capture_fixtures` (command in the panic below).
+/// only by `working_tree_state::capture_fixtures` (command in the panic below).
 #[test]
 fn committed_status_fixture_parses() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

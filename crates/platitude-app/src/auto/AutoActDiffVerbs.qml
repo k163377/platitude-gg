@@ -20,7 +20,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var worktreeModel: driver.worktreeModel
+    readonly property var unstagedModel: driver.unstagedModel
     readonly property var diffPane: driver.diffPane
     readonly property var graphPane: driver.graphPane
     readonly property var diffRowMenu: driver.diffRowMenu
@@ -48,17 +48,17 @@ Item {
             page.showWip()
             // A rename's source comes off the model, as a row click hands it over; without it the diff reads as a new
             // file.
-            const wtPath = named ? arg.substring(cut + 1) : arg
+            const workingTreePath = named ? arg.substring(cut + 1) : arg
             // A missing path is the run's own mistake and must read as one: git takes an empty pathspec as the whole
             // tree, so the pane would fill with a plausible diff and the verb would report rows of no file.
-            if (wtPath === "") {
+            if (workingTreePath === "") {
                 Harness.report("diff_arg act=" + act + " named=false")
                 renderedBarrier.begin()
                 // True even here — falsy reads as "not mine" to the dispatch chain.
                 return true
             }
-            page.toggleDiff(named ? head : "unstaged", wtPath,
-                            worktreeModel.origOf(wtPath))
+            page.toggleDiff(named ? head : "unstaged", workingTreePath,
+                            unstagedModel.origOf(workingTreePath))
             stageRowTimer.begin()
         } else if (act === "preview" || act === "preview-unstaged" || act === "preview-staged"
                    || act === "preview-close") {
@@ -672,7 +672,7 @@ Item {
                 followTimer.was = page.diffKind + ":" + page.diffPath
                 // Read before the write takes the file off this side.
                 followTimer.alone =
-                    worktreeModel.besidePath(page.diffKind, page.diffPath) === ""
+                    unstagedModel.besidePath(page.diffKind, page.diffPath) === ""
                 // The file list's own `+` / `−` path.
                 driver.pressWrite("follow:" + page.diffKind, () => {
                     if (page.diffKind === "staged")
@@ -1021,7 +1021,7 @@ Item {
                 codeSwapTimer.drawn0 = diffPane.codeDrawn
                 codeSwapTimer.was = page.diffKind + ":" + page.diffPath
                 // `<bucket>:<path>` of the row beside this one under the same heading; none ends the run here.
-                const beside = worktreeModel.besidePath(page.diffKind, page.diffPath)
+                const beside = unstagedModel.besidePath(page.diffKind, page.diffPath)
                 if (beside === "") {
                     codeSwapTimer.finish()
                     return
@@ -1029,7 +1029,7 @@ Item {
                 const cut = beside.indexOf(":")
                 const path = beside.substring(cut + 1)
                 codeSwapTimer.landed = beside
-                page.toggleDiff(beside.substring(0, cut), path, worktreeModel.origOf(path))
+                page.toggleDiff(beside.substring(0, cut), path, unstagedModel.origOf(path))
                 codeSwapTimer.step = 1
                 return
             }

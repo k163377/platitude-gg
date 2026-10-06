@@ -20,7 +20,7 @@ pub(super) enum Source {
     /// The pending changes and the pane's order. A row is a bucket and an
     /// entry: an `MM` entry is one row under each side.
     Files {
-        status: platitude_core::status::WorkTreeStatus,
+        status: platitude_core::status::WorkingTreeStatus,
         order: Vec<FileAt>,
     },
 }
@@ -220,7 +220,7 @@ impl Source {
     }
 
     /// The same status as one list of paths ([`Bucket::Whole`]).
-    pub(super) fn whole_files(status: platitude_core::status::WorkTreeStatus) -> Self {
+    pub(super) fn whole_files(status: platitude_core::status::WorkingTreeStatus) -> Self {
         let mut order: Vec<FileAt> = (0..status.items.len())
             .map(|at| FileAt {
                 bucket: Bucket::Whole,
@@ -231,7 +231,7 @@ impl Source {
         Self::Files { status, order }
     }
 
-    pub(super) fn files(status: platitude_core::status::WorkTreeStatus) -> Self {
+    pub(super) fn files(status: platitude_core::status::WorkingTreeStatus) -> Self {
         let mut order = Vec::new();
         // The heading being filled and where its rows began: buckets
         // sharing a `Bucket::run` are sorted as one list once it is whole.
@@ -258,7 +258,7 @@ impl Source {
 /// Puts one heading's rows in path order. git lists untracked entries
 /// after the sorted tracked ones, so unsorted, new files sit at the foot
 /// of the unstaged heading and staging one moves it.
-fn by_path(rows: &mut [FileAt], status: &platitude_core::status::WorkTreeStatus) {
+fn by_path(rows: &mut [FileAt], status: &platitude_core::status::WorkingTreeStatus) {
     let path_of = |row: &FileAt| {
         status
             .items
@@ -298,7 +298,7 @@ impl Bucket {
     ];
 
     /// Whether an entry belongs in this bucket — the same test as
-    /// `WorkTreeStatus`'s four iterators (held together by the test at
+    /// `WorkingTreeStatus`'s four iterators (held together by the test at
     /// the foot).
     fn holds(self, item: &platitude_core::status::StatusItem) -> bool {
         use platitude_core::status::StatusItem;
@@ -491,7 +491,7 @@ mod tests {
     /// sorted on its own (`by_path`).
     #[test]
     fn a_heading_lists_its_files_by_name_whichever_bucket_they_came_from() {
-        use platitude_core::status::{StatusItem, WorkTreeStatus};
+        use platitude_core::status::{StatusItem, WorkingTreeStatus};
         let under = |source: &Source, run: &str| -> Vec<String> {
             (0..source.len())
                 .filter_map(|at| source.entry(at))
@@ -503,7 +503,7 @@ mod tests {
                 })
                 .collect()
         };
-        let edited = WorkTreeStatus {
+        let edited = WorkingTreeStatus {
             items: vec![
                 tracked('.', 'M', ".idea/gradle.xml"),
                 tracked('.', 'M', ".idea/misc.xml"),
@@ -513,7 +513,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let all_staged = WorkTreeStatus {
+        let all_staged = WorkingTreeStatus {
             items: vec![
                 tracked('M', '.', ".idea/gradle.xml"),
                 tracked('A', '.', ".idea/kotlinc.xml"),

@@ -17,8 +17,8 @@ Item {
     readonly property var graphModel: driver.graphModel
     readonly property var detailsModel: driver.detailsModel
     readonly property var branchesModel: driver.branchesModel
-    readonly property var worktreeModel: driver.worktreeModel
-    readonly property var workTree: driver.workTree
+    readonly property var unstagedModel: driver.unstagedModel
+    readonly property var workingTree: driver.workingTree
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
     readonly property var diffPane: driver.diffPane
@@ -33,7 +33,7 @@ Item {
             // centred only where half a view lies above it, which near the tip it never does on a window standing on
             // its floor.
             page.activateRow(act === "graph-step-far" && arg !== "" ? graphModel.oidAt(Number(arg))
-                             : workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
+                             : workingTree.branchOid !== "" ? workingTree.branchOid : graphModel.oidAt(0))
             graphStepTimer.named = act === "graph-step-named"
             graphStepTimer.dirty = act === "graph-step-dirty"
             graphStepTimer.away = act === "graph-step-far"
@@ -43,7 +43,7 @@ Item {
                                  : act === "graph-step-diff" ? 1 : arg === "" ? 1 : Number(arg)
             graphStepTimer.start()
         } else if (act === "graph-step-hold") {
-            page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
+            page.activateRow(workingTree.branchOid !== "" ? workingTree.branchOid : graphModel.oidAt(0))
             graphHoldTimer.steps = arg === "" ? 6 : Number(arg)
             graphHoldTimer.start()
         } else if (act === "changes-step" || act === "changes-step-edge"
@@ -61,7 +61,7 @@ Item {
                 fileStepTimer.bucket = named ? head : "unstaged"
                 fileStepTimer.path = named ? arg.substring(cut + 1) : arg
             } else {
-                page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
+                page.activateRow(workingTree.branchOid !== "" ? workingTree.branchOid : graphModel.oidAt(0))
                 fileStepTimer.pane = "changes"
                 fileStepTimer.bucket = ""
                 fileStepTimer.path = arg
@@ -73,7 +73,7 @@ Item {
             // The argument is the directory as the row is keyed (a lone chain is one row, `a/b/c`), and must be a row
             // the list has built (`itemAtIndex`). The default is the first row, the one a picture can hold: a folder
             // shut below the fold frames like one left open.
-            page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
+            page.activateRow(workingTree.branchOid !== "" ? workingTree.branchOid : graphModel.oidAt(0))
             // Said outright: a run that inherited the paths view would wait out the watchdog for a folder row.
             detailsModel.setTreeView(true)
             changesFoldTimer.path = arg === "" ? "assets/icons" : arg
@@ -285,7 +285,7 @@ Item {
                 return false
             if (fileStepTimer.pane === "wip")
                 row.fileClicked(fileStepTimer.bucket, fileStepTimer.path,
-                                worktreeModel.origOf(fileStepTimer.path),
+                                unstagedModel.origOf(fileStepTimer.path),
                                 Qt.NoModifier)
             else
                 // The row's own press, with its own reading of the model: handed the path from beside it, this goes

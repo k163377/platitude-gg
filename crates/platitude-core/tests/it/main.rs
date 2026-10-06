@@ -33,6 +33,6 @@ mod stash_integration;
 mod status_integration;
 mod tag_integration;
 mod upstream_integration;
+mod working_tree_state;
 mod worktree_add;
 mod worktree_remove;
-mod worktree_state;

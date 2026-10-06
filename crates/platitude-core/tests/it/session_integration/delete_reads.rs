@@ -24,7 +24,7 @@ fn times(commands: &[String], needle: &str) -> usize {
 }
 
 /// The newest status reading the session published.
-fn last_status(sink: &CaptureSink) -> platitude_core::status::WorkTreeStatus {
+fn last_status(sink: &CaptureSink) -> platitude_core::status::WorkingTreeStatus {
     sink.events
         .lock()
         .unwrap()

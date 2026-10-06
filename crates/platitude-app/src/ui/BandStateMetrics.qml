@@ -12,7 +12,7 @@ Item {
     visible: false
 
     /// The working tree of the tab in front, which is where the operation's own words come from. Null while no tab is.
-    required property var stateWt
+    required property var stateWorkingTree
     /// Whether the operation also has a second word and a step count, both drawn inside its badge.
     required property bool hasAlso
     required property bool hasStep
@@ -75,16 +75,16 @@ Item {
     }
     BadgeWord {
         id: mOpText
-        text: metrics.stateWt !== null ? metrics.stateWt.opText : ""
+        text: metrics.stateWorkingTree !== null ? metrics.stateWorkingTree.opText : ""
     }
     BadgeWord {
         id: mOpAlso
-        text: metrics.stateWt !== null ? metrics.stateWt.opAlso : ""
+        text: metrics.stateWorkingTree !== null ? metrics.stateWorkingTree.opAlso : ""
     }
     BadgeWord {
         id: mOpStep
-        text: metrics.stateWt === null ? ""
-              : qsTr("%1/%2").arg(metrics.stateWt.opStep).arg(metrics.stateWt.opSteps)
+        text: metrics.stateWorkingTree === null ? ""
+              : qsTr("%1/%2").arg(metrics.stateWorkingTree.opStep).arg(metrics.stateWorkingTree.opSteps)
     }
     BadgeWord {
         id: mConflict

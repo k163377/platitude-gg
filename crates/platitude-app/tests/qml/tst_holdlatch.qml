@@ -61,7 +61,7 @@ Item {
         property bool canForcePush: true
         property string pushFailReason: ""
         property QtObject pageTab: QtObject { property string busyOp: "" }
-        property QtObject pageWt: QtObject {
+        property QtObject pageWorkingTree: QtObject {
             property string branch: tab.branch
         }
         function forcePush() { tab.sent++; tab.sentBranch = tab.branch }
@@ -148,7 +148,7 @@ Item {
         }
 
         /// Two local branches can track one remote one: a switch between them leaves `origin/main` on the button while
-        /// `PublishFlow.forcePush` would send the other branch (`workTree.branch`).
+        /// `PublishFlow.forcePush` would send the other branch (`workingTree.branch`).
         function test_a_band_hold_does_not_follow_a_branch_that_replaced_it() {
             band.forceActiveFocus()
             keyPress(Qt.Key_Space)

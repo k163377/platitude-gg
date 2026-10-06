@@ -79,7 +79,7 @@ enum SideSource {
         spec: String,
         path: String,
     },
-    WorkTree(PathBuf),
+    WorkingTree(PathBuf),
     /// The side does not exist (e.g. the old side of an untracked file).
     Absent,
 }
@@ -367,7 +367,7 @@ async fn read_source(
             }
             read_capped_blob(executor, workdir, spec, cancel).await
         }
-        SideSource::WorkTree(path) => match tokio::fs::metadata(path).await {
+        SideSource::WorkingTree(path) => match tokio::fs::metadata(path).await {
             Ok(meta) if meta.len() > SOURCE_BYTE_CAP => Source::TooBig,
             Ok(_) => match tokio::fs::read(path).await {
                 Ok(bytes) => Source::Text(bytes),
@@ -469,12 +469,14 @@ fn side_sources(workdir: &Path, target: &DiffTarget) -> (SideSource, SideSource)
             let old_path = orig_path.as_deref().unwrap_or(path);
             (blob("HEAD", old_path), blob(":0", path))
         }
-        DiffTarget::Unstaged { path } => {
-            (blob(":0", path), SideSource::WorkTree(workdir.join(path)))
-        }
-        DiffTarget::Untracked { path } => {
-            (SideSource::Absent, SideSource::WorkTree(workdir.join(path)))
-        }
+        DiffTarget::Unstaged { path } => (
+            blob(":0", path),
+            SideSource::WorkingTree(workdir.join(path)),
+        ),
+        DiffTarget::Untracked { path } => (
+            SideSource::Absent,
+            SideSource::WorkingTree(workdir.join(path)),
+        ),
     }
 }
 
@@ -517,7 +519,7 @@ async fn load_side(
             let into = want_file.then(|| read.path_for(side, path));
             blob_side(executor, workdir, spec, into, cancel).await
         }
-        SideSource::WorkTree(path) => worktree_side(path, want_file).await,
+        SideSource::WorkingTree(path) => working_tree_side(path, want_file).await,
         SideSource::Absent => None,
     }
 }
@@ -644,7 +646,7 @@ impl WriteBlobError {
 
 /// Reads one side straight from the working tree: the file itself is the
 /// preview, so nothing is copied.
-async fn worktree_side(path: &Path, want_file: bool) -> Option<PreviewSide> {
+async fn working_tree_side(path: &Path, want_file: bool) -> Option<PreviewSide> {
     let meta = tokio::fs::metadata(path).await.ok()?;
     if !meta.is_file() {
         return None;

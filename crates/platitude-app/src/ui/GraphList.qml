@@ -13,7 +13,7 @@ AppListView {
     id: graphList
 
     required property var graphModel
-    required property var workTree
+    required property var workingTree
     /// The three columns' arithmetic (`GraphColumnMetrics`).
     required property var columns
 
@@ -48,12 +48,12 @@ AppListView {
     property real graphColWidth: graphList.columns.graphColW
     property real graphFullWidth: graphList.columns.graphFullW
     property real graphXOffset: graphList.columns.graphX
-    property int wipAdded: graphList.workTree.wipAdded
-    property int wipModified: graphList.workTree.wipModified
-    property int wipDeleted: graphList.workTree.wipDeleted
-    property int wipRenamed: graphList.workTree.wipRenamed
-    property int wipCopied: graphList.workTree.wipCopied
-    property int wipConflicted: graphList.workTree.conflictCount
+    property int wipAdded: graphList.workingTree.wipAdded
+    property int wipModified: graphList.workingTree.wipModified
+    property int wipDeleted: graphList.workingTree.wipDeleted
+    property int wipRenamed: graphList.workingTree.wipRenamed
+    property int wipCopied: graphList.workingTree.wipCopied
+    property int wipConflicted: graphList.workingTree.conflictCount
     // Which row's chip column is a name box, and what has been typed into it.
     property string namingOid: ""
     property string namingText: ""

@@ -202,7 +202,7 @@ impl RefMenuOffers {
 /// where pushes go, empty with no remote; `tag_sides` is
 /// [`TagSides::from_word`]'s word (ignored for other kinds);
 /// `current_upstream` is what the tree's branch tracks
-/// (`WorkTreeModel.upstream`), not this row's — a pull goes there
+/// (`WorkingTreeModel.upstream`), not this row's — a pull goes there
 /// whichever end the menu opened on.
 #[expect(clippy::too_many_arguments)]
 pub fn ref_menu(

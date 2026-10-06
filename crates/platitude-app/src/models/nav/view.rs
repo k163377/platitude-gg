@@ -17,8 +17,8 @@ impl NavSectionModel {
                 "branches" | "remotes" => Some(self.build_tree()),
                 // Every bucket run is held; this list shows its own `run`,
                 // or all of them where none is named (tests). Trees are
-                // built per run (`wt_tree_into`).
-                "worktree" => {
+                // built per run (`file_tree_into`).
+                "files" => {
                     let mut out = Vec::new();
                     let mut at = 0;
                     while at < self.all.len() {
@@ -29,7 +29,7 @@ impl NavSectionModel {
                         }
                         if self.run.is_empty() || run == self.run {
                             if self.tree_view {
-                                self.wt_tree_into(at..end, run, &mut out);
+                                self.file_tree_into(at..end, run, &mut out);
                             } else {
                                 out.extend((at..end).map(|at| Arranged::At {
                                     at: at as u32,

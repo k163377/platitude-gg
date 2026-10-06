@@ -95,7 +95,7 @@ pub struct GraphModel {
     finish_count: i32,
     /// Whether the rows this pass left start with this window's
     /// working-tree row (`session::rows::wip_row`). Read against what the
-    /// status says (`WorkTreeModel.wipRowStands`): the opening walks before
+    /// status says (`WorkingTreeModel.wipRowStands`): the opening walks before
     /// the first status, so the two disagreeing means the graph is one read
     /// behind. Settled with the footer, once the pass is whole.
     wip_row: bool,

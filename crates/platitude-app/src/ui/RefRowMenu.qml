@@ -12,7 +12,7 @@ Item {
     id: refRowMenu
 
     required property RepoTab repoTab
-    required property WorkTreeModel workTree
+    required property WorkingTreeModel workingTree
     /// Answers the `rebase` row's note off the drawn rows (`rebasePublished`).
     required property GraphModel graphModel
     /// Both read for the branch card (`branchFacts`); `switch` also asks `worktreesModel` who holds the branch.
@@ -48,7 +48,7 @@ Item {
     /// Whether this row is either end of the current branch's upstream comparison, where `git pull` runs
     /// (offers::ref_menu).
     property bool canPull: false
-    /// Whether the sides have diverged, which greys the row (`WorkTreeModel.pullBlocked`).
+    /// Whether the sides have diverged, which greys the row (`WorkingTreeModel.pullBlocked`).
     property bool pullBlocked: false
     /// The stash's drop — the only delete on this level; branch and tag deletes are their cards' (`RefBranchMenu` /
     /// `RefTagMenu`).
@@ -132,11 +132,11 @@ Item {
             "remoteDrifted": drifted,
             "open": open,
             "merged": !open || kind !== "branch" ? "" : refRowMenu.graphModel.branchDeleteMerged(
-                oidHex, refRowMenu.branchesModel.upstreamOidOf(full), refRowMenu.workTree.headOid),
+                oidHex, refRowMenu.branchesModel.upstreamOidOf(full), refRowMenu.workingTree.headOid),
             "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex, open, refRowMenu.askBusy,
-                refRowMenu.workTree.branch, refRowMenu.workTree.detached,
-                refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
+                refRowMenu.workingTree.branch, refRowMenu.workingTree.detached,
+                refRowMenu.workingTree.opText, refRowMenu.workingTree.conflictCount,
                 held, counterpart, drifted, refRowMenu.repoTab.defaultRemote, "", "")
         }
     }
@@ -180,8 +180,8 @@ Item {
             "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex,
                 refRowMenu.repoTab.state === "open", refRowMenu.askBusy,
-                refRowMenu.workTree.branch, refRowMenu.workTree.detached,
-                refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
+                refRowMenu.workingTree.branch, refRowMenu.workingTree.detached,
+                refRowMenu.workingTree.opText, refRowMenu.workingTree.conflictCount,
                 "", "", menu.heldBack !== "", menu.pushRemote, sides, "")
         }
     }
@@ -194,7 +194,7 @@ Item {
         const local = kind === "remote" ? refRowMenu.repoTab.localNameFor(full) : full
         const offers = GitFacts.copyOffers(
             kind, full, oidHex, refRowMenu.repoTab.state === "open", refRowMenu.askBusy,
-            refRowMenu.workTree.branch, kind === "branch" || kind === "remote" ? held : "",
+            refRowMenu.workingTree.branch, kind === "branch" || kind === "remote" ? held : "",
             kind === "remote" && refRowMenu.branchesModel.oidOfName(local) !== "")
         const checkout = offers.includes("checkout-branch") ? "branch"
                        : offers.includes("checkout-track") ? "track" : ""
@@ -249,24 +249,24 @@ Item {
         const offers = GitFacts.refMenuOffers(
             kind, full, oidHex,
             refRowMenu.repoTab.state === "open", refRowMenu.askBusy,
-            refRowMenu.workTree.branch, refRowMenu.workTree.detached,
-            refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
+            refRowMenu.workingTree.branch, refRowMenu.workingTree.detached,
+            refRowMenu.workingTree.opText, refRowMenu.workingTree.conflictCount,
             // No drift: the remote rows are the branch card's (`RefBranchMenu`). The last is the tree's own upstream,
             // which the `pull` row reads.
             held, "", false, refRowMenu.repoTab.defaultRemote, "",
-            refRowMenu.workTree.upstream)
+            refRowMenu.workingTree.upstream)
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
         refRowMenu.heldLeaf = held === "" ? "" : GitFacts.pathLeaf(held)
         refRowMenu.canBranchHere = offers.includes("branch-here")
         refRowMenu.canIntegrateFrom = offers.includes("integrate")
         refRowMenu.canPull = offers.includes("pull")
-        refRowMenu.pullBlocked = refRowMenu.canPull && refRowMenu.workTree.pullBlocked
+        refRowMenu.pullBlocked = refRowMenu.canPull && refRowMenu.workingTree.pullBlocked
         refRowMenu.canDelete = offers.includes("delete")
         // Only where the row that wears it is offered.
         refRowMenu.rebasePublished =
             refRowMenu.integrateOffered
-            && refRowMenu.graphModel.rebaseRewritesPublished(oidHex, refRowMenu.workTree.headOid)
+            && refRowMenu.graphModel.rebaseRewritesPublished(oidHex, refRowMenu.workingTree.headOid)
         return refMenu.offer()
     }
 
@@ -308,7 +308,7 @@ Item {
             code: "merge"
             //: Follows the `merge` chip: "merge into main".
             refSentence: qsTr("into %1")
-            refName: refRowMenu.workTree.branch
+            refName: refRowMenu.workingTree.branch
             offered: refRowMenu.integrateOffered
             onTriggered: refRowMenu.repoTab.merge(refRowMenu.integrateRef, false, false, "")
         }
@@ -317,7 +317,7 @@ Item {
             code: "rebase"
             //: Follows the `rebase` chip: "rebase main onto it".
             refSentence: qsTr("%1 onto it")
-            refName: refRowMenu.workTree.branch
+            refName: refRowMenu.workingTree.branch
             // A tag stays put under a rebase onto it: git peels it to its commit, and `--update-refs` carries
             // branches only (デザイン規約 §履歴を合流させる).
             offered: refRowMenu.integrateOffered

@@ -79,7 +79,7 @@ pub enum TabMsg {
         /// The smallest number the first HEAD report after this write can
         /// carry (`SessionEvent::WriteFinished::head_seq`); 0 while
         /// running. What a landing on the write's tip arms on
-        /// (`WorkTreeModel.headSeq`).
+        /// (`WorkingTreeModel.headSeq`).
         head_seq: u64,
         /// The smallest stamp a listing that looked after this write can
         /// carry (`SessionEvent::WriteFinished::reads_from`); 0 while
@@ -211,7 +211,7 @@ impl HeadMsg {
     }
 }
 
-/// The headline consumer's feed (`WorkTreeModel`) — one queue, so the
+/// The headline consumer's feed (`WorkingTreeModel`) — one queue, so the
 /// counts never arrive ahead of the branch they are about.
 #[derive(Debug)]
 pub enum StateMsg {
@@ -390,12 +390,12 @@ pub struct CarriedStatusMsg {
     pub at: String,
     /// The copy's own name, for the band that says whose files these are.
     pub name: String,
-    pub status: WorkTreeStatus,
+    pub status: WorkingTreeStatus,
 }
 
 #[derive(Debug)]
 pub struct StatusMsg {
-    pub status: WorkTreeStatus,
+    pub status: WorkingTreeStatus,
     /// The number of the report of HEAD this status stands beside
     /// (`SessionEvent::StatusLoaded::head_seq`): the counts are about
     /// the HEAD the consumer holds only while the two numbers agree.

@@ -56,7 +56,7 @@ RowLayout {
         change: body.row.change
         // A sidebar folder keeps its fold state in the change slot it has no change code for (`models::nav::item`).
         folded: body.row.change === "FOLDED"
-        showChange: body.row.kindHint === "wt"
+        showChange: body.row.kindHint === "file"
         // A worktree's state rides the change slot (`models::nav::item`): lock, prunable `!`, or the main copy's house
         // (git never locks or prunes the main one, so they never contend). A branch another copy holds wears `tree`,
         // not the padlock, which means `git worktree lock`. Open, `tree` goes (the lines name that copy) but a copy's
@@ -84,7 +84,7 @@ RowLayout {
             : body.row.only_remote ? Theme.textSecondary : Theme.textPrimary
         weight: body.row.is_head ? Theme.fontWeightStrong : Font.Normal
         // A pending file's line-ending mark; the row's hover says what, the diff pane in full.
-        marked: body.row.kindHint === "wt" && body.row.eol_mark
+        marked: body.row.kindHint === "file" && body.row.eol_mark
     }
     Item {
         id: boxSeat

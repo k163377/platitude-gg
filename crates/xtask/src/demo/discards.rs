@@ -410,7 +410,7 @@ fn copy(
     moved: Option<&str>,
 ) -> Result<(), String> {
     let head = repo.git(&["rev-parse", "HEAD"])?;
-    let (work_tree, index) = if tracked.is_empty() {
+    let (working_tree, index) = if tracked.is_empty() {
         let tree = repo.git(&["rev-parse", "HEAD^{tree}"])?;
         let index = recorder(
             repo,
@@ -442,7 +442,7 @@ fn copy(
     if let Some(moved) = moved {
         trailers.push(("Moved", moved));
     }
-    let mut args = vec!["commit-tree", work_tree.as_str()];
+    let mut args = vec!["commit-tree", working_tree.as_str()];
     for parent in &parents {
         args.extend(["-p", parent.as_str()]);
     }

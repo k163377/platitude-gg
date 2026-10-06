@@ -18,7 +18,7 @@ use hub::Hub;
 use models::{
     AppBackend, CloneModel, CommandsModel, DetailsModel, DiffModel, DiscardModel, GitFacts,
     GraphModel, LineEndingsModel, NavSectionModel, RebasePlanModel, RepoConfigModel, RepoTab,
-    TabsModel, WorkTreeModel,
+    TabsModel, WorkingTreeModel,
 };
 use platitude_core::settings::{Build, Claim, Store};
 use qtbridge::QmlElement;
@@ -339,7 +339,7 @@ fn main() {
         RepoTab::register,
         GraphModel::register,
         NavSectionModel::register,
-        WorkTreeModel::register,
+        WorkingTreeModel::register,
         DetailsModel::register,
         DiffModel::register,
         CommandsModel::register,

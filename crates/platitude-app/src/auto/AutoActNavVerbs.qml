@@ -17,7 +17,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workTree: driver.workTree
+    readonly property var workingTree: driver.workingTree
     readonly property var graphModel: driver.graphModel
     readonly property var graphPane: driver.graphPane
     readonly property var branchesModel: driver.branchesModel
@@ -76,8 +76,8 @@ Item {
                 // The box lands on the peeked row and holds the section open — the list is not put back for it
                 // (SidebarRowGestures.startEdit).
                 navProbe.peekAt("branch")
-                sidebarPane.beginRename("branch", workTree.branch,
-                                        workTree.branch)
+                sidebarPane.beginRename("branch", workingTree.branch,
+                                        workingTree.branch)
             }
             navRailTimer.start()
         } else if (act === "menu-peek") {
@@ -174,8 +174,8 @@ Item {
                 page.foldByHand(false)
             else if (act === "diff-fold-by-rename") {
                 navProbe.peekAt("branch")
-                sidebarPane.beginRename("branch", workTree.branch,
-                                        workTree.branch)
+                sidebarPane.beginRename("branch", workingTree.branch,
+                                        workingTree.branch)
             } else if (act !== "diff-fold")
                 page.closeDiff()
             // None of these is about a section going: "-by-rename" opens one and holds it open for the box.
@@ -444,11 +444,11 @@ Item {
                         "folded": page.sidebarCollapsed && sidebarPane.width > 0,
                         "branches": branchesModel.total > 0,
                         "tags": menuPeekTimer.how !== "own-swap" || tagsModel.total > 0,
-                        "head": graphModel.rowOf(workTree.headOid) >= 0
+                        "head": graphModel.rowOf(workingTree.headOid) >= 0
                     }))
                     return
                 if (menuPeekTimer.how === "behind")
-                    page.openRowMenu(workTree.headOid)
+                    page.openRowMenu(workingTree.headOid)
                 else
                     navProbe.peekAt("branch")
                 menuPeekTimer.step = 1
@@ -464,10 +464,11 @@ Item {
                     if (!Awaited.all("menu_peek_open", { "peek": navProbe.peekStanding }))
                         return
                     menuPeekTimer.opened = true
-                    page.openRowMenu(workTree.headOid)
+                    page.openRowMenu(workingTree.headOid)
                 } else {
                     // The current branch's row: the list's first row may be a folder, which raises no menu.
-                    const row = navProbe.peek.sectionModel ? navProbe.peek.sectionModel.rowOfName(workTree.branch) : -1
+                    const row = navProbe.peek.sectionModel
+                              ? navProbe.peek.sectionModel.rowOfName(workingTree.branch) : -1
                     if (!Awaited.all("menu_peek_open", { "peek": navProbe.peekStanding, "row": row >= 0 }))
                         return
                     // Not built yet: no press has gone in.
@@ -577,7 +578,7 @@ Item {
             // Every switch on the graph side ends at `RepoPage.switchToRef`; `false` is a press it turned away.
             acts.heldSwitch = page.switchToRef("branch", acts.heldBranch) === false
             // The row menu keeps its rows, greyed; `drop` is read as the one row that cannot be undone.
-            page.openRowMenu(workTree.headOid)
+            page.openRowMenu(workingTree.headOid)
             acts.heldRowMenu = commitMenu.opened
             acts.heldDrop = dropCommitItem.blocked
             commitMenu.close()

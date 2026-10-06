@@ -12,7 +12,8 @@ import QtQuick
 ///
 /// `finishCount > 0` is not the word: the opening log walk races the first status for the working-tree row, and
 /// when the status loses it asks for a rebuild that brings the row a pass later. So the rows must agree with the
-/// status (`GraphModel.wipRow` against `WorkTreeModel.wipRowStands`, both off `platitude_core::graph::wip_row_stands`).
+/// status (`GraphModel.wipRow` against `WorkingTreeModel.wipRowStands`, both off
+/// `platitude_core::graph::wip_row_stands`).
 /// A graph that could not be walked (`failed` / `stale`) waits for nothing and answers yes with what it holds.
 ///
 /// A landing the page owes itself is a read on its way (`RepoPage.pageLanding`): both ends of that move settle every
@@ -44,7 +45,7 @@ QtObject {
             return ["open"]
         const graph = page.pageGraph
         const owed = []
-        if (!page.pageWt.loaded)
+        if (!page.pageWorkingTree.loaded)
             owed.push("worktree")
         if (!page.pageRefsLoaded)
             owed.push("refs")
@@ -55,7 +56,7 @@ QtObject {
         if (!graph.failed && !graph.stale) {
             if (page.pageLanding)
                 owed.push("landing")
-            else if (graph.wipRow !== page.pageWt.wipRowStands)
+            else if (graph.wipRow !== page.pageWorkingTree.wipRowStands)
                 owed.push("wipRow")
         }
         if (page.pageGraphPane.placing)

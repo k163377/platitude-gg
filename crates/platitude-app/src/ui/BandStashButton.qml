@@ -11,8 +11,8 @@ ActionButton {
     /// What the working tree lets this button do (`platitude_core::stash::standing`), or `closed` with nothing open.
     readonly property string mode:
         stashButton.curPage === null || stashButton.curPage.pageTab.state !== "open"
-            || !stashButton.curPage.pageWt.loaded
-        ? "closed" : stashButton.curPage.pageWt.stashStanding
+            || !stashButton.curPage.pageWorkingTree.loaded
+        ? "closed" : stashButton.curPage.pageWorkingTree.stashStanding
 
     kind: "stash"
     text: "stash"

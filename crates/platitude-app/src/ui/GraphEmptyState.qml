@@ -13,9 +13,9 @@ Item {
     required property var graphModel
     /// No repository behind the pane at all.
     required property bool blank
-    required property var workTree
+    required property var workingTree
     /// A repository is open and has no commits yet — a screen apart from `blank`.
-    readonly property bool unborn: !emptyState.blank && emptyState.workTree.unborn
+    readonly property bool unborn: !emptyState.blank && emptyState.workingTree.unborn
     /// The line under the heading, `%1` left open so the branch name takes its own colour (`Words.nameInSentence`).
     readonly property string firstCommitLine: qsTr("The first commit will start %1")
 
@@ -46,8 +46,8 @@ Item {
         }
         NoticeLine {
             // Names the branch: with no HEAD row, no pin can.
-            text: emptyState.firstCommitLine.arg(emptyState.workTree.branch)
-            markup: Words.nameInSentence(emptyState.firstCommitLine, emptyState.workTree.branch, Theme.textLink)
+            text: emptyState.firstCommitLine.arg(emptyState.workingTree.branch)
+            markup: Words.nameInSentence(emptyState.firstCommitLine, emptyState.workingTree.branch, Theme.textLink)
             color: Theme.textSecondary
             // Natural width while it fits, wrapped at the window's floor — unbounded it takes width from the panes
             // beside it (規約 §窓の床).

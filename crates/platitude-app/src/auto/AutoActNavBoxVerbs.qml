@@ -18,7 +18,7 @@ Item {
     // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workTree: driver.workTree
+    readonly property var workingTree: driver.workingTree
     readonly property var graphModel: driver.graphModel
     readonly property var branchesModel: driver.branchesModel
     readonly property var remotesModel: driver.remotesModel
@@ -43,8 +43,8 @@ Item {
         } else if (act === "nav-rename-drop") {
             // The box walked away from untyped: "fold" takes the list down to the rail, "away" is a press elsewhere
             // (Main's `FocusRelease` enters here).
-            sidebarPane.beginRename("branch", workTree.branch,
-                                    workTree.branch)
+            sidebarPane.beginRename("branch", workingTree.branch,
+                                    workingTree.branch)
             if (arg === "fold")
                 page.foldByHand(true)
             else
@@ -112,7 +112,7 @@ Item {
         } else if (act === "nav-rename" || act === "rename-branch"
                    || act === "rename-tag" || act === "rename-stash") {
             const kind = act === "rename-tag" ? "tag" : act === "rename-stash" ? "stash" : "branch"
-            const id = kind === "branch" ? workTree.branch
+            const id = kind === "branch" ? workingTree.branch
                      : kind === "tag" ? tagsModel.nameAt(0) : stashesModel.fullAt(0)
             const shown = kind === "stash" ? stashesModel.nameAt(0) : id
             sidebarPane.beginRename(kind, id, shown)
@@ -121,7 +121,7 @@ Item {
         } else if (act === "rename-taken") {
             // A name git refuses, submitted for real: the box stays open holding it, with git's words under it and in
             // the bar (デザイン規約 §答えの要らない報せ).
-            sidebarPane.beginRename("branch", workTree.branch, arg)
+            sidebarPane.beginRename("branch", workingTree.branch, arg)
             sidebarPane.submitEdit(arg)
             renameTakenTimer.start()
         } else if (act === "rename-tag-box") {

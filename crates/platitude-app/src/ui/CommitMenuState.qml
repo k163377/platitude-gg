@@ -12,7 +12,7 @@ QtObject {
     id: menuState
 
     required property RepoTab repoTab
-    required property WorkTreeModel workTree
+    required property WorkingTreeModel workingTree
     required property GraphModel graphModel
     /// Which working copy has a branch checked out — what the `switch` row needs beyond the commit's own rules.
     required property NavSectionModel worktreesModel
@@ -46,7 +46,7 @@ QtObject {
     /// Whether that name has a far side a `git pull` would go to (the same `offers::ref_menu` ask).
     property bool menuCanPull: false
     /// And whether git would turn that press down for want of orders, which greys the row
-    /// (`WorkTreeModel.pullBlocked`).
+    /// (`WorkingTreeModel.pullBlocked`).
     property bool menuPullBlocked: false
     /// How many files the `--hard` row would take besides the commits — held still with the rest, since its tag
     /// widens the card (デザイン規約 §メニュー).
@@ -68,7 +68,7 @@ QtObject {
             kind, name, oidHex,
             menuState.repoTab.state === "open",
             menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
-            menuState.workTree.branch,
+            menuState.workingTree.branch,
             kind === "branch" || kind === "remote" ? menuState.worktreesModel.worktreeHolding(local) : "",
             kind === "remote" && menuState.branchesModel.oidOfName(local) !== "")
         const checkout = offers.includes("checkout-branch") ? "branch"
@@ -103,17 +103,17 @@ QtObject {
             kind, name, oidHex,
             menuState.repoTab.state === "open",
             menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
-            menuState.workTree.branch, menuState.workTree.detached,
-            menuState.workTree.opText, menuState.workTree.conflictCount,
+            menuState.workingTree.branch, menuState.workingTree.detached,
+            menuState.workingTree.opText, menuState.workingTree.conflictCount,
             // No drift: the rows that reach a remote are the card's (`RefBranchMenu`). The last is the working
             // tree's own upstream, which the `pull` row reads.
             held, "", false, menuState.repoTab.defaultRemote, "",
-            menuState.workTree.upstream)
+            menuState.workingTree.upstream)
         menuState.menuCanSwitch = offers.includes("switch")
         menuState.menuSwitchAsks = offers.includes("asks")
         menuState.menuHeldLeaf = held === "" ? "" : GitFacts.pathLeaf(held)
         menuState.menuCanPull = offers.includes("pull")
-        menuState.menuPullBlocked = menuState.menuCanPull && menuState.workTree.pullBlocked
+        menuState.menuPullBlocked = menuState.menuCanPull && menuState.workingTree.pullBlocked
     }
 
     /// The other working copy the menu's name leads to: the one holding the branch (a remote row through the local
@@ -167,12 +167,12 @@ QtObject {
             "remoteDrifted": drifted,
             "open": open,
             "merged": !open || kind !== "branch" ? "" : menuState.graphModel.branchDeleteMerged(
-                oidHex, menuState.branchesModel.upstreamOidOf(full), menuState.workTree.headOid),
+                oidHex, menuState.branchesModel.upstreamOidOf(full), menuState.workingTree.headOid),
             "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex, open,
                 menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
-                menuState.workTree.branch, menuState.workTree.detached,
-                menuState.workTree.opText, menuState.workTree.conflictCount,
+                menuState.workingTree.branch, menuState.workingTree.detached,
+                menuState.workingTree.opText, menuState.workingTree.conflictCount,
                 held, counterpart, drifted, menuState.repoTab.defaultRemote, "", "")
         }
     }
@@ -197,8 +197,8 @@ QtObject {
                 kind, full, oidHex,
                 menuState.repoTab.state === "open",
                 menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
-                menuState.workTree.branch, menuState.workTree.detached,
-                menuState.workTree.opText, menuState.workTree.conflictCount,
+                menuState.workingTree.branch, menuState.workingTree.detached,
+                menuState.workingTree.opText, menuState.workingTree.conflictCount,
                 "", "", menu.heldBack !== "", menu.pushRemote, sides, "")
         }
     }
@@ -229,17 +229,17 @@ QtObject {
             // (rules-refs/app-ui.md「ロック中のメニューは `busyCount` を 0 として offers を訊く」).
             menuState.repoTab.state === "open",
             menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
-            menuState.workTree.branch, menuState.workTree.detached, menuState.workTree.opText,
-            oidHex, menuState.workTree.headOid, menuState.menuStashRef)
+            menuState.workingTree.branch, menuState.workingTree.detached, menuState.workingTree.opText,
+            oidHex, menuState.workingTree.headOid, menuState.menuStashRef)
         if (menuState.menuStashRef !== "") {
             menuState.menuStashCanWrite = offers.includes("stash-write")
             menuState.menu.offerStash()
             return
         }
         menuState.menuPublished = menuState.graphModel.publishedAt(oidHex)
-        menuState.menuHardResetTakes = menuState.workTree.hardResetTakes
-        menuState.menuHardResetNotCopied = menuState.workTree.hardResetNotCopied
-        menuState.menuTipHeldElsewhere = menuState.workTree.headReachedElsewhere
+        menuState.menuHardResetTakes = menuState.workingTree.hardResetTakes
+        menuState.menuHardResetNotCopied = menuState.workingTree.hardResetNotCopied
+        menuState.menuTipHeldElsewhere = menuState.workingTree.headReachedElsewhere
         menuState.menuCanSequence = offers.includes("sequence")
         menuState.menuCanIntegrate = offers.includes("integrate")
         menuState.menuCanEditHistory = offers.includes("edit-history")

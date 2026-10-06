@@ -140,7 +140,7 @@ async fn read_one(
 pub(super) struct PaneRead {
     /// `joins::same_path_key` of the copy.
     key: String,
-    hand: Arc<dyn Fn(crate::status::WorkTreeStatus) + Send + Sync>,
+    hand: Arc<dyn Fn(crate::status::WorkingTreeStatus) + Send + Sync>,
 }
 
 /// Which other copy the read-only pane stands on, and which reading of it
@@ -644,7 +644,7 @@ impl super::RepoSession {
 
     /// Hands the pane a reading of the copy `key`, asked as `number`, if it
     /// still stands there and holds nothing asked later.
-    fn hand_carried(&self, key: &str, number: u64, status: crate::status::WorkTreeStatus) {
+    fn hand_carried(&self, key: &str, number: u64, status: crate::status::WorkingTreeStatus) {
         if let Some((path, name)) = self.carried_pane.take(key, number) {
             self.sink
                 .event(crate::session::SessionEvent::CarriedStatusLoaded { path, name, status });

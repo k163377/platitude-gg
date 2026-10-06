@@ -17,7 +17,7 @@ Rectangle {
 
     required property var graphModel
     // The uncommitted row's tallies: the status the list is built from, counted by kind (`status::Kinds`).
-    required property var workTree
+    required property var workingTree
     // No repository behind this pane: the empty-window call to action.
     property bool blank: false
 
@@ -403,7 +403,7 @@ Rectangle {
             NumberAnimation { duration: 200 }
         }
         graphModel: graphArea.graphModel
-        workTree: graphArea.workTree
+        workingTree: graphArea.workingTree
         columns: metrics
         findOn: findBar.findOn
         chosenOids: graphArea.chosenOids
@@ -601,7 +601,7 @@ Rectangle {
         anchors.fill: parent
         graphModel: graphArea.graphModel
         blank: graphArea.blank
-        workTree: graphArea.workTree
+        workingTree: graphArea.workingTree
         onOpenRepositoryRequested: graphArea.openRepositoryRequested()
     }
 }

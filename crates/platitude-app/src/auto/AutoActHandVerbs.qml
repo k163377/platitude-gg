@@ -20,7 +20,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var graphModel: driver.graphModel
-    readonly property var workTree: driver.workTree
+    readonly property var workingTree: driver.workingTree
     readonly property var detailsModel: driver.detailsModel
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
@@ -59,7 +59,7 @@ Item {
     /// each off the timer's count.
     function seat(name) {
         if (name === "files" || name === "block")
-            return acts.detailsSeat(name, workTree.headOid)
+            return acts.detailsSeat(name, workingTree.headOid)
         if (name === "description" || name === "summary")
             return acts.detailsSeat(name, graphModel.oidAt(acts.longMessageRow))
         if (name === "chosen")
@@ -236,7 +236,7 @@ Item {
     function refListSeat() {
         const card = driver.refList
         if (!card.opened) {
-            const row = graphModel.rowOf(workTree.headOid)
+            const row = graphModel.rowOf(workingTree.headOid)
             const stacked = row >= 0 ? graphPane.view.itemAtIndex(row) : null
             if (!stacked)
                 return acts.waiting("HEAD's row")
@@ -290,7 +290,7 @@ Item {
     /// its rows run past the pane.
     function planSeat() {
         if (!page.planShown) {
-            const fromOid = graphModel.oidAt(graphModel.rowOf(workTree.headOid) + acts.planBack)
+            const fromOid = graphModel.oidAt(graphModel.rowOf(workingTree.headOid) + acts.planBack)
             if (fromOid === "")
                 return acts.waiting("the row the plan opens from")
             page.openRowMenu(fromOid)

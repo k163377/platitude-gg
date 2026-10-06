@@ -335,7 +335,7 @@ fn only_the_five_sections_that_draw_a_stood_in_row_are_named() {
     assert_eq!(Row::drawn_by("tags"), Some(Row::Tag));
     assert_eq!(Row::drawn_by("stashes"), Some(Row::Stash));
     assert_eq!(Row::drawn_by("worktrees"), Some(Row::Worktree));
-    assert_eq!(Row::drawn_by("worktree"), None);
+    assert_eq!(Row::drawn_by("files"), None);
 }
 
 /// A removed copy's row is read off the worktree listing, which runs

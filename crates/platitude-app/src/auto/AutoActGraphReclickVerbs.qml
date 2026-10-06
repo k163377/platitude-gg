@@ -15,7 +15,7 @@ Item {
 
     // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
-    readonly property var workTree: driver.workTree
+    readonly property var workingTree: driver.workingTree
     readonly property var graphModel: driver.graphModel
     readonly property var graphPane: driver.graphPane
     readonly property var refList: driver.refList
@@ -132,7 +132,7 @@ Item {
                 + " kind=" + graphPane.namingKind
                 + " typed=" + graphPane.namingText
                 // The tree did not move — the gesture was not a double-click, which a picture cannot say.
-                + " branch=" + workTree.branch
+                + " branch=" + workingTree.branch
                 // The scrolled run's whole claim.
                 + " shown=" + graphPane.rowOnScreen(reclickGraphTimer.row)
                 // Includes the sampler's beat, so read as "about the window".
@@ -189,7 +189,7 @@ Item {
                 + " armed=" + acts.laneClickArmed
                 + " box=" + (graphPane.namingOid !== "")
                 + " typed=" + graphPane.namingText
-                + " branch=" + workTree.branch)
+                + " branch=" + workingTree.branch)
                 driver.complete()
             }
         }
@@ -263,7 +263,7 @@ Item {
                 + " mode=" + graphPane.namingMode
                 + " kind=" + graphPane.namingKind
                 + " typed=" + graphPane.namingText
-                + " branch=" + workTree.branch)
+                + " branch=" + workingTree.branch)
                 driver.complete()
             }
         }

@@ -30,7 +30,7 @@ pub async fn untracked_shapes(
         "--exclude-standard",
     ]);
     let out = executor.run(cmd, cancel).await?;
-    Ok(worktree_shapes(&out.stdout))
+    Ok(working_tree_shapes(&out.stdout))
 }
 
 /// What a file's bytes on disk look like, as `ls-files --eol` reports them.
@@ -51,7 +51,7 @@ pub enum Shape {
 /// Reads the `w/` column — the bytes on disk, the space a new file's patch
 /// is read in. `i/` differs only where git converts, and there none of this
 /// is asked.
-pub fn worktree_shapes(stdout: &[u8]) -> Vec<(String, Shape)> {
+pub fn working_tree_shapes(stdout: &[u8]) -> Vec<(String, Shape)> {
     let mut out = Vec::new();
     for record in stdout.split(|b| *b == 0).filter(|r| !r.is_empty()) {
         let text = String::from_utf8_lossy(record);
@@ -76,7 +76,7 @@ pub fn worktree_shapes(stdout: &[u8]) -> Vec<(String, Shape)> {
 
 /// The worktree ending of each path git can name one for, with the index it
 /// came in at. Unusable samples are simply absent.
-pub(super) async fn worktree_endings(
+pub(super) async fn working_tree_endings(
     executor: &GitExecutor,
     workdir: &Path,
     paths: &[String],
@@ -91,7 +91,7 @@ pub(super) async fn worktree_endings(
     let out = executor.run(cmd, cancel).await?;
 
     let mut found: Vec<(usize, Eol)> = Vec::new();
-    for (path, shape) in worktree_shapes(&out.stdout) {
+    for (path, shape) in working_tree_shapes(&out.stdout) {
         let Shape::Uniform(eol) = shape else { continue };
         if let Some(index) = paths.iter().position(|p| *p == path) {
             found.push((index, eol));

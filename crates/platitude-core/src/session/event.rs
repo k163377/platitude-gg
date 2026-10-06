@@ -134,7 +134,7 @@ pub enum SessionEvent {
         path: String,
         /// The name the header says — the copy's own.
         name: String,
-        status: WorkTreeStatus,
+        status: WorkingTreeStatus,
     },
     /// A read the page's pace started has ended (`session::pacer`): this
     /// tree's when `copy` is `None`, else another working copy's, by the
@@ -145,7 +145,7 @@ pub enum SessionEvent {
         copy: Option<String>,
     },
     StatusLoaded {
-        status: WorkTreeStatus,
+        status: WorkingTreeStatus,
         /// The [`HeadObserved::seq`](SessionEvent::HeadObserved) this
         /// status stands beside, taken after the read's own HEAD went into
         /// the record. Tells a consumer the counts are about the HEAD it

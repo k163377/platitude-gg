@@ -318,7 +318,7 @@ impl RepoTab {
     }
 
     /// The number of the first HEAD report after that write
-    /// (`WriteAnswer::head_seq`): `WorkTreeModel.headSeq` at or above it
+    /// (`WriteAnswer::head_seq`): `WorkingTreeModel.headSeq` at or above it
     /// looked after the write, whichever of the two arrives first.
     #[qslot]
     fn write_answer_head_seq(&self, index: i32) -> i32 {
@@ -977,7 +977,7 @@ impl RepoTab {
     /// A status has been applied beside HEAD report `seen`, leaving the
     /// working tree empty or not (`RepoTab::tree_was_read`).
     ///
-    /// `seen` is the counts' own number (`WorkTreeModel.statusSeq`), not
+    /// `seen` is the counts' own number (`WorkingTreeModel.statusSeq`), not
     /// `headSeq`: a HEAD report also arrives on its own, carrying no counts.
     #[qslot]
     fn note_tree_read(&mut self, seen: i32, emptied: bool) {

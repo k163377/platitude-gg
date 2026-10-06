@@ -13,7 +13,7 @@ Rectangle {
     required property string title
     /// Whether the shown diff is a working-tree file (stageable), which side it is, whether git stopped on it, and
     /// whether a write is running (`DiffPane`).
-    required property bool fromWorkTree
+    required property bool fromWorkingTree
     required property bool staged
     /// Whether the file is this window's own to write (`DiffPane.writable`); the stage word stands only then
     /// (デザイン規約 §別の作業コピーを読む).
@@ -154,7 +154,7 @@ Rectangle {
         ActionButton {
             id: stageFileButton
             Layout.fillWidth: false
-            visible: header.fromWorkTree && header.writable
+            visible: header.fromWorkingTree && header.writable
             // On a conflicted file the same `git add` marks it resolved (デザイン規約 §diff の中のステージ).
             text: header.conflicted ? qsTr("Mark resolved")
                   : header.staged ? qsTr("Unstage file") : qsTr("Stage file")

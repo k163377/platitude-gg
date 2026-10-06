@@ -84,7 +84,7 @@ Item {
     /// seen before it is pressed (デザイン規約 §その他の操作).
     property bool stagePeer: false
     /// What each side of a conflict is called. **The two swap over during a rebase**, so they come from the model
-    /// (`WorkTreeModel.sideOurs` / `sideTheirs`); empty where git left nothing to name a side by.
+    /// (`WorkingTreeModel.sideOurs` / `sideTheirs`); empty where git left nothing to name a side by.
     property string sideOurs: ""
     property string sideTheirs: ""
 
@@ -359,7 +359,7 @@ Item {
     function ordinaryClick(modifiers) {
         if (navRow.folder) {
             navRow.folderClicked(navRow.full)
-        } else if (navRow.kindHint === "wt") {
+        } else if (navRow.kindHint === "file") {
             navRow.fileClicked(navRow.bucket, navRow.fullName, navRow.orig_path,
                                modifiers === undefined ? Qt.NoModifier : modifiers)
         } else if (navRow.oid_hex !== "") {
@@ -539,7 +539,7 @@ Item {
                 // open under the next menu raised elsewhere, so it is taken back.
                 if (navRow.factsOpen && !navRow.menuStanding)
                     navRow.factsMenuRefused()
-            } else if (!navRow.folder && navRow.kindHint === "wt")
+            } else if (!navRow.folder && navRow.kindHint === "file")
                 navRow.fileMenuRequested(navRow.bucket, navRow.fullName)
             else if (navRow.isRemoteRow)
                 navRow.remoteMenuRequested(navRow.fullName)
@@ -647,7 +647,7 @@ Item {
         // Every folder row says its own path: in the working tree's list it rides in `orig_path`, and a ref folder's
         // fold key is its path.
         if (navRow.folder)
-            return navRow.kindHint === "wt" ? navRow.orig_path : full
+            return navRow.kindHint === "file" ? navRow.orig_path : full
         if (navRow.kindHint === "stash")
             return navRow.name
         if (navRow.kindHint === "branch" || navRow.kindHint === "tag" || navRow.kindHint === "remote")

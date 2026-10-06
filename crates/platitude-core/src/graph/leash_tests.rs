@@ -6,16 +6,16 @@ use super::*;
 use crate::model::StrPool;
 use crate::oid::Oid;
 use crate::opstate::OpState;
-use crate::status::{StatusItem, WorkTreeStatus};
+use crate::status::{StatusItem, WorkingTreeStatus};
 
 #[test]
 fn the_wip_row_stands_for_a_clean_tree_under_an_operation_but_not_under_a_bisect() {
-    let clean = WorkTreeStatus::default();
-    let dirty = WorkTreeStatus {
+    let clean = WorkingTreeStatus::default();
+    let dirty = WorkingTreeStatus {
         items: vec![StatusItem::Untracked {
             path: "scratch.txt".into(),
         }],
-        ..WorkTreeStatus::default()
+        ..WorkingTreeStatus::default()
     };
     assert!(!wip_row_stands(&clean, &OpState::default()));
     assert!(wip_row_stands(&dirty, &OpState::default()));

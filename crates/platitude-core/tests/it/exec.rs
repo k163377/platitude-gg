@@ -255,7 +255,7 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
 /// that lock unless the fixed arguments say not to; `--no-optional-locks`
 /// does not reach `diff`.
 #[tokio::test]
-async fn a_work_tree_read_leaves_the_index_untouched() {
+async fn a_working_tree_read_leaves_the_index_untouched() {
     let mut repo_dir = TestRepo::init();
     repo_dir.commit_file("a.txt", "one\n", "add a");
 

@@ -16,7 +16,7 @@ Flickable {
 
     /// What the pane hands down: the tree this commit is made of, and the room it is given.
     required property var repoTab
-    required property var workTree
+    required property var workingTree
     required property string standingSubject
     required property string standingBody
     required property bool onStandingMessage
@@ -41,7 +41,7 @@ Flickable {
     /// are the way on there, and a commit of one's own would drop what the stopped commit carries — a rebase's author
     /// and message, a pick's message. The edit step keeps them: amending is what it stops for. A merge keeps them too:
     /// its `--continue` is the commit this button makes.
-    readonly property bool composeHidden: block.workTree.opStepping && !block.workTree.opEditing
+    readonly property bool composeHidden: block.workingTree.opStepping && !block.workingTree.opEditing
 
     // -- what the pane reads back out of here --
     readonly property alias subjectText: msgEditor.subjectText
@@ -137,7 +137,7 @@ Flickable {
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
                 // Nothing to amend before the first commit.
-                visible: block.workTree.headOid !== "" && !block.composeHidden
+                visible: block.workingTree.headOid !== "" && !block.composeHidden
                 AppCheckBox {
                     id: amendBox
                     text: qsTr("Amend the last commit")
@@ -189,7 +189,7 @@ Flickable {
                 /// A staged file's line endings changed. Only the index counts — a working-tree mark is not in this
                 /// commit (`session::EolMark::staged`).
                 readonly property bool eolWarned:
-                    block.workTree.eolStagedCount > 0 && commitButton.enabled
+                    block.workingTree.eolStagedCount > 0 && commitButton.enabled
                 // The frame and the `!` follow as bindings; the card has to be asked (`settleCommitCard`).
                 onEolWarnedChanged: block.cardAsked()
                 // No icon: the `!` is the one mark this button needs, and has to stand out.
@@ -225,20 +225,20 @@ Flickable {
                                       : qsTr("Signed with your gpg key")
                 // Files, as the list above counts them; none for a message-only amend. Apart from the words, so
                 // they can give way without taking it.
-                phraseCount: block.workTree.stagedCount === 0
-                             ? "" : block.workTree.stagedCount.toString()
+                phraseCount: block.workingTree.stagedCount === 0
+                             ? "" : block.workingTree.stagedCount.toString()
                 // No count, no noun: `commit files to main` would name a quantity that is not there.
-                text: block.workTree.stagedCount === 0 ? qsTr("to")
-                      : block.workTree.stagedCount === 1 ? qsTr("file to") : qsTr("files to")
+                text: block.workingTree.stagedCount === 0 ? qsTr("to")
+                      : block.workingTree.stagedCount === 1 ? qsTr("file to") : qsTr("files to")
                 // Unmerged paths stop it: git will not commit over them (デザイン規約 §可否・警告の出し場所). A stopped
                 // merge presses on its own, with an empty box and nothing staged — git writes the merge commit
                 // either way, and this seat is the whole way out of a merge (§進行中の操作から出る).
                 // Not while hidden either: the pane's own press (`WipPane.pressCommit`) reads this.
                 enabled: !block.composeHidden && block.repoTab.busyCount === 0 && block.repoTab.identityReady
-                         && block.workTree.conflictCount === 0
+                         && block.workingTree.conflictCount === 0
                          && (block.onStandingMessage
                              || (msgEditor.subjectText.trim() !== ""
-                                 && (block.amending || block.workTree.stagedCount > 0
+                                 && (block.amending || block.workingTree.stagedCount > 0
                                      || block.standingSubject !== "")))
                 // One click even when warning: a confirmation on a daily operation gets pressed unread (デザイン規約
                 // §可否・警告の出し場所).
@@ -249,7 +249,7 @@ Flickable {
                 ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: !block.repoTab.identityReady
                               ? qsTr("No name or email set for commits")
-                              : block.workTree.conflictCount > 0
+                              : block.workingTree.conflictCount > 0
                               ? qsTr("Files are still waiting on a decision")
                               : msgEditor.subjectText.trim() === ""
                               ? qsTr("A commit needs a summary")
@@ -269,7 +269,7 @@ Flickable {
                 // list's edge when the button is hidden — the one gap every piece of the block keeps.
                 Layout.fillWidth: true
                 repoTab: block.repoTab
-                workTree: block.workTree
+                workingTree: block.workingTree
             }
         }
     }

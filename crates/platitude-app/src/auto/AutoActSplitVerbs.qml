@@ -14,7 +14,7 @@ Item {
     required property var driver
 
     readonly property var page: driver.page
-    readonly property var worktreeModel: driver.worktreeModel
+    readonly property var unstagedModel: driver.unstagedModel
     readonly property var diffPane: driver.diffPane
 
     /// Runs `act` if it is one of this family's, and says whether it was.
@@ -25,14 +25,14 @@ Item {
         const cut = arg.indexOf(":")
         const head = cut > 0 ? arg.substring(0, cut) : ""
         const named = head === "staged" || head === "unstaged" || head === "untracked" || head === "conflicts"
-        const wtPath = named ? arg.substring(cut + 1) : arg
-        if (wtPath === "") {
+        const workingTreePath = named ? arg.substring(cut + 1) : arg
+        if (workingTreePath === "") {
             Harness.report("diff_arg act=" + act + " named=false")
             driver.barrierRendered.begin()
             return true
         }
         page.showWip()
-        page.toggleDiff(named ? head : "unstaged", wtPath, worktreeModel.origOf(wtPath))
+        page.toggleDiff(named ? head : "unstaged", workingTreePath, unstagedModel.origOf(workingTreePath))
         rowsTimer.begin()
         return true
     }

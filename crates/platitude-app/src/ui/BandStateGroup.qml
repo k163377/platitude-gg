@@ -34,9 +34,11 @@ Item {
 
     /// What can be the matter here, one expression each, read by both the mark and the card (`BandStateCard`) so the
     /// two cannot disagree about whether there is anything to open.
-    readonly property var stateWt: stateGroup.curPage !== null ? stateGroup.curPage.pageWt : null
-    readonly property bool opBadgeShown: stateGroup.stateWt !== null && stateGroup.stateWt.opText !== ""
-    readonly property bool conflictBadgeShown: stateGroup.stateWt !== null && stateGroup.stateWt.hasConflicts
+    readonly property var stateWorkingTree: stateGroup.curPage !== null ? stateGroup.curPage.pageWorkingTree : null
+    readonly property bool opBadgeShown: stateGroup.stateWorkingTree !== null
+                                         && stateGroup.stateWorkingTree.opText !== ""
+    readonly property bool conflictBadgeShown: stateGroup.stateWorkingTree !== null
+                                               && stateGroup.stateWorkingTree.hasConflicts
     /// Also a save whose halves did not both land: the identity is then set, but not as asked.
     readonly property bool identityBadgeShown: AppBackend.identityState === "missing" || AppBackend.identityUnsaved
         || (stateGroup.curPage !== null && !stateGroup.curPage.pageTab.identityReady)
@@ -46,8 +48,9 @@ Item {
     readonly property bool staleBadgeShown: stateGroup.curPage !== null
                                             && (stateGroup.curPage.pageGraph.failed
                                                 || stateGroup.curPage.pageGraph.stale)
-    /// Pending files need Git LFS and git cannot run it here (`WorkTreeModel.lfsNeeded`).
-    readonly property bool lfsBadgeShown: stateGroup.stateWt !== null && stateGroup.stateWt.lfsNeeded > 0
+    /// Pending files need Git LFS and git cannot run it here (`WorkingTreeModel.lfsNeeded`).
+    readonly property bool lfsBadgeShown: stateGroup.stateWorkingTree !== null
+                                          && stateGroup.stateWorkingTree.lfsNeeded > 0
     readonly property bool stateShown: stateGroup.opBadgeShown || stateGroup.conflictBadgeShown
                                        || stateGroup.identityBadgeShown || stateGroup.oldGitBadgeShown
                                        || stateGroup.staleBadgeShown || stateGroup.lfsBadgeShown
@@ -55,8 +58,10 @@ Item {
     readonly property int stateMinChars: 2
     /// Settled where it is measured (`BandStateMetrics`).
     readonly property real stateBadgeMinW: badgeMetrics.minW
-    readonly property bool stateHasAlso: stateGroup.stateWt !== null && stateGroup.stateWt.opAlso !== ""
-    readonly property bool stateHasStep: stateGroup.stateWt !== null && stateGroup.stateWt.opSteps > 0
+    readonly property bool stateHasAlso: stateGroup.stateWorkingTree !== null
+                                         && stateGroup.stateWorkingTree.opAlso !== ""
+    readonly property bool stateHasStep: stateGroup.stateWorkingTree !== null
+                                         && stateGroup.stateWorkingTree.opSteps > 0
     /// What each badge would like to be, measured off labels that are never drawn (`BandStateMetrics`).
     readonly property int opBadgeW: badgeMetrics.opW
     readonly property int conflictBadgeW: badgeMetrics.conflictW
@@ -186,7 +191,7 @@ Item {
 
     BandStateMetrics {
         id: badgeMetrics
-        stateWt: stateGroup.stateWt
+        stateWorkingTree: stateGroup.stateWorkingTree
         hasAlso: stateGroup.stateHasAlso
         hasStep: stateGroup.stateHasStep
         minChars: stateGroup.stateMinChars
@@ -219,7 +224,7 @@ Item {
             naturalW: stateGroup.opBadgeW
             cap: stateGroup.cap
             Label {
-                text: stateGroup.stateWt !== null ? stateGroup.stateWt.opText : ""
+                text: stateGroup.stateWorkingTree !== null ? stateGroup.stateWorkingTree.opText : ""
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
                 font.weight: Theme.fontWeightStrong
@@ -233,22 +238,22 @@ Item {
             // not the line's: the words beside it are capitals only.
             DotMark {
                 id: opDot
-                visible: stateGroup.stateWt !== null && stateGroup.stateWt.opAlso !== ""
+                visible: stateGroup.stateWorkingTree !== null && stateGroup.stateWorkingTree.opAlso !== ""
                 tint: Theme.warning
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: badgeMetrics.capMiddle - opDot.implicitHeight / 2
             }
             Label {
-                visible: stateGroup.stateWt !== null && stateGroup.stateWt.opAlso !== ""
-                text: stateGroup.stateWt !== null ? stateGroup.stateWt.opAlso : ""
+                visible: stateGroup.stateWorkingTree !== null && stateGroup.stateWorkingTree.opAlso !== ""
+                text: stateGroup.stateWorkingTree !== null ? stateGroup.stateWorkingTree.opAlso : ""
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
                 font.weight: Theme.fontWeightStrong
             }
             Label {
-                visible: stateGroup.stateWt !== null && stateGroup.stateWt.opSteps > 0
-                text: stateGroup.stateWt === null ? ""
-                      : qsTr("%1/%2").arg(stateGroup.stateWt.opStep).arg(stateGroup.stateWt.opSteps)
+                visible: stateGroup.stateWorkingTree !== null && stateGroup.stateWorkingTree.opSteps > 0
+                text: stateGroup.stateWorkingTree === null ? ""
+                      : qsTr("%1/%2").arg(stateGroup.stateWorkingTree.opStep).arg(stateGroup.stateWorkingTree.opSteps)
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
                 font.weight: Theme.fontWeightStrong
@@ -400,11 +405,11 @@ Item {
         x: stateGroup.width - width
         y: stateGroup.height
         box: badgeMetrics
-        opText: stateGroup.stateWt !== null ? stateGroup.stateWt.opText : ""
-        opAlso: stateGroup.stateWt !== null ? stateGroup.stateWt.opAlso : ""
-        opStep: stateGroup.stateWt !== null ? stateGroup.stateWt.opStep : 0
-        opSteps: stateGroup.stateWt !== null ? stateGroup.stateWt.opSteps : 0
-        conflictCount: stateGroup.stateWt !== null ? stateGroup.stateWt.conflictCount : 0
+        opText: stateGroup.stateWorkingTree !== null ? stateGroup.stateWorkingTree.opText : ""
+        opAlso: stateGroup.stateWorkingTree !== null ? stateGroup.stateWorkingTree.opAlso : ""
+        opStep: stateGroup.stateWorkingTree !== null ? stateGroup.stateWorkingTree.opStep : 0
+        opSteps: stateGroup.stateWorkingTree !== null ? stateGroup.stateWorkingTree.opSteps : 0
+        conflictCount: stateGroup.stateWorkingTree !== null ? stateGroup.stateWorkingTree.conflictCount : 0
         identityUnsaved: AppBackend.identityUnsaved
         gitVersion: AppBackend.gitVersion
         minimumGit: AppBackend.minimumGit
@@ -414,7 +419,7 @@ Item {
         oldGitShown: stateGroup.oldGitBadgeShown
         staleShown: stateGroup.staleBadgeShown
         lfsShown: stateGroup.lfsBadgeShown
-        lfsNeeded: stateGroup.stateWt !== null ? stateGroup.stateWt.lfsNeeded : 0
+        lfsNeeded: stateGroup.stateWorkingTree !== null ? stateGroup.stateWorkingTree.lfsNeeded : 0
         staleStopped: stateGroup.curPage !== null && stateGroup.curPage.pageGraph.failed
         staleWhy: stateGroup.curPage !== null ? stateGroup.curPage.pageGraph.error : ""
         onIdentityRequested: stateGroup.identityEditRequested()

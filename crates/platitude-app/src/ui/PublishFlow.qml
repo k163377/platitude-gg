@@ -13,7 +13,7 @@ Item {
     id: publishFlow
 
     required property RepoTab repoTab
-    required property WorkTreeModel workTree
+    required property WorkingTreeModel workingTree
     /// Where a remote-tracking branch's commit is read from.
     required property NavSectionModel remotesModel
     /// Holds the bar this question stands in and dresses (`RepoPage.startRowAsk` raises it).
@@ -32,8 +32,8 @@ Item {
     /// (デザイン規約 §リモートを書き留める). **The order is core's** (`platitude_core::remote::push_target`), the same the send
     /// reads — never re-derive it here, or the label and the send part ways.
     readonly property string pushTargetLabel:
-        GitFacts.pushTarget(publishFlow.workTree.branch, publishFlow.workTree.upstream,
-                            publishFlow.workTree.pushRemote, publishFlow.repoTab.pushDefault,
+        GitFacts.pushTarget(publishFlow.workingTree.branch, publishFlow.workingTree.upstream,
+                            publishFlow.workingTree.pushRemote, publishFlow.repoTab.pushDefault,
                             publishFlow.repoTab.defaultRemote, publishFlow.repoTab.remoteNames)
     /// What the branch can do with its remote (デザイン規約 §リモートへ送る):
     ///
@@ -50,28 +50,28 @@ Item {
     /// all bound here), read against the destination's own counts where the push goes elsewhere (`pushElsewhere`).
     /// The counts are the last fetch's, so they prove the negative only: a push may still be refused.
     readonly property string pushState:
-        // `closed` too until the counts are about HEAD's branch (`WorkTreeModel.countsSettled`).
-        publishFlow.repoTab.state !== "open" || !publishFlow.workTree.countsSettled ? "closed"
-        : GitFacts.pushStanding(publishFlow.workTree.unborn,
-                                publishFlow.workTree.detached, publishFlow.workTree.branch,
-                                publishFlow.workTree.upstream, publishFlow.workTree.upstreamTracked,
-                                publishFlow.workTree.ahead, publishFlow.workTree.behind,
-                                publishFlow.workTree.pushRemote, publishFlow.repoTab.pushDefault,
-                                publishFlow.repoTab.remoteNames, publishFlow.workTree.pushTracking,
-                                publishFlow.workTree.pushAhead, publishFlow.workTree.pushBehind)
+        // `closed` too until the counts are about HEAD's branch (`WorkingTreeModel.countsSettled`).
+        publishFlow.repoTab.state !== "open" || !publishFlow.workingTree.countsSettled ? "closed"
+        : GitFacts.pushStanding(publishFlow.workingTree.unborn,
+                                publishFlow.workingTree.detached, publishFlow.workingTree.branch,
+                                publishFlow.workingTree.upstream, publishFlow.workingTree.upstreamTracked,
+                                publishFlow.workingTree.ahead, publishFlow.workingTree.behind,
+                                publishFlow.workingTree.pushRemote, publishFlow.repoTab.pushDefault,
+                                publishFlow.repoTab.remoteNames, publishFlow.workingTree.pushTracking,
+                                publishFlow.workingTree.pushAhead, publishFlow.workingTree.pushBehind)
     /// A mark sends the push to another remote than the upstream's: the counts that speak for it are then the
     /// destination's own, never the upstream's (デザイン規約 §リモートへ送る). Core's rule, the one `pushState` weighs.
     readonly property bool pushElsewhere:
-        GitFacts.pushGoesElsewhere(publishFlow.workTree.upstream, publishFlow.workTree.pushRemote,
+        GitFacts.pushGoesElsewhere(publishFlow.workingTree.upstream, publishFlow.workingTree.pushRemote,
                                    publishFlow.repoTab.pushDefault, publishFlow.repoTab.remoteNames)
     /// The counts the standing reads, for the words that say them (`BandPushButton.tip`), and the remote branch they
     /// are against, which an overwrite leases to.
-    readonly property int pushAhead: publishFlow.pushElsewhere ? publishFlow.workTree.pushAhead
-                                                               : publishFlow.workTree.ahead
-    readonly property int pushBehind: publishFlow.pushElsewhere ? publishFlow.workTree.pushBehind
-                                                                : publishFlow.workTree.behind
-    readonly property string pushMeasured: publishFlow.pushElsewhere ? publishFlow.workTree.pushTracking
-                                                                     : publishFlow.workTree.upstream
+    readonly property int pushAhead: publishFlow.pushElsewhere ? publishFlow.workingTree.pushAhead
+                                                               : publishFlow.workingTree.ahead
+    readonly property int pushBehind: publishFlow.pushElsewhere ? publishFlow.workingTree.pushBehind
+                                                                : publishFlow.workingTree.behind
+    readonly property string pushMeasured: publishFlow.pushElsewhere ? publishFlow.workingTree.pushTracking
+                                                                     : publishFlow.workingTree.upstream
     readonly property bool canPush: (publishFlow.pushState === "publish"
                                      || publishFlow.pushState === "elsewhere"
                                      || publishFlow.pushState === "ready")
@@ -87,7 +87,7 @@ Item {
     property string pushFailBranch: ""
     property string pushFailReason: ""
     readonly property bool pushFailed:
-        publishFlow.pushFailBranch !== "" && publishFlow.pushFailBranch === publishFlow.workTree.branch
+        publishFlow.pushFailBranch !== "" && publishFlow.pushFailBranch === publishFlow.workingTree.branch
     /// The branch travels with the press: the tab keeps it beside the push's id and hands it back with the answer
     /// (`RepoTab.pushAnswer` / `pushAnswerBranch`) — nothing here holds it across the round trip.
     function pushNow() {
@@ -95,12 +95,12 @@ Item {
             publishFlow.startPublishAsk()
             return
         }
-        publishFlow.repoTab.pushCurrent(publishFlow.workTree.branch, "", "")
+        publishFlow.repoTab.pushCurrent(publishFlow.workingTree.branch, "", "")
     }
     /// Leased against the commit this window shows, not the tracking ref — a background fetch moves that and would
     /// make it a plain force. A remote that moved since is refused, and core answers with a fetch.
     function forcePush() {
-        publishFlow.repoTab.pushCurrent(publishFlow.workTree.branch, "lease", publishFlow.leaseOid())
+        publishFlow.repoTab.pushCurrent(publishFlow.workingTree.branch, "lease", publishFlow.leaseOid())
     }
     /// Commit the remote branch the counts are against (`pushMeasured`) points at, as shown here.
     function leaseOid() {
@@ -290,18 +290,18 @@ Item {
         // Open on the upstream where there is one, even with no tracking ref (デザイン規約 §ブランチが測られる相手を決める)
         // — but only on a remote still configured: `remoteOfRef` cuts a lost name at the first slash, and the chooser
         // cannot pick back a row it does not hold.
-        const upstream = publishFlow.workTree.upstream
+        const upstream = publishFlow.workingTree.upstream
         const on = upstream !== ""
                  ? GitFacts.remoteOfRef(upstream, publishFlow.repoTab.remoteNames) : ""
         const tracked = on !== "" && publishFlow.publishRemotes.indexOf(on) >= 0
         publishFlow.publishRemote = tracked ? on : publishFlow.repoTab.defaultRemote
         publishFlow.publishBranch = tracked
             ? GitFacts.branchOfRef(upstream, publishFlow.repoTab.remoteNames)
-            : publishFlow.workTree.branch
+            : publishFlow.workingTree.branch
         // `push` untranslated (the command's spelling); `%1` is left for the bar to draw the name in its ref colour
         // (デザイン規約 §ref の種別).
         publishFlow.askRequested(
-            qsTr("%1 where?"), publishFlow.answerPublish, publishForm, "push", publishFlow.workTree.branch)
+            qsTr("%1 where?"), publishFlow.answerPublish, publishForm, "push", publishFlow.workingTree.branch)
         // After the bar is up: raising it resets what the bindings above own, and an unchanged binding does not push
         // back.
         publishFlow.publishAsking = true
@@ -357,7 +357,7 @@ Item {
     function answerPublish() {
         // The same owner a plain push writes to: a refused first push is still this button's news
         // (デザイン規約 §リモートへ送る).
-        publishFlow.repoTab.publishCurrent(publishFlow.workTree.branch,
+        publishFlow.repoTab.publishCurrent(publishFlow.workingTree.branch,
                                            publishFlow.publishRemote,
                                            publishFlow.publishBranch,
                                            publishFlow.publishLease)

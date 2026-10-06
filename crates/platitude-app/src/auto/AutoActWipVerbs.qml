@@ -16,11 +16,11 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workTree: driver.workTree
+    readonly property var workingTree: driver.workingTree
     readonly property var graphModel: driver.graphModel
     readonly property var detailsModel: driver.detailsModel
     readonly property var branchesModel: driver.branchesModel
-    readonly property var worktreeModel: driver.worktreeModel
+    readonly property var unstagedModel: driver.unstagedModel
     readonly property var stashesModel: driver.stashesModel
     readonly property var graphPane: driver.graphPane
     readonly property var wipPane: driver.wipPane
@@ -146,14 +146,14 @@ Item {
                               + " renamed=" + graphPane.view.wipRenamed
                               + " copied=" + graphPane.view.wipCopied
                               + " conflicted=" + graphPane.view.wipConflicted
-                              + " rows=" + worktreeModel.total)
+                              + " rows=" + unstagedModel.total)
         } else if (act === "wip-commit-half") {
             // Commits the staged half of `--preset dirty`, so the uncommitted row survives and is redrawn above the
             // new HEAD — staged as found, as staging everything would leave no row. `during` stops with the write out
             // and the picture not yet moved.
             page.showWip()
             wipPane.setMessage("feat: record the staged half", "")
-            driver.headOidBefore = workTree.headOid
+            driver.headOidBefore = workingTree.headOid
             halfWatch.duringOnly = arg === "during"
             driver.pressWrite("commit", () => {
                 page.commitNow()
@@ -307,7 +307,7 @@ Item {
         property bool moved: false
         property string leftPath: ""
         onTriggered: {
-            if (graphModel.finishCount === 0 || !workTree.loaded)
+            if (graphModel.finishCount === 0 || !workingTree.loaded)
                 return
             if (!carriedReadTimer.asked) {
                 const row = driver.rowOfCopy(Harness.autoActArg)
@@ -407,7 +407,7 @@ Item {
             return ""
         }
         onTriggered: {
-            if (graphModel.finishCount === 0 || !workTree.loaded)
+            if (graphModel.finishCount === 0 || !workingTree.loaded)
                 return
             if (!carriedStandTimer.asked) {
                 // The same road in as `carried-read`.
@@ -477,10 +477,10 @@ Item {
         target: acts.repoTab
         enabled: halfWatch.duringOnly && !halfWatch.caught
         function onBusyCountChanged() {
-            if (repoTab.busyCount === 0 || workTree.headOid !== driver.headOidBefore)
+            if (repoTab.busyCount === 0 || workingTree.headOid !== driver.headOidBefore)
                 return
             halfWatch.sawWipRow = graphModel.wipRow
-            halfWatch.sawRows = worktreeModel.total
+            halfWatch.sawRows = unstagedModel.total
             halfWatch.caught = true
         }
     }
@@ -490,7 +490,7 @@ Item {
         id: halfDuringTimer
         onTriggered: {
             if (!halfWatch.caught) {
-                if (workTree.headOid === driver.headOidBefore)
+                if (workingTree.headOid === driver.headOidBefore)
                     return
                 halfDuringTimer.stop()
                 Harness.report("wip_half_missed the commit landed before any notify carried a raised busy, so this "
@@ -511,15 +511,15 @@ Item {
         id: halfSettledTimer
         onTriggered: {
             if (!driver.wroteAndSettled()
-                    || workTree.headOid === driver.headOidBefore
-                    || graphModel.rowOf(workTree.headOid) < 0
+                    || workingTree.headOid === driver.headOidBefore
+                    || graphModel.rowOf(workingTree.headOid) < 0
                     || !graphModel.wipRow)
                 return
             halfSettledTimer.stop()
             Harness.report("wip_half stage=after busy=false"
-                              + " moved=" + (workTree.headOid !== driver.headOidBefore)
+                              + " moved=" + (workingTree.headOid !== driver.headOidBefore)
                               + " wipRow=" + graphModel.wipRow
-                              + " rows=" + worktreeModel.total)
+                              + " rows=" + unstagedModel.total)
             driver.complete()
         }
     }
@@ -537,7 +537,7 @@ Item {
             wipPane.setMessage(Harness.autoActArg, "")
             // A deferred run: nothing raises its barrier, so the commit is sent and waited out here. HEAD is re-read
             // now — the page's opening fetch can have answered since `prepareCompletion` read it.
-            driver.headOidBefore = workTree.headOid
+            driver.headOidBefore = workingTree.headOid
             driver.pressWrite("commit", () => {
                 page.commitNow()
                 return true
@@ -552,13 +552,13 @@ Item {
         id: resetAuthorLandedTimer
         onTriggered: {
             if (!driver.wroteAndSettled()
-                    || workTree.headOid === driver.headOidBefore
-                    || graphModel.rowOf(workTree.headOid) < 0
+                    || workingTree.headOid === driver.headOidBefore
+                    || graphModel.rowOf(workingTree.headOid) < 0
                     || !driver.cardSettled)
                 return
             resetAuthorLandedTimer.stop()
             Harness.report("reset_author was=" + driver.headOidBefore.substring(0, 8)
-                              + " head=" + workTree.headOid.substring(0, 8)
+                              + " head=" + workingTree.headOid.substring(0, 8)
                               + " shown=" + detailsModel.shaHex.substring(0, 8)
                               + " author=" + detailsModel.authorName
                               + " committer=" + detailsModel.committerName)
@@ -577,7 +577,7 @@ Item {
             Harness.report("op_exit card=" + wipPane.offersOpExit("--abort")
                               + " box=" + wipPane.commitBlock.messageSeat.visible
                               + " button=" + wipPane.commitBlock.commitSeat.visible
-                              + " op=" + workTree.opText)
+                              + " op=" + workingTree.opText)
             driver.complete()
         }
     }
@@ -589,8 +589,8 @@ Item {
             if (!wipPane.eolCardOpen)
                 return
             eolCommitTimer.stop()
-            Harness.report("eol_commit staged=" + workTree.stagedCount
-                              + " warned=" + workTree.eolStagedCount
+            Harness.report("eol_commit staged=" + workingTree.stagedCount
+                              + " warned=" + workingTree.eolStagedCount
                               + " card=" + wipPane.eolCardOpen)
             driver.complete()
         }
@@ -651,8 +651,8 @@ Item {
         property int seenHead: -1
         property string headWas: ""
         function begin() {
-            mergeCommitTimer.wanted = workTree.opSubject
-            mergeCommitTimer.headWas = workTree.headOid
+            mergeCommitTimer.wanted = workingTree.opSubject
+            mergeCommitTimer.headWas = workingTree.headOid
             // Read now: the landing clears the editor, so afterwards every run would say the boxes were empty.
             mergeCommitTimer.typed = wipPane.subjectText !== "" || wipPane.bodyText !== ""
             mergeCommitTimer.seenHead = -1
@@ -663,8 +663,8 @@ Item {
                 return
             // The graph holding the commit, checked against the id HEAD moved from: refs and the walk arrive behind
             // the write and each other, so the old tip would pass.
-            if (!workTree.headKnown || workTree.headOid === mergeCommitTimer.headWas
-                    || graphModel.rowOf(workTree.headOid) < 0
+            if (!workingTree.headKnown || workingTree.headOid === mergeCommitTimer.headWas
+                    || graphModel.rowOf(workingTree.headOid) < 0
                     || driver.graphTopKind() === "wip")
                 return
             if (mergeCommitTimer.seenHead < 0) {
@@ -676,7 +676,7 @@ Item {
                 return
             mergeCommitTimer.stop()
             Harness.report(
-                "merge_committed merging=" + (workTree.opText !== "")
+                "merge_committed merging=" + (workingTree.opText !== "")
                 + " kept=" + (mergeCommitTimer.wanted !== ""
                               && repoTab.headSubject === mergeCommitTimer.wanted)
                 + " typed=" + mergeCommitTimer.typed

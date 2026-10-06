@@ -20,9 +20,9 @@ impl NavSectionModel {
         }
     }
 
-    pub(super) fn attach_worktree_feed(&mut self, tab_id: i32, run: String) {
+    pub(super) fn attach_working_tree_feed(&mut self, tab_id: i32, run: String) {
         self.tab_id = tab_id;
-        self.section = "worktree".to_string();
+        self.section = "files".to_string();
         self.run = run;
         let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
             return;
@@ -47,7 +47,7 @@ impl NavSectionModel {
     /// all the same — both trees are fed while the pane shows either.
     pub(super) fn attach_carried_feed(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
-        self.section = "worktree".to_string();
+        self.section = "files".to_string();
         self.run = "whole".to_string();
         let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
             return;

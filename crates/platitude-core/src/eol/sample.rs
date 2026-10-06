@@ -9,7 +9,7 @@ use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 
 use super::attrs::{Ruling, ruling};
 use super::scan::Tally;
-use super::worktree::{readable, worktree_endings};
+use super::working_tree::{readable, working_tree_endings};
 use super::{Baseline, Eol, Scope};
 
 /// How many usable samples a baseline needs.
@@ -71,7 +71,7 @@ async fn sample(
     }
 
     let paths: Vec<String> = picked.iter().map(|(p, _)| p.clone()).collect();
-    let read = worktree_endings(executor, workdir, &paths, cancel).await?;
+    let read = working_tree_endings(executor, workdir, &paths, cancel).await?;
     Ok(settle(&picked, &read, ext))
 }
 

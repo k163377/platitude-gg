@@ -49,7 +49,7 @@ Item {
         onTriggered: {
             acts.bandBeats++
             if (identityDialog.opened || topBar.bandTabsWidth <= 0
-                    || window.curPage === null || !window.curPage.pageWt.loaded
+                    || window.curPage === null || !window.curPage.pageWorkingTree.loaded
                     || !topBar.opBadgeShown || !topBar.conflictBadgeShown
                     || !topBar.identityBadgeShown)
                 return
@@ -194,7 +194,7 @@ Item {
             + " tabsW=" + Math.round(topBar.bandTabsWidth)
             + " grabRun=" + Math.round(topBar.bandGrabRun)
             // The count the card's sentence says, from the model the badge reads.
-            + " lfsCount=" + window.curPage.pageWt.lfsNeeded)
+            + " lfsCount=" + window.curPage.pageWorkingTree.lfsNeeded)
         window.finishAutoAct()
     }
 
@@ -266,7 +266,7 @@ Item {
                 // The raced pass: the tree is dirty, a pass has finished, and its top row is a neighbour copy's
                 // (`GraphModel.carriedTop`). Over a pass with no all-zero row, row 0 reads correctly and the verb
                 // would pass without the misreading ever in front of the page.
-                if (!page.pageWt.loaded || !page.pageWt.wipRowStands
+                if (!page.pageWorkingTree.loaded || !page.pageWorkingTree.wipRowStands
                         || graph.loading || graph.finishCount <= 0 || graph.wipRow || !graph.carriedTop)
                     return
                 wipLandingTimer.read = true
@@ -412,7 +412,7 @@ Item {
                 noLfsActTimer.sizeRequested = true
                 return
             }
-            if (!page.pageWt.loaded || !topBar.lfsBadgeShown)
+            if (!page.pageWorkingTree.loaded || !topBar.lfsBadgeShown)
                 return
             if (noLfsActTimer.sizeRequested
                     && (topBar.width !== mainUi.width
@@ -436,7 +436,7 @@ Item {
             Harness.report(
                 "no-lfs badge=" + topBar.lfsBadgeShown
                 + " card=" + topBar.stateCardOpen
-                + " count=" + page.pageWt.lfsNeeded
+                + " count=" + page.pageWorkingTree.lfsNeeded
                 + " words=" + topBar.stateWordsShown
                 + " mark=" + topBar.stateMarkShown
                 + " tint=" + acts.stateTint

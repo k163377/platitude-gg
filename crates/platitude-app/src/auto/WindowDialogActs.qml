@@ -382,7 +382,7 @@ Item {
             // And reached the screen: the answer comes before the status is read again (`session::write::run_write`),
             // and this commit takes the working-tree row off: ending on the answer flips `WipTallyRow` in the census.
             const page = window.curPage
-            if (page.pageWt.wipRowStands || !PageSettled.settled(page))
+            if (page.pageWorkingTree.wipRowStands || !PageSettled.settled(page))
                 return
             stop()
             Harness.report("quit_lock dialog=" + quitWaitDialog.opened

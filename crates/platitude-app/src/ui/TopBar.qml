@@ -385,17 +385,17 @@ Rectangle {
     /// the next name in this row.
     readonly property string copyName: topBar.tabsModel.currentCopyName
     /// Whether HEAD is on no branch at all — a state rather than a name, and coloured as one.
-    readonly property bool detachedHead: topBar.curPage !== null && topBar.curPage.pageWt.detached
+    readonly property bool detachedHead: topBar.curPage !== null && topBar.curPage.pageWorkingTree.detached
     /// The branch HEAD is on, or the marker for a HEAD that is on no branch at all.
     readonly property string branchName:
-        topBar.curPage === null || !topBar.curPage.pageWt.headKnown ? ""
-        : topBar.curPage.pageWt.detached ? qsTr("detached")
-        : topBar.curPage.pageWt.branch
+        topBar.curPage === null || !topBar.curPage.pageWorkingTree.headKnown ? ""
+        : topBar.curPage.pageWorkingTree.detached ? qsTr("detached")
+        : topBar.curPage.pageWorkingTree.branch
     /// What this branch is measured against — **the whole ref as git names it** (`origin/main`), not the remote alone:
     /// a branch can follow a remote one under another name, so `origin` would leave the reader guessing which. Empty
     /// with no upstream.
     readonly property string branchUpstream:
-        topBar.curPage === null ? "" : topBar.curPage.pageWt.upstream
+        topBar.curPage === null ? "" : topBar.curPage.pageWorkingTree.upstream
     /// Whether that upstream has gone from the remote — git's own `[gone]`, read where the left panel reads it
     /// (`NavSectionModel.headUpstreamGone`). The name stays; the colour says the far side is gone.
     readonly property bool upstreamGone:
@@ -673,12 +673,13 @@ Rectangle {
                 name: topBar.branchName
                 note: topBar.branchUpstream
                 noteTone: topBar.upstreamGone ? Theme.warning : Theme.textMuted
-                ahead: topBar.curPage === null ? 0 : topBar.curPage.pageWt.ahead
-                behind: topBar.curPage === null ? 0 : topBar.curPage.pageWt.behind
+                ahead: topBar.curPage === null ? 0 : topBar.curPage.pageWorkingTree.ahead
+                behind: topBar.curPage === null ? 0 : topBar.curPage.pageWorkingTree.behind
                 given: topBar.opsBranchCut
                 opened: branchMenu.opened
                 // `Loading…` while the page in front is still reading (規約 §操作パネル, `Hub::release_tab`).
-                blank: topBar.curPage !== null && !topBar.curPage.openFailed && !topBar.curPage.pageWt.headKnown
+                blank: topBar.curPage !== null && !topBar.curPage.openFailed
+                       && !topBar.curPage.pageWorkingTree.headKnown
                        ? qsTr("Loading…") : qsTr("No branch")
                 // A local branch is the accent wherever it is drawn (規約 §ref の種別); a detached HEAD is a state, and
                 // takes the state's colour on mark and word alike.

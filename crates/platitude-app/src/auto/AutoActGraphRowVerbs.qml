@@ -14,7 +14,7 @@ Item {
     required property var driver
 
     readonly property var page: driver.page
-    readonly property var workTree: driver.workTree
+    readonly property var workingTree: driver.workingTree
     readonly property var graphModel: driver.graphModel
     readonly property var graphPane: driver.graphPane
     readonly property var detailsModel: driver.detailsModel
@@ -162,7 +162,7 @@ Item {
             // Same row and default as `commit-menu`; the row under the menu is then asked for its card.
             let hoverOid = arg
             if (hoverOid === "")
-                hoverOid = graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
+                hoverOid = graphModel.oidAt(graphModel.rowOf(workingTree.headOid) + 1)
             page.openRowMenu(hoverOid)
             menuHoverTimer.oidHex = hoverOid
             menuHoverTimer.asked = false
@@ -352,7 +352,7 @@ Item {
                 Harness.report("chosen_dbl led=" + led
                                   + " movable=" + at.movable
                                   + " naming=" + (graphPane.namingOid !== "")
-                                  + " branch=" + workTree.branch)
+                                  + " branch=" + workingTree.branch)
                 driver.complete()
                 return
             }

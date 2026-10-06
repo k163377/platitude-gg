@@ -46,7 +46,7 @@ impl MessageEdit {
 /// id: detached has no branch to ask), `stash_ref` the reflog selector
 /// when that row is a stash (`""` otherwise), and `op_text` the standing
 /// operation's own word — `""` exactly when nothing stands
-/// (`WorkTreeModel.op_text`).
+/// (`WorkingTreeModel.op_text`).
 ///
 /// **Only HEAD's own commit.** Amending an older one replays every commit
 /// after it, and the first stray keystroke would start that; rewrites

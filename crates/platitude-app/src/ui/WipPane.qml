@@ -19,10 +19,11 @@ ColumnLayout {
     id: wipPane
 
     required property var repoTab
-    required property var workTree
+    required property var workingTree
     /// One model per bucket run, each showing its own run and answering about the whole tree
-    /// (`NavSectionModel::attach_worktree`) — so `worktreeModel`, the unstaged one, is where the pane asks the tree.
-    required property var worktreeModel
+    /// (`NavSectionModel::attach_working_tree`) — so `unstagedModel`, the unstaged one, is where the pane asks the
+    /// tree.
+    required property var unstagedModel
     required property var conflictsModel
     required property var stagedModel
     // Mirrored page state; `headPublished` shows the warning tag.
@@ -63,7 +64,7 @@ ColumnLayout {
     readonly property bool signingTipShown: commitBlock.signingTipShown
     /// Where a press lands it. Detached, the chip says git's own `HEAD` — naming nothing would read as "somewhere".
     readonly property string commitTarget:
-        wipPane.workTree.detached ? "HEAD" : wipPane.workTree.branch
+        wipPane.workingTree.detached ? "HEAD" : wipPane.workingTree.branch
 
     signal amendToggled(bool on)
     signal commitClicked()
@@ -98,7 +99,7 @@ ColumnLayout {
     // Even shares, and a share a bucket cannot fill goes to the ones that can (デザイン規約 §バケツごとの一覧と、ペインの分け方).
 
     /// **A clean tree stands no bucket**: a `(0)` heads nothing.
-    readonly property bool bucketsStanding: wipPane.worktreeModel.total > 0
+    readonly property bool bucketsStanding: wipPane.unstagedModel.total > 0
     /// The standing buckets, top to bottom — what everything reaching across buckets reads.
     readonly property var bucketPanes:
         conflictsBucket.visible ? [conflictsBucket, unstagedBucket, stagedBucket]
@@ -357,7 +358,7 @@ ColumnLayout {
             eolKeep.settle()
             return
         }
-        wipPane.worktreeModel.pointEol(path)
+        wipPane.unstagedModel.pointEol(path)
         // Under the row, placed from the row: a row is a pane wide at most, so never far from the hand, and a pointer
         // and the automation land the card alike.
         const row = wipPane.rowFor(path)
@@ -379,7 +380,7 @@ ColumnLayout {
     /// answers for the pane as the pointer found it — usually mid-write after `Stage all`, not warning yet. So the
     /// warning (`onCardAsked`) and its count call it as well.
     Connections {
-        target: wipPane.workTree
+        target: wipPane.workingTree
         function onEolStagedCountChanged() { wipPane.settleCommitCard() }
     }
     /// The button is warning and the pointer (or a headless run) is on it.
@@ -414,9 +415,9 @@ ColumnLayout {
         // The button speaks for the whole index, so the words hold for all four cases at once: **"problems"**, since
         // only one case is a change, and **`may`**, since two are guesses from a sample (デザイン規約 §改行コードの警告).
         eolCard.path = ""
-        eolCard.notice = wipPane.workTree.eolStagedCount === 1
+        eolCard.notice = wipPane.workingTree.eolStagedCount === 1
             ? qsTr("1 staged file may have line-ending problems")
-            : qsTr("%1 staged files may have line-ending problems").arg(wipPane.workTree.eolStagedCount)
+            : qsTr("%1 staged files may have line-ending problems").arg(wipPane.workingTree.eolStagedCount)
         // Above the button: it is pinned to the pane's bottom edge, so under it is off the window.
         const at = commitBlock.commitSeat.mapToItem(wipPane, 0, 0)
         eolCard.x = at.x
@@ -438,7 +439,7 @@ ColumnLayout {
         // stands, and the card's sentence is read off the pointed row.
         onClosed: {
             eolCard.path = ""
-            wipPane.worktreeModel.pointEol("")
+            wipPane.unstagedModel.pointEol("")
         }
     }
     // The beat between the card and its mark: the card goes only when the hand is out of both.
@@ -452,13 +453,13 @@ ColumnLayout {
     readonly property bool eolCardOpen: eolCard.opened
     /// What the named row is saying, for the headless report and the rows of all three lists — read off the unstaged
     /// model, where `pointEol` writes.
-    readonly property string pointedEolPath: wipPane.worktreeModel.pointedEolPath
-    readonly property string pointedEolKind: wipPane.worktreeModel.pointedEolKind
-    readonly property string pointedEolFrom: wipPane.worktreeModel.pointedEolFrom
-    readonly property string pointedEolTo: wipPane.worktreeModel.pointedEolTo
-    readonly property int pointedEolLines: wipPane.worktreeModel.pointedEolLines
-    readonly property string pointedEolScope: wipPane.worktreeModel.pointedEolScope
-    readonly property string pointedEolExt: wipPane.worktreeModel.pointedEolExt
+    readonly property string pointedEolPath: wipPane.unstagedModel.pointedEolPath
+    readonly property string pointedEolKind: wipPane.unstagedModel.pointedEolKind
+    readonly property string pointedEolFrom: wipPane.unstagedModel.pointedEolFrom
+    readonly property string pointedEolTo: wipPane.unstagedModel.pointedEolTo
+    readonly property int pointedEolLines: wipPane.unstagedModel.pointedEolLines
+    readonly property string pointedEolScope: wipPane.unstagedModel.pointedEolScope
+    readonly property string pointedEolExt: wipPane.unstagedModel.pointedEolExt
     readonly property string pointedEolText:
         wipPane.pointedEolKind !== ""
         ? Words.lineEndings(wipPane.pointedEolKind, wipPane.pointedEolFrom, wipPane.pointedEolTo,
@@ -550,8 +551,8 @@ ColumnLayout {
     // A merge is the one operation finished from this seat, and git wrote its message when it stopped. The page puts
     // it in the boxes (`absorbOpMessage`); these are what the boxes fall back to when emptied — the placeholder, and
     // what the press commits (デザイン規約 §進行中の操作から出る).
-    readonly property string standingSubject: wipPane.workTree.opMerging ? wipPane.workTree.opSubject : ""
-    readonly property string standingBody: wipPane.workTree.opMerging ? wipPane.workTree.opBody : ""
+    readonly property string standingSubject: wipPane.workingTree.opMerging ? wipPane.workingTree.opSubject : ""
+    readonly property string standingBody: wipPane.workingTree.opMerging ? wipPane.workingTree.opBody : ""
     /// The boxes stand empty over one — **both** boxes: a description with no summary would commit a blank first
     /// line. **Outside amend mode**: the message belongs to the commit the merge is about to make, not to the one an
     /// amend replaces.
@@ -651,13 +652,13 @@ ColumnLayout {
             }
             // The count stands at the caption's own step, as in every heading band (see DetailsChangesBand's).
             Label {
-                text: "(" + wipPane.worktreeModel.total + ")"
+                text: "(" + wipPane.unstagedModel.total + ")"
                 font.pixelSize: Theme.fontMd
                 color: Theme.textMuted
             }
             Item { Layout.fillWidth: true }
             TreeViewToggle {
-                treeView: wipPane.worktreeModel.treeView
+                treeView: wipPane.unstagedModel.treeView
                 onChosen: tree => wipPane.treeViewChosen(tree)
             }
         }
@@ -680,7 +681,7 @@ ColumnLayout {
             visible: conflictsBucket.model.runFiles > 0
             pane: wipPane
             repoTab: wipPane.repoTab
-            workTree: wipPane.workTree
+            workingTree: wipPane.workingTree
             model: wipPane.conflictsModel
             tipRow: wipPane.pointedTipRow
             width: buckets.width
@@ -692,8 +693,8 @@ ColumnLayout {
             section: "unstaged"
             pane: wipPane
             repoTab: wipPane.repoTab
-            workTree: wipPane.workTree
-            model: wipPane.worktreeModel
+            workingTree: wipPane.workingTree
+            model: wipPane.unstagedModel
             tipRow: wipPane.pointedTipRow - wipPane.conflictRows
             width: buckets.width
             // A hairline of ground between buckets: both headings wear `bgElevated`, and stacked flush an emptied
@@ -706,7 +707,7 @@ ColumnLayout {
             section: "staged"
             pane: wipPane
             repoTab: wipPane.repoTab
-            workTree: wipPane.workTree
+            workingTree: wipPane.workingTree
             model: wipPane.stagedModel
             tipRow: wipPane.pointedTipRow - wipPane.conflictRows - unstagedBucket.rows
             width: buckets.width
@@ -740,7 +741,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.preferredHeight: Math.min(commitBlock.wants, wipPane.blockRoom)
         repoTab: wipPane.repoTab
-        workTree: wipPane.workTree
+        workingTree: wipPane.workingTree
         standingSubject: wipPane.standingSubject
         standingBody: wipPane.standingBody
         onStandingMessage: wipPane.onStandingMessage

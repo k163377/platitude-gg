@@ -116,7 +116,7 @@ impl NavSectionModel {
 
     /// Wires this instance to one section's data feed. `section`:
     /// `branches` / `remotes` / `worktrees` / `stashes` / `tags`. The
-    /// working tree's changed files come through [`Self::attach_worktree`].
+    /// working tree's changed files come through [`Self::attach_working_tree`].
     #[qslot]
     fn attach_section(&mut self, tab_id: i32, section: String) {
         self.attach_section_feed(tab_id, section);
@@ -129,8 +129,8 @@ impl NavSectionModel {
     /// Only what is **shown** is one run's: every instance holds the whole
     /// status, so a page can ask any of them about any file.
     #[qslot]
-    fn attach_worktree(&mut self, tab_id: i32, run: String) {
-        self.attach_worktree_feed(tab_id, run);
+    fn attach_working_tree(&mut self, tab_id: i32, run: String) {
+        self.attach_working_tree_feed(tab_id, run);
     }
 
     /// Wires this instance to **another** working copy's changed files, as

@@ -59,7 +59,7 @@ Item {
             behind: 0
             listWidth: 200
             height: Theme.rowHeight
-            kindHint: "wt"
+            kindHint: "file"
         }
         NavItemDelegate {
             id: wipInside
@@ -82,7 +82,7 @@ Item {
             behind: 0
             listWidth: 200
             height: Theme.rowHeight
-            kindHint: "wt"
+            kindHint: "file"
         }
         NavItemDelegate {
             id: wipBeside
@@ -105,7 +105,7 @@ Item {
             behind: 0
             listWidth: 200
             height: Theme.rowHeight
-            kindHint: "wt"
+            kindHint: "file"
         }
     }
 

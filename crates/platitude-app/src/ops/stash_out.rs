@@ -19,7 +19,7 @@ use super::Press;
 /// emptied in the other order.
 ///
 /// Which status can answer is a stamp: the counts say which report of HEAD
-/// they were read beside (`WorkTreeModel.statusSeq`), and the answer names
+/// they were read beside (`WorkingTreeModel.statusSeq`), and the answer names
 /// the smallest one that speaks for what it left. A status from before
 /// that fence would settle the press on the dirty tree before the empty
 /// one arrived; nor is the report of HEAD in hand a measure, since one

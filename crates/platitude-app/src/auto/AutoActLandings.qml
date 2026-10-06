@@ -16,10 +16,10 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workTree: driver.workTree
+    readonly property var workingTree: driver.workingTree
     readonly property var graphModel: driver.graphModel
     readonly property var branchesModel: driver.branchesModel
-    readonly property var worktreeModel: driver.worktreeModel
+    readonly property var unstagedModel: driver.unstagedModel
     readonly property var stashesModel: driver.stashesModel
     readonly property var graphPane: driver.graphPane
     readonly property var renderedBarrier: driver.barrierRendered
@@ -40,17 +40,17 @@ Item {
     SampleTimer {
         id: stashLandTimer
         onTriggered: {
-            if (worktreeModel.total !== 0)
+            if (unstagedModel.total !== 0)
                 return
             if (!page.wipShown && !driver.cardSettled)
                 return
             stashLandTimer.stop()
-            const row = graphModel.rowOf(workTree.headOid)
+            const row = graphModel.rowOf(workingTree.headOid)
             Harness.report("stash_landed wip=" + page.wipShown
-                              + " follows=" + (page.selectedOid === workTree.headOid)
+                              + " follows=" + (page.selectedOid === workingTree.headOid)
                               + " onscreen=" + graphPane.rowOnScreen(row)
                               + " lit=" + (graphPane.view.currentIndex === row)
-                              + " head=" + workTree.headOid.substring(0, 8)
+                              + " head=" + workingTree.headOid.substring(0, 8)
                               + " selected=" + page.selectedOid.substring(0, 8)
                               + " row=" + row + " rows=" + graphModel.rowTotal
                               // Last because it has spaces. A box filled by a standing merge (`absorbOpMessage`)
@@ -69,28 +69,28 @@ Item {
     SampleTimer {
         id: opExitLandTimer
         onTriggered: {
-            if (!driver.wroteAndSettled() || workTree.opText !== "")
+            if (!driver.wroteAndSettled() || workingTree.opText !== "")
                 return
             if (!page.wipShown) {
                 if (!driver.cardSettled)
                     return
                 // The graph rebuilds after the status, so the working-tree row the operation held open over a clean
                 // tree is still drawn; waited out. Only on a clean tree: an abort that brings work back keeps that row.
-                if (worktreeModel.total === 0 && driver.graphTopKind() === "wip")
+                if (unstagedModel.total === 0 && driver.graphTopKind() === "wip")
                     return
             }
             opExitLandTimer.stop()
-            const row = graphModel.rowOf(workTree.headOid)
+            const row = graphModel.rowOf(workingTree.headOid)
             Harness.report("op_exit_landed wip=" + page.wipShown
-                              + " op=" + workTree.opText
-                              + " follows=" + (page.selectedOid === workTree.headOid)
+                              + " op=" + workingTree.opText
+                              + " follows=" + (page.selectedOid === workingTree.headOid)
                               + " onscreen=" + graphPane.rowOnScreen(row)
                               // The main copy's WORKTREES row: the branch HEAD stands on once the operation is down,
                               // the folder where it is left on none (`quit`; デザイン規約 §左メニューの所作).
                               + " home=" + driver.navProbe.homeCopyName()
                               + " lit=" + (graphPane.view.currentIndex === row)
-                              + " files=" + worktreeModel.total
-                              + " head=" + workTree.headOid.substring(0, 8)
+                              + " files=" + unstagedModel.total
+                              + " head=" + workingTree.headOid.substring(0, 8)
                               + " selected=" + page.selectedOid.substring(0, 8)
                               + " row=" + row)
             renderedBarrier.begin()

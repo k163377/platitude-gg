@@ -108,7 +108,7 @@ Item {
         running: Harness.autoAct === "stash-state"
         onTriggered: {
             // Not the graph, unlike `fetch-tip`: `empty` has no rows, so it is judged on its working tree alone.
-            if (window.curPage === null || !window.curPage.pageWt.loaded)
+            if (window.curPage === null || !window.curPage.pageWorkingTree.loaded)
                 return
             const tab = window.curPage.pageTab
             if (tab.busyCount !== 0 || tab.autoFetchRunning)
@@ -179,13 +179,14 @@ Item {
         }
     }
     function opsPanelKey() {
-        const wt = window.curPage === null ? null : window.curPage.pageWt
-        return topBar.opsNames + "|" + topBar.branchUpstream + "|" + (wt === null ? "" : wt.ahead + "/" + wt.behind)
+        const workingTree = window.curPage === null ? null : window.curPage.pageWorkingTree
+        return topBar.opsNames + "|" + topBar.branchUpstream + "|"
+            + (workingTree === null ? "" : workingTree.ahead + "/" + workingTree.behind)
             + "|" + topBar.width
     }
     function opsPanelLoaded() {
         if (!window.visible || topBar.width <= 0 || window.curPage === null
-                || !window.curPage.pageRefsLoaded || !window.curPage.pageWt.loaded)
+                || !window.curPage.pageRefsLoaded || !window.curPage.pageWorkingTree.loaded)
             return false
         const tab = window.curPage.pageTab
         return tab.busyCount === 0 && !tab.autoFetchRunning
@@ -400,7 +401,7 @@ Item {
             // loaded — and off push's wording, which the working tree decides (`publish` until the first status,
             // `push -f` after on a diverged branch).
             if (topBar.bandTabsWidth <= 0 || topBar.actionNaturalW <= Theme.railWidth
-                    || window.curPage === null || !window.curPage.pageWt.loaded)
+                    || window.curPage === null || !window.curPage.pageWorkingTree.loaded)
                 return
             // The `!` before the window is sized: a real refusal from git (`--preset longnames` will not fast-forward,
             // as `push-retry` sets up). Sent through the page, because in this state the button is a hold and its

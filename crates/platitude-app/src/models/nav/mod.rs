@@ -1,5 +1,5 @@
-//! One section list (branches / remotes / worktree / worktrees /
-//! stashes / tags). All render in the sidebar except `worktree` (the
+//! One section list (branches / remotes / files / worktrees /
+//! stashes / tags). All render in the sidebar except `files` (the
 //! changed files), which the right pane's WIP view shows.
 
 use std::collections::HashMap;
@@ -188,7 +188,7 @@ pub struct NavSectionModel {
     head_upstream_gone: String,
     /// How far that branch stands from its upstream, off the same lookup,
     /// so the stand-in and its row cannot say different numbers. Drawn
-    /// while the status read's pair (`WorkTreeModel.ahead`) is held back
+    /// while the status read's pair (`WorkingTreeModel.ahead`) is held back
     /// after a switch, not yet being about the branch HEAD is on.
     head_ahead: i32,
     head_behind: i32,

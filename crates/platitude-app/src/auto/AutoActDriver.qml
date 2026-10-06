@@ -15,12 +15,12 @@ Item {
     property Item page
 
     property RepoTab repoTab
-    property WorkTreeModel workTree
+    property WorkingTreeModel workingTree
     property GraphModel graphModel
     property DetailsModel detailsModel
     property NavSectionModel branchesModel
     property NavSectionModel remotesModel
-    property NavSectionModel worktreeModel
+    property NavSectionModel unstagedModel
     /// The working copies (WORKTREES).
     property NavSectionModel worktreesModel
     property NavSectionModel stashesModel
@@ -169,8 +169,8 @@ Item {
     /// made.
     function owedStatusLanded() {
         return driver.statusOwedFrom !== 0
-            && workTree.statusSeq >= driver.statusOwedFrom
-            && graphModel.rowOf(workTree.headOid) >= 0
+            && workingTree.statusSeq >= driver.statusOwedFrom
+            && graphModel.rowOf(workingTree.headOid) >= 0
             && PageSettled.settled(page)
     }
     /// The working-tree row this run's write takes out of its bucket, as `<bucket>:<path>` — or "" for the verbs the
@@ -537,15 +537,15 @@ Item {
             const cut = driver.treeGoneRow.indexOf(":")
             const from = driver.treeGoneRow.substring(0, cut)
             const path = driver.treeGoneRow.substring(cut + 1)
-            if (worktreeModel.holdsPath(from, path))
+            if (unstagedModel.holdsPath(from, path))
                 return
             treeBarrier.stop()
             // `landed=` tells a file resolved into the index from one discarded out of the tree ("" = nowhere).
             Harness.report("tree_settled from=" + from
-                              + " landed=" + worktreeModel.bucketOf(path)
-                              + " conflicts=" + workTree.conflictCount
-                              + " staged=" + workTree.stagedCount
-                              + " unstaged=" + (workTree.unstagedCount + workTree.untrackedCount))
+                              + " landed=" + unstagedModel.bucketOf(path)
+                              + " conflicts=" + workingTree.conflictCount
+                              + " staged=" + workingTree.stagedCount
+                              + " unstaged=" + (workingTree.unstagedCount + workingTree.untrackedCount))
             driver.afterTreeSettled()
         }
     }
@@ -593,7 +593,7 @@ Item {
             }
             // `open` only means the path was accepted; the baseline is HEAD known and `PageSettled` — without the rows
             // agreeing with the status, a verb naming rows by number (`3:5:6`) presses one row off.
-            if (repoTab.state !== "open" || !workTree.headKnown || !PageSettled.settled(page))
+            if (repoTab.state !== "open" || !workingTree.headKnown || !PageSettled.settled(page))
                 return
             autoActTimer.stop()
             driver.runAutoAct()
@@ -603,7 +603,7 @@ Item {
     // repository is built fresh every run, so its object names cannot be spelled ahead.
     function autoActOid(arg) {
         if (arg === "")
-            return workTree.headOid
+            return workingTree.headOid
         if (arg.indexOf("row:") === 0)
             return graphModel.oidAt(Number(arg.substring(4)))
         return arg

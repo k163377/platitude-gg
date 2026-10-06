@@ -17,14 +17,14 @@ Item {
 
     required property var page
     required property var repoTab
-    required property var workTree
+    required property var workingTree
     required property var graphModel
     required property var detailsModel
     required property var diffModel
     required property var branchesModel
     required property var remotesModel
-    required property var worktreeModel
-    /// The working copies (WORKTREES), apart from `worktreeModel` — this tab's own changed files.
+    required property var unstagedModel
+    /// The working copies (WORKTREES), apart from `unstagedModel` — this tab's own changed files.
     required property var worktreesModel
     required property var stashesModel
     required property var tagsModel
@@ -77,7 +77,7 @@ Item {
         graphModel: harness.graphModel
         detailsModel: harness.detailsModel
         diffModel: harness.diffModel
-        worktreeModel: harness.worktreeModel
+        unstagedModel: harness.unstagedModel
         graphPane: harness.graphPane
     }
 
@@ -88,12 +88,12 @@ Item {
         sourceComponent: AutoActDriver {
             page: harness.page
             repoTab: harness.repoTab
-            workTree: harness.workTree
+            workingTree: harness.workingTree
             graphModel: harness.graphModel
             detailsModel: harness.detailsModel
             branchesModel: harness.branchesModel
             remotesModel: harness.remotesModel
-            worktreeModel: harness.worktreeModel
+            unstagedModel: harness.unstagedModel
             worktreesModel: harness.worktreesModel
             stashesModel: harness.stashesModel
             tagsModel: harness.tagsModel
@@ -158,7 +158,7 @@ Item {
             page: harness.page
             repoTab: harness.repoTab
             graphModel: harness.graphModel
-            worktreeModel: harness.workTree
+            workingTree: harness.workingTree
             branchesModel: harness.branchesModel
             detailsModel: harness.detailsModel
             diffModel: harness.diffModel

@@ -13,11 +13,11 @@ Item {
     width: 600
     height: 100
 
-    /// A stopped merge with conflicts: two badges, in the page's shape the group reads (`curPage.pageWt` / …).
+    /// A stopped merge with conflicts: two badges, in the page's shape the group reads (`curPage.pageWorkingTree` / …).
     /// The identity and old-git badges read `AppBackend`, staged empty for these runs (`xtask::qmltest`), so they
     /// stay down.
     QtObject {
-        id: workTree
+        id: workingTree
         property string opText: "MERGING"
         property string opAlso: ""
         property int opStep: 0
@@ -36,7 +36,7 @@ Item {
     }
     QtObject {
         id: page
-        property var pageWt: workTree
+        property var pageWorkingTree: workingTree
         property var pageGraph: graph
         property var pageTab: tab
     }
@@ -61,7 +61,7 @@ Item {
     /// that number as its own.
     BandStateMetrics {
         id: witness
-        stateWt: workTree
+        stateWorkingTree: workingTree
         hasAlso: false
         hasStep: false
         minChars: group.stateMinChars
@@ -80,9 +80,9 @@ Item {
             group.tabContentWidth = 100
             group.tabRunAvail = 400
             group.tabCount = 1
-            workTree.opText = "MERGING"
-            workTree.hasConflicts = true
-            workTree.lfsNeeded = 0
+            workingTree.opText = "MERGING"
+            workingTree.hasConflicts = true
+            workingTree.lfsNeeded = 0
             graph.failed = false
             graph.stale = false
         }
@@ -217,21 +217,21 @@ Item {
             verify(!group.lfsBadgeShown, "nothing needs Git LFS")
             const without = group.naturalWidth
 
-            workTree.lfsNeeded = 2
+            workingTree.lfsNeeded = 2
             verify(group.lfsBadgeShown, "two files need it")
             compare(group.naturalWidth, without + Theme.spaceXs + group.lfsBadgeW, "and the group asks for its room")
             compare(badgesDrawn(), [group.opBadgeW, group.conflictBadgeW, group.lfsBadgeW],
                     "after the operation and its conflicts")
 
-            workTree.opText = ""
-            workTree.hasConflicts = false
+            workingTree.opText = ""
+            workingTree.hasConflicts = false
             verify(group.stateShown, "it stands the group up on its own")
             compare(badgesDrawn(), [group.lfsBadgeW])
             group.windowAtFloor = true
             verify(group.stateMarkShown)
             verify(Qt.colorEqual(group.stateMarkColor, Theme.warning), "folded, its mark is yellow")
 
-            workTree.lfsNeeded = 0
+            workingTree.lfsNeeded = 0
             verify(!group.lfsBadgeShown)
             verify(!group.stateShown)
         }
@@ -252,9 +252,9 @@ Item {
             graph.failed = false
             verify(!group.staleBadgeShown)
 
-            workTree.hasConflicts = false
+            workingTree.hasConflicts = false
             verify(!group.conflictBadgeShown)
-            workTree.opText = ""
+            workingTree.opText = ""
             verify(!group.opBadgeShown)
             verify(!group.stateShown, "with nothing the matter the group is not there at all")
             verify(!group.visible)

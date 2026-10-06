@@ -14,7 +14,7 @@ Item {
     required property var graphModel
     required property var detailsModel
     required property var diffModel
-    required property var worktreeModel
+    required property var unstagedModel
     required property var graphPane
 
     /// Keeps the page's own default selection out of the way while one of these picks — it would land first and be
@@ -28,10 +28,10 @@ Item {
 
     // PGG_AUTO_WIP=1: open the WIP view once uncommitted changes are known.
     Connections {
-        target: start.worktreeModel
+        target: start.unstagedModel
         enabled: Harness.autoWip
         function onChanged() {
-            if (start.worktreeModel.total > 0 && !start.page.wipShown) {
+            if (start.unstagedModel.total > 0 && !start.page.wipShown) {
                 start.graphPane.setCurrentRow(0)
                 start.page.showWip()
             }

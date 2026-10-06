@@ -60,7 +60,7 @@ Item {
     /// How many uncommitted files `--hard` takes besides the commits (`status::Counts::hard_reset_takes`); 0 on a
     /// clean tree.
     required property int hardResetTakes
-    /// Whether what `--hard` takes holds a file the discard record cannot copy (`WorkTreeModel.hardResetNotCopied`),
+    /// Whether what `--hard` takes holds a file the discard record cannot copy (`WorkingTreeModel.hardResetNotCopied`),
     /// which holds the row in `danger` (デザイン規約 §長押し の色の表).
     required property bool hardResetNotCopied
     /// git's answers about the branch card's delete (refusal, landing, early check), live while the card stands —

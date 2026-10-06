@@ -46,7 +46,7 @@ Item {
             // HEAD.
             fieldMenuTimer.boxState = arg === "" ? "empty" : arg
             if (arg === "readonly")
-                page.activateRow(graphModel.oidAt(graphModel.rowOf(driver.workTree.headOid) + 1))
+                page.activateRow(graphModel.oidAt(graphModel.rowOf(driver.workingTree.headOid) + 1))
             else
                 page.showWip()
             fieldMenuTimer.start()

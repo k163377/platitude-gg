@@ -67,7 +67,7 @@ impl StashStanding {
 }
 
 /// The standing, off a status already in hand (no git runs).
-/// `head_missing`: no commit yet (`WorkTreeStatus::branch_oid` is `None`).
+/// `head_missing`: no commit yet (`WorkingTreeStatus::branch_oid` is `None`).
 pub fn standing(head_missing: bool, counts: &crate::status::Counts) -> StashStanding {
     if head_missing {
         return StashStanding::Unborn;

@@ -33,7 +33,7 @@ Item {
         id: card
         width: root.width
         repoTab: tab
-        workTree: tree
+        workingTree: tree
     }
     /// One line of the card's words, off the font rather than the part: a part that cuts has a line height of its own
     /// to agree with.

@@ -16,7 +16,7 @@ Item {
     // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workTree: driver.workTree
+    readonly property var workingTree: driver.workingTree
     readonly property var graphModel: driver.graphModel
     readonly property var branchesModel: driver.branchesModel
     readonly property var wipPane: driver.wipPane
@@ -70,10 +70,10 @@ Item {
                 return
             // Counts first: the headings are the list's, and trail the model's counts.
             const emptied = bucketAllTimer.from === "staged"
-                          ? workTree.stagedCount
+                          ? workingTree.stagedCount
                           : bucketAllTimer.from === "conflicts"
-                          ? workTree.conflictCount
-                          : workTree.unstagedCount + workTree.untrackedCount
+                          ? workingTree.conflictCount
+                          : workingTree.unstagedCount + workingTree.untrackedCount
             if (emptied !== 0)
                 return
             bucketAllTimer.stop()
@@ -84,9 +84,9 @@ Item {
                               + " staged=" + wipPane.bucketHeaded("staged")
                               + " conflicts=" + wipPane.bucketHeaded("conflicts")
                               + " unstaged_count="
-                              + (workTree.unstagedCount + workTree.untrackedCount)
-                              + " staged_count=" + workTree.stagedCount
-                              + " conflict_count=" + workTree.conflictCount)
+                              + (workingTree.unstagedCount + workingTree.untrackedCount)
+                              + " staged_count=" + workingTree.stagedCount
+                              + " conflict_count=" + workingTree.conflictCount)
             renderedBarrier.begin()
         }
     }
@@ -159,7 +159,7 @@ Item {
             // consumed) chooses nothing, and `openInMergeTool` then queues no write.
             const handed = fileRowMenu.chosenConflicts().length
             fileRowMenu.openInMergeTool()
-            Harness.report("merge_tool " + wipPane.workTree.mergeTool + " paths=" + handed)
+            Harness.report("merge_tool " + wipPane.workingTree.mergeTool + " paths=" + handed)
             // Only where something was handed over — else the barrier reports a landing nothing here caused.
             if (handed > 0)
                 driver.treeGoneRow = "conflicts:" + arg

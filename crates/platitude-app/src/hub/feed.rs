@@ -152,11 +152,11 @@ pub struct Feeds {
     pub refs_branches: Arc<Feed<RefsMsg>>,
     pub refs_remotes: Arc<Feed<RefsMsg>>,
     pub refs_tags: Arc<Feed<RefsMsg>>,
-    /// Status headline consumer (WorkTreeModel): where the tree stands
+    /// Status headline consumer (WorkingTreeModel): where the tree stands
     /// — HEAD and what is derived from it — and the last status's
     /// counts, in the order the session said them.
     pub status: Arc<Feed<StateMsg>>,
-    /// Status list consumers — one `worktree` NavSectionModel per bucket
+    /// Status list consumers — one `files` NavSectionModel per bucket
     /// run of the changed files the right pane's WIP view lists. A feed is
     /// drained by whoever gets there first, so each run needs its own.
     pub status_nav_conflicts: Arc<Feed<StatusMsg>>,

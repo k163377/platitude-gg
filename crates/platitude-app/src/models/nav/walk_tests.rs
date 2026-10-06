@@ -15,7 +15,7 @@ fn landed(row: i32, bucket: &str, path: &str) -> Option<Landing> {
 /// `NavSectionModel::run` cuts what is shown, not what is answered.
 #[test]
 fn a_bucket_list_shows_one_run_and_answers_for_the_whole_tree() {
-    let mut model = worktree("unstaged", Source::files(pending()));
+    let mut model = working_tree("unstaged", Source::files(pending()));
     model.tree_view = false;
     model.arrange();
 
@@ -32,7 +32,7 @@ fn a_bucket_list_shows_one_run_and_answers_for_the_whole_tree() {
 /// (`FileRowWalk`, デザイン規約 §diff のファイル一覧).
 #[test]
 fn the_arrows_walk_one_bucket_and_stop_at_its_ends() {
-    let mut model = worktree("staged", Source::files(pending()));
+    let mut model = working_tree("staged", Source::files(pending()));
     model.tree_view = false;
     model.arrange();
 
@@ -55,13 +55,13 @@ fn the_arrows_walk_one_bucket_and_stop_at_its_ends() {
 /// An empty bucket answers nothing, so the arrows go past it.
 #[test]
 fn a_walk_crossing_into_a_bucket_lands_at_the_end_it_comes_in_by() {
-    let mut model = worktree("staged", Source::files(pending()));
+    let mut model = working_tree("staged", Source::files(pending()));
     model.tree_view = false;
     model.arrange();
     assert_eq!(*model.edge(1), landed(0, "staged", "d.txt"));
     assert_eq!(*model.edge(-1), landed(1, "staged", "src/b.txt"));
 
-    let mut empty = worktree("conflicts", Source::files(Default::default()));
+    let mut empty = working_tree("conflicts", Source::files(Default::default()));
     empty.arrange();
     assert!(empty.edge(1).is_none());
     assert!(empty.edge(-1).is_none());
@@ -69,7 +69,7 @@ fn a_walk_crossing_into_a_bucket_lands_at_the_end_it_comes_in_by() {
 /// A folder row has no diff, so the walk and the crossing skip it.
 #[test]
 fn the_arrows_step_over_a_folder_row() {
-    let mut model = worktree("unstaged", Source::files(pending()));
+    let mut model = working_tree("unstaged", Source::files(pending()));
     model.tree_view = true;
     model.arrange();
 
@@ -86,7 +86,7 @@ fn the_arrows_step_over_a_folder_row() {
 /// An untracked file keys by its own bucket, not its heading's.
 #[test]
 fn every_file_row_answers_the_key_a_choice_holds_it_by() {
-    let mut model = worktree("unstaged", Source::files(pending()));
+    let mut model = working_tree("unstaged", Source::files(pending()));
     model.tree_view = true;
     model.arrange();
 

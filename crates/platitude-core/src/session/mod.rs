@@ -47,7 +47,7 @@ use crate::report;
 use crate::sequencer;
 use crate::stage;
 use crate::stash::{self, StashEntry};
-use crate::status::{self, WorkTreeStatus};
+use crate::status::{self, WorkingTreeStatus};
 use crate::tag;
 
 mod author;

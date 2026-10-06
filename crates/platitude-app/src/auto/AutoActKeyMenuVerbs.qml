@@ -17,8 +17,8 @@ Item {
 
     readonly property var page: driver.page
     readonly property var graphModel: driver.graphModel
-    readonly property var workTree: driver.workTree
-    readonly property var worktreeModel: driver.worktreeModel
+    readonly property var workingTree: driver.workingTree
+    readonly property var unstagedModel: driver.unstagedModel
     readonly property var graphPane: driver.graphPane
     readonly property var wipPane: driver.wipPane
     readonly property var diffPane: driver.diffPane
@@ -71,7 +71,7 @@ Item {
         return true
     }
     function headRow() {
-        return acts.graphModel.rowOf(acts.workTree.headOid)
+        return acts.graphModel.rowOf(acts.workingTree.headOid)
     }
     /// The diff opens first, then a drag from the head of the first line past the first removed one, then the hand
     /// arrives on the text (`DiffPane.handArrived`, the wheel's and a press's door for the keyboard).
@@ -80,7 +80,7 @@ Item {
     function pressDiff(path) {
         if (!acts.diffAsked) {
             acts.page.showWip()
-            acts.page.toggleDiff("unstaged", path, acts.worktreeModel.origOf(path))
+            acts.page.toggleDiff("unstaged", path, acts.unstagedModel.origOf(path))
             acts.diffAsked = true
             return false
         }

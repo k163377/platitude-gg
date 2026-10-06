@@ -178,7 +178,7 @@ impl DiffModel {
     /// Diff of a working-tree entry (bucket: staged/unstaged/untracked/
     /// conflicts).
     #[qslot]
-    fn request_work_tree(&mut self, bucket: String, path: String, orig_path: String) {
+    fn request_working_tree(&mut self, bucket: String, path: String, orig_path: String) {
         let target = bucket_target(&bucket, &path, orig_path);
         self.begin_request(path, target);
     }
@@ -191,7 +191,7 @@ impl DiffModel {
         self.begin_request_in(at, path, target);
     }
 
-    /// `refresh_work_tree` for a carried diff, on the copies' slower tick.
+    /// `refresh_working_tree` for a carried diff, on the copies' slower tick.
     /// Aimed where the rows came from — the ordinary re-read would put this
     /// window's file of that name in a pane showing another copy's.
     #[qslot]
@@ -220,7 +220,7 @@ impl DiffModel {
     /// Returns whether a read went out — what `diff-tick` reads, since the
     /// read's usual answer is silence.
     #[qslot]
-    fn refresh_work_tree(&mut self, bucket: String, path: String, orig_path: String) -> bool {
+    fn refresh_working_tree(&mut self, bucket: String, path: String, orig_path: String) -> bool {
         // A carried diff is re-read by `refresh_carried`.
         if self.loading || !self.current_at.is_empty() {
             return false;

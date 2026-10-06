@@ -27,7 +27,7 @@ QtObject {
     required property GitVersionCorner gitCorner
 
     required property RepoTab repoTab
-    required property NavSectionModel worktreeModel
+    required property NavSectionModel unstagedModel
     required property DetailsModel detailsModel
     required property DiffModel diffModel
 
@@ -130,7 +130,7 @@ QtObject {
         AppBackend.saveLayoutFlags(layout.page.sidebarCollapsed,
                                    layout.page.commandsOpen,
                                    layout.repoTab.tagsShown,
-                                   layout.worktreeModel.treeView,
+                                   layout.unstagedModel.treeView,
                                    layout.detailsModel.treeView,
                                    layout.diffModel.split)
         AppBackend.saveSections(layout.sidebarPane.expBranches,

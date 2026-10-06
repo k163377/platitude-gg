@@ -166,7 +166,7 @@ Item {
         const state = page.pageTab.state === "" ? "none" : page.pageTab.state
         return said + " state=" + state + " finish=" + graph.finishCount
             + " failed=" + graph.failed + " stale=" + graph.stale + " wipRow=" + graph.wipRow
-            + " wipRowStands=" + page.pageWt.wipRowStands
+            + " wipRowStands=" + page.pageWorkingTree.wipRowStands
     }
 
     /// What the picture's walk met and this one did not: taken away by what the verb left running.

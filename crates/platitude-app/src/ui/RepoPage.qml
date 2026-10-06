@@ -174,7 +174,7 @@ FocusScope {
     /// The list the right pane shows: our unstaged run, or another copy's one folded list (`CarriedPane`). Every
     /// question about the files on screen goes here; both answer alike, being built from one whole status
     /// (`models::nav::Source::files`).
-    readonly property var wipUnstaged: page.wipWritable ? worktreeModel : carriedModel
+    readonly property var wipUnstaged: page.wipWritable ? unstagedModel : carriedModel
     /// The diff in two columns or one — the band's toggle, and the saved choice as the page opens
     /// (`PageLayout.applySavedLayout`, デザイン規約 §diff を 2 列で読む).
     function setDiffSplit(split) {
@@ -184,7 +184,7 @@ FocusScope {
     /// another copy and back keeps it, and one answer is saved at close.
     function setWipTreeView(tree) {
         conflictsModel.setTreeView(tree)
-        worktreeModel.setTreeView(tree)
+        unstagedModel.setTreeView(tree)
         stagedModel.setTreeView(tree)
         carriedModel.setTreeView(tree)
     }
@@ -249,7 +249,7 @@ FocusScope {
     property bool amending: false
     // Whether a remote already has HEAD's commit — the amend's `already pushed`. Kept beside HEAD by the session, so a
     // HEAD that moved wears no answer about the commit it left.
-    readonly property bool headPublished: workTree.headPublished
+    readonly property bool headPublished: workingTree.headPublished
     /// Whether the tab was standing in another working copy at the last drain (`RepoTab.standing`). Every property of
     /// that model shares one notify, so the edge is seen only by keeping the last value
     /// (rules-refs/app-ui.md「『まだ答えが無い』と値 0 / false を分ける」).
@@ -318,8 +318,8 @@ FocusScope {
     property string opFilledSubject: ""
     property string opFilledBody: ""
     function absorbOpMessage() {
-        const subject = workTree.opMerging ? workTree.opSubject : ""
-        const body = workTree.opMerging ? workTree.opBody : ""
+        const subject = workingTree.opMerging ? workingTree.opSubject : ""
+        const body = workingTree.opMerging ? workingTree.opBody : ""
         const message = subject === "" ? "" : subject + "\n" + body
         if (message === page.seenOpMessage)
             return
@@ -490,7 +490,7 @@ FocusScope {
     property string moveLanding: ""
     function absorbMoveLanding() {
         if (page.moveLanding !== ""
-                && GitFacts.moveLanded(page.moveLanding, workTree.branch,
+                && GitFacts.moveLanded(page.moveLanding, workingTree.branch,
                                        branchesModel.oidOfName(page.moveLanding)))
             page.moveLanding = ""
     }
@@ -523,24 +523,24 @@ FocusScope {
     // it is one question for both (デザイン規約 §進行中の操作から出る). **Asked before anything is sent** — git's
     // refusal would put a red log line where a question belongs.
     function standsInTheWay(leaving) {
-        return leaving !== true && workTree.movesBlocked
+        return leaving !== true && workingTree.movesBlocked
     }
     readonly property string leaveHeading:
-        workTree.leaveUndoes ? qsTr("Undo it and go?") : qsTr("Put it aside and go?")
+        workingTree.leaveUndoes ? qsTr("Undo it and go?") : qsTr("Put it aside and go?")
     readonly property string leaveDetail:
-        workTree.leaveUndoes ? qsTr("Nothing it did since it started is kept.")
+        workingTree.leaveUndoes ? qsTr("Nothing it did since it started is kept.")
         // Nothing standing: only the files are in the way.
-        : workTree.opCommand === ""
+        : workingTree.opCommand === ""
         ? qsTr("The files waiting on a decision go to the stash, markers and all.")
         //: %1 is the standing operation in git's own spelling, e.g. cherry-pick.
-        : qsTr("The %1 stops; its files go to the stash, markers and all.").arg(workTree.opCommand)
+        : qsTr("The %1 stops; its files go to the stash, markers and all.").arg(workingTree.opCommand)
     function askLeaveOperation(retry) {
         // Marked on HEAD's row — a rebase runs detached, so that is the only name the tree has for where it is
         // (デザイン規約 §立っている質問は 1 か所で聞く). Whether leaving undoes work in hand (`danger` and a hold —
         // §状態, §長押し) and the command on the question's line are core's (offers::leaving_undoes / leave_code).
-        page.startRowAsk(workTree.headOid, page.leaveHeading, page.leaveDetail,
-                         workTree.leaveUndoes, "", retry, workTree.leaveUndoes, "", null,
-                         workTree.leaveCode)
+        page.startRowAsk(workingTree.headOid, page.leaveHeading, page.leaveDetail,
+                         workingTree.leaveUndoes, "", retry, workingTree.leaveUndoes, "", null,
+                         workingTree.leaveCode)
     }
 
     // ---- what a chip leads to --------------------------------------
@@ -578,7 +578,7 @@ FocusScope {
         // Which move the lookups add up to is core's rule (offers::switch_action); a remote row's holder is asked of
         // the local branch it lands on.
         const local = kind === "remote" ? remotesModel.localNameFor(name) : name
-        const action = GitFacts.switchAction(kind, local, workTree.branch,
+        const action = GitFacts.switchAction(kind, local, workingTree.branch,
                                              worktreesModel.worktreeHolding(local),
                                              branchesModel.oidOfName(local))
         // Before the leave question: no put-down clears the holder road, so undoing a rebase first would spend the
@@ -730,13 +730,13 @@ FocusScope {
     // Tip and standing operation, fed on every snapshot while a plan stands: either moving puts the plan away (a merge
     // stopped on a conflict leaves the tip where it was).
     Connections {
-        target: workTree
+        target: workingTree
         function onChanged() {
             if (!page.planActive)
                 return
-            planModel.noteOp(workTree.opText)
+            planModel.noteOp(workingTree.opText)
             if (page.planActive)
-                planModel.noteHead(workTree.headOid)
+                planModel.noteHead(workingTree.headOid)
         }
     }
 
@@ -826,7 +826,7 @@ FocusScope {
     PublishFlow {
         id: publishFlow
         repoTab: repoTab
-        workTree: workTree
+        workingTree: workingTree
         remotesModel: remotesModel
         graphPane: graphPane
         // The first push asks where the branch goes, in the one question bar.
@@ -885,7 +885,7 @@ FocusScope {
             // (デザイン規約 §メニュー「入口が違っても同じ操作は同じ文」).
             heldReason: page.doorsHeldWhy
             repoTab: repoTab
-            workTree: workTree
+            workingTree: workingTree
             graphModel: graphModel
             branchesModel: branchesModel
             worktreesModel: worktreesModel
@@ -1183,7 +1183,7 @@ FocusScope {
         active: page.keepBuilt
         sourceComponent: FileRowMenu {
             repoTab: repoTab
-            workTree: workTree
+            workingTree: workingTree
             wipPane: wipPane
             onMergeToolWanted: page.gitSettingsRequested()
             onCopyRequested: text => clipboard.copy(text)
@@ -1244,7 +1244,7 @@ FocusScope {
     CommitMenuState {
         id: commitMenuState
         repoTab: repoTab
-        workTree: workTree
+        workingTree: workingTree
         graphModel: graphModel
         worktreesModel: worktreesModel
         branchesModel: branchesModel
@@ -1261,7 +1261,7 @@ FocusScope {
             // Held on the same answer as the left pane's rows: a reset or drop mid-replay is the same accident a
             // switch would be.
             heldReason: page.doorsHeldWhy
-            branch: workTree.branch
+            branch: workingTree.branch
             oid: commitMenuState.menuOid
             stashRef: commitMenuState.menuStashRef
             published: commitMenuState.menuPublished
@@ -1409,7 +1409,7 @@ FocusScope {
     RowHoverHost {
         id: rowHost
         graphPane: graphPane
-        currentBranch: workTree.branch
+        currentBranch: workingTree.branch
         branchesModel: branchesModel
         remotesModel: remotesModel
         tagsModel: tagsModel
@@ -1460,8 +1460,8 @@ FocusScope {
     // where typing lands (HEAD's own commit only, デザイン規約 §コミットメッセージの 2 つの枠), `stash` / `not-head` /
     // `standing` where it does not, `""` with no message.
     readonly property string messageEdit: GitFacts.messageEdit(
-        !page.blank && repoTab.state === "open", detailsModel.shaHex, workTree.headOid,
-        page.selectedStashRef, workTree.opText, workTree.opEditing)
+        !page.blank && repoTab.state === "open", detailsModel.shaHex, workingTree.headOid,
+        page.selectedStashRef, workingTree.opText, workingTree.opEditing)
 
     // Asked on every selection and read only when the answer names the commit on screen — verifying runs gpg or
     // ssh-keygen and lands after the details. A signature changes only with the hash, so nothing asks twice.
@@ -1481,7 +1481,7 @@ FocusScope {
     // Whether a remote already has the selected commit (the save row's warning). Only HEAD takes typing, so this is
     // HEAD's own answer — nothing is asked on the keystroke. Under a plan the reword chip carries the plan's warning.
     readonly property bool selectedPublished: !page.planActive && page.selectedOid !== ""
-                                              && page.selectedOid === workTree.headOid && workTree.headPublished
+                                              && page.selectedOid === workingTree.headOid && workingTree.headPublished
 
     // Moving off a half-written message in the details pane drops it and nothing asks (`DetailsPane.syncMessage`,
     // デザイン規約 §コミットメッセージの 2 つの枠): the button keeps it, and Escape or reading another commit are on purpose.
@@ -1511,13 +1511,13 @@ FocusScope {
         seats: ({
             page: page,
             repoTab: repoTab,
-            workTree: workTree,
+            workingTree: workingTree,
             graphModel: graphModel,
             detailsModel: detailsModel,
             diffModel: diffModel,
             branchesModel: branchesModel,
             remotesModel: remotesModel,
-            worktreeModel: worktreeModel,
+            unstagedModel: unstagedModel,
             worktreesModel: worktreesModel,
             stashesModel: stashesModel,
             tagsModel: tagsModel,
@@ -1727,7 +1727,7 @@ FocusScope {
     property string diffPath: ""
     property string diffOrigPath: ""
     // Whether the shown diff is a working-tree file (stageable).
-    property bool diffFromWt: false
+    property bool diffFromWorkingTree: false
     readonly property bool diffStaged: page.diffKind === "staged"
     /// The two stage letters git reports for the shown file, read once at open: on a conflict git prints no patch, so
     /// they are all there is to say. They hold until the file leaves the conflicts, which reopens it
@@ -1737,9 +1737,9 @@ FocusScope {
     /// only to depend on it — every graph property shares one notify, and the graph arrives in two passes (chips after
     /// rows) and rebuilds when refs move.
     readonly property int sideColorOurs:
-        graphModel.finishCount >= 0 ? graphModel.conflictColorOurs(workTree.sideOurs, workTree.sideTheirs) : -1
+        graphModel.finishCount >= 0 ? graphModel.conflictColorOurs(workingTree.sideOurs, workingTree.sideTheirs) : -1
     readonly property int sideColorTheirs:
-        graphModel.finishCount >= 0 ? graphModel.conflictColorTheirs(workTree.sideOurs, workTree.sideTheirs) : -1
+        graphModel.finishCount >= 0 ? graphModel.conflictColorTheirs(workingTree.sideOurs, workingTree.sideTheirs) : -1
     function toggleDiff(kind, path, origPath) {
         if (page.diffShown && page.diffKey === kind + ":" + path) {
             page.closeDiff()
@@ -1761,7 +1761,7 @@ FocusScope {
         page.diffKind = kind
         page.diffPath = path
         page.diffOrigPath = origPath
-        page.diffFromWt = kind !== "commit"
+        page.diffFromWorkingTree = kind !== "commit"
         page.diffChange = kind === "conflicts" ? page.wipUnstaged.changeOf(path) : ""
         // The list's light follows the pane when it moves itself. Only this window's own tree: a carried copy's path
         // picked here would aim this tree's presses at it (`WipPane.readOne`).
@@ -1773,7 +1773,7 @@ FocusScope {
             // Read-only, aimed at the copy the rows came from (`RepoSession::load_carried_diff`).
             diffModel.requestCarried(page.carriedPath, kind, path, origPath)
         else
-            diffModel.requestWorkTree(kind, path, origPath)
+            diffModel.requestWorkingTree(kind, path, origPath)
         page.diffShown = true
         page.diffNeighbour = ""
         page.noteDiffNeighbour()
@@ -1868,7 +1868,7 @@ FocusScope {
         // (`pollCarried`).
         if (!page.diffShown || page.diffKind === "commit" || !page.wipWritable)
             return
-        diffModel.requestWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
+        diffModel.requestWorkingTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
     /// Asks, after each paced read of this tree, whether the file on screen still reads the same: the counts and the
     /// file list miss an edit that moves neither (a conflict resolved elsewhere keeps its stage letters until added).
@@ -1881,7 +1881,7 @@ FocusScope {
         // window's file of that name into a pane showing somebody else's (`pollCarried`).
         if (!page.wipWritable)
             return false
-        return diffModel.refreshWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
+        return diffModel.refreshWorkingTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
     /// The open file of the copy being read: after each paced read of that copy, which handed the pane its list as it
     /// read the row (`RepoSession::read_carried_status`), and when the window comes back. Returns whether it asked, as
@@ -1907,14 +1907,14 @@ FocusScope {
         page.diffKind = ""
         page.diffPath = ""
         page.diffOrigPath = ""
-        page.diffFromWt = false
+        page.diffFromWorkingTree = false
         page.diffChange = ""
         diffModel.clear()
     }
 
     // Exposed for the window toolbar (acts on the active tab).
     readonly property var pageTab: repoTab
-    readonly property var pageWt: workTree
+    readonly property var pageWorkingTree: workingTree
     /// For the band's one reading: whether this branch's upstream is gone (`headUpstreamGone`, git's `[gone]`).
     readonly property var pageBranches: branchesModel
     /// For `TopBar`'s WORKTREE rows — the left menu's WORKTREES listing, so both name the same places in the same
@@ -2275,7 +2275,7 @@ FocusScope {
         Component.onCompleted: commandsModel.setZoneMinutes(new Date().getTimezoneOffset())
     }
     GraphModel { id: graphModel }
-    WorkTreeModel { id: workTree }
+    WorkingTreeModel { id: workingTree }
     DetailsModel { id: detailsModel }
     DiffModel { id: diffModel }
     RebasePlanModel { id: planModel }
@@ -2283,9 +2283,9 @@ FocusScope {
     NavSectionModel { id: remotesModel }
     // One letter apart: the three `*Model`s below are the WIP pane's buckets (uncommitted files); `worktreesModel`
     // lists git worktrees (the sidebar's WORKTREES). One per bucket (`WipPane`), each holding the whole status, so a
-    // question about a file (which bucket, what is beside it, where it came from) goes to `worktreeModel`.
+    // question about a file (which bucket, what is beside it, where it came from) goes to `unstagedModel`.
     NavSectionModel { id: conflictsModel }
-    NavSectionModel { id: worktreeModel }
+    NavSectionModel { id: unstagedModel }
     NavSectionModel { id: stagedModel }
     // Another working copy's changes (`page.carriedPath`), kept apart: this window's own status arrives on its own
     // tick and would take the copy's rows, and the reader's place, with it. One list, not three: the split is the
@@ -2361,9 +2361,9 @@ FocusScope {
         // What the models hold of that copy, each by its own rule (the `restand` slots).
         repoTab.restand()
         graphModel.restand()
-        workTree.restand()
+        workingTree.restand()
         conflictsModel.restand()
-        worktreeModel.restand()
+        unstagedModel.restand()
         stagedModel.restand()
         carriedModel.restand()
         // The command log is not reset: its rows name their session (`CommandMsg`), and a write the left copy is still
@@ -2449,7 +2449,7 @@ FocusScope {
         detailsPane: detailsPane
         gitCorner: gitCorner
         repoTab: repoTab
-        worktreeModel: worktreeModel
+        unstagedModel: unstagedModel
         detailsModel: detailsModel
         diffModel: diffModel
     }
@@ -2490,16 +2490,16 @@ FocusScope {
             repoTab.activate()
         commandsModel.attach(page.tab_id)
         graphModel.attach(page.tab_id)
-        workTree.attach(page.tab_id)
+        workingTree.attach(page.tab_id)
         detailsModel.attach(page.tab_id)
         diffModel.attach(page.tab_id)
         planModel.attach(page.tab_id)
         discardModel.attach(page.tab_id)
         branchesModel.attachSection(page.tab_id, "branches")
         remotesModel.attachSection(page.tab_id, "remotes")
-        conflictsModel.attachWorktree(page.tab_id, "conflicts")
-        worktreeModel.attachWorktree(page.tab_id, "unstaged")
-        stagedModel.attachWorktree(page.tab_id, "staged")
+        conflictsModel.attachWorkingTree(page.tab_id, "conflicts")
+        unstagedModel.attachWorkingTree(page.tab_id, "unstaged")
+        stagedModel.attachWorkingTree(page.tab_id, "staged")
         carriedModel.attachCarried(page.tab_id)
         worktreesModel.attachSection(page.tab_id, "worktrees")
         stashesModel.attachSection(page.tab_id, "stashes")
@@ -2729,7 +2729,7 @@ FocusScope {
     // three separate messages, and the two that come first still describe the repository as it was — landing off them
     // picks the commit that was just replaced. Resolved once the graph holds where HEAD points.
     property bool pendingHeadSelect: false
-    /// The first report of HEAD that may answer the landing (`WorkTreeModel.headSeq`). A write's answer names it
+    /// The first report of HEAD that may answer the landing (`WorkingTreeModel.headSeq`). A write's answer names it
     /// (`RepoTab.writeAnswerHeadSeq`): the report in hand at that arming may predate the write, with a stale HEAD that
     /// has a row. An arming read out of a report already in hand (the tree emptying, the selected commit vanishing)
     /// takes that very report.
@@ -2738,10 +2738,11 @@ FocusScope {
     // is no answer off screen. The other ways it is owed happen *to* the window (a terminal commit, a rewrite under the
     // poll), and those may not move the reader's view (rules-refs/app-ui.md — the `pendingHeadAsked` line).
     property bool pendingHeadAsked: false
-    /// Whether the working tree the last status described is empty. **Every reader stands behind `workTree.loaded`**:
-    /// the counts start at zero, which reads as a finished job before any status (rules/app-ui.md §UI 自動化).
-    readonly property bool treeClean: workTree.stagedCount === 0 && workTree.unstagedCount === 0
-                                   && workTree.untrackedCount === 0 && workTree.conflictCount === 0
+    /// Whether the working tree the last status described is empty. **Every reader stands behind
+    /// `workingTree.loaded`**: the counts start at zero, which reads as a finished job before any status
+    /// (rules/app-ui.md §UI 自動化).
+    readonly property bool treeClean: workingTree.stagedCount === 0 && workingTree.unstagedCount === 0
+                                   && workingTree.untrackedCount === 0 && workingTree.conflictCount === 0
     /// What operation the last status named, so that its going away can be read as an edge.
     property string seenOpText: ""
     /// The WIP face has nothing left to hold the reader with — the working tree emptied, or the operation went away
@@ -2756,7 +2757,7 @@ FocusScope {
     /// (rules-refs/app-ui.md — the `RepoPage.leaveWipWhenDone` line).
     function leaveWipWhenDone(edge) {
         // `treeClean`'s guard. `loaded` latches on the first status, so this holds off only a page's opening moment.
-        if (!workTree.loaded)
+        if (!workingTree.loaded)
             return
         // **A pane about another working copy is that copy's face** — its changes are still there, so nobody is walked
         // off it. The landing below stays armed for the reader coming back to their own row.
@@ -2768,7 +2769,7 @@ FocusScope {
         if (!page.treeClean)
             return
         // **A landing of our own is an edge in itself**: the press is what moved.
-        if ((!edge && !ourStash) || !page.wipShown || workTree.opText !== "")
+        if ((!edge && !ourStash) || !page.wipShown || workingTree.opText !== "")
             return
         if (!ourStash && (wipPane.subjectText !== "" || wipPane.bodyText !== ""))
             return
@@ -2776,17 +2777,17 @@ FocusScope {
         page.pendingHeadSelect = true
         // The status this is read out of **is** the one that answers: its HEAD report is already in hand (`hub::sink`
         // sends it ahead of the status).
-        page.pendingHeadFromSeq = workTree.headSeq
+        page.pendingHeadFromSeq = workingTree.headSeq
         // Only ours is a landing anybody asked for, so only ours takes the viewport along.
         page.pendingHeadAsked = ourStash
     }
     function tryPendingHeadSelect() {
-        if (!page.pendingHeadSelect || !workTree.headKnown)
+        if (!page.pendingHeadSelect || !workingTree.headKnown)
             return
         // `headOid` is HEAD branch or not, so a detached landing is the same.
-        if (workTree.headSeq < page.pendingHeadFromSeq)
+        if (workingTree.headSeq < page.pendingHeadFromSeq)
             return
-        const row = workTree.headOid !== "" ? graphModel.rowOf(workTree.headOid) : -1
+        const row = workingTree.headOid !== "" ? graphModel.rowOf(workingTree.headOid) : -1
         if (row < 0)
             return
         page.pendingHeadSelect = false
@@ -2828,7 +2829,7 @@ FocusScope {
         page.pendingHeadSelect = true
         // The graph that let the commit go was rebuilt behind a read that had already reported where HEAD went, so
         // the report in hand is the one to land on.
-        page.pendingHeadFromSeq = workTree.headSeq
+        page.pendingHeadFromSeq = workingTree.headSeq
     }
 
     // A reworded commit came back under a different hash: the one now standing where it stood is it, since only the
@@ -2901,10 +2902,10 @@ FocusScope {
             return
         // Both reads must have answered: before the first status `wipRowStands` is false only because nothing was
         // asked, and a landing on a commit then is never taken back (the first line above holds every later call off).
-        if (!workTree.headKnown || !workTree.loaded)
+        if (!workingTree.headKnown || !workingTree.loaded)
             return
         let row = -1
-        if (workTree.wipRowStands) {
+        if (workingTree.wipRowStands) {
             // **Uncommitted work is the landing, branch or not** (デザイン規約 §未コミット行が名乗るもの). Asked of the
             // status (`graph::wip_row_stands`) — whether the opening walk carries the row races the first status — and
             // of the graph (`GraphModel.wipRow`), for the reason `tryPendingWipSelect` gives. Every pass calls this
@@ -2913,8 +2914,8 @@ FocusScope {
                 return
             row = 0
         } else {
-            // Where HEAD stands, branch or not (`WorkTreeModel.headOid` — what `tryPendingHeadSelect` lands on too).
-            row = workTree.headOid !== "" ? graphModel.rowOf(workTree.headOid) : -1
+            // Where HEAD stands, branch or not (`WorkingTreeModel.headOid` — what `tryPendingHeadSelect` lands on too).
+            row = workingTree.headOid !== "" ? graphModel.rowOf(workingTree.headOid) : -1
             if (row < 0) {
                 if (graphModel.loading)
                     return // the head row may still be streaming in
@@ -2978,7 +2979,7 @@ FocusScope {
         }
     }
     // Where HEAD stands rides the working-tree model, so the landings and the default selection are paid there
-    // (`workTree.onChanged`), not on the refs.
+    // (`workingTree.onChanged`), not on the refs.
     Connections {
         target: branchesModel
         function onRefsSettled() {
@@ -3032,25 +3033,25 @@ FocusScope {
             page.listingDrawn()
         }
     }
-    /// The `WorkTreeModel.treeRevision` the open diff was last read against — bumped when the four buckets' counts
+    /// The `WorkingTreeModel.treeRevision` the open diff was last read against — bumped when the four buckets' counts
     /// move. Per file: a second hunk staged out of a file on both sides moves none, and is re-read at the write's
     /// answer (this window) or by `pollDiff` (anyone else).
     property int seenTreeRev: -1
     // **The tree was read** — heard from the working-tree model, not the list, which says `changed` only when its rows
     // differ: a status that moved no row is exactly the one this has to hear about.
     Connections {
-        target: workTree
+        target: workingTree
         function onChanged() {
-            const moved = workTree.treeRevision !== page.seenTreeRev
-            page.seenTreeRev = workTree.treeRevision
+            const moved = workingTree.treeRevision !== page.seenTreeRev
+            page.seenTreeRev = workingTree.treeRevision
             // The operation that was standing is not standing any more — the other edge the WIP face's exit turns on,
             // and the only one a clean stop ever moves (`leaveWipWhenDone`).
-            const opGone = page.seenOpText !== "" && workTree.opText === ""
-            page.seenOpText = workTree.opText
+            const opGone = page.seenOpText !== "" && workingTree.opText === ""
+            page.seenOpText = workingTree.opText
             // **Written down before anything asks what it means**, waited on or not: a write's answer and the status it
             // published are drained apart, and this may be the half that arrives first.
-            if (workTree.loaded)
-                repoTab.noteTreeRead(workTree.statusSeq, page.treeClean)
+            if (workingTree.loaded)
+                repoTab.noteTreeRead(workingTree.statusSeq, page.treeClean)
             // Whether this is the status our own write published, whose file was already re-read at the answer
             // (`ops::DiffReread`, rules-refs/app-ui.md「diff の読み直しは書き込みの答えの所で撃つ」).
             const ours = repoTab.takeDiffRead()
@@ -3064,7 +3065,7 @@ FocusScope {
             // Whether the WIP face still has anything to stand for. **After `absorbOpMessage`**: an abort takes the
             // words a stopped merge put in the box back out — asked before it, the box reads as a message being typed.
             page.leaveWipWhenDone(moved || opGone)
-            // HEAD's report rides this model (`WorkTreeModel.headSeq`), so an owed landing is paid here — even for a
+            // HEAD's report rides this model (`WorkingTreeModel.headSeq`), so an owed landing is paid here — even for a
             // write that recorded nothing: the first read after a write always sends one.
             page.tryPendingHeadSelect()
             page.trySelectDefault()
@@ -3131,7 +3132,7 @@ FocusScope {
                     // rest of the time this pane's edge would be drawn over the splitter.
                     z: sidebarPane.editKey !== "" ? 1 : 0
                     repoTab: repoTab
-                    workTree: workTree
+                    workingTree: workingTree
                     branchesModel: branchesModel
                     remotesModel: remotesModel
                     worktreesModel: worktreesModel
@@ -3212,7 +3213,7 @@ FocusScope {
                         GraphPane {
                             id: graphPane
                             graphModel: graphModel
-                            workTree: workTree
+                            workingTree: workingTree
                             blank: page.blank
                             chipListAnchor: rowHost.refListAnchor
                             rowCardOid: rowHost.rowCardOid
@@ -3251,7 +3252,7 @@ FocusScope {
                         DiffPane {
                             id: diffPane
                             diffModel: diffModel
-                            fromWorkTree: page.diffFromWt
+                            fromWorkingTree: page.diffFromWorkingTree
                             staged: page.diffStaged
                             conflicted: page.diffKind === "conflicts"
                             conflictChange: page.diffChange
@@ -3261,12 +3262,12 @@ FocusScope {
                             // The two swap over during a rebase; the model is where that is already answered. What
                             // *this* window is in the middle of, so a copy's conflicted file falls back to git's own
                             // two words the way its rows do (`WipBucketPane`).
-                            sideOurs: page.wipWritable ? workTree.sideOurs : ""
-                            sideTheirs: page.wipWritable ? workTree.sideTheirs : ""
+                            sideOurs: page.wipWritable ? workingTree.sideOurs : ""
+                            sideTheirs: page.wipWritable ? workingTree.sideTheirs : ""
                             sideColorOurs: page.sideColorOurs
                             sideColorTheirs: page.sideColorTheirs
                             busy: page.diffSettling
-                            discardUnrecorded: GitFacts.discardUnrecorded(workTree.unborn, workTree.notCopied,
+                            discardUnrecorded: GitFacts.discardUnrecorded(workingTree.unborn, workingTree.notCopied,
                                                                           [page.diffPath])
                             menuStanding: page.menuStanding
                             onCloseRequested: page.closeDiffToGraph()
@@ -3338,8 +3339,8 @@ FocusScope {
                         visible: page.wipShown && !page.wipWritable
                         copyName: page.carriedName
                         files: carriedModel
-                        readBucket: page.diffFromWt ? page.diffKind : ""
-                        readPath: page.diffFromWt ? page.diffPath : ""
+                        readBucket: page.diffFromWorkingTree ? page.diffKind : ""
+                        readPath: page.diffFromWorkingTree ? page.diffPath : ""
                         menuStanding: page.menuStanding
                         onTreeViewChosen: tree => page.setWipTreeView(tree)
                         onFileActivated: (bucket, path, origPath) => page.toggleDiff(bucket, path, origPath)
@@ -3351,8 +3352,8 @@ FocusScope {
                         anchors.fill: parent
                         visible: page.wipShown && page.wipWritable
                         repoTab: repoTab
-                        workTree: workTree
-                        worktreeModel: worktreeModel
+                        workingTree: workingTree
+                        unstagedModel: unstagedModel
                         conflictsModel: conflictsModel
                         stagedModel: stagedModel
                         onTreeViewChosen: tree => page.setWipTreeView(tree)
@@ -3361,8 +3362,8 @@ FocusScope {
                         menuStanding: page.menuStanding
                         onAmendToggled: on => page.amendToggled(on)
                         onCommitClicked: page.commitNow()
-                        readBucket: page.diffFromWt ? page.diffKind : ""
-                        readPath: page.diffFromWt ? page.diffPath : ""
+                        readBucket: page.diffFromWorkingTree ? page.diffKind : ""
+                        readPath: page.diffFromWorkingTree ? page.diffPath : ""
                         onFileActivated: (bucket, path, origPath) => page.toggleDiff(bucket, path, origPath)
                         onFileWalked: (bucket, path, origPath) => page.openDiff(bucket, path, origPath)
                         onFileMenuRequested: (bucket, path) => page.openFileMenu(bucket, path)
@@ -3448,7 +3449,7 @@ FocusScope {
                         anchors.rightMargin: Theme.spaceMd
                         plan: planModel
                         pushedCount: page.planPushed
-                        tipHeldElsewhere: workTree.headReachedElsewhere
+                        tipHeldElsewhere: workingTree.headReachedElsewhere
                         busy: repoTab.busyCount > 0
                     }
                 }

@@ -43,7 +43,7 @@ Item {
         // builds a new page).
         const page = acts.window.curPage
         if (page === null || page.pageTab.state !== "open"
-                || !page.pageWt.loaded || page.pageGraph.finishCount === 0) {
+                || !page.pageWorkingTree.loaded || page.pageGraph.finishCount === 0) {
             Awaited.at(verb, "page")
             return false
         }
@@ -197,7 +197,7 @@ Item {
                     "whole": acts.topBar.frontTabWhole,
                     "pinGone": !acts.topBar.tabPinShown,
                     "open": page !== null && page.pageTab.state === "open",
-                    "worktree": page !== null && page.pageWt.loaded,
+                    "worktree": page !== null && page.pageWorkingTree.loaded,
                     "graph": page !== null && page.pageGraph.finishCount !== 0
                 })) {
                 // The strip's account of the ask when it changes, so a run stuck here says whether the ask was
@@ -252,7 +252,7 @@ Item {
                         "whole": acts.topBar.frontTabWhole,
                         "pinGone": !acts.topBar.tabPinShown,
                         "open": page !== null && page.pageTab.state === "open",
-                        "worktree": page !== null && page.pageWt.loaded,
+                        "worktree": page !== null && page.pageWorkingTree.loaded,
                         "graph": page !== null && page.pageGraph.finishCount !== 0
                     })) {
                     // The ask's account meanwhile, as in `tab-open-go`.

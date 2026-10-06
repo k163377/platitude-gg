@@ -402,7 +402,7 @@ impl GraphModel {
     /// so it is walked off the rows' order and marks; git would answer
     /// after the card is up (デザイン規約 §行が読む答えはどこから来るか).
     /// `head` comes from the asker off the one record
-    /// (`WorkTreeModel.headOid`), the HEAD the rest of the card is about.
+    /// (`WorkingTreeModel.headOid`), the HEAD the rest of the card is about.
     #[qslot]
     fn rebase_rewrites_published(&self, onto_oid_hex: String, head_oid_hex: String) -> bool {
         let (Ok(onto), Ok(head)) = (

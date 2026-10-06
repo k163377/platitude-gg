@@ -206,7 +206,7 @@ impl RepoSession {
     pub(super) async fn settle_eol_marks(
         &self,
         workdir: &Path,
-        status: &WorkTreeStatus,
+        status: &WorkingTreeStatus,
         cancel: &CancellationToken,
     ) -> Arc<Vec<EolMark>> {
         let marks = Arc::new(if status.is_dirty() {
@@ -221,7 +221,7 @@ impl RepoSession {
     async fn read_eol_marks(
         &self,
         workdir: &Path,
-        status: &WorkTreeStatus,
+        status: &WorkingTreeStatus,
         cancel: &CancellationToken,
     ) -> Vec<EolMark> {
         let run = |args: &[&'static str]| {

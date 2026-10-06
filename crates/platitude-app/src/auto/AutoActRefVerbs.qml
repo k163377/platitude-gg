@@ -17,7 +17,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workTree: driver.workTree
+    readonly property var workingTree: driver.workingTree
     readonly property var graphModel: driver.graphModel
     readonly property var branchesModel: driver.branchesModel
     readonly property var remotesModel: driver.remotesModel
@@ -137,7 +137,7 @@ Item {
             // does. Two remote rows tell the offer apart — only the upstream this branch is measured against carries
             // it (`offers::ref_menu`).
             const onRemote = arg !== ""
-            const name = onRemote ? arg : workTree.branch
+            const name = onRemote ? arg : workingTree.branch
             if (onRemote)
                 remotesModel.toggleFolder(GitFacts.remoteOfRef(arg, repoTab.remoteNames))
             const oid = onRemote ? remotesModel.oidOfName(arg) : branchesModel.oidOfName(name)
@@ -148,7 +148,7 @@ Item {
             // The row out where both sides have moved, its reason under the pointer (規約 §取り込んで合流させる). Bare
             // is the sidebar's entrance, `chip` the graph's: the same answer from each needs a run through each.
             // Forced, because a pointer cannot be put on a row from here (verify-ui §hover の絵の撮り方).
-            const onBranch = workTree.branch
+            const onBranch = workingTree.branch
             if (arg === "chip")
                 page.openRowMenu(branchesModel.oidOfName(onBranch), { "kind": "branch", "name": onBranch })
             else
@@ -173,8 +173,8 @@ Item {
             page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
             chipMenuTimer.start()
         } else if (act === "chip-menu-current") {
-            page.openRowMenu(branchesModel.oidOfName(workTree.branch),
-                             { "kind": "branch", "name": workTree.branch })
+            page.openRowMenu(branchesModel.oidOfName(workingTree.branch),
+                             { "kind": "branch", "name": workingTree.branch })
             chipMenuTimer.start()
         } else if (act === "delete-blocked-tip") {
             // Forced through the property the real hover writes. The argument picks why the delete row is out: none
@@ -183,7 +183,7 @@ Item {
             // local row may be pressable (デザイン規約 §左メニューの所作 の削除の表).
             const wantsRemote = arg.endsWith(":remote")
             const named = wantsRemote ? arg.slice(0, -7) : arg
-            const blockedOn = named === "" ? workTree.branch : named
+            const blockedOn = named === "" ? workingTree.branch : named
             page.openRefMenu("branch", blockedOn, blockedOn, branchesModel.oidOfName(blockedOn))
             refMenu.openSub(refBranchCard)
             acts.blockedTipRow = wantsRemote ? refBranchCard.deleteRemoteItem : refDeleteItem
@@ -191,7 +191,7 @@ Item {
             blockedTipTimer.start()
         } else if (act === "menu-highlight") {
             // The keyboard's road to `highlighted` — the only one that can be driven from here.
-            const litOn = arg === "" ? workTree.branch : arg
+            const litOn = arg === "" ? workingTree.branch : arg
             page.openRefMenu("branch", litOn, litOn, branchesModel.oidOfName(litOn))
             refMenu.currentIndex = 1
             Harness.report("menu_highlight index=" + refMenu.currentIndex)
@@ -209,7 +209,7 @@ Item {
             // The graph's road: the commit menu's row opens the box in the chip column, and the field's own submit
             // spawns git. The row under HEAD's, counted as `commit-menu` counts: the rows above HEAD (the working tree,
             // a stash) open no such menu.
-            acts.createTagOid = graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
+            acts.createTagOid = graphModel.oidAt(graphModel.rowOf(workingTree.headOid) + 1)
             page.openRowMenu(acts.createTagOid)
             commitMenu.openSub(commitTagCard)
             tagHereCommitItem.triggered()

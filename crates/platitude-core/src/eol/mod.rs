@@ -36,7 +36,7 @@ mod read;
 mod sample;
 mod scan;
 pub mod setting;
-mod worktree;
+mod working_tree;
 
 #[cfg(test)]
 mod read_tests;
@@ -45,7 +45,7 @@ pub use attrs::{Ruling, normalises, ruling, rulings, rulings_given};
 pub use notice::{Notice, settle};
 pub use read::{Sighting, read, read_one};
 pub use sample::{baseline, cache_key};
-pub use worktree::{Shape, untracked_shapes, worktree_shapes};
+pub use working_tree::{Shape, untracked_shapes, working_tree_shapes};
 
 /// A line terminator this module can name.
 ///

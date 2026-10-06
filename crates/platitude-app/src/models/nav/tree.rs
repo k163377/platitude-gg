@@ -3,7 +3,7 @@ use super::*;
 impl NavSectionModel {
     /// Trees one group run of file rows. Fold keys are group-prefixed so
     /// equal paths in different groups fold apart.
-    pub(super) fn wt_tree_into(
+    pub(super) fn file_tree_into(
         &self,
         run: std::ops::Range<usize>,
         group: &str,
@@ -252,7 +252,7 @@ mod tests {
     }
     #[test]
     fn the_file_tree_folds_each_run_of_its_own() {
-        let mut model = section("worktree", Source::files(pending()));
+        let mut model = section("files", Source::files(pending()));
         model.tree_view = true;
         model.arrange();
 
@@ -286,13 +286,13 @@ mod tests {
     /// row.
     #[test]
     fn a_directory_git_would_not_open_is_one_row() {
-        use platitude_core::status::{StatusItem, WorkTreeStatus};
+        use platitude_core::status::{StatusItem, WorkingTreeStatus};
         let untracked = |path: &str| StatusItem::Untracked {
             path: path.to_string(),
         };
         let mut model = section(
-            "worktree",
-            Source::files(WorkTreeStatus {
+            "files",
+            Source::files(WorkingTreeStatus {
                 items: vec![untracked("vendor/nest/"), untracked("vendor/plain.txt")],
                 ..Default::default()
             }),

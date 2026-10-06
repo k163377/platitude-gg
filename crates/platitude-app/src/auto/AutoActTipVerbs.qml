@@ -16,10 +16,10 @@ Item {
     required property var driver
 
     readonly property var page: driver.page
-    readonly property var workTree: driver.workTree
+    readonly property var workingTree: driver.workingTree
     readonly property var graphModel: driver.graphModel
     readonly property var detailsModel: driver.detailsModel
-    readonly property var worktreeModel: driver.worktreeModel
+    readonly property var unstagedModel: driver.unstagedModel
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
     readonly property var wipPane: driver.wipPane
@@ -36,7 +36,7 @@ Item {
         } else if (act === "stash-tip") {
             // Why the box refuses the caret — the row decides which refusal. `older` is the row under HEAD's.
             page.activateRow(graphModel.oidAt(
-                arg === "older" ? graphModel.rowOf(workTree.headOid) + 1 : Number(arg)))
+                arg === "older" ? graphModel.rowOf(workingTree.headOid) + 1 : Number(arg)))
             stashTipTimer.start()
         } else if (act === "path-tip") {
             // Row 0 is the elided leaf, or the folder chain with `-tree`. The argument picks the pane as `corner`
@@ -55,7 +55,7 @@ Item {
                 page.setWipTreeView(wantsTree)
             } else if (pathTipTimer.wipSide) {
                 page.showWip()
-                worktreeModel.setTreeView(wantsTree)
+                unstagedModel.setTreeView(wantsTree)
             } else {
                 page.activateRow(graphModel.oidAt(Number(pane)))
                 detailsModel.setTreeView(wantsTree)
@@ -64,7 +64,7 @@ Item {
         } else if (act === "tip-copy" || act === "tip-sweep") {
             // `path-tip`'s plain row: the flattened view's whole path is the longest tooltip (the tree's is one word).
             page.showWip()
-            worktreeModel.setTreeView(false)
+            unstagedModel.setTreeView(false)
             if (act === "tip-sweep")
                 tipSweepTimer.start()
             else
@@ -171,7 +171,7 @@ Item {
                 pathTipReport.start()
                 return
             }
-            if (pathTipTimer.wipSide && worktreeModel.total === 0)
+            if (pathTipTimer.wipSide && unstagedModel.total === 0)
                 return
             if (!pathTipTimer.wipSide && !driver.cardSettled)
                 return
@@ -187,7 +187,7 @@ Item {
         function standOnCopy() {
             if (pathTipTimer.stood)
                 return true
-            if (graphModel.finishCount === 0 || !workTree.loaded)
+            if (graphModel.finishCount === 0 || !workingTree.loaded)
                 return false
             const row = driver.rowOfCopy(pathTipTimer.carried)
             if (row < 0)
@@ -211,7 +211,7 @@ Item {
                 + (pathTipTimer.carried !== "" ? "carried"
                    : pathTipTimer.wipSide ? "wip" : "details")
                 + " tree=" + (pathTipTimer.carried !== "" ? page.wipUnstaged.treeView
-                              : pathTipTimer.wipSide ? worktreeModel.treeView : detailsModel.treeView)
+                              : pathTipTimer.wipSide ? unstagedModel.treeView : detailsModel.treeView)
                 + " tip=" + tip.visible
                 + " aside=" + driver.tipAside(tip)
                 + " text=" + tip.text)
@@ -223,7 +223,7 @@ Item {
     SampleTimer {
         id: tipCopyTimer
         onTriggered: {
-            if (worktreeModel.total === 0)
+            if (unstagedModel.total === 0)
                 return
             wipPane.pointedTipRow = 0
             const tip = page.ToolTip.toolTip
@@ -243,7 +243,7 @@ Item {
     SampleTimer {
         id: tipSweepTimer
         onTriggered: {
-            if (worktreeModel.total === 0)
+            if (unstagedModel.total === 0)
                 return
             wipPane.pointedTipRow = 0
             const tip = page.ToolTip.toolTip
