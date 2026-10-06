@@ -182,8 +182,8 @@ QtObject {
         case "stash":
             return qsTr("back to the stashes")
         case "worktree":
-            return part.with === "" ? qsTr("as a working copy there")
-                                    : qsTr("as a working copy there, on %1").arg(part.with)
+            return part.with === "" ? qsTr("as a worktree there")
+                                    : qsTr("as a worktree there, on %1").arg(part.with)
         case "tag":
             return qsTr("as tag %1").arg(part.name)
         default:

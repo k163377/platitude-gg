@@ -86,7 +86,7 @@ pub async fn restore(
             // gone, it has nowhere to go.
             if copy_at(executor, path, cancel).await?.is_none() {
                 return Err(GitError::Rejected {
-                    message: format!("The working copy the changes came from is gone: {path}"),
+                    message: format!("The worktree the changes came from is gone: {path}"),
                 });
             }
             changes(executor, Path::new(path), copy, cancel).await

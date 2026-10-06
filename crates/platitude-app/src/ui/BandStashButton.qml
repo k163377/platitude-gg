@@ -36,7 +36,7 @@ ActionButton {
             return qsTr("A rebase plan is being composed — until it closes, the only write is its run button")
         // The files on screen are the ones a reader would expect a press here to reach.
         if (!stashButton.curPage.wipWritable)
-            return qsTr("Reading another working copy — this sets aside this window's changes")
+            return qsTr("Reading another worktree — this sets aside this window's changes")
         // These speak though disabled: the reason is not on screen (デザイン規約 §変更を退避する).
         if (stashButton.mode === "unborn")
             return qsTr("No commits yet — git cannot stash before the first one")

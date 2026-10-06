@@ -69,7 +69,7 @@ ColumnLayout {
             anchors.rightMargin: Theme.spaceXs
             spacing: Theme.spaceXs
             Label {
-                text: qsTr("WORKING COPY")
+                text: qsTr("WORKTREE")
                 font.pixelSize: Theme.fontMd
                 font.weight: Theme.fontWeightStrong
                 color: Theme.textSecondary

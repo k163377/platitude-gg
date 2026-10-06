@@ -84,7 +84,7 @@ Item {
             const stash = part("stash", { name: "On main: try", look: "stash", files: 1 })
             compare(shown.restoredAs(stash), "back to the stashes")
             const copy = part("worktree", { name: "C:/work/side", with: "side-work" })
-            compare(shown.restoredAs(copy), "as a working copy there, on side-work")
+            compare(shown.restoredAs(copy), "as a worktree there, on side-work")
         }
 
         // Where it was taken, in the mark (P3-確認事項 §破棄記録と復元): a remote's tag alone wears the cloud on the

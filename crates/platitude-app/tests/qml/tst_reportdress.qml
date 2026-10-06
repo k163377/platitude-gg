@@ -78,13 +78,13 @@ Item {
         }
 
         /// The mark goes in front of the name where the sentence says it — last in a tip, first in a heading — and
-        /// never into a word that only holds the same letters (`copy` and `work` in `working copy`).
+        /// never into a word that only holds the same letters (`work` and `tree` in `worktree`).
         function test_the_tree_mark_stands_before_the_name_and_nowhere_else() {
-            compare(Words.markSeatIn("Checked out in another working copy — copy", "copy", true), 38)
-            compare(Words.markSeatIn("Checked out in another working copy — work", "work", true), 38)
+            compare(Words.markSeatIn("Checked out in another worktree — tree", "tree", true), 34)
+            compare(Words.markSeatIn("Checked out in another worktree — work", "work", true), 34)
             compare(Words.markSeatIn("topic was not removed", "topic", false), 0)
             compare(Words.markSeatIn("removed was not removed", "removed", false), 0, "a heading's name is its first")
-            compare(Words.markSeatIn("Checked out in another working copy — rework", "work", true), -1,
+            compare(Words.markSeatIn("Checked out in another worktree — rework", "work", true), -1,
                     "the letters, not the word")
             compare(Words.markSeatIn("Den Ordner topic gibt es", "topic", true), -1, "a translation that moved it: none")
             compare(Words.markSeatIn("anything", "", true), -1)

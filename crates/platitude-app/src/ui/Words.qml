@@ -47,9 +47,9 @@ QtObject {
     /// where the tip stands the tree mark (`copyNameMark`, デザイン規約 §ref の種別「名前の印」).
     function copyPlaceTaken(taken, name) {
         switch (taken) {
-        //: %1 is the folder the new working copy would be made in, named as the copy git still lists there.
-        case "listed": return qsTr("Taken by another working copy — %1").arg(name)
-        //: %1 is the folder the new working copy would be made in.
+        //: %1 is the folder the new worktree would be made in, named as the copy git still lists there.
+        case "listed": return qsTr("Taken by another worktree — %1").arg(name)
+        //: %1 is the folder the new worktree would be made in.
         case "folder": return qsTr("The folder is not empty — %1").arg(name)
         default: return ""
         }

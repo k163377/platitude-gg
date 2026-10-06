@@ -73,9 +73,9 @@ Item {
                     reason: "Switch away first — this is the branch you are on",
                 },
                 {
-                    tag: "held by another working copy",
+                    tag: "held by another worktree",
                     fields: { offers: root.held, heldByWorktree: "C:/copies/topic", holderLeaf: "topic" },
-                    reason: "Checked out in another working copy — topic",
+                    reason: "Checked out in another worktree — topic",
                     // The one reason naming something outside this repository, so the tip gets a word for the tree
                     // mark (デザイン規約 §ref の種別).
                     marks: "topic",

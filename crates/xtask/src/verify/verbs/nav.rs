@@ -240,7 +240,7 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Is("spike"),
                 "worktree_menu copy=spike card=true offered=true blocked=true tip=true \
                  code=worktree remove branch=true held=false cut=false \
-                 says=This working copy is locked",
+                 says=This worktree is locked",
             ),
             (
                 Arg::Is("detached"),
@@ -262,7 +262,7 @@ pub(super) const TABLE: &[Verb] = &[
         // No preset: a copy of `demo-repo worktrees` opened with `--repo`
         // is the one this tab stands in (verbs.md).
         plain: "card=true offered=true blocked=true tip=true code=worktree remove branch=true \
-                held=false cut=false says=This tab is showing this working copy",
+                held=false cut=false says=This tab is showing this worktree",
     },
     // The same card from the graph: the row the copy stands on, its menu
     // aimed at the copy's folder chip (`detached`) or at the branch chip
@@ -331,7 +331,7 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Is("branch:fix/listed"),
                 "copy_menu card=true here=true add=true folder=fix-listed blocked=true tip=true \
                  aside=true mark=fix-listed cut=false \
-                 says=Taken by another working copy — fix-listed",
+                 says=Taken by another worktree — fix-listed",
             ),
             (
                 Arg::Has("long-enough"),

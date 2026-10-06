@@ -162,9 +162,9 @@ AppMenu {
     readonly property string deleteBlockedWhileBusy: Words.otherCommandRunning
     // The state and where, not why (デザイン規約 §hover のツールチップ). The folder, not the whole path git prints:
     // nobody reads a tooltip that wide.
-    //: %1 is the folder of the other working copy that has this branch checked out.
+    //: %1 is the folder of the other worktree that has this branch checked out.
     readonly property string blockedByWorktree:
-        qsTr("Checked out in another working copy — %1").arg(state.holderLeaf)
+        qsTr("Checked out in another worktree — %1").arg(state.holderLeaf)
 
     titleKind: "branch"
     titleTint: Theme.accent

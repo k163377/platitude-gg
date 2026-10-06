@@ -116,7 +116,7 @@ Item {
         /// (offers::SwitchAction::OpenHolder). The mark is the WORKTREES one that copy wears everywhere.
         function test_a_held_branch_names_the_copy_instead_of_a_command() {
             root.aimAt({ canSwitch: true, heldLeaf: "topic" })
-            compare(menu.switchItem.code, "", "there is no git command for opening a working copy")
+            compare(menu.switchItem.code, "", "there is no git command for opening a worktree")
             compare(menu.switchItem.text, "Open")
             compare(menu.switchItem.markName, "topic")
             compare(menu.switchItem.nameMark, "tree")
@@ -312,7 +312,7 @@ Item {
             menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": {
                 "oid": menu.oid, "here": true, "checkout": "branch", "branch": "fix/listed", "start": "",
                 "path": "C:/work/repo.worktrees/fix-listed", "place": "fix-listed", "taken": "listed" } })
-            compare(card.copyAddItem.blockedReason, "Taken by another working copy — fix-listed")
+            compare(card.copyAddItem.blockedReason, "Taken by another worktree — fix-listed")
             compare(card.copyAddItem.tipMarkWord, "fix-listed")
 
             menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": root.makingNothing })

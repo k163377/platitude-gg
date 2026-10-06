@@ -120,9 +120,9 @@ AppMenu {
         offered: state.canRemove
         // Greyed, not gone: the reader asked why it cannot go, and this is where it says (デザイン規約 §メニュー の例外).
         blockedReason: state.out === "locked"
-                       ? (state.lockReason === "" ? qsTr("This working copy is locked")
+                       ? (state.lockReason === "" ? qsTr("This worktree is locked")
                                                   : qsTr("Locked — %1").arg(state.lockReason))
-                       : state.out === "here" ? qsTr("This tab is showing this working copy")
+                       : state.out === "here" ? qsTr("This tab is showing this worktree")
                        : state.out === "busy" ? Words.otherCommandRunning : ""
         onTriggered: copyMenu.removeRequested(state.path, state.name)
     }

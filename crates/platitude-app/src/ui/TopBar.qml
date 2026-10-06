@@ -800,7 +800,7 @@ Rectangle {
                         // (`NavRowBody.branchSeat`). The main copy's row is named by it already.
                         sideName: copyRow.homeCopy ? "" : copyRow.branch
                         offered: !copyRow.here || copySub.rows.length === 1
-                        blockedReason: copyRow.here ? qsTr("You are in this working copy") : ""
+                        blockedReason: copyRow.here ? qsTr("You are in this worktree") : ""
                         onTriggered: topBar.curPage.openRepositoryPathRequested(copyRow.full)
                     }
                     onObjectAdded: (at, object) => copySub.insertItem(at, object)

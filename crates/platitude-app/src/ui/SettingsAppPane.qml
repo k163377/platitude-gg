@@ -494,7 +494,7 @@ ColumnLayout {
         // Both rows are a mode, then its boxes, in the same columns. This copy is always read automatically, so its
         // mode is a word standing where the other row's chooser stands, its letters where the chooser's letters are.
         LabeledField {
-            caption: qsTr("Current working copy")
+            caption: qsTr("Current worktree")
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm
@@ -538,7 +538,7 @@ ColumnLayout {
             }
         }
         LabeledField {
-            caption: qsTr("Other working copies")
+            caption: qsTr("Other worktrees")
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm
