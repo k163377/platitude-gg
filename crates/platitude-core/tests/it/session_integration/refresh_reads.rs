@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use platitude_core::session::{PassStep, Recording, RepoSession, SessionEvent};
+use platitude_core::session::{PaceBounds, PassStep, Recording, RepoSession, SessionEvent};
 
 use crate::support::TestRepo;
 use crate::support::remote::origin_and_clone;
@@ -348,6 +348,76 @@ async fn a_stash_dropped_outside_is_walked_off_when_the_window_comes_back() {
         "the dropped stash is gone"
     );
     session.close();
+}
+
+/// This tree's read the window coming back asks for at its pace
+/// (`RepoSession::poll_now`) reads what the focus read does: each listing
+/// once, the stashes included, and one walk for a commit made outside.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_paced_read_the_window_asks_for_reads_each_thing_once() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.write_file("a.txt", "two\n");
+    let (sink, session) = opened(&repo).await;
+    let from = settled(&sink, &session).await;
+    repo.git(&["commit", "-am", "made in a terminal"]);
+
+    asked_paced_read(&sink, &session, from).await;
+    let ran = commands_since(&sink, from);
+    for (needle, expected) in [
+        ("for-each-ref", 1),
+        ("status", 1),
+        ("stash list", 1),
+        ("worktree list", 1),
+        ("log -z", 1),
+    ] {
+        assert_eq!(times(&ran, needle), expected, "`{needle}`: {ran:#?}");
+    }
+    session.close();
+}
+
+/// A stash dropped in a terminal is walked off by the read the window
+/// asks for, as by the focus read: the stash listing rides that read alone.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_stash_dropped_outside_is_walked_off_by_the_paced_read_the_window_asks_for() {
+    let mut repo = with_a_stash();
+    let (sink, session) = opened(&repo).await;
+    let from = settled(&sink, &session).await;
+    assert_eq!(drawn_stashes(&sink), ["stash@{0}"], "the stash is drawn");
+    repo.git(&["stash", "drop"]);
+
+    asked_paced_read(&sink, &session, from).await;
+    let ran = commands_since(&sink, from);
+    assert_eq!(times(&ran, "log -z"), 1, "{ran:#?}");
+    assert_eq!(
+        drawn_stashes(&sink),
+        Vec::<String>::new(),
+        "the dropped stash is gone"
+    );
+    session.close();
+}
+
+/// Paces the page with bounds no read falls due under, asks for this
+/// tree's read as the window coming back does, and waits for its end —
+/// the walk it asked for included, which runs inside the read.
+async fn asked_paced_read(sink: &CaptureSink, session: &Arc<RepoSession>, from: usize) {
+    let hour = std::time::Duration::from_secs(3600);
+    session.set_pace_bounds(PaceBounds {
+        own_floor: hour,
+        own_ceiling: hour,
+        copy_floor: hour,
+        copy_ceiling: hour,
+    });
+    session.set_paced(true);
+    session.poll_now();
+    sink.wait_for("this tree's paced read", |events| {
+        events[from..]
+            .iter()
+            .any(|e| matches!(e, SessionEvent::PacedRead { copy: None }))
+            .then_some(())
+    })
+    .await;
+    reads_over(session).await;
 }
 
 /// The stash list a focus read is not walked once a newer listing has

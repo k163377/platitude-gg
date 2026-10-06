@@ -44,7 +44,8 @@ impl RepoSession {
         }
     }
 
-    /// Where the copies stood when a listing last named them.
+    /// Where the copies stood when a listing last named them, and which
+    /// copies there are to read (`carried::Copies`, `session::pace`).
     ///
     /// Every listing writes it, the copies pass's own included
     /// (`carried::pass_over_copies`): a record older than a reading would
@@ -64,6 +65,10 @@ impl RepoSession {
             })
             .collect();
         *relock(&self.copy_heads) = Arc::new(heads);
+        let listed = super::carried::listed(worktrees, workdir);
+        let keys: Vec<String> = listed.iter().map(|c| c.key.clone()).collect();
+        self.copies.list(listed);
+        self.pacing.change(|rules, at| rules.list(&keys, at));
     }
 
     /// The readings the rows may be drawn from — see [`Self::standing_rows`]
@@ -78,11 +83,32 @@ impl RepoSession {
         } else {
             let current = still_where_the_listing_says(&readings, &listed);
             if current.len() != readings.len() {
-                // A second ask while a pass runs is dropped, so this costs
-                // nothing (`RepoSession::refresh_carried`).
-                drop(self.refresh_carried());
+                self.read_copies_behind(&readings, &current);
             }
             Arc::new(current)
+        }
+    }
+
+    /// Asks again for the readings the listing has moved past: due at once
+    /// where the page paces its copies, else a pass of their own — a
+    /// second ask while one runs is dropped, so asking costs nothing
+    /// (`RepoSession::refresh_carried`).
+    fn read_copies_behind(self: &Arc<Self>, readings: &[Carried], current: &[Carried]) {
+        let behind: Vec<String> = readings
+            .iter()
+            .filter(|r| !current.iter().any(|c| c.path == r.path))
+            .map(|r| super::joins::same_path_key(&r.path))
+            .collect();
+        let paced = self.pacing.change(|rules, at| {
+            if rules.active() {
+                for key in &behind {
+                    rules.copy_stale(key, at);
+                }
+            }
+            rules.active()
+        });
+        if !paced {
+            drop(self.refresh_carried());
         }
     }
 

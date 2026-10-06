@@ -216,13 +216,13 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-processes <commands>:<seconds>: the application category's `GIT PROCESSES` chapter, both
-    // boxes typed through the pane's own door (`SettingsAppPane.autoTypeProcesses`); an empty half is an emptied box
-    // (the default, and never). An unapplied edit frames the same, so the store's own answer is the line judged.
+    // PGG_AUTO_ACT=settings-processes <commands>: the application category's `GIT PROCESSES` chapter, its box typed
+    // through the pane's own door (`SettingsAppPane.autoTypeProcesses`); an empty argument is an emptied box (the
+    // default). An unapplied edit frames the same, so the store's own answer is the line judged.
     SampleTimer {
         id: processesTimer
         running: Harness.autoAct === "settings-processes"
-        /// Both boxes have been typed; the tick after is the store's answer.
+        /// The box has been typed; the tick after is the store's answer.
         property bool acted: false
         onTriggered: {
             if (!settingsDialog.opened) {
@@ -230,13 +230,75 @@ Item {
                 return
             }
             if (!processesTimer.acted) {
-                const halves = Harness.autoActArg.split(":")
-                acts.appPane.autoTypeProcesses(halves[0] || "", halves.length > 1 ? halves[1] : "")
+                acts.appPane.autoTypeProcesses(Harness.autoActArg)
                 processesTimer.acted = true
                 return
             }
             processesTimer.stop()
             Harness.report("git_processes " + acts.appPane.processesTally())
+            window.finishAutoAct()
+        }
+    }
+
+    // PGG_AUTO_ACT=settings-refresh <floor>:<ceiling>:<reading>:<first>:<second>: the application category's `REFRESH`
+    // chapter worked through the pane's own doors (`SettingsAppPane.autoTypeRefresh`) — this repository's two boxes, the
+    // other copies' chooser (`auto` / `fixed` / `off`), then the boxes that reading shows (`first` and `second` are the
+    // two bounds, or `first` the one interval). An empty part is left as it is. The store's own answer is the line
+    // judged, with which boxes stand beside the chooser.
+    SampleTimer {
+        id: refreshTimer
+        running: Harness.autoAct === "settings-refresh"
+        /// The chapter has been worked; the tick after is the store's answer.
+        property bool acted: false
+        onTriggered: {
+            if (!settingsDialog.opened) {
+                settingsDialog.openAt("app")
+                return
+            }
+            if (!refreshTimer.acted) {
+                const parts = Harness.autoActArg.split(":")
+                acts.appPane.autoTypeRefresh(parts[0] || "", parts[1] || "", parts[2] || "", parts[3] || "",
+                                             parts[4] || "")
+                refreshTimer.acted = true
+                return
+            }
+            refreshTimer.stop()
+            Harness.report("settings_refresh " + acts.appPane.refreshTally())
+            window.finishAutoAct()
+        }
+    }
+
+    // PGG_AUTO_ACT=settings-refresh-leave <floor>:<ceiling>:<first>:<second>: the way out taken with the `REFRESH`
+    // chapter's four bound boxes holding these texts, never finished (`SettingsAppPane.autoLeaveBounds`) — an empty part
+    // is an emptied box, which only the way out writes. Both pairs are first set off their defaults through the
+    // chapter's own door, so an emptied box has a default to go back to. The store's answer after the close is judged.
+    SampleTimer {
+        id: refreshLeaveTimer
+        running: Harness.autoAct === "settings-refresh-leave"
+        /// 0: the screen is coming up; 1: the pairs are off their defaults; 2: the way out has been taken.
+        property int step: 0
+        onTriggered: {
+            if (refreshLeaveTimer.step === 0) {
+                if (!settingsDialog.opened) {
+                    settingsDialog.openAt("app")
+                    return
+                }
+                acts.appPane.autoTypeRefresh("7", "20", "auto", "9", "60")
+                refreshLeaveTimer.step = 1
+                return
+            }
+            if (refreshLeaveTimer.step === 1) {
+                const parts = Harness.autoActArg.split(":")
+                acts.appPane.autoLeaveBounds(parts[0] || "", parts[1] || "", parts[2] || "", parts[3] || "")
+                settingsDialog.escapeOut()
+                refreshLeaveTimer.step = 2
+                return
+            }
+            // The fields are written as the close ends.
+            if (settingsDialog.visible)
+                return
+            refreshLeaveTimer.stop()
+            Harness.report("settings_refresh_leave " + acts.appPane.refreshStore() + " open=" + settingsDialog.opened)
             window.finishAutoAct()
         }
     }

@@ -257,6 +257,13 @@ pub struct RepoTab {
     /// entry); the least whole of its parts (破棄記録仕様.md §4).
     restore_seq: i32,
     restore_how: String,
+    /// This tree's paced reads that have ended (`TabMsg::PacedRead`): the
+    /// page reads the file on screen again after each.
+    paced_seq: i32,
+    /// The other copies whose paced read ended in this notify, by the path
+    /// git printed: the page reads a copy's pane again when its copy is
+    /// among them. Emptied by every notify.
+    paced_copies: Vec<String>,
     /// The one write a run is waiting for, by the id its ask was given,
     /// compared by equality alone (`write_watch`).
     write_watch: WriteWatch,

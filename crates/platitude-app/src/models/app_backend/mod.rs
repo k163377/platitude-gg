@@ -102,13 +102,25 @@ pub struct AppBackend {
     git_concurrency: i32,
     git_concurrency_max: i32,
     git_concurrency_default: i32,
-    /// How often the other working copies are read for uncommitted work,
-    /// in seconds; 0 is off. Floor and ceiling are core's
+    /// How the other working copies are read for uncommitted work, as the
+    /// settings file spells it (`settings::CopiesReading::word`).
+    copies_reading: String,
+    /// The fixed interval, in seconds — kept while another reading is
+    /// chosen. Floor and ceiling are core's
     /// (`session::copies_interval_secs`).
     copies_interval_secs: i32,
     copies_interval_min: i32,
     copies_interval_max: i32,
-    copies_interval_ms: i32,
+    /// The shortest and the longest interval a repository on screen is read
+    /// again at, and the same pair for each other copy read automatically
+    /// (`session::pace`). The range is core's (`session::pace_bounds_secs`);
+    /// an emptied box is the default, which is core's too.
+    refresh_floor_secs: i32,
+    refresh_ceiling_secs: i32,
+    copies_floor_secs: i32,
+    copies_ceiling_secs: i32,
+    pace_min_secs: i32,
+    pace_max_secs: i32,
     /// Commits a graph opens with; 0 is the whole history (the screen's own
     /// box). Application-wide: it is about how much this person reads.
     initial_commits: i32,

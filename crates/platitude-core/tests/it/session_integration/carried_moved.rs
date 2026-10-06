@@ -1,12 +1,14 @@
 //! A copy that has committed since its reading was taken: what the
-//! graph draws for it in between. The worktree listing rides the page's
-//! tick and each copy's `status` a slower one, so a row drawn from the
+//! graph draws for it in between. The worktree listing rides this tree's
+//! reads and each copy's `status` its own turn, so a row drawn from the
 //! older reading would stand on a commit that copy has left.
+
+use std::time::Duration;
 
 use crate::support::TestRepo;
 use crate::support::session::{opened_with, scenario};
 use crate::support::wait::bounded;
-use platitude_core::session::SessionEvent;
+use platitude_core::session::{PaceBounds, SessionEvent};
 
 /// A second working copy beside `repo`, dirty enough to draw a row.
 fn a_copy_beside(repo: &mut TestRepo) -> std::path::PathBuf {
@@ -72,8 +74,8 @@ async fn settled_with_row(
         .expect("the row was drawn above a commit")
 }
 
-/// The other order, which a record written only by the page's tick gets
-/// wrong: the copies' pass takes its own listing before reading them, so
+/// The other order, which a record written only by this tree's listing
+/// gets wrong: the copies' pass takes its own listing before reading them, so
 /// its reading can be the fresher one, and the row is drawn on the commit
 /// it names.
 #[tokio::test(flavor = "multi_thread")]
@@ -87,7 +89,7 @@ async fn a_reading_fresher_than_the_page_s_listing_keeps_its_row() {
     repo.git_in(&copy, &["commit", "-m", "feat: the copy records its own"]);
     std::fs::write(copy.join("still.txt"), "u\n").expect("a second file in the copy");
 
-    // Only the copies' pass: the page's listing has not run since the
+    // Only the copies' pass: this tree's listing has not run since the
     // commit, so this pass's is the only record of where the copy stands.
     let pass = session
         .refresh_carried()
@@ -126,24 +128,29 @@ async fn a_copy_that_has_committed_draws_no_row_until_its_reading_catches_up() {
     repo.git_in(&copy, &["commit", "-m", "feat: the copy records its own"]);
     std::fs::write(copy.join("still.txt"), "u\n").expect("a second file in the copy");
 
-    // The page's tick: the listing moves where the copy stands, and the
-    // refs read sees its branch move, which asks for the walk. The copy's
-    // reading is not retaken yet.
-    let owed = bounded(
-        "the worktree listing",
-        session
-            .refresh_worktrees()
-            .expect("the session is open, so the listing is read"),
-    )
-    .await
-    .expect("the listing task");
-    assert!(owed.is_empty(), "the listing left reads owed: {owed:?}");
-    bounded("the page's poll", session.refresh_poll_tracked().outcome()).await;
+    // This tree's read, under bounds nothing falls due within: the listing
+    // moves where the copy stands, and the refs read sees its branch move,
+    // which asks for the walk. The copy's reading is not retaken by it.
+    let hour = Duration::from_secs(3600);
+    session.set_pace_bounds(PaceBounds {
+        own_floor: hour,
+        own_ceiling: hour,
+        copy_floor: hour,
+        copy_ceiling: hour,
+    });
+    session.set_paced(true);
+    session.poll_now();
 
-    // Asked by `RepoSession::carried_current`.
-    bounded(
-        "the reading asked for when the listing moved",
-        session.wait_for_carried_pass(),
+    // Asked for at once by `RepoSession::carried_current` as that walk
+    // draws the copy behind the listing, and read at the pace.
+    sink.wait_for(
+        "the copy's reading asked for when the listing moved",
+        |events| {
+            events
+                .iter()
+                .any(|e| matches!(e, SessionEvent::PacedRead { copy: Some(_) }))
+                .then_some(())
+        },
     )
     .await;
     let back = sink

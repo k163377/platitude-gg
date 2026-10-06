@@ -193,6 +193,7 @@ impl RepoSession {
             read_owed: std::sync::atomic::AtomicBool::new(false),
             carried_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             copies: super::carried::Copies::default(),
+            pacing: super::pacer::Pacing::default(),
             refs_read: ReadFlight::default(),
             status_read: ReadFlight::default(),
             stash_read: ReadFlight::default(),
@@ -242,6 +243,9 @@ async fn settle(s: Arc<RepoSession>, path: PathBuf) {
             // accepted before the order is installed would take no place
             // in it (`session::write_order`).
             s.join_write_order(&info);
+            // Before the event too: the page told it is open may pace its
+            // reads at once, and the opening's read must count as the first.
+            s.paced_from_the_opening();
             s.sink.event(SessionEvent::Opened { info });
             // First, so the UI can ask for a missing identity before the
             // first commit fails on it.

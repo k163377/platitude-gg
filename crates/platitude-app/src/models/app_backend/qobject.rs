@@ -95,6 +95,12 @@ impl AppBackend {
         Member = git_concurrency_default,
         Constant
     );
+    // "auto" | "fixed" | "off" (`settings::CopiesReading::word`).
+    qproperty!(
+        "copiesReading",
+        Member = copies_reading,
+        Notify = settings_changed
+    );
     qproperty!(
         "copiesIntervalSecs",
         Member = copies_interval_secs,
@@ -102,13 +108,30 @@ impl AppBackend {
     );
     qproperty!("copiesIntervalMin", Member = copies_interval_min, Constant);
     qproperty!("copiesIntervalMax", Member = copies_interval_max, Constant);
-    // The page's `Timer` binds to this, so no arithmetic stands in the
-    // binding.
+    // The floors and ceilings of the reads while a repository is on screen
+    // (`session::pace`), and the range a box can ask for.
     qproperty!(
-        "copiesIntervalMs",
-        Member = copies_interval_ms,
+        "refreshFloorSecs",
+        Member = refresh_floor_secs,
         Notify = settings_changed
     );
+    qproperty!(
+        "refreshCeilingSecs",
+        Member = refresh_ceiling_secs,
+        Notify = settings_changed
+    );
+    qproperty!(
+        "copiesFloorSecs",
+        Member = copies_floor_secs,
+        Notify = settings_changed
+    );
+    qproperty!(
+        "copiesCeilingSecs",
+        Member = copies_ceiling_secs,
+        Notify = settings_changed
+    );
+    qproperty!("paceMinSecs", Member = pace_min_secs, Constant);
+    qproperty!("paceMaxSecs", Member = pace_max_secs, Constant);
     qproperty!(
         "initialCommits",
         Member = initial_commits,
@@ -237,9 +260,24 @@ impl AppBackend {
         self.apply_git_concurrency(concurrency);
     }
 
+    /// How the other copies are read — `reading` as the file spells it —
+    /// and the fixed interval in seconds, kept whatever is chosen.
     #[qslot]
-    fn set_copies_interval_secs(&mut self, secs: i32) {
-        self.apply_copies_interval_secs(secs);
+    fn set_copies_reading(&mut self, reading: String, secs: i32) {
+        self.apply_copies_reading(&reading, secs);
+    }
+
+    /// The shortest and the longest interval a repository on screen is
+    /// read again at; zero (an emptied box) is that bound's default.
+    #[qslot]
+    fn set_refresh_bounds(&mut self, floor: i32, ceiling: i32) {
+        self.apply_pace_bounds(Some((floor, ceiling)), None);
+    }
+
+    /// The same pair for each other copy read automatically.
+    #[qslot]
+    fn set_copies_bounds(&mut self, floor: i32, ceiling: i32) {
+        self.apply_pace_bounds(None, Some((floor, ceiling)));
     }
 
     /// Records which git this computer runs (a path, or empty for the one

@@ -75,11 +75,8 @@ QtObject {
     // key-repeat interval (macOS 15ms / X11 25ms / Windows ≈32ms); the first repeat's delay is longer everywhere, so a
     // first press has always settled.
     readonly property int keyStepSettleMs: 150
-    // Repository reload while the page is on screen. A tick runs `git status -uall`, whose cost set this interval
-    // (ci/baseline/poll-cost-windows-x64.md); only a new measurement moves it.
-    readonly property int pollIntervalMs: 10000
-    // The other working copies' tick is a setting, not a constant here (`AppBackend.copiesIntervalMs`): a
-    // `git status` per copy scales with how many copies a person keeps.
+    // How often the repository is read while the page is on screen is the session's, not a constant here: the pace
+    // follows how heavy the reads are (`session::pace`).
     // The badge's `n/m` while a replay runs. It reads two files and starts no process; faster than this costs the
     // notify side — the work tree model's one `changed()` re-pulls every binding on the page.
     readonly property int opProgressMs: 250

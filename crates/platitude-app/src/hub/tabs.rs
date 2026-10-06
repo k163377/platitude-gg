@@ -481,10 +481,9 @@ fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {
 fn apply_repo_settings(session: &Arc<RepoSession>, applied: &platitude_core::settings::Defaults) {
     session.set_auto_fetch(minutes_to_interval(applied.auto_fetch_minutes));
     session.set_network_timeout(std::time::Duration::from_secs(applied.network_timeout_secs));
-    // The interval is the page's tick's (`RepoPage`); the session takes
-    // only whether other copies are read at all, so "never" also holds
-    // for an opening and a focus.
-    session.set_copies_read(applied.copies_interval_secs > 0);
+    // Off holds for an opening's pass too, not only the page's pace.
+    session.set_copies_pace(applied.copies_pace());
+    session.set_pace_bounds(applied.pace_bounds());
     // Walks nothing twice on a new session: with no workdir yet the
     // restart returns, and the opening's own `restart_log` reads this.
     session.set_log_limit(applied.initial_commits);

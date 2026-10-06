@@ -12,8 +12,8 @@ impl RepoTab {
     /// a commit's signature. Everything else goes, and a field added to
     /// this model belongs here — it is the copy's, or an answer the
     /// retired sink never delivers (`Hub::let_go_of_session`).
-    /// `write_seq` and `move_ask_seq` stay too: the staying page reads
-    /// them as rises (`RepoPage.seenWriteSeq`).
+    /// `write_seq`, `move_ask_seq` and `paced_seq` stay too: the staying
+    /// page reads them as rises (`RepoPage.seenWriteSeq`).
     ///
     /// Written out, not `*self = Self::default()`: dropping the value
     /// deletes its QObject, and the next slot call aborts ("No proxy").
@@ -86,6 +86,7 @@ impl RepoTab {
         self.write_report_reason = String::new();
         self.move_ask_local = String::new();
         self.move_ask_start = String::new();
+        self.paced_copies = Vec::new();
         self.auto_fetch_running = false;
         self.fetch_failures = 0;
         self.fetch_log_raised = false;

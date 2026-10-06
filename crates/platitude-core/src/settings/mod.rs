@@ -23,7 +23,7 @@ mod testkit;
 pub use self::toml::repo_key;
 pub use lock::{Claim, Lock};
 pub use place::{Build, Env, Platform};
-pub use prefs::{Defaults, Settings};
+pub use prefs::{CopiesReading, Defaults, Settings};
 pub use state::{AUTO_WIDTH, LayoutState, Sections, State, TabRecord, TabsState, WindowState};
 pub use store::Store;
 

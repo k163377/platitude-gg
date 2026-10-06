@@ -204,7 +204,7 @@ FocusScope {
         if (at !== "")
             page.standOnCopy(at, graphModel.carriedName(row))
     }
-    /// Points the pane at one copy and reads its files; the copies' tick keeps them current while it stands
+    /// Points the pane at one copy and reads its files; that copy's paced reads keep them current while it stands
     /// (`pollCarried`).
     function standOnCopy(at, name) {
         page.carriedPath = at
@@ -215,7 +215,7 @@ FocusScope {
     function dropCarried() {
         page.carriedPath = ""
         page.carriedName = ""
-        // Or the copies' pass goes on handing the pane a list nobody shows.
+        // Or the copy's reads go on handing the pane a list nobody shows.
         repoTab.leaveCarriedStatus()
     }
     /// Follows the copy being read across a graph pass, and lets go where the copy has gone clean and taken its row.
@@ -266,6 +266,7 @@ FocusScope {
             page.absorbMoveAsk()
             page.absorbWriteResult()
             page.absorbFetchRecovery()
+            page.absorbPacedReads()
         }
         // Only the first failure of a run: an offline machine would otherwise re-raise the panel every interval (デザイン規約
         // §git が言ったことを読む場所).
@@ -1863,31 +1864,31 @@ FocusScope {
     /// The tree moved, so the open file is stale — whoever moved it (デザイン規約 §diff の中のステージ
     /// 「作業ツリーが動いたら diff を読み直す」). The callers already know the tree moved.
     function reloadDiff() {
-        // Nothing this window writes moves another copy's file; its own tick keeps it current (`pollCarried`).
+        // Nothing this window writes moves another copy's file; that copy's own paced reads keep it current
+        // (`pollCarried`).
         if (!page.diffShown || page.diffKind === "commit" || !page.wipWritable)
             return
         diffModel.requestWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
-    /// Asks, on the page's tick, whether the file on screen still reads the same: the counts and the file list miss an
-    /// edit that moves neither (a conflict resolved elsewhere keeps its stage letters until added). Returns whether a
-    /// read went out — the only edge automation can latch on (`diff-tick`), since a quiet file gets no answer.
+    /// Asks, after each paced read of this tree, whether the file on screen still reads the same: the counts and the
+    /// file list miss an edit that moves neither (a conflict resolved elsewhere keeps its stage letters until added).
+    /// Returns whether a read went out — the only edge automation can latch on (`diff-tick`), since a quiet file gets
+    /// no answer.
     function pollDiff() {
         if (!page.diffShown || page.diffKind === "commit" || page.diffSettling)
             return false
-        // A copy's file is re-read on the copies' tick, aimed at the copy — through here it would read *this* window's
-        // file of that name into a pane showing somebody else's (`pollCarried`).
+        // A copy's file is re-read with that copy's reads, aimed at the copy — through here it would read *this*
+        // window's file of that name into a pane showing somebody else's (`pollCarried`).
         if (!page.wipWritable)
             return false
         return diffModel.refreshWorkTree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
-    /// The copies' tick over the copy being read: its file list and its open file. Off the page's tick — a `status` of
-    /// another tree is too dear for it (`RepoSession::refresh_carried`). `readList` is false beside a pass that began:
-    /// the pass reads that copy with the rest and hands the pane its list. Returns whether it asked, as `pollDiff`.
-    function pollCarried(readList) {
+    /// The open file of the copy being read: after each paced read of that copy, which handed the pane its list as it
+    /// read the row (`RepoSession::read_carried_status`), and when the window comes back. Returns whether it asked, as
+    /// `pollDiff`.
+    function pollCarried() {
         if (page.carriedPath === "")
             return false
-        if (readList)
-            repoTab.readCarriedStatus(page.carriedPath, page.carriedName)
         if (page.diffShown && page.diffKind !== "commit" && !diffModel.loading)
             diffModel.refreshCarried(page.carriedPath, page.diffKind, page.diffPath, page.diffOrigPath)
         return true
@@ -2504,6 +2505,8 @@ FocusScope {
         stashesModel.attachSection(page.tab_id, "stashes")
         tagsModel.attachSection(page.tab_id, "tags")
         page.restoreDraft()
+        // `onPacedChanged` hears only a change: a tab whose repository is already open starts out paced.
+        repoTab.setPaced(page.paced)
         const acts = harness.ask()
         if (acts !== null)
             acts.begin()
@@ -2513,34 +2516,36 @@ FocusScope {
     property int focusEpoch: 0
     onFocusEpochChanged: {
         if (page.visible && repoTab.state === "open") {
-            repoTab.refreshQuick()
-            // The window coming back is when an outside change is most likely waiting, so the file on screen is asked
-            // too — and the copy the pane stands on, read at once rather than when the pass beside it gets to it.
-            page.pollDiff()
-            page.pollCarried(true)
+            // The window coming back is when an outside change is most likely waiting: this tree now, with its stashes
+            // (the file on screen follows that read — `absorbPacedReads`), and of the other copies only the one the
+            // pane stands on, its row and its list at once rather than at its turn (`RepoSession::poll_now`). The rest
+            // keep their pace. That copy's open file is asked now; its list follows the copy's read.
+            repoTab.pollNow()
+            page.pollCarried()
         }
     }
 
-    /// True while the window is on screen (see Main.qml): the page shown there re-reads its repository on a tick, so a
-    /// commit made in a terminal or by an agent turns up on its own.
+    /// True while the window is on screen (see Main.qml): the page shown there has its repository read on the
+    /// session's pace, so a commit made in a terminal or by an agent turns up on its own.
     property bool onScreen: false
-    Timer {
-        interval: Metrics.pollIntervalMs
-        repeat: true
-        // Only the tab in front — the others catch up when switched to, so a tick reads one repository however many
-        // are open.
-        running: page.onScreen && page.visible && repoTab.state === "open"
-        onTriggered: page.pollRepo()
-    }
-    // What the other working copies are carrying, on a tick of its own because it costs a `status` per copy — the
-    // interval is the reader's setting (`AppBackend.copiesIntervalMs`, zero for never).
-    Timer {
-        interval: AppBackend.copiesIntervalMs
-        repeat: true
-        running: page.onScreen && page.visible && repoTab.state === "open" && AppBackend.copiesIntervalMs > 0
-        // A pass that begins reads the copy being read with the rest and hands the pane its list; one that does not (the
-        // last still out) leaves the pane to read its own (`pollCarried`).
-        onTriggered: page.pollCarried(!repoTab.refreshCarried())
+    /// What the session is told (`RepoSession::set_paced`): this tree and the other copies are read at its pace while
+    /// this holds. Only the tab in front — the others are let go of and read again when switched to. Not while the tab
+    /// stands in another copy: the session behind it is being replaced, and the new one is told as it opens.
+    readonly property bool paced: page.onScreen && page.visible && repoTab.state === "open" && !repoTab.standing
+    onPacedChanged: repoTab.setPaced(page.paced)
+    /// Paced reads that ended, as the tab counts them (`RepoTab.pacedSeq` / `pacedCopies`).
+    property int seenPacedSeq: 0
+    /// Each paced read of this tree is followed by the file on screen — a status that did not move says nothing about
+    /// a file whose bytes did (`pollDiff`); a read of the copy the pane stands on by that copy's open file — the read
+    /// handed the pane its list already (`pollCarried`). A turn later: this runs inside the tab's notify, and both
+    /// reach back into the tab.
+    function absorbPacedReads() {
+        if (repoTab.pacedSeq !== page.seenPacedSeq) {
+            page.seenPacedSeq = repoTab.pacedSeq
+            Qt.callLater(page.pollDiff)
+        }
+        if (page.carriedPath !== "" && repoTab.pacedCopies.indexOf(page.carriedPath) >= 0)
+            Qt.callLater(page.pollCarried)
     }
     // The badge counting a running replay out, on its own tick: two file reads, no process (デザイン規約
     // §進行中・長押しの定数). Only while the write is out — the status tick says when the operation ended;
@@ -2551,15 +2556,6 @@ FocusScope {
         running: page.visible && repoTab.state === "open" && page.replayRunning
         onTriggered: repoTab.refreshOpProgress()
     }
-    /// One tick: the repository, and the file the diff pane holds (`pollDiff`).
-    function pollRepo() {
-        repoTab.refreshPoll()
-        // The worktree listing rides this tick (one process): without it the WORKTREES rows and the mark saying a
-        // branch is another copy's freeze until the window is clicked.
-        repoTab.refreshWorktrees()
-        page.pollDiff()
-    }
-
     // Where the selection stands, kept so a commit that disappears from under it can be followed to whatever took its
     // place.
     property int selectedRow: -1

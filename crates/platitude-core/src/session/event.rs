@@ -136,6 +136,14 @@ pub enum SessionEvent {
         name: String,
         status: WorkTreeStatus,
     },
+    /// A read the page's pace started has ended (`session::pacer`): this
+    /// tree's when `copy` is `None`, else another working copy's, by the
+    /// path git printed for it. What the page follows with the file on
+    /// screen — a status that did not move says nothing about a file whose
+    /// bytes did.
+    PacedRead {
+        copy: Option<String>,
+    },
     StatusLoaded {
         status: WorkTreeStatus,
         /// The [`HeadObserved::seq`](SessionEvent::HeadObserved) this

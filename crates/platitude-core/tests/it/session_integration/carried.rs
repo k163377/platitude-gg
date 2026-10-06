@@ -12,7 +12,7 @@ use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened_with, scenario};
 use crate::support::wait::bounded;
 use platitude_core::process::{Limits, Pace, Priority, Slots};
-use platitude_core::session::{CarriedOutcome, Recording, SessionEvent};
+use platitude_core::session::{CarriedOutcome, CopiesPace, Recording, SessionEvent};
 
 /// A second working copy of `repo` beside it, carrying an untracked
 /// file — a row for the graph to draw, leashed to the commit both
@@ -90,7 +90,7 @@ async fn a_pass_in_flight_when_the_copies_are_turned_off_lands_nothing() {
         .expect("a pass begins: the copies are read and none is out");
     // Both queued behind the held slot: the rows come down, the walk is
     // asked for again.
-    session.set_copies_read(false);
+    session.set_copies_pace(CopiesPace::Off);
     drop(held);
     assert_eq!(
         bounded("the pass", pass.outcome()).await,

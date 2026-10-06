@@ -193,16 +193,62 @@ pub(super) fn concurrency(table: &Table, key: &str) -> Option<u32> {
         .map(crate::process::concurrency)
 }
 
-/// Seconds between passes over the other working copies: `0` is off,
-/// anything else clamped by `session::copies_interval_secs`, like
-/// `minutes`.
-pub(super) fn copies_interval(table: &Table, key: &str) -> Option<u32> {
-    table
-        .get(key)
+/// How the other working copies are read (`copies_reading`) and the fixed
+/// interval (`copies_interval_secs`, clamped by
+/// `session::copies_interval_secs`, like `minutes`), each falling back on
+/// its own to `fallback`.
+///
+/// A file without the reading was written before it was a choice of its
+/// own, when the interval alone said it: `0` was off, and any other number
+/// that interval, fixed. Both are carried over as the person chose them —
+/// a number that happens to equal the old default is a choice all the
+/// same, not consent to the automatic pace.
+pub(super) fn copies(
+    table: &Table,
+    fallback: (crate::settings::prefs::CopiesReading, u32),
+) -> (crate::settings::prefs::CopiesReading, u32) {
+    use crate::settings::prefs::CopiesReading;
+    let interval = table
+        .get("copies_interval_secs")
         .and_then(Value::as_integer)
         .filter(|v| *v >= 0)
-        .map(|v| u32::try_from(v).unwrap_or(u32::MAX))
+        .map(|v| u32::try_from(v).unwrap_or(u32::MAX));
+    let reading = table
+        .get("copies_reading")
+        .and_then(Value::as_str)
+        .and_then(CopiesReading::from_word)
+        .or(match interval {
+            Some(0) => Some(CopiesReading::Off),
+            Some(_) => Some(CopiesReading::Fixed),
+            None => None,
+        })
+        .unwrap_or(fallback.0);
+    let interval = interval
+        .filter(|v| *v > 0)
         .map(crate::session::copies_interval_secs)
+        .unwrap_or(fallback.1);
+    (reading, interval)
+}
+
+/// A floor and a ceiling in seconds, each falling back on its own to
+/// `fallback`, then held to range together by `session::pace_bounds_secs`
+/// — a ceiling written under the floor comes back as the floor.
+pub(super) fn pace_pair(
+    table: &Table,
+    (floor_key, ceiling_key): (&str, &str),
+    (floor, ceiling): (u32, u32),
+) -> (u32, u32) {
+    let secs = |key: &str| {
+        table
+            .get(key)
+            .and_then(Value::as_integer)
+            .filter(|v| *v >= 0)
+            .map(|v| u32::try_from(v).unwrap_or(u32::MAX))
+    };
+    crate::session::pace_bounds_secs(
+        secs(floor_key).unwrap_or(floor),
+        secs(ceiling_key).unwrap_or(ceiling),
+    )
 }
 
 pub(super) fn timeout_secs(table: &Table, key: &str) -> Option<u64> {

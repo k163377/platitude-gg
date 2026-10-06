@@ -84,6 +84,7 @@ mod ops_tree;
 mod pace;
 #[cfg(test)]
 mod pace_tests;
+mod pacer;
 mod pass_watch;
 mod print;
 mod published;

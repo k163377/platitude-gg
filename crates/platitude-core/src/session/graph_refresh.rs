@@ -1,6 +1,7 @@
 //! Background graph refresh entry points and their completion boundary.
 
 use super::log::PassReads;
+use super::refresh::Listed;
 use super::*;
 
 /// What a background graph refresh established when it completed — the
@@ -350,14 +351,9 @@ impl RepoSession {
         task
     }
 
-    /// Rebuilds the graph and waits for its answer, following a takeover
-    /// to the ask that took it over ([`Self::graph_answer`]) — what a
-    /// write's settling waits on.
-    pub(super) async fn settle_graph(self: &Arc<Self>) -> RefreshOutcome {
-        self.settle_graph_with(None).await
-    }
-
-    /// [`Self::settle_graph`] with the reads the caller already took.
+    /// Rebuilds the graph with the reads the caller already took and waits
+    /// for its answer, following a takeover to the ask that took it over
+    /// ([`Self::graph_answer`]) — what a write's settling waits on.
     pub(super) async fn settle_graph_with(
         self: &Arc<Self>,
         reads: Option<PassReads>,
@@ -391,10 +387,11 @@ impl RepoSession {
             .unwrap_or(RefreshOutcome::Cancelled)
     }
 
-    /// The periodic re-read while the repository is on screen: refs and
-    /// status only. Stashes and worktrees ride the focus and post-write
-    /// refreshes — two more processes a tick for what rarely moves on its
-    /// own.
+    /// Refs and status read again, and the rebuild they ask for — the half
+    /// of the page's paced read (`session::pacer`, which adds the worktree
+    /// listing) that a write landing in this tree asks for too
+    /// ([`Self::read_again`]). Stashes ride the focus and post-write
+    /// refreshes.
     ///
     /// Skipped while the previous poll is still going (a slow repository
     /// polls less often) and while any write of this working tree runs
@@ -450,56 +447,19 @@ impl RepoSession {
     }
 
     fn start_refresh_poll(self: &Arc<Self>) -> RefreshTask {
-        if self
-            .tree_write()
-            .is_some_and(|write| !write.kind.replays_history())
-        {
-            tracing::trace!("poll skipped: a write is running");
-            return RefreshTask::ready(RefreshOutcome::WriteBusy);
-        }
-        let Ok(permit) = Arc::clone(&self.poll_slot).try_acquire_owned() else {
-            tracing::trace!("poll skipped: the previous one has not finished");
-            return RefreshTask::ready(RefreshOutcome::Busy);
+        let ticket = match self.begin_poll() {
+            Ok(ticket) => ticket,
+            Err(skipped) => return RefreshTask::ready(skipped),
         };
-        // The reads below answer for anything that landed before this
-        // moment; a write landing inside them sets this again
-        // ([`Self::read_again`]).
-        self.read_owed.store(false, Ordering::SeqCst);
-        let held = self.graph_passes.enter();
         let s = Arc::clone(self);
         // Nobody follows a tick that was taken over (`RefreshTask::ask`).
         let (finished, task) = RefreshTask::pending(None);
         self.runtime.spawn(async move {
-            let _held = held;
-            // Settled before either read starts: inside the join, the
-            // status read could consume the line-ending staleness before
-            // the refs read sets it, leaving a withdrawn notice standing.
-            // Idempotent — the refs read then pays only a stat.
-            s.forget_what_the_config_decides();
-            // Both reads can call for a rebuild, but one walk serves both:
-            // an external commit moves a ref *and* cleans the tree.
-            let (refs, tree) = tokio::join!(s.read_refs(), s.read_status());
-            let outcome = if refs == Reread::Moved || tree == Reread::Moved {
-                let Some(workdir) = s.workdir() else {
-                    drop(permit);
-                    if finished.send(RefreshOutcome::Cancelled).is_err() {
-                        tracing::trace!("poll completion was not observed");
-                    }
-                    s.take_the_read_owed();
-                    return;
-                };
-                let (run_cancel, mut run) = s.take_log_run();
-                let options = s.log_options();
-                let outcome = s.run_swap_pass(&workdir, options, &run_cancel, None).await;
-                run.answer(outcome);
-                outcome
-            } else {
-                RefreshOutcome::Unchanged
-            };
+            let nothing_listed = async { (StashRead::default(), Listed::default()) };
+            let poll = s.poll_reads(ticket, nothing_listed).await;
             // The completion is also the single-flight ownership boundary:
             // a caller woken by it must be able to start the following poll.
-            drop(permit);
-            if finished.send(outcome).is_err() {
+            if finished.send(poll.outcome).is_err() {
                 tracing::trace!("poll completion was not observed");
             }
             // Last, and after the slot is back: a read this session was
@@ -508,4 +468,98 @@ impl RepoSession {
         });
         task
     }
+
+    /// Takes the poll's single flight, or says why the poll is skipped.
+    /// Taken on the caller's thread, so a tick that finds the last one
+    /// out is dropped at once.
+    pub(super) fn begin_poll(self: &Arc<Self>) -> Result<PollTicket, RefreshOutcome> {
+        if self
+            .tree_write()
+            .is_some_and(|write| !write.kind.replays_history())
+        {
+            tracing::trace!("poll skipped: a write is running");
+            return Err(RefreshOutcome::WriteBusy);
+        }
+        let Ok(permit) = Arc::clone(&self.poll_slot).try_acquire_owned() else {
+            tracing::trace!("poll skipped: the previous one has not finished");
+            return Err(RefreshOutcome::Busy);
+        };
+        // The reads below answer for anything that landed before this
+        // moment; a write landing inside them sets this again
+        // ([`Self::read_again`]).
+        self.read_owed.store(false, Ordering::SeqCst);
+        Ok(PollTicket {
+            permit,
+            held: self.graph_passes.enter(),
+        })
+    }
+
+    /// The poll's reads, the listings the caller adds beside them, and the
+    /// rebuild they ask for, in the caller's task — the paced read meters
+    /// them there (`session::pacer`). Gives the single flight back before
+    /// it answers; the read owed is the caller's to take after that
+    /// ([`Self::take_the_read_owed`]).
+    pub(super) async fn poll_reads(
+        self: &Arc<Self>,
+        ticket: PollTicket,
+        listings: impl Future<Output = (StashRead, Listed)>,
+    ) -> PollRead {
+        let PollTicket { permit, held } = ticket;
+        // Settled before either read starts: inside the join, the status
+        // read could consume the line-ending staleness before the refs
+        // read sets it, leaving a withdrawn notice standing. Idempotent —
+        // the refs read then pays only a stat.
+        self.forget_what_the_config_decides();
+        // Every read can call for a rebuild, but one walk serves them all,
+        // after all of them: an external commit moves a ref *and* cleans
+        // the tree, and a copy taken or a stash dropped outside moves
+        // neither — the listings are their only word.
+        let (refs, tree, (stashes, listed)) =
+            tokio::join!(self.read_refs(), self.read_status(), listings);
+        let moved = refs == Reread::Moved || tree == Reread::Moved || stashes.moved;
+        let outcome = if moved || listed.walk {
+            self.walk_here(stashes).await
+        } else {
+            RefreshOutcome::Unchanged
+        };
+        drop(permit);
+        PollRead {
+            outcome,
+            _held: held,
+        }
+    }
+
+    /// A swap pass in the caller's task, as [`Self::refresh_log`] runs one
+    /// in a task of its own — walking with the stashes a listing behind
+    /// the same reason read, while they still stand
+    /// ([`Self::pass_reads_listed`]).
+    pub(super) async fn walk_here(self: &Arc<Self>, stashes: StashRead) -> RefreshOutcome {
+        let Some(workdir) = self.workdir() else {
+            return RefreshOutcome::Cancelled;
+        };
+        let (run_cancel, mut run) = self.take_log_run();
+        let _held = self.graph_passes.enter();
+        let reads = self.pass_reads_listed(&workdir, &run_cancel, stashes).await;
+        let options = self.log_options();
+        let outcome = self
+            .run_swap_pass(&workdir, options, &run_cancel, reads)
+            .await;
+        run.answer(outcome);
+        outcome
+    }
+}
+
+/// The poll's single flight, held, and its place among the graph passes.
+pub(super) struct PollTicket {
+    permit: tokio::sync::OwnedSemaphorePermit,
+    held: GraphPassHeld,
+}
+
+/// What a poll came to, and its place among the graph passes, held until
+/// the caller drops it — after it has taken the read owed
+/// ([`RepoSession::take_the_read_owed`]), whose poll enters before this
+/// leaves, so a wait for the passes never sees idle between the two.
+pub(super) struct PollRead {
+    pub(super) outcome: RefreshOutcome,
+    _held: GraphPassHeld,
 }

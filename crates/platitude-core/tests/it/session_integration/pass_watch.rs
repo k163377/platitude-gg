@@ -13,7 +13,7 @@ use std::sync::Arc;
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, PassDoors, is_stream_event, open_with_doors, scenario};
 use crate::support::wait::bounded;
-use platitude_core::session::{PassStep, RefreshOutcome, RepoSession, SessionEvent};
+use platitude_core::session::{PaceBounds, PassStep, RefreshOutcome, RepoSession, SessionEvent};
 
 /// `scenario()` opened with the doors in hand and the opening's passes
 /// over, so the pass each test takes down is the one it asked for.
@@ -222,4 +222,43 @@ async fn a_closing_session_is_told_nothing() {
         )),
         "a closing window heard nothing: {events:?}"
     );
+}
+
+/// A paced read of this tree whose walk falls over still ends for the
+/// pace: left running, it would start no read of this tree again, and the
+/// window coming back would read nothing. The bounds are an hour, so the
+/// second read is the one the second ask starts.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_paced_read_whose_walk_falls_over_still_ends_for_the_pace() {
+    let (mut repo, sink, session, doors) = settled().await;
+    let hour = std::time::Duration::from_secs(3600);
+    session.set_pace_bounds(PaceBounds {
+        own_floor: hour,
+        own_ceiling: hour,
+        copy_floor: hour,
+        copy_ceiling: hour,
+    });
+    session.set_paced(true);
+    // A commit made outside, so the read walks.
+    repo.commit_file("outside.txt", "o\n", "made outside");
+
+    doors.run_inside_next_pass(PassStep::Swapping, || panic!("the walk fell over"));
+    session.poll_now();
+    sink.wait_for("the fallen walk's mark", |events| {
+        events
+            .iter()
+            .find(|event| matches!(event, SessionEvent::LogStale { stale: true }))
+            .map(|_| ())
+    })
+    .await;
+
+    session.poll_now();
+    sink.wait_for("the next read of this tree", |events| {
+        events
+            .iter()
+            .any(|event| matches!(event, SessionEvent::PacedRead { copy: None }))
+            .then_some(())
+    })
+    .await;
+    session.close();
 }

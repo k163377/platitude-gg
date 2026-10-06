@@ -241,7 +241,12 @@ mod tests {
                 initial_commits: Some(4000),
                 git_path: "C:/tools/git/cmd/git.exe".into(),
                 git_concurrency: 8,
+                copies_reading: crate::settings::prefs::CopiesReading::Fixed,
                 copies_interval_secs: 45,
+                refresh_floor_secs: 3,
+                refresh_ceiling_secs: 20,
+                copies_floor_secs: 10,
+                copies_ceiling_secs: 60,
             },
             avatars: crate::avatar::Avatars::from_values(&[toml::Value::Table({
                 let mut t = Table::new();

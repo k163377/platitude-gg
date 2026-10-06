@@ -21,6 +21,7 @@ impl RepoTab {
         // alike: a classification read a second time sequences the screen
         // twice off one answer.
         self.write_answers.clear();
+        self.paced_copies.clear();
         self.commit_out.new_notify();
         self.read_commit_out();
         self.branch_delete_out.new_notify();
@@ -198,6 +199,8 @@ impl RepoTab {
                 // Arrives between this write's start and its end, so the
                 // flag is already standing when the answer below is read.
                 TabMsg::WriteStopped => self.last_write_stopped = true,
+                TabMsg::PacedRead { copy: None } => self.paced_seq = self.paced_seq.wrapping_add(1),
+                TabMsg::PacedRead { copy: Some(path) } => self.paced_copies.push(path),
                 TabMsg::WriteState {
                     id,
                     kind,

@@ -159,6 +159,10 @@ impl RepoTab {
     // came back: "whole" | "unstaged" | "stash".
     qproperty!("restoreSeq", Member = restore_seq, Notify = changed);
     qproperty!("restoreHow", Member = restore_how, Notify = changed);
+    // This tree's paced reads that have ended, and the other copies whose
+    // paced read ended in this notify (`TabMsg::PacedRead`).
+    qproperty!("pacedSeq", Member = paced_seq, Notify = changed);
+    qproperty!("pacedCopies", Member = paced_copies, Notify = changed);
     // Where the editor's own commit answered in this notify, or -1 —
     // matched by the press's id, whatever order the answers came in
     // (`ops::Press`).
@@ -562,53 +566,42 @@ impl RepoTab {
         self.take_feed()
     }
 
-    /// Cheap refresh: refs + status + stashes (window focus, post-op).
+    /// Refs, status, the listings and a pass over the other copies, with
+    /// one walk (`RepoSession::refresh_quick`) — for the harness; a page on
+    /// screen is read at its pace (`setPaced`).
     #[qslot]
     fn refresh_quick(&mut self) {
         self.with_session(|s| s.refresh_quick());
     }
 
-    /// The tick the page runs while it is on screen: refs + status, and a
-    /// graph rebuild only when one of them moved. Ticks that arrive while
-    /// the session is busy are dropped there.
+    /// Whether the page is on screen to be read for: this tree and the
+    /// other copies are then read on the session's pace
+    /// (`RepoSession::set_paced`), and each read that ends says so
+    /// (`pacedRead`).
     #[qslot]
-    fn refresh_poll(&mut self) {
-        self.with_session(|s| s.refresh_poll());
+    fn set_paced(&mut self, paced: bool) {
+        self.with_session(|s| s.set_paced(paced));
     }
 
-    /// The worktree listing, on the page's tick beside the reads above:
-    /// one process, cheap enough for a tick another copy's `status` may
-    /// not ride. Off the tick, the WORKTREES rows and the other-copy
-    /// branch mark freeze until the window is clicked.
+    /// The window came back: this tree now, with its stashes
+    /// (`RepoSession::poll_now`). The other copies keep their pace.
     #[qslot]
-    fn refresh_worktrees(&mut self) {
-        self.with_session(|s| {
-            s.refresh_worktrees();
-        });
-    }
-
-    /// What the other copies are carrying, on a slower tick of its own: a
-    /// whole `status` per copy (`RepoSession::refresh_carried`). Answers
-    /// whether a pass began — one that did hands the pane the copy it
-    /// stands on, one that did not (the last still out, the copies off)
-    /// leaves the pane to read its own (`RepoPage.pollCarried`).
-    #[qslot]
-    fn refresh_carried(&mut self) -> bool {
-        crate::hub::from_session(self.tab_id, |s| s.refresh_carried().is_some()).unwrap_or(false)
+    fn poll_now(&mut self) {
+        self.with_session(|s| s.poll_now());
     }
 
     /// What one other copy is holding, file by file — the pane's read,
-    /// asked when a copy's row is selected, when the window comes back,
-    /// and on the copies' tick when no pass began. It stands the pane on
-    /// that copy: the copies' pass hands the pane the copy's list from
-    /// there on.
+    /// asked when a copy's row is selected and when the window comes back.
+    /// It stands the pane on that copy: each read of the copy hands the
+    /// pane its list from there on.
     #[qslot]
     fn read_carried_status(&mut self, path: String, name: String) {
         self.with_session(|s| s.read_carried_status(path, name));
     }
 
-    /// The pane is about this window's own tree again: no pass hands it
-    /// another copy's list (`RepoSession::leave_carried_status`).
+    /// The pane is about this window's own tree again: no read of the
+    /// copies hands it another copy's list
+    /// (`RepoSession::leave_carried_status`).
     #[qslot]
     fn leave_carried_status(&mut self) {
         self.with_session(|s| s.leave_carried_status());

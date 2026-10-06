@@ -115,20 +115,54 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "named=true native=false answered=false offers=false held=false restart=false state=missing",
     },
-    // The process chapter's two boxes, typed and read back off the store
-    // (the tick reads the interval in a unit no box shows). With no
-    // argument both are emptied: the default count is the machine's own
-    // (a third of its threads), so the line says `default=true`, and
-    // `copies_ms=0` is what stops the tick.
+    // The process chapter's box, typed and read back off the store. With
+    // no argument the box is emptied: the default count is the machine's
+    // own (a third of its threads), so the line says `default=true`.
     Verb {
         name: "settings-processes",
         // Three, which no machine defaults to (floor four, ceiling eight),
         // so `default=false` holds on every machine.
+        when: &[(Arg::Is("3"), "git_processes concurrency=3 default=false")],
+        plain: "default=true",
+    },
+    // The refresh chapter, worked and read back off the store, with what
+    // the chooser shows and which boxes stand beside it (a box that is not
+    // there is an absence a picture leaves to the eye). A fresh store reads
+    // at the default bounds and reads the copies automatically; a ceiling
+    // typed under its floor comes back as the floor.
+    Verb {
+        name: "settings-refresh",
+        when: &[
+            (
+                Arg::Is("2:30:auto:3:90"),
+                "settings_refresh refresh=2-30 copies=auto copies_bounds=3-90 copies_secs=30 shown=Automatic boxes=bounds",
+            ),
+            (
+                Arg::Is("::fixed:20"),
+                "settings_refresh refresh=5-15 copies=fixed copies_bounds=5-45 copies_secs=20 shown=Fixed boxes=every",
+            ),
+            (
+                Arg::Is("::off"),
+                "settings_refresh refresh=5-15 copies=off copies_bounds=5-45 copies_secs=30 shown=Off boxes=none",
+            ),
+            (
+                Arg::Is("20:10"),
+                "settings_refresh refresh=20-20 copies=auto",
+            ),
+        ],
+        plain: "settings_refresh refresh=5-15 copies=auto copies_bounds=5-45 copies_secs=30 shown=Automatic boxes=bounds",
+    },
+    // The way out over the chapter's bound boxes left unfinished, both
+    // pairs set off their defaults first (7-20, 9-60): what each box held
+    // is what the store keeps — an emptied box its default, a typed one
+    // its number — whichever pair the close writes first.
+    Verb {
+        name: "settings-refresh-leave",
         when: &[(
-            Arg::Is("3:10"),
-            "git_processes concurrency=3 default=false copies_secs=10 copies_ms=10000",
+            Arg::Is("3::7:"),
+            "settings_refresh_leave refresh=3-15 copies=auto copies_bounds=7-45 copies_secs=30 open=false",
         )],
-        plain: "default=true copies_secs=0 copies_ms=0",
+        plain: "settings_refresh_leave refresh=5-15 copies=auto copies_bounds=5-45 copies_secs=30 open=false",
     },
     // The way out taken over a git waiting to be applied: the screen
     // still stands with its mark turned, and what holds it must be the

@@ -136,11 +136,12 @@ impl RepoSession {
 
     /// [`Self::pass_reads`] with the stashes a listing behind the same
     /// reason already read — for a caller that read them before asking for
-    /// the walk (`write::settle_after`, `refresh_quick`). `None` where they
-    /// no longer stand ([`Self::stashes_standing`], checked here, just
-    /// before the walk is asked for, which is what can be overtaken): what
-    /// overtook the list moved the rest a pass reads ahead as well (HEAD,
-    /// the remote tips), so the pass is left to read all of it at its turn.
+    /// the walk (`write::settle_after`, `refresh_quick`, `poll_reads`).
+    /// `None` where they no longer stand ([`Self::stashes_standing`],
+    /// checked here, just before the walk is asked for, which is what can
+    /// be overtaken): what overtook the list moved the rest a pass reads
+    /// ahead as well (HEAD, the remote tips), so the pass is left to read
+    /// all of it at its turn.
     pub(super) async fn pass_reads_listed(
         self: &Arc<Self>,
         workdir: &std::path::Path,
@@ -539,8 +540,9 @@ impl RepoSession {
 
     /// Refreshes refs, status(+op state), stashes and worktrees
     /// concurrently, then asks for the graph once if any of them moved —
-    /// handing the walk the stash list the listing read. Cheap enough for
-    /// window-focus and post-operation triggers.
+    /// handing the walk the stash list the listing read — the manual
+    /// refresh. A page on screen is read at its pace instead
+    /// (`session::pacer`).
     ///
     /// One rebuild for all of them: asked apiece, a commit made outside
     /// (a ref moved, the tree came clean) asked twice, the second taking
@@ -549,7 +551,7 @@ impl RepoSession {
     /// walk as they land).
     pub fn refresh_quick(self: &Arc<Self>) {
         self.settle_snapshots(true);
-        // Focus coming back is when the other copies most likely moved.
+        // A refresh asked by hand reads every copy as well.
         self.refresh_carried();
     }
 

@@ -194,14 +194,17 @@ pub struct RepoSession {
     /// ([`RepoSession::read_again`]). Remembered, because a refused clock
     /// tick comes round again and a write's news does not.
     pub(super) read_owed: std::sync::atomic::AtomicBool,
-    /// The poll's permit, for the other copies' own tick: a pass carries a
-    /// `status` per copy and on a big tree can outlast its interval.
+    /// One permit for a read of the other copies — one copy's, or a pass
+    /// over all of them — so two never run at once.
     pub(super) carried_slot: Arc<tokio::sync::Semaphore>,
-    /// Whether the other copies are read at all (`set_copies_read` —
-    /// the settings' "never", which holds for the page's tick, an
-    /// opening and a focus fire alike), what the last pass left and the
-    /// pass in flight, under one lock (`carried::Copies`).
+    /// Whether the other copies are read at all (`set_copies_pace` — the
+    /// settings' "off", which holds for the page's pace and an opening
+    /// alike), which there are, what their reads left and the read in
+    /// flight, under one lock (`carried::Copies`).
     pub(super) copies: super::carried::Copies,
+    /// When this tree and the other copies are read while the page is on
+    /// screen (`session::pacer`).
+    pub(super) pacing: super::pacer::Pacing,
     /// One pass in flight per snapshot, for the reads asked for from more
     /// than one place at once ([`ReadFlight`]).
     pub(super) refs_read: ReadFlight<Reread>,

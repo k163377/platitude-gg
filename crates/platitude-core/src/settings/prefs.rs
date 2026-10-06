@@ -4,9 +4,44 @@ use toml::{Table, Value};
 
 use super::SCHEMA_VERSION;
 use super::toml::{
-    clamp_to_i64, concurrency, copies_interval, initial_commits, minutes, sub_table, text,
+    clamp_to_i64, concurrency, copies, initial_commits, minutes, pace_pair, sub_table, text,
     timeout_secs,
 };
+
+/// How the other working copies of a repository are read for uncommitted
+/// work (`session::pace`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CopiesReading {
+    /// Each copy at an interval its weight sets — what a fresh file starts
+    /// with.
+    #[default]
+    Auto,
+    /// Every copy at [`Defaults::copies_interval_secs`].
+    Fixed,
+    Off,
+}
+
+impl CopiesReading {
+    /// As the file spells it.
+    #[must_use]
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Fixed => "fixed",
+            Self::Off => "off",
+        }
+    }
+
+    #[must_use]
+    pub fn from_word(word: &str) -> Option<Self> {
+        match word.trim() {
+            "auto" => Some(Self::Auto),
+            "fixed" => Some(Self::Fixed),
+            "off" => Some(Self::Off),
+            _ => None,
+        }
+    }
+}
 
 /// The values a person decided once and every repository is opened with
 /// (the `[defaults]` table). One set for every repository: they are
@@ -28,10 +63,20 @@ pub struct Defaults {
     /// How many git processes the application runs at once, across every
     /// repository (`process::Limits::of`).
     pub git_concurrency: u32,
-    /// Seconds between passes over the other working copies of a
-    /// repository for uncommitted work — one `git status` per copy per
-    /// pass (`session::carried`). Zero is off.
+    /// How the other working copies of a repository are read — one
+    /// `git status` per copy per read (`session::carried`).
+    pub copies_reading: CopiesReading,
+    /// Seconds between reads of each other copy where the reading is
+    /// [`CopiesReading::Fixed`]; kept while another is chosen, so choosing
+    /// it again brings the number back.
     pub copies_interval_secs: u32,
+    /// The shortest and the longest interval a repository on screen is read
+    /// again at (`session::pace`), through `session::pace_bounds_secs`.
+    pub refresh_floor_secs: u32,
+    pub refresh_ceiling_secs: u32,
+    /// The same pair for each other copy read automatically.
+    pub copies_floor_secs: u32,
+    pub copies_ceiling_secs: u32,
 }
 
 impl Default for Defaults {
@@ -42,7 +87,42 @@ impl Default for Defaults {
             initial_commits: Some(crate::session::DEFAULT_LOG_LIMIT),
             git_path: String::new(),
             git_concurrency: crate::process::default_concurrency(),
+            copies_reading: CopiesReading::default(),
             copies_interval_secs: crate::session::COPIES_INTERVAL_DEFAULT_SECS,
+            refresh_floor_secs: secs_of(crate::session::OWN_FLOOR),
+            refresh_ceiling_secs: secs_of(crate::session::OWN_CEILING),
+            copies_floor_secs: secs_of(crate::session::COPY_FLOOR),
+            copies_ceiling_secs: secs_of(crate::session::COPY_CEILING),
+        }
+    }
+}
+
+fn secs_of(duration: std::time::Duration) -> u32 {
+    u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
+}
+
+impl Defaults {
+    /// The floors and ceilings the session paces its reads by.
+    #[must_use]
+    pub fn pace_bounds(&self) -> crate::session::PaceBounds {
+        let secs = |s: u32| std::time::Duration::from_secs(s.into());
+        crate::session::PaceBounds {
+            own_floor: secs(self.refresh_floor_secs),
+            own_ceiling: secs(self.refresh_ceiling_secs),
+            copy_floor: secs(self.copies_floor_secs),
+            copy_ceiling: secs(self.copies_ceiling_secs),
+        }
+    }
+
+    /// What the session paces the other copies by.
+    #[must_use]
+    pub fn copies_pace(&self) -> crate::session::CopiesPace {
+        match self.copies_reading {
+            CopiesReading::Auto => crate::session::CopiesPace::Auto,
+            CopiesReading::Fixed => crate::session::CopiesPace::Fixed(
+                std::time::Duration::from_secs(self.copies_interval_secs.into()),
+            ),
+            CopiesReading::Off => crate::session::CopiesPace::Off,
         }
     }
 }
@@ -64,19 +144,37 @@ impl Settings {
     pub(super) fn from_table(table: &Table) -> Self {
         let fallback = Defaults::default();
         let defaults = match sub_table(table, "defaults") {
-            Some(t) => Defaults {
-                auto_fetch_minutes: minutes(t, "auto_fetch_minutes")
-                    .unwrap_or(fallback.auto_fetch_minutes),
-                network_timeout_secs: timeout_secs(t, "network_timeout_secs")
-                    .unwrap_or(fallback.network_timeout_secs),
-                initial_commits: initial_commits(t, "initial_commits")
-                    .unwrap_or(fallback.initial_commits),
-                git_path: text(t, "git_path").unwrap_or(fallback.git_path),
-                git_concurrency: concurrency(t, "git_concurrency")
-                    .unwrap_or(fallback.git_concurrency),
-                copies_interval_secs: copies_interval(t, "copies_interval_secs")
-                    .unwrap_or(fallback.copies_interval_secs),
-            },
+            Some(t) => {
+                let (copies_reading, copies_interval_secs) =
+                    copies(t, (fallback.copies_reading, fallback.copies_interval_secs));
+                let (refresh_floor_secs, refresh_ceiling_secs) = pace_pair(
+                    t,
+                    ("refresh_floor_secs", "refresh_ceiling_secs"),
+                    (fallback.refresh_floor_secs, fallback.refresh_ceiling_secs),
+                );
+                let (copies_floor_secs, copies_ceiling_secs) = pace_pair(
+                    t,
+                    ("copies_floor_secs", "copies_ceiling_secs"),
+                    (fallback.copies_floor_secs, fallback.copies_ceiling_secs),
+                );
+                Defaults {
+                    auto_fetch_minutes: minutes(t, "auto_fetch_minutes")
+                        .unwrap_or(fallback.auto_fetch_minutes),
+                    network_timeout_secs: timeout_secs(t, "network_timeout_secs")
+                        .unwrap_or(fallback.network_timeout_secs),
+                    initial_commits: initial_commits(t, "initial_commits")
+                        .unwrap_or(fallback.initial_commits),
+                    git_path: text(t, "git_path").unwrap_or(fallback.git_path),
+                    git_concurrency: concurrency(t, "git_concurrency")
+                        .unwrap_or(fallback.git_concurrency),
+                    copies_reading,
+                    copies_interval_secs,
+                    refresh_floor_secs,
+                    refresh_ceiling_secs,
+                    copies_floor_secs,
+                    copies_ceiling_secs,
+                }
+            }
             None => fallback,
         };
         let avatars = table
@@ -116,12 +214,24 @@ impl Settings {
             "git_concurrency".into(),
             Value::Integer(self.defaults.git_concurrency.into()),
         );
-        // Off is written as `0`: a key left out would read as the
-        // default, which is on.
+        // Both, always: a file without the reading is read as one written
+        // before it was a choice of its own (`toml::copies`).
+        defaults.insert(
+            "copies_reading".into(),
+            Value::String(self.defaults.copies_reading.word().into()),
+        );
         defaults.insert(
             "copies_interval_secs".into(),
             Value::Integer(self.defaults.copies_interval_secs.into()),
         );
+        for (key, secs) in [
+            ("refresh_floor_secs", self.defaults.refresh_floor_secs),
+            ("refresh_ceiling_secs", self.defaults.refresh_ceiling_secs),
+            ("copies_floor_secs", self.defaults.copies_floor_secs),
+            ("copies_ceiling_secs", self.defaults.copies_ceiling_secs),
+        ] {
+            defaults.insert(key.into(), Value::Integer(secs.into()));
+        }
         root.insert("defaults".into(), Value::Table(defaults));
 
         if !self.avatars.is_empty() {
@@ -316,30 +426,121 @@ network_timeout_secs = 9
         assert_eq!(Settings::from_table(&settings.to_table()), settings);
     }
 
-    /// A number under the floor is the floor, so a file cannot ask for a
-    /// `status` per copy every second.
+    fn copies_from(text: &str) -> (CopiesReading, u32) {
+        let defaults = defaults_from(text);
+        (defaults.copies_reading, defaults.copies_interval_secs)
+    }
+
+    /// A file from before the reading was a choice of its own keeps what
+    /// its number said; only a file that says nothing reads automatically.
     #[test]
-    fn the_copies_interval_keeps_off_and_its_floor_through_the_file() {
+    fn a_file_from_before_the_reading_keeps_its_off_and_its_number() {
         assert_eq!(
-            defaults_from("[defaults]\ncopies_interval_secs = 0\n").copies_interval_secs,
-            0
+            copies_from("[defaults]\ncopies_interval_secs = 0\n"),
+            (
+                CopiesReading::Off,
+                crate::session::COPIES_INTERVAL_DEFAULT_SECS
+            ),
+            "zero was off, and the number to bring back is the default"
         );
         assert_eq!(
-            defaults_from("[defaults]\ncopies_interval_secs = 1\n").copies_interval_secs,
-            crate::session::COPIES_INTERVAL_MIN_SECS
+            copies_from(&format!(
+                "[defaults]\ncopies_interval_secs = {}\n",
+                crate::session::COPIES_INTERVAL_DEFAULT_SECS
+            )),
+            (
+                CopiesReading::Fixed,
+                crate::session::COPIES_INTERVAL_DEFAULT_SECS
+            ),
+            "a number equal to the old default is a fixed choice all the same"
         );
+        assert_eq!(
+            copies_from("[defaults]\ncopies_interval_secs = 3600\n"),
+            (CopiesReading::Fixed, 3600)
+        );
+        assert_eq!(
+            copies_from("[defaults]\nauto_fetch_minutes = 5\n"),
+            (
+                CopiesReading::Auto,
+                crate::session::COPIES_INTERVAL_DEFAULT_SECS
+            ),
+            "a file that says nothing reads automatically"
+        );
+    }
+
+    /// A number under the floor is the floor, so a file cannot ask for a
+    /// `status` per copy every second; a reading the file names wins over
+    /// what its number would have said.
+    #[test]
+    fn the_floors_and_ceilings_survive_the_file_and_a_ceiling_never_sits_under_its_floor() {
+        let defaults = defaults_from(
+            "[defaults]\nrefresh_floor_secs = 2\nrefresh_ceiling_secs = 30\n\
+             copies_floor_secs = 20\ncopies_ceiling_secs = 10\n",
+        );
+        assert_eq!(
+            (defaults.refresh_floor_secs, defaults.refresh_ceiling_secs),
+            (2, 30)
+        );
+        assert_eq!(
+            (defaults.copies_floor_secs, defaults.copies_ceiling_secs),
+            (20, 20),
+            "a ceiling written under its floor is the floor"
+        );
+        let fresh = defaults_from("[defaults]\nauto_fetch_minutes = 5\n");
+        assert_eq!(fresh.pace_bounds(), crate::session::PaceBounds::default());
         let settings = Settings {
             defaults: Defaults {
-                copies_interval_secs: 0,
+                refresh_floor_secs: 1,
+                refresh_ceiling_secs: 90,
+                copies_floor_secs: 7,
+                copies_ceiling_secs: 600,
                 ..Defaults::default()
             },
             ..Settings::default()
         };
+        assert_eq!(Settings::from_table(&settings.to_table()), settings);
+    }
+
+    #[test]
+    fn the_copies_reading_and_its_number_survive_the_file() {
         assert_eq!(
-            Settings::from_table(&settings.to_table()),
-            settings,
-            "off survives a round trip"
+            copies_from("[defaults]\ncopies_reading = \"fixed\"\ncopies_interval_secs = 1\n"),
+            (
+                CopiesReading::Fixed,
+                crate::session::COPIES_INTERVAL_MIN_SECS
+            )
         );
+        assert_eq!(
+            copies_from("[defaults]\ncopies_reading = \"auto\"\ncopies_interval_secs = 0\n"),
+            (
+                CopiesReading::Auto,
+                crate::session::COPIES_INTERVAL_DEFAULT_SECS
+            )
+        );
+        assert_eq!(
+            copies_from("[defaults]\ncopies_reading = \"sometimes\"\ncopies_interval_secs = 20\n"),
+            (CopiesReading::Fixed, 20),
+            "a reading that is no word falls back to what the number says"
+        );
+        for reading in [
+            CopiesReading::Auto,
+            CopiesReading::Fixed,
+            CopiesReading::Off,
+        ] {
+            let settings = Settings {
+                defaults: Defaults {
+                    copies_reading: reading,
+                    copies_interval_secs: 90,
+                    ..Defaults::default()
+                },
+                ..Settings::default()
+            };
+            assert_eq!(
+                Settings::from_table(&settings.to_table()),
+                settings,
+                "{reading:?} survives a round trip with its number"
+            );
+        }
     }
 
     #[test]

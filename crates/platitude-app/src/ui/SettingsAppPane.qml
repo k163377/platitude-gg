@@ -198,27 +198,82 @@ ColumnLayout {
         pane.takeGitPick(url)
     }
 
-    /// Both process boxes, each typed the way a hand leaves a box: the text, then the edit finished. An empty half is
-    /// an emptied box: the default / off.
-    function autoTypeProcesses(concurrency, copiesSecs) {
+    /// The count's box, typed the way a hand leaves a box: the text, then the edit finished. Empty is the default.
+    function autoTypeProcesses(concurrency) {
         concurrencyField.text = concurrency
         pane.applyConcurrency()
-        copiesField.text = copiesSecs
-        pane.applyCopies()
     }
     /// What the store holds for that chapter: the count and whether it is this machine's default (the number itself
-    /// varies by machine), and the interval in both units — the tick reads milliseconds, the box seconds.
+    /// varies by machine).
     function processesTally() {
         return "concurrency=" + AppBackend.gitConcurrency
                + " default=" + (AppBackend.gitConcurrency === AppBackend.gitConcurrencyDefault)
-               + " copies_secs=" + AppBackend.copiesIntervalSecs + " copies_ms=" + AppBackend.copiesIntervalMs
+    }
+    /// The `REFRESH` chapter worked the way a hand works it: this repository's two boxes, the copies' reading through
+    /// the chooser's own door (`pickCopiesReading`), then the boxes that reading shows — the two bounds, or the one
+    /// interval. An empty part is left alone.
+    function autoTypeRefresh(floor, ceiling, reading, first, second) {
+        if (floor !== "" || ceiling !== "") {
+            if (floor !== "")
+                refreshFloorField.text = floor
+            if (ceiling !== "")
+                refreshCeilingField.text = ceiling
+            pane.applyRefreshBounds()
+        }
+        if (reading !== "")
+            pane.pickCopiesReading(pane.copiesValues.indexOf(reading))
+        if (AppBackend.copiesReading === "fixed" && first !== "") {
+            copiesField.text = first
+            pane.applyCopies()
+        } else if (AppBackend.copiesReading === "auto" && (first !== "" || second !== "")) {
+            if (first !== "")
+                copiesFloorField.text = first
+            if (second !== "")
+                copiesCeilingField.text = second
+            pane.applyCopiesBounds()
+        }
+    }
+    /// The four bound boxes holding these texts as the way out is taken: typed and never finished, an empty one
+    /// emptied — a validator with a floor sends no `editingFinished` for an empty box, so only the way out writes it.
+    function autoLeaveBounds(floor, ceiling, first, second) {
+        refreshFloorField.text = floor
+        refreshCeilingField.text = ceiling
+        copiesFloorField.text = first
+        copiesCeilingField.text = second
+    }
+    /// What the store holds for that chapter.
+    function refreshStore() {
+        return "refresh=" + AppBackend.refreshFloorSecs + "-" + AppBackend.refreshCeilingSecs
+               + " copies=" + AppBackend.copiesReading
+               + " copies_bounds=" + AppBackend.copiesFloorSecs + "-" + AppBackend.copiesCeilingSecs
+               + " copies_secs=" + AppBackend.copiesIntervalSecs
+    }
+    /// The store, with what the chooser shows and which boxes stand beside it — a box that is not there is an absence
+    /// a picture leaves to the eye.
+    function refreshTally() {
+        const boxes = copiesFloorField.visible ? "bounds" : copiesField.visible ? "every" : "none"
+        return pane.refreshStore() + " shown=" + copiesChooser.wanted + " boxes=" + boxes
+    }
+
+    /// The readings and their words at matching indexes (`settings::CopiesReading::word`).
+    readonly property var copiesValues: ["auto", "fixed", "off"]
+    readonly property var copiesWords: [qsTr("Automatic"), qsTr("Fixed"), qsTr("Off")]
+    /// Picking the row at `index`; the chooser's handler is one line onto it, so a run takes the same road as a hand.
+    /// The box's number goes with it, so a number typed and not yet finished is not lost to the pick.
+    function pickCopiesReading(index) {
+        if (index < 0)
+            return
+        AppBackend.setCopiesReading(pane.copiesValues[index], copiesField.text === "" ? 0 : Number(copiesField.text))
+        copiesField.text = String(AppBackend.copiesIntervalSecs)
     }
 
     /// Puts the fields back to what the store says, for the screen that just opened.
     function load() {
         fetchField.text = AppBackend.autoFetchMinutes > 0 ? String(AppBackend.autoFetchMinutes) : ""
         concurrencyField.text = String(AppBackend.gitConcurrency)
-        copiesField.text = AppBackend.copiesIntervalSecs > 0 ? String(AppBackend.copiesIntervalSecs) : ""
+        pane.showRefreshBounds()
+        pane.showCopiesBounds()
+        copiesField.text = String(AppBackend.copiesIntervalSecs)
         wholeHistoryBox.checked = AppBackend.initialCommits === 0
         commitsField.text = AppBackend.initialCommits > 0 ? String(AppBackend.initialCommits) : ""
         gitPathField.text = AppBackend.gitPath
@@ -249,9 +304,32 @@ ColumnLayout {
     function applyConcurrency() {
         AppBackend.setGitConcurrency(concurrencyField.text === "" ? 0 : Number(concurrencyField.text))
     }
-    // Empty is never.
+    // The fixed interval, kept whichever reading is chosen. Empty keeps the number held, and the box shows it again.
     function applyCopies() {
-        AppBackend.setCopiesIntervalSecs(copiesField.text === "" ? 0 : Number(copiesField.text))
+        AppBackend.setCopiesReading(AppBackend.copiesReading, copiesField.text === "" ? 0 : Number(copiesField.text))
+        copiesField.text = String(AppBackend.copiesIntervalSecs)
+    }
+    // A pair is written whole: the ceiling is held to the floor by core (`session::pace_bounds_secs`), so its boxes
+    // show what came back. Empty is that bound's default. Each pair puts back only its own boxes — the way out writes
+    // one pair after the other, and the second's boxes may hold an edit nobody finished.
+    function applyRefreshBounds() {
+        AppBackend.setRefreshBounds(pane.boxSecs(refreshFloorField), pane.boxSecs(refreshCeilingField))
+        pane.showRefreshBounds()
+    }
+    function applyCopiesBounds() {
+        AppBackend.setCopiesBounds(pane.boxSecs(copiesFloorField), pane.boxSecs(copiesCeilingField))
+        pane.showCopiesBounds()
+    }
+    function boxSecs(field) {
+        return field.text === "" ? 0 : Number(field.text)
+    }
+    function showRefreshBounds() {
+        refreshFloorField.text = String(AppBackend.refreshFloorSecs)
+        refreshCeilingField.text = String(AppBackend.refreshCeilingSecs)
+    }
+    function showCopiesBounds() {
+        copiesFloorField.text = String(AppBackend.copiesFloorSecs)
+        copiesCeilingField.text = String(AppBackend.copiesCeilingSecs)
     }
     // Two controls, one value: the box asks for no window at all (core's `0`); the field answers only while the box
     // is clear, empty being the default. Written from `applyFields` too, as `applyConcurrency` is.
@@ -268,8 +346,10 @@ ColumnLayout {
     /// button's errand (`AppBackend.applyGitPathNow`): closing a settings screen must not restart the window.
     function applyFields() {
         pane.applyFetch()
-        pane.applyConcurrency()
+        pane.applyRefreshBounds()
         pane.applyCopies()
+        pane.applyCopiesBounds()
+        pane.applyConcurrency()
         pane.applyCommits()
         pane.applyGitPath()
     }
@@ -403,6 +483,127 @@ ColumnLayout {
         }
     }
 
+    // Beside the fetch: the other thing done on its own while a repository is open (`session::pace`). Said once at the
+    // head, before both rows (規約 §設定の画面「説明はその章の前」).
+    SettingsSection {
+        enabled: !AppBackend.gitPathOffersRestart
+        caption: qsTr("REFRESH")
+        HelpText {
+            text: qsTr("Applies to all repositories. Automatic intervals adapt to how long refreshes take. Shorter intervals update sooner but use more resources.")
+        }
+        // Both rows are a mode, then its boxes, in the same columns. This copy is always read automatically, so its
+        // mode is a word standing where the other row's chooser stands, its letters where the chooser's letters are.
+        LabeledField {
+            caption: qsTr("Current working copy")
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spaceSm
+                LineText {
+                    Layout.leftMargin: copiesChooser.leftPadding + copiesChooser.contentItem.leftPadding
+                    Layout.preferredWidth: copiesChooser.implicitWidth - Layout.leftMargin
+                    text: qsTr("Automatic")
+                    color: Theme.textPrimary
+                }
+                FormField {
+                    id: refreshFloorField
+                    implicitWidth: fetchField.implicitWidth
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    validator: IntValidator {
+                        bottom: AppBackend.paceMinSecs
+                        top: AppBackend.paceMaxSecs
+                    }
+                    onEditingFinished: pane.applyRefreshBounds()
+                    onAccepted: pane.accepted()
+                }
+                LineText {
+                    text: qsTr("to")
+                    color: Theme.textSecondary
+                }
+                FormField {
+                    id: refreshCeilingField
+                    implicitWidth: fetchField.implicitWidth
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    validator: IntValidator {
+                        bottom: AppBackend.paceMinSecs
+                        top: AppBackend.paceMaxSecs
+                    }
+                    onEditingFinished: pane.applyRefreshBounds()
+                    onAccepted: pane.accepted()
+                }
+                LineText {
+                    text: qsTr("seconds")
+                    color: Theme.textSecondary
+                }
+                Item { Layout.fillWidth: true }
+            }
+        }
+        LabeledField {
+            caption: qsTr("Other working copies")
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spaceSm
+                // Picking only: these three are the whole set (デザイン規約 §選ぶ欄と打つ欄).
+                AppCombo {
+                    id: copiesChooser
+                    implicitWidth: fetchField.implicitWidth
+                    pickOnly: true
+                    model: pane.copiesWords
+                    wanted: pane.copiesWords[Math.max(0, pane.copiesValues.indexOf(AppBackend.copiesReading))]
+                    onActivated: index => pane.pickCopiesReading(index)
+                }
+                // Each reading shows only the boxes it reads: the two bounds, the one interval, or none — `Off`
+                // reads no copy at all, and a number beside it would say otherwise.
+                FormField {
+                    id: copiesFloorField
+                    visible: AppBackend.copiesReading === "auto"
+                    implicitWidth: fetchField.implicitWidth
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    validator: IntValidator {
+                        bottom: AppBackend.paceMinSecs
+                        top: AppBackend.paceMaxSecs
+                    }
+                    onEditingFinished: pane.applyCopiesBounds()
+                    onAccepted: pane.accepted()
+                }
+                LineText {
+                    visible: copiesFloorField.visible
+                    text: qsTr("to")
+                    color: Theme.textSecondary
+                }
+                FormField {
+                    id: copiesCeilingField
+                    visible: copiesFloorField.visible
+                    implicitWidth: fetchField.implicitWidth
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    validator: IntValidator {
+                        bottom: AppBackend.paceMinSecs
+                        top: AppBackend.paceMaxSecs
+                    }
+                    onEditingFinished: pane.applyCopiesBounds()
+                    onAccepted: pane.accepted()
+                }
+                FormField {
+                    id: copiesField
+                    visible: AppBackend.copiesReading === "fixed"
+                    implicitWidth: fetchField.implicitWidth
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    validator: IntValidator {
+                        bottom: AppBackend.copiesIntervalMin
+                        top: AppBackend.copiesIntervalMax
+                    }
+                    onEditingFinished: pane.applyCopies()
+                    onAccepted: pane.accepted()
+                }
+                LineText {
+                    visible: copiesFloorField.visible || copiesField.visible
+                    text: qsTr("seconds")
+                    color: Theme.textSecondary
+                }
+                Item { Layout.fillWidth: true }
+            }
+        }
+    }
+
     // Beside the fetch interval: the same kind of answer, about this machine (規約 §設定の画面).
     SettingsSection {
         enabled: !AppBackend.gitPathOffersRestart
@@ -430,34 +631,6 @@ ColumnLayout {
                 }
                 LineText {
                     text: qsTr("commands")
-                    color: Theme.textSecondary
-                }
-                Item { Layout.fillWidth: true }
-            }
-        }
-        HelpText {
-            text: qsTr("The repository's other working copies are read for uncommitted work on a tick of their own — one git status per copy. Empty means never; %1 seconds is the shortest interval.")
-                  .arg(AppBackend.copiesIntervalMin)
-        }
-        LabeledField {
-            caption: qsTr("Other copies every")
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spaceSm
-                FormField {
-                    id: copiesField
-                    implicitWidth: 160
-                    placeholderText: qsTr("never")
-                    inputMethodHints: Qt.ImhDigitsOnly
-                    validator: IntValidator {
-                        bottom: AppBackend.copiesIntervalMin
-                        top: AppBackend.copiesIntervalMax
-                    }
-                    onEditingFinished: pane.applyCopies()
-                    onAccepted: pane.accepted()
-                }
-                LineText {
-                    text: qsTr("seconds")
                     color: Theme.textSecondary
                 }
                 Item { Layout.fillWidth: true }

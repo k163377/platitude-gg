@@ -221,6 +221,7 @@ impl SessionSink for BridgeSink {
                     status,
                 });
             }
+            SessionEvent::PacedRead { copy } => self.feeds.tab.push(TabMsg::PacedRead { copy }),
             SessionEvent::StatusLoaded {
                 status,
                 head_seq,

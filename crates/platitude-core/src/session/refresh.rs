@@ -264,28 +264,6 @@ impl RepoSession {
         (read.listing == newest && self.standing.current(read.looked)).then_some(list)
     }
 
-    /// Reads the worktree list again, and then the reads it asks for: a
-    /// working copy taken or given back moves no ref, so the joins are
-    /// asked for by name, and a copy on no branch is a row only the walk
-    /// can put there.
-    ///
-    /// Those reads are awaited after the flight is let go: the task is
-    /// what the page's tick waits on, and letting the walk run on would put
-    /// that boundary before its row. The task answers the reads that did
-    /// not land, the listing's own included; empty where all did.
-    pub fn refresh_worktrees(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<Vec<FollowUp>>> {
-        self.workdir()?;
-        let s = Arc::clone(self);
-        Some(self.runtime.spawn(async move {
-            let listed = s.read_worktrees().await;
-            let mut failed = listed.failed;
-            if listed.walk && !s.settle_graph().await.landed() {
-                failed.push(FollowUp::Graph);
-            }
-            failed
-        }))
-    }
-
     /// The worktree listing behind its own flight, published, and the
     /// joins it asks for — not the walk, which the caller folds into the
     /// one it makes for everything it read ([`Listed`]). Every caller the
@@ -349,7 +327,8 @@ impl RepoSession {
     }
 }
 
-/// What a listing read behind a write or a focus left to its caller:
+/// What a listing read behind a write, a refresh or this tree's paced
+/// read left to its caller:
 /// whether the history has to be walked for it, and the reads that did not
 /// land.
 #[derive(Debug, Default)]

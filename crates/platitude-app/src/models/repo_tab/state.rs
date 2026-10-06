@@ -81,6 +81,8 @@ impl Default for RepoTab {
             taken_seq: 0,
             restore_seq: 0,
             restore_how: String::new(),
+            paced_seq: 0,
+            paced_copies: Vec::new(),
             write_watch: crate::models::repo_tab::WriteWatch::default(),
             write_refused: false,
             write_stale_diff: false,

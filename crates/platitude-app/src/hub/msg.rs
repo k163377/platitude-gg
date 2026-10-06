@@ -55,6 +55,12 @@ pub enum TabMsg {
     /// operation standing. Arrives before the `WriteState` ending that
     /// write, whose `kind` says which write it was.
     WriteStopped,
+    /// A read the page's pace started has ended (`SessionEvent::PacedRead`):
+    /// this tree's where `copy` is `None`, else that copy's, by the path git
+    /// printed.
+    PacedRead {
+        copy: Option<String>,
+    },
     /// A write started / ended. A failed write also arrives as an
     /// `OpError`; `error` is here too so an editor can tell whether its
     /// own write failed — except where `report` is set: then no `OpError`

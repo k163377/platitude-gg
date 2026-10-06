@@ -24,6 +24,7 @@ mod head;
 mod helper_binary;
 mod merge_tools;
 mod operations;
+mod paced;
 mod pass_watch;
 mod published;
 mod query;

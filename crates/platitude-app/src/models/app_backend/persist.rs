@@ -53,18 +53,76 @@ impl AppBackend {
         self.settings_changed();
     }
 
-    /// Sets how often the other working copies are read for uncommitted
-    /// work, in seconds; zero (the blank input) is off. The range is core's
+    /// Sets how the other working copies are read for uncommitted work —
+    /// automatically, at a fixed interval, or not at all — and the fixed
+    /// interval, which is kept whichever is chosen. A word that names no
+    /// reading leaves the reading as it is. Zero seconds (the blank input)
+    /// keeps the number held; the range is core's
     /// (`session::copies_interval_secs`), as above.
-    pub(super) fn apply_copies_interval_secs(&mut self, secs: i32) {
-        let asked = platitude_core::session::copies_interval_secs(secs.max(0).unsigned_abs());
+    pub(super) fn apply_copies_reading(&mut self, reading: &str, secs: i32) {
+        let chosen = platitude_core::settings::CopiesReading::from_word(reading)
+            .or_else(|| platitude_core::settings::CopiesReading::from_word(&self.copies_reading))
+            .unwrap_or_default();
+        let asked = match secs.max(0).unsigned_abs() {
+            0 => self.copies_interval_secs.max(0).unsigned_abs(),
+            secs => secs,
+        };
+        let asked = platitude_core::session::copies_interval_secs(asked);
         let secs = asked as i32;
-        if self.copies_interval_secs == secs {
+        if self.copies_reading == chosen.word() && self.copies_interval_secs == secs {
             return;
         }
+        self.copies_reading = chosen.word().to_string();
         self.copies_interval_secs = secs;
-        self.copies_interval_ms = secs.saturating_mul(1000);
-        Hub::with(|hub| hub.set_copies_interval_secs(asked));
+        Hub::with(|hub| hub.set_copies_reading(chosen, asked));
+        self.settings_changed();
+    }
+
+    /// Sets the shortest and the longest interval a repository on screen is
+    /// read again at (`refresh`) and the same pair for each other copy read
+    /// automatically (`copies`); `None` leaves a pair as it is, and zero (an
+    /// emptied box) is that bound's default. The range — and a ceiling
+    /// never under its floor — is core's (`session::pace_bounds_secs`), as
+    /// above.
+    pub(super) fn apply_pace_bounds(
+        &mut self,
+        refresh: Option<(i32, i32)>,
+        copies: Option<(i32, i32)>,
+    ) {
+        let fallback = platitude_core::settings::Defaults::default();
+        let held = |secs: i32| secs.max(0).unsigned_abs();
+        let pair = |asked: Option<(i32, i32)>, held: (u32, u32), default: (u32, u32)| {
+            let pick = |asked: i32, default: u32| match asked.max(0).unsigned_abs() {
+                0 => default,
+                secs => secs,
+            };
+            let (floor, ceiling) = asked.map_or(held, |(floor, ceiling)| {
+                (pick(floor, default.0), pick(ceiling, default.1))
+            });
+            platitude_core::session::pace_bounds_secs(floor, ceiling)
+        };
+        let refresh = pair(
+            refresh,
+            (
+                held(self.refresh_floor_secs),
+                held(self.refresh_ceiling_secs),
+            ),
+            (fallback.refresh_floor_secs, fallback.refresh_ceiling_secs),
+        );
+        let copies = pair(
+            copies,
+            (held(self.copies_floor_secs), held(self.copies_ceiling_secs)),
+            (fallback.copies_floor_secs, fallback.copies_ceiling_secs),
+        );
+        let as_i32 = |(floor, ceiling): (u32, u32)| (floor as i32, ceiling as i32);
+        let unchanged = as_i32(refresh) == (self.refresh_floor_secs, self.refresh_ceiling_secs)
+            && as_i32(copies) == (self.copies_floor_secs, self.copies_ceiling_secs);
+        if unchanged {
+            return;
+        }
+        (self.refresh_floor_secs, self.refresh_ceiling_secs) = as_i32(refresh);
+        (self.copies_floor_secs, self.copies_ceiling_secs) = as_i32(copies);
+        Hub::with(|hub| hub.set_pace_bounds(refresh, copies));
         self.settings_changed();
     }
 
