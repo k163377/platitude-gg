@@ -45,7 +45,7 @@ MenuItem {
     readonly property bool seated:
         menuItem.menu !== null && menuItem.menu.seatWorn !== undefined && menuItem.menu.seatWorn === true
     readonly property bool wearsSeat: menuItem.heads && !menuItem.headed
-    readonly property real seatX: Theme.spaceSm + menuItem.holdIndent
+    readonly property real seatX: menuItem.padding + menuItem.holdIndent
     /// Read by `AppMenu.headingSeat` to line a card's headings up.
     readonly property real headInk: menuItem.titled ? rowMark.inkWidth : 0
     /// The step every heading on such a card starts its words at, marked or not; zero on any other card.
@@ -156,11 +156,13 @@ MenuItem {
     readonly property real holdIndent:
         menuItem.menu !== null && menuItem.menu.holdIndent !== undefined ? menuItem.menu.holdIndent : 0
 
-    padding: Theme.spaceSm
+    // The row's air either side of its words: the step the left menu keeps between a mark and its name (デザイン規約
+    // §メニュー). The card's own `spaceXs` outside it only keeps a highlight off the rounded corners.
+    padding: Theme.spaceXs
 
-    /// Where a heading's mark ink starts: the x other rows start their words at, shifted left into the hold / `!` seat
-    /// where the menu has one (デザイン規約 §メニュー「印の始まりは文字に合わせ」).
-    readonly property real markX: Theme.spaceSm - menuItem.holdIndent
+    /// Where a heading's mark ink starts: the x other rows start their words at — or, where the menu has a hold / `!`
+    /// seat, that seat's own x at the row's edge (デザイン規約 §メニュー「印の始まりは文字に合わせ」).
+    readonly property real markX: menuItem.holdIndent > 0 ? 0 : menuItem.padding
 
     // A heading's words sit `spaceXs` past the mark's ink, not its box
     // (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」). On a card that keeps the seat, every row's
@@ -169,7 +171,7 @@ MenuItem {
                : menuItem.titled ? menuItem.markX + rowMark.inkWidth + Theme.spaceXs
                : menuItem.seated ? menuItem.seatX + Theme.iconXs + Theme.spaceXs
                : menuItem.heads ? menuItem.markX + rowMark.inkWidth + Theme.spaceXs
-               : Theme.spaceSm + menuItem.holdIndent
+               : menuItem.padding + menuItem.holdIndent
     topPadding: 0
     bottomPadding: 0
     // A row this menu is not offering takes no room: the list lays rows out by height, so an invisible row that keeps
@@ -454,13 +456,15 @@ MenuItem {
 
     // A row that opens a card ends in `>`: `chevron` as drawn, the mark `AppCombo` turns down for its list, on the
     // left menu's row grid (デザイン規約 §メニュー の入れ子). Its ink ends where the right-set words of other rows end
-    // (a note, a track): on the right padding. The item is the room the words of such a row keep clear, `iconLg`
-    // wide — where that row is a card's widest, the card's width is measured off it. The mark is built only on the
-    // rows that wear it (rules-refs の「行のデリゲートが見せない部品は消す」): a card builds a row per branch.
+    // (a note, a track): on the right padding. The item is the mark's ink and nothing more, so the words of such a row
+    // stop a word's step short of the ink, as a heading's start one past its mark's (デザイン規約 §余白「印が自分で
+    // 持っている余白は、隣の詰めに数える」) — where that row is a card's widest, the card's width is measured off it.
+    // The mark is built only on the rows that wear it (rules-refs の「行のデリゲートが見せない部品は消す」): a card builds a
+    // row per branch.
     arrow: Item {
         x: menuItem.width - width - menuItem.rightPadding
         y: (menuItem.height - height) / 2
-        width: Theme.iconLg
+        width: arrowSeat.item ? arrowSeat.item.inkWidth : 0
         height: Theme.iconSm
         Loader {
             id: arrowSeat

@@ -255,6 +255,10 @@ ComboBox {
         width: combo.width - 2 * Theme.spaceXs
         height: Theme.rowHeight + row.lead
         topPadding: row.lead
+        // A menu row's air either side of its word (`AppMenuItem.padding`, デザイン規約 §選ぶ欄と打つ欄), not the
+        // style's wider one.
+        leftPadding: Theme.spaceXs
+        rightPadding: Theme.spaceXs
         highlighted: combo.highlightedIndex === row.index
         // The line and the row's grounds apart: a wash over the whole item would swallow the line.
         background: Item {
@@ -287,11 +291,10 @@ ComboBox {
         contentItem: Item {
             Label {
                 anchors.fill: parent
-                anchors.rightMargin: mark.visible ? Theme.iconSm + Theme.spaceXs : 0
+                anchors.rightMargin: mark.visible ? mark.width + mark.anchors.rightMargin : 0
                 text: row.modelData
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontMd
-                leftPadding: Theme.spaceXs
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
             }
@@ -304,7 +307,9 @@ ComboBox {
                 width: Theme.iconSm
                 height: Theme.iconSm
                 anchors.right: parent.right
-                anchors.rightMargin: Theme.spaceXs
+                // Clear of the list's floating thumb: right-set ink on that side would stand under it whenever the
+                // list scrolls (デザイン規約 §ペインのスクロールバー「その辺に右揃えのインクが立つ」).
+                anchors.rightMargin: rows.ScrollBar.vertical.width - row.rightPadding
                 anchors.verticalCenter: parent.verticalCenter
             }
         }

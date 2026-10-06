@@ -13,7 +13,7 @@ Rectangle {
 
     // The mark's seat on every row, held or not, as `AppMenu.holdIndent`
     // (デザイン規約 §長押し「メニューでは印の席を全行が空ける」).
-    readonly property real holdIndent: Theme.iconMd - 2 * Theme.spaceXs
+    readonly property real holdIndent: Theme.iconSm
     /// Whether leaving the stopped commit out costs nothing — core's rule (`offers::skip_is_free`).
     readonly property bool skipIsFree: opExitCard.workTree.opSkipFree
     readonly property real codeColW: {

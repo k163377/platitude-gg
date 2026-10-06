@@ -134,6 +134,7 @@ Menu {
 
     // The hold mark's seat, left by every row once any row on offer carries the mark, so words start on one x
     // (デザイン規約 §長押し); 0 otherwise. Extra left padding, not a layout seat, which would also pay the layout's gap.
+    // The mark's box: it stands at the row's edge, and the row's own padding is the step from it to the words.
     readonly property real holdIndent: {
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
@@ -141,7 +142,7 @@ Menu {
                 continue
             // Either mark takes the same seat, so either one opens it (`AppMenuItem.asks`).
             if ((row.holdMs !== undefined && row.holdMs > 0) || row.asks === true)
-                return Theme.spaceSm
+                return Theme.iconSm
         }
         return 0
     }

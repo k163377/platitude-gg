@@ -93,8 +93,8 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.leftMargin: Theme.spaceSm + opRow.holdIndent
-        anchors.rightMargin: Theme.spaceSm
+        anchors.leftMargin: Theme.spaceXs + opRow.holdIndent
+        anchors.rightMargin: Theme.spaceXs
         anchors.topMargin: (Theme.rowHeight - opRow.firstBand) / 2
         spacing: Theme.spaceSm
         Item {
