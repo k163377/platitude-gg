@@ -47,6 +47,7 @@ Item {
         property bool staleArmed: false
         property int requestedWidth: -1
         onTriggered: {
+            acts.bandBeats++
             if (identityDialog.opened || topBar.bandTabsWidth <= 0
                     || window.curPage === null || !window.curPage.pageWt.loaded
                     || !topBar.opBadgeShown || !topBar.conflictBadgeShown
@@ -105,9 +106,42 @@ Item {
                 if (!topBar.stateCardOpen || !topBar.stateCardLaidOut)
                     return
             }
+            if (!acts.bandLaidOutAfterFrames())
+                return
             stop()
             acts.reportBadges()
         }
+    }
+    // The band's two rows (`TopBar`'s `bandRow` and its shadow `bandAsked`) lay out on polish, so in the beat the last
+    // badge arrives, or the window reaches its width, the group still has the width the row gave it before — on macOS
+    // the identity badge's alone, read as a shadow that disagrees. Every report of the band's shape waits two swapped
+    // frames once what it waits for is there, as the left menu's does (`WindowFrameActs.menuReadAfterFrames`) — there
+    // the whole time: a beat that turned back before asking (a badge gone again, the card not laid out) starts the
+    // count over, or the report would go out in the very beat the shape came back.
+    property int framesSwapped: 0
+    Connections {
+        target: acts.window
+        function onFrameSwapped() {
+            acts.framesSwapped++
+        }
+    }
+    /// Counted by each verb's sampler at the top of its beat, so the wait sees a beat it was not asked in.
+    property int bandBeats: 0
+    property int bandAskedAt: -1
+    property int bandFramesWanted: -1
+    function bandLaidOutAfterFrames() {
+        if (acts.bandAskedAt !== acts.bandBeats - 1)
+            acts.bandFramesWanted = -1
+        acts.bandAskedAt = acts.bandBeats
+        if (acts.bandFramesWanted < 0)
+            acts.bandFramesWanted = acts.framesSwapped + 2
+        if (acts.framesSwapped < acts.bandFramesWanted) {
+            // `update()`, asked again each beat: a still offscreen scene swaps nothing unasked
+            // (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
+            acts.window.update()
+            return false
+        }
+        return true
     }
     /// Which rule painted the folded group's mark (デザイン規約 §ウィンドウの縁「色は最も重い状態が決める」), read off
     /// the band's own colour — recomputing the rule here would agree with itself whatever the band did.
@@ -282,6 +316,7 @@ Item {
         property bool sizeRequested: false
         property int requestedWidth: -1
         onTriggered: {
+            acts.bandBeats++
             if (topBar.bandTabsWidth <= 0)
                 return
             // `-fold` brings its own width: a folded group with nothing red in it, where the mark's colour is its whole
@@ -320,6 +355,8 @@ Item {
             }
             if (Harness.autoAct === "old-git-card" && !topBar.stateCardOpen)
                 return
+            if (!acts.bandLaidOutAfterFrames())
+                return
             stop()
             // `version=` says which git answered: a run whose shim never got onto PATH photographs an ordinary window.
             Harness.report(
@@ -352,6 +389,7 @@ Item {
         property bool sizeRequested: false
         property int requestedWidth: -1
         onTriggered: {
+            acts.bandBeats++
             const page = window.curPage
             if (topBar.bandTabsWidth <= 0 || page === null)
                 return
@@ -384,6 +422,8 @@ Item {
                 return
             }
             if (Harness.autoAct === "no-lfs-card" && (!topBar.stateCardOpen || !topBar.stateCardLaidOut))
+                return
+            if (!acts.bandLaidOutAfterFrames())
                 return
             stop()
             // `count=` is the model's, which the card's sentence says: the picture cannot be read for a number. The
