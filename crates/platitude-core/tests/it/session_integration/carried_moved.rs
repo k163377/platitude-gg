@@ -44,6 +44,34 @@ fn drew_a_copy(events: &[SessionEvent]) -> Option<u64> {
         .find_map(|(generation, anchor)| anchor.is_some().then_some(generation))
 }
 
+/// The picture the opening leaves: every read and walk it started over,
+/// then the newest pass that drew the copy's row, and the commit it drew
+/// it on. Not the first such pass — an opening walks more than once (the
+/// tag pass behind the fast one, the copies' pass asking again), and one
+/// begun before the copy moves, landing after the first, rightly draws
+/// the row where the copy still was.
+async fn settled_with_row(
+    sink: &crate::support::session::CaptureSink,
+    session: &std::sync::Arc<platitude_core::session::RepoSession>,
+) -> (u64, String) {
+    sink.wait_for("a graph drawing the copy's row", drew_a_copy)
+        .await;
+    bounded(
+        "the opening's pass over the copies",
+        session.wait_for_carried_pass(),
+    )
+    .await;
+    bounded("the opening's reads", session.wait_for_snapshot_reads()).await;
+    bounded("the opening's walks", session.wait_for_graph_passes()).await;
+    let events = sink.events.lock().unwrap();
+    events
+        .iter()
+        .filter_map(copy_row_anchor)
+        .filter_map(|(at, anchor)| Some((at, anchor?)))
+        .max_by_key(|(at, _)| *at)
+        .expect("the row was drawn above a commit")
+}
+
 /// The other order, which a record written only by the page's tick gets
 /// wrong: the copies' pass takes its own listing before reading them, so
 /// its reading can be the fresher one, and the row is drawn on the commit
@@ -53,15 +81,7 @@ async fn a_reading_fresher_than_the_page_s_listing_keeps_its_row() {
     let (mut repo, _head) = scenario();
     let copy = a_copy_beside(&mut repo);
     let (sink, session) = opened_with(&repo, crate::support::exec::isolated()).await;
-
-    let with_row = sink
-        .wait_for("a graph drawing the copy's row", drew_a_copy)
-        .await;
-    bounded(
-        "the opening's pass over the copies",
-        session.wait_for_carried_pass(),
-    )
-    .await;
+    let (with_row, _) = settled_with_row(&sink, &session).await;
 
     repo.git_in(&copy, &["add", "carried.txt"]);
     repo.git_in(&copy, &["commit", "-m", "feat: the copy records its own"]);
@@ -99,24 +119,7 @@ async fn a_copy_that_has_committed_draws_no_row_until_its_reading_catches_up() {
     let (mut repo, _head) = scenario();
     let copy = a_copy_beside(&mut repo);
     let (sink, session) = opened_with(&repo, crate::support::exec::isolated()).await;
-
-    let with_row = sink
-        .wait_for("a graph drawing the copy's row", drew_a_copy)
-        .await;
-    bounded(
-        "the opening's pass over the copies",
-        session.wait_for_carried_pass(),
-    )
-    .await;
-    let stood_on = {
-        let events = sink.events.lock().unwrap();
-        events
-            .iter()
-            .filter_map(copy_row_anchor)
-            .find_map(|(at, anchor)| (at == with_row).then_some(anchor))
-            .flatten()
-            .expect("the row was drawn above a commit")
-    };
+    let (with_row, stood_on) = settled_with_row(&sink, &session).await;
 
     // Something stays uncommitted, so the copy still has a row afterwards.
     repo.git_in(&copy, &["add", "carried.txt"]);
