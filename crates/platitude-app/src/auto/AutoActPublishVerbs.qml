@@ -270,7 +270,8 @@ Item {
         }
     }
     /// PGG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark's write is
-    /// waited out first — the question reads the marked remote as it opens.
+    /// waited out first — the question reads the marked remote as it opens — and the list opened, as `publish-remotes`
+    /// opens it, only once the question is dressed and the bar is all the way down.
     SampleTimer {
         id: publishMarkedTimer
         onTriggered: {
@@ -280,6 +281,8 @@ Item {
                 page.pushNow()
                 return
             }
+            if (!publishFlow.publishChecked || !graphPane.askCard.settled)
+                return
             if (!publishFlow.publishRemotesOpen()) {
                 publishFlow.openPublishRemotes()
                 return
@@ -469,10 +472,14 @@ Item {
             driver.complete()
         }
     }
-    /// `publish-remotes`: the popup, asked for each tick — the form is created asynchronously with the ask bar.
+    /// `publish-remotes`: the popup, asked for each tick — the form is created asynchronously with the ask bar. Only
+    /// once the question is dressed and the bar is all the way down: a list opened mid-slide is photographed over a bar
+    /// still cut short at its foot.
     SampleTimer {
         id: publishRemotesTimer
         onTriggered: {
+            if (!publishFlow.publishChecked || !graphPane.askCard.settled)
+                return
             if (!publishFlow.publishRemotesOpen()) {
                 publishFlow.openPublishRemotes()
                 return
