@@ -8,18 +8,20 @@
 name: Shots (macOS)
 
 on:
-  # Any lines, on any ref that is on GitHub.
+  # Any lines, on any ref that is on GitHub. Run as it comes, it shoots
+  # every census line, as the full test does: a tier narrows it, and lines
+  # are shot besides the tier's, or alone under `none`.
   workflow_dispatch:
     inputs:
+      tier:
+        description: "census lines to shoot: all (every line), linux (what the fonts decide), merge, none (the lines below alone)"
+        type: choice
+        options: [all, linux, merge, none]
+        default: all
       lines:
-        description: "verify-ui lines to run, ; between them (band; nav-tip branch:0)"
+        description: "verify-ui lines to shoot besides, ; between them (band; nav-tip branch:0)"
         type: string
         default: ""
-      tier:
-        description: "census lines to run besides: linux (what the fonts decide), merge, all"
-        type: choice
-        options: [none, linux, merge, all]
-        default: none
       locale:
         description: "the system language the app runs under"
         type: choice
@@ -48,7 +50,7 @@ defaults:
 
 jobs:
   macos:
-    # A run that names no line and no tier has nothing to run: skipped
+    # A run with no tier (`none`) and no line has nothing to run: skipped
     # here, before a runner is stood up for it.
     if: ${{ inputs.tier != 'none' || inputs.lines != '' }}
     runs-on: macos-26
