@@ -131,6 +131,8 @@ Item {
 
     signal identityEditRequested()
 
+    /// Automation: `BandStateCard.wordsOffLevel`, for the band to hand on.
+    function stateCardWordsOff() { return stateCard.wordsOffLevel() }
     /// Opens the card; `stateKeep` is what closes it a beat after the last thing asking for it lets go.
     function settleStateCard() {
         if (!stateGroup.stateLit || !stateGroup.placed) {

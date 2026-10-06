@@ -22,6 +22,7 @@ linux	author-card-open 0 --preset authorship	-	cut= reads whether the author's n
 linux	badges --preset conflict	-	narrowed= words= mark= read the band's measured floor
 linux	badges 1000:6 --preset conflict	-	narrowed= words= mark= read the band's measured floor
 linux	badges floor:16 --preset conflict	-	words= mark= fitted= read the band's measured floor
+linux	badges-all-hover --preset lfs-conflict	-	level= reads the baselines the face gives each card row's badge words and sentence
 linux	band-actions --preset longnames	-	fits= folded= read the band's measured widths
 linux	band-actions-alert --preset longnames --allow-write-failure	-	fits= folded= cut= read the band's measured widths
 linux	band-actions-none --preset longnames	-	fits= folded= cut= read the band's measured widths

@@ -150,6 +150,7 @@ Item {
     /// band. `stale=` / `lfs=` ride between, so the three's line stays one string for `badges` to be judged by.
     function reportBadges() {
         const floorW = Math.ceil(window.floorWidth)
+        const wordsOff = topBar.stateCardWordsOff()
         Harness.report(
             "badges fits=" + (window.width >= floorW)
             + " stale=" + topBar.staleBadgeShown
@@ -182,7 +183,11 @@ Item {
             + " tabMin=" + topBar.tabTitleMinW
             + " card=" + topBar.stateCardOpen
             + " rows=" + topBar.stateCardRows
+            // Each row's sentence on its badge's words' baseline (`BandStateCard.wordsOffLevel`), to the half pixel its
+            // whole-pixel seat may round by, with how far off the worst one stood.
+            + " level=" + (wordsOff <= 0.5)
             + " cardSize=" + topBar.stateCardSize
+            + " levelOff=" + wordsOff.toFixed(2)
             // The band's own floor beside the window's, which alone would not say whether this row set it.
             + " bandW=" + Math.ceil(topBar.floorWidth)
             + " floorW=" + floorW + " w=" + window.width

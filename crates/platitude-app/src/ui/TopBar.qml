@@ -83,6 +83,9 @@ Rectangle {
     /// Whether the fetch button can be pressed — the edge `fetch-tip` waits on before it reads.
     readonly property bool fetchLive: fetchButton.enabled
 
+    /// How far the state card's sentences stand off their badges' words (`BandStateCard.wordsOffLevel`). A call: it
+    /// maps laid-out items, which no binding follows.
+    function stateCardWordsOff() { return stateGroup.stateCardWordsOff() }
     /// A press on either name. **Each is a toggle**, like the ☰ (`AppMenuButton`): `open()` on a card already up does
     /// nothing, which reads as a name that cannot be pressed twice. Each card is assembled as it opens
     /// (`NavSectionModel.copyCard` / `OpsBranchMenu.offerFrom`); each says whether it opened a card.

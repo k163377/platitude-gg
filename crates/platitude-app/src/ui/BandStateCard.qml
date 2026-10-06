@@ -104,6 +104,30 @@ AppCard {
         return bottom > 0 && Math.abs(rows.height - bottom) < 1
     }
 
+    /// Automation: how far, at most, a standing row's sentence stands off its badge's words (`badges-hover` の
+    /// `level=`). Both read off what is drawn and mapped into the card: the word's label, and the sentence's first line
+    /// as its field lays it out (`charRect`) down by the face's ascent — not the `baselineOffset` the row seats it by.
+    function wordsOffLevel() {
+        const pairs = [[opRow, opWord, opLine], [conflictRow, conflictLabel, conflictLine],
+                       [identityRow, identityLabel, identityLine], [staleRow, staleLabel, staleLine],
+                       [lfsRow, lfsLabel, lfsLine], [oldGitRow, oldGitLabel, oldGitLine]]
+        let off = 0
+        for (let i = 0; i < pairs.length; i++) {
+            const [row, word, line] = pairs[i]
+            if (!row.visible)
+                continue
+            const wordBase = word.mapToItem(rows, 0, word.baselineOffset).y
+            const lineBase = line.mapToItem(rows, 0, line.charRect(0).y + sentenceFace.ascent).y
+            off = Math.max(off, Math.abs(wordBase - lineBase))
+        }
+        return off
+    }
+    /// The sentences' face, for `wordsOffLevel` (a `CardText` at `fontSm`, the UI family).
+    property FontMetrics sentenceFace: FontMetrics {
+        font.family: Theme.uiFamily
+        font.pixelSize: Theme.fontSm
+    }
+
     // The pointer leaving is what closes it (`BandStateGroup.settleStateCard`).
     closesOnPressOutside: false
     // Both halves of `AppCard.pointerInside`, for the same reason.
@@ -142,6 +166,7 @@ AppCard {
                     y: stateCard.box.wordTop
                     spacing: Theme.spaceXs
                     Label {
+                        id: opWord
                         text: stateCard.opText
                         color: Theme.warning
                         font.pixelSize: Theme.fontSm

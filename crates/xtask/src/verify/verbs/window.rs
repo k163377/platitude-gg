@@ -412,7 +412,11 @@ pub(super) const TABLE: &[Verb] = &[
                 mark=false shadow=true",
     },
     // The card, opened. `rows=` is which rows arrived — a card with one row
-    // and one with three frame alike once cropped to the band.
+    // and one with three frame alike once cropped to the band. `level=true`
+    // is every row's sentence on its badge's words' baseline, to the half
+    // pixel its whole-pixel seat rounds by: centred beside the badge
+    // instead, it stands off the words, 1px on the desks and 2-3px with
+    // Hiragino Sans on macOS (`levelOff=` says by how much).
     //
     // One stopped operation stands for all of them: the rows are the same
     // three and only the op row's word differs, which is the model's
@@ -420,7 +424,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "badges-hover",
         when: &[],
-        plain: "card=true rows=op,conflicts,identity",
+        plain: "card=true rows=op,conflicts,identity level=true",
     },
     // The same card opened from the other order: the stand-in pointer goes
     // down before the band has placed the group, so the group arrives under
@@ -431,7 +435,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "badges-hover-early",
         when: &[],
-        plain: "card=true rows=op,conflicts,identity",
+        plain: "card=true rows=op,conflicts,identity level=true",
     },
     // The badge for a graph that is not this repository's history, and the
     // card line that parts its two states: an out-of-date graph is pixel for
@@ -611,7 +615,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "badges-all-hover",
         when: &[],
-        plain: "card=true rows=op,conflicts,identity,stale,lfs,old-git",
+        plain: "card=true rows=op,conflicts,identity,stale,lfs,old-git level=true",
     },
     // The picker is the platform's own window and stands in neither
     // photograph (`popups=0`), so the line is the whole evidence. It comes
