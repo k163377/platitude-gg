@@ -520,20 +520,21 @@ impl GitExecutor {
             TimeBudget::At(timeout) => Some(timeout),
             TimeBudget::Never => None,
         };
-        let outcome = run_child(&mut child, budget, cancel, on_stdout)
-            .await
-            .map_err(|source| {
-                report(
-                    CommandEnd::Failed,
-                    waited,
-                    started.elapsed(),
-                    &source.to_string(),
-                );
-                GitError::Io {
-                    command: described.clone(),
-                    source,
-                }
-            })?;
+        let outcome = run_child(&mut child, budget, cancel, on_stdout).await;
+        // Reaped (or killed) whichever way it ended: the life is spent.
+        super::meter::charge(started.elapsed());
+        let outcome = outcome.map_err(|source| {
+            report(
+                CommandEnd::Failed,
+                waited,
+                started.elapsed(),
+                &source.to_string(),
+            );
+            GitError::Io {
+                command: described.clone(),
+                source,
+            }
+        })?;
 
         let clocks = Clocks {
             waited,
