@@ -308,6 +308,17 @@ QtObject {
         const list = probe.listOf(kind)
         return list ? list.rowNameAt(row) : ""
     }
+    /// PGG_AUTO_ACT=rebase-edit-stop: the name the repository's own working copy draws on its WORKTREES row — its
+    /// branch, or its folder while it stands on none (デザイン規約 §左メニューの所作). Empty while that row is unbuilt.
+    function homeCopyName() {
+        const list = probe.listOf("worktree")
+        for (let at = 0; list && at < list.count; at++) {
+            const row = list.itemAtIndex(at)
+            if (row && row.change === "MAIN")
+                return list.rowShownNameAt(at)
+        }
+        return ""
+    }
     /// Whether one section's row is on screen, so a run can say the row left before it says what took its place.
     function rowInView(kind, row) {
         const list = probe.listOf(kind)

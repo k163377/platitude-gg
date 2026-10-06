@@ -58,10 +58,13 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "write_stopped wip=true conflicts=true error=false log=false cont=true",
     },
+    // A replay stops on no branch: `home=` is the main copy's WORKTREES
+    // row named by its folder, which only the listing read after the
+    // write says (the one before names the branch).
     Verb {
         name: "rebase-stops",
         when: &[],
-        plain: "write_stopped wip=true conflicts=true error=false log=false cont=true",
+        plain: "write_stopped wip=true conflicts=true error=false log=false cont=true home=repo",
     },
     // The `rebase` row's note about the range. The picture cannot date it:
     // a note a frame late moves the card's edge from under the hand
@@ -79,11 +82,12 @@ pub(super) const TABLE: &[Verb] = &[
     // The same stop reached through a carry: the stash the rewrite took
     // out of its way still stands, and `stashes=1` is the claim — a screen
     // that lost the work frames nearly like one holding it in the stash
-    // (規約 §未コミット変更がある状態で履歴を書き換える).
+    // (規約 §未コミット変更がある状態で履歴を書き換える). `home=` as for
+    // `rebase-stops`.
     Verb {
         name: "drop-stops",
         when: &[],
-        plain: "write_stopped wip=true conflicts=true error=false log=false cont=true stashes=1",
+        plain: "write_stopped wip=true conflicts=true error=false log=false cont=true home=repo stashes=1",
     },
     // Rewrites turned down before git is asked, through the row menu's
     // door. A window judges only the connection — the press reaching
@@ -187,10 +191,12 @@ pub(super) const TABLE: &[Verb] = &[
     // like the emptied-commit stop (デザイン規約 §フル interactive rebase).
     // `box=` / `button=`: the one stepping stop that keeps the message
     // boxes and the commit button, since amending is what it stops for.
+    // `home=`: the main copy's WORKTREES row, on no branch now, is named by
+    // its folder; the branch it left is the listing from before the write.
     Verb {
         name: "rebase-edit-stop",
         when: &[],
-        plain: "edit_stop editing=true skipfree=false oid=true cont=true skip=true box=true button=true",
+        plain: "edit_stop editing=true skipfree=false oid=true cont=true skip=true box=true button=true home=repo",
     },
     // The row's verb walked out of `reword` and back. The dropped draft and
     // the commit's own message draw the same two boxes, and a dropped one
@@ -241,10 +247,12 @@ pub(super) const TABLE: &[Verb] = &[
     // and every other exit-card row. Over a clean tree the face it stood
     // on is empty once the operation is gone, so a reader left on it
     // frames like one taken to the commit — `wip=` and `op=` are the claim.
+    // `home=`: the main copy's WORKTREES row names its branch again, which
+    // only the listing read after the write can say.
     Verb {
         name: "rebase-edit-stop-out",
         when: &[],
-        plain: "op_exit_landed wip=false op= follows=true onscreen=true",
+        plain: "op_exit_landed wip=false op= follows=true onscreen=true home=main",
     },
     // What stands beside the exit card. A stopped rebase, pick or revert
     // hides the message boxes and the commit button — the card's rows are
@@ -270,9 +278,20 @@ pub(super) const TABLE: &[Verb] = &[
     // The same landing the ordinary way: a conflict resolved, staged and
     // continued. It lands only if the rows emptying and the operation
     // going are read out of one status (`RepoPage.leaveWipWhenDone`).
+    // `home=` as above, where the preset names the branch: `rebase-staged`
+    // stops replaying `feature/clash`. `quit` leaves HEAD on no branch.
     Verb {
         name: "op-exit-lands",
-        when: &[],
+        when: &[
+            (
+                Arg::Is("quit"),
+                "op_exit_landed wip=false op= follows=true onscreen=true",
+            ),
+            (
+                Arg::WithPreset("rebase-staged"),
+                "op_exit_landed wip=false op= follows=true onscreen=true home=feature/clash",
+            ),
+        ],
         plain: "op_exit_landed wip=false op= follows=true onscreen=true",
     },
     // Taking the branch back. The line itself is the claim: it is written

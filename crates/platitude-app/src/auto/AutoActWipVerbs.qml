@@ -193,8 +193,8 @@ Item {
             // "-go" followed to where it puts the reader, a status later than the write's own answer
             // (`AutoActDriver.awaitOpExitLanding`). The bare word as above, defaulting to `continue`.
             page.showWip()
-            Harness.report("op_exit_held "
-                              + wipPane.completeOpExit("--" + (arg === "" ? "continue" : arg)))
+            Harness.report("op_exit_held " + driver.pressWrite("op-exit", () => wipPane.completeOpExit(
+                "--" + (arg === "" ? "continue" : arg))))
             driver.awaitOpExitLanding()
         } else if (act === "eol-commit") {
             // The shot is the state before anyone decides.

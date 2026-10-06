@@ -137,10 +137,8 @@ Item {
                 // still reaches it (rules-refs/app-ui.md「プラン実行の write barrier」).
                 plan.setAction(plan.stepCount - 1, "drop")
                 planRanTimer.begin(workTree.headOid)
-                driver.pressWrite("run-plan", () => {
-                    plan.runPlan()
-                    return true
-                })
+                // Not through `pressWrite`, as for the edit stop below: the plan's door hands the tab no id.
+                plan.runPlan()
             } else if (planOpenTimer.act === "plan-details-held") {
                 // The walk starts from the screen a reader gets: the opened row selected and the right pane on it
                 // (`RepoPage.onPlanActiveChanged`), no verb dressed.
@@ -183,7 +181,9 @@ Item {
                 planRewordTimer.begin(planOpenTimer.act)
             } else {
                 plan.setAction(plan.stepCount - 1, "edit")
-                planEditStopTimer.start()
+                planEditStopTimer.begin()
+                // Not through `pressWrite`: the plan's door hands the tab no id to hold, so the watch would stand
+                // pressed for good and `-out`'s own press would arm over it. The stop is waited out by name instead.
                 plan.runPlan()
             }
         }
@@ -222,19 +222,22 @@ Item {
     }
     /// Read out of the answers the notify carried (as `tipLandedTimer.answeredOp` is): one drain empties the queue and
     /// notifies once (`RepoTab::write_answers`), and the fetch the freeze leaves running can leave the answer group
-    /// describing itself.
+    /// describing itself. By name, not by id: the plan's write leaves by the plan's own door, which hands the tab no id
+    /// (`RebasePlanModel::run_plan`), so `wroteAndSettled` never opens on it.
     Connections {
         target: driver.repoTab
         function onWriteSeqChanged() {
-            if (!planRanTimer.running || planRanTimer.answeredOp !== "")
-                return
             const tab = driver.repoTab
             for (let i = 0; i < tab.writeAnswerCount(); i++) {
                 if (tab.writeAnswerSeq(i) <= driver.writeSeqBefore || tab.writeAnswerOp(i) !== "rebase")
                     continue
-                planRanTimer.answeredOp = tab.writeAnswerOp(i)
-                planRanTimer.answeredStopped = tab.writeAnswerStopped(i)
-                planRanTimer.answeredError = tab.writeAnswerFailed(i)
+                if (planRanTimer.running && planRanTimer.answeredOp === "") {
+                    planRanTimer.answeredOp = tab.writeAnswerOp(i)
+                    planRanTimer.answeredStopped = tab.writeAnswerStopped(i)
+                    planRanTimer.answeredError = tab.writeAnswerFailed(i)
+                }
+                if (planEditStopTimer.running && planEditStopTimer.listingFrom < 0)
+                    planEditStopTimer.listingFrom = tab.writeAnswerReadsFrom(i)
                 return
             }
         }
@@ -243,10 +246,31 @@ Item {
     // cost and the exit card's rows (デザイン規約 §進行中の操作から出る / P3-確認事項「クリーン停止の WIP 行は語が場面に合っていない」).
     // `-out` continues it: a clean stop moves no file row, so nothing on that side announces the way out
     // (`RepoPage.leaveWipWhenDone`).
+    //
+    // Also waited out: the WORKTREES listing read after the write, and the walk behind it. The listing is a read of
+    // its own, landing apart from the status that raises the edit marker (`session::write::settle_after`), so a shot
+    // on the status alone can name the main copy by the branch the stop left; the walk comes after both, and draws
+    // the working-tree row the standing operation holds open (`PageSettled`).
     SampleTimer {
         id: planEditStopTimer
+        /// The rebase's `reads_from` (`RepoTab.writeAnswerReadsFrom`), -1 until its answer is in: a listing that
+        /// looked at or above it saw the stop.
+        property int listingFrom: -1
+        function begin() {
+            planEditStopTimer.listingFrom = -1
+            planEditStopTimer.start()
+        }
         onTriggered: {
-            if (repoTab.busyCount !== 0 || !page.wipShown || !workTree.opEditing)
+            const answered = planEditStopTimer.listingFrom >= 0
+            if (!Awaited.all("edit_stop", {
+                    "answer": answered,
+                    "idle": repoTab.busyCount === 0,
+                    "wip": page.wipShown,
+                    "editing": workTree.opEditing,
+                    "worktrees": answered
+                                 && driver.worktreesModel.listingLooked() >= planEditStopTimer.listingFrom,
+                    "page": PageSettled.settled(page)
+                }))
                 return
             planEditStopTimer.stop()
             Harness.report("edit_stop editing=" + workTree.opEditing
@@ -258,12 +282,15 @@ Item {
                               // is what it stops for (デザイン規約 §進行中の操作から出る). Read off the drawn items.
                               + " box=" + wipPane.commitBlock.messageSeat.visible
                               + " button=" + wipPane.commitBlock.commitSeat.visible
+                              // The stop leaves HEAD on no branch, so the main copy's WORKTREES row is named by its
+                              // folder again (デザイン規約 §左メニューの所作) — once the listing behind the write is in.
+                              + " home=" + driver.navProbe.homeCopyName()
                               + " op=" + workTree.opText)
             if (planOpenTimer.act !== "rebase-edit-stop-out") {
                 renderedBarrier.begin()
                 return
             }
-            Harness.report("op_exit_held " + wipPane.completeOpExit("--continue"))
+            Harness.report("op_exit_held " + driver.pressWrite("op-exit", () => wipPane.completeOpExit("--continue")))
             driver.awaitOpExitLanding()
         }
     }

@@ -213,6 +213,13 @@ pub struct NavSectionModel {
     /// True once a refs snapshot arrived (distinguishes "no head yet"
     /// from "detached / no local branches" for the default selection).
     refs_loaded: bool,
+    /// When the last listing this section applied looked at the
+    /// repository (`session::Standing::stamp`) — measured against a
+    /// write's `reads_from`, which tells a listing that saw the write from
+    /// one in flight as it ended. A session's own count: the tab stood in
+    /// another copy counts from the start again, and this holds the old
+    /// session's number until the new one's first listing lands.
+    looked: u64,
     /// Worktree section only: tree vs flat-path display. The page's
     /// restore (`PageLayout.applySavedLayout` → `set_tree_view`) is the
     /// sole writer — rules-refs/app-ui.md「保存フラグの復元は 1 書き手」;

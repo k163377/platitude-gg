@@ -436,8 +436,9 @@ pub enum SessionEvent {
     ///
     /// `reads_from` is the same fence for **listings**: the smallest stamp
     /// a read that looked after this write can carry, compared with the
-    /// `looked` of [`RefsLoaded`](Self::RefsLoaded) and
-    /// [`StashesLoaded`](Self::StashesLoaded). Counting arrivals cannot
+    /// `looked` of [`RefsLoaded`](Self::RefsLoaded),
+    /// [`StashesLoaded`](Self::StashesLoaded) and
+    /// [`WorktreesLoaded`](Self::WorktreesLoaded). Counting arrivals cannot
     /// replace it: a listing in flight when the write ended says nothing
     /// about the write.
     WriteFinished {

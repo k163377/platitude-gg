@@ -297,7 +297,9 @@ Item {
     /// **The one way a verb makes a write.** `what` names the press for the lines a failure and a watchdog leave;
     /// `press` is the product's own input path and answers whether the input went in. Answers the same.
     /// Arm and press are one call so no verb arms after its own press
-    /// (rules-refs/app-ui.md「書き込みを頼む口は動詞側に 1 つだけ」).
+    /// (rules-refs/app-ui.md「書き込みを頼む口は動詞側に 1 つだけ」). Only for a write that leaves by the tab's door
+    /// (`RepoTab::ask_session`): the plan's run leaves by its own with no id to hold, and pressed through here would
+    /// leave the watch pressed for good (`AutoActPlanVerbs`).
     function pressWrite(what, press) {
         if (!driver.beginWrite(what))
             return false

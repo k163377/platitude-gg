@@ -566,6 +566,13 @@ impl NavSectionModel {
         self.shows(row, Role::Full)
     }
 
+    /// When the listing on screen looked (`looked`): at or above a write's
+    /// `RepoTab.writeAnswerReadsFrom`, these rows saw what it left.
+    #[qslot]
+    fn listing_looked(&self) -> i32 {
+        i32::try_from(self.looked).unwrap_or(i32::MAX)
+    }
+
     /// The file row at `row` keyed the way the WIP pane holds its choice
     /// — `<bucket>:<path>`, empty for a folder row and past the end. How
     /// the choice reaches rows with no delegate built

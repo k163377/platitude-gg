@@ -410,7 +410,8 @@ pub(super) fn asked_for(kind: OperationKind) -> bool {
 /// the one the queue handed back at the press; `seq` is where `write_seq`
 /// counted it, so a run holding no id tells its answer from one counted
 /// before it pressed; `head_seq` is the first report of HEAD after the
-/// write (`TabMsg::WriteState::head_seq`), which a tip landing arms on.
+/// write (`TabMsg::WriteState::head_seq`), which a tip landing arms on;
+/// `reads_from` is the same fence for the listings.
 struct WriteAnswer {
     id: u64,
     seq: i32,
@@ -424,6 +425,7 @@ struct WriteAnswer {
     error: String,
     at_tip: bool,
     head_seq: u64,
+    reads_from: u64,
     /// What the far side, a hook, or this end said about refusing it — per
     /// answer, since a drain can bring several. Empty `kind` is git's
     /// plain refusal, the command log's news

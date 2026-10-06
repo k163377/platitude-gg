@@ -25,6 +25,7 @@ impl NavSectionModel {
                         // two arrive on separate feeds in no fixed order
                         // (`ops::StandIn`).
                         crate::hub::listing_applied(self.tab_id, &self.section, looked);
+                        self.looked = looked;
                         // The first snapshot is news even when empty: the
                         // default selection waits on `refsLoaded`.
                         arrived |= !self.refs_loaded;
@@ -93,6 +94,7 @@ impl NavSectionModel {
             worktrees_arrived = true;
             // The same stamp, for the listing a removed copy waits on.
             crate::hub::listing_applied(self.tab_id, &self.section, list.looked);
+            self.looked = list.looked;
             // A bare entry has no working copy to show.
             let list = list.entries.into_iter().filter(|w| !w.bare).collect();
             arrived |= self.take(Source::Worktrees { list, current });
@@ -105,6 +107,7 @@ impl NavSectionModel {
             // The same stamp, for the listing a dropped stash waits on
             // (see the refs above).
             crate::hub::listing_applied(self.tab_id, &self.section, list.looked);
+            self.looked = list.looked;
             arrived |= self.take(Source::Stashes(list.entries));
         }
         if arrived {

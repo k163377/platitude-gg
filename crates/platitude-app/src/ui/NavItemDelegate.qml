@@ -465,6 +465,8 @@ Item {
     readonly property Item nameField: rowLayout.nameWhole
     readonly property string nameTook: navRow.nameField ? navRow.nameField.selected : ""
     readonly property bool nameCaret: !!navRow.nameField && navRow.nameField.hasCaret
+    /// The name the row draws — the main copy's row draws its branch where it has one (`NavRowBody.shownName`).
+    readonly property string shownName: rowLayout.shownName
 
     /// A press on the row's **own line** (the open lines answer theirs in `NavRowFacts`). One that never moves is a
     /// click; one that moves is going for the name, so the row opens **now** and the drag carries on into the name

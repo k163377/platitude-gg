@@ -323,6 +323,12 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.name : ""
     }
+    /// What that row draws as its name (PGG_AUTO_ACT=rebase-edit-stop) — the main copy's row draws its branch in place
+    /// of `name` where it has one (`NavRowBody.shownName`). Empty on an unbuilt row.
+    function rowShownNameAt(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.shownName : ""
+    }
     /// The commit a click on that row leads to, read off the row rather than the model (PGG_AUTO_ACT=nav-jump).
     /// Empty on an unbuilt row, a folder, and a bare worktree entry.
     function rowOidAt(index) {

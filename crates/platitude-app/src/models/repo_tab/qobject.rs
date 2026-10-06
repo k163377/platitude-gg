@@ -322,6 +322,16 @@ impl RepoTab {
             .map_or(0, |a| bridge_id(a.head_seq))
     }
 
+    /// The smallest stamp a listing read after that write can carry
+    /// (`WriteAnswer::reads_from`): a section whose `listingLooked` is at
+    /// or above it shows what the write left. Past the end, a stamp no
+    /// listing reaches — the resting value is the failing one.
+    #[qslot]
+    fn write_answer_reads_from(&self, index: i32) -> i32 {
+        self.write_answer_at(index)
+            .map_or(i32::MAX, |a| bridge_id(a.reads_from))
+    }
+
     /// Which write answered, as raw data; what it means is
     /// `writeAnswerStopped` / `writeAnswerFailed` / `writeAnswerAtTip`.
     #[qslot]

@@ -338,6 +338,7 @@ impl RepoTab {
             error: error.clone(),
             at_tip,
             head_seq,
+            reads_from,
             report_kind,
             report_remote: remote,
             report_name: name,

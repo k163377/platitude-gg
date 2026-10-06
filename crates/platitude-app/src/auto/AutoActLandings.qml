@@ -63,11 +63,13 @@ Item {
     /// a terminal. Ended by the status, not the write: the page leaves the WIP face off the status that says the
     /// operation is gone (`RepoPage.leaveWipWhenDone`), published after the answer. Waited out on resting states, as
     /// `stashLandTimer` is; `wip=` is a report because the face left over a clean tree pictures the same as an
-    /// ordinary empty WIP face.
+    /// ordinary empty WIP face. Behind the whole write barrier as well: the worktree listing is a read of its own,
+    /// landing apart from that status, and until it lands the main copy's row names the HEAD the stop stood on — only
+    /// the write's settle says it is in (`session::write::settle_after`).
     SampleTimer {
         id: opExitLandTimer
         onTriggered: {
-            if (repoTab.busyCount !== 0 || workTree.opText !== "")
+            if (!driver.wroteAndSettled() || workTree.opText !== "")
                 return
             if (!page.wipShown) {
                 if (!driver.cardSettled)
@@ -83,6 +85,9 @@ Item {
                               + " op=" + workTree.opText
                               + " follows=" + (page.selectedOid === workTree.headOid)
                               + " onscreen=" + graphPane.rowOnScreen(row)
+                              // The main copy's WORKTREES row: the branch HEAD stands on once the operation is down,
+                              // the folder where it is left on none (`quit`; デザイン規約 §左メニューの所作).
+                              + " home=" + driver.navProbe.homeCopyName()
                               + " lit=" + (graphPane.view.currentIndex === row)
                               + " files=" + worktreeModel.total
                               + " head=" + workTree.headOid.substring(0, 8)

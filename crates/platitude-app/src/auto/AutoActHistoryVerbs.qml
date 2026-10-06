@@ -67,7 +67,7 @@ Item {
             // Through → answers at the tip; stopped → answers in the working tree
             // (規約 §履歴を合流させる / §進行中の操作から出る). Revert and merge land the same way.
             if (act === "cherry-pick-stops")
-                opStoppedTimer.begin(false)
+                opStoppedTimer.start()
             else
                 tipLandedTimer.begin()
             repoTab.cherryPick(pickOid)
@@ -126,9 +126,9 @@ Item {
                               + " hold=" + (dropCommitItem.holdMs > 0)
                               + " reached=" + workTree.headReachedElsewhere)
             if (act !== "drop-commit") {
-                // "drop-stops" stops with the work still in the stash it took (`opStoppedTimer.carried`).
+                // "drop-stops" stops with the work still in the stash it took (`write_stopped stashes=`).
                 if (act === "drop-stops")
-                    opStoppedTimer.begin(true)
+                    opStoppedTimer.start()
                 if (dropCommitItem.holdMs > 0) {
                     dropCommitItem.completeHold()
                 } else {
@@ -171,7 +171,7 @@ Item {
                 page.activateRow(oidHex)
                 page.openRowMenu(oidHex)
                 if (act === "revert-stops")
-                    opStoppedTimer.begin(false)
+                    opStoppedTimer.start()
                 else
                     tipLandedTimer.begin()
                 repoTab.revert(oidHex)
@@ -188,7 +188,7 @@ Item {
                     // `rebase-stops` answers in the working tree (規約 §未コミット変更がある状態で履歴を書き換える
                     // の着地表); `replay-running` answers nowhere — its subject is the screen while git is out.
                     if (act === "rebase-stops") {
-                        opStoppedTimer.begin(false)
+                        opStoppedTimer.start()
                     } else if (act === "replay-running") {
                         replayRunningTimer.start()
                         // What a click does next; the other two land long after the menu is gone, this one does not.
@@ -498,16 +498,11 @@ Item {
     // (規約 §進行中の操作から出る).
     SampleTimer {
         id: opStoppedTimer
-        // Whether the work was carried into a stash: the stash section refreshes after the graph, so it reads 0 at
-        // the write barrier and has to be waited for.
-        property bool carried: false
-        function begin(withStash) {
-            opStoppedTimer.carried = withStash
-            opStoppedTimer.start()
-        }
         onTriggered: {
-            if (repoTab.busyCount !== 0 || !page.wipShown || workTree.conflictCount === 0
-                    || (opStoppedTimer.carried && stashesModel.total === 0))
+            // The whole write barrier: the stash and worktree listings are reads of their own, landing apart from
+            // the status that says the stop, and only the write's settle says both are in
+            // (`session::write::settle_after`).
+            if (!driver.wroteAndSettled() || !page.wipShown || workTree.conflictCount === 0)
                 return
             opStoppedTimer.stop()
             Harness.report(
@@ -516,6 +511,9 @@ Item {
                 + " error=" + (repoTab.lastError !== "")
                 + " log=" + page.commandsOpen
                 + " cont=" + wipPane.offersOpExit("--continue")
+                // A replay stops on no branch, and the main copy's WORKTREES row is named by its folder
+                // (デザイン規約 §左メニューの所作); a pick or a revert stops on the branch.
+                + " home=" + driver.navProbe.homeCopyName()
                 // Where carried work went: git's words are not raised over the stop, so only the count and the
                 // stash row say it (規約 §未コミット変更がある状態で履歴を書き換える).
                 + " stashes=" + stashesModel.total

@@ -28,6 +28,8 @@ RowLayout {
     /// The branch that row is named by. Empty when detached (git lists no `branch` line), and the folder name stands
     /// instead — else the row is a house and a blank.
     readonly property string homeName: body.homeCopy ? body.row.bucket : ""
+    /// The name this row draws: the main copy's branch, else the row's own (`homeName`).
+    readonly property string shownName: body.homeName !== "" ? body.homeName : body.row.name
     /// The colour of "this window stands here": `textLink` as for a branch (the main copy is named by one), and a
     /// linked copy's `textHereTree` (デザイン規約 §ref の種別).
     readonly property color hereTone:
@@ -70,7 +72,7 @@ RowLayout {
                 : nameCell.seatMark === "tree" ? Theme.success
                 : Theme.textSecondary
         // The main copy is named by its branch, in the name's place (デザイン規約 §左メニューの所作; `homeName`).
-        name: body.homeName !== "" ? body.homeName : body.row.name
+        name: body.shownName
         // A staged rename's source, as the commit's file list shows it. Not `orig_path`, which a folder row uses for
         // its own path.
         origPath: body.row.orig_name
