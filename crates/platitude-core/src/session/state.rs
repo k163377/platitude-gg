@@ -132,6 +132,47 @@ pub(super) enum Reread {
     Failed,
 }
 
+/// What one stash listing published — the flight's shared answer, so a
+/// walk can take the stashes from the listing that answered it instead of
+/// reading them again (`RepoSession::read_stashes`), while that listing
+/// still stands (`RepoSession::stashes_standing`).
+#[derive(Debug, Clone, Default)]
+pub(super) struct StashRead {
+    /// The list published; `None` is a failed read.
+    pub(super) list: Option<Arc<Vec<StashEntry>>>,
+    /// When it looked (`Standing::stamp`).
+    pub(super) looked: u64,
+    /// Which listing it was, counted over every reader ([`StashListings`]).
+    pub(super) listing: u64,
+    /// Whether it differs from the listing before it. A stash taken or
+    /// dropped moves no ref the refs read lists, so this is the only word
+    /// of it a walk gets.
+    pub(super) moved: bool,
+}
+
+/// The stash listings so far: the last one's list, and how many.
+#[derive(Default)]
+pub(super) struct StashListings {
+    last: Option<Arc<Vec<StashEntry>>>,
+    count: u64,
+}
+
+impl StashListings {
+    /// Records a listing, answering its number and whether it moved. The
+    /// first moves nothing: the opening's walk reads the stashes itself.
+    pub(super) fn record(&mut self, list: &Arc<Vec<StashEntry>>) -> (u64, bool) {
+        self.count += 1;
+        let moved = self.last.as_ref().is_some_and(|last| **last != **list);
+        self.last = Some(Arc::clone(list));
+        (self.count, moved)
+    }
+
+    /// The number of the newest listing.
+    pub(super) fn newest(&self) -> u64 {
+        self.count
+    }
+}
+
 /// What the worktree listing came back with — the flight's shared answer,
 /// so every caller answered by one pass acts on the same news and none
 /// of them settles before the reads that news asks for.
@@ -272,7 +313,7 @@ impl<T: Clone> Derived<T> {
     /// (single-flight: callers waiting behind the gate re-check the value).
     ///
     /// A read that returns into a newer generation reads once more, and
-    /// only once: every write invalidates on its way out, so chasing until
+    /// only once: writes invalidate on their way out, so chasing until
     /// no write lands mid-read is unbounded with every waiter parked behind
     /// the gate. That second reading answers this call but stays out of
     /// the cache.

@@ -195,6 +195,7 @@ impl RepoSession {
             refs_read: ReadFlight::default(),
             status_read: ReadFlight::default(),
             stash_read: ReadFlight::default(),
+            stash_listings: Mutex::new(StashListings::default()),
             worktrees_read: ReadFlight::default(),
             write_tx,
             write_order: Mutex::new(None),
@@ -249,7 +250,7 @@ async fn settle(s: Arc<RepoSession>, path: PathBuf) {
                 FirstPass::Streamed => s.restart_log(),
                 FirstPass::Swapped => s.refresh_log(),
             }
-            s.refresh_quick();
+            s.refresh_opening();
             // The fetch decision is spawned beside the reads, not awaited
             // before them (rules-refs/core.md「開いたら 1 回 fetch する」).
             let opening = Arc::clone(&s);

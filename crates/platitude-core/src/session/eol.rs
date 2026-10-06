@@ -90,8 +90,10 @@ impl RepoSession {
     ///
     /// A stat per poll tick, not the process the cache saves. It watches
     /// the repository's own config (`--git-path config`, the common one
-    /// for a linked worktree); a global write is seen on the next write or
-    /// ref move, except the push mark ([`RepoSession::note_push_default`]).
+    /// for a linked worktree); a global write is seen on the next write that
+    /// drops what is derived (one reaching the tree or the history —
+    /// `session::write::settle_after`) or ref move, except the push mark
+    /// ([`RepoSession::note_push_default`]).
     pub(super) fn forget_what_the_config_decides(&self) {
         let Some(path) = self.config_path() else {
             return;

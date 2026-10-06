@@ -195,7 +195,7 @@ impl RepoSession {
     pub fn add_remote(self: &Arc<Self>, name: String, url: String) -> Option<OperationId> {
         self.write(
             OperationKind::Remote,
-            AfterWrite::Graph,
+            AfterWrite::Config,
             move |exec, repo, cancel| async move {
                 remote::add(&exec, &repo.workdir, &name, &url, &cancel).await
             },
@@ -216,7 +216,7 @@ impl RepoSession {
     pub fn mark_origin(self: &Arc<Self>, name: String) -> Option<OperationId> {
         self.write(
             OperationKind::Remote,
-            AfterWrite::Graph,
+            AfterWrite::Config,
             move |exec, repo, cancel| async move {
                 if name.is_empty() {
                     remote::clear_origin(&exec, &repo.workdir, &cancel).await
@@ -231,7 +231,7 @@ impl RepoSession {
     pub fn set_remote_url(self: &Arc<Self>, name: String, url: String) -> Option<OperationId> {
         self.write(
             OperationKind::Remote,
-            AfterWrite::Graph,
+            AfterWrite::Config,
             move |exec, repo, cancel| async move {
                 remote::set_url(&exec, &repo.workdir, &name, &url, &cancel).await
             },

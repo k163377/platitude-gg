@@ -38,12 +38,17 @@ impl RepoSession {
     /// The two reads a walk waits on, taken together.
     ///
     /// HEAD is asked of git only where no refs read has answered it
-    /// (`known_head_tip`); a failed stash listing leaves the walk without
-    /// stash rows.
+    /// (`known_head_tip`). The stashes are `listed` where the caller read
+    /// them for its listing behind the same reason and they still stand
+    /// ([`RepoSession::stashes_standing`]), else asked of the listing's own
+    /// reader, which publishes them too and answers a listing asked beside
+    /// this walk ([`RepoSession::read_stashes`]). A failed stash read
+    /// leaves the walk without stash rows.
     pub(super) async fn walk_inputs(
         self: &Arc<Self>,
         workdir: &std::path::Path,
         cancel: &CancellationToken,
+        listed: Option<Arc<Vec<StashEntry>>>,
     ) -> Result<WalkInputs, GitError> {
         let head = async {
             match self.known_head_tip() {
@@ -54,16 +59,18 @@ impl RepoSession {
         // Stash oids join the walk; their synthetic parents are sifted out
         // (`Sifter`).
         let stashes = async {
-            stash::load(&self.executor, workdir, cancel)
-                .await
-                .unwrap_or_default()
+            match listed {
+                Some(listed) => Some(listed),
+                None => self.read_stashes().await.list,
+            }
         };
         let (head_tip, stashes) = tokio::join!(head, stashes);
+        let stashes = stashes.unwrap_or_default();
         let stash_stands = stashes
             .iter()
             .filter_map(|s| s.stands.map(|stands| (s.oid, stands)))
             .collect();
-        let stash_refs = stashes.into_iter().map(|s| (s.oid, s.name)).collect();
+        let stash_refs = stashes.iter().map(|s| (s.oid, s.name.clone())).collect();
         Ok(WalkInputs {
             head_tip: head_tip?,
             stash_refs,

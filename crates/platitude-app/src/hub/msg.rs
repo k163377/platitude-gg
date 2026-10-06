@@ -227,8 +227,8 @@ pub enum StateMsg {
 
 /// The stashes section's entries, and when the read that listed them
 /// looked (`SessionEvent::StashesLoaded`). A stamp of its own because the
-/// stash is read after the graph rebuild: a dropped row measured against
-/// the refs' stamp would come back for the whole rebuild.
+/// stash is a read of its own, landing apart from the refs: a dropped row
+/// measured against the refs' stamp would come back until it lands.
 #[derive(Debug)]
 pub struct StashList {
     pub entries: Vec<StashEntry>,

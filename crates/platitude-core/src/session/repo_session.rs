@@ -127,8 +127,9 @@ pub struct RepoSession {
     /// extension) — what a house style is scoped to.
     ///
     /// `None` is a cached "unknown": it cost the same reads as knowing.
-    /// Emptied whenever a write lands or refs move, since either can bring
-    /// a new `.gitattributes` or new neighbours.
+    /// Emptied by a write that reaches the tree or the history and when refs
+    /// move, since either can bring a new `.gitattributes` or new neighbours
+    /// (a fetch, a config write, a delete or a copy taken away cannot).
     pub(super) eol_baselines: Mutex<HashMap<(String, String), Option<crate::eol::Baseline>>>,
     /// Whether git normalises line endings here (`core.autocrlf`).
     pub(super) eol_normalises: Derived<bool>,
@@ -202,7 +203,10 @@ pub struct RepoSession {
     /// than one place at once ([`ReadFlight`]).
     pub(super) refs_read: ReadFlight<Reread>,
     pub(super) status_read: ReadFlight<Reread>,
-    pub(super) stash_read: ReadFlight,
+    pub(super) stash_read: ReadFlight<StashRead>,
+    /// The stash listings so far, for whether one moved and whether a
+    /// list handed on is still the newest (`RepoSession::stashes_standing`).
+    pub(super) stash_listings: Mutex<StashListings>,
     pub(super) worktrees_read: ReadFlight<WorktreeRead>,
     /// Submission end of the write queue (`session::write`).
     pub(super) write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,

@@ -138,9 +138,9 @@ impl Applied {
 ///    away.
 /// 3. [`Self::look_again`] — a list has drawn a reading. Each row answers
 ///    off the list that draws it ([`Applied`]; a composite delete's two
-///    rows go as their two lists reach them): the stash listing is read
-///    after the graph rebuild (`session::write`), so measured against the
-///    refs' a dropped entry would be back for the whole rebuild.
+///    rows go as their two lists reach them): the stash listing is a read
+///    of its own, landing apart from the refs (`session::write`), so
+///    measured against the refs' a dropped entry would be back until it lands.
 ///
 /// Only a listing that saw the write answers: the answer and the listings
 /// arrive in no fixed order, and a read in flight when the write ended

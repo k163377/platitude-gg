@@ -163,7 +163,7 @@ impl RepoSession {
     ) -> Option<OperationId> {
         self.write(
             OperationKind::Branch,
-            AfterWrite::Graph,
+            AfterWrite::Config,
             move |exec, repo, cancel| async move {
                 branch::set_upstream(
                     &exec,

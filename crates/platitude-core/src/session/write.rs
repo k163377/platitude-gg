@@ -349,10 +349,9 @@ impl RepoSession {
                     head_seq: fence.head_seq,
                     reads_from: fence.reads_from,
                 });
-                matches!(
-                    after,
-                    AfterWrite::Graph | AfterWrite::Refs | AfterWrite::Name { .. }
-                )
+                // The rest walk where a read behind them moved
+                // (`settle_after`).
+                matches!(after, AfterWrite::Graph | AfterWrite::Name { .. })
             }
             // Only a network write lands here (a local token is nobody's
             // to cancel): the session is closing. The boundaries must
@@ -420,14 +419,22 @@ impl RepoSession {
         rebuild_graph: bool,
     ) -> Vec<FollowUp> {
         let after = operation.after;
-        let name_only = matches!(after, AfterWrite::Name { .. });
-        if !name_only {
-            self.forget_derived();
+        // What is read once and kept, dropped where the write can have
+        // moved it: a write reaching the tree or the history can bring a
+        // new `.gitattributes` or a remote; a config write the remotes
+        // (its file's stamp drops the rest — `forget_what_the_config_decides`).
+        // A fetch, a delete and a copy taken away reach neither.
+        match after {
+            AfterWrite::Tree | AfterWrite::Snapshots | AfterWrite::Graph | AfterWrite::Author => {
+                self.forget_derived();
+            }
+            AfterWrite::Config => self.remotes.forget(),
+            AfterWrite::Refs | AfterWrite::Worktrees | AfterWrite::Name { .. } => {}
         }
 
-        // Tree and refs settle before the graph: either can move the WIP
-        // row or a ref, and rebuilding first would walk the history twice
-        // for one write.
+        // Every read that decides the walk comes before it — the tree, the
+        // refs and the listings each can move a row — so one walk answers
+        // for the write, over the repository as the write left it.
         //
         // An index-only write reads the tree alone: the refs are where they
         // were, and theirs is the longest read (`AfterWrite::Tree`).
@@ -440,24 +447,35 @@ impl RepoSession {
         // A delete moves a ref every time, so it is told at acceptance
         // whether the tree is owed a read, and reads none otherwise
         // (`AfterWrite::Name`).
+        //
+        // The listings are read with the rest, and the stashes they list go
+        // to the walk, which reads none of its own (`walk_inputs`). They are
+        // awaited: `WriteSettled` is only worth sending once all have
+        // published, and a listing still in flight when the next write
+        // answers can let a refusal put a dropped stash back on screen (the
+        // app stands rows in until a listing proves them gone).
         let mut failed = Vec::new();
-        let tree_only = after == AfterWrite::Tree;
-        let (tree, refs) = match after {
-            AfterWrite::Tree => (self.read_status().await, Reread::Same),
-            AfterWrite::Name { status: false } => (Reread::Same, self.read_refs().await),
-            AfterWrite::Refs => {
-                let refs = self.read_refs().await;
-                let tree = if refs == Reread::Moved {
-                    self.read_status().await
-                } else {
-                    Reread::Same
-                };
-                (tree, refs)
+        let (tree, refs, (stashes, listed)) = match after {
+            AfterWrite::Tree => (self.read_status().await, Reread::Same, Default::default()),
+            AfterWrite::Name { status: false } => {
+                (Reread::Same, self.read_refs().await, Default::default())
             }
-            AfterWrite::Name { status: true }
-            | AfterWrite::Snapshots
-            | AfterWrite::Graph
-            | AfterWrite::Author => tokio::join!(self.read_status(), self.read_refs()),
+            AfterWrite::Name { status: true } | AfterWrite::Config => {
+                let (tree, refs) = tokio::join!(self.read_status(), self.read_refs());
+                (tree, refs, Default::default())
+            }
+            AfterWrite::Refs => {
+                let (tree, refs) = self.read_refs_then_tree().await;
+                (tree, refs, Default::default())
+            }
+            AfterWrite::Worktrees => {
+                let ((tree, refs), listed) =
+                    tokio::join!(self.read_refs_then_tree(), self.read_worktrees());
+                (tree, refs, (StashRead::default(), listed))
+            }
+            AfterWrite::Snapshots | AfterWrite::Graph | AfterWrite::Author => {
+                tokio::join!(self.read_status(), self.read_refs(), self.read_listings())
+            }
         };
         if tree == Reread::Failed {
             note_failed(&mut failed, FollowUp::Status);
@@ -465,42 +483,52 @@ impl RepoSession {
         if refs == Reread::Failed {
             note_failed(&mut failed, FollowUp::Refs);
         }
+        for read in listed.failed {
+            note_failed(&mut failed, read);
+        }
         let refs_moved = refs == Reread::Moved;
-        if rebuild_graph || tree == Reread::Moved || refs_moved {
+        // A stash moved by the write — or outside, beside it — moves no ref
+        // the refs read lists: the listing is its only word.
+        let moved = tree == Reread::Moved || refs_moved || stashes.moved;
+        let mut walk = rebuild_graph || moved || listed.walk;
+        // A fetch that left the refs where they were has nothing new to
+        // walk — unless the graph is behind: a read beside the fetch may
+        // have seen its refs move first, and walks them itself (waited for,
+        // so the write settles behind it), or a walk failed earlier.
+        if after == AfterWrite::Refs && !walk {
+            self.wait_for_graph_passes().await;
+            walk = self.graph_stale.load(Ordering::SeqCst);
+        }
+        if walk {
+            let reads = match self.workdir() {
+                Some(workdir) => {
+                    self.pass_reads_listed(&workdir, &self.root_cancel, stashes)
+                        .await
+                }
+                None => None,
+            };
             // Off-screen rebuild: the old graph stays until the new one
             // swaps in, or nothing repaints if unchanged. Awaited, or a
             // later write or test barrier could overtake and cancel the
             // refresh it follows.
-            if !self.settle_graph().await.landed() {
+            if !self.settle_graph_with(reads).await.landed() {
                 note_failed(&mut failed, FollowUp::Graph);
             }
         }
         // Head reach is asked here because a stash push, pop or drop moves
         // no ref (so the refs read will not ask), yet changes whether
-        // anything else holds the tip. An index-only write changes none of
-        // reach, stashes or worktrees.
-        //
-        // The listings, and the reads they ask for, are awaited:
-        // `WriteSettled` is only worth sending once all have published, and
-        // a listing still in flight when the next write answers can let a
-        // refusal put a dropped stash back on screen (the app stands rows
-        // in until a listing proves them gone).
-        let mut listings = Vec::new();
-        if !tree_only && !refs_moved {
+        // anything else holds the tip. An index-only write, a fetch and a
+        // config write change none of it.
+        let reaches = !matches!(
+            after,
+            AfterWrite::Tree | AfterWrite::Refs | AfterWrite::Config
+        );
+        if reaches && !refs_moved {
             self.settle_head_reach();
         }
-        // A delete leaves both listings as they were (`AfterWrite::Name`).
-        if !tree_only && !name_only {
-            listings.extend(self.refresh_stashes().map(|task| (FollowUp::Stashes, task)));
-            listings.extend(
-                self.refresh_worktrees()
-                    .map(|task| (FollowUp::Worktrees, task)),
-            );
-        }
-        if after == AfterWrite::Author {
-            listings.extend(self.refresh_author().map(|task| (FollowUp::Author, task)));
-        }
-        for (listing, task) in listings {
+        if after == AfterWrite::Author
+            && let Some(task) = self.refresh_author()
+        {
             match task.await {
                 Ok(more) => {
                     for read in more {
@@ -509,8 +537,8 @@ impl RepoSession {
                 }
                 // The task unwound: nothing it was to publish did.
                 Err(error) => {
-                    tracing::warn!(?operation, %error, "a listing read after the write did not finish");
-                    note_failed(&mut failed, listing);
+                    tracing::warn!(?operation, %error, "the author read after the write did not finish");
+                    note_failed(&mut failed, FollowUp::Author);
                 }
             }
         }
@@ -521,10 +549,22 @@ impl RepoSession {
         }
         failed
     }
+
+    /// The refs, and the tree only where they moved — the series a write
+    /// that cannot reach the index or the tree reads (`AfterWrite::Refs`).
+    async fn read_refs_then_tree(self: &Arc<Self>) -> (Reread, Reread) {
+        let refs = self.read_refs().await;
+        let tree = if refs == Reread::Moved {
+            self.read_status().await
+        } else {
+            Reread::Same
+        };
+        (tree, refs)
+    }
 }
 
-/// Names a read that did not land, once: the graph can be asked for twice
-/// behind one write (by the write and by the worktree listing).
+/// Names a read that did not land, once: the refs can be asked for twice
+/// behind one write (by the write and by the worktree listing's joins).
 fn note_failed(failed: &mut Vec<FollowUp>, read: FollowUp) {
     if !failed.contains(&read) {
         failed.push(read);

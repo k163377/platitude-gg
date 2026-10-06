@@ -27,8 +27,8 @@ use super::*;
 /// existed: a write settled by an older pass would rebuild the graph
 /// from the repository as it was *before* the write.
 ///
-/// `A` is what a pass answers its callers with (`Reread`,
-/// `WorktreeRead`); listings that answer only "published" use a `bool`.
+/// `A` is what a pass answers its callers with (`Reread`, `StashRead`,
+/// `WorktreeRead`; a `bool` where nothing but "it landed" is wanted).
 pub(super) struct ReadFlight<A = bool> {
     /// One pass at a time. tokio hands it on in the order it was asked
     /// for, so no caller is passed over; which pass answers whom is the
@@ -94,7 +94,7 @@ impl<A> ReadFlight<A> {
     /// started after it asked has already answered the same question.
     pub(super) async fn run<F, Fut>(&self, read: F) -> A
     where
-        A: Copy,
+        A: Clone,
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = A>,
     {
@@ -105,7 +105,7 @@ impl<A> ReadFlight<A> {
     /// ([`Self::stamp`]).
     pub(super) async fn run_from<F, Fut>(&self, stamp: Stamp, read: F) -> A
     where
-        A: Copy,
+        A: Clone,
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = A>,
     {
@@ -117,7 +117,7 @@ impl<A> ReadFlight<A> {
         {
             let passes = relock(&self.passes);
             if passes.landed > stamped.asked {
-                return passes.answer;
+                return passes.answer.clone();
             }
         }
         let mine = {
@@ -131,7 +131,7 @@ impl<A> ReadFlight<A> {
         // next caller a read of its own, never its answer.
         let mut passes = relock(&self.passes);
         passes.landed = mine;
-        passes.answer = answer;
+        passes.answer = answer.clone();
         answer
     }
 
@@ -139,6 +139,21 @@ impl<A> ReadFlight<A> {
     /// the work already in flight.
     pub(super) async fn wait_idle(&self) {
         self.wait_for_live(|live| live == 0).await;
+    }
+
+    /// Counts a caller in beyond its read, until [`Self::leave`]: for one
+    /// that acts on the answer after leaving the flight — asks for the
+    /// rebuild it implies once its other reads are in — so the boundary
+    /// that closes the flight ([`Self::wait_idle`]) closes that act too.
+    pub(super) fn enter(&self) {
+        self.live.fetch_add(1, Ordering::SeqCst);
+        self.woken();
+    }
+
+    /// Counts out a caller [`Self::enter`] counted in.
+    pub(super) fn leave(&self) {
+        self.live.fetch_sub(1, Ordering::SeqCst);
+        self.woken();
     }
 
     async fn wait_for_live(&self, settled: impl Fn(usize) -> bool) {

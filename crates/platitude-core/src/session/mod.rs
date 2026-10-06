@@ -139,7 +139,7 @@ use standing::{HeadHold, HeadOffer, HeadPublished, Standing};
 pub use state::AutoFetchTicker;
 use state::{
     AutoFetch, ConfigStamp, Derived, EndingContext, Footer, OpenFetchState, Operation, Reread,
-    Shared, WorktreeRead, WriteRequest,
+    Shared, StashListings, StashRead, WorktreeRead, WriteRequest,
 };
 use walk::{Building, WalkInputs};
 use write_order::WriteOrder;
@@ -240,17 +240,29 @@ pub enum AfterWrite {
     /// of a full refresh's wait). What it gives up: the write does not
     /// double as a poll for ref moves made outside this window.
     Tree,
-    /// Refs and nothing else (a fetch): reads the refs first and the
-    /// status only where they moved — the one status field such a write
-    /// can move, `# branch.ab`, follows the upstream's remote-tracking ref
-    /// (`joins::refs_keys`). Saves a `git status -uall`, the longest read
-    /// in the app, on almost every auto-fetch tick
-    /// (ci/baseline/code-costs-windows-x64.md §git のプロセス代).
+    /// Refs and nothing else (a fetch): reads the refs first, and the
+    /// status and the history only where they moved — the one status field
+    /// such a write can move, `# branch.ab`, follows the upstream's
+    /// remote-tracking ref (`joins::refs_keys`), and the walk reads nothing
+    /// else a fetch writes. Saves a `git status -uall`, the longest read in
+    /// the app, and a walk of the history on almost every auto-fetch tick
+    /// (ci/baseline/code-costs-windows-x64.md §git のプロセス代). Nothing
+    /// derived is dropped and no listing is read: a fetch reaches no config,
+    /// attributes, stash or working copy.
     ///
     /// Only for a write that touches refs alone: the status event also
     /// carries the push marks and the merge tool, `git config` reads the
     /// refs key does not see.
     Refs,
+    /// A working copy taken off the disk: the copies' listing, and what it
+    /// asks for — the joins, and a walk where a copy on no branch went
+    /// (its commits are rows only the walk names) — with the refs read
+    /// first and the tree only where they moved, as for [`Self::Refs`].
+    Worktrees,
+    /// Configuration a ref listing and a status carry (an upstream, a
+    /// remote, the origin marks): those two read again, the history walked
+    /// only where one of them moved — no ref did — and no listing read.
+    Config,
     /// A name taken away — a branch or a tag, here or on a remote: the refs
     /// and the graph. Nothing else such a write reaches is read again: not
     /// the tree, the stashes or the working copies (git refuses to delete a

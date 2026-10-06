@@ -134,6 +134,30 @@ impl RepoSession {
         })
     }
 
+    /// [`Self::pass_reads`] with the stashes a listing behind the same
+    /// reason already read — for a caller that read them before asking for
+    /// the walk (`write::settle_after`, `refresh_quick`). `None` where they
+    /// no longer stand ([`Self::stashes_standing`], checked here, just
+    /// before the walk is asked for, which is what can be overtaken): what
+    /// overtook the list moved the rest a pass reads ahead as well (HEAD,
+    /// the remote tips), so the pass is left to read all of it at its turn.
+    pub(super) async fn pass_reads_listed(
+        self: &Arc<Self>,
+        workdir: &std::path::Path,
+        cancel: &CancellationToken,
+        stashes: StashRead,
+    ) -> Option<PassReads> {
+        let listed = self.stashes_standing(stashes)?;
+        let (tips, inputs) = tokio::join!(
+            self.remote_tips(workdir, cancel),
+            self.walk_inputs(workdir, cancel, Some(listed))
+        );
+        Some(PassReads {
+            tips,
+            inputs: inputs.ok()?,
+        })
+    }
+
     /// What this pass walks with: the reads the ask above it took, or its
     /// own. The halves come back apart: a failed walk input is the walk's
     /// to report, and the tips still seed the pass's marks.
@@ -147,7 +171,7 @@ impl RepoSession {
             Some(PassReads { tips, inputs }) => (tips, Ok(inputs)),
             None => tokio::join!(
                 self.remote_tips(workdir, cancel),
-                self.walk_inputs(workdir, cancel)
+                self.walk_inputs(workdir, cancel, None)
             ),
         }
     }
@@ -514,15 +538,77 @@ impl RepoSession {
     }
 
     /// Refreshes refs, status(+op state), stashes and worktrees
-    /// concurrently. Cheap enough for window-focus and post-operation
-    /// triggers.
+    /// concurrently, then asks for the graph once if any of them moved —
+    /// handing the walk the stash list the listing read. Cheap enough for
+    /// window-focus and post-operation triggers.
+    ///
+    /// One rebuild for all of them: asked apiece, a commit made outside
+    /// (a ref moved, the tree came clean) asked twice, the second taking
+    /// the first's walk over part-way. The other copies' pass stays apart:
+    /// a status per copy, too slow to wait on (its rows ask for their own
+    /// walk as they land).
     pub fn refresh_quick(self: &Arc<Self>) {
-        self.refresh_refs();
-        self.refresh_status();
-        self.refresh_stashes();
-        self.refresh_worktrees();
+        self.settle_snapshots(true);
         // Focus coming back is when the other copies most likely moved.
         self.refresh_carried();
+    }
+
+    /// The opening's [`Self::refresh_quick`], the stashes left to the
+    /// opening's first pass, which reads and publishes them
+    /// ([`RepoSession::walk_inputs`]).
+    pub(super) fn refresh_opening(self: &Arc<Self>) {
+        self.settle_snapshots(false);
+        self.refresh_carried();
+    }
+
+    fn settle_snapshots(self: &Arc<Self>, list_stashes: bool) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        // The places in the flights are taken here, and the status flight
+        // held on until the rebuild is asked: a caller closing the reads
+        // (`wait_for_snapshot_reads`) has closed that ask too, as when each
+        // read asked from inside its own pass. The pass is counted from
+        // here, so `wait_for_graph_passes` covers it.
+        let refs = self.refs_read.stamp();
+        let tree = self.status_read.stamp();
+        let held = self.graph_passes.enter();
+        self.status_read.enter();
+        let asking = Asking(Arc::clone(self));
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            let _held = held;
+            let _asking = asking;
+            // Before either read, as the poll does (`start_refresh_poll`).
+            s.forget_what_the_config_decides();
+            let listings = async {
+                if list_stashes {
+                    s.read_listings().await
+                } else {
+                    (StashRead::default(), s.read_worktrees().await)
+                }
+            };
+            let (refs, tree, (stashes, listed)) =
+                tokio::join!(s.read_refs_at(refs), s.read_status_at(tree), listings);
+            // A stash taken or dropped outside moves no ref the refs read
+            // lists: the listing is its only word.
+            let moved = refs == Reread::Moved || tree == Reread::Moved || stashes.moved;
+            if moved || listed.walk {
+                let reads = s.pass_reads_listed(&workdir, &s.root_cancel, stashes).await;
+                s.refresh_log_with(reads);
+            }
+        });
+    }
+}
+
+/// The status flight held by a [`RepoSession::refresh_quick`] until it has
+/// asked for the rebuild its reads imply — let go on drop, so one that
+/// unwound or went down with the runtime still lets the boundary close.
+struct Asking(Arc<RepoSession>);
+
+impl Drop for Asking {
+    fn drop(&mut self) {
+        self.0.status_read.leave();
     }
 }
 

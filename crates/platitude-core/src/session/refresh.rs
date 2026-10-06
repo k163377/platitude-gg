@@ -40,6 +40,12 @@ impl RepoSession {
         self.refs_read.run(|| self.publish_refs()).await
     }
 
+    /// [`Self::read_refs`] for a caller whose place in the flight was
+    /// taken when it was asked ([`ReadFlight::stamp`]).
+    pub(super) async fn read_refs_at(self: &Arc<Self>, stamp: Stamp) -> Reread {
+        self.refs_read.run_from(stamp, || self.publish_refs()).await
+    }
+
     /// Reads refs and HEAD, publishes the snapshot and the label diff, and
     /// reports whether the ref layout moved since the last read — or that
     /// nothing was published at all.
@@ -193,103 +199,161 @@ impl RepoSession {
         self.status_read.run(|| self.publish_status()).await
     }
 
-    /// Reads the stash list again, behind its own flight ([`ReadFlight`]).
-    ///
-    /// Answers with the read's task, done once the listing has published
-    /// — what the write queue waits on before it says a write is settled
-    /// (`session::write`) — and the task answers the reads that failed:
-    /// empty where the listing landed. `None` where no repository is open.
-    pub fn refresh_stashes(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<Vec<FollowUp>>> {
-        let workdir = self.workdir()?;
-        let s = Arc::clone(self);
-        Some(self.runtime.spawn(async move {
-            let session = Arc::clone(&s);
-            let published = s
-                .stash_read
-                .run(move || async move {
-                    // Stamped before git is spawned, as in the refs pass
-                    // (`Standing::stamp`).
-                    let looked = session.standing.stamp();
-                    let cancel = session.root_cancel.clone();
-                    match stash::load(&session.executor, &workdir, &cancel).await {
-                        Ok(stashes) => {
-                            session
-                                .sink
-                                .event(SessionEvent::StashesLoaded { stashes, looked });
-                            true
-                        }
-                        Err(e) => {
-                            session.fail(FollowUp::Stashes.label(), e);
-                            false
-                        }
-                    }
-                })
-                .await;
-            if published {
-                Vec::new()
-            } else {
-                vec![FollowUp::Stashes]
-            }
-        }))
+    /// [`Self::read_status`] for a place taken when the caller was asked.
+    pub(super) async fn read_status_at(self: &Arc<Self>, stamp: Stamp) -> Reread {
+        self.status_read
+            .run_from(stamp, || self.publish_status())
+            .await
     }
 
-    /// Reads the worktree list again, behind its own flight as
-    /// [`Self::refresh_stashes`] does, and then the reads it asks for: a
+    /// Reads the stash list behind its own flight ([`ReadFlight`]) and
+    /// publishes it, answering with what it published ([`StashRead`]) —
+    /// no list where the read failed (the failure is on the error surface).
+    ///
+    /// The one reader of the list: the listing and the walk, which draws
+    /// each stash as a row, both ask here, so one pass answers whichever of
+    /// them asked before it began, and a walk handed the listing's answer
+    /// reads nothing while that answer still stands
+    /// ([`Self::stashes_standing`]).
+    pub(super) async fn read_stashes(self: &Arc<Self>) -> StashRead {
+        let Some(workdir) = self.workdir() else {
+            return StashRead::default();
+        };
+        self.stash_read
+            .run(|| async {
+                // Stamped before git is spawned, as in the refs pass
+                // (`Standing::stamp`).
+                let looked = self.standing.stamp();
+                let cancel = self.root_cancel.clone();
+                match stash::load(&self.executor, &workdir, &cancel).await {
+                    Ok(stashes) => {
+                        let list = Arc::new(stashes);
+                        let (listing, moved) = relock(&self.stash_listings).record(&list);
+                        self.sink.event(SessionEvent::StashesLoaded {
+                            stashes: list.as_ref().clone(),
+                            looked,
+                        });
+                        StashRead {
+                            list: Some(list),
+                            looked,
+                            listing,
+                            moved,
+                        }
+                    }
+                    Err(e) => {
+                        self.fail(FollowUp::Stashes.label(), e);
+                        StashRead {
+                            looked,
+                            ..StashRead::default()
+                        }
+                    }
+                }
+            })
+            .await
+    }
+
+    /// The list `read` published, while it still speaks for the
+    /// repository: no write has ended since it looked, and no listing has
+    /// published since. Held past either, it would hand a walk a stash that
+    /// is gone — the walk names each stash's commit on its command line, so
+    /// a dropped one is drawn back while its object lasts — and that walk,
+    /// asked last, would replace the one that drew the drop.
+    pub(super) fn stashes_standing(&self, read: StashRead) -> Option<Arc<Vec<StashEntry>>> {
+        let list = read.list?;
+        let newest = relock(&self.stash_listings).newest();
+        (read.listing == newest && self.standing.current(read.looked)).then_some(list)
+    }
+
+    /// Reads the worktree list again, and then the reads it asks for: a
     /// working copy taken or given back moves no ref, so the joins are
     /// asked for by name, and a copy on no branch is a row only the walk
     /// can put there.
     ///
     /// Those reads are awaited after the flight is let go: the task is
-    /// what the write queue waits on to call a write settled, and letting
-    /// the walk run on would put that boundary before its row. Every
-    /// caller the pass answers gets the same news ([`WorktreeRead`]) and
-    /// waits for the same reads. The task answers the reads that did not
-    /// land, the listing's own included; empty where all did.
+    /// what the page's tick waits on, and letting the walk run on would put
+    /// that boundary before its row. The task answers the reads that did
+    /// not land, the listing's own included; empty where all did.
     pub fn refresh_worktrees(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<Vec<FollowUp>>> {
-        let workdir = self.workdir()?;
+        self.workdir()?;
         let s = Arc::clone(self);
         Some(self.runtime.spawn(async move {
-            let session = Arc::clone(&s);
-            let read = s
-                .worktrees_read
-                .run(move || async move {
-                    // Stamped before git is spawned, as the stashes are.
-                    let looked = session.standing.stamp();
-                    let cancel = session.root_cancel.clone();
-                    match crate::worktrees::load(&session.executor, &workdir, &cancel).await {
-                        Ok(worktrees) => {
-                            let news = session.note_worktree_holders(&worktrees, &workdir);
-                            session
-                                .sink
-                                .event(SessionEvent::WorktreesLoaded { worktrees, looked });
-                            WorktreeRead {
-                                published: true,
-                                news,
-                            }
-                        }
-                        Err(e) => {
-                            session.fail(FollowUp::Worktrees.label(), e);
-                            WorktreeRead::default()
-                        }
-                    }
-                })
-                .await;
-            let mut failed = Vec::new();
-            if !read.published {
-                failed.push(FollowUp::Worktrees);
-            }
-            let mut walk = read.news.walk;
-            if read.news.joins {
-                match s.read_refs().await {
-                    Reread::Moved => walk = true,
-                    Reread::Same => {}
-                    Reread::Failed => failed.push(FollowUp::Refs),
-                }
-            }
-            if walk && !s.settle_graph().await.landed() {
+            let listed = s.read_worktrees().await;
+            let mut failed = listed.failed;
+            if listed.walk && !s.settle_graph().await.landed() {
                 failed.push(FollowUp::Graph);
             }
             failed
         }))
     }
+
+    /// The worktree listing behind its own flight, published, and the
+    /// joins it asks for — not the walk, which the caller folds into the
+    /// one it makes for everything it read ([`Listed`]). Every caller the
+    /// pass answers gets the same news ([`WorktreeRead`]) and waits for the
+    /// same joins.
+    pub(super) async fn read_worktrees(self: &Arc<Self>) -> Listed {
+        let Some(workdir) = self.workdir() else {
+            return Listed {
+                failed: vec![FollowUp::Worktrees],
+                ..Listed::default()
+            };
+        };
+        let read = self
+            .worktrees_read
+            .run(|| async {
+                // Stamped before git is spawned, as the stashes are.
+                let looked = self.standing.stamp();
+                let cancel = self.root_cancel.clone();
+                match crate::worktrees::load(&self.executor, &workdir, &cancel).await {
+                    Ok(worktrees) => {
+                        let news = self.note_worktree_holders(&worktrees, &workdir);
+                        self.sink
+                            .event(SessionEvent::WorktreesLoaded { worktrees, looked });
+                        WorktreeRead {
+                            published: true,
+                            news,
+                        }
+                    }
+                    Err(e) => {
+                        self.fail(FollowUp::Worktrees.label(), e);
+                        WorktreeRead::default()
+                    }
+                }
+            })
+            .await;
+        let mut listed = Listed {
+            walk: read.news.walk,
+            ..Listed::default()
+        };
+        if !read.published {
+            listed.failed.push(FollowUp::Worktrees);
+        }
+        if read.news.joins {
+            match self.read_refs().await {
+                Reread::Moved => listed.walk = true,
+                Reread::Same => {}
+                Reread::Failed => listed.failed.push(FollowUp::Refs),
+            }
+        }
+        listed
+    }
+
+    /// The stash and worktree listings together, for a caller that walks
+    /// once behind both.
+    pub(super) async fn read_listings(self: &Arc<Self>) -> (StashRead, Listed) {
+        let (stashes, mut listed) = tokio::join!(self.read_stashes(), self.read_worktrees());
+        if stashes.list.is_none() {
+            listed.failed.push(FollowUp::Stashes);
+        }
+        (stashes, listed)
+    }
+}
+
+/// What a listing read behind a write or a focus left to its caller:
+/// whether the history has to be walked for it, and the reads that did not
+/// land.
+#[derive(Debug, Default)]
+pub(super) struct Listed {
+    pub(super) walk: bool,
+    pub(super) failed: Vec<FollowUp>,
 }

@@ -125,3 +125,28 @@ async fn an_answer_invalidated_on_every_read_is_still_an_answer() {
     let after = derived.get_or_try_init(|| async { Ok::<u32, ()>(9) }).await;
     assert_eq!(after, Ok(9), "the outrun reading was not cached");
 }
+
+#[test]
+fn a_stash_listing_moves_only_where_the_list_does() {
+    let entry = |name: &str, hex: char| StashEntry {
+        name: name.to_string(),
+        oid: Oid::from_hex_str(&hex.to_string().repeat(40)).expect("an oid"),
+        time: 0,
+        message: String::new(),
+        stands: None,
+    };
+    let mut listings = StashListings::default();
+    let one = Arc::new(vec![entry("stash@{0}", 'a')]);
+    assert_eq!(listings.record(&one), (1, false), "the first moves nothing");
+    assert_eq!(listings.record(&Arc::new(one.as_ref().clone())), (2, false));
+    assert_eq!(
+        listings.record(&Arc::new(Vec::new())),
+        (3, true),
+        "a drop moves it"
+    );
+    assert_eq!(
+        listings.newest(),
+        3,
+        "every listing is counted, moved or not"
+    );
+}

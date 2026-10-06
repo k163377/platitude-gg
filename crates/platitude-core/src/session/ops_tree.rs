@@ -314,15 +314,15 @@ impl RepoSession {
     /// (one a program has open on Windows) fails it after git has taken the
     /// copy's own HEAD and reflog. A copy on no commit yet takes nothing.
     ///
-    /// Moves no ref, so the refs are read first and the rest only where
-    /// they moved; the worktree listing that follows every such write
-    /// frees the branch and drops a branchless copy's graph row itself
-    /// (`refresh_worktrees`).
+    /// Moves no ref, so the refs are read first and the tree only where
+    /// they moved; the listing behind it frees the branch, and drops a
+    /// branchless copy's graph row with the one walk the write makes
+    /// (`AfterWrite::Worktrees`).
     pub fn remove_worktree(self: &Arc<Self>, path: String, name: String) -> Option<OperationId> {
         let s = Arc::clone(self);
         self.write(
             OperationKind::Worktree,
-            AfterWrite::Refs,
+            AfterWrite::Worktrees,
             move |exec, repo, cancel| async move {
                 let listed = crate::worktrees::load(&exec, &repo.workdir, &cancel).await?;
                 let before = listed

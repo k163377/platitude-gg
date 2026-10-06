@@ -306,9 +306,10 @@ pub enum SessionEvent {
         stashes: Vec<StashEntry>,
         /// When this listing looked, read like
         /// [`RefsLoaded::looked`](Self::RefsLoaded). Its own stamp because
-        /// the stash is its own read, after the graph rebuild: measured
-        /// against the refs' stamp, a dropped entry would reappear for the
-        /// whole rebuild.
+        /// the stash is its own read, landing apart from the refs: measured
+        /// against the refs' stamp, a dropped entry would reappear until it
+        /// lands. Sent by a walk that read the stashes for itself too
+        /// (`RepoSession::read_stashes`).
         looked: u64,
     },
     WorktreesLoaded {

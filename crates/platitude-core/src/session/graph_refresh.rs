@@ -1,5 +1,6 @@
 //! Background graph refresh entry points and their completion boundary.
 
+use super::log::PassReads;
 use super::*;
 
 /// What a background graph refresh established when it completed — the
@@ -312,17 +313,24 @@ impl RepoSession {
     /// repaints even when history did not move, which flickers under a
     /// periodic fetch.
     pub fn refresh_log(self: &Arc<Self>) {
-        drop(self.start_refresh_log());
+        drop(self.start_refresh_log(None));
+    }
+
+    /// [`Self::refresh_log`], walking with reads the caller already took
+    /// ([`PassReads`]) — the stashes its listing read, so the walk reads
+    /// none of its own.
+    pub(super) fn refresh_log_with(self: &Arc<Self>, reads: Option<PassReads>) {
+        drop(self.start_refresh_log(reads));
     }
 
     /// [`Self::refresh_log`], returning its completion boundary — for
     /// callers that must tell "still running" from "finished without an
     /// event".
     pub fn refresh_log_tracked(self: &Arc<Self>) -> RefreshTask {
-        self.start_refresh_log()
+        self.start_refresh_log(None)
     }
 
-    fn start_refresh_log(self: &Arc<Self>) -> RefreshTask {
+    fn start_refresh_log(self: &Arc<Self>, reads: Option<PassReads>) -> RefreshTask {
         let Some(workdir) = self.workdir() else {
             return RefreshTask::ready(RefreshOutcome::Unavailable);
         };
@@ -333,7 +341,7 @@ impl RepoSession {
         let (finished, task) = RefreshTask::pending(Some(run.ask()));
         self.runtime.spawn(async move {
             let _held = held;
-            let outcome = s.run_swap_pass(&workdir, options, &run_cancel, None).await;
+            let outcome = s.run_swap_pass(&workdir, options, &run_cancel, reads).await;
             run.answer(outcome);
             if finished.send(outcome).is_err() {
                 tracing::trace!("refresh completion was not observed");
@@ -346,7 +354,15 @@ impl RepoSession {
     /// to the ask that took it over ([`Self::graph_answer`]) — what a
     /// write's settling waits on.
     pub(super) async fn settle_graph(self: &Arc<Self>) -> RefreshOutcome {
-        let task = self.refresh_log_tracked();
+        self.settle_graph_with(None).await
+    }
+
+    /// [`Self::settle_graph`] with the reads the caller already took.
+    pub(super) async fn settle_graph_with(
+        self: &Arc<Self>,
+        reads: Option<PassReads>,
+    ) -> RefreshOutcome {
+        let task = self.start_refresh_log(reads);
         self.graph_answer(task).await
     }
 

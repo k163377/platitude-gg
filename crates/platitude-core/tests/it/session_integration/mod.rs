@@ -28,6 +28,7 @@ mod pass_watch;
 mod published;
 mod query;
 mod rebuild;
+mod refresh_reads;
 mod standing_op;
 mod standing_reads;
 mod stream;
