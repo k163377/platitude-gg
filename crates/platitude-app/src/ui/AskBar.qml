@@ -192,12 +192,15 @@ Rectangle {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
-                // The chip stands on the heading's first line (デザイン規約 §立っている質問は 1 か所で聞く): both hang from
-                // the top and the shorter drops half the difference.
+                // The chip stands on the heading's first line (デザイン規約 §立っている質問は 1 か所で聞く): both hang
+                // from the top and the one whose word stands higher drops to the other's baseline, in whole pixels.
+                // Centred on the line, the chip's word stands under the heading's by half the leading a field files
+                // under its line (2〜3px on macOS); on the row's `Qt.AlignBaseline` the two faces' depths leave the
+                // heading on a half pixel (rules-refs/app-ui.md「その組は自分だけの `RowLayout` に入れる」).
                 CodeChip {
                     id: askCode
                     Layout.alignment: Qt.AlignTop
-                    Layout.topMargin: Math.max(0, (askWord.lineHeight - askCode.implicitHeight) / 2)
+                    Layout.topMargin: Math.max(0, Math.round(askWord.baselineOffset - askCode.baselineOffset))
                     visible: bar.code !== ""
                     word: bar.code
                     tint: bar.tone
@@ -214,10 +217,10 @@ Rectangle {
                     weight: Theme.fontWeightStrong
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignTop
-                    // The other half, **only where a chip stands**: an invisible chip still has a height, and read
+                    // The other half, **only where a chip stands**: an invisible chip still has a baseline, and read
                     // unguarded it would drop every question git has no one word for.
                     Layout.topMargin: bar.code === ""
-                                      ? 0 : Math.max(0, (askCode.implicitHeight - askWord.lineHeight) / 2)
+                                      ? 0 : Math.max(0, Math.round(askCode.baselineOffset - askWord.baselineOffset))
                 }
             }
             // **Hidden when empty**, not merely empty: an empty `CardText` still stands a line high, a blank band under

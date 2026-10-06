@@ -392,7 +392,9 @@ ColumnLayout {
                     onEditingFinished: pane.applyFetch()
                     onAccepted: pane.accepted()
                 }
-                CardText {
+                // A field one line long, as the value beside it is: a `CardText` files the face's leading under its
+                // line, so centred beside the value the unit stands half of it high (3px on macOS).
+                LineText {
                     text: qsTr("minutes")
                     color: Theme.textSecondary
                 }
@@ -426,7 +428,7 @@ ColumnLayout {
                     onEditingFinished: pane.applyConcurrency()
                     onAccepted: pane.accepted()
                 }
-                CardText {
+                LineText {
                     text: qsTr("commands")
                     color: Theme.textSecondary
                 }
@@ -454,7 +456,7 @@ ColumnLayout {
                     onEditingFinished: pane.applyCopies()
                     onAccepted: pane.accepted()
                 }
-                CardText {
+                LineText {
                     text: qsTr("seconds")
                     color: Theme.textSecondary
                 }
@@ -489,7 +491,7 @@ ColumnLayout {
                     onEditingFinished: pane.applyCommits()
                     onAccepted: pane.accepted()
                 }
-                CardText {
+                LineText {
                     text: qsTr("commits")
                     color: commitsField.enabled ? Theme.textSecondary : Theme.textMuted
                 }

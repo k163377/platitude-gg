@@ -98,14 +98,17 @@ Rectangle {
                         color: Theme.textPrimary
                         pixelSize: Theme.fontSm
                     }
-                    // The line's own height, the press centred on it: a button's height would open the lines apart.
+                    // The line's own height, the press on its words' baseline in whole pixels: a button's height
+                    // would open the lines apart, and centred on the line its word stands under the line's by half the
+                    // leading a field files under its line (2〜3px on macOS). The seat is centred in the row as the
+                    // line is, so its top is the line's.
                     Item {
                         visible: band.byPart
                         Layout.preferredWidth: partRestore.implicitWidth
                         Layout.preferredHeight: partText.implicitHeight
                         HoverToolButton {
                             id: partRestore
-                            anchors.verticalCenter: parent.verticalCenter
+                            y: Math.round(partText.baselineOffset - partRestore.baselineOffset)
                             // Down to the wash's own height (`HoverToolButton`), which the lines' spacing holds.
                             topPadding: 0
                             bottomPadding: 0
@@ -122,12 +125,21 @@ Rectangle {
             RowLayout {
                 visible: band.outOfReach
                 spacing: Theme.spaceSm
+                // On one baseline in whole pixels, as a part's press is: both hang from the top and the one whose word
+                // stands higher drops to the other's.
                 CardText {
+                    id: reachWords
                     text: qsTr("Not loaded on the graph yet")
                     color: Theme.warning
                     pixelSize: Theme.fontSm
+                    Layout.alignment: Qt.AlignTop
+                    Layout.topMargin: walkFurther.visible
+                                      ? Math.max(0, Math.round(walkFurther.baselineOffset - reachWords.baselineOffset)) : 0
                 }
                 HoverToolButton {
+                    id: walkFurther
+                    Layout.alignment: Qt.AlignTop
+                    Layout.topMargin: Math.max(0, Math.round(reachWords.baselineOffset - walkFurther.baselineOffset))
                     visible: band.canWalkFurther
                     text: qsTr("Load %L1 more commits").arg(band.step)
                     font.pixelSize: Theme.fontSm

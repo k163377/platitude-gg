@@ -117,15 +117,14 @@ Rectangle {
             Layout.leftMargin: Theme.spaceXs
             Layout.bottomMargin: Theme.spaceXs
             spacing: Theme.spaceXs
-            // The chip stands on the line's first row: both hang from the top and the shorter drops half the
-            // difference (as `AskBar`'s heading).
+            // The chip stands on the line's first row, on its baseline in whole pixels (as `AskBar`'s heading).
             CodeChip {
                 id: editChip
                 word: "edit"
                 size: Theme.fontSm
                 tint: Theme.textSecondary
                 Layout.alignment: Qt.AlignTop
-                Layout.topMargin: Math.max(0, (editWords.lineHeight - editChip.implicitHeight) / 2)
+                Layout.topMargin: Math.max(0, Math.round(editWords.baselineOffset - editChip.baselineOffset))
             }
             // **Wrapped, never cut** (デザイン規約 §フル interactive rebase): the second half is what to do, and a cut
             // takes exactly that. What comes after it is the `--continue` row under it, and that more steps follow is
@@ -135,7 +134,7 @@ Rectangle {
                 id: editWords
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignTop
-                Layout.topMargin: Math.max(0, (editChip.implicitHeight - editWords.lineHeight) / 2)
+                Layout.topMargin: Math.max(0, Math.round(editChip.baselineOffset - editWords.baselineOffset))
                 text: opExitCard.workTree.opEditOid !== ""
                       ? qsTr("Stopped at %1 — amend it above")
                             .arg(opExitCard.workTree.opEditOid.substring(0, 8))

@@ -76,9 +76,12 @@ RowLayout {
             }
         }
     }
+    // The words and the ahead / behind on one baseline: the words are a field, which files the face's leading under its
+    // line, so centred beside the numbers they stand half of it high (3px on macOS).
     CardText {
         id: words
         Layout.fillWidth: true
+        Layout.alignment: Qt.AlignBaseline
         text: line.text
         pixelSize: line.pixelSize
         color: line.tone
@@ -89,7 +92,8 @@ RowLayout {
         id: trackSeat
         active: line.ahead > 0 || line.behind > 0
         visible: trackSeat.active
-        Layout.alignment: Qt.AlignVCenter
+        baselineOffset: trackSeat.item ? trackSeat.item.baselineOffset : 0
+        Layout.alignment: Qt.AlignBaseline
         sourceComponent: HeadTrack {
             ahead: line.ahead
             behind: line.behind

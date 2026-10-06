@@ -130,6 +130,9 @@ Item {
     implicitHeight: cardText.capLines > 0
                     ? Math.min(field.implicitHeight, cardText.capLines * cardText.lineHeight)
                     : field.implicitHeight
+    /// The first line's, so a row can stand the sentence on another item's baseline (`Qt.AlignBaseline`), as
+    /// `LineText`'s.
+    baselineOffset: field.y + field.baselineOffset
     clip: cardText.clipped
 
     Text {

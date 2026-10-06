@@ -143,14 +143,20 @@ AppCard {
             color: Theme.textPrimary
             pixelSize: Theme.fontMd
         }
-        // Date, and beside it the co-author credit, written out (規約 §co-author の表示).
+        // Date, and beside it the co-author credit, written out (規約 §co-author の表示). On one baseline, both one-line
+        // fields set at a label's height, as `CommitAuthorRow`'s date line: a `CardText` date files the face's leading
+        // under its line, so centred beside the names it stands half of it high, and on the baseline the row grows by it.
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceSm
-            CardText {
+            LineText {
                 text: Words.stamp(hoverCard.atime)
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
+                ground: Theme.bgElevated
+                // Whole: the credit beside it is what gives way.
+                Layout.minimumWidth: implicitWidth
+                Layout.alignment: Qt.AlignBaseline
             }
             CoAuthorLine {
                 id: mateLine
@@ -158,7 +164,7 @@ AppCard {
                 plain: true
                 // The card's face, so the cut mark is drawn on it (`LineText.ground`).
                 ground: Theme.bgElevated
-                Layout.alignment: Qt.AlignVCenter
+                Layout.alignment: Qt.AlignBaseline
                 // The message sets the card's width; the credit line takes what is left and elides. `preferredWidth` 0
                 // keeps a crowd of names out of the card's size hint; the minimum (the names' need, capped at
                 // `messageMinW`) keeps a one-line subject's card wide enough to credit somebody.

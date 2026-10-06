@@ -77,9 +77,19 @@ AppCard {
     /// mark with the hand still on it.
     readonly property string laidOutSize: Math.round(width) + "x" + Math.round(height)
 
+    /// Where a row's sentence hangs so its first line stands on the badge's words' baseline (`wordBase`), in whole
+    /// pixels. Not by the row's `Qt.AlignBaseline`: a layout leaves a baseline-placed item unrounded, and the badge box
+    /// is deeper than the sentence's line, so the sentence would stand on a half pixel (rules-refs/app-ui.md「その組は
+    /// 自分だけの `RowLayout` に入れる」). Centred instead, it stands off the words by the badge box's cut — round the
+    /// capitals, not round a line — and by half the leading a field files under its line.
+    function sentenceTop(line) {
+        return Math.max(0, Math.round(stateCard.box.wordBase - line.baselineOffset))
+    }
+
     /// Automation: whether the readings above are of the settled card. A `ColumnLayout` settles on polish, so a row
     /// that begins to stand is counted a frame before it is placed (piled at the top). Settled: each standing row
-    /// sits below the one before, and together they fill the content exactly.
+    /// sits below the one before, and together they fill the content — to within the pixel the column rounds a cell
+    /// up to.
     readonly property bool laidOut: stateCard.rowsSettled()
     function rowsSettled() {
         const all = [opRow, conflictRow, identityRow, staleRow, lfsRow, oldGitRow]
@@ -91,7 +101,7 @@ AppCard {
                 return false
             bottom = all[i].y + all[i].height
         }
-        return bottom > 0 && Math.abs(rows.height - bottom) < 0.5
+        return bottom > 0 && Math.abs(rows.height - bottom) < 1
     }
 
     // The pointer leaving is what closes it (`BandStateGroup.settleStateCard`).
@@ -124,6 +134,7 @@ AppCard {
                 implicitHeight: stateCard.box.depth
                 implicitWidth: opLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
+                Layout.alignment: Qt.AlignTop
                 // The words' line where the box puts it: a row has no baseline to anchor by.
                 RowLayout {
                     id: opLabel
@@ -162,9 +173,12 @@ AppCard {
                 }
             }
             CardText {
+                id: opLine
                 text: qsTr("Ways out sit under the commit button")
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: stateCard.sentenceTop(opLine)
             }
         }
 
@@ -180,6 +194,7 @@ AppCard {
                 implicitHeight: stateCard.box.depth
                 implicitWidth: conflictLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
+                Layout.alignment: Qt.AlignTop
                 Label {
                     id: conflictLabel
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -192,12 +207,15 @@ AppCard {
                 }
             }
             CardText {
+                id: conflictLine
                 // A sentence for each count — `file(s)` would reach the reader as written (デザイン規約 §タイポグラフィ).
                 text: stateCard.conflictCount === 1
                       ? qsTr("%n file waiting on a decision", "", stateCard.conflictCount)
                       : qsTr("%n files waiting on a decision", "", stateCard.conflictCount)
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: stateCard.sentenceTop(conflictLine)
             }
         }
 
@@ -215,6 +233,7 @@ AppCard {
                 implicitHeight: stateCard.box.depth
                 implicitWidth: identityLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
+                Layout.alignment: Qt.AlignTop
                 Rectangle {
                     anchors.fill: parent
                     radius: Theme.radiusSm
@@ -241,11 +260,14 @@ AppCard {
             // Which of the two reasons it stands for — a half-landed save leaves an identity that *is* set
             // (デザイン規約 §ウィンドウの縁).
             CardText {
+                id: identityLine
                 text: stateCard.identityUnsaved
                       ? qsTr("Name and email were not both saved")
                       : qsTr("No name or email set for commits")
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: stateCard.sentenceTop(identityLine)
             }
         }
 
@@ -264,6 +286,7 @@ AppCard {
                 implicitHeight: stateCard.box.depth
                 implicitWidth: staleLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
+                Layout.alignment: Qt.AlignTop
                 Label {
                     id: staleLabel
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -276,6 +299,7 @@ AppCard {
                 }
             }
             CardText {
+                id: staleLine
                 text: !stateCard.staleStopped
                       ? qsTr("The latest history is not being shown")
                       : stateCard.staleWhy !== ""
@@ -283,6 +307,8 @@ AppCard {
                         : qsTr("Only part of the history could be read")
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: stateCard.sentenceTop(staleLine)
             }
         }
 
@@ -300,6 +326,7 @@ AppCard {
                 implicitHeight: stateCard.box.depth
                 implicitWidth: lfsLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
+                Layout.alignment: Qt.AlignTop
                 Label {
                     id: lfsLabel
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -312,6 +339,7 @@ AppCard {
                 }
             }
             CardText {
+                id: lfsLine
                 // A sentence for each count, as the conflicts row's; "uncommitted" is the files pane's own word for
                 // the list they are counted from. That LFS is missing is the badge's to say, not this line's.
                 text: stateCard.lfsNeeded === 1
@@ -319,6 +347,8 @@ AppCard {
                       : qsTr("%n uncommitted files need Git LFS", "", stateCard.lfsNeeded)
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: stateCard.sentenceTop(lfsLine)
             }
         }
 
@@ -336,6 +366,7 @@ AppCard {
                 implicitHeight: stateCard.box.depth
                 implicitWidth: oldGitLabel.implicitWidth + 2 * Theme.spaceXs
                 Layout.preferredWidth: stateCard.badgeRun
+                Layout.alignment: Qt.AlignTop
                 Label {
                     id: oldGitLabel
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -348,10 +379,13 @@ AppCard {
                 }
             }
             CardText {
+                id: oldGitLine
                 text: qsTr("git %1 is older than the %2 this app is built for")
                           .arg(stateCard.gitVersion).arg(stateCard.minimumGit)
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: stateCard.sentenceTop(oldGitLine)
             }
         }
     }

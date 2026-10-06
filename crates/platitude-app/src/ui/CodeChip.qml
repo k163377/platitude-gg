@@ -33,6 +33,9 @@ Item {
 
     implicitWidth: chip.cap > 0 ? Math.min(wordLabel.paintedWidth, chip.cap) : wordLabel.implicitWidth
     implicitHeight: wordLabel.implicitHeight
+    /// The word's, so a row can stand a sentence beside the chip on its baseline (`AskBar`, `OpExitCard`). The label's: a
+    /// `grabbable` chip draws its word in a field instead, which stands its words by its own rule (`LineText`).
+    baselineOffset: wordLabel.y + wordLabel.baselineOffset
 
     Rectangle {
         // Drawn to the ink (`paintedWidth`): an elided word paints narrower than its width, which would leave an empty
