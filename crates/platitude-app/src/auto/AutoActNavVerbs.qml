@@ -533,9 +533,12 @@ Item {
             + " cell=" + Math.round(sidebarPane.peekTop)
             + " end=" + Math.round(navProbe.peekBottom)
             + " pane=" + Math.round(sidebarPane.height)
-            // The counts clear of their marks, and where their ink fell in the cells, for a run that came out false.
+            // The counts clear of their marks, and where their ink fell in the cells, for a run that came out false —
+            // with the face's own numbers the rail seated them by (`NavProbe.countsInk`), which a run on a machine
+            // with no desk (macOS) cannot be asked for again.
             + " counts=" + counts.clear
-            + " ink=" + counts.top.toFixed(1) + ":" + counts.bottom.toFixed(1))
+            + " ink=" + counts.top.toFixed(1) + ":" + counts.bottom.toFixed(1)
+            + " face=" + counts.face)
             driver.complete()
         }
     }

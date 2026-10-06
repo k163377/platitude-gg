@@ -89,7 +89,7 @@ QtObject {
     function countsInk() {
         const cells = probe.rail.autoCells
         const floor = probe.rail.cellHeight - Theme.spaceXs / 2
-        const span = { clear: cells.count > 0, top: Infinity, bottom: -Infinity }
+        const span = { clear: cells.count > 0, top: Infinity, bottom: -Infinity, face: "" }
         for (let i = 0; i < cells.count; i++) {
             const cell = cells.itemAt(i)
             if (cell === null) {
@@ -106,6 +106,9 @@ QtObject {
             span.clear = span.clear && over >= 0 && Math.abs(over - under) <= 1.5
             span.top = Math.min(span.top, top)
             span.bottom = Math.max(span.bottom, top + ink.height)
+            // The line's baseline and every digit's ink — the numbers the rail seats a count by.
+            const digits = probe.countFace.tightBoundingRect("0123456789")
+            span.face = count.baselineOffset.toFixed(2) + ":" + digits.y.toFixed(2) + ":" + digits.height.toFixed(2)
         }
         return span
     }
