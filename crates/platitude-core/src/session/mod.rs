@@ -56,6 +56,7 @@ mod build;
 mod carried;
 mod chips;
 mod details_read;
+mod diff_reads;
 mod discard_record;
 mod eol;
 mod event;
@@ -110,6 +111,7 @@ pub use carried::{
     CarriedOutcome, CarriedPass, copies_interval_secs,
 };
 pub use details_read::{DetailsOutcome, DetailsTask, SelectionRead};
+use diff_reads::{DiffEpoch, Rereads};
 pub use event::SessionEvent;
 use feed::CommandFeed;
 pub use feed::Recording;
@@ -127,7 +129,7 @@ use pass_watch::PassWatch;
 pub use pass_watch::{PassHooks, PassStep};
 use print::RowPrint;
 use published::{PublishMarks, RemoteTips};
-pub use query::{DiffReadOutcome, DiffRefreshTask};
+pub use query::DiffReadOutcome;
 use read_flight::{ReadFlight, Stamp};
 pub use remote_tags::RemoteTagIndex;
 pub use repo_session::RepoSession;

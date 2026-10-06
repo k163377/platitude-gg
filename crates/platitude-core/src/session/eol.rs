@@ -9,6 +9,12 @@ impl RepoSession {
     ///
     /// A history diff gets no baseline: it would have to sample the
     /// neighbours as they stood at that commit, not the files on disk.
+    ///
+    /// `cancel` is the read's own (stopped by the read that passes it) and
+    /// stops only this path's ruling. The answers kept for every read —
+    /// whether git normalises, a (directory, extension)'s baseline — are
+    /// read on the session's token: stopped half-way, the baseline would be
+    /// kept as "unknown" until a write or a ref move drops it.
     pub(super) async fn ending_context(
         &self,
         workdir: &Path,
@@ -24,7 +30,7 @@ impl RepoSession {
             | DiffTarget::Untracked { path } => (path, false),
         };
         let one = [path.clone()];
-        let ruling = match self.normalising(workdir, cancel).await {
+        let ruling = match self.normalising(workdir, &self.root_cancel).await {
             Ok(converting) => eol::rulings_given(&self.executor, workdir, &one, converting, cancel)
                 .await
                 .map(|mut r| r.pop().unwrap_or(eol::Ruling::Open)),
@@ -35,7 +41,7 @@ impl RepoSession {
             Ok(eol::Ruling::Normalised) => EndingContext::Open(None),
             Ok(eol::Ruling::Open) if historical => EndingContext::Open(None),
             Ok(eol::Ruling::Open) => {
-                EndingContext::Open(self.eol_baseline(workdir, path, cancel).await)
+                EndingContext::Open(self.eol_baseline(workdir, path, &self.root_cancel).await)
             }
             // Not knowing is silence: the diff beside it is the thing
             // that was asked for.

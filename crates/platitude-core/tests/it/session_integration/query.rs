@@ -796,7 +796,7 @@ async fn a_re_read_of_a_file_nobody_touched_says_nothing() {
     assert_eq!(
         crate::support::wait::bounded(
             "the tracked diff refresh",
-            session.refresh_diff_tracked(target).outcome()
+            session.refresh_diff_tracked(target)
         )
         .await,
         DiffReadOutcome::Unchanged
@@ -837,7 +837,7 @@ async fn a_file_typed_over_outside_the_window_is_re_read() {
     assert_eq!(
         crate::support::wait::bounded(
             "the tracked diff refresh",
-            session.refresh_diff_tracked(target).outcome()
+            session.refresh_diff_tracked(target)
         )
         .await,
         DiffReadOutcome::Sent
@@ -971,7 +971,7 @@ async fn a_copys_file_is_not_the_same_file_as_ours_of_that_name() {
     assert_eq!(
         crate::support::wait::bounded(
             "the tracked diff refresh",
-            session.refresh_diff_tracked(target).outcome()
+            session.refresh_diff_tracked(target)
         )
         .await,
         DiffReadOutcome::Sent,

@@ -17,6 +17,7 @@ mod delete_reads;
 mod delete_stand_in;
 mod details;
 mod details_order;
+mod diff_reads;
 mod discard_record;
 mod discard_shown;
 mod head;

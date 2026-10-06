@@ -61,13 +61,17 @@ pub struct RepoSession {
     pub(super) graph_stale: std::sync::atomic::AtomicBool,
     /// Which diff read is the current one: bumped by every
     /// [`RepoSession::load_diff`] and checked wherever a read would hand
-    /// something over.
+    /// something over. Bumping it cancels the passed read's git.
     ///
     /// A passed read hands over nothing, its rows included: the
     /// fingerprint riding with them is what the next partial stage is
     /// refused against (`stage::refusal::verify_fingerprint`), so an older
     /// read landing last leaves the pane unable to stage (`publish_diff`).
-    pub(super) diff_epoch: AtomicU64,
+    pub(super) diff_epoch: DiffEpoch,
+    /// The re-reads of the pane's diff that are out, by file: a tick or a
+    /// focus asking while one is out shares the one after it
+    /// ([`RepoSession::refresh_diff`]).
+    pub(super) rereads: Rereads,
     /// The diff last published and the fingerprint of the bytes it was
     /// read from — what [`RepoSession::refresh_diff`] compares against, so
     /// a poll tick over an untouched file sends nothing.
