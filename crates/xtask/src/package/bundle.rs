@@ -48,16 +48,21 @@ pub(super) fn archive_stem(day: &str, commit: &str) -> String {
 }
 
 /// The run paths a Mach-O carries, off `otool -l`: the `path` of each
-/// `LC_RPATH` load command, in order.
+/// `LC_RPATH` load command, once each, in order. A universal binary (Qt's
+/// plugins carry x86_64 and arm64) is listed once per architecture, and
+/// `install_name_tool` changes every architecture at once — a path asked
+/// to go twice is refused the second time, as no longer there.
 pub(super) fn rpaths(load_commands: &str) -> Vec<String> {
-    let mut found = Vec::new();
+    let mut found: Vec<String> = Vec::new();
     let mut in_rpath = false;
     for line in load_commands.lines().map(str::trim) {
         if let Some(cmd) = line.strip_prefix("cmd ") {
             in_rpath = cmd.trim() == "LC_RPATH";
         } else if in_rpath && let Some(rest) = line.strip_prefix("path ") {
             let path = rest.rsplit_once(" (offset ").map_or(rest, |(path, _)| path);
-            found.push(path.to_string());
+            if !found.iter().any(|seen| seen == path) {
+                found.push(path.to_string());
+            }
             in_rpath = false;
         }
     }
@@ -183,6 +188,22 @@ mod tests {
             ]
         );
         assert!(rpaths("Load command 1\n cmd LC_UUID\n").is_empty());
+    }
+
+    /// `otool -l` on a Qt plugin, which carries two architectures: the same
+    /// path under each.
+    #[test]
+    fn a_universal_binary_s_run_paths_come_once() {
+        let plugin = "/tmp/package/Platitude GG.app/Contents/PlugIns/platforms/libqcocoa.dylib";
+        let listed = format!(
+            "{plugin} (architecture x86_64):\nLoad command 0\n      cmd LC_SEGMENT_64\n\
+            Load command 21\n          cmd LC_RPATH\n      cmdsize 40\n         \
+            path @loader_path/../../lib (offset 12)\n\
+            {plugin} (architecture arm64):\nLoad command 0\n      cmd LC_SEGMENT_64\n\
+            Load command 21\n          cmd LC_RPATH\n      cmdsize 40\n         \
+            path @loader_path/../../lib (offset 12)\n"
+        );
+        assert_eq!(rpaths(&listed), ["@loader_path/../../lib"]);
     }
 
     /// Lines as dyld writes them (`Loader::logLoad`: `"<%s> %s\n"` after
