@@ -81,6 +81,9 @@ mod ops_remote;
 mod ops_remote_tags;
 mod ops_stash;
 mod ops_tree;
+mod pace;
+#[cfg(test)]
+mod pace_tests;
 mod pass_watch;
 mod print;
 mod published;
@@ -125,6 +128,10 @@ use leaving::{Leaving, LeavingRef, Walked};
 pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel, RelaidRow};
 pub use open::{DrawnGraph, FirstPass};
+pub use pace::{
+    COPY_CEILING, COPY_FLOOR, CopiesPace, OWN_CEILING, OWN_FLOOR, OWN_REST, PACE_MAX_SECS,
+    PACE_MIN_SECS, PaceBounds, pace_bounds_secs,
+};
 use pass_watch::PassWatch;
 pub use pass_watch::{PassHooks, PassStep};
 use print::RowPrint;
