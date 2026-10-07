@@ -1,7 +1,8 @@
 //! Claude Code hook handlers (`cargo xtask hook <event>`), wired from
 //! .claude/settings.json: the git, launches, kills, seats and chips a
 //! session touches only when the user asks. Main moves on the permit the
-//! user's own message opens (`permit`), and on that alone.
+//! user's own message opens (`permit`), and on that alone. A cloud session
+//! runs nothing and answers from a table of its own (`cloud`).
 //!
 //! Each handler reads the hook's JSON payload from stdin and answers on
 //! stdout; printing nothing means "no objection".
@@ -12,6 +13,7 @@ pub(crate) mod approval;
 mod attribution;
 mod awake;
 mod chips;
+mod cloud;
 mod commit;
 mod dump;
 mod git;
@@ -58,6 +60,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "subagent-start" => awake::subagent_start(&input),
         "subagent-stop" => awake::subagent_stop(&input),
         _ => {}
+    }
+    // A cloud session answers from its own table (`cloud`): it runs
+    // nothing, and none of the seats, the gate or the landing permit is
+    // there to hold it to.
+    if cloud::session() {
+        return cloud::run(event, &input);
     }
     match event {
         "pre-write" => write::pre_write(&input),

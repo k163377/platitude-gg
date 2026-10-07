@@ -20,11 +20,16 @@ pub(crate) const PROCESS_STOP_APPROVAL_FLAG: &str = "PGG_ALLOW_KILL";
 /// from whoever holds it (`seats::takeover`).
 pub(crate) const TAKEOVER_APPROVAL_FLAG: &str = "PGG_ALLOW_TAKEOVER";
 
+/// The same, for an instruction that asked a cloud session, which runs
+/// nothing, to run something after all (`cloud`).
+pub(crate) const RUN_APPROVAL_FLAG: &str = "PGG_ALLOW_RUN";
+
 /// Every escape this hook reads — what a flag spelled elsewhere is held to.
-pub(crate) const APPROVAL_FLAGS: [&str; 5] = [
+pub(crate) const APPROVAL_FLAGS: [&str; 6] = [
     MAIN_APPROVAL_FLAG,
     REBASE_APPROVAL_FLAG,
     GUI_APPROVAL_FLAG,
     PROCESS_STOP_APPROVAL_FLAG,
     TAKEOVER_APPROVAL_FLAG,
+    RUN_APPROVAL_FLAG,
 ];
