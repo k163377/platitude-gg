@@ -8,8 +8,8 @@ use super::payload::{deny, string_field};
 use super::shell::{is_cargo, pipe_pieces, program_at};
 
 /// The cargo subcommands that compile nothing, and so may run beside a
-/// measurement — and in a cloud session, which runs nothing (`cloud`).
-pub(super) const HARMLESS: [&str; 8] = [
+/// measurement.
+const HARMLESS: [&str; 8] = [
     "fmt",
     "tree",
     "metadata",

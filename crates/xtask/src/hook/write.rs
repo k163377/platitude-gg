@@ -26,8 +26,8 @@ pub(super) fn pre_write(input: &str) -> Result<(), String> {
 }
 
 /// A new .rs directly under crates/platitude-core/tests/, which would be a
-/// second test binary. Refused in a cloud session too (`cloud`).
-pub(super) fn second_test_binary(path: &str) -> Option<String> {
+/// second test binary.
+fn second_test_binary(path: &str) -> Option<String> {
     let rest = path.split("crates/platitude-core/tests/").nth(1)?;
     (rest.ends_with(".rs") && !rest.contains('/')).then(|| {
         "Integration tests are one binary: cargo test runs test binaries one \

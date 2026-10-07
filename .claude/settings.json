@@ -6,7 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook pre-write"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook pre-write"
           }
         ]
       },
@@ -15,7 +16,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook pre-shell"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook pre-shell"
           }
         ]
       },
@@ -24,7 +26,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook pre-worktree"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook pre-worktree"
           }
         ]
       },
@@ -33,7 +36,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook pre-chip"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook pre-chip"
           }
         ]
       },
@@ -41,7 +45,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook pre-tool"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook pre-tool"
           }
         ]
       }
@@ -51,7 +56,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook permission-request"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook permission-request"
           }
         ]
       }
@@ -61,7 +67,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook post-tool"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook post-tool"
           }
         ]
       },
@@ -70,7 +77,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook post-write"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook post-write"
           }
         ]
       },
@@ -79,7 +87,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook post-worktree"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook post-worktree"
           }
         ]
       },
@@ -88,7 +97,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook post-chip"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook post-chip"
           }
         ]
       }
@@ -98,7 +108,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook post-tool"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook post-tool"
           }
         ]
       }
@@ -108,7 +119,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook subagent-start"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook subagent-start"
           }
         ]
       }
@@ -118,7 +130,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook subagent-stop"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook subagent-stop"
           }
         ]
       }
@@ -128,7 +141,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook permission-denied"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook permission-denied"
           }
         ]
       }
@@ -138,7 +152,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook stop"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook stop"
           }
         ]
       }
@@ -148,7 +163,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook stop-failure"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook stop-failure"
           }
         ]
       }
@@ -158,7 +174,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook prompt-submit"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook prompt-submit"
           }
         ]
       }
@@ -168,7 +185,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook session-start"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook session-start"
           }
         ]
       }
@@ -178,7 +196,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook session-end"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook session-end"
           }
         ]
       }
@@ -188,7 +207,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook elicitation"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook elicitation"
           }
         ]
       }
@@ -198,7 +218,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cargo run --quiet -p xtask --profile hooks -- hook elicitation-result"
+            "shell": "bash",
+            "command": "test \"$CLAUDE_CODE_REMOTE\" = true || cargo run --quiet -p xtask --profile hooks -- hook elicitation-result"
           }
         ]
       }

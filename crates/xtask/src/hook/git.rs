@@ -30,17 +30,6 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
     Ok(false)
 }
 
-/// The same for a cloud session (`cloud`), which has no gate to step
-/// around and commits where it started: only the git that writes main or
-/// rewrites the branch is held.
-pub(super) fn pre_git_in_the_cloud(input: &str) -> Result<bool, String> {
-    let Some(command) = string_field(input, "command") else {
-        return Ok(false);
-    };
-    let cwd = string_field(input, "cwd").unwrap_or_default();
-    Ok(guarded_git_denied(input, &command, &cwd))
-}
-
 /// The gate's skip flag and session mark decide whether refs/heads/main
 /// answers to the gate at all; a session spelling either is stepping
 /// around the pre-merge tests.

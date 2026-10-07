@@ -233,9 +233,7 @@ fn opens_a_tag(text: &str) -> bool {
     chars.next() == Some('<') && chars.next().is_some_and(|c| c.is_ascii_alphabetic())
 }
 
-/// Whether the prompt asks for main (`ASK`, past the forms that only
-/// contain it).
-pub(super) fn asks_for_main(prompt: &str) -> bool {
+fn asks_for_main(prompt: &str) -> bool {
     let containers: usize = CONTAINERS
         .iter()
         .map(|form| prompt.matches(form).count())

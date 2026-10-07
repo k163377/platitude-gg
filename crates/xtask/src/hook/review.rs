@@ -20,19 +20,13 @@ pub(super) fn prompt_submit(input: &str) -> Result<(), String> {
         return Ok(());
     };
     super::permit::prompt_submit(input, &prompt);
-    note_if_asked(input, &prompt);
-    Ok(())
-}
-
-/// The review note, when this prompt asks for one — all a cloud session
-/// keeps of this hook, having no landing permit to open (`cloud`).
-pub(super) fn note_if_asked(input: &str, prompt: &str) {
-    if answers(prompt) {
+    if answers(&prompt) {
         println!(
             "{}",
             note(string_field(input, "transcript_path").as_deref())
         );
     }
+    Ok(())
 }
 
 /// Whether the note answers this prompt: the user's own message asking for

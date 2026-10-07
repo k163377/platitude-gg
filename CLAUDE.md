@@ -24,13 +24,13 @@
 
 ## ビルド・テスト
 
+**Claudeクラウド(`CLAUDE_CODE_REMOTE=true`)はテキスト編集のみ** — 本節・席・land は [クラウドセッション.md](internal-docs/クラウドセッション.md) が置き換える。
+
 前提: Qt は `.qt-version` の版(xtask は Windows で `C:\Qt\<版>` を選び、PATH の別の版では組まない)+ C++ ツールチェーン(他 OS の環境は `ci/` が正)。開発は debug ビルド。**`--release` は性能計測と起動確認だけ**(release でないと QML = exe 埋め込みが反映されない)。以下 `cargo` / `cargo xtask` を省略。
 
 **確認は 3 段**: **1 日常** = <!--call:gate.daily-->`gate --host-only`(コンテナ無し)/ **2 反映前** = `gate`(差分の依存木と `verb-tiers.txt` の段で選んだテストを回し、緑を commit にスタンプ = `land` と git hook が要求)/ **3 フル** = `gate --all`(`periodic` のテストと全動詞を両 OS で回す。それ以外で回すのはユーザーがテストを指示した時だけ)+ <!--call:linux.bare-->`linux bare --discover` + 3OS CI + 性能実測(リリース前と依存・環境を触った時。**版(crate・toolchain・Qt・最低 git)を動かす差分は `gate` 自身が段 3 の計画へ上がる**、残りは手で)。
 
 **変更作業の完了には、依頼範囲の作業完了(§Git 運用)と、現在の commit に対する `gate` の PASS の両方が必要**。UI 配線では **触った動詞が両 OS で PASS し、両方の PNG を目視するまで**(verify-ui スキルを必ず呼ぶ)。
-
-**クラウドセッションはコード変更のみ・実行無し** — 本節と land・席は [クラウドセッション.md](internal-docs/クラウドセッション.md) が置き換える。
 
 - **起動だけの要求(「rebase して起動」等)は fast path** — シェル呼び出し 1 個で起動して即報告し、ターンを終える(verify-ui スキル §起動 fast path)。段 2 はユーザーが検証・反映を指示した時
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ = 最低 git バージョンを積んだ唯一の環境。Windows では WSL 3 の `wslc` が回す — Docker 不要。**`bare` は宣言した依存だけの Ubuntu で動くかだけを見る**)
