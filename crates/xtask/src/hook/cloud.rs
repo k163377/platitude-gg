@@ -41,9 +41,9 @@ fn every_hook_skips_cargo_only_in_the_cloud_and_preserves_local_io() {
                 child.env_remove("CLAUDE_CODE_REMOTE");
             }
             let output = child.output().expect("run the configured hook shell");
-            assert!(output.stderr.is_empty(), "{command}: {:?}", output);
+            assert!(output.stderr.is_empty(), "{command}: {output:?}");
             if remote == Some("true") {
-                assert!(output.status.success(), "{command}: {:?}", output);
+                assert!(output.status.success(), "{command}: {output:?}");
                 assert!(output.stdout.is_empty(), "cloud hook ran Cargo: {command}");
             } else {
                 assert_eq!(output.status.code(), Some(23), "{command}: {remote:?}");
