@@ -5,7 +5,7 @@ description: platitude-gg の UI 動作確認・スクリーンショット検�
 
 # UI 動作確認(ヘッドレス検証)
 
-**クラウドセッション(`CLAUDE_CODE_REMOTE=true`)ではここの何も撃たない** — 触った動詞は報告で「手元に残る検証」として名指すだけ(internal-docs/クラウドセッション.md)。
+**クラウドセッション(`CLAUDE_CODE_REMOTE=true`)ではここの何も撃たない** — 触った動詞は報告で「未実行の検証」として名指すだけ(internal-docs/クラウドセッション.md)。
 
 **ヘッドレス動確は `cargo xtask verify-ui <動詞> [引数]`** — release ビルド → `screenshot saved=true` 判定と PNG 保存まで 1 コマンド。`--no-build` で連続実行、`--preset` / `--repo` で対象指定、素材だけ欲しければ <!--cmd:demo.repo-->`cargo xtask demo-repo <preset>`。
 
