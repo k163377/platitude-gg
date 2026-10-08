@@ -30,7 +30,7 @@ ColumnLayout {
     }
 
     // ---- the merge editor ------------------------------------------------
-    readonly property string mergeTool: pane.curPage ? pane.curPage.pageWorkingTree.mergeTool : ""
+    readonly property string mergeTool: pane.curPage ? pane.curPage.pageWorktree.mergeTool : ""
     /// Names to offer (`RepoTab.mergeTools`).
     readonly property var toolChoices: pane.curPage ? pane.curPage.pageTab.mergeTools : []
     /// Stops a late answer from overwriting something already typed.

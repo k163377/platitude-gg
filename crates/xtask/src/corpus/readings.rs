@@ -13,7 +13,7 @@ pub(super) fn readings(at: &Path) -> Result<(), String> {
     tags(at)?;
     branch_tree(at)?;
     println!("profile: startup/status (tracked tree, index and ignored paths)");
-    working_tree(at)?;
+    worktree(at)?;
     println!("profile: graph/scroll (lanes, chips, visible text and font coverage)");
     graph(at)?;
     window(at)?;
@@ -163,14 +163,14 @@ fn tags(at: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// What the working tree costs to read, which is most of startup:
+/// What the worktree costs to read, which is most of startup:
 /// `status::load` pays one `lstat` per tracked file.
 ///
 /// The time is a reading of the walk: the corpus does not copy the
 /// reference clone's `core.fsmonitor`, which makes its status slower
 /// (ci/baseline/code-costs-windows-x64.md §コーパス生成) and would time a
 /// daemon's health on the day.
-fn working_tree(at: &Path) -> Result<(), String> {
+fn worktree(at: &Path) -> Result<(), String> {
     let tracked = git(at, &["ls-files"])?.lines().count();
     let index = std::fs::metadata(at.join(".git").join("index"))
         .map(|meta| meta.len())

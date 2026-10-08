@@ -226,7 +226,7 @@ pub async fn head_oid(
 
 /// Whether HEAD can reach `oid` — the commit is HEAD itself or something
 /// it was built on; only this line of commits can be rewritten from where
-/// the working tree stands.
+/// the worktree stands.
 pub async fn is_in_head_history(
     executor: &GitExecutor,
     workdir: &Path,

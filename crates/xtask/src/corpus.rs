@@ -179,7 +179,7 @@ fn report(at: &Path) -> Result<(), String> {
 /// definition (window, lane, chip).
 ///
 /// Read only: the reference is somebody's working clone, so nothing here
-/// writes to it, down to the status (`readings::working_tree`).
+/// writes to it, down to the status (`readings::worktree`).
 fn against(at: &Path) -> Result<(), String> {
     let refs = git(at, &["show-ref"])?;
     let commits = git(at, &["rev-list", "--all", "--count"])?;

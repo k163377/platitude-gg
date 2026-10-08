@@ -152,7 +152,7 @@ pub struct Feeds {
     pub refs_branches: Arc<Feed<RefsMsg>>,
     pub refs_remotes: Arc<Feed<RefsMsg>>,
     pub refs_tags: Arc<Feed<RefsMsg>>,
-    /// Status headline consumer (WorkingTreeModel): where the tree stands
+    /// Status headline consumer (WorktreeModel): where the tree stands
     /// — HEAD and what is derived from it — and the last status's
     /// counts, in the order the session said them.
     pub status: Arc<Feed<StateMsg>>,

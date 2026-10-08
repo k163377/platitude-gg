@@ -247,8 +247,8 @@ impl GraphModel {
     /// never arranged for its own. Stands in every build, as
     /// [`Self::fail_graph_pass`] does.
     #[qslot]
-    fn let_the_working_tree_row_through(&mut self) -> bool {
-        crate::harness::let_the_working_tree_row_through(self.tab_id)
+    fn let_the_worktree_row_through(&mut self) -> bool {
+        crate::harness::let_the_worktree_row_through(self.tab_id)
     }
 
     /// Automation: one more pass while the hold stays up; answers whether
@@ -402,7 +402,7 @@ impl GraphModel {
     /// so it is walked off the rows' order and marks; git would answer
     /// after the card is up (デザイン規約 §行が読む答えはどこから来るか).
     /// `head` comes from the asker off the one record
-    /// (`WorkingTreeModel.headOid`), the HEAD the rest of the card is about.
+    /// (`WorktreeModel.headOid`), the HEAD the rest of the card is about.
     #[qslot]
     fn rebase_rewrites_published(&self, onto_oid_hex: String, head_oid_hex: String) -> bool {
         let (Ok(onto), Ok(head)) = (

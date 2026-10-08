@@ -10,7 +10,7 @@ Item {
     property Item page
     property RepoTab repoTab
     property GraphModel graphModel
-    property WorkingTreeModel workingTree
+    property WorktreeModel worktree
     property NavSectionModel branchesModel
     property DetailsModel detailsModel
     property DiffModel diffModel
@@ -36,7 +36,7 @@ Item {
                                         && graphPane.width > 0 && graphPane.height > 0
     readonly property bool ready: AppBackend.identityState === "ready" && repoTab.state === "open" && !graphModel.loading
                                   && graphModel.finishCount > 0 && branchesModel.refsLoaded
-                                  && workingTree.loaded
+                                  && worktree.loaded
 
     // Every stage change goes through here (rules/app-ui.md §UI 自動化「段を持つドライバは段が変わるたびに名乗る」).
     function enter(next) {
@@ -109,7 +109,7 @@ Item {
         let row = -1
         const caseOid = PerfProbe.caseField(driver.operation, 1)
         const oid = caseOid !== "" ? caseOid
-                    : PerfProbe.selection === "head" ? workingTree.headOid : ""
+                    : PerfProbe.selection === "head" ? worktree.headOid : ""
         if (oid !== "")
             row = graphModel.rowOf(oid)
         else if (PerfProbe.selection === "first") {
@@ -337,7 +337,7 @@ Item {
         function onChanged() { driver.tick() }
     }
     Connections {
-        target: driver.workingTree
+        target: driver.worktree
         function onChanged() { driver.tick() }
     }
     Connections {

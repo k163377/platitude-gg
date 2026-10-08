@@ -4,13 +4,13 @@ import QtQuick
 import platitude.ui
 
 // Where a file list's arrows stand, and when the middle pane is asked to read what they walked onto (規約 §diff のファイル一覧).
-// Shared by the commit's CHANGES and the working tree's lists, through the same two model slots (`stepFile` /
+// Shared by the commit's CHANGES and the worktree's lists, through the same two model slots (`stepFile` /
 // `origOf`). Its visibility is the pane's.
 Item {
     id: walk
 
     /// The lists being walked, top to bottom, each `{ view, model }`: one for a commit's changed files, one per bucket
-    /// for the working tree's.
+    /// for the worktree's.
     required property var sides
     readonly property var view: walk.sides[0].view
     readonly property var model: walk.sides[0].model

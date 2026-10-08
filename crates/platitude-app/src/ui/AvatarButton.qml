@@ -10,7 +10,7 @@ Item {
     /// The identicon code, and the assigned image ("" for none).
     property string face: ""
     property string faceUrl: ""
-    /// Whom the badge would be about; "" (no author — the working tree's row, a commit not read yet) disables it.
+    /// Whom the badge would be about; "" (no author — the worktree's row, a commit not read yet) disables it.
     property string email: ""
     /// Stands in for the pointer where headless cannot put one, so the badge can be photographed
     /// (PGG_AUTO_ACT=avatar-hover).

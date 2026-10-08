@@ -16,7 +16,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workingTree: driver.workingTree
+    readonly property var worktree: driver.worktree
     readonly property var graphModel: driver.graphModel
     readonly property var branchesModel: driver.branchesModel
     readonly property var unstagedModel: driver.unstagedModel
@@ -33,10 +33,10 @@ Item {
         opExitLandTimer.start()
     }
 
-    // Where the stash press left the reader. `follows=` is by oid: a highlight left on the index the working-tree row
+    // Where the stash press left the reader. `follows=` is by oid: a highlight left on the index the worktree row
     // vacated lights whatever slid into it (here, the new entry), and two rows a few lines apart look alike in the
     // picture. Waited out on the pane, so a build that never lands still answers: the tree is empty and the right side
-    // has caught up — the working tree's pane or a settled commit card; `wip=` says which.
+    // has caught up — the worktree's pane or a settled commit card; `wip=` says which.
     SampleTimer {
         id: stashLandTimer
         onTriggered: {
@@ -45,12 +45,12 @@ Item {
             if (!page.wipShown && !driver.cardSettled)
                 return
             stashLandTimer.stop()
-            const row = graphModel.rowOf(workingTree.headOid)
+            const row = graphModel.rowOf(worktree.headOid)
             Harness.report("stash_landed wip=" + page.wipShown
-                              + " follows=" + (page.selectedOid === workingTree.headOid)
+                              + " follows=" + (page.selectedOid === worktree.headOid)
                               + " onscreen=" + graphPane.rowOnScreen(row)
                               + " lit=" + (graphPane.view.currentIndex === row)
-                              + " head=" + workingTree.headOid.substring(0, 8)
+                              + " head=" + worktree.headOid.substring(0, 8)
                               + " selected=" + page.selectedOid.substring(0, 8)
                               + " row=" + row + " rows=" + graphModel.rowTotal
                               // Last because it has spaces. A box filled by a standing merge (`absorbOpMessage`)
@@ -69,28 +69,28 @@ Item {
     SampleTimer {
         id: opExitLandTimer
         onTriggered: {
-            if (!driver.wroteAndSettled() || workingTree.opText !== "")
+            if (!driver.wroteAndSettled() || worktree.opText !== "")
                 return
             if (!page.wipShown) {
                 if (!driver.cardSettled)
                     return
-                // The graph rebuilds after the status, so the working-tree row the operation held open over a clean
+                // The graph rebuilds after the status, so the worktree row the operation held open over a clean
                 // tree is still drawn; waited out. Only on a clean tree: an abort that brings work back keeps that row.
                 if (unstagedModel.total === 0 && driver.graphTopKind() === "wip")
                     return
             }
             opExitLandTimer.stop()
-            const row = graphModel.rowOf(workingTree.headOid)
+            const row = graphModel.rowOf(worktree.headOid)
             Harness.report("op_exit_landed wip=" + page.wipShown
-                              + " op=" + workingTree.opText
-                              + " follows=" + (page.selectedOid === workingTree.headOid)
+                              + " op=" + worktree.opText
+                              + " follows=" + (page.selectedOid === worktree.headOid)
                               + " onscreen=" + graphPane.rowOnScreen(row)
                               // The main worktree's WORKTREES row: the branch HEAD stands on once the operation is
                               // down, the folder where it is left on none (`quit`; デザイン規約 §左メニューの所作).
                               + " home=" + driver.navProbe.homeWorktreeName()
                               + " lit=" + (graphPane.view.currentIndex === row)
                               + " files=" + unstagedModel.total
-                              + " head=" + workingTree.headOid.substring(0, 8)
+                              + " head=" + worktree.headOid.substring(0, 8)
                               + " selected=" + page.selectedOid.substring(0, 8)
                               + " row=" + row)
             renderedBarrier.begin()

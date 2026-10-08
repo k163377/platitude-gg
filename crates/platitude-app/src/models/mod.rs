@@ -25,7 +25,7 @@ mod tab_name;
 mod tabs;
 #[cfg(test)]
 mod tabs_tests;
-mod working_tree;
+mod worktree;
 
 pub use app_backend::{AppBackend, build_id, build_tree};
 pub use clone::CloneModel;
@@ -41,7 +41,7 @@ pub use rebase_plan::RebasePlanModel;
 pub use repo_config::RepoConfigModel;
 pub use repo_tab::RepoTab;
 pub use tabs::TabsModel;
-pub use working_tree::WorkingTreeModel;
+pub use worktree::WorktreeModel;
 
 pub(crate) use notify::{impl_extend_notified, impl_move_notified, impl_notify_runs, push_run};
 

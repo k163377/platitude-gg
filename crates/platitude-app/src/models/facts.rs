@@ -148,7 +148,7 @@ impl GitFacts {
     /// What a push of the current branch can do, in the word
     /// `PublishFlow.pushState` branches on. A closed tab is the caller's to
     /// add: this answers for the repository alone. The `push_*` three are
-    /// the destination's own counts (`WorkingTreeModel.pushTracking`), read
+    /// the destination's own counts (`WorktreeModel.pushTracking`), read
     /// where the push goes elsewhere.
     #[qslot]
     #[expect(clippy::too_many_arguments)]

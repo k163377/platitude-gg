@@ -286,13 +286,13 @@ mod tests {
     /// row.
     #[test]
     fn a_directory_git_would_not_open_is_one_row() {
-        use platitude_core::status::{StatusItem, WorkingTreeStatus};
+        use platitude_core::status::{StatusItem, WorktreeStatus};
         let untracked = |path: &str| StatusItem::Untracked {
             path: path.to_string(),
         };
         let mut model = section(
             "files",
-            Source::files(WorkingTreeStatus {
+            Source::files(WorktreeStatus {
                 items: vec![untracked("vendor/nest/"), untracked("vendor/plain.txt")],
                 ..Default::default()
             }),

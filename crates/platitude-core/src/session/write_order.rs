@@ -289,7 +289,7 @@ mod tests {
     /// Keys nothing else in the binary can name: the registry is
     /// process-wide.
     #[test]
-    fn one_order_per_working_tree_and_none_once_it_is_let_go() {
+    fn one_order_per_worktree_and_none_once_it_is_let_go() {
         let tree = std::path::Path::new("/write-order-test/one/.git");
         let other = std::path::Path::new("/write-order-test/other/.git");
         let held = of(tree);

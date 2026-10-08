@@ -16,7 +16,7 @@ Item {
     required property var driver
 
     readonly property var page: driver.page
-    readonly property var workingTree: driver.workingTree
+    readonly property var worktree: driver.worktree
     readonly property var graphModel: driver.graphModel
     readonly property var detailsModel: driver.detailsModel
     readonly property var unstagedModel: driver.unstagedModel
@@ -36,7 +36,7 @@ Item {
         } else if (act === "stash-tip") {
             // Why the box refuses the caret — the row decides which refusal. `older` is the row under HEAD's.
             page.activateRow(graphModel.oidAt(
-                arg === "older" ? graphModel.rowOf(workingTree.headOid) + 1 : Number(arg)))
+                arg === "older" ? graphModel.rowOf(worktree.headOid) + 1 : Number(arg)))
             stashTipTimer.start()
         } else if (act === "path-tip") {
             // Row 0 is the elided leaf, or the folder chain with `-tree`. The argument picks the pane as `corner`
@@ -187,7 +187,7 @@ Item {
         function standOnWorktree() {
             if (pathTipTimer.stood)
                 return true
-            if (graphModel.finishCount === 0 || !workingTree.loaded)
+            if (graphModel.finishCount === 0 || !worktree.loaded)
                 return false
             const row = driver.rowOfWorktree(pathTipTimer.carried)
             if (row < 0)

@@ -10,7 +10,7 @@ use crate::integrate::Landing;
 use crate::opstate;
 use crate::process::{GitCommand, GitExecutor};
 
-/// `git pull`: the branch the working tree is on, brought in line with
+/// `git pull`: the branch the worktree is on, brought in line with
 /// its upstream.
 ///
 /// Handed no arguments: git's config decides how and from where

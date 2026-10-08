@@ -4,7 +4,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The working tree's own verbs: what a commit is made of and what it is called — the message boxes, the amend
+/// The worktree's own verbs: what a commit is made of and what it is called — the message boxes, the amend
 /// row, stashing, the line-ending card, and the seat a stopped merge is finished from. Built by `AutoActDriver`
 /// only when a verb was given.
 // An `Item` only because `QtObject` has no default property to hold the timers below.
@@ -16,7 +16,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workingTree: driver.workingTree
+    readonly property var worktree: driver.worktree
     readonly property var graphModel: driver.graphModel
     readonly property var detailsModel: driver.detailsModel
     readonly property var branchesModel: driver.branchesModel
@@ -76,7 +76,7 @@ Item {
         } else if (act === "stash" || act === "stash-lands") {
             // Through the band's button with the WIP pane left alone — the button does not need it
             // (デザイン規約 §変更を退避する). `stash-lands` opens it: where the reader stands is its subject. The
-            // working-tree row going is the rebuild's edge (`graphGoneOid`). `named` leaves a summary in the commit
+            // worktree row going is the rebuild's edge (`graphGoneOid`). `named` leaves a summary in the commit
             // box to name the entry; the words are the driver's, as the argument cannot carry spaces.
             if (arg === "named") {
                 driver.stashWanted = "feat: write the summary"
@@ -153,7 +153,7 @@ Item {
             // and the picture not yet moved.
             page.showWip()
             wipPane.setMessage("feat: record the staged half", "")
-            driver.headOidBefore = workingTree.headOid
+            driver.headOidBefore = worktree.headOid
             halfWatch.duringOnly = arg === "during"
             driver.pressWrite("commit", () => {
                 page.commitNow()
@@ -307,7 +307,7 @@ Item {
         property bool moved: false
         property string leftPath: ""
         onTriggered: {
-            if (graphModel.finishCount === 0 || !workingTree.loaded)
+            if (graphModel.finishCount === 0 || !worktree.loaded)
                 return
             if (!carriedReadTimer.asked) {
                 const row = driver.rowOfWorktree(Harness.autoActArg)
@@ -407,7 +407,7 @@ Item {
             return ""
         }
         onTriggered: {
-            if (graphModel.finishCount === 0 || !workingTree.loaded)
+            if (graphModel.finishCount === 0 || !worktree.loaded)
                 return
             if (!carriedStandTimer.asked) {
                 // The same road in as `carried-read`.
@@ -477,7 +477,7 @@ Item {
         target: acts.repoTab
         enabled: halfWatch.duringOnly && !halfWatch.caught
         function onBusyCountChanged() {
-            if (repoTab.busyCount === 0 || workingTree.headOid !== driver.headOidBefore)
+            if (repoTab.busyCount === 0 || worktree.headOid !== driver.headOidBefore)
                 return
             halfWatch.sawWipRow = graphModel.wipRow
             halfWatch.sawRows = unstagedModel.total
@@ -490,7 +490,7 @@ Item {
         id: halfDuringTimer
         onTriggered: {
             if (!halfWatch.caught) {
-                if (workingTree.headOid === driver.headOidBefore)
+                if (worktree.headOid === driver.headOidBefore)
                     return
                 halfDuringTimer.stop()
                 Harness.report("wip_half_missed the commit landed before any notify carried a raised busy, so this "
@@ -511,13 +511,13 @@ Item {
         id: halfSettledTimer
         onTriggered: {
             if (!driver.wroteAndSettled()
-                    || workingTree.headOid === driver.headOidBefore
-                    || graphModel.rowOf(workingTree.headOid) < 0
+                    || worktree.headOid === driver.headOidBefore
+                    || graphModel.rowOf(worktree.headOid) < 0
                     || !graphModel.wipRow)
                 return
             halfSettledTimer.stop()
             Harness.report("wip_half stage=after busy=false"
-                              + " moved=" + (workingTree.headOid !== driver.headOidBefore)
+                              + " moved=" + (worktree.headOid !== driver.headOidBefore)
                               + " wipRow=" + graphModel.wipRow
                               + " rows=" + unstagedModel.total)
             driver.complete()
@@ -537,7 +537,7 @@ Item {
             wipPane.setMessage(Harness.autoActArg, "")
             // A deferred run: nothing raises its barrier, so the commit is sent and waited out here. HEAD is re-read
             // now — the page's opening fetch can have answered since `prepareCompletion` read it.
-            driver.headOidBefore = workingTree.headOid
+            driver.headOidBefore = worktree.headOid
             driver.pressWrite("commit", () => {
                 page.commitNow()
                 return true
@@ -552,13 +552,13 @@ Item {
         id: resetAuthorLandedTimer
         onTriggered: {
             if (!driver.wroteAndSettled()
-                    || workingTree.headOid === driver.headOidBefore
-                    || graphModel.rowOf(workingTree.headOid) < 0
+                    || worktree.headOid === driver.headOidBefore
+                    || graphModel.rowOf(worktree.headOid) < 0
                     || !driver.cardSettled)
                 return
             resetAuthorLandedTimer.stop()
             Harness.report("reset_author was=" + driver.headOidBefore.substring(0, 8)
-                              + " head=" + workingTree.headOid.substring(0, 8)
+                              + " head=" + worktree.headOid.substring(0, 8)
                               + " shown=" + detailsModel.shaHex.substring(0, 8)
                               + " author=" + detailsModel.authorName
                               + " committer=" + detailsModel.committerName)
@@ -567,7 +567,7 @@ Item {
     }
     // What stands beside the exit card (デザイン規約 §進行中の操作から出る): a stopped rebase, pick or revert hides the
     // message boxes and the commit button, a stopped merge keeps them — its `--continue` is that button. Read off the
-    // drawn items (an item's `visible` is false under a hidden parent), once the card stands on the working-tree face.
+    // drawn items (an item's `visible` is false under a hidden parent), once the card stands on the worktree face.
     SampleTimer {
         id: opExitTimer
         onTriggered: {
@@ -577,7 +577,7 @@ Item {
             Harness.report("op_exit card=" + wipPane.offersOpExit("--abort")
                               + " box=" + wipPane.commitBlock.messageSeat.visible
                               + " button=" + wipPane.commitBlock.commitSeat.visible
-                              + " op=" + workingTree.opText)
+                              + " op=" + worktree.opText)
             driver.complete()
         }
     }
@@ -589,8 +589,8 @@ Item {
             if (!wipPane.eolCardOpen)
                 return
             eolCommitTimer.stop()
-            Harness.report("eol_commit staged=" + workingTree.stagedCount
-                              + " warned=" + workingTree.eolStagedCount
+            Harness.report("eol_commit staged=" + worktree.stagedCount
+                              + " warned=" + worktree.eolStagedCount
                               + " card=" + wipPane.eolCardOpen)
             driver.complete()
         }
@@ -622,11 +622,11 @@ Item {
         }
     }
     // The band's Stash button, pressed until it takes: it is down while the opening fetch keeps the tab busy. The row
-    // that has to go is read here, once the working-tree row leads — it can arrive after the graph's first pass (a
+    // that has to go is read here, once the worktree row leads — it can arrive after the graph's first pass (a
     // stopped merge), and read earlier the verb would wait on the newest commit.
     SampleTimer {
         id: stashPressTimer
-        /// `stash-lands`: pressed from the working-tree row with its pane open, taken here so the row is there.
+        /// `stash-lands`: pressed from the worktree row with its pane open, taken here so the row is there.
         property bool fromWip: false
         onTriggered: {
             if (driver.graphTopKind() !== "wip" || page.pageBand === null)
@@ -651,8 +651,8 @@ Item {
         property int seenHead: -1
         property string headWas: ""
         function begin() {
-            mergeCommitTimer.wanted = workingTree.opSubject
-            mergeCommitTimer.headWas = workingTree.headOid
+            mergeCommitTimer.wanted = worktree.opSubject
+            mergeCommitTimer.headWas = worktree.headOid
             // Read now: the landing clears the editor, so afterwards every run would say the boxes were empty.
             mergeCommitTimer.typed = wipPane.subjectText !== "" || wipPane.bodyText !== ""
             mergeCommitTimer.seenHead = -1
@@ -663,8 +663,8 @@ Item {
                 return
             // The graph holding the commit, checked against the id HEAD moved from: refs and the walk arrive behind
             // the write and each other, so the old tip would pass.
-            if (!workingTree.headKnown || workingTree.headOid === mergeCommitTimer.headWas
-                    || graphModel.rowOf(workingTree.headOid) < 0
+            if (!worktree.headKnown || worktree.headOid === mergeCommitTimer.headWas
+                    || graphModel.rowOf(worktree.headOid) < 0
                     || driver.graphTopKind() === "wip")
                 return
             if (mergeCommitTimer.seenHead < 0) {
@@ -676,7 +676,7 @@ Item {
                 return
             mergeCommitTimer.stop()
             Harness.report(
-                "merge_committed merging=" + (workingTree.opText !== "")
+                "merge_committed merging=" + (worktree.opText !== "")
                 + " kept=" + (mergeCommitTimer.wanted !== ""
                               && repoTab.headSubject === mergeCommitTimer.wanted)
                 + " typed=" + mergeCommitTimer.typed

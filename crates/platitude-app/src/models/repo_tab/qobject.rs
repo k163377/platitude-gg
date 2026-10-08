@@ -167,7 +167,7 @@ impl RepoTab {
     // matched by the press's id, whatever order the answers came in
     // (`ops::Press`).
     qproperty!("commitAnswer", Member = commit_answer, Notify = changed);
-    // …and where the stash press that took the working tree away
+    // …and where the stash press that took the worktree away
     // answered. Its other wait — the tree itself — is asked for
     // (`takeStashLanding`).
     qproperty!("stashAnswer", Member = stash_answer, Notify = changed);
@@ -318,7 +318,7 @@ impl RepoTab {
     }
 
     /// The number of the first HEAD report after that write
-    /// (`WriteAnswer::head_seq`): `WorkingTreeModel.headSeq` at or above it
+    /// (`WriteAnswer::head_seq`): `WorktreeModel.headSeq` at or above it
     /// looked after the write, whichever of the two arrives first.
     #[qslot]
     fn write_answer_head_seq(&self, index: i32) -> i32 {
@@ -901,7 +901,7 @@ impl RepoTab {
         self.ask_session(|s| s.rename_stash(selector.clone(), message.clone()));
     }
 
-    /// `git stash push -u` over the whole working tree, straight off the
+    /// `git stash push -u` over the whole worktree, straight off the
     /// press (デザイン規約 §変更を退避する).
     ///
     /// `message` is the commit box's text; empty lets git name the entry.
@@ -975,9 +975,9 @@ impl RepoTab {
     }
 
     /// A status has been applied beside HEAD report `seen`, leaving the
-    /// working tree empty or not (`RepoTab::tree_was_read`).
+    /// worktree empty or not (`RepoTab::tree_was_read`).
     ///
-    /// `seen` is the counts' own number (`WorkingTreeModel.statusSeq`), not
+    /// `seen` is the counts' own number (`WorktreeModel.statusSeq`), not
     /// `headSeq`: a HEAD report also arrives on its own, carrying no counts.
     #[qslot]
     fn note_tree_read(&mut self, seen: i32, emptied: bool) {
@@ -987,7 +987,7 @@ impl RepoTab {
         self.tree_was_read(seen, emptied);
     }
 
-    /// The page is acting on the working tree it has: answers whether
+    /// The page is acting on the worktree it has: answers whether
     /// this window's own stash is what emptied it, and settles that press
     /// (`ops::StashOut`). Asked from both halves of the pair (a status
     /// landing, a write answering) — the first gets nothing — and asking
@@ -1271,7 +1271,7 @@ impl RepoTab {
     /// (`"ours"`/`"theirs"`), in one git command however many were chosen.
     ///
     /// Which branch each side is called is `sideOurs` / `sideTheirs` on
-    /// the working-tree model — during a rebase the two swap over, so the
+    /// the worktree model — during a rebase the two swap over, so the
     /// wording cannot be worked out from the flag alone.
     #[qslot]
     fn take_side_paths(&mut self, side: String) {
@@ -1293,7 +1293,7 @@ impl RepoTab {
     }
 
     /// Asks for the configured merge tool; the answer arrives on the
-    /// working-tree model's `mergeTool`. The status refresh only names it
+    /// worktree model's `mergeTool`. The status refresh only names it
     /// where something is conflicted, so a settings field has to ask.
     #[qslot]
     fn ask_merge_tool(&mut self) {

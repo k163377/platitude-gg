@@ -32,7 +32,7 @@ pub use rows::{
     DiffRow, LineMarks, Marks, SplitRow, flatten_patches, is_combined, is_new_file,
     is_unmerged_only, pair_rows,
 };
-pub use select::{diff_key, hunk_selection, working_tree_target};
+pub use select::{diff_key, hunk_selection, worktree_target};
 pub use text_end::{Ended, TextEnd};
 pub(crate) use wire::{Fields, Listed, One, Optional, Record, field};
 // `EndingWords` is not re-exported: no caller names it, and in this private

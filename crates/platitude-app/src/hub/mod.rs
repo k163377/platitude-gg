@@ -23,7 +23,7 @@ use platitude_core::session::{
 };
 use platitude_core::settings::{Settings, State, Store};
 use platitude_core::stash::StashEntry;
-use platitude_core::status::WorkingTreeStatus;
+use platitude_core::status::WorktreeStatus;
 use qtbridge::QmlMethodInvoker;
 
 #[cfg(test)]

@@ -25,14 +25,14 @@ Item {
         const cut = arg.indexOf(":")
         const head = cut > 0 ? arg.substring(0, cut) : ""
         const named = head === "staged" || head === "unstaged" || head === "untracked" || head === "conflicts"
-        const workingTreePath = named ? arg.substring(cut + 1) : arg
-        if (workingTreePath === "") {
+        const filePath = named ? arg.substring(cut + 1) : arg
+        if (filePath === "") {
             Harness.report("diff_arg act=" + act + " named=false")
             driver.barrierRendered.begin()
             return true
         }
         page.showWip()
-        page.toggleDiff(named ? head : "unstaged", workingTreePath, unstagedModel.origOf(workingTreePath))
+        page.toggleDiff(named ? head : "unstaged", filePath, unstagedModel.origOf(filePath))
         rowsTimer.begin()
         return true
     }

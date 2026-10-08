@@ -8,7 +8,7 @@ use crate::hub::{Feed, HeadMsg, OpProgressMsg, StateMsg, StatusMsg};
 use super::qml_register;
 
 // ---------------------------------------------------------------------------
-// WorkingTreeModel: where the tree stands, as one record — HEAD and what
+// WorktreeModel: where the tree stands, as one record — HEAD and what
 // derives from it, the standing operation, and the last status's counts.
 // The one place QML reads HEAD from: other models are told the same report
 // (`hub::sink`) but are not a source
@@ -17,7 +17,7 @@ use super::qml_register;
 // ---------------------------------------------------------------------------
 
 #[derive(Default)]
-pub struct WorkingTreeModel {
+pub struct WorktreeModel {
     /// The first status snapshot has landed. Counts of zero mean clean only
     /// after this edge; before it they mean no answer yet.
     loaded: bool,
@@ -168,7 +168,7 @@ pub struct WorkingTreeModel {
     wip_deleted: i32,
     wip_renamed: i32,
     wip_copied: i32,
-    /// What the working tree lets a stash do — `unborn` / `conflicts` /
+    /// What the worktree lets a stash do — `unborn` / `conflicts` /
     /// `clean` / `ready` (`platitude_core::stash::standing`). Empty until
     /// `loaded`, like every count here.
     stash_standing: String,
@@ -202,7 +202,7 @@ pub struct WorkingTreeModel {
     /// answer (`ops::DiffReread`); one made elsewhere, by the page's tick on
     /// the open file (`RepoPage.pollDiff`).
     tree_revision: i32,
-    /// Whether this status leaves the synthetic working-tree row at the
+    /// Whether this status leaves the synthetic worktree row at the
     /// head of the graph (`platitude_core::graph::wip_row_stands`). The
     /// graph answers the same one read behind, so a reader comparing the
     /// two (`GraphModel::wip_row`) can tell the picture is still arriving.
@@ -229,7 +229,7 @@ pub struct WorkingTreeModel {
 }
 
 #[qobject(ConvertToCamelCase, NoQmlElement)]
-impl WorkingTreeModel {
+impl WorktreeModel {
     qproperty!("loaded", Member = loaded, Notify = changed);
     qproperty!("headKnown", Member = head_known, Notify = changed);
     qproperty!("branch", Member = branch, Notify = changed);
@@ -347,8 +347,8 @@ impl WorkingTreeModel {
     }
 }
 
-impl WorkingTreeModel {
-    /// Back to before the first read, for [`WorkingTreeModel::restand`]:
+impl WorktreeModel {
+    /// Back to before the first read, for [`WorktreeModel::restand`]:
     /// every field but the tab and the two feeds — a field added to this
     /// model belongs here too.
     ///
@@ -664,13 +664,13 @@ impl WorkingTreeModel {
     }
 }
 
-qml_register!(WorkingTreeModel, "WorkingTreeModel", singleton = false);
+qml_register!(WorktreeModel, "WorktreeModel", singleton = false);
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use platitude_core::opstate::OpState;
-    use platitude_core::status::{StatusItem, WorkingTreeStatus};
+    use platitude_core::status::{StatusItem, WorktreeStatus};
 
     const ROOT: &str = "1111111111111111111111111111111111111111";
     const NEXT: &str = "2222222222222222222222222222222222222222";
@@ -700,7 +700,7 @@ mod tests {
         items: Vec<StatusItem>,
     ) -> StateMsg {
         StateMsg::Status(Box::new(StatusMsg {
-            status: WorkingTreeStatus {
+            status: WorktreeStatus {
                 branch_oid: None,
                 branch_head: Some(branch.to_string()),
                 upstream: upstream.map(str::to_string),
@@ -729,7 +729,7 @@ mod tests {
     /// names no commit does not make the tree unborn once a HEAD is known.
     #[test]
     fn head_is_the_reports_own_and_the_status_does_not_overwrite_it() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         assert!(!model.absorb(Vec::new()), "nothing arrived, nothing said");
         assert!(!model.head_known);
         assert!(model.absorb(vec![head(ROOT, 1), status(Vec::new())]));
@@ -767,7 +767,7 @@ mod tests {
         let new = StatusItem::Untracked {
             path: "new.psd".to_string(),
         };
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         model.absorb(vec![
             head(ROOT, 1),
             with_not_copied(status(vec![changed.clone(), new.clone()]), &["new.psd"]),
@@ -791,7 +791,7 @@ mod tests {
 
     #[test]
     fn a_branch_with_no_commits_is_unborn_once_head_has_been_read() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         model.absorb(vec![status(Vec::new())]);
         assert!(!model.unborn, "no HEAD report yet is not an unborn branch");
         model.absorb(vec![head("", 1)]);
@@ -801,7 +801,7 @@ mod tests {
 
     #[test]
     fn detached_names_no_branch_tip() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         model.absorb(vec![StateMsg::Head(HeadMsg {
             oid_hex: ROOT.to_string(),
             branch: String::new(),
@@ -814,7 +814,7 @@ mod tests {
 
     #[test]
     fn the_published_answer_follows_the_commit_it_is_about() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         model.absorb(vec![
             head(ROOT, 1),
             StateMsg::HeadPublished {
@@ -836,7 +836,7 @@ mod tests {
     /// counts: `headSeq` is what a landing arms against.
     #[test]
     fn a_report_that_moved_nothing_still_counts() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         model.absorb(vec![head(ROOT, 1)]);
         model.absorb(vec![head(ROOT, 2)]);
         assert_eq!(model.head_oid, ROOT);
@@ -847,7 +847,7 @@ mod tests {
     /// (`status_seq`).
     #[test]
     fn the_counts_stand_beside_the_report_they_were_read_under() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         model.absorb(vec![
             head(ROOT, 1),
             status_of("main", None, 0, 1, Vec::new()),
@@ -862,7 +862,7 @@ mod tests {
 
     #[test]
     fn the_counts_are_the_branch_they_were_read_with() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         model.absorb(vec![
             head_on("feature", ROOT, 1),
             status_of("feature", Some("origin/feature"), 2, 1, Vec::new()),
@@ -892,7 +892,7 @@ mod tests {
     /// The push destination's own counts go blank with the upstream's.
     #[test]
     fn the_push_destinations_counts_are_the_branch_they_were_read_with() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         let mut read = status_of("feature", Some("origin/feature"), 0, 1, Vec::new());
         if let StateMsg::Status(status) = &mut read {
             status.push_track = platitude_core::remote::PushTrack {
@@ -902,7 +902,7 @@ mod tests {
             };
         }
         model.absorb(vec![head_on("feature", ROOT, 1), read]);
-        let pushes = |model: &WorkingTreeModel| {
+        let pushes = |model: &WorktreeModel| {
             (
                 model.push_tracking.clone(),
                 model.push_ahead,
@@ -921,7 +921,7 @@ mod tests {
 
     #[test]
     fn the_stash_standing_is_settled_off_head_and_the_counts_together() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         model.absorb(vec![head("", 1)]);
         model.absorb(vec![status(vec![StatusItem::Untracked {
             path: "f.txt".to_string(),
@@ -978,7 +978,7 @@ mod tests {
                     "REVERTING",
                 ),
             };
-            let mut model = WorkingTreeModel::default();
+            let mut model = WorktreeModel::default();
             model.settle_op(&state, "");
             assert_eq!(model.op_text, word);
             assert!(model.op_also.is_empty(), "{word}: one operation, one word");
@@ -989,7 +989,7 @@ mod tests {
     /// (`BandStateMetrics.opW`).
     #[test]
     fn a_bisect_takes_the_second_word_and_the_first_when_it_is_alone() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         model.settle_op(
             &OpState {
                 bisecting: true,
@@ -1018,7 +1018,7 @@ mod tests {
 
     #[test]
     fn a_rebase_that_stopped_on_a_pick_is_one_operation_not_two() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         model.settle_op(
             &OpState {
                 rebasing: true,
@@ -1046,7 +1046,7 @@ mod tests {
     };
 
     /// A model whose badge a tick stamped `looked` put at `step` of `steps`.
-    fn ticked(model: &mut WorkingTreeModel, looked: u64, step: u32, steps: u32) {
+    fn ticked(model: &mut WorktreeModel, looked: u64, step: u32, steps: u32) {
         let feed = Arc::new(Feed::default());
         feed.push_replace(OpProgressMsg {
             op_state: REBASING,
@@ -1075,7 +1075,7 @@ mod tests {
     /// looked later lands first, and the status must not take it back.
     #[test]
     fn a_status_that_looked_before_the_tick_does_not_take_the_count_back() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         ticked(&mut model, 5, 7, 10);
         model.absorb(vec![status_looked(3, REBASING, Some((6, 10)))]);
         assert_eq!((model.op_step, model.op_steps), (7, 10));
@@ -1084,7 +1084,7 @@ mod tests {
 
     #[test]
     fn a_status_read_before_the_first_marker_does_not_take_the_badge_down() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         ticked(&mut model, 5, 1, 100);
         model.absorb(vec![status_looked(3, OpState::default(), None)]);
         assert_eq!(model.op_text, "REBASING");
@@ -1093,7 +1093,7 @@ mod tests {
 
     #[test]
     fn the_status_after_the_write_ends_the_badge() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         ticked(&mut model, 5, 9, 10);
         model.absorb(vec![status_looked(8, OpState::default(), None)]);
         assert_eq!(model.op_text, "");
@@ -1102,7 +1102,7 @@ mod tests {
 
     #[test]
     fn a_new_worktree_counts_its_stamps_from_the_start() {
-        let mut model = WorkingTreeModel::default();
+        let mut model = WorktreeModel::default();
         ticked(&mut model, 50, 3, 10);
         model.forget_the_worktree();
         ticked(&mut model, 1, 2, 4);

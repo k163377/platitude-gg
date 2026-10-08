@@ -9,7 +9,7 @@ Rectangle {
     id: sidebar
 
     required property var repoTab
-    required property var workingTree
+    required property var worktree
     required property var branchesModel
     required property var remotesModel
     required property var worktreesModel
@@ -371,7 +371,7 @@ Rectangle {
         parent: sidebar
         addHeld: sidebar.doorsHeld
         repoTab: sidebar.repoTab
-        workingTree: sidebar.workingTree
+        worktree: sidebar.worktree
         rail: rail
         gestures: rowGestures
         paneW: sidebar.width

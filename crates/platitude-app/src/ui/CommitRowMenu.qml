@@ -60,7 +60,7 @@ Item {
     /// How many uncommitted files `--hard` takes besides the commits (`status::Counts::hard_reset_takes`); 0 on a
     /// clean tree.
     required property int hardResetTakes
-    /// Whether what `--hard` takes holds a file the discard record cannot copy (`WorkingTreeModel.hardResetNotCopied`),
+    /// Whether what `--hard` takes holds a file the discard record cannot copy (`WorktreeModel.hardResetNotCopied`),
     /// which holds the row in `danger` (デザイン規約 §長押し の色の表).
     required property bool hardResetNotCopied
     /// git's answers about the branch card's delete (refusal, landing, early check), live while the card stands —
@@ -70,7 +70,7 @@ Item {
     property string checkedBranch: ""
     property string checkedMerged: ""
 
-    /// Move the working tree to the row's name, by the road a double-click takes (`RepoPage.switchToRef`).
+    /// Move the worktree to the row's name, by the road a double-click takes (`RepoPage.switchToRef`).
     signal switchRequested(string kind, string name)
     signal branchHereRequested(string oidHex)
     signal tagHereRequested(string oidHex)
@@ -317,7 +317,7 @@ Item {
         }
         AppMenuSeparator {}
         // The sidebar's `pull` row, in the same seat: a group of its own above the cards, since a pull acts on the
-        // working tree's branch, not this commit (デザイン規約 §取り込んで合流させる).
+        // worktree's branch, not this commit (デザイン規約 §取り込んで合流させる).
         AppMenuItem {
             id: pullCommitItem
             code: "pull"

@@ -4,7 +4,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-// The right-click on a working-tree file row. Every row acts on the pane's chosen files (the click chose the row if
+// The right-click on a worktree file row. Every row acts on the pane's chosen files (the click chose the row if
 // nothing else was).
 //
 // An `Item` because a menu measures the window through the item it was declared under (`AppMenu.ownerItem`).
@@ -12,7 +12,7 @@ Item {
     id: fileRowMenu
 
     required property RepoTab repoTab
-    required property WorkingTreeModel workingTree
+    required property WorktreeModel worktree
     /// Which rows are chosen (`chosenRows()` skips folder rows, which nothing here acts on).
     required property WipPane wipPane
 
@@ -46,7 +46,7 @@ Item {
         fileRowMenu.bucket = bucket
         fileRowMenu.path = path
         fileRowMenu.canWrite = fileRowMenu.repoTab.busyCount === 0
-        fileRowMenu.canStash = fileRowMenu.canWrite && fileRowMenu.workingTree.stashStanding === "ready"
+        fileRowMenu.canStash = fileRowMenu.canWrite && fileRowMenu.worktree.stashStanding === "ready"
         fileRowMenu.plan = fileRowMenu.planDiscard()
         // Rows, not `chosenCount`: a folder in the choice is a chosen key no command here reaches.
         fileRowMenu.count = fileRowMenu.wipPane.chosenRows().length
@@ -75,7 +75,7 @@ Item {
             count: fileRowMenu.repoTab.discardCount,
             only: fileRowMenu.repoTab.discardOnly,
             // Answered before the row is shown, as the colour has to be (デザイン規約 §長押し).
-            unrecorded: GitFacts.discardUnrecorded(fileRowMenu.workingTree.unborn, fileRowMenu.workingTree.notCopied,
+            unrecorded: GitFacts.discardUnrecorded(fileRowMenu.worktree.unborn, fileRowMenu.worktree.notCopied,
                                                    paths)
         }
     }
@@ -123,7 +123,7 @@ Item {
     /// The paths are always named: git walks a bare `mergetool` one file at a time and holds the write queue for the
     /// whole walk.
     function openInMergeTool() {
-        if (fileRowMenu.workingTree.mergeTool === "") {
+        if (fileRowMenu.worktree.mergeTool === "") {
             fileRowMenu.mergeToolWanted()
             return
         }
@@ -139,22 +139,22 @@ Item {
         // Named by branch — during a rebase `--ours` / `--theirs` swap over (デザイン規約 §conflict の ours / theirs).
         // Plain clicks: a conflicted file has no settled version to lose.
         AppMenuItem {
-            text: fileRowMenu.workingTree.sideOurs !== ""
-                  ? qsTr("Keep %1's version").arg(fileRowMenu.workingTree.sideOurs)
+            text: fileRowMenu.worktree.sideOurs !== ""
+                  ? qsTr("Keep %1's version").arg(fileRowMenu.worktree.sideOurs)
                   : qsTr("Keep this branch's version")
             offered: fileRowMenu.bucket === "conflicts" && fileRowMenu.canWrite
             onTriggered: fileRowMenu.takeSideNow("ours")
         }
         AppMenuItem {
-            text: fileRowMenu.workingTree.sideTheirs !== ""
-                  ? qsTr("Take %1's version").arg(fileRowMenu.workingTree.sideTheirs)
+            text: fileRowMenu.worktree.sideTheirs !== ""
+                  ? qsTr("Take %1's version").arg(fileRowMenu.worktree.sideTheirs)
                   : qsTr("Take the incoming version")
             offered: fileRowMenu.bucket === "conflicts" && fileRowMenu.canWrite
             onTriggered: fileRowMenu.takeSideNow("theirs")
         }
         AppMenuItem {
-            text: fileRowMenu.workingTree.mergeTool !== ""
-                  ? qsTr("Edit in %1").arg(fileRowMenu.workingTree.mergeTool)
+            text: fileRowMenu.worktree.mergeTool !== ""
+                  ? qsTr("Edit in %1").arg(fileRowMenu.worktree.mergeTool)
                   : qsTr("Edit in <merge editor>…")
             offered: fileRowMenu.bucket === "conflicts" && fileRowMenu.canWrite
             onTriggered: fileRowMenu.openInMergeTool()

@@ -20,7 +20,7 @@ AppCard {
     /// card — `{mark, markTint, text, tone, ahead, behind}` — or null. Set as the card opens
     /// (`RowHoverHost.openRefList`): the card is measured in that turn, so a later fact would have no room.
     property var mates: []
-    /// The branch the working tree is on; that one leads nowhere.
+    /// The branch the worktree is on; that one leads nowhere.
     property string currentBranch: ""
     /// One was double-clicked: the reader is going there. The whole chip, so its kind travels with it. A single click
     /// never moves (規約 §グラフ行のダブルクリック).

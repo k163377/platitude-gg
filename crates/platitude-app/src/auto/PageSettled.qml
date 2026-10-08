@@ -7,12 +7,12 @@ import QtQuick
 /// `PageSettled.settled()` 1 本」). A sampler waiting for one thing of its own (a tab count, a refs read) keeps its
 /// own wait.
 ///
-/// Every read the page still waits on is a term: stopping at the working tree, the refs and the graph calls a run
+/// Every read the page still waits on is a term: stopping at the worktree, the refs and the graph calls a run
 /// settled while the changed-file list is on its way, and `FileRowDelegate` flips in and out of the census.
 ///
-/// `finishCount > 0` is not the word: the opening log walk races the first status for the working-tree row, and
+/// `finishCount > 0` is not the word: the opening log walk races the first status for the worktree row, and
 /// when the status loses it asks for a rebuild that brings the row a pass later. So the rows must agree with the
-/// status (`GraphModel.wipRow` against `WorkingTreeModel.wipRowStands`, both off
+/// status (`GraphModel.wipRow` against `WorktreeModel.wipRowStands`, both off
 /// `platitude_core::graph::wip_row_stands`).
 /// A graph that could not be walked (`failed` / `stale`) waits for nothing and answers yes with what it holds.
 ///
@@ -45,8 +45,8 @@ QtObject {
             return ["open"]
         const graph = page.pageGraph
         const owed = []
-        if (!page.pageWorkingTree.loaded)
-            owed.push("workingTree")
+        if (!page.pageWorktree.loaded)
+            owed.push("worktree")
         if (!page.pageRefsLoaded)
             owed.push("refs")
         if (!(graph.finishCount > 0))
@@ -56,7 +56,7 @@ QtObject {
         if (!graph.failed && !graph.stale) {
             if (page.pageLanding)
                 owed.push("landing")
-            else if (graph.wipRow !== page.pageWorkingTree.wipRowStands)
+            else if (graph.wipRow !== page.pageWorktree.wipRowStands)
                 owed.push("wipRow")
         }
         if (page.pageGraphPane.placing)

@@ -17,7 +17,7 @@ Item {
 
     required property var page
     required property var repoTab
-    required property var workingTree
+    required property var worktree
     required property var graphModel
     required property var detailsModel
     required property var diffModel
@@ -88,7 +88,7 @@ Item {
         sourceComponent: AutoActDriver {
             page: harness.page
             repoTab: harness.repoTab
-            workingTree: harness.workingTree
+            worktree: harness.worktree
             graphModel: harness.graphModel
             detailsModel: harness.detailsModel
             branchesModel: harness.branchesModel
@@ -158,7 +158,7 @@ Item {
             page: harness.page
             repoTab: harness.repoTab
             graphModel: harness.graphModel
-            workingTree: harness.workingTree
+            worktree: harness.worktree
             branchesModel: harness.branchesModel
             detailsModel: harness.detailsModel
             diffModel: harness.diffModel

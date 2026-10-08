@@ -122,7 +122,7 @@ struct Inner {
     /// last read it off its rows (`session::published`); `None` until a
     /// walk has answered.
     published: Option<HeadPublished>,
-    /// Dirty working tree — one of the two halves that put a synthetic WIP
+    /// Dirty worktree — one of the two halves that put a synthetic WIP
     /// row in front of the log stream (the other is below).
     wip_dirty: bool,
     /// What a standing merge is bringing in (`MERGE_HEAD`), else empty;

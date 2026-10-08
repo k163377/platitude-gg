@@ -63,7 +63,7 @@ mod periodic {
 
     #[tokio::test]
     #[ignore = "duplicates committed_status_fixture_parses: not worth the pre-merge run"]
-    async fn status_buckets_reflect_the_working_tree() {
+    async fn status_buckets_reflect_the_worktree() {
         let repo = dirty_scenario();
         let (executor, cancel) = env();
 

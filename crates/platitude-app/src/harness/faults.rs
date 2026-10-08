@@ -20,7 +20,7 @@ use platitude_core::session::PassStep;
 struct GraphFaults {
     at: std::sync::Mutex<Option<PassStep>>,
     /// Whether every pass must walk as one that began before the first
-    /// status did ([`PassHooks::holds_back_the_working_tree_row`]).
+    /// status did ([`PassHooks::holds_back_the_worktree_row`]).
     /// Raised before the repository is opened, so the opening's own walk
     /// is held too; lowered by the run once it has read the page.
     holds_the_row: std::sync::atomic::AtomicBool,
@@ -79,27 +79,27 @@ impl PassHooks for GraphFaults {
         })
     }
 
-    fn holds_back_the_working_tree_row(&self) -> bool {
+    fn holds_back_the_worktree_row(&self) -> bool {
         self.holds_the_row.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
 /// Raises the hold before anything is opened (`fault_hold_wip_row`).
 #[cfg(feature = "automation")]
-pub(crate) fn hold_the_working_tree_row() {
+pub(crate) fn hold_the_worktree_row() {
     GraphFaults::standing()
         .holds_the_row
         .store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
 #[cfg(not(feature = "automation"))]
-pub(crate) fn hold_the_working_tree_row() {}
+pub(crate) fn hold_the_worktree_row() {}
 
 /// Lowers it and asks the tab's session for the pass that carries the
 /// row, answering whether the hold had been up
-/// (`GraphModel.letTheWorkingTreeRowThrough`).
+/// (`GraphModel.letTheWorktreeRowThrough`).
 #[cfg(feature = "automation")]
-pub(crate) fn let_the_working_tree_row_through(tab_id: i32) -> bool {
+pub(crate) fn let_the_worktree_row_through(tab_id: i32) -> bool {
     let held = GraphFaults::standing()
         .holds_the_row
         .swap(false, std::sync::atomic::Ordering::SeqCst);
@@ -110,7 +110,7 @@ pub(crate) fn let_the_working_tree_row_through(tab_id: i32) -> bool {
 }
 
 #[cfg(not(feature = "automation"))]
-pub(crate) fn let_the_working_tree_row_through(_tab_id: i32) -> bool {
+pub(crate) fn let_the_worktree_row_through(_tab_id: i32) -> bool {
     false
 }
 

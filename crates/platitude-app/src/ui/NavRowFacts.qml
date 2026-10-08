@@ -239,7 +239,7 @@ Item {
         return -1
     }
     /// **A double-click on a line that goes somewhere is two presses of it**, not a double-click on the row — which
-    /// would move the working tree to a name the hand was not on.
+    /// would move the worktree to a name the hand was not on.
     function handDoubled(button) {
         if (facts.swept || facts.row === null || facts.goesAt(facts.pressFrom) !== null)
             return

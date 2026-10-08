@@ -326,7 +326,7 @@ fn an_unnamed_row_stands_nothing_in() {
     assert_eq!(gone.rows(), &Rows::default());
 }
 
-/// The working tree's buckets have rows, but nothing takes one away ahead
+/// The worktree's buckets have rows, but nothing takes one away ahead
 /// of git; the worktrees' section (`worktrees`) does.
 #[test]
 fn only_the_five_sections_that_draw_a_stood_in_row_are_named() {

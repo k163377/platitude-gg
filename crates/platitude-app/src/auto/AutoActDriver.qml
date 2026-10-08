@@ -15,7 +15,7 @@ Item {
     property Item page
 
     property RepoTab repoTab
-    property WorkingTreeModel workingTree
+    property WorktreeModel worktree
     property GraphModel graphModel
     property DetailsModel detailsModel
     property NavSectionModel branchesModel
@@ -169,11 +169,11 @@ Item {
     /// made.
     function owedStatusLanded() {
         return driver.statusOwedFrom !== 0
-            && workingTree.statusSeq >= driver.statusOwedFrom
-            && graphModel.rowOf(workingTree.headOid) >= 0
+            && worktree.statusSeq >= driver.statusOwedFrom
+            && graphModel.rowOf(worktree.headOid) >= 0
             && PageSettled.settled(page)
     }
-    /// The working-tree row this run's write takes out of its bucket, as `<bucket>:<path>` — or "" for the verbs the
+    /// The worktree row this run's write takes out of its bucket, as `<bucket>:<path>` — or "" for the verbs the
     /// write barrier alone answers for. The write barrier already has the model re-read (each feed's drain is queued
     /// ahead of the tab's settle), but a settle also comes for a write git refused and for one whose re-read failed
     /// (`WriteSettled.failed` never reaches the tab): the row leaving is what says this write landed — a refusal
@@ -182,7 +182,7 @@ Item {
     property string treeGoneRow: ""
     /// The graph row this run's write takes off the graph, or "" for the verbs the write barrier alone answers for.
     /// Until the row is gone from the model, rows can wear each other's marks (a popped stash's box on the
-    /// working-tree row); a pass counter would also move for passes nobody here asked for. The write barrier's settle
+    /// worktree row); a pass counter would also move for passes nobody here asked for. The write barrier's settle
     /// is no proof the row went: it also comes for a refused write and a failed re-read (see `treeGoneRow`).
     ///
     /// **Stash verbs only as it stands**: `graphBarrier` also holds for the stash total moving, so a non-stash write
@@ -543,9 +543,9 @@ Item {
             // `landed=` tells a file resolved into the index from one discarded out of the tree ("" = nowhere).
             Harness.report("tree_settled from=" + from
                               + " landed=" + unstagedModel.bucketOf(path)
-                              + " conflicts=" + workingTree.conflictCount
-                              + " staged=" + workingTree.stagedCount
-                              + " unstaged=" + (workingTree.unstagedCount + workingTree.untrackedCount))
+                              + " conflicts=" + worktree.conflictCount
+                              + " staged=" + worktree.stagedCount
+                              + " unstaged=" + (worktree.unstagedCount + worktree.untrackedCount))
             driver.afterTreeSettled()
         }
     }
@@ -593,7 +593,7 @@ Item {
             }
             // `open` only means the path was accepted; the baseline is HEAD known and `PageSettled` — without the rows
             // agreeing with the status, a verb naming rows by number (`3:5:6`) presses one row off.
-            if (repoTab.state !== "open" || !workingTree.headKnown || !PageSettled.settled(page))
+            if (repoTab.state !== "open" || !worktree.headKnown || !PageSettled.settled(page))
                 return
             autoActTimer.stop()
             driver.runAutoAct()
@@ -603,7 +603,7 @@ Item {
     // repository is built fresh every run, so its object names cannot be spelled ahead.
     function autoActOid(arg) {
         if (arg === "")
-            return workingTree.headOid
+            return worktree.headOid
         if (arg.indexOf("row:") === 0)
             return graphModel.oidAt(Number(arg.substring(4)))
         return arg

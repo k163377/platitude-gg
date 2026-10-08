@@ -4,7 +4,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The file rows of the working tree: the menu a row opens, the whole-bucket moves, and the reads an opening
+/// The file rows of the worktree: the menu a row opens, the whole-bucket moves, and the reads an opening
 /// fires.
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
@@ -16,7 +16,7 @@ Item {
     // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workingTree: driver.workingTree
+    readonly property var worktree: driver.worktree
     readonly property var graphModel: driver.graphModel
     readonly property var branchesModel: driver.branchesModel
     readonly property var wipPane: driver.wipPane
@@ -70,10 +70,10 @@ Item {
                 return
             // Counts first: the headings are the list's, and trail the model's counts.
             const emptied = bucketAllTimer.from === "staged"
-                          ? workingTree.stagedCount
+                          ? worktree.stagedCount
                           : bucketAllTimer.from === "conflicts"
-                          ? workingTree.conflictCount
-                          : workingTree.unstagedCount + workingTree.untrackedCount
+                          ? worktree.conflictCount
+                          : worktree.unstagedCount + worktree.untrackedCount
             if (emptied !== 0)
                 return
             bucketAllTimer.stop()
@@ -84,9 +84,9 @@ Item {
                               + " staged=" + wipPane.bucketHeaded("staged")
                               + " conflicts=" + wipPane.bucketHeaded("conflicts")
                               + " unstaged_count="
-                              + (workingTree.unstagedCount + workingTree.untrackedCount)
-                              + " staged_count=" + workingTree.stagedCount
-                              + " conflict_count=" + workingTree.conflictCount)
+                              + (worktree.unstagedCount + worktree.untrackedCount)
+                              + " staged_count=" + worktree.stagedCount
+                              + " conflict_count=" + worktree.conflictCount)
             renderedBarrier.begin()
         }
     }
@@ -159,7 +159,7 @@ Item {
             // consumed) chooses nothing, and `openInMergeTool` then queues no write.
             const handed = fileRowMenu.chosenConflicts().length
             fileRowMenu.openInMergeTool()
-            Harness.report("merge_tool " + wipPane.workingTree.mergeTool + " paths=" + handed)
+            Harness.report("merge_tool " + wipPane.worktree.mergeTool + " paths=" + handed)
             // Only where something was handed over — else the barrier reports a landing nothing here caused.
             if (handed > 0)
                 driver.treeGoneRow = "conflicts:" + arg
@@ -210,7 +210,7 @@ Item {
                     || branchesModel.headBehind < 1)
                 return
             // The fetched row arrives chipless and takes the remote name a pass later. Row zero is that row: the
-            // preset opens on a clean tree, so no working-tree row stands above it.
+            // preset opens on a clean tree, so no worktree row stands above it.
             const topChips = GitFacts.chipsShown(graphModel.labelsAt(0), graphModel.goneChips)
             if (topChips.length === 0)
                 return

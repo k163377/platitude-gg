@@ -283,10 +283,10 @@ twin	ref-list-lit 1:1 --preset tags	ref-list-lit 0:1 --preset tags	Rests on v1.0
 twin	rename-branch main-renamed	rename-local-upstream main-renamed	Same input and page path; this one only stops earlier (write barrier, with the carry bar still arriving) and judges nothing.
 twin	rename-taken --allow-write-failure	rename-taken feature/topic-a --allow-write-failure	Arg-less run submits an empty name the product never sends (NavNameBox.qml blocks Enter on a refused box; validRefName("") already refuses). Only git's words differ.
 twin	replace-remote origin/main:main-2	replace-remote origin/main:renamed	The two plain lines differ only in the new name and take the same askReplaceRemote branch (no ref-specific logic).
-twin	row-card	row-card 7 --preset edges	Arg "" is row 0 = basic's working-tree row. The product never opens a card there (GraphRowDelegate.qml partAt answers "" for isWip)
+twin	row-card	row-card 7 --preset edges	Arg "" is row 0 = basic's worktree row. The product never opens a card there (GraphRowDelegate.qml partAt answers "" for isWip)
 twin	row-card 5 --preset carried --scroll-to top	row-card 7 --preset edges	A card the product never opens (another worktree's row, P3-確認事項.md), and run-dependently a real commit's card instead; the judgement passes either way.
 twin	stage-all	stage-all --preset dirty	Same slot, completion and must_say as stage-all --preset dirty.
-twin	stash-pop-row	stash-pop-row --preset stashes	On basic the working-tree row already leads before the pop, so top=wip does not discriminate
+twin	stash-pop-row	stash-pop-row --preset stashes	On basic the worktree row already leads before the pop, so top=wip does not discriminate
 twin	switch feature/topic-a	dbl-local feature/topic-a	Same preset, arg, completion (write barrier) and judgement as dbl-local, which enters one step higher (activateChip->switchToRef->switchTo) and so covers this whole path.
 twin	switch-remote origin/feature/remote-only	switch-remote-twice origin/feature/remote-only	Same run as dbl-remote (activateChip only wraps switchToRef); switch-remote-twice makes the same first press on the same arg/preset and is judged at the later landing.
 twin	tab-edge	tab-edge 0	Exact duplicate of tab-edge 0: an empty arg is 0, same fixture, same row (window.rs). The same bare/0 pair exists for tab-pin in another slice.

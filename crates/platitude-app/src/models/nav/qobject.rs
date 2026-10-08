@@ -116,21 +116,21 @@ impl NavSectionModel {
 
     /// Wires this instance to one section's data feed. `section`:
     /// `branches` / `remotes` / `worktrees` / `stashes` / `tags`. The
-    /// working tree's changed files come through [`Self::attach_working_tree`].
+    /// worktree's changed files come through [`Self::attach_worktree`].
     #[qslot]
     fn attach_section(&mut self, tab_id: i32, section: String) {
         self.attach_section_feed(tab_id, section);
     }
 
-    /// Wires this instance to one bucket run of the working tree's changed
+    /// Wires this instance to one bucket run of the worktree's changed
     /// files — `conflicts` / `unstaged` / `staged`, each a list with its
     /// own share and scroll of the WIP pane.
     ///
     /// Only what is **shown** is one run's: every instance holds the whole
     /// status, so a page can ask any of them about any file.
     #[qslot]
-    fn attach_working_tree(&mut self, tab_id: i32, run: String) {
-        self.attach_working_tree_feed(tab_id, run);
+    fn attach_worktree(&mut self, tab_id: i32, run: String) {
+        self.attach_worktree_feed(tab_id, run);
     }
 
     /// Wires this instance to **another** worktree's changed files, as
@@ -200,7 +200,7 @@ impl NavSectionModel {
         self.changed();
     }
 
-    /// Switches the working-tree list between tree and flat-path display.
+    /// Switches the worktree list between tree and flat-path display.
     #[qslot]
     fn set_tree_view(&mut self, tree: bool) {
         if self.tree_view == tree {
@@ -599,7 +599,7 @@ impl NavSectionModel {
         self.local_name_of(&remote_ref)
     }
 
-    /// The two stage letters git reports for a working-tree path (`UU`,
+    /// The two stage letters git reports for a worktree path (`UU`,
     /// `DU`, …); empty for any path that is not in this section. By path,
     /// all the diff pane holds: a conflict git prints no patch for is
     /// described by what the two sides did.

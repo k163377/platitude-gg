@@ -1,4 +1,4 @@
-//! Whose doing an empty working tree is, at each of the moments that
+//! Whose doing an empty worktree is, at each of the moments that
 //! decide it — the press, the answer, and the status whose counts can
 //! speak for that answer, in either order.
 

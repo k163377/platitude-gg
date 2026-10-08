@@ -497,11 +497,11 @@ impl RepoSession {
             record.footer = Some(walk_footer);
             // The walk's, less what a delete out now took off it.
             let footer = leaving::footer_without(walk_footer, &gone);
-            // Every pass speaks while the working-tree row is held back
-            // ([`PassHooks::holds_back_the_working_tree_row`]): after a
+            // Every pass speaks while the worktree row is held back
+            // ([`PassHooks::holds_back_the_worktree_row`]): after a
             // stopped replay that row is the only difference, so the pass
             // would be dropped as the same picture. Only a harness raises it.
-            let unchanged = !self.holds_back_the_working_tree_row() && shared.shows(&rows, footer);
+            let unchanged = !self.holds_back_the_worktree_row() && shared.shows(&rows, footer);
             shared.builder = builder;
             shared.publish_marks = marks;
             shared.applied = applied;

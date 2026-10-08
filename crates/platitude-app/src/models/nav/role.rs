@@ -7,7 +7,7 @@ use super::*;
 ///
 /// `from` is where in the whole name the shown segment begins, written by
 /// whichever tree placed the row: the refs tree (one folder per `/`) and
-/// the working tree's (single-child chains compacted) disagree on it.
+/// the worktree's (single-child chains compacted) disagree on it.
 pub(super) enum Arranged {
     At { at: u32, depth: i32, from: u32 },
     Made(Box<NavItem>),

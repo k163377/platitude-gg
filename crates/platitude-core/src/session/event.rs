@@ -134,7 +134,7 @@ pub enum SessionEvent {
         path: String,
         /// The name the header says — the worktree's own.
         name: String,
-        status: WorkingTreeStatus,
+        status: WorktreeStatus,
     },
     /// A read the page's pace started has ended (`session::pacer`): this
     /// tree's when `worktree` is `None`, else another worktree's, by the
@@ -145,7 +145,7 @@ pub enum SessionEvent {
         worktree: Option<String>,
     },
     StatusLoaded {
-        status: WorkingTreeStatus,
+        status: WorktreeStatus,
         /// The [`HeadObserved::seq`](SessionEvent::HeadObserved) this
         /// status stands beside, taken after the read's own HEAD went into
         /// the record. Tells a consumer the counts are about the HEAD it

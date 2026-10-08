@@ -18,7 +18,7 @@ Item {
 
     /// Word lists as `offers::RefMenuOffers::words` answers them — data, not a rule.
     readonly property var free: ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream"]
-    /// The branch the working tree is on: no move, no delete, and the rows say so.
+    /// The branch the worktree is on: no move, no delete, and the rows say so.
     readonly property var current: ["branch-here", "integrate", "set-upstream", "current"]
     /// One another worktree holds: `switch` stays and leads there without asking, the delete goes.
     readonly property var held: ["switch", "branch-here", "integrate", "set-upstream"]

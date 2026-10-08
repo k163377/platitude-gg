@@ -62,7 +62,7 @@ fn strip_count(verb: &str, arg: &str) -> Result<usize, String> {
 /// `count` repositories off the ladder, the last of them built to
 /// `front`: the tab opened last is the one in front, the page in the
 /// picture and the only one the band shows a state for
-/// (`BandStateGroup.stateWorkingTree`). The rest are `empty` — the subject is the
+/// (`BandStateGroup.stateWorktree`). The rest are `empty` — the subject is the
 /// strip above them.
 fn named_strip(count: usize, front: &str, verb: &str) -> Result<Vec<PathBuf>, String> {
     let mut made = Vec::with_capacity(count);

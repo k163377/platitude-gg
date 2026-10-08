@@ -17,7 +17,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var graphModel: driver.graphModel
-    readonly property var workingTree: driver.workingTree
+    readonly property var worktree: driver.worktree
     readonly property var unstagedModel: driver.unstagedModel
     readonly property var graphPane: driver.graphPane
     readonly property var wipPane: driver.wipPane
@@ -71,7 +71,7 @@ Item {
         return true
     }
     function headRow() {
-        return acts.graphModel.rowOf(acts.workingTree.headOid)
+        return acts.graphModel.rowOf(acts.worktree.headOid)
     }
     /// The diff opens first, then a drag from the head of the first line past the first removed one, then the hand
     /// arrives on the text (`DiffPane.handArrived`, the wheel's and a press's door for the keyboard).

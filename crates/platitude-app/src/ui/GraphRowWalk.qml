@@ -65,7 +65,7 @@ Item {
         return top + Theme.graphRowHeight > walk.view.contentY && top < walk.view.contentY + walk.view.height
     }
     /// The menu key on the history (デザイン規約 §メニュー のキーボード): the current row's own right-click
-    /// (`GraphRowDelegate.askMenu` — the choice drawn in to that row, and its menu, none on the working tree's row),
+    /// (`GraphRowDelegate.askMenu` — the choice drawn in to that row, and its menu, none on the worktree's row),
     /// standing under the row's left end. The row comes on screen first as a step lands on it: as little as will do,
     /// into the middle from out of sight. Only while the list holds the keyboard — the window hands Shift+F10 to the
     /// nearest surface up from whatever does (`KeyMenu.answer`). Says whether a row was asked.

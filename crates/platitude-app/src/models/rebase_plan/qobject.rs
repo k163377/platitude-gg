@@ -306,7 +306,7 @@ impl RebasePlanModel {
         self.stale_plan();
     }
 
-    /// The operation the status now reads as standing (`workingTree.opText`,
+    /// The operation the status now reads as standing (`worktree.opText`,
     /// empty = none); one under an open plan puts it away. `noteHead`
     /// alone misses it — a merge stopped on a conflict leaves HEAD where it
     /// was — and core refusing the run does not take the button away.

@@ -20,7 +20,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var graphModel: driver.graphModel
-    readonly property var workingTree: driver.workingTree
+    readonly property var worktree: driver.worktree
     readonly property var detailsModel: driver.detailsModel
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
@@ -59,7 +59,7 @@ Item {
     /// each off the timer's count.
     function seat(name) {
         if (name === "files" || name === "block")
-            return acts.detailsSeat(name, workingTree.headOid)
+            return acts.detailsSeat(name, worktree.headOid)
         if (name === "description" || name === "summary")
             return acts.detailsSeat(name, graphModel.oidAt(acts.longMessageRow))
         if (name === "chosen")
@@ -141,7 +141,7 @@ Item {
     }
 
     /// The right pane on one commit, put there through the page's own door: a page on a dirty tree opens on the
-    /// working tree (`RepoPage.trySelectDefault`).
+    /// worktree (`RepoPage.trySelectDefault`).
     function detailsSeat(name, oid) {
         if (oid === "")
             return acts.waiting("the commit's row")
@@ -164,7 +164,7 @@ Item {
     function wipSeat(name) {
         if (!page.wipShown) {
             page.showWip()
-            return acts.waiting("the working tree's face")
+            return acts.waiting("the worktree's face")
         }
         const commitBlock = wipPane.commitBlock
         if (name === "wip-files") {
@@ -188,7 +188,7 @@ Item {
                 wipPane.setMessage(acts.longSubject(), "")
             return acts.boxSeat(commitBlock.summaryHand, () => commitBlock.summaryAt)
         }
-        return acts.waiting("a surface of the working tree's this verb knows")
+        return acts.waiting("a surface of the worktree's this verb knows")
     }
     function longBody() {
         let lines = []
@@ -236,7 +236,7 @@ Item {
     function refListSeat() {
         const card = driver.refList
         if (!card.opened) {
-            const row = graphModel.rowOf(workingTree.headOid)
+            const row = graphModel.rowOf(worktree.headOid)
             const stacked = row >= 0 ? graphPane.view.itemAtIndex(row) : null
             if (!stacked)
                 return acts.waiting("HEAD's row")
@@ -290,7 +290,7 @@ Item {
     /// its rows run past the pane.
     function planSeat() {
         if (!page.planShown) {
-            const fromOid = graphModel.oidAt(graphModel.rowOf(workingTree.headOid) + acts.planBack)
+            const fromOid = graphModel.oidAt(graphModel.rowOf(worktree.headOid) + acts.planBack)
             if (fromOid === "")
                 return acts.waiting("the row the plan opens from")
             page.openRowMenu(fromOid)

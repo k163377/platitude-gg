@@ -251,7 +251,7 @@ fn split_item(r: SplitRow) -> DiffLineItem {
     item
 }
 
-/// Which diff a working-tree bucket asks for — shared by the click's
+/// Which diff a worktree bucket asks for — shared by the click's
 /// request and the tick's re-read, so they cannot address different files
 /// under one name.
 pub(super) fn bucket_target(bucket: &str, path: &str, orig_path: String) -> DiffTarget {

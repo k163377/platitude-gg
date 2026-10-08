@@ -9,4 +9,4 @@ cargo test -p platitude-core --test it -- --ignored capture
 ```
 
 実行後、`git diff` で差分をレビューしてからコミットする。生成シナリオは
-`tests/it/working_tree_state.rs` の `capture_fixtures` テストに定義されている。
+`tests/it/worktree_state.rs` の `capture_fixtures` テストに定義されている。

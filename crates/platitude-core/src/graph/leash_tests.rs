@@ -6,16 +6,16 @@ use super::*;
 use crate::model::StrPool;
 use crate::oid::Oid;
 use crate::opstate::OpState;
-use crate::status::{StatusItem, WorkingTreeStatus};
+use crate::status::{StatusItem, WorktreeStatus};
 
 #[test]
 fn the_wip_row_stands_for_a_clean_tree_under_an_operation_but_not_under_a_bisect() {
-    let clean = WorkingTreeStatus::default();
-    let dirty = WorkingTreeStatus {
+    let clean = WorktreeStatus::default();
+    let dirty = WorktreeStatus {
         items: vec![StatusItem::Untracked {
             path: "scratch.txt".into(),
         }],
-        ..WorkingTreeStatus::default()
+        ..WorktreeStatus::default()
     };
     assert!(!wip_row_stands(&clean, &OpState::default()));
     assert!(wip_row_stands(&dirty, &OpState::default()));
@@ -301,7 +301,7 @@ fn duplicate_parent_merge_keeps_an_unrelated_leash_dashed() {
     assert!(into.dashed);
 }
 
-/// A merge stopped in the working tree: the row for the uncommitted
+/// A merge stopped in the worktree: the row for the uncommitted
 /// files is the merge commit it is about to become, so the side being
 /// brought in hangs off it too — on a leash of its own, beside HEAD's.
 #[test]

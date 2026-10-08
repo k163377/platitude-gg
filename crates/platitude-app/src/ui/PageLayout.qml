@@ -16,7 +16,7 @@ QtObject {
     required property Item page
 
     required property SidebarPane sidebarPane
-    /// The seat the working-tree and details panes share — `SplitView` measures the seat.
+    /// The seat the worktree and details panes share — `SplitView` measures the seat.
     required property Item rightPane
     /// The log's seat in the vertical split. The height is the seat's even while the log is down.
     required property Item commandsSeat
@@ -73,7 +73,7 @@ QtObject {
     /// `bottomMargin`.
     readonly property int commandsMinHeight:
         Theme.headerHeight + Theme.rowHeight + Theme.fontSmLine + 2 * Theme.spaceXs + Theme.spaceXs
-    /// Whether the working-tree pane scrolls past its bottom — its blocks keep their heights (`window-floor wip`).
+    /// Whether the worktree pane scrolls past its bottom — its blocks keep their heights (`window-floor wip`).
     readonly property bool wipBlockScrolls: layout.wipPane.blockScrolls
     /// …and how far the commit-details pane runs past its bottom.
     readonly property real detailsOverHeight: layout.detailsPane.contentOverHeight

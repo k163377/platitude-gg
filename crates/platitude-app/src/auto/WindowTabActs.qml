@@ -86,7 +86,7 @@ Item {
             // survived the close or never opened (`AutoActDriver`'s baseline).
             const kept = window.curPage
             if (kept === null || kept.pageTab.state !== "open"
-                    || !kept.pageWorkingTree.loaded || kept.pageGraph.finishCount === 0)
+                    || !kept.pageWorktree.loaded || kept.pageGraph.finishCount === 0)
                 return
             stop()
             // `gone=` leads: a count that merely fell would pass with the wrong tab closed.
@@ -117,7 +117,7 @@ Item {
                 // page then has to open.
                 const front = window.curPage
                 if (front === null || front.pageTab.state !== "open"
-                        || !front.pageWorkingTree.loaded || front.pageGraph.finishCount === 0)
+                        || !front.pageWorktree.loaded || front.pageGraph.finishCount === 0)
                     return
                 const asked = (Harness.autoActArg || "3:1").split(":")
                 tabDragTimer.from = Number(asked[0])
@@ -156,7 +156,7 @@ Item {
                     return
                 const front = window.curPage
                 if (front === null || front.pageTab.state !== "open"
-                        || !front.pageWorkingTree.loaded || front.pageGraph.finishCount === 0)
+                        || !front.pageWorktree.loaded || front.pageGraph.finishCount === 0)
                     return
                 tabHoldTimer.requested = topBar.holdTabAt(Number(Harness.autoActArg || 0))
                 return
@@ -190,7 +190,7 @@ Item {
                     return
                 const front = window.curPage
                 if (front === null || front.pageTab.state !== "open"
-                        || !front.pageWorkingTree.loaded || front.pageGraph.finishCount === 0)
+                        || !front.pageWorktree.loaded || front.pageGraph.finishCount === 0)
                     return
                 if (!tabEdgeTimer.sized) {
                     window.width = Math.ceil(window.floorWidth)
@@ -376,13 +376,13 @@ Item {
                 return
             }
             if (acts.standsIn(page, worktreeMadeTimer.from) || !PageSettled.settled(page)
-                    || page.pageWorkingTree.branch === "")
+                    || page.pageWorktree.branch === "")
                 return
             stop()
             const where = page.pageTab.repoPath
             Harness.report("worktree_made stood=" + !acts.standsIn(page, worktreeMadeTimer.from)
                               + " worktree=" + GitFacts.pathLeaf(where)
-                              + " branch=" + page.pageWorkingTree.branch
+                              + " branch=" + page.pageWorktree.branch
                               + " tabs=" + pageRepeater.count
                               + " kept=" + acts.standKept(page)
                               + " log=" + page.commandsOpen
@@ -408,7 +408,7 @@ Item {
         /// Whether the tab has answered for where it now stands (`RepoTab.standing`).
         function settled(page, worktree) {
             return page !== null && page.pageTab.state === "open" && !page.pageTab.standing
-                   && page.pageWorkingTree.loaded && acts.standsIn(page, worktree)
+                   && page.pageWorktree.loaded && acts.standsIn(page, worktree)
         }
         /// The WORKTREES row naming `worktree`, activated the way a double-click does. Answers whether it was there.
         function standIn(page, worktree) {
@@ -425,7 +425,7 @@ Item {
         onTriggered: {
             const page = window.curPage
             if (page === null || page.pageTab.state !== "open" || page.pageTab.standing
-                    || !page.pageWorkingTree.loaded || page.pageGraph.finishCount === 0)
+                    || !page.pageWorktree.loaded || page.pageGraph.finishCount === 0)
                 return
             if (worktreeDraftTimer.step === 0) {
                 const trees = page.pageSidebar.worktreesModel
@@ -535,7 +535,7 @@ Item {
         readonly property bool comesBack: (Harness.autoActArg || "").indexOf("away") < 0
         function whole(page) {
             return page !== null && page.pageTab.state === "open"
-                   && page.pageWorkingTree.loaded && page.pageGraph.finishCount > 0
+                   && page.pageWorktree.loaded && page.pageGraph.finishCount > 0
         }
         function tell(page) {
             tabProbe.settleStrip()
@@ -638,7 +638,7 @@ Item {
             // And the front tab showing its repository (`middle-close` above, same baseline).
             const front = window.curPage
             if (front === null || front.pageTab.state !== "open"
-                    || !front.pageWorkingTree.loaded || front.pageGraph.finishCount === 0)
+                    || !front.pageWorktree.loaded || front.pageGraph.finishCount === 0)
                 return
             stop()
             Harness.report("open_again tabs=" + pageRepeater.count
@@ -668,7 +668,7 @@ Item {
         property bool otherEmpty: false
         function whole(page) {
             return page !== null && page.pageTab.state === "open"
-                   && page.pageWorkingTree.loaded && page.pageGraph.finishCount > 0
+                   && page.pageWorktree.loaded && page.pageGraph.finishCount > 0
         }
         onTriggered: {
             const page = window.curPage

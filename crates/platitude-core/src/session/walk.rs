@@ -94,7 +94,7 @@ impl RepoSession {
             shown,
         } = inputs;
         let Some(head_tip) = head_tip else {
-            // Unborn HEAD: nothing to log, but the working-tree row can
+            // Unborn HEAD: nothing to log, but the worktree row can
             // still stand on its own where the first commit will.
             let mut totals = LogTotals::default();
             if self.pending_commit().is_some() {
@@ -304,8 +304,8 @@ impl RepoSession {
     /// tip names and no edge reaches.
     pub(super) fn pending_commit(&self) -> Option<Vec<Oid>> {
         // Held back where a harness asked
-        // ([`PassHooks::holds_back_the_working_tree_row`]).
-        if self.holds_back_the_working_tree_row() {
+        // ([`PassHooks::holds_back_the_worktree_row`]).
+        if self.holds_back_the_worktree_row() {
             return None;
         }
         let incoming = self.standing.merge_incoming();
@@ -313,7 +313,7 @@ impl RepoSession {
         stacked.then_some(incoming)
     }
 
-    /// Sends the working-tree row for a branch with no commits yet.
+    /// Sends the worktree row for a branch with no commits yet.
     fn emit_wip_root_row(&self, generation: u64) {
         let Some(mut guard) = self.store_shared() else {
             return;

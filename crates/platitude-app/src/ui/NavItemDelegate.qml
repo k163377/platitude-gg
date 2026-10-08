@@ -78,13 +78,13 @@ Item {
     property real boxRowsHeight: 0
     // Shows the hover stage/unstage affordance (WIP view).
     property bool showStage: false
-    /// Whether this row is one of those chosen (working-tree list). Held by the list: delegates are recycled.
+    /// Whether this row is one of those chosen (worktree list). Held by the list: delegates are recycled.
     property bool chosen: false
     /// The pointer is on another chosen row's stage affordance, and this row goes with it: what one press moves is
     /// seen before it is pressed (デザイン規約 §その他の操作).
     property bool stagePeer: false
     /// What each side of a conflict is called. **The two swap over during a rebase**, so they come from the model
-    /// (`WorkingTreeModel.sideOurs` / `sideTheirs`); empty where git left nothing to name a side by.
+    /// (`WorktreeModel.sideOurs` / `sideTheirs`); empty where git left nothing to name a side by.
     property string sideOurs: ""
     property string sideTheirs: ""
 
@@ -122,7 +122,7 @@ Item {
     readonly property bool litNow: chosenBox.visible
 
     signal refClicked(string oidHex)
-    /// A working-tree file row was clicked. `modifiers` carries Ctrl and Shift, which choose several rows.
+    /// A worktree file row was clicked. `modifiers` carries Ctrl and Shift, which choose several rows.
     signal fileClicked(string bucket, string path, string origPath, int modifiers)
     signal folderClicked(string key)
     signal stageClicked(string bucket, string path)
@@ -143,7 +143,7 @@ Item {
     /// Right-click on a remote's own row, the only folder row with anything behind it (デザイン規約 §左メニューの所作).
     /// Its own signal because a remote is configuration and opens a different menu.
     signal remoteMenuRequested(string name)
-    /// Right-click on a working-tree file row. The menu reads a rename's two names off the chosen rows (`orig_path`).
+    /// Right-click on a worktree file row. The menu reads a rename's two names off the chosen rows (`orig_path`).
     signal fileMenuRequested(string bucket, string path)
 
     /// A row's height of ground at this row's foot for the stand-in of a current branch a fold closed over
@@ -286,7 +286,7 @@ Item {
     }
     /// A delegate the view pools is off screen, and one it uses again is another row (`ListView.reuseItems`): what the
     /// hand found on it does not carry over — its light would land on a row nobody walked to, its rest open it. Only
-    /// where the hand is counted; the working tree's rows take Qt's hover itself.
+    /// where the hand is counted; the worktree's rows take Qt's hover itself.
     function forgetHand() {
         if (!navRow.handCounted)
             return
@@ -371,7 +371,7 @@ Item {
     // Which row the hand is on — a handler, for the reason `pointed` gives.
     // **Where a panel counts the hand, nothing is written from here**: hover follows the item, not the hand, so rows
     // growing or a list scrolling under a still pointer would light rows the reader never walked to
-    // (`tests/qml/tst_hoverunderstillhand.qml`). `syncHover` reads this on each hand move instead. The working tree's
+    // (`tests/qml/tst_hoverunderstillhand.qml`). `syncHover` reads this on each hand move instead. The worktree's
     // rows never move under a resting hand, and take the event.
     // **On `rowGround`, not the whole item**: a `HoverHandler` takes its item's full face, and the seat at this row's
     // foot (`pinSeat`) is not this row (rules-refs/app-ui.md の「親アイテムの全面」の行).
@@ -644,7 +644,7 @@ Item {
         // 1 行), in the words its mark uses (§リモートを書き留める).
         if (navRow.holdsOrigin)
             return qsTr("origin (default remote) — %1").arg(full)
-        // Every folder row says its own path: in the working tree's list it rides in `orig_path`, and a ref folder's
+        // Every folder row says its own path: in the worktree's list it rides in `orig_path`, and a ref folder's
         // fold key is its path.
         if (navRow.folder)
             return navRow.kindHint === "file" ? navRow.orig_path : full

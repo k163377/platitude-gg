@@ -15,7 +15,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workingTree: driver.workingTree
+    readonly property var worktree: driver.worktree
     readonly property var graphModel: driver.graphModel
     readonly property var wipPane: driver.wipPane
     readonly property var planPane: driver.planPane
@@ -39,7 +39,7 @@ Item {
                        : act === "rebase-plan-run" || act === "plan-fold-carry" ? 2
                        : 1
             const fromOid = arg !== "" ? driver.autoActOid(arg)
-                          : graphModel.oidAt(graphModel.rowOf(workingTree.headOid) + back)
+                          : graphModel.oidAt(graphModel.rowOf(worktree.headOid) + back)
             page.openRowMenu(fromOid)
             page.startRebasePlan(fromOid)
             commitMenu.close()
@@ -56,7 +56,7 @@ Item {
             // `rebase_plan::drain_tests`. The row has to be named (`row:0`): the commit no branch of `one-commit`
             // sees is not under the tip.
             const refusedOid = arg !== "" ? driver.autoActOid(arg)
-                             : graphModel.oidAt(graphModel.rowOf(workingTree.headOid) + 1)
+                             : graphModel.oidAt(graphModel.rowOf(worktree.headOid) + 1)
             page.openRowMenu(refusedOid)
             page.startRebasePlan(refusedOid)
             commitMenu.close()
@@ -65,7 +65,7 @@ Item {
             driver.barrierNotice.start()
         } else if (act === "plan-amend-kept") {
             // A half-written amend, then a plan opened from HEAD's own row (`planAmendTimer`).
-            const tip = workingTree.headOid
+            const tip = worktree.headOid
             page.jumpToRef(tip)
             planAmendTimer.begin(tip)
         } else {
@@ -127,7 +127,7 @@ Item {
                 // nothing selected photographs the same.
                 plan.setAction(1, "squash")
                 plan.setAction(2, "drop")
-                page.activateRow(workingTree.headOid)
+                page.activateRow(worktree.headOid)
                 Harness.report("rebase_plan rows=" + plan.stepCount + " dirty=" + plan.dirty
                                   + " drops=" + plan.dropCount + " onto=" + (plan.ontoRef !== "")
                                   + " pushed=" + page.planPushed + " selected=" + plan.selectedRow)
@@ -136,7 +136,7 @@ Item {
                 // The barrier is the old head's row going and the new one standing, not the dropped row — origin
                 // still reaches it (rules-refs/app-ui.md「プラン実行の write barrier」).
                 plan.setAction(plan.stepCount - 1, "drop")
-                planRanTimer.begin(workingTree.headOid)
+                planRanTimer.begin(worktree.headOid)
                 // Not through `pressWrite`, as for the edit stop below: the plan's door hands the tab no id.
                 plan.runPlan()
             } else if (planOpenTimer.act === "plan-details-held") {
@@ -205,14 +205,14 @@ Item {
         }
         onTriggered: {
             if (planRanTimer.answeredOp === "" || repoTab.busyCount !== 0 || page.rebasePlan.active
-                    || workingTree.headOid === planRanTimer.headBefore
-                    || workingTree.headOid === ""
-                    || graphModel.rowOf(workingTree.headOid) < 0
+                    || worktree.headOid === planRanTimer.headBefore
+                    || worktree.headOid === ""
+                    || graphModel.rowOf(worktree.headOid) < 0
                     || graphModel.rowOf(planRanTimer.headBefore) >= 0)
                 return
             planRanTimer.stop()
             Harness.report("rebase_plan_ran op=" + planRanTimer.answeredOp
-                              + " moved=" + (workingTree.headOid !== planRanTimer.headBefore)
+                              + " moved=" + (worktree.headOid !== planRanTimer.headBefore)
                               + " gone=" + (graphModel.rowOf(planRanTimer.headBefore) < 0)
                               + " stopped=" + planRanTimer.answeredStopped
                               + " plan=" + page.rebasePlan.active
@@ -250,7 +250,7 @@ Item {
     // Also waited out: the WORKTREES listing read after the write, and the walk behind it. The listing is a read of
     // its own, landing apart from the status that raises the edit marker (`session::write::settle_after`), so a shot
     // on the status alone can name the main worktree by the branch the stop left; the walk comes after both, and draws
-    // the working-tree row the standing operation holds open (`PageSettled`).
+    // the worktree row the standing operation holds open (`PageSettled`).
     SampleTimer {
         id: planEditStopTimer
         /// The rebase's `reads_from` (`RepoTab.writeAnswerReadsFrom`), -1 until its answer is in: a listing that
@@ -266,16 +266,16 @@ Item {
                     "answer": answered,
                     "idle": repoTab.busyCount === 0,
                     "wip": page.wipShown,
-                    "editing": workingTree.opEditing,
+                    "editing": worktree.opEditing,
                     "worktrees": answered
                                  && driver.worktreesModel.listingLooked() >= planEditStopTimer.listingFrom,
                     "page": PageSettled.settled(page)
                 }))
                 return
             planEditStopTimer.stop()
-            Harness.report("edit_stop editing=" + workingTree.opEditing
-                              + " skipfree=" + workingTree.opSkipFree
-                              + " oid=" + (workingTree.opEditOid !== "")
+            Harness.report("edit_stop editing=" + worktree.opEditing
+                              + " skipfree=" + worktree.opSkipFree
+                              + " oid=" + (worktree.opEditOid !== "")
                               + " cont=" + wipPane.offersOpExit("--continue")
                               + " skip=" + wipPane.offersOpExit("--skip")
                               // The one stepping stop that keeps the message boxes and the commit button: amending
@@ -285,7 +285,7 @@ Item {
                               // The stop leaves HEAD on no branch, so the main worktree's WORKTREES row is named by
                               // its folder again (デザイン規約 §左メニューの所作) — once the listing behind the write is in.
                               + " home=" + driver.navProbe.homeWorktreeName()
-                              + " op=" + workingTree.opText)
+                              + " op=" + worktree.opText)
             if (planOpenTimer.act !== "rebase-edit-stop-out") {
                 renderedBarrier.begin()
                 return
@@ -373,7 +373,7 @@ Item {
                     renderedBarrier.begin()
                     return
                 }
-                // Published-ness is HEAD's own answer (`WorkingTreeModel.headPublished`), so the plan cannot have spent
+                // Published-ness is HEAD's own answer (`WorktreeModel.headPublished`), so the plan cannot have spent
                 // it; type again and read the warning with the boxes dirty.
                 detailsPane.setMessageText(planRewordTimer.retyped, "")
                 planRewordTimer.stage = "retyped"
@@ -382,7 +382,7 @@ Item {
             if (planRewordTimer.stage === "retyped") {
                 planRewordTimer.stop()
                 Harness.report("plan_reword_ask dirty=" + detailsPane.messageDirty
-                                  + " onhead=" + (page.selectedOid === workingTree.headOid)
+                                  + " onhead=" + (page.selectedOid === worktree.headOid)
                                   + " published=" + page.selectedPublished)
                 renderedBarrier.begin()
             }

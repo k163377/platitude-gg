@@ -1,4 +1,4 @@
-//! Refuses the working tree's question (`GitFacts.wipOid`) asked of a row
+//! Refuses the worktree's question (`GitFacts.wipOid`) asked of a row
 //! taken out of the graph by index (.claude/rules-refs/app-ui.md
 //! 「worktree の行は全部 git の all-zero id を着ている」). A row somebody
 //! is on — a click's, a selection's, a reword's — is left alone: there the
@@ -29,7 +29,7 @@ const TREES: &[&str] = &[
 ];
 /// How a row is taken out of the graph at a numbered position.
 const BY_INDEX: &str = "oidAt";
-/// What is refused of it — only the working tree's question: a stash row
+/// What is refused of it — only the worktree's question: a stash row
 /// carries a real object, so `stashRefOf` is answered by the row itself.
 const OF_THE_ID: &[&str] = &["wipOid"];
 const DECLARES: &[&str] = &["const", "let", "var"];
@@ -67,7 +67,7 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     Ok((failures, read))
 }
 
-/// Every line that puts the working tree's question to a row read at a
+/// Every line that puts the worktree's question to a row read at a
 /// numbered position, with the question it asked.
 fn findings(text: &str) -> Vec<(usize, &'static str)> {
     Walk::over(&super::without_comments_and_strings(text)).findings()
@@ -243,7 +243,7 @@ impl<'a> Walk<'a> {
         self.give(name.to_string(), true, numbered);
     }
 
-    /// The working tree's question, put to whatever the call is handed.
+    /// The worktree's question, put to whatever the call is handed.
     fn asked(&mut self, word: &'static str) {
         let Some((open, _)) = self.non_space(self.at) else {
             return;
@@ -722,7 +722,7 @@ mod tests {
     ];
 
     #[test]
-    fn a_row_at_a_numbered_position_may_not_be_asked_the_working_tree_s_question() {
+    fn a_row_at_a_numbered_position_may_not_be_asked_the_worktree_s_question() {
         assert_eq!(findings(DIRECT).len(), 1, "asked in one expression");
         assert_eq!(findings(THROUGH_A_NAME).len(), 1, "asked through a name");
     }

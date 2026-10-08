@@ -19,16 +19,16 @@ pub(super) fn objection(cwd: &str, claimed: &BTreeSet<String>) -> Option<String>
     (!shared.is_empty()).then(|| reason(&shared))
 }
 
-/// The files this seat has open: its working tree's changes and what its
+/// The files this seat has open: its uncommitted changes and what its
 /// branch carries that main has not taken — a file committed here is still
 /// missing from the main a chip's session starts on.
 fn open_here(cwd: &str) -> BTreeSet<String> {
-    let mut open = working_tree(cwd);
+    let mut open = uncommitted_paths(cwd);
     open.extend(carried(cwd));
     open
 }
 
-fn working_tree(cwd: &str) -> BTreeSet<String> {
+fn uncommitted_paths(cwd: &str) -> BTreeSet<String> {
     touched(
         &git_query(
             cwd,
@@ -89,7 +89,7 @@ fn touched(status: &str) -> BTreeSet<String> {
 fn reason(shared: &[String]) -> String {
     format!(
         "This chip claims {}, which this session already has open — the seat's \
-         working tree, or the commits its branch is carrying. A chip is worked \
+         worktree, or the commits its branch is carrying. A chip is worked \
          later, by another session on another seat, starting from a main without \
          this branch in it: over a file this branch is changing, that session and \
          this one edit it from two sides, and the user gets a conflict and a \

@@ -380,9 +380,9 @@ Item {
             if (!quitWaitDialog.opened || tab.busyCount !== 0 || tab.writeSeq <= quitTimer.seqBefore)
                 return
             // And reached the screen: the answer comes before the status is read again (`session::write::run_write`),
-            // and this commit takes the working-tree row off: ending on the answer flips `WipTallyRow` in the census.
+            // and this commit takes the worktree row off: ending on the answer flips `WipTallyRow` in the census.
             const page = window.curPage
-            if (page.pageWorkingTree.wipRowStands || !PageSettled.settled(page))
+            if (page.pageWorktree.wipRowStands || !PageSettled.settled(page))
                 return
             stop()
             Harness.report("quit_lock dialog=" + quitWaitDialog.opened

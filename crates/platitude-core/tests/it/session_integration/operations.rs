@@ -309,7 +309,7 @@ async fn a_read_that_failed_is_named_under_the_writes_own_id() {
     repo.write_file("f.txt", "changed\n");
     repo.git(&["add", "f.txt"]);
     let (sink, session, doors) = open_with_doors(&repo);
-    // The root and the working-tree row.
+    // The root and the worktree row.
     sink.opened_graph(&session, 2).await;
 
     doors.fail_every_pass(PassStep::Swapping);
@@ -343,7 +343,7 @@ async fn staged_with_doors() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, A
     repo.write_file("f.txt", "changed\n");
     repo.git(&["add", "f.txt"]);
     let (sink, session, doors) = open_with_doors(&repo);
-    // The root and the working-tree row.
+    // The root and the worktree row.
     sink.opened_graph(&session, 2).await;
     (repo, sink, session, doors)
 }

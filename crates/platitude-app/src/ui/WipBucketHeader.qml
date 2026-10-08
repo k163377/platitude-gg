@@ -6,7 +6,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// One bucket's heading in the working-tree file list: its name, its count, and the button that moves the whole
+// One bucket's heading in the worktree file list: its name, its count, and the button that moves the whole
 // bucket. Pinned above its rows (`WipBucketPane`).
 Rectangle {
     id: bucketHeader
@@ -14,7 +14,7 @@ Rectangle {
     /// Which bucket this heads: `conflicts` / `unstaged` / `staged`.
     required property string section
     required property var repoTab
-    required property var workingTree
+    required property var worktree
     /// This bucket's rows.
     required property var bucketModel
     /// Files in this bucket as the list counts them (`NavSectionModel.runFiles`) — untracked ride in unstaged, a rule
@@ -62,7 +62,7 @@ Rectangle {
         // The tool's wait, in the whole-bucket button's seat (規約 §conflict を外部ツールへ渡す).
         Label {
             visible: bucketHeader.waitingForTool
-            text: qsTr("Waiting for %1").arg(bucketHeader.workingTree.mergeTool)
+            text: qsTr("Waiting for %1").arg(bucketHeader.worktree.mergeTool)
             font.pixelSize: Theme.fontMd
             color: Theme.textSecondary
         }

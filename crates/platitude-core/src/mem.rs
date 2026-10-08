@@ -323,7 +323,7 @@ impl Footprint for crate::status::StatusItem {
     }
 }
 
-impl Footprint for crate::status::WorkingTreeStatus {
+impl Footprint for crate::status::WorktreeStatus {
     fn heap_bytes(&self) -> usize {
         self.branch_head.heap_bytes() + self.upstream.heap_bytes() + self.items.heap_bytes()
     }

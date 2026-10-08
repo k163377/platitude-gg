@@ -47,7 +47,7 @@ ActionButton {
     // branch, so the destination alone does not name what is sent. `:` cannot occur in a ref name.
     premise: pushButton.curPage === null
              ? ""
-             : pushButton.curPage.tab_id + ":" + pushButton.curPage.pageWorkingTree.branch
+             : pushButton.curPage.tab_id + ":" + pushButton.curPage.pageWorktree.branch
                + ":" + pushButton.curPage.pushTargetLabel
     // Down while a rebase plan is composed: it rewrites the very commits a push would send.
     enabled: pushButton.curPage !== null && !pushButton.curPage.planShown

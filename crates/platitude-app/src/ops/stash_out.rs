@@ -1,9 +1,9 @@
-//! The stash that took the working tree away, and the tree turning out
+//! The stash that took the uncommitted changes away, and the tree turning out
 //! to be empty behind it.
 
 use super::Press;
 
-/// One stash press that empties the working tree, from the press to the
+/// One stash press that empties the worktree, from the press to the
 /// reading that shows the tree gone.
 ///
 /// git answering says the entry was made; what the page waits for is the
@@ -19,7 +19,7 @@ use super::Press;
 /// emptied in the other order.
 ///
 /// Which status can answer is a stamp: the counts say which report of HEAD
-/// they were read beside (`WorkingTreeModel.statusSeq`), and the answer names
+/// they were read beside (`WorktreeModel.statusSeq`), and the answer names
 /// the smallest one that speaks for what it left. A status from before
 /// that fence would settle the press on the dirty tree before the empty
 /// one arrived; nor is the report of HEAD in hand a measure, since one
@@ -71,7 +71,7 @@ impl StashOut {
         true
     }
 
-    /// The page is acting on the working tree as it last read it: the
+    /// The page is acting on the worktree as it last read it: the
     /// counts stood beside the report numbered `seen`, and `emptied` is
     /// whether they left nothing in it.
     ///

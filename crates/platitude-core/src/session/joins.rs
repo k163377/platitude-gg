@@ -249,7 +249,7 @@ pub(super) fn build_label_map(
 /// Fingerprint of which paths status reported, in which state — not
 /// ahead/behind, which a fetch moves and which say nothing about line
 /// endings.
-pub(super) fn status_key(status: &WorkingTreeStatus) -> u64 {
+pub(super) fn status_key(status: &WorktreeStatus) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     for item in &status.items {

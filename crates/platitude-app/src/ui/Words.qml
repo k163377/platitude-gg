@@ -132,7 +132,7 @@ QtObject {
     }
 
     /// What to call a side git left nothing to name (デザイン規約 §conflict の ours / theirs). The names swap over
-    /// during a rebase, so they are handed in from `WorkingTreeModel`.
+    /// during a rebase, so they are handed in from `WorktreeModel`.
     function ourSide(name) {
         return name !== "" ? name : qsTr("this branch")
     }

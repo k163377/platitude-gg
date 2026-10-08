@@ -13,7 +13,7 @@ import platitude.ui
 AppCard {
     id: stateCard
 
-    /// What the working tree is in the middle of, handed in by the group.
+    /// What the worktree is in the middle of, handed in by the group.
     property string opText: ""
     property string opAlso: ""
     property int opStep: 0

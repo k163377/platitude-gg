@@ -3,19 +3,19 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The way out of a stopped operation, in the working-tree pane under the commit button (whose seat already means
+// The way out of a stopped operation, in the worktree pane under the commit button (whose seat already means
 // "conclude this"); the file list moves down for it.
 Rectangle {
     id: opExitCard
 
     required property var repoTab
-    required property var workingTree
+    required property var worktree
 
     // The mark's seat on every row, held or not, as `AppMenu.holdIndent`
     // (デザイン規約 §長押し「メニューでは印の席を全行が空ける」).
     readonly property real holdIndent: Theme.iconSm
     /// Whether leaving the stopped commit out costs nothing — core's rule (`offers::skip_is_free`).
-    readonly property bool skipIsFree: opExitCard.workingTree.opSkipFree
+    readonly property bool skipIsFree: opExitCard.worktree.opSkipFree
     readonly property real codeColW: {
         let widest = 0
         for (let i = 0; i < opExitCol.children.length; i++) {
@@ -55,9 +55,9 @@ Rectangle {
 
     /// A stopped merge has no card: it is one button, and a frame and heading around one button would draw a box
     /// around a box (rules-refs/app-ui.md「止まった merge の出口は `ActionButton` 1 個で、カードごと消える」).
-    readonly property bool bare: opExitCard.workingTree.opMerging
+    readonly property bool bare: opExitCard.worktree.opMerging
 
-    visible: opExitCard.workingTree.opText !== ""
+    visible: opExitCard.worktree.opText !== ""
     implicitHeight: opExitCol.implicitHeight + (opExitCard.bare ? 0 : 2 * Theme.spaceXs)
     color: opExitCard.bare ? "transparent" : Theme.bgBase
     radius: Theme.radiusMd
@@ -76,20 +76,20 @@ Rectangle {
             Layout.bottomMargin: Theme.spaceXs
             spacing: Theme.spaceXs
             Label {
-                text: opExitCard.workingTree.opText
+                text: opExitCard.worktree.opText
                 font.pixelSize: Theme.fontMd
                 font.weight: Theme.fontWeightStrong
                 color: Theme.warning
             }
             // Bisect, when it is running alongside. The mark between the two names is drawn (規約 §余白).
             DotMark {
-                visible: opExitCard.workingTree.opAlso !== ""
+                visible: opExitCard.worktree.opAlso !== ""
                 tint: Theme.warning
                 Layout.alignment: Qt.AlignVCenter
             }
             Label {
-                visible: opExitCard.workingTree.opAlso !== ""
-                text: opExitCard.workingTree.opAlso
+                visible: opExitCard.worktree.opAlso !== ""
+                text: opExitCard.worktree.opAlso
                 font.pixelSize: Theme.fontMd
                 font.weight: Theme.fontWeightStrong
                 color: Theme.warning
@@ -97,10 +97,10 @@ Rectangle {
             // How far it got. The dash stays a character, not a drawn mark: it is part of a sentence, and renders
             // alike on both OSes.
             Label {
-                visible: opExitCard.workingTree.opSteps > 0
+                visible: opExitCard.worktree.opSteps > 0
                 text: qsTr("— %1 of %2")
-                      .arg(opExitCard.workingTree.opStep)
-                      .arg(opExitCard.workingTree.opSteps)
+                      .arg(opExitCard.worktree.opStep)
+                      .arg(opExitCard.worktree.opSteps)
                 font.pixelSize: Theme.fontSm
                 font.weight: Theme.fontWeightStrong
                 color: Theme.warning
@@ -112,7 +112,7 @@ Rectangle {
         // say why it stands — and `--skip` below is a hold again (`offers::skip_is_free`,
         // デザイン規約 §フル interactive rebase).
         RowLayout {
-            visible: opExitCard.workingTree.opEditing
+            visible: opExitCard.worktree.opEditing
             Layout.fillWidth: true
             Layout.leftMargin: Theme.spaceXs
             Layout.bottomMargin: Theme.spaceXs
@@ -135,9 +135,9 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: Math.max(0, Math.round(editChip.baselineOffset - editWords.baselineOffset))
-                text: opExitCard.workingTree.opEditOid !== ""
+                text: opExitCard.worktree.opEditOid !== ""
                       ? qsTr("Stopped at %1 — amend it above")
-                            .arg(opExitCard.workingTree.opEditOid.substring(0, 8))
+                            .arg(opExitCard.worktree.opEditOid.substring(0, 8))
                       : qsTr("Stopped — amend the commit above")
                 pixelSize: Theme.fontSm
                 color: Theme.textSecondary
@@ -151,9 +151,9 @@ Rectangle {
             holdIndent: opExitCard.holdIndent
             code: "--continue"
             text: qsTr("Carry on with what is staged")
-            visible: !opExitCard.workingTree.opMerging
+            visible: !opExitCard.worktree.opMerging
             enabled: opExitCard.repoTab.busyCount === 0
-                     && opExitCard.workingTree.conflictCount === 0
+                     && opExitCard.worktree.conflictCount === 0
             onPicked: opExitCard.repoTab.resolveOperation("continue")
         }
         // A merge steps through nothing: no commit to leave out, and nowhere to stop stepping.
@@ -167,7 +167,7 @@ Rectangle {
             // Off the length the press under way was given, so tag and gesture agree under a hand
             // (`OpExitRow.armedMs`).
             note: skipRow.armedMs <= 0 ? qsTr("nothing in it") : ""
-            visible: opExitCard.workingTree.opStepping
+            visible: opExitCard.worktree.opStepping
             enabled: opExitCard.repoTab.busyCount === 0
             // Held only where a real commit is lost (デザイン規約 §長押し); an emptied commit's stop loses nothing.
             holdMs: opExitCard.skipIsFree ? 0 : Metrics.holdMs
@@ -183,8 +183,8 @@ Rectangle {
             text: qsTr("Stop stepping, keep the tree")
             // **The tree it keeps is the conflicted one**: git drops the operation but leaves every unmerged path, so
             // this card goes while the files still wait (デザイン規約 §進行中の操作から出る).
-            note: opExitCard.workingTree.conflictCount > 0 ? qsTr("conflicts stay") : ""
-            visible: opExitCard.workingTree.opStepping
+            note: opExitCard.worktree.conflictCount > 0 ? qsTr("conflicts stay") : ""
+            visible: opExitCard.worktree.opStepping
             enabled: opExitCard.repoTab.busyCount === 0
             onPicked: opExitCard.repoTab.resolveOperation("quit")
         }
@@ -194,7 +194,7 @@ Rectangle {
             holdIndent: opExitCard.holdIndent
             code: "--abort"
             text: qsTr("Undo it all and go back")
-            visible: !opExitCard.workingTree.opMerging
+            visible: !opExitCard.worktree.opMerging
             enabled: opExitCard.repoTab.busyCount === 0
             holdMs: Metrics.holdMs
             // Everything the operation did since it started goes, none of it on the discard record.

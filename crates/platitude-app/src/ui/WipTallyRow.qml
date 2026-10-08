@@ -5,7 +5,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The working tree's changes by kind, on the graph's uncommitted row. Conflicts first; the rest in the file list's
+// The worktree's changes by kind, on the graph's uncommitted row. Conflicts first; the rest in the file list's
 // order.
 RowLayout {
     id: tallies

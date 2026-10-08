@@ -8,11 +8,11 @@ ActionButton {
 
     /// The RepoPage of the active tab (null while no tab is open).
     property var curPage: null
-    /// What the working tree lets this button do (`platitude_core::stash::standing`), or `closed` with nothing open.
+    /// What the worktree lets this button do (`platitude_core::stash::standing`), or `closed` with nothing open.
     readonly property string mode:
         stashButton.curPage === null || stashButton.curPage.pageTab.state !== "open"
-            || !stashButton.curPage.pageWorkingTree.loaded
-        ? "closed" : stashButton.curPage.pageWorkingTree.stashStanding
+            || !stashButton.curPage.pageWorktree.loaded
+        ? "closed" : stashButton.curPage.pageWorktree.stashStanding
 
     kind: "stash"
     text: "stash"

@@ -20,12 +20,12 @@ pub struct NavItem {
     /// guarded by `folder`.
     pub(super) change: String,
     pub(super) bucket: String,
-    /// Display grouping of working-tree rows: untracked files count as
+    /// Display grouping of worktree rows: untracked files count as
     /// `unstaged` here while `bucket` keeps the real routing for diffs
     /// and staging.
     pub(super) group: String,
-    /// The old path of a renamed working-tree file. A folder row in the
-    /// working tree's list carries its clean path here — its `full` is
+    /// The old path of a renamed worktree file. A folder row in the
+    /// worktree's list carries its clean path here — its `full` is
     /// the group-prefixed fold key, and the hover of an elided chain
     /// needs the path itself.
     pub(super) orig_path: String,

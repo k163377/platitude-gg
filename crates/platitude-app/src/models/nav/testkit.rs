@@ -135,9 +135,9 @@ pub(super) fn section(kind: &str, all: Source) -> NavSectionModel {
     }
 }
 
-/// One of the working tree's bucket lists: the whole status, showing one
+/// One of the worktree's bucket lists: the whole status, showing one
 /// run (`NavSectionModel::run`).
-pub(super) fn working_tree(run: &str, all: Source) -> NavSectionModel {
+pub(super) fn worktree(run: &str, all: Source) -> NavSectionModel {
     let mut model = section("files", all);
     model.run = run.to_string();
     model
@@ -186,9 +186,9 @@ pub(super) fn tracked(
 
 /// One of each kind of pending change, in git's order: tracked entries
 /// sorted, then the untracked ones after them.
-pub(super) fn pending() -> platitude_core::status::WorkingTreeStatus {
+pub(super) fn pending() -> platitude_core::status::WorktreeStatus {
     use platitude_core::status::StatusItem;
-    platitude_core::status::WorkingTreeStatus {
+    platitude_core::status::WorktreeStatus {
         items: vec![
             StatusItem::Unmerged {
                 ours: 'U',

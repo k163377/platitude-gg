@@ -15,7 +15,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workingTree: driver.workingTree
+    readonly property var worktree: driver.worktree
     readonly property var graphPane: driver.graphPane
     readonly property var publishFlow: driver.publishFlow
     readonly property var remoteDialog: driver.remoteDialog
@@ -94,7 +94,7 @@ Item {
             // the question the toolbar's press raises must open on that name, or the answer just given is asked again.
             // The upstream goes in at the slot the question's pill calls — the question is `set-upstream-go`'s subject.
             publishUpstreamTimer.want = arg === "" ? "brand-new" : arg
-            repoTab.setUpstream(workingTree.branch, repoTab.defaultRemote, publishUpstreamTimer.want)
+            repoTab.setUpstream(worktree.branch, repoTab.defaultRemote, publishUpstreamTimer.want)
             publishUpstreamTimer.start()
         } else if (act === "push-target") {
             pushTargetTimer.start()
@@ -206,7 +206,7 @@ Item {
         onTriggered: {
             if (!publishUpstreamTimer.pressed) {
                 const target = repoTab.defaultRemote + "/" + publishUpstreamTimer.want
-                if (!workingTree.countsSettled || workingTree.upstream !== target || repoTab.busyCount > 0)
+                if (!worktree.countsSettled || worktree.upstream !== target || repoTab.busyCount > 0)
                     return
                 page.pushNow()
                 publishUpstreamTimer.pressed = true
@@ -216,8 +216,8 @@ Item {
             if (!graphPane.askCard.settled)
                 return
             publishUpstreamTimer.stop()
-            Harness.report("publish upstream=" + workingTree.upstream
-                              + " tracked=" + workingTree.upstreamTracked
+            Harness.report("publish upstream=" + worktree.upstream
+                              + " tracked=" + worktree.upstreamTracked
                               + " state=" + page.pushState
                               + " remote=" + publishFlow.publishRemote
                               + " branch=" + publishFlow.publishBranch)
@@ -226,18 +226,18 @@ Item {
     }
     /// PGG_AUTO_ACT=push-target: the toolbar's destination and standing, off the bindings the button reads
     /// (`RepoPage.pushTargetLabel` / `pushState`), with the marks that decided it — the label cannot say which one git
-    /// followed. `workingTree.loaded` is the barrier: before the first status every mark reads unset.
+    /// followed. `worktree.loaded` is the barrier: before the first status every mark reads unset.
     SampleTimer {
         id: pushTargetTimer
         onTriggered: {
-            if (!workingTree.loaded || repoTab.state !== "open" || repoTab.busyCount > 0)
+            if (!worktree.loaded || repoTab.state !== "open" || repoTab.busyCount > 0)
                 return
             pushTargetTimer.stop()
             Harness.report("push_target label=" + page.pushTargetLabel
                               + " state=" + page.pushState
-                              + " branch_mark=" + workingTree.pushRemote
+                              + " branch_mark=" + worktree.pushRemote
                               + " repo_mark=" + repoTab.pushDefault
-                              + " tracks=" + workingTree.upstream)
+                              + " tracks=" + worktree.upstream)
             driver.complete()
         }
     }
@@ -249,7 +249,7 @@ Item {
         property bool pointed: false
         onTriggered: {
             if (!pushHoverTimer.pointed) {
-                if (!workingTree.loaded || repoTab.state !== "open" || repoTab.busyCount > 0
+                if (!worktree.loaded || repoTab.state !== "open" || repoTab.busyCount > 0
                         || repoTab.autoFetchRunning)
                     return
                 pushHoverTimer.pointed = true

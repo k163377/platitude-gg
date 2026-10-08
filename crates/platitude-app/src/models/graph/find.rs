@@ -102,7 +102,7 @@ mod tests {
     }
 
     #[test]
-    fn a_working_tree_row_answers_nothing() {
+    fn a_worktree_row_answers_nothing() {
         // As the walk lays it: git's all-zero id, ours and another worktree's alike.
         let row = GraphRowItem {
             oid_hex: "0".repeat(40),

@@ -77,7 +77,7 @@ Item {
                 // The band's marks come off the page's tree (`BandStateGroup`), so a floor read before it is an
                 // empty band's. With no repository to open (`--restore`) the floor is the blank page's.
                 if (Harness.autoOpen !== ""
-                        && (window.curPage === null || !window.curPage.pageWorkingTree.loaded))
+                        && (window.curPage === null || !window.curPage.pageWorktree.loaded))
                     return
                 if (window.width < window.floorWidth || window.height < window.floorHeight)
                     return
@@ -90,7 +90,7 @@ Item {
             // Asked of a real page: until a tab opens, `window.floorPage` is the blank one, lost when the real page
             // arrives (`WindowBody.floorPage`). Its tree read too, or the face stands at four zeroes and `wipScrolls=`
             // answers for an empty pane.
-            if (window.curPage === null || !window.curPage.pageWorkingTree.loaded)
+            if (window.curPage === null || !window.curPage.pageWorktree.loaded)
                 return
             if (!floorActTimer.shapeRequested) {
                 floorActTimer.shapeRequested = true

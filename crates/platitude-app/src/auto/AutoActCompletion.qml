@@ -60,7 +60,7 @@ QtObject {
     /// pages a write reaches.
     ///
     /// **Which of the two a run reaches is the machine's to decide.** core answers a write before it publishes the
-    /// status that write invalidated (`session::write::run_write`), so at the answer the working-tree row the write
+    /// status that write invalidated (`session::write::run_write`), so at the answer the worktree row the write
     /// takes away still stands. Both moments settle (`PageSettled`), so the census walked from one names
     /// `WipTallyRow` and from the other `FileRowDelegate` — a generated file moving under an untouched tree, and a
     /// gate that refuses to stamp for it.
@@ -83,7 +83,7 @@ QtObject {
                 "diff-band-sweep", "diff-bar", "diff-blank", "diff-escape",
                 "diff-split", "split-tools", "split-copy",
                 "preview", "preview-unstaged", "preview-staged", "preview-close",
-                // The write barrier is behind these: the stops land on the working tree's own row, which the graph
+                // The write barrier is behind these: the stops land on the worktree's own row, which the graph
                 // pass after the write puts there, and `merge-commit` has to read the commit it just made.
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
                 "wip-landing-stopped",

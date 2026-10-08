@@ -61,12 +61,12 @@ impl platitude_core::mem::Footprint for GraphRowItem {
 }
 
 /// The row "the newest commit" names: the first that is neither the
-/// working tree's row nor a stash; `None` where the window holds no commit.
+/// worktree's row nor a stash; `None` where the window holds no commit.
 /// A stash is no branch's history (デザイン規約 §変更を退避する), yet a
 /// fresh one's time stands it above the tip — so the rule is written once
 /// here, not by each asker (`GraphModel::newest_commit_row`).
 ///
-/// A scan, but of the top: only the working tree's row and the stashes
+/// A scan, but of the top: only the worktree's row and the stashes
 /// can stand over the first commit.
 pub(super) fn newest_commit_row(rows: &[GraphRowItem]) -> Option<usize> {
     rows.iter()
@@ -239,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn newest_commit_row_walks_past_the_working_tree_and_the_stashes() {
+    fn newest_commit_row_walks_past_the_worktree_and_the_stashes() {
         let rows = [
             wip(),
             stash("c3", "stash@{0}"),

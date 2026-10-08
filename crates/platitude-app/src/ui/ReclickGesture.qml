@@ -71,7 +71,7 @@ QtObject {
         gesture.activeKey = key
     }
     /// A click on something standing over this surface took it down (`RefListPopup.followed`): the second press of
-    /// that double-click would fall on whatever is under the hand, and a double-click here moves the working tree.
+    /// that double-click would fall on whatever is under the hand, and a double-click here moves the worktree.
     /// For one double-click window every press here is ignored (`hushed`, which the surface's double-click reads too).
     function hush() {
         renameTimer.stop()

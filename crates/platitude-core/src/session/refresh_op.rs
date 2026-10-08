@@ -57,7 +57,7 @@ impl RepoSession {
     async fn read_standing_op(
         &self,
         paths: (&std::path::Path, &std::path::Path),
-        status: &WorkingTreeStatus,
+        status: &WorktreeStatus,
         op_state: &OpState,
         cancel: &CancellationToken,
     ) -> StandingOp {
@@ -108,7 +108,7 @@ impl RepoSession {
         &self,
         workdir: &std::path::Path,
         branch: &str,
-        status: &WorkingTreeStatus,
+        status: &WorktreeStatus,
         marks: &remote::PushMarks,
         cancel: &CancellationToken,
     ) -> remote::PushTrack {
@@ -131,7 +131,7 @@ impl RepoSession {
     /// count is read. The remote names are the kept ones, not read for
     /// this; before the first listing the cut falls back to the mark's
     /// exact prefix.
-    fn push_goes_elsewhere(&self, status: &WorkingTreeStatus, marks: &remote::PushMarks) -> bool {
+    fn push_goes_elsewhere(&self, status: &WorktreeStatus, marks: &remote::PushMarks) -> bool {
         let Some(upstream) = status
             .upstream
             .as_deref()

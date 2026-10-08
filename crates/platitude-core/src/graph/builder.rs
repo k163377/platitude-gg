@@ -198,7 +198,7 @@ impl GraphBuilder {
         }
     }
 
-    /// Emits the synthetic working-tree (WIP) row: a childless tip whose
+    /// Emits the synthetic worktree (WIP) row: a childless tip whose
     /// only edge — drawn dashed — runs down to `parent` (HEAD). Feed it
     /// before the first real commit so the current chain keeps lane 0 and
     /// other tips shift right, exactly like a real commit would.
@@ -206,7 +206,7 @@ impl GraphBuilder {
         self.push_virtual_merging(parent, &[])
     }
 
-    /// The synthetic working-tree row of a branch with no commits yet: a
+    /// The synthetic worktree row of a branch with no commits yet: a
     /// node with nothing under it, the shape the first commit will have.
     /// Nothing is leashed — there is no tip to reach down to.
     pub fn push_virtual_root(&mut self) -> GraphRow {

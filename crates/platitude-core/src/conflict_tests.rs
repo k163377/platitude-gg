@@ -3,7 +3,7 @@
 
 use crate::conflict::tool::parse_tool_help;
 use crate::conflict::*;
-use crate::status::{StatusItem, WorkingTreeStatus};
+use crate::status::{StatusItem, WorktreeStatus};
 
 #[test]
 fn classifies_stage_letters() {
@@ -65,7 +65,7 @@ fn only_content_conflicts_are_worth_a_merge_tool() {
 
 #[test]
 fn extracts_conflicted_entries_only() {
-    let status = WorkingTreeStatus {
+    let status = WorktreeStatus {
         items: vec![
             StatusItem::Unmerged {
                 ours: 'U',

@@ -29,7 +29,7 @@ impl RepoSession {
     pub(super) async fn lfs_needs(
         &self,
         workdir: &Path,
-        status: &WorkingTreeStatus,
+        status: &WorktreeStatus,
         moved: bool,
         cancel: &CancellationToken,
     ) -> LfsNeeds {
@@ -48,7 +48,7 @@ impl RepoSession {
     async fn settle_lfs_needs(
         &self,
         workdir: &Path,
-        status: &WorkingTreeStatus,
+        status: &WorktreeStatus,
         cancel: &CancellationToken,
     ) -> LfsNeeds {
         match self.read_lfs_needs(workdir, status, cancel).await {
@@ -84,7 +84,7 @@ impl RepoSession {
     async fn read_lfs_needs(
         &self,
         workdir: &Path,
-        status: &WorkingTreeStatus,
+        status: &WorktreeStatus,
         cancel: &CancellationToken,
     ) -> Option<LfsNeeds> {
         let paths: Vec<String> = status

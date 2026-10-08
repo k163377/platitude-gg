@@ -155,7 +155,7 @@ Item {
 
     /// Why the window said `settled`, on the run's own line, so a census that moves says why. Only terms that can
     /// still differ once it says yes: through `failed` / `stale` a run settles on whatever pass stands, which may hold
-    /// no working-tree row — and `WipTallyRow` (behind `GraphRowDelegate`'s loader) is the one component that stands
+    /// no worktree row — and `WipTallyRow` (behind `GraphRowDelegate`'s loader) is the one component that stands
     /// or falls with that row.
     function terms() {
         const page = census.window ? census.window.curPage : null
@@ -166,7 +166,7 @@ Item {
         const state = page.pageTab.state === "" ? "none" : page.pageTab.state
         return said + " state=" + state + " finish=" + graph.finishCount
             + " failed=" + graph.failed + " stale=" + graph.stale + " wipRow=" + graph.wipRow
-            + " wipRowStands=" + page.pageWorkingTree.wipRowStands
+            + " wipRowStands=" + page.pageWorktree.wipRowStands
     }
 
     /// What the picture's walk met and this one did not: taken away by what the verb left running.

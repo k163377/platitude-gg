@@ -94,8 +94,8 @@ pub struct GraphModel {
     /// watches this edge to re-resolve the selection by oid.
     finish_count: i32,
     /// Whether the rows this pass left start with this window's
-    /// working-tree row (`session::rows::wip_row`). Read against what the
-    /// status says (`WorkingTreeModel.wipRowStands`): the opening walks before
+    /// worktree row (`session::rows::wip_row`). Read against what the
+    /// status says (`WorktreeModel.wipRowStands`): the opening walks before
     /// the first status, so the two disagreeing means the graph is one read
     /// behind. Settled with the footer, once the pass is whole.
     wip_row: bool,
@@ -116,7 +116,7 @@ pub struct GraphModel {
     /// (`find::Query::short_of_an_oid`) — what the find bar's hint answers.
     short_of_an_oid: bool,
     /// Whether the newest row is one of the answers; the graph steps down
-    /// from under the card for it (規約 §コミットを探す). The working-tree
+    /// from under the card for it (規約 §コミットを探す). The worktree
     /// row never matches, so true also means a clean tree.
     first_matched: bool,
     /// Lanes running off the end of the window (`encode::tail_lanes`),
@@ -125,7 +125,7 @@ pub struct GraphModel {
     /// Whether the oldest loaded row is one of the answers: the footer's
     /// lanes carry on from that row's, so they start at its strength.
     tail_matched: bool,
-    /// The loaded row the working tree stands on, and what its stand-in
+    /// The loaded row the worktree stands on, and what its stand-in
     /// draws; -1 and empty outside the window (`head::settle_head`).
     head_row: i32,
     head_labels: Chips,

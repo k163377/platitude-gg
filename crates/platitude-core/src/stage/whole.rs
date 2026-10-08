@@ -171,7 +171,7 @@ pub async fn remove_untracked(
     run_over_paths(executor, cmd, paths, cancel).await
 }
 
-/// Which side of the working tree a chosen row was standing on. Carried
+/// Which side of the worktree a chosen row was standing on. Carried
 /// with the path: a file changed on both sides has a row in each bucket,
 /// and which was chosen decides whether what is staged survives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -48,17 +48,17 @@ Item {
             page.showWip()
             // A rename's source comes off the model, as a row click hands it over; without it the diff reads as a new
             // file.
-            const workingTreePath = named ? arg.substring(cut + 1) : arg
+            const filePath = named ? arg.substring(cut + 1) : arg
             // A missing path is the run's own mistake and must read as one: git takes an empty pathspec as the whole
             // tree, so the pane would fill with a plausible diff and the verb would report rows of no file.
-            if (workingTreePath === "") {
+            if (filePath === "") {
                 Harness.report("diff_arg act=" + act + " named=false")
                 renderedBarrier.begin()
                 // True even here — falsy reads as "not mine" to the dispatch chain.
                 return true
             }
-            page.toggleDiff(named ? head : "unstaged", workingTreePath,
-                            unstagedModel.origOf(workingTreePath))
+            page.toggleDiff(named ? head : "unstaged", filePath,
+                            unstagedModel.origOf(filePath))
             stageRowTimer.begin()
         } else if (act === "preview" || act === "preview-unstaged" || act === "preview-staged"
                    || act === "preview-close") {

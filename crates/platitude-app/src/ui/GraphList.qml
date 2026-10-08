@@ -13,7 +13,7 @@ AppListView {
     id: graphList
 
     required property var graphModel
-    required property var workingTree
+    required property var worktree
     /// The three columns' arithmetic (`GraphColumnMetrics`).
     required property var columns
 
@@ -48,12 +48,12 @@ AppListView {
     property real graphColWidth: graphList.columns.graphColW
     property real graphFullWidth: graphList.columns.graphFullW
     property real graphXOffset: graphList.columns.graphX
-    property int wipAdded: graphList.workingTree.wipAdded
-    property int wipModified: graphList.workingTree.wipModified
-    property int wipDeleted: graphList.workingTree.wipDeleted
-    property int wipRenamed: graphList.workingTree.wipRenamed
-    property int wipCopied: graphList.workingTree.wipCopied
-    property int wipConflicted: graphList.workingTree.conflictCount
+    property int wipAdded: graphList.worktree.wipAdded
+    property int wipModified: graphList.worktree.wipModified
+    property int wipDeleted: graphList.worktree.wipDeleted
+    property int wipRenamed: graphList.worktree.wipRenamed
+    property int wipCopied: graphList.worktree.wipCopied
+    property int wipConflicted: graphList.worktree.conflictCount
     // Which row's chip column is a name box, and what has been typed into it.
     property string namingOid: ""
     property string namingText: ""
@@ -114,10 +114,10 @@ AppListView {
     property bool askDanger: false
     // Rows dim while a search is on; written by the pane, which owns the find card.
     property bool findOn: false
-    // The row the working tree stands on writes its message in the branch's blue (規約 §グラフの中で HEAD を見失わない).
+    // The row the worktree stands on writes its message in the branch's blue (規約 §グラフの中で HEAD を見失わない).
     readonly property int headRow: graphList.graphModel.headRow
     /// The commits the page is holding, as a set of ids, and their count (デザイン規約 §複数のコミットを選ぶ). Empty while
-    /// the working tree's row is shown — it is no commit and never joins a choice.
+    /// the worktree's row is shown — it is no commit and never joins a choice.
     property var chosenOids: ({})
     property int chosenCount: 0
     /// A row was clicked, with the modifiers held and the row it sits on (`RepoPage.activateRow`).

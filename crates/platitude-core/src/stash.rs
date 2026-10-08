@@ -40,7 +40,7 @@ pub struct StashEntry {
     pub stands: Option<crate::discards::Stands>,
 }
 
-/// What the working tree lets a stash do. Every refusal is git's own
+/// What the worktree lets a stash do. Every refusal is git's own
 /// (デザイン規約 §退避できるかどうかを、押す前に出す).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StashStanding {
@@ -67,7 +67,7 @@ impl StashStanding {
 }
 
 /// The standing, off a status already in hand (no git runs).
-/// `head_missing`: no commit yet (`WorkingTreeStatus::branch_oid` is `None`).
+/// `head_missing`: no commit yet (`WorktreeStatus::branch_oid` is `None`).
 pub fn standing(head_missing: bool, counts: &crate::status::Counts) -> StashStanding {
     if head_missing {
         return StashStanding::Unborn;

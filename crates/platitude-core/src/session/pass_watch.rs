@@ -82,7 +82,7 @@ pub trait PassHooks: Send + Sync + 'static {
     ///
     /// **The one arrangement a repository cannot be walked into**: which
     /// of walk and status arrives first is the scheduler's, and the readers
-    /// landing on the working-tree row answer for the pass that lost — every
+    /// landing on the worktree row answer for the pass that lost — every
     /// other worktree has a row, this window none, all wearing the
     /// all-zero id. `false` for everything but a harness.
     ///
@@ -90,7 +90,7 @@ pub trait PassHooks: Send + Sync + 'static {
     /// otherwise drops a pass whose picture is already on screen): after a
     /// write nothing else may differ — a stopped replay moves no branch —
     /// so the arrangement would be walked and then dropped.
-    fn holds_back_the_working_tree_row(&self) -> bool {
+    fn holds_back_the_worktree_row(&self) -> bool {
         false
     }
 }
@@ -109,11 +109,11 @@ impl RepoSession {
     }
 
     /// Whether a pass must walk as one that began before the first status
-    /// did ([`PassHooks::holds_back_the_working_tree_row`]).
-    pub(super) fn holds_back_the_working_tree_row(&self) -> bool {
+    /// did ([`PassHooks::holds_back_the_worktree_row`]).
+    pub(super) fn holds_back_the_worktree_row(&self) -> bool {
         self.pass_hooks
             .as_ref()
-            .is_some_and(|hooks| hooks.holds_back_the_working_tree_row())
+            .is_some_and(|hooks| hooks.holds_back_the_worktree_row())
     }
 }
 

@@ -70,7 +70,7 @@ Item {
     height: Theme.graphRowHeight
 
     /// This row is one of the commits being held (デザイン規約 §複数のコミットを選ぶ). **A non-empty choice is the whole
-    /// highlight**; with nothing held, the current item — the working tree's row, where a person lands — is.
+    /// highlight**; with nothing held, the current item — the worktree's row, where a person lands — is.
     readonly property bool selected: rowItem.ListView.view && rowItem.ListView.view.chosenCount > 0
         ? rowItem.ListView.view.chosenOids[rowItem.oid_hex] === true
         : rowItem.ListView.isCurrentItem
@@ -131,10 +131,10 @@ Item {
     readonly property var labelRecords: GitFacts.chipsShown(labels, rowItem.goneChips)
     // The chips a double-click can lead to (`primaryChip`).
     readonly property var branchRecords: labelRecords.filter(chip => chip.kind === "branch" || chip.kind === "remote")
-    // Whether this row is somewhere HEAD could stand: the working-tree row is not a commit, and a stash sits on no
+    // Whether this row is somewhere HEAD could stand: the worktree row is not a commit, and a stash sits on no
     // branch's history — a dropped one the log shows neither.
     readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === "" && !rowItem.asStash
-    // The commit the working tree is standing on, detached or not — the row number the model settled
+    // The commit the worktree is standing on, detached or not — the row number the model settled
     // (`models::graph::head`).
     readonly property bool isHead: rowItem.ListView.view ? rowItem.ListView.view.headRow === rowItem.index : false
     // Where a double-click on this row goes: the branch chip's own first record, so what is on screen is what is moved
@@ -530,7 +530,7 @@ Item {
         const mods = modifiers === undefined ? Qt.NoModifier : modifiers
         // **A held double-click is two selection presses** (デザイン規約 §複数のコミットを選ぶ). Qt reports the pair as
         // a double whatever is held, modifier included (`tst_moddblclick`), so this is where they are told apart —
-        // toggling a row out of a choice and back must not `switch` the working tree.
+        // toggling a row out of a choice and back must not `switch` the worktree.
         if (mods & (Qt.ControlModifier | Qt.ShiftModifier))
             return false
         // The gesture was the double-click: the name box comes off its wait even on a row that leads nowhere.

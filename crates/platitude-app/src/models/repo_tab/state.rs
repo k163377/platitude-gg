@@ -163,7 +163,7 @@ impl RepoTab {
     }
 
     /// The page has put a status on screen beside HEAD report `seen`;
-    /// `emptied` is whether it left the working tree empty.
+    /// `emptied` is whether it left the worktree empty.
     ///
     /// Written down before anything asks, because a status and its write
     /// answer are drained apart and either can arrive first.

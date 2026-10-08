@@ -188,7 +188,7 @@ pub struct NavSectionModel {
     head_upstream_gone: String,
     /// How far that branch stands from its upstream, off the same lookup,
     /// so the stand-in and its row cannot say different numbers. Drawn
-    /// while the status read's pair (`WorkingTreeModel.ahead`) is held back
+    /// while the status read's pair (`WorktreeModel.ahead`) is held back
     /// after a switch, not yet being about the branch HEAD is on.
     head_ahead: i32,
     head_behind: i32,

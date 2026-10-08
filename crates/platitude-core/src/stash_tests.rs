@@ -63,7 +63,7 @@ fn wrong_arity_is_an_error() {
 }
 
 /// Real git's `stash list -z` bytes under tests/fixtures/, regenerated
-/// only by `working_tree_state::capture_fixtures` (command in the panic below).
+/// only by `worktree_state::capture_fixtures` (command in the panic below).
 #[test]
 fn committed_stash_fixture_parses() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

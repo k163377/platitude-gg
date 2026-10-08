@@ -175,10 +175,10 @@ impl DiffModel {
         self.begin_request(path, target);
     }
 
-    /// Diff of a working-tree entry (bucket: staged/unstaged/untracked/
+    /// Diff of a worktree entry (bucket: staged/unstaged/untracked/
     /// conflicts).
     #[qslot]
-    fn request_working_tree(&mut self, bucket: String, path: String, orig_path: String) {
+    fn request_worktree(&mut self, bucket: String, path: String, orig_path: String) {
         let target = bucket_target(&bucket, &path, orig_path);
         self.begin_request(path, target);
     }
@@ -191,7 +191,7 @@ impl DiffModel {
         self.begin_request_in(at, path, target);
     }
 
-    /// `refresh_working_tree` for a carried diff, on the other worktrees'
+    /// `refresh_worktree` for a carried diff, on the other worktrees'
     /// slower tick. Aimed where the rows came from — the ordinary re-read
     /// would put this window's file of that name in a pane showing another
     /// worktree's.
@@ -213,7 +213,7 @@ impl DiffModel {
         crate::hub::from_session(self.tab_id, |s| s.refresh_carried_diff(at, target)).is_some()
     }
 
-    /// The page's tick: asks core whether the open working-tree file
+    /// The page's tick: asks core whether the open worktree file
     /// changed (`RepoSession::refresh_diff`, silent when not). Sets no
     /// `loading` — most ticks find nothing. Ignored for another file or
     /// while a read is out.
@@ -221,7 +221,7 @@ impl DiffModel {
     /// Returns whether a read went out — what `diff-tick` reads, since the
     /// read's usual answer is silence.
     #[qslot]
-    fn refresh_working_tree(&mut self, bucket: String, path: String, orig_path: String) -> bool {
+    fn refresh_worktree(&mut self, bucket: String, path: String, orig_path: String) -> bool {
         // A carried diff is re-read by `refresh_carried`.
         if self.loading || !self.current_at.is_empty() {
             return false;

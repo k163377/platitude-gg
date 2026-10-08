@@ -20,7 +20,7 @@ impl NavSectionModel {
         }
     }
 
-    pub(super) fn attach_working_tree_feed(&mut self, tab_id: i32, run: String) {
+    pub(super) fn attach_worktree_feed(&mut self, tab_id: i32, run: String) {
         self.tab_id = tab_id;
         self.section = "files".to_string();
         self.run = run;
@@ -33,7 +33,7 @@ impl NavSectionModel {
             "staged" => &feeds.status_nav_staged,
             "unstaged" => &feeds.status_nav_unstaged,
             other => {
-                tracing::warn!(run = other, "unknown working-tree bucket run");
+                tracing::warn!(run = other, "unknown worktree bucket run");
                 return;
             }
         };

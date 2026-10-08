@@ -17,7 +17,7 @@ Rectangle {
 
     required property var graphModel
     // The uncommitted row's tallies: the status the list is built from, counted by kind (`status::Kinds`).
-    required property var workingTree
+    required property var worktree
     // No repository behind this pane: the empty-window call to action.
     property bool blank: false
 
@@ -70,7 +70,7 @@ Rectangle {
     /// A press on the current branch's stand-in (`GraphHeadPin`) or on the card its chip unfolds into
     /// (`RefListPopup.standInPressed`): brings the off-screen row on, then picks it with the modifiers the rows read.
     /// The stand-in goes once its row is on screen, so **the row now under the hand is not what the hand was on**
-    /// (`settleUnderHand`) — a double-click there would move the working tree.
+    /// (`settleUnderHand`) — a double-click there would move the worktree.
     function pinPressed(row, modifiers) {
         graphArea.settleUnderHand()
         graphList.takeKeyboard()
@@ -403,7 +403,7 @@ Rectangle {
             NumberAnimation { duration: 200 }
         }
         graphModel: graphArea.graphModel
-        workingTree: graphArea.workingTree
+        worktree: graphArea.worktree
         columns: metrics
         findOn: findBar.findOn
         chosenOids: graphArea.chosenOids
@@ -601,7 +601,7 @@ Rectangle {
         anchors.fill: parent
         graphModel: graphArea.graphModel
         blank: graphArea.blank
-        workingTree: graphArea.workingTree
+        worktree: graphArea.worktree
         onOpenRepositoryRequested: graphArea.openRepositoryRequested()
     }
 }

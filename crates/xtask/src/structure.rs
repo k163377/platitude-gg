@@ -22,7 +22,7 @@
 //! Rust may not look a `PGG_*` variable up outside the module that owns
 //! them ([`env`]), the product's QML closes no popup but its own
 //! ([`popups`]), QML asks the graph, not a row's id, which row is this
-//! window's working tree ([`wiprow`]), and every text box the product
+//! window's worktree ([`wiprow`]), and every text box the product
 //! declares hands its right-click and its menu key to the product's menu
 //! ([`textboxes`]).
 //!

@@ -140,7 +140,7 @@ async fn read_one(
 pub(super) struct PaneRead {
     /// `joins::same_path_key` of the worktree.
     key: String,
-    hand: Arc<dyn Fn(crate::status::WorkingTreeStatus) + Send + Sync>,
+    hand: Arc<dyn Fn(crate::status::WorktreeStatus) + Send + Sync>,
 }
 
 /// Which other worktree the read-only pane stands on, and which reading of
@@ -658,7 +658,7 @@ impl super::RepoSession {
 
     /// Hands the pane a reading of the worktree `key`, asked as `number`, if
     /// it still stands there and holds nothing asked later.
-    fn hand_carried(&self, key: &str, number: u64, status: crate::status::WorkingTreeStatus) {
+    fn hand_carried(&self, key: &str, number: u64, status: crate::status::WorktreeStatus) {
         if let Some((path, name)) = self.carried_pane.take(key, number) {
             self.sink
                 .event(crate::session::SessionEvent::CarriedStatusLoaded { path, name, status });

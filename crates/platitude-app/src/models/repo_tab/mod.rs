@@ -280,7 +280,7 @@ pub struct RepoTab {
     /// commit / stash moved it, and a refused stage / unstage / discard
     /// was refused because the rows on screen drifted.
     write_stale_diff: bool,
-    /// HEAD moved (a checkout or a reset landed), so the working tree
+    /// HEAD moved (a checkout or a reset landed), so the worktree
     /// under an open diff was rewritten.
     write_moved_head: bool,
     /// A reword landed: the saved message is on its commit.
@@ -319,7 +319,7 @@ pub struct RepoTab {
     /// not a property: it has an answer only while a status is being
     /// read, and asking spends it (`takeDiffRead`).
     diff_reread: crate::ops::DiffReread,
-    /// The working tree as the page last put it on screen: the report of
+    /// The worktree as the page last put it on screen: the report of
     /// HEAD its counts stood beside, and whether they left it empty
     /// (`noteTreeRead`).
     ///
@@ -329,7 +329,7 @@ pub struct RepoTab {
     /// arrives first.
     tree_seen: u64,
     tree_emptied: bool,
-    /// The stash this window pressed to take the working tree away,
+    /// The stash this window pressed to take the worktree away,
     /// waiting for the reading that finds the tree empty
     /// (`ops::StashOut`).
     ///

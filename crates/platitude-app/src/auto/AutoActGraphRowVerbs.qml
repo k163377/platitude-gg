@@ -14,7 +14,7 @@ Item {
     required property var driver
 
     readonly property var page: driver.page
-    readonly property var workingTree: driver.workingTree
+    readonly property var worktree: driver.worktree
     readonly property var graphModel: driver.graphModel
     readonly property var graphPane: driver.graphPane
     readonly property var detailsModel: driver.detailsModel
@@ -162,7 +162,7 @@ Item {
             // Same row and default as `commit-menu`; the row under the menu is then asked for its card.
             let hoverOid = arg
             if (hoverOid === "")
-                hoverOid = graphModel.oidAt(graphModel.rowOf(workingTree.headOid) + 1)
+                hoverOid = graphModel.oidAt(graphModel.rowOf(worktree.headOid) + 1)
             page.openRowMenu(hoverOid)
             menuHoverTimer.oidHex = hoverOid
             menuHoverTimer.asked = false
@@ -352,7 +352,7 @@ Item {
                 Harness.report("chosen_dbl led=" + led
                                   + " movable=" + at.movable
                                   + " naming=" + (graphPane.namingOid !== "")
-                                  + " branch=" + workingTree.branch)
+                                  + " branch=" + worktree.branch)
                 driver.complete()
                 return
             }
@@ -719,7 +719,7 @@ Item {
         /// answers (`GraphRowDelegate.cardOnThisRow`): another worktree's rows land on a pass of their own and can
         /// shift the row number between the hover and this read.
         property string oidHex: ""
-        /// The row number instead, for a row with no commit of its own (`byNumber`): the working tree's and every
+        /// The row number instead, for a row with no commit of its own (`byNumber`): the worktree's and every
         /// other worktree's row share the all-zero id.
         property int row: 0
         property bool byNumber: false

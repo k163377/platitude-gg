@@ -309,7 +309,7 @@ ColumnLayout {
         id: chosenList
         visible: detailsPane.choosing
         Layout.fillWidth: true
-        // Divided as the working tree's buckets are (規約 §バケツごとの一覧). This list's want is counted, not read
+        // Divided as the worktree's buckets are (規約 §バケツごとの一覧). This list's want is counted, not read
         // off its content: a view's content height is 0 for the frame its model is replaced in, which would flash the
         // pane to the list below each time the choice changes. The top margin is counted too, or the view stands
         // short of its own content and scrolls with nothing to reach.

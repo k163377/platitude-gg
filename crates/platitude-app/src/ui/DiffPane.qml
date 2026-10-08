@@ -11,8 +11,8 @@ Rectangle {
     id: diffPane
 
     required property var diffModel
-    // Whether the shown diff is a working-tree file (stageable).
-    property bool fromWorkingTree: false
+    // Whether the shown diff is a worktree file (stageable).
+    property bool fromWorktree: false
     // Whether it is the staged side (flips the affordance wording).
     property bool staged: false
     /// A file git stopped on: `git add` still runs, but means "this is dealt with", and the words follow that.
@@ -42,7 +42,7 @@ Rectangle {
     /// Whether a hunk and a line can be staged on their own. Not on a new file — its one hunk is the whole file
     /// (デザイン規約 §diff の中のステージ) — nor a conflicted one, whose combined diff `git apply` refuses (and so does
     /// core, `stage::refuse_combined`); both keep the header's one word. Nor on another worktree's file.
-    readonly property bool partial: diffPane.fromWorkingTree && diffPane.writable
+    readonly property bool partial: diffPane.fromWorktree && diffPane.writable
                                     && !diffPane.diffModel.isNewFile && !diffPane.combined
 
     // ---- one column or two ----------------------------------------
@@ -392,7 +392,7 @@ Rectangle {
             id: paneHeader
             Layout.fillWidth: true
             title: diffPane.diffModel.title
-            fromWorkingTree: diffPane.fromWorkingTree
+            fromWorktree: diffPane.fromWorktree
             staged: diffPane.staged
             conflicted: diffPane.conflicted
             busy: diffPane.busy

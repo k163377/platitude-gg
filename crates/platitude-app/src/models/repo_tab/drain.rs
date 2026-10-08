@@ -319,7 +319,7 @@ impl RepoTab {
         // `reads_from` is what the listings that remove them for good
         // are measured against (`ops_delete::delete_answered`).
         self.delete_answered(id, !landed, reads_from);
-        // Stopped part-way answers with the working tree: there is no
+        // Stopped part-way answers with the worktree: there is no
         // commit at the tip to go to (`last_write_stopped`, raised by
         // the message before this one).
         let at_tip = landed
@@ -396,7 +396,7 @@ impl RepoTab {
             .unwrap_or(-1);
     }
 
-    /// The same for the stash press that took the working tree away. The
+    /// The same for the stash press that took the worktree away. The
     /// tree it waits for is not copied: asking spends it
     /// (`takeStashLanding`).
     fn read_stash_out(&mut self) {

@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::integrate::InProgress;
 use crate::process::{GitCommand, GitExecutor, literal_pathspec};
-use crate::status::{StatusItem, WorkingTreeStatus};
+use crate::status::{StatusItem, WorktreeStatus};
 
 /// The pre-merge tests' mock of [`available_tools`] (mry builds it into
 /// debug builds only).
@@ -69,7 +69,7 @@ pub struct ConflictedFile {
 }
 
 /// Conflicted entries of a status snapshot, in git's order.
-pub fn conflicted(status: &WorkingTreeStatus) -> Vec<ConflictedFile> {
+pub fn conflicted(status: &WorktreeStatus) -> Vec<ConflictedFile> {
     status
         .conflicted()
         .filter_map(|item| match item {

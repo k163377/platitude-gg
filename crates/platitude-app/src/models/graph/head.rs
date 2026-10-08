@@ -1,4 +1,4 @@
-//! Where the working tree stands in the loaded rows, and what that row
+//! Where the worktree stands in the loaded rows, and what that row
 //! draws — for the stand-in (`GraphHeadPin`) shown while the row is
 //! scrolled off. Properties, because the rows and their chips land in
 //! separate passes (app-ui.md「QML バインディングはプロパティにしか反応しない」).
@@ -13,7 +13,7 @@ fn take<T: PartialEq + Clone>(slot: &mut T, value: &T, moved: &mut bool) {
 }
 
 impl GraphModel {
-    /// Re-reads which loaded row the working tree stands on and copies off
+    /// Re-reads which loaded row the worktree stands on and copies off
     /// it what the stand-in draws; answers whether any of that moved.
     /// Called after every drain and re-marking — the rows, their chips, the
     /// HEAD report and the find line each move the answer on their own.

@@ -1,5 +1,5 @@
 //! What the panes point at: the hunks and lines a selection covers, and
-//! the diff target a working-tree row names.
+//! the diff target a worktree row names.
 
 use platitude_core::details::DiffTarget;
 use platitude_core::patch::HunkSelect;
@@ -16,10 +16,10 @@ pub fn hunk_selection(hunk: i32, line: i32) -> Vec<HunkSelect> {
     }
 }
 
-/// Rebuilds the diff target a working-tree selection refers to.
+/// Rebuilds the diff target a worktree selection refers to.
 /// `kind` is the prefix [`diff_key`] uses (`staged` / `unstaged` /
 /// `untracked`); a committed diff is not stageable and yields `None`.
-pub fn working_tree_target(kind: &str, path: &str, orig_path: &str) -> Option<DiffTarget> {
+pub fn worktree_target(kind: &str, path: &str, orig_path: &str) -> Option<DiffTarget> {
     let orig = (!orig_path.is_empty()).then(|| orig_path.to_string());
     match kind {
         "staged" => Some(DiffTarget::Staged {
@@ -73,20 +73,20 @@ mod tests {
     }
 
     #[test]
-    fn working_tree_targets_exclude_committed_diffs() {
+    fn worktree_targets_exclude_committed_diffs() {
         assert_eq!(
-            working_tree_target("unstaged", "f.txt", ""),
+            worktree_target("unstaged", "f.txt", ""),
             Some(DiffTarget::Unstaged {
                 path: "f.txt".into()
             })
         );
         assert_eq!(
-            working_tree_target("staged", "new.txt", "old.txt"),
+            worktree_target("staged", "new.txt", "old.txt"),
             Some(DiffTarget::Staged {
                 path: "new.txt".into(),
                 orig_path: Some("old.txt".into())
             })
         );
-        assert_eq!(working_tree_target("commit", "f.txt", ""), None);
+        assert_eq!(worktree_target("commit", "f.txt", ""), None);
     }
 }

@@ -15,7 +15,7 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var workingTree: driver.workingTree
+    readonly property var worktree: driver.worktree
     readonly property var branchesModel: driver.branchesModel
     readonly property var stashesModel: driver.stashesModel
     readonly property var graphPane: driver.graphPane
@@ -103,7 +103,7 @@ Item {
             localUpstreamAskTimer.answers = goes
             localUpstreamAskTimer.points = points
             localUpstreamAskTimer.pointed = false
-            const local = workingTree.branch
+            const local = worktree.branch
             sidebarPane.beginRename("branch", local, local)
             sidebarPane.submitEdit(want[0])
             localUpstreamAskTimer.start()
@@ -149,7 +149,7 @@ Item {
             // `code=` empty is part of the claim: git has no single word for this move (規約 §git 用語のコード表記).
             Harness.report("move_ask hold=" + graphPane.askHold
                               + " code=" + graphPane.askCode
-                              + " branch=" + workingTree.branch)
+                              + " branch=" + worktree.branch)
             driver.complete()
         }
     }
@@ -299,17 +299,17 @@ Item {
         property string branch: ""
         property int stashes: -1
         onTriggered: {
-            if (repoTab.busyCount !== 0 || workingTree.branch !== switchLandsTimer.branch)
+            if (repoTab.busyCount !== 0 || worktree.branch !== switchLandsTimer.branch)
                 return
             if (switchLandsTimer.stashes >= 0 && stashesModel.total !== switchLandsTimer.stashes)
                 return
             switchLandsTimer.stop()
             // `log=`: a refused move raises the command log (デザイン規約 §git が言ったことを読む場所), and a shut
             // panel frames like one never raised.
-            Harness.report("switch_landed branch=" + workingTree.branch
+            Harness.report("switch_landed branch=" + worktree.branch
                               + " stashes=" + stashesModel.total
                               + " wanted=" + switchLandsTimer.stashes
-                              + " conflicts=" + workingTree.conflictCount
+                              + " conflicts=" + worktree.conflictCount
                               + " log=" + page.commandsOpen)
             driver.complete()
         }
@@ -321,13 +321,13 @@ Item {
         property bool held: false
         property int writesBefore: 0
         onTriggered: {
-            if (repoTab.busyCount !== 0 || workingTree.branch !== switchTwiceTimer.branch)
+            if (repoTab.busyCount !== 0 || worktree.branch !== switchTwiceTimer.branch)
                 return
             switchTwiceTimer.stop()
             // `writes=` counts the same claim from the write side, read once the tree has settled.
             Harness.report("switch_twice held=" + switchTwiceTimer.held
                               + " writes=" + (repoTab.writeSeq - switchTwiceTimer.writesBefore)
-                              + " branch=" + workingTree.branch
+                              + " branch=" + worktree.branch
                               + " log=" + page.commandsOpen)
             driver.complete()
         }
@@ -363,8 +363,8 @@ Item {
                               + " accept=" + graphPane.askCard.accept
                               + " hold=" + graphPane.askHold
                               + " bang=" + graphPane.askAlert
-                              + " op=" + workingTree.opCommand
-                              + " branch=" + workingTree.branch
+                              + " op=" + worktree.opCommand
+                              + " branch=" + worktree.branch
                               + " log=" + page.commandsOpen)
             if (!switchStoppedTimer.go) {
                 driver.complete()
@@ -388,15 +388,15 @@ Item {
         property int stashes: -1
         onTriggered: {
             if (!driver.wroteAndSettled()
-                    || workingTree.opCommand !== "" || !graphPane.askCard.shut)
+                    || worktree.opCommand !== "" || !graphPane.askCard.shut)
                 return
             if (switchStoppedLandedTimer.stashes >= 0
                     && stashesModel.total !== switchStoppedLandedTimer.stashes)
                 return
             switchStoppedLandedTimer.stop()
-            Harness.report("switch_stopped_landed branch=" + workingTree.branch
-                              + " op=" + workingTree.opCommand
-                              + " conflicts=" + workingTree.conflictCount
+            Harness.report("switch_stopped_landed branch=" + worktree.branch
+                              + " op=" + worktree.opCommand
+                              + " conflicts=" + worktree.conflictCount
                               + " stashes=" + stashesModel.total
                               + " wanted=" + switchStoppedLandedTimer.stashes
                               + " log=" + page.commandsOpen)

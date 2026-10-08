@@ -22,7 +22,7 @@ pub use builder::GraphBuilder;
 /// palette (デザイン規約).
 pub const GRAPH_PALETTE_SIZE: u32 = 8;
 
-/// Whether a status leaves the synthetic working-tree row standing at the
+/// Whether a status leaves the synthetic worktree row standing at the
 /// head of the graph. The one place the rule is written: every reader asks
 /// here, so the window cannot drift from the rows the walk builds.
 ///
@@ -31,7 +31,7 @@ pub const GRAPH_PALETTE_SIZE: u32 = 8;
 /// with the card under the row). A bisect flips `OpState::any()` but has no
 /// card, so it does not count (デザイン規約 §進行中の操作から出る「出口は WIP ペインに立つ」).
 pub fn wip_row_stands(
-    status: &crate::status::WorkingTreeStatus,
+    status: &crate::status::WorktreeStatus,
     op: &crate::opstate::OpState,
 ) -> bool {
     status.is_dirty() || crate::integrate::InProgress::from_state(op).is_some()

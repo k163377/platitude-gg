@@ -6,7 +6,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// Right pane, working-tree (WIP) mode: the changed files, one list per bucket with stage/unstage affordances, over
+// Right pane, worktree (WIP) mode: the changed files, one list per bucket with stage/unstage affordances, over
 // the commit editor pinned to the pane's bottom.
 //
 // The parts are out (`WipBucketPane` per bucket, `WipCommitBlock` with the editor and the stopped operation's card,
@@ -19,9 +19,9 @@ ColumnLayout {
     id: wipPane
 
     required property var repoTab
-    required property var workingTree
+    required property var worktree
     /// One model per bucket run, each showing its own run and answering about the whole tree
-    /// (`NavSectionModel::attach_working_tree`) — so `unstagedModel`, the unstaged one, is where the pane asks the
+    /// (`NavSectionModel::attach_worktree`) — so `unstagedModel`, the unstaged one, is where the pane asks the
     /// tree.
     required property var unstagedModel
     required property var conflictsModel
@@ -34,7 +34,7 @@ ColumnLayout {
     /// A page's right-click menu is standing over this pane — the menus are the page's, so only it can say
     /// (デザイン規約 §メニュー).
     property bool menuStanding: false
-    /// The working-tree file the middle pane is reading, empty while the graph is there: what the arrows walk from
+    /// The worktree file the middle pane is reading, empty while the graph is there: what the arrows walk from
     /// (規約 §diff のファイル一覧). Its light is this list's own choice — see `readOne`.
     property string readBucket: ""
     property string readPath: ""
@@ -64,7 +64,7 @@ ColumnLayout {
     readonly property bool signingTipShown: commitBlock.signingTipShown
     /// Where a press lands it. Detached, the chip says git's own `HEAD` — naming nothing would read as "somewhere".
     readonly property string commitTarget:
-        wipPane.workingTree.detached ? "HEAD" : wipPane.workingTree.branch
+        wipPane.worktree.detached ? "HEAD" : wipPane.worktree.branch
 
     signal amendToggled(bool on)
     signal commitClicked()
@@ -380,7 +380,7 @@ ColumnLayout {
     /// answers for the pane as the pointer found it — usually mid-write after `Stage all`, not warning yet. So the
     /// warning (`onCardAsked`) and its count call it as well.
     Connections {
-        target: wipPane.workingTree
+        target: wipPane.worktree
         function onEolStagedCountChanged() { wipPane.settleCommitCard() }
     }
     /// The button is warning and the pointer (or a headless run) is on it.
@@ -415,9 +415,9 @@ ColumnLayout {
         // The button speaks for the whole index, so the words hold for all four cases at once: **"problems"**, since
         // only one case is a change, and **`may`**, since two are guesses from a sample (デザイン規約 §改行コードの警告).
         eolCard.path = ""
-        eolCard.notice = wipPane.workingTree.eolStagedCount === 1
+        eolCard.notice = wipPane.worktree.eolStagedCount === 1
             ? qsTr("1 staged file may have line-ending problems")
-            : qsTr("%1 staged files may have line-ending problems").arg(wipPane.workingTree.eolStagedCount)
+            : qsTr("%1 staged files may have line-ending problems").arg(wipPane.worktree.eolStagedCount)
         // Above the button: it is pinned to the pane's bottom edge, so under it is off the window.
         const at = commitBlock.commitSeat.mapToItem(wipPane, 0, 0)
         eolCard.x = at.x
@@ -551,8 +551,8 @@ ColumnLayout {
     // A merge is the one operation finished from this seat, and git wrote its message when it stopped. The page puts
     // it in the boxes (`absorbOpMessage`); these are what the boxes fall back to when emptied — the placeholder, and
     // what the press commits (デザイン規約 §進行中の操作から出る).
-    readonly property string standingSubject: wipPane.workingTree.opMerging ? wipPane.workingTree.opSubject : ""
-    readonly property string standingBody: wipPane.workingTree.opMerging ? wipPane.workingTree.opBody : ""
+    readonly property string standingSubject: wipPane.worktree.opMerging ? wipPane.worktree.opSubject : ""
+    readonly property string standingBody: wipPane.worktree.opMerging ? wipPane.worktree.opBody : ""
     /// The boxes stand empty over one — **both** boxes: a description with no summary would commit a blank first
     /// line. **Outside amend mode**: the message belongs to the commit the merge is about to make, not to the one an
     /// amend replaces.
@@ -681,7 +681,7 @@ ColumnLayout {
             visible: conflictsBucket.model.runFiles > 0
             pane: wipPane
             repoTab: wipPane.repoTab
-            workingTree: wipPane.workingTree
+            worktree: wipPane.worktree
             model: wipPane.conflictsModel
             tipRow: wipPane.pointedTipRow
             width: buckets.width
@@ -693,7 +693,7 @@ ColumnLayout {
             section: "unstaged"
             pane: wipPane
             repoTab: wipPane.repoTab
-            workingTree: wipPane.workingTree
+            worktree: wipPane.worktree
             model: wipPane.unstagedModel
             tipRow: wipPane.pointedTipRow - wipPane.conflictRows
             width: buckets.width
@@ -707,7 +707,7 @@ ColumnLayout {
             section: "staged"
             pane: wipPane
             repoTab: wipPane.repoTab
-            workingTree: wipPane.workingTree
+            worktree: wipPane.worktree
             model: wipPane.stagedModel
             tipRow: wipPane.pointedTipRow - wipPane.conflictRows - unstagedBucket.rows
             width: buckets.width
@@ -741,7 +741,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.preferredHeight: Math.min(commitBlock.wants, wipPane.blockRoom)
         repoTab: wipPane.repoTab
-        workingTree: wipPane.workingTree
+        worktree: wipPane.worktree
         standingSubject: wipPane.standingSubject
         standingBody: wipPane.standingBody
         onStandingMessage: wipPane.onStandingMessage

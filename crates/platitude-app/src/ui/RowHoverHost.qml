@@ -12,7 +12,7 @@ Item {
     id: host
 
     required property GraphPane graphPane
-    /// The branch the working tree is on; that one leads nowhere.
+    /// The branch the worktree is on; that one leads nowhere.
     required property string currentBranch
     /// The sections `mateOf` asks.
     required property var branchesModel

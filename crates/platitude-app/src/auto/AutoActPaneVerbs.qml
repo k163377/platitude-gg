@@ -14,7 +14,7 @@ Item {
     required property var driver
 
     readonly property var page: driver.page
-    readonly property var workingTree: driver.workingTree
+    readonly property var worktree: driver.worktree
     readonly property var graphModel: driver.graphModel
     readonly property var detailsModel: driver.detailsModel
     readonly property var graphPane: driver.graphPane
@@ -72,15 +72,15 @@ Item {
         } else if (act === "pane-bar" || act === "pane-bar-away") {
             // The details pane's bar, which a page opened on a dirty tree is not showing (`RepoPage.trySelectDefault`);
             // HEAD is the commit `--preset long` gives its eighty files.
-            page.activateRow(workingTree.headOid)
+            page.activateRow(worktree.headOid)
             paneBarTimer.begin()
         } else if (act === "bar-track") {
             // The file list `--preset long` gives HEAD eighty files for, as `bar-arrow`.
-            page.activateRow(workingTree.headOid)
+            page.activateRow(worktree.headOid)
             barTrackTimer.begin()
         } else if (act === "bar-arrow") {
             // The file list `--preset long` gives HEAD eighty files for, as `pane-bar`.
-            page.activateRow(workingTree.headOid)
+            page.activateRow(worktree.headOid)
             barArrowTimer.begin()
         } else if (act === "text-bar" || act === "text-bar-away") {
             // The argument picks a commit whose body runs past the box — one that fits never moves, and the run waits

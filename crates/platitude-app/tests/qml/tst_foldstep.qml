@@ -34,7 +34,7 @@ Item {
         }
     }
 
-    // The working tree's rows (`WipBucketPane`), which take the delegate's own step.
+    // The worktree's rows (`WipBucketPane`), which take the delegate's own step.
     Column {
         y: 100
         width: 200
@@ -207,7 +207,7 @@ Item {
             return [
                 { tag: "a commit's changed files", folder: () => changedList.itemAtIndex(0),
                   inside: () => changedList.itemAtIndex(1), beside: () => changedList.itemAtIndex(2), mark: "pen" },
-                { tag: "the working tree's files", folder: () => wipFolder, inside: () => wipInside,
+                { tag: "the worktree's files", folder: () => wipFolder, inside: () => wipInside,
                   beside: () => wipBeside, mark: "pen" },
                 { tag: "the sidebar's refs", folder: () => refFolder, inside: () => refInside, beside: null,
                   mark: "chevron" },
@@ -238,7 +238,7 @@ Item {
             compare(nameGap(changedList.itemAtIndex(2), "pen", "b.rs"), sidebar,
                     "a changed file's name starts as far past its mark's box as a sidebar name does")
             compare(nameGap(wipBeside, "pen", "b.rs"), sidebar,
-                    "and so does a working tree file's")
+                    "and so does a worktree file's")
         }
     }
 }

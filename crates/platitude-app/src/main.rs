@@ -18,7 +18,7 @@ use hub::Hub;
 use models::{
     AppBackend, CloneModel, CommandsModel, DetailsModel, DiffModel, DiscardModel, GitFacts,
     GraphModel, LineEndingsModel, NavSectionModel, RebasePlanModel, RepoConfigModel, RepoTab,
-    TabsModel, WorkingTreeModel,
+    TabsModel, WorktreeModel,
 };
 use platitude_core::settings::{Build, Claim, Store};
 use qtbridge::QmlElement;
@@ -32,9 +32,9 @@ fn main() {
     // event loop stops turning or is left (`harness::deadline`).
     harness::watch_deadline();
     // Before any repository is opened, so the opening's own walk is already
-    // a pass without the working tree's row (`harness::faults`).
+    // a pass without the worktree's row (`harness::faults`).
     if harness::knobs().fault_hold_wip_row {
-        harness::hold_the_working_tree_row();
+        harness::hold_the_worktree_row();
     }
     // Before anything else can fail, so a run whose window never comes up
     // still names the tree it was built from.
@@ -339,7 +339,7 @@ fn main() {
         RepoTab::register,
         GraphModel::register,
         NavSectionModel::register,
-        WorkingTreeModel::register,
+        WorktreeModel::register,
         DetailsModel::register,
         DiffModel::register,
         CommandsModel::register,

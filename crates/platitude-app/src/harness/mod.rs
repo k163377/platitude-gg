@@ -18,8 +18,8 @@ mod singleton;
 
 pub(crate) use deadline::{Station, at as station, watch as watch_deadline};
 pub(crate) use faults::{
-    fail_graph_pass, held_save, hold_the_working_tree_row, let_the_working_tree_row_through,
-    pass_hooks, walk_again_while_held,
+    fail_graph_pass, held_save, hold_the_worktree_row, let_the_worktree_row_through, pass_hooks,
+    walk_again_while_held,
 };
 pub(crate) use knobs::knobs;
 

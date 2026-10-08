@@ -46,7 +46,7 @@ Item {
             // HEAD.
             fieldMenuTimer.boxState = arg === "" ? "empty" : arg
             if (arg === "readonly")
-                page.activateRow(graphModel.oidAt(graphModel.rowOf(driver.workingTree.headOid) + 1))
+                page.activateRow(graphModel.oidAt(graphModel.rowOf(driver.worktree.headOid) + 1))
             else
                 page.showWip()
             fieldMenuTimer.start()
@@ -108,7 +108,7 @@ Item {
             // Overflow is glyphs cut at the window's edge, which headless cannot see, so the pane reports the number.
             //
             // No row named keeps the one the page opened on: `Number("")` is 0, and row 0 of a dirty tree (both
-            // presets this verb runs on) is the working tree's — the card never settles and the run waits out the
+            // presets this verb runs on) is the worktree's — the card never settles and the run waits out the
             // watchdog.
             if (arg !== "")
                 page.activateRow(graphModel.oidAt(Number(arg)))
@@ -128,7 +128,7 @@ Item {
                 page.commandsOpen = true
                 splitRefuseTimer.start()
             } else if (arg === "desc-max" || arg === "desc-min") {
-                // Row 1: row 0 of every preset is the uncommitted row, which puts the working tree in the right-hand
+                // Row 1: row 0 of every preset is the uncommitted row, which puts the worktree in the right-hand
                 // pane and the box this pulls on off screen.
                 page.activateRow(graphModel.oidAt(1))
                 descGrowTimer.pane = detailsPane
@@ -647,7 +647,7 @@ Item {
                 return
             // The pane has to be done arriving: a details pane still reading its file list leaves its whole bottom
             // bare, so the corner reads as standing whatever the commit holds (`DetailsPane.bottomRoomSettled`). The
-            // working tree's foot is the commit button's, whatever is above it.
+            // worktree's foot is the commit button's, whatever is above it.
             if (!page.wipShown && (!driver.cardSettled || !detailsPane.bottomRoomSettled))
                 return
             // And it has to have stopped moving, as in `details-fit`. Both halves are needed: the settle alone can be

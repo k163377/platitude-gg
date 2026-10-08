@@ -169,7 +169,7 @@ impl NavSectionModel {
         self.run.is_empty() || self.run_of(at) == self.run
     }
 
-    /// The memory report's name for this list — one per working-tree run, so
+    /// The memory report's name for this list — one per worktree run, so
     /// three lists do not read as one that grew.
     fn named(&self) -> String {
         if self.run.is_empty() {

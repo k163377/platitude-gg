@@ -11,7 +11,7 @@ AppCard {
     id: peek
 
     required property var repoTab
-    required property var workingTree
+    required property var worktree
     /// The folded rail: which model and which mark each section has.
     required property var rail
     /// Who the rows report their gestures to (`NavList.gestures`).

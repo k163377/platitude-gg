@@ -55,7 +55,7 @@ pub(crate) struct Knobs {
     /// `PGG_FAULT_HOLD_WIP_ROW` — walk every pass as one that began
     /// before this window's first status did, until the run says
     /// otherwise: an arrangement no repository can be built into
-    /// (`platitude_core::session::PassHooks::holds_back_the_working_tree_row`).
+    /// (`platitude_core::session::PassHooks::holds_back_the_worktree_row`).
     pub fault_hold_wip_row: bool,
     /// `PGG_FAULT_HOLD_SAVE` — hold every configuration save the hub
     /// spawns until the station this names (`harness::deadline`), so a
@@ -70,7 +70,7 @@ pub(crate) struct Knobs {
     pub scroll: bool,
     /// `PGG_AUTO_PERF` — take the startup and interaction measurements.
     pub perf: bool,
-    /// `PGG_AUTO_WIP` — open the working-tree view once there is something
+    /// `PGG_AUTO_WIP` — open the worktree view once there is something
     /// uncommitted to show.
     pub wip: bool,
     /// `PGG_SYSTEM_TITLE_BAR` — take the window shape the two platforms

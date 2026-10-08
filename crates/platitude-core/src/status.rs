@@ -1,4 +1,4 @@
-//! Working-tree status: `git status --porcelain=v2 -z --branch -uall`.
+//! Worktree status: `git status --porcelain=v2 -z --branch -uall`.
 
 use std::path::Path;
 
@@ -42,7 +42,7 @@ impl StatusItem {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct WorkingTreeStatus {
+pub struct WorktreeStatus {
     /// HEAD commit; `None` on an unborn branch.
     pub branch_oid: Option<Oid>,
     /// Current branch name; `None` when detached.
@@ -57,7 +57,7 @@ pub struct WorkingTreeStatus {
     pub items: Vec<StatusItem>,
 }
 
-impl WorkingTreeStatus {
+impl WorktreeStatus {
     /// Where this read saw HEAD, for the session's one record of it
     /// (`session::standing`).
     pub fn head(&self) -> crate::refs::HeadState {
@@ -65,7 +65,7 @@ impl WorkingTreeStatus {
     }
 }
 
-impl WorkingTreeStatus {
+impl WorktreeStatus {
     pub fn staged(&self) -> impl Iterator<Item = &StatusItem> {
         self.items
             .iter()
@@ -127,7 +127,7 @@ pub struct Counts {
 }
 
 impl Counts {
-    pub fn of(status: &WorkingTreeStatus) -> Self {
+    pub fn of(status: &WorktreeStatus) -> Self {
         let mut counts = Self::default();
         for item in &status.items {
             match item {
@@ -154,7 +154,7 @@ impl Counts {
     }
 }
 
-/// How many rows of each change kind a working-tree list holds, counted
+/// How many rows of each change kind a worktree list holds, counted
 /// the way that list is built so the tally and the list agree:
 /// [`Kinds::of`] for this window's pane, which lists a path once per side
 /// it changed on, and [`Kinds::folded`] for another worktree's pane, which
@@ -172,7 +172,7 @@ pub struct Kinds {
 }
 
 impl Kinds {
-    pub fn of(status: &WorkingTreeStatus) -> Self {
+    pub fn of(status: &WorktreeStatus) -> Self {
         let mut kinds = Self::default();
         for item in &status.items {
             match item {
@@ -193,7 +193,7 @@ impl Kinds {
 
     /// The same six counted once per path, for another worktree's pane
     /// ([`Kinds`]).
-    pub fn folded(status: &WorkingTreeStatus) -> Self {
+    pub fn folded(status: &WorktreeStatus) -> Self {
         let mut kinds = Self::default();
         for item in &status.items {
             match item {
@@ -238,8 +238,8 @@ impl Kinds {
 pub struct StatusParseError(pub String);
 
 /// Parses `git status --porcelain=v2 -z --branch` output.
-pub fn parse_status(bytes: &[u8]) -> Result<WorkingTreeStatus, StatusParseError> {
-    let mut status = WorkingTreeStatus::default();
+pub fn parse_status(bytes: &[u8]) -> Result<WorktreeStatus, StatusParseError> {
+    let mut status = WorktreeStatus::default();
     let mut tokens = bytes
         .split(|b| *b == 0)
         .filter(|t| !t.is_empty())
@@ -324,7 +324,7 @@ fn split_fields(
     Ok(((x, y), path.to_string()))
 }
 
-fn parse_header(header: &str, status: &mut WorkingTreeStatus) {
+fn parse_header(header: &str, status: &mut WorktreeStatus) {
     let Some((key, value)) = header.split_once(' ') else {
         return;
     };
@@ -355,7 +355,7 @@ pub async fn load(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
-) -> Result<WorkingTreeStatus, GitError> {
+) -> Result<WorktreeStatus, GitError> {
     // `-uall` pins the untracked listing against user config and lists a
     // new directory's files; `-unormal` would give one `dir/` entry with no
     // per-file diff to stage from. A nested repository still stays one
@@ -370,7 +370,7 @@ pub async fn load_tracked(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
-) -> Result<WorkingTreeStatus, GitError> {
+) -> Result<WorktreeStatus, GitError> {
     load_listing(executor, workdir, "-uno", cancel).await
 }
 
@@ -379,7 +379,7 @@ async fn load_listing(
     workdir: &Path,
     untracked: &str,
     cancel: &CancellationToken,
-) -> Result<WorkingTreeStatus, GitError> {
+) -> Result<WorktreeStatus, GitError> {
     let cmd = GitCommand::new().cwd(workdir).args([
         "status",
         "--porcelain=v2",

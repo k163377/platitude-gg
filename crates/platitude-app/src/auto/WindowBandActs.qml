@@ -107,8 +107,8 @@ Item {
     SampleTimer {
         running: Harness.autoAct === "stash-state"
         onTriggered: {
-            // Not the graph, unlike `fetch-tip`: `empty` has no rows, so it is judged on its working tree alone.
-            if (window.curPage === null || !window.curPage.pageWorkingTree.loaded)
+            // Not the graph, unlike `fetch-tip`: `empty` has no rows, so it is judged on its worktree alone.
+            if (window.curPage === null || !window.curPage.pageWorktree.loaded)
                 return
             const tab = window.curPage.pageTab
             if (tab.busyCount !== 0 || tab.autoFetchRunning)
@@ -179,14 +179,14 @@ Item {
         }
     }
     function opsPanelKey() {
-        const workingTree = window.curPage === null ? null : window.curPage.pageWorkingTree
+        const worktree = window.curPage === null ? null : window.curPage.pageWorktree
         return topBar.opsNames + "|" + topBar.branchUpstream + "|"
-            + (workingTree === null ? "" : workingTree.ahead + "/" + workingTree.behind)
+            + (worktree === null ? "" : worktree.ahead + "/" + worktree.behind)
             + "|" + topBar.width
     }
     function opsPanelLoaded() {
         if (!window.visible || topBar.width <= 0 || window.curPage === null
-                || !window.curPage.pageRefsLoaded || !window.curPage.pageWorkingTree.loaded)
+                || !window.curPage.pageRefsLoaded || !window.curPage.pageWorktree.loaded)
             return false
         const tab = window.curPage.pageTab
         return tab.busyCount === 0 && !tab.autoFetchRunning
@@ -399,10 +399,10 @@ Item {
         property int askSeq: -1
         onTriggered: {
             // Every width is measured off the set's shared box (`TopBar.widestAction`), zero until the band has
-            // loaded — and off push's wording, which the working tree decides (`publish` until the first status,
+            // loaded — and off push's wording, which the worktree decides (`publish` until the first status,
             // `push -f` after on a diverged branch).
             if (topBar.bandTabsWidth <= 0 || topBar.actionNaturalW <= Theme.railWidth
-                    || window.curPage === null || !window.curPage.pageWorkingTree.loaded)
+                    || window.curPage === null || !window.curPage.pageWorktree.loaded)
                 return
             // The `!` before the window is sized: a real refusal from git (`--preset longnames` will not fast-forward,
             // as `push-retry` sets up). Sent through the page, because in this state the button is a hold and its
@@ -433,7 +433,7 @@ Item {
                 if (!acts.stoppedYet(tab, actionsActTimer))
                     return
             }
-            // Re-asked on every tick: push's wording can still change after the working tree loads, and the width is
+            // Re-asked on every tick: push's wording can still change after the worktree loads, and the width is
             // measured off it. The target does not move with the window's width, so this closes no ring.
             const wanted = acts.actionsWidthFor(
                 Harness.autoAct === "band-actions" ? Harness.autoActArg

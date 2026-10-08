@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// One bucket of the working tree as a list of its own: the heading pinned on top and the files scrolling under it,
+// One bucket of the worktree as a list of its own: the heading pinned on top and the files scrolling under it,
 // in whatever share of the pane the bucket was given. The heading stands when the bucket is empty and does not
 // scroll (デザイン規約 §バケツごとの一覧と、ペインの分け方).
 ColumnLayout {
@@ -17,7 +17,7 @@ ColumnLayout {
     /// walk crosses buckets.
     required property var pane
     required property var repoTab
-    required property var workingTree
+    required property var worktree
     /// This bucket's rows (`NavSectionModel` attached to this run).
     required property var model
     /// Automation's stand-in pointer row (PGG_AUTO_ACT=path-tip): the pane's row less the rows above this bucket, so
@@ -48,7 +48,7 @@ ColumnLayout {
         Layout.fillWidth: true
         section: bucketPane.section
         repoTab: bucketPane.repoTab
-        workingTree: bucketPane.workingTree
+        worktree: bucketPane.worktree
         bucketModel: bucketPane.model
     }
     AppListView {
@@ -70,8 +70,8 @@ ColumnLayout {
             kindHint: "file"
             showStage: true
             chosen: bucketPane.pane.isChosen(bucket, fullName)
-            sideOurs: bucketPane.workingTree.sideOurs
-            sideTheirs: bucketPane.workingTree.sideTheirs
+            sideOurs: bucketPane.worktree.sideOurs
+            sideTheirs: bucketPane.worktree.sideTheirs
             pointedTipRow: bucketPane.tipRow
             menuStanding: bucketPane.pane.menuStanding
             pointedEolPath: bucketPane.pane.pointedEolPath
