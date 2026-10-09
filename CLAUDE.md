@@ -48,7 +48,7 @@
 - **依存(crate・Qt・toolchain)の更新は、追従の改善まで 1 回の land に入れる** — その land の前後を `land` が `deps/<日付>/before`・`after` のタグで挟んで push する(範囲の印はこの 2 本だけ。反映前テストの機械化.md §版を動かした land のタグ)
 - **rebase はその場でユーザーが指示した時だけ**(main への追従・squash を含む。その時だけ `PGG_ALLOW_REBASE=1` を先頭に付ける)。worktree ブランチが main より遅れたままは正常
 - **完了報告・反映の前に、依頼範囲の修正・レビュー対応・docs 更新を完了して commit する**(バックグラウンドのレビュー・検証も結果を受け取って対応まで)。外部確認・判断が得られなければ阻害要因を報告し、範囲を減らすならユーザーと合意する
-- **main を動かすのはその場でユーザーが指示した時だけ**: <!--cmd:land.branch-->`cargo xtask land <branch>`(席で rebase → gate → fast-forward)。指示がなければ席で `gate` を通し、branch/SHA と検証結果を添えて「マージ可」と報告する。**許可は発話 1 回につき main が動く land 1 回**で、main が動いて初めて消える(判定は [land の許可](internal-docs/反映前テストの機械化.md#land-の許可permit))
+- **main を動かすのはその場でユーザーが指示した時だけ**: <!--cmd:land.branch-->`cargo xtask land <branch>`(席で rebase → gate → fast-forward)。指示がなければ席で `gate` を通し、branch/SHA と検証結果を添えて「マージ可」と報告する。**許可は発話 1 回につき main が動く land 1 回**。main が動いた時に消費し、次のユーザー発話には持ち越さない(判定は [land の許可](internal-docs/反映前テストの機械化.md#land-の許可permit))
 - **確認の要る UI 挙動変更が入るなら反映を中止し、board で承諾を得る**(反映の指示より後に絵を載せた席の `land` は、絵を下げてもユーザーの次の発言まで止まる)。**land 後に絵を載せ直さない**(絵は claim を戻さない)
 - **land は自分のセッションの branch(作った物・アプリが起動用に作った物)とそれを出す席以外の worktree をゴミとして残さない** — 持ち主は hook が記録し(reference-transaction / SessionStart)、land は中身を main が持つ物を消して残りを名指す。使用中で消えない起動用 worktree は手放し、後の land(誰のでも)が消す。他セッション・アプリ・ユーザーの物には触らない。名指された控え等は報告前に消し、main に無い作業を残すなら `keep/<名前>` にして確認事項へ置き場を書く
 
