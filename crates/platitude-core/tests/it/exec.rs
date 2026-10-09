@@ -310,6 +310,10 @@ mod periodic {
         let v = bounded("version detect", version::detect(&executor, &cancel))
             .await
             .unwrap();
-        assert!(v.supported(), "dev/CI machines must have git >= 2.43");
+        assert!(
+            v.supported(),
+            "dev/CI machines must have git >= {}",
+            version::minimum_string()
+        );
     }
 }

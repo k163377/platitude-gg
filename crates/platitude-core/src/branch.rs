@@ -140,7 +140,7 @@ impl ResetMode {
 ///
 /// No `--` (to `reset` it opens the pathspec form, which takes no mode
 /// flag) and no `--end-of-options` (the minimum git refuses it in `reset`
-/// — git最低バージョン整合.md). A caller with a *name* resolves it first
+/// — see [`crate::version::MINIMUM_GIT`]). A caller with a *name* resolves it first
 /// with `rev-parse --end-of-options`.
 ///
 /// Not a way out of an operation in progress (the UI does not offer it):

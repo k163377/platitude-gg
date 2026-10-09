@@ -75,7 +75,7 @@ pub async fn revert(
 /// standing, a message naming `--skip`) though it asks nothing of the
 /// person, so it is answered here (デザイン規約 §履歴を合流させる).
 /// `--empty=drop` would do it but is past the minimum git version
-/// (internal-docs/git最低バージョン整合.md).
+/// (see [`crate::version::MINIMUM_GIT`] and version.rs's unsupported forms).
 ///
 /// The number of commits bounds the loop: each `--skip` moves the
 /// sequence on by one.

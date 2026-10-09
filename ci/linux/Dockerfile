@@ -1,11 +1,10 @@
 # `cargo xtask linux <cargo args>` builds this image and runs the workspace
 # inside it — with WSL's own engine (wslc) on Windows, docker elsewhere.
 #
-# The Ubuntu release both base stages start from. Its git is the oldest
-# git最低バージョン整合.md supports — no other machine here runs it (a
-# GitHub runner of the same release carries a newer one). CI's Linux jobs
-# run on this release; `cargo xtask versions` holds their runner names to
-# this line.
+# The base OS for both stages. Its packaged git is the minimum defined
+# in crates/platitude-core/src/version.rs; a GitHub runner of the same
+# release can carry a newer git. CI's Linux jobs run on this release;
+# `cargo xtask versions` holds their runner names to this line.
 ARG UBUNTU=24.04
 # aqtinstall as pip takes it, for every Qt install here and in CI (the Qt
 # action reads this line). Windows Qt from 6.11 sits in a folder per

@@ -406,7 +406,7 @@ nothex\trefs/tags/v2\n";
     }
 
     /// Real `ls-remote --tags -- origin refs/tags/<t> refs/tags/<t>^{}`
-    /// stdout (git 2.55 and 2.43 alike).
+    /// stdout (the supported minimum and development git alike).
     const ANNOTATED: &[u8] = b"\
 2ed5d8dca01fe0551588949ea26e6dc65e69cae8\trefs/tags/ann\n\
 a9771664a8219f845abfd8ce6f5d7af521247539\trefs/tags/ann^{}\n";

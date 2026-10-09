@@ -439,7 +439,7 @@ const SEED: &[(&str, &str)] = &[
     ),
     (
         "crates/platitude-core/src/version.rs",
-        "/// The oldest git.\npub const MINIMUM_GIT: (u32, u32) = (2, 43);\n",
+        "/// The oldest git.\npub const MINIMUM_GIT: (u32, u32) = (1, 2);\n",
     ),
     (
         "crates/platitude-core/src/stash.rs",

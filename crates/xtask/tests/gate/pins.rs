@@ -103,7 +103,7 @@ fn the_git_minimum_is_its_constant() {
     sb.write(
         &sb.seat,
         version,
-        "/// The oldest git supported.\npub const MINIMUM_GIT: (u32, u32) = (2, 43);\n",
+        "/// The oldest git supported.\npub const MINIMUM_GIT: (u32, u32) = (1, 2);\n",
     );
     sb.commit_all(&sb.seat, "docs: the minimum", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
@@ -112,7 +112,7 @@ fn the_git_minimum_is_its_constant() {
     sb.write(
         &sb.seat,
         version,
-        "/// The oldest git supported.\npub const MINIMUM_GIT: (u32, u32) = (2, 47);\n",
+        "/// The oldest git supported.\npub const MINIMUM_GIT: (u32, u32) = (1, 3);\n",
     );
     sb.commit_all(&sb.seat, "feat: a newer minimum", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);

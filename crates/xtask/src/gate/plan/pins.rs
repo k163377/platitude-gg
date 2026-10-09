@@ -39,7 +39,7 @@ fn pins() -> [Pin; 5] {
             container_only: false,
         },
         // The floor the product guarantees, which the container's git is
-        // (git最低バージョン整合.md); the host runs a newer one.
+        // (version.rs's MINIMUM_GIT); the host runs a newer one.
         Pin {
             path: format!("{}/src/version.rs", core()),
             carries: |line| line.trim_start().starts_with("pub const MINIMUM_GIT"),
@@ -114,9 +114,10 @@ mod tests {
     #[test]
     fn the_git_minimum_is_read_off_its_constant_alone() {
         let version = pin("version.rs");
-        let before = "/// doc\npub const MINIMUM_GIT: (u32, u32) = (2, 43);\nfn a() {}\n";
-        let edited = "/// other doc\npub const MINIMUM_GIT: (u32, u32) = (2, 43);\nfn b() {}\n";
-        let raised = "/// doc\npub const MINIMUM_GIT: (u32, u32) = (2, 47);\nfn a() {}\n";
+        // Arbitrary fixture versions: only the constant line is a pin.
+        let before = "/// doc\npub const MINIMUM_GIT: (u32, u32) = (1, 2);\nfn a() {}\n";
+        let edited = "/// other doc\npub const MINIMUM_GIT: (u32, u32) = (1, 2);\nfn b() {}\n";
+        let raised = "/// doc\npub const MINIMUM_GIT: (u32, u32) = (1, 3);\nfn a() {}\n";
         assert_eq!(carried(&version, before), carried(&version, edited));
         assert_ne!(carried(&version, before), carried(&version, raised));
     }

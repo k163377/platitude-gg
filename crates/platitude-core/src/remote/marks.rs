@@ -219,9 +219,9 @@ const ORIGIN_KEYS: [&str; 2] = ["remote.pushDefault", "checkout.defaultRemote"];
 /// remote.pushDefault <name>`, then `git config checkout.defaultRemote
 /// <name>`.
 ///
-/// The old spelling on purpose (git最低バージョン整合.md: `git config set`
-/// is 2.46), one key per process. The key ends the options, so a remote
-/// named `-x` is taken as the value.
+/// The old spelling supports [`crate::version::MINIMUM_GIT`] (see
+/// version.rs's unsupported forms), one key per process. The key ends
+/// the options, so a remote named `-x` is taken as the value.
 pub async fn mark_origin(
     executor: &GitExecutor,
     workdir: &Path,
