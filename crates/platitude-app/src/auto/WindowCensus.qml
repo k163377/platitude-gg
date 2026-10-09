@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude
+import platitude.ui
 
 /// Every QML component a verb's run showed, by type name, reported as `census=A,B,C` for verify-ui to record
 /// (`crates/xtask/verb-census.txt`). The union of two walks — at the picture and at the settled edge — with `lost=`
@@ -45,6 +46,29 @@ Item {
         }
     }
 
+    /// A pooled delegate can still be `visible` and keep its old index; the view no longer returns it for that row.
+    /// Headers and footers have the attached view too, but no row index. A row's `index` can be an action value
+    /// (`ChosenCommitRow` always says -1), so find its list position by its geometry, not that property's value.
+    function inList(object) {
+        if (!(object instanceof Item))
+            return true
+        // Only direct children of a list's content item can be its delegates. Reading the attached object on
+        // every Item would create ListView's attached state across the fixed tree just to discover it has no view.
+        const holder = object.parent
+        if (!holder || !(holder.parent instanceof ListView) || holder.parent.contentItem !== holder)
+            return true
+        const view = object.ListView.view
+        if (!view)
+            return true
+        const hasRowIndex = object.index !== undefined || (object.model && object.model.index !== undefined)
+        if (!hasRowIndex)
+            return true
+        if (!object.visible)
+            return false
+        const point = object.mapToItem(view.contentItem, object.width / 2, object.height / 2)
+        return view.itemAtIndex(view.indexAt(point.x, point.y)) === object
+    }
+
     /// Down through `data`, not `children` — a Popup is no item. `shown` is whether this branch is on screen: a shut
     /// popup is still walked (an open one can be declared inside it) with nothing noted until an open one. `offered`
     /// is a menu in an open menu's content, which shows as that menu's row whether open or not.
@@ -52,13 +76,18 @@ Item {
         if (!object)
             return
         const key = String(object)
+        // A list keeps pooled delegates alive, and hidden panes can receive their rows after the pane went away.
+        // Their existence depends on arrival order; count only the delegates the visible list still owns.
+        // Popups can stand outside a hidden declaring branch, and an offered submenu stands as its parent's row.
+        if (object.opened !== undefined)
+            shown = object.visible === true || offered === true
+        else if (!census.inList(object))
+            shown = false
         // A second visit goes through when it is the showing one: a branch first met through a property pointing
         // back up the tree would otherwise drop out of the census.
         if (census.visited[key] === true || (census.visited[key] !== undefined && !shown))
             return
         census.visited[key] = shown === true
-        if (object.opened !== undefined)
-            shown = object.visible === true || offered === true
         if (shown)
             note(object)
         const owned = object.data
@@ -95,8 +124,7 @@ Item {
             visit(loaded, shown, false)
     }
 
-    /// A binding, so the wait below has an edge: every term in `pageSettled()` is a property read, so its
-    /// dependencies are captured as they would be inline.
+    /// The page's property edges wake the wait; the core's counted reads are queried again by the sampler below.
     readonly property bool settled: census.pageSettled()
 
     /// The one rule (`PageSettled`) of the page in front — the same the page and badge verbs wait on, never a copy.
@@ -120,7 +148,7 @@ Item {
         if (Harness.autoAct === "")
             return
         census.waiting = true
-        census.waited = !census.settled
+        census.waited = !census.pageSettled()
         // In the picture's own turn, not on a frame: waiting for one is the stretch where the verb's leftover beats
         // fire.
         census.walk()
@@ -134,7 +162,7 @@ Item {
             census.armed = false
     }
     function arm() {
-        if (!census.waiting || !census.settled)
+        if (!census.waiting || census.armed || !census.pageSettled())
             return
         census.armed = true
         // A quiet scene draws no frame of its own; asked for one, the window polishes its items and says so.
@@ -145,12 +173,19 @@ Item {
         enabled: census.armed
         function onAfterAnimating() {
             // A read went out since the ask: the next settled edge re-arms.
-            if (!census.settled) {
+            if (!census.pageSettled()) {
                 census.armed = false
                 return
             }
             census.take()
         }
+    }
+
+    // Core's counted reads can end without changing a model (an unchanged graph pass). Its query has no property
+    // edge, so sample the same predicate rather than relying on the binding above to wake this last part of the run.
+    SampleTimer {
+        running: census.waiting
+        onTriggered: census.arm()
     }
 
     /// Why the window said `settled`, on the run's own line, so a census that moves says why. Only terms that can
@@ -182,7 +217,7 @@ Item {
         const left = census.lost()
         // A line of its own, first: everything after `census=` is a name. The answer's line is read one word at a
         // time (`gate::census::page_settled_in`).
-        Harness.report("census page=" + (census.settled ? "settled" : "arriving") + " " + census.terms()
+        Harness.report("census page=" + (census.pageSettled() ? "settled" : "arriving") + " " + census.terms()
                        + " lost=" + (left.length === 0 ? "none" : left.join("/")))
         Harness.report("census=" + Object.keys(census.seen).sort().join(","))
         // From the event loop: the ending this releases may quit the application, so the frame finishes first.

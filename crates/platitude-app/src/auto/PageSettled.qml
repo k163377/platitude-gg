@@ -14,7 +14,10 @@ import QtQuick
 /// when the status loses it asks for a rebuild that brings the row a pass later. So the rows must agree with the
 /// status (`GraphModel.wipRow` against `WorktreeModel.wipRowStands`, both off
 /// `platitude_core::graph::wip_row_stands`).
-/// A graph that could not be walked (`failed` / `stale`) waits for nothing and answers yes with what it holds.
+/// `finishCount` is cumulative, and Started applies a stream's generation before its Finished reaches the UI:
+/// A healthy stream's `loading` must be down too, even after the core's reads ended and generations already agree.
+/// A graph that could not be walked (`failed` / `stale`) owes no new stream or readings; the other page terms
+/// (including an initial finish) still stand, and it answers with what it holds.
 ///
 /// A landing the page owes itself is a read on its way (`RepoPage.pageLanding`): both ends of that move settle every
 /// other term, so without it a run reads settled before and after the move (`AutoActCompletion.owesStatus`). What
@@ -49,11 +52,13 @@ QtObject {
             owed.push("worktree")
         if (!page.pageRefsLoaded)
             owed.push("refs")
-        if (!(graph.finishCount > 0))
+        if (!(graph.finishCount > 0) || (!graph.failed && !graph.stale && graph.loading))
             owed.push("graph")
         if (!page.pageDetailsSettled)
             owed.push("details")
         if (!graph.failed && !graph.stale) {
+            if (!graph.readingsSettled())
+                owed.push("readings")
             if (page.pageLanding)
                 owed.push("landing")
             else if (graph.wipRow !== page.pageWorktree.wipRowStands)

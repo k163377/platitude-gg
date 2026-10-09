@@ -12,6 +12,7 @@ use std::time::Duration;
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened_with, scenario};
 use crate::support::wait::bounded;
+use platitude_core::process::{Limits, Pace, Priority, Slots};
 use platitude_core::session::{PaceBounds, Recording, RepoSession, SessionEvent, WorktreesPace};
 
 /// Waits out the opening's reading of the worktrees: the worktrees' row drawn —
@@ -58,6 +59,85 @@ fn a_worktree_beside(repo: &mut TestRepo) -> std::path::PathBuf {
     repo.git(&["worktree", "add", "-b", "worktree", &at]);
     std::fs::write(worktree.join("carried.txt"), "u\n").expect("a file in the worktree");
     worktree
+}
+
+#[tokio::test]
+async fn a_settled_graph_waits_from_a_paced_worktree_becoming_due_to_its_applied_generation() {
+    let (mut repo, _head) = scenario();
+    let worktree = a_worktree_beside(&mut repo);
+    let slots = Arc::new(Slots::new(Limits {
+        total: 1,
+        reserve: 0,
+    }));
+    let exec = crate::support::exec::isolated().scheduled(Arc::clone(&slots));
+    let (sink, session) = opened_with(&repo, exec).await;
+    worktrees_settled(&sink, &session, 1).await;
+    let before = sink
+        .wait_for("the opening's generation", |events| {
+            events
+                .iter()
+                .filter_map(crate::support::session::pass_of)
+                .max_by_key(|p| p.generation)
+        })
+        .await;
+
+    session.read_carried_status(listed_path(&mut repo, "worktree"), "worktree".into());
+    sink.wait_for("the pane stands on the worktree", |events| {
+        handed(events).contains(&"worktree".into()).then_some(())
+    })
+    .await;
+    repo.git_in(&worktree, &["add", "carried.txt"]);
+    repo.git_in(&worktree, &["commit", "-m", "feat: move the worktree head"]);
+    std::fs::write(worktree.join("new.txt"), "new\n").expect("the worktree still carries a file");
+    let held = bounded(
+        "the test's slot",
+        slots.acquire(Priority::Interactive, Pace::Here),
+    )
+    .await
+    .expect("a free slot");
+    paced_off_the_clock(&session);
+    assert!(session.graph_settled_at(before.generation));
+
+    // This current-thread task does not yield: poll_now marks the pane's worktree due before the driver runs.
+    session.poll_now();
+    assert!(
+        !session.graph_settled_at(before.generation),
+        "the due read has not started yet"
+    );
+    bounded(
+        "the paced reads reach git's queue",
+        slots.settled(|report| report.queued_background + report.queued_interactive > 0),
+    )
+    .await;
+    assert!(
+        !session.graph_settled_at(before.generation),
+        "the reads are queued"
+    );
+    drop(held);
+    sink.wait_for("the paced worktree's read", |events| {
+        paced_reads(events)
+            .iter()
+            .any(Option::is_some)
+            .then_some(())
+    })
+    .await;
+    bounded("the paced snapshots end", session.wait_for_snapshot_reads()).await;
+    bounded("the paced graph ends", session.wait_for_graph_passes()).await;
+    let after = sink
+        .wait_for("the paced worktree's last graph", |events| {
+            events
+                .iter()
+                .filter_map(crate::support::session::pass_of)
+                .max_by_key(|p| p.generation)
+        })
+        .await;
+    assert!(after.generation > before.generation);
+    assert!(
+        !session.graph_settled_at(before.generation),
+        "the UI still holds the old generation"
+    );
+    assert!(session.graph_settled_at(after.generation));
+    session.close();
 }
 
 fn paced_reads(events: &[SessionEvent]) -> Vec<Option<String>> {

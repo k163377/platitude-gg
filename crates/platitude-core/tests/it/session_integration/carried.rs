@@ -51,6 +51,92 @@ fn pass_draws_a_worktree(events: &[SessionEvent], generation: u64) -> bool {
         .any(|(at, drawn)| at == generation && drawn)
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn a_settled_graph_waits_for_carried_reads_and_their_applied_generation() {
+    let (mut repo, _head) = scenario();
+    a_worktree_beside(&mut repo);
+    let slots = Arc::new(Slots::new(Limits {
+        total: 1,
+        reserve: 0,
+    }));
+    let exec = crate::support::exec::isolated().scheduled(Arc::clone(&slots));
+    let (sink, session) = opened_with(&repo, exec).await;
+    sink.opening_settled(&session).await;
+    bounded(
+        "the opening's carried read",
+        session.wait_for_carried_pass(),
+    )
+    .await;
+    let opened = bounded(
+        "the opening's graph",
+        session.refresh_log_tracked().outcome(),
+    )
+    .await;
+    assert!(opened.landed());
+    bounded("all opening graph passes", session.wait_for_graph_passes()).await;
+    let before = sink
+        .wait_for("the opening's last graph", |events| {
+            events
+                .iter()
+                .filter_map(crate::support::session::pass_of)
+                .max_by_key(|p| p.generation)
+        })
+        .await;
+    assert!(session.graph_settled_at(before.generation));
+
+    // A counted read is already pending while its git is queued. The old graph still has a finished pass and its
+    // own WIP row still agrees with its status; neither closes the other worktree's outstanding read.
+    let held = bounded(
+        "the test's git slot",
+        slots.acquire(Priority::Interactive, Pace::Here),
+    )
+    .await
+    .expect("a free slot");
+    let path = repo.path.with_file_name("worktree").join("carried.txt");
+    std::fs::remove_file(path).expect("the other worktree goes clean");
+    let carried = session.refresh_carried().expect("a new carried pass");
+    assert!(!session.graph_settled_at(before.generation));
+    drop(held);
+    assert_eq!(
+        bounded("the carried answer", carried.outcome()).await,
+        CarriedOutcome::Landed { moved: true }
+    );
+    bounded("the carried owner leaving", session.wait_for_carried_pass()).await;
+    bounded(
+        "the graph requested by the carried read",
+        session.wait_for_graph_passes(),
+    )
+    .await;
+    let after = sink
+        .pass_after("the graph without the carried row", before.generation)
+        .await;
+    assert!(
+        !session.graph_settled_at(before.generation),
+        "the consumer has not applied the replacement"
+    );
+    assert!(session.graph_settled_at(after.generation));
+
+    // The other ordering: an unchanged rebuild is counted before its worker starts, and closes without publishing
+    // another generation. Its owner still has to leave before that same applied graph is settled again.
+    let held = bounded(
+        "the test's git slot again",
+        slots.acquire(Priority::Interactive, Pace::Here),
+    )
+    .await
+    .expect("a free slot");
+    let graph = session.refresh_log_tracked();
+    assert!(!session.graph_settled_at(after.generation));
+    drop(held);
+    assert!(
+        bounded("the unchanged rebuild", graph.outcome())
+            .await
+            .landed()
+    );
+    bounded("the rebuild owner leaving", session.wait_for_graph_passes()).await;
+    assert!(session.graph_settled_at(after.generation));
+    session.close();
+}
+
 /// A pass that landed after the switch would put the worktree's row back up,
 /// with the tick stopped and nothing left to take it down again.
 #[tokio::test(flavor = "multi_thread")]

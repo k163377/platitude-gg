@@ -13,6 +13,7 @@ mod knobs;
 pub(crate) mod memprobe;
 #[cfg(feature = "automation")]
 mod perf_probe;
+mod settlement;
 #[cfg(feature = "automation")]
 mod singleton;
 
@@ -22,6 +23,7 @@ pub(crate) use faults::{
     walk_again_while_held,
 };
 pub(crate) use knobs::knobs;
+pub(crate) use settlement::readings_settled;
 
 /// A line for the verdict a run is read off, said from the product's own
 /// path: the moment a step nobody at a window can see is over, such as

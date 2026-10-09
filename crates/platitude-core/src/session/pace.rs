@@ -273,6 +273,16 @@ impl Pacer {
         self.active
     }
 
+    /// Starts chosen by the driver are already registered here, before their tasks run. A due worktree is owed
+    /// even when it cannot fit the current gap; future polls and an inactive page owe no new read yet.
+    pub(super) fn readings_settled(&self, at: At) -> bool {
+        !self.own.running
+            && self.reading.is_none()
+            && (!self.active
+                || !self.reads_worktrees()
+                || self.worktrees.iter().all(|worktree| worktree.due > at))
+    }
+
     /// The worktrees a listing named, by key, in its order. A worktree new
     /// to the pace is due at once; one no longer listed is forgotten.
     pub(super) fn list(&mut self, keys: &[String], at: At) {

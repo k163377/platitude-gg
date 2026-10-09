@@ -42,6 +42,10 @@ impl Pacing {
         self.origin.elapsed()
     }
 
+    pub(super) fn readings_settled(&self) -> bool {
+        relock(&self.rules).readings_settled(self.at())
+    }
+
     /// Changes the rules and wakes the driver to look again.
     pub(super) fn change<R>(&self, edit: impl FnOnce(&mut Pacer, At) -> R) -> R {
         let at = self.at();
@@ -119,8 +123,16 @@ impl RepoSession {
                             .change(|rules, at| rules.own_refused(at, with_stashes)),
                     },
                     Start::Worktree(key) => {
+                        // `starts` already counts the read. Its end guard travels with the task from before spawn,
+                        // so a task dropped before its first poll also returns the reading to the rules.
+                        let ended = WorktreeEnded {
+                            session: Arc::clone(&self),
+                            key,
+                            began: at,
+                            read: None,
+                        };
                         self.runtime
-                            .spawn(async move { s.paced_worktree(key, at).await });
+                            .spawn(async move { s.paced_worktree(ended).await });
                     }
                 }
             }
@@ -184,13 +196,7 @@ impl RepoSession {
         drop(poll);
     }
 
-    async fn paced_worktree(self: Arc<Self>, key: String, began: At) {
-        let mut ended = WorktreeEnded {
-            session: Arc::clone(&self),
-            key,
-            began,
-            read: None,
-        };
+    async fn paced_worktree(self: Arc<Self>, mut ended: WorktreeEnded) {
         let Some((path, weight)) = self.read_paced_worktree(&ended.key).await else {
             return;
         };

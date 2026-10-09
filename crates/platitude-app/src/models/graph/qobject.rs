@@ -124,6 +124,14 @@ impl GraphModel {
     #[qsignal]
     pub(super) fn stats_changed(&mut self);
 
+    /// Automation: polled by `PageSettled`; the model supplies the tab and current graph generation.
+    /// Stands in every build, as fail_graph_pass does. The non-automation stub returns true without consulting the
+    /// session: no harness reading is owed. A missing session also has no reads to await (`harness::settlement`).
+    #[qslot]
+    fn readings_settled(&self) -> bool {
+        crate::harness::readings_settled(self.tab_id, self.generation)
+    }
+
     /// Puts the discard log's picked entry on the graph: its parts' tips,
     /// the first the one it lands on, how each draws (`uncommitted` /
     /// `stash` / empty for a commit), the commits only they reach, and where

@@ -141,6 +141,10 @@ impl GraphPasses {
         GraphPassHeld(Arc::clone(self))
     }
 
+    fn is_idle(&self) -> bool {
+        self.live.load(Ordering::SeqCst) == 0
+    }
+
     /// Waits until no pass is registered — every one in flight when called
     /// included, and any registered meanwhile.
     async fn wait_idle(&self) {
@@ -291,6 +295,21 @@ impl RemoteTagRefreshTask {
 }
 
 impl RepoSession {
+    /// The boundary sampled by `PageSettled`'s readings term and session integration tests: snapshot and carried
+    /// reads have ended, paced worktrees owe no due read, chosen starts have ended, and the consumer's generation
+    /// matches the latest graph. The consumer separately awaits its stream's Finished (`GraphModel.loading`).
+    /// Future polls and due worktrees on an inactive page owe no new read; starts already chosen still count.
+    pub fn graph_settled_at(&self, generation: u64) -> bool {
+        self.refs_read.is_idle()
+            && self.status_read.is_idle()
+            && self.stash_read.is_idle()
+            && self.worktrees_read.is_idle()
+            && self.carried_slot.available_permits() > 0
+            && self.pacing.readings_settled()
+            && self.graph_passes.is_idle()
+            && self.log_gen.load(Ordering::SeqCst) == generation
+    }
+
     /// Waits until the refs and status reads in flight have left their
     /// single flight. A snapshot event is sent from inside the reader,
     /// before it requests the graph refresh the answer implies; wait here

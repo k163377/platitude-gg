@@ -141,6 +141,10 @@ impl<A> ReadFlight<A> {
         self.wait_for_live(|live| live == 0).await;
     }
 
+    pub(super) fn is_idle(&self) -> bool {
+        self.live.load(Ordering::SeqCst) == 0
+    }
+
     /// Counts a caller in beyond its read, until [`Self::leave`]: for one
     /// that acts on the answer after leaving the flight — asks for the
     /// rebuild it implies once its other reads are in — so the boundary

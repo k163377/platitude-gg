@@ -15,6 +15,47 @@ fn secs(n: u64) -> Duration {
     Duration::from_secs(n)
 }
 
+#[test]
+fn settlement_counts_due_and_chosen_worktree_reads_but_not_future_or_inactive_reads() {
+    let at = Duration::ZERO;
+    let mut pacer = Pacer::new(WorktreesPace::Auto);
+    pacer.set_active(true, at);
+    pacer.opened(at);
+    pacer.list(&["a".into()], at);
+    pacer.worktree_ended("a", at, Some(ms(10)));
+    assert!(
+        pacer.readings_settled(at),
+        "future polling owes no read yet"
+    );
+    pacer.worktree_stale("a", at);
+    assert!(
+        !pacer.readings_settled(at),
+        "due, before the driver chooses a start"
+    );
+    pacer.set_active(false, at);
+    assert!(
+        pacer.readings_settled(at),
+        "an inactive page starts no read"
+    );
+    pacer.set_active(true, at);
+    assert_eq!(pacer.starts(at), vec![Start::Worktree("a".into())]);
+    pacer.set_active(false, at);
+    assert!(
+        !pacer.readings_settled(at),
+        "a chosen start still counts off screen before its worker runs"
+    );
+    pacer.worktree_skipped("a");
+    assert!(
+        pacer.readings_settled(at),
+        "a skipped start clears the running marker while the page is inactive"
+    );
+    pacer.set_active(true, at);
+    assert!(
+        !pacer.readings_settled(at),
+        "the skipped read is still owed when the page returns"
+    );
+}
+
 /// What a read of this tree weighs, by its number from 0.
 type OwnWeights = Box<dyn FnMut(usize) -> Duration>;
 
