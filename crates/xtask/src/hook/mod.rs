@@ -14,6 +14,7 @@ mod awake;
 mod chips;
 #[cfg(test)]
 mod cloud;
+mod codex;
 mod commit;
 mod dump;
 mod git;
@@ -47,6 +48,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     std::io::stdin()
         .read_to_string(&mut input)
         .map_err(|e| format!("failed to read hook payload: {e}"))?;
+    if event == "codex-awake" {
+        codex::awake(&input);
+        return Ok(());
+    }
     // Whether the session is at work (`awake`) is written before any
     // handler answers, so a refusal or an early return leaves it said.
     match event {

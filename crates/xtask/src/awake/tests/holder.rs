@@ -15,9 +15,13 @@ struct FakeClaude(std::process::Child);
 
 impl FakeClaude {
     fn start(dir: &Path) -> Self {
+        Self::start_as(dir, "claude.exe")
+    }
+
+    fn start_as(dir: &Path, image: &str) -> Self {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        let exe = dir.join("claude.exe");
+        let exe = dir.join(image);
         if !exe.exists() {
             let root = std::env::var("SystemRoot").expect("SystemRoot names the Windows directory");
             std::fs::copy(Path::new(&root).join("System32").join("cmd.exe"), &exe)
@@ -712,7 +716,7 @@ fn the_holder_s_script_is_pinned_to_its_revision() {
             crate::awake::REVISION,
             digest(&crate::awake::holder::script(Path::new(r"C:\pgg"), 0))
         ),
-        (6, "26cd3706bb4565b9".to_string()),
+        (16, "7b329ccb0814d83e".to_string()),
         "the holder's script changed: raise REVISION, then pin the new digest here"
     );
 }
@@ -926,6 +930,8 @@ fn claims_made_at_once_start_one_holder() {
     assert_eq!(holders_for(&dir), started);
 }
 
+mod codex;
+mod codex_log;
 mod coordination;
 mod counting;
 mod desktop;

@@ -58,6 +58,7 @@ fn scratch(stem: &str) -> Scratch {
     );
     std::fs::write(dir.join(crate::awake::DESKTOP_OFF), "test isolation")
         .expect("no real Desktop logs");
+    std::fs::write(dir.join("codex-log.off"), "test isolation").expect("no real Codex logs");
     dir
 }
 

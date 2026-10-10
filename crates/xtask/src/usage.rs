@@ -805,7 +805,7 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       retakes (--label), or a seat whose session is long gone.
 
   awake [log on|off]
-      Which sessions keep this machine from idle-sleeping (Windows
+      Which Claude and Codex sessions keep this machine from idle-sleeping (Windows
       only): each session's hooks, and each subagent's apart, write a
       claim under .awake/ in the primary checkout — in one activity
       protocol, which every compatible build's hooks update, so a Stop
@@ -853,7 +853,35 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       for a sleep, or the want of one, to be set against afterwards.
       Prints the claims as written, each holder's last verdict, when
       its build's hooks last ran, the last line it wrote in the
-      history, and what it last made of the desktop app's log.
+      history, and what it last made of the desktop app's log. The
+      transcript, Desktop-log and child-process rules above are Claude's;
+      Codex uses its own lifecycle hooks as described below.
+
+      Codex manual fallback: awake codex work|idle
+      Manual fallback for Codex activity hooks (.codex/hooks.json).
+      CODEX_THREAD_ID names the chat; its claimed seat is read from Git
+      even when the session cwd is the primary checkout. `work` refreshes
+      working activity for one hour; refresh before it expires, including
+      during long checks. `idle` ends its calls and lets sleep resume if
+      nothing else works. Neither command changes the seat claim.
+      The actual Codex ancestor owns activity; never set CLAUDE_PID for
+      this. Native hooks mark prompt/tool starts, blocking questions,
+      results, Stop, Interrupt and SessionEnd. Unified exec stays open
+      until its completion hook; unrelated children of Codex's shared
+      process are not attributed by time spans. No-op outside Windows.
+      New or changed hooks require Codex's trust review (/hooks).
+
+      Codex Desktop setup: awake codex setup [--undo]
+      One-time Windows Desktop logging setup for the shared sleep holder.
+      Saves the previous user CODEX_MAX_LOG_LEVEL, enables debug logging,
+      and broadcasts the environment change. Fully quit Desktop and launch
+      its normal icon afterwards. No launch wrapper or CLI override.
+      --undo restores the previous level if it is still this setup's debug
+      setting, preserves a later user edit, and disables the supplement.
+      The log supplies actual approval/question waits and their responses;
+      a PermissionRequest hook alone is not evidence of a human wait.
+      Unmatched or unavailable logs leave native activity unchanged. `awake`
+      reports observed debug age, unmatched IDs and fallback diagnostics.
 
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads
@@ -863,5 +891,6 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       elicitation-result, subagent-start, subagent-stop, stop,
       stop-failure, pre-worktree, post-worktree, prompt-submit,
       session-start (which also installs the gate's git hook),
-      session-end.
+      session-end. `codex-awake` accepts Codex's lifecycle payload and
+      updates only shared sleep activity, without Claude's other handlers.
 ";

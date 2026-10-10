@@ -191,9 +191,32 @@ $paced = [int64]0
 $script:tails = @{}
 @PROCESSES@
 @DESKTOP@
+@CODEX_LOG@
 $desktopPath = [IO.Path]::Combine("$env:LOCALAPPDATA", 'Claude', 'logs', 'main.log')
 if (Test-Path -LiteralPath "$dir\desktop-log.path") { $desktopPath = [IO.File]::ReadAllText("$dir\desktop-log.path").Trim() }
 $desktop = New-DesktopLog $desktopPath
+$codexPaths = @()
+if (Test-Path -LiteralPath "$dir\codex-log.path") { $codexPaths = @([IO.File]::ReadAllText("$dir\codex-log.path").Trim()) }
+else {
+  $codexPaths = @([IO.Path]::Combine("$env:LOCALAPPDATA", 'Codex', 'Logs'))
+  foreach ($package in @(Get-ChildItem -LiteralPath "$env:LOCALAPPDATA\Packages" -Filter 'OpenAI.Codex_*' -Directory -ErrorAction SilentlyContinue)) {
+    $codexPaths += Join-Path $package.FullName 'LocalCache\Local\Codex\Logs'
+  }
+}
+$codexLog = New-CodexLog $codexPaths
+$codexWatches = @()
+foreach ($codexPath in $codexPaths) {
+  try {
+    if (Test-Path -LiteralPath "$dir\codex-log.off") { throw 'disabled' }
+    $watch = New-Object IO.FileSystemWatcher -ArgumentList $codexPath, 'codex-desktop-*.log'
+    $watch.IncludeSubdirectories = $true
+    foreach ($kind in 'Created', 'Changed', 'Deleted', 'Renamed') {
+      [void](Register-ObjectEvent -InputObject $watch -EventName $kind -SourceIdentifier "codex-$($codexWatches.Count)-$kind")
+    }
+    $codexWatches += $watch
+    $watch.EnableRaisingEvents = $true
+  } catch { $codexLog.Status='watcher unavailable; polling' }
+}
 $desktopWatch = $null
 try {
   if (Test-Path -LiteralPath "$dir\desktop-log.off") { throw 'disabled' }
@@ -297,6 +320,7 @@ function Test-Retiring($nowms) {
     if ($other.Name -notmatch '^holder-r(\d+)$') { continue }
     $theirs = [int]$Matches[1]
     if (($theirs -eq [int]$revision) -or (([DateTime]::UtcNow - $other.LastWriteTimeUtc).TotalSeconds -ge @STALE@)) { continue }
+    if (($theirs -lt @CODEX_HANDOFF@) -and @(Get-ChildItem -LiteralPath $dir -Filter "c$format.*.claim").Count) { continue }
     if ((($nowms - (Get-Heard $theirs)) -lt $quiet) -or ($theirs -gt [int]$revision)) { return $true }
   }
   return $false
@@ -321,6 +345,10 @@ function Get-Children($owner) {
   if (-not $script:kids.ContainsKey($owner)) { $script:kids[$owner] = @($script:spawned.Children($owner)) }
   return $script:kids[$owner]
 }
+function Get-Claims {
+  Get-ChildItem -LiteralPath $dir -Filter "r$format.*.claim"
+  Get-ChildItem -LiteralPath $dir -Filter "c$format.*.claim"
+}
 try {
   while ($true) {
     $nowms = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
@@ -339,9 +367,9 @@ try {
         if (-not (Test-Named)) { break }
         $readms = [PggAwake]::Now()
         $seen = @()
-        foreach ($claim in Get-ChildItem -LiteralPath $dir -Filter "r$format.*.claim") { $seen += ,@($claim, (Read-Word $claim.FullName)) }
-        foreach ($claim in Get-ChildItem -LiteralPath $dir -Filter "r$format.*.claim") {
-          if ($claim.Name -match '^r\d+\.([^~]+)~') { $minded[$Matches[1]] = $true }
+        foreach ($claim in (Get-Claims)) { $seen += ,@($claim, (Read-Word $claim.FullName)) }
+        foreach ($claim in (Get-Claims)) {
+          if ($claim.Name -match '^([rc]\d+\.[^~]+)~') { $minded[$Matches[1]] = $true }
         }
       } catch [IO.IOException], [UnauthorizedAccessException] { $seen = $null }
     } finally { Exit-Lock $lock }
@@ -368,7 +396,9 @@ try {
           $mark = "$($claim.Name) $owner"
           $birth = [PggProcesses]::Born($owner)
           if (-not $birth) { $birth = $born[$mark] }
-          if (($script:processes.Image($owner) -ne 'claude.exe') -or ($born[$mark] -and ($born[$mark] -ne $birth))) {
+          $image = 'claude.exe'
+          if ($claim.Name.StartsWith('c')) { $image = 'codex.exe' }
+          if (($script:processes.Image($owner) -ne $image) -or ($born[$mark] -and ($born[$mark] -ne $birth))) {
             $changes += ,@($claim.FullName, $text, $null)
             continue
           }
@@ -445,16 +475,18 @@ try {
           }
           if ($changed) { $changes += ,@($claim.FullName, $text, ("r$format " + (($word[0..7]) -join ' '))) }
         }
-        $candidates=@()
+        $candidates=@(); $codexCandidates=@()
         foreach ($session in $calls.Keys) {
           foreach ($call in $calls[$session]) {
             $part=$call -split ':'
             if (([int64]$part[5] -eq 0) -and -not $ended[$session].ContainsKey($part[1])) {
-              $candidates += @{ Key="$session/$($part[0])/$($part[1])/$($part[4])"; Session=(Get-Whose $session); Part=$part }
+              if ($session.StartsWith('c')) { $codexCandidates += New-CodexCandidate $session $part }
+              else { $candidates += @{ Key="$session/$($part[0])/$($part[1])/$($part[4])"; Session=(Get-Whose $session); Part=$part } }
             }
           }
         }
         Update-DesktopLog $desktop $candidates $nowms
+        Update-CodexLog $codexLog $codexCandidates $nowms
         $runs = @{}
         foreach ($entry in $counted) {
           $claim, $text, $word, $session, $who, $tail = $entry
@@ -469,9 +501,18 @@ try {
             $open += ,$part
           }
           $bare = Get-Whose $session
+          if ($session.StartsWith('c')) {
+            $pending=Get-CodexPending $codexLog $session $who
+            if ($pending.Count) {
+              if (-not $requests[$session]) { $requests[$session]=@{} }
+              foreach ($server in $pending.Keys) { $requests[$session][$server]=[int]$requests[$session][$server]+[int]$pending[$server] }
+            }
+          }
           foreach ($part in $open) {
-            $starting = ($delegated -contains $part[2]) -and -not $minded[$bare]
-            if ((-not (Get-DesktopAsked $desktop $session $part)) -and ($starting -or ($delegated -notcontains $part[2]))) { $runs[$session] = @($runs[$session]) + $part[2] }
+            $starting = ($delegated -contains $part[2]) -and -not $minded[$session]
+            $asked=Get-DesktopAsked $desktop $session $part
+            if ($session.StartsWith('c')) { $asked=Get-CodexAsked $codexLog $session $part }
+            if ((-not $asked) -and ($starting -or ($delegated -notcontains $part[2]))) { $runs[$session] = @($runs[$session]) + $part[2] }
           }
           $fresh = ($nowms - [int64]$word[2]) -lt @TTL@ * 1000
           if (($open.Count -eq 0) -and $fresh) { $keep = $true; $why["turn:$bare"] = $true }
@@ -497,6 +538,7 @@ try {
         $seen = $null
         $keep = $holding
         Undo-DesktopDecisions $desktop
+        Undo-CodexDecisions $codexLog
       }
     }
     $lock = Enter-Lock
@@ -504,14 +546,15 @@ try {
       try {
         if (-not (Test-Named)) { break }
         if ($null -ne $seen) {
-          $current = @(Get-ChildItem -LiteralPath $dir -Filter "r$format.*.claim")
+          $current = @(Get-Claims)
           $unchanged = $current.Count -eq $seen.Count
           foreach ($pair in $seen) {
             $file, $was = $pair
             if ((-not (Test-Path -LiteralPath $file.FullName)) -or ((Read-Word $file.FullName) -ne $was)) { $unchanged = $false; break }
           }
-          if (-not $unchanged) { $keep = $true; $changes = @(); $readat = 0; $why = @{}; Undo-DesktopDecisions $desktop }
+          if (-not $unchanged) { $keep = $true; $changes = @(); $readat = 0; $why = @{}; Undo-DesktopDecisions $desktop; Undo-CodexDecisions $codexLog }
           $desktop.Decided = @()
+          $codexLog.Decided = @()
           foreach ($change in $changes) {
             $file, $was, $becomes = $change
             if ((Test-Path -LiteralPath $file) -and ((Read-Word $file) -eq $was)) {
@@ -538,7 +581,10 @@ try {
         $transport='polling'
         if ($desktopWatch -and $desktopWatch.EnableRaisingEvents) { $transport='file-events' }
         Write-Word "$dir\desktop-r$revision" "$me $nowms $($desktop.Status) transport=$transport"
-      } catch [IO.IOException], [UnauthorizedAccessException] { $keep = $holding; Undo-DesktopDecisions $desktop }
+        $transport='polling'
+        if (@($codexWatches | Where-Object { $_.EnableRaisingEvents }).Count) { $transport='file-events' }
+        Write-Word "$dir\codex-log-r$revision" "$me $nowms $($codexLog.Status) transport=$transport"
+      } catch [IO.IOException], [UnauthorizedAccessException] { $keep = $holding; Undo-DesktopDecisions $desktop; Undo-CodexDecisions $codexLog }
     } finally { Exit-Lock $lock }
     $woken = Wait-Event -Timeout @TICK@
     if ($holding -and $woken) {
@@ -555,7 +601,9 @@ try {
     try { [void](Add-History 'quit' '-') } finally { Exit-Lock $parting }
   } catch [IO.IOException], [UnauthorizedAccessException] { }
   Close-DesktopLog $desktop
+  Close-CodexLog $codexLog
   if ($null -ne $desktopWatch) { $desktopWatch.Dispose() }
+  foreach ($watch in $codexWatches) { $watch.Dispose() }
 }
 "#;
 
@@ -566,6 +614,7 @@ pub(super) fn script(dir: &Path, reserved: u32) -> String {
     SCRIPT
         .replace("@PROCESSES@", super::processes::SCRIPT)
         .replace("@DESKTOP@", super::desktop::SCRIPT)
+        .replace("@CODEX_LOG@", super::codex::log::SCRIPT)
         .replace("@DIR@", &dir.display().to_string().replace('\'', "''"))
         .replace("@RESERVED@", &reserved.to_string())
         .replace("@STARTING@", super::STARTING)
@@ -582,6 +631,10 @@ pub(super) fn script(dir: &Path, reserved: u32) -> String {
         .replace("@DELEGATED@", DELEGATED)
         .replace("@STARTS_PROCESSES@", STARTS_PROCESSES)
         .replace("@REVISION@", &super::REVISION.to_string())
+        .replace(
+            "@CODEX_HANDOFF@",
+            &super::CODEX_HANDOFF_REVISION.to_string(),
+        )
         .replace("@FORMAT@", &super::CLAIM_FORMAT.to_string())
 }
 

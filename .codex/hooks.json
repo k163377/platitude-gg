@@ -1,0 +1,15 @@
+{
+  "description": "Share the repository's Windows sleep holder with Claude while a Codex chat holds a seat.",
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "git -c alias.pgg-codex-awake=\"!cargo run --quiet -p xtask --profile hooks -- hook codex-awake\" pgg-codex-awake" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "git -c alias.pgg-codex-awake=\"!cargo run --quiet -p xtask --profile hooks -- hook codex-awake\" pgg-codex-awake" }] }],
+    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "git -c alias.pgg-codex-awake=\"!cargo run --quiet -p xtask --profile hooks -- hook codex-awake\" pgg-codex-awake" }] }],
+    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "git -c alias.pgg-codex-awake=\"!cargo run --quiet -p xtask --profile hooks -- hook codex-awake\" pgg-codex-awake" }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "git -c alias.pgg-codex-awake=\"!cargo run --quiet -p xtask --profile hooks -- hook codex-awake\" pgg-codex-awake" }] }],
+    "SubagentStart": [{ "hooks": [{ "type": "command", "command": "git -c alias.pgg-codex-awake=\"!cargo run --quiet -p xtask --profile hooks -- hook codex-awake\" pgg-codex-awake" }] }],
+    "SubagentStop": [{ "hooks": [{ "type": "command", "command": "git -c alias.pgg-codex-awake=\"!cargo run --quiet -p xtask --profile hooks -- hook codex-awake\" pgg-codex-awake" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "git -c alias.pgg-codex-awake=\"!cargo run --quiet -p xtask --profile hooks -- hook codex-awake\" pgg-codex-awake" }] }],
+    "Interrupt": [{ "hooks": [{ "type": "command", "command": "git -c alias.pgg-codex-awake=\"!cargo run --quiet -p xtask --profile hooks -- hook codex-awake\" pgg-codex-awake", "timeout": 3 }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "git -c alias.pgg-codex-awake=\"!cargo run --quiet -p xtask --profile hooks -- hook codex-awake\" pgg-codex-awake", "timeout": 3 }] }]
+  }
+}

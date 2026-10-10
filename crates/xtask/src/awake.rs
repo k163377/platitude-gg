@@ -95,8 +95,10 @@ use crate::command::{Command, Permission, Where};
 use crate::locks::Locked;
 
 mod claim;
+pub(crate) mod codex;
 mod desktop;
 mod holder;
+mod owner;
 mod processes;
 
 pub(crate) use claim::digest;
@@ -127,7 +129,15 @@ pub(crate) static LOG_OFF: Command = Command {
     needs: &[],
     permission: Permission::Plain,
 };
-pub(crate) static COMMANDS: &[&Command] = &[&STATUS, &LOG_ON, &LOG_OFF];
+pub(crate) static COMMANDS: &[&Command] = &[
+    &STATUS,
+    &LOG_ON,
+    &LOG_OFF,
+    &codex::WORK,
+    &codex::IDLE,
+    &codex::SETUP,
+    &codex::UNDO,
+];
 
 /// In the primary checkout, so every seat's sessions share one holder per
 /// [`REVISION`] (the `.chips` / `.permits` layout).
@@ -166,7 +176,11 @@ const AGENT: char = '~';
 /// The holder implementation, independent of the activity protocol.
 /// A script change raises this; compatible builds still update the same
 /// claims, so a Stop or a question reaches every holder reading them.
-const REVISION: u32 = 6;
+const REVISION: u32 = 16;
+/// A Codex handoff requires a holder that accounts for its independent
+/// child agents. An older holder can count delegated work twice.
+#[cfg(windows)]
+const CODEX_HANDOFF_REVISION: u32 = 16;
 /// The shared activity protocol, including claim names and bodies. Do not
 /// raise this for a holder change: a protocol change needs a migration,
 /// not a second independent copy of a session's current state.
@@ -404,7 +418,8 @@ fn end_session(dir: &Path, session: &str) -> Result<(), String> {
     let entries =
         std::fs::read_dir(dir).map_err(|e| format!("could not read {}: {e}", dir.display()))?;
     for entry in entries.flatten() {
-        if claim_of(&entry.file_name().to_string_lossy()) == Some(session) {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('r') && claim_of(&name) == Some(session) {
             remove(&entry.path())?;
         }
     }
@@ -414,7 +429,7 @@ fn end_session(dir: &Path, session: &str) -> Result<(), String> {
 /// The session a claim's name is of — its own or a subagent's, of any
 /// revision; None for a name that is no claim's.
 fn claim_of(name: &str) -> Option<&str> {
-    let (revision, whose) = name.strip_prefix('r')?.split_once('.')?;
+    let (revision, whose) = name.strip_prefix(['r', 'c'])?.split_once('.')?;
     if revision.is_empty() || !revision.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
     }
@@ -506,6 +521,9 @@ fn now_ms() -> u64 {
 /// `cargo xtask awake`: the claims as written, and whether the holder
 /// holds the machine. Whether each claim counts is the holder's to decide.
 pub fn run(args: &[String]) -> Result<(), String> {
+    if args.first().is_some_and(|arg| arg == "codex") {
+        return codex::run(&args[1..]);
+    }
     if !args.is_empty() && args != ["log", "on"] && args != ["log", "off"] {
         return Err(format!("awake accepts log on or log off (got {args:?})"));
     }
@@ -532,11 +550,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
         .filter_map(|entry| {
             let name = entry.file_name().to_string_lossy().into_owned();
             claim_of(&name)?;
-            let Some(whose) = name.strip_prefix(&own) else {
+            let codex = format!("c{CLAIM_FORMAT}.");
+            let Some(whose) = name
+                .strip_prefix(&own)
+                .or_else(|| name.strip_prefix(&codex))
+            else {
                 others += 1;
                 return None;
             };
-            let whose = whose.strip_suffix(&format!(".{CLAIM}"))?.to_string();
+            let whose = whose.strip_suffix(&format!(".{CLAIM}"))?;
+            let whose = if name.starts_with('c') {
+                format!("codex {whose}")
+            } else {
+                whose.to_string()
+            };
             let claim = std::fs::read_to_string(entry.path())
                 .ok()
                 .and_then(|text| Claim::parse(&text));
@@ -556,7 +583,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let open: Vec<_> = claim.calls.iter().filter(|call| call.end == 0).collect();
         let asked = open.iter().filter(|call| call.asked).count();
         println!(
-            "  seat {} {:<7} {}s ago  claude pid {}  {} call(s) open, {asked} asked, \
+            "  seat {} {:<7} {}s ago  owner pid {}  {} call(s) open, {asked} asked, \
              {} request(s) for input  {whose}{wake}",
             claim.seat,
             claim.state.word(),
@@ -625,6 +652,9 @@ fn show_holders(dir: &Path) {
         }
         if let Ok(seen) = std::fs::read_to_string(dir.join(format!("{DESKTOP_SEEN}{revision}"))) {
             println!("  desktop app's log, last read: {}", seen.trim());
+        }
+        if let Ok(seen) = std::fs::read_to_string(dir.join(format!("codex-log-r{revision}"))) {
+            println!("  Codex Desktop log, last read: {}", seen.trim());
         }
     }
 }

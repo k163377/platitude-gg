@@ -162,8 +162,13 @@ pub(super) fn shipped(dir: &std::path::Path, revision: u32, during_query: &str) 
     source
         .replace("@PROCESSES@", &processes)
         .replace("@DESKTOP@", crate::awake::desktop::SCRIPT)
+        .replace("@CODEX_LOG@", crate::awake::codex::log::SCRIPT)
         .replace("@DIR@", &dir.display().to_string().replace('\'', "''"))
         .replace("@REVISION@", &revision.to_string())
+        .replace(
+            "@CODEX_HANDOFF@",
+            &crate::awake::CODEX_HANDOFF_REVISION.to_string(),
+        )
         .replace("@FORMAT@", "1")
         .replace("@RESERVED@", "0")
         .replace("@STARTING@", "starting")
@@ -568,6 +573,30 @@ fn a_quiet_build_s_holder_steps_down_for_one_in_use() {
     other_holder(&dir, revision - 1, crate::awake::now_ms());
     let observed = once(&dir, revision, "");
     assert!(!stayed(&dir, revision, &observed), "it read on: {observed}");
+}
+
+/// Codex activity can be handed only to a build that preserves it when
+/// older Claude-only builds continue receiving hooks.
+#[test]
+fn codex_activity_is_handed_only_to_a_capable_holder() {
+    let revision = crate::awake::REVISION;
+    for (other, must_stay) in [(revision - 1, true), (revision + 1, false)] {
+        let dir = scratch("codex-retire");
+        let codex = FakeClaude::start_as(&dir, "codex.exe");
+        std::fs::write(
+            dir.join("c1.s.claim"),
+            format!(
+                "r1 working {} {} b 0 - - -",
+                codex.pid(),
+                crate::awake::now_ms()
+            ),
+        )
+        .expect("Codex activity");
+        heard(&dir, revision, long_ago());
+        other_holder(&dir, other, crate::awake::now_ms());
+        let observed = once(&dir, revision, "");
+        assert_eq!(stayed(&dir, revision, &observed), must_stay, "{observed}");
+    }
 }
 
 /// Quiet hooks alone never take the machine's last holder down: a session

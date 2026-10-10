@@ -4,6 +4,10 @@
 
 app.kill
 app.launch
+awake.codex.idle
+awake.codex.setup
+awake.codex.setup.undo
+awake.codex.work
 awake.log.off
 awake.log.on
 awake.status
