@@ -7,6 +7,9 @@ use crate::hub::{Feed, PlanMsg};
 
 use super::qml_register;
 
+mod answer;
+#[cfg(test)]
+mod answer_tests;
 mod drain;
 #[cfg(test)]
 mod drain_tests;
@@ -120,6 +123,15 @@ pub struct RebasePlanModel {
     /// One head report disagreed with `expect_head` — the first of the two
     /// strikes `note_head` waits for.
     pub(super) head_suspect: bool,
+    /// What a confirmed button's last press took, waiting out the press's
+    /// floor (`answer.rs`).
+    accepted: Option<answer::Accepted>,
+    /// That answer standing, as a property: the plan takes no edit, no
+    /// other answer and no other plan meanwhile, and the buttons that would
+    /// give another bind to it.
+    pub(super) locked: bool,
+    /// The last ticket handed out, so an old one never takes a new answer.
+    pub(super) last_ticket: i32,
     pub(super) feed: Option<Arc<Feed<PlanMsg>>>,
     pub(super) tab_id: i32,
 }

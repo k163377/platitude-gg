@@ -143,6 +143,17 @@ impl RebasePlanModel {
         if !self.active && !self.loading && self.steps.is_empty() {
             return;
         }
+        self.forget();
+        self.reset_rows(Vec::new());
+        self.settle();
+        self.changed();
+    }
+
+    /// Everything a plan put away stops holding except its rows, which go
+    /// under a model reset ([`Self::reset_rows`]) — the answer a press took
+    /// included: no ticket gives it once the plan is gone (`answer.rs`).
+    pub(super) fn forget(&mut self) {
+        self.drop_accepted();
         self.active = false;
         self.loading = false;
         self.asked_from = String::new();
@@ -150,9 +161,6 @@ impl RebasePlanModel {
         self.head_suspect = false;
         self.publish_range = String::new();
         self.pushed_count = 0;
-        self.reset_rows(Vec::new());
         self.initial = Vec::new();
-        self.settle();
-        self.changed();
     }
 }

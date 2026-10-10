@@ -19,6 +19,7 @@ impl RebasePlanModel {
     qproperty!("expectHead", Member = expect_head, Notify = changed);
     qproperty!("pushedCount", Member = pushed_count, Notify = changed);
     qproperty!("dirty", Member = dirty, Notify = changed);
+    qproperty!("locked", Member = locked, Notify = changed);
     qproperty!("dropCount", Member = drops, Notify = changed);
     qproperty!("stepCount", Member = step_count, Notify = changed);
     qproperty!("selectedRow", Member = selected_row, Notify = changed);
@@ -92,7 +93,8 @@ impl RebasePlanModel {
     #[qslot]
     fn open(&mut self, oid_hex: String) {
         let from = oid_hex.trim().to_string();
-        if from.is_empty() || self.already_asking(&from) {
+        // An accepted answer stands on the plan on screen (`answer.rs`).
+        if self.locked || from.is_empty() || self.already_asking(&from) {
             return;
         }
         self.loading = true;
@@ -102,7 +104,11 @@ impl RebasePlanModel {
     }
 
     /// Puts the plan away. Nothing ran, and nothing asks — the plan is a
-    /// draft (デザイン規約 §可否・警告の出し場所).
+    /// draft (デザイン規約 §可否・警告の出し場所). Over an accepted answer too:
+    /// the callers that reach it then are the ones whose plan is gone (the
+    /// tab leaving its worktree), and the answer goes with it. A reader's
+    /// own discard of a composed plan is a held press, which an answer
+    /// standing refuses ([`Self::accept_discard`]).
     #[qslot]
     fn cancel_plan(&mut self) {
         self.close();
@@ -138,6 +144,9 @@ impl RebasePlanModel {
         let Ok(index) = usize::try_from(row) else {
             return;
         };
+        if self.locked {
+            return;
+        }
         if !ACTIONS.contains(&action.as_str()) {
             return;
         }
@@ -172,6 +181,9 @@ impl RebasePlanModel {
         let Ok(index) = usize::try_from(row) else {
             return;
         };
+        if self.locked {
+            return;
+        }
         let Some(step) = self.steps.get_mut(index) else {
             return;
         };
@@ -218,7 +230,7 @@ impl RebasePlanModel {
     /// [`Self::end_move`].
     #[qslot]
     fn move_step(&mut self, from: i32, to: i32) {
-        if !self.reorder(from, to) {
+        if self.locked || !self.reorder(from, to) {
             return;
         }
         self.settle();
@@ -229,6 +241,9 @@ impl RebasePlanModel {
     /// rows move without the fold rule walking them.
     #[qslot]
     fn begin_move(&mut self) {
+        if self.locked {
+            return;
+        }
         self.dragging = true;
     }
 
@@ -261,25 +276,64 @@ impl RebasePlanModel {
         // A drag whose release never came (its delegate taken away) leaves
         // the fold rule unheld, and git stops broken on an orphan fold.
         self.end_move();
-        if !self.active || !self.dirty {
+        if self.locked || !self.active || !self.dirty {
             return;
         }
-        let steps = self.todo_steps();
-        let upstream = self.onto_oid.clone();
-        let expect = self.expect_head.clone();
-        let options = platitude_core::integrate::RebaseOptions {
-            onto: None,
-            branch: None,
-            // Branches inside the range move along with it, always
-            // (デザイン規約 §履歴を合流させる — 既定のフラグ).
-            update_refs: true,
-            root: self.root,
-        };
-        crate::hub::with_session(self.tab_id, move |s| {
-            s.rebase_interactive(upstream, steps, options, expect);
-        });
+        self.queue_run(
+            self.onto_oid.clone(),
+            self.todo_steps(),
+            self.expect_head.clone(),
+            self.root,
+        );
         self.close();
         self.plan_ran();
+    }
+
+    /// A held run's last press: the todo is taken as it stands and the plan
+    /// locked behind it ([`Self::accept`]); it runs as taken once the press's
+    /// floor has passed ([`Self::give_accepted`]). The ticket, 0 where
+    /// nothing was taken.
+    #[qslot]
+    fn accept_run(&mut self) -> i32 {
+        // As `run_plan`: a drag whose release never came leaves the fold
+        // rule unheld.
+        self.end_move();
+        let ticket = self.accept(true);
+        if ticket != 0 {
+            self.changed();
+        }
+        ticket
+    }
+
+    /// A held `Discard`'s last press, taken the same way.
+    #[qslot]
+    fn accept_discard(&mut self) -> i32 {
+        let ticket = self.accept(false);
+        if ticket != 0 {
+            self.changed();
+        }
+        ticket
+    }
+
+    /// Gives the answer taken under `ticket`, once. Nothing where the plan
+    /// was put away since — the tip moved, an operation stood, the tab left
+    /// its worktree: the answer went with it.
+    #[qslot]
+    fn give_accepted(&mut self, ticket: i32) {
+        match self.take_accepted(ticket) {
+            Some(answer::Answer::Run {
+                upstream,
+                steps,
+                expect,
+                root,
+            }) => {
+                self.queue_run(upstream, steps, expect, root);
+                self.close();
+                self.plan_ran();
+            }
+            Some(answer::Answer::Discard) => self.close(),
+            None => {}
+        }
     }
 
     /// The branch tip as the status now reads it, fed in by the page on
