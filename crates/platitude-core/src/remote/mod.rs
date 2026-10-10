@@ -21,7 +21,7 @@ mod standing;
 mod tags;
 
 pub use self::branch::{
-    RemoteBranchState, branch_tip, delete_remote_branch, replace_remote_branch,
+    RemoteBranchState, branch_tip, delete_remote_branch, replace_remote_branch, untrack_deleted,
 };
 pub use self::clone::{clone, folder_name_for};
 pub use self::fetch::fetch;

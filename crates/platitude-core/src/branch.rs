@@ -269,6 +269,32 @@ pub async fn set_upstream(
     Ok(())
 }
 
+/// Takes `branch.<name>.merge` and `.remote` out of this repository's own
+/// config file — what a branch was measured against is gone. The caller
+/// has read both keys there.
+///
+/// The keys by name, not `branch --unset-upstream <name>`: that resolves
+/// `HEAD` to the branch checked out, so a `[branch "HEAD"]` section would
+/// cost the current branch its upstream. `.merge` goes first: left alone,
+/// it is measured against the default remote, while `.remote` alone names
+/// no branch. `branch.<name>.pushRemote` stays: it names a remote, not a
+/// branch over there.
+pub async fn unset_upstream(
+    executor: &GitExecutor,
+    workdir: &Path,
+    name: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    for field in ["merge", "remote"] {
+        let key = format!("branch.{name}.{field}");
+        let cmd = GitCommand::new()
+            .cwd(workdir)
+            .args(["config", "--local", "--unset-all", &key]);
+        executor.run(cmd, cancel).await?;
+    }
+    Ok(())
+}
+
 /// Whether this repository holds `full`, which decides the two paths of
 /// [`set_upstream`].
 async fn ref_is_here(

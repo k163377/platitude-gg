@@ -54,7 +54,7 @@ use crate::process::{GitCommand, GitExecutor};
 /// - `commit`: `--amend`, `--allow-empty`, `--reset-author`, `--no-edit`,
 ///   `--cleanup=whitespace`, `--file`; `commit-tree`: `-p`, `-m`.
 /// - `config`: `--get`, `--get-regexp`, `-z`, `--global`, `--local`,
-///   `--show-scope` (2.26), `--unset`, `--type=bool` (2.18), and
+///   `--show-scope` (2.26), `--unset`, `--unset-all`, `--type=bool` (2.18), and
 ///   `<key> <value>` writes. `checkout.defaultRemote` (2.19),
 ///   `remote.pushDefault`, and `filter.lfs.required` are supported keys.
 ///   `lfs_integration` checks typed bool reads; absent `--unset` exits 5.

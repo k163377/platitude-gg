@@ -1,6 +1,7 @@
 //! Branches on a remote: what one holds now, and removing or
 //! replacing one.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::Duration;
 
@@ -97,6 +98,9 @@ impl RemoteBranchState {
 /// Read like an ordinary push (`--porcelain`, then
 /// [`super::refusal::refusal`]): a far-side refusal (protected branch,
 /// hook) is a report to pass on (デザイン規約 §リモートブランチを消す).
+///
+/// What tracked it keeps its upstream here; [`untrack_deleted`] is the
+/// step after.
 pub async fn delete_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
@@ -127,6 +131,62 @@ pub async fn delete_remote_branch(
         return Ok(());
     }
     Err(super::refusal::refusal(command, &out, remote, branch, true))
+}
+
+/// After [`delete_remote_branch`] went: takes the upstream off the local
+/// branches that tracked `<remote>/<branch>` ([`crate::branch::unset_upstream`]),
+/// and returns them.
+///
+/// An upstream left naming a deleted branch is what the `[gone]` warning
+/// reads, and that warning is for a branch the far side dropped on its own
+/// (merged and deleted there), so the now useless branch here is not
+/// forgotten. A delete asked for here is no such case: the warning would
+/// only nag about the reader's own act.
+///
+/// Judged by the push alone: the delete went where `<remote>` pushes, and
+/// so does every branch tracking `<remote>/<branch>`. A `pushurl` naming
+/// another repository than the fetch URL changes nothing — the reader
+/// deleted the branch their pushes go to, and the next fetch reading the
+/// name back from the other side is that configuration's own doing.
+/// Another remote name writing to the same repository is not followed: its
+/// branches keep the upstream (P3-確認事項 §リモートの別名).
+///
+/// Only settings in this repository's own config file, and only where
+/// they are the upstream git goes by: one inherited from an included or
+/// the global file is configuration kept elsewhere on purpose, left as it
+/// is.
+pub async fn untrack_deleted(
+    executor: &GitExecutor,
+    workdir: &Path,
+    remote: &str,
+    branch: &str,
+    cancel: &CancellationToken,
+) -> Result<Vec<String>, GitError> {
+    let out = config::get_regexp_at(
+        executor,
+        workdir,
+        config::ConfigScope::Local,
+        r"^branch\.",
+        "git config --local --get-regexp branch",
+        cancel,
+    )
+    .await?;
+    let written_here = parse_tracking(&out, remote, branch);
+    if written_here.is_empty() {
+        return Ok(Vec::new());
+    }
+    // The file's own say is not the branch's: an include read after it, a
+    // worktree's config, or a value the global file adds can make the
+    // upstream another one, which stays.
+    let in_effect = tracking_branches(executor, workdir, remote, branch, cancel).await?;
+    let tracking: Vec<String> = written_here
+        .into_iter()
+        .filter(|name| in_effect.contains(name))
+        .collect();
+    for name in &tracking {
+        crate::branch::unset_upstream(executor, workdir, name, cancel).await?;
+    }
+    Ok(tracking)
 }
 
 /// Replaces a branch on a remote with one under a new name — not a
@@ -188,11 +248,16 @@ async fn tracking_branches(
 }
 
 /// Picks the branches whose `remote` and `merge` both name the same remote
-/// branch out of `git config -z --get-regexp ^branch\.` output.
+/// branch out of `git config -z --get-regexp ^branch\.` output, each once,
+/// in name order.
+///
+/// Read as git reads the setting: the last `remote` wins, and `merge` is
+/// multi-valued — a branch merging more than this one name (an octopus
+/// `pull`) does not track it alone, and is not picked.
 fn parse_tracking(bytes: &[u8], remote: &str, branch: &str) -> Vec<String> {
     let merge_ref = format!("refs/heads/{branch}");
-    let mut remotes: Vec<(String, String)> = Vec::new();
-    let mut merges: Vec<(String, String)> = Vec::new();
+    // Per branch: the last `remote` read, and every `merge`.
+    let mut settings: BTreeMap<String, (String, Vec<String>)> = BTreeMap::new();
     for record in config::parse_z_records(bytes) {
         let Some(value) = record.value() else {
             continue;
@@ -205,21 +270,20 @@ fn parse_tracking(bytes: &[u8], remote: &str, branch: &str) -> Vec<String> {
         let Some((name, field)) = rest.rsplit_once('.') else {
             continue;
         };
-        match field {
-            "remote" => remotes.push((name.to_string(), value.to_string())),
-            "merge" => merges.push((name.to_string(), value.to_string())),
-            _ => {}
+        let (remotes, merges) = match field {
+            "remote" | "merge" => settings.entry(name.to_string()).or_default(),
+            _ => continue,
+        };
+        if field == "remote" {
+            *remotes = value.to_string();
+        } else {
+            merges.push(value.to_string());
         }
     }
-    remotes
+    settings
         .into_iter()
-        .filter(|(_, value)| value == remote)
+        .filter(|(_, (last, merges))| last == remote && *merges == [merge_ref.as_str()])
         .map(|(name, _)| name)
-        .filter(|name| {
-            merges
-                .iter()
-                .any(|(other, value)| other == name && *value == merge_ref)
-        })
         .collect()
 }
 
@@ -255,5 +319,27 @@ mod tests {
             parse_tracking(&bytes, "origin", "release.8.4"),
             ["release.8.4"]
         );
+    }
+
+    /// The setting as git goes by it: the last `remote` read, and a
+    /// `merge` naming this branch alone. A name written twice is one
+    /// branch.
+    #[test]
+    fn tracking_is_read_as_git_resolves_it() {
+        let bytes = z(&[
+            // A later file moved it to another remote.
+            "branch.moved.remote\norigin",
+            "branch.moved.merge\nrefs/heads/topic",
+            "branch.moved.remote\nupstream",
+            // An octopus pull merges topic and main.
+            "branch.octopus.remote\norigin",
+            "branch.octopus.merge\nrefs/heads/main",
+            "branch.octopus.merge\nrefs/heads/topic",
+            // Written twice, the same both times.
+            "branch.twice.remote\norigin",
+            "branch.twice.merge\nrefs/heads/topic",
+            "branch.twice.remote\norigin",
+        ]);
+        assert_eq!(parse_tracking(&bytes, "origin", "topic"), ["twice"]);
     }
 }

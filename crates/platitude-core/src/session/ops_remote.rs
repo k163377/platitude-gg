@@ -324,7 +324,8 @@ impl RepoSession {
     /// commit the screen showed it on ([`remote::delete_remote_branch`]).
     /// A remote that moved since is caught up with, as a push is
     /// ([`Self::catch_up_after`]). The commits only the remote branch held
-    /// leave the graph at once (`session::leaving`).
+    /// leave the graph at once (`session::leaving`). Once recorded, the
+    /// upstream comes off what tracked it ([`Self::untrack_deleted`]).
     pub fn delete_remote_branch(
         self: &Arc<Self>,
         remote_name: String,
@@ -359,7 +360,7 @@ impl RepoSession {
                     &cancel,
                 )
                 .await;
-                s.catch_up_after(&result, remote_name);
+                s.catch_up_after(&result, remote_name.clone());
                 result?;
                 if let Some(before) = before {
                     let keep = record_token();
@@ -373,9 +374,38 @@ impl RepoSession {
                     .await;
                     s.recorded(written);
                 }
+                s.untrack_deleted(&exec, &repo, &remote_name, &branch_name, &cancel)
+                    .await;
                 Ok(())
             },
         )
+    }
+
+    /// Takes the upstream off the branches here that tracked a remote
+    /// branch this session just deleted ([`remote::untrack_deleted`] says
+    /// which and why). Last in the write, after the discard record.
+    ///
+    /// **A failure here is no answer of the write's**: the delete went, so
+    /// the write answers as done — no report, and the row it took stays
+    /// gone. The refused command stands in the command log as any asked
+    /// command does (デザイン規約 §リモートブランチを消す).
+    ///
+    /// The refs listing behind the write reads the upstreams again, and
+    /// the status `measures_head` asks for reads HEAD's; the config
+    /// rewrite is the write's own ([`Self::own_config_rewrite`]).
+    async fn untrack_deleted(
+        &self,
+        exec: &GitExecutor,
+        repo: &RepoInfo,
+        remote_name: &str,
+        branch_name: &str,
+        cancel: &CancellationToken,
+    ) {
+        match remote::untrack_deleted(exec, &repo.workdir, remote_name, branch_name, cancel).await {
+            Ok(untracked) if !untracked.is_empty() => self.own_config_rewrite(),
+            Ok(_) => {}
+            Err(error) => tracing::warn!(%error, "the upstream of a deleted remote branch"),
+        }
     }
 
     /// Deletes a branch here and on its remote as one write, the remote
@@ -438,7 +468,7 @@ impl RepoSession {
                     &cancel,
                 )
                 .await;
-                s.catch_up_after(&result, remote_name);
+                s.catch_up_after(&result, remote_name.clone());
                 // The branch here went whatever the remote said.
                 if let Some(here) = here {
                     let there = there.filter(|_| result.is_ok());
@@ -454,7 +484,11 @@ impl RepoSession {
                     .await;
                     s.recorded(written);
                 }
-                result
+                result?;
+                // Other branches here may have tracked it too.
+                s.untrack_deleted(&exec, &repo, &remote_name, &remote_branch, &cancel)
+                    .await;
+                Ok(())
             },
         )
     }

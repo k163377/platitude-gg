@@ -2,6 +2,8 @@
 //! the stash list or the worktrees, which no delete reaches — unless
 //! the name was what HEAD is measured against (`AfterWrite::Name`).
 
+use std::sync::Arc;
+
 use platitude_core::session::{Recording, SessionEvent};
 
 use crate::support::TestRepo;
@@ -143,6 +145,44 @@ async fn a_remote_branch_delete_reads_the_status_only_for_heads_upstream() {
             "the delete of origin/{branch}: {ran:#?}"
         );
     }
+    session.close();
+}
+
+/// The listing behind a remote branch delete carries the upstream it took
+/// off: no `[gone]` warning for a delete asked for here
+/// (`remote::delete_remote_branch`).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_remote_branch_delete_leaves_no_gone_upstream_behind() {
+    let (_bare, mut work) = origin_and_clone();
+    let shown = pushed(&mut work, "topic");
+    let (sink, session) = opened(&work).await;
+    sink.opening_settled(&session).await;
+
+    let id = session
+        .delete_remote_branch("origin".into(), "topic".into(), shown)
+        .expect("accepted");
+    assert_eq!(write_settled(&sink, id).await, []);
+
+    let refs = sink
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .rev()
+        .find_map(|e| match e {
+            SessionEvent::RefsLoaded { snapshot, .. } => Some(Arc::clone(snapshot)),
+            _ => None,
+        })
+        .expect("the delete read the refs");
+    let topic = refs
+        .locals
+        .iter()
+        .find(|b| b.short == "topic")
+        .expect("the branch here stays");
+    assert_eq!(
+        (topic.upstream.as_str(), topic.upstream_gone.as_str()),
+        ("", "")
+    );
     session.close();
 }
 

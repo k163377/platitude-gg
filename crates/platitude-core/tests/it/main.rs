@@ -25,6 +25,7 @@ mod reachable_integration;
 mod refs_integration;
 mod remote_integration;
 mod remote_tags_integration;
+mod remote_untrack_integration;
 mod rename_integration;
 mod session_integration;
 mod slots;
