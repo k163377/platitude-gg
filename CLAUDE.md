@@ -5,7 +5,7 @@
 
 ## 絶対制約(変更には人間の明示承認が必要)
 
-- git に存在する機能は git に委譲する。**パスフレーズ・認証情報は agent / helper が自前の pinentry で聞く**
+- git に含まれる設定・情報を扱う以外では、アプリの設定に関するデータのみ管理する
 - git の対応範囲・最低版の定義と確認記録への参照先は [git互換性.md](internal-docs/git互換性.md)
 - **依存(crate)と意匠素材の追加・変更は、ライセンス確認と人の許可が必須**。git 操作はシステム git のサブプロセス、通信は git コマンド経由のみ
 - UI はダークテーマ(青系)のみ。文言は英語のみ・`qsTr()` 必須
@@ -18,22 +18,21 @@
 
 ## 技術スタック
 
-- Rust は `rust-toolchain.toml` の版、UI は Qt Quick (QML)、ブリッジは **Qt Bridges**(`qtbridge` クレート、build.rs 不要)。Qt の必要バージョンは qtbridge の要求に従う
 - **CXX-Qt へ差し替えられる構成を守る**(QML と core を無変更で移せる形。条件は core.md / app-ui.md)。core は Qt 依存ゼロ・`cargo test` で完結
 - 開発補助ツールは **`cargo xtask`**(ワークスペース内クレート、**依存は std のみ**)で 3OS 同一に書き、OS 差はコード内の分岐に焼き込む。**スクリプト仕事も xtask のサブコマンド**・タスクランナーはこれ 1 本
 
 ## ビルド・テスト
 
-**Claudeクラウド(`CLAUDE_CODE_REMOTE=true`)はテキスト編集のみ** — 本節・席・land は [クラウドセッション.md](internal-docs/クラウドセッション.md) が置き換える。
+**Claudeクラウド(`CLAUDE_CODE_REMOTE=true`)はビルド・テスト実行禁止** — [クラウドセッション.md](internal-docs/クラウドセッション.md) に従う。
 
-前提: Qt は `.qt-version` の版(xtask は Windows で `C:\Qt\<版>` を選び、PATH の別の版では組まない)+ C++ ツールチェーン(他 OS の環境は `ci/` が正)。開発は debug ビルド。**`--release` は性能計測と起動確認だけ**(release でないと QML = exe 埋め込みが反映されない)。以下 `cargo` / `cargo xtask` を省略。
+前提: 日常のビルド・テストは debug。起動・UI 検証・性能計測は各 xtask コマンドの手順に従う。以下 `cargo` / `cargo xtask` を省略。
 
 **確認は 3 段**: **1 日常** = <!--call:gate.daily-->`gate --host-only`(コンテナ無し)/ **2 反映前** = `gate`(差分の依存木と `verb-tiers.txt` の段で選んだテストを回し、緑を commit にスタンプ = `land` と git hook が要求)/ **3 フル** = `gate --all`(`periodic` のテストと全動詞を両 OS で回す。それ以外で回すのはユーザーがテストを指示した時だけ)+ <!--call:linux.bare-->`linux bare --discover` + 3OS CI + 性能実測(リリース前と依存・環境を触った時。**版(crate・toolchain・Qt・最低 git)を動かす差分は `gate` 自身が段 3 の計画へ上がる**、残りは手で)。
 
 **変更作業の完了には、依頼範囲の作業完了(§Git 運用)と、現在の commit に対する `gate` の PASS の両方が必要**。UI 配線では **触った動詞が両 OS で PASS し、両方の PNG を目視するまで**(verify-ui スキルを必ず呼ぶ)。
 
 - **起動だけの要求(「rebase して起動」等)は fast path** — シェル呼び出し 1 個で起動して即報告し、ターンを終える(verify-ui スキル §起動 fast path)。段 2 はユーザーが検証・反映を指示した時
-- **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ = 最低 git バージョンを積んだ唯一の環境。Windows では WSL 3 の `wslc` が回す — Docker 不要。**`bare` は宣言した依存だけの Ubuntu で動くかだけを見る**)
+- **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ = 最低 git バージョンを積んだ唯一の環境。Windows では WSL 3 の `wslc` が回す。**`bare` は宣言した依存だけの Ubuntu で動くかだけを見る**)
 - **書く作業は worktree 座席 `a`〜`f` で行う**(ドキュメントも含めて全部 — 本体 checkout は読むだけ)。席は `cargo xtask seat`(引数なし)が lock して返すので、それを EnterWorktree に渡す。未マージの席は続きの仕事専用。**claim は会話のもの — プロセスの死活は見ない**。claim を動かすのは 3 つだけ: **land が返す** / <!--cmd:seat.release-->`cargo xtask seat release` / **ユーザーがその場で指示した時だけ**の乗っ取り <!--cmd:seat.takeover-->`PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>`(対象は他人の claim だけ)。全席詰まりなら増設せず、持ち主を添えて報告して止まる。**完了後も席に留まる**
 - **依頼範囲の作業はこのセッションで完了する**。チップは別セッションでしかできない作業だけ(触っているファイルを claim するチップは hook が deny)。継続して参照する制約・要判断は `internal-docs/P<n>-確認事項.md` へ記録する
 - **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ <!--cmd:app.launch-->`PGG_ALLOW_GUI=1 cargo xtask launch`。自ツリーの残存プロセス・exe の使用中状態は `cargo xtask kill`。**窓のビルドがどのツリーのものかは右下が名乗る**
