@@ -41,9 +41,16 @@ pub async fn rename(
     // The two halves report differently (デザイン規約 §答えの要らない報せ):
     // a refused create has moved nothing, so the name box can still answer
     // it; a failed delete leaves both names, a half-done rename.
-    let create = GitCommand::new()
-        .cwd(workdir)
-        .args(["tag", "--end-of-options", to, from]);
+    //
+    // The old name is read as a tag: a short one gone since the press
+    // resolves to a branch of the same name, and the new tag would mark
+    // the branch's commit.
+    let create = GitCommand::new().cwd(workdir).args([
+        "tag",
+        "--end-of-options",
+        to,
+        &format!("refs/tags/{from}"),
+    ]);
     let command = create.describe();
     let out = executor.run_unchecked(create, cancel).await?;
     if out.code != 0 {

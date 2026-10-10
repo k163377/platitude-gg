@@ -97,6 +97,32 @@ async fn a_name_a_tag_cannot_take_is_reported_under_the_old_one() {
     );
 }
 
+/// A tag deleted elsewhere between the menu and the press, with a branch
+/// of the same name still standing: a short name would resolve to the
+/// branch, and the new tag would mark the branch's commit. The old name
+/// is read as the tag it was, so git refuses and nothing is made.
+#[tokio::test]
+async fn a_tag_gone_before_the_press_is_not_taken_from_a_branch_of_its_name() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.git(&["tag", "v1.0"]);
+    repo.git(&["branch", "v1.0"]);
+    repo.commit_file("b.txt", "b\n", "second");
+    repo.git(&["branch", "--force", "v1.0"]);
+    repo.git(&["tag", "--delete", "v1.0"]);
+    let (exec, cancel) = env();
+
+    let err = tag::rename(&exec, &repo.path, "v1.0", "v1.1", &cancel)
+        .await
+        .expect_err("there is no tag to rename");
+    assert_eq!(
+        err.report().map(|report| report.kind),
+        Some(ReportKind::RenameRefused),
+        "nothing moved, so the box can still answer it: {err}"
+    );
+    assert_eq!(repo.git(&["tag", "--list"]), "", "no tag was made");
+}
+
 /// What the pre-merge run leaves out: git refusing a tag name that is
 /// taken or that no ref can have. `tag::create` hands it over on a fixed
 /// command line with no `--force`, so the refusal is git's; what the box
