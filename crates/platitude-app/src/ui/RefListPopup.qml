@@ -263,13 +263,13 @@ AppCard {
                 // nowhere too (§タグのダブルクリックは入力欄へ).
                 readonly property bool current:
                     refRow.modelData.kind === "branch" && refRow.modelData.name === refList.currentBranch
-                // The two markers (a detached HEAD, a worktree with no branch here) name no ref, and git refuses
-                // the move to a branch another worktree has out (§無効). Only the move comes off: the chip keeps its
-                // colour, or the detached HEAD would be amber on the row and grey in its card.
-                readonly property bool unavailable:
-                    refRow.modelData.kind === "head" || refRow.modelData.kind === "worktree" || refRow.modelData.held
+                // The two markers (a detached HEAD, a worktree with no branch here) name no ref. Only the move comes
+                // off: the chip keeps its colour, or the detached HEAD would be amber on the row and grey in its card.
+                // A branch another worktree has out leads to that worktree, as the graph row's double-click does
+                // (`RepoPage.switchToRef`).
                 readonly property bool leadsNowhere:
-                    refRow.unavailable || refRow.current || refRow.modelData.kind === "tag"
+                    refRow.modelData.kind === "head" || refRow.modelData.kind === "worktree" || refRow.current
+                    || refRow.modelData.kind === "tag"
 
                 /// For `layOutRows`: without it the chip's width is a pass behind its room (`RefChip.layOutNow`).
                 function layOutNow() {

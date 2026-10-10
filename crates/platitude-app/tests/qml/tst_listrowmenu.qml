@@ -5,8 +5,8 @@ import platitude.ui
 
 // A right-click on a row of the card a chip unfolds into asks for the graph row's menu aimed at that row
 // (デザイン規約 §グラフ行の右クリック「行のどこを押しても同じ 1 枚が出る」). Every row asks, the ones that lead
-// nowhere included: a worktree's folder has its WORKTREE card, a branch another worktree holds its `Open` row, and the
-// detached HEAD's marker the commit's own rows. Pressed with a real pointer, since what refused it was the handler.
+// nowhere included: a worktree's folder has its WORKTREE card and the detached HEAD's marker the commit's own rows; a
+// branch another worktree holds has its `Open` row. Pressed with a real pointer, since the handler is what takes it.
 Item {
     id: root
     width: 400
