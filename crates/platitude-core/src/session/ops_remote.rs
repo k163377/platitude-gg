@@ -519,7 +519,9 @@ impl RepoSession {
     /// pair only once the push landed, so a refused push would leave the
     /// branch measured against the name it was renamed away from; written
     /// first, the toolbar's `push` is the retry ([`branch::set_upstream`]
-    /// writes the pair straight for a name not yet fetched).
+    /// writes the pair straight for a name not yet fetched). A refusal
+    /// for knowing the remote only as it was is caught up with as any
+    /// push's is ([`Self::catch_up_after`]).
     pub fn point_upstream_and_push(
         self: &Arc<Self>,
         branch: String,
@@ -527,6 +529,7 @@ impl RepoSession {
         remote_branch: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
+        let s = Arc::clone(self);
         self.write(
             OperationKind::Push,
             AfterWrite::Graph,
@@ -547,7 +550,9 @@ impl RepoSession {
                     set_upstream: false,
                     force: remote::PushForce::None,
                 };
-                remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await
+                let result = remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await;
+                s.catch_up_after(&result, spec.remote);
+                result
             },
         )
     }

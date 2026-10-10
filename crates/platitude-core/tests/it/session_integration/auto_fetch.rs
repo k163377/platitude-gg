@@ -168,6 +168,32 @@ async fn a_suspended_timer_comes_back_on_the_interval_it_had() {
 /// decided; the push itself still fails and is not retried.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
+    let (mut origin, mut clone, known) = outrun();
+
+    let (sink, session) = opened(&clone).await;
+    session.push_current(String::new(), platitude_core::remote::PushForce::None);
+
+    caught_up(&sink, &mut origin, &mut clone, &known).await;
+    session.close();
+}
+
+/// The same for the push that keeps a renamed branch's remote name
+/// (`point_upstream_and_push`), the one push not sent through the
+/// session's own `push`.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_rename_kept_over_there_refused_as_out_of_date_fetches_too() {
+    let (mut origin, mut clone, known) = outrun();
+
+    let (sink, session) = opened(&clone).await;
+    session.point_upstream_and_push("main".into(), "origin".into(), "main".into());
+
+    caught_up(&sink, &mut origin, &mut clone, &known).await;
+    session.close();
+}
+
+/// A bare origin, a clone that knows it at `known`, and a commit on each
+/// side since: the clone's next push is refused as out of date.
+fn outrun() -> (TestRepo, TestRepo, String) {
     let mut origin = TestRepo::init();
     origin.commit_file("f.txt", "0\n", "root");
     origin.git(&["config", "core.bare", "true"]);
@@ -187,10 +213,12 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
     other.git(&["push", "origin", "main"]);
 
     clone.commit_file("mine.txt", "m\n", "my work");
+    (origin, clone, known)
+}
 
-    let (sink, session) = opened(&clone).await;
-    session.push_current(String::new(), platitude_core::remote::PushForce::None);
-
+/// The push's refusal, then the fetch it queued, which brings the remote's
+/// commit in and sends nothing.
+async fn caught_up(sink: &CaptureSink, origin: &mut TestRepo, clone: &mut TestRepo, known: &str) {
     let error = sink
         .wait_for("the push to be refused", |evs| {
             evs.iter().find_map(|e| match e {
@@ -236,7 +264,6 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
         "their work",
         "nothing was retried: the remote still holds only their commit"
     );
-    session.close();
 }
 
 /// What a tab shows a moment after it opens is what the remote holds now.
