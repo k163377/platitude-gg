@@ -178,7 +178,7 @@ QtObject {
                 // The list must be up before a row is pressed, and the menu before the report; one sampler owns it all.
                 "list-menu",
                 "ref-list", "ref-list-card", "ref-list-lit", "ref-list-choose",
-                "ref-list-follow", "ref-list-follow-lit",
+                "ref-list-follow", "ref-list-follow-lit", "ref-list-held",
                 "row-part", "ref-list-leave", "graph-reclick",
                 "graph-head-list",
                 "graph-reclick-list",

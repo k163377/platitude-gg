@@ -5,7 +5,8 @@ import platitude
 import platitude.ui
 
 /// The gesture that names a graph row: the two clicks at a row, the same pair put in through the strip over the lane
-/// column, and the pair (with the double-click that moves beside it) put in at a row of the card a chip unfolds into.
+/// column, and the pair (with the double-clicks that move beside it — to a branch, or to the worktree holding one) put
+/// in at a row of the card a chip unfolds into.
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
@@ -15,6 +16,8 @@ Item {
 
     // The driver's own names, read once so the verbs can name them bare.
     readonly property var page: driver.page
+    readonly property var repoTab: driver.repoTab
+    readonly property var sidebarPane: driver.sidebarPane
     readonly property var worktree: driver.worktree
     readonly property var graphModel: driver.graphModel
     readonly property var graphPane: driver.graphPane
@@ -52,6 +55,13 @@ Item {
             if (reclickListTimer.picks)
                 driver.beginWrite("ref-list-pick")
             reclickListTimer.start()
+        } else if (act === "ref-list-held") {
+            // The double-click on a card row naming a branch another worktree has out: the tab goes and stands in
+            // that worktree, as the graph row's own double-click does. Argument `<行>:<カードの行>`.
+            const heldParts = arg.split(":")
+            listHeldTimer.row = Number(heldParts[0])
+            listHeldTimer.card = heldParts.length > 1 ? Number(heldParts[1]) : 0
+            listHeldTimer.start()
         } else {
             return false
         }
@@ -266,6 +276,78 @@ Item {
                 + " branch=" + worktree.branch)
                 driver.complete()
             }
+        }
+    }
+    // Where that double-click lands: this tab, standing in the worktree holding the branch. **The page stays** — that
+    // is what the landing is (`Hub::restand_tab`) — so this very driver reads the answer.
+    //
+    // **Every end ends the run**, each named on the line: a row that is no held branch (`held=false`, said before any
+    // press), a row that turned the double-click away (the card stays up: `list=true`), and a page that took the
+    // press and asked for no worktree (`asked=` empty — the whole road from the press to that ask runs inside the
+    // press). Waiting only for the worktree, any of them would sit out the ceiling saying nothing about why.
+    SampleTimer {
+        id: listHeldTimer
+        property int row: 0
+        property int card: 0
+        property int step: 0
+        /// Read before the press: after it this page reads that worktree, and would answer with itself.
+        property string wanted: ""
+        property bool held: false
+        /// What the page asked to open on the press (`RepoPage.openRepositoryPathRequested`), latched.
+        property string asked: ""
+        function report(stood) {
+            listHeldTimer.stop()
+            Harness.report("ref_list_held stood=" + stood
+                              + " list=" + refList.opened
+                              + " held=" + listHeldTimer.held
+                              + " row=" + listHeldTimer.row
+                              + " card=" + listHeldTimer.card
+                              + " asked=" + listHeldTimer.asked
+                              + " wanted=" + listHeldTimer.wanted
+                              + " where=" + repoTab.repoPath)
+            driver.complete()
+        }
+        onTriggered: {
+            if (listHeldTimer.step === 0) {
+                Awaited.at("ref_list_held", "card")
+                const item = graphPane.view.itemAtIndex(listHeldTimer.row)
+                if (!item)
+                    return
+                // Hover cannot be injected, so this enters where the row's own rest timer would (`ref-list`).
+                graphPane.view.chipExpandRequested(item.oid_hex, listHeldTimer.row, item.chipItem.records,
+                                                   item.chipItem)
+                listHeldTimer.step = 1
+            } else if (listHeldTimer.step === 1) {
+                Awaited.at("ref_list_held", "press")
+                if (!refList.opened)
+                    return
+                // The card is up, so its records are this run's answer: a row that is no held branch never will be.
+                const rec = refList.records[listHeldTimer.card]
+                listHeldTimer.held = rec !== undefined && rec.kind === "branch" && rec.held
+                if (!listHeldTimer.held) {
+                    listHeldTimer.report(false)
+                    return
+                }
+                // The chip's mark rides the ref joins; the listing the page asks may land a tick apart.
+                listHeldTimer.wanted = sidebarPane.worktreesModel.worktreeHolding(rec.name)
+                if (listHeldTimer.wanted === "")
+                    return
+                if (!refList.doubleClickRow(listHeldTimer.card))
+                    return
+                listHeldTimer.step = 2
+            } else {
+                Awaited.at("ref_list_held", "landing")
+                const stood = repoTab.repoPath.toLowerCase() === listHeldTimer.wanted.toLowerCase()
+                if (!refList.opened && listHeldTimer.asked !== "" && !(stood && PageSettled.settled(page)))
+                    return
+                listHeldTimer.report(stood)
+            }
+        }
+    }
+    Connections {
+        target: listHeldTimer.running ? page : null
+        function onOpenRepositoryPathRequested(path) {
+            listHeldTimer.asked = path
         }
     }
 }

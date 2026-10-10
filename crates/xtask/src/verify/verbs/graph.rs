@@ -192,6 +192,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "list=true aimed=true",
     },
+    // A double-click on a row of that list naming a branch another
+    // worktree has out: the tab stands in that worktree, as the graph
+    // row's own double-click does. `list=false` is the half a row turning
+    // the press away fails on, since the card stays up.
+    Verb {
+        name: "ref-list-held",
+        when: &[],
+        plain: "ref_list_held stood=true list=false",
+    },
     // The pointer resting on the note a cut message puts out. The rule
     // under the words takes the words' colour, so `lit=` alone passes;
     // `word=` pins the step — this note alone rests at `textMuted`, where
