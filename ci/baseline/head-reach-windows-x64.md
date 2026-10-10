@@ -1,6 +1,6 @@
 # ブランチ先端を他が掴んでいるかの実測(Windows x64)
 
-drop 行を長押しにするかクリックにするかの判定
+drop 行を回数押しにするかクリックにするかの判定
 (`reachable::reached_without_branch`)が払う git のコスト。**refs が動いた
 refresh と書き込み 1 件ごとに 1 回**走る。
 

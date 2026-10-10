@@ -13,6 +13,6 @@
 - **ハーネスは出荷ビルドの外の別ビルド**(Cargo feature `automation`)。**`cargo xtask` が起動するビルドは全部この feature 付き**(例外は出荷ビルドそのものを組む `shipped` と `perf --shipped` の 2 つ)だが、**手で `cargo build --release` して撃つと動詞が 1 つも効かない**(窓は普通に出る = 症状は「watchdog まで無言」)。その時は `--features automation` を付ける
 - **sampler で完了する動詞は `AutoActCompletion.defersCompletion` に名前を足す** — 足し忘れると**動詞が何かする前の画面が撮られる**。報告行は後から出るので `must_say` は緑になり、**赤いのは絵だけ**。**新しい動詞の 1 発目は必ず PNG を開き、動詞が触ったものが写っているかを見る**
 - **中間状態は実 edge を latch する**。busy/loading/error を撮る動詞は対応 signal で edge を観測し、非同期画像 callback が終わるまで専用の automation latch で表示を保つ。latch の根拠は出力側の edge だけ。既存例は `force-push-hold` と `settings-tools-loading`
-- **長押しは終わりが press — `driver.holdToEnd(row)` で走らせる**(`completeHold()` の直呼びは barrier が早すぎる)。**動詞が仕掛けた物は動詞が待ってから完了する** — 開いた diff は `DiffPane.diffSettled()`、書いた後の読み直しは `RepoPage.diffSettling`。仕掛けた物が届く前に完了した動詞は census の行を載せたり落としたりする
+- **回数押しは終わりが press — `driver.holdToEnd(row)` で走らせる**(`completeHold()` の直呼びは barrier が早すぎる)。**動詞が仕掛けた物は動詞が待ってから完了する** — 開いた diff は `DiffPane.diffSettled()`、書いた後の読み直しは `RepoPage.diffSettling`。仕掛けた物が届く前に完了した動詞は census の行を載せたり落としたりする
 - **並行反復は build 後に `--no-build`**。既定の repo/config/shot は run ごとに一意かつ atomic claim される。明示した `--repo` / `--config-dir` / `--shot-dir` は同じ path の同時利用を fail fast するので、並行 batch には別 path を渡す。状態往復のように共有が目的の組は同じ path で直列実行する
 - flaky 方針の合否を反復で決める時は **最低 10 run**。10 を超えて 1 回でも NG が出たら、修正後に **5 run 連続 OK** を取り直す。並行 batch は各 process を 1 run と数え、全 process の exit / `must_say` / screenshot を個別に判定する
