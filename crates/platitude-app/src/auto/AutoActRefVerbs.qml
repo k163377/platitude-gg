@@ -283,11 +283,12 @@ Item {
                 refusedRowTimer.start()
         }
     }
-    // git's refusal has to come back before the row it turns into a held one can be held — or photographed.
+    // git's refusal has to come back before the row it turns into `-D` (the warning's three presses) can be pressed
+    // through — or photographed. The plain delete is pressed too, so a count is no sign of the refusal; this one is.
     SampleTimer {
         id: forceDeleteTimer
         onTriggered: {
-            if (!driver.wroteAndSettled() || refDeleteItem.holdMs <= 0)
+            if (!driver.wroteAndSettled() || refDeleteItem.holdPresses < Metrics.holdPressesWarned)
                 return
             forceDeleteTimer.stop()
             Harness.report("ref_menu delete=" + refDeleteItem.text
@@ -479,7 +480,7 @@ Item {
                               + " tag_here=" + refTagHereItem.offered
                               + " push=" + refPushTagItem.offered
                               + " code=" + refPushTagItem.code
-                              + " held=" + (refPushTagItem.holdMs > 0)
+                              + " held=" + (refPushTagItem.holdPresses > 0)
                               // The model's reading, as `ready()` polls: this family reaches only the
                               // driver's properties.
                               + " lease=" + tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote)
@@ -515,7 +516,7 @@ Item {
             }
             // The forced push is held, and the barrier is armed at the hold's end (`holdToEnd`): this run's own fetch
             // answers during the hold, and a barrier armed here would pass on it with nothing pushed.
-            if (refPushTagItem.holdMs > 0)
+            if (refPushTagItem.holdPresses > 0)
                 driver.holdToEnd(refPushTagItem)
             else
                 driver.pressWrite("push-tag", () => {
@@ -605,14 +606,14 @@ Item {
                                        + " merged=" + (fromRows ? (refBranchCard.deleteMerged ? "yes" : "no")
                                                                 : repoTab.branchDeleteMerged)
                                        + " code=" + refDeleteItem.code
-                                       + " held=" + (refDeleteItem.holdMs > 0)
+                                       + " presses=" + refDeleteItem.holdPresses
                                        + " note=" + refDeleteItem.note)
             driver.complete()
         }
     }
     // The delete asked from the graph row. The subject is the card going: the row stays up for a refusal
-    // (`AppMenuItem.staysOpen`), so a delete git takes has to take the card down — and a closed card frames like one
-    // nobody opened. `code=` tells a landing from a refusal, which leaves the row wearing `branch -D`.
+    // (`RefBranchMenu`'s plain delete, `onHeld`), so a delete git takes has to take the card down — and a closed card
+    // frames like one nobody opened. `code=` tells a landing from a refusal, which leaves the row wearing `branch -D`.
     SampleTimer {
         id: chipDeleteTimer
         /// Whether the row has been pressed; until then every tick is the input's branch only.
@@ -626,8 +627,8 @@ Item {
                 const arg = Harness.autoActArg
                 page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
                 commitMenu.openSub(commitBranchCard)
-                // The row's own press: a stays-open row is picked (`AppMenuItem.picked`).
-                commitDeleteItem.picked()
+                // The row's own presses: the plain delete's two, which keep the card up (`RefBranchMenu`'s `onHeld`).
+                commitDeleteItem.completeHold()
                 if (!acts.deleteRowLanded(commitDeleteItem)) {
                     chipDeleteTimer.stop()
                     driver.complete()

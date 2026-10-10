@@ -6,7 +6,7 @@ InkCanvas {
     id: icon
     property string kind: "branch"
     property color tint: Theme.textSecondary
-    /// Line weight. The coordinates scale with the size and this does not (デザイン規約 §進行中・長押しの定数「座標だけ縮めて
+    /// Line weight. The coordinates scale with the size and this does not (デザイン規約 §進行中・回数押しの定数「座標だけ縮めて
     /// 線を縮めない」). Beside a word at `iconSm` it would outweigh the letters by 4/3, so those callers pass the grid
     /// ratio in, the way `HoldIcon` scales.
     property real stroke: Metrics.iconStroke

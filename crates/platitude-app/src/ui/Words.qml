@@ -8,11 +8,20 @@ QtObject {
     /// The application's name, as the window title and both empty states write it.
     readonly property string appName: qsTr("Platitude GG")
 
-    /// A held control's answer to a screen reader, wherever a HoldDriver drives one.
-    readonly property string holdToActivate: qsTr("Hold to activate")
+    /// How many presses run a confirmed control, as the sentence saying so opens ("Press three times to …"). Every such
+    /// sentence takes the count from here, handed `Metrics`' own number. The words are for the two counts `Metrics`
+    /// holds (`holdPressesPlain` / `holdPressesWarned`); a count other than those needs its words here first.
+    function pressCount(presses) {
+        return presses === 2 ? qsTr("Press twice") : qsTr("Press three times")
+    }
+
+    /// A confirmed control's answer to a screen reader, wherever a HoldDriver drives one: how many presses run it.
+    function pressToActivate(presses) {
+        return qsTr("%1 to activate").arg(Words.pressCount(presses))
+    }
 
     /// The menu-row tag on anything that replays commits a remote already has — the amend-family rows and both
-    /// rebase entries (デザイン規約 §長押し).
+    /// rebase entries (デザイン規約 §回数押し).
     readonly property string rewritesPushed: qsTr("rewrites pushed commits")
 
     /// Starting a branch where the row stands, from the graph row's menu and the sidebar's ref menu

@@ -84,11 +84,11 @@ Item {
             root.standOn(root.here, "", false)
             verify(card.pushTagItem.offered)
             compare(card.pushTagItem.code, "push")
-            compare(card.pushTagItem.holdMs, 0, "an ordinary row: it adds a name and takes nothing away")
+            compare(card.pushTagItem.holdPresses, 0, "an ordinary row: it adds a name and takes nothing away")
 
             root.standOn(root.drifted, "deadbee", false)
             verify(card.pushTagItem.offered)
-            verify(card.pushTagItem.holdMs > 0, "the leased overwrite is held")
+            verify(card.pushTagItem.holdPresses > 0, "the leased overwrite is held")
             compare(card.pushTagItem.holdTone, Theme.warning, "reaching past this machine is the warning tone")
         }
 

@@ -35,7 +35,7 @@ Item {
     required property string oid
     required property string stashRef
     /// Whether a remote already has that commit: the rewrite rows carry a tag and do not ask
-    /// (デザイン規約 §長押し「ローカルの履歴書き換えはクリック」).
+    /// (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」).
     required property bool published
     /// What these menus offer. `canSequence` is cherry-pick / revert, which only add a commit and so ask less.
     required property bool canSequence
@@ -61,7 +61,7 @@ Item {
     /// clean tree.
     required property int hardResetTakes
     /// Whether what `--hard` takes holds a file the discard record cannot copy (`WorktreeModel.hardResetNotCopied`),
-    /// which holds the row in `danger` (デザイン規約 §長押し の色の表).
+    /// which holds the row in `danger` (デザイン規約 §回数押し の色の表).
     required property bool hardResetNotCopied
     /// git's answers about the branch card's delete (refusal, landing, early check), live while the card stands —
     /// passed straight through to `RefBranchMenu`.
@@ -165,14 +165,14 @@ Item {
             onTriggered: rowMenu.popStashRequested(rowMenu.stashRef)
         }
         AppMenuSeparator {}
-        // Held (デザイン規約 §長押し).
+        // Held (デザイン規約 §回数押し).
         AppMenuItem {
             id: stashDeleteItem
             code: "drop"
             offered: rowMenu.stashCanWrite
-            holdMs: Metrics.holdMs
+            holdPresses: Metrics.holdPressesWarned
             onHeld: {
-                stashMenu.dismiss()
+                stashDeleteItem.closeMenu()
                 rowMenu.dropStashRequested(rowMenu.stashRef)
             }
         }
@@ -235,16 +235,16 @@ Item {
             onTriggered: rowMenu.squashRequested(rowMenu.oid)
         }
         // Held while this branch alone holds its tip; a plain click once something else does, since the commits then
-        // stay drawn and a cherry-pick brings them back (デザイン規約 §長押し).
+        // stay drawn and a cherry-pick brings them back (デザイン規約 §回数押し).
         AppMenuItem {
             id: dropCommitItem
             code: "drop"
             note: rowMenu.published ? qsTr("already pushed") : ""
             offered: rowMenu.canEditHistory
-            holdMs: rowMenu.tipHeldElsewhere ? 0 : Metrics.holdMs
+            holdPresses: rowMenu.tipHeldElsewhere ? 0 : Metrics.holdPressesWarned
             onTriggered: rowMenu.dropRequested(rowMenu.oid)
             onHeld: {
-                commitMenu.dismiss()
+                dropCommitItem.closeMenu()
                 rowMenu.dropRequested(rowMenu.oid)
             }
         }
@@ -304,13 +304,13 @@ Item {
                 text: qsTr("Discard everything after it")
                 // Two words and no count: `%n … file(s)` would show `(s)` verbatim, since no translation loads.
                 note: rowMenu.hardResetTakes > 0 ? qsTr("uncommitted too") : ""
-                holdMs: Metrics.holdMs
+                holdPresses: Metrics.holdPressesWarned
                 // The commits come back from the branch's reflog and the uncommitted changes from the discard
-                // record's copy — unless a file in them is one the copy cannot take (デザイン規約 §長押し の色の表).
+                // record's copy — unless a file in them is one the copy cannot take (デザイン規約 §回数押し の色の表).
                 holdTone: rowMenu.hardResetNotCopied ? Theme.danger : Theme.warning
                 onHeld: {
-                    // Qt's `dismiss()`: this card and the menu it hangs off go together.
-                    resetMenu.dismiss()
+                    // This card and the menu it hangs off go together (`AppMenuItem.closeMenu`).
+                    hardResetItem.closeMenu()
                     rowMenu.resetRequested("hard")
                 }
             }

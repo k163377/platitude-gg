@@ -30,7 +30,7 @@ Rectangle {
     property bool busy: false
     /// Whether a discard of this file leaves something the discard record does not keep — before the first commit,
     /// or under a required LFS filter that cannot run (`GitFacts.discardUnrecorded`). `Discard hunk` is held in
-    /// `danger` then, in `warning` otherwise (デザイン規約 §長押し の色の表).
+    /// `danger` then, in `warning` otherwise (デザイン規約 §回数押し の色の表).
     property bool discardUnrecorded: false
     /// False for a file read out of another worktree, which reads the way a commit's file does (デザイン規約
     /// §別の worktree を読む): no whole-file word, no hunk or line seats. Not disabled — not offered: staging belongs

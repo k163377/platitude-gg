@@ -37,7 +37,7 @@ Rectangle {
     /// wears the accent — until what is typed would reach past this machine after all (a name the remote already has).
     property bool neutral: false
     /// The pill's hover tip: that it is held, and what the far side will make of it — what the bar's one line has no
-    /// room for (§長押し).
+    /// room for (§回数押し).
     property string tip: ""
     /// Stands in for a hand on the pill, which headless cannot inject (`HoverToolButton.pointedAt`). Read only where a
     /// real hover is — the pill's wash and its tip — so what a run lights is what a hand lights.
@@ -49,15 +49,15 @@ Rectangle {
     /// word and the gesture stay as they were — what could not be read changes neither what would run nor how it is
     /// pressed.
     property bool alert: false
-    /// Whether answering takes a hold (デザイン規約 §進行中・長押しの定数). A hold pill answers only on a fill that
-    /// reaches the end — both releases stop there — and letting go part way leaves nothing behind.
+    /// Whether answering takes the warning's count of presses (デザイン規約 §回数押し). Such a pill answers only at its
+    /// last press, and presses given up part way leave nothing behind.
     property bool hold: false
-    /// How far into the hold the press has got, 0 to 1.
+    /// How far into its presses the pill has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
-    /// The gesture the press under way was given (`HoldDriver.armedMs`; the live one between presses). The mark and
-    /// the word's colour read this: the answer the question waits on can land under a hand, and a pill that changed
-    /// its gesture there would take a click for an answer to a question that now wants a hold (デザイン規約 §長押し).
-    readonly property alias armedMs: holdDrive.armedMs
+    /// The gesture the press under way was given (`HoldDriver.armedPresses`; the live one between presses). The mark
+    /// and the word's colour read this: the answer the question waits on can land under a hand, and a pill that changed
+    /// its gesture there would take a click for an answer to a question that now wants a hold (デザイン規約 §回数押し).
+    readonly property alias armedPresses: holdDrive.armedPresses
     /// The sweep hand over the question's words, exposed so a run can enter it (as `<card>.background.pad` is).
     property alias pad: askHand
     /// What the question needs to have an answer at all (a chooser, a name box), declared by whoever raises it; the
@@ -75,7 +75,7 @@ Rectangle {
     /// whether it may answer is the bar's.
     function answerFromForm() {
         // A key cannot do what the dark pill cannot, and a held question is the pill's alone: the gesture is the
-        // intent, and a keystroke is not one (§進行中・長押しの定数).
+        // intent, and a keystroke is not one (§進行中・回数押しの定数).
         if (!bar.answerable || bar.hold)
             return
         bar.confirmed()
@@ -88,9 +88,9 @@ Rectangle {
     }
     /// Whether the pill can be pressed yet — false while a form has no answer to give.
     property bool answerable: true
-    /// Automation: run the hold to its end without a press behind it.
+    /// Automation: every press at once without a hand behind them.
     function completeHold() {
-        holdDrive.begin()
+        holdDrive.runOut()
     }
     /// Called off without the hand letting go — the question itself has gone, so the fill blanks (HoldDriver.blank).
     function blankHold() {
@@ -98,7 +98,9 @@ Rectangle {
     }
     HoldDriver {
         id: holdDrive
-        holdMs: bar.hold ? Metrics.holdMs : 0
+        holdPresses: bar.hold ? Metrics.holdPressesWarned : 0
+        // At the last press, while the question is still the one pressed for. The owner lowers the bar as it answers;
+        // the bar stays down for the floor regardless (`openHeight`).
         onFinished: bar.confirmed()
     }
 
@@ -133,6 +135,12 @@ Rectangle {
         // First, ahead of the height binding: the animation must be armed before the height moves (`travelling`).
         bar.travelling = true
         if (bar.open) {
+            // The next question, raised on the last one's floor: that answer has gone, and its fill is not this pill's.
+            // The bar never went up, so nothing comes down either: words arriving later grow it unanimated.
+            if (holdDrive.done) {
+                holdDrive.settle()
+                bar.travelling = false
+            }
             if (bar.form === null) {
                 acceptPill.tookTheOpening = true
                 Qt.callLater(acceptPill.forceActiveFocus)
@@ -147,7 +155,10 @@ Rectangle {
     /// The height the words ask for, kept apart from the animated one so automation can tell a bar all the way down
     /// from one on its way — `label` is set a whole opening ahead of any of it being on screen (a shot taken on
     /// `label` shows a red line and no words).
-    readonly property real openHeight: bar.open ? askRow.implicitHeight + 2 * Theme.spaceMd : 0
+    ///
+    /// A pill just pressed through keeps the bar down for its floor, the question answered or not: the full fill is
+    /// what the answer looks like (デザイン規約 §回数押し).
+    readonly property real openHeight: bar.open || holdDrive.settling ? askRow.implicitHeight + 2 * Theme.spaceMd : 0
     readonly property bool settled: bar.openHeight > 0 && bar.implicitHeight === bar.openHeight
     /// The other edge: answered and all the way back up (a shot taken on the answer shows the bar half-retracted).
     readonly property bool shut: !bar.open && bar.implicitHeight === 0
@@ -260,8 +271,8 @@ Rectangle {
             // (デザイン規約 §立っている質問は 1 か所で聞く).
             readonly property color wordInk:
                 !bar.answerable ? Theme.textMuted
-                : bar.holdProgress > 0 ? Theme.textOnAccent : bar.armedMs > 0 ? bar.tone : Theme.textPrimary
-            // Reachable without a pointer (デザイン規約 §長押し). Closed, it leaves the tab order by going disabled: Qt
+                : bar.holdProgress > 0 ? Theme.textOnAccent : bar.armedPresses > 0 ? bar.tone : Theme.textPrimary
+            // Reachable without a pointer (デザイン規約 §回数押し). Closed, it leaves the tab order by going disabled: Qt
             // refuses to clear `activeFocusOnTab` on the item holding the focus, and warns. Disabling takes the focus
             // away first, and the pill draws its own colours, so it looks no different.
             activeFocusOnTab: true
@@ -283,13 +294,14 @@ Rectangle {
             // A drawn pill has to name itself.
             Accessible.role: Accessible.Button
             Accessible.name: bar.code !== "" ? bar.code : bar.accept
-            Accessible.description: bar.hold ? Words.holdToActivate : ""
+            Accessible.description: bar.hold ? Words.pressToActivate(Metrics.holdPressesWarned) : ""
             HoldFill {
                 progress: bar.holdProgress
                 tone: bar.tone
+                dimmed: holdDrive.dimmed
                 inset: Theme.borderWidth
             }
-            // Outside the frame, and only for focus moved here from the keyboard (デザイン規約 §長押し). **Not
+            // Outside the frame, and only for focus moved here from the keyboard (デザイン規約 §回数押し). **Not
             // `visualFocus`**: that belongs to `Control`, and on this plain rectangle it binds `undefined` and the ring
             // never shows. With a press the only other way in, remembering the press says the same.
             Rectangle {
@@ -306,12 +318,13 @@ Rectangle {
                 id: acceptRow
                 anchors.centerIn: parent
                 spacing: Theme.spaceXs
-                // Ahead of the word: how the pill is answered before what answering does (デザイン規約 §長押し).
+                // Ahead of the word: how the pill is answered before what answering does (デザイン規約 §回数押し).
                 HoldIcon {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.verticalCenterOffset: Metrics.opticalDrop
-                    visible: bar.armedMs > 0
+                    visible: bar.armedPresses > 0
                     progress: bar.holdProgress
+                    presses: bar.armedPresses
                     tint: acceptPill.wordInk
                 }
                 // The chip or the word (`code` decides). Only the word takes room in the row: the `!` hangs off the end
@@ -356,27 +369,30 @@ Rectangle {
                 onPressed: {
                     acceptPill.tookAPress = true
                     // Unconditionally: a plain press is answered from the latch too, since the question's answer can
-                    // land while a hand is on the pill (`HoldDriver.armedMs`).
+                    // land while a hand is on the pill (`HoldDriver.armedPresses`).
                     holdDrive.begin()
                 }
                 // `released`, not `clicked`: Qt stops emitting `clicked` once its own press-and-hold timer (800ms) has
-                // gone off, so a click pill held down like a hold pill would answer nothing. `containsMouse` keeps a
-                // release away from the pill a cancel.
+                // gone off, so a click pill kept down a while would answer nothing. `containsMouse` keeps a release
+                // away from the pill a cancel.
                 onReleased: {
                     // Read before the latch opens; nothing where the question changed since the press
-                    // (`HoldDriver.stale`) — a click that became a hold under the hand is no answer (デザイン規約 §長押し).
-                    const plain = holdDrive.armedMs <= 0 && !holdDrive.stale && containsMouse
+                    // (`HoldDriver.stale`) — a click that became a count under the hand is no answer (デザイン規約
+                    // §回数押し).
+                    const plain = holdDrive.armedPresses <= 0 && !holdDrive.stale && containsMouse
                     holdDrive.letUp()
                     if (plain)
                         bar.confirmed()
                 }
-                // Dragging off calls the hold off (the grab keeps `pressed` true out there). Read off the moves, not
+                // Dragging off calls the presses off (the grab keeps `pressed` true out there). Read off the moves, not
                 // `containsPress`: that also falls on the release and would open the latch before `onReleased` read it.
-                onPositionChanged: if (!containsMouse) holdDrive.letUp()
+                onPositionChanged: if (!containsMouse) holdDrive.leave()
+                // The hand left the pill part way through its presses: back to zero (デザイン規約 §回数押し).
+                onExited: holdDrive.leave()
                 onCanceled: holdDrive.letUp()
             }
-            // Space or Enter: held where the question asks for a hold (`HoldDriver.pressKey`), otherwise answered as
-            // the key comes back up.
+            // Space or Enter: counted where the question asks for presses (`HoldDriver.pressKey`), otherwise answered
+            // as the key comes back up.
             Keys.onPressed: event => {
                 if (holdDrive.pressKey(event) || !holdDrive.ownsKey(event))
                     return

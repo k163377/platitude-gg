@@ -215,7 +215,7 @@ Rectangle {
     // concerns is marked, so the question is written exactly once.
 
     /// Raises the bar. `oidHex` is the row it is about ("" for none; a row outside the loaded window goes unmarked —
-    /// the bar stands either way). `hold` takes the answer as a held press (デザイン規約 §進行中・長押しの定数) and
+    /// the bar stands either way). `hold` takes the answer as a held press (デザイン規約 §進行中・回数押しの定数) and
     /// `tip` is the pill's hover text. `form` is what the question needs to take an answer at all (a chooser, a name
     /// box). `code` is the git command, said at the head of the question and on the pill where the act has one word of
     /// its own (デザイン規約 §git 用語のコード表記); `accept` carries the wording otherwise. `refName` is the ref the
@@ -278,7 +278,7 @@ Rectangle {
         askBar.open = false
         graphList.askOid = ""
     }
-    /// Automation: answer a held question the way a person does, by keeping the pill down to the end.
+    /// Automation: answer a held question the way a person does, by pressing the pill through to its last press.
     function completeHold() {
         askBar.completeHold()
     }

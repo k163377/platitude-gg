@@ -206,7 +206,7 @@ Rectangle {
         + (actionSeat.children.length - 1) * actionSeat.spacing
 
     /// Keeps the two actions' waiting visual up past the operation that raised it, for a picture of the wait: a fast
-    /// remote is done before one can be grabbed. False unless written from outside (デザイン規約 §進行中・長押しの定数).
+    /// remote is done before one can be grabbed. False unless written from outside (デザイン規約 §進行中・回数押しの定数).
     property bool holdPushBusy: false
     property bool holdFetchBusy: false
     readonly property string pushMode: pushButton.mode

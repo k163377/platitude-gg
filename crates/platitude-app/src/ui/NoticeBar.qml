@@ -64,7 +64,7 @@ Rectangle {
         NumberAnimation { duration: 200 }
     }
     // The hairline carries the tone (`Words.reportTone`); the heading and words keep their own colours
-    // (デザイン規約 §長押し「警告の色は枠と印が持つ」).
+    // (デザイン規約 §回数押し「警告の色は枠と印が持つ」).
     BandRule {
         color: bar.tone === "danger" ? Theme.danger
              : bar.tone === "warning" ? Theme.warning

@@ -135,7 +135,7 @@ pub struct RepoTab {
     branch_delete_merged: String,
     /// The plain `branch --delete` out for git's answer — the one press
     /// whose menu stays up, so a refusal lands on the row that asked
-    /// (`AppMenuItem.staysOpen`); `-D` and `Delete both` stand for
+    /// (`RefBranchMenu`'s plain delete, `onHeld`); `-D` and `Delete both` stand for
     /// nothing. The press writes the name down with its write's id
     /// (`ops::BranchDeleteOut`): a drain can carry several answers, and
     /// only the id tells which is this card's.

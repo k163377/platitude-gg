@@ -1,5 +1,5 @@
 // Graph / interaction constants, each beside the reason it is that number. The design document's
-// グラフ・インタラクション定数 and 進行中・長押しの定数 tables quote these values (`cargo xtask docs --sync`).
+// グラフ・インタラクション定数 and 進行中・回数押しの定数 tables quote these values (`cargo xtask docs --sync`).
 //
 // Tiered like `Theme` (規約 §トークンの三層). Nothing here belongs to one named screen, so there is no 個別 tier — a
 // per-screen number goes to `Theme`'s third block.
@@ -14,7 +14,19 @@ QtObject {
     // ---- 1. 基礎: how a gesture is answered, anywhere it is made ----
     readonly property real iconStroke: 1.5
     readonly property int spinMs: 1000
-    readonly property int holdMs: 500
+    // Presses that confirm a control that takes something away (デザイン規約 §回数押し): one to start, two more to mean it.
+    // Danger asks no more than warning — the colour says what is lost, the count only that it was meant.
+    readonly property int holdPressesWarned: 3
+    // The same for a plain (white) delete: a second press is enough to rule out the stray one.
+    readonly property int holdPressesPlain: 2
+    // One press's step of the fill and the mark. A double-click lands well inside it, so presses never wait on the
+    // drawing.
+    readonly property int holdStepMs: 110
+    // How long the full fill stays after the last press, whatever the work does: long enough to be seen, short enough
+    // not to be waited on.
+    readonly property int holdFloorMs: 150
+    // No press for this long and the count goes back to zero.
+    readonly property int holdResetMs: 4000
     readonly property int holdFillMin: Theme.spaceXs
     readonly property int holdBackMs: 150
     readonly property int opticalDrop: 1
@@ -80,7 +92,7 @@ QtObject {
     // The badge's `n/m` while a replay runs. It reads two files and starts no process; faster than this costs the
     // notify side — the worktree model's one `changed()` re-pulls every binding on the page.
     readonly property int opProgressMs: 250
-    // Wide enough that a long-press fill crossing it reads as progress.
+    // Wide enough that a press-count fill crossing it in steps reads as progress.
     readonly property int menuMinW: 160
     // 1 on, 1 off — the dashes of a WIP or stash edge and a WIP node's outline.
     readonly property var laneDash: [1, 1]

@@ -88,7 +88,7 @@ pub struct GraphModel {
     /// window it is a step of is the session's.
     window_step: i32,
     /// A press of the tail is out and the wider walk has not landed; the
-    /// footer wears the wait (デザイン規約 §進行中・長押しの定数).
+    /// footer wears the wait (デザイン規約 §進行中・回数押しの定数).
     growing: bool,
     /// Completed stream passes (direct + replacements + reloads). QML
     /// watches this edge to re-resolve the selection by oid.

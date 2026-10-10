@@ -15,9 +15,16 @@ RowLayout {
     property real nameColW: 0
     /// Stands in for the pointer on one row's Remove, which headless cannot inject (`SettingsAppPane.pointedAtRow`).
     property int pointedAtRow: -1
+    /// The person whose removal this row's last press took, until its floor has passed.
+    property string removalTaken: ""
+
+    /// Remove pressed through: the removal of this person's picture as it is now, for the list to keep.
+    signal removeAccepted(string email, string url)
+    /// Its floor has passed: the list gives the removal it keeps for `email`, if it still stands.
+    signal removeLanded(string email)
 
     spacing: Theme.spaceSm
-    /// The hand is on this row's Remove: the pointer, keyboard focus (デザイン規約 §長押し) or the headless stand-in.
+    /// The hand is on this row's Remove: the pointer, keyboard focus (デザイン規約 §回数押し) or the headless stand-in.
     /// The button's own hover, not the row's — a word that reddens three columns away is about none of them.
     readonly property bool lit: unsetButton.hovered || unsetButton.activeFocus
         || avatarRow.pointedAtRow === avatarRow.index
@@ -63,11 +70,23 @@ RowLayout {
         font.pixelSize: Theme.fontMd
         tone: avatarRow.lit ? Theme.danger : Theme.textSecondary
         frameColor: avatarRow.lit ? Theme.dangerDim : Theme.borderSubtle
-        holdMs: Metrics.holdMs
+        holdPresses: Metrics.holdPressesWarned
         holdTone: Theme.danger
         // Whose face this press is aimed at (`HoldDriver.premise`): an assignment landing while the hand is here
         // rebuilds the list, and a delegate re-used for another row would take that person's instead.
         premise: avatarRow.modelData.email
-        onHeld: AppBackend.removeAvatar(avatarRow.modelData.email)
+        // The row goes with the entry, in the same turn: the removal is taken at the last press — this person, this
+        // picture — and given once the full fill has been seen. The list keeps it (`AvatarRemovals`): a row
+        // rebuilt meanwhile would take it with it.
+        onHeld: {
+            avatarRow.removalTaken = avatarRow.modelData.email
+            avatarRow.removeAccepted(avatarRow.modelData.email, avatarRow.modelData.url)
+        }
+        onLanded: {
+            const email = avatarRow.removalTaken
+            avatarRow.removalTaken = ""
+            if (email !== "")
+                avatarRow.removeLanded(email)
+        }
     }
 }

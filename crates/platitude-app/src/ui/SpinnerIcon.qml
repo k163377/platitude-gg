@@ -1,7 +1,7 @@
 import QtQuick
 import platitude.ui
 
-// The one turning mark the window has: the drawn ring (規約 §進行中・長押しの定数). Drawn exactly while it turns, so
+// The one turning mark the window has: the drawn ring (規約 §進行中・回数押しの定数). Drawn exactly while it turns, so
 // callers write one condition.
 NavIcon {
     id: ring

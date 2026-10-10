@@ -113,8 +113,10 @@ Item {
             }
             compare(card.deleteItem.code, "branch --delete")
             compare(card.deleteRemoteItem.code, "push --delete")
-            compare(card.deleteItem.holdMs, 0, "the everyday delete is a click; git is what may still refuse it")
-            verify(card.deleteRemoteItem.holdMs > 0, "reaching past this machine is held")
+            compare(card.deleteItem.holdPresses, Metrics.holdPressesPlain,
+                    "the everyday delete is the plain delete's two presses; git is what may still refuse it")
+            compare(card.deleteItem.holdTone, Theme.textPrimary, "in the plain ink")
+            verify(card.deleteRemoteItem.holdPresses > 0, "reaching past this machine is held")
             compare(card.deleteRemoteItem.holdTone, Theme.warning)
             compare(card.deleteBothItem.holdTone, Theme.warning, "while the local half is not a force delete")
         }
@@ -136,7 +138,7 @@ Item {
             verify(card.applies)
             verify(card.deleteItem.offered)
             compare(card.deleteItem.code, "push --delete")
-            verify(card.deleteItem.holdMs > 0)
+            verify(card.deleteItem.holdPresses > 0)
             compare(card.deleteItem.holdTone, Theme.warning)
             verify(!card.deleteRemoteItem.offered, "a reading has no reading of its own")
             verify(!card.deleteBothItem.offered)
@@ -157,9 +159,9 @@ Item {
             compare(card.deleteBothItem.note, "")
 
             card.forceDeleteBranch = "feature/topic-a"
-            verify(card.deleteItem.holdMs > 0, "a click is no longer enough")
+            compare(card.deleteItem.holdPresses, Metrics.holdPressesWarned, "the plain two are no longer enough")
             // Commits nothing else reaches, but the discard record brings them back with the name
-            // (デザイン規約 §長押し の色の表): the warning, not the danger.
+            // (デザイン規約 §回数押し の色の表): the warning, not the danger.
             compare(card.deleteItem.holdTone, Theme.warning, "what goes comes back from the record")
             compare(card.deleteBothItem.note, "not merged")
             compare(card.deleteBothItem.holdTone, Theme.warning, "so the pair stays the warning too")
@@ -175,7 +177,8 @@ Item {
             verify(!card.deleteMerged)
             verify(card.deleteAsked)
             compare(root.asked, "", "the rows answered, so nobody was asked")
-            verify(card.deleteItem.holdMs > 0, "and the row is already the held one")
+            compare(card.deleteItem.holdPresses, Metrics.holdPressesWarned,
+                    "and the row is already the warning's three")
 
             root.standOn({ merged: "" })
             verify(!card.deleteAnswered)
@@ -185,9 +188,9 @@ Item {
             // git's late answer dresses the row the same way, by name.
             card.checkedBranch = "feature/topic-a"
             card.checkedMerged = "no"
-            verify(card.deleteItem.holdMs > 0)
+            verify(card.deleteItem.holdPresses > 0)
             card.checkedMerged = "unknown"
-            compare(card.deleteItem.holdMs, 0, "a read that fell over is not a refusal")
+            compare(card.deleteItem.holdPresses, Metrics.holdPressesPlain, "a read that fell over is not a refusal")
 
             // And a card over a row nobody can delete asks nothing at all.
             root.standOn({ offers: root.current })
@@ -197,7 +200,8 @@ Item {
 
         function test_each_row_asks_for_the_write_in_the_words_it_takes() {
             root.standOn({})
-            card.deleteItem.picked()
+            // Pressed through as the plain delete: the card stays up for git's answer (`RefBranchMenu`'s `onHeld`).
+            card.deleteItem.held()
             compare(root.asked, "delete branch feature/topic-a")
 
             root.standOn({})

@@ -2,7 +2,7 @@ import QtQuick
 import platitude.ui
 
 // The ring beside the pointer while a write that replays history is out; the OS cursor stays as it is, since a
-// cursor is not in a screenshot (デザイン規約 §進行中・長押しの定数). This file owns only where the mark sits —
+// cursor is not in a screenshot (デザイン規約 §進行中・回数押しの定数). This file owns only where the mark sits —
 // whoever knows what is running says whether it turns (`SpinnerIcon.spinning`).
 SpinnerIcon {
     id: waitRing

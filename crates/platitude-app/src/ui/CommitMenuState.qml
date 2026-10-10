@@ -27,7 +27,7 @@ QtObject {
     // The stash's selector ("" on an ordinary commit); a stash gets its own menu (デザイン規約 §グラフ行の右クリック).
     property string menuStashRef: ""
     // Whether a remote already has the menu's commit — the rewrite rows say so with a tag and do not ask
-    // (デザイン規約 §長押し「ローカルの履歴書き換えはクリック」). Read off the row (`GraphModel.publishedAt`), so it is
+    // (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」). Read off the row (`GraphModel.publishedAt`), so it is
     // in hand as the menu opens (デザイン規約 §行が読む答えはどこから来るか).
     property bool menuPublished: false
     /// What these menus offer, held still while they stand. The rules are core's (`offers::commit_menu`).

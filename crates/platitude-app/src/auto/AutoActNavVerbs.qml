@@ -295,7 +295,7 @@ Item {
                                   // BRANCH card.
                                   + " branch=" + (worktreeMenuTimer.onGraph ? driver.commitBranchCard.applies
                                                                             : driver.refBranchCard.applies)
-                                  + " held=" + (item.holdMs > 0)
+                                  + " presses=" + item.holdPresses
                                   // Whether the folder came out whole: the row bids for it, and a bid a fraction
                                   // short elides it on one OS only (`AppMenuItem.implicitWidth`).
                                   + " cut=" + item.nameCut
@@ -304,13 +304,14 @@ Item {
                 driver.complete()
                 return
             }
+            // The presses, as a hand makes them: the row's handler folds the menus and asks for the removal. A row out
+            // of reach takes none (`AppMenuItem.completeHold`), and the sampler presses again on its next beat, naming
+            // the stage it waits at.
+            const went = driver.pressWrite("worktree-remove", () => item.completeHold())
+            Awaited.at(Harness.autoAct, went ? "pressed" : "row in reach")
+            if (!went)
+                return
             worktreeMenuTimer.stop()
-            // A click, as a hand makes it: the row's handler, then the menus fold.
-            driver.pressWrite("worktree-remove", () => {
-                item.triggered()
-                worktreeMenuTimer.menu.dismiss()
-                return true
-            })
             // git keeps the worktree and says why: the bar is the answer, and the log stays shut (`write_notice log=`).
             if (worktreeMenuTimer.refused)
                 driver.barrierNotice.start()

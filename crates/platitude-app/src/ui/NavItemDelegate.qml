@@ -182,8 +182,8 @@ Item {
         // (`tipPointedAt`). **An open row stays lit**: dark, its open lines would read as belonging to nothing.
         visible: navRow.pointed || navRow.tipPointedAt || navRow.factsOpen
     }
-    // Nothing asks a question about a row in this list: what a row takes away is held down on the menu row that
-    // names it (デザイン規約 §長押し).
+    // Nothing asks a question about a row in this list: what a row takes away is pressed through on the menu row that
+    // names it (デザイン規約 §回数押し).
     // The row's ink (`NavRowBody`), handed the row itself: mirroring its properties here would double every binding
     // paid on reuse.
     NavRowBody {

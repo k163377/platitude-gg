@@ -140,10 +140,10 @@ ColumnLayout {
         return Theme.textSecondary
     }
 
-    /// Whether the button stands, frozen for the length of a press (規約 §設定の画面「姿は押した瞬間に凍る」): the
-    /// offer moves on git's clock and could take the button from under a hand mid-hold; frozen, the press finishes and
-    /// `restart_now` decides whether it still means anything. The `Binding` below keeps it live and lets go during a
-    /// press (`RestoreNone` is the freeze).
+    /// Whether the button stands, frozen for the presses under way (規約 §設定の画面「姿は押した瞬間に凍る」): the
+    /// offer moves on git's clock and could take the button away between presses; frozen, the presses finish and
+    /// `restart_now` decides whether they still mean anything. The `Binding` below keeps it live and lets go while
+    /// presses are under way (`RestoreNone` is the freeze).
     property bool gitButtonRestarts: AppBackend.gitPathOffersRestart
     /// `warning` for a git that answers, `danger` where it is below the supported minimum — the button alone goes
     /// red; the line stays `warning`, being old a fact about the git.
@@ -386,7 +386,7 @@ ColumnLayout {
                 onPicking: pane.openGitPicker()
             }
             // The one button puts a git in force, standing only while there is one to put — choosing is the box's
-            // errand. `warning` and held: the press costs the window (規約 §設定の画面 / §長押し).
+            // errand. `warning` and held: the press costs the window (規約 §設定の画面 / §回数押し).
             ActionButton {
                 id: gitButton
                 visible: pane.gitButtonRestarts
@@ -396,7 +396,7 @@ ColumnLayout {
                 // Framed beside a framed box (rules-refs/app-ui.md「肯定側のボタンは枠で名乗り」), in the word's
                 // colour to say the press costs something.
                 frameColor: pane.gitButtonTone
-                holdMs: Metrics.holdMs
+                holdPresses: Metrics.holdPressesWarned
                 activeFocusOnTab: true
                 onHeld: AppBackend.applyGitPathNow()
             }
@@ -709,6 +709,8 @@ ColumnLayout {
                 nameColW: avatarRepeater.nameColW
                 pointedAtRow: pane.pointedAtRow
                 onNameSeatChanged: avatarRepeater.settleNameColW()
+                onRemoveAccepted: (email, url) => leaving.accept(email, url)
+                onRemoveLanded: email => leaving.give(email)
             }
         }
         RowLayout {
@@ -756,5 +758,11 @@ ColumnLayout {
         // pinned by デザイン規約 §アバターを与える, so `avatar::EXTENSIONS` cannot grow without the rules moving first.
         nameFilters: [qsTr("PNG and JPEG (%1)").arg(AppBackend.avatarPatterns)]
         onAccepted: AppBackend.assignAvatar(pane.chosenEmail, pane.chosenName, selectedFile.toString())
+    }
+    // The rows' removals, kept here: a row is rebuilt with every assignment that lands.
+    AvatarRemovals {
+        id: leaving
+        filed: AppBackend.avatars
+        onRemove: email => AppBackend.removeAvatar(email)
     }
 }

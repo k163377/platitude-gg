@@ -152,8 +152,9 @@ AppMenu {
             branchCard.forceDeleteBranch = branchCard.refusedDelete
     }
     onLandedDeleteChanged: {
+        // Through the row: a git that answers inside the floor still leaves the full fill its time.
         if (branchCard.answersHere(branchCard.landedDelete))
-            branchCard.dismiss()
+            refDeleteItem.closeMenu()
     }
 
     /// Why the delete table's rows are out — worn as the rows' `blockedReason` (デザイン規約 §無効).
@@ -196,9 +197,11 @@ AppMenu {
                     : (branchCard.checkedBranch === state.refId
                        && branchCard.checkedMerged === "no")))
         readonly property bool heldRow: remoteRow || refusedRow
-        /// `refusedRow` as latched at the press: on a branch row a hold length (`AppMenuItem.armedMs`) means refused.
-        /// Read live, git's answer to the last press would re-word the row under the hand (デザイン規約 §長押し).
-        readonly property bool shownRefused: refDeleteItem.branchRow && refDeleteItem.armedMs > 0
+        /// `refusedRow` as latched at the first press: on a branch row the warning's count (`AppMenuItem.armedPresses`)
+        /// means refused, the plain delete's means not. Read live, git's answer to the last attempt would re-word the
+        /// row between presses (デザイン規約 §回数押し).
+        readonly property bool shownRefused:
+            refDeleteItem.branchRow && refDeleteItem.armedPresses >= Metrics.holdPressesWarned
         code: shownRefused ? "branch -D"
             : branchRow ? "branch --delete"
             : "push --delete"
@@ -215,15 +218,22 @@ AppMenu {
                      : branchCard.deleteBlockedWhileBusy
         // Asked of the sentence this row shows, not of the state: a row blocked for another reason names no worktree.
         reasonMarkWord: refDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
-        holdMs: heldRow ? Metrics.holdMs : 0
-        // A branch's plain delete keeps the menu up: git's answer lands on this row.
-        staysOpen: branchRow
-        // `warning` both ways: a remote's name stands back up here, and a local branch's tip and upstream come back
-        // from the discard record (デザイン規約 §長押し の色の表).
-        holdTone: Theme.warning
-        onPicked: branchCard.deleteRequested(state.kind, state.refId, state.refName, state.refOid)
+        // The plain delete is a delete too: two presses, in the plain ink (デザイン規約 §回数押し). Refused, or reaching
+        // past this machine, it is the warning's three.
+        holdPresses: heldRow ? Metrics.holdPressesWarned : Metrics.holdPressesPlain
+        // `warning` both ways when held: a remote's name stands back up here, and a local branch's tip and upstream
+        // come back from the discard record (デザイン規約 §回数押し の色の表). Off the latched count, as the words are.
+        holdTone: refDeleteItem.armedPresses >= Metrics.holdPressesWarned ? Theme.warning : Theme.textPrimary
+        // At the last press, so `shownRefused` is the count these presses were given: an unmerged answer landing on the
+        // floor turns no plain delete into `-D`.
         onHeld: {
-            branchCard.dismiss()
+            // A branch's plain delete keeps the menu up: git's answer lands on this row, which a refusal turns into
+            // `branch -D` (`AppMenuItem.armedPresses` reopens with the warning's count).
+            if (refDeleteItem.branchRow && !refDeleteItem.shownRefused) {
+                branchCard.deleteRequested(state.kind, state.refId, state.refName, state.refOid)
+                return
+            }
+            refDeleteItem.closeMenu()
             if (remoteRow) {
                 // Leased to the commit this row showed (`remote::delete_remote_branch`).
                 branchCard.deleteRemoteRequested(state.refId, state.refOid)
@@ -244,10 +254,10 @@ AppMenu {
         blockedReason: state.canDeleteRemote ? ""
                      : state.remoteDrifted ? Words.differsFrom(state.remoteCounterpart)
                      : branchCard.deleteBlockedWhileBusy
-        holdMs: Metrics.holdMs
+        holdPresses: Metrics.holdPressesWarned
         holdTone: Theme.warning
         onHeld: {
-            branchCard.dismiss()
+            refRemoteDeleteItem.closeMenu()
             branchCard.deleteRemoteRequested(state.remoteCounterpart, state.remoteCounterpartOid)
         }
     }
@@ -256,9 +266,10 @@ AppMenu {
     // (`session::delete_branch_everywhere`).
     AppMenuItem {
         id: refBothDeleteItem
-        /// Whether the local half goes as `-D`, latched for the press under way (デザイン規約 §長押し): read live, git's
-        /// answer landing mid-hold would turn a hold begun on the warning into a force delete. The hold length cannot
-        /// carry it (this row is held either way), so the `Binding` freezes it while `AppMenuItem.gesturing`.
+        /// Whether the local half goes as `-D`, latched for the presses under way (デザイン規約 §回数押し): read live, git's
+        /// answer landing between presses would turn presses begun on the plain delete into a force delete. The count
+        /// cannot carry it (this row takes three either way), so the `Binding` freezes it while
+        /// `AppMenuItem.gesturing`.
         property bool forces: refDeleteItem.refusedRow
         readonly property Binding forcesHeld: Binding {
             target: refBothDeleteItem
@@ -278,13 +289,13 @@ AppMenu {
                      : branchCard.deleteBlockedWhileBusy
         // As on the local row.
         reasonMarkWord: refBothDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
-        holdMs: Metrics.holdMs
+        holdPresses: Metrics.holdPressesWarned
         // `warning` whether the local half runs as `-d` or `-D`: the commits only it reached come back from the discard
-        // record with the name (デザイン規約 §長押し の色の表).
+        // record with the name (デザイン規約 §回数押し の色の表).
         holdTone: Theme.warning
         onHeld: {
-            branchCard.dismiss()
-            // One write with one answer, so one thing to put back.
+            refBothDeleteItem.closeMenu()
+            // One write with one answer, so one thing to put back. `forces` is still the latched one.
             branchCard.deleteEverywhereRequested(state.refId, state.remoteCounterpart,
                                                  refBothDeleteItem.forces, state.remoteCounterpartOid)
         }

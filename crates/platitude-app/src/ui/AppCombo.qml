@@ -180,7 +180,7 @@ ComboBox {
     }
 
     /// Rows, or a read that may still bring some: the card opens on that with a ring, since refusing leaves the press
-    /// unanswered (デザイン規約 §進行中・長押しの定数「進行中を言うのはリングの仕事」). With neither, the arrow goes.
+    /// unanswered (デザイン規約 §進行中・回数押しの定数「進行中を言うのはリングの仕事」). With neither, the arrow goes.
     readonly property bool hasList: combo.count > 0 || combo.loading
     /// Automation only: the card's middle-button hand, and how far it has sent the rows (a middle button cannot be
     /// injected).

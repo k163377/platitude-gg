@@ -135,7 +135,7 @@ Item {
         visible: tail.graphModel.truncated
         color: tailMouse.containsMouse && tail.canLoadMore ? Theme.textSecondary : Theme.borderStrong
     }
-    // The wait ring where the words end (デザイン規約 §進行中・長押しの定数), placed off their ink — a reserved seat
+    // The wait ring where the words end (デザイン規約 §進行中・回数押しの定数), placed off their ink — a reserved seat
     // would push the words out of the subject column.
     SpinnerIcon {
         id: tailWait

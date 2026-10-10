@@ -3,13 +3,13 @@ import QtTest
 import platitude.ui
 
 // A row of the stopped operation's card turned off (`enabled`, its own or an ancestor's) answers nothing: no key, no
-// press, and no hold already under way lands after it. Turned back on, it answers as before.
+// press, and no count already under way lands after it. Turned back on, it answers as before.
 Item {
     id: root
     width: 360
     height: 200
 
-    readonly property int hold: 300
+    readonly property int presses: Metrics.holdPressesWarned
 
     /// Takes the tab before the rows.
     Item {
@@ -37,7 +37,7 @@ Item {
             width: 340
             code: "--abort"
             text: "Undo it all and go back"
-            holdMs: root.hold
+            holdPresses: root.presses
         }
     }
     /// Somewhere else for the focus to go.
@@ -64,15 +64,17 @@ Item {
             held.enabled = true
             elsewhere.forceActiveFocus()
             keyRelease(Qt.Key_Space)
-            tryVerify(() => held.holdProgress === 0 && plain.holdProgress === 0)
+            // The gesture, not the fill: a row pressed through in the test before is still before its first frame, and
+            // locked until its floor has passed.
+            tryVerify(() => !held.gesturing && !plain.gesturing)
             plainPicks.clear()
             heldPicks.clear()
         }
 
-        /// Longer than the hold, so a fill that was going to land has landed.
+        /// Longer than the floor, so a last press that was going to land has landed.
         function outlastTheHold() {
-            // waits(paced): the subject is a pick that must **not** come, so the wait is the hold it would come after.
-            wait(root.hold * 2)
+            // waits(paced): the subject is a pick that must **not** come, so the wait is the floor it would come after.
+            wait(Metrics.holdFloorMs * 2)
         }
 
         function test_a_row_turned_off_under_the_focus_takes_no_key_data() {
@@ -88,25 +90,38 @@ Item {
             compare(plainPicks.count, 0)
         }
 
-        function test_a_key_hold_turned_off_midway_never_lands() {
+        /// The count goes the moment the row is turned off, and presses after it is back begin a new one — short of the
+        /// last press, so nothing lands.
+        function test_a_key_count_turned_off_midway_never_lands() {
             held.forceActiveFocus()
             keyPress(Qt.Key_Space)
             tryVerify(() => held.holdProgress > 0)
             held.enabled = false
-            tryVerify(() => held.holdProgress === 0)
+            compare(held.holdProgress, 0, "dropped at once, not by the idle reset")
             outlastTheHold()
             keyRelease(Qt.Key_Space)
-            compare(heldPicks.count, 0)
+            held.enabled = true
+            held.forceActiveFocus()
+            for (let i = 0; i < root.presses - 1; i++)
+                keyClick(Qt.Key_Space)
+            compare(heldPicks.count, 0, "the presses after it began a new count")
+            keyClick(Qt.Key_Space)
+            compare(heldPicks.count, 1, "which the next press completes: the row is not left deaf")
         }
 
-        function test_a_pointer_hold_turned_off_midway_never_lands() {
+        function test_a_pointer_count_turned_off_midway_never_lands() {
             mousePress(held, 40, 10)
             tryVerify(() => held.holdProgress > 0)
             held.enabled = false
-            tryVerify(() => held.holdProgress === 0)
+            compare(held.holdProgress, 0, "dropped at once, not by the idle reset")
             outlastTheHold()
             mouseRelease(held, 40, 10)
-            compare(heldPicks.count, 0)
+            held.enabled = true
+            for (let i = 0; i < root.presses - 1; i++)
+                mouseClick(held, 40, 10)
+            compare(heldPicks.count, 0, "the presses after it began a new count")
+            mouseClick(held, 40, 10)
+            compare(heldPicks.count, 1, "which the next press completes: the row is not left deaf")
         }
 
         function test_a_press_turned_off_before_its_release_picks_nothing() {
@@ -124,7 +139,7 @@ Item {
             verify(!plain.enabled && !held.enabled, "the rows read their ancestor's")
             compare(plain.wordColor, Theme.textMuted)
             compare(held.wordColor, Theme.textMuted)
-            tryVerify(() => held.holdProgress === 0)
+            compare(held.holdProgress, 0, "dropped at once, not by the idle reset")
             outlastTheHold()
             keyRelease(Qt.Key_Space)
             mouseClick(plain, 40, 10)
@@ -159,15 +174,15 @@ Item {
             mouseClick(plain, 40, 10)
             compare(plainPicks.count, 1)
             held.forceActiveFocus()
-            keyPress(Qt.Key_Space)
-            tryVerify(() => heldPicks.count === 1)
-            keyRelease(Qt.Key_Space)
+            for (let i = 0; i < root.presses; i++)
+                keyClick(Qt.Key_Space)
+            compare(heldPicks.count, 1)
         }
 
         /// The control: every test above would pass on a row that answers nothing.
         function test_a_row_that_is_on_answers_as_it_always_did() {
             compare(plain.wordColor, Theme.textPrimary)
-            compare(held.wordColor, held.holdTone, "a held row wears its cost before it is touched")
+            compare(held.wordColor, held.holdTone, "a confirmed row wears its cost before it is touched")
             mouseClick(plain, 40, 10)
             compare(plainPicks.count, 1, "a plain row runs on the release")
             plain.forceActiveFocus()
@@ -175,11 +190,10 @@ Item {
             compare(plainPicks.count, 2, "and on its key")
             mouseClick(held, 40, 10)
             outlastTheHold()
-            compare(heldPicks.count, 0, "a held row ignores a click")
-            mousePress(held, 40, 10)
-            tryVerify(() => heldPicks.count === 1)
-            mouseRelease(held, 40, 10)
-            compare(heldPicks.count, 1, "and runs once the hold is through")
+            compare(heldPicks.count, 0, "a confirmed row is not run by one click")
+            for (let i = 1; i < root.presses; i++)
+                mouseClick(held, 40, 10)
+            compare(heldPicks.count, 1, "and runs at its last press")
         }
     }
 }

@@ -35,7 +35,7 @@ Item {
         foldRequested: true
         height: Theme.opsBarHeight
     }
-    // `push -f` at rest, as `BandPushButton` dresses it: the push mark and the hold's ring as a fraction.
+    // `push -f` at rest, as `BandPushButton` dresses it: the push mark and the press count's mark as a fraction.
     PanelButton {
         id: forced
         y: 100
@@ -44,7 +44,7 @@ Item {
         widestText: "push -f"
         code: true
         widestCode: true
-        holdMs: Metrics.holdMs
+        holdPresses: Metrics.holdPressesWarned
         tone: root.ink
         faceColor: root.face
         height: stackDepth
@@ -68,16 +68,17 @@ Item {
             compare(marked.stackDepth, worded.stackDepth)
         }
 
-        /// In a frame that deep the hold's fraction keeps air over the frame's bottom line. One as deep as the seat put
-        /// its ring on the line: the seat's foot is the frame's.
+        /// In a frame that deep the presses' fraction keeps air over the frame's bottom line. One as deep as the seat
+        /// put its mark on the line: the seat's foot is the frame's.
         function test_the_hold_ring_keeps_off_the_frame_line() {
-            compare(forced.armedMs, Metrics.holdMs, "the button wears the hold")
-            // The ring is the lower right of the fraction, and a canvas: on screen once red stands there.
+            compare(forced.armedPresses, Metrics.holdPressesWarned, "the button wears the press mark")
+            // The mark is the lower right of the fraction, and a canvas: on screen once its sectors stand there — at
+            // rest every one at `dimFade` of the red, over the black face. The frame's grey stays under that.
             tryVerify(() => {
                 const shot = grabImage(forced)
                 for (let y = Math.floor(forced.height * 3 / 4); y < forced.height - Theme.borderWidth; ++y) {
                     for (let x = Math.ceil(forced.width / 2) + Theme.spaceXs / 2; x < forced.width; ++x) {
-                        if (shot.pixel(x, y).r > 0.5)
+                        if (shot.pixel(x, y).r > Metrics.dimFade * 0.8)
                             return true
                     }
                 }

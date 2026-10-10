@@ -632,9 +632,11 @@ Item {
                         return
                     }
                 } else if (act === "avatar-remove") {
+                    // Read before the presses: their last one removes the row before the call returns.
+                    const rows = acts.appPane.autoAvatarRows
                     if (!acts.appPane.autoAvatarHoldRemove(0))
                         return
-                    avatarCardTimer.rowsBefore = acts.appPane.autoAvatarRows
+                    avatarCardTimer.rowsBefore = rows
                 }
                 avatarCardTimer.acted = true
             }

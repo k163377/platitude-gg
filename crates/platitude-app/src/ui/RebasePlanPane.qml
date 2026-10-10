@@ -24,8 +24,10 @@ Rectangle {
     signal rowPicked(string oidHex)
 
     /// `Discard` would throw away composed work (verbs, moves, a reword saved or still in the right pane's boxes), so
-    /// it becomes a hold (デザイン規約 §長押し). Handed in: half the answer is the right pane's (`RepoPage.planDiscards`).
+    /// it becomes a hold (デザイン規約 §回数押し). Handed in: half the answer is the right pane's (`RepoPage.planDiscards`).
     property bool discards: false
+    /// A held `Discard` accepted at its last press, waiting out the floor (`RebasePlanModel.acceptDiscard`); 0 = none.
+    property int discardTicket: 0
 
     /// Automation only: the list, so a verb makes the same calls a hand on a row makes.
     readonly property alias view: planList
@@ -56,7 +58,7 @@ Rectangle {
                 anchors.rightMargin: Theme.spaceMd
                 spacing: Theme.spaceSm
                 // Named from the press; the rest of the sentence arrives with the rows. The `…` says the phrase will
-                // be finished, not that something is in progress (規約 §進行中・長押しの定数「文がまだ途中」).
+                // be finished, not that something is in progress (規約 §進行中・回数押しの定数「文がまだ途中」).
                 Label {
                     text: planPane.waiting ? qsTr("Rebasing…")
                         : planPane.planModel.root ? qsTr("Rebasing back to the very first commit")
@@ -85,13 +87,23 @@ Rectangle {
                     text: qsTr("Discard")
                     // A plain word, not `--abort`: nothing has run, and git would refuse that command here
                     // (デザイン規約 §git 用語のコード表記「着せるのはコマンドだけ」).
-                    // The dressing reads `armedMs`, not `discards`: the right pane's boxes can empty under a hand
-                    // already holding (規約 §長押し).
-                    frameColor: cancelButton.armedMs > 0 ? Theme.warning : Theme.borderDefault
-                    tone: cancelButton.armedMs > 0 ? Theme.warning : Theme.textPrimary
-                    holdMs: planPane.discards ? Metrics.holdMs : 0
+                    // The dressing reads `armedPresses`, not `discards`: the right pane's boxes can empty under a hand
+                    // already holding (規約 §回数押し).
+                    frameColor: cancelButton.armedPresses > 0 ? Theme.warning : Theme.borderDefault
+                    tone: cancelButton.armedPresses > 0 ? Theme.warning : Theme.textPrimary
+                    holdPresses: planPane.discards ? Metrics.holdPressesWarned : 0
+                    // Not over an answer already taken (a held run, or this discard's own).
+                    enabled: !planPane.planModel.locked
                     onActivated: planPane.planModel.cancelPlan()
-                    onHeld: planPane.planModel.cancelPlan()
+                    // The pane closes with the plan, in the same turn: a held discard is taken at its last press, the
+                    // plan locked behind it, and given once the full fill has been seen.
+                    onHeld: planPane.discardTicket = planPane.planModel.acceptDiscard()
+                    onLanded: {
+                        const ticket = planPane.discardTicket
+                        planPane.discardTicket = 0
+                        if (ticket !== 0)
+                            planPane.planModel.giveAccepted(ticket)
+                    }
                 }
             }
             // The mode's own underline, where a standing bar draws its edge.

@@ -46,12 +46,12 @@ ActionButton {
     text: fetchButton.stopped ? qsTr("Resume") : "fetch"
     code: !fetchButton.stopped
     // Stopped: `textSecondary`, full under a hand (デザイン規約 §リモートから取り込む). Otherwise the plain word — a
-    // failure is the mark's (§長押し「警告の色は枠と印が持つ」).
+    // failure is the mark's (§回数押し「警告の色は枠と印が持つ」).
     tone: fetchButton.stopped && !fetchButton.lit ? Theme.textSecondary : Theme.textPrimary
     // Through the wait the word takes the disabled step; ring, mark and frame keep the warning
     // (デザイン規約 §暗く落とした段).
     toneDim: fetchButton.fails > 0 ? Theme.warningDim : Theme.textMuted
-    // Framed in every state: a bare word in the panel reads as a label (デザイン規約 §進行中・長押しの定数
+    // Framed in every state: a bare word in the panel reads as a label (デザイン規約 §進行中・回数押しの定数
     // 「枠を持てる場所にだけ枠を出す」). At rest `borderStrong`: the ordinary line is lost against `Theme.bgRaised`.
     frameColor: fetchButton.stopped ? Theme.warning : Theme.borderStrong
     // The canvas inside the frame: a box on the operated row is a hole onto the work, so the row stays one surface.

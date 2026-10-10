@@ -454,25 +454,26 @@ Rectangle {
                     : Math.abs(discardHunkButton.wordBase(diffRow) - stageHunkButton.wordBase(diffRow))
             }
             spacing: Theme.spaceXs
-            // Unstaged side only: on the staged side, unstaging puts the hunk back where it can be discarded. Held
-            // (デザイン規約 §長押し), with no ask bar — it stands in the heading of what it takes. Shaped like a held menu
-            // row: a frame around one word in a heading reads as a box come loose.
+            // Unstaged side only: on the staged side, unstaging puts the hunk back where it can be discarded. Pressed
+            // through (デザイン規約 §回数押し), with no ask bar — it stands in the heading of what it takes. Shaped like
+            // a confirmed menu row: a frame around one word in a heading reads as a box come loose.
             ActionButton {
                 id: discardHunkButton
-                /// `warning` — the hunk comes back from the discard record — unless this file's discard goes
-                /// unrecorded (デザイン規約 §長押し の色の表).
-                readonly property color discardTone: diffRow.discardUnrecorded ? Theme.danger : Theme.warning
+                /// The plain delete's ink and count — the hunk comes back from the discard record, and a hunk is the
+                /// smallest thing a discard takes — unless this file's discard goes unrecorded (デザイン規約 §回数押し
+                /// の色の表).
+                readonly property color discardTone: diffRow.discardUnrecorded ? Theme.danger : Theme.textPrimary
                 visible: !diffRow.staged
                 text: qsTr("Discard hunk")
                 font.pixelSize: Theme.fontSm
-                // Asleep until the pointer is on this heading (デザイン規約 §diff の中のステージ); the hold mark still says
-                // it is held.
+                // Asleep until the pointer is on this heading (デザイン規約 §diff の中のステージ); the press mark still says
+                // it takes several.
                 tone: diffRow.underPointer ? discardHunkButton.discardTone : Theme.textSecondary
                 holdTone: discardHunkButton.discardTone
-                holdMs: Metrics.holdMs
+                holdPresses: diffRow.discardUnrecorded ? Metrics.holdPressesWarned : Metrics.holdPressesPlain
                 enabled: !diffRow.busy
                 // Which hunk of which reading (`HoldDriver.premise`): the pane re-reads itself behind every write, and
-                // a delegate re-used across that read would discard whatever it was pointed at when the fill ran out.
+                // a delegate re-used across that read would discard whatever it was pointed at by its last press.
                 premise: diffRow.rowsGen + ":" + diffRow.hunk
                 onHeld: diffRow.discardRequested(diffRow.hunk)
             }
@@ -492,5 +493,5 @@ Rectangle {
             }
         }
     }
-    // No per-line discard: a bare `×` has no words to say what it takes (デザイン規約 §長押し「長押しの的は文字を持つ」).
+    // No per-line discard: a bare `×` has no words to say what it takes (デザイン規約 §回数押し「回数押しの的は文字を持つ」).
 }

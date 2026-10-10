@@ -110,8 +110,9 @@ AppMenu {
                                                        state.place)
     }
     AppMenuSeparator {}
-    // A click, as `branch --delete`: a local write, and git keeps a worktree holding uncommitted work — that refusal
-    // comes down as a report over the graph (デザイン規約 §左メニューの所作 の削除の表).
+    // A plain delete, as `branch --delete`: two presses in the plain ink (デザイン規約 §回数押し) — a local write, and git
+    // keeps a worktree holding uncommitted work; that refusal comes down as a report over the graph (デザイン規約
+    // §左メニューの所作 の削除の表).
     AppMenuItem {
         id: refWorktreeRemoveItem
         code: "worktree remove"
@@ -127,6 +128,11 @@ AppMenu {
                                                   : qsTr("Locked — %1").arg(state.lockReason))
                        : state.out === "here" ? qsTr("This tab is showing this worktree")
                        : state.out === "busy" ? Words.otherCommandRunning : ""
-        onTriggered: worktreeMenu.removeRequested(state.path, state.name)
+        holdPresses: Metrics.holdPressesPlain
+        holdTone: Theme.textPrimary
+        onHeld: {
+            refWorktreeRemoveItem.closeMenu()
+            worktreeMenu.removeRequested(state.path, state.name)
+        }
     }
 }

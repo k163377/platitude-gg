@@ -6,7 +6,7 @@ use super::*;
 impl AppBackend {
     /// Files a picture against an address (`file_url` is the picker's).
     /// Writes at once: the card has no Save, and taking one away is a hold
-    /// (デザイン規約 §長押し).
+    /// (デザイン規約 §回数押し).
     pub(super) fn file_avatar(&mut self, email: &str, name: &str, file_url: &str) {
         let source = crate::urlpath::file_url_to_path(file_url);
         let refused = Hub::with(|hub| hub.assign_avatar(email, name, &source)).flatten();

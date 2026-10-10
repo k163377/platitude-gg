@@ -307,7 +307,7 @@ Item {
         id: tagRemoteRenameTimer
         property string tag: ""
         property string name: ""
-        /// Whether the pill is held to the end, or the run stops at the question standing.
+        /// Whether the pill is pressed through, or the run stops at the question standing.
         property bool holds: false
         /// Whether the rename has gone in: before it the run waits on the reading, after it on the bar.
         property bool sent: false

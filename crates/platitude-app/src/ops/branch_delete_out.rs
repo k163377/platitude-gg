@@ -5,7 +5,7 @@ use super::Press;
 
 /// The one press whose menu stays up: `git branch --delete` may be
 /// turned down, and the refusal has to land on the row that asked for
-/// it (`AppMenuItem.staysOpen`).
+/// it (`RefBranchMenu`'s plain delete, `onHeld`).
 ///
 /// The press writes down the name with the id: only the id tells this
 /// answer from the fetch's in the same drain ([`Press`]).

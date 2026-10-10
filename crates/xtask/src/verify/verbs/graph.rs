@@ -96,7 +96,7 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "overlay saved=true popups=2",
     },
     // The delete that card offers, run to git's answer. The row stays up
-    // for a refusal (`AppMenuItem.staysOpen`), so what is judged is the
+    // for a refusal (the plain delete's `onHeld` in `RefBranchMenu`), so what is judged is the
     // card going once none came; `code=` tells a landing (still
     // `branch --delete`) from a refusal (turned `branch -D`).
     Verb {

@@ -55,7 +55,7 @@ Menu {
         return widest
     }
     /// The narrowest width: a hold fills its row from the left and needs the travel to read as progress
-    /// (デザイン規約 §進行中・長押しの定数). A card with no held row may drop it to fit its rows.
+    /// (デザイン規約 §進行中・回数押しの定数). A card with no held row may drop it to fit its rows.
     property real widthFloor: Metrics.menuMinW
 
     /// For a submenu: whether its title row is offered. Not `visible`, which on a Menu means the card is on screen.
@@ -133,7 +133,7 @@ Menu {
     }
 
     // The hold mark's seat, left by every row once any row on offer carries the mark, so words start on one x
-    // (デザイン規約 §長押し); 0 otherwise. Extra left padding, not a layout seat, which would also pay the layout's gap.
+    // (デザイン規約 §回数押し); 0 otherwise. Extra left padding, not a layout seat, which would also pay the layout's gap.
     // The mark's box: it stands at the row's edge, and the row's own padding is the step from it to the words.
     readonly property real holdIndent: {
         for (let i = 0; i < appMenu.count; i++) {
@@ -141,7 +141,7 @@ Menu {
             if (!row || !row.offered)
                 continue
             // Either mark takes the same seat, so either one opens it (`AppMenuItem.asks`).
-            if ((row.holdMs !== undefined && row.holdMs > 0) || row.asks === true)
+            if ((row.holdPresses !== undefined && row.holdPresses > 0) || row.asks === true)
                 return Theme.iconSm
         }
         return 0

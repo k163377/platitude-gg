@@ -8,7 +8,7 @@ Rectangle {
     id: badge
     property bool filled: false
     /// The state this badge stands for (規約 §状態), carried by the frame
-    /// (規約 §進行中・長押しの定数「警告の色は枠と印が持つ」).
+    /// (規約 §進行中・回数押しの定数「警告の色は枠と印が持つ」).
     property color tint: Theme.warning
     /// This badge's width with nothing narrowed, handed in from the hidden measurement (`BadgeWord`) — this row is
     /// not laid out while the group is folded.

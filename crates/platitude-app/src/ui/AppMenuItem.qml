@@ -114,44 +114,55 @@ MenuItem {
     /// (verify-ui §hover の絵の撮り方).
     property bool tipForced: false
 
-    /// Held, for a row that would otherwise have to raise a question of its own (デザイン規約 §長押し). Zero is an
-    /// ordinary row. A hold row reports no click (`rowPress`).
-    property int holdMs: 0
+    /// Pressed this many times, for a row that would otherwise have to raise a question of its own (デザイン規約
+    /// §回数押し). Zero is an ordinary row. Such a row reports no click (`rowPress`).
+    property int holdPresses: 0
     /// Pressing this row raises a question: a `!` in the hold mark's seat (デザイン規約 §進行中の操作から出る). A row
     /// asks or holds, never both — a row that asks is confirmed on the bar it raises.
     property bool asks: false
-    /// How far into the hold the press has got, 0 to 1.
+    /// How far into the presses the row has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
-    /// The length the press under way was given (`HoldDriver.armedMs`; the live one between presses). Anything the row
-    /// dresses from the same answer reads this, so it cannot change under a holding hand
-    /// (rules-refs の「長押しか否かは押した瞬間に確定する」の行).
-    readonly property alias armedMs: holdDrive.armedMs
+    /// The count the gesture under way was given (`HoldDriver.armedPresses`; the live one between gestures). Anything
+    /// the row dresses from the same answer reads this, so it cannot change between presses
+    /// (rules-refs の「回数押しか否かは最初の押下で確定する」の行).
+    readonly property alias armedPresses: holdDrive.armedPresses
     /// A gesture is under way, the fill's slide back included (`HoldDriver.gesturing`) — the latch for a row dressed
-    /// from an answer other than the length (`RefBranchMenu`'s `Delete both`).
+    /// from an answer other than the count (`RefBranchMenu`'s `Delete both`).
     readonly property alias gesturing: holdDrive.gesturing
-    /// What a held row wears — word, chip, mark and fill. `warning`: what a hold here throws away is brought back from
-    /// the discard record. **A row that cannot be brought back names `danger` itself** (デザイン規約 §長押し の色の表) —
-    /// so a new held row never takes the stronger warning by leaving this out.
+    /// What a confirmed row wears — word, chip, mark and fill. `warning`: what the row throws away is brought back from
+    /// the discard record. **A row that cannot be brought back names `danger` itself**, and a plain delete
+    /// `textPrimary` (デザイン規約 §回数押し の色の表) — so a new row never takes the stronger warning by leaving this out.
     property color holdTone: Theme.warning
-    /// Held all the way down.
+    /// [`closeMenu`] asked under the floor: the menu goes when it has passed.
+    property bool closesAfterFloor: false
+    /// Pressed through: the handler runs the row now, at the last press, while what the presses were for still holds.
+    /// The menu stays for the floor — the handler closes it with [`closeMenu`], never the menu's own `dismiss()`.
     signal held()
-    /// Automation: run the hold to its end without a press behind it — on a row a hand could hold.
-    function completeHold() {
-        if (menuItem.blocked || !menuItem.enabled)
+    /// Closes the menu this row is in, every level of it (Qt's `dismiss()`): at once, or — under a row just pressed
+    /// through — once its floor has passed, so the full fill is seen (デザイン規約 §回数押し). A menu closed some other
+    /// way meanwhile is not closed again: what opens next is not this row's. Where only this row's level went (the
+    /// hand moving onto another row of the menu above), the rest stays: the hand is in it.
+    function closeMenu() {
+        if (menuItem.menu === null)
             return
-        holdDrive.begin()
+        if (holdDrive.settling) {
+            menuItem.closesAfterFloor = true
+            return
+        }
+        menuItem.menu.dismiss()
+    }
+    /// Automation: every press at once without a hand behind them — on a row a hand could press. Answers whether
+    /// they went in, so a run that met the row out of reach waits rather than counting presses nothing landed.
+    function completeHold() {
+        if (!menuItem.offered || menuItem.blocked || !menuItem.enabled)
+            return false
+        holdDrive.runOut()
+        return true
     }
     // Blocked under a hand: the hold under way blanks rather than running out to fire, as a row blocked from the start
     // drops the press (`rowPress`).
     onBlockedChanged: if (menuItem.blocked) holdDrive.blank()
     readonly property bool holding: menuItem.holdProgress > 0
-
-    /// A row that runs on a click but leaves the menu standing: `branch -d` refuses while the branch holds commits
-    /// nothing else does, and the refusal has to land where the hand already is — the row turns into a held one
-    /// (デザイン規約 §左メニューの所作).
-    property bool staysOpen: false
-    /// Clicked, on a row that stays open; `triggered` never fires for one (`rowPress` takes the press).
-    signal picked()
 
     /// The hold mark's seat, the same on every row of the menu (`AppMenu.holdIndent`).
     readonly property real holdIndent:
@@ -198,16 +209,16 @@ MenuItem {
                    + (menuItem.trail !== "" ? Theme.spaceXs + Theme.iconXs + trailLabel.implicitWidth : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
-    Accessible.description: menuItem.holdMs > 0 ? Words.holdToActivate : ""
+    Accessible.description: menuItem.holdPresses > 0 ? Words.pressToActivate(menuItem.holdPresses) : ""
 
     // The one colour every word in the row follows, so the chip cannot disagree with its sentence. A held row wears
     // its tone before it is touched at all (デザイン規約 §状態).
     readonly property color wordColor: !menuItem.enabled || menuItem.blocked ? Theme.textMuted
                                      : menuItem.holding ? Theme.textOnAccent
-                                     : menuItem.armedMs > 0 ? menuItem.holdTone : Theme.textPrimary
+                                     : menuItem.armedPresses > 0 ? menuItem.holdTone : Theme.textPrimary
     /// The colour the name inside those words takes: its own only while the row has no colour of its own
     /// (デザイン規約 §メニュー「文の中に入った名前も、色は名前のもの」).
-    readonly property color refColor: !menuItem.enabled || menuItem.blocked || menuItem.armedMs > 0
+    readonly property color refColor: !menuItem.enabled || menuItem.blocked || menuItem.armedPresses > 0
                                       ? menuItem.wordColor : Theme.textLink
     /// Those words as `Text.StyledText` markup, in one label so the line elides, measures and hovers like any row's.
     /// Every piece is escaped: the name is the repository's (a branch called `<b>`), and spaces go as `&nbsp;` because
@@ -238,14 +249,15 @@ MenuItem {
                 : [menuItem.code, menuItem.text, menuItem.namesMark ? menuItem.markName : ""]
                   .filter(words => words !== "").join(" ")
 
-    // The hold mark, in the seat `holdIndent` leaves on every row (デザイン規約 §長押し).
+    // The press mark, in the seat `holdIndent` leaves on every row (デザイン規約 §回数押し).
     HoldIcon {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: Metrics.opticalDrop
         progress: menuItem.holdProgress
+        presses: menuItem.armedPresses
         tint: menuItem.wordColor
-        visible: menuItem.armedMs > 0
+        visible: menuItem.armedPresses > 0
     }
     // The `!` of a row that asks, sharing the hold mark's seat — a row is one or the other (`asks`). Ahead of the word,
     // so it is the seat's icon (デザイン規約 §git 用語のコード表記「`!` の席」): the step a menu's icons take, centred
@@ -259,7 +271,7 @@ MenuItem {
         width: Theme.iconMd
         height: Theme.iconMd
         // Only on a row that can be pressed; a blocked row says `blockedWhy` instead.
-        visible: menuItem.asks && menuItem.armedMs <= 0 && !menuItem.blocked
+        visible: menuItem.asks && menuItem.armedPresses <= 0 && !menuItem.blocked
     }
     // A heading's mark. Its ink, not its box, stands at `markX`: the box's air hangs either side into the card's
     // padding and the word's gap, which would otherwise be spent twice.
@@ -407,7 +419,7 @@ MenuItem {
                     stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
                     // `NavIcon` paints on a kind it is given; an empty one would be a shape nobody asked for.
                     kind: menuItem.namesMark ? menuItem.nameMark : "tree"
-                    tint: menuItem.blocked || !menuItem.enabled || menuItem.armedMs > 0
+                    tint: menuItem.blocked || !menuItem.enabled || menuItem.armedPresses > 0
                           ? menuItem.wordColor : menuItem.nameMarkTint
                 }
             }
@@ -486,9 +498,13 @@ MenuItem {
         radius: Theme.radiusSm
         // Every row hovers to the same wash, held rows included (デザイン規約 §メニュー).
         color: menuItem.highlighted ? Theme.bgHover : "transparent"
+        // Out over the card's side padding to its frame, so the mark at the row's edge has as much fill on its left as
+        // its word's step gives it on its right (デザイン規約 §回数押し).
         HoldFill {
             progress: menuItem.holdProgress
             tone: menuItem.holdTone
+            dimmed: holdDrive.dimmed
+            bleed: menuItem.menu !== null ? menuItem.menu.leftPadding - Theme.borderWidth : 0
         }
         // Under the hand, a heading is underlined in its mark's colour across the row: what is about to open
         // (デザイン規約 §メニュー の入れ子). Headings only — a mark about the row names no card.
@@ -502,35 +518,44 @@ MenuItem {
         }
     }
 
+    // The row runs at the last press; only the menu's going waits out the floor (`closeMenu`).
     HoldDriver {
         id: holdDrive
-        holdMs: menuItem.holdMs
+        holdPresses: menuItem.holdPresses
         onFinished: menuItem.held()
+        onLanded: {
+            if (!menuItem.closesAfterFloor)
+                return
+            menuItem.closesAfterFloor = false
+            menuItem.menu.dismiss()
+        }
     }
-    // Takes the press before the MenuItem can emit `triggered`, which would run the row and close the menu under a
-    // hold. It accepts no hover, so the row still highlights like any other.
+    Connections {
+        target: menuItem.menu
+        // Whoever closed the menu, the row's completion went with it.
+        function onAboutToHide() {
+            menuItem.closesAfterFloor = false
+            holdDrive.settle()
+        }
+    }
+    // The hand left the row part way through its presses: back to zero (デザイン規約 §回数押し).
+    onHoveredChanged: if (!menuItem.hovered) holdDrive.leave()
+    // Takes the press before the MenuItem can emit `triggered`, which would run the row and close the menu on the
+    // first press. It accepts no hover, so the row still highlights like any other.
     MouseArea {
         id: rowPress
         anchors.fill: parent
-        // A blocked row takes the press and drops it, or the row underneath would run and close the menu. `armedMs`,
-        // not the live length: disabling the area mid-gesture would lose the release and fire a hold nobody is making.
-        enabled: menuItem.blocked || ((holdDrive.armedMs > 0 || menuItem.staysOpen) && menuItem.enabled)
+        // A blocked row takes the press and drops it, or the row underneath would run and close the menu.
+        // `armedPresses`, not the live count: disabling the area mid-gesture would lose the release.
+        enabled: menuItem.blocked || (holdDrive.armedPresses > 0 && menuItem.enabled)
         onPressed: if (!menuItem.blocked) holdDrive.begin()
-        // Letting go or dragging off calls the hold off; on a stays-open row, letting go on the row is its click.
-        onReleased: mouse => {
-            // Read before `letUp()` opens the latch; a press whose premise has gone (`HoldDriver.stale`) is neither
-            // the click nor the hold.
-            const pick = !menuItem.blocked && holdDrive.armedMs <= 0 && !holdDrive.stale && menuItem.staysOpen
-                    && mouse.x >= 0 && mouse.y >= 0 && mouse.x <= width && mouse.y <= height
-            holdDrive.letUp()
-            if (pick)
-                menuItem.picked()
-        }
+        onReleased: holdDrive.letUp()
         onCanceled: holdDrive.letUp()
-        onPositionChanged: if (!containsMouse) holdDrive.letUp()
+        // Dragged off the row: as the hand leaving it.
+        onPositionChanged: if (!containsMouse) holdDrive.leave()
     }
-    // Keyboard: hold Space or Enter on the row (デザイン規約 §長押し). Accepting the key keeps the menu from
-    // triggering the row outright.
+    // Keyboard: press Space or Enter on the row, as many times (デザイン規約 §回数押し). Accepting the key keeps the
+    // menu from triggering the row outright.
     Keys.onPressed: event => {
         // A blocked row takes the key that would run it and drops it.
         if (menuItem.blocked) {

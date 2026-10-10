@@ -372,13 +372,14 @@ Item {
     function wroteAndSettled() {
         return repoTab.wroteThrough() && repoTab.busyCount === 0
     }
-    /// Runs a hold to its end, armed on the end: a write this run never pressed can answer during `Metrics.holdMs`
+    /// Runs a control's presses to their end, armed on the end: a write this run never pressed can answer before then
     /// (the opening fetch, or `push-tag`'s own on a drifted tag), and a barrier armed at the start would pass on it
-    /// with the card still up. The row's handler runs inside `completeHold()`, so its ask has gone in when the call
-    /// returns.
+    /// with the card still up. Automated presses wait out no floor (`HoldDriver.runOut`), so the row's handler runs
+    /// inside `completeHold()` and its ask has gone in when the call returns.
     function holdToEnd(held) {
-        // A button waiting on git answers false (`ActionButton.completeHold`) — no press. A hold with no such gate
-        // answers nothing, which is a press that went in.
+        // A button waiting on git, or a menu or exit row out of reach, answers false (`ActionButton.completeHold`,
+        // `AppMenuItem.completeHold`, `OpExitRow.completeHold`) — no press. A control with no such gate (the question
+        // bar's pill) answers nothing, which is a press that went in.
         return driver.pressWrite("hold", () => held.completeHold() !== false)
     }
     /// A hold on a button that may be waiting on git: pressed again each tick until it takes (`holdToEnd`), then

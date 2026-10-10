@@ -74,9 +74,9 @@ Item {
     /// a line of its own above a pane-filling button reads as the pane's heading (デザイン規約 §フル interactive rebase).
     property string phraseNote: ""
     property color phraseNoteTint: Theme.warning
-    /// The hold's mark on a held phrase button, ahead of the first chip (§長押し): the seat stands at the row's edge,
+    /// The hold's mark on a held phrase button, ahead of the first chip (§回数押し): the seat stands at the row's edge,
     /// far from a centred phrase.
-    property int phraseHoldMs: 0
+    property int phraseHoldPresses: 0
     property real phraseHoldProgress: 0
     /// The face the action is attributed to, at the phrase's end (`… by <face>`); -1 draws none
     /// (デザイン規約 §アバターを与える).
@@ -99,7 +99,7 @@ Item {
     /// The parts that never give, each with its following gap — per part, since a `Row` charges a gap only for a
     /// visible child.
     readonly property real phraseFixed:
-        (btnLabel.phraseHoldMs > 0 ? Theme.iconSm + phraseRow.spacing : 0)
+        (btnLabel.phraseHoldPresses > 0 ? Theme.iconSm + phraseRow.spacing : 0)
         + (phraseAlert.visible ? phraseAlert.width + phraseRow.spacing : 0)
         + headChip.implicitWidth + phraseRow.spacing
         + (countWord.visible ? countWord.implicitWidth + phraseRow.spacing : 0)
@@ -196,8 +196,9 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.spaceXs
         HoldIcon {
-            visible: btnLabel.phraseHoldMs > 0
+            visible: btnLabel.phraseHoldPresses > 0
             progress: btnLabel.phraseHoldProgress
+            presses: btnLabel.phraseHoldPresses
             tint: btnLabel.tint
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: Metrics.opticalDrop

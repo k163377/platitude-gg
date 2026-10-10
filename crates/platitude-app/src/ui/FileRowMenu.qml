@@ -74,7 +74,7 @@ Item {
             keys: keys,
             count: fileRowMenu.repoTab.discardCount,
             only: fileRowMenu.repoTab.discardOnly,
-            // Answered before the row is shown, as the colour has to be (デザイン規約 §長押し).
+            // Answered before the row is shown, as the colour has to be (デザイン規約 §回数押し).
             unrecorded: GitFacts.discardUnrecorded(fileRowMenu.worktree.unborn, fileRowMenu.worktree.notCopied,
                                                    paths)
         }
@@ -174,18 +174,18 @@ Item {
                 fileRowMenu.repoTab.stashPaths(fileRowMenu.wipPane.stashName)
             }
         }
-        // Held (デザイン規約 §長押し). On a file changed on both sides the unstaged row keeps what is staged, the staged
+        // Held (デザイン規約 §回数押し). On a file changed on both sides the unstaged row keeps what is staged, the staged
         // row takes the lot. `warning`: what goes comes back from the discard record's copy — `danger` where it would
-        // not (before the first commit, a file the copy cannot take; デザイン規約 §長押し の色の表).
+        // not (before the first commit, a file the copy cannot take; デザイン規約 §回数押し の色の表).
         AppMenuItem {
             id: fileDiscardItem
             text: fileRowMenu.discardWords(fileRowMenu.plan)
             note: fileRowMenu.discardNote(fileRowMenu.plan)
             offered: fileRowMenu.bucket !== "conflicts" && fileRowMenu.canWrite
-            holdMs: Metrics.holdMs
+            holdPresses: Metrics.holdPressesWarned
             holdTone: fileRowMenu.plan && fileRowMenu.plan.unrecorded ? Theme.danger : Theme.warning
             onHeld: {
-                fileMenu.close()
+                fileDiscardItem.closeMenu()
                 fileRowMenu.discardChosenNow(fileRowMenu.plan)
             }
         }

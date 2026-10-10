@@ -127,7 +127,7 @@ struct Sides {
 /// [`crate::lfs::required`]); the others — another required filter, an
 /// encoding it cannot convert — are found by trying, and named afterwards
 /// under `Not-copied:`. The screen holds a discard this answers no to in
-/// `danger`, the rest in `warning` (デザイン規約 §長押し).
+/// `danger`, the rest in `warning` (デザイン規約 §回数押し).
 pub fn recorded_whole(unborn: bool, not_copied: &[String], paths: &[String]) -> bool {
     if unborn {
         return false;

@@ -144,7 +144,7 @@ pub(super) const TABLE: &[Verb] = &[
         name: "delete-branch-early",
         when: &[(
             Arg::Is("feature/topic-a"),
-            "merged=no code=branch -D held=true note=not merged",
+            "merged=no code=branch -D presses=3 note=not merged",
         )],
         plain: "delete_early asked=true",
     },
@@ -160,7 +160,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "delete-branch-early-far",
         when: &[],
-        plain: "delete_early asked=true from=git merged=no code=branch -D held=true \
+        plain: "delete_early asked=true from=git merged=no code=branch -D presses=3 \
                 note=not merged",
     },
     // The three deletes of the left row's card, each judged first on the
@@ -217,35 +217,35 @@ pub(super) const TABLE: &[Verb] = &[
     // than pale, which sentence its hover gives, and whether the menu
     // stands on the branch the worktree has out (`branch=`) — the two locks
     // of `--preset worktrees` (with and without a reason), a worktree on a
-    // branch and one on none. `held=false`: the row is a click; `cut=false`:
-    // the folder came out whole, which a Linux font once missed by a pixel.
-    // `longnames`' worktree is cut on purpose: its forced hover gives the
-    // whole line back. `says=` is the tip's text.
+    // branch and one on none. `presses=2`: the row is a plain delete's two
+    // presses; `cut=false`: the folder came out whole, which a Linux font
+    // once missed by a pixel. `longnames`' worktree is cut on purpose: its
+    // forced hover gives the whole line back. `says=` is the tip's text.
     Verb {
         name: "worktree-menu",
         when: &[
             (
                 Arg::Is("a-very-long-linked-worktree-folder-name"),
                 "worktree_menu worktree=a-very-long-linked-worktree-folder-name card=true offered=true \
-                 blocked=false tip=true code=worktree remove branch=true held=false cut=true \
+                 blocked=false tip=true code=worktree remove branch=true presses=2 cut=true \
                  says=worktree remove a-very-long-linked-worktree-folder-name",
             ),
             (
                 Arg::Is("hotfix"),
                 "worktree_menu worktree=hotfix card=true offered=true blocked=true tip=true \
-                 code=worktree remove branch=true held=false cut=false \
+                 code=worktree remove branch=true presses=2 cut=false \
                  says=Locked — release run is using this checkout",
             ),
             (
                 Arg::Is("spike"),
                 "worktree_menu worktree=spike card=true offered=true blocked=true tip=true \
-                 code=worktree remove branch=true held=false cut=false \
+                 code=worktree remove branch=true presses=2 cut=false \
                  says=This worktree is locked",
             ),
             (
                 Arg::Is("detached"),
                 "worktree_menu worktree=detached card=true offered=true blocked=false tip=false \
-                 code=worktree remove branch=false held=false cut=false",
+                 code=worktree remove branch=false presses=2 cut=false",
             ),
             // The repository's own worktree: its branch's menu, and a card
             // that makes worktrees but has no `worktree remove` — git never
@@ -263,7 +263,7 @@ pub(super) const TABLE: &[Verb] = &[
         // No preset: a worktree of `demo-repo worktrees` opened with
         // `--repo` is the one this tab stands in (verbs.md).
         plain: "card=true offered=true blocked=true tip=true code=worktree remove branch=true \
-                held=false cut=false says=This tab is showing this worktree",
+                presses=2 cut=false says=This tab is showing this worktree",
     },
     // The same card from the graph: the row the worktree stands on, its
     // menu aimed at the worktree's folder chip (`detached`) or at the
@@ -276,12 +276,12 @@ pub(super) const TABLE: &[Verb] = &[
             (
                 Arg::Is("detached"),
                 "worktree_menu worktree=detached card=true offered=true blocked=false tip=false \
-                 code=worktree remove branch=false held=false cut=false",
+                 code=worktree remove branch=false presses=2 cut=false",
             ),
             (
                 Arg::Is("topic"),
                 "worktree_menu worktree=topic card=true offered=true blocked=false tip=false \
-                 code=worktree remove branch=true held=false cut=false",
+                 code=worktree remove branch=true presses=2 cut=false",
             ),
         ],
         plain: "card=true offered=true code=worktree remove",

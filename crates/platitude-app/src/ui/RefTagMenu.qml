@@ -120,17 +120,17 @@ AppMenu {
     AppMenuItem {
         id: refPushTagItem
         // Off the running press's length, so the chip cannot change under a hand already on the row
-        // (`AppMenuItem.armedMs`, デザイン規約 §長押し).
-        code: refPushTagItem.armedMs <= 0 ? "push" : "push --force"
+        // (`AppMenuItem.armedPresses`, デザイン規約 §回数押し).
+        code: refPushTagItem.armedPresses <= 0 ? "push" : "push --force"
         //: Follows the `push` chip: "push to origin".
         text: qsTr("to %1").arg(state.pushRemote)
         offered: state.canPushTag
-        holdMs: state.tagDriftOid === "" ? 0 : Metrics.holdMs
+        holdPresses: state.tagDriftOid === "" ? 0 : Metrics.holdPressesWarned
         // Reaching past this machine is the warning tone (デザイン規約 §状態).
         holdTone: Theme.warning
         onTriggered: tagMenu.pushTagRequested(state.pushRemote, state.refId, "")
         onHeld: {
-            tagMenu.dismiss()
+            refPushTagItem.closeMenu()
             tagMenu.pushTagRequested(state.pushRemote, state.refId, state.tagDriftOid)
         }
     }
@@ -144,9 +144,9 @@ AppMenu {
         text: state.refId
         growsForText: false
         offered: state.kind === "tag" && state.canDelete
-        holdMs: Metrics.holdMs
+        holdPresses: Metrics.holdPressesWarned
         onHeld: {
-            tagMenu.dismiss()
+            refTagDeleteItem.closeMenu()
             tagMenu.deleteTagRequested(state.refId)
         }
     }
@@ -161,11 +161,11 @@ AppMenu {
         // (デザイン規約 §左メニューの所作 の削除の表).
         offered: state.kind === "tag" && (state.canDeleteRemoteTag || state.heldBack !== "")
         blockedReason: state.canDeleteRemoteTag ? "" : state.heldWhy
-        holdMs: Metrics.holdMs
+        holdPresses: Metrics.holdPressesWarned
         // Warning: only a name goes, and the commit stays (デザイン規約 §タグを作る・送る).
         holdTone: Theme.warning
         onHeld: {
-            tagMenu.dismiss()
+            refRemoteTagDeleteItem.closeMenu()
             tagMenu.deleteRemoteTagRequested(state.reach, state.refId, state.tagOnlyThere, state.refOid)
         }
     }
@@ -175,11 +175,11 @@ AppMenu {
         text: qsTr("Delete both")
         offered: state.kind === "tag" && (state.canDeleteTagEverywhere || (state.heldBack !== "" && state.tagHere))
         blockedReason: state.canDeleteTagEverywhere ? "" : state.heldWhy
-        holdMs: Metrics.holdMs
+        holdPresses: Metrics.holdPressesWarned
         // Only names go — git keeps the object — so never the danger of the branch's `-D`.
         holdTone: Theme.warning
         onHeld: {
-            tagMenu.dismiss()
+            refBothTagDeleteItem.closeMenu()
             tagMenu.deleteTagEverywhereRequested(state.refId, state.reach, state.refOid)
         }
     }

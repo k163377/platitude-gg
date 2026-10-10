@@ -270,11 +270,11 @@ Item {
         // A sentence for each count — `commit(s)` would reach the reader as written (デザイン規約 §タイポグラフィ).
         value: publishFlow.publishRefused
                ? (publishFlow.repoTab.remoteBranchTheirs === 1
-                  ? qsTr("Hold to overwrite %1, dropping %n commit it has and yours does not. A remote that moved since is refused.",
+                  ? qsTr("%1 to overwrite %2, dropping %n commit it has and yours does not. A remote that moved since is refused.",
                          "", publishFlow.repoTab.remoteBranchTheirs)
-                  : qsTr("Hold to overwrite %1, dropping %n commits it has and yours does not. A remote that moved since is refused.",
+                  : qsTr("%1 to overwrite %2, dropping %n commits it has and yours does not. A remote that moved since is refused.",
                          "", publishFlow.repoTab.remoteBranchTheirs))
-                 .arg(publishFlow.publishTarget)
+                 .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(publishFlow.publishTarget)
                : publishFlow.publishState === "unknown"
                  ? qsTr("%1 was never fetched here, so what it holds cannot be read — the push can only fast-forward it.")
                    .arg(publishFlow.publishTarget)

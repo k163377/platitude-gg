@@ -26,6 +26,7 @@ AuthorCard 1.0 AuthorCard.qml
 AutoScrollBar 1.0 AutoScrollBar.qml
 AvatarAssignRow 1.0 AvatarAssignRow.qml
 AvatarButton 1.0 AvatarButton.qml
+AvatarRemovals 1.0 AvatarRemovals.qml
 CardText 1.0 CardText.qml
 CarriedPane 1.0 CarriedPane.qml
 ChangeIcon 1.0 ChangeIcon.qml

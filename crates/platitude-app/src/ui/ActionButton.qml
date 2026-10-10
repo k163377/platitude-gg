@@ -15,21 +15,24 @@ HoverToolButton {
     property color toneDim: Theme.textMuted
     /// git is on the network for this button: the ring takes the icon's seat, the word drops to the disabled colour,
     /// and presses are ignored — with `enabled` kept, since dropping it takes the focus from a keyboard press
-    /// (デザイン規約 §進行中・長押しの定数).
+    /// (デザイン規約 §進行中・回数押しの定数).
     property bool busy: false
-    /// How long a press has to last to fire `held()`; zero for an ordinary click button (デザイン規約 §進行中・長押しの定数).
-    property int holdMs: 0
-    /// How far into the hold the press has got, 0 to 1.
+    /// How many presses fire `held()`; zero for an ordinary click button (デザイン規約 §進行中・回数押しの定数).
+    property int holdPresses: 0
+    /// How far into the presses the button has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
-    /// The length the press under way was given (`HoldDriver.armedMs`; the live one between presses). An owner that
-    /// dresses itself from the same condition as the length reads this, so nothing changes under a hand already
-    /// holding (rules-refs の「長押しか否かは押した瞬間に確定する」の行).
-    readonly property alias armedMs: holdDrive.armedMs
-    /// A gesture is under way, the fill's slide back included (`HoldDriver.gesturing`) — what an owner latches on when
-    /// it dresses itself from an answer other than the length.
+    /// The count the gesture under way was given (`HoldDriver.armedPresses`; the live one between gestures). An owner
+    /// that dresses itself from the same condition as the count reads this, so nothing changes between presses
+    /// (rules-refs の「回数押しか否かは最初の押下で確定する」の行).
+    readonly property alias armedPresses: holdDrive.armedPresses
+    /// A gesture is under way, its completion included (`HoldDriver.gesturing`) — what an owner latches on when it
+    /// dresses itself from an answer other than the count.
     readonly property alias gesturing: holdDrive.gesturing
+    /// The ring turns in the mark's seat: git is on the network for this button, and the full fill of the press that
+    /// started it has had its floor (デザイン規約 §回数押し).
+    readonly property bool ringing: actionBtn.busy && !holdDrive.settling
     /// What this button's press is aimed at (`HoldDriver.premise`) — set it wherever the target can be swapped out
-    /// from under the hand without the length moving: a band button re-pointed at another tab, a list delegate re-used
+    /// from under the hand without the count moving: a band button re-pointed at another tab, a list delegate re-used
     /// for another row.
     property alias premise: holdDrive.premise
     /// Frame drawn around the button. Transparent leaves the button bare.
@@ -38,8 +41,8 @@ HoverToolButton {
     property bool alert: false
     /// The mark's colour, where it is not the word's.
     property color alertTone: actionBtn.fg
-    /// The hold's fill colour — the frame's by default. A bare button names its own and fills edge to edge like a held
-    /// menu row (the hunk heading's `Discard hunk` — デザイン規約 §長押し).
+    /// The fill's colour — the frame's by default. A bare button names its own and fills edge to edge like a confirmed
+    /// menu row (the hunk heading's `Discard hunk` — デザイン規約 §回数押し).
     property color holdTone: actionBtn.frameColor
     readonly property bool framed: actionBtn.frameColor.a > 0
     /// The whole label is a git command in git's own spelling and wears the code chip (デザイン規約 §git 用語のコード表記);
@@ -143,17 +146,24 @@ HoverToolButton {
     /// cut, so the ink comes out even.
     readonly property real headInk: seat.visible ? (seat.implicitWidth - seat.step) / 2 : 0
     readonly property real tailInk: actionBtn.code ? Theme.spaceXs / 2 : 0
-    /// Held all the way down.
+    /// The last press landed, raised at once: the answer is decided here, and the work starts under the full fill.
     signal held()
-    /// The ordinary action: a plain press let go. A hold button raises it on neither release — the one that completes
-    /// the hold or the one that gives up part way.
+    /// The floor after it has passed (`HoldDriver.landed`). For an owner whose answer takes this button off the
+    /// screen at once — the row leaving its list, the pane closing: it accepted the answer at `held`, its content
+    /// taken and its target locked there, and gives it now, so the full fill is seen first (デザイン規約 §回数押し).
+    /// Nothing is decided here, and nothing this button turned into meanwhile (busy, disabled) calls the answer off.
+    signal landed()
+    /// The ordinary action: a plain press let go. A confirmed button raises it on no release.
     signal activated()
-    readonly property color fg: actionBtn.busy ? Theme.textMuted
-                                : holdProgress > 0 ? Theme.textOnAccent : enabled ? tone : Theme.textMuted
+    /// Over the fill the words lift to `textOnAccent`, the wait included: the full fill stays while the work runs.
+    readonly property color fg: holdProgress > 0 ? Theme.textOnAccent
+                                : actionBtn.busy ? Theme.textMuted : enabled ? tone : Theme.textMuted
     /// The marks' colour: while busy, the state a step down like the ring and the frame
-    /// (デザイン規約 §進行中・長押しの定数「リング・枠・印は、そのボタンが待つ前に着ていた色の 1 段下」). Apart from `fg`
-    /// because a dimmed word has one colour only (§無効), while a mark keeps its hue so a wait says which button waits.
-    readonly property color markFg: actionBtn.busy ? actionBtn.toneDim : actionBtn.fg
+    /// (デザイン規約 §進行中・回数押しの定数「リング・枠・印は、そのボタンが待つ前に着ていた色の 1 段下」) — over the fill, the
+    /// words' lift. Apart from `fg` because a dimmed word has one colour only (§無効), while a mark keeps its hue so a
+    /// wait says which button waits.
+    readonly property color markFg: holdProgress > 0 ? Theme.textOnAccent
+                                    : actionBtn.busy ? actionBtn.toneDim : actionBtn.fg
     /// A press lands only with git off the network for this button.
     readonly property bool live: actionBtn.enabled && !actionBtn.busy
 
@@ -163,61 +173,63 @@ HoverToolButton {
         return (actionBtn.stacked ? stackLabel : btnLabel).wordBase(item)
     }
 
-    /// Automation: run the hold without a press, gated the way a hand's press is (`onDownChanged`). Answers whether it
-    /// went in, so a run that met the button busy presses again later rather than filling a hold nothing can land.
+    /// Automation: every press at once without a hand, gated the way a hand's press is (`onDownChanged`). Answers
+    /// whether it went in, so a run that met the button busy presses again later rather than counting presses nothing
+    /// can land.
     function completeHold() {
         if (!actionBtn.live)
             return false
-        holdDrive.begin()
+        holdDrive.runOut()
         return true
     }
 
-    // Only hold buttons join the tab order (デザイン規約 §長押し).
-    activeFocusOnTab: actionBtn.holdMs > 0
-    Accessible.description: actionBtn.holdMs > 0 ? Words.holdToActivate : ""
+    // Only confirmed buttons join the tab order (デザイン規約 §回数押し).
+    activeFocusOnTab: actionBtn.holdPresses > 0
+    Accessible.description: actionBtn.holdPresses > 0 ? Words.pressToActivate(actionBtn.holdPresses) : ""
+    // The hand left part way through the presses: back to zero (デザイン規約 §回数押し).
+    onHoveredChanged: if (!actionBtn.hovered) holdDrive.leave()
 
     /// Whether the press just let go was a plain one, judged before the latch opens — the click follows the release in
-    /// the same delivery, when the length is live again. `clickJudged` says there was a press at all: `clicked()` is
+    /// the same delivery, when the count is live again. `clickJudged` says there was a press at all: `clicked()` is
     /// also raised with no press behind it (`TopBar.stashNow` / `fetchNow`, `TabStrip`, `WipBucketHeader`), and that
-    /// one is answered from the live length.
+    /// one is answered from the live count.
     property bool clickWanted: false
     property bool clickJudged: false
     onClicked: {
         if (!actionBtn.live)
             return
-        const plain = actionBtn.clickJudged ? actionBtn.clickWanted : actionBtn.holdMs <= 0
+        const plain = actionBtn.clickJudged ? actionBtn.clickWanted : actionBtn.holdPresses <= 0
         actionBtn.clickJudged = false
         if (plain)
             actionBtn.activated()
     }
-    /// Gone deaf under the hand (git went onto the network, or the state it acts on went): the fill blanks and no
-    /// signal is raised.
+    /// Gone deaf under the hand (git went onto the network, or the state it acts on went): the count blanks and no
+    /// signal is raised. The press that sent the work keeps its full fill (`HoldDriver.blank`).
     onLiveChanged: if (!actionBtn.live) {
-        // Both, so a following press-less `clicked()` is judged from the live length.
+        // Both, so a following press-less `clicked()` is judged from the live count.
         actionBtn.clickWanted = false
         actionBtn.clickJudged = false
         holdDrive.blank()
     }
     onDownChanged: {
-        // Only the press is gated: an unanswered release leaves the fill running to fire a hold after the hand let go
-        // (and the latch below never reopens).
+        // Only the press is gated: the release has nothing left to start.
         if (actionBtn.down && !actionBtn.live)
             return
         if (actionBtn.down) {
-            // Whatever the length: a plain press is answered from the latch too, and a press that never closed it can
+            // Whatever the count: a plain press is answered from the latch too, and a press that never closed it can
             // still change meaning under the hand.
             actionBtn.clickJudged = false
             holdDrive.begin()
             return
         }
-        // A hold reports no click, and a press whose premise went reports nothing (`HoldDriver.stale` —
-        // デザイン規約 §長押し).
-        actionBtn.clickWanted = holdDrive.armedMs <= 0 && !holdDrive.stale
+        // A confirmed button reports no click, and a press whose premise went reports nothing (`HoldDriver.stale` —
+        // デザイン規約 §回数押し).
+        actionBtn.clickWanted = holdDrive.armedPresses <= 0 && !holdDrive.stale
         actionBtn.clickJudged = true
         holdDrive.letUp()
     }
-    // The hold's other hand (`HoldDriver.pressKey`), offered only while `live`: a button waiting on git answers no key
-    // either.
+    // The press's other hand (`HoldDriver.pressKey`), offered only while `live`: a button waiting on git answers no
+    // key either.
     Keys.onPressed: event => {
         if (actionBtn.live)
             holdDrive.pressKey(event)
@@ -226,13 +238,16 @@ HoverToolButton {
         if (actionBtn.live)
             holdDrive.releaseKey(event)
     }
-    // A key's release goes wherever the focus is by then: moved away, this fill would run out and fire a hold nobody
-    // was still making (`HoldDriver.focusLost`).
+    // Keys counted elsewhere are another gesture: the focus moved away drops them (`HoldDriver.focusLost`).
     onActiveFocusChanged: if (!actionBtn.activeFocus) holdDrive.focusLost()
+    // The work goes out at the last press; the full fill waits on it past the floor, and the ring takes over from
+    // there. An answer that takes the button away is given at the floor's end (`landed`).
     HoldDriver {
         id: holdDrive
-        holdMs: actionBtn.holdMs
+        holdPresses: actionBtn.holdPresses
+        waiting: actionBtn.busy
         onFinished: actionBtn.held()
+        onLanded: actionBtn.landed()
     }
     /// The frame's height once folded: the depth the button had with its word, handed down by whoever sets that depth.
     /// Folding gives up the word, not the depth (デザイン規約 §操作パネル).
@@ -254,33 +269,36 @@ HoverToolButton {
         id: btnGround
         color: "transparent"
         radius: Theme.radiusSm
-        // The frame and the hold's fill: its own item, so a cell taller than the box washes edge to edge with the
+        // The frame and the presses' fill: its own item, so a cell taller than the box washes edge to edge with the
         // frame still round the box (`frameInset`).
         Rectangle {
             anchors.fill: parent
             anchors.topMargin: actionBtn.frameInset
             anchors.bottomMargin: actionBtn.frameInset
             color: actionBtn.faceColor
-            // While busy the frame goes a step down rather than to grey (grey would take its warning back for the
-            // whole wait), and a button with no frame grows none (デザイン規約 §進行中・長押しの定数).
-            border.color: actionBtn.busy && actionBtn.framed ? actionBtn.toneDim : actionBtn.frameColor
+            // While busy, or once the last press has filled it, the frame goes a step down rather than to grey (grey
+            // would take its warning back for the whole wait), and a button with no frame grows none
+            // (デザイン規約 §進行中・回数押しの定数).
+            border.color: (actionBtn.busy || holdDrive.dimmed) && actionBtn.framed ? actionBtn.toneDim
+                                                                                      : actionBtn.frameColor
             border.width: Theme.borderWidth
             radius: Theme.radiusSm
             HoldFill {
                 progress: actionBtn.holdProgress
                 tone: actionBtn.holdTone
+                dimmed: holdDrive.dimmed
                 inset: actionBtn.framed ? Theme.borderWidth : 0
             }
         }
         // `HoverToolButton`'s wash (`washColor`), redrawn because a background handed in replaces the one that carried
         // it. Over the face (an opaque face would hide it) and under the focus ring, across the whole cell so the
-        // target matches its neighbours'. Only while `live` (デザイン規約 §進行中・長押しの定数).
+        // target matches its neighbours'. Only while `live` (デザイン規約 §進行中・回数押しの定数).
         Rectangle {
             anchors.fill: parent
             radius: Theme.radiusSm
             color: actionBtn.live ? actionBtn.washColor : "transparent"
         }
-        // Outside the frame: the frame's colour is saying this button is the dangerous one (デザイン規約 §長押し).
+        // Outside the frame: the frame's colour is saying this button is the dangerous one (デザイン規約 §回数押し).
         // `visualFocus`, not `activeFocus`: a click gives focus too and nothing on the band takes it back, so the ring
         // would come up on a click and stay.
         Rectangle {
@@ -346,15 +364,15 @@ HoverToolButton {
             ActionButtonSeat {
                 id: seat
                 kind: actionBtn.kind
-                // A phrase carries the hold's mark itself (`ActionButtonLabel.phraseHoldMs`): this seat sits at the
-                // row's left edge, apart from the centred phrase.
-                holdMs: btnLabel.phrased ? 0 : actionBtn.armedMs
+                // A phrase carries the hold's mark itself (`ActionButtonLabel.phraseHoldPresses`): this seat sits at
+                // the row's left edge, apart from the centred phrase.
+                holdPresses: btnLabel.phrased ? 0 : actionBtn.armedPresses
                 besideWord: actionBtn.besideWord
                 holdProgress: actionBtn.holdProgress
-                busy: actionBtn.busy
+                busy: actionBtn.ringing
                 tint: actionBtn.markFg
                 // Folded, the `!` comes to the mark's corner: the warning survives the fold
-                // (規約 §長押し「警告の色は枠と印が持つ」).
+                // (規約 §回数押し「警告の色は枠と印が持つ」).
                 cornerAlert: actionBtn.folded && actionBtn.alert
                 cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
                 Layout.alignment: Qt.AlignVCenter
@@ -375,13 +393,13 @@ HoverToolButton {
                 folded: actionBtn.folded
                 tint: actionBtn.fg
                 alert: actionBtn.alert
-                // A step down while busy, like every mark (デザイン規約 §進行中・長押しの定数).
+                // A step down while busy, like every mark (デザイン規約 §進行中・回数押しの定数).
                 alertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
                 alertCeiling: actionBtn.alertTopEdge - actionBtn.topPadding - btnRow.y - btnLabel.y
                 alertWall: actionBtn.alertRightEdge - actionBtn.leftPadding - btnRow.x - btnLabel.x
                 fontSize: actionBtn.font.pixelSize
                 phraseHead: actionBtn.phraseHead
-                phraseHoldMs: actionBtn.armedMs
+                phraseHoldPresses: actionBtn.armedPresses
                 phraseHoldProgress: actionBtn.holdProgress
                 phraseCount: actionBtn.phraseCount
                 phraseTail: actionBtn.phraseTail
@@ -449,12 +467,12 @@ HoverToolButton {
                 Layout.topMargin: actionBtn.folded ? 0 : -Metrics.opticalDrop
                 Layout.bottomMargin: actionBtn.folded ? 0 : Metrics.opticalDrop
                 kind: actionBtn.kind
-                holdMs: actionBtn.armedMs
+                holdPresses: actionBtn.armedPresses
                 // Folded, the mark grows into the word's room.
                 step: actionBtn.folded ? Theme.iconXl : actionBtn.stackStep
                 besideWord: false
                 holdProgress: actionBtn.holdProgress
-                busy: actionBtn.busy
+                busy: actionBtn.ringing
                 tint: actionBtn.markFg
                 cornerAlert: actionBtn.folded && actionBtn.alert
                 cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone

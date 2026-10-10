@@ -107,7 +107,7 @@ FocusScope {
         if (MiddleHand.stop())
             return true
         // The plan's own way out — **only while that door is a press**. With something composed to lose it is a
-        // hold (規約 §長押し — `RebasePlanPane.discards`), and one key down must not throw away what the hold guards.
+        // hold (規約 §回数押し — `RebasePlanPane.discards`), and one key down must not throw away what the hold guards.
         if (page.planShown) {
             if (page.planDiscards)
                 return false
@@ -376,7 +376,7 @@ FocusScope {
             wipPane.setMessage(carried, "")
     }
 
-    // An amend runs straight even when HEAD is pushed (デザイン規約 §長押し「ローカルの履歴書き換えはクリック」). The
+    // An amend runs straight even when HEAD is pushed (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」). The
     // slot records the queue's id itself (`ops::Press`).
     function commitNow() {
         // Another worktree's changes show in `CarriedPane`, which has no commit button; this is the belt under it.
@@ -539,7 +539,7 @@ FocusScope {
     function askLeaveOperation(retry) {
         // Marked on HEAD's row — a rebase runs detached, so that is the only name the tree has for where it is
         // (デザイン規約 §立っている質問は 1 か所で聞く). Whether leaving undoes work in hand (`danger` and a hold —
-        // §状態, §長押し) and the command on the question's line are core's (offers::leaving_undoes / leave_code).
+        // §状態, §回数押し) and the command on the question's line are core's (offers::leaving_undoes / leave_code).
         page.startRowAsk(worktree.headOid, page.leaveHeading, page.leaveDetail,
                          worktree.leaveUndoes, "", retry, worktree.leaveUndoes, "", null,
                          worktree.leaveCode)
@@ -628,7 +628,7 @@ FocusScope {
 
     // ---- the standing question --------------------------------------
     // One bar over the graph (デザイン規約 §可否・警告の出し場所). Only questions about a ref reach it: taking one named
-    // thing away is a hold (デザイン規約 §長押し).
+    // thing away is a hold (デザイン規約 §回数押し).
     /// Ctrl+F is quietly refused while a plan covers the graph, as a standing question refuses it
     /// (`GraphPane.startFind`).
     function startFind() {
@@ -665,7 +665,7 @@ FocusScope {
                                        && planModel.selectedOid !== ""
                                        && planModel.selectedOid === detailsModel.shaHex
     /// What `Discard` is about to take away, which nothing else holds a copy of — so the button is held (デザイン規約
-    /// §長押し): the plan's edits, and a reword in the right pane's boxes not yet given to the plan. **Not a
+    /// §回数押し): the plan's edits, and a reword in the right pane's boxes not yet given to the plan. **Not a
     /// half-written amend from before the plan** — closing the plan leaves it (`DetailsPane.dropDraft`). **Read off
     /// `boxMoved`**, not off whether the boxes take typing: a row walked back out of `reword` locks the boxes with the
     /// text still in them.
@@ -1062,8 +1062,8 @@ FocusScope {
     }
 
     /// Replacing a branch on a remote with one under a new name, which git has no command for: core pushes the new
-    /// name and deletes the old, so the question is asked first and its answer is held down — this is the one write
-    /// here that another machine keeps (デザイン規約 §長押し).
+    /// name and deletes the old, so the question is asked first and its answer is pressed through — this is the one
+    /// write here that another machine keeps (デザイン規約 §回数押し).
     function askReplaceRemote(remoteRef, name) {
         // The same cut as `carryBranchRenameOver`.
         const remote = GitFacts.remoteOfRef(remoteRef, repoTab.remoteNames)
@@ -1085,7 +1085,8 @@ FocusScope {
             qsTr("Replace"),
             function () { repoTab.replaceRemoteBranch(remote, from, name, shown) },
             true,
-            qsTr("Hold to replace. %1 goes up first, then %2 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.").arg(remote + "/" + name).arg(remoteRef))
+            qsTr("%1 to replace. %2 goes up first, then %3 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.")
+            .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(remote + "/" + name).arg(remoteRef))
         page.replaceRemoteAsked(remoteRef, name)
     }
     /// Automation: the question above was raised, and the two names it is between.
@@ -1166,7 +1167,7 @@ FocusScope {
         repoTab.deleteBranch(id, false)
         page.deleteRowAsked = true
     }
-    /// Held (デザイン規約 §長押し).
+    /// Held (デザイン規約 §回数押し).
     function dropStashNow(ref) {
         repoTab.dropStash(ref)
         if (page.selectedStashRef === ref)
@@ -1437,7 +1438,7 @@ FocusScope {
     }
 
     // ---- rewriting one commit --------------------------------------
-    // Run straight even for a pushed commit (デザイン規約 §長押し「ローカルの履歴書き換えはクリック」).
+    // Run straight even for a pushed commit (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」).
     function squashCommit(oidHex) {
         repoTab.squashIntoParent(oidHex)
     }
@@ -2557,7 +2558,7 @@ FocusScope {
             Qt.callLater(page.pollCarried)
     }
     // The badge counting a running replay out, on its own tick: two file reads, no process (デザイン規約
-    // §進行中・長押しの定数). Only while the write is out — the status tick says when the operation ended;
+    // §進行中・回数押しの定数). Only while the write is out — the status tick says when the operation ended;
     // `replayRunning` covers the gap a handed-over plan leaves before the queue starts it.
     Timer {
         interval: Metrics.opProgressMs

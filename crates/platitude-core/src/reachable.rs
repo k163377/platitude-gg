@@ -3,7 +3,7 @@
 //!
 //! A history rewrite moves the branch off its tip: if another ref reaches
 //! the old chain it stays drawn and the work is one cherry-pick away;
-//! otherwise only the reflog has it (デザイン規約 §長押し).
+//! otherwise only the reflog has it (デザイン規約 §回数押し).
 //!
 //! The tip alone is enough to ask about: the rewritten range is merge-free
 //! (the sequencer refuses a merge), so every commit in it is an ancestor

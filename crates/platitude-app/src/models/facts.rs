@@ -39,7 +39,7 @@ impl GitFacts {
     /// not keep — no record before the first commit, and a path the status
     /// names `not_copied` is left out of the copy
     /// (`discards::recorded_whole`). Such a discard is held in `danger`, the
-    /// rest in `warning` (デザイン規約 §長押し).
+    /// rest in `warning` (デザイン規約 §回数押し).
     #[qslot]
     fn discard_unrecorded(
         &self,

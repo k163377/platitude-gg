@@ -144,7 +144,7 @@ AppDialog {
                     kind: "folder"
                     besideWord: true
                     frameColor: Theme.borderDefault
-                    // The `…` says a box opens (§長押し の語彙).
+                    // The `…` says a box opens (§回数押し の語彙).
                     text: qsTr("Choose…")
                     onActivated: cloneDialog.chooseFolder(cloneDialog.parentUrl)
                 }
@@ -176,7 +176,7 @@ AppDialog {
 
         DialogActions {
             cancelText: Words.cancel
-            // The mark's seat is where the ring turns while git is out (§進行中・長押しの定数「待てるボタンには席が要る」).
+            // The mark's seat is where the ring turns while git is out (§進行中・回数押しの定数「待てるボタンには席が要る」).
             acceptKind: "fetch"
             acceptText: qsTr("Clone")
             busy: cloneDialog.cloning

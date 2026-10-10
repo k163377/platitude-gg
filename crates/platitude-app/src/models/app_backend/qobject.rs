@@ -304,7 +304,7 @@ impl AppBackend {
         self.begin_git_path_screen();
     }
 
-    /// The restart button was held down: raises `restartWanted`, unless
+    /// The restart button was pressed through: raises `restartWanted`, unless
     /// nothing was on offer (`AppBackend::restart_now`).
     #[qslot]
     fn apply_git_path_now(&mut self) {

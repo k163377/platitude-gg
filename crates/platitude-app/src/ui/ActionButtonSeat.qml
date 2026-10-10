@@ -9,13 +9,13 @@ Item {
 
     /// The icon's `NavIcon` kind; empty draws none.
     property string kind: ""
-    property int holdMs: 0
+    property int holdPresses: 0
     /// A mark standing next to the word (`ActionButton.besideWord`).
     property bool besideWord: false
     /// 0 to 1.
     property real holdProgress: 0
     /// git is out on the network for this button: the ring turns here in place of the seat's marks, so a button that
-    /// can wait needs a seat (デザイン規約 §進行中・長押しの定数).
+    /// can wait needs a seat (デザイン規約 §進行中・回数押しの定数).
     property bool busy: false
     /// The button's own `markFg`.
     property color tint: Theme.textPrimary
@@ -24,7 +24,7 @@ Item {
     property bool cornerAlert: false
     property color cornerAlertTone: seat.tint
 
-    readonly property bool paired: seat.kind !== "" && seat.holdMs > 0
+    readonly property bool paired: seat.kind !== "" && seat.holdPresses > 0
     /// How much wider than one half the seat is (`implicitWidth`): the two halves' ink stands inside it.
     readonly property int spread: Theme.iconMd - Theme.spaceXs
     /// How far along the slash sets the two apart: `spread` and half a gap more — the air each half carries inside its
@@ -37,7 +37,7 @@ Item {
     readonly property int pairDown: Theme.iconLg - Theme.iconSm
     /// The icon's step. A held button keeps `iconMd`: the fraction is two `iconSm` halves with no room to give. A
     /// caller may raise it where a folded two-line button's mark grows into the word's line (`ActionButton.stacked`).
-    property int step: seat.besideWord && seat.holdMs <= 0 ? Theme.iconSm : Theme.iconMd
+    property int step: seat.besideWord && seat.holdPresses <= 0 ? Theme.iconSm : Theme.iconMd
     /// The air inside the mark's box, given back so the padding and the row's spacing land on the ink; the icon
     /// overflows the seat by this much either side (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
     /// One number for the family, from its widest mark (8–10px of ink in the 12px box).
@@ -49,7 +49,7 @@ Item {
         return step + Theme.spaceXs
     }
 
-    visible: seat.kind !== "" || seat.holdMs > 0
+    visible: seat.kind !== "" || seat.holdPresses > 0
     implicitWidth: !visible ? 0
                    : seat.kind !== ""
                      ? (seat.step === Theme.iconSm
@@ -65,10 +65,10 @@ Item {
         tint: seat.tint
         // Whole at `iconMd`, and the grid ratio under it.
         stroke: Metrics.iconStroke * seat.step / 16
-        visible: seat.holdMs <= 0 && !seat.busy
+        visible: seat.holdPresses <= 0 && !seat.busy
     }
     // At the seat's step so the width holds, swapping with the hold mark
-    // (デザイン規約 §進行中・長押しの定数「回るリングと長押しの印は同じ席で入れ替わる」). Its own item: an animator
+    // (デザイン規約 §進行中・回数押しの定数「回るリングと回数押しの印は同じ席で入れ替わる」). Its own item: an animator
     // leaves the angle where it stopped, and the icon has to come back upright.
     SpinnerIcon {
         width: seat.step
@@ -88,17 +88,18 @@ Item {
         x: (pair.visible ? pair.x + pair.width : parent.width) - width + Theme.spaceXs / 2
         y: (pair.visible ? pair.y : 0) - Theme.spaceXs
     }
-    // A held button with no icon wears only the hold mark, at the row's start (デザイン規約 §長押し).
+    // A held button with no icon wears only the hold mark, at the row's start (デザイン規約 §回数押し).
     HoldIcon {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: Metrics.opticalDrop
         progress: seat.holdProgress
+        presses: seat.holdPresses
         tint: seat.tint
-        visible: seat.holdMs > 0 && !seat.paired && !seat.busy
+        visible: seat.holdPresses > 0 && !seat.paired && !seat.busy
     }
     // A held button with an icon wears both as a fraction across a slash: the hold mark alone would cost `push -f` the
-    // icon that says it is a push (デザイン規約 §長押し).
+    // icon that says it is a push (デザイン規約 §回数押し).
     // Centred at its own size whatever the step: the folded seat is deeper, and the halves keep their distance in it.
     Item {
         id: pair
@@ -122,6 +123,7 @@ Item {
         }
         HoldIcon {
             progress: seat.holdProgress
+            presses: seat.holdPresses
             tint: seat.tint
             width: Theme.iconSm
             height: Theme.iconSm

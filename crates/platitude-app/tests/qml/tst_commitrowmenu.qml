@@ -174,7 +174,7 @@ Item {
             compare(root.asked, "merge abc123")
         }
 
-        /// The rewrite rows wear the tag and stay a plain click (デザイン規約 §長押し「ローカルの履歴書き換えはクリック」).
+        /// The rewrite rows wear the tag and stay a plain click (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」).
         function test_a_pushed_commit_is_told_about_and_not_held() {
             root.aimAt({})
             compare(root.row("rebase").note, "")
@@ -186,7 +186,7 @@ Item {
         }
 
         /// The held rows wear `warning` — what they throw away comes back from the discard record — and `--hard`
-        /// takes `danger` only where a file it takes is one the record cannot copy (デザイン規約 §長押し の色の表).
+        /// takes `danger` only where a file it takes is one the record cannot copy (デザイン規約 §回数押し の色の表).
         function test_a_held_row_warns_and_only_an_uncopied_reset_is_danger() {
             root.aimAt({ hardResetTakes: 2 })
             verify(Qt.colorEqual(menu.hardResetRow.holdTone, Theme.warning), "copied whole")

@@ -62,7 +62,7 @@ Item {
     readonly property int keepsBoth: 1
     readonly property int leavesAlone: 2
     /// The answer that cannot be taken back: a name goes from the remote, and whatever hung off it stays behind
-    /// (デザイン規約 §長押し).
+    /// (デザイン規約 §回数押し).
     readonly property bool takesAway: carryFlow.choice === carryFlow.replacesIt
     /// …and the one that writes nothing at all.
     readonly property bool leavesIt: carryFlow.choice === carryFlow.leavesAlone
@@ -161,15 +161,15 @@ Item {
         when: carryFlow.asking
         restoreMode: Binding.RestoreNone
     }
-    // The hold's tooltip, which says the running order (デザイン規約 §長押し); empty for the two click answers.
+    // The hold's tooltip, which says the running order (デザイン規約 §回数押し); empty for the two click answers.
     Binding {
         target: carryFlow.graphPane
         property: "askTip"
         value: !carryFlow.takesAway ? "" : carryFlow.kind === "branch"
-            ? qsTr("Hold to replace. %1 goes up first, then %2 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.")
-              .arg(carryFlow.newSide).arg(carryFlow.oldSide)
-            : qsTr("Hold to replace. %1 goes up first, then %2 comes off — so a push the far side turns down leaves the old name where it is. Anything built from it stays with the name that goes.")
-              .arg(carryFlow.newSide).arg(carryFlow.oldSide)
+            ? qsTr("%1 to replace. %2 goes up first, then %3 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.")
+              .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(carryFlow.newSide).arg(carryFlow.oldSide)
+            : qsTr("%1 to replace. %2 goes up first, then %3 comes off — so a push the far side turns down leaves the old name where it is. Anything built from it stays with the name that goes.")
+              .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(carryFlow.newSide).arg(carryFlow.oldSide)
         when: carryFlow.asking
         restoreMode: Binding.RestoreNone
     }

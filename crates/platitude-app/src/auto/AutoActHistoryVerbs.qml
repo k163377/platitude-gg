@@ -123,13 +123,13 @@ Item {
             Harness.report("drop_row " + dropCommitItem.code
                               + " " + dropCommitItem.text
                               + " oid=" + commitMenuState.menuOid.substring(0, 8)
-                              + " hold=" + (dropCommitItem.holdMs > 0)
+                              + " hold=" + (dropCommitItem.holdPresses > 0)
                               + " reached=" + worktree.headReachedElsewhere)
             if (act !== "drop-commit") {
                 // "drop-stops" stops with the work still in the stash it took (`write_stopped stashes=`).
                 if (act === "drop-stops")
                     opStoppedTimer.start()
-                if (dropCommitItem.holdMs > 0) {
+                if (dropCommitItem.holdPresses > 0) {
                     dropCommitItem.completeHold()
                 } else {
                     // The item's own click takes the menu down before the write (`CommitRowMenu`

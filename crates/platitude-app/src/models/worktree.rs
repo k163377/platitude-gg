@@ -153,7 +153,7 @@ pub struct WorktreeModel {
     /// Of those, the paths a discard could not copy (the filter is
     /// required): a discard of one is not brought back, so it is held in
     /// `danger` rather than `warning` (`GitFacts.discardUnrecorded`,
-    /// デザイン規約 §長押し).
+    /// デザイン規約 §回数押し).
     not_copied: Vec<String>,
     /// Whether what a `reset --hard` takes holds such a path — read off
     /// the status, so the untracked ones do not count: most survive the

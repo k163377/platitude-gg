@@ -45,7 +45,7 @@ ColumnLayout {
     property bool busy: false
     // Why the boxes are read-only, in one line ("" when they are not).
     property string editBlocked: ""
-    // A remote already has this commit: the save row says so (デザイン規約 §長押し「ローカルの履歴書き換えはクリック」).
+    // A remote already has this commit: the save row says so (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」).
     property bool published: false
     // What git makes of the signature: "" (unsigned, or not answered yet), "verified", "signed" or "bad".
     // `signatureCode` is git's `%G?`, for the tooltip: an unjudged signature has one of five reasons.

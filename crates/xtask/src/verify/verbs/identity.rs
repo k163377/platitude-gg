@@ -84,8 +84,8 @@ pub(super) const TABLE: &[Verb] = &[
     // `other` picks the second git (`--other-git`) and gets the button.
     // Both go in as the chooser answers (`autoPickGitPath`). `offers=` is
     // the rule the press is guarded by; `held=` the frozen copy the button
-    // was drawn from — `Restart to apply` over a `holdMs` of zero would
-    // fall through under a hand.
+    // was drawn from — `Restart to apply` over a `holdPresses` of zero
+    // would fall through under a hand.
     //
     // A path with nothing at its end must be refused as *missing*, not as
     // "it ran and said something else"; `offers=false` keeps the loud

@@ -12,7 +12,7 @@ Rectangle {
     required property var worktree
 
     // The mark's seat on every row, held or not, as `AppMenu.holdIndent`
-    // (デザイン規約 §長押し「メニューでは印の席を全行が空ける」).
+    // (デザイン規約 §回数押し「メニューでは印の席を全行が空ける」).
     readonly property real holdIndent: Theme.iconSm
     /// Whether leaving the stopped commit out costs nothing — core's rule (`offers::skip_is_free`).
     readonly property bool skipIsFree: opExitCard.worktree.opSkipFree
@@ -45,10 +45,8 @@ Rectangle {
             return abortButton.completeHold()
         for (let i = 0; i < opExitCol.children.length; i++) {
             const row = opExitCol.children[i]
-            if (row && row.code === code) {
-                row.completeHold()
-                return true
-            }
+            if (row && row.code === code)
+                return row.completeHold()
         }
         return false
     }
@@ -149,6 +147,8 @@ Rectangle {
             Layout.fillWidth: true
             codeColW: opExitCard.codeColW
             holdIndent: opExitCard.holdIndent
+            fillBleed: Theme.spaceXs - Theme.borderWidth
+            waiting: opExitCard.repoTab.busyCount > 0
             code: "--continue"
             text: qsTr("Carry on with what is staged")
             visible: !opExitCard.worktree.opMerging
@@ -162,15 +162,17 @@ Rectangle {
             Layout.fillWidth: true
             codeColW: opExitCard.codeColW
             holdIndent: opExitCard.holdIndent
+            fillBleed: Theme.spaceXs - Theme.borderWidth
+            waiting: opExitCard.repoTab.busyCount > 0
             code: "--skip"
             text: qsTr("Leave this commit out")
-            // Off the length the press under way was given, so tag and gesture agree under a hand
-            // (`OpExitRow.armedMs`).
-            note: skipRow.armedMs <= 0 ? qsTr("nothing in it") : ""
+            // Off the count the presses under way were given, so tag and gesture agree between presses
+            // (`OpExitRow.armedPresses`).
+            note: skipRow.armedPresses <= 0 ? qsTr("nothing in it") : ""
             visible: opExitCard.worktree.opStepping
             enabled: opExitCard.repoTab.busyCount === 0
-            // Held only where a real commit is lost (デザイン規約 §長押し); an emptied commit's stop loses nothing.
-            holdMs: opExitCard.skipIsFree ? 0 : Metrics.holdMs
+            // Held only where a real commit is lost (デザイン規約 §回数押し); an emptied commit's stop loses nothing.
+            holdPresses: opExitCard.skipIsFree ? 0 : Metrics.holdPressesWarned
             // The work done on this stop goes with it, and the discard record keeps none of a stopped operation's.
             holdTone: Theme.danger
             onPicked: opExitCard.repoTab.resolveOperation("skip")
@@ -179,6 +181,8 @@ Rectangle {
             Layout.fillWidth: true
             codeColW: opExitCard.codeColW
             holdIndent: opExitCard.holdIndent
+            fillBleed: Theme.spaceXs - Theme.borderWidth
+            waiting: opExitCard.repoTab.busyCount > 0
             code: "--quit"
             text: qsTr("Stop stepping, keep the tree")
             // **The tree it keeps is the conflicted one**: git drops the operation but leaves every unmerged path, so
@@ -192,18 +196,20 @@ Rectangle {
             Layout.fillWidth: true
             codeColW: opExitCard.codeColW
             holdIndent: opExitCard.holdIndent
+            fillBleed: Theme.spaceXs - Theme.borderWidth
+            waiting: opExitCard.repoTab.busyCount > 0
             code: "--abort"
             text: qsTr("Undo it all and go back")
             visible: !opExitCard.worktree.opMerging
             enabled: opExitCard.repoTab.busyCount === 0
-            holdMs: Metrics.holdMs
+            holdPresses: Metrics.holdPressesWarned
             // Everything the operation did since it started goes, none of it on the discard record.
             holdTone: Theme.danger
             onPicked: opExitCard.repoTab.resolveOperation("abort")
         }
         // A merge's only way out (`bare`): the commit button's shape in red, so the two read as the pair that finishes
         // the merge and the one that puts it back (デザイン規約 §進行中の操作から出る). The word is red because the
-        // gesture is a hold (§長押し).
+        // gesture is a hold (§回数押し).
         ActionButton {
             id: abortButton
             Layout.fillWidth: true
@@ -211,7 +217,7 @@ Rectangle {
             centred: true
             tone: Theme.danger
             frameColor: Theme.danger
-            holdMs: Metrics.holdMs
+            holdPresses: Metrics.holdPressesWarned
             // The whole command in git's spelling (§git 用語のコード表記), as the commit button's `commit --amend`.
             phraseHead: "merge --abort"
             // Where it lands: nothing done since the merge began survives it.

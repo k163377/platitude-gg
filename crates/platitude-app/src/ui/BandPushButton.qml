@@ -17,10 +17,10 @@ ActionButton {
     /// The standings where an overwrite is the only send there is (デザイン規約 §リモートへ送る). `elsewhere` stays
     /// plain: nothing here tracks the branch over there, so no commit is on screen for the lease to pin to.
     readonly property bool forceShape: pushButton.mode === "diverged" || pushButton.mode === "behind"
-    /// The shape as the press under way was given it, settled when the button goes down (デザイン規約 §長押し): `mode`
-    /// moves under a holding hand with the fetch behind every press. Everything the shape decides reads this
-    /// (`ActionButton.armedMs`); a press whose shape went is dropped (`HoldDriver.stale`).
-    readonly property bool shownForce: pushButton.armedMs > 0
+    /// The shape as the press under way was given it, settled when the button goes down (デザイン規約 §回数押し): `mode`
+    /// moves between presses with the fetch behind every press. Everything the shape decides reads this
+    /// (`ActionButton.armedPresses`); a press whose shape went is dropped (`HoldDriver.stale`).
+    readonly property bool shownForce: pushButton.armedPresses > 0
     /// The frame's warning: an overwrite, or the last push refused. The word takes it only for the overwrite.
     readonly property bool warned: pushButton.shownForce || pushButton.failed
 
@@ -30,7 +30,7 @@ ActionButton {
     // No counts: the label would change width with them (デザイン規約 §リモートへ送る).
     text: pushButton.shownForce ? "push -f" : "push"
     code: true
-    // Only the overwrite colours its word (デザイン規約 §長押し「警告の色は枠と印が持つ」).
+    // Only the overwrite colours its word (デザイン規約 §回数押し「警告の色は枠と印が持つ」).
     tone: pushButton.shownForce ? Theme.warning : Theme.textPrimary
     // Through the wait: ring and frame a step down, the word the disabled step (デザイン規約 §暗く落とした段 / §無効).
     toneDim: pushButton.warned ? Theme.warningDim : Theme.textMuted
@@ -41,9 +41,9 @@ ActionButton {
     // The `!` tells "did not land" apart from the diverged shape, which wears the same frame.
     alert: pushButton.failed
     alertTone: Theme.warning
-    holdMs: pushButton.forceShape ? Metrics.holdMs : 0
-    // Tab, branch and destination (`HoldDriver.premise`): the band outlives the page, so a tab switch under a holding
-    // hand would aim the release at another repository (`tst_holdlatch`); two local branches can track one remote
+    holdPresses: pushButton.forceShape ? Metrics.holdPressesWarned : 0
+    // Tab, branch and destination (`HoldDriver.premise`): the band outlives the page, so a tab switch between presses
+    // would aim the last press at another repository (`tst_holdlatch`); two local branches can track one remote
     // branch, so the destination alone does not name what is sent. `:` cannot occur in a ref name.
     premise: pushButton.curPage === null
              ? ""
@@ -79,10 +79,9 @@ ActionButton {
                    // One sentence for both overwrite standings (デザイン規約 §リモートへ送る).
                    : pushButton.forceShape
                      ? (behind === 1
-                        ? qsTr("Hold to overwrite %1, dropping %n commit it has (as of the last fetch)", "",
-                               behind)
-                        : qsTr("Hold to overwrite %1, dropping %n commits it has (as of the last fetch)", "",
-                               behind)).arg(to)
+                        ? qsTr("%1 to overwrite %2, dropping %n commit it has (as of the last fetch)", "", behind)
+                        : qsTr("%1 to overwrite %2, dropping %n commits it has (as of the last fetch)", "", behind))
+                       .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(to)
                    : ""
         // What git said, under what the button would do next (デザイン規約 §リモートへ送る).
         const why = pushButton.curPage.pushFailReason

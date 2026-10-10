@@ -21,7 +21,7 @@ Item {
 
     signal openRepositoryRequested()
 
-    // First load, before any row exists (規約 §進行中・長押しの定数).
+    // First load, before any row exists (規約 §進行中・回数押しの定数).
     SpinnerIcon {
         anchors.centerIn: parent
         width: Theme.iconLg

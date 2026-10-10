@@ -16,7 +16,7 @@ RowLayout {
     property string acceptKind: ""
     property bool acceptEnabled: true
     /// git is out on the network for this button: it spins and takes no press (`ActionButton.busy` — デザイン規約
-    /// §進行中・長押しの定数). The way out stays live — it is what stops the call.
+    /// §進行中・回数押しの定数). The way out stays live — it is what stops the call.
     property alias busy: accept.busy
 
     /// The acting button, for a dialog that opens with the focus on it.

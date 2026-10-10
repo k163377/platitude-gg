@@ -141,7 +141,7 @@ Rectangle {
                 // Coloured here: an own `contentItem` does not go through the palette (規約 §無効).
                 tint: header.addHeld ? Theme.textMuted : header.iconTint
             }
-            // The dialog it opens is named by the `…`, the way the chooser's own row names it (デザイン規約 §長押し の語彙).
+            // The dialog it opens is named by the `…`, the way the chooser's own row names it (デザイン規約 §回数押し の語彙).
             tip: Words.addRemote
             onClicked: header.addRemoteRequested()
         }

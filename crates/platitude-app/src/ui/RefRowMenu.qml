@@ -343,9 +343,9 @@ Item {
             id: refStashDropItem
             code: "drop"
             offered: refRowMenu.kind === "stash" && refRowMenu.canDelete
-            holdMs: Metrics.holdMs
+            holdPresses: Metrics.holdPressesWarned
             onHeld: {
-                refMenu.dismiss()
+                refStashDropItem.closeMenu()
                 refRowMenu.dropStashRequested(refRowMenu.refId)
             }
         }
