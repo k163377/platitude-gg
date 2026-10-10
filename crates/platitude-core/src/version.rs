@@ -67,7 +67,10 @@ use crate::process::{GitCommand, GitExecutor};
 /// - `diff-tree`: `-r`, `--no-commit-id`, `-z`, `--name-status`,
 ///   `--name-only`, `--diff-filter=`, `--find-renames`, `--no-renames`,
 ///   `--root`, `--no-ext-diff`, `-p`, `--binary`, `--full-index`,
-///   `--no-color`, `--end-of-options`.
+///   `--no-color`, `--end-of-options`, `--quiet` (diff-options; exit 1
+///   where the commit changes something).
+/// - `diff-index`: `--cached --quiet <tree-ish> --` (exit 1 where the index
+///   differs). `commit_integration` holds both answers for an amend.
 /// - `fetch`: `--prune`, `--all`; `pull`: `--no-edit`.
 /// - `for-each-ref`: `--points-at=` (2.7), `--count`,
 ///   `--sort=refname:short`, `--format=` with `refname[:short]`,

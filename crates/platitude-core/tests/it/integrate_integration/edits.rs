@@ -131,6 +131,36 @@ async fn rewording_an_older_commit_replaces_only_its_message() {
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "after");
 }
 
+/// A commit empty on purpose, further back: git's own `reword` passes
+/// `ALLOW_EMPTY`, and the plan's `exec` amend has to as well, or the
+/// replay stops on it.
+#[tokio::test]
+async fn rewording_an_empty_older_commit_replaces_its_message() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["commit", "--allow-empty", "-m", "marker"]);
+    let target = repo.git(&["rev-parse", "HEAD"]);
+    repo.commit_file("c.txt", "three\n", "after");
+    let (exec, cancel) = env();
+
+    let plan = sequencer::plan_edit(
+        &exec,
+        &repo.path,
+        &target,
+        sequencer::Edit::Reword("marker, renamed\n".into()),
+        &cancel,
+    )
+    .await
+    .expect("plan");
+    apply(&repo, &plan).await;
+
+    assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "3");
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%s", "HEAD~1"]),
+        "marker, renamed"
+    );
+}
+
 /// A reword is one commit deep, so its range starts at the root, which
 /// resolves. A fold is two, so its range starts at `root~1`, which does not
 /// — the only way `sequencer::plan::base_of` is handed such a revision.

@@ -61,6 +61,12 @@ pub fn split_message(message: &str) -> (String, String) {
 /// An empty `message` is only valid together with [`CommitOptions::amend`],
 /// where it means "keep the existing message" (`--no-edit`).
 ///
+/// An amend of a commit that is itself empty (an `--allow-empty` marker)
+/// goes with `--allow-empty`: git refuses to amend one into an empty
+/// commit otherwise, words for a terminal and all, and its own `reword`
+/// passes the same. An amend that would empty a commit with changes is
+/// the screen's to refuse before the press ([`amend_would_empty`]).
+///
 /// Nothing is read back: a second command asking where HEAD landed could
 /// fail on its own and report a made commit as failed. The refresh after
 /// the write reads it.
@@ -71,11 +77,13 @@ pub async fn commit(
     options: CommitOptions,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
+    let allow_empty = options.allow_empty
+        || (options.amend && head_is_empty(executor, &repo.workdir, cancel).await?);
     let mut cmd = GitCommand::new().cwd(&repo.workdir).arg("commit");
     if options.amend {
         cmd = cmd.arg("--amend");
     }
-    if options.allow_empty {
+    if allow_empty {
         cmd = cmd.arg("--allow-empty");
     }
     if options.reset_author {
@@ -192,6 +200,77 @@ pub async fn head_commit(
         author_name: author_name.to_string(),
         author_email: author_email.to_string(),
     }))
+}
+
+/// Whether HEAD changes nothing against its first parent (the empty tree
+/// for a root commit) — a marker made with `--allow-empty`. A merge
+/// answers true too (`diff-tree` shows nothing for one unasked), which
+/// costs nothing: git amends a merge whatever its tree.
+async fn head_is_empty(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args([
+            "diff-tree",
+            "--quiet",
+            "--no-commit-id",
+            "--root",
+            "-r",
+            "HEAD",
+        ])
+        .answers_by_code(1);
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    match out.code {
+        0 => Ok(true),
+        1 => Ok(false),
+        code => Err(GitError::Failed {
+            command: "git diff-tree --quiet HEAD".to_string(),
+            code,
+            stderr: out.stderr_utf8().into_owned(),
+        }),
+    }
+}
+
+/// Whether amending HEAD now would leave it changing nothing: what is
+/// staged takes back everything HEAD changed, so the index's tree is
+/// HEAD's first parent's. git refuses that amend, so the screen refuses
+/// it first. A message-only amend of an empty HEAD is not this one
+/// ([`commit`] lets it through). A root commit answers false: emptying
+/// one means taking every file out of the index.
+pub async fn amend_would_empty(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let parent = GitCommand::new().cwd(workdir).answers_by_code(1).args([
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        "HEAD~1",
+    ]);
+    if executor.run_unchecked(parent, cancel).await?.code != 0 {
+        return Ok(false);
+    }
+    if head_is_empty(executor, workdir, cancel).await? {
+        return Ok(false);
+    }
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["diff-index", "--cached", "--quiet", "HEAD~1", "--"])
+        .answers_by_code(1);
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    match out.code {
+        0 => Ok(true),
+        1 => Ok(false),
+        code => Err(GitError::Failed {
+            command: "git diff-index --cached --quiet HEAD~1".to_string(),
+            code,
+            stderr: out.stderr_utf8().into_owned(),
+        }),
+    }
 }
 
 /// True when HEAD exists and is a merge commit (amending one is a

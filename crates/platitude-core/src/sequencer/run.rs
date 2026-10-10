@@ -102,9 +102,12 @@ pub async fn rebase_interactive(
             normalized(message).as_bytes(),
         )
         .map_err(io_error)?;
+        // `--allow-empty`: a marker commit made empty on purpose is reworded
+        // like any other, as git's own `reword` does (`ALLOW_EMPTY`). The
+        // index is the picked commit's here, so nothing else can come of it.
         lines.push(TodoLine::Exec {
             command: format!(
-                "git commit --amend --cleanup=whitespace --file {}",
+                "git commit --amend --allow-empty --cleanup=whitespace --file {}",
                 sh_quote(&shell_path(file.path()))
             ),
         });

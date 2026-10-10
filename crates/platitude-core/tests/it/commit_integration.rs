@@ -73,6 +73,75 @@ async fn a_commit_asks_git_once_and_reads_nothing_back() {
     assert!(ran[0].contains("commit"), "{ran:?}");
 }
 
+/// A commit that is empty on purpose (a release marker) takes a new
+/// message like any other: git would refuse it as an amend that leaves the
+/// commit empty, so the amend passes `--allow-empty` for one.
+#[tokio::test]
+async fn an_empty_commits_message_is_amended_on_its_own() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["commit", "--allow-empty", "-m", "chore: mark the release"]);
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    commit::commit(
+        &exec,
+        &repo_info,
+        "chore: mark the 1.0 release",
+        CommitOptions {
+            amend: true,
+            ..Default::default()
+        },
+        &cancel,
+    )
+    .await
+    .expect("the message changes and nothing else");
+
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%s"]),
+        "chore: mark the 1.0 release"
+    );
+    assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "2");
+    assert_eq!(
+        repo.git(&["rev-parse", "HEAD^{tree}"]),
+        repo.git(&["rev-parse", "HEAD~1^{tree}"]),
+        "still a marker"
+    );
+}
+
+/// What the commit button asks before an amend is pressed: whether what is
+/// staged takes back all HEAD changed. Only then, of all the shapes an
+/// amend can be pressed over.
+#[tokio::test]
+async fn an_amend_empties_only_a_commit_whose_changes_are_staged_back() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let (exec, cancel) = env();
+    let empties = async |repo: &TestRepo| {
+        commit::amend_would_empty(&exec, &repo.path, &cancel)
+            .await
+            .expect("a read")
+    };
+    assert!(!empties(&repo).await, "a root commit");
+
+    repo.commit_file("a.txt", "two\n", "change a");
+    assert!(!empties(&repo).await, "nothing staged");
+    repo.write_file("b.txt", "new\n");
+    repo.git(&["add", "--", "b.txt"]);
+    assert!(!empties(&repo).await, "something staged beside the change");
+    repo.git(&["rm", "--cached", "--quiet", "--", "b.txt"]);
+    repo.write_file("a.txt", "one\n");
+    repo.git(&["add", "--", "a.txt"]);
+    assert!(empties(&repo).await, "the change staged back");
+
+    repo.git(&["reset", "--quiet", "--hard"]);
+    repo.git(&["commit", "--allow-empty", "-m", "marker"]);
+    assert!(
+        !empties(&repo).await,
+        "an empty HEAD: a message-only amend, let through"
+    );
+}
+
 #[tokio::test]
 async fn amend_without_a_message_keeps_the_old_one() {
     let mut repo = TestRepo::init();
