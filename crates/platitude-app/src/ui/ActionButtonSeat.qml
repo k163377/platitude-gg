@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import platitude.ui
 
 // The seat a toolbar action's icon sits in; no icon, no width. A button that swaps icon and hold mark keeps the wider
@@ -35,6 +34,14 @@ Item {
     /// `ActionButton.stackStep`), so a frame held to the word over the mark (`ActionButton.stackDepth`, which macOS's
     /// short lines make the frame's depth) keeps air under the ring.
     readonly property int pairDown: Theme.iconLg - Theme.iconSm
+    /// How far the pair stands under the seat's centre. A caller that lifts the seat for a lone mark's uneven air
+    /// gives the lift back here: the fraction's ink is even about its box.
+    property int pairDrop: 0
+    /// The slash's length, end to end: as far as a `fontMd` `/` reaches.
+    readonly property real slashReach: Theme.iconSm + Theme.spaceXs / 2
+    /// The grid's stroke scaled to the halves' step, lighter than the push mark's (`NavIcon` keeps its stroke whole at
+    /// `iconSm`): the slash parts the two halves and is neither of them.
+    readonly property real slashStroke: Metrics.iconStroke * Theme.iconSm / 16
     /// The icon's step. A held button keeps `iconMd`: the fraction is two `iconSm` halves with no room to give. A
     /// caller may raise it where a folded two-line button's mark grows into the word's line (`ActionButton.stacked`).
     property int step: seat.besideWord && seat.holdPresses <= 0 ? Theme.iconSm : Theme.iconMd
@@ -106,6 +113,7 @@ Item {
         width: Theme.iconSm + seat.pairAlong
         height: Theme.iconSm + seat.pairDown
         anchors.centerIn: parent
+        anchors.verticalCenterOffset: seat.pairDrop
         visible: seat.paired && !seat.busy
         NavIcon {
             kind: seat.kind
@@ -115,11 +123,31 @@ Item {
             x: 0
             y: 0
         }
-        Label {
-            text: "/"
-            color: seat.tint
-            font.pixelSize: Theme.fontMd
-            anchors.centerIn: parent
+        // Drawn, not a glyph: square to the line between the halves' centres and through its middle, so it parts the
+        // two evenly whatever `pairAlong` and `pairDown` are — a font's `/` keeps its own slant and sits on its
+        // baseline.
+        InkCanvas {
+            id: slash
+
+            property color tint: seat.tint
+
+            anchors.fill: parent
+            onTintChanged: slash.requestPaint()
+            onPaint: {
+                const ctx = getContext("2d")
+                const run = Math.hypot(seat.pairAlong, seat.pairDown)
+                const half = seat.slashReach / 2
+                const dx = half * seat.pairDown / run
+                const dy = half * seat.pairAlong / run
+                ctx.clearRect(0, 0, width, height)
+                ctx.strokeStyle = slash.tint
+                ctx.lineWidth = seat.slashStroke
+                ctx.lineCap = "round"
+                ctx.beginPath()
+                ctx.moveTo(width / 2 - dx, height / 2 + dy)
+                ctx.lineTo(width / 2 + dx, height / 2 - dy)
+                ctx.stroke()
+            }
         }
         HoldIcon {
             progress: seat.holdProgress

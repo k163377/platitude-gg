@@ -466,6 +466,9 @@ HoverToolButton {
                 // margins cancel, so the cell keeps its depth.
                 Layout.topMargin: actionBtn.folded ? 0 : -Metrics.opticalDrop
                 Layout.bottomMargin: actionBtn.folded ? 0 : Metrics.opticalDrop
+                // The fraction's ink is even about its box, so it gives back the lifts made for a lone mark's uneven
+                // air: the seat's above, and folded, the column's (`stackCol`).
+                pairDrop: actionBtn.folded ? -Metrics.opticalDrop : Metrics.opticalDrop
                 kind: actionBtn.kind
                 holdPresses: actionBtn.armedPresses
                 // Folded, the mark grows into the word's room.
