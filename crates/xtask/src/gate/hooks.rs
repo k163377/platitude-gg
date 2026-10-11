@@ -184,7 +184,7 @@ fn write_executable(path: &Path, text: &str) -> Result<(), String> {
 }
 
 /// The hook's question: may refs/heads/main move from `old` to `new`?
-/// Yes only for a fast-forward onto a commit gated in full while it sat
+/// Yes only for a fast-forward onto a commit gated on both sides while it sat
 /// on main. The refusal reason is what git shows the person whose command
 /// was stopped.
 pub(crate) fn verdict(dir: &Path, old: &str, new: &str) -> Result<(), String> {
@@ -216,10 +216,10 @@ pub(crate) fn verdict(dir: &Path, old: &str, new: &str) -> Result<(), String> {
              change owes is green on both sides."
         ));
     };
-    if !found.full {
+    if !found.container {
         return Err(format!(
             "refs/heads/main may not move onto {short}: its stamp is host-only (a --host-only \
-             run). Run the full gate — `cargo xtask gate`, or `cargo xtask land`."
+             run). Run the gate on both sides — `cargo xtask gate`, or `cargo xtask land`."
         ));
     }
     if !found.onto_main {

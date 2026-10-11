@@ -689,9 +689,9 @@ fn a_renamed_source_is_seen_to_have_gone() {
     );
 }
 
-/// What the tier table moves (`verb-tiers.txt`): before a merge a full
-/// line waits, a twin never runs, and only a linux line goes to the
-/// container; the full gate owes every line but the twin on both sides.
+/// What the tier table moves (`verb-tiers.txt`): before a merge a whole
+/// line waits, a twin never runs, and only a fonts line goes to the
+/// container; the whole gate owes every line but the twin on both sides.
 #[test]
 fn the_tier_table_says_which_lines_each_gate_owes_and_where() {
     let sb = Sandbox::new("tiers");
@@ -706,8 +706,8 @@ fn the_tier_table_says_which_lines_each_gate_owes_and_where() {
     sb.write(
         &sb.seat,
         "crates/xtask/verb-tiers.txt",
-        "linux\tstash --preset basic\t-\tboth sides\n\
-         full\tstash-menu --preset basic\tstash --preset basic\tpicture: the menu standing\n\
+        "fonts\tstash --preset basic\t-\tboth sides\n\
+         whole\tstash-menu --preset basic\tstash --preset basic\tpicture: the menu standing\n\
          twin\tstash-twin --preset basic\tstash --preset basic\tthe same run\n",
     );
     sb.write(
@@ -736,27 +736,27 @@ fn the_tier_table_says_which_lines_each_gate_owes_and_where() {
         ]),
         "{verbs:?}"
     );
-    let full = sb.gate_ok(&sb.seat, &["--all", "--dry-run"]);
+    let whole = sb.gate_ok(&sb.seat, &["--whole", "--dry-run"]);
     for owed in [
         "[host ] verify stash-menu --preset basic",
         "[linux] verify-linux stash-menu --preset basic",
         "[linux] verify-linux stash-open --preset basic",
     ] {
         assert!(
-            full.contains(owed),
-            "{owed} not owed by the full gate: {full}"
+            whole.contains(owed),
+            "{owed} not owed by the whole gate: {whole}"
         );
     }
     assert!(
-        !full.contains("stash-twin"),
-        "a twin is owed by no gate: {full}"
+        !whole.contains("stash-twin"),
+        "a twin is owed by no gate: {whole}"
     );
 }
 
-/// Waiting for the full gate would leave that component with no run
+/// Waiting for the whole gate would leave that component with no run
 /// before the merge.
 #[test]
-fn a_full_line_that_alone_shows_a_reached_component_is_owed_before_the_merge() {
+fn a_whole_line_that_alone_shows_a_reached_component_is_owed_before_the_merge() {
     let sb = Sandbox::new("tiers-alone");
     sb.write(
         &sb.seat,
@@ -772,7 +772,7 @@ fn a_full_line_that_alone_shows_a_reached_component_is_owed_before_the_merge() {
     sb.write(
         &sb.seat,
         "crates/xtask/verb-tiers.txt",
-        "full\tperf none --preset perf\t-\tperf: the perf tool walks it\n",
+        "whole\tperf none --preset perf\t-\tperf: the perf tool walks it\n",
     );
     let base = sb.commit_all(&sb.seat, "test: a perf driver", &[]);
     sb.write(
@@ -1012,7 +1012,7 @@ fn a_tier_table_that_cannot_be_read_stops_the_gate_before_anything_runs() {
         "crates/platitude-app/src/ui/StashPane.qml",
         "Item {\n    width: 6\n    property var model: StashModel\n}\n",
     );
-    std::fs::write(&table, b"linux\tstash --preset basic\t-\t\xff\n").expect("bytes");
+    std::fs::write(&table, b"fonts\tstash --preset basic\t-\t\xff\n").expect("bytes");
     sb.commit_all(&sb.seat, "chore: a table that is not text", &[]);
     let (ok, text) = sb.gate(&sb.seat, &[], &[]);
     assert!(
@@ -1037,7 +1037,7 @@ fn a_tier_table_that_cannot_be_read_stops_the_gate_before_anything_runs() {
     sb.write(
         &sb.seat,
         "crates/xtask/verb-tiers.txt",
-        "linux\tstash --preset basic\t-\tthe sandbox's line on both sides\n",
+        "fonts\tstash --preset basic\t-\tthe sandbox's line on both sides\n",
     );
     sb.commit_all(&sb.seat, "chore: the table back", &[]);
     sb.gate_ok(&sb.seat, &[]);

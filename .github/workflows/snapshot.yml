@@ -1,4 +1,4 @@
-# A snapshot of the app for a Mac, by hand: the full test of the commit,
+# A snapshot of the app for a Mac, by hand: the whole test of the commit,
 # and beside it the bundle `cargo xtask package` makes, kept as this run's
 # artifact. Not a release (P5-確認事項 §3.5): no notices of the bundled
 # licences travel with it and no Apple identity signs it, so what the run
@@ -21,8 +21,8 @@ jobs:
   # The run's verdict on the commit. The bundle does not wait for it: the
   # census on macOS takes the most of an hour, and one red line there
   # would keep a bundle from being looked at.
-  full:
-    uses: ./.github/workflows/full.yml
+  whole:
+    uses: ./.github/workflows/whole.yml
 
   package:
     runs-on: macos-26

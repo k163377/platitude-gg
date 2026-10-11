@@ -24,7 +24,7 @@ use crate::watched::Stepped;
 
 pub(crate) static REPLAY: command::Command = command::Command {
     id: "replay.lines",
-    call: "replay --tier <linux|merge|all>",
+    call: "replay --tier <fonts|premerge|whole>",
     purpose: "census lines run again on this machine, every run's pictures under one directory",
     run_in: Where::Seat,
     needs: &[],
@@ -36,14 +36,14 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&REPLAY];
 /// Which census lines a run takes besides the ones it is handed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Tier {
-    /// The tier table's `linux` rows: judged on a size, a cut or a fold
+    /// The tier table's `fonts` rows: judged on a size, a cut or a fold
     /// the fonts decide, so a machine with other fonts can answer
     /// differently.
-    Linux,
+    Fonts,
     /// Every line a gate owes before a merge.
-    Merge,
-    /// Every line the full gate owes.
-    All,
+    Premerge,
+    /// Every line the whole gate owes.
+    Whole,
 }
 
 struct Options {
@@ -65,15 +65,15 @@ fn parse(args: &[String]) -> Result<Options, String> {
         match arg.as_str() {
             "--tier" => {
                 opts.tier = match it.next().map(String::as_str) {
-                    Some("linux") => Some(Tier::Linux),
-                    Some("merge") => Some(Tier::Merge),
-                    Some("all") => Some(Tier::All),
+                    Some("fonts") => Some(Tier::Fonts),
+                    Some("premerge") => Some(Tier::Premerge),
+                    Some("whole") => Some(Tier::Whole),
                     // Sayable, so a caller that always passes the flag
                     // (the workflow) can ask for the typed lines alone.
                     Some("none") => None,
                     other => {
                         return Err(format!(
-                            "--tier takes linux, merge, all or none; got {other:?}"
+                            "--tier takes fonts, premerge, whole or none; got {other:?}"
                         ));
                     }
                 };
@@ -115,9 +115,9 @@ fn chosen(tier: Option<Tier>, typed: &[String], census: &Census, tiers: &Tiers) 
         .keys()
         .filter(|line| match tier {
             None => false,
-            Some(Tier::Linux) => tiers.on_linux(line, false),
-            Some(Tier::Merge) => tiers.owed(line, false),
-            Some(Tier::All) => tiers.owed(line, true),
+            Some(Tier::Fonts) => tiers.on_linux(line, false),
+            Some(Tier::Premerge) => tiers.owed(line, false),
+            Some(Tier::Whole) => tiers.owed(line, true),
         })
         .cloned()
         .collect();
@@ -414,7 +414,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let lines = chosen(opts.tier, &opts.lines, &census, &tiers);
     if lines.is_empty() {
         return Err(
-            "nothing to replay: --tier (linux, merge or all) and --line '<verify-ui line>' named \
+            "nothing to replay: --tier (fonts, premerge or whole) and --line '<verify-ui line>' named \
              no line between them"
                 .into(),
         );
@@ -504,28 +504,28 @@ mod tests {
         census
     }
 
-    const TABLE: &str = "linux\tbadges --preset conflict\t-\tcap= reads the band's measured floor\n\
-        full\tfile-menu b.txt\tstash\tpicture: the menu standing\n";
+    const TABLE: &str = "fonts\tbadges --preset conflict\t-\tcap= reads the band's measured floor\n\
+        whole\tfile-menu b.txt\tstash\tpicture: the menu standing\n";
 
     #[test]
     fn a_tier_takes_the_lines_the_table_gives_it_and_typed_lines_follow() {
         let held = census(&["badges --preset conflict", "file-menu b.txt", "stash"]);
         let tiers = Tiers::parse(TABLE);
         let of = |tier, typed: &[&str]| chosen(tier, &words(typed), &held, &tiers);
-        assert_eq!(of(Some(Tier::Linux), &[]), ["badges --preset conflict"]);
+        assert_eq!(of(Some(Tier::Fonts), &[]), ["badges --preset conflict"]);
         assert_eq!(
-            of(Some(Tier::Merge), &[]),
+            of(Some(Tier::Premerge), &[]),
             ["badges --preset conflict", "stash"]
         );
         assert_eq!(
-            of(Some(Tier::All), &[]),
+            of(Some(Tier::Whole), &[]),
             ["badges --preset conflict", "file-menu b.txt", "stash"]
         );
         // After the tier's, in the order typed; one the tier already
         // holds runs once.
         assert_eq!(
             of(
-                Some(Tier::Linux),
+                Some(Tier::Fonts),
                 &["nav-tip branch:0", "badges --preset conflict"]
             ),
             ["badges --preset conflict", "nav-tip branch:0"]
@@ -553,7 +553,7 @@ mod tests {
     fn the_command_line_names_a_tier_lines_and_a_place() {
         let opts = parse(&words(&[
             "--tier",
-            "linux",
+            "fonts",
             "--line",
             "band; amend",
             "--line",
@@ -563,7 +563,7 @@ mod tests {
             "--no-build",
         ]))
         .expect("every option at once");
-        assert_eq!(opts.tier, Some(Tier::Linux));
+        assert_eq!(opts.tier, Some(Tier::Fonts));
         assert_eq!(opts.lines, ["band", "amend", "stash"]);
         assert_eq!(opts.out.as_deref(), Some(Path::new("shots")));
         assert!(!opts.build);
@@ -572,10 +572,13 @@ mod tests {
         assert_eq!(none.tier, None);
         assert!(none.lines.is_empty() && none.build);
 
-        let Err(unknown) = parse(&words(&["--tier", "fonts"])) else {
+        let Err(unknown) = parse(&words(&["--tier", "linux"])) else {
             panic!("a tier the table does not have is refused where it is typed");
         };
-        assert!(unknown.contains("linux, merge, all or none"), "{unknown}");
+        assert!(
+            unknown.contains("fonts, premerge, whole or none"),
+            "{unknown}"
+        );
         let Err(stray) = parse(&words(&["band"])) else {
             panic!("a line typed bare would run nothing and say nothing");
         };

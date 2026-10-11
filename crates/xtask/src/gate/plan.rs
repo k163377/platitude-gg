@@ -55,12 +55,12 @@ pub(crate) struct Required {
 /// What one side owes beyond the reach of the diff.
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub(crate) struct Scope {
-    /// Every file in the tree counted as reached, and why: `--all`, a
+    /// Every file in the tree counted as reached, and why: `--whole`, a
     /// moved version, or the build input that changed.
     pub everything: Option<String>,
-    /// The full tier's steps (`periodic`, every census line): `--all`, or
+    /// The whole tier's steps (`periodic`, every census line): `--whole`, or
     /// a moved version ([`pins`]) before a merge.
-    pub full: bool,
+    pub whole_tier: bool,
 }
 
 pub(crate) struct Plan {
@@ -95,15 +95,15 @@ pub(crate) struct Plan {
     /// Candidate count from the final census, for comparison only.
     /// A component absent at the end may have been exercised earlier.
     pub verbs_in_shadow: usize,
-    /// Census lines the reach selected that this gate leaves to the full
-    /// one (`tiers`) — before a merge only; the full gate leaves none.
+    /// Census lines the reach selected that this gate leaves to the whole
+    /// one (`tiers`) — before a merge only; the whole gate leaves none.
     pub verbs_left: usize,
 }
 
 pub(crate) struct Ask<'a> {
     pub main_ref: &'a str,
     pub host_only: bool,
-    pub all: bool,
+    pub whole: bool,
     pub fresh: bool,
     /// verify-ui lines to run besides the census's, as typed.
     pub extra_verbs: &'a [String],
@@ -278,8 +278,8 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         census: &census,
         tiers: &tiers,
         worn: &worn,
-        whole: scope.everything.is_some(),
-        full: scope.full,
+        everything: scope.everything.is_some(),
+        whole_tier: scope.whole_tier,
     };
     let (
         mut steps,
@@ -423,7 +423,7 @@ fn moves_everything(file: &str) -> bool {
 }
 
 /// What each side owes beyond the reach: the host's, and the container's.
-/// The daily tier stays the host's quick half; stage 2 owes the full tier
+/// The daily tier stays the host's quick half; stage 2 owes the whole tier
 /// for a new version, on the side built with it ([`pins`]).
 fn scopes(
     dir: &Path,
@@ -433,12 +433,12 @@ fn scopes(
     head: &str,
     changed: &[String],
 ) -> (Scope, Scope) {
-    if ask.all {
-        let all = Scope {
-            everything: Some("--all".to_string()),
-            full: true,
+    if ask.whole {
+        let whole = Scope {
+            everything: Some("--whole".to_string()),
+            whole_tier: true,
         };
-        return (all.clone(), all);
+        return (whole.clone(), whole);
     }
     let pinned = if ask.host_only {
         None
@@ -448,7 +448,7 @@ fn scopes(
     let host = match &pinned {
         Some(moved) if !moved.container_only => Scope {
             everything: Some(moved.why.clone()),
-            full: true,
+            whole_tier: true,
         },
         _ => Scope {
             everything: changed
@@ -461,20 +461,20 @@ fn scopes(
                         .find(|f| gone_source(dir, f))
                         .map(|f| format!("{f} is gone"))
                 }),
-            full: false,
+            whole_tier: false,
         },
     };
     let container = match pinned {
-        Some(moved) if !host.full => Scope {
+        Some(moved) if !host.whole_tier => Scope {
             everything: Some(moved.why),
-            full: true,
+            whole_tier: true,
         },
         _ if host.everything.is_none() => Scope {
             everything: changed
                 .iter()
                 .find(|f| IMAGE.contains(&f.as_str()))
                 .map(|f| format!("{f} builds its image")),
-            full: false,
+            whole_tier: false,
         },
         _ => host.clone(),
     };
@@ -601,16 +601,16 @@ struct Reading<'a> {
     /// Which of the census's lines each gate owes, and where (`tiers`).
     tiers: &'a Tiers,
     worn: &'a BTreeMap<String, BTreeSet<String>>,
-    whole: bool,
-    /// Owes the full tier ([`Scope::full`]).
-    full: bool,
+    everything: bool,
+    /// Owes the whole tier ([`Scope::whole_tier`]).
+    whole_tier: bool,
 }
 
 /// What the verb selection counted beside the steps it made.
 struct Counted {
     /// The narrower candidate count (`steps::verbs_in_snapshot`).
     shadow: usize,
-    /// Selected lines left to the full gate.
+    /// Selected lines left to the whole gate.
     left: usize,
 }
 
@@ -726,7 +726,7 @@ pub(crate) fn describe(plan: &Plan, keys: bool) -> String {
         .count();
     if plan.verbs_in_shadow > 0 || chosen > 0 || on_linux > 0 {
         // The container's lines are the host's own unless its side owes
-        // more than the host's does; what waits for the full gate is the
+        // more than the host's does; what waits for the whole gate is the
         // host's count.
         let (container, left) = if plan.container == plan.host {
             (format!("{on_linux} of them on the container too"), "")
@@ -734,7 +734,7 @@ pub(crate) fn describe(plan: &Plan, keys: bool) -> String {
             (format!("{on_linux} on the container"), " on the host")
         };
         out.push_str(&format!(
-            "verbs: {chosen} selected, {container}; {} left{left} to the full gate ({}); shadow \
+            "verbs: {chosen} selected, {container}; {} left{left} to the whole gate ({}); shadow \
              candidate: {} (final census only, not used to skip runs)\n",
             plan.verbs_left,
             super::tiers::FILE,
@@ -758,8 +758,8 @@ fn headline(plan: &Plan) -> String {
         if let Some(why) = &scope.everything {
             said.push(format!("everything ({why})"));
         }
-        if scope.full {
-            said.push("the full tier".to_string());
+        if scope.whole_tier {
+            said.push("the whole tier".to_string());
         }
         said
     };

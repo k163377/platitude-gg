@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::stamp::Store;
 
-/// A seat ahead of main whose tip carries no full stamp is work reported
+/// A seat ahead of main whose tip carries no both-sides stamp is work reported
 /// before it was gated — said as a system message, so a turn that ends
 /// mid-work is not held to a gate it was never claiming.
 pub(crate) fn standing(cwd: &str) -> Option<String> {
@@ -21,16 +21,18 @@ pub(crate) fn standing(cwd: &str) -> Option<String> {
             "gate: seat {seat} is {ahead} commit(s) ahead of main and its tip is not gated — \
              `cargo xtask gate` before 「マージ可」."
         ),
-        Some(found) if !found.full => format!(
+        Some(found) if !found.container => format!(
             "gate: seat {seat} is {ahead} commit(s) ahead of main; its tip is gated on the host \
-             side only — the full `cargo xtask gate` still owes the container side."
+             side only — `cargo xtask gate` still owes the container side."
         ),
         Some(found) if !found.onto_main => format!(
             "gate: seat {seat} is {ahead} commit(s) ahead of main; its tip was gated off main — \
              `land` will rebase and gate again."
         ),
         Some(_) => {
-            format!("gate: seat {seat} is {ahead} commit(s) ahead of main, tip gated in full.")
+            format!(
+                "gate: seat {seat} is {ahead} commit(s) ahead of main, tip gated on both sides."
+            )
         }
     })
 }

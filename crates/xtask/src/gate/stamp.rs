@@ -13,12 +13,12 @@ pub(crate) struct Store {
 }
 
 /// A commit's stamp. `onto_main`: the diff's base was where main stood
-/// (the branch sat on main); `full`: both sides ran.
+/// (the branch sat on main); `container`: the container side ran too.
 pub(crate) struct CommitStamp {
     pub main: String,
     pub base: String,
     pub onto_main: bool,
-    pub full: bool,
+    pub container: bool,
     pub steps: Vec<String>,
 }
 
@@ -62,8 +62,8 @@ fn write(path: &Path, text: &str) -> Result<(), String> {
 
 fn render(stamp: &CommitStamp) -> String {
     let mut text = format!(
-        "main={}\nbase={}\nonto_main={}\nfull={}\n",
-        stamp.main, stamp.base, stamp.onto_main, stamp.full
+        "main={}\nbase={}\nonto_main={}\ncontainer={}\n",
+        stamp.main, stamp.base, stamp.onto_main, stamp.container
     );
     for step in &stamp.steps {
         text.push_str("step=");
@@ -78,7 +78,7 @@ fn parse(text: &str) -> Option<CommitStamp> {
         main: String::new(),
         base: String::new(),
         onto_main: false,
-        full: false,
+        container: false,
         steps: Vec::new(),
     };
     for line in text.lines() {
@@ -89,7 +89,7 @@ fn parse(text: &str) -> Option<CommitStamp> {
             "main" => stamp.main = value.to_string(),
             "base" => stamp.base = value.to_string(),
             "onto_main" => stamp.onto_main = value == "true",
-            "full" => stamp.full = value == "true",
+            "container" => stamp.container = value == "true",
             "step" => stamp.steps.push(value.to_string()),
             _ => {}
         }
@@ -107,14 +107,14 @@ mod tests {
             main: "aaaa".into(),
             base: "bbbb".into(),
             onto_main: false,
-            full: true,
+            container: true,
             steps: vec!["test-core 0123".into(), "fmt -".into()],
         };
         let back = parse(&render(&stamp)).expect("parses");
         assert_eq!(back.main, "aaaa");
         assert_eq!(back.base, "bbbb");
         assert!(!back.onto_main);
-        assert!(back.full);
+        assert!(back.container);
         assert_eq!(back.steps, stamp.steps);
         assert!(parse("").is_none(), "an empty file is no stamp");
     }

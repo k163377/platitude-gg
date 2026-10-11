@@ -1,10 +1,10 @@
 //! Which changes move a version the product is built against, and owe
-//! the full tier before a merge (反映前テストの機械化.md
+//! the whole tier before a merge (反映前テストの機械化.md
 //! §版を動かす変更は段 3).
 
 use crate::support::{Sandbox, without_always};
 
-/// A census with one line of each tier the full gate adds.
+/// A census with one line of each tier the whole gate adds.
 fn tiered(name: &str) -> Sandbox {
     let sb = Sandbox::new(name);
     sb.write(
@@ -17,65 +17,68 @@ fn tiered(name: &str) -> Sandbox {
     sb.write(
         &sb.seat,
         "crates/xtask/verb-tiers.txt",
-        "linux\tstash --preset basic\t-\tboth sides\n\
-         full\tstash-menu --preset basic\tstash --preset basic\tpicture: the menu standing\n",
+        "fonts\tstash --preset basic\t-\tboth sides\n\
+         whole\tstash-menu --preset basic\tstash --preset basic\tpicture: the menu standing\n",
     );
     sb.commit_all(&sb.seat, "chore: tiers", &[]);
     sb
 }
 
-/// The lines only the full gate owes, both sides.
-const FULL_ONLY: [&str; 2] = [
+/// The lines only the whole gate owes, both sides.
+const WHOLE_ONLY: [&str; 2] = [
     "[host ] verify stash-menu --preset basic",
     "[linux] verify-linux stash-open --preset basic",
 ];
 
-/// The lines only the full gate owes on the container's side.
-const FULL_ON_THE_CONTAINER: [&str; 2] = [
+/// The lines only the whole gate owes on the container's side.
+const WHOLE_ON_THE_CONTAINER: [&str; 2] = [
     "[linux] verify-linux stash-menu --preset basic",
     "[linux] verify-linux stash-open --preset basic",
 ];
 
-/// A version the container alone is built with owes the full tier there
+/// A version the container alone is built with owes the whole tier there
 /// and leaves the host to the reach of the diff.
-fn owes_the_full_tier_on_the_container_alone(text: &str, file: &str) {
+fn owes_the_whole_tier_on_the_container_alone(text: &str, file: &str) {
     assert!(
         text.contains(&format!(
-            "; the container: everything ({file} moves a version), the full tier\n"
+            "; the container: everything ({file} moves a version), the whole tier\n"
         )),
         "{text}"
     );
     let headline = text.lines().next().unwrap_or_default();
     let host = headline.split("; the container").next().unwrap_or_default();
-    assert!(!host.contains("the full tier"), "{headline}");
-    for owed in FULL_ON_THE_CONTAINER {
+    assert!(!host.contains("the whole tier"), "{headline}");
+    for owed in WHOLE_ON_THE_CONTAINER {
         assert!(text.contains(owed), "{owed} not owed: {text}");
     }
-    assert!(!text.contains(FULL_ONLY[0]), "the host's full line: {text}");
+    assert!(
+        !text.contains(WHOLE_ONLY[0]),
+        "the host's whole line: {text}"
+    );
 }
 
-/// A moved crate version owes stage 2 the full tier, without `--all`;
+/// A moved crate version owes stage 2 the whole tier, without `--whole`;
 /// the daily tier stays the host's quick half.
 #[test]
-fn a_version_move_owes_the_full_tier() {
+fn a_version_move_owes_the_whole_tier() {
     let sb = tiered("version-move");
     sb.write(&sb.seat, "Cargo.lock", "# lock\n# bumped\n");
     sb.commit_all(&sb.seat, "chore: bump", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(
-        text.contains("everything (Cargo.lock moves a version), the full tier"),
+        text.contains("everything (Cargo.lock moves a version), the whole tier"),
         "{text}"
     );
-    for owed in FULL_ONLY {
+    for owed in WHOLE_ONLY {
         assert!(text.contains(owed), "{owed} not owed: {text}");
     }
     let daily = sb.gate_ok(&sb.seat, &["--host-only", "--dry-run"]);
-    assert!(!daily.contains("the full tier"), "{daily}");
+    assert!(!daily.contains("the whole tier"), "{daily}");
     assert!(!daily.contains("stash-menu"), "{daily}");
 }
 
 /// A version both sides are built with, moved beside the container's own,
-/// owes the full tier on both sides.
+/// owes the whole tier on both sides.
 #[test]
 fn a_version_of_both_sides_moved_with_the_containers_owes_both() {
     let sb = tiered("both-moves");
@@ -84,11 +87,11 @@ fn a_version_of_both_sides_moved_with_the_containers_owes_both() {
     sb.commit_all(&sb.seat, "chore: a newer base and lock", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(
-        text.contains("everything (Cargo.lock moves a version), the full tier\n"),
+        text.contains("everything (Cargo.lock moves a version), the whole tier\n"),
         "{text}"
     );
     assert!(!text.contains("; the container"), "{text}");
-    for owed in FULL_ONLY {
+    for owed in WHOLE_ONLY {
         assert!(text.contains(owed), "{owed} not owed: {text}");
     }
 }
@@ -107,7 +110,7 @@ fn the_git_minimum_is_its_constant() {
     );
     sb.commit_all(&sb.seat, "docs: the minimum", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
-    assert!(!text.contains("the full tier"), "{text}");
+    assert!(!text.contains("the whole tier"), "{text}");
 
     sb.write(
         &sb.seat,
@@ -116,24 +119,24 @@ fn the_git_minimum_is_its_constant() {
     );
     sb.commit_all(&sb.seat, "feat: a newer minimum", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
-    owes_the_full_tier_on_the_container_alone(&text, version);
+    owes_the_whole_tier_on_the_container_alone(&text, version);
     // The host is owed what the constant's readers are.
     assert!(text.contains("[host ] clippy platitude-core"), "{text}");
 }
 
 /// Qt's version lives in a file of its own, which no source reads: a bump
-/// there alone owes the full tier.
+/// there alone owes the whole tier.
 #[test]
-fn a_qt_bump_owes_the_full_tier() {
+fn a_qt_bump_owes_the_whole_tier() {
     let sb = tiered("qt");
     sb.write(&sb.seat, ".qt-version", "6.11.0\n");
     sb.commit_all(&sb.seat, "chore: a newer Qt", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(
-        text.contains("everything (.qt-version moves a version), the full tier"),
+        text.contains("everything (.qt-version moves a version), the whole tier"),
         "{text}"
     );
-    for owed in FULL_ONLY {
+    for owed in WHOLE_ONLY {
         assert!(text.contains(owed), "{owed} not owed: {text}");
     }
 }
@@ -153,7 +156,7 @@ fn a_workflow_edit_owes_no_step() {
     );
     sb.commit_all(&sb.seat, "ci: a job", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
-    assert!(!text.contains("the full tier"), "{text}");
+    assert!(!text.contains("the whole tier"), "{text}");
     // Among the files no step reads: a row of its own, where a changed
     // file is listed behind a `*`.
     assert!(
@@ -196,5 +199,5 @@ fn the_containers_base_image_is_its_version() {
     );
     sb.commit_all(&sb.seat, "chore: a newer base", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
-    owes_the_full_tier_on_the_container_alone(&text, "ci/linux/Dockerfile");
+    owes_the_whole_tier_on_the_container_alone(&text, "ci/linux/Dockerfile");
 }

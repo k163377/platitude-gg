@@ -11,7 +11,7 @@ fn a_build_input_change_owes_everything() {
     sb.commit_all(&sb.seat, "chore: the resolver", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(text.contains("everything (Cargo.toml)"), "{text}");
-    assert!(!text.contains("the full tier"), "{text}");
+    assert!(!text.contains("the whole tier"), "{text}");
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
     for owed in [

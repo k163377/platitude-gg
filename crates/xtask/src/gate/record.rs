@@ -220,7 +220,7 @@ pub(crate) struct Run<'a> {
     /// always, cached, to run.
     pub steps: (usize, usize, usize),
     /// Verb steps selected, those of them not already stamped, and the
-    /// census lines left to the full gate.
+    /// census lines left to the whole gate.
     pub verbs: (usize, usize, usize),
     pub outcome: &'a str,
 }
@@ -250,7 +250,7 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::census::Shift)
     out.push_str(&format!(
         "  chose  changed {} / reach {} / steps {} (always {always}, cached {cached}, run \
          {to_run}) / verbs {verbs_selected} selected, {verbs_run} to run, {verbs_left} left to \
-         the full gate\n",
+         the whole gate\n",
         run.changed,
         run.reach,
         always + cached + to_run,

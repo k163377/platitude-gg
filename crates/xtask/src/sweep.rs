@@ -34,7 +34,7 @@ pub(crate) static SWEEP: command::Command = command::Command {
     run_in: Where::Seat,
     needs: &[
         "the lines it reads the live set from compile whatever this tree has not built — \
-              once per generation, and the same work a full gate asks for",
+              once per generation, and the same work a whole gate asks for",
     ],
     permission: Permission::Plain,
 };
@@ -333,7 +333,7 @@ impl Tail {
 /// The sweep a passing gate or landing ends with — two build directories,
 /// each answered by its own key ([`asks`]). The key, not stage 3 alone,
 /// is what sets it off: a generation is left behind by every `Cargo.lock`
-/// that lands, far more often than the full tier runs.
+/// that lands, far more often than the whole tier runs.
 ///
 /// Never a failure of its caller — the tests have answered — and per side
 /// as well: a tree out here that could not be read says nothing about the
@@ -402,7 +402,7 @@ fn sweep(root: &Path, dry_run: bool) -> Result<(), String> {
     if compiled > 0 {
         println!(
             "sweep: {compiled} unit(s) were compiled to be read — this tree had not built them. \
-             Once per generation, and the same work the full tier asks for."
+             Once per generation, and the same work the whole tier asks for."
         );
     }
     let mut freed = 0;

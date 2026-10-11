@@ -509,7 +509,7 @@ const SEED: &[(&str, &str)] = &[
     // sees both sides' verb blocks.
     (
         "crates/xtask/verb-tiers.txt",
-        "linux\tstash --preset basic\t-\tthe sandbox's line on both sides\n",
+        "fonts\tstash --preset basic\t-\tthe sandbox's line on both sides\n",
     ),
     ("internal-docs/notes.md", "# notes\n"),
 ];

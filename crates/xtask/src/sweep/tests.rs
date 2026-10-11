@@ -561,7 +561,7 @@ fn a_tail_with_a_linux_side_asks_the_volume_on_the_volumes_own_terms() {
         })
     };
     assert_eq!(tier(false, true), Some(false), "gate, and the key decides");
-    assert_eq!(tier(true, true), Some(true), "gate --all, on both sides");
+    assert_eq!(tier(true, true), Some(true), "gate --whole, on both sides");
     assert_eq!(
         tier(false, false),
         None,

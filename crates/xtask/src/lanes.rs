@@ -122,10 +122,10 @@ mod tests {
     fn a_tree_holds_one_gate_and_names_it_to_the_second() {
         let dir = common("one-gate");
         let note = dir.join("target").join("gate-running");
-        let first = sole(&note, "gate --all").expect("the first gate");
+        let first = sole(&note, "gate --whole").expect("the first gate");
         let refused = sole(&note, "gate").expect_err("a second gate in the same tree");
         assert!(refused.contains("already running"), "{refused}");
-        assert!(refused.contains("gate --all (pid"), "{refused}");
+        assert!(refused.contains("gate --whole (pid"), "{refused}");
         drop(first);
         assert!(!note.exists(), "the note comes down with the gate");
         let _again = sole(&note, "gate").expect("the tree, once the first gate is done");
@@ -144,7 +144,7 @@ mod tests {
 
         let dir = common("carried");
         let note = dir.join("target").join("gate-running");
-        let first = sole(&note, "gate --all").expect("the first gate");
+        let first = sole(&note, "gate --whole").expect("the first gate");
         let mut carrier = Command::new("sleep")
             .arg("5")
             .stdin(Stdio::from(

@@ -92,11 +92,11 @@ struct Sorted {
     qml: BTreeSet<String>,
 }
 
-/// `whole` runs every package's tests unfiltered.
+/// `everything` runs every package's tests unfiltered.
 fn sort(
     g: &Graph,
     reach: &Reach,
-    whole: bool,
+    everything: bool,
     worn: &BTreeMap<String, BTreeSet<String>>,
 ) -> Sorted {
     let (_, qml_tests) = qml_dirs();
@@ -124,7 +124,7 @@ fn sort(
         }
         match &module.test_binary {
             None if module.has_tests => {
-                let filter = if whole || module.path.is_empty() {
+                let filter = if everything || module.path.is_empty() {
                     String::new()
                 } else {
                     format!("{}::", module.path.join("::"))
@@ -145,7 +145,7 @@ fn sort(
                 // main.rs and support/ are read by every module: the whole
                 // binary.
                 let filter = match module.path.first() {
-                    Some(top) if !whole && top != "support" => format!("{top}::"),
+                    Some(top) if !everything && top != "support" => format!("{top}::"),
                     _ => String::new(),
                 };
                 let entry = sorted
@@ -167,11 +167,11 @@ pub(super) fn select(
     changed: &[String],
     ask: &Ask<'_>,
 ) -> (Vec<Step>, Counted) {
-    let mut sorted = sort(g, reach, read.whole, read.worn);
+    let mut sorted = sort(g, reach, read.everything, read.worn);
     let mut steps = always_steps();
-    steps.extend(deny_steps(g, changed, read.whole));
-    steps.extend(qmltest_steps(reach, read.whole));
-    steps.extend(wedge_steps(reach, read.whole));
+    steps.extend(deny_steps(g, changed, read.everything));
+    steps.extend(qmltest_steps(reach, read.everything));
+    steps.extend(wedge_steps(reach, read.everything));
     // Its configuration is clippy's alone, read by every crate's run and
     // by nothing a test or a build reads.
     if changed.contains(&clippy_config()) {
@@ -182,7 +182,7 @@ pub(super) fn select(
     steps.extend(clippy_steps(&sorted));
     steps.extend(unit_steps(g, &sorted));
     steps.extend(it_steps(g, &sorted));
-    if read.full {
+    if read.whole_tier {
         steps.extend(periodic_steps(g, read.dir, &sorted));
     }
     let (binary, counted) = binary_steps(read, &sorted, reach, changed, ask);
@@ -230,7 +230,7 @@ fn always_steps() -> Vec<Step> {
 ///
 /// Host only: the policy names no `targets` and takes `all-features`, so
 /// every OS reads the same crates.
-fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
+fn deny_steps(g: &Graph, changed: &[String], everything: bool) -> Vec<Step> {
     // The manifests carry what the lock does not: a license field and the
     // features a dependency is taken with — a patched-in crate's among
     // them; cargo's configuration ([`CARGO`]) can patch a dependency or
@@ -242,7 +242,7 @@ fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
             .values()
             .map(|module| format!("crates/{}/Cargo.toml", module.package)),
     );
-    if !whole && !changed.iter().any(|f| inputs.iter().any(|i| under(f, i))) {
+    if !everything && !changed.iter().any(|f| inputs.iter().any(|i| under(f, i))) {
         return Vec::new();
     }
     let inputs: Vec<String> = inputs.into_iter().collect();
@@ -257,9 +257,9 @@ fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
 /// whole module, because the staging copies all of it and a test can
 /// resolve through any of it (`crate::qmltest`).
 ///
-/// `whole` selects it outright: neither the qmldir nor a QtTest file is a
+/// `everything` selects it outright: neither the qmldir nor a QtTest file is a
 /// node of the source graph.
-fn qmltest_steps(reach: &Reach, whole: bool) -> Vec<Step> {
+fn qmltest_steps(reach: &Reach, everything: bool) -> Vec<Step> {
     let (ui, tests) = qml_dirs();
     // The qmldir counts (it declares the singletons), and so does the
     // runner, whose staging a run resolves through — when its code moved,
@@ -270,7 +270,7 @@ fn qmltest_steps(reach: &Reach, whole: bool) -> Vec<Step> {
             || under(file, &ui)
             || (under(file, &tests) && file.ends_with(".qml") && stem_of(file).starts_with("tst_"))
     };
-    if !whole && !reach.iter().any(reads) {
+    if !everything && !reach.iter().any(reads) {
         return Vec::new();
     }
     let inputs = [ui, tests, QMLTEST.to_string()];
@@ -309,7 +309,7 @@ fn record_of_a_wedge() -> [String; 7] {
 ///
 /// Host only: both sides pass the record through the same mount, and
 /// every verb step already proves the container carries a file out.
-fn wedge_steps(reach: &Reach, whole: bool) -> Vec<Step> {
+fn wedge_steps(reach: &Reach, everything: bool) -> Vec<Step> {
     let inputs = record_of_a_wedge();
     // Its xtask files read the product tree, so any product change
     // reaches them as data (`graph::Carried`); what stops a stopped run
@@ -321,7 +321,7 @@ fn wedge_steps(reach: &Reach, whole: bool) -> Vec<Step> {
         Some(Carried::AsData) => under(file, &product),
         _ => false,
     };
-    if !whole && !inputs.iter().any(moved) {
+    if !everything && !inputs.iter().any(moved) {
         return Vec::new();
     }
     let mut wedge = step(
@@ -488,7 +488,7 @@ fn holds_periodic(text: &str) -> bool {
 /// (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める). `None`
 /// when the changed inputs are not all component names.
 fn verbs_in_snapshot(read: &Reading<'_>, changed: &[String]) -> Option<BTreeSet<String>> {
-    if read.whole {
+    if read.everything {
         return None;
     }
     let (ui, _) = qml_dirs();
@@ -549,7 +549,7 @@ fn binary_steps(
     let harness_moved = reach.iter().any(|(file, carried)| {
         *carried == Carried::Whole && harness_dirs.iter().any(|dir| under(file, dir))
     });
-    let lines = if read.whole || harness_moved {
+    let lines = if read.everything || harness_moved {
         census.lines.keys().cloned().collect()
     } else {
         census.verbs_touching(&sorted.qml)
@@ -557,7 +557,7 @@ fn binary_steps(
     let shadow = verbs_in_snapshot(read, changed)
         .map_or(lines.len(), |shown| census.verbs_touching(&shown).len());
     let selected = lines.len();
-    let mut lines = owed_lines(read, &sorted.qml, lines, read.full);
+    let mut lines = owed_lines(read, &sorted.qml, lines, read.whole_tier);
     let left = selected - lines.len();
     for extra in ask.extra_verbs {
         if !lines.contains(extra) {
@@ -583,7 +583,7 @@ fn binary_steps(
         host_step.release = true;
         steps.push(host_step);
         // Asked for by name, the line runs where the asker can see it.
-        if !(read.tiers.on_linux(line, read.full) || ask.extra_verbs.contains(line)) {
+        if !(read.tiers.on_linux(line, read.whole_tier) || ask.extra_verbs.contains(line)) {
             continue;
         }
         let mut linux = xtask(&["linux", "verify-ui"]);
@@ -622,20 +622,20 @@ fn binary_steps(
     (steps, Counted { shadow, left })
 }
 
-/// The selected census lines this gate owes (`tiers`): the full gate owes
-/// every line but a twin; a gate before a merge leaves the full lines out,
+/// The selected census lines this gate owes (`tiers`): the whole gate owes
+/// every line but a twin; a gate before a merge leaves the whole lines out,
 /// except one that is the only witness of a component the change reaches
 /// (反映前テストの機械化.md「唯一の証人の例外」).
 fn owed_lines(
     read: &Reading<'_>,
     reached: &BTreeSet<String>,
     lines: Vec<String>,
-    full: bool,
+    whole_tier: bool,
 ) -> Vec<String> {
     let (owed, left): (Vec<String>, Vec<String>) = lines
         .into_iter()
         .filter(|line| read.tiers.tier(line) != Some(Tier::Twin))
-        .partition(|line| read.tiers.owed(line, full));
+        .partition(|line| read.tiers.owed(line, whole_tier));
     let shown: BTreeSet<&String> = owed
         .iter()
         .filter_map(|line| read.census.lines.get(line))

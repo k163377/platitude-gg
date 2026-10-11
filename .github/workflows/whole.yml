@@ -1,8 +1,8 @@
-# Everything CI checks: the full cargo set on all three OSes (ci.yml)
-# and every census line on macOS (shots.yml, the `all` tier).
-name: Full test (3 OS)
+# Everything CI checks: the whole cargo set on all three OSes (ci.yml)
+# and every census line on macOS (shots.yml, the `whole` tier).
+name: Whole test (3 OS)
 run-name: >-
-  Full test · ${{ github.event_name == 'push' && github.ref_name
+  Whole test · ${{ github.event_name == 'push' && github.ref_name
   || github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number)
   || github.event_name == 'schedule' && 'weekly'
   || github.ref_name }}
@@ -16,7 +16,7 @@ on:
   # Dependabot's: the actions the workflows name, one pull request a week.
   pull_request:
     paths-ignore: ["**.md"]
-  # What the light check leaves out, and what moves with no commit — the
+  # What the push check leaves out, and what moves with no commit — the
   # runners' images, the advisories: Friday 19:00 JST, the hour Dependabot
   # runs here (dependabot.yml) and in jackson-module-kogera. GitHub may
   # start a run set on the hour late, or drop it under load, and turns a
@@ -43,8 +43,8 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       os: '["ubuntu-24.04", "windows-2025", "macos-26"]'
-      full: true
+      whole: true
   shots:
     uses: ./.github/workflows/shots.yml
     with:
-      tier: all
+      tier: whole

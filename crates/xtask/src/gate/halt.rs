@@ -7,7 +7,7 @@
 //! container of its own, which is left to finish ([`super::runner`]). Every
 //! step it kept from running or ended is filed as `halted`.
 //!
-//! `--keep-going` (implied by `--all`) runs the rest, but a red always-step
+//! `--keep-going` (implied by `--whole`) runs the rest, but a red always-step
 //! stops the run either way ([`super::sides::run_sides`]).
 
 use std::sync::Mutex;

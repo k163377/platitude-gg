@@ -9,8 +9,8 @@
 //! commits only ([`hooks`]).
 //!
 //! `--host-only` is the daily tier (CLAUDE.md「確認は 3 段」), whose stamps
-//! the full run reuses. The first red stops the run ([`halt`]) unless
-//! `--keep-going`, which `--all` implies.
+//! the both-sides run reuses. The first red stops the run ([`halt`]) unless
+//! `--keep-going`, which `--whole` implies.
 
 mod census;
 mod deps;
@@ -63,11 +63,12 @@ pub(crate) static DAILY: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-/// 段 3. Without `--fresh` a stamped tree runs almost nothing.
-pub(crate) static FULL: command::Command = command::Command {
-    id: "gate.full",
-    call: "gate --all --fresh",
-    purpose: "stage 3: every step owed, stamps ignored",
+/// 段 3.
+pub(crate) static WHOLE: command::Command = command::Command {
+    id: "gate.whole",
+    call: "gate --whole",
+    purpose: "stage 3: no diff read, every census line and periodic test on both sides, \
+              stamps ignored",
     run_in: Where::Seat,
     needs: &[],
     permission: Permission::Plain,
@@ -101,7 +102,7 @@ pub(crate) static DEPS: command::Command = command::Command {
 };
 
 pub(crate) static COMMANDS: &[&command::Command] =
-    &[&PREMERGE, &DAILY, &FULL, &VERDICT, &INSTALL, &DEPS];
+    &[&PREMERGE, &DAILY, &WHOLE, &VERDICT, &INSTALL, &DEPS];
 pub(crate) use census::Census;
 pub(crate) use census::{FILE as CENSUS_FILE, names_in, page_settled_in, record};
 pub(crate) use graph::qml_files;

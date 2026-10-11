@@ -46,10 +46,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
     for verb in &unrecorded {
         println!("  {verb}");
     }
-    let (linux, full, twins) = tiers.counts();
     println!(
-        "census lines before a merge: {} (host), {linux} of them on the container too; {full} \
-         for the full gate only; {twins} twin(s) no gate runs",
+        "verbs no gate runs, every line a twin: {}",
+        twins_only.difference(&recorded).count()
+    );
+    let (fonts, whole, twins) = tiers.counts();
+    println!(
+        "census lines before a merge: {} (host), {fonts} of them on the container too; {whole} \
+         for the whole gate only; {twins} twin(s) no gate runs",
         census
             .lines
             .keys()

@@ -3,21 +3,21 @@
 # (.claude/skills/verify-ui/mac.md says how to read them). Offscreen, as
 # every verify-ui run is: CoreText's fonts and macOS's own code paths, not
 # the Cocoa window.
-# The tiers come from the workflows that call this one: `linux` on every
-# push (light.yml), `all` in the full test (full.yml).
+# The tiers come from the workflows that call this one: `fonts` on every
+# push (push.yml), `whole` in the whole test (whole.yml).
 name: Shots (macOS)
 
 on:
   # Any lines, on any ref that is on GitHub. Run as it comes, it shoots
-  # every census line, as the full test does: a tier narrows it, and lines
+  # every census line, as the whole test does: a tier narrows it, and lines
   # are shot besides the tier's, or alone under `none`.
   workflow_dispatch:
     inputs:
       tier:
-        description: "census lines to shoot: all (every line), linux (what the fonts decide), merge, none (the lines below alone)"
+        description: "census lines to shoot: whole (every line), fonts (what the fonts decide), premerge, none (the lines below alone)"
         type: choice
-        options: [all, linux, merge, none]
-        default: all
+        options: [whole, fonts, premerge, none]
+        default: whole
       lines:
         description: "verify-ui lines to shoot besides, ; between them (band; nav-tip branch:0)"
         type: string
@@ -33,7 +33,7 @@ on:
         type: string
         default: ""
       tier:
-        description: "none, linux (what the fonts decide), merge or all"
+        description: "none, fonts (what the fonts decide), premerge or whole"
         type: string
         default: none
       locale:

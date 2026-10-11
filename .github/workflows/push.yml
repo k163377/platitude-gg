@@ -2,9 +2,9 @@
 # reaches main only through land's gate, which ran it on Windows and in the
 # Linux container (反映前テストの機械化.md §land), so a push asks macOS
 # alone — clippy and the tests (ci.yml), and the verify-ui lines whose
-# verdict the fonts decide (shots.yml, the `linux` tier). What the gate's
-# selection let through is the full test's (full.yml, weekly).
-name: Light check (macOS, on push)
+# verdict the fonts decide (shots.yml, the `fonts` tier). What the gate's
+# selection let through is the whole test's (whole.yml, weekly).
+name: Push check (macOS)
 
 # A push that is Markdown alone starts nothing, as it selects no test in
 # the gate.
@@ -27,8 +27,8 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       os: '["macos-26"]'
-      full: false
+      whole: false
   shots:
     uses: ./.github/workflows/shots.yml
     with:
-      tier: linux
+      tier: fonts

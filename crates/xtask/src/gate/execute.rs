@@ -91,22 +91,22 @@ pub(super) fn execute(
     if rewrote {
         return Ok(Gated::CensusMoved);
     }
-    // A host-only run keeps a full stamp already on the commit: writing
-    // `full=false` over it would send the next landing back through a
-    // container side that has already answered.
+    // A host-only run keeps a both-sides stamp already on the commit:
+    // writing `container=false` over it would send the next landing back
+    // through a container side that has already answered.
     if plan.host_only
-        && store
-            .commit(&plan.head)
-            .is_some_and(|found| found.full && found.main == plan.main && found.base == plan.base)
+        && store.commit(&plan.head).is_some_and(|found| {
+            found.container && found.main == plan.main && found.base == plan.base
+        })
     {
-        println!("gate: PASS — {head} keeps its full stamp (this run was host-only)");
+        println!("gate: PASS — {head} keeps its both-sides stamp (this run was host-only)");
         return Ok(Gated::Stamped);
     }
     let stamp = CommitStamp {
         main: plan.main.clone(),
         base: plan.base.clone(),
         onto_main: plan.onto_main,
-        full: !plan.host_only,
+        container: !plan.host_only,
         steps: plan
             .required
             .iter()
@@ -122,7 +122,11 @@ pub(super) fn execute(
     store.mark_commit(&plan.head, &stamp)?;
     println!(
         "gate: PASS — {head} stamped ({}, {})",
-        if stamp.full { "full" } else { "host-only" },
+        if stamp.container {
+            "both sides"
+        } else {
+            "host-only"
+        },
         if stamp.onto_main {
             "on main"
         } else {

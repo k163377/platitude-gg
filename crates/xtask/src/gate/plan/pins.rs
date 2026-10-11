@@ -1,6 +1,6 @@
 //! The versions the product is built and tested against — the crates',
 //! the toolchain's, Qt's, and the oldest git it supports. A branch that
-//! moves one owes the full tier, not the reach of its diff: a new version
+//! moves one owes the whole tier, not the reach of its diff: a new version
 //! breaks what no source edge leads to (反映前テストの機械化.md
 //! §版を動かす変更は段 3). It owes it where that version is built and
 //! run: the oldest git is the container's alone.
@@ -17,7 +17,7 @@ struct Pin {
     container_only: bool,
 }
 
-/// A version the branch moves, and where it owes the full tier.
+/// A version the branch moves, and where it owes the whole tier.
 pub(super) struct Moved {
     pub why: String,
     pub container_only: bool,
@@ -71,7 +71,7 @@ fn pins() -> [Pin; 5] {
 
 /// The version the branch moves between `base` and `head` that owes the
 /// most — one both sides are built with before one the container alone
-/// is — said as the reason the gate runs the full tier. A side git cannot
+/// is — said as the reason the gate runs the whole tier. A side git cannot
 /// show (the file added or taken out) counts as a move.
 pub(super) fn moved(here: &str, base: &str, head: &str, changed: &[String]) -> Option<Moved> {
     let mut moved: Vec<Pin> = pins()

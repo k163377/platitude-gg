@@ -15,7 +15,7 @@ const HEAD: &str = "\
 cargo xtask <command>
 
 commands:
-  gate [--host-only] [--all] [--fresh] [--keep-going] [--dry-run]
+  gate [--host-only] [--whole] [--fresh] [--keep-going] [--dry-run]
        [--verb <line>]... [--jobs <n>] [--dir <tree>] [--main <ref>]
       The pre-merge tests, chosen by machine (CLAUDE.md 確認は 3 段;
       internal-docs/反映前テストの機械化.md). Reads the branch's diff
@@ -60,10 +60,12 @@ commands:
       before stamping — commit the generated file and run it again.
       options:
         --host-only   the daily tier: no container; stamps the host half
-        --all         every file counts as changed — stage 2 in full, and the
-                      `periodic` tests the daily tiers leave out
+        --whole       stage 3: no diff is read, every file counts as
+                      changed; every census line on both sides (a twin
+                      is in no census) and the `periodic` tests; implies
+                      --fresh and --keep-going
         --fresh       ignore the stamps and run everything owed
-        --keep-going  run the rest after a red (--all does): a red verb
+        --keep-going  run the rest after a red (--whole does): a red verb
                       stops none of the others, the first red of a checks
                       group stops that group, and what passed is stamped.
                       A red always-step stops the run all the same
@@ -112,7 +114,7 @@ commands:
       the next tail does it again. Every removal is printed with its
       size, and so is anything that would not go. The tail of a gate and
       of a landing runs this by itself when the generation key has moved;
-      `gate --all` runs it whatever the key says. The container's build
+      `gate --whole` runs it whatever the key says. The container's build
       volume is swept through the same verb, by a tier that has a Linux
       side — never by --host-only, which starts no container at all. The
       volume is a build directory of its own, with its own rustc, key and
@@ -218,7 +220,7 @@ commands:
       git implementations out of the closure (CLAUDE.md 絶対制約), the
       registries, and the license allow list. Three checks —
       advisories fetches the RustSec database from github.com, and stage
-      2 stays offline; CI runs the full set. Needs cargo-deny installed
+      2 stays offline; CI's whole test runs all four. Needs cargo-deny installed
       (`cargo install --locked cargo-deny`), and says so when it is
       missing. `gate` runs this when deny.toml or a manifest
       moved, which is every way the closure can change.
@@ -226,7 +228,7 @@ commands:
 ";
 
 // No `"\` continuation on the opening line (see `demo_repo`).
-const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line>']...
+const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui line>']...
          [--out <dir>] [--no-build]
       Runs verify-ui lines again on the machine this stands on, one after
       another, and gathers every run's pictures and log under one
@@ -239,10 +241,11 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       read: the lines left are then named in the summary, not run.
       Nothing here writes the census or the board.
       options:
-        --tier <t>    the census lines to run: linux (the tier table's
-                      rows judged on what the fonts decide), merge (every
-                      line a gate owes before a merge), all (every line
-                      the full gate owes); none takes no census line
+        --tier <t>    the census lines to run: fonts (the tier table's
+                      rows judged on what the fonts decide), premerge
+                      (every line a gate owes before a merge), whole
+                      (every line the whole gate owes); none takes no
+                      census line
         --line <l>    a line to run besides, as it would follow verify-ui;
                       one value may hold several with ; between them
         --out <dir>   where the pictures and logs go: a directory that
@@ -534,7 +537,7 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       reading. The samplers stay up for --settle seconds after the
       command (60 by default), because what a run leaves behind is not
       the last tick of it.
-        cargo xtask footprint --settle 300 gate --all --fresh
+        cargo xtask footprint --settle 300 gate --whole
       For the question repeating a gate raises: whether the VM grows and
       what kind of memory grew. Neither side answers it alone — the VM
       process's working set (wslc's `vmmemwslc-…`) is what Windows has

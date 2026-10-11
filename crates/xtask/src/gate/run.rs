@@ -40,10 +40,10 @@ struct Options {
     dir: std::path::PathBuf,
     main_ref: String,
     host_only: bool,
-    all: bool,
+    whole: bool,
     fresh: bool,
     dry_run: bool,
-    /// Run the rest after a red ([`super::halt`]) — `--keep-going`, or `--all`.
+    /// Run the rest after a red ([`super::halt`]) — `--keep-going`, or `--whole`.
     keep_going: bool,
     verbs: Vec<String>,
     /// How many verify-ui verbs a side runs at once ([`super::sides::verbs`]).
@@ -55,7 +55,7 @@ fn options(args: &[String]) -> Result<Options, String> {
         dir: crate::tree::workspace_root(),
         main_ref: "main".to_string(),
         host_only: false,
-        all: false,
+        whole: false,
         fresh: false,
         dry_run: false,
         keep_going: false,
@@ -66,10 +66,13 @@ fn options(args: &[String]) -> Result<Options, String> {
     while let Some(arg) = args.get(at) {
         match arg.as_str() {
             "--host-only" => opts.host_only = true,
-            // Stage 3 is asked for the whole picture, not the first red.
-            "--all" => {
-                opts.all = true;
+            // Stage 3 is asked for the whole picture, not the first red,
+            // and asks every step again: what it is run for — a release, a
+            // machine's own install — moves nothing a stamp's key holds.
+            "--whole" => {
+                opts.whole = true;
                 opts.keep_going = true;
+                opts.fresh = true;
             }
             "--keep-going" => opts.keep_going = true,
             "--fresh" => opts.fresh = true,
@@ -98,7 +101,7 @@ fn options(args: &[String]) -> Result<Options, String> {
             }
             other => {
                 return Err(format!(
-                    "unknown option {other:?} (gate takes --host-only, --all, --fresh, \
+                    "unknown option {other:?} (gate takes --host-only, --whole, --fresh, \
                      --keep-going, --dry-run, --dir <tree>, --main <ref>, --verb <line>…, \
                      --jobs <n>)"
                 ));
@@ -133,7 +136,7 @@ fn gate(args: &[String]) -> Result<(), String> {
         &plan::Ask {
             main_ref: &opts.main_ref,
             host_only: opts.host_only,
-            all: opts.all,
+            whole: opts.whole,
             fresh: opts.fresh,
             extra_verbs: &opts.verbs,
         },
@@ -175,7 +178,7 @@ fn gate(args: &[String]) -> Result<(), String> {
             crate::sweep::at_a_tail(
                 &plan.dir,
                 &crate::sweep::Tail {
-                    whatever_the_key_says: opts.all,
+                    whatever_the_key_says: opts.whole,
                     the_volume_too: !opts.host_only,
                 },
             );
@@ -208,7 +211,7 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> 
         &plan::Ask {
             main_ref,
             host_only: false,
-            all: false,
+            whole: false,
             fresh: false,
             extra_verbs: &[],
         },

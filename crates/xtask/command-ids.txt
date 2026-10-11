@@ -20,10 +20,10 @@ docs.sync
 footprint.watch
 gate.daily
 gate.deps
-gate.full
 gate.install
 gate.premerge
 gate.verdict
+gate.whole
 hook.event
 land.branch
 linux.bare

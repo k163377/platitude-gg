@@ -59,7 +59,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (settle, args) = settle_for(args)?;
     let args = &args[..];
     if args.is_empty() {
-        return Err(format!("{} — e.g. `footprint gate --all`", FOOTPRINT.call));
+        return Err(format!(
+            "{} — e.g. `footprint gate --whole`",
+            FOOTPRINT.call
+        ));
     }
     let root = crate::tree::workspace_root();
     let at = crate::note::now_secs();
