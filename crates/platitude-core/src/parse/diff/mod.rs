@@ -108,6 +108,16 @@ pub struct FilePatch {
     /// git named the path unmerged and printed no patch (one side does not
     /// exist); the entry carries the path and nothing else.
     pub unmerged: bool,
+    /// The path is a gitlink — another repository's commit standing for a
+    /// folder, mode `160000` on a header line. Its patch is one
+    /// `Subproject commit` line a side, no part of which `git apply` takes
+    /// on its own.
+    pub gitlink: bool,
+    /// git's attributes give the path `filter=lfs`, so where Git LFS runs
+    /// the patch is of the pointer git stores, which a part of would leave
+    /// broken in the index (or in the file, undone). Not read off the
+    /// patch: the reader asks git and sets it (`session::query`).
+    pub lfs: bool,
     /// Which commit this patch is of, as a line to put above it: filled
     /// only where several commits' patches of a file stand one after
     /// another (`DiffTarget::Choice`, デザイン規約 §複数のコミットを選ぶ),

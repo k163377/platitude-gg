@@ -166,6 +166,9 @@ Item {
                                   + " text=" + Words.lineEndings(
                                       d.endingKind, d.endingFrom, d.endingTo,
                                   d.endingLines, d.endingScope, d.endingExt))
+                // Whether a hunk or a line puts a seat out, and the band's word: a line's mark comes up under a hand
+                // alone, so a picture without one cannot say whether the lines offer one.
+                Harness.report("diff_pieces offered=" + diffPane.piecesOffered + " whole=" + diffPane.stageOffered)
                 driver.complete()
                 return
             }

@@ -41,9 +41,11 @@ Rectangle {
     property string worktreeName: ""
     /// Whether a hunk and a line can be staged on their own. Not on a new file — its one hunk is the whole file
     /// (デザイン規約 §diff の中のステージ) — nor a conflicted one, whose combined diff `git apply` refuses (and so does
-    /// core, `stage::refuse_combined`); both keep the header's one word. Nor on another worktree's file.
+    /// core, `stage::refuse_combined`), nor a gitlink or a file through Git LFS, a part of whose patch breaks what git
+    /// stores (`DiffModel.wholeOnly`); all keep the header's one word. Nor on another worktree's file.
     readonly property bool partial: diffPane.fromWorktree && diffPane.writable
                                     && !diffPane.diffModel.isNewFile && !diffPane.combined
+                                    && !diffPane.diffModel.wholeOnly
 
     // ---- one column or two ----------------------------------------
     /// Side by side (old left, new right) rather than one column (デザイン規約 §diff を 2 列で読む). The model's: it

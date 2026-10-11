@@ -20,6 +20,7 @@ impl DiffModel {
     qproperty!("title", Member = title, Notify = changed);
     qproperty!("isBinary", Member = is_binary, Notify = changed);
     qproperty!("isNewFile", Member = is_new_file, Notify = changed);
+    qproperty!("wholeOnly", Member = whole_only, Notify = changed);
     qproperty!("isCombined", Member = is_combined, Notify = changed);
     qproperty!("unmerged", Member = unmerged, Notify = changed);
     qproperty!("embedded", Member = embedded, Notify = changed);
@@ -326,6 +327,7 @@ impl DiffModel {
         self.title = String::new();
         self.is_binary = false;
         self.is_new_file = false;
+        self.whole_only = false;
         self.is_combined = false;
         self.unmerged = false;
         self.embedded = false;
@@ -385,6 +387,7 @@ impl DiffModel {
                     }
                     self.is_binary = patches.iter().any(|p| p.is_binary);
                     self.is_new_file = is_new_file(&patches);
+                    self.whole_only = is_whole_only(&patches);
                     self.is_combined = is_combined(&patches);
                     self.unmerged = is_unmerged_only(&patches);
                     self.embedded = embedded.is_some();

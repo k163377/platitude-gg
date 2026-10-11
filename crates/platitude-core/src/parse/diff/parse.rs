@@ -111,6 +111,25 @@ impl Reading {
             }
             return true;
         }
+        // The mode lines: a gitlink says `160000` on whichever its side has
+        // (`index a..b 160000`, `new file mode 160000`, `old mode …`).
+        if [
+            "index ",
+            "new file mode ",
+            "deleted file mode ",
+            "old mode ",
+            "new mode ",
+        ]
+        .iter()
+        .any(|head| line.starts_with(head))
+        {
+            if line.ends_with(" 160000")
+                && let Some(f) = self.current.as_mut()
+            {
+                f.gitlink = true;
+            }
+            return true;
+        }
         false
     }
 
@@ -316,5 +335,46 @@ diff --git a/has space.txt b/has space.txt
     #[test]
     fn empty_input_yields_no_files() {
         assert!(parse_patch(b"").is_empty());
+    }
+
+    /// git 2.55's patch of a moved gitlink, and of one newly staged: the
+    /// mode is on the `index` line or the `new file mode` line.
+    #[test]
+    fn a_gitlink_says_so_in_its_mode() {
+        let moved = "\
+diff --git a/vendor/nest b/vendor/nest
+index 8da2dfc..1d97e67 160000
+--- a/vendor/nest
++++ b/vendor/nest
+@@ -1 +1 @@
+-Subproject commit 8da2dfce92c89b7e81b20dc0b59c3f748369c33b
++Subproject commit 1d97e6774296644ee38675b47710bf8fcef90186
+";
+        let added = "\
+diff --git a/vendor/nest b/vendor/nest
+new file mode 160000
+index 0000000..1d97e67
+--- /dev/null
++++ b/vendor/nest
+@@ -0,0 +1 @@
++Subproject commit 1d97e6774296644ee38675b47710bf8fcef90186
+";
+        let file = "\
+diff --git a/a.txt b/a.txt
+index 1111111..2222222 100644
+--- a/a.txt
++++ b/a.txt
+@@ -1 +1 @@
+-one
++two
+";
+        assert!(parse_patch(moved.as_bytes())[0].gitlink);
+        assert!(parse_patch(added.as_bytes())[0].gitlink);
+        assert!(!parse_patch(file.as_bytes())[0].gitlink);
+        assert_eq!(
+            parse_patch(moved.as_bytes())[0].hunks[0].lines.len(),
+            2,
+            "the mode line is header, not a row"
+        );
     }
 }

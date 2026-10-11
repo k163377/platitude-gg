@@ -142,6 +142,14 @@ pub fn is_new_file(patches: &[FilePatch]) -> bool {
         })
 }
 
+/// Whether the patch is one `git apply` cannot take a part of without
+/// breaking what it stores: a gitlink's `Subproject commit` line, or a file
+/// that goes through Git LFS (the pointer git keeps). The pane offers the
+/// whole file only, as for a new one (デザイン規約 §diff の中のステージ).
+pub fn is_whole_only(patches: &[FilePatch]) -> bool {
+    patches.iter().any(|p| p.gitlink || p.lfs)
+}
+
 /// Whether the diff compares its file against more than one side (a
 /// conflicted path). Nothing in it is staged or discarded piecemeal
 /// (`platitude_core::patch::is_combined` is the floor), and its rows

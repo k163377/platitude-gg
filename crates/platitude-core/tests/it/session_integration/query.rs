@@ -609,6 +609,55 @@ async fn concurrent_diffs_share_the_line_ending_setting_read() {
     session.close();
 }
 
+/// A file git's attributes send through Git LFS says so with its diff,
+/// whether or not Git LFS runs here (the isolated config defines no
+/// filter): the pane offers it whole only. A file beside it does not.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_diff_of_a_file_through_git_lfs_says_so() {
+    let mut repo = TestRepo::init();
+    repo.commit_file(
+        ".gitattributes",
+        "*.psd filter=lfs diff=lfs merge=lfs -text\n",
+        "lfs",
+    );
+    repo.commit_file("art/cover.psd", "8BPS cover v1\n", "cover");
+    repo.commit_file("notes.txt", "one\n", "notes");
+    repo.write_file("art/cover.psd", "8BPS cover v2\n");
+    repo.write_file("notes.txt", "two\n");
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+
+    let lfs_of = |path: &'static str| {
+        move |events: &[SessionEvent]| {
+            events.iter().find_map(|event| match event {
+                SessionEvent::DiffLoaded {
+                    target: DiffTarget::Unstaged { path: seen },
+                    patches,
+                    ..
+                } if seen == path => Some(patches.iter().map(|p| p.lfs).collect::<Vec<_>>()),
+                _ => None,
+            })
+        }
+    };
+    session.load_diff(DiffTarget::Unstaged {
+        path: "art/cover.psd".to_string(),
+    });
+    assert_eq!(
+        sink.wait_for("the picture file's diff", lfs_of("art/cover.psd"))
+            .await,
+        [true]
+    );
+    session.load_diff(DiffTarget::Unstaged {
+        path: "notes.txt".to_string(),
+    });
+    assert_eq!(
+        sink.wait_for("the text file's diff", lfs_of("notes.txt"))
+            .await,
+        [false]
+    );
+    session.close();
+}
+
 /// A picture's blob side has no path a URL could name, so the session
 /// writes it to a file of the run's own (`preview::PreviewFiles`).
 #[tokio::test(flavor = "multi_thread")]

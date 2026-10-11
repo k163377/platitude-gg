@@ -143,7 +143,7 @@ impl RepoSession {
         // is the source the colours are read against (`highlight`), but
         // only for a language something can be said about.
         let wants_source = crate::highlight::knows(preview::target_path(&target));
-        let (diff, endings, source, embedded) = tokio::join!(
+        let (diff, endings, source, embedded, lfs) = tokio::join!(
             async {
                 match known {
                     Some(raw) => Ok(raw),
@@ -169,6 +169,24 @@ impl RepoSession {
                     _ => None,
                 }
             },
+            // Whether the file goes through Git LFS, for a diff the pane
+            // stages or discards in parts (`FilePatch::lfs`). A read that
+            // fails answers no: the pieces stay offered.
+            async {
+                match &target {
+                    DiffTarget::Staged { path, .. } | DiffTarget::Unstaged { path } => {
+                        crate::lfs::filtered(
+                            &self.executor,
+                            &workdir,
+                            std::slice::from_ref(path),
+                            &cancel,
+                        )
+                        .await
+                        .is_ok_and(|found| !found.is_empty())
+                    }
+                    _ => false,
+                }
+            },
         );
         match diff {
             Ok(raw) => {
@@ -177,7 +195,10 @@ impl RepoSession {
                 if !self.diff_is_current(epoch) {
                     return DiffReadOutcome::Overtaken;
                 }
-                let patches = crate::parse::diff::parse_patch(&raw);
+                let mut patches = crate::parse::diff::parse_patch(&raw);
+                for patch in &mut patches {
+                    patch.lfs = lfs;
+                }
                 let fingerprint = details::fingerprint(&raw);
                 let endings = match endings {
                     EndingContext::Excluded => None,

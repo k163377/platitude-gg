@@ -156,6 +156,44 @@ pub(super) fn embedded(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// A repository of its own committed inside this one as a gitlink (no
+/// `.gitmodules`), whose own history has moved on since: the change
+/// `diff` answers as `-Subproject commit <old>` / `+Subproject commit
+/// <new>`, which a patch of one line of it cannot carry.
+pub(super) fn gitlink(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nA repository with another committed inside it.\n",
+        "docs: start the readme",
+    )?;
+    let dir = repo.work.join("vendor").join("nest");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    repo.git_at(&dir, &["init", "-b", "main"])?;
+    let inner_commit = |repo: &mut DemoRepo, text: &str, message: &str| {
+        repo.write("vendor/nest/inside.txt", text)?;
+        repo.git_at(&dir, &["add", "--", "inside.txt"])?;
+        // The nested repository has no identity configured.
+        repo.git_at(
+            &dir,
+            &[
+                "-c",
+                "user.name=Demo User",
+                "-c",
+                "user.email=demo@example.com",
+                "commit",
+                "-m",
+                message,
+            ],
+        )
+        .map(drop)
+    };
+    inner_commit(repo, "v1\n", "feat: the commit the pointer names")?;
+    repo.git(&["add", "--", "vendor/nest"])?;
+    repo.git(&["commit", "-m", "chore: pin the nested library"])?;
+    inner_commit(repo, "v2\n", "feat: move the nested library on")?;
+    Ok(())
+}
+
 /// `basic`, with a lock on `refs/heads/held` as another git would hold it
 /// mid-write: a rename onto that name git turns down for a reason no name
 /// box can see (`rename-taken held`). git lists no branch for a `.lock`.

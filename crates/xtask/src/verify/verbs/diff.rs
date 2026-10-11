@@ -98,7 +98,19 @@ pub(super) const TABLE: &[Verb] = &[
     // reached the diff cannot pass on another verb's report.
     Verb {
         name: "diff-file",
-        when: &[],
+        // A gitlink and a file through Git LFS offer the whole file alone:
+        // `git apply` cannot take a part of either without breaking what git
+        // stores (デザイン規約 §diff の中のステージ).
+        when: &[
+            (
+                Arg::WithPreset("gitlink"),
+                "diff_pieces offered=false whole=true",
+            ),
+            (
+                Arg::WithPreset("lfs"),
+                "diff_pieces offered=false whole=true",
+            ),
+        ],
         plain: "diff_row act=diff-file ready=true",
     },
     // The three buckets a file can be previewed from. `ready=` is the

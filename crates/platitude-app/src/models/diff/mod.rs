@@ -12,7 +12,8 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject,
 use crate::encode::{
     Candidates, DiffRow, Ended, Fields, LineMarks, Marks, One, Optional, Record, Runs, SplitRow,
     TextEnd, diff_key, field, flatten_patches, human_size, is_combined, is_new_file,
-    is_unmerged_only, pair_rows, source_byte, spelled_place, spelled_ranges, widest_lines,
+    is_unmerged_only, is_whole_only, pair_rows, source_byte, spelled_place, spelled_ranges,
+    widest_lines,
 };
 use crate::hub::{DiffMsg, Feed};
 
@@ -163,6 +164,9 @@ pub struct DiffModel {
     is_binary: bool,
     /// The file has no old side (`encode::is_new_file`).
     is_new_file: bool,
+    /// A gitlink or a file through Git LFS, which `git apply` cannot take a
+    /// part of (`encode::is_whole_only`).
+    whole_only: bool,
     /// git's combined diff of a conflicted path — none of it can be
     /// staged in pieces.
     is_combined: bool,

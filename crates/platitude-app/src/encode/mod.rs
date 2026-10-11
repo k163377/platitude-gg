@@ -30,7 +30,7 @@ pub use markup::{Runs, plain_byte, plain_ranges, source_byte, spelled_place, spe
 pub use mates::{Mates, mates_of};
 pub use rows::{
     DiffRow, LineMarks, Marks, SplitRow, flatten_patches, is_combined, is_new_file,
-    is_unmerged_only, pair_rows,
+    is_unmerged_only, is_whole_only, pair_rows,
 };
 pub use select::{diff_key, hunk_selection, worktree_target};
 pub use text_end::{Ended, TextEnd};
