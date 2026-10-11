@@ -293,6 +293,26 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "worktree_gone row=-1 log=false",
     },
+    // The press's in-between, held open: the row is off the list, and so is
+    // what the worktree marked — its own chip on no branch (`detached`), its
+    // branch's frame on the graph and tree mark in the branches list where it
+    // has one out (`topic`; `mark=` is that row's word, empty where `HELD`
+    // stood).
+    Verb {
+        name: "worktree-held",
+        when: &[
+            (
+                Arg::Is("topic"),
+                "worktree_held row=-1 chips=held:feature/topic-a branch=feature/topic-a mark= \
+                 worktree=topic",
+            ),
+            (
+                Arg::Is("detached"),
+                "worktree_held row=-1 chips=worktree:detached branch= mark= worktree=detached",
+            ),
+        ],
+        plain: "worktree_held row=-1",
+    },
     // git keeps a worktree holding work: the report bar in the gesture's
     // colour, the log left shut. `why=true` is the screen's own sentence
     // — git's ends in advice to force it; `mark=true` the tree mark in

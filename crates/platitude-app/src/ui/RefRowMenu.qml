@@ -125,7 +125,7 @@ Item {
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal dropStashRequested(string selector)
     /// The WORKTREE card's `worktree remove`, which takes the worktree's row off the screen at the press (`RepoTab`).
-    signal removeWorktreeRequested(string path, string name)
+    signal removeWorktreeRequested(string path, string name, string holds)
     /// Which remote branch a local one is measured against — the branch card's row, answered in the page's one bar
     /// (`UpstreamFlow`).
     signal upstreamRequested(string branch, string counterpart)
@@ -450,7 +450,7 @@ Item {
             onWorktreeHereRequested: oidHex => refRowMenu.worktreeHereRequested(oidHex)
             onWorktreeAddRequested: (mode, branch, start, path, name) =>
                 refRowMenu.worktreeAddRequested(mode, branch, start, path, name)
-            onRemoveRequested: (path, name) => refRowMenu.removeWorktreeRequested(path, name)
+            onRemoveRequested: (path, name, holds) => refRowMenu.removeWorktreeRequested(path, name, holds)
         }
         AppMenuSeparator {}
         // The same card the graph row's menu carries.

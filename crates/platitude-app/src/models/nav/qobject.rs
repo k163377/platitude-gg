@@ -181,6 +181,19 @@ impl NavSectionModel {
         self.changed();
     }
 
+    /// Draws `branch` as held by no other worktree: the one holding it is
+    /// being removed (デザイン規約 §消す操作は先に画面から消す). Empty puts the
+    /// mark back.
+    #[qslot]
+    fn set_released(&mut self, branch: String) {
+        if self.released == branch {
+            return;
+        }
+        self.released = branch;
+        self.reshape();
+        self.changed();
+    }
+
     #[qslot]
     fn set_filter(&mut self, filter: String) {
         if self.filter != filter {

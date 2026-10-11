@@ -14,10 +14,12 @@ import platitude.ui
 AppMenu {
     id: worktreeMenu
 
-    /// The worktree the card stands on, frozen by `standOn`: its path (what git removes) and its folder (what the row
-    /// says).
+    /// The worktree the card stands on, frozen by `standOn`: its path (what git removes), its folder (what the row
+    /// says) and the branch it has out (empty for none) — the folder and the branch are what it marks on the graph and
+    /// the branches list, which go with the press.
     readonly property alias path: state.path
     readonly property alias name: state.name
+    readonly property alias holds: state.holds
     /// Automation's handles into the rows, passed on through the carrying menus. Not `removeItem`, which is `Menu`'s
     /// own way to take a row off.
     readonly property alias worktreeHereItem: refWorktreeHereItem
@@ -30,12 +32,13 @@ AppMenu {
     /// The row's own branch out in a new worktree at `path`: `mode` is `branch` / `track`, `start` the remote branch a
     /// tracking one is made off, `name` the folder.
     signal worktreeAddRequested(string mode, string branch, string start, string path, string name)
-    signal removeRequested(string path, string name)
+    signal removeRequested(string path, string name, string holds)
 
     QtObject {
         id: state
         property string path: ""
         property string name: ""
+        property string holds: ""
         property bool canRemove: false
         /// Why the row is out — `locked` / `here`, or empty (`offers::worktree_card`).
         property string out: ""
@@ -63,6 +66,7 @@ AppMenu {
         const offers = facts ? GitFacts.worktreeCardOffers(facts.change, here) : []
         state.path = facts ? facts.full : ""
         state.name = facts ? facts.name : ""
+        state.holds = facts ? facts.branch : ""
         state.lockReason = offers.includes("out-locked") ? facts.reason : ""
         state.canRemove = offers.includes("remove")
         state.out = offers.includes("out-locked") ? "locked"
@@ -130,7 +134,7 @@ AppMenu {
         holdTone: Theme.textPrimary
         onHeld: {
             refWorktreeRemoveItem.closeMenu()
-            worktreeMenu.removeRequested(state.path, state.name)
+            worktreeMenu.removeRequested(state.path, state.name, state.holds)
         }
     }
 }

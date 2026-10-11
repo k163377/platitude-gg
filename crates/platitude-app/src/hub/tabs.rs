@@ -290,10 +290,11 @@ impl Hub {
             // worktree's; the log's messages stay.
             PageAfter::Standing => tab.feeds.clear_queued_reads(),
         }
-        // Rows a delete took off go back and the lists' drawn readings
-        // are dropped: the answer that would put the rows back is this
-        // session's, kept out by the retired sink, and the readings carry
-        // this session's stamps (`ops::StandIn::session_gone`).
+        // Rows a delete took off wait for the next session's lists, and
+        // the lists' drawn readings are dropped: the answer that would have
+        // put them down is this session's, kept out by the retired sink,
+        // and the readings carry this session's stamps
+        // (`ops::StandIn::session_gone`).
         tab.stand_in.session_gone();
         self.park_writes_of(&session);
         true

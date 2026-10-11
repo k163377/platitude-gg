@@ -550,6 +550,11 @@ fn a_branch_another_worktree_holds_wears_the_state_in_the_shared_slot() {
         "HELD"
     );
     assert_eq!(model.told(Role::Name, "main", Role::Change), "");
+
+    // The worktree holding it is being removed: nobody's until the listing says
+    // (デザイン規約 §消す操作は先に画面から消す).
+    model.released = "feature/topic-a".to_string();
+    assert_eq!(model.told(Role::Name, "feature/topic-a", Role::Change), "");
 }
 
 /// By name, not flag, so the badge and the line it opens cannot disagree

@@ -129,17 +129,32 @@ pub fn chips_of(labels: &[RefLabel], pr: &std::collections::HashSet<String>) -> 
     )
 }
 
+/// What the gone set calls the mark a worktree going puts on the branch it
+/// has out — the green frame and its padlock. Not a kind word: the mark is
+/// no chip of its own.
+const HELD_KEY: &str = "held";
+
 /// The gone set: the keys of chips shown as gone while git is still
-/// deleting their refs — one per kind at most, empty halves left out.
-pub fn gone_keys(branch: &str, remote: &str, tag: &str) -> Vec<String> {
-    [("branch", branch), ("remote", remote), ("tag", tag)]
-        .into_iter()
-        .filter(|(_, name)| !name.is_empty())
-        .map(|(kind, name)| chip_key(kind, name))
-        .collect()
+/// deleting their refs — one per kind at most, empty halves left out — and,
+/// for a worktree going, its chip (`worktree`, by the folder's name) or the
+/// mark it puts on the branch it has out (`held`, by the branch's).
+pub fn gone_keys(branch: &str, remote: &str, tag: &str, worktree: &str, held: &str) -> Vec<String> {
+    [
+        ("branch", branch),
+        ("remote", remote),
+        ("tag", tag),
+        ("worktree", worktree),
+        (HELD_KEY, held),
+    ]
+    .into_iter()
+    .filter(|(_, name)| !name.is_empty())
+    .map(|(kind, name)| chip_key(kind, name))
+    .collect()
 }
 
-/// The chips less the gone set (デザイン規約 §消す操作は先に画面から消す).
+/// The chips less the gone set (デザイン規約 §消す操作は先に画面から消す): a
+/// branch whose worktree is going keeps its chip and loses that worktree's
+/// mark.
 pub fn chips_shown(chips: &Chips, gone: &[String]) -> Chips {
     if gone.is_empty() {
         return chips.clone();
@@ -148,7 +163,17 @@ pub fn chips_shown(chips: &Chips, gone: &[String]) -> Chips {
         chips
             .iter()
             .filter(|chip| !gone.contains(&chip.key()))
-            .cloned()
+            .map(|chip| {
+                if chip.held && gone.contains(&chip_key(HELD_KEY, &chip.name)) {
+                    Chip {
+                        held: false,
+                        locked: false,
+                        ..chip.clone()
+                    }
+                } else {
+                    chip.clone()
+                }
+            })
             .collect(),
     )
 }
@@ -337,20 +362,64 @@ mod tests {
         ]);
         // A tag sharing the branch's name stays: the kind is part of the
         // identity.
-        let shown = chips_shown(&chips, &gone_keys("main", "", ""));
+        let shown = chips_shown(&chips, &gone_keys("main", "", "", "", ""));
         assert_eq!(shown.len(), 2);
         assert_eq!(shown[0].kind, LabelKind::Tag);
         assert_eq!(shown[1].name, "origin/main");
         assert_eq!(
-            chips_shown(&chips, &gone_keys("main", "origin/main", "main")),
+            chips_shown(&chips, &gone_keys("main", "origin/main", "main", "", "")),
             Chips::default()
         );
         assert_eq!(chips_shown(&chips, &[]), chips);
         assert_eq!(
-            chips_shown(&Chips::default(), &gone_keys("main", "", "")),
+            chips_shown(&Chips::default(), &gone_keys("main", "", "", "", "")),
             Chips::default()
         );
-        assert!(gone_keys("", "", "").is_empty());
-        assert_eq!(gone_keys("main", "", "v1"), ["branch:main", "tag:v1"]);
+        assert!(gone_keys("", "", "", "", "").is_empty());
+        assert_eq!(
+            gone_keys("main", "", "v1", "", ""),
+            ["branch:main", "tag:v1"]
+        );
+    }
+
+    /// A worktree going takes its chip where it is on no branch, and the
+    /// branch's frame and padlock where it has one out — the branch's chip
+    /// stays, and so does every other worktree's.
+    #[test]
+    fn the_gone_set_takes_a_worktree_and_what_it_marks() {
+        let held = RefLabel {
+            held_elsewhere: true,
+            locked: true,
+            ..label("topic", LabelKind::LocalBranch)
+        };
+        let other = RefLabel {
+            held_elsewhere: true,
+            ..label("other", LabelKind::LocalBranch)
+        };
+        let chips = chips_no_pr(&[
+            held,
+            other,
+            label("spike", LabelKind::Worktree),
+            label("loose", LabelKind::Worktree),
+        ]);
+
+        let shown = chips_shown(&chips, &gone_keys("", "", "", "", "topic"));
+        assert_eq!(shown.len(), 4);
+        assert!(!shown[0].held && !shown[0].locked, "{:?}", shown[0]);
+        assert!(shown[1].held, "another worktree's branch keeps its frame");
+
+        let shown = chips_shown(&chips, &gone_keys("", "", "", "spike", ""));
+        assert_eq!(
+            shown
+                .iter()
+                .map(|chip| chip.name.as_str())
+                .collect::<Vec<_>>(),
+            ["topic", "other", "loose"]
+        );
+        assert!(shown[0].held, "a worktree on no branch marks no branch");
+        assert_eq!(
+            gone_keys("", "", "", "spike", "topic"),
+            ["worktree:spike", "held:topic"]
+        );
     }
 }

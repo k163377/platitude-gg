@@ -12,6 +12,13 @@ pub enum Row {
     Stash,
     /// A worktree, by its path as git lists it.
     Worktree,
+    /// What the graph draws of a worktree going on no branch: the chip with
+    /// its folder's name. Rides on [`Row::Worktree`] — taken and put back
+    /// with it; no list draws it alone.
+    WorktreeChip,
+    /// The branch a worktree going has out, which the graph's chip and the
+    /// branches list mark as another worktree's. Rides on [`Row::Worktree`].
+    WorktreeBranch,
 }
 
 impl Row {
@@ -43,6 +50,11 @@ pub struct Rows {
     pub tag: String,
     pub stash: String,
     pub worktree: String,
+    /// [`Row::WorktreeChip`]: the folder's name, empty for a worktree with a
+    /// branch out.
+    pub worktree_chip: String,
+    /// [`Row::WorktreeBranch`]: empty for a worktree on no branch.
+    pub worktree_branch: String,
 }
 
 impl Rows {
@@ -52,19 +64,16 @@ impl Rows {
         if name.is_empty() {
             return;
         }
-        let seat = match row {
-            Row::Branch => &mut self.branch,
-            Row::Remote => &mut self.remote,
-            Row::Tag => &mut self.tag,
-            Row::Stash => &mut self.stash,
-            Row::Worktree => &mut self.worktree,
-        };
-        *seat = name.to_string();
+        *self.seat(row) = name.to_string();
     }
 
-    /// Puts one kind back, whatever it was.
+    /// Puts one kind back, whatever it was — a worktree with what it marked.
     fn clear(&mut self, row: Row) {
         self.seat(row).clear();
+        if row == Row::Worktree {
+            self.worktree_chip.clear();
+            self.worktree_branch.clear();
+        }
     }
 
     fn seat(&mut self, row: Row) -> &mut String {
@@ -74,9 +83,12 @@ impl Rows {
             Row::Tag => &mut self.tag,
             Row::Stash => &mut self.stash,
             Row::Worktree => &mut self.worktree,
+            Row::WorktreeChip => &mut self.worktree_chip,
+            Row::WorktreeBranch => &mut self.worktree_branch,
         }
     }
 
+    /// The marks ride on their worktree: without it they stand nothing in.
     fn is_empty(&self) -> bool {
         self.branch.is_empty()
             && self.remote.is_empty()
@@ -101,17 +113,24 @@ struct Applied {
 }
 
 impl Applied {
+    /// A worktree's marks are drawn off the refs — the chip by the graph, the
+    /// branch's mark by the branches list — so its row waits for the refs as
+    /// well as its own listing: let go before them, a mark the refs still
+    /// carry would stand again until they arrive.
     fn at(&self, row: Row) -> u64 {
         match row {
             Row::Branch => self.branch,
             Row::Remote => self.remote,
             Row::Tag => self.tag,
             Row::Stash => self.stash,
-            Row::Worktree => self.worktree,
+            Row::Worktree | Row::WorktreeChip | Row::WorktreeBranch => {
+                self.worktree.min(self.branch)
+            }
         }
     }
 
-    /// Writes down a reading that list has drawn; the newest stands.
+    /// Writes down a reading that list has drawn; the newest stands. The
+    /// marks have no list of their own (`Row::drawn_by`).
     fn note(&mut self, row: Row, at: u64) {
         let seat = match row {
             Row::Branch => &mut self.branch,
@@ -119,10 +138,15 @@ impl Applied {
             Row::Tag => &mut self.tag,
             Row::Stash => &mut self.stash,
             Row::Worktree => &mut self.worktree,
+            Row::WorktreeChip | Row::WorktreeBranch => return,
         };
         *seat = (*seat).max(at);
     }
 }
+
+/// What [`StandIn::session_gone`] waits on in place of an id: the rows a gone
+/// session took away, which no answer can name.
+const CARRIED: u64 = u64::MAX;
 
 /// One delete, from the press to the reading that proves it: the rows it
 /// took off the screen, the write they are waiting on, and how far that
@@ -236,15 +260,34 @@ impl StandIn {
         }
     }
 
-    /// The session behind this tab is gone (`Hub::release_tab`), and with
-    /// it every list that was drawing these rows and every number they
-    /// were measured by.
+    /// The session behind this tab is gone (`Hub::release_tab` /
+    /// `Hub::restand_tab`), and with it every list that was drawing these
+    /// rows and every number they were measured by.
     ///
-    /// Wider than [`Self::put_back`]: a new session counts its reads from
-    /// zero (`session::Standing`), so a stamp kept from the last one would
-    /// answer for a delete no listing has been read for.
+    /// The rows stay gone until the next session's own lists have drawn a
+    /// reading: no answer is coming from the gone one (its sink is retired),
+    /// but a local write it let run on is still at work — a worktree's
+    /// folder can take minutes to delete — and a page that stays (a tab stood
+    /// in another worktree) would draw the row back from the listing it
+    /// holds. The next session's reading is the truth either way: it leaves
+    /// out a worktree still being removed (`platitude_core`'s
+    /// `session::removals`), and has what a cancelled or refused write left.
+    ///
+    /// The numbers go: a new session counts its reads from zero
+    /// (`session::Standing`), so a stamp kept from the last one would answer
+    /// for a delete no listing has been read for.
     pub fn session_gone(&mut self) {
+        let rows = std::mem::take(&mut self.rows);
         *self = Self::default();
+        if rows.is_empty() {
+            return;
+        }
+        self.rows = rows;
+        // Nothing the gone session numbered can be this id again.
+        self.waiting = CARRIED;
+        self.landed = true;
+        // Any reading of the next session: its stamps start at 1.
+        self.reads_from = 1;
     }
 
     /// The rows to draw as gone.

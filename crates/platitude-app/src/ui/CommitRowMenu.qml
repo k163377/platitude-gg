@@ -106,7 +106,7 @@ Item {
     /// its own, the row's own branch out in one, and `worktree remove`.
     signal worktreeHereRequested(string oidHex)
     signal worktreeAddRequested(string mode, string branch, string start, string path, string name)
-    signal removeWorktreeRequested(string path, string name)
+    signal removeWorktreeRequested(string path, string name, string holds)
     /// The menu went away — and the stacked list it may have been standing on is the pointer's to answer for again.
     signal dismissed()
     /// A level of this menu waited for a git command and it has ended with the menu up: the page reads again what the
@@ -396,7 +396,7 @@ Item {
             onWorktreeHereRequested: oidHex => rowMenu.worktreeHereRequested(oidHex)
             onWorktreeAddRequested: (mode, branch, start, path, name) =>
                 rowMenu.worktreeAddRequested(mode, branch, start, path, name)
-            onRemoveRequested: (path, name) => rowMenu.removeWorktreeRequested(path, name)
+            onRemoveRequested: (path, name, holds) => rowMenu.removeWorktreeRequested(path, name, holds)
         }
         AppMenuSeparator {}
         // The same TAG card as the sidebar's: `Create tag here…` always, and the tag's own rows where the row draws

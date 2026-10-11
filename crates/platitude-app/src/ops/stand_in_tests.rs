@@ -34,6 +34,20 @@ fn branch_asked() -> StandIn {
     gone
 }
 
+/// A worktree on no branch taken away, with the chip the graph draws of it.
+fn worktree_asked() -> StandIn {
+    let mut gone = StandIn::default();
+    gone.asked(
+        &[
+            (Row::Worktree, "C:/work/topic"),
+            (Row::WorktreeChip, "topic"),
+            (Row::WorktreeBranch, ""),
+        ],
+        Some(OURS),
+    );
+    gone
+}
+
 /// …and git took it, with the fence its listings are measured against.
 fn branch_landed() -> StandIn {
     let mut gone = branch_asked();
@@ -270,14 +284,49 @@ fn a_second_press_takes_the_wait_over_without_putting_the_first_back() {
     assert_eq!(gone.rows(), &Rows::default());
 }
 
+/// The gone session's answer never comes, and the write it let run on may
+/// still be deleting: the rows wait for the next session's own listing.
 #[test]
-fn letting_the_session_go_puts_every_row_back() {
-    let mut gone = branch_asked();
+fn letting_the_session_go_keeps_the_rows_until_the_next_session_lists() {
+    let mut gone = worktree_asked();
     gone.session_gone();
-    assert_eq!(gone.rows(), &Rows::default());
-    // …and the write it waited on is over with it: an answer from the next
-    // session is not this press's.
+    assert_eq!(gone.rows().worktree, "C:/work/topic");
+    assert_eq!(gone.rows().worktree_chip, "topic");
+    // An answer under the gone session's id is not one this can hear.
     gone.answered(OURS, true, FENCE);
+    assert_eq!(gone.rows().worktree, "C:/work/topic");
+    // The next session's first readings, stamped from 1.
+    gone.listing_applied(Row::Worktree, 1);
+    gone.look_again();
+    assert_eq!(
+        gone.rows().worktree,
+        "C:/work/topic",
+        "the chip is still the refs' to say"
+    );
+    gone.listing_applied(Row::Branch, 1);
+    gone.look_again();
+    assert_eq!(gone.rows(), &Rows::default());
+}
+
+#[test]
+fn letting_a_session_with_nothing_stood_in_go_leaves_nothing_waiting() {
+    let mut gone = StandIn::default();
+    gone.session_gone();
+    every_list_drew(&mut gone, 1);
+    assert_eq!(gone.rows(), &Rows::default());
+}
+
+/// A press in the next session takes the wait over; the rows carried from
+/// the last one go with its listing.
+#[test]
+fn a_press_after_the_session_went_takes_the_wait_over() {
+    let mut gone = worktree_asked();
+    gone.session_gone();
+    gone.asked(&[(Row::Branch, "feature/x")], Some(SOMEBODY_ELSE));
+    every_list_drew(&mut gone, 1);
+    assert_eq!(gone.rows().worktree, "C:/work/topic");
+    gone.answered(SOMEBODY_ELSE, false, 3);
+    every_list_drew(&mut gone, 3);
     assert_eq!(gone.rows(), &Rows::default());
 }
 
@@ -352,5 +401,36 @@ fn a_removed_worktree_waits_for_its_own_listing() {
     assert_eq!(gone.rows().worktree, "C:/work/topic");
     gone.listing_applied(Row::Worktree, AFTERWARDS);
     gone.look_again();
+    assert_eq!(gone.rows(), &Rows::default());
+}
+
+/// The chip and the branch's mark are drawn off the refs: the worktree's own
+/// listing is not enough to let them go.
+#[test]
+fn a_removed_worktree_s_marks_wait_for_the_refs_too() {
+    let mut gone = StandIn::default();
+    gone.asked(
+        &[
+            (Row::Worktree, "C:/work/out"),
+            (Row::WorktreeChip, ""),
+            (Row::WorktreeBranch, "topic"),
+        ],
+        Some(OURS),
+    );
+    assert_eq!(gone.rows().worktree_branch, "topic");
+    gone.answered(OURS, false, FENCE);
+    gone.listing_applied(Row::Worktree, AFTERWARDS);
+    gone.look_again();
+    assert_eq!(gone.rows().worktree_branch, "topic");
+    gone.listing_applied(Row::Branch, AFTERWARDS);
+    gone.look_again();
+    assert_eq!(gone.rows(), &Rows::default());
+}
+
+/// Refused, the worktree comes back with what it marked.
+#[test]
+fn a_refused_removal_puts_the_marks_back_with_the_row() {
+    let mut gone = worktree_asked();
+    gone.answered(OURS, true, FENCE);
     assert_eq!(gone.rows(), &Rows::default());
 }

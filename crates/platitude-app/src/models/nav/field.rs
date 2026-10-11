@@ -87,7 +87,12 @@ impl NavSectionModel {
             Role::Change => match of {
                 Entry::File { item, bucket } => Value::Spelled(letters_of(item, bucket)),
                 // Shares the worktree rows' slot and seat (`item::HELD`).
-                Entry::Local(branch) if branch.held_elsewhere => Value::Said(HELD),
+                // Not while the worktree holding it is being removed.
+                Entry::Local(branch)
+                    if branch.held_elsewhere && branch.short.as_str() != self.released =>
+                {
+                    Value::Said(HELD)
+                }
                 // The checkout's state, in the shared slot
                 // (`item::LOCKED`).
                 Entry::Worktree { entry, .. } => Value::Said(if entry.locked {

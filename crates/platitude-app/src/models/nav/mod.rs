@@ -164,6 +164,11 @@ pub struct NavSectionModel {
     /// decided by `ops::StandIn`; the page only hands over what to draw
     /// without.
     hidden: Vec<String>,
+    /// Branches section only: the branch whose worktree is being removed,
+    /// drawn as nobody's while git is still asked (`HELD` left off — the
+    /// worktree's own row is the worktrees section's `hidden`). Empty for
+    /// none; when it comes back is `ops::StandIn`'s, as for `hidden`.
+    released: String,
     total: i32,
     /// Rows on screen — what filtering, folding and the run leave shown.
     /// A property because the pane's share of room is bound to it.

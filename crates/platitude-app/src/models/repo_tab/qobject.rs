@@ -100,6 +100,16 @@ impl RepoTab {
     qproperty!("goneTag", Member = gone_tag, Notify = changed);
     qproperty!("goneStash", Member = gone_stash, Notify = changed);
     qproperty!("goneWorktree", Member = gone_worktree, Notify = changed);
+    qproperty!(
+        "goneWorktreeChip",
+        Member = gone_worktree_chip,
+        Notify = changed
+    );
+    qproperty!(
+        "goneWorktreeBranch",
+        Member = gone_worktree_branch,
+        Notify = changed
+    );
     qproperty!("authorName", Member = author_name, Notify = changed);
     qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("authorAvatar", Member = author_avatar, Notify = changed);
@@ -986,10 +996,13 @@ impl RepoTab {
     }
 
     /// `git worktree remove` (destructive): the worktree's row goes at the
-    /// press. `name` is the row's own word for it, for a refusal's heading.
+    /// press, with the chip and the branch mark it wears on the graph and the
+    /// branches list. `name` is the row's own word for it, for a refusal's
+    /// heading and the chip of one on no branch; `branch` the branch it has
+    /// out, empty for none.
     #[qslot]
-    fn remove_worktree(&mut self, path: String, name: String) {
-        self.worktree_remove(path, name);
+    fn remove_worktree(&mut self, path: String, name: String, branch: String) {
+        self.worktree_remove(path, name, branch);
     }
 
     /// One of the sidebar's lists has drawn a reading; what that proves

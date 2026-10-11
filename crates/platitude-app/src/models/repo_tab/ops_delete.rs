@@ -153,10 +153,20 @@ impl RepoTab {
     }
 
     /// `git worktree remove`. The WORKTREES row goes, keyed by the path
-    /// the row carries; the branch it had out keeps its row.
-    pub(super) fn worktree_remove(&mut self, path: String, name: String) {
+    /// the row carries, and with it what the worktree marks: the chip with
+    /// its folder's name where it is on no branch, the branch's mark as
+    /// another worktree's where it has one out — the branch keeps its row.
+    pub(super) fn worktree_remove(&mut self, path: String, name: String, branch: String) {
         let asked = self.ask_session(|s| s.remove_worktree(path.clone(), name.clone()));
-        self.took_away(&[(Row::Worktree, &path)], asked);
+        let chip = if branch.is_empty() { name.as_str() } else { "" };
+        self.took_away(
+            &[
+                (Row::Worktree, &path),
+                (Row::WorktreeChip, chip),
+                (Row::WorktreeBranch, &branch),
+            ],
+            asked,
+        );
     }
 
     /// git's answer to any write. Refused, the rows come back before the
@@ -197,7 +207,7 @@ impl RepoTab {
         }
     }
 
-    /// Moves this tab's stand-in on and copies its picture into the five
+    /// Moves this tab's stand-in on and copies its picture into the
     /// `gone_*`, saying whether they moved. The copy keeps bindings out of
     /// the hub's borrow (rules/app-ui.md §Qt Bridges・QML の不変条件).
     fn stand_in(&mut self, f: impl FnOnce(&mut StandIn)) -> bool {
@@ -207,6 +217,8 @@ impl RepoTab {
             && rows.tag == self.gone_tag
             && rows.stash == self.gone_stash
             && rows.worktree == self.gone_worktree
+            && rows.worktree_chip == self.gone_worktree_chip
+            && rows.worktree_branch == self.gone_worktree_branch
         {
             return false;
         }
@@ -215,6 +227,8 @@ impl RepoTab {
         self.gone_tag = rows.tag;
         self.gone_stash = rows.stash;
         self.gone_worktree = rows.worktree;
+        self.gone_worktree_chip = rows.worktree_chip;
+        self.gone_worktree_branch = rows.worktree_branch;
         true
     }
 }

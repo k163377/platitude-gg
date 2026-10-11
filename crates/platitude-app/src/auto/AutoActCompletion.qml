@@ -131,7 +131,7 @@ QtObject {
                 "tag-chip-menu", "tag-line-menu",
                 // The menu and its WORKTREE card open from a sampler once the row is laid out; the pressing ones click
                 // from there and wait for the list the worktree leaves, or for the bar git's refusal comes down in.
-                "worktree-menu", "worktree-remove", "worktree-remove-refused", "worktree-graph",
+                "worktree-menu", "worktree-remove", "worktree-remove-refused", "worktree-graph", "worktree-held",
                 // The same for the rows that make a worktree (`AutoActWorktreeVerbs`); the two that land stand the tab
                 // in the new worktree, which the window reads (`WindowTabActs`).
                 "worktree-add-menu", "worktree-box", "worktree-new-refused", "worktree-add", "worktree-new",

@@ -46,6 +46,8 @@ impl Default for RepoTab {
             gone_tag: String::new(),
             gone_stash: String::new(),
             gone_worktree: String::new(),
+            gone_worktree_chip: String::new(),
+            gone_worktree_branch: String::new(),
             signature_wanted: String::new(),
             author_name: String::new(),
             author_email: String::new(),

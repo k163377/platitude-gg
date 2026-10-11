@@ -172,6 +172,11 @@ pub struct RepoTab {
     gone_tag: String,
     gone_stash: String,
     gone_worktree: String,
+    /// What the graph and the branches list draw of the worktree going: its
+    /// chip's name where it is on no branch, the branch it has out where it
+    /// is on one (`ops::Row::WorktreeChip` / `WorktreeBranch`).
+    gone_worktree_chip: String,
+    gone_worktree_branch: String,
     /// The commit the standing `checkSignature` is about — the question,
     /// where `signature_oid` and its three are the answer.
     ///

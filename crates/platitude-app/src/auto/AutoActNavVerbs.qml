@@ -182,17 +182,20 @@ Item {
             acts.peekGoneWanted = false
             navRailTimer.start()
         } else if (act === "worktree-menu" || act === "worktree-remove" || act === "worktree-remove-refused"
-                   || act === "worktree-graph") {
+                   || act === "worktree-graph" || act === "worktree-held") {
             // A worktree's WORKTREE card, raised where a hand raises it: its WORKTREES row's right-click (the row's
             // own press), or the graph row its chip is on (`worktree-graph`, the row's own right-click door). The
             // argument is the worktree's folder, `:go` on the graph one to press. The menu verb stands the card (a
             // greyed row wears its tip); the others press `worktree remove` — landing, or refused by git into the
-            // report bar.
+            // report bar. `worktree-held` holds the in-between open: what the press took off the screen before
+            // anything was read again.
             const go = arg.endsWith(":go")
             worktreeMenuTimer.worktree = go ? arg.slice(0, -3) : arg
             worktreeMenuTimer.onGraph = act === "worktree-graph"
             worktreeMenuTimer.press = act === "worktree-remove" || act === "worktree-remove-refused" || go
+                                      || act === "worktree-held"
             worktreeMenuTimer.refused = act === "worktree-remove-refused"
+            worktreeMenuTimer.holding = act === "worktree-held"
             worktreeMenuTimer.start()
         } else {
             return false
@@ -227,6 +230,7 @@ Item {
         property bool onGraph: false
         property bool press: false
         property bool refused: false
+        property bool holding: false
         readonly property var menu: worktreeMenuTimer.onGraph ? acts.commitMenu : acts.refMenu
         readonly property var card: worktreeMenuTimer.onGraph ? driver.commitWorktreeCard : driver.refWorktreeCard
         /// Raises the menu, through the row's own door. False while the row is not there yet.
@@ -307,7 +311,10 @@ Item {
             }
             // The presses, as a hand makes them: the row's handler folds the menus and asks for the removal. A row out
             // of reach takes none (`AppMenuItem.completeHold`), and the sampler presses again on its next beat, naming
-            // the stage it waits at.
+            // the stage it waits at. The in-between is held before the press: a demo repository's listing would let
+            // it go before a picture could be grabbed (`RepoPage.holdGoneRows`).
+            if (worktreeMenuTimer.holding)
+                page.holdGoneRows = true
             const went = driver.pressWrite("worktree-remove", () => item.completeHold())
             Awaited.at(Harness.autoAct, went ? "pressed" : "row in reach")
             if (!went)
@@ -316,8 +323,32 @@ Item {
             // git keeps the worktree and says why: the bar is the answer, and the log stays shut (`write_notice log=`).
             if (worktreeMenuTimer.refused)
                 driver.barrierNotice.start()
+            else if (worktreeMenuTimer.holding)
+                worktreeHeldTimer.start()
             else
                 worktreeGoneTimer.start()
+        }
+    }
+    // What the press took off the screen, with git done and the listing that would let it go withheld: the row, and
+    // what the worktree marked — its chip on the graph (on no branch), or its branch's frame and the branches list's
+    // tree mark. The screen cannot tell a mark the window hides from one the refs no longer carry, so the claim is the
+    // gone set and the branch row's own word (`mark=`, empty where `HELD` was).
+    SampleTimer {
+        id: worktreeHeldTimer
+        onTriggered: {
+            if (!driver.wroteAndSettled())
+                return
+            worktreeHeldTimer.stop()
+            const branch = repoTab.goneWorktreeBranch
+            const list = navProbe.listOf("branch")
+            const at = branch === "" ? -1 : branchesModel.rowOfName(branch)
+            const row = at < 0 || !list ? null : list.itemAtIndex(at)
+            Harness.report("worktree_held row=" + acts.worktreeRow(worktreeMenuTimer.worktree)
+                              + " chips=" + graphModel.goneChips.join(",")
+                              + " branch=" + branch
+                              + " mark=" + (row === null ? "" : row.change)
+                              + " worktree=" + worktreeMenuTimer.worktree)
+            renderedBarrier.begin()
         }
     }
     // A removed worktree, judged on the list it leaves: gone at the press and still gone once git's listing is in.

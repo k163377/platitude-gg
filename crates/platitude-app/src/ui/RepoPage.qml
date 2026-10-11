@@ -932,7 +932,7 @@ FocusScope {
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onDropStashRequested: selector => page.dropStashNow(selector)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
-            onRemoveWorktreeRequested: (path, name) => repoTab.removeWorktree(path, name)
+            onRemoveWorktreeRequested: (path, name, holds) => repoTab.removeWorktree(path, name, holds)
         }
     }
     // What a remote itself offers. Its own menu: a remote is repository configuration, and the ref menu is about
@@ -1156,10 +1156,16 @@ FocusScope {
     readonly property string goneTag: repoTab.goneTag
     readonly property string goneStash: repoTab.goneStash
     readonly property string goneWorktree: repoTab.goneWorktree
+    /// What the worktree going marks elsewhere: its chip on the graph where it is on no branch, the branch it has out
+    /// where it has one (that branch's frame on the graph, its mark in the branches list).
+    readonly property string goneWorktreeChip: repoTab.goneWorktreeChip
+    readonly property string goneWorktreeBranch: repoTab.goneWorktreeBranch
     /// The chips that go with the rows are the graph model's to key (`GraphModel.setGone` / `encode::gone_keys`). A
-    /// dropped stash has no chip: it is a graph row, not a name on one, and a row only leaves with the walk.
+    /// dropped stash has no chip: it is a graph row, not a name on one, which the session lays out again without
+    /// (`session::leaving`).
     function syncGone() {
-        graphModel.setGone(page.goneBranch, page.goneRemote, page.goneTag)
+        graphModel.setGone(page.goneBranch, page.goneRemote, page.goneTag, page.goneWorktreeChip,
+                           page.goneWorktreeBranch)
     }
     onGoneBranchChanged: {
         branchesModel.setHidden(page.goneBranch)
@@ -1174,8 +1180,12 @@ FocusScope {
         page.syncGone()
     }
     onGoneStashChanged: stashesModel.setHidden(page.goneStash)
-    // No chip: a worktree is marked on the graph by its checkout, which the listing that proves it gone redraws.
     onGoneWorktreeChanged: worktreesModel.setHidden(page.goneWorktree)
+    onGoneWorktreeChipChanged: page.syncGone()
+    onGoneWorktreeBranchChanged: {
+        branchesModel.setReleased(page.goneWorktreeBranch)
+        page.syncGone()
+    }
 
     /// Automation: holds a row taken away before git answers, for its picture — asked before the press, since a demo
     /// repository answers before the grab (verify-ui スキル §壊れない動詞の実装と反復). Held by withholding
@@ -1345,7 +1355,7 @@ FocusScope {
             // The branch card's own rows, answered where the ref menu's are.
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
-            onRemoveWorktreeRequested: (path, name) => repoTab.removeWorktree(path, name)
+            onRemoveWorktreeRequested: (path, name, holds) => repoTab.removeWorktree(path, name, holds)
             // The remote-ref deletes go through `CommitMenuState`, beside the lookups their cards read.
             onCherryPickRequested: oidHex => repoTab.cherryPick(oidHex)
             onRevertRequested: oidHex => repoTab.revert(oidHex)

@@ -37,11 +37,10 @@ impl RepoTab {
         self.branch_delete_landed = String::new();
         self.branch_delete_refused = String::new();
         self.branch_delete_answer = -1;
-        self.gone_branch = String::new();
-        self.gone_remote = String::new();
-        self.gone_tag = String::new();
-        self.gone_stash = String::new();
-        self.gone_worktree = String::new();
+        // What a delete took away stays gone until the next session's lists
+        // say (`ops::StandIn::session_gone`): the staying page would draw it
+        // back from the listing it holds.
+        self.read_stand_in();
         // The ask goes and the answer stays: a read still out answers
         // nowhere, and the page asks again (`RepoPage.standSettled`).
         self.signature_wanted = String::new();
