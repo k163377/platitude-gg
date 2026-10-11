@@ -95,6 +95,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "worktree_draft empty=true back=true wip=true kept=true",
     },
+    // The worktree the tab stands in, its folder renamed: the tab stands in
+    // the new folder (one tab, the page and its graph kept), the words written
+    // there went with it (`Hub::carry_draft`), the box came down and the old
+    // folder is listed no more. None of it is a picture's: the strip and the
+    // rows draw the same for a tab that never moved but was renamed in place.
+    Verb {
+        name: "worktree-rename-stand",
+        when: &[],
+        plain: "worktree_follow stood=true tabs=1 grew=false kept=true draft=true box=false gone=true",
+    },
     // The path under the hand on such a tab. `worktree=`: the words name the
     // worktree the tab stands in, not the repository it is named after — they
     // differ only on a tab that has been stood somewhere. `tip=` is the

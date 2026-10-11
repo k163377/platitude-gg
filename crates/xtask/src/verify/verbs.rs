@@ -37,12 +37,18 @@ pub(super) enum Arg {
     /// differ only in preset are two states, and one line for both would
     /// go on passing after they stop differing (`corner`).
     WithPreset(&'static str),
+    /// The whole argument, in a run on Windows — where the app keeps to
+    /// rules the other systems do not (a folder's name: `worktrees::Disk`).
+    /// The same argument's row for the others follows it. Judged where the
+    /// run is, so the container's run reads the next row.
+    IsOnWindows(&'static str),
 }
 
 impl Arg {
     fn answers(&self, arg: &str, presets: &[String]) -> bool {
         match self {
             Self::Is(want) => arg == *want,
+            Self::IsOnWindows(want) => cfg!(windows) && arg == *want,
             Self::OneOf(any) => any.contains(&arg),
             Self::Starts(head) => arg.starts_with(head),
             Self::Ends(tail) => arg.ends_with(tail),
@@ -174,6 +180,28 @@ mod tests {
             must_say("stash", "", &[]),
             must_say("stash", "anything else", &[])
         );
+    }
+
+    /// A Windows row answers on Windows alone, and the same argument's next
+    /// row answers everywhere else.
+    #[test]
+    fn a_windows_row_answers_only_on_windows() {
+        let said = must_say("worktree-rename-box", "detached=CON", &[]);
+        let row = |os: &str| {
+            format!(
+                "worktree_rename_box where=nav open=true withheld=false kind=worktreeFolder \
+                 placeholder=Worktree name text=CON refused={} tip={} mark= why={}",
+                os == "windows",
+                os == "windows",
+                if os == "windows" {
+                    "Not a folder name on Windows — CON is kept for a device"
+                } else {
+                    ""
+                }
+            )
+        };
+        let here = if cfg!(windows) { "windows" } else { "posix" };
+        assert_eq!(said.map(str::to_string), Some(row(here)));
     }
 
     #[test]

@@ -42,6 +42,10 @@ Item {
             "worktree-new": "new",
             "worktree-new-refused": "refused"
         }
+        if (act === "worktree-rename-box" || act === "worktree-rename") {
+            renameTimer.begin(arg, act === "worktree-rename")
+            return true
+        }
         if (modes[act] === undefined)
             return false
         worktreeTimer.begin(arg, modes[act])
@@ -156,9 +160,9 @@ Item {
             if (item === null)
                 return false
             // The row's own right-click: aimed at the chip of the name, or at the row's first one for a worktree, or at
-            // nothing on a bare commit (`GraphRowDelegate.menuChip`).
+            // nothing on a bare commit (`GraphRowDelegate.nameChip`).
             const chip = worktreeTimer.kind === "commit" ? null
-                       : worktreeTimer.kind === "worktree" ? item.menuChip
+                       : worktreeTimer.kind === "worktree" ? item.nameChip
                        : { "kind": worktreeTimer.kind, "name": worktreeTimer.ref }
             acts.graphPane.view.rowMenuRequested(worktreeTimer.oid, chip)
             acts.standMenuOn(worktreeTimer.menu(), item)
@@ -299,6 +303,170 @@ Item {
             // git turns the worktree down: the bar is the answer, the log stays shut (`write_notice log=`).
             if (worktreeTimer.mode === "refused")
                 acts.driver.barrierNotice.start()
+        }
+    }
+
+    /// PGG_AUTO_ACT=worktree-rename-box / worktree-rename: the spaced second click on a worktree — its WORKTREES row,
+    /// or with `@graph` the chip on the row it stands on — through the row's own clicks (`NavList.clickRow` /
+    /// `GraphRowDelegate.leftClick`), so the row decides what the click renames. The argument is
+    /// `<folder>[=<name>][@graph]`: `-box` stops at the box (holding `<name>` where one is given — the left menu's
+    /// opened through its door holding it, since nothing types into it) or at the reason no box opened; `worktree-rename`
+    /// sends `<name>` and waits for the listing that names the new folder (デザイン規約 §グラフ行のダブルクリック).
+    SampleTimer {
+        id: renameTimer
+        property string folder: ""
+        property string name: ""
+        property bool typed: false
+        property bool onGraph: false
+        property bool sends: false
+        property string full: ""
+        property string oid: ""
+        /// 0 = the first click, 1 = the second once the double-click window has passed, 2 = the box or the reason,
+        /// 3 = the listing after the send.
+        property int step: 0
+        function begin(arg, sends) {
+            let rest = "" + arg
+            renameTimer.onGraph = rest.endsWith("@graph")
+            if (renameTimer.onGraph)
+                rest = rest.slice(0, -6)
+            const named = rest.indexOf("=")
+            renameTimer.typed = named >= 0
+            renameTimer.name = named < 0 ? "" : rest.substring(named + 1)
+            renameTimer.folder = named < 0 ? rest : rest.substring(0, named)
+            renameTimer.sends = sends
+            renameTimer.step = 0
+            renameTimer.start()
+        }
+        function say(line) {
+            renameTimer.stop()
+            Harness.report(line)
+        }
+        /// The graph row the worktree stands on, null while it is not laid out.
+        function graphItem() {
+            const row = acts.graphModel.rowOf(renameTimer.oid)
+            return row < 0 ? null : acts.graphPane.view.itemAtIndex(row)
+        }
+        /// One click on the row the gesture is made on; false while it is not there.
+        function click() {
+            if (renameTimer.onGraph) {
+                const item = renameTimer.graphItem()
+                if (item === null)
+                    return false
+                item.leftClick(Qt.NoModifier)
+                return true
+            }
+            const list = acts.navProbe.listOf("worktree")
+            return !!list && list.clickRow(acts.rowOf("worktree", renameTimer.folder))
+        }
+        function guarded() {
+            if (renameTimer.onGraph) {
+                const item = renameTimer.graphItem()
+                return item === null || item.clickGuarded
+            }
+            const list = acts.navProbe.listOf("worktree")
+            return !list || list.rowGuarded(acts.rowOf("worktree", renameTimer.folder))
+        }
+        onTriggered: {
+            Awaited.at("worktree_rename", renameTimer.step)
+            if (renameTimer.step === 0) {
+                const at = acts.rowOf("worktree", renameTimer.folder)
+                if (at < 0)
+                    return
+                renameTimer.full = acts.worktreesModel.fullAt(at)
+                renameTimer.oid = acts.worktreesModel.headOfWorktree(renameTimer.full)
+                // The left menu's box holds a name only through its door (`SidebarPane.beginRename`).
+                if (renameTimer.typed && !renameTimer.onGraph && !renameTimer.sends) {
+                    acts.sidebarPane.beginRename("worktreeFolder", renameTimer.full, renameTimer.name)
+                    renameTimer.step = 2
+                    return
+                }
+                if (!renameTimer.click())
+                    return
+                renameTimer.step = 1
+                return
+            }
+            if (renameTimer.step === 1) {
+                // Inside the double-click window a second click would be half a double-click.
+                if (renameTimer.guarded() || !renameTimer.click())
+                    return
+                renameTimer.step = 2
+                return
+            }
+            if (renameTimer.step === 2) {
+                renameTimer.awaitBox()
+                return
+            }
+            renameTimer.awaitListing()
+        }
+        function awaitBox() {
+            const view = acts.graphPane.view
+            const item = renameTimer.onGraph ? renameTimer.graphItem() : null
+            const list = acts.navProbe.listOf("worktree")
+            const at = acts.rowOf("worktree", renameTimer.folder)
+            const open = renameTimer.onGraph ? view.namingOid === renameTimer.oid && item !== null && item.naming
+                                             : acts.sidebarPane.editKey !== "" && at >= 0 && list.rowBoxWidth(at) > 0
+            const withheld = renameTimer.onGraph ? acts.graphPane.renameWithheld : acts.sidebarPane.renameWithheld
+            if (!Awaited.all("worktree_rename_box", { "box_or_reason": open || withheld }))
+                return
+            if (open && renameTimer.onGraph && renameTimer.typed && view.namingText !== renameTimer.name) {
+                // In the way a recycled delegate puts it back (`GraphRowDelegate.takeNamingFocus`).
+                view.namingText = renameTimer.name
+                item.takeNamingFocus()
+                return
+            }
+            if (open && renameTimer.sends) {
+                renameTimer.step = 3
+                acts.driver.pressWrite("worktree-rename", () => {
+                    if (renameTimer.onGraph)
+                        view.namingSubmitted(renameTimer.oid, renameTimer.name, "rename")
+                    else
+                        acts.sidebarPane.submitEdit(renameTimer.name)
+                    return true
+                })
+                return
+            }
+            const refused = open && (renameTimer.onGraph ? acts.graphPane.namingRefused : acts.sidebarPane.editRefused)
+            const why = withheld ? (renameTimer.onGraph ? view.withheldWhy : acts.sidebarPane.withheldWhy)
+                      : renameTimer.onGraph ? acts.page.graphNameRefusedWhy : acts.sidebarPane.editRefusedWhy
+            // A reason comes up after the tip's delay, on the window's one tip.
+            const tip = acts.page.ToolTip.toolTip
+            const tipped = tip.visible && tip.text === why
+            if (!Awaited.all("worktree_rename_box", { "tip": tipped || !(refused || withheld) }))
+                return
+            renameTimer.say("worktree_rename_box where=" + (renameTimer.onGraph ? "graph" : "nav")
+                            + " open=" + open
+                            + " withheld=" + withheld
+                            + " kind=" + (!open ? "" : renameTimer.onGraph ? view.namingKind
+                                                                         : acts.sidebarPane.editKind)
+                            + " placeholder=" + (!open ? "" : renameTimer.onGraph ? item.nameBoxPlaceholder
+                                                                                : list.rowBoxPlaceholder(at))
+                            + " text=" + (!open ? "" : renameTimer.onGraph ? view.namingText
+                                                                         : acts.sidebarPane.editText)
+                            + " refused=" + refused
+                            + " tip=" + tipped
+                            + " mark=" + worktreeTimer.tipMark(tip)
+                            // Last, because it is a sentence.
+                            + " why=" + why)
+            acts.driver.barrierRendered.begin()
+        }
+        /// The new folder listed, the old one gone, the box down, nothing running.
+        function awaitListing() {
+            const box = renameTimer.onGraph ? acts.graphPane.view.namingOid !== "" : acts.sidebarPane.editKey !== ""
+            const listed = acts.rowOf("worktree", renameTimer.name) >= 0
+            const gone = acts.rowOf("worktree", renameTimer.folder) < 0
+            // Settled too: the new listing sets the other worktrees' reads going, and a picture taken under them is of
+            // a page still arriving.
+            if (!Awaited.all("worktree_renamed", { "idle": acts.repoTab.busyCount === 0, "box_down": !box,
+                                                   "listed": listed, "gone": gone,
+                                                   "settled": PageSettled.settled(acts.page) }))
+                return
+            renameTimer.say("worktree_renamed where=" + (renameTimer.onGraph ? "graph" : "nav")
+                            + " from=" + renameTimer.folder
+                            + " to=" + renameTimer.name
+                            + " listed=" + listed
+                            + " gone=" + gone
+                            + " box=" + box)
+            acts.driver.barrierRendered.begin()
         }
     }
 }

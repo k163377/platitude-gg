@@ -135,6 +135,9 @@ QtObject {
                 // The same for the rows that make a worktree (`AutoActWorktreeVerbs`); the two that land stand the tab
                 // in the new worktree, which the window reads (`WindowTabActs`).
                 "worktree-add-menu", "worktree-box", "worktree-new-refused", "worktree-add", "worktree-new",
+                // The rename's gesture runs in its sampler, and stops at the box or the reason, or waits for the listing that
+                // names the new folder.
+                "worktree-rename-box", "worktree-rename",
                 "nav-add-remote", "push-default", "push-target", "push-hover", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "delete-branch-chip", "remote-refused", "chip-menu", "chip-menu-current",

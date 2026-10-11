@@ -475,6 +475,68 @@ Item {
         }
     }
 
+    // The worktree this tab stands in, its folder renamed: the session stands down for git, and the tab stands in the
+    // new folder on a session of its own, the page and the words written there kept (デザイン規約 §タブの所作).
+    // The argument is `<folder>=<new name>`; the tab is stood in `<folder>` first, by its WORKTREES row. The rename goes
+    // in through the left menu's box door (`SidebarPane.beginRename` — the gesture is `worktree-rename`'s to judge).
+    SampleTimer {
+        id: worktreeFollowTimer
+        running: Harness.autoAct === "worktree-rename-stand"
+        /// 0 = stand in the folder, 1 = write the words and send the rename, 2 = read where the tab stands.
+        property int step: 0
+        readonly property string typed: "chore: words written before the rename"
+        readonly property string folder: Harness.autoActArg.split("=")[0]
+        readonly property string renamed: Harness.autoActArg.split("=")[1] || ""
+        property string from: ""
+        property string to: ""
+        property int beforeCount: -1
+        onTriggered: {
+            const page = window.curPage
+            if (page === null || page.pageTab.state !== "open" || page.pageTab.standing
+                    || !page.pageWorktree.loaded || page.pageGraph.finishCount === 0)
+                return
+            const trees = page.pageSidebar.worktreesModel
+            if (worktreeFollowTimer.step === 0) {
+                for (let row = 0; row < trees.shown(); row++) {
+                    if (trees.nameAt(row) !== worktreeFollowTimer.folder)
+                        continue
+                    worktreeFollowTimer.from = trees.fullAt(row)
+                    if (!acts.standsIn(page, worktreeFollowTimer.from))
+                        worktreeDraftTimer.standIn(page, worktreeFollowTimer.from)
+                    worktreeFollowTimer.step = 1
+                }
+                return
+            }
+            if (worktreeFollowTimer.step === 1) {
+                if (!worktreeDraftTimer.settled(page, worktreeFollowTimer.from) || !PageSettled.settled(page))
+                    return
+                const place = trees.renamedWorktreeFor(worktreeFollowTimer.from, worktreeFollowTimer.renamed)
+                if (place === undefined)
+                    return
+                worktreeFollowTimer.to = place.path
+                worktreeFollowTimer.beforeCount = pageRepeater.count
+                page.pageWip.setMessage(worktreeFollowTimer.typed, "")
+                acts.holdStand(page)
+                page.pageSidebar.beginRename("worktreeFolder", worktreeFollowTimer.from, worktreeFollowTimer.folder)
+                page.pageSidebar.submitEdit(worktreeFollowTimer.renamed)
+                worktreeFollowTimer.step = 2
+                return
+            }
+            if (!worktreeDraftTimer.settled(page, worktreeFollowTimer.to) || !PageSettled.settled(page))
+                return
+            stop()
+            Harness.report("worktree_follow stood=" + acts.standsIn(page, worktreeFollowTimer.to)
+                              + " tabs=" + pageRepeater.count
+                              + " grew=" + (pageRepeater.count !== worktreeFollowTimer.beforeCount)
+                              + " kept=" + acts.standKept(page)
+                              + " draft=" + (page.pageWip.subjectText === worktreeFollowTimer.typed)
+                              + " box=" + (page.pageSidebar.editKey !== "")
+                              + " gone=" + (trees.worktreeFacts(worktreeFollowTimer.from) === undefined)
+                              + " where=" + page.pageTab.repoPath)
+            window.finishAutoAct()
+        }
+    }
+
     // The hover over a tab standing in a linked worktree says that worktree's path, not the repository's
     // (デザイン規約 §hover のツールチップ).
     SampleTimer {

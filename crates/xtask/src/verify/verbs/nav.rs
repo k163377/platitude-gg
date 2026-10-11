@@ -492,6 +492,96 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "worktree_box where=nav open=true mode=worktree refused=false tip=false mark= why=",
     },
+    // The spaced second click on a worktree (デザイン規約 §グラフ行のダブルクリック
+    // 「箱のプレースホルダ」): a worktree on no branch opens the box on its
+    // folder (`kind=worktreeFolder placeholder=Worktree name`), one with a
+    // branch renames the branch, a lock opens no box and says why where it
+    // would have stood (`withheld=true`), and what is typed is turned down
+    // before the press with the reason in the tip. The placeholder and the
+    // tip's words are not the picture's: a box holding a name draws neither.
+    Verb {
+        name: "worktree-rename-box",
+        when: &[
+            (
+                Arg::Is("topic"),
+                "worktree_rename_box where=nav open=true withheld=false kind=branch \
+                 placeholder=Branch name text=feature/topic-a refused=false tip=false mark= why=",
+            ),
+            (
+                Arg::Is("vaulted"),
+                "worktree_rename_box where=nav open=false withheld=true kind= placeholder= text= \
+                 refused=false tip=true mark=vaulted why=Cannot rename — vaulted is locked",
+            ),
+            (
+                Arg::Is("vaulted@graph"),
+                "worktree_rename_box where=graph open=false withheld=true kind= placeholder= text= \
+                 refused=false tip=true mark=vaulted why=Cannot rename — vaulted is locked",
+            ),
+            (
+                Arg::Is("detached="),
+                "worktree_rename_box where=nav open=true withheld=false kind=worktreeFolder \
+                 placeholder=Worktree name text= refused=true tip=true mark= why=A name is needed",
+            ),
+            (
+                Arg::Is("detached=@graph"),
+                "worktree_rename_box where=graph open=true withheld=false kind=worktreeFolder \
+                 placeholder=Worktree name text= refused=true tip=true mark= why=A name is needed",
+            ),
+            (
+                Arg::Is("detached=topic@graph"),
+                "worktree_rename_box where=graph open=true withheld=false kind=worktreeFolder \
+                 placeholder=Worktree name text=topic refused=true tip=true mark=topic \
+                 why=Taken by another worktree — topic",
+            ),
+            (
+                Arg::Is("detached=a/b"),
+                "worktree_rename_box where=nav open=true withheld=false kind=worktreeFolder \
+                 placeholder=Worktree name text=a/b refused=true tip=true mark= why=Not a folder name",
+            ),
+            // What Windows keeps out of a folder's name (`worktrees::Disk`) is
+            // turned down there before the press — a device's name would leave
+            // the worktree broken — and is a free name everywhere else.
+            (
+                Arg::IsOnWindows("detached=CON"),
+                "worktree_rename_box where=nav open=true withheld=false kind=worktreeFolder \
+                 placeholder=Worktree name text=CON refused=true tip=true mark= \
+                 why=Not a folder name on Windows — CON is kept for a device",
+            ),
+            (
+                Arg::Is("detached=CON"),
+                "worktree_rename_box where=nav open=true withheld=false kind=worktreeFolder \
+                 placeholder=Worktree name text=CON refused=false tip=false mark= why=",
+            ),
+            (
+                Arg::IsOnWindows("detached=why?@graph"),
+                "worktree_rename_box where=graph open=true withheld=false kind=worktreeFolder \
+                 placeholder=Worktree name text=why? refused=true tip=true mark= \
+                 why=Not a folder name on Windows — ? is not allowed",
+            ),
+            (
+                Arg::Is("detached=why?@graph"),
+                "worktree_rename_box where=graph open=true withheld=false kind=worktreeFolder \
+                 placeholder=Worktree name text=why? refused=false tip=false mark= why=",
+            ),
+            (
+                Arg::Is("detached@graph"),
+                "worktree_rename_box where=graph open=true withheld=false kind=worktreeFolder \
+                 placeholder=Worktree name text=detached refused=false tip=false mark= why=",
+            ),
+        ],
+        plain: "worktree_rename_box where=nav open=true withheld=false kind=worktreeFolder \
+                placeholder=Worktree name text=detached refused=false tip=false mark= why=",
+    },
+    // The folder renamed through either box: the listing names the new folder
+    // and no longer the old one, and the box came down on the answer.
+    Verb {
+        name: "worktree-rename",
+        when: &[(
+            Arg::Ends("@graph"),
+            "worktree_renamed where=graph from=detached to=renamed listed=true gone=true box=false",
+        )],
+        plain: "worktree_renamed where=nav from=detached to=renamed listed=true gone=true box=false",
+    },
     // A worktree made and the tab stood in it: the folder the rule names, the
     // branch out in it, one tab (the tab moved, not grew), the page kept,
     // and no log raised by the landing.

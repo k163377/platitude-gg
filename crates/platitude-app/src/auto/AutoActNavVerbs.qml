@@ -246,13 +246,13 @@ Item {
                 return true
             }
             // The graph row the worktree stands on, pressed where its own right-click goes: the menu aimed at the row's
-            // first chip (`GraphRowDelegate.menuChip`).
+            // first chip (`GraphRowDelegate.nameChip`).
             const facts = worktreesModel.worktreeFacts(worktreesModel.fullAt(at))
             const row = facts === undefined ? -1 : graphModel.rowOf(facts.head)
             const item = row < 0 ? null : graphPane.view.itemAtIndex(row)
             if (item === null)
                 return false
-            graphPane.view.rowMenuRequested(item.oid_hex, item.menuChip)
+            graphPane.view.rowMenuRequested(item.oid_hex, item.nameChip)
             acts.standMenuOn(acts.commitMenu, item)
             return true
         }
