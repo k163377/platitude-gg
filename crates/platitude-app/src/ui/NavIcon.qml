@@ -21,7 +21,7 @@ InkCanvas {
         // The body, 3.5 to 12.5; the shackle stands inside it.
         case "lock": return 9
         // The house, 2.5 to 13.5 — filled, which at `iconSm` matches the padlock's 9 plus its stroke. The seat caps
-        // it at 11. Being filled, `inkWidth` overcounts it by a stroke; no caller seats it by its ink.
+        // it at 11. Filled, so `inkWidth` adds no stroke to it.
         case "home": return 11
         case "plus":
         case "minus":
@@ -68,6 +68,8 @@ InkCanvas {
         case "chevron": return 8
         // The rings, 1.7 to 14.3.
         case "branch": return 12.6
+        // Apex to foot, 2.3 to 13.7.
+        case "home": return 11.4
         // The dome's top to the flat base, 3.1 to 12.9.
         case "remote": return 9.8
         default: return icon.inkGrid
@@ -103,13 +105,21 @@ InkCanvas {
     }
     /// The ink's top edge in the item's pixels, half a stroke included. Of the unturned mark.
     readonly property real inkTop: icon.inkTopGrid / 16 * icon.height - icon.stroke / 2
-    /// The ink span in the item's pixels, stroke included. A quarter turn reads the other axis.
+    /// The ink span in the item's pixels, stroke included — none on the filled house. A quarter turn reads the
+    /// other axis.
     readonly property real inkWidth:
         (icon.rotation % 180 === 0 ? icon.inkGrid : icon.inkTallGrid)
-        / 16 * icon.width + icon.stroke
+        / 16 * icon.width + (icon.kind === "home" ? 0 : icon.stroke)
     /// The ink's right edge in the item's pixels, half a stroke included: `width - inkRight` is the air the box
     /// holds on that side (デザイン規約 §余白). Of the unturned mark.
     readonly property real inkRight: icon.inkRightGrid / 16 * icon.width + icon.stroke / 2
+    /// How far below the middle of a line this mark's centre goes to stand its ink on the baseline of the word beside
+    /// it, the two set in the same middle: `base` is that word's baseline from its own top, `tall` its height
+    /// (デザイン規約 §操作パネル「印は字と同じくベースラインに立てる」). Only the house moves: centred, its flat foot
+    /// floats over the letters, where a line-drawn mark's open ends do not.
+    function standOn(base, tall) {
+        return icon.kind !== "home" ? 0 : base - tall / 2 - icon.inkTallGrid / 16 * icon.height / 2
+    }
     width: Theme.iconMd
     height: Theme.iconMd
     onKindChanged: requestPaint()

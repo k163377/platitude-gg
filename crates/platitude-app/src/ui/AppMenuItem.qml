@@ -301,7 +301,10 @@ MenuItem {
         id: rowMark
         x: menuItem.markX - (rowMark.width - rowMark.inkWidth) / 2
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: Metrics.opticalDrop
+        // The house stands on the row's words (`NavIcon.standOn`).
+        anchors.verticalCenterOffset: rowMark.kind === "home"
+                                      ? rowMark.standOn(itemLabel.baselineOffset, itemLabel.height)
+                                      : Metrics.opticalDrop
         width: Theme.iconMd
         height: Theme.iconMd
         visible: menuItem.heads && (menuItem.titled || !menuItem.seated)
@@ -314,7 +317,9 @@ MenuItem {
         id: seatMark
         x: menuItem.seatX
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: Metrics.opticalDrop
+        anchors.verticalCenterOffset: seatMark.kind === "home"
+                                      ? seatMark.standOn(itemLabel.baselineOffset, itemLabel.height)
+                                      : Metrics.opticalDrop
         width: Theme.iconSm
         height: Theme.iconSm
         visible: menuItem.heads && !menuItem.titled && menuItem.seated

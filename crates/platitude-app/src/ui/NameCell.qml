@@ -116,9 +116,12 @@ RowLayout {
         // Centred down the seat and set against its left edge (`seatNudge`): given the seat's own size, it would take
         // the seat's top-left corner and ride a step high.
         Loader {
+            id: stateSeat
             active: nameCell.seatMark !== ""
             anchors.centerIn: parent
             anchors.horizontalCenterOffset: nameCell.seatNudge
+            // The house stands on the name instead (`NavIcon.standOn`).
+            anchors.verticalCenterOffset: stateSeat.item ? stateSeat.item.standOn(newName.wordBase, newName.height) : 0
             sourceComponent: NavIcon {
                 width: Theme.iconSm
                 height: Theme.iconSm

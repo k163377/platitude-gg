@@ -39,6 +39,9 @@ Item {
     /// Where the ink ends — the whole column once there is a cut in the name, the name's own width while there is not.
     /// What a mark on the name's shoulder is placed against.
     readonly property real inkWidth: cut.cutting ? cut.width : headLabel.implicitWidth
+    /// The name's baseline from this item's top, wherever the box it was handed centres it — what a mark beside the
+    /// name stands on (`NavIcon.standOn`). Not `baselineOffset`, which would seat this item in a baseline layout.
+    readonly property real wordBase: headLabel.baselineOffset
 
     function relayout() {
         const whole = cut.text
