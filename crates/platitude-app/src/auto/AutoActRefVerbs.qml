@@ -213,7 +213,7 @@ Item {
             page.openRowMenu(acts.createTagOid)
             commitMenu.openSub(commitTagCard)
             tagHereCommitItem.triggered()
-            // `<name>:box` stops at the box the row opened — the chip column's second question (`GraphRowChips`).
+            // `<name>:box` stops at the box the row opened — the chip column's name box, as a tag's (`GraphRowChips`).
             if (arg.endsWith(":box")) {
                 graphPane.view.namingText = arg.slice(0, -4)
                 Harness.report("create_tag box=" + (graphPane.view.namingOid !== "")

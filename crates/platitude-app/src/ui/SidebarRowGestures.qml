@@ -310,7 +310,8 @@ QtObject {
     function beginBranchAt(kind, id, oidHex) {
         gestures.startEdit(kind, kind + ":" + id, "branch", id, oidHex, "")
     }
-    /// The same box for a new tag. One field, four modes, told apart by the placeholder (`NavNameBox`).
+    /// The same box for a new tag. One field, four modes, told apart by the placeholder, the frame and what it opens
+    /// holding (`NavNameBox`).
     function beginTagAt(kind, id, oidHex) {
         gestures.startEdit(kind, kind + ":" + id, "tag", id, oidHex, "")
     }

@@ -958,7 +958,7 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "create_tag tag=v9.9-new row=1 total=4 at=true",
     },
     // The field's third mode, on the same line; which mode it came up in
-    // is the picture's (the box reads `Create tag here?`).
+    // is the picture's (the box reads `Tag name`).
     Verb {
         name: "nav-tag-box",
         when: &[],

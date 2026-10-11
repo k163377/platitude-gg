@@ -16,11 +16,12 @@ Item {
     /// Waiting out the double-click window after a second click (`RefChip.waiting`).
     required property bool waiting
     /// This column is a name box right now, and which of the four it asks for ("branch" / "tag" / "worktree" /
-    /// "rename"). One field for all: the three that make a name ask in the placeholder, a rename opens holding the
-    /// name.
+    /// "rename"). One field for all: the placeholder names the kind being typed (a rename rubbed out shows it too), a
+    /// rename opens holding the name.
     required property bool naming
     required property string namingMode
-    /// What a rename box is naming ("branch" / "remote" / "tag"), for the frame's tone; empty while making a name.
+    /// What a rename box is naming ("branch" / "remote" / "tag"), for the frame's tone and the placeholder; empty
+    /// while making a name.
     required property string namingKind
     /// Whether what is typed can be accepted, and why not — the page's answer (デザイン規約 §可否・警告の出し場所).
     required property bool namingRefused
@@ -65,7 +66,7 @@ Item {
         if (field === null || !chipColumn.naming)
             return
         field.text = chipColumn.askedText
-        field.inkText = chipColumn.namingMode === "rename" ? field.text : field.placeholderText
+        field.inkText = chipColumn.namingMode === "rename" ? field.text : ""
         if (chipColumn.namingMode === "rename")
             field.selectAll()
         field.forceActiveFocus()
@@ -104,31 +105,31 @@ Item {
         onLoaded: chipColumn.focusBox()
         sourceComponent: SlimField {
             id: nameField
-            /// The narrowest the box goes: the whole of what it opened holding (the placeholder, or a rename's name) —
-            /// cut, a placeholder asks nothing and a name cannot be checked before Enter. Measured off a never-drawn
-            /// label, since `TextMetrics` comes out a few pixels tight and a tight floor still elides; plus the
-            /// field's paddings, which Controls takes out of `width` before laying the placeholder out.
+            /// The narrowest the box goes: the whole of the placeholder and of what it opened holding (a rename's
+            /// name) — cut, neither says what it is. Measured off never-drawn labels, since `TextMetrics` comes out a
+            /// few pixels tight and a tight floor still elides; plus the field's paddings, which Controls takes out of
+            /// `width` before laying the placeholder out.
             readonly property real nameBoxMinW:
-                Math.ceil(placeholderInk.implicitWidth) + nameField.leftPadding + nameField.rightPadding
-            /// What the box must be able to show, latched as it opens — measured per keystroke, the right edge would
-            /// walk out from under the caret.
+                Math.ceil(Math.max(placeholderInk.implicitWidth, openedInk.implicitWidth))
+                + nameField.leftPadding + nameField.rightPadding
+            /// The name a rename box opened holding, latched — measured per keystroke, the right edge would walk out
+            /// from under the caret. Empty for the boxes that make a name, even rebuilt holding what was typed.
             property string inkText: ""
             /// A worktree's folder in the refusal's line, which the shared tip stands the tree mark in front of
             /// (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別「名前の印」).
             readonly property string tipMarkWord: chipColumn.namingRefusedMark
+            /// The kind of ref being typed: the mode, or on a rename the kind it renames.
+            readonly property string namesKind:
+                chipColumn.namingMode === "rename" ? chipColumn.namingKind : chipColumn.namingMode
             width: Math.max(chipColumn.columnWidth - 2 * Theme.spaceXs, nameField.nameBoxMinW)
             // The frame names the kind (デザイン規約 §ref の種別「枠 = 種別」); a branch's colour is the focus ring's own,
             // so a tag differs, and so does a branch made out in another worktree — that worktree's green, as its chip
             // wears.
-            focusTone: {
-                const kind = chipColumn.namingMode === "rename" ? chipColumn.namingKind : chipColumn.namingMode
-                return kind === "tag" ? Theme.refTag : kind === "worktree" ? Theme.success : Theme.borderFocus
-            }
-            // None for a rename, whose box is for the name it opened holding (デザイン規約 §左メニューの所作).
-            placeholderText: chipColumn.namingMode === "rename" ? ""
-                           : chipColumn.namingMode === "tag" ? qsTr("Create tag here?")
-                           : chipColumn.namingMode === "worktree" ? qsTr("Create worktree here?")
-                                                                  : qsTr("Create branch here?")
+            focusTone: nameField.namesKind === "tag" ? Theme.refTag
+                     : nameField.namesKind === "worktree" ? Theme.success : Theme.borderFocus
+            // What goes in the box, by kind: a new worktree and a remote's are branch names too
+            // (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダ」).
+            placeholderText: nameField.namesKind === "tag" ? qsTr("Tag name") : qsTr("Branch name")
             refused: chipColumn.namingRefused
             ToolTip.visible: nameField.refused && nameField.activeFocus && chipColumn.namingRefusedWhy !== ""
             ToolTip.delay: Metrics.tipDelayMs
@@ -141,10 +142,16 @@ Item {
             // Held on the view, which outlives this recycled delegate.
             onTextEdited: chipColumn.namingEdited(nameField.text)
             Keys.onEscapePressed: chipColumn.namingCancelled()
-            // The floor's ruler, never drawn: the field's own placeholder cannot be measured before the box has a
+            // The floor's rulers, never drawn: the field's own placeholder cannot be measured before the box has a
             // width.
             Label {
                 id: placeholderInk
+                visible: false
+                text: nameField.placeholderText
+                font: nameField.font
+            }
+            Label {
+                id: openedInk
                 visible: false
                 text: nameField.inkText
                 font: nameField.font

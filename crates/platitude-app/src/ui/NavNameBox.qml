@@ -4,7 +4,7 @@ import platitude.ui
 
 // The box a sidebar row's name goes into — new branch, new tag, new branch in a worktree of its own or rename, told
 // apart by the mode (`SidebarRowGestures`). Drawn outside the list so it can grow past the pane over the graph, head
-// held where the name's was: a box too narrow for its text asks nothing (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダは全文」).
+// held where the name's was: a box too narrow for its text says nothing (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダは全文」).
 SlimField {
     id: box
 
@@ -29,8 +29,8 @@ SlimField {
     /// (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別「名前の印」).
     property string refusedMark: ""
     readonly property string tipMarkWord: box.refusedMark
-    /// The kind of ref being named — the mode, or the row's kind on a rename — which the frame says
-    /// (`SlimField.focusTone` — §ref の種別: 枠 = 種別).
+    /// The kind of name being typed — the mode, or the row's kind on a rename — which the frame and the placeholder
+    /// say (`SlimField.focusTone` — §ref の種別: 枠 = 種別).
     property string namesKind: ""
 
     /// `submitted`, not `accepted`: that is the field's own Enter signal.
@@ -41,11 +41,11 @@ SlimField {
     readonly property real rowTop: box.rowsY + box.row.y
     readonly property bool rowInView: box.rowTop >= box.rowsTop
         && box.rowTop + box.row.height <= box.rowsTop + box.rowsHeight
-    /// What the box must show, latched when it opens: a right edge that walks under the caret cannot be aimed at
-    /// (rules/app-ui.md「測って押し出す値は…」).
+    /// What the box opened holding, latched: a right edge that walks under the caret cannot be aimed at
+    /// (rules/app-ui.md「測って押し出す値は…」). The box wants room for that and for the placeholder whole.
     property string inkText: ""
     readonly property real wantWidth:
-        Math.ceil(ink.implicitWidth) + box.leftPadding + box.rightPadding
+        Math.ceil(Math.max(ink.implicitWidth, placeholderInk.implicitWidth)) + box.leftPadding + box.rightPadding
 
     // Filled here on open and on rebuild, not from the row's handler: that can run before this `editing` catches up,
     // leaving the box empty and without the keyboard.
@@ -55,7 +55,7 @@ SlimField {
         if (!box.editing)
             return
         box.text = box.carried
-        box.inkText = box.carried === "" ? box.placeholderText : box.carried
+        box.inkText = box.carried
         box.selectAll()
         box.forceActiveFocus()
     }
@@ -76,9 +76,10 @@ SlimField {
     // A tag has a colour to say, and so does a branch made out in another worktree (that worktree's green, as the
     // graph's box wears it — `GraphRowChips`); the others would read as the plain focus ring anyway.
     focusTone: box.namesKind === "tag" ? Theme.refTag : box.namesKind === "worktree" ? Theme.success : Theme.borderFocus
-    placeholderText: box.mode === "branch" ? qsTr("Create branch here?")
-                   : box.mode === "tag" ? qsTr("Create tag here?")
-                   : box.mode === "worktree" ? qsTr("Create worktree here?") : ""
+    // What goes in the box, by kind — a rename rubbed out shows it too. A new worktree's and a remote's are branch
+    // names; a stash's name is its message (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダ」).
+    placeholderText: box.namesKind === "tag" ? qsTr("Tag name")
+                   : box.namesKind === "stash" ? qsTr("Stash name") : qsTr("Branch name")
     onTextEdited: box.typed(box.text)
     // Refused: Enter does nothing, and the frame and tooltip say why.
     onAccepted: {
@@ -103,11 +104,17 @@ SlimField {
         + " row=" + Math.round(box.rowTop) + " list=" + Math.round(box.rowsTop)
         + "+" + Math.round(box.rowsHeight) + " out=" + box.out
 
-    // Measures `inkText` apart from the field, whose own layout needs a width first.
+    // Measure `inkText` and the placeholder apart from the field, whose own layout needs a width first.
     Label {
         id: ink
         visible: false
         text: box.inkText
+        font: box.font
+    }
+    Label {
+        id: placeholderInk
+        visible: false
+        text: box.placeholderText
         font: box.font
     }
 }

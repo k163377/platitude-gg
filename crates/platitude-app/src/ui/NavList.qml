@@ -286,8 +286,8 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editFocused : false
     }
-    /// The box on one row, as drawn and as its question wants (PGG_AUTO_ACT=nav-branch-box) — a picture cannot tell
-    /// an elided placeholder from a shorter question. 0 on an unbuilt row.
+    /// The box on one row, as drawn and as its placeholder and opened name want (PGG_AUTO_ACT=nav-branch-box) — a
+    /// picture cannot tell an elided word from a shorter one. 0 on an unbuilt row.
     function rowBoxWidth(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.editBoxWidth : 0

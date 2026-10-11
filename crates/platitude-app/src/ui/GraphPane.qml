@@ -128,7 +128,7 @@ Rectangle {
     }
     function openNameBox(oidHex, mode, kind, id, text) {
         graphList.askOid = ""
-        // All before `namingOid`: the box comes up already holding its own question, and what it opened holding is
+        // All before `namingOid`: the box comes up already wearing its own placeholder, and what it opened holding is
         // what a press elsewhere weighs against (`dropEmptyBoxes`).
         graphList.namingText = text
         graphList.namingMode = mode

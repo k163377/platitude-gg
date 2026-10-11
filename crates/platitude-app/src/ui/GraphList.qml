@@ -59,8 +59,8 @@ AppListView {
     property string namingText: ""
     // Which of the four the box is asking for ("branch" / "tag" / "worktree" / "rename").
     property string namingMode: "branch"
-    // What a rename box is naming ("branch" / "remote" / "tag", as `renameRow` takes it), so the frame says the kind
-    // (規約 §ref の種別: 枠 = 種別); empty for the three boxes that make a name.
+    // What a rename box is naming ("branch" / "remote" / "tag", as `renameRow` takes it), so the frame and the
+    // placeholder say the kind (規約 §ref の種別: 枠 = 種別); empty for the three boxes that make a name.
     property string namingKind: ""
     // Whether the box's text can be accepted, and why not — decided by the page (`RepoPage.graphNameRefusedWhy`) —
     // and the worktree's folder in that line, which its tip stands the tree mark in front of.

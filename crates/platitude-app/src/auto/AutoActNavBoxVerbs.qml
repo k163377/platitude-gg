@@ -1005,7 +1005,8 @@ Item {
                               + " seat=" + Math.round(list.rowBoxSeat(row))
                               + " box=" + Math.round(drawn)
                               + " whole=" + Math.ceil(whole)
-                              // A cut placeholder asks nothing (デザイン規約 §グラフ行のダブルクリック).
+                              // Cut, a placeholder no longer says what goes in and a name cannot be read back
+                              // (デザイン規約 §グラフ行のダブルクリック).
                               + " cut=" + (Math.ceil(whole) > Math.round(drawn))
                               + " open=" + (sidebarPane.editKey === key)
                               + " focused=" + list.rowFocused(row)

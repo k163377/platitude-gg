@@ -36,7 +36,7 @@ QtObject {
     /// menu's, and the new worktree's, asked by a branch's rules (`worktreeNameRefused`, `GitFacts.validBranchName`).
     readonly property string notAName: qsTr("git will not take this as a name")
 
-    /// Why the name typed into `Create worktree here?` cannot be taken — the box's tip in the graph and in the left
+    /// Why the name typed into the new-worktree box cannot be taken — the box's tip in the graph and in the left
     /// menu alike, everything git would refuse that this end can see, said before the press. `branchTaken` is whether
     /// a branch of that name is there; `place` what `NavSectionModel.newWorktreeFor` answered for it. Empty while
     /// nothing is typed: a box opened empty would turn the reader's arrival down (デザイン規約 §可否・警告の出し場所).
