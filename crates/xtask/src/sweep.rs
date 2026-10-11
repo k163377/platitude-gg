@@ -93,7 +93,7 @@ const SAME_COMPILE: Duration = Duration::from_secs(60);
 
 /// A line this tree has not built is a compile like any other, so it
 /// gets every step's ceiling.
-const REPLAY_CEILING: Duration = crate::check::STEP_CEILING;
+const REPLAY_CEILING: Duration = crate::watched::STEP_CEILING;
 
 /// Where a tree keeps the key its last sweep ran under, and when that
 /// was. Inside the build directory it answers for, so the container's

@@ -164,7 +164,7 @@ mod tests {
     /// step ended mid-run, not one that never started; the log says so.
     #[test]
     fn a_step_told_to_stop_is_ended_where_it_stands() {
-        let dir = Yard::new("check-stop");
+        let dir = Yard::new("watched-stop");
         let room = Pool::at(&dir, 24)
             .admit(&Ask {
                 weight: 1,

@@ -5,7 +5,6 @@ mod app_env;
 mod app_out;
 mod awake;
 mod budget;
-mod check;
 mod command;
 mod commands;
 mod corpus;
@@ -43,6 +42,7 @@ mod verify;
 mod versions;
 mod wait;
 mod waits;
+mod watched;
 mod yard;
 
 use std::process::ExitCode;

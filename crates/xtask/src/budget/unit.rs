@@ -134,7 +134,7 @@ impl Admitted {
 ///
 /// Only a command that is itself one unit sets it. A runner of steps (the
 /// gate, `replay`) holds many tickets from a [`Pool`] and records through
-/// each step's own (`check::run_step`); through [`standalone`] its later
+/// each step's own (`watched::run_step`); through [`standalone`] its later
 /// steps would write at a ticket already taken down.
 static MINE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 

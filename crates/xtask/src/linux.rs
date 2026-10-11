@@ -1052,7 +1052,7 @@ impl Drop for TrimTheCache {
 /// No container started here is named or reaped: an interrupted one
 /// cannot reach this checkout's copies (`runner::SCRIPT`), and the
 /// volume's cargo lock it holds the next build waits out under the step's
-/// own ceiling (`check::run_step`).
+/// own ceiling (`watched::run_step`).
 fn in_container(
     root: &Path,
     tag: &str,

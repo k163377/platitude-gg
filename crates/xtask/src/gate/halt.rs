@@ -3,7 +3,7 @@
 //! A red decides the run, and the fix it asks for nearly always voids the
 //! stamps the rest could earn. So on either side nothing more starts, a step
 //! waiting for room gives its place up, and a running step is ended with what
-//! it started ([`crate::check::run_step`]) — except a `linux` step with a
+//! it started ([`crate::watched::run_step`]) — except a `linux` step with a
 //! container of its own, which is left to finish ([`super::runner`]). Every
 //! step it kept from running or ended is filed as `halted`.
 //!

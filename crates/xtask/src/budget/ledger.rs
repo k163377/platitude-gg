@@ -53,7 +53,7 @@ const WHOLE_CEILING: Duration = if cfg!(test) {
 /// machine ([`queue::Ticket::ran_since`]), before it is reported
 /// ([`Pool::leftover`]): the longest a step may run, since a leftover is
 /// a step whose runner died.
-pub(super) const LEFTOVER_CEILING: u64 = crate::check::STEP_CEILING.as_secs();
+pub(super) const LEFTOVER_CEILING: u64 = crate::watched::STEP_CEILING.as_secs();
 
 /// The machine's budget, as one process sees it.
 pub(crate) struct Pool {

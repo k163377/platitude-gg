@@ -41,7 +41,7 @@
 //!
 //! The tree's one gate (`lanes::sole`, which refuses) → a landing's turn
 //! → a ticket → the announcement to a measurement (`still::busy`, inside
-//! `check::run_step`). `still::hold`'s side takes no ticket, and a unit
+//! `watched::run_step`). `still::hold`'s side takes no ticket, and a unit
 //! takes exactly one ticket whole, so there is no cycle and nothing waits
 //! holding part of what it needs.
 //!

@@ -42,9 +42,9 @@ pub(super) enum Finished {
     Halted,
 }
 
-/// One step, through `check`'s watched runner, its xtask launcher
-/// swapped for the runner copy ([`launched`]). With `PGG_GATE_FAKE_LOG`
-/// set the step is not run at all ([`faked`]).
+/// One step, through the watched runner (`watched::run_step`), its xtask
+/// launcher swapped for the runner copy ([`launched`]). With
+/// `PGG_GATE_FAKE_LOG` set the step is not run at all ([`faked`]).
 pub(super) fn execute_step(
     ground: &Ground<'_>,
     id: &str,
@@ -65,7 +65,7 @@ pub(super) fn execute_step(
     // `linux` line with a container of its own would go on working past
     // its launcher, so it is left to finish, holding its room.
     let stoppable = mark.is_some() || !starts_its_own_container(command);
-    match crate::check::run_step(
+    match crate::watched::run_step(
         ground.dir,
         &launched(
             command,
@@ -78,10 +78,10 @@ pub(super) fn execute_step(
         room,
         &|| stoppable && ground.halt.raised(),
     ) {
-        Ok(crate::check::Stepped::Exited(true)) => Ok(Finished::Green),
+        Ok(crate::watched::Stepped::Exited(true)) => Ok(Finished::Green),
         // Ended out here for the run's halt: what it started inside the
         // container is reached by its mark, as at a ceiling below.
-        Ok(crate::check::Stepped::Stopped) => {
+        Ok(crate::watched::Stepped::Stopped) => {
             if let (Some(container), Some(mark)) = (ground.container, &mark) {
                 let said = crate::linux::container::stop_step(container, mark, ground.logs)
                     .unwrap_or_else(|line| line);
@@ -89,10 +89,10 @@ pub(super) fn execute_step(
             }
             Ok(Finished::Halted)
         }
-        Ok(crate::check::Stepped::Exited(false)) => Err(format!(
+        Ok(crate::watched::Stepped::Exited(false)) => Err(format!(
             "exited non-zero (log: {})\n{}",
             log.display(),
-            crate::check::log_tail(log)
+            crate::watched::log_tail(log)
         )),
         // A ceiling out here reaps only the host side; the container's
         // end is reached by its mark, said in the same failure.
@@ -149,7 +149,7 @@ fn faked(
         if let Ok(after) = std::env::var(FAKE_FAIL_AFTER) {
             let mut wait = crate::wait::Wait::new(
                 format!("{after} to start before {id} goes red"),
-                crate::wait::Budget::whole(crate::check::STEP_CEILING),
+                crate::wait::Budget::whole(crate::watched::STEP_CEILING),
                 crate::wait::LOOK_AGAIN,
             );
             while !std::fs::read_to_string(fake)
@@ -166,7 +166,7 @@ fn faked(
     if std::env::var(FAKE_HOLD).is_ok_and(|held| held == id) {
         let mut wait = crate::wait::Wait::new(
             format!("the held step {id}"),
-            crate::wait::Budget::whole(crate::check::STEP_CEILING),
+            crate::wait::Budget::whole(crate::watched::STEP_CEILING),
             crate::wait::LOOK_AGAIN,
         );
         while !ground.halt.raised() {
@@ -281,19 +281,19 @@ pub(super) fn runner(
         seat: &crate::budget::seat_of(dir),
         what: "the task runner's build",
     })?;
-    // Through `check::run_step` for its ceiling: a build with none would
+    // Through `watched::run_step` for its ceiling: a build with none would
     // sit holding this tree's build lock and the gate's own, and the next
     // gate here would be refused by a live pid saying nothing.
     let build_log = logs.join(format!("{RUNNER}build-{}.log", std::process::id()));
     let build = ["cargo", "build", "--locked", "-p", "xtask"].map(String::from);
-    match crate::check::run_step(dir, &build, &build_log, &room, &|| false) {
-        Ok(crate::check::Stepped::Exited(true)) => {}
+    match crate::watched::run_step(dir, &build, &build_log, &room, &|| false) {
+        Ok(crate::watched::Stepped::Exited(true)) => {}
         // Nothing asks this build to stop: it comes before either side.
-        Ok(crate::check::Stepped::Exited(false) | crate::check::Stepped::Stopped) => {
+        Ok(crate::watched::Stepped::Exited(false) | crate::watched::Stepped::Stopped) => {
             return Err(format!(
                 "the task runner did not build in {}:\n{}",
                 dir.display(),
-                crate::check::log_tail(&build_log)
+                crate::watched::log_tail(&build_log)
             ));
         }
         // A ceiling, a cargo already announced on this tree, or a spawn
@@ -387,13 +387,13 @@ pub(super) fn linux_runner(
         "--gate".to_string(),
         std::process::id().to_string(),
     ];
-    match crate::check::run_step(ground.dir, &line, &log, &room, &|| false) {
-        Ok(crate::check::Stepped::Exited(true)) => Ok(Some(name)),
-        Ok(crate::check::Stepped::Stopped) => Ok(None),
-        Ok(crate::check::Stepped::Exited(false)) => Err(format!(
+    match crate::watched::run_step(ground.dir, &line, &log, &room, &|| false) {
+        Ok(crate::watched::Stepped::Exited(true)) => Ok(Some(name)),
+        Ok(crate::watched::Stepped::Stopped) => Ok(None),
+        Ok(crate::watched::Stepped::Exited(false)) => Err(format!(
             "the container's task runner did not build (log: {})\n{}",
             log.display(),
-            crate::check::log_tail(&log)
+            crate::watched::log_tail(&log)
         )),
         Err(why) => Err(format!(
             "the container's task runner did not run to its end: {why}"

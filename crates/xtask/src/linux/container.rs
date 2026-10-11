@@ -141,7 +141,7 @@ pub(super) fn start_container(root: &Path, name: &str, gate: u32, tag: &str) -> 
         .args(engine::INIT)
         .args(["sh", "-c", IDLE_SCRIPT, "pgg-gate"])
         .arg(IDLE.as_secs().to_string())
-        .arg((crate::check::STEP_CEILING.as_secs() / 60).to_string())
+        .arg((crate::watched::STEP_CEILING.as_secs() / 60).to_string())
         .arg(format!("{LOGS_MOUNT}/{CONTAINER_LOG}"))
         .arg(STATE_DIR);
     let said = logs.join("linux-container.start.txt");

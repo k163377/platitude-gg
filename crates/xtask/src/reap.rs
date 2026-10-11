@@ -1,8 +1,9 @@
 //! Ending a step and everything it started.
 //!
 //! [`Child::kill`] reaches the spawned process and nothing below it: a
-//! cargo ended at `check`'s ceiling leaves its rustc holding this tree's
-//! build lock, and the next gate waits on it with nothing to say why.
+//! cargo ended at a step's ceiling (`watched::STEP_CEILING`) leaves its
+//! rustc holding this tree's build lock, and the next gate waits on it
+//! with nothing to say why.
 //!
 //! * **unix** — a step that leads a group of its own ([`own_group`]) is
 //!   ended by that group: a kernel object, so nothing under the step

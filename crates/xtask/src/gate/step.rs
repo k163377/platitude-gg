@@ -34,7 +34,7 @@ pub(super) enum Ran {
 /// unit is the one worth splitting.
 ///
 /// The ticket is taken before the step announces itself to a measurement
-/// (`still::busy`, inside `check::run_step`) and let go after it ends, so
+/// (`still::busy`, inside `watched::run_step`) and let go after it ends, so
 /// nothing holds room it is not using, or part of what it needs while
 /// waiting for the rest.
 pub(super) fn run_one(
@@ -111,7 +111,7 @@ pub(super) fn run_one(
     match outcome {
         Ok(()) => {
             println!("[{name}] ok     {id} ({secs}s)");
-            crate::check::print_shots(name, &log);
+            crate::watched::print_shots(name, &log);
             if !required.step.always
                 && let Err(why) = ground.store.mark_step(
                     &required.key,

@@ -23,7 +23,7 @@
 //! what it can name** ([`SCRIPT`]).
 //!
 //! **Everything is one step** — the one container (or `sh`) the gate
-//! starts through `check::run_step`, under its ceiling, log and tree
+//! starts through `watched::run_step`, under its ceiling, log and tree
 //! kill. An engine command on the side would be a road out of that
 //! ceiling (`budget::watched` has none) and a second container to orphan.
 //!

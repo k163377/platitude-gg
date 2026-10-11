@@ -17,10 +17,10 @@ use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 
 use crate::budget::{Ask, Pool, Rank};
-use crate::check::Stepped;
 use crate::command::{self, Permission, Where};
 use crate::gate::{Census, Tiers};
 use crate::locks::Locked;
+use crate::watched::Stepped;
 
 pub(crate) static REPLAY: command::Command = command::Command {
     id: "replay.lines",
@@ -168,7 +168,7 @@ fn out_dir(root: &Path, named: Option<&Path>) -> Result<Out, String> {
         });
     };
     // Pinned where it was typed: every run starts in the tree's root
-    // (`check::run_step`), where a relative path would name another place.
+    // (`watched::run_step`), where a relative path would name another place.
     let out = std::path::absolute(named).map_err(|e| format!("{}: {e}", named.display()))?;
     std::fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
     let holds_something = std::fs::read_dir(&out)
@@ -331,7 +331,7 @@ fn run_line(ground: &Ground<'_>, index: usize, line: &str, build: bool) -> Resul
     })?;
     // waits(measured): the line's wall clock, said on its row and judged by nothing
     let at = std::time::Instant::now();
-    let outcome = crate::check::run_step(ground.root, &step, &log, &room, &|| false);
+    let outcome = crate::watched::run_step(ground.root, &step, &log, &room, &|| false);
     drop(room);
     let secs = at.elapsed().as_secs();
     let passed = matches!(outcome, Ok(Stepped::Exited(true)));
@@ -348,7 +348,7 @@ fn run_line(ground: &Ground<'_>, index: usize, line: &str, build: bool) -> Resul
         // localized byte in a linker line would otherwise blank all of it.
         let said = String::from_utf8_lossy(&std::fs::read(&log).unwrap_or_default()).into_owned();
         unbuilt = build && build_went_red(&said);
-        for said in crate::check::tail_of(&said).lines() {
+        for said in crate::watched::tail_of(&said).lines() {
             println!("     {said}");
         }
     }

@@ -9,7 +9,7 @@
 //! before it begins; a hold waits for the builds already announced.
 //!
 //! Builds are announced where the compiling happens (`app_build::app_exe` /
-//! `app_build::shipped_exe`, `check::run_step`), so a verb that builds need not
+//! `app_build::shipped_exe`, `watched::run_step`), so a verb that builds need not
 //! name itself; verbs heavy without compiling announce themselves. A bare
 //! `cargo build` a session types runs outside any verb, so the pre-shell
 //! hook holds it (hook/still.rs).
