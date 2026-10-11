@@ -377,6 +377,17 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
+    /// Whether the worktree a row is about is the repository's own — the
+    /// house its name wears instead of the tree (デザイン規約 §ref の種別
+    /// 「名前の印」). False for every other row.
+    #[qslot]
+    fn carried_home(&self, row: i32) -> bool {
+        usize::try_from(row)
+            .ok()
+            .and_then(|row| self.carried.get(&row))
+            .is_some_and(|carried| carried.home)
+    }
+
     /// Which row a worktree's uncommitted work stands on now, or -1
     /// (the worktree has gone clean). Every such row carries git's all-zero id,
     /// as this window's own does, so a pane on one follows it across a

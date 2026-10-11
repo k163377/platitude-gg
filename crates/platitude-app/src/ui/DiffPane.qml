@@ -39,6 +39,8 @@ Rectangle {
     /// The worktree the file was read from, where it is not this window's — said in the band before the path: while a
     /// diff is open nothing else on screen can say whose file it is.
     property string worktreeName: ""
+    /// That worktree is the repository's own (`DiffPaneHeader.worktreeHome`).
+    property bool worktreeHome: false
     /// Whether a hunk and a line can be staged on their own. Not on a new file — its one hunk is the whole file
     /// (デザイン規約 §diff の中のステージ) — nor a conflicted one, whose combined diff `git apply` refuses (and so does
     /// core, `stage::refuse_combined`), nor a gitlink or a file through Git LFS, a part of whose patch breaks what git
@@ -400,6 +402,7 @@ Rectangle {
             busy: diffPane.busy
             writable: diffPane.writable
             worktreeName: diffPane.worktreeName
+            worktreeHome: diffPane.worktreeHome
             split: diffPane.split
             onStageFileRequested: diffPane.stageFileRequested()
             onCloseRequested: diffPane.closeRequested()

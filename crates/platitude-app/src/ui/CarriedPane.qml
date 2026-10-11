@@ -13,8 +13,11 @@ import platitude.ui
 ColumnLayout {
     id: carriedPane
 
-    /// The worktree's name — the folder's last segment, the same one the row's chip carries.
+    /// The worktree's name, as the row says it: its folder's last segment, or the branch the repository's own has out
+    /// (`GraphModel.carriedName`).
     required property string worktreeName
+    /// It is the repository's own worktree: the name wears the house, not the tree (規約 §ref の種別「名前の印」).
+    property bool worktreeHome: false
     /// Its changed files, one row per path (`NavSectionModel` on the `whole` run).
     required property var files
     /// Which of them the middle pane is reading. Both halves: the walk matches a row by the pair, and the rows still
@@ -92,7 +95,8 @@ ColumnLayout {
                     NavIcon {
                         id: nameMark
                         anchors.centerIn: parent
-                        kind: "tree"
+                        anchors.verticalCenterOffset: nameMark.standOn(nameLabel.wordBase, nameLabel.height)
+                        kind: carriedPane.worktreeHome ? "home" : "tree"
                         tint: Theme.textSecondary
                         width: Theme.iconSm
                         height: Theme.iconSm

@@ -94,8 +94,8 @@ Rectangle {
 
     /// Stand-in record while there are none: not drawn (`visible`), but every colour below is still asked.
     readonly property var noChip: ({ "kind": "branch", "name": "", "isHead": false, "hasRemote": false,
-                                     "hasPr": false, "here": true, "held": false, "locked": false, "remote": "",
-                                     "key": "" })
+                                     "hasPr": false, "here": true, "held": false, "locked": false, "home": false,
+                                     "remote": "", "key": "" })
     /// The record the card draws: the first of the row's (`encode::Chip`).
     readonly property var rec: records.length > 0 ? records[0] : chip.noChip
     readonly property string recKind: rec.kind
@@ -108,6 +108,9 @@ Rectangle {
     readonly property bool recHeld: rec.held
     // `git worktree lock` is on the worktree standing here; only records a worktree stands on carry it.
     readonly property bool recLocked: rec.locked
+    // A worktree marker naming the repository's own worktree: the house, not the tree. A record built without the word
+    // (a test's) is no such marker.
+    readonly property bool recHome: rec.home === true
     // Name, and the remotes it was read from when it was not read here.
     readonly property string recName: rec.name
     readonly property string recWhere: rec.remote
@@ -117,7 +120,8 @@ Rectangle {
     /// stands here at all is the frame's green. Same mark and colour as the WORKTREES row (`NavRowBody`).
     readonly property bool hasLock: chip.recLocked
     /// The tree ahead of a name that is a worktree's folder, not a ref: bare, it would read as a branch
-    /// (デザイン規約 §ref の種別). Never with the padlock, which already says "worktree".
+    /// (デザイン規約 §ref の種別) — the house where it is the repository's own. Never with the padlock, which already
+    /// says "worktree" (git never locks the repository's own).
     readonly property bool hasTree: chip.recKind === "worktree" && !chip.recLocked
     /// One seat for the padlock or the tree.
     readonly property bool hasMark: chip.hasLock || chip.hasTree
@@ -233,6 +237,7 @@ Rectangle {
         // The padlock or the tree ([`hasMark`]). Unlike the sidebar row's, the seat comes and goes: held open, it
         // would push every name on the graph one mark right. Seated to its ink ([`markInk`]).
         Item {
+            id: markBox
             visible: chip.hasMark
             // Asked of the mark, not a number: the padlock and the tree span different ink.
             width: chip.markInk
@@ -242,9 +247,12 @@ Rectangle {
             NavIcon {
                 id: nameMark
                 anchors.verticalCenter: parent.verticalCenter
+                // The house stands on the name's baseline (`NavIcon.standOn`).
+                anchors.verticalCenterOffset: nameMark.standOn(nameLabel.y + nameLabel.baselineOffset - markBox.y,
+                                                               markBox.height)
                 anchors.left: parent.left
                 anchors.leftMargin: -(Theme.iconSm - nameMark.inkWidth) / 2
-                kind: chip.hasLock ? "lock" : "tree"
+                kind: chip.hasLock ? "lock" : chip.recHome ? "home" : "tree"
                 tint: Theme.textSecondary
                 width: Theme.iconSm
                 height: Theme.iconSm

@@ -196,6 +196,14 @@ FocusScope {
     // tree, and only then can anything here be written.**
     property string carriedPath: ""
     property string carriedName: ""
+    /// That worktree is the repository's own, whose name wears the house (規約 §ref の種別「名前の印」).
+    property bool carriedHome: false
+    /// Whether the last worktree whose changes were asked here was the repository's own — the mark a report naming it
+    /// wears (`showReport`).
+    property bool appliedFromHome: false
+    /// …and the name it went by then (`NavSectionModel.worktreeCalled`) — the one such a report says, which carries the
+    /// folder alone.
+    property string appliedName: ""
     /// Whether the pane may write what it shows — the one property every write control reads (デザイン規約 §無効).
     readonly property bool wipWritable: page.carriedPath === ""
     /// The list the right pane shows: our unstaged run, or another worktree's one folded list (`CarriedPane`). Every
@@ -230,19 +238,21 @@ FocusScope {
             wipPane.clearChoice()
         page.showWip()
         if (at !== "")
-            page.standOnWorktree(at, graphModel.carriedName(row))
+            page.standOnWorktree(at, graphModel.carriedName(row), graphModel.carriedHome(row))
     }
     /// Points the pane at one worktree and reads its files; that worktree's paced reads keep them current while it
-    /// stands (`pollCarried`).
-    function standOnWorktree(at, name) {
+    /// stands (`pollCarried`). `home` is whether it is the repository's own (`GraphModel.carriedHome`).
+    function standOnWorktree(at, name, home) {
         page.carriedPath = at
         page.carriedName = name
+        page.carriedHome = home
         repoTab.readCarriedStatus(at, name)
     }
     /// The pane is about this window's own tree again — every road to a commit and to our own row comes through here.
     function dropCarried() {
         page.carriedPath = ""
         page.carriedName = ""
+        page.carriedHome = false
         // Or the worktree's reads go on handing the pane a list nobody shows.
         repoTab.leaveCarriedStatus()
     }
@@ -253,6 +263,11 @@ FocusScope {
             return
         const row = graphModel.carriedRowOf(page.carriedPath)
         if (row >= 0) {
+            // The repository's own worktree goes by the branch it has out, which a switch over there changes under
+            // the pane: the bands take the row's name again.
+            const name = graphModel.carriedName(row)
+            if (name !== page.carriedName)
+                page.standOnWorktree(page.carriedPath, name, graphModel.carriedHome(row))
             page.selectedRow = row
             graphPane.setCurrentRow(row)
             return
@@ -1340,6 +1355,7 @@ FocusScope {
             canSwitch: commitMenuState.menuCanSwitch
             switchAsks: commitMenuState.menuSwitchAsks
             heldLeaf: commitMenuState.menuHeldLeaf
+            heldHome: commitMenuState.menuHeldHome
             pullRuns: commitMenuState.menuPullRuns
             pullOut: commitMenuState.menuPullOut
             pullUpstream: commitMenuState.menuPullUpstream
@@ -1374,7 +1390,14 @@ FocusScope {
             onDropStashRequested: selector => page.dropStashNow(selector)
             // Another worktree's uncommitted row: the door its double-click opens, and its work applied here.
             onCarriedOpenRequested: path => page.openRepositoryPathRequested(path)
-            onCarriedApplyRequested: path => repoTab.applyCarried(path)
+            onCarriedApplyRequested: path => {
+                // The report names the worktree by its folder alone; whether it was the repository's own, and what it
+                // goes by, is known here on the way in (`showReport`). No second apply can be asked before the report:
+                // the menus hold while a write is out.
+                page.appliedFromHome = worktreesModel.worktreeHome(path)
+                page.appliedName = worktreesModel.worktreeCalled(path)
+                repoTab.applyCarried(path)
+            }
             // The branch card's own rows, answered where the ref menu's are.
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
@@ -1641,29 +1664,35 @@ FocusScope {
     /// refuser's words; empty where this end refused, and then the second line is ours (`Words.writeReportedWhy`).
     function showReport(kind, remote, name, reason) {
         const names = Words.reportNamesWorktree(kind)
+        // The only reports that can name the repository's own worktree (it is never removed or made), which goes by
+        // the branch it keeps (デザイン規約 §ref の種別「リポジトリ自身の worktree の呼び名」).
+        const home = kind.startsWith("carried-") && page.appliedFromHome
+        const shown = home ? page.appliedName : name
         // Only our own line can send the reader somewhere: a refuser's words are quoted as they came.
-        page.showNotice(Words.writeReported(kind, remote, name),
-                        reason !== "" ? reason : Words.writeReportedWhy(kind, remote, name),
+        page.showNotice(Words.writeReported(kind, remote, shown),
+                        reason !== "" ? reason : Words.writeReportedWhy(kind, remote, shown),
                         Words.reportTone(kind),
-                        names ? name : "",
+                        names ? shown : "",
                         names ? Words.reportNameSeat(kind, remote) : -1,
-                        reason !== "" ? "" : Words.reportPlace(kind))
+                        reason !== "" ? "" : Words.reportPlace(kind),
+                        home ? "home" : "tree")
     }
     /// Automation only: git's answer to a write has been taken all the way — bar raised, mark down, standing questions
     /// cleared. What it was about rides the signal: a drain can bring several reports, so the tab holds none to read
     /// back.
     signal writeReported(string kind, string remote, string name)
     /// `label` is what did not happen, `detail` the refuser's words, `tone` the state colour, if any; `markWord` the
-    /// worktree's name in `label` that wears the tree mark, left out for none (`NoticeBar.markWord`), and `markAt` where
+    /// worktree's name in `label` that wears its mark, left out for none (`NoticeBar.markWord`), and `markAt` where
     /// the sentence put it, left out for the heading's start; `place` the word of `detail` that opens the command log,
-    /// left out for none (`NoticeBar.detailPlace`).
-    function showNotice(label, detail, tone, markWord, markAt, place) {
+    /// left out for none (`NoticeBar.detailPlace`); `markKind` that name's mark, left out for the tree.
+    function showNotice(label, detail, tone, markWord, markAt, place, markKind) {
         // Dressed, then raised — so nothing is written on a bar the reader can see (`NoticeBar.open`).
         noticeBar.label = label
         noticeBar.detail = detail
         noticeBar.tone = tone
         noticeBar.markWord = markWord === undefined ? "" : markWord
         noticeBar.markWordAt = markAt === undefined ? -1 : markAt
+        noticeBar.markKind = markKind === "home" ? "home" : "tree"
         noticeBar.detailPlace = place === undefined ? "" : place
         noticeBar.detailHref = noticeBar.detailPlace === "" ? "" : Words.commandsHref
         noticeBar.open = true
@@ -3371,6 +3400,7 @@ FocusScope {
                             // Read where the file is, and staged only where this window is the one holding it.
                             writable: page.wipWritable
                             worktreeName: page.carriedName
+                            worktreeHome: page.carriedHome
                             // The two swap over during a rebase; the model is where that is already answered. What
                             // *this* window is in the middle of, so a worktree's conflicted file falls back to git's
                             // own two words the way its rows do (`WipBucketPane`).
@@ -3451,6 +3481,7 @@ FocusScope {
                         anchors.fill: parent
                         visible: page.wipShown && !page.wipWritable
                         worktreeName: page.carriedName
+                        worktreeHome: page.carriedHome
                         files: carriedModel
                         readBucket: page.diffFromWorktree ? page.diffKind : ""
                         readPath: page.diffFromWorktree ? page.diffPath : ""

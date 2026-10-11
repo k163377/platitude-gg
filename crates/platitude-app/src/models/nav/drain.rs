@@ -96,7 +96,8 @@ impl NavSectionModel {
             crate::hub::listing_applied(self.tab_id, &self.section, list.looked);
             self.looked = list.looked;
             // A bare entry has no working tree to show.
-            let list = list.entries.into_iter().filter(|w| !w.bare).collect();
+            let list: Vec<_> = list.entries.into_iter().filter(|w| !w.bare).collect();
+            arrived |= self.settle_home_branch(&list, &current);
             arrived |= self.take(Source::Worktrees { list, current });
         }
         let mut stashes_arrived = false;
@@ -167,5 +168,24 @@ impl NavSectionModel {
         self.head_behind = behind;
         self.head_upstream_gone = gone.to_string();
         changed
+    }
+
+    /// Settles `home_branch` off a worktree listing: the branch the
+    /// repository's own worktree keeps, where that worktree is not
+    /// `current` (this window's, spelled as `take_feeds` spells it).
+    /// Answers whether it moved.
+    pub(super) fn settle_home_branch(
+        &mut self,
+        list: &[platitude_core::worktrees::WorktreeEntry],
+        current: &str,
+    ) -> bool {
+        let home = list
+            .iter()
+            .find(|w| w.main && w.path.replace('\\', "/").to_lowercase() != current)
+            .and_then(|w| w.branch.clone().or_else(|| w.held.clone()))
+            .unwrap_or_default();
+        let moved = self.home_branch != home;
+        self.home_branch = home;
+        moved
     }
 }

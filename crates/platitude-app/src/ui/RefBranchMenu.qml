@@ -78,8 +78,10 @@ AppMenu {
         /// That reading stands on another commit, so the two rows that reach it say why.
         property bool remoteDrifted: false
         property string heldByWorktree: ""
-        /// The leaf of the path git prints for that worktree, cut at the entrance.
+        /// The name that worktree goes by, read at the entrance (`RefRowMenu.heldLeaf`).
         property string holderLeaf: ""
+        /// That worktree is the repository's own: its name wears the house (デザイン規約 §ref の種別).
+        property bool holderHome: false
         property bool canDelete: false
         property bool canDeleteRemote: false
         property bool canSetUpstream: false
@@ -92,7 +94,8 @@ AppMenu {
     }
 
     /// Freezes the card on that branch. `facts` is what the carrying menu read for it: `heldByWorktree` the other
-    /// worktree holding this row's local branch and `holderLeaf` its folder, `remoteCounterpart` the reading a
+    /// worktree holding this row's local branch, `holderLeaf` the name it goes by and `holderHome` whether it is the
+    /// repository's own, `remoteCounterpart` the reading a
     /// local branch speaks for, `remoteCounterpartOid` its commit and `remoteDrifted` whether that stands on another
     /// commit, `offers` core's words,
     /// `open` whether the tab is, and `merged` what the drawn rows say about the plain delete (`yes` / `no`, empty
@@ -112,6 +115,7 @@ AppMenu {
             state.remoteDrifted = false
             state.heldByWorktree = ""
             state.holderLeaf = ""
+            state.holderHome = false
             state.canDelete = false
             state.canDeleteRemote = false
             state.canSetUpstream = false
@@ -120,6 +124,7 @@ AppMenu {
         }
         state.heldByWorktree = facts.heldByWorktree
         state.holderLeaf = facts.holderLeaf
+        state.holderHome = facts.holderHome === true
         state.remoteCounterpart = facts.remoteCounterpart
         state.remoteCounterpartOid = facts.remoteCounterpartOid
         state.remoteDrifted = facts.remoteDrifted
@@ -212,6 +217,7 @@ AppMenu {
                      : branchCard.blockedByWorktree
         // Asked of the sentence this row shows, not of the state: a row blocked for another reason names no worktree.
         reasonMarkWord: refDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
+        reasonMarkKind: state.holderHome ? "home" : "tree"
         // The plain delete is a delete too: two presses, in the plain ink (デザイン規約 §回数押し). Refused, or reaching
         // past this machine, it is the warning's three.
         holdPresses: heldRow ? Metrics.holdPressesWarned : Metrics.holdPressesPlain
@@ -280,6 +286,7 @@ AppMenu {
                      : Words.differsFrom(state.remoteCounterpart)
         // As on the local row.
         reasonMarkWord: refBothDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
+        reasonMarkKind: state.holderHome ? "home" : "tree"
         holdPresses: Metrics.holdPressesWarned
         // `warning` whether the local half runs as `-d` or `-D`: the commits only it reached come back from the discard
         // record with the name (デザイン規約 §回数押し の色の表).

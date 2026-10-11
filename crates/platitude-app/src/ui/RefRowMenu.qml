@@ -57,10 +57,12 @@ Item {
     /// Whether `switch` will raise a question (an operation standing, or unmerged files), worn as the row's `!`
     /// (デザイン規約 §進行中の操作から出る).
     property bool switchAsks: false
-    /// The leaf of the worktree holding this row's branch, empty when none does; the switch row then opens that
-    /// worktree and names it (`RepoPage.switchToRef`). The leaf is how a worktree is named everywhere
-    /// (デザイン規約 §ref の種別).
+    /// The name the worktree holding this row's branch goes by, empty when none does; the switch row then opens that
+    /// worktree and names it (`RepoPage.switchToRef`). Its WORKTREES row's name — the folder, or the branch the
+    /// repository's own has out (`NavSectionModel.worktreeCalled`, デザイン規約 §ref の種別).
     property string heldLeaf: ""
+    /// That worktree is the repository's own: its name wears the house, not the tree (デザイン規約 §ref の種別).
+    property bool heldHome: false
     property bool canBranchHere: false
     property bool canIntegrateFrom: false
     /// What the `pull` row runs (`offers::pull_row`): `here` — `git pull`, on either end of the current branch's
@@ -139,7 +141,8 @@ Item {
     /// row is held through the local branch of the same name.
     function branchFacts(kind, full, oidHex) {
         if (kind !== "branch" && kind !== "remote")
-            return { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
+            return { "heldByWorktree": "", "holderLeaf": "", "holderHome": false,
+                     "remoteCounterpart": "", "remoteCounterpartOid": "",
                      "remoteDrifted": false, "offers": "", "open": false, "merged": "" }
         const held = kind === "branch"
             ? refRowMenu.worktreesModel.worktreeHolding(full)
@@ -149,7 +152,8 @@ Item {
         const open = refRowMenu.repoTab.state === "open"
         return {
             "heldByWorktree": held,
-            "holderLeaf": held === "" ? "" : GitFacts.pathLeaf(held),
+            "holderLeaf": held === "" ? "" : refRowMenu.worktreesModel.worktreeCalled(held),
+            "holderHome": held !== "" && refRowMenu.worktreesModel.worktreeHome(held),
             "remoteCounterpart": counterpart,
             "remoteCounterpartOid": counterpart === "" ? "" : refRowMenu.branchesModel.upstreamOidOf(full),
             "remoteDrifted": drifted,
@@ -328,7 +332,9 @@ Item {
             held, "", false, refRowMenu.repoTab.defaultRemote, "")
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
-        refRowMenu.heldLeaf = held === "" ? "" : GitFacts.pathLeaf(held)
+        // As its WORKTREES row names it (`NavSectionModel.worktreeCalled`).
+        refRowMenu.heldLeaf = held === "" ? "" : refRowMenu.worktreesModel.worktreeCalled(held)
+        refRowMenu.heldHome = held !== "" && refRowMenu.worktreesModel.worktreeHome(held)
         refRowMenu.canBranchHere = offers.includes("branch-here")
         refRowMenu.canIntegrateFrom = offers.includes("integrate")
         // The tree's own comparison for `git pull`, the row's branch's for its fast-forward (offers::pull_row).
@@ -368,9 +374,10 @@ Item {
             // A branch another worktree holds opens that worktree instead: the chip gives way to the worktree's name
             // behind its tree mark (デザイン規約 §進行中の操作から出る).
             code: refRowMenu.heldLeaf === "" ? "switch" : ""
-            //: The row that leads to the worktree holding this branch; the folder's name follows it.
+            //: The row that leads to the worktree holding this branch; its name follows it — the folder's, or the branch
+            //: the repository's own worktree has out.
             text: refRowMenu.heldLeaf === "" ? "" : qsTr("Open")
-            nameMark: refRowMenu.heldLeaf === "" ? "" : "tree"
+            nameMark: refRowMenu.heldLeaf === "" ? "" : refRowMenu.heldHome ? "home" : "tree"
             nameMarkTint: Theme.success
             markName: refRowMenu.heldLeaf
             offered: refRowMenu.canSwitch
@@ -417,6 +424,7 @@ Item {
             // Greyed where git would turn the press down, saying where to go instead (デザイン規約 §取り込んで合流させる).
             blockedReason: Words.pullOut(refRowMenu.pullOut, refRowMenu.heldLeaf, refRowMenu.pullUpstream)
             reasonMarkWord: refRowMenu.pullOut === "held" ? refRowMenu.heldLeaf : ""
+            reasonMarkKind: refRowMenu.heldHome ? "home" : "tree"
             // `git pull` resolves the other end itself; the fast-forward is told the branch.
             onTriggered: refRowMenu.repoTab.pull(refRowMenu.pullRuns === "aside" ? refRowMenu.refId : "")
         }

@@ -23,6 +23,7 @@ impl NavSectionModel {
     qproperty!("refsLoaded", Member = refs_loaded, Notify = changed);
     qproperty!("carriedAt", Member = carried_at, Notify = changed);
     qproperty!("carriedName", Member = carried_name, Notify = changed);
+    qproperty!("homeBranch", Member = home_branch, Notify = changed);
     qproperty!("treeView", Member = tree_view, Notify = changed);
     qproperty!(
         "pointedEolPath",
@@ -296,6 +297,20 @@ impl NavSectionModel {
     #[qslot]
     fn worktree_facts(&self, path: String) -> Optional<WorktreeRow> {
         Optional::new(self.worktree_of(&path))
+    }
+
+    /// Whether the worktree at `path` is the repository's own
+    /// (`is_home_worktree`) — read as a menu opens or a write is asked.
+    #[qslot]
+    fn worktree_home(&self, path: String) -> bool {
+        self.is_home_worktree(&path)
+    }
+
+    /// The name the worktree at `path` goes by from elsewhere
+    /// (`name_of_worktree`) — read as a menu opens or a write is asked.
+    #[qslot]
+    fn worktree_called(&self, path: String) -> String {
+        self.name_of_worktree(&path)
     }
 
     /// Where a new worktree for `branch` would be made and whether git would

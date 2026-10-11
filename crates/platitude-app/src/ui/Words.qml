@@ -150,10 +150,12 @@ QtObject {
     }
 
     /// Why a row acting on a branch another worktree has checked out is greyed — the branch card's delete rows and the
-    /// `pull` row. The state and where, not why (デザイン規約 §hover のツールチップ); the folder, not the whole path git
-    /// prints: nobody reads a tooltip that wide.
+    /// `pull` row. The state and where, not why (デザイン規約 §hover のツールチップ); the name the worktree goes by — its
+    /// folder, or the branch the repository's own has out — not the whole path git prints: nobody reads a tooltip
+    /// that wide.
     function checkedOutElsewhere(leaf) {
-        //: %1 is the folder of the other worktree that has this branch checked out.
+        //: %1 is the name of the other worktree that has this branch checked out: its folder, or for the repository's
+        //: own worktree the branch it has out.
         return qsTr("Checked out in another worktree — %1").arg(leaf)
     }
 
@@ -268,7 +270,8 @@ QtObject {
         case "worktree-half": return qsTr("%1 was not removed completely").arg(name)
         case "worktree-not-added":
         case "worktree-folder-taken": return qsTr("%1 was not created").arg(name)
-        // Another worktree's changes, applied here from its uncommitted row: `name` is that worktree's folder.
+        // Another worktree's changes, applied here from its uncommitted row: `name` is the name that worktree goes by —
+        // its folder, or the branch the repository's own has out (`RepoPage.showReport`).
         case "carried-in-the-way":
         case "carried-file-in-the-way":
         case "carried-unread":

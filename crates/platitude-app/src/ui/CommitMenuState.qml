@@ -49,9 +49,11 @@ QtObject {
     /// Whether the row's name is somewhere to move to, and whether the press asks first (`offers::ref_menu`).
     property bool menuCanSwitch: false
     property bool menuSwitchAsks: false
-    /// …or leads to another worktree instead: the folder of the one holding that name, empty when none does
+    /// …or leads to another worktree instead: the name the one holding that name goes by, empty when none does
     /// (`RefRowMenu.heldLeaf`).
     property string menuHeldLeaf: ""
+    /// That worktree is the repository's own (`RefRowMenu.heldHome`).
+    property bool menuHeldHome: false
     /// What the `pull` row runs on that name and why it is greyed — the same `offers::pull_row` ask as
     /// `RefRowMenu.pullRuns` / `pullOut`.
     property string menuPullRuns: ""
@@ -103,6 +105,7 @@ QtObject {
         menuState.menuCanSwitch = false
         menuState.menuSwitchAsks = false
         menuState.menuHeldLeaf = ""
+        menuState.menuHeldHome = false
         menuState.menuPullRuns = ""
         menuState.menuPullOut = ""
         menuState.menuPullUpstream = ""
@@ -118,7 +121,9 @@ QtObject {
             held, "", false, menuState.repoTab.defaultRemote, "")
         menuState.menuCanSwitch = offers.includes("switch")
         menuState.menuSwitchAsks = offers.includes("asks")
-        menuState.menuHeldLeaf = held === "" ? "" : GitFacts.pathLeaf(held)
+        // As its WORKTREES row names it (`NavSectionModel.worktreeCalled`).
+        menuState.menuHeldLeaf = held === "" ? "" : menuState.worktreesModel.worktreeCalled(held)
+        menuState.menuHeldHome = held !== "" && menuState.worktreesModel.worktreeHome(held)
         menuState.menuPullUpstream = menuState.branchesModel.upstreamOf(name)
         const pull = GitFacts.pullRow(
             kind, name, menuState.repoTab.state === "open",
@@ -163,7 +168,8 @@ QtObject {
     /// What the BRANCH card stands on — the same answer `RefRowMenu.branchFacts` gives at the other entrance.
     function branchFacts(kind, full, oidHex) {
         if (kind !== "branch" && kind !== "remote")
-            return { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
+            return { "heldByWorktree": "", "holderLeaf": "", "holderHome": false,
+                     "remoteCounterpart": "", "remoteCounterpartOid": "",
                      "remoteDrifted": false, "offers": [], "open": false, "merged": "" }
         const held = kind === "branch"
             ? menuState.worktreesModel.worktreeHolding(full)
@@ -173,7 +179,8 @@ QtObject {
         const open = menuState.repoTab.state === "open"
         return {
             "heldByWorktree": held,
-            "holderLeaf": held === "" ? "" : GitFacts.pathLeaf(held),
+            "holderLeaf": held === "" ? "" : menuState.worktreesModel.worktreeCalled(held),
+            "holderHome": held !== "" && menuState.worktreesModel.worktreeHome(held),
             "remoteCounterpart": counterpart,
             "remoteCounterpartOid": counterpart === "" ? "" : menuState.branchesModel.upstreamOidOf(full),
             "remoteDrifted": drifted,
@@ -239,6 +246,7 @@ QtObject {
         menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree
         menu.carriedPath = path
         menu.carriedName = name
+        menu.carriedHome = menuState.graphModel.carriedHome(menuState.graphModel.carriedRowOf(path))
         menuState.standCarried()
         menu.offerCarried()
     }

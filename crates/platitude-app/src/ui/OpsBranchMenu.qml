@@ -112,7 +112,11 @@ AppMenu {
                     // The current branch has no row — it is what the menu was opened from (規約 §メニュー); a folder
                     // left holding nothing else goes too (`AppMenu.delegate`).
                     "offered": row.offers,
-                    "markKind": row.held ? "tree" : "",
+                    // The repository's own worktree's branch wears the house (`NavSectionModel.homeBranch`).
+                    "markKind": !row.held ? ""
+                              : card.page !== null && card.page.pageWorktrees
+                                && row.full === card.page.pageWorktrees.homeBranch ? "home"
+                              : "tree",
                     "ahead": row.ahead,
                     "behind": row.behind,
                     "remoteBadge": row.remote,

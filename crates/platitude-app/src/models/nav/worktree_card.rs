@@ -163,6 +163,26 @@ impl NavSectionModel {
             .find(|row| row.full == path)
     }
 
+    /// Whether the worktree at `path` (as git lists it) is the repository's
+    /// own — whose marks are the house where the others' are the tree
+    /// (デザイン規約 §ref の種別). False for a path not listed.
+    pub(super) fn is_home_worktree(&self, path: &str) -> bool {
+        self.worktree_of(path).is_some_and(|row| row.change == MAIN)
+    }
+
+    /// The name the worktree at `path` goes by where something else names
+    /// it — its WORKTREES row's: the branch the repository's own has out,
+    /// the folder otherwise and where that one is detached (デザイン規約
+    /// §ref の種別「リポジトリ自身の worktree の呼び名」). The path's last
+    /// segment for a worktree not listed, empty for an empty path.
+    pub(super) fn name_of_worktree(&self, path: &str) -> String {
+        match self.worktree_of(path) {
+            Some(row) if row.change == MAIN && !row.branch.is_empty() => row.branch,
+            Some(row) => row.name,
+            None => crate::urlpath::path_leaf(path).to_string(),
+        }
+    }
+
     /// The path of the worktree called `name` standing on `head` — what a
     /// folder's chip on the graph names, which carries only the folder:
     /// two worktrees of one name under different parents sit on different
@@ -244,6 +264,66 @@ mod tests {
         model.arrange();
         assert_eq!(model.shown_rows(), 1, "the filter left one row on the list");
         assert_eq!(fulls(&model), whole);
+    }
+
+    /// What names the repository's own worktree from elsewhere: the house,
+    /// and its branch for a name — its folder while detached. Every other
+    /// worktree by its folder (デザイン規約 §ref の種別).
+    #[test]
+    fn the_repositorys_own_worktree_is_home_and_goes_by_its_branch() {
+        let model = worktrees();
+        assert!(model.is_home_worktree("C:/work/home"));
+        assert!(!model.is_home_worktree("C:/work/plain"));
+        assert!(!model.is_home_worktree(""));
+        assert_eq!(model.name_of_worktree("C:/work/home"), "main");
+        assert_eq!(model.name_of_worktree("C:/work/plain"), "plain");
+        assert_eq!(
+            model.name_of_worktree("C:/work/gone"),
+            "gone",
+            "one not listed: its folder"
+        );
+        assert_eq!(model.name_of_worktree(""), "");
+
+        let detached = section(
+            "worktrees",
+            Source::Worktrees {
+                list: vec![worktree_entry("C:/work/home", None, false)],
+                current: "c:/work/plain".to_string(),
+            },
+        );
+        assert!(detached.is_home_worktree("C:/work/home"));
+        assert_eq!(detached.name_of_worktree("C:/work/home"), "home");
+    }
+
+    /// The branch whose marks are the house: the one the repository's own
+    /// worktree keeps — a rebase standing there too — and only while this
+    /// window stands elsewhere.
+    #[test]
+    fn the_home_branch_is_the_one_the_repositorys_own_worktree_keeps_elsewhere() {
+        let mut model = worktrees();
+        let list = vec![
+            worktree_entry("C:/work/home", Some("main"), false),
+            worktree_entry("C:/work/plain", Some("topic"), false),
+        ];
+        assert!(model.settle_home_branch(&list, "c:/work/plain"));
+        assert_eq!(model.home_branch, "main");
+        assert!(
+            !model.settle_home_branch(&list, "c:/work/plain"),
+            "the same listing moves nothing"
+        );
+        assert!(model.settle_home_branch(&list, "c:/work/home"));
+        assert_eq!(
+            model.home_branch, "",
+            "none where this window is that worktree"
+        );
+
+        let mut rebasing = worktree_entry("C:/work/home", None, false);
+        rebasing.held = Some("main".to_string());
+        model.settle_home_branch(&[rebasing], "c:/work/plain");
+        assert_eq!(
+            model.home_branch, "main",
+            "a rebase standing there keeps it"
+        );
     }
 
     #[test]

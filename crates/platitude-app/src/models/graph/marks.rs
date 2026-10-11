@@ -79,6 +79,7 @@ impl GraphModel {
                 super::CarriedRow {
                     name: carried.name.to_string(),
                     path: carried.path.clone(),
+                    home: carried.main,
                     tally: Optional::some(Tally {
                         added: count(k.added),
                         modified: count(k.modified),

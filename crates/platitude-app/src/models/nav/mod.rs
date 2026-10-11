@@ -300,6 +300,12 @@ pub struct NavSectionModel {
     carried_at: String,
     /// That worktree's name, as the band says it.
     carried_name: String,
+    /// The branch the repository's own worktree keeps, where that worktree is
+    /// not this window's — checked out, or kept by a rebase or bisect
+    /// standing there (`WorktreeEntry::held`). A branch it keeps wears the
+    /// house where the others wear the tree (デザイン規約 §ref の種別).
+    /// Empty otherwise, and on every section but WORKTREES.
+    home_branch: String,
     stash_feed: Option<Arc<Feed<crate::hub::StashList>>>,
     worktrees_feed: Option<Arc<Feed<crate::hub::WorktreeList>>>,
     tab_id: i32,

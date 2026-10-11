@@ -35,6 +35,9 @@ pub struct Chip {
     pub held: bool,
     /// `git worktree lock` is on that worktree — the padlock beside the name.
     pub locked: bool,
+    /// A `worktree` chip naming the repository's own worktree — the house
+    /// beside the name instead of the tree (`RefLabel::main`).
+    pub home: bool,
     /// Whose reading this is, when it is not this repository's: the
     /// remotes carrying a tag, comma-separated. Empty for everything else.
     pub remote: String,
@@ -123,6 +126,7 @@ pub fn chips_of(labels: &[RefLabel], pr: &std::collections::HashSet<String>) -> 
                 here: l.here,
                 held: l.held_elsewhere,
                 locked: l.locked,
+                home: l.main,
                 remote: l.remote.clone(),
             })
             .collect(),
@@ -189,6 +193,7 @@ impl Record for Chip {
             .put("here", &self.here)
             .put("held", &self.held)
             .put("locked", &self.locked)
+            .put("home", &self.home)
             .put("remote", &self.remote)
             .put("key", &self.key())
             .done()
@@ -204,6 +209,7 @@ impl Record for Chip {
             here: field(map, "here")?,
             held: field(map, "held")?,
             locked: field(map, "locked")?,
+            home: field(map, "home")?,
             remote: field(map, "remote")?,
         })
     }
@@ -262,6 +268,10 @@ mod tests {
                 ..label("spike", LabelKind::Worktree)
             },
             label("HEAD", LabelKind::Head),
+            RefLabel {
+                main: true,
+                ..label("repo", LabelKind::Worktree)
+            },
         ]);
         assert_eq!(
             chips[0],
@@ -274,6 +284,7 @@ mod tests {
                 here: true,
                 held: false,
                 locked: false,
+                home: false,
                 remote: String::new(),
             }
         );
@@ -283,6 +294,8 @@ mod tests {
         // A branchless worktree's marker carries the padlock alone: it names
         // no branch, so `held` stays down (the kind puts the frame on it).
         assert!(chips[3].locked && !chips[3].held);
+        // The repository's own worktree's marker wears the house; no other chip does.
+        assert!(chips[5].home && !chips[3].home);
         assert_eq!(
             <Chips as QVariantConvertible>::try_from_qvariant(&chips.to_qvariant()),
             Ok(chips)

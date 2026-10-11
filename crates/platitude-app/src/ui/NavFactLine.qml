@@ -60,6 +60,7 @@ RowLayout {
     // where the row's name does; sized by the mark instead, they land right of it. A TAGS row has no seat
     // (`NavRowBody.seated`): its lines' cloud stands under the name's head and the words one seat in.
     Item {
+        id: seatBox
         Layout.preferredWidth: Theme.iconXs
         Layout.preferredHeight: Theme.iconXs
         // Built only on the lines that wear one (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」).
@@ -68,6 +69,9 @@ RowLayout {
             active: line.mark !== ""
             anchors.centerIn: parent
             anchors.horizontalCenterOffset: (Theme.iconSm - Theme.iconXs) / 2
+            // The house stands on the words (`NavIcon.standOn`), which sit on the line's baseline, not its middle.
+            anchors.verticalCenterOffset: markSeat.item
+                ? markSeat.item.standOn(words.y + words.baselineOffset - seatBox.y, seatBox.height) : 0
             sourceComponent: NavIcon {
                 kind: line.mark
                 tint: line.markTint

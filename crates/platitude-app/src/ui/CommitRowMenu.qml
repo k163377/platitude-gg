@@ -54,8 +54,10 @@ Item {
     /// Whether the row's name is somewhere to move to, and whether that move asks first (`offers::ref_menu`).
     required property bool canSwitch
     required property bool switchAsks
-    /// …or leads to the worktree holding that name instead: that worktree's folder (`RefRowMenu.heldLeaf`).
+    /// …or leads to the worktree holding that name instead: the name that worktree goes by (`RefRowMenu.heldLeaf`).
     required property string heldLeaf
+    /// That worktree is the repository's own: its name wears the house (`RefRowMenu.heldHome`).
+    property bool heldHome: false
     /// What the `pull` row runs on that name — `here` / `aside`, "" for no row — and why it is greyed — `diverged` /
     /// `own` / `held`, "" while live (`RefRowMenu.pullRuns` / `pullOut`).
     required property string pullRuns
@@ -74,10 +76,12 @@ Item {
     property string landedDelete: ""
     property string checkedBranch: ""
     property string checkedMerged: ""
-    /// Another worktree's uncommitted row the third menu stands on: where that worktree is (as its row names it), its
-    /// folder's name, and whether its work can be applied here (`CommitMenuState.standCarried`).
+    /// Another worktree's uncommitted row the third menu stands on: where that worktree is (as its row names it), the
+    /// name the row gives it, and whether its work can be applied here (`CommitMenuState.standCarried`).
     property string carriedPath: ""
     property string carriedName: ""
+    /// That worktree is the repository's own, whose name wears the house (`GraphModel.carriedHome`).
+    property bool carriedHome: false
     property bool carriedCanApply: false
 
     /// Move the worktree to the row's name, by the road a double-click takes (`RepoPage.switchToRef`).
@@ -243,9 +247,10 @@ Item {
         // The row's double-click, in the words and seat a branch another worktree holds has (`switchCommitItem`).
         AppMenuItem {
             id: carriedOpenRow
-            //: The row that leads to the worktree whose uncommitted changes these are; the folder's name follows it.
+            //: The row that leads to the worktree whose uncommitted changes these are; its name follows it — the folder's,
+            //: or the branch the repository's own worktree has out.
             text: qsTr("Open")
-            nameMark: "tree"
+            nameMark: rowMenu.carriedHome ? "home" : "tree"
             nameMarkTint: Theme.success
             markName: rowMenu.carriedName
             onTriggered: rowMenu.carriedOpenRequested(rowMenu.carriedPath)
@@ -285,9 +290,10 @@ Item {
             // A branch another worktree holds leads to that worktree, in the same words and seat as the sidebar's row
             // (デザイン規約 §メニュー).
             code: rowMenu.heldLeaf === "" ? "switch" : ""
-            //: The row that leads to the worktree holding this branch; the folder's name follows it.
+            //: The row that leads to the worktree holding this branch; its name follows it — the folder's, or the branch
+            //: the repository's own worktree has out.
             text: rowMenu.heldLeaf === "" ? "" : qsTr("Open")
-            nameMark: rowMenu.heldLeaf === "" ? "" : "tree"
+            nameMark: rowMenu.heldLeaf === "" ? "" : rowMenu.heldHome ? "home" : "tree"
             nameMarkTint: Theme.success
             markName: rowMenu.heldLeaf
             offered: rowMenu.canSwitch
@@ -414,6 +420,7 @@ Item {
             offered: rowMenu.pullRuns !== ""
             blockedReason: Words.pullOut(rowMenu.pullOut, rowMenu.heldLeaf, rowMenu.pullUpstream)
             reasonMarkWord: rowMenu.pullOut === "held" ? rowMenu.heldLeaf : ""
+            reasonMarkKind: rowMenu.heldHome ? "home" : "tree"
             onTriggered: rowMenu.pullRequested(rowMenu.pullRuns === "aside" ? rowMenu.targetName : "")
         }
         AppMenuSeparator {}

@@ -41,6 +41,12 @@ Item {
         const at = shared.sharedTip.parent
         return at !== null && at.tipMarkWord !== undefined ? at.tipMarkWord : ""
     }
+    /// The mark itself: the house where that worktree is the repository's own, else the tree. A target that names
+    /// none means the tree.
+    readonly property string tipMarkKind: {
+        const at = shared.sharedTip.parent
+        return at !== null && at.tipMarkKind !== undefined && at.tipMarkKind === "home" ? "home" : "tree"
+    }
     /// The place word was pressed; `Main` hands the href to the page that owns it.
     signal linkAsked(string href)
 
@@ -461,12 +467,20 @@ Item {
             NavIcon {
                 id: tipMark
                 visible: tipWords.markSeat.width > 0 || tipWords.markSeat.height > 0
-                kind: "tree"
+                kind: shared.tipMarkKind
                 tint: Theme.textSecondary
                 width: Theme.iconSm
                 height: Theme.iconSm
                 x: tipWords.markSeat.x - (Theme.iconSm + tipMark.inkWidth) / 2
+                // The line's middle; the house goes down onto the line's baseline (`NavIcon.standOn`).
                 y: tipWords.markSeat.y + (tipWords.markSeat.height - Theme.iconSm) / 2
+                   + tipMark.standOn(tipFace.ascent, tipWords.markSeat.height)
+            }
+            /// The field's face, whose ascent is where a line's baseline stands below its top.
+            FontMetrics {
+                id: tipFace
+                font.family: Theme.uiFamily
+                font.pixelSize: tipWords.pixelSize
             }
         }
     }

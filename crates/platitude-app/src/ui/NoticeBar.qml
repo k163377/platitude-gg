@@ -23,6 +23,8 @@ Rectangle {
     property string markWord: ""
     /// Where in the heading that name stands (`Words.reportNameSeat`); -1 for the heading's start.
     property int markWordAt: -1
+    /// That name's mark: the house for the repository's own worktree, else the tree.
+    property string markKind: "tree"
     /// The one word of `detail` that is a place to go, and where (デザイン規約 §hover のツールチップ「2 行目の中の 1 語は
     /// 行き先にできる」, `Words.commandsHref`); empty for none.
     property string detailPlace: ""
@@ -150,12 +152,21 @@ Rectangle {
                 NavIcon {
                     id: headMark
                     visible: headingWord.markSeat.width > 0 || headingWord.markSeat.height > 0
-                    kind: "tree"
+                    kind: bar.markKind
                     tint: Theme.textSecondary
                     width: Theme.iconSm
                     height: Theme.iconSm
                     x: headingWord.markSeat.x - (Theme.iconSm + headMark.inkWidth) / 2
+                    // The line's middle; the house goes down onto the line's baseline (`NavIcon.standOn`).
                     y: headingWord.markSeat.y + (headingWord.markSeat.height - Theme.iconSm) / 2
+                       + headMark.standOn(headFace.ascent, headingWord.markSeat.height)
+                }
+                /// The heading's face, whose ascent is where a line's baseline stands below its top.
+                FontMetrics {
+                    id: headFace
+                    font.family: Theme.uiFamily
+                    font.pixelSize: Theme.fontMd
+                    font.weight: Theme.fontWeightStrong
                 }
             }
             // Wrapped: a forge writes the broken rule last (after `GH006: …`), so a cut drops the sentence the reader

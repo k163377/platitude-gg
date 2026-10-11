@@ -21,6 +21,8 @@ Rectangle {
     /// The worktree the file belongs to, where it is not this window's — said after the path, which leads
     /// (デザイン規約 §別の worktree を読む).
     required property string worktreeName
+    /// That worktree is the repository's own: the name wears the house (規約 §ref の種別「名前の印」).
+    property bool worktreeHome: false
     required property bool conflicted
     required property bool busy
     /// Whether the rows are read as two columns (`DiffModel.split`) — what the toggle shows
@@ -124,13 +126,16 @@ Rectangle {
                     NavIcon {
                         id: worktreeMark
                         anchors.centerIn: parent
-                        kind: "tree"
+                        anchors.verticalCenterOffset: worktreeMark.standOn(worktreeNameCut.wordBase,
+                                                                           worktreeNameCut.height)
+                        kind: header.worktreeHome ? "home" : "tree"
                         tint: Theme.textSecondary
                         width: Theme.iconSm
                         height: Theme.iconSm
                     }
                 }
                 CutName {
+                    id: worktreeNameCut
                     Layout.fillWidth: true
                     Layout.preferredHeight: Theme.rowHeight
                     text: header.worktreeName

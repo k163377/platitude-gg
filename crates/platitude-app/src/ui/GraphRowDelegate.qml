@@ -102,6 +102,15 @@ Item {
         view.model.carriedRevision
         return view.model.carriedName(rowItem.index)
     }
+    /// That worktree is the repository's own: its name wears the house, as its WORKTREES row does
+    /// (規約 §ref の種別「名前の印」). Touches `carriedRevision` for the reason `carriedName` does.
+    readonly property bool carriedHome: {
+        const view = rowItem.ListView.view
+        if (!rowItem.carried || !view || !view.model)
+            return false
+        view.model.carriedRevision
+        return view.model.carriedHome(rowItem.index)
+    }
     // A row about a worktree this window is not open on. **It selects like any other row and opens that worktree
     // read-only** (`leftClick`) — the only tree this window can write is its own (`RepoPage.wipWritable`); the
     // worktree's writes are in its own tab, which the double-click opens (デザイン規約 §別の worktree を読む).
@@ -340,7 +349,9 @@ Item {
                             NavIcon {
                                 id: carriedMark
                                 anchors.centerIn: parent
-                                kind: "tree"
+                                anchors.verticalCenterOffset: carriedMark.standOn(carriedNameCut.wordBase,
+                                                                                  carriedNameCut.height)
+                                kind: rowItem.carriedHome ? "home" : "tree"
                                 // The ink every mark takes: what a mark says is its shape (規約 §ref の種別).
                                 tint: Theme.textSecondary
                                 width: Theme.iconSm
@@ -349,6 +360,7 @@ Item {
                         }
                         // Cut in the middle, as this worktree's name is everywhere (規約 §別の worktree を読む).
                         CutName {
+                            id: carriedNameCut
                             Layout.maximumWidth: rowItem.carriedNameMax
                             text: rowItem.carriedName
                             pixelSize: Theme.fontMd

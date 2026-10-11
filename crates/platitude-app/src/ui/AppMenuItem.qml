@@ -126,11 +126,16 @@ MenuItem {
     readonly property bool blocked: menuItem.blockedWhy !== ""
     /// A worktree's folder inside the row's own reason (`blockedReason`); empty for none.
     property string reasonMarkWord: ""
-    /// The word the shared tooltip stands the tree mark against (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別
-    /// 「ツールチップだけは字の中」): the folder in the reason, or the folder this row names behind the tree mark, which the
-    /// hover gives back whole when it is cut.
+    /// The mark that folder wears: the house for the repository's own worktree, else the tree.
+    property string reasonMarkKind: "tree"
+    /// The word the shared tooltip stands the worktree's mark against (`SharedToolTip.tipMarkWord`, デザイン規約
+    /// §ref の種別「ツールチップだけは字の中」): the folder in the reason, or the folder this row names behind its mark,
+    /// which the hover gives back whole when it is cut.
     readonly property string tipMarkWord: menuItem.blocked ? menuItem.reasonMarkWord
-                                        : menuItem.nameMark === "tree" ? menuItem.markName : ""
+                                        : menuItem.nameMark === "tree" || menuItem.nameMark === "home"
+                                          ? menuItem.markName : ""
+    /// …and which mark (`SharedToolTip.tipMarkKind`).
+    readonly property string tipMarkKind: menuItem.blocked ? menuItem.reasonMarkKind : menuItem.nameMark
 
     /// Automation: show the tooltip with no pointer behind it, through the binding the hover drives
     /// (verify-ui §hover の絵の撮り方).
@@ -439,6 +444,8 @@ MenuItem {
                 NavIcon {
                     id: nameMarkIcon
                     anchors.centerIn: parent
+                    anchors.verticalCenterOffset: nameMarkIcon.standOn(markNameLabel.baselineOffset,
+                                                                       markNameLabel.height)
                     width: Theme.iconSm
                     height: Theme.iconSm
                     // The 16-grid scales with the seat and the line does not; unscaled, the mark outweighs the letters

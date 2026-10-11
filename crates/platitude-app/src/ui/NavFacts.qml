@@ -80,7 +80,11 @@ QtObject {
             "branch": branch,
             // Shown as the folder the path ends in. Asked only when there is one, so this table runs where `GitFacts`
             // is absent (`tests/qml/tst_navrowlight.qml`).
+            // By its folder, the repository's own worktree too: the row above already says the branch it keeps
+            // (デザイン規約 §ref の種別「リポジトリ自身の worktree の呼び名」).
             "heldBy": held === "" ? "" : GitFacts.pathLeaf(held),
+            // The holder is the repository's own worktree, which wears the house (`NavSectionModel.homeBranch`).
+            "heldHome": held !== "" && holds === row.worktreesModel.homeBranch,
             "upstream": gone !== "" ? gone : upstream,
             "gone": gone !== "",
             // The commit the row itself stands on — a line going there is the row's own (`joined`).
@@ -145,7 +149,7 @@ QtObject {
     /// (規約 §ref の種別).
     function worktreeLine(a) {
         return a.heldBy === "" ? null
-             : { "mark": "tree", "markTint": Theme.success, "text": a.heldBy,
+             : { "mark": a.heldHome ? "home" : "tree", "markTint": Theme.success, "text": a.heldBy,
                  "tone": Theme.textSecondary, "ahead": 0, "behind": 0, "note": "", "to": a.heldTo }
     }
     /// What that branch is measured against. One git cannot reach says so in git's word (`gone`), name first, and

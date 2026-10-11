@@ -32,6 +32,8 @@ use marks::RowMark;
 struct CarriedRow {
     name: String,
     path: String,
+    /// The repository's own worktree, which wears the house.
+    home: bool,
     tally: Optional<Tally>,
 }
 

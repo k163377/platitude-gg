@@ -34,6 +34,11 @@ RowLayout {
     /// linked worktree's `textHereTree` (デザイン規約 §ref の種別).
     readonly property color hereTone:
         body.row.kindHint === "worktree" && !body.homeWorktree ? Theme.textHereTree : Theme.textLink
+    /// A branch the repository's own worktree keeps: it wears the house, in the green the tree would
+    /// (デザイン規約 §ref の種別「名前の印」; `NavSectionModel.homeBranch`).
+    readonly property bool heldHome: body.row.kindHint === "branch" && body.row.change === "HELD"
+                                     && body.row.worktreesModel !== null
+                                     && body.row.fullName === body.row.worktreesModel.homeBranch
     /// Whether this section has a mark seat — not STASHES / TAGS (デザイン規約 §余白「印の立たないセクションは席を取らない」).
     readonly property bool seated: body.row.kindHint !== "stash" && body.row.kindHint !== "tag"
 
@@ -62,14 +67,14 @@ RowLayout {
         // `tree`, not the padlock, which means `git worktree lock`. Open, `tree` goes (the lines name that worktree)
         // but a worktree's own state stays, so it does not flicker under the pointer.
         seatMark: body.row.kindHint === "branch"
-                    ? (body.row.change === "HELD" && !body.row.factsOpen ? "tree" : "")
+                    ? (body.row.change === "HELD" && !body.row.factsOpen ? (body.heldHome ? "home" : "tree") : "")
                 : body.row.kindHint !== "worktree" ? ""
                 : body.row.change === "LOCKED" ? "lock"
                 : body.row.change === "PRUNABLE" ? "bang"
                 : body.row.change === "MAIN" ? "home" : ""
         // Prunable warns; `tree` wears the WORKTREES colour it points at (規約 §ref の種別); a lock stays quiet.
         seatTint: body.row.change === "PRUNABLE" ? Theme.warning
-                : nameCell.seatMark === "tree" ? Theme.success
+                : nameCell.seatMark === "tree" || body.heldHome ? Theme.success
                 : Theme.textSecondary
         // The main worktree is named by its branch, in the name's place (デザイン規約 §左メニューの所作; `homeName`).
         name: body.shownName

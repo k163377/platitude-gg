@@ -333,7 +333,7 @@ Item {
             "delete_blocked code=" + acts.blockedTipRow.code
             + " tip=" + acts.blockedTipRow.ToolTip.visible
             + " aside=" + driver.tipAside(acts.blockedTipRow.ToolTip.toolTip)
-            // The holding worktree's folder (`RefBranchMenu.holderLeaf`), empty on other rows — the sentence itself is
+            // The name the holding worktree goes by (`RefBranchMenu.holderLeaf`), empty on other rows — the sentence is
             // tst_branchcard's to judge.
             + " holder=" + refBranchCard.holderLeaf
             + " reason=" + acts.blockedTipRow.blockedReason)
