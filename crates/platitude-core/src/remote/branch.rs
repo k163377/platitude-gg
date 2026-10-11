@@ -12,7 +12,7 @@ use crate::error::GitError;
 use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor};
 
-use super::push::{PushForce, PushSpec, push};
+use super::push::{PushForce, PushSpec, porcelain_push, push};
 use super::tags::split_ls_remote_line;
 
 /// What a remote carries under this exact branch name, if anything.
@@ -112,19 +112,9 @@ pub async fn delete_remote_branch(
 ) -> Result<(), GitError> {
     let refname = format!("refs/heads/{branch}");
     let lease = format!("--force-with-lease={refname}:{expect}");
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        .args([
-            "push",
-            "--porcelain",
-            &lease,
-            "--delete",
-            "--",
-            remote,
-            &refname,
-        ])
-        .timeout(timeout)
-        .paced_elsewhere();
+    let cmd = porcelain_push(workdir, timeout)
+        .arg(lease)
+        .args(["--delete", "--", remote, &refname]);
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code == 0 {

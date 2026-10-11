@@ -10,6 +10,8 @@ use crate::error::GitError;
 use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor};
 
+use super::push::porcelain_push;
+
 /// What a remote carries under `refs/tags/`: each tag name and the commit
 /// it designates over there.
 ///
@@ -66,11 +68,7 @@ pub async fn push_tag(
     cancel: &CancellationToken,
 ) -> Result<Option<HeldTag>, GitError> {
     let refspec = format!("refs/tags/{tag}:refs/tags/{tag}");
-    let mut cmd = GitCommand::new()
-        .cwd(workdir)
-        .args(["push", "--porcelain"])
-        .timeout(timeout)
-        .paced_elsewhere();
+    let mut cmd = porcelain_push(workdir, timeout);
     let mut replaced = None;
     if !expect.is_empty() {
         let (pinned, there) =
@@ -136,19 +134,9 @@ pub async fn delete_remote_tag(
     cancel: &CancellationToken,
 ) -> Result<Option<HeldTag>, GitError> {
     let (pinned, there) = lease_on(executor, workdir, remote, tag, expect, timeout, cancel).await?;
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        .args([
-            "push",
-            "--porcelain",
-            &format!("--force-with-lease=refs/tags/{tag}:{pinned}"),
-            "--delete",
-            "--",
-            remote,
-            &format!("refs/tags/{tag}"),
-        ])
-        .timeout(timeout)
-        .paced_elsewhere();
+    let cmd = porcelain_push(workdir, timeout)
+        .arg(format!("--force-with-lease=refs/tags/{tag}:{pinned}"))
+        .args(["--delete", "--", remote, &format!("refs/tags/{tag}")]);
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code == 0 {

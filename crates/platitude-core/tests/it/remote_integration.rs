@@ -669,6 +669,47 @@ async fn a_push_the_far_side_turns_down_is_not_one_a_fetch_would_answer() {
     );
 }
 
+/// A user's `push.followTags` would send every annotated tag on the pushed
+/// commits beside the branch, and a far side turning those away fails the
+/// push with the branch landed (`[remote rejected]` on the tag's line,
+/// exit 1). Every push sends the one ref asked for.
+#[tokio::test]
+async fn a_push_sends_the_branch_alone_whatever_follow_tags_says() {
+    let (mut bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    bare.write_hook(
+        "update",
+        "case \"$1\" in refs/tags/*) echo \"error: no tags here\" >&2; exit 1;; esac\n",
+    );
+    work.git(&["config", "push.followTags", "true"]);
+    work.commit_file("b.txt", "ours\n", "work of our own");
+    work.git(&["tag", "-a", "rel2", "-m", "release two"]);
+
+    remote::push(
+        &exec,
+        &work.path,
+        &PushSpec {
+            remote: "origin".into(),
+            local: "main".into(),
+            remote_branch: "main".into(),
+            set_upstream: false,
+            force: PushForce::None,
+        },
+        NET,
+        &cancel,
+    )
+    .await
+    .expect("the branch is all that goes, and it lands");
+    assert_eq!(
+        bare.git(&["rev-parse", "refs/heads/main"]),
+        work.git(&["rev-parse", "HEAD"])
+    );
+    assert!(
+        !bare.git_ok(&["rev-parse", "--verify", "--quiet", "refs/tags/rel2"]),
+        "the tag stays here"
+    );
+}
+
 /// A tag refusal is a report like a branch's (デザイン規約 §答えの要らない報せ).
 /// Both halves are checked: sending and deleting are different commands
 /// (`push` / `push --delete`), so one being classified says nothing of the other.

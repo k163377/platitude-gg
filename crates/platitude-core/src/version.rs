@@ -98,9 +98,11 @@ use crate::process::{GitCommand, GitExecutor};
 ///   custom recipes are read with `config --get-regexp`.
 /// - `name-rev`: `--name-only`, `--refs=refs/heads/*`.
 /// - `push`: `--porcelain`, `--set-upstream`, `--force-with-lease[=ref:oid]`,
-///   `--force`, `--delete`. `remote_` integration tests check lease plus
-///   deletion of qualified branch/tag refs: matching object deletes;
-///   stale or absent object rejects with stale info and exit 1.
+///   `--force`, `--delete`, `--no-follow-tags` (`OPT_BIT` in v2.43.0
+///   `builtin/push.c`; gitcli's negation over `push.followTags`). `remote_`
+///   integration tests check lease plus deletion of qualified branch/tag
+///   refs: matching object deletes; stale or absent object rejects with
+///   stale info and exit 1; a followTags user's push sends the branch alone.
 /// - `read-tree <tree-ish>` / `write-tree` use a temporary index.
 /// - `rebase`: `--interactive`, `--no-rebase-merges`, `--onto`, `--root`,
 ///   `--update-refs` (2.38), `--continue`, `--abort`, `--skip`, `--quit`.

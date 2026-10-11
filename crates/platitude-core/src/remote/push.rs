@@ -155,6 +155,22 @@ pub async fn plan_publish(
     })
 }
 
+/// The head of every push this application sends, before its options
+/// and refspec.
+///
+/// `--porcelain` puts a fixed per-ref result on stdout; the refusal's kind
+/// is not parseable from stderr's prose. `--no-follow-tags` sends the one
+/// ref asked for and nothing beside it: a user's `push.followTags` would
+/// add every annotated tag on the pushed commits, and the far side turning
+/// one of those away fails a push whose branch landed.
+pub(super) fn porcelain_push(workdir: &Path, timeout: Duration) -> GitCommand {
+    GitCommand::new()
+        .cwd(workdir)
+        .args(["push", "--porcelain", "--no-follow-tags"])
+        .timeout(timeout)
+        .paced_elsewhere()
+}
+
 /// `git push` for one branch.
 ///
 /// A refusal that a fetch would answer comes back as a report whose kind
@@ -167,13 +183,7 @@ pub async fn push(
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    // `--porcelain` puts a fixed per-ref result on stdout; the refusal's
-    // kind is not parseable from stderr's prose.
-    let mut cmd = GitCommand::new()
-        .cwd(workdir)
-        .args(["push", "--porcelain"])
-        .timeout(timeout)
-        .paced_elsewhere();
+    let mut cmd = porcelain_push(workdir, timeout);
     if spec.set_upstream {
         cmd = cmd.arg("--set-upstream");
     }
