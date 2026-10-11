@@ -70,6 +70,11 @@ pub enum OperationKind {
     /// this worktree's own branch, so it is supervised as a remote write and
     /// ordered as a local one.
     Pull,
+    /// The pull of a branch this worktree is not on
+    /// (`remote::fast_forward`): a fetch straight into the branch. Answers
+    /// as a pull; apart from [`Self::Pull`] because it replays nothing and
+    /// lands on no tip of this worktree's.
+    FastForward,
     Remote,
     Merge,
     Rebase,
@@ -119,7 +124,7 @@ impl OperationKind {
             Self::Tag | Self::DeleteTagEverywhere => "tag",
             Self::Push => "push",
             Self::Fetch => "fetch",
-            Self::Pull => "pull",
+            Self::Pull | Self::FastForward => "pull",
             Self::Remote => "remote",
             Self::Merge => "merge",
             Self::Rebase => "rebase",
@@ -160,6 +165,7 @@ impl OperationKind {
             Self::Push
             | Self::Fetch
             | Self::Pull
+            | Self::FastForward
             | Self::DeleteBranchEverywhere
             | Self::DeleteTagEverywhere => Lane::Remote,
             Self::AutoFetch | Self::OpenFetch => Lane::UnaskedFetch,
@@ -194,7 +200,7 @@ impl OperationKind {
     /// order serves it in turn (`session::write_order`).
     ///
     /// **Not read off [`Self::lane`]**, which says how a write is
-    /// supervised: a pull and the composite deletes are paced by the
+    /// supervised: the two pulls and the composite deletes are paced by the
     /// network but move a ref here, so they stay behind a rename accepted
     /// before them. `false` only for a push and the three fetches, whose
     /// effect is all at the other end — ordering them would hold a commit
@@ -204,6 +210,7 @@ impl OperationKind {
         match self {
             Self::Push | Self::Fetch | Self::AutoFetch | Self::OpenFetch => false,
             Self::Pull
+            | Self::FastForward
             | Self::DeleteBranchEverywhere
             | Self::DeleteTagEverywhere
             | Self::Stage
@@ -311,6 +318,7 @@ mod tests {
             OperationKind::Tag,
             OperationKind::Push,
             OperationKind::Fetch,
+            OperationKind::FastForward,
             OperationKind::Config,
             OperationKind::Mergetool,
             OperationKind::Identity,
@@ -335,6 +343,7 @@ mod tests {
             OperationKind::Push,
             OperationKind::Fetch,
             OperationKind::Pull,
+            OperationKind::FastForward,
             OperationKind::DeleteBranchEverywhere,
             OperationKind::DeleteTagEverywhere,
         ] {
@@ -390,8 +399,11 @@ mod tests {
 
     #[test]
     fn a_pull_runs_on_the_remote_lane_and_takes_its_place_in_the_tree() {
-        assert_eq!(OperationKind::Pull.lane(), Lane::Remote);
-        assert!(OperationKind::Pull.writes_here());
+        for kind in [OperationKind::Pull, OperationKind::FastForward] {
+            assert_eq!(kind.lane(), Lane::Remote);
+            assert!(kind.writes_here(), "{kind:?} moves a branch here");
+            assert_eq!(kind.label(), "pull", "{kind:?} answers as a pull");
+        }
         assert!(!OperationKind::Fetch.writes_here());
         assert_eq!(OperationKind::Merge.lane(), Lane::Local);
     }

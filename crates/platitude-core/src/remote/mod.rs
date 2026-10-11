@@ -29,7 +29,7 @@ pub use self::list::{Remote, Remotes, add, list, read, set_url};
 pub use self::marks::{
     OriginMarks, PushDefault, PushMarks, clear_origin, mark_origin, origin_marks, push_marks,
 };
-pub use self::pull::pull;
+pub use self::pull::{fast_forward, pull};
 pub use self::push::{PushForce, PushSpec, plan_current_push, plan_publish, push, push_track};
 pub use self::standing::{PushStanding, PushTrack, push_standing, push_target, pushes_elsewhere};
 pub use self::tags::{

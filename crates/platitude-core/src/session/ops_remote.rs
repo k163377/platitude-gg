@@ -56,6 +56,24 @@ impl RepoSession {
         )
     }
 
+    /// The pull of a branch this worktree is not on
+    /// ([`remote::fast_forward`]).
+    ///
+    /// Refreshed as refs-only ([`AfterWrite::Refs`]), as a fetch is: it
+    /// writes the branch, the remote-tracking ref and `FETCH_HEAD`, nothing
+    /// nearer this worktree. A fast-forward drops no commit, so nothing goes
+    /// on the discard record.
+    pub fn fast_forward(self: &Arc<Self>, branch: String) -> Option<OperationId> {
+        let timeout = self.network_timeout();
+        self.write(
+            OperationKind::FastForward,
+            AfterWrite::Refs,
+            move |exec, repo, cancel| async move {
+                remote::fast_forward(&exec, &repo.workdir, &branch, timeout, &cancel).await
+            },
+        )
+    }
+
     /// `git push` for one branch.
     pub fn push(self: &Arc<Self>, spec: remote::PushSpec) -> Option<OperationId> {
         let timeout = self.network_timeout();

@@ -896,6 +896,75 @@ async fn a_pull_brings_the_upstream_in_and_moves_the_branch() {
     );
 }
 
+/// The pull of a branch the worktree is not on moves that branch and its
+/// reading of the remote, and nothing the worktree stands on.
+#[tokio::test]
+async fn a_branch_aside_is_fast_forwarded_to_what_its_upstream_holds() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    a_branch_over_there(&mut work, "topic");
+    let theirs = moved_over_there(&bare, "topic");
+    let head = work.git(&["rev-parse", "HEAD"]);
+
+    remote::fast_forward(&exec, &work.path, "topic", NET, &cancel)
+        .await
+        .expect("fast-forward");
+    assert_eq!(
+        work.git(&["rev-parse", "topic"]),
+        theirs,
+        "the branch is on what the far side holds"
+    );
+    assert_eq!(
+        work.git(&["rev-parse", "origin/topic"]),
+        theirs,
+        "and the reading of the remote came down with it"
+    );
+    assert_eq!(work.git(&["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        work.git(&["symbolic-ref", "--short", "HEAD"]),
+        "main",
+        "the worktree stays on its own branch"
+    );
+}
+
+/// No `+` on the refspec: a branch with commits its upstream lacks is never
+/// set back to the upstream's tip. git turns the fetch down instead, which
+/// is why the row is greyed before the press (`offers::pull_row`).
+#[tokio::test]
+async fn a_branch_aside_with_commits_of_its_own_keeps_them() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    a_branch_over_there(&mut work, "topic");
+    moved_over_there(&bare, "topic");
+    work.git(&["switch", "topic"]);
+    work.commit_file("mine.txt", "mine\n", "work of our own");
+    work.git(&["switch", "main"]);
+    let ours = work.git(&["rev-parse", "topic"]);
+
+    let err = remote::fast_forward(&exec, &work.path, "topic", NET, &cancel)
+        .await
+        .expect_err("not a fast-forward");
+    assert!(
+        matches!(err, GitError::Failed { code: 1, .. }),
+        "git's own refusal, passed through: {err}"
+    );
+    assert_eq!(work.git(&["rev-parse", "topic"]), ours, "nothing was lost");
+}
+
+/// A branch that has stopped tracking anything since the menu opened is
+/// refused here, before git is handed a refspec with half of it missing.
+#[tokio::test]
+async fn a_branch_aside_tracking_nothing_is_refused_before_git() {
+    let (_bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    work.git(&["branch", "solo"]);
+
+    let err = remote::fast_forward(&exec, &work.path, "solo", NET, &cancel)
+        .await
+        .expect_err("nowhere to pull from");
+    assert!(matches!(err, GitError::Rejected { .. }), "{err:?}");
+}
+
 /// What git itself does behind the fixed command lines these functions hand
 /// it (the lines are unit-tested beside `remote::list` and `remote::fetch`).
 /// What each reads of git's answer is held above and by `remote::refusal`'s

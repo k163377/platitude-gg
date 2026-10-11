@@ -1,4 +1,4 @@
-//! `git pull`.
+//! `git pull`, and the pull of a branch the worktree is not on.
 
 use std::path::Path;
 use std::time::Duration;
@@ -42,6 +42,43 @@ pub async fn pull(
         }
         Err(error) => Err(error),
     }
+}
+
+/// The pull of a branch the worktree is not on: `git fetch <remote>
+/// <merge>:refs/heads/<branch>`, the far side's branch fetched straight
+/// into it.
+///
+/// No `+`: git moves the branch only onto a commit that descends from it
+/// and turns anything else down (`[rejected] (non-fast-forward)`). Nothing
+/// is checked out to merge or rebase into, so a fast-forward is the whole
+/// of a pull here (デザイン規約 §取り込んで合流させる). The remote-tracking
+/// ref comes along under the remote's own refspec, as a pull's fetch
+/// brings it.
+///
+/// Where the branch tracks is read at the moment of asking, by the one
+/// reader of the branch keys ([`super::push_marks`]); a branch tracking
+/// nothing by then is refused here, before git.
+pub async fn fast_forward(
+    executor: &GitExecutor,
+    workdir: &Path,
+    branch: &str,
+    timeout: Duration,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let marks = super::push_marks(executor, workdir, branch, cancel).await?;
+    let (Some(remote), Some(merge)) = (marks.tracks, marks.merge) else {
+        return Err(GitError::Rejected {
+            message: format!("{branch} tracks no branch to pull from"),
+        });
+    };
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["fetch", "--"])
+        .arg(remote)
+        .arg(format!("{merge}:refs/heads/{branch}"))
+        .timeout(timeout)
+        .paced_elsewhere();
+    executor.run(cmd, cancel).await.map(|_| ())
 }
 
 /// Whether a pull that exited non-zero left something standing to be
