@@ -235,6 +235,14 @@ Item {
         shared.seat()
         Qt.callLater(shared.settleAnchor)
     }
+    /// The words the target holds now. Qt gives the box the target's text when the ask rises and passes a change on
+    /// only while the box is up, so one made while the delay counts is lost — the ask and the words moving in one
+    /// change, the ask heard first, opens the box on the words from before it.
+    function takeWords() {
+        const at = shared.sharedTip.parent
+        if (at !== null)
+            shared.sharedTip.text = at.ToolTip.text
+    }
     function settleAnchor() {
         if (shared.sharedTip.visible && !shared.keeping)
             shared.readAnchor()
@@ -368,6 +376,7 @@ Item {
         // A target letting go is answered with a beat; a target taking over, with a close — it is owed its own delay.
         function onVisibleChanged() {
             if (shared.sharedTip.visible) {
+                shared.takeWords()
                 if (!shared.keeping)
                     shared.freeze()
                 return

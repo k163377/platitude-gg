@@ -276,12 +276,6 @@ ColumnLayout {
         const tip = hashCopy.ToolTip.toolTip
         return !!tip && tip.visible && tip.parent === hashCopy
     }
-    /// The attached tip snapshots its text when `visible` rises, missing a copy made during the delay; re-set as it
-    /// comes up, which covers both orders (rules-refs/app-ui.md「右パネルの値は掴める字」).
-    onTipStandingChanged: {
-        if (plate.tipStanding)
-            hashCopy.ToolTip.toolTip.text = hashCopy.ToolTip.text
-    }
     function forceTip(on) {
         hashCopy.tipForced = on
     }
