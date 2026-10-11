@@ -92,7 +92,7 @@ async fn opens_a_valid_repository() {
 
 #[tokio::test]
 async fn open_rejects_a_non_repository() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::support::temp::dir();
     let missing = dir.path().join("nope");
     let (executor, cancel) = env();
     for path in [dir.path(), missing.as_path()] {
@@ -111,7 +111,7 @@ async fn open_rejects_a_non_repository() {
 /// is the only thing it may read to choose it.
 #[tokio::test]
 async fn open_rejects_a_bare_repository_as_bare() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::support::temp::dir();
     let bare = dir.path().join("origin.git");
     let status = std::process::Command::new("git")
         .args(["init", "--bare", "--quiet"])

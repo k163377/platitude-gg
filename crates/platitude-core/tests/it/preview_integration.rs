@@ -34,7 +34,7 @@ fn write_bytes(repo: &TestRepo, rel: &str, bytes: &[u8]) {
 /// The temp dir has to outlive the files — dropping them removes their own
 /// directory, and the assertions read what is left.
 fn files() -> (tempfile::TempDir, PreviewFiles) {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::support::temp::dir();
     let files = PreviewFiles::at(dir.path().join("s"));
     (dir, files)
 }
@@ -389,7 +389,7 @@ async fn a_side_that_could_not_be_written_says_what_stopped_it() {
 
     // A file where the directory would go: nothing can be made under it on
     // any platform.
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::support::temp::dir();
     let wall = dir.path().join("not-a-directory");
     std::fs::write(&wall, b"x").unwrap();
     let files = PreviewFiles::at(wall.join("s"));

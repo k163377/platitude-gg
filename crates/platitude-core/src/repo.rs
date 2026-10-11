@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn one_folder_spelled_several_ways_is_one_key() {
-        let dir = tempfile::tempdir().expect("create tempdir");
+        let dir = crate::temp::dir();
         let here = folder(&dir, "repo");
         let plain = here.to_string_lossy().into_owned();
 
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn two_folders_keep_their_own_keys() {
-        let dir = tempfile::tempdir().expect("create tempdir");
+        let dir = crate::temp::dir();
         let one = folder(&dir, "one");
         let two = folder(&dir, "two");
         assert_ne!(
@@ -207,7 +207,7 @@ mod tests {
     /// moved-away repository stand for all the others.
     #[test]
     fn paths_that_are_not_there_stay_apart() {
-        let dir = tempfile::tempdir().expect("create tempdir");
+        let dir = crate::temp::dir();
         let one = dir.path().join("gone-one").to_string_lossy().into_owned();
         let two = dir.path().join("gone-two").to_string_lossy().into_owned();
         assert_ne!(open_key(&one), open_key(&two));
@@ -219,7 +219,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_letter_case_is_not_part_of_the_name() {
-        let dir = tempfile::tempdir().expect("create tempdir");
+        let dir = crate::temp::dir();
         let here = folder(&dir, "repo");
         assert_eq!(
             open_key(&here.to_string_lossy()),

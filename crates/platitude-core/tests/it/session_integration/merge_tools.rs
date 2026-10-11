@@ -64,7 +64,7 @@ async fn the_opening_gave_up(sink: &CaptureSink) {
 #[tokio::test]
 async fn a_session_whose_open_failed_answers_the_merge_tool_ask() {
     // Not inside a `TestRepo`: git walks up and would open that repository.
-    let plain = tempfile::tempdir().expect("a plain directory");
+    let plain = crate::support::temp::dir();
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(
@@ -117,7 +117,7 @@ async fn an_ask_inside_the_opening_names_the_configured_tool_first() {
 /// ([`the_opening_gave_up`]).
 #[tokio::test]
 async fn an_ask_made_after_the_opening_gave_up_is_answered() {
-    let plain = tempfile::tempdir().expect("a plain directory");
+    let plain = crate::support::temp::dir();
 
     let sink = CaptureSink::new();
     let session = RepoSession::open(

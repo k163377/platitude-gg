@@ -210,7 +210,7 @@ fn single_quotes_in_a_path_are_escaped() {
 
 #[test]
 fn the_helper_must_sit_in_the_directory_it_is_looked_for_in() {
-    let dir = tempfile::tempdir().expect("tempdir");
+    let dir = crate::temp::dir();
     let error = helper_in(dir.path()).expect_err("nothing there yet");
     assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
     assert!(
@@ -251,7 +251,7 @@ fn a_parent_header_is_read_out_of_the_headers_alone() {
 
 #[test]
 fn apply_plan_writes_the_plan_over_the_todo_file() {
-    let dir = tempfile::tempdir().expect("tempdir");
+    let dir = crate::temp::dir();
     let plan = dir.path().join("plan");
     let todo = dir.path().join("todo");
     std::fs::write(&plan, "pick aaa one\n").expect("write plan");

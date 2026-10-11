@@ -74,7 +74,7 @@ mod tests {
         if std::env::var_os("QML_ENGINE_CHILD").is_none() {
             return;
         }
-        let dir = std::env::temp_dir().join(format!("pgg-qml-engine-{}", std::process::id()));
+        let dir = crate::temp::root().join(format!("pgg-qml-engine-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("a directory for the QML");
         let broken = dir.join("Broken.qml");
         let sound = dir.join("Sound.qml");

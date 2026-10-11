@@ -19,7 +19,7 @@ static ISOLATED_GIT: OnceLock<IsolatedGit> = OnceLock::new();
 
 fn isolated_git() -> &'static IsolatedGit {
     ISOLATED_GIT.get_or_init(|| {
-        let dir = tempfile::tempdir().expect("create isolated git config dir");
+        let dir = super::temp::dir();
         let global_config = dir.path().join("global-config");
         let xdg_config = dir.path().join("xdg-config");
         std::fs::write(
@@ -48,6 +48,7 @@ fn isolated_env() -> Vec<(OsString, OsString)> {
             OsString::from("XDG_CONFIG_HOME"),
             config.xdg_config.clone().into_os_string(),
         ),
+        super::temp::ceiling(),
     ]
 }
 
@@ -178,6 +179,7 @@ pub fn isolated_global(global_config: &Path) -> GitExecutor {
                 OsString::from("XDG_CONFIG_HOME"),
                 isolated_git().xdg_config.clone().into_os_string(),
             ),
+            super::temp::ceiling(),
         ])
 }
 

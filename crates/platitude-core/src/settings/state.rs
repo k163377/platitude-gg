@@ -294,7 +294,7 @@ mod tests {
     use crate::settings::testkit::dir_store;
     #[test]
     fn one_bad_value_costs_only_that_key() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         std::fs::write(
             dir.path().join(STATE_FILE),
             r#"
@@ -325,7 +325,7 @@ colour = "midnight"
     /// a stored 3.
     #[test]
     fn an_untouched_graph_divider_is_not_a_width() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         std::fs::write(
             dir.path().join(STATE_FILE),
             r#"
@@ -361,7 +361,7 @@ graph_lanes_width = 3
 
     #[test]
     fn active_tab_outside_the_list_falls_back() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         std::fs::write(
             dir.path().join(STATE_FILE),
             "[tabs]\nactive = 9\npaths = ['C:/a', '', 'C:/b']\n",
@@ -379,7 +379,7 @@ graph_lanes_width = 3
     /// its repository with it.
     #[test]
     fn a_tab_keeps_the_repository_its_worktree_hangs_off() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         std::fs::write(
             dir.path().join(STATE_FILE),
             "[tabs]\nactive = 0\npaths = ['C:/a/worktree', '', 'C:/b']\nrepos = ['C:/a', 'C:/gone', 'C:/b']\n",
@@ -398,7 +398,7 @@ graph_lanes_width = 3
 
     #[test]
     fn a_file_with_no_repositories_names_each_tab_after_its_own_worktree() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         std::fs::write(
             dir.path().join(STATE_FILE),
             "[tabs]\nactive = 0\npaths = ['C:/a', 'C:/b']\n",

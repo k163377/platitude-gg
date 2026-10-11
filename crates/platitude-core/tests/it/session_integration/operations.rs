@@ -241,7 +241,7 @@ async fn a_write_is_not_settled_until_the_reads_its_listings_asked_for_have_land
 
     // Taken outside the window, with a commit of its own: no ref moves,
     // and the commit is in the graph only if the listing's walk names it.
-    let elsewhere = tempfile::tempdir().expect("a folder for the worktree");
+    let elsewhere = crate::support::temp::dir();
     let spike = elsewhere.path().join("spike");
     repo.git(&["worktree", "add", "--detach", &spike.to_string_lossy()]);
     std::fs::write(spike.join("idea.txt"), "an idea\n").expect("write the spike's file");

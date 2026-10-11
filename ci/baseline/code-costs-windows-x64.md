@@ -131,6 +131,7 @@ release・Qt 6.12.0・qtbridge 0.3.0(同梱版)・rustc 1.98.1。製品の変換
 | `xtask::gui` の起動見張り | Qt プラットフォームプラグインの失敗はほぼ即死(約 10ms)。`FIRST_MOMENT` の残りはコールドスタートの余白 |
 | `platitude-app` の `qrc::embed!`(QML のディスクキャッシュ) | 時刻 0 の qrc(置き場を渡されない起動 = 製品)は起動のたびに 268 ファイルをコンパイルし、そのログはプロセス時刻 0.07s → 0.77s に並ぶ(`app-menu` の run 全体 1.4s)。キャッシュが効いた時のアプリの CPU 時間は [gate-load-windows-x64.md](gate-load-windows-x64.md) §git の console と QML のキャッシュの代金、私有メモリは約 220MB のまま動かない。キャッシュ置き場を渡された起動は両モジュールぶん(`ui/` 2.7MB + `auto/` 1.1MB のファイル)を私有メモリに持つ |
 | verify-ui の 32 run(動詞 8 種 × 4、`--no-build`)の置き場(`pgg-demo` の fixture のコピーと `pgg-verify` の shot dir)を `%TEMP%` から席の `target\` = Defender の除外の内へ(交互に 2 巡、全 run PASS) | 壁時計 幅 8: 28.5 / 18.8s → 30.8 / 24.2s・幅 16: 19.6 / 18.9s → 18.7 / 16.9s。**同じ置き場の 2 巡の差(最大 1.5 倍)の方が置き場の差より大きい = 置き場では速くならない**。run の代金の 9 割以上はアプリの側 |
+| core の結合テスト一式(`it` 602 本、既定のスレッド数)の一時フォルダを `%TEMP%` から席の `target\tmp` = Defender の除外の内へ(交互に 3 巡、他席の gate が居ない窓) | `target\tmp` 51.5 / 69.7 / 65.6s・`%TEMP%` 64.6 / 53.5 / 66.1s。**同じ置き場の巡の差(最大 18s)の方が置き場の差より大きい = 置き場で速さは変わらない** |
 | demo の雛形(`demo::template`) | 雛形を組む run の fixture は `app-menu`(`basic`)で約 2.0–2.2s、雛形のコピーは約 0.1s。全 preset の雛形を組む gate は、雛形が立っている gate より host の動詞平均 9.1–12.4s 対 6.7–6.8s・fixture が 3s を超える run 74–78 本 対 4–6 本・壁時計 12m52s–13m39s 対 8m52s–8m57s(同じ席の `gate --fresh`) |
 
 ## build directory の世代(`xtask::sweep`)

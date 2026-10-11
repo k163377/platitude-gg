@@ -16,7 +16,7 @@ const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 async fn a_clone_lands_in_the_folder_it_was_named() {
     let mut seed = TestRepo::init();
     seed.commit_file("a.txt", "one\n", "root");
-    let dir = tempfile::tempdir().expect("create tempdir");
+    let dir = crate::support::temp::dir();
     let into = dir.path().join("landed");
     let (exec, cancel) = env();
 
@@ -45,7 +45,7 @@ async fn a_clone_lands_in_the_folder_it_was_named() {
 async fn the_folders_above_the_destination_are_made() {
     let mut seed = TestRepo::init();
     seed.commit_file("a.txt", "one\n", "root");
-    let dir = tempfile::tempdir().expect("create tempdir");
+    let dir = crate::support::temp::dir();
     let into = dir.path().join("not").join("there").join("yet");
     let (exec, cancel) = env();
 
@@ -69,7 +69,7 @@ mod periodic {
     async fn a_destination_that_is_taken_comes_back_as_gits_own_refusal() {
         let mut seed = TestRepo::init();
         seed.commit_file("a.txt", "one\n", "root");
-        let dir = tempfile::tempdir().expect("create tempdir");
+        let dir = crate::support::temp::dir();
         let into = dir.path().join("landed");
         let (exec, cancel) = env();
         remote::clone(&exec, &seed.file_url(), &into, NET, &cancel)
@@ -91,7 +91,7 @@ mod periodic {
     #[tokio::test]
     #[ignore = "git's own failure on a URL nothing answers: not worth the pre-merge run"]
     async fn a_url_that_answers_nothing_comes_back_the_same_way() {
-        let dir = tempfile::tempdir().expect("create tempdir");
+        let dir = crate::support::temp::dir();
         let nowhere = dir.path().join("nowhere");
         let into = dir.path().join("landed");
         let (exec, cancel) = env();

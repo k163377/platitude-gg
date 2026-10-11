@@ -11,6 +11,8 @@ mod models;
 mod ops;
 mod qml_engine;
 mod qrc;
+#[cfg(test)]
+mod temp;
 mod urlpath;
 mod winframe;
 

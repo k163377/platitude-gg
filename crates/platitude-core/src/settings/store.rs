@@ -182,7 +182,7 @@ mod tests {
     }
     #[test]
     fn round_trips_everything() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let store = dir_store(dir.path());
 
         let mut settings = Settings::default();
@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn a_development_build_starts_from_a_copy_and_then_goes_its_own_way() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let real = dir_store(&dir.path().join("real"));
         let mut settings = Settings::default();
         settings.defaults.auto_fetch_minutes = 7;
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn the_first_run_of_a_development_build_lands_beside_the_real_one() {
-        let home = tempfile::tempdir().expect("tempdir");
+        let home = crate::temp::dir();
         let base = home.path().to_string_lossy().replace('\\', "/");
         let env = Env::from_pairs(&[("APPDATA", &base), ("LOCALAPPDATA", &base)]);
 

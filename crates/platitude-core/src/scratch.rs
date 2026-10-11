@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn creates_and_removes_the_file() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let path = {
             let scratch = ScratchFile::create(dir.path(), "patch", b"hello").expect("create");
             let path = scratch.path().to_path_buf();
@@ -119,7 +119,7 @@ mod tests {
     /// file and its lock — is not there when the name is handed out.
     #[test]
     fn a_fresh_name_has_nothing_left_on_it() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let next = COUNTER.load(Ordering::Relaxed);
         let left = dir.path().join(DIR_NAME);
         std::fs::create_dir_all(&left).expect("dir");
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn names_do_not_collide() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let a = ScratchFile::create(dir.path(), "msg", b"a").expect("create");
         let b = ScratchFile::create(dir.path(), "msg", b"b").expect("create");
         assert_ne!(a.path(), b.path());

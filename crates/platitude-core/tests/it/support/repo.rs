@@ -63,7 +63,7 @@ impl TestRepo {
     }
 
     fn init_with_autocrlf(autocrlf: &str) -> Self {
-        let dir = tempfile::tempdir().expect("create tempdir");
+        let dir = super::temp::dir();
         let path = dir.path().join("repo");
         let global_config = dir.path().join("global-config");
         let xdg_config = dir.path().join("xdg-config");
@@ -205,6 +205,7 @@ impl TestRepo {
             .env("GIT_CONFIG_GLOBAL", &self.global_config)
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("XDG_CONFIG_HOME", &self.xdg_config)
+            .envs([super::temp::ceiling()])
             .env("GIT_TERMINAL_PROMPT", "0")
             // A continue that wants a message takes the recorded one.
             .env("GIT_EDITOR", "true")

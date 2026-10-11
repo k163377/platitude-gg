@@ -12,6 +12,7 @@ pub mod remote;
 pub mod repo;
 pub mod session;
 pub mod stage;
+pub mod temp;
 pub mod wait;
 
 // Only the names the suite reaches as `crate::support::<name>`; the rest go

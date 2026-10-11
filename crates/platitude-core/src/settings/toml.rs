@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn windows_paths_are_written_without_escaping() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let store = dir_store(dir.path());
         let state = State {
             tabs: one_tab(r"C:\Users\me\proj"),
@@ -303,7 +303,7 @@ mod tests {
     /// compared against the file does not differ every time.
     #[test]
     fn a_raw_path_settles_after_one_round_trip() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let store = dir_store(dir.path());
         let raw = State {
             tabs: one_tab(r"C:\Users\me\proj"),
@@ -325,14 +325,14 @@ mod tests {
 
     #[test]
     fn nonsense_file_starts_from_defaults() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         std::fs::write(dir.path().join(STATE_FILE), "this is not toml {{{").expect("write");
         assert_eq!(dir_store(dir.path()).load_state(), State::default());
     }
 
     #[test]
     fn missing_files_start_from_defaults() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let store = dir_store(&dir.path().join("never-created"));
         assert_eq!(store.load_state(), State::default());
         assert_eq!(store.load_settings(), Settings::default());
@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn a_replaced_file_never_appears_half_written() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let store = dir_store(dir.path());
         store.save_state(&State::default()).expect("first");
 

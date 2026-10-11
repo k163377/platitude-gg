@@ -58,7 +58,7 @@ async fn previewing_a_side_that_is_not_there_answers_by_code() {
     let head = repo.git(&["rev-parse", "HEAD"]);
     let parent = repo.git(&["rev-parse", "HEAD^"]);
     let (exec, log, cancel) = logged();
-    let scratch = tempfile::tempdir().expect("a temp dir");
+    let scratch = crate::support::temp::dir();
     let files = preview::PreviewFiles::at(scratch.path().join("s"));
 
     let p = preview::file_preview(

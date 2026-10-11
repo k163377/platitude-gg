@@ -453,7 +453,7 @@ fn qml_side() {
     let Some(child) = std::env::var_os("WIRE_QML_CHILD") else {
         return;
     };
-    let dir = std::env::temp_dir().join(format!("pgg-wire-qml-{}", std::process::id()));
+    let dir = crate::temp::root().join(format!("pgg-wire-qml-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("a directory for the QML");
     let file = dir.join("WireChecks.qml");
     std::fs::write(&file, child_qml(&child.to_string_lossy())).expect("the QML");

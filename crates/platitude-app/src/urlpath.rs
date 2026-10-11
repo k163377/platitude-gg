@@ -262,7 +262,7 @@ mod tests {
     /// query, loads in an `Image`.
     #[test]
     fn real_files_load_from_their_urls_and_read_back() {
-        let base = std::env::temp_dir().join(format!("pgg url 実在 #{}", std::process::id()));
+        let base = crate::temp::root().join(format!("pgg url 実在 #{}", std::process::id()));
         let mut names = vec![
             "plain.png",
             "日本語 名前.png",

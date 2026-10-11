@@ -3,7 +3,7 @@
 use super::*;
 
 fn scratch() -> tempfile::TempDir {
-    tempfile::tempdir().expect("tempdir")
+    crate::temp::dir()
 }
 
 /// A real picture on disk — the store decodes what it is handed.

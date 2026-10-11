@@ -501,7 +501,7 @@ mod tests {
     /// folder does not (git fills one).
     #[test]
     fn a_folder_holding_something_is_taken() {
-        let dir = std::env::temp_dir().join(format!("pgg-new-worktree-{}", std::process::id()));
+        let dir = crate::temp::root().join(format!("pgg-new-worktree-{}", std::process::id()));
         let home = dir.join("home").to_string_lossy().replace('\\', "/");
         let model = section(
             "worktrees",
@@ -611,7 +611,7 @@ mod tests {
     /// the disk calls it the same folder.
     #[test]
     fn anything_at_a_renamed_worktrees_place_takes_it() {
-        let dir = std::env::temp_dir().join(format!("pgg-renamed-worktree-{}", std::process::id()));
+        let dir = crate::temp::root().join(format!("pgg-renamed-worktree-{}", std::process::id()));
         let at = |leaf: &str| dir.join(leaf).to_string_lossy().replace('\\', "/");
         let model = section(
             "worktrees",

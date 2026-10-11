@@ -131,7 +131,7 @@ async fn a_commit_above_the_shallow_edge_still_plans_onto_it() {
 #[tokio::test]
 async fn a_folder_that_is_not_a_repository_fails_instead_of_planning_from_the_root() {
     let (exec, cancel) = env();
-    let dir = tempfile::tempdir().expect("tempdir");
+    let dir = crate::support::temp::dir();
 
     // git exits 128 here; only 1 (a revision looked for and not found) is an answer.
     let error = rebase_plan::preview(&exec, dir.path(), &"0".repeat(40), &cancel)

@@ -24,7 +24,7 @@ fn the_helper_is_replaced_rather_than_written_over() {
     use std::os::unix::fs::MetadataExt;
 
     let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pgg-todo-editor"));
-    let dir = tempfile::tempdir().expect("tempdir");
+    let dir = crate::support::temp::dir();
     let first = publish_helper(&built, dir.path()).expect("install");
     let before = std::fs::metadata(&first).expect("stat").ino();
 
@@ -55,7 +55,7 @@ fn the_helper_is_replaced_rather_than_written_over() {
 #[cfg(target_os = "linux")]
 fn a_helper_held_open_for_writing_is_run_once_the_handle_goes() {
     let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pgg-todo-editor"));
-    let dir = tempfile::tempdir().expect("tempdir");
+    let dir = crate::support::temp::dir();
     let published = publish_helper(&built, dir.path()).expect("install");
 
     // Opened: the file stays the helper throughout.

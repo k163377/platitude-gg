@@ -206,7 +206,7 @@ mod tests {
 
     #[test]
     fn a_launcher_on_disk_and_the_git_behind_it_are_one_program() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let launcher = dir.path().join("cmd").join("git.exe");
         let real = dir.path().join("mingw64").join("bin").join("git.exe");
         for file in [&launcher, &real] {
@@ -224,7 +224,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_link_and_its_target_are_one_program() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let target = dir.path().join("git-2.55");
         std::fs::write(&target, b"").expect("a file");
         let link = dir.path().join("git");
@@ -235,7 +235,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn the_extension_a_spawn_adds_does_not_make_a_second_program() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let exe = dir.path().join("git.exe");
         std::fs::write(&exe, b"").expect("a file");
         assert!(same_program(&dir.path().join("git"), &exe));
@@ -253,7 +253,7 @@ mod tests {
             spawnable_among(Path::new("C:/Program Files/Git/cmd/git"), &install),
             real
         );
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let launcher = dir.path().join("cmd").join("git.exe");
         let behind = dir.path().join("mingw64").join("bin").join("git.exe");
         for file in [&launcher, &behind] {

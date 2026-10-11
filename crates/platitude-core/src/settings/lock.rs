@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn only_one_process_at_a_time_holds_a_store() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let store = dir_store(dir.path());
         let first = store.claim();
         assert!(matches!(first, Claim::Ours(_)), "nobody else has it");
@@ -114,7 +114,7 @@ mod tests {
     fn a_lock_let_go_of_is_free_though_a_forked_child_holds_the_description() {
         use std::process::{Command, Stdio};
 
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let store = dir_store(dir.path());
         let Claim::Ours(held) = store.claim() else {
             panic!("nobody else has it")
@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn the_lock_is_not_one_of_the_two_files() {
-        let dir = tempfile::tempdir().expect("tempdir");
+        let dir = crate::temp::dir();
         let store = dir_store(dir.path());
         let held = store.claim();
         store.save_state(&State::default()).expect("save");

@@ -699,7 +699,7 @@ mod tests {
     /// A directory of this test's own; the temp dir outlives the files,
     /// whose drop removes only their own directory.
     fn files() -> (tempfile::TempDir, PreviewFiles) {
-        let dir = tempfile::tempdir().expect("a temp dir");
+        let dir = crate::temp::dir();
         let files = PreviewFiles::at(dir.path().join("s"));
         (dir, files)
     }
