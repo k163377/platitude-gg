@@ -163,3 +163,16 @@ fn only_a_closed_tab_or_no_commit_keeps_a_worktree_from_being_made() {
         .is_empty()
     );
 }
+
+/// A worktree on no branch: the box opens on its folder, but on the
+/// repository's own worktree nothing happens, and a lock or a gone folder
+/// says why instead — the lock first.
+#[test]
+fn a_folder_is_renamed_unless_git_would_keep_it() {
+    assert_eq!(worktree_rename(false, false, false), WorktreeRename::Box);
+    assert_eq!(worktree_rename(true, false, false), WorktreeRename::Never);
+    assert_eq!(worktree_rename(false, true, false), WorktreeRename::Locked);
+    assert_eq!(worktree_rename(false, false, true), WorktreeRename::Gone);
+    assert_eq!(worktree_rename(false, true, true), WorktreeRename::Locked);
+    assert_eq!(WorktreeRename::Never.word(), "");
+}

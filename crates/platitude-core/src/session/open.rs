@@ -138,6 +138,9 @@ impl RepoSession {
         let (write_tx, write_rx) = tokio::sync::mpsc::unbounded_channel();
         let commands = Arc::new(CommandFeed::new(Arc::clone(&sink), recording));
         let observer: Arc<dyn crate::process::CommandObserver> = Arc::clone(&commands) as _;
+        // Every handle below counts into it (`RepoSession::stand_down`).
+        let live = Arc::new(crate::process::Live::default());
+        let executor = executor.counted(Arc::clone(&live));
         let watched = |kept: Kept| executor.observed(Arc::clone(&observer), kept);
         let session = Arc::new(Self {
             executor: watched(Kept::Unasked),
@@ -147,6 +150,7 @@ impl RepoSession {
             // ones somebody did (`process::Priority::Background`).
             exec_unasked_fetch: watched(Kept::UnaskedUnlessItFails).background(),
             commands,
+            live,
             runtime: runtime.clone(),
             sink,
             root_cancel: CancellationToken::new(),

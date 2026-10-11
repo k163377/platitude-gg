@@ -393,6 +393,52 @@ pub fn worktree_card(main: bool, locked: bool, here: bool) -> WorktreeCardOffers
     }
 }
 
+/// What the spaced second click does on a worktree with no branch out, whose
+/// name is its folder (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダ」).
+/// A worktree with a branch out renames the branch, and asks nothing here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorktreeRename {
+    /// The name box opens on the folder's name (`Worktree name`).
+    Box,
+    /// Nothing: git never moves the repository's own worktree, as it never
+    /// removes it ([`worktree_card`]).
+    Never,
+    /// No box; the reason stands where the box would have, as a refused
+    /// name's does: a lock, which git keeps the folder for —
+    Locked,
+    /// — or a folder that is gone, of which git has nothing to move.
+    Gone,
+}
+
+impl WorktreeRename {
+    /// The answer as a word, the shape `GitFacts.worktreeRename` answers with:
+    /// `box`, `locked`, `gone`, or empty for nothing.
+    #[must_use]
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Box => "box",
+            Self::Never => "",
+            Self::Locked => "locked",
+            Self::Gone => "gone",
+        }
+    }
+}
+
+/// The rule. `main` is the repository's own worktree; a lock wins over a gone
+/// folder, as on the row (the one the reader can undo).
+#[must_use]
+pub fn worktree_rename(main: bool, locked: bool, gone: bool) -> WorktreeRename {
+    if main {
+        WorktreeRename::Never
+    } else if locked {
+        WorktreeRename::Locked
+    } else if gone {
+        WorktreeRename::Gone
+    } else {
+        WorktreeRename::Box
+    }
+}
+
 /// What a new worktree can be made to stand on, from the row a menu
 /// was opened on: the two rows that make one (デザイン規約 §worktree を作る).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

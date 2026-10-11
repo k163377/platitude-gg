@@ -561,6 +561,8 @@ fn report_word(kind: ReportKind) -> String {
         ReportKind::CarriedFileInTheWay => "carried-file-in-the-way",
         ReportKind::CarriedUnread => "carried-unread",
         ReportKind::CarriedRefused => "carried-refused",
+        ReportKind::WorktreeNotRenamed => "worktree-not-renamed",
+        ReportKind::WorktreeRenameTaken => "worktree-rename-taken",
         ReportKind::RewriteAcrossMerge => "across-merge",
         ReportKind::RewriteOffBranch => "off-branch",
         ReportKind::FoldFirstCommit => "fold-first",

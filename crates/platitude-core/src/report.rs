@@ -147,6 +147,19 @@ pub enum ReportKind {
     /// here, an index another tool holds (about which the minimum's git says
     /// nothing). Its words, where it has any, are the log's.
     CarriedRefused,
+    /// A worktree whose folder git did not rename (`git worktree move`) —
+    /// nothing moved and the name box stays open holding the name. The name
+    /// boxes answer what they know before the press (one folder's name the
+    /// system allows — `worktrees::Disk` — free, not listed for another
+    /// worktree), so what reaches git is the rest: submodules, a lock taken
+    /// since, a program holding the folder on Windows. The screen writes the
+    /// line and sends the reader to the log for git's words, so it carries no
+    /// fact.
+    WorktreeNotRenamed,
+    /// The same, turned down here before git ran: something came to stand
+    /// where the folder would go, and git would move the worktree into it
+    /// ([`crate::worktrees::move_to`]). Nobody to quote.
+    WorktreeRenameTaken,
 
     /// The five shapes a history cannot be rewritten in, found before a
     /// rebase is spawned ([`crate::sequencer::plan_edit`]). git is never
@@ -273,6 +286,16 @@ pub fn reported(
         code: out.code,
         stderr: out.failure_message(),
         report: Box::new(report),
+    }
+}
+
+/// A write turned down here before git ran: nobody to quote, so the screen
+/// writes both lines from `kind`. `message` is only the log's record.
+#[must_use]
+pub fn withheld_about(kind: ReportKind, name: &str, message: String) -> crate::error::GitError {
+    crate::error::GitError::Withheld {
+        message,
+        report: Box::new(WriteReport::about(kind, name)),
     }
 }
 
@@ -445,10 +468,11 @@ pub fn worktree_hook_failed(
 /// `path` is only the log's record.
 #[must_use]
 pub fn worktree_folder_taken(name: &str, path: &str) -> crate::error::GitError {
-    crate::error::GitError::Withheld {
-        message: format!("'{path}' is not empty"),
-        report: Box::new(WriteReport::about(ReportKind::WorktreeFolderTaken, name)),
-    }
+    withheld_about(
+        ReportKind::WorktreeFolderTaken,
+        name,
+        format!("'{path}' is not empty"),
+    )
 }
 
 /// What git says when an apply would write over work here, tracked or
@@ -475,14 +499,28 @@ pub fn carried_refused(
     reported(WriteReport::about(kind, name), command, out)
 }
 
-/// The same, turned down before git ran — `kind` says why (a file standing
-/// here, or what was read there). `message` is only the log's record.
+/// A worktree git did not move, from its answer to `worktree move`. git's
+/// words stay the log's: they end in advice to force it (`use 'move -f -f'`),
+/// which the screen does not offer, and the screen's line points there.
 #[must_use]
-pub fn carried_withheld(name: &str, kind: ReportKind, message: String) -> crate::error::GitError {
-    crate::error::GitError::Withheld {
-        message,
-        report: Box::new(WriteReport::about(kind, name)),
-    }
+pub fn worktree_not_renamed(
+    name: &str,
+    command: String,
+    out: &crate::process::GitOutput,
+) -> crate::error::GitError {
+    reported(
+        WriteReport::about(ReportKind::WorktreeNotRenamed, name),
+        command,
+        out,
+    )
+}
+
+/// A worktree's rename turned down before git ran: something is already
+/// where it would go, and git would move the worktree into it. `message` is
+/// only the log's record.
+#[must_use]
+pub fn worktree_rename_refused(name: &str, message: String) -> crate::error::GitError {
+    withheld_about(ReportKind::WorktreeRenameTaken, name, message)
 }
 
 /// The seven rewrites this end turns down before git runs. There is no

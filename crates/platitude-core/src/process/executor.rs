@@ -14,6 +14,7 @@ use super::child::{ChildOutcome, run_child};
 use super::command::{
     CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, TimeBudget, shell_quote,
 };
+use super::live::Live;
 use super::slots::{GroupKey, Lead, Priority, Shared, Slots, WayIn};
 use crate::error::GitError;
 use crate::operation::OperationId;
@@ -99,6 +100,9 @@ pub struct GitExecutor {
     /// Who is waiting on this handle's commands ([`Priority`]), carried
     /// like `kept` ([`GitExecutor::background`]).
     priority: Priority,
+    /// Where this handle's running processes are counted, shared by every
+    /// clone ([`GitExecutor::counted`]); `None` counts nothing.
+    live: Option<Arc<Live>>,
 }
 
 impl std::fmt::Debug for GitExecutor {
@@ -146,6 +150,7 @@ impl GitExecutor {
             stock_timeout: Some(DEFAULT_TIMEOUT),
             slots: Arc::new(Slots::unbounded()),
             priority: Priority::Interactive,
+            live: None,
         }
     }
 
@@ -233,7 +238,16 @@ impl GitExecutor {
             stock_timeout: self.stock_timeout,
             slots: Arc::clone(&self.slots),
             priority: self.priority,
+            live: self.live.clone(),
         }
+    }
+
+    /// Returns a handle that counts its running processes in `live` — install
+    /// before the handle is cloned into anything, or a clone counts nowhere.
+    #[must_use]
+    pub fn counted(mut self, live: Arc<Live>) -> Self {
+        self.live = Some(live);
+        self
     }
 
     /// Returns a handle whose every invocation is reported as part of
@@ -482,6 +496,16 @@ impl GitExecutor {
             return Err(GitError::Cancelled { command: described });
         };
         let waited = asked.elapsed();
+        // Counted before the spawn, the token read after: an owner that
+        // cancels and then finds none running (`Live::idle`) cannot pass a
+        // git that is still being spawned, and none is spawned after.
+        let running = self.live.as_ref().map(Live::enter);
+        if cancel.is_cancelled() {
+            drop(running);
+            tracing::debug!(command = %described, "git cancelled before its spawn");
+            report(CommandEnd::Cancelled, waited, Duration::ZERO, "");
+            return Err(GitError::Cancelled { command: described });
+        }
         if let Some(lead) = &mut lead {
             lead.spawning();
         }
@@ -493,24 +517,22 @@ impl GitExecutor {
             "spawning git"
         );
         let started = Instant::now();
-        let mut child = command.spawn().map_err(|source| {
-            report(
-                CommandEnd::Failed,
-                waited,
-                started.elapsed(),
-                &source.to_string(),
-            );
-            if source.kind() == std::io::ErrorKind::NotFound
-                && cmd.cwd.as_ref().is_none_or(|d| d.is_dir())
-            {
-                GitError::GitNotFound { source }
-            } else {
-                GitError::Spawn {
-                    command: described.clone(),
-                    source,
-                }
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(source) => {
+                drop(running);
+                report(
+                    CommandEnd::Failed,
+                    waited,
+                    started.elapsed(),
+                    &source.to_string(),
+                );
+                return Err(Self::unspawned(cmd, described, source));
             }
-        })?;
+        };
+        // Held to the reap (`run_child` reaps on every road), which is the
+        // end of this function.
+        let _running = running;
         // The spawn's own cost: on Windows most of a round trip
         // (ci/baseline/code-costs-windows-x64.md).
         let spawned = started.elapsed();
@@ -542,6 +564,21 @@ impl GitExecutor {
             spawned,
         };
         Self::ended(cmd, described, outcome, &kept, budget, clocks, &report)
+    }
+
+    /// A spawn that failed: git missing where the folder it was to run in
+    /// is there, anything else as the spawn's own error.
+    fn unspawned(cmd: &GitCommand, described: String, source: std::io::Error) -> GitError {
+        if source.kind() == std::io::ErrorKind::NotFound
+            && cmd.cwd.as_ref().is_none_or(|d| d.is_dir())
+        {
+            GitError::GitNotFound { source }
+        } else {
+            GitError::Spawn {
+                command: described,
+                source,
+            }
+        }
     }
 
     /// The child's end: the log line, the observer's report, and the

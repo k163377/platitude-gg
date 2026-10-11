@@ -380,6 +380,70 @@ impl RepoSession {
         )
     }
 
+    /// Renames a worktree's folder (`git worktree move`), `to` beside it in
+    /// the same parent. `name` is the worktree as the screen names it, for a
+    /// refusal's heading ([`crate::worktrees::move_to`]).
+    ///
+    /// The worktree this session stands in moves too, once the session has
+    /// stood down ([`Self::stand_down`]): Windows will not rename a folder a
+    /// process stands in, and every read here stands in it. git then runs from
+    /// the repository's own directory, and nothing is read behind it — the
+    /// tab stands in the folder's new place, or back in its old one, on a
+    /// session of its own — refused or not, since the session stands down
+    /// before anything is asked. The boxes turn down every name that cannot
+    /// be taken before the press, so a refusal here is the rare one.
+    ///
+    /// Another worktree moves while no read of the other worktrees stands in
+    /// it ([`Self::refresh_carried`]'s slot).
+    ///
+    /// Moves no ref; the listing behind it names the folder anew
+    /// (`AfterWrite::Worktrees`).
+    pub fn move_worktree(
+        self: &Arc<Self>,
+        from: String,
+        to: String,
+        name: String,
+    ) -> Option<OperationId> {
+        let standing = self
+            .workdir()
+            .is_some_and(|here| same_path_key(&here.to_string_lossy()) == same_path_key(&from));
+        let s = Arc::clone(self);
+        self.write(
+            OperationKind::Worktree,
+            AfterWrite::Worktrees,
+            move |exec, repo, cancel| async move {
+                if !standing {
+                    // No read of the other worktrees runs while one is moved: a
+                    // `status` standing in the folder is what Windows refuses the
+                    // rename for. The read under way is waited out, and the ones
+                    // due meanwhile skip their turn (`refresh_carried`).
+                    let _reads = s.carried_slot.acquire().await;
+                    return crate::worktrees::move_to(
+                        &exec,
+                        &repo.workdir,
+                        &from,
+                        &to,
+                        &name,
+                        &cancel,
+                    )
+                    .await;
+                }
+                // Before anything can turn the rename down: every answer from
+                // here comes from a session that stood down, so the tab stands
+                // again on each (`RepoPage.absorbWorktreeMove`).
+                s.stand_down().await;
+                // `--git-path config` is the repository's own config, in its own
+                // directory, whichever worktree asked (`repo::open`).
+                let Some(common) = repo.config_path.parent() else {
+                    return Err(GitError::Rejected {
+                        message: "the repository's own directory is not known".to_string(),
+                    });
+                };
+                crate::worktrees::move_to(&exec, common, &from, &to, &name, &cancel).await
+            },
+        )
+    }
+
     /// Notes the other worktrees' holds again from the listing in hand, less
     /// the removals under way, and reads the refs for them: the chip, the
     /// branch's mark and the walk's starting point go with the press. The app

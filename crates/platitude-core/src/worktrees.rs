@@ -392,6 +392,162 @@ fn lock_reason(said: &str) -> Option<&str> {
     Some(reason.strip_suffix('.').unwrap_or(reason))
 }
 
+/// Where the worktree at `from` goes when its folder is renamed `name`:
+/// beside where it stands, in the same parent (git's paths, `/` throughout).
+/// Empty for a `from` with no parent.
+#[must_use]
+pub fn renamed_worktree_path(from: &str, name: &str) -> String {
+    match from.trim_end_matches('/').rsplit_once('/') {
+        Some((parent, _)) => format!("{parent}/{name}"),
+        None => String::new(),
+    }
+}
+
+/// Whether `name` is one folder's name: not empty, not `.` or `..`, and no
+/// separator that would make it a path to somewhere else — `\` too, on
+/// every disk, since the screen spells every path with `/`. What one system
+/// keeps out of a name beyond that is [`Disk::refuses`].
+#[must_use]
+pub fn is_folder_name(name: &str) -> bool {
+    !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\\'])
+}
+
+/// Whose rules a folder's name answers to beyond [`is_folder_name`]: Windows
+/// keeps characters, device names and a name's last letter for itself; Linux
+/// and macOS take anything else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Disk {
+    Windows,
+    Posix,
+}
+
+/// What Windows keeps out of a folder's name, as `git worktree move` meets it
+/// (`tests/it/worktree_move.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiskRefusal {
+    /// One of `< > : " | ? *`: git answers `Invalid argument` and nothing moves.
+    Character(char),
+    /// A device's name (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`),
+    /// with an extension or without: git moves the folder to a name only a
+    /// `\\?\` path reaches, cannot write the worktree's `.git` there, and
+    /// leaves the worktree broken (`NUL` it turns down outright).
+    Device,
+    /// A dot or a space at the end, which Windows drops: the folder would land
+    /// under another name than the one asked for.
+    Trailing(char),
+}
+
+impl Disk {
+    /// The rules of the system this runs on.
+    pub const HERE: Self = if cfg!(windows) {
+        Self::Windows
+    } else {
+        Self::Posix
+    };
+
+    /// What this system keeps out of `name`, a name [`is_folder_name`]
+    /// answered; `None` where it takes it.
+    #[must_use]
+    pub fn refuses(self, name: &str) -> Option<DiskRefusal> {
+        if self == Self::Posix {
+            return None;
+        }
+        if let Some(c) = name.chars().find(|c| "<>:\"|?*".contains(*c)) {
+            return Some(DiskRefusal::Character(c));
+        }
+        let stem = name.split('.').next().unwrap_or_default();
+        let numbered = |prefix: &str| {
+            stem.len() == 4
+                && stem
+                    .get(..3)
+                    .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+                && matches!(stem.as_bytes().get(3), Some(b'1'..=b'9'))
+        };
+        if ["CON", "PRN", "AUX", "NUL"]
+            .iter()
+            .any(|device| stem.eq_ignore_ascii_case(device))
+            || numbered("COM")
+            || numbered("LPT")
+        {
+            return Some(DiskRefusal::Device);
+        }
+        name.chars()
+            .last()
+            .filter(|c| matches!(c, '.' | ' '))
+            .map(DiskRefusal::Trailing)
+    }
+}
+
+/// Whether nothing at all is at `path` — a file, a folder, an empty one, a
+/// link. `git worktree move` moves into a folder that is there instead of
+/// refusing it, so anything there is in the way. A path that cannot be
+/// looked at is taken.
+#[must_use]
+pub fn path_free(path: &Path) -> bool {
+    matches!(std::fs::symlink_metadata(path), Err(err) if err.kind() == std::io::ErrorKind::NotFound)
+}
+
+/// What [`move_to`] turns down before git runs.
+fn check_move(from: &str, to: &str, name: &str) -> Result<(), GitError> {
+    let leaf = to
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or_default();
+    // Never sent by the name box, which turns such a name down as it is typed —
+    // one Windows keeps for itself too, which would leave the worktree broken.
+    if !is_folder_name(leaf)
+        || Disk::HERE.refuses(leaf).is_some()
+        || renamed_worktree_path(from, leaf) != to
+    {
+        return Err(GitError::Rejected {
+            message: format!("'{to}' is not a folder beside '{from}'"),
+        });
+    }
+    if !path_free(Path::new(to)) {
+        return Err(crate::report::worktree_rename_refused(
+            name,
+            format!("'{to}' already exists"),
+        ));
+    }
+    Ok(())
+}
+
+/// `git worktree move -- <from> <to>`: the worktree's folder renamed, its
+/// branch, HEAD and changes going with it. `name` is the worktree as the
+/// screen names it (its folder now), which a refusal's heading is written
+/// from. `cwd` is where git runs: anywhere in the repository but the
+/// worktree being moved, whose folder Windows will not rename while a
+/// process stands in it.
+///
+/// Turned down here, before git: a `to` that is not one folder in `from`'s
+/// parent, and anything already at `to` — git moves into a folder that is
+/// there, and would put the worktree inside it
+/// ([`crate::report::worktree_rename_refused`]).
+///
+/// Unforced, so git keeps everything else it refuses for: the repository's
+/// own worktree, a lock, submodules, a folder that is gone, and a path still
+/// listed for another worktree ([`crate::report::worktree_not_renamed`]).
+pub async fn move_to(
+    executor: &GitExecutor,
+    cwd: &Path,
+    from: &str,
+    to: &str,
+    name: &str,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    check_move(from, to, name)?;
+    let cmd = GitCommand::new()
+        .cwd(cwd)
+        .args(["worktree", "move", "--", from, to]);
+    let command = cmd.describe();
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    match out.code {
+        0 => Ok(()),
+        _ => Err(crate::report::worktree_not_renamed(name, command, &out)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -595,6 +751,71 @@ mod tests {
             lock_reason("fatal: 'C:/t/wt' contains modified or untracked files"),
             None
         );
+    }
+
+    #[test]
+    fn a_renamed_worktree_stays_in_its_parent() {
+        assert_eq!(
+            renamed_worktree_path("C:/work/repo.worktrees/old", "feature-x"),
+            "C:/work/repo.worktrees/feature-x"
+        );
+        assert_eq!(
+            renamed_worktree_path("/srv/repo/.claude/worktrees/a/", "b"),
+            "/srv/repo/.claude/worktrees/b"
+        );
+        assert_eq!(renamed_worktree_path("loose", "x"), "");
+    }
+
+    #[test]
+    fn a_folder_name_is_one_folder() {
+        assert!(is_folder_name("feature-x"));
+        assert!(is_folder_name(".hidden"));
+        assert!(is_folder_name("-dash"));
+        for not in ["", ".", "..", "a/b", "a\\b", "../out"] {
+            assert!(!is_folder_name(not), "{not:?}");
+        }
+    }
+
+    /// Windows keeps its characters, its devices' names — an extension does not
+    /// free one, a longer name is not one — and a name's trailing dot or space;
+    /// Linux and macOS take every one of them.
+    #[test]
+    fn windows_keeps_what_the_others_take() {
+        use DiskRefusal::{Character, Device, Trailing};
+        let kept = [
+            ("a<b", Character('<')),
+            ("a>b", Character('>')),
+            ("a:b", Character(':')),
+            ("a\"b", Character('"')),
+            ("a|b", Character('|')),
+            ("why?", Character('?')),
+            ("a*b", Character('*')),
+            ("CON", Device),
+            ("con.txt", Device),
+            ("Nul", Device),
+            ("aux", Device),
+            ("prn.tar.gz", Device),
+            ("COM1", Device),
+            ("lpt9.log", Device),
+            ("dot.", Trailing('.')),
+            ("space ", Trailing(' ')),
+        ];
+        for (name, why) in kept {
+            assert_eq!(Disk::Windows.refuses(name), Some(why), "{name:?}");
+            assert_eq!(Disk::Posix.refuses(name), None, "{name:?}");
+        }
+        for taken in [
+            "conx",
+            "COM0",
+            "com10",
+            "lpt",
+            "a.con",
+            "ノート",
+            "éé",
+            "x.y",
+        ] {
+            assert_eq!(Disk::Windows.refuses(taken), None, "{taken:?}");
+        }
     }
 
     #[test]

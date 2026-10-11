@@ -19,7 +19,8 @@ pub(super) enum ChildOutcome {
     Cancelled,
 }
 
-/// The child is killed and reaped when the timeout or the token fires.
+/// The child is killed and reaped when the timeout or the token fires, or
+/// a pipe breaks: it is gone on every road out of here.
 pub(super) async fn run_child(
     child: &mut Child,
     timeout: Option<Duration>,
@@ -88,7 +89,12 @@ pub(super) async fn run_child(
             kill_and_reap(child).await;
             Ok(ChildOutcome::TimedOut)
         }
-        res = work => res,
+        res = work => {
+            if res.is_err() {
+                kill_and_reap(child).await;
+            }
+            res
+        }
     }
 }
 

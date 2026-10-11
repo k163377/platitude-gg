@@ -345,6 +345,106 @@ async fn a_working_tree_read_leaves_the_index_untouched() {
     assert_eq!(out.stdout_utf8(), "", "a stat-only change is not a change");
 }
 
+/// What a counted handle's count was as the observer heard each command
+/// asked for and ended — the end is heard after the reap, inside the run.
+struct CountsAtEnds {
+    live: std::sync::Arc<platitude_core::process::Live>,
+    seen: std::sync::Mutex<Vec<(&'static str, usize)>>,
+}
+
+impl platitude_core::process::CommandObserver for CountsAtEnds {
+    fn records(&self, _kept: Kept) -> bool {
+        true
+    }
+    fn started(
+        &self,
+        _display: &str,
+        _full: &str,
+        _kept: Kept,
+        _operation: Option<platitude_core::OperationId>,
+    ) -> u64 {
+        if let Ok(mut seen) = self.seen.lock() {
+            seen.push(("asked", self.live.count()));
+        }
+        0
+    }
+    fn finished(
+        &self,
+        _id: u64,
+        _end: platitude_core::process::CommandEnd,
+        _waited: u64,
+        _elapsed: u64,
+        _message: &str,
+    ) {
+        if let Ok(mut seen) = self.seen.lock() {
+            seen.push(("ended", self.live.count()));
+        }
+    }
+}
+
+/// A counted handle counts a git from the spawn to the reap: none when it is
+/// asked for, one still as its end is heard (the child reaped), none once the
+/// run has answered — and none at all for a command that never spawned. What
+/// a session standing down waits out before its folder is renamed
+/// (`RepoSession::stand_down`); the guard sits in the one function every
+/// command runs through, so a cancelled one is counted by the same lines.
+#[tokio::test]
+async fn a_counted_git_runs_until_it_is_reaped_and_no_longer() {
+    let live = std::sync::Arc::new(platitude_core::process::Live::default());
+    let observer = std::sync::Arc::new(CountsAtEnds {
+        live: std::sync::Arc::clone(&live),
+        seen: std::sync::Mutex::new(Vec::new()),
+    });
+    let counted = |executor: GitExecutor| {
+        executor
+            .counted(std::sync::Arc::clone(&live))
+            .observed(std::sync::Arc::clone(&observer) as _, Kept::Asked)
+    };
+
+    let ran = counted(crate::support::exec::isolated());
+    bounded(
+        "git version",
+        ran.run(GitCommand::new().arg("version"), &CancellationToken::new()),
+    )
+    .await
+    .expect("git answers");
+    assert_eq!(live.count(), 0, "reaped and let go by the time it answers");
+
+    let cancelled = CancellationToken::new();
+    cancelled.cancel();
+    let err = bounded(
+        "a cancelled ask",
+        ran.run(GitCommand::new().arg("version"), &cancelled),
+    )
+    .await
+    .expect_err("nothing runs");
+    assert!(err.is_cancelled(), "{err:?}");
+
+    let missing = counted(GitExecutor::with_program("pgg-no-such-program"));
+    let err = bounded(
+        "a program that is not there",
+        missing.run(GitCommand::new().arg("version"), &CancellationToken::new()),
+    )
+    .await
+    .expect_err("nothing spawns");
+    assert!(matches!(err, GitError::GitNotFound { .. }), "{err:?}");
+
+    assert_eq!(
+        *observer.seen.lock().unwrap(),
+        [
+            ("asked", 0),
+            ("ended", 1),
+            ("asked", 0),
+            ("ended", 0),
+            ("asked", 0),
+            ("ended", 0),
+        ],
+        "counted from the spawn to the reap, and only a spawn"
+    );
+    assert_eq!(live.count(), 0);
+    bounded("idle", live.idle()).await;
+}
+
 /// Whether this machine's git meets the minimum is about the machine, not
 /// the code (the parse and boundary are `version::tests`), so the full gate
 /// runs it (`-- --ignored ::periodic::`), not every change.

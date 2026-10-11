@@ -6,7 +6,7 @@
 //!
 //! What git turns down, and what this end finds in the way before git
 //! runs, is a report for the notice bar (`report::carried_refused` /
-//! `carried_withheld`), not a failure for the command log to raise.
+//! `withheld_about`), not a failure for the command log to raise.
 
 use super::stash_round::conflicts_now;
 use super::*;
@@ -45,9 +45,8 @@ async fn apply_work(
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let name = joins::shown_name(there);
-    let unread = |message: String| {
-        report::carried_withheld(&name, report::ReportKind::CarriedUnread, message)
-    };
+    let unread =
+        |message: String| report::withheld_about(report::ReportKind::CarriedUnread, &name, message);
     let Some(git_dir) = discards::worktree_at(exec, there, cancel).await? else {
         return Err(unread(format!("no worktree stands at '{there}'")));
     };
@@ -78,9 +77,9 @@ async fn apply_work(
         .iter()
         .find(|path| !discards::lies_free(&repo.workdir, path))
     {
-        return Err(report::carried_withheld(
-            &name,
+        return Err(report::withheld_about(
             report::ReportKind::CarriedFileInTheWay,
+            &name,
             format!("'{path}' already stands here"),
         ));
     }

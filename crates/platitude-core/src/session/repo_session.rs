@@ -22,6 +22,9 @@ pub struct RepoSession {
     /// (デザイン規約 §git が言ったことを読む場所).
     pub(super) exec_unasked_fetch: GitExecutor,
     pub(super) commands: Arc<CommandFeed>,
+    /// The git processes the four handles above have running, counted from
+    /// the spawn to the reap — what [`Self::stand_down`] waits out.
+    pub(super) live: Arc<crate::process::Live>,
     pub(super) runtime: tokio::runtime::Handle,
     pub(super) sink: Arc<dyn SessionSink>,
     /// Cancelled when the session closes; every op but a local write
@@ -400,6 +403,21 @@ impl RepoSession {
             order.leave(self);
         }
         self.forget_the_screens_copy();
+    }
+
+    /// Stops every read this session makes and waits until none of its
+    /// git processes is left running: from here no git of this session
+    /// stands in its worktree — what Windows needs of a folder it is asked to
+    /// rename. Git the app runs outside a session (a dialog's own reads) is
+    /// not counted here. The write asking goes on, on a token of its own, and
+    /// nothing is read behind it; what the session drew is kept for the tab
+    /// to stand on in a new one ([`Self::take_drawn_graph`]). Close it after,
+    /// as any other.
+    pub(super) async fn stand_down(&self) {
+        // The token first: a command not yet spawned ends at its slot, or
+        // just before its spawn (`process::Live`).
+        self.root_cancel.cancel();
+        self.live.idle().await;
     }
 
     /// This worktree's write order, once the repository is open.

@@ -4,12 +4,14 @@
 mod child;
 mod command;
 mod executor;
+mod live;
 mod meter;
 mod program;
 mod slots;
 
 pub use command::{CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, literal_pathspec};
 pub use executor::{DEFAULT_TIMEOUT, GitExecutor};
+pub use live::Live;
 pub use meter::Meter;
 pub use program::{default_program_path, same_program, spawnable};
 pub use slots::{
