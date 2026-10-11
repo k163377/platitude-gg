@@ -1020,7 +1020,7 @@ FocusScope {
     // ---- what the sidebar's rows ask for ---------------------------
     /// Unconfirmed: a name is not history. A tag and a stash are re-made under the new name by core — the only rename
     /// git has for them.
-    function renameRow(kind, id, name) {
+    function renameRow(kind, id, oid, name) {
         if (kind === "branch") {
             // Which remote this branch speaks for has to be read before the rename: afterwards the row answers to the
             // new name.
@@ -1033,7 +1033,7 @@ FocusScope {
             page.armRenameTagRemote(id, name)
             repoTab.renameTag(id, name)
         } else if (kind === "stash") {
-            repoTab.renameStash(id, name)
+            repoTab.renameStash(id, oid, name)
         } else if (kind === "remote") {
             // A remote branch's box leads to the replace over there, whose question carries both names
             // (`askReplaceRemote`) — so, unlike every rename, the box comes down now: left waiting, a dismissed
@@ -3243,7 +3243,7 @@ FocusScope {
                             repoTab.createTag(name, oidHex)
                     }
                     onWorktreeAtRequested: (oidHex, name) => page.worktreeFromBox(oidHex, name)
-                    onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
+                    onRenameSubmitted: (kind, id, oid, name) => page.renameRow(kind, id, oid, name)
                     onAddRemoteRequested: publishFlow.startAddRemote()
                 }
 
@@ -3317,7 +3317,7 @@ FocusScope {
                             onCarriedOpenRequested: path => page.openRepositoryPathRequested(path)
                             onCarriedMenuRequested: (path, name) => page.openCarriedMenu(path, name)
                             onRowRenameRequested: (oidHex, chip) => page.startRename(oidHex, chip)
-                            onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
+                            onRenameSubmitted: (kind, id, oid, name) => page.renameRow(kind, id, oid, name)
                             namingRefused: page.graphNameRefusedWhy !== ""
                             namingRefusedWhy: page.graphNameRefusedWhy
                             namingRefusedMark: page.graphNameRefusedMark

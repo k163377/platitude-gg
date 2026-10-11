@@ -125,9 +125,10 @@ async fn renaming_a_stash_probes_by_code() {
     repo.commit_file("a.txt", "one\n", "root");
     repo.write_file("a.txt", "two\n");
     repo.git(&["stash", "push", "-m", "before"]);
+    let oid = repo.git(&["rev-parse", "stash@{0}"]);
     let (exec, log, cancel) = logged();
 
-    stash::rename(&exec, &repo.path, "stash@{0}", "after", &cancel)
+    stash::rename(&exec, &repo.path, "stash@{0}", &oid, "after", &cancel)
         .await
         .expect("rename");
 

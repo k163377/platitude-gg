@@ -567,6 +567,15 @@ impl NavSectionModel {
         self.told(Role::Full, &path, Role::OidHex)
     }
 
+    /// The commit the row git knows by `full` stands on, as hex; empty for
+    /// a name this listing does not hold. A stash's, by its selector — the
+    /// entry a rename means, whatever its number is by the press
+    /// (`SidebarPane.beginRename`).
+    #[qslot]
+    fn oid_of_full(&self, full: String) -> String {
+        self.told(Role::Full, &full, Role::OidHex)
+    }
+
     /// What one row shows, and what git knows it by (empty out of range) —
     /// how automation reaches a row, roles being visible only to a delegate.
     #[qslot]

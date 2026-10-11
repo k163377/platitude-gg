@@ -3,7 +3,8 @@
 //! Selectors (`stash@{0}`) come from a listing and are passed straight
 //! back: the numbering shifts under every push and drop, so an invented
 //! one could name someone else's entry. The one exception is [`rename`],
-//! which checks its shifted selector by oid before dropping.
+//! which finds its entry by oid and checks the shifted selector by oid
+//! before dropping.
 
 use std::path::Path;
 

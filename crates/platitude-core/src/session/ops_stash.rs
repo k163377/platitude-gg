@@ -13,16 +13,18 @@ use crate::discards;
 impl RepoSession {
     /// Renames a stash entry — stored again under the new label, old entry
     /// dropped (git has no rename for one — see [`crate::stash::rename`]).
+    /// `oid` is the entry the screen chose, `selector` where it stood.
     pub fn rename_stash(
         self: &Arc<Self>,
         selector: String,
+        oid: String,
         message: String,
     ) -> Option<OperationId> {
         self.write(
             OperationKind::Stash,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                stash::rename(&exec, &repo.workdir, &selector, &message, &cancel).await
+                stash::rename(&exec, &repo.workdir, &selector, &oid, &message, &cancel).await
             },
         )
     }

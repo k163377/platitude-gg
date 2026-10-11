@@ -168,7 +168,7 @@ QtObject {
         // could know about (one already taken), and a box closed first loses what was typed and leaves the answer
         // nowhere but the log. The page takes it down on the landing (`RepoPage.absorbWriteResult`).
         gestures.editWaiting = true
-        gestures.host.renameSubmitted(kind, id, text.trim())
+        gestures.host.renameSubmitted(kind, id, oid, text.trim())
     }
     /// A rename is out and git has not answered; the answer takes the box down or writes its refusal under it
     /// (`editGitRefusal`).
@@ -303,8 +303,8 @@ QtObject {
         // A stash is a shelf, and a folder a heading: both stay put.
     }
     /// The menu's way into the rename box, for anyone who cannot use the two-click gesture.
-    function beginRename(kind, id, text) {
-        gestures.startEdit(kind, kind + ":" + id, "rename", id, "", text)
+    function beginRename(kind, id, text, oid) {
+        gestures.startEdit(kind, kind + ":" + id, "rename", id, oid, text)
     }
     /// The new-branch box on any row that names a commit, not just a tag's.
     function beginBranchAt(kind, id, oidHex) {

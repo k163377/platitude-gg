@@ -14,14 +14,40 @@ use super::*;
 /// The old entry is dropped last, only after its oid is confirmed at the
 /// shifted position: keeping both entries is a mess, losing the work is
 /// worse.
+///
+/// `oid` is the entry the screen chose, and `selector` where it stood
+/// then: a push or drop made elsewhere since moves every number, and the
+/// selector alone would rename whichever entry stands there now — or name
+/// none, past the end of a list that got shorter. One that has left the
+/// list is turned down before anything is written.
 pub async fn rename(
     executor: &GitExecutor,
     workdir: &Path,
     selector: &str,
+    oid: &str,
     message: &str,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let entry = read_entry(executor, workdir, selector, cancel).await?;
+    let there = read_entry(executor, workdir, selector, cancel).await;
+    let mut selector = selector.to_string();
+    let entry = match there {
+        Ok(entry) if entry.oid == oid => entry,
+        _ => {
+            let Some(moved) = super::load(executor, workdir, cancel)
+                .await?
+                .into_iter()
+                .find(|listed| listed.oid.to_hex() == oid)
+            else {
+                return Err(GitError::Rejected {
+                    message: format!("the stash {oid} is no longer in the list"),
+                });
+            };
+            let entry = read_entry(executor, workdir, &moved.name, cancel).await?;
+            selector = moved.name;
+            entry
+        }
+    };
+    let selector = selector.as_str();
     let mut cmd = GitCommand::new()
         .cwd(workdir)
         .args(["commit-tree", &entry.tree]);

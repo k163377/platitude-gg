@@ -48,8 +48,9 @@ Rectangle {
     signal tagAtRequested(string oidHex, string name)
     /// …and for a new branch out in a worktree of its own (`RepoPage.worktreeFromBox`).
     signal worktreeAtRequested(string oidHex, string name)
-    /// A row was renamed. `kind` is the section ("branch" / "tag" / "stash"), `id` what git knows the row by.
-    signal renameSubmitted(string kind, string id, string name)
+    /// A row was renamed. `kind` is the section ("branch" / "tag" / "stash"), `id` what git knows the row by, `oid` what
+    /// it pointed at when the box opened — the entry a stash rename means, whatever its number is by then.
+    signal renameSubmitted(string kind, string id, string oid, string name)
     signal foldRequested(bool collapse)
     /// The REMOTES `+`, past the doors' hold (`askAddRemote`).
     signal addRemoteRequested()
@@ -113,8 +114,9 @@ Rectangle {
     function submitEdit(text) {
         rowGestures.submitEdit(text)
     }
+    /// A stash's box carries the entry it opened on (`renameSubmitted`'s `oid`), as the two-click gesture's does.
     function beginRename(kind, id, text) {
-        rowGestures.beginRename(kind, id, text)
+        rowGestures.beginRename(kind, id, text, kind === "stash" ? sidebar.stashesModel.oidOfFull(id) : "")
     }
     /// git's answer to a rename this pane's box sent (`SidebarRowGestures.submitEdit`): it landed, or git would not
     /// have the name and says so under the box the name is still in.

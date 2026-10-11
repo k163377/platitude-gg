@@ -108,7 +108,7 @@ Rectangle {
     signal createWorktreeRequested(string oidHex, string name)
     /// The same box, answered with a new name for something that has one. `kind` picks the git command
     /// (`RepoPage.renameRow`).
-    signal renameSubmitted(string kind, string id, string name)
+    signal renameSubmitted(string kind, string id, string oid, string name)
     signal openRepositoryRequested()
 
     // ---- naming a branch or a tag on a row -------------------------
@@ -436,7 +436,7 @@ Rectangle {
             // デザイン規約 §答えの要らない報せ).
             if (mode === "rename" && name !== "" && name !== was) {
                 graphArea.namingWaiting = true
-                graphArea.renameSubmitted(kind, id, name)
+                graphArea.renameSubmitted(kind, id, oidHex, name)
                 return
             }
             graphArea.stopNaming()

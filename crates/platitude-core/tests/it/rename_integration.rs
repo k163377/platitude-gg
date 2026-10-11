@@ -45,12 +45,14 @@ async fn renaming_a_stash_keeps_its_contents_and_says_so_everywhere() {
     repo.write_file("a.txt", "changed\n");
     repo.write_file("new.txt", "untracked\n");
     repo.git(&["stash", "push", "-u", "-m", "half of the work"]);
+    let oid = repo.git(&["rev-parse", "stash@{0}"]);
     let (exec, cancel) = env();
 
     stash::rename(
         &exec,
         &repo.path,
         "stash@{0}",
+        &oid,
         "the login refactor",
         &cancel,
     )
@@ -84,17 +86,95 @@ async fn renaming_a_stash_leaves_the_others_where_they_were() {
     repo.git(&["stash", "push", "-m", "first"]);
     repo.write_file("a.txt", "two\n");
     repo.git(&["stash", "push", "-m", "second"]);
+    let oid = repo.git(&["rev-parse", "stash@{1}"]);
     let (exec, cancel) = env();
 
-    stash::rename(&exec, &repo.path, "stash@{1}", "renamed first", &cancel)
-        .await
-        .expect("rename");
+    stash::rename(
+        &exec,
+        &repo.path,
+        "stash@{1}",
+        &oid,
+        "renamed first",
+        &cancel,
+    )
+    .await
+    .expect("rename");
 
     let list = repo.git(&["stash", "list", "--format=%gs"]);
     assert_eq!(
         list.lines().collect::<Vec<_>>(),
         vec!["renamed first", "On main: second"],
         "the renamed entry is at the top; the reflog only grows at the front"
+    );
+}
+
+/// A stash pushed elsewhere between the selection and the press moves
+/// every number down: the entry chosen is the one renamed, wherever it
+/// stands now, and the one that took its number keeps its name.
+#[tokio::test]
+async fn a_stash_pushed_since_the_selection_is_not_the_one_renamed() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.write_file("a.txt", "one\n");
+    repo.git(&["stash", "push", "-m", "chosen"]);
+    let chosen = repo.git(&["rev-parse", "stash@{0}"]);
+    repo.write_file("a.txt", "two\n");
+    repo.git(&["stash", "push", "-m", "pushed since"]);
+    let (exec, cancel) = env();
+
+    stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
+        .await
+        .expect("the chosen entry is still there to rename");
+
+    let list = repo.git(&["stash", "list", "--format=%gs"]);
+    assert_eq!(
+        list.lines().collect::<Vec<_>>(),
+        vec!["renamed", "On main: pushed since"]
+    );
+}
+
+/// An entry above the chosen one dropped elsewhere since: the selection's
+/// number is now past the end of the list, and the chosen entry is one up.
+#[tokio::test]
+async fn a_stash_dropped_above_the_selection_is_renamed_where_it_stands_now() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.write_file("a.txt", "one\n");
+    repo.git(&["stash", "push", "-m", "chosen"]);
+    repo.write_file("a.txt", "two\n");
+    repo.git(&["stash", "push", "-m", "dropped since"]);
+    let chosen = repo.git(&["rev-parse", "stash@{1}"]);
+    repo.git(&["stash", "drop", "stash@{0}"]);
+    let (exec, cancel) = env();
+
+    stash::rename(&exec, &repo.path, "stash@{1}", &chosen, "renamed", &cancel)
+        .await
+        .expect("the chosen entry is still there to rename");
+
+    assert_eq!(repo.git(&["stash", "list", "--format=%gs"]), "renamed");
+}
+
+/// The entry chosen has left the list since (popped or dropped elsewhere):
+/// nothing is written, and no other entry is touched.
+#[tokio::test]
+async fn a_stash_gone_since_the_selection_is_turned_down() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.write_file("a.txt", "one\n");
+    repo.git(&["stash", "push", "-m", "kept"]);
+    repo.write_file("a.txt", "two\n");
+    repo.git(&["stash", "push", "-m", "chosen"]);
+    let chosen = repo.git(&["rev-parse", "stash@{0}"]);
+    repo.git(&["stash", "drop", "stash@{0}"]);
+    let (exec, cancel) = env();
+
+    stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
+        .await
+        .expect_err("there is nothing left to rename");
+
+    assert_eq!(
+        repo.git(&["stash", "list", "--format=%gs"]),
+        "On main: kept"
     );
 }
 
