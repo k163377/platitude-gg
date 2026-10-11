@@ -7,7 +7,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::GitError;
 use crate::integrate::{RebaseOptions, RebaseOutcome, rebase_command};
-use crate::process::GitExecutor;
+use crate::process::{GitExecutor, Trace};
 use crate::repo::RepoInfo;
 use crate::report;
 use crate::scratch::ScratchFile;
@@ -120,31 +120,48 @@ pub async fn rebase_interactive(
     // Exit 1 answers (work in the way, or a stopped replay), each with its
     // own landing on screen; a 128 stays a failure
     // (.claude/rules/core.md「終了コードで答える問い合わせ」) — and so does a
-    // 1 that is a commit turned down, which the replay is put back for.
+    // 1 that is a refusal ([`not_a_stop`]). Traced: a commit hook's no and
+    // an ssh signing program's are in git's record, not its words
+    // ([`refused_by`]).
     let cmd = rebase_command(&repo.workdir, upstream, options, Some(&editor))
         .answers_by_code(1)
-        .except_when_it_says(&NOT_A_STOP);
-    let result = executor.run(cmd, cancel).await;
+        .except_when(not_a_stop)
+        .traced();
+    let command = cmd.describe();
+    let ran = executor.run_unchecked(cmd, cancel).await;
     // The todo is installed (or refused) by now; only the message files
     // may still have a reader.
     drop(plan);
-    let refused = match &result {
-        Err(GitError::Failed {
-            command,
-            code,
-            stderr,
-        }) => commit_refused(stderr).map(|kind| (kind, command.clone(), *code, stderr.clone())),
-        _ => None,
+    // A non-zero end is a failure for `landed` to read, as `GitExecutor::run`
+    // answers it; the trace that names a refusal is read here first.
+    let (result, refused) = match ran {
+        Ok(out) if out.code == 0 => (Ok(()), None),
+        Ok(out) => {
+            let stderr = out.failure_message();
+            let refused = refused_by(&stderr, &out.trace)
+                .map(|kind| (kind, command.clone(), out.code, stderr.clone()));
+            let failed = GitError::Failed {
+                command,
+                code: out.code,
+                stderr,
+            };
+            (Err(failed), refused)
+        }
+        Err(error) => (Err(error), None),
     };
-    let mut outcome =
-        crate::integrate::landed(executor, &repo.workdir, result.map(drop), cancel).await;
-    if let Some((kind, command, code, stderr)) = refused
-        && left_standing(executor, repo, &outcome, cancel).await
-    {
-        outcome = Err(match put_back(executor, repo, cancel).await {
-            Ok(()) => report::rewrite_refused(kind, command, code, stderr),
-            Err(left_standing) => left_standing,
-        });
+    let mut outcome = crate::integrate::landed(executor, &repo.workdir, result, cancel).await;
+    if let Some((kind, command, code, stderr)) = refused {
+        if left_standing(executor, repo, &outcome, cancel).await {
+            outcome = Err(match put_back(executor, repo, cancel).await {
+                Ok(()) => report::rewrite_refused(kind, command, code, stderr),
+                Err(left_standing) => left_standing,
+            });
+        } else if outcome.is_err() {
+            // Nothing found standing to put back: turned down at the first
+            // checkout, or a read that could not tell, where the band shows
+            // whatever stands.
+            outcome = Err(report::rewrite_refused(kind, command, code, stderr));
+        }
     }
     match &outcome {
         // Kept for the `--continue`; what an abort strands is swept on the
@@ -165,39 +182,42 @@ pub async fn rebase_interactive(
     outcome
 }
 
-/// What git says, part-way through a replay, when a commit it remade was
-/// turned down — the replay then stops as over a conflict, with exit 1, or
-/// dies with it standing (128: no signing key named at all, which git
-/// dies over in its own process) (sequencer.c, the same words at the
-/// minimum and 2.55). Signing: [`crate::commit::UNSIGNED`]. A hook:
-/// `prepare-commit-msg` on a pick, or any commit hook on a reword's `exec`
-/// (the one `exec` a plan writes, whose `git commit` runs them all). And
-/// the `pre-rebase` hook's no, which stops nothing.
-const NOT_A_STOP: [&str; 5] = [
-    crate::commit::UNSIGNED[0],
-    crate::commit::UNSIGNED[1],
-    PREPARE_HOOK_FAILED,
-    REWORD_EXEC_FAILED,
-    crate::integrate::PRE_REBASE_REFUSED,
-];
+/// What git says when a pick's `prepare-commit-msg` hook said no, made in
+/// the rebase's own process (sequencer.c, the minimum to 2.55).
 const PREPARE_HOOK_FAILED: &str = "'prepare-commit-msg' hook failed";
-const REWORD_EXEC_FAILED: &str = "execution failed: git commit --amend";
 
-/// Which refusal a stopped replay's words are, for one that stopped over
-/// a commit turned down rather than to be settled: a plan is one press, so
-/// it is put back and reported (デザイン規約 §答えの要らない報せ), where a
-/// conflict or an `edit` stop is the reader's to carry on. A lock is left a
-/// stop: the next `--continue` gets past one that has gone.
-fn commit_refused(stderr: &str) -> Option<report::ReportKind> {
-    if crate::commit::UNSIGNED
-        .iter()
-        .any(|said| stderr.contains(said))
-    {
-        Some(report::ReportKind::RewriteUnsigned)
-    } else if crate::report::lock_taken(stderr) {
-        None
-    } else if stderr.contains(PREPARE_HOOK_FAILED) || stderr.contains(REWORD_EXEC_FAILED) {
+/// Whether the rebase's exit 1 is a refusal rather than a stop, for its
+/// row in the log ([`crate::process::GitCommand::except_when`]): what turns
+/// a plain rebase down ([`crate::integrate::turned_down`]) and what
+/// [`refused_by`] names.
+fn not_a_stop(said: &str, trace: &Trace) -> bool {
+    crate::integrate::turned_down(said) || refused_by(said, trace).is_some()
+}
+
+/// Which refusal a replay that ended non-zero was, for one stopped over a
+/// commit turned down rather than to be settled: a plan is one press, so it
+/// is put back and reported (デザイン規約 §答えの要らない報せ), where a
+/// conflict or an `edit` stop is the reader's to carry on. Only what git
+/// said or recorded names it. A commit hook that ended non-zero first — on
+/// a pick, in git's words; on a reword's `exec` or a squash's last commit,
+/// a `git commit` of its own, whose no git adds no words to
+/// (builtin/commit.c), in its trace: a hook's own output lands among git's
+/// words, a lock's or a signer's words with it, and git makes no more of
+/// that commit after its hook said no. Then a commit git could not sign
+/// ([`crate::commit::signing_failed`]), a lock it named, untracked files
+/// its first checkout would overwrite. A stop git gives no cause for is
+/// left as git left it, for the band to carry.
+///
+/// The last two stop the replay before it begins, with nothing to put back.
+fn refused_by(said: &str, trace: &Trace) -> Option<report::ReportKind> {
+    if said.contains(PREPARE_HOOK_FAILED) || trace.hook_failed(&crate::commit::COMMIT_HOOKS) {
         Some(report::ReportKind::RewriteCommitHook)
+    } else if crate::commit::signing_failed(said, trace) {
+        Some(report::ReportKind::RewriteUnsigned)
+    } else if crate::report::lock_taken(said) {
+        Some(report::ReportKind::RewriteLocked)
+    } else if said.contains(crate::integrate::UNTRACKED_IN_THE_WAY) {
+        Some(report::ReportKind::RewriteUntrackedInTheWay)
     } else {
         None
     }
@@ -289,6 +309,63 @@ mod tests {
 
     fn no_helper() -> &'static Path {
         Path::new("no-such-helper-for-this-test")
+    }
+
+    /// Which refusal each set of words is — and the stops that are none.
+    /// What only git's trace tells (a hook on a squash's last commit, an ssh
+    /// signer) is pinned against real git in `integrate_integration::refused`.
+    #[test]
+    fn a_refused_replay_is_told_by_what_said_no() {
+        let untraced = Trace::default();
+        let kind = |said: &str| refused_by(said, &untraced);
+        assert_eq!(
+            kind("error: 'prepare-commit-msg' hook failed\nCould not apply 5ecd2e3... c"),
+            Some(ReportKind::RewriteCommitHook)
+        );
+        assert_eq!(
+            kind(
+                "error: gpg failed to sign the data:\n[GNUPG:] NO_SECKEY\nerror: failed to write commit object"
+            ),
+            Some(ReportKind::RewriteUnsigned)
+        );
+        assert_eq!(
+            kind("prep says no\nCould not apply 246838c... # c\n"),
+            None,
+            "a squash's last commit turned down says nothing of who: its trace does"
+        );
+        assert_eq!(
+            kind("error: failed to write commit object\nCould not apply 246838c... c"),
+            None,
+            "the object store's failure says the same"
+        );
+        assert_eq!(
+            kind(
+                "error: update_ref failed for ref 'CHERRY_PICK_HEAD': cannot lock ref \
+                 'CHERRY_PICK_HEAD': Unable to create 'C:/t/.git/CHERRY_PICK_HEAD.lock': File exists.\n\
+                 error: could not apply 5ecd2e3... c"
+            ),
+            Some(ReportKind::RewriteLocked)
+        );
+        assert_eq!(
+            kind(
+                "error: The following untracked working tree files would be overwritten by \
+                 checkout:\n\told.txt\nPlease move or remove them before you switch branches.\n\
+                 Aborting\nerror: could not detach HEAD"
+            ),
+            Some(ReportKind::RewriteUntrackedInTheWay)
+        );
+        assert_eq!(
+            kind("error: could not apply 5ecd2e3... c\nCould not apply 5ecd2e3... c"),
+            None
+        );
+        assert!(not_a_stop(
+            "Unable to create 'C:/t/.git/index.lock': File exists.",
+            &untraced
+        ));
+        assert!(!not_a_stop(
+            "error: could not apply 5ecd2e3... c\nCould not apply 5ecd2e3... c",
+            &untraced
+        ));
     }
 
     #[tokio::test]

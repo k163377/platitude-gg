@@ -79,7 +79,9 @@ pub async fn commit(
 ) -> Result<(), GitError> {
     let allow_empty = options.allow_empty
         || (options.amend && head_is_empty(executor, &repo.workdir, cancel).await?);
-    let mut cmd = GitCommand::new().cwd(&repo.workdir).arg("commit");
+    // Traced: a hook's no and an ssh signing program's are in git's record,
+    // not its words ([`refused_by`]).
+    let mut cmd = GitCommand::new().cwd(&repo.workdir).traced().arg("commit");
     if options.amend {
         cmd = cmd.arg("--amend");
     }
@@ -133,37 +135,51 @@ fn refused(command: String, out: &crate::process::GitOutput) -> GitError {
     )
 }
 
-/// What git says when it could not sign (`LC_ALL=C`, the same at the
-/// minimum and 2.55): `commit_tree_extended` failing dies with the first
-/// whatever the signing program said — gpg, ssh-keygen, gpgsm — and an
-/// ssh signing with no key named dies with the second before it starts
-/// (gpg-interface.c `get_default_ssh_signing_key`). The first is also what
-/// an object store git cannot write to ends with (a full disk, objects a
-/// root-run git left behind) — outside what a repository meets in normal
-/// use, and read as signing.
-pub(crate) const UNSIGNED: [&str; 2] = [
-    "failed to write commit object",
+/// The hooks whose no stops a commit (builtin/commit.c; `post-commit`'s end
+/// changes nothing).
+pub(crate) const COMMIT_HOOKS: [&str; 3] = ["pre-commit", "prepare-commit-msg", "commit-msg"];
+
+/// What git says, in words of its own that name the signing, when it could
+/// not sign (`LC_ALL=C`, gpg-interface.c at the minimum and 2.55): gpg or
+/// gpgsm gave no signature, no ssh key is named or none can be had, the
+/// ssh-keygen there cannot sign, the key or the signature could not pass
+/// through the temporary file. Not `failed to write commit object`, which a
+/// commit ends with after any of them and after an object store git cannot
+/// write to alike.
+const UNSIGNED: [&str; 6] = [
+    "gpg failed to sign the data",
+    "user.signingKey needs to be set for ssh signing",
     "either user.signingkey or gpg.ssh.defaultKeyCommand needs to be configured",
+    "ssh-keygen -Y sign is needed for ssh signing",
+    "failed writing ssh signing key",
+    "failed reading ssh signing data buffer",
 ];
 
-/// Which of the outside's refusals a failed `git commit` was. git adds
-/// nothing of its own to a hook's no — `pre-commit`, `prepare-commit-msg`
-/// and `commit-msg` alike end the command with exit 1 and the hook's words
-/// on stderr (git sends a commit hook's stdout there too, hook.c), and an
-/// empty stdout: git's own exit 1s (`nothing to commit`, an amend that
-/// would empty the commit) print the status there. A lock and a signing
-/// failure are git's own words. (A tree git cannot write, `Error building
-/// trees`, ends the same way as a hook's no: a full disk, outside what a
-/// repository meets in normal use.)
+/// Whether git could not sign: its own words name the signing, or — for an
+/// ssh signature, whose program's failure git passes on as that program's
+/// words alone (`sign_buffer_ssh`) — the program ended non-zero in its
+/// trace.
+pub(crate) fn signing_failed(said: &str, trace: &crate::process::Trace) -> bool {
+    UNSIGNED.iter().any(|words| said.contains(words)) || trace.ssh_signer_failed()
+}
+
+/// Which of the outside's refusals a failed `git commit` was, as far as git
+/// said or recorded it. A hook first, by its end in git's trace — git adds
+/// nothing of its own to a hook's no, and the hook's own output, which may
+/// carry a lock's or a signer's words, lands among git's: the index's lock
+/// is taken before the hooks run, the signing and the ref's lock after them
+/// all. Then a signing failure in git's own words (or an ssh signer's end,
+/// [`signing_failed`]) and a lock git named. The rest is git's words to
+/// explain.
 fn refused_by(out: &crate::process::GitOutput) -> crate::report::ReportKind {
     use crate::report::ReportKind;
     let said = out.stderr_utf8();
-    if crate::report::lock_taken(&said) {
-        ReportKind::CommitLocked
-    } else if UNSIGNED.iter().any(|words| said.contains(words)) {
-        ReportKind::CommitUnsigned
-    } else if out.code == 1 && out.stdout.iter().all(u8::is_ascii_whitespace) {
+    if out.trace.hook_failed(&COMMIT_HOOKS) {
         ReportKind::CommitHook
+    } else if signing_failed(&said, &out.trace) {
+        ReportKind::CommitUnsigned
+    } else if crate::report::lock_taken(&said) {
+        ReportKind::CommitLocked
     } else {
         ReportKind::Commit
     }

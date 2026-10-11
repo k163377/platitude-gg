@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use crate::support::exec::observed_env;
+use crate::support::exec::{isolated_global, observed_env};
 use crate::support::integrate::{current_op, helper};
 use crate::support::{Said, TestRepo, info};
 use platitude_core::GitError;
@@ -159,5 +159,250 @@ async fn a_reword_a_commit_hook_turns_down_is_put_back_and_reported() {
     assert!(
         failed_row(&said).contains("subject must say why"),
         "the hook's words are under the failed row"
+    );
+}
+
+/// A user's `trace2.eventBrief` would leave the times out of git's record,
+/// and with them what tells the replay's own `git commit` from a git a hook
+/// ran: the record is asked for whole all the same.
+#[tokio::test]
+async fn a_brief_trace_setting_still_names_a_reworded_commits_hook() {
+    let (mut repo, middle) = three_commits();
+    repo.write_hook("commit-msg", "exit 1\n");
+    repo.git(&["config", "--global", "trace2.eventBrief", "true"]);
+
+    let exec = isolated_global(repo.global_config());
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let edit = sequencer::Edit::Reword("a subject the hook will not have\n".into());
+    let plan = sequencer::plan_edit(&exec, &repo.path, &middle, edit, &cancel)
+        .await
+        .expect("plan");
+    let err = sequencer::rebase_interactive(
+        &exec,
+        &info(&repo).await,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect_err("the hook says no");
+    assert_eq!(kind_of(&err), Some(ReportKind::RewriteCommitHook), "{err}");
+}
+
+/// Another git holding a lock the replayed pick needs (`CHERRY_PICK_HEAD`'s,
+/// which the abort does not take): the pick stops with the lock's words,
+/// and the replay is put back — the reader presses again once it is gone.
+#[tokio::test]
+async fn a_replay_another_gits_lock_stops_is_put_back_and_reported() {
+    let (mut repo, middle) = three_commits();
+    let before = repo.git(&["rev-parse", "HEAD"]);
+    let lock = repo.path.join(".git/CHERRY_PICK_HEAD.lock");
+    std::fs::write(&lock, "").expect("lock");
+
+    let said = Arc::new(Said::default());
+    let err = run_plan(&repo, &middle, sequencer::Edit::Drop, &said).await;
+    std::fs::remove_file(&lock).expect("unlock");
+    assert_eq!(kind_of(&err), Some(ReportKind::RewriteLocked), "{err}");
+    assert_eq!(current_op(&repo).await, None, "put back, nothing standing");
+    assert_eq!(repo.git(&["rev-parse", "HEAD"]), before, "where it began");
+    assert!(
+        failed_row(&said).contains("CHERRY_PICK_HEAD.lock': File exists"),
+        "the lock's words are under the failed row"
+    );
+}
+
+/// The same at the replay's first checkout (the index's lock): turned down
+/// before anything moved, with nothing to put back.
+#[tokio::test]
+async fn a_replay_another_gits_lock_turns_down_at_the_start_is_reported() {
+    let (mut repo, middle) = three_commits();
+    let before = repo.git(&["rev-parse", "HEAD"]);
+    let lock = repo.path.join(".git/index.lock");
+
+    let said = Arc::new(Said::default());
+    let (exec, cancel) = observed_env(said.clone(), Kept::Asked);
+    let plan = sequencer::plan_edit(&exec, &repo.path, &middle, sequencer::Edit::Drop, &cancel)
+        .await
+        .expect("plan");
+    std::fs::write(&lock, "").expect("lock");
+    let err = sequencer::rebase_interactive(
+        &exec,
+        &info(&repo).await,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect_err("the index is another git's");
+    std::fs::remove_file(&lock).expect("unlock");
+    assert_eq!(kind_of(&err), Some(ReportKind::RewriteLocked), "{err}");
+    assert_eq!(current_op(&repo).await, None, "nothing standing");
+    assert_eq!(repo.git(&["rev-parse", "HEAD"]), before, "nothing moved");
+    assert!(
+        failed_row(&said).contains("index.lock': File exists"),
+        "the lock's words are under the failed row"
+    );
+}
+
+/// A squash's commit turned down by `prepare-commit-msg`, the one hook it
+/// runs (`-n`): git adds no words to the hook's, and the replay is put
+/// back as for any other commit hook. The commit folded into is no root, so
+/// the replay's first pick is the squash itself.
+#[tokio::test]
+async fn a_squash_its_prepare_commit_msg_hook_turns_down_is_put_back_and_reported() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.commit_file("b.txt", "two\n", "second");
+    let third = repo.commit_file_id("c.txt", "three\n", "third");
+    repo.commit_file("d.txt", "four\n", "last");
+    repo.write_hook(
+        "prepare-commit-msg",
+        "echo \"no squashes here\" >&2\nexit 1\n",
+    );
+    let before = repo.git(&["rev-parse", "HEAD"]);
+
+    let said = Arc::new(Said::default());
+    let err = run_plan(&repo, &third, sequencer::Edit::SquashIntoParent, &said).await;
+    assert_eq!(kind_of(&err), Some(ReportKind::RewriteCommitHook), "{err}");
+    assert_eq!(current_op(&repo).await, None, "put back, nothing standing");
+    assert_eq!(repo.git(&["rev-parse", "HEAD"]), before, "where it began");
+    assert!(
+        failed_row(&said).contains("no squashes here"),
+        "the hook's words are under the failed row"
+    );
+}
+
+/// An untracked file where the commit under the range has one — the
+/// commit dropped deleted it — would be overwritten by the replay's first
+/// checkout: git turns the rewrite down, nothing moved, and its words are
+/// under the failed row. An ignored one is git's to write over, and not in
+/// the way.
+#[tokio::test]
+async fn a_rewrite_whose_first_checkout_would_overwrite_untracked_files_is_turned_down() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("old.txt", "kept once\n", "root");
+    repo.git(&["rm", "-q", "old.txt"]);
+    repo.commit_file("a.txt", "a\n", "drops old");
+    let dropping = repo.git(&["rev-parse", "HEAD"]);
+    repo.commit_file("b.txt", "b\n", "last");
+    repo.write_file("old.txt", "untracked now\n");
+    let before = repo.git(&["rev-parse", "HEAD"]);
+
+    let said = Arc::new(Said::default());
+    let err = run_plan(&repo, &dropping, sequencer::Edit::Drop, &said).await;
+    assert_eq!(
+        kind_of(&err),
+        Some(ReportKind::RewriteUntrackedInTheWay),
+        "{err}"
+    );
+    assert!(
+        matches!(err, GitError::Reported { .. }),
+        "git's own refusal: {err:?}"
+    );
+    assert!(
+        failed_row(&said).contains("old.txt"),
+        "git's words name the file under the failed row"
+    );
+    assert_eq!(current_op(&repo).await, None, "nothing standing");
+    assert_eq!(repo.git(&["rev-parse", "HEAD"]), before, "nothing moved");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("old.txt")).expect("read"),
+        "untracked now\n"
+    );
+
+    repo.write_file(".git/info/exclude", "old.txt\n");
+    let (exec, cancel) = observed_env(Arc::new(Said::default()), Kept::Asked);
+    let plan = sequencer::plan_edit(&exec, &repo.path, &dropping, sequencer::Edit::Drop, &cancel)
+        .await
+        .expect("plan");
+    sequencer::rebase_interactive(
+        &exec,
+        &info(&repo).await,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("an ignored file is not in the way");
+}
+
+/// Which commit a replay's first checkout lands on is git's to work out: a
+/// reword's starts on the commit reworded, not the one under it
+/// (sequencer.c `skip_unnecessary_picks`). That commit deleted the file
+/// standing untracked here, so nothing writes over it and the reword goes
+/// through.
+#[tokio::test]
+async fn a_reword_whose_commit_let_go_of_an_untracked_file_goes_through() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("old.txt", "kept once\n", "root");
+    repo.git(&["rm", "-q", "--cached", "old.txt"]);
+    repo.commit_file("a.txt", "a\n", "stops tracking old");
+    let letting_go = repo.git(&["rev-parse", "HEAD"]);
+    repo.commit_file("b.txt", "b\n", "last");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("old.txt")).expect("read"),
+        "kept once\n",
+        "the file stays, untracked"
+    );
+
+    let (exec, cancel) = observed_env(Arc::new(Said::default()), Kept::Asked);
+    let edit = sequencer::Edit::Reword("let old.txt go\n".to_string());
+    let plan = sequencer::plan_edit(&exec, &repo.path, &letting_go, edit, &cancel)
+        .await
+        .expect("plan");
+    sequencer::rebase_interactive(
+        &exec,
+        &info(&repo).await,
+        &plan.upstream,
+        &plan.steps,
+        &plan.options(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("nothing writes over the file");
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%s", "HEAD~1"]),
+        "let old.txt go"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("old.txt")).expect("read"),
+        "kept once\n"
+    );
+}
+
+/// The plain rebase meets the same file at its first checkout: git turns
+/// it down, and its row in the log is a failure with git's words under it.
+#[tokio::test]
+async fn a_rebase_untracked_files_turn_down_leaves_gits_words_on_its_row() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.git(&["switch", "-q", "-c", "base"]);
+    repo.commit_file("new.txt", "theirs\n", "base adds new");
+    repo.git(&["switch", "-q", "main"]);
+    repo.commit_file("b.txt", "b\n", "ours");
+    repo.write_file("new.txt", "untracked here\n");
+
+    let said = Arc::new(Said::default());
+    let (exec, cancel) = observed_env(said.clone(), Kept::Asked);
+    let err = integrate::rebase(
+        &exec,
+        &repo.path,
+        "base",
+        &RebaseOptions::default(),
+        &cancel,
+    )
+    .await
+    .expect_err("the checkout would overwrite new.txt");
+    assert!(matches!(err, GitError::Failed { .. }), "{err:?}");
+    assert!(
+        failed_row(&said).contains("would be overwritten by checkout"),
+        "git's words are under the failed row"
     );
 }

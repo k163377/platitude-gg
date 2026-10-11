@@ -58,7 +58,7 @@ pub async fn rebase(
     // (rules/core.md「終了コードで答える問い合わせは」).
     let cmd = rebase_command(workdir, upstream, options, None)
         .answers_by_code(1)
-        .except_when_it_says(&[PRE_REBASE_REFUSED]);
+        .except_when(|said, _| turned_down(said));
     let result = executor.run(cmd, cancel).await.map(drop);
     landed(executor, workdir, result, cancel).await
 }
@@ -66,7 +66,26 @@ pub async fn rebase(
 /// What git says when the `pre-rebase` hook here turned the rebase down,
 /// before anything moved (builtin/rebase.c): `error:` and exit 1 at 2.55 —
 /// the code a stop answers with — and `fatal:` with 128 at the minimum.
-pub(crate) const PRE_REBASE_REFUSED: &str = "The pre-rebase hook refused to rebase.";
+const PRE_REBASE_REFUSED: &str = "The pre-rebase hook refused to rebase.";
+
+/// What git says when the checkout a rebase starts with would write over
+/// untracked files here (unpack-trees' words, then `could not detach HEAD`
+/// — sequencer.c `checkout_onto`, the same at the minimum and 2.55). Exit
+/// 1, nothing moved. Not the shorter tail: local changes to tracked files
+/// end in the same words.
+pub(crate) const UNTRACKED_IN_THE_WAY: &str =
+    "untracked working tree files would be overwritten by checkout";
+
+/// Whether a rebase's exit 1 is something turning it down rather than a
+/// stop, for its row in the log ([`GitCommand::except_when`]): the
+/// `pre-rebase` hook, untracked files its first checkout would overwrite,
+/// a lock another git held. A stop's words are the reader's to read on the
+/// band; these are what the log has to show.
+pub(crate) fn turned_down(said: &str) -> bool {
+    said.contains(PRE_REBASE_REFUSED)
+        || said.contains(UNTRACKED_IN_THE_WAY)
+        || crate::report::lock_taken(said)
+}
 
 /// Sorts a rebase's result into [`RebaseOutcome`], shared by the plain
 /// rebase above and the driven one in [`crate::sequencer`].
