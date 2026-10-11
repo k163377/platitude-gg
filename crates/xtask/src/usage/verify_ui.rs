@@ -109,13 +109,18 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           with an upstream has no first push left to
                           publish —, and the plain verbs over a preset
                           git's run turns them down on (push, force-push,
-                          drop-commit-go, rename-stash, worktree-add,
-                          commit-refused over prepush, nonff, toolarge,
+                          drop-commit-go, squash, rename-stash,
+                          worktree-add, stage-line, commit-refused,
+                          push-tag over prepush, nonff, toolarge,
                           checkedout, prerebase, plan-unsigned,
-                          stash-lock, stash-droplock, postcheckout,
-                          unsigned, hooked-auto). A replay that stops
-                          part-way is not among them any more: git left
-                          it standing, which is a landing.
+                          plan-untracked, stash-lock, stash-droplock,
+                          postcheckout, unsigned, hooked-auto,
+                          signed-push, push-unsigned, prepush-config,
+                          stage-lock, plan-lock, squash-hooked,
+                          carried-lock, reftable-lock, reftable-droplock,
+                          remote-lock, tag-hidden). A replay that stops
+                          part-way is not among them: git left it
+                          standing, which is a landing.
         --old-git <ver>   run the app against a git that answers --version
                           with <ver> and passes everything else to the real
                           one, so an installation older than the supported

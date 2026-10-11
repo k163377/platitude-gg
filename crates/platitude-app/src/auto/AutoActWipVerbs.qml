@@ -224,8 +224,16 @@ Item {
             eolCommitTimer.start()
         } else if (act === "amend-row") {
             // Whether the amend row stands over this tree — a stopped merge takes it away (`WipCommitBlock.amendBarred`,
-            // `--preset conflict-staged`).
+            // `--preset conflict-staged`). With a branch for the argument (`--preset clashing`), the box is ticked as a
+            // hand ticks it and then that branch is merged, to stop on its conflict: the stop takes the tick away with
+            // the row, or the button would still send `--amend` (`WipCommitBlock.onAmendBarredChanged`).
             page.showWip()
+            if (arg !== "") {
+                wipPane.setAmendChecked(true)
+                page.amendToggled(true)
+                amendRowTimer.merged = arg
+                repoTab.merge(arg, false, false, "")
+            }
             amendRowTimer.start()
         } else if (act === "amend-tip") {
             // The commit button's refusal with the amend box ticked over a stage that takes back all HEAD changed
@@ -734,28 +742,34 @@ Item {
             driver.complete()
         }
     }
-    // The row is read once the stopped operation the status reports has reached the pane (`opText`), or once a status
-    // has landed at all where nothing stands.
+    // The row is read once the status has landed and HEAD is known (the row stands only over a commit), and — after a
+    // merge this verb pressed — once that merge's stop has reached the pane: the tick has to have met it.
     SampleTimer {
         id: amendRowTimer
+        /// The branch this run merged to stop on, `""` for a run that reads the tree as it opened.
+        property string merged: ""
         onTriggered: {
-            if (!worktree.loaded)
+            if (!worktree.loaded || !worktree.headKnown)
+                return
+            if (amendRowTimer.merged !== "" && !worktree.opMerging)
                 return
             amendRowTimer.stop()
             Harness.report("amend_row shown=" + wipPane.commitBlock.amendRowShown
                               + " barred=" + wipPane.commitBlock.amendBarred
-                              + " op=" + worktree.opText)
+                              + " op=" + worktree.opText
+                              + " ticked=" + wipPane.commitBlock.amendChecked
+                              + " amending=" + page.amending)
             driver.complete()
         }
     }
-    // Two things land apart: HEAD's message into the box and git's answer about the amend. The pointer goes on after
-    // both, as a hand arriving later does — the shared tip keeps the words it was asked with while its delay runs
-    // (rules-refs/app-ui.md). Its own words are then read, not the button's state: a tip naming the summary is the
-    // box still empty.
+    // Two things land apart: HEAD's message into the box and git's answer about the amend. The pointer goes on once
+    // the message is in, and the tip comes up only on a button that refuses — git's answer is what greys it, and the
+    // run waits on the tip, never on the answer it reports (`empties=` is read, not waited for). The tip's own words
+    // are read too: a refusal for anything else names that instead.
     SampleTimer {
         id: amendTipTimer
         onTriggered: {
-            if (!repoTab.amendEmpties || wipPane.subjectText === "")
+            if (wipPane.subjectText === "")
                 return
             wipPane.pointAtCommit = true
             const tip = wipPane.commitBlock.commitSeat.ToolTip.toolTip

@@ -54,7 +54,7 @@ Item {
             if (act !== "squash")
                 driver.barrierNotice.start()
         } else if (act === "reword" || act === "edit-message"
-                   || act === "edit-message-leave"
+                   || act === "edit-message-leave" || act === "edit-message-refused"
                    || act === "edit-message-focus" || act === "edit-message-away") {
             // HEAD's own: the only row that takes typing (`offers::message_edit`), branch or not.
             page.jumpToRef(worktree.headOid)
@@ -750,6 +750,11 @@ Item {
                 return
             }
             detailsPane.setMessageText(Harness.autoActArg, "")
+            // "edit-message-refused" waits for the save to turn the amend down (`--preset undone`) and reads its tip.
+            if (Harness.autoAct === "edit-message-refused") {
+                saveRefusedTimer.start()
+                return
+            }
             // "edit-message" stops here, with the save row on screen.
             if (Harness.autoAct === "reword")
                 driver.pressWrite("reword", () => {
@@ -764,6 +769,25 @@ Item {
                 writeBarrier.start()
             else
                 renderedBarrier.begin()
+        }
+    }
+    // The save of HEAD's message over a stage that takes back all HEAD changed: git's answer about the amend is what
+    // greys it, and the run waits on the button's tip alone — pointed at once the save row stands, the tip comes up
+    // only on a button that refuses, with the words the reader gets.
+    SampleTimer {
+        id: saveRefusedTimer
+        onTriggered: {
+            if (!detailsPane.saveRowShown)
+                return
+            detailsPane.savePointedAt = true
+            const tip = detailsPane.saveTip
+            if (!tip.visible)
+                return
+            saveRefusedTimer.stop()
+            Harness.report("save_refused enabled=" + detailsPane.saveEnabled
+                              + " tip=" + tip.visible
+                              + " why=" + tip.text)
+            driver.complete()
         }
     }
 }

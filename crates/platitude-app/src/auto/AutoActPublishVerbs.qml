@@ -469,6 +469,9 @@ Item {
             if (!remoteDialog.visible && !publishFlow.publishChecked)
                 return
             publishSurfaceTimer.stop()
+            // What the far side's answer made of the bar: the line under the question, the reader's only word of it.
+            if (publishFlow.publishChecked)
+                Harness.report("publish asked state=" + publishFlow.publishState + " says=" + graphPane.askDetail)
             driver.complete()
         }
     }

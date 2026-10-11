@@ -129,7 +129,7 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::WithPreset("prerebase"),
                 "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                  said=The history was not rewritten place=GIT COMMANDS \
-                 says=The pre-rebase hook here turned it down — see GIT COMMANDS",
+                 says=The pre-rebase hook turned it down — see GIT COMMANDS",
             ),
             (
                 Arg::WithPreset("plan-unsigned"),
@@ -137,7 +137,37 @@ pub(super) const TABLE: &[Verb] = &[
                  said=The history was not rewritten place=GIT COMMANDS \
                  says=The commit could not be signed — see GIT COMMANDS",
             ),
+            // Another git's lock on what the remade commit needs: put back
+            // as the two above are.
+            (
+                Arg::WithPreset("plan-lock"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=The history was not rewritten place=GIT COMMANDS \
+                 says=Another git process seems to be running — see GIT COMMANDS",
+            ),
+            // An untracked file where the commit under the drop has one:
+            // git turns the replay down at its first checkout.
+            (
+                Arg::WithPreset("plan-untracked"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=The history was not rewritten place=GIT COMMANDS \
+                 says=Untracked files would be overwritten — see GIT COMMANDS",
+            ),
         ],
+        plain: "write_barrier mine=true",
+    },
+    // The fold whose squashed commit `prepare-commit-msg` turns down
+    // (`--preset squash-hooked`): git adds no words to the hook's, and the
+    // replay is put back as for any commit hook. Bare, the write's own
+    // boundary.
+    Verb {
+        name: "squash",
+        when: &[(
+            Arg::WithPreset("squash-hooked"),
+            "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+             said=The history was not rewritten place=GIT COMMANDS \
+             says=A commit hook turned it down — see GIT COMMANDS",
+        )],
         plain: "write_barrier mine=true",
     },
     // The other door: the plan's preview turns the history down before

@@ -17,6 +17,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "message_focus pane=wip focused=true",
     },
+    // HEAD's message typed anew over a stage that takes back all HEAD
+    // changed (`--preset undone`): the save is an amend, which git would
+    // refuse, so it is greyed with the commit button's reason. The run
+    // waits on the tip alone, so `enabled=` is what the button was.
+    Verb {
+        name: "edit-message-refused",
+        when: &[],
+        plain: "save_refused enabled=false tip=true \
+                why=Amending would leave the last commit empty — what is staged undoes it",
+    },
     // A press elsewhere takes that caret back out, and the save row it put
     // up with it. `stood=true` is the caret having been in at all: a hook
     // that never reached the box would read the row down as well.

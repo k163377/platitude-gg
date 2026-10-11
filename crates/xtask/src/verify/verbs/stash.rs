@@ -47,13 +47,21 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::WithPreset("stash-lock"),
                 "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
                  said=The stash was not renamed place=GIT COMMANDS \
-                 says=Another git process was working here — see GIT COMMANDS",
+                 says=Another git process seems to be running — see GIT COMMANDS",
             ),
             (
                 Arg::WithPreset("stash-droplock"),
                 "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
-                 said=The rename did not finish place= \
-                 says=The new name was made; the old one is still there.",
+                 said=The rename did not finish place=GIT COMMANDS \
+                 says=The new name was made, but another git process seems to be running — see GIT COMMANDS",
+            ),
+            // The reftable store's drop git turned down without naming a
+            // lock (git 2.48+, `--no-census`).
+            (
+                Arg::WithPreset("reftable-droplock"),
+                "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
+                 said=The rename did not finish place=GIT COMMANDS \
+                 says=The new name was made, but git did not remove the old one — see GIT COMMANDS",
             ),
         ],
         plain: "write_barrier mine=true",

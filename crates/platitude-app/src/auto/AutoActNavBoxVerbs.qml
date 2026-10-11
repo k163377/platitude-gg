@@ -203,7 +203,8 @@ Item {
         }
     }
     // PGG_AUTO_ACT=rename-tag-box / rename-branch-box: the box on the first tag or on the branch HEAD is on, the
-    // argument typed in, and whether the reason for refusing the name reached the reader.
+    // argument typed in, and whether the reason for refusing the name reached the reader. A branch's argument may name
+    // the row too, `<branch>:<typed>` (a branch name holds no `:`) — a branch a stopped rebase holds is never HEAD's.
     //
     // `editKey` is only the ask: the box is built by a `Loader` in a row not yet laid out, so `box=` reads the box as
     // drawn and holding the keyboard (`NavList.rowBoxShown` / `rowFocused`). `refused=` alone passes a box refusing in
@@ -213,14 +214,19 @@ Item {
         id: tagNameBoxTimer
         property string typed: ""
         property string kind: "tag"
+        /// The branch named before the `:`, `""` for HEAD's.
+        property string row: ""
         function begin(arg, kind) {
-            tagNameBoxTimer.typed = "" + arg
+            const named = kind === "branch" ? ("" + arg).indexOf(":") : -1
+            tagNameBoxTimer.row = named >= 0 ? ("" + arg).substring(0, named) : ""
+            tagNameBoxTimer.typed = named >= 0 ? ("" + arg).substring(named + 1) : "" + arg
             tagNameBoxTimer.kind = kind
             sidebarPane.beginRename(kind, tagNameBoxTimer.was(), tagNameBoxTimer.typed)
             tagNameBoxTimer.start()
         }
         function was() {
-            return tagNameBoxTimer.kind === "tag" ? tagsModel.nameAt(0) : worktree.branch
+            return tagNameBoxTimer.kind === "tag" ? tagsModel.nameAt(0)
+                 : tagNameBoxTimer.row !== "" ? tagNameBoxTimer.row : worktree.branch
         }
         onTriggered: {
             // Asked every beat: a binding on a call would hold the empty model's answer

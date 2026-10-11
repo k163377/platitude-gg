@@ -3,10 +3,11 @@
 //! own settings — for the report each brings down (デザイン規約
 //! §答えの要らない報せ).
 
-use super::basic::{basic, plan, stashes};
-use super::remote::{diverged, hooked, install_hook};
+use super::basic::{basic, dirty, plan, stashes};
+use super::remote::{diverged, hooked, install_hook, unpublished};
 use super::repo::{DemoRepo, file_url};
 use super::signing::config_path;
+use super::worktrees::carried;
 
 /// Builds `preset` if it is one of this module's; `None` for the rest
 /// (`super::presets::build`).
@@ -23,9 +24,182 @@ pub(super) fn build(preset: &str, repo: &mut DemoRepo) -> Option<Result<(), Stri
         "stash-lock" => stash_lock(repo),
         "stash-droplock" => stash_droplock(repo),
         "postcheckout" => postcheckout(repo),
+        "signed-push" => signed_push(repo),
+        "push-unsigned" => push_unsigned(repo),
+        "prepush-config" => prepush_config(repo),
+        "stage-lock" => stage_lock(repo),
+        "plan-lock" => plan_lock(repo),
+        "plan-untracked" => plan_untracked(repo),
+        "squash-hooked" => squash_hooked(repo),
+        "carried-lock" => carried_lock(repo),
+        "reftable-lock" => reftable_lock(repo),
+        "reftable-droplock" => reftable_droplock(repo),
+        "remote-lock" => remote_lock(repo),
+        "tag-hidden" => tag_hidden(repo),
+        "publish-unreachable" => publish_unreachable(repo),
         _ => return None,
     };
     Some(made)
+}
+
+/// Writes an empty lock file at `rel` under the repository's `.git` — another
+/// git holding it, or one that crashed and left it.
+fn lock(repo: &DemoRepo, rel: &str) -> Result<(), String> {
+    let lock = repo.work.join(".git").join(rel);
+    std::fs::write(&lock, "").map_err(|e| format!("writing {}: {e}", lock.display()))
+}
+
+/// [`ahead_of_origin`] asking for a signed push (`push.gpgSign=true`) of a
+/// remote that takes none — no `receive.certNonceSeed` there.
+fn signed_push(repo: &mut DemoRepo) -> Result<(), String> {
+    ahead_of_origin(repo)?;
+    repo.git(&["config", "push.gpgSign", "true"])?;
+    Ok(())
+}
+
+/// The same against a remote that takes signed pushes, with the ssh key to
+/// sign with not there.
+fn push_unsigned(repo: &mut DemoRepo) -> Result<(), String> {
+    signed_push(repo)?;
+    let origin = repo.root.join("origin.git");
+    repo.git_at(
+        &origin,
+        &["config", "receive.certNonceSeed", "a seed of its own"],
+    )?;
+    let key = repo.root.join("no-such-key.pub");
+    repo.git(&["config", "gpg.format", "ssh"])?;
+    repo.git(&["config", "user.signingkey", &config_path(&key)])?;
+    Ok(())
+}
+
+/// [`prepush`]'s no from a hook the config names (`hook.<name>.event`) —
+/// git 2.54 and later; the minimum runs no such hook, and the push goes.
+fn prepush_config(repo: &mut DemoRepo) -> Result<(), String> {
+    ahead_of_origin(repo)?;
+    repo.git(&["config", "hook.lint.event", "pre-push"])?;
+    repo.git(&[
+        "config",
+        "hook.lint.command",
+        "echo \"lint: 1 problem found, nothing pushed\" >&2; exit 1",
+    ])?;
+    Ok(())
+}
+
+/// [`dirty`] with another git holding the index's lock: nothing can be
+/// staged, unstaged or discarded.
+fn stage_lock(repo: &mut DemoRepo) -> Result<(), String> {
+    dirty(repo)?;
+    lock(repo, "index.lock")
+}
+
+/// [`plan`] with another git holding a lock a remade commit needs —
+/// `CHERRY_PICK_HEAD`'s, which every replayed pick writes and the abort does
+/// not: the replay stops on it and is put back.
+fn plan_lock(repo: &mut DemoRepo) -> Result<(), String> {
+    plan(repo)?;
+    lock(repo, "CHERRY_PICK_HEAD.lock")
+}
+
+/// A straight run whose second-newest commit takes a file away that is
+/// standing untracked now: dropping that commit would check out the one
+/// under it, file and all, over the untracked copy (`drop-commit-go row:2`
+/// — the untracked file stands the worktree's row above HEAD's).
+fn plan_untracked(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("notes.txt", "v1\n", "docs: start the notes")?;
+    repo.commit("src/old.txt", "old helper\n", "feat: an old helper")?;
+    repo.git(&["rm", "-q", "--", "src/old.txt"])?;
+    repo.commit(
+        "src/new.txt",
+        "new helper\n",
+        "refactor: replace the old helper",
+    )?;
+    repo.commit("src/two.txt", "two\n", "feat: carry on")?;
+    repo.write("src/old.txt", "a copy kept by hand\n")
+}
+
+/// [`plan`] with a `prepare-commit-msg` hook that turns every message down:
+/// a fold remakes the commit it folds into with it.
+fn squash_hooked(repo: &mut DemoRepo) -> Result<(), String> {
+    plan(repo)?;
+    install_hook(
+        &repo.work.join(".git").join("hooks"),
+        "prepare-commit-msg",
+        "#!/bin/sh\n\
+         echo \"commit messages here come from the ticket template\" >&2\n\
+         exit 1\n",
+    )
+}
+
+/// [`carried`] with another git holding this worktree's index lock: no other
+/// worktree's changes can be applied here.
+fn carried_lock(repo: &mut DemoRepo) -> Result<(), String> {
+    carried(repo)?;
+    lock(repo, "index.lock")
+}
+
+/// [`basic`] in the reftable ref store (git 2.48+ migrates it in place),
+/// with the store's one lock taken: git's rename of a branch then names no
+/// lock at all.
+fn reftable_lock(repo: &mut DemoRepo) -> Result<(), String> {
+    basic(repo)?;
+    repo.git(&["refs", "migrate", "--ref-format=reftable"])?;
+    lock(repo, "reftable/tables.list.lock")
+}
+
+/// [`stashes`] in the reftable ref store, its one lock taken the moment a
+/// new entry goes in — by a `reference-transaction` hook, as
+/// [`stash_droplock`]'s: the renamed entry goes in, the old one's drop says
+/// only `Could not drop stash entry`, naming no lock.
+fn reftable_droplock(repo: &mut DemoRepo) -> Result<(), String> {
+    stashes(repo)?;
+    repo.git(&["refs", "migrate", "--ref-format=reftable"])?;
+    install_hook(
+        &repo.work.join(".git").join("hooks"),
+        "reference-transaction",
+        "#!/bin/sh\n\
+         [ \"$1\" = committed ] || exit 0\n\
+         while read -r old new ref; do\n\
+         if [ \"$ref\" = refs/stash ]; then\n\
+         : > \"$(git rev-parse --git-dir)/reftable/tables.list.lock\"\n\
+         fi\n\
+         done\n\
+         exit 0\n",
+    )
+}
+
+/// [`ahead_of_origin`] with another git holding `main`'s lock over there:
+/// the far side turns the push down in its own words for the lock.
+fn remote_lock(repo: &mut DemoRepo) -> Result<(), String> {
+    ahead_of_origin(repo)?;
+    let lock = repo.root.join("origin.git/refs/heads/main.lock");
+    std::fs::write(&lock, "").map_err(|e| format!("writing {}: {e}", lock.display()))
+}
+
+/// `v1` on `origin` and, moved, here — with `origin` hiding it from reads
+/// (`uploadpack.hideRefs`) but not from a push's own look: git turns the
+/// plain push down as `already exists`, and a read of the remote's tags
+/// right after finds no `v1` on any commit (`remote::push_tag`).
+fn tag_hidden(repo: &mut DemoRepo) -> Result<(), String> {
+    ahead_of_origin(repo)?;
+    repo.git(&["tag", "v1", "HEAD~1"])?;
+    repo.git(&["push", "origin", "v1"])?;
+    repo.git(&["tag", "--force", "v1", "HEAD"])?;
+    let origin = repo.root.join("origin.git");
+    repo.git_at(&origin, &["config", "uploadpack.hideRefs", "refs/tags/v1"])?;
+    Ok(())
+}
+
+/// [`unpublished`] with `origin` nowhere to be reached: asking it what it
+/// holds for the branch fails (the publish bar's `Asking origin failed`).
+fn publish_unreachable(repo: &mut DemoRepo) -> Result<(), String> {
+    unpublished(repo)?;
+    repo.git(&[
+        "remote",
+        "set-url",
+        "origin",
+        "file:///C:/pgg-nowhere/gone.git",
+    ])?;
+    Ok(())
 }
 
 /// A clone with a commit of its own to push, `origin` holding the rest.

@@ -24,9 +24,15 @@ pub(super) const TABLE: &[Verb] = &[
     // going.
     Verb {
         name: "rename-taken",
-        when: &[],
+        // A reftable store's lock (`--preset reftable-lock`): git's branch
+        // rename says only `branch rename failed`, so no lock is named.
+        when: &[(
+            Arg::WithPreset("reftable-lock"),
+            "rename_taken open=true refused=false tone=warning place=GIT COMMANDS \
+             says=git turned it down — see GIT COMMANDS",
+        )],
         plain: "rename_taken open=true refused=false tone=warning place=GIT COMMANDS \
-                says=Another git process was working here — see GIT COMMANDS",
+                says=Another git process seems to be running — see GIT COMMANDS",
     },
     // A tag renamed to its own name in other letters: git writes a ref as
     // a file, so on a case-insensitive disk both names would go — core
@@ -94,6 +100,14 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Is("Feature/Topic-A"),
                 "box=true refused=true tip=true \
                  text=feature/topic-a differs only in letter case — some disks take it for the same name",
+            ),
+            // `--preset worktree-places`: `fix/rebasing` is held by the
+            // rebase stopped in `../rebasing` — git renames it from nowhere,
+            // whatever the name.
+            (
+                Arg::Is("fix/rebasing:fix/renamed"),
+                "was=fix/rebasing typed=fix/renamed box=true refused=true tip=true \
+                 text=Being rebased in another worktree — rebasing",
             ),
         ],
         plain: "box=true refused=false tip=false text=",

@@ -132,6 +132,35 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         postcheckout  basic, with a post-checkout hook that fails: a
                   worktree git makes is kept, its hook's failure the answer
                   (worktree-add branch:feature/topic-a)
+        signed-push  a commit to push with push.gpgSign=true, onto an origin
+                  that takes no signed push (push)
+        push-unsigned  the same onto an origin that takes them, with the
+                  ssh key to sign with not there (push)
+        prepush-config  a commit to push and a pre-push hook the config
+                  names (hook.<name>.event — git 2.54+) that says no (push)
+        stage-lock  dirty, with another git holding the index's lock
+                  (stage-line b.txt)
+        plan-lock  plan, with another git holding CHERRY_PICK_HEAD's lock:
+                  the commit a drop remakes stops on it (drop-commit-go row:1)
+        plan-untracked  a straight run whose second-newest commit took a
+                  file away that stands untracked now: a drop of it would
+                  check that file out over the copy (drop-commit-go row:2 —
+                  the untracked file puts the worktree's row first)
+        squash-hooked  plan, with a prepare-commit-msg hook that says no:
+                  the commit a fold remakes is turned down (squash row:1)
+        carried-lock  carried, with another git holding this worktree's
+                  index lock (carried-apply-refused topic)
+        reftable-lock  basic in the reftable ref store (git 2.48+), its one
+                  lock taken (rename-taken renamed)
+        reftable-droplock  stashes in the reftable ref store (git 2.48+),
+                  its lock taken as a new entry goes in (rename-stash
+                  renamed — the old entry's drop names no lock)
+        remote-lock  a commit to push, origin's main lock taken over there
+                  (push)
+        tag-hidden  v1 moved here, origin hiding its own v1 from reads but
+                  not from a push (push-tag v1)
+        publish-unreachable  unpublished, origin nowhere to be reached
+                  (publish)
         slowhook  a pre-commit hook that takes its time, over something
                   staged — a write provably in flight (quit-waits, quit-locked)
         noremote  commits and no remote at all: the first push writes one down

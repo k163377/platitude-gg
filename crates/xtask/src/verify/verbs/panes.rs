@@ -387,19 +387,28 @@ pub(super) const TABLE: &[Verb] = &[
     // A stopped merge takes the amend row away (git will not amend in the
     // middle of one, and the button is the merge's `--continue`); any other
     // tree with a commit keeps it. Neither shows in a picture of a row
-    // that is simply not there.
+    // that is simply not there. With a branch to merge (`--preset
+    // clashing`) the box is ticked first: the merge's stop takes the tick
+    // away with the row (`ticked=false amending=false`).
     Verb {
         name: "amend-row",
-        when: &[(
-            Arg::WithPreset("conflict-staged"),
-            "amend_row shown=false barred=true",
-        )],
+        when: &[
+            (
+                Arg::WithPreset("conflict-staged"),
+                "amend_row shown=false barred=true",
+            ),
+            (
+                Arg::Is("feature/clash"),
+                "amend_row shown=false barred=true op=MERGING ticked=false amending=false",
+            ),
+        ],
         plain: "amend_row shown=true barred=false",
     },
     // The amend box ticked over a stage that takes back all HEAD changed
     // (`--preset undone`): git's answer arrived, and the button refuses
-    // with the tip that says why. A button refusing for an empty summary
-    // looks the same, so the words are read too.
+    // with the tip that says why. The run waits on the tip alone, so
+    // `empties=` is what the answer was; a button refusing for an empty
+    // summary looks the same, so the words are read too.
     Verb {
         name: "amend-tip",
         when: &[],
@@ -441,7 +450,7 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=The commit was not made place=GIT COMMANDS \
-                says=A commit hook here turned it down — see GIT COMMANDS",
+                says=A commit hook turned it down — see GIT COMMANDS",
     },
     // The same refusal with a file open in the middle, where a bar living
     // in the graph pane would be hidden. `clears=true`: the middle stands
@@ -451,7 +460,7 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=The commit was not made place=GIT COMMANDS \
-                says=A commit hook here turned it down — see GIT COMMANDS",
+                says=A commit hook turned it down — see GIT COMMANDS",
     },
     // A part of a file that is not that file any more, refused here before
     // git ran: there is no log row, so raising the panel would put it empty
@@ -574,12 +583,24 @@ pub(super) const TABLE: &[Verb] = &[
     // command log left shut (`log=false`).
     Verb {
         name: "carried-apply-refused",
-        when: &[(
-            Arg::Starts("an-extremely-long"),
-            "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
-             said=Changes from an-extremely-long-worktree-folder-name-for-the-edge-case \
-             were not applied mark=true",
-        )],
+        when: &[
+            (
+                Arg::Starts("an-extremely-long"),
+                "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
+                 said=Changes from an-extremely-long-worktree-folder-name-for-the-edge-case \
+                 were not applied mark=true",
+            ),
+            // Over another git's index lock (`--preset carried-lock`): a line
+            // that sends the reader to the log. Which one is git's to decide —
+            // the lock's where git names it (2.55), the plain refusal where it
+            // says nothing (the minimum) — and core holds that
+            // (`carried_apply::an_index_another_git_holds_is_reported_as_locked_where_git_says_so`).
+            (
+                Arg::WithPreset("carried-lock"),
+                "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
+                 said=Changes from topic were not applied mark=true place=GIT COMMANDS says=",
+            ),
+        ],
         plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
                 said=Changes from",
     },

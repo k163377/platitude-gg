@@ -58,11 +58,18 @@ pub(super) fn config(
     // offers `push -f`. `unpublished`'s `outsider` is a name never fetched
     // here (`RemoteBranchState::Unknown`, from `is_in_head_history`
     // failing); fetched, the comparison answers `refused`.
+    // `publish-unreachable`'s origin is nowhere: an opening fetch would
+    // fail first and stand its own failure where the publish's ask is to
+    // be read.
     //
     // Keyed on the preset, not the verb: any verb run on these would
     // picture the neighbouring fixture under this one's name. `perf` wants
     // it because a measurement is of this machine alone.
-    if verb == "perf" || presets.iter().any(|p| p == "outrun" || p == "unpublished") {
+    if verb == "perf"
+        || presets
+            .iter()
+            .any(|p| p == "outrun" || p == "unpublished" || p == "publish-unreachable")
+    {
         let settings = config_dir.join("settings.toml");
         std::fs::write(
             &settings,

@@ -179,7 +179,7 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::WithPreset("prepush"),
                 "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                  said=main was not sent to origin place=GIT COMMANDS \
-                 says=The pre-push hook here turned it down — see GIT COMMANDS",
+                 says=The pre-push hook turned it down — see GIT COMMANDS",
             ),
             (
                 Arg::WithPreset("toolarge"),
@@ -192,6 +192,37 @@ pub(super) const TABLE: &[Verb] = &[
                 "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                  said=origin would not update main place=GIT COMMANDS \
                  says=origin has main checked out in a working tree of its own — see GIT COMMANDS",
+            ),
+            // `push.gpgSign=true` against a remote that takes no signed push,
+            // and one that does with a key that is not there: git stops
+            // before sending anything.
+            (
+                Arg::WithPreset("signed-push"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=main was not sent to origin place=GIT COMMANDS \
+                 says=origin does not take signed pushes — see GIT COMMANDS",
+            ),
+            (
+                Arg::WithPreset("push-unsigned"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=main was not sent to origin place=GIT COMMANDS \
+                 says=The push could not be signed — see GIT COMMANDS",
+            ),
+            // The same no from a hook the config names (git 2.54+, so out of
+            // the census — the minimum runs no such hook).
+            (
+                Arg::WithPreset("prepush-config"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=main was not sent to origin place=GIT COMMANDS \
+                 says=The pre-push hook turned it down — see GIT COMMANDS",
+            ),
+            // Another git over there holding the ref's lock, in the words
+            // its git hedges it with.
+            (
+                Arg::WithPreset("remote-lock"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=origin would not update main place=GIT COMMANDS \
+                 says=Another git process seems to be running on origin — see GIT COMMANDS",
             ),
         ],
         plain: "write_barrier mine=true",
@@ -279,7 +310,12 @@ pub(super) const TABLE: &[Verb] = &[
     // does not), a pair `Arg::WithPreset` could key.
     Verb {
         name: "publish",
-        when: &[],
+        // An ask of the far side that failed, said as no answer of its: what
+        // the line under the question becomes once it is back.
+        when: &[(
+            Arg::WithPreset("publish-unreachable"),
+            "publish asked state=unreachable says=Asking origin failed — it may already have that branch.",
+        )],
         plain: "publish state=publish",
     },
     // The first push against the three shapes a name on the far side can

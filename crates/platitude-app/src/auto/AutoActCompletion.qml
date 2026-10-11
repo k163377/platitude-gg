@@ -77,6 +77,7 @@ QtObject {
                 "publish-go", "publish-enter", "publish-new-go", "publish-dismiss",
                 "amend-reset-author", "amend-author",
                 "eol-commit", "eol-hover", "commit-face", "op-exit", "amend-row", "amend-tip",
+                "edit-message-refused",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "diff-tick", "line-tools", "hunk-tools",
                 "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep",

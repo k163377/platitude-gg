@@ -334,9 +334,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_row act=stage-hunk ready=true",
     },
+    // Over another git's index lock (`--preset stage-lock`): nothing staged,
+    // and the bar says who stopped it and sends the reader to the log, as a
+    // commit's does (デザイン規約 §答えの要らない報せ).
     Verb {
         name: "stage-line",
-        when: &[],
+        when: &[(
+            Arg::WithPreset("stage-lock"),
+            "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+             said=Nothing was staged place=GIT COMMANDS \
+             says=Another git process seems to be running — see GIT COMMANDS",
+        )],
         plain: "diff_row act=stage-line ready=true",
     },
     // `at=` against `want=`: the place is kept only if the rebuilt list
