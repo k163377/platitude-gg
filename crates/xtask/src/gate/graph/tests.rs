@@ -586,7 +586,7 @@ fn a_crate_is_built_from_its_manifest_and_script() {
 }
 
 /// Taken out, a file has no edge left: what still names it is found by
-/// its strings — the window icon the Windows frame embeds, the hook the
+/// its strings — the resource the app's build script links, the hook the
 /// gate embeds and the directory node that held it.
 #[test]
 fn what_names_a_file_taken_out_is_read_off_its_strings() {
@@ -596,8 +596,8 @@ fn what_names_a_file_taken_out_is_read_off_its_strings() {
     let app = format!("crates/{}", "platitude-app");
     let cases = [
         (
-            format!("{app}/assets/{}", "icon-20.png"),
-            vec![format!("{app}/src/winframe/win32/{}", "icon.rs")],
+            format!("{app}/assets/{}", "platitude.res"),
+            vec![format!("{app}/{}", "build.rs")],
         ),
         (
             format!("{}/{}", ".githooks", "reference-transaction"),

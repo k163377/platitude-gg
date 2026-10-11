@@ -10,13 +10,6 @@ pub fn square_corners() {
     win32::square_corners();
 }
 
-/// Hands those same windows the app's own icon (title bar, taskbar,
-/// Alt+Tab).
-pub fn set_icon() {
-    #[cfg(windows)]
-    win32::set_icon();
-}
-
 /// Puts back the style bits Qt drops with the button and frameless hints
 /// (`WS_MINIMIZEBOX` / `WS_MAXIMIZEBOX` / `WS_SYSMENU` / `WS_THICKFRAME`):
 /// without them the platform refuses Win+Arrow, the taskbar's menu and

@@ -67,13 +67,12 @@ Item {
                                     gapAt.x, gapAt.x + gap.width,
                                     at.y + run.height)
     }
-    /// What Windows has to be told about this window — a turned-away run's too, or it sits on the taskbar wearing the
-    /// shell's generic icon.
+    /// What Windows has to be told about this window — a turned-away run's too. Not the icon: the exe's resource hands
+    /// it to the window before it is up (`assets/platitude.rc`).
     function decorateWindow() {
         // Windows 11 rounds the window and the desktop shows through the corners. Needs the window up, which it is
         // (`visible` is set at the window).
         AppBackend.squareWindowCorners()
-        AppBackend.setWindowIcon()
         // Asking for no drawn buttons took the system's own gestures with them; this puts those back (`Main.flags`).
         if (!chrome.window.captionMerged)
             return

@@ -2,8 +2,8 @@
 //! submodules share through `use super::*` — every `extern` block is here.
 #![expect(
     unsafe_code,
-    reason = "neither the DWM corner attribute nor WM_SETICON has a safe \
-              binding, and a handful of signatures do not earn a dependency"
+    reason = "neither the DWM corner attribute nor the window subclass has a \
+              safe binding, and a handful of signatures do not earn a dependency"
 )]
 
 use std::cell::Cell;
@@ -12,11 +12,9 @@ use std::ffi::c_void;
 use super::api::CAPTION_RUNS;
 
 mod frame;
-mod icon;
 mod window;
 
 pub(super) use frame::{set_caption_strips, take_frame_hit_test};
-pub(super) use icon::set_icon;
 pub(super) use window::{
     fit_to_work_area, keep_system_gestures, minimize, set_maximized, square_corners,
 };
@@ -92,7 +90,6 @@ unsafe extern "system" {
 #[link(name = "user32")]
 unsafe extern "system" {
     fn EnumThreadWindows(thread: u32, callback: EnumProc, param: isize) -> i32;
-    fn GetSystemMetrics(index: i32) -> i32;
     fn GetWindowLongW(window: *mut c_void, index: i32) -> i32;
     fn SetWindowLongW(window: *mut c_void, index: i32, value: i32) -> i32;
     fn SetWindowPos(
@@ -104,16 +101,6 @@ unsafe extern "system" {
         cy: i32,
         flags: u32,
     ) -> i32;
-    fn CreateIconFromResourceEx(
-        bits: *const u8,
-        size: u32,
-        icon: i32,
-        version: u32,
-        cx: i32,
-        cy: i32,
-        flags: u32,
-    ) -> *mut c_void;
-    fn SendMessageW(window: *mut c_void, message: u32, wparam: usize, lparam: isize) -> isize;
 }
 
 // SAFETY: as above.

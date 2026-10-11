@@ -317,13 +317,6 @@ impl AppBackend {
         crate::winframe::square_corners();
     }
 
-    /// Gives the window the app's icon (title bar, taskbar, Alt+Tab).
-    /// Windows-only: elsewhere the desktop entry or the bundle carries it.
-    #[qslot]
-    fn set_window_icon(&self) {
-        crate::winframe::set_icon();
-    }
-
     /// Puts back Win+Arrow, the taskbar's menu and minimising from the
     /// taskbar button, which a window asking for none of the drawn buttons
     /// loses (P3-確認事項 §ウィンドウ chrome).

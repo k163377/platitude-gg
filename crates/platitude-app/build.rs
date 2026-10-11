@@ -6,8 +6,8 @@
 //! comes only with the Windows SDK. `assets/platitude.rc` says how to
 //! rebuild it.
 //!
-//! The running window's icon is separate (`winframe::set_icon`): the shell
-//! reads this one off the file, the taskbar that one off the window.
+//! The same resource is the running windows' icon: Qt registers its window
+//! classes with it, by the name `platitude.rc` gives it.
 
 use std::process::Command;
 

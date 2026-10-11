@@ -14,13 +14,22 @@
 // differently on someone else's machine than it does on the one that last
 // rebuilt the .res.
 
-// The file's icon: what Explorer shows for it, what a pinned shortcut
-// carries, and what the taskbar falls back to before the window is up. The
-// running window sets its own separately (`winframe::set_icon`).
+// The icon, for the file and for the app's windows: what Explorer shows for
+// it, what a pinned shortcut carries, and the title bar, taskbar and
+// Alt+Tab of a running window.
 //
-// Resource id 1 is deliberate: Windows shows the numerically lowest ICON
-// resource as the file's icon, so this has to stay the lowest one here.
-1 ICON "platitude.ico"
+// The name IDI_ICON1 is what makes it the windows' too: Qt registers the
+// class of a Qt::Window-type window with the ICON resource of exactly that
+// name (QWindowsWindowClassRegistry::registerWindowClass), and with
+// IDI_APPLICATION, the shell's generic icon, when there is none. That is
+// the only place the icon comes from: nothing sets one once a window is
+// up. A QML window is already shown by the time its Component.onCompleted
+// runs, so its taskbar button is made with whatever the class carries.
+//
+// It also has to stay the first ICON resource: Explorer takes the first
+// one in the resource directory as the file's icon, and named resources
+// sort before numbered ones.
+IDI_ICON1 ICON "platitude.ico"
 
 // The display name. Without a version resource the shell has no name to
 // show and falls back to the file name, so the taskbar's window menu read
