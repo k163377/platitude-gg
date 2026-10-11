@@ -197,6 +197,10 @@ Item {
             const add = worktreeTimer.addItem()
             const here = worktreeTimer.hereItem()
             if (worktreeTimer.mode === "menu") {
+                // Whether the folder is cut is the row's layout's to say (`AutoActDriver.cardLaidOut`).
+                const laidOut = acts.driver.cardLaidOut(worktreeTimer.card())
+                if (!Awaited.all("worktree_add_menu", { "card_laid_out": laidOut }))
+                    return
                 // A greyed row says why on its hover alone, and a cut folder comes back whole on it.
                 const tip = add.ToolTip.toolTip
                 const wants = add.offered && (add.blocked || add.nameCut)

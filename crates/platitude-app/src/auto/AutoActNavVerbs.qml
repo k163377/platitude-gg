@@ -284,6 +284,9 @@ Item {
             }
             const item = card.removeWorktreeItem
             if (!worktreeMenuTimer.press) {
+                // Whether the folder is cut is the row's layout's to say (`AutoActDriver.cardLaidOut`).
+                if (!Awaited.all("worktree_menu", { "card_laid_out": driver.cardLaidOut(card) }))
+                    return
                 // A greyed row says why on its hover alone, and a cut folder comes back whole on it.
                 // A row not on offer has no hover, and its folder no room to be cut in.
                 const wants = item.offered && (item.blocked || item.nameCut)

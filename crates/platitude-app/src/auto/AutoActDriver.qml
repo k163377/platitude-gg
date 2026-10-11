@@ -131,6 +131,33 @@ Item {
         row.tipForced = wants
         return !wants || (row.ToolTip.visible && driver.tipAside(tip))
     }
+    // A menu row's words take their widths from a `RowLayout` on polish, so a cut name (`AppMenuItem.nameCut`) read in
+    // the beat its card opens answers for the row before that layout ran — whole, as if it fit. Under load the
+    // sampler's beat lands there. A reading waits two swapped frames from the first time it is asked for a card: one
+    // whose polish ran before the ask answers for the shape before it.
+    property int framesSwapped: 0
+    Connections {
+        target: page.Window.window
+        function onFrameSwapped() {
+            driver.framesSwapped++
+        }
+    }
+    property var framesCard: null
+    property int framesCardWanted: -1
+    /// Whether `card`'s rows have been laid out since the first ask about it: false while the frames are still to come.
+    function cardLaidOut(card) {
+        if (driver.framesCard !== card) {
+            driver.framesCard = card
+            driver.framesCardWanted = driver.framesSwapped + 2
+        }
+        if (driver.framesSwapped < driver.framesCardWanted) {
+            // `update()`, asked again each beat: a still offscreen scene swaps nothing unasked
+            // (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
+            page.Window.window.update()
+            return false
+        }
+        return true
+    }
     /// Where a TAG card's rows reach, in the one report line both entrances' verbs say it with
     /// (`AutoActRefVerbs.reachWords`).
     function tagReachWords(card) {
