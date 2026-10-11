@@ -19,6 +19,7 @@ mod wait;
 mod budget;
 mod chips;
 mod configuration;
+mod contact;
 mod embedded;
 mod halt;
 mod hook;

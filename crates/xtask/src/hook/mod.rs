@@ -1,7 +1,7 @@
 //! Claude Code hook handlers (`cargo xtask hook <event>`), wired from
-//! .claude/settings.json: the git, launches, kills, seats and chips a
-//! session touches only when the user asks. Main moves on the permit the
-//! user's own message opens (`permit`), and on that alone.
+//! .claude/settings.json: the git, launches, kills, seats, chips and other
+//! sessions a session touches only when the user asks. Main moves on the
+//! permit the user's own `/land` opens (`permit`), and on that alone.
 //!
 //! Each handler reads the hook's JSON payload from stdin and answers on
 //! stdout; printing nothing means "no objection".
@@ -16,6 +16,7 @@ mod chips;
 mod cloud;
 mod codex;
 mod commit;
+mod contact;
 mod dump;
 mod git;
 mod greeting;
@@ -70,18 +71,39 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "pre-write" => write::pre_write(&input),
         "post-write" => write::post_write(&input),
         "pre-shell" => pre_shell(&input),
+        "pre-tool" => pre_tool(&input),
         "pre-chip" => chips::pre_spawn(&input),
         "post-chip" => chips::post_chip(&input),
         "stop" => stop(&input),
         "pre-worktree" => seat::pre_worktree(&input),
         "post-worktree" => seat::post_worktree(&input),
-        "prompt-submit" => review::prompt_submit(&input),
+        "prompt-submit" => prompt_submit(&input),
         "session-start" => greeting::session_start(&input),
         "session-end" => session_end(&input),
-        "stop-failure" | "pre-tool" | "post-tool" | "permission-request" | "permission-denied"
+        "stop-failure" | "post-tool" | "permission-request" | "permission-denied"
         | "elicitation" | "elicitation-result" | "subagent-start" | "subagent-stop" => Ok(()),
         other => Err(format!("unknown hook event: {other:?}")),
     }
+}
+
+/// PreToolUse, of any tool: the guard on tools no matcher names — the
+/// other sessions (`contact`).
+fn pre_tool(input: &str) -> Result<(), String> {
+    let _refused = contact::pre_tool(input);
+    Ok(())
+}
+
+/// UserPromptSubmit. A side session's report that is refused is answered
+/// by the refusal alone — one JSON object on stdout.
+fn prompt_submit(input: &str) -> Result<(), String> {
+    let prompt = payload::string_field(input, "prompt").unwrap_or_default();
+    if contact::prompt_submit(input, &prompt) {
+        // A refused prompt starts no turn, and no Stop comes to end the one
+        // `awake::prompt` marked for it.
+        awake::stopped(input);
+        return Ok(());
+    }
+    review::prompt_submit(input)
 }
 
 /// Stop. Repository state cannot tell whether the request is complete;

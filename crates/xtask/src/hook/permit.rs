@@ -12,7 +12,7 @@ use super::payload::{deny, string_field};
 
 /// The user's command for putting a branch on main: the land skill
 /// (`.claude/skills/land`), typed at the head of their message.
-const COMMAND: &str = "/land";
+pub(super) const COMMAND: &str = "/land";
 
 /// The user's word for landing in their own prose. Said without the
 /// command it opens nothing, and the session is told where the permit
@@ -292,6 +292,12 @@ fn is_land(text: &str) -> bool {
         })
 }
 
+/// Whether `text` carries the land command on a line of its own — what a
+/// message or a brief must never pass to another session (`contact`).
+pub(super) fn carries_land(text: &str) -> bool {
+    text.lines().any(|line| is_land(line.trim_start()))
+}
+
 fn refusal(what: &str, permit: Option<&Permit>) -> String {
     let report = "This permit controls land only. Complete the work under CLAUDE.md §Git 運用 \
                   before reporting its branch/SHA and verification result";
@@ -349,15 +355,24 @@ fn excerpt(prompt: &str) -> String {
 
 /// This session's permit, out of a hook payload.
 fn permit_path(input: &str) -> Option<PathBuf> {
-    let session = string_field(input, "session_id")?;
-    let cwd = string_field(input, "cwd")?;
-    permit_file(&cwd, &session)
+    session_file(input, "land")
 }
 
-/// `.permits/<session>.land` beside the primary checkout's `.git`, so a
+/// This session's `.permits/<session>.<kind>`, out of a hook payload.
+pub(super) fn session_file(input: &str, kind: &str) -> Option<PathBuf> {
+    let session = string_field(input, "session_id")?;
+    let cwd = string_field(input, "cwd")?;
+    kept_file(&cwd, &session, kind)
+}
+
+fn permit_file(dir: &str, session: &str) -> Option<PathBuf> {
+    kept_file(dir, session, "land")
+}
+
+/// `.permits/<session>.<kind>` beside the primary checkout's `.git`, so a
 /// landing in the seat reads what the prompt hook wrote wherever the
 /// session sat.
-fn permit_file(dir: &str, session: &str) -> Option<PathBuf> {
+fn kept_file(dir: &str, session: &str, kind: &str) -> Option<PathBuf> {
     let session: String = session
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
@@ -367,7 +382,7 @@ fn permit_file(dir: &str, session: &str) -> Option<PathBuf> {
     }
     let common = crate::subprocess::common_git_dir(dir)?;
     let root = Path::new(&common).parent()?;
-    Some(root.join(".permits").join(format!("{session}.land")))
+    Some(root.join(".permits").join(format!("{session}.{kind}")))
 }
 
 fn spend(path: &Path) {
@@ -447,8 +462,8 @@ fn ago(secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        EXCERPT, Permit, Standing, excerpt, is_land, load, parse, refusal, spend, store,
-        the_users_words,
+        EXCERPT, Permit, Standing, carries_land, excerpt, is_land, load, parse, refusal, spend,
+        store, the_users_words,
     };
 
     /// Whether the prompt opens the permit, as `prompt_submit` decides it.
@@ -488,6 +503,14 @@ mod tests {
         ] {
             assert!(!invokes_land(prompt), "{prompt}");
         }
+    }
+
+    #[test]
+    fn a_message_carries_the_command_only_on_a_line_of_its_own() {
+        assert!(carries_land("/land"));
+        assert!(carries_land("終わったら次を送る:\n  /land push"));
+        assert!(!carries_land("crates/xtask/src/land.rs を直す"));
+        assert!(!carries_land("cargo xtask land worktree-b は撃たない"));
     }
 
     #[test]

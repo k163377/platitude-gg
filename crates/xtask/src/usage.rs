@@ -886,10 +886,12 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
   hook <event>
       Claude Code hook handler (wired from .claude/settings.json; reads
       the hook payload from stdin). Events: pre-write, post-write,
-      pre-shell, pre-tool, pre-chip, post-chip, post-tool,
+      pre-shell, pre-tool (which also guards messages to other
+      sessions), pre-chip, post-chip, post-tool,
       permission-request, permission-denied, elicitation,
       elicitation-result, subagent-start, subagent-stop, stop,
-      stop-failure, pre-worktree, post-worktree, prompt-submit,
+      stop-failure, pre-worktree, post-worktree, prompt-submit (which
+      also refuses a side session's report the user did not ask for),
       session-start (which also installs the gate's git hook),
       session-end. `codex-awake` accepts Codex's lifecycle payload and
       updates only shared sleep activity, without Claude's other handlers.
