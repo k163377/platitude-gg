@@ -494,6 +494,10 @@ Item {
             // `mine=false`: passed without a write of its own; `settled=`: the last boundary that write reached.
             Harness.report("write_barrier mine=" + (repoTab.watchedWriteId() !== 0)
                            + " settled=" + (repoTab.writeWatchStage() === "settled"))
+            // A write a verb pressed that came back as a report says so the way the notice verbs do, for a run of
+            // that verb over a preset that refuses it (`verify/verbs`'s `WithPreset` rows).
+            if (page.noticeCard.open)
+                Harness.report(driver.noticeLine())
             if (driver.treeGoneRow === "")
                 driver.afterTreeSettled()
             else
@@ -516,23 +520,30 @@ Item {
             if (page.diffShown && !diffPane.diffSettled())
                 return
             noticeBarrier.stop()
-            // `log=` / `wrong=`: no error raised beside the bar, which no picture can say (デザイン規約 §答えの要らない報せ).
-            Harness.report("write_notice open=" + page.noticeCard.open
-                              + " clears=" + page.noticeClears
-                              + " why=" + (page.noticeCard.detail !== "")
-                              + " tone=" + (page.noticeCard.tone === "" ? "none" : page.noticeCard.tone)
-                              + " log=" + page.commandsOpen
-                              + " wrong=" + page.commandsWrong
-                              + (noticeBarrier.saysPlan ? " plan=" + page.planActive : "")
-                              // Last, because it is a sentence.
-                              + " said=" + page.noticeCard.label
-                              // …but for the one report whose heading names a worktree: whether the tree mark
-                              // found the name (`NoticeBar.markWord`). Absent elsewhere, so no other line moves.
-                              + (page.noticeCard.markWord !== "" ? " mark=" + page.noticeCard.markShown : ""))
+            Harness.report(driver.noticeLine(noticeBarrier.saysPlan))
             driver.complete()
         }
     }
     readonly property alias barrierNotice: noticeBarrier
+    /// What a standing report says, for a run to be judged on: `log=` / `wrong=` that no error was raised beside the
+    /// bar, which no picture can say (デザイン規約 §答えの要らない報せ); `plan=` only where asked (`saysPlan`).
+    function noticeLine(withPlan) {
+        return "write_notice open=" + page.noticeCard.open
+               + " clears=" + page.noticeClears
+               + " why=" + (page.noticeCard.detail !== "")
+               + " tone=" + (page.noticeCard.tone === "" ? "none" : page.noticeCard.tone)
+               + " log=" + page.commandsOpen
+               + " wrong=" + page.commandsWrong
+               + (withPlan === true ? " plan=" + page.planActive : "")
+               // The heading, a sentence: after it only what follows from it.
+               + " said=" + page.noticeCard.label
+               // …for a heading that names a worktree: whether the tree mark found the name (`NoticeBar.markWord`).
+               // Absent elsewhere, so no other line moves.
+               + (page.noticeCard.markWord !== "" ? " mark=" + page.noticeCard.markShown : "")
+               // The second line, ours always, and the word of it that goes to the log (`NoticeBar.detailPlace`).
+               + " place=" + page.noticeCard.detailPlace
+               + " says=" + page.noticeCard.detail
+    }
     /// The diff's first heading lit as under a pointer (`hunk-tools`), waited on until its row is built. `level=` is
     /// its two words on one line, and `caption=` the band's caption and path on one. Each is a label beside something
     /// built otherwise (a button deeper by its hold mark, a field), and whether the pair shares a baseline is what the

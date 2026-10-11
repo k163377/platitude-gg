@@ -378,7 +378,7 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(
             Arg::Is("topic"),
             "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
-             said=topic was not removed mark=true",
+             said=topic was not removed mark=true place= says=It has uncommitted changes.",
         )],
         plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false",
     },
@@ -509,11 +509,21 @@ pub(super) const TABLE: &[Verb] = &[
     // remote one with no local branch made local and following it.
     Verb {
         name: "worktree-add",
-        when: &[(
-            Arg::Has("remote-only"),
-            "worktree_made stood=true worktree=feature-remote-only branch=feature/remote-only tabs=1 \
-             kept=true log=false",
-        )],
+        when: &[
+            (
+                Arg::Has("remote-only"),
+                "worktree_made stood=true worktree=feature-remote-only branch=feature/remote-only \
+                 tabs=1 kept=true log=false",
+            ),
+            // Made, and its `post-checkout` hook failed: git keeps the
+            // worktree, and the report says so where the tab still stands.
+            (
+                Arg::WithPreset("postcheckout"),
+                "worktree_refused stood=false \
+                 said=feature-topic-a was made, but its post-checkout hook failed \
+                 place=GIT COMMANDS says=See GIT COMMANDS for what the hook said.",
+            ),
+        ],
         plain: "worktree_made stood=true worktree=feature-topic-a branch=feature/topic-a tabs=1 \
                 kept=true log=false",
     },
@@ -524,7 +534,8 @@ pub(super) const TABLE: &[Verb] = &[
         name: "worktree-new-refused",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
-                said=hotfix-patch was not created mark=true",
+                said=hotfix-patch was not created mark=true place=GIT COMMANDS \
+                says=git turned it down — see GIT COMMANDS",
     },
     // An elided row whose hover says the whole name. The wider lines name
     // no pane: `tree=` echoes the view asked for (`-tree`, where row 0 is

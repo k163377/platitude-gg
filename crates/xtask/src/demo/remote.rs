@@ -147,7 +147,11 @@ pub(super) fn gone(repo: &mut DemoRepo) -> Result<(), String> {
 
 /// Puts one hook into `hooks` and makes it runnable (the exec bit matters
 /// off Windows). `script` is the whole file, shebang included.
-fn install_hook(hooks: &std::path::Path, name: &str, script: &str) -> Result<(), String> {
+pub(super) fn install_hook(
+    hooks: &std::path::Path,
+    name: &str,
+    script: &str,
+) -> Result<(), String> {
     std::fs::create_dir_all(hooks).map_err(|e| e.to_string())?;
     let path = hooks.join(name);
     std::fs::write(&path, script).map_err(|e| e.to_string())?;

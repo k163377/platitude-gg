@@ -375,6 +375,16 @@ Item {
                 acts.holdStand(page)
                 return
             }
+            // Answered with a report instead (a preset whose git says no after the press — `postcheckout`): the tab
+            // stays, and the bar is the run's subject once it is down.
+            if (acts.standsIn(page, worktreeMadeTimer.from) && page.noticeCard.settled) {
+                stop()
+                Harness.report("worktree_refused stood=false said=" + page.noticeCard.label
+                                  + " place=" + page.noticeCard.detailPlace
+                                  + " says=" + page.noticeCard.detail)
+                window.finishAutoAct()
+                return
+            }
             if (acts.standsIn(page, worktreeMadeTimer.from) || !PageSettled.settled(page)
                     || page.pageWorktree.branch === "")
                 return

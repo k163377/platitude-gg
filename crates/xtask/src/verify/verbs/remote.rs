@@ -136,17 +136,18 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "tag_reach reach=",
     },
     // The far side keeping a branch: `said=` is the sentence built from
-    // what core classified (remote, branch, a deletion), `why=true` the
-    // far side's own words (デザイン規約 §可否・警告の出し場所).
+    // what core classified (remote, branch, a deletion), `says=` the line
+    // naming who said no — a hook over there — and sending the reader to
+    // the log for its words (デザイン規約 §答えの要らない報せ).
     // `log=false`: the panel did not come up over the same news;
     // `wrong=false`: the corner's mark is not calling it an error.
-    // `tone=danger` is a press turned down and over
-    // (デザイン規約 §答えの要らない報せ).
+    // `tone=danger` is a press turned down and over.
     Verb {
         name: "remote-refused",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
-                said=origin would not delete main",
+                said=origin would not delete main place=GIT COMMANDS \
+                says=A rule on origin turned it down — see GIT COMMANDS",
     },
     // The same refusal over a tag: a `push_tag` / `delete_remote_tag`
     // returning a plain failure would put the log up over news the branch
@@ -155,15 +156,57 @@ pub(super) const TABLE: &[Verb] = &[
         name: "tag-refused",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
-                said=origin would not delete v1.0",
+                said=origin would not delete v1.0 place=GIT COMMANDS \
+                says=A rule on origin turned it down — see GIT COMMANDS",
     },
     // A push git will not send. The session fetches on it, so it is a
-    // report like the others; `why=true` is git's advice, `hint:` off.
+    // report like the others; `why=true` is our own line, saying what the
+    // remote turned out to be.
     Verb {
         name: "push-outdated",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
-                said=main was not sent to origin",
+                said=main was not sent to origin place= says=origin has commits that this push would drop.",
+    },
+    // The toolbar's push, and over the presets that turn it down only once
+    // git runs: the bar's second line says who did and sends the reader to
+    // the log (`place=`), where their words are (デザイン規約
+    // §答えの要らない報せ). Bare, the write's own boundary.
+    Verb {
+        name: "push",
+        when: &[
+            (
+                Arg::WithPreset("prepush"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=main was not sent to origin place=GIT COMMANDS \
+                 says=The pre-push hook here turned it down — see GIT COMMANDS",
+            ),
+            (
+                Arg::WithPreset("toolarge"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=origin would not update main place=GIT COMMANDS \
+                 says=The push is larger than origin accepts — see GIT COMMANDS",
+            ),
+            (
+                Arg::WithPreset("checkedout"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=origin would not update main place=GIT COMMANDS \
+                 says=origin has main checked out in a working tree of its own — see GIT COMMANDS",
+            ),
+        ],
+        plain: "write_barrier mine=true",
+    },
+    // The overwrite onto a remote that takes no rewrite: its own rule, not
+    // a remote this end found out of date (no fetch follows).
+    Verb {
+        name: "force-push",
+        when: &[(
+            Arg::WithPreset("nonff"),
+            "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+             said=origin would not update main place=GIT COMMANDS \
+             says=origin does not take pushes that rewrite its history — see GIT COMMANDS",
+        )],
+        plain: "write_barrier mine=true",
     },
     // Which remote a push goes to: `local=true` is the repository's own
     // config holding the mark. The run ends once `checkout.defaultRemote`

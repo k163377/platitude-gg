@@ -117,6 +117,29 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=The history was not rewritten",
     },
+    // A drop git started and something here turned down: the `pre-rebase`
+    // hook before anything moved, or a commit the replay remade that could
+    // not be signed — put back where it began. The line names it and sends
+    // the reader to the log, where the rebase's row failed with the words
+    // (デザイン規約 §答えの要らない報せ). Bare, the write's own boundary.
+    Verb {
+        name: "drop-commit-go",
+        when: &[
+            (
+                Arg::WithPreset("prerebase"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=The history was not rewritten place=GIT COMMANDS \
+                 says=The pre-rebase hook here turned it down — see GIT COMMANDS",
+            ),
+            (
+                Arg::WithPreset("plan-unsigned"),
+                "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+                 said=The history was not rewritten place=GIT COMMANDS \
+                 says=The commit could not be signed — see GIT COMMANDS",
+            ),
+        ],
+        plain: "write_barrier mine=true",
+    },
     // The other door: the plan's preview turns the history down before
     // the plan opens. One run for the three shapes it refuses — they
     // differ only in the heading, which `tst_reportdress.qml` reads.

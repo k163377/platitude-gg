@@ -426,14 +426,22 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "author=Demo User committer=Demo User",
     },
     // A commit a hook would not have, read as `remote-refused`: `said=` is
-    // built from what core classified, `why=true` the hook's own words,
-    // `log=false wrong=false` nothing raised as an error
-    // (デザイン規約 §答えの要らない報せ).
+    // built from what core classified, `says=` the line naming the hook and
+    // sending the reader to the log for its words, `log=false wrong=false`
+    // nothing raised as an error (デザイン規約 §答えの要らない報せ). The same
+    // under 2.55's warning for `core.commentChar=auto`, and a commit git
+    // could not sign.
     Verb {
         name: "commit-refused",
-        when: &[],
+        when: &[(
+            Arg::WithPreset("unsigned"),
+            "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
+             said=The commit was not made place=GIT COMMANDS \
+             says=The commit could not be signed — see GIT COMMANDS",
+        )],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
-                said=The commit was not made",
+                said=The commit was not made place=GIT COMMANDS \
+                says=A commit hook here turned it down — see GIT COMMANDS",
     },
     // The same refusal with a file open in the middle, where a bar living
     // in the graph pane would be hidden. `clears=true`: the middle stands
@@ -442,7 +450,8 @@ pub(super) const TABLE: &[Verb] = &[
         name: "notice-over-diff",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
-                said=The commit was not made",
+                said=The commit was not made place=GIT COMMANDS \
+                says=A commit hook here turned it down — see GIT COMMANDS",
     },
     // A part of a file that is not that file any more, refused here before
     // git ran: there is no log row, so raising the panel would put it empty

@@ -35,6 +35,29 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "stash_landed wip=false follows=true onscreen=true",
     },
+    // A stash rename git turned down, as a branch's is: before the new
+    // entry went in (another git's lock — the box stays open, the gesture
+    // going on), and after it, with the old one left beside it (half
+    // done). Both `warning` (デザイン規約 §答えの要らない報せ). Bare, the
+    // write's own boundary.
+    Verb {
+        name: "rename-stash",
+        when: &[
+            (
+                Arg::WithPreset("stash-lock"),
+                "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
+                 said=The stash was not renamed place=GIT COMMANDS \
+                 says=Another git process was working here — see GIT COMMANDS",
+            ),
+            (
+                Arg::WithPreset("stash-droplock"),
+                "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
+                 said=The rename did not finish place= \
+                 says=The new name was made; the old one is still there.",
+            ),
+        ],
+        plain: "write_barrier mine=true",
+    },
     // `back=`: the popped entry's name is back in the commit box, read off
     // the box.
     Verb {

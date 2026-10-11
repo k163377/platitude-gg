@@ -102,13 +102,19 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           rename-taken, fold-first-commit,
                           drop-last-commit, carried-apply-refused,
                           band-actions-alert, push
-                          --preset unreachable, and publish-new-go given
+                          --preset unreachable, publish-new-go given
                           a URL nothing can reach — that preset cannot
                           stand in for it, since a branch already pushed
                           with an upstream has no first push left to
-                          publish). A replay that stops part-way is not
-                          among them any more: git left it standing,
-                          which is a landing.
+                          publish —, and the plain verbs over a preset
+                          git's run turns them down on (push, force-push,
+                          drop-commit-go, rename-stash, worktree-add,
+                          commit-refused over prepush, nonff, toolarge,
+                          checkedout, prerebase, plan-unsigned,
+                          stash-lock, stash-droplock, postcheckout,
+                          unsigned, hooked-auto). A replay that stops
+                          part-way is not among them any more: git left
+                          it standing, which is a landing.
         --old-git <ver>   run the app against a git that answers --version
                           with <ver> and passes everything else to the real
                           one, so an installation older than the supported

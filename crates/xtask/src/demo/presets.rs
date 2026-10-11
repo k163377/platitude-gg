@@ -130,6 +130,10 @@ fn build_or_copy_in(preset: &str, root: &Path, name: &str, named: bool) -> Resul
 
 pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, String> {
     let mut repo = DemoRepo::init(root, name)?;
+    if let Some(made) = super::refusals::build(preset, &mut repo) {
+        made?;
+        return Ok(repo.work);
+    }
     match preset {
         "basic" => basic(&mut repo)?,
         "nested" => nested(&mut repo)?,

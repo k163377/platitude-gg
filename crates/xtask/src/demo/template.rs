@@ -165,6 +165,7 @@ const BUILT_BY: &[(&str, &[u8])] = &[
     ("demo/mod.rs", include_bytes!("mod.rs")),
     ("demo/pictures.rs", include_bytes!("pictures.rs")),
     ("demo/presets.rs", include_bytes!("presets.rs")),
+    ("demo/refusals.rs", include_bytes!("refusals.rs")),
     ("demo/remote.rs", include_bytes!("remote.rs")),
     ("demo/repo.rs", include_bytes!("repo.rs")),
     ("demo/scale.rs", include_bytes!("scale.rs")),

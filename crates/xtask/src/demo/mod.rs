@@ -11,6 +11,7 @@ mod discards;
 mod lfs;
 mod pictures;
 mod presets;
+mod refusals;
 mod remote;
 mod repo;
 mod scale;

@@ -106,6 +106,32 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   now would leave HEAD changing nothing (amend-tip)
         hooked    a pre-commit hook that says no, over something staged
                   for it to say it about (commit-refused, notice-over-diff)
+        hooked-auto  the same under core.commentChar=auto, whose warning
+                  and hints git 2.55 writes ahead of every refusal
+                  (commit-refused)
+        unsigned  something staged, and signing on with a key that is not
+                  there (commit-refused)
+        prepush   a commit to push and a pre-push hook here that says no
+                  (push)
+        nonff     diverged, onto an origin that takes no rewrite
+                  (receive.denyNonFastForwards — force-push)
+        toolarge  a commit to push and an origin that unpacks no more than
+                  ten bytes (receive.maxInputSize — push)
+        checkedout  an origin with a working tree of its own and main
+                  checked out in it (push)
+        prerebase  plan, with a pre-rebase hook that says no
+                  (drop-commit-go row:1)
+        plan-unsigned  plan, with signing on and a key that is not there:
+                  the commit a drop remakes cannot be signed
+                  (drop-commit-go row:1)
+        stash-lock  stashes, with another git holding the stash's lock
+                  (rename-stash)
+        stash-droplock  stashes, where the stash's log is locked as a new
+                  entry goes in: a rename's old entry cannot be dropped
+                  (rename-stash)
+        postcheckout  basic, with a post-checkout hook that fails: a
+                  worktree git makes is kept, its hook's failure the answer
+                  (worktree-add branch:feature/topic-a)
         slowhook  a pre-commit hook that takes its time, over something
                   staged — a write provably in flight (quit-waits, quit-locked)
         noremote  commits and no remote at all: the first push writes one down
