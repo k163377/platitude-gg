@@ -12,7 +12,6 @@ awake.log.off
 awake.log.on
 awake.status
 budget.standing
-check.stage2
 corpus.build
 demo.repo
 deny.policy

@@ -15,25 +15,6 @@ const HEAD: &str = "\
 cargo xtask <command>
 
 commands:
-  check [--verb <v>]...
-      Stage-2 verification (CLAUDE.md 確認は 3 段), with the host and the
-      container running in parallel: structure, waits, versions, docs, qmltest,
-      fmt, clippy, the workspace tests and the shipped build here, while
-      the container runs test -p platitude-core, qmltest, that same
-      clippy for Linux, verify-ui for each --verb, and bare. Clippy runs
-      on both sides because the host's cannot answer for the other one: a
-      name reachable only under
-      #[cfg(not(windows))] is not compiled here at all, so an unused
-      import or an orphaned fn behind that cfg would reach CI unseen.
-      The two sides write to different build trees (target/ vs the
-      container's volume), so the wall clock is whichever side finishes
-      last. Each --verb also runs verify-ui on the host, so one flag
-      covers the verb on both OSes; its value is a whole verify-ui
-      argument line, quoted when the verb needs its preset or argument
-      beside it (--verb 'co-authors 4 --preset co-authors'). Without
-      --verb the summary says the touched verbs still have to run — it
-      never passes for the whole of stage 2 on its own.
-
   gate [--host-only] [--all] [--fresh] [--keep-going] [--dry-run]
        [--verb <line>]... [--jobs <n>] [--dir <tree>] [--main <ref>]
       The pre-merge tests, chosen by machine (CLAUDE.md 確認は 3 段;
@@ -148,7 +129,7 @@ commands:
       The per-file length backstop of .claude/rules/structure.md (1000
       code lines — blank and comment-only lines do not count) over
       crates/**/*.rs and *.qml, and what the tree spends on comments —
-      first step of `check`, and a second or two on its own. Three
+      an always-step of `gate`, and a second or two on its own. Three
       standings: a file the ledger (.claude/rules-refs/structure.md
       分割しない判断) gives a written reason not to split has no backstop
       at all, and the run asks only that the entry still names a file
@@ -167,7 +148,7 @@ commands:
       watches — a tracked outcome(), a session boundary wait, a ticker
       step — must sit under support::wait::bounded or an explicit
       timeout, so a silent hang fails by test name, ahead of the CI
-      kill. Second step of `check`; subsecond on its own.
+      kill. An always-step of `gate`; subsecond on its own.
 
   versions
       The versions the workflows cannot name once, held to their source:
@@ -177,8 +158,8 @@ commands:
       Linux machine — no runner name is -latest, and every action is at
       one commit under one release comment. What a file names once (the
       crates' lock, the toolchain file, Qt's pin, the Dockerfile's
-      AQT_SOURCE that CI's Qt action reads) is not read. Third step of
-      `check` and an always-step of `gate`.
+      AQT_SOURCE that CI's Qt action reads) is not read. An always-step
+      of `gate`.
 
   docs [--sync]
       The three ways an edit to internal-docs, .claude/rules,
@@ -195,7 +176,7 @@ commands:
       what lets a table or a heading indented inside a list stay part of
       it; fenced code and YAML front matter are skipped whole. Structure
       only: how wide a line runs and how a sentence is built are the
-      writer's. Fourth step of `check` and an always-step of `gate` —
+      writer's. An always-step of `gate` —
       sixteen files in twenty milliseconds is under the cost of asking a
       stamp whether it still answers. The Write hook says the same thing
       about the one file an edit just landed in, which is where a tear is
@@ -535,7 +516,7 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       Whether a measurement is holding the machine still, and which
       builds are under way. `perf` holds the machine for the length of
       its runs; every app build here (`app_build::app_exe`), every cargo step
-      of check and gate, the linux container, verify-ui and a corpus
+      of the gate, the linux container, verify-ui and a corpus
       being made announce themselves and wait for a hold to lift before
       they begin, and a hold waits for the builds already announced — a
       build beside a measurement is counted as load that was not the

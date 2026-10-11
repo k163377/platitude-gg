@@ -343,7 +343,7 @@ fn run_line(ground: &Ground<'_>, index: usize, line: &str, build: bool) -> Resul
         if let Err(why) = &outcome {
             println!("     {why}");
         }
-        // The whole log, lossily, as `check` reads a step's: the sentence
+        // The whole log, lossily: the sentence
         // that says the build went red can stand above the tail, and one
         // localized byte in a linker line would otherwise blank all of it.
         let said = String::from_utf8_lossy(&std::fs::read(&log).unwrap_or_default()).into_owned();

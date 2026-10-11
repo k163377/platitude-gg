@@ -203,7 +203,7 @@ pub(super) fn deep_detached(repo: &mut DemoRepo) -> Result<(), String> {
 /// Commits on the line `replay` rewrites. A replay pays a process per
 /// commit (ci/baseline/code-costs-windows-x64.md §git のプロセス代), so
 /// three hundred stand for seconds: long enough to catch the running
-/// state, short enough to pay for on both sides of every `check`.
+/// state, short enough to pay for on both sides of every gate.
 const REPLAY_COMMITS: u64 = 300;
 
 /// Where `replay`'s blob marks start — clear of its commit marks, which

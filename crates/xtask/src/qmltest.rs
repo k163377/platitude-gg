@@ -197,7 +197,7 @@ fn case_names(file: &Path) -> Vec<String> {
 
 /// This run's own staging directory, named after the process and
 /// workspace-relative (that is how the log reaches `-o`). On a Linux host
-/// `gate` / `check` run the host and container sides here at once, and a
+/// `gate` runs the host and container sides here at once, and a
 /// shared directory has each rebuilding the tree the other resolves
 /// through — a component "unavailable" for the length of one copy.
 fn work_rel() -> String {

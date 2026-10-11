@@ -1,6 +1,6 @@
 //! The machine as every process on it names it the same: how many
 //! units fit at once, and the name a tree queues under. Read by the
-//! gate, the budget, `check` and `land` alike, so it reads nothing of
+//! gate, the budget, `replay` and `land` alike, so it reads nothing of
 //! theirs (反映前テストの機械化.md §依存木).
 
 use std::path::Path;

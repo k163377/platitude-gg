@@ -53,7 +53,6 @@ fn main() -> ExitCode {
     }
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
-        Some("check") => check::run(&args[1..]),
         Some("gate") => gate::run(&args[1..]),
         Some("sweep") => sweep::run(&args[1..]),
         Some("structure") => structure::run(&args[1..]),

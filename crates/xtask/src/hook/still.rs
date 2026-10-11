@@ -37,7 +37,7 @@ pub(super) fn pre_shell(input: &str) -> Result<bool, String> {
         "A measurement is holding the machine still ({hold}): a build beside it is counted as \
          load that was not the application, and the run is refused and taken again — so this \
          cargo line is held the way every `cargo xtask` verb holds itself. Use the verb \
-         (`cargo xtask gate` / `check` / `verify-ui` wait for the hold by themselves), or come \
+         (`cargo xtask gate` / `verify-ui` wait for the hold by themselves), or come \
          back once `cargo xtask still` says the hold is gone."
     ));
     Ok(true)

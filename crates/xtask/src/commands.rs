@@ -6,7 +6,6 @@ use crate::command::Command;
 /// Every declaration, in the order the usage page reads.
 pub(crate) fn all() -> Vec<&'static Command> {
     [
-        crate::check::COMMANDS,
         crate::gate::COMMANDS,
         crate::sweep::COMMANDS,
         crate::structure::COMMANDS,

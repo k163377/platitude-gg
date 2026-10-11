@@ -15,7 +15,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 **目視は等倍以上で、判定する所を切り出して見る。** 何枚も並べて縮小した一覧は「どの絵が撮れたか」の確認**だけ**に使う — 縮小の補間は上に載った数 px を消す。文字・枠・重なりを判定する時は、その行を 3 倍以上・**NEAREST**(補間なし)で切り出す —— **`cargo xtask shots crop <png> --at <x>:<y>:<幅>:<高さ> [--scale <n>]`**(既定 3 倍。整数倍のみ)。切り出しは元の絵の隣に置かれる(`app.png` → `app-crop-24-96-220x44.png`)ので、そのまま Read で読む —— **切り出しの道具はこれだけ**。空白・崩れに見えた絵は、直す前に保存ファイルの画素(crop / SHA-256)で確かめる。
 
-**ユーザーに見せる絵は board へ出す**(チャットのペインは画像を縮めるうえ拡大できない)。**明示的に撃った** `verify-ui` は撮った PNG を自動で board に載せる。**`gate` / `check` が回す verify の run は載らない**。**board に載せるのは「ユーザーが求めた絵」と「その指示に直接関係する絵」だけ**(ユーザー決定)。**`/land` の後に自分の確かめだけで撃つ run は `--no-board`** — `/land` の後に board へ載せた絵は、下げてもユーザーの次の発言まで反映を止める(CLAUDE.md §Git 運用)。**窓は 1 枚 — 見せ方の既定は「F5」**(ユーザー決定): 絵を載せたら**「board を更新した。F5 で反映される」と伝えるだけ**にする。<!--cmd:shots.open-->`cargo xtask shots open` は窓が立っていれば開かずに「already open — press F5」と答える。`shots add` は最後に今どちらかを言う(`a window is open — F5 there` / `no window open yet`)ので**それに従う** — **<!--call:shots.open-->`shots open` を撃つのは後者を言われた時だけ**。`cargo xtask shots open --again` は**ユーザーが「閉じた」と言った時だけ**。
+**ユーザーに見せる絵は board へ出す**(チャットのペインは画像を縮めるうえ拡大できない)。**明示的に撃った** `verify-ui` は撮った PNG を自動で board に載せる。**`gate` が回す verify の run は載らない**。**board に載せるのは「ユーザーが求めた絵」と「その指示に直接関係する絵」だけ**(ユーザー決定)。**`/land` の後に自分の確かめだけで撃つ run は `--no-board`** — `/land` の後に board へ載せた絵は、下げてもユーザーの次の発言まで反映を止める(CLAUDE.md §Git 運用)。**窓は 1 枚 — 見せ方の既定は「F5」**(ユーザー決定): 絵を載せたら**「board を更新した。F5 で反映される」と伝えるだけ**にする。<!--cmd:shots.open-->`cargo xtask shots open` は窓が立っていれば開かずに「already open — press F5」と答える。`shots add` は最後に今どちらかを言う(`a window is open — F5 there` / `no window open yet`)ので**それに従う** — **<!--call:shots.open-->`shots open` を撃つのは後者を言われた時だけ**。`cargo xtask shots open --again` は**ユーザーが「閉じた」と言った時だけ**。
 
 手で作った切り出し・比較シートは `cargo xtask shots add --label "<この絵で何を見るか>" [--verb <動詞>] <png>...`(**`--label` は必須**)。**ラベルは日本語で書く**(日本語の字を 1 つも含まないラベルは拒まれる)。識別子・動詞・ファイル名はその綴りのまま名前の中へ入れてよい(`"AskBar.settled を待った絵"`)。**`--label` は `verify-ui` 側にもある** — 見せるために撮る run には付ける(規則も拒み方も `shots add` と同じ)。**before / after は必ず 1 つの run に横並びで載せ、両側を出す** — `cargo xtask shots add --label "<何が変わったか>" [--verb <動詞>] --before <png> --after <png>`(ユーザー決定)。flaky 掃引のように同じ絵が何十枚も出る run は `verify-ui --no-board` で撃つ。
 
@@ -29,7 +29,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 両 OS を見せる時は **Windows の 1 → 2 → 3 を全部載せてから、Linux の 1 → 2 → 3**。見せると決めた絵は上の順で `verify-ui --no-build` / `shots add` を順に撃って載せる。
 
-**動詞はまとめて撮る(1 ターンに複数)** — 同じビルドで撮れる動詞は 1 個の複合コマンドに並べて 1 ターンで実行し(2 発目以降は `--no-build`)、PNG の目視も 1 ターンに複数枚まとめて読む。段 2 と重なる時は `cargo xtask check --verb '<動詞と引数>' --verb …` の一括(ホスト / コンテナ並列)が最速。1 動詞ずつ「撮る→見る→直す」を回してよいのは、直前の絵が次の編集を決める時だけ。
+**動詞はまとめて撮る(1 ターンに複数)** — 同じビルドで撮れる動詞は 1 個の複合コマンドに並べて 1 ターンで実行し(2 発目以降は `--no-build`)、PNG の目視も 1 ターンに複数枚まとめて読む。段 2 と重なる時は、commit してから `cargo xtask gate --verb '<動詞と引数>' --verb …` で 1 本にまとめるのが最速(名指した行は段分け表に関わらず両側で回る)。1 動詞ずつ「撮る→見る→直す」を回してよいのは、直前の絵が次の編集を決める時だけ。
 
 **判定には書き込みの失敗も入る** — `write failed` が 1 行でもあれば FAIL(撮れた PNG は「届かなかった状態」のもの)。**`--allow-write-failure` を付けてよいのは「その拒否がこの動詞の見せ物である」時だけ**(対象動詞の全列挙は `cargo xtask` の USAGE が正)。引数の渡し忘れも同じ行に出る(`delete-branch-refused` を引数なしで撃つと `git branch --delete -- ''` が拒まれ、`not merged` の絵は撮れていない)。
 
@@ -46,7 +46,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
    `launch` が自ツリーの居残りプロセス回収(`cargo xtask kill` 相当)→ release ビルド → 切り離し起動 → 生存確認まで行い、Qt の PATH も自分で解決する。rebase 不要の要求なら <!--cmd:app.launch-->`PGG_ALLOW_GUI=1 cargo xtask launch` だけ。冷えたツリーの release ビルドは既定の 2 分を超えうるので、**前景のまま timeout を上げる**(理由は下の 3)。**落とすのは自ツリーの居残りだけ** — `kill` / `launch` がそれだけを落とす(画像名 kill は hook が deny)。
 2. **`launch` の行が最後のツール呼び出し**。窓が出たら報告してターンを終える。起動を待たせてよいのは rebase の衝突と build エラーだけ(衝突を解決したら、この fast path の続きで起動まで行く)。
 3. **起動の報告がターンの終わり** — **ターンが終わらない間ユーザーの次の指示はキューに載ったまま届かない**。以下はどれもターンを延ばす:
-   - 起動そのものを run_in_background で撃つ(hook が deny)/ 報告と同じターンで `check` 等を run_in_background で始める(完了通知がエージェントを起こし直す)
+   - 起動そのものを run_in_background で撃つ(hook が deny)/ 報告と同じターンで `gate` 等を run_in_background で始める(完了通知がエージェントを起こし直す)
    - `Get-Process` / `xtask seats` / ログの tail で生存や pid を確かめ直す(生存確認は `launch` が済ませている)
    - 窓が閉じるのを待つ・ユーザーの操作を待つ・撃ち直す・スクショを撮る
 
