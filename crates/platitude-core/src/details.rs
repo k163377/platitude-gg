@@ -342,6 +342,11 @@ fn for_paths(cmd: GitCommand, path: &str, orig_path: Option<&str>) -> GitCommand
 /// Partial staging rebuilds patches from these bytes ([`crate::patch`]), so
 /// both must run the exact same command: hunk and line indices only mean
 /// something against the bytes they came from.
+///
+/// The staging tests mock this (`mock_file_diff_raw`) to hold a read while
+/// the file moves before git's apply; mry copies what a mock matches on, so
+/// every argument is skipped.
+#[mry::mry(skip_args(GitExecutor, Path, DiffTarget, CancellationToken))]
 pub async fn file_diff_raw(
     executor: &GitExecutor,
     workdir: &Path,

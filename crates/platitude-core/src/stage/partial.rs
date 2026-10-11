@@ -14,7 +14,7 @@ use crate::repo::RepoInfo;
 use crate::report::ReportKind;
 use crate::scratch::ScratchFile;
 
-use super::refusal::{refuse_combined, stale, taking, verify_fingerprint};
+use super::refusal::{moved, refuse_combined, stale, taking, verify_fingerprint};
 use super::whole::unstage_paths;
 
 /// Stages or unstages part of one file's diff.
@@ -22,7 +22,9 @@ use super::whole::unstage_paths;
 /// The diff is re-run here and `seen` — the fingerprint of the diff the
 /// selection was made on ([`details::file_diff_with_fingerprint`]) — is
 /// checked against it; any drift is a refusal. `git apply` cannot be the
-/// net: a patch rebuilt from drifted bytes always fits them.
+/// net: a patch rebuilt from drifted bytes always fits them. A file that
+/// moves after this read so the patch no longer fits is git's to find, and
+/// the same refusal once a second read shows the move.
 ///
 /// [`DiffTarget::Untracked`] is marked intent-to-add first (git's own
 /// requirement for partially staging a new file), then treated as unstaged.
@@ -121,7 +123,42 @@ async fn apply_prepared(
         cmd = cmd.arg("--reverse");
     }
     cmd = cmd.arg(scratch.path());
-    executor.run(cmd, cancel).await.map(drop)
+    apply_built(executor, workdir, target, &raw, cmd, taking(side), cancel).await
+}
+
+/// Runs git's apply of a patch built from `raw`. Exit 1 is `apply` finding
+/// the patch does not fit what is there (`patch does not apply`, `does not
+/// exist in index`, `No such file or directory`) with nothing written; when
+/// the diff reads differently now, the file moved after the fingerprint
+/// check and it is `kind`'s refusal. A diff that reads the same was turned
+/// down for a reason of git's own, and git's words are the answer.
+async fn apply_built(
+    executor: &GitExecutor,
+    workdir: &Path,
+    target: &DiffTarget,
+    raw: &[u8],
+    cmd: GitCommand,
+    kind: ReportKind,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let command = cmd.describe();
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    if out.code == 0 {
+        return Ok(());
+    }
+    // A read that fails says nothing about a move; git's words stand.
+    if out.code == 1
+        && details::file_diff_raw(executor, workdir, target, cancel)
+            .await
+            .is_ok_and(|now| now != raw)
+    {
+        return Err(moved(kind, command, &out));
+    }
+    Err(GitError::Failed {
+        command,
+        code: out.code,
+        stderr: out.failure_message(),
+    })
 }
 
 /// Throws away part of one file's unstaged diff: built like an unstaging
@@ -172,7 +209,8 @@ pub async fn discard_partial(
         // Pinned against `apply.whitespace`, as when staging.
         .args(["apply", "--whitespace=nowarn", "--reverse"])
         .arg(scratch.path());
-    executor.run(cmd, cancel).await.map(drop)
+    let kind = ReportKind::StaleDiscard;
+    apply_built(executor, workdir, target, &raw, cmd, kind, cancel).await
 }
 
 /// Number of hunks in the diff a target currently produces (the range the

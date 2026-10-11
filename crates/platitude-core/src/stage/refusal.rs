@@ -1,11 +1,12 @@
-//! What a partial stage refuses before git is asked: the fingerprint did
+//! What a partial stage refuses: before git is asked, the fingerprint did
 //! not match, the hunk the selection indexes is no longer in the diff, or
 //! the file is conflicted and has no single old side to cut a patch
-//! against.
+//! against; after, git turned the patch down and the file had moved.
 
 use crate::details;
 use crate::error::GitError;
 use crate::patch::{self, PatchSide};
+use crate::process::GitOutput;
 use crate::report::{ReportKind, WriteReport};
 
 /// Refuses a conflicted file's diff, which has more than one old side and
@@ -34,6 +35,18 @@ pub(super) fn taking(side: PatchSide) -> ReportKind {
     match side {
         PatchSide::Reverse => ReportKind::StaleUnstage,
         PatchSide::Forward => ReportKind::StaleStage,
+    }
+}
+
+/// git turning down a rebuilt patch whose file moved after the fingerprint
+/// check: [`stale`] found one step later. The screen says it the same way;
+/// the log keeps git's words.
+pub(super) fn moved(kind: ReportKind, command: String, out: &GitOutput) -> GitError {
+    GitError::Reported {
+        command,
+        code: out.code,
+        stderr: out.failure_message(),
+        report: Box::new(WriteReport::local(kind, String::new())),
     }
 }
 

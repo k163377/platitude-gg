@@ -1,13 +1,16 @@
 //! What staging refuses once git has been asked: vanished selections,
-//! stale fingerprints, a conflicted file's combined diff.
+//! stale fingerprints, a file that moves before git's apply, a conflicted
+//! file's combined diff.
 //!
 //! Targets refused off the target alone (a diff of history, a side with
 //! no working tree) are pinned where that is decided (`stage::partial`).
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use crate::support::exec::env;
 use crate::support::stage::{buckets, fp};
 use crate::support::{TestRepo, info};
-use platitude_core::details::DiffTarget;
+use platitude_core::details::{self, DiffTarget};
 use platitude_core::patch::HunkSelect;
 use platitude_core::report::ReportKind;
 use platitude_core::{stage, status};
@@ -173,6 +176,199 @@ async fn a_selection_from_a_stale_diff_is_refused() {
         Some(ReportKind::StaleUnstage),
         "{err}"
     );
+}
+
+/// The diff `target` gives as the file stands now.
+///
+/// Read on a thread of its own: under the lock this thread has no real
+/// `file_diff_raw` until a rule says so, and a rule that calls the real one
+/// would answer every call after it (mry keeps the mock and the lock per
+/// thread, and the first rule that matches wins).
+async fn read_now(repo: &TestRepo, target: &DiffTarget) -> Vec<u8> {
+    let (path, target) = (repo.path.clone(), target.clone());
+    tokio::task::spawn_blocking(move || {
+        let (exec, cancel) = env();
+        tokio::runtime::Handle::current()
+            .block_on(details::file_diff_raw(&exec, &path, &target, &cancel))
+    })
+    .await
+    .expect("the read's thread")
+    .expect("diff")
+}
+
+/// Holds the first read of a diff on this thread at what `target` gives
+/// now, `moves` the file, and answers every later read as it stands after;
+/// returns the fingerprint of the first. That stands for another git (or a
+/// formatter) moving the file between the fingerprint check and git's
+/// apply: the check passes, git finds a patch that does not fit, and a read
+/// after that shows the move.
+async fn hold_the_read(
+    repo: &mut TestRepo,
+    target: &DiffTarget,
+    moves: impl FnOnce(&mut TestRepo),
+) -> u64 {
+    let before = read_now(repo, target).await;
+    moves(repo);
+    let after = read_now(repo, target).await;
+    assert_ne!(before, after, "the move shows in the diff");
+    let seen = details::fingerprint(&before);
+    let first = AtomicBool::new(true);
+    details::mock_file_diff_raw().returns_with(move || {
+        Ok(if first.swap(false, Ordering::SeqCst) {
+            before.clone()
+        } else {
+            after.clone()
+        })
+    });
+    seen
+}
+
+/// What git says when the patch no longer fits (`patch does not apply` and
+/// its kin, exit 1) on a file that moved since it was read is the same
+/// refusal as a fingerprint that moved, with git's words kept for the log.
+fn assert_moved_under_the_apply(err: &platitude_core::error::GitError, kind: ReportKind) {
+    assert_eq!(err.report().map(|r| r.kind), Some(kind), "{err}");
+    assert!(
+        err.report().is_some_and(|r| r.reason.is_empty()),
+        "the words are the screen's own: {err}"
+    );
+    assert!(
+        err.to_string().contains("patch does not apply"),
+        "the log keeps git's answer: {err}"
+    );
+}
+
+#[tokio::test]
+#[mry::lock(details::file_diff_raw)]
+async fn an_index_that_moves_under_the_stage_is_refused_as_stale() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\ntwo\nthree\n", "root");
+    repo.write_file("a.txt", "one\ntwo changed\nthree\n");
+    let repo_info = info(&repo).await;
+    let target = DiffTarget::Unstaged {
+        path: "a.txt".into(),
+    };
+    let seen = hold_the_read(&mut repo, &target, |repo| {
+        repo.git(&["add", "--", "a.txt"]);
+    })
+    .await;
+
+    let (exec, cancel) = env();
+    let err = stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        seen,
+        &cancel,
+    )
+    .await
+    .expect_err("the index moved under the patch");
+    assert_moved_under_the_apply(&err, ReportKind::StaleStage);
+}
+
+#[tokio::test]
+#[mry::lock(details::file_diff_raw)]
+async fn an_index_that_moves_under_the_unstage_is_refused_as_stale() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\ntwo\nthree\n", "root");
+    repo.write_file("a.txt", "one\ntwo changed\nthree\n");
+    repo.git(&["add", "--", "a.txt"]);
+    let repo_info = info(&repo).await;
+    let target = DiffTarget::Staged {
+        path: "a.txt".into(),
+        orig_path: None,
+    };
+    let seen = hold_the_read(&mut repo, &target, |repo| {
+        repo.write_file("a.txt", "one\ntwo changed again\nthree\n");
+        repo.git(&["add", "--", "a.txt"]);
+    })
+    .await;
+
+    let (exec, cancel) = env();
+    let err = stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        seen,
+        &cancel,
+    )
+    .await
+    .expect_err("the index moved under the patch");
+    assert_moved_under_the_apply(&err, ReportKind::StaleUnstage);
+    assert_eq!(
+        repo.git(&["show", ":a.txt"]),
+        "one\ntwo changed again\nthree",
+        "nothing was unstaged"
+    );
+}
+
+#[tokio::test]
+#[mry::lock(details::file_diff_raw)]
+async fn a_file_that_moves_under_the_discard_is_refused_as_stale() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\ntwo\nthree\n", "root");
+    repo.write_file("a.txt", "one\ntwo changed\nthree\n");
+    let repo_info = info(&repo).await;
+    let target = DiffTarget::Unstaged {
+        path: "a.txt".into(),
+    };
+    let seen = hold_the_read(&mut repo, &target, |repo| {
+        repo.write_file("a.txt", "one\ntwo changed again\nthree\n");
+    })
+    .await;
+
+    let (exec, cancel) = env();
+    let err = stage::discard_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        seen,
+        &cancel,
+    )
+    .await
+    .expect_err("the file moved under the patch");
+    assert_moved_under_the_apply(&err, ReportKind::StaleDiscard);
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("a.txt")).unwrap(),
+        "one\ntwo changed again\nthree\n",
+        "nothing was thrown away"
+    );
+}
+
+/// git can turn a patch down that nothing moved under: a diff read with
+/// `diff.context=0` has hunks without context, and `apply` will not place
+/// one that does not end the file. The file reads the same afterwards, so
+/// this is not the stale refusal — it is git's to say, and the log has it.
+#[tokio::test]
+async fn a_patch_git_refuses_on_an_unmoved_file_is_not_called_stale() {
+    let mut repo = TestRepo::init();
+    let base: String = (1..=9).map(|n| format!("line {n}\n")).collect();
+    repo.commit_file("a.txt", &base, "root");
+    repo.write_file("a.txt", &base.replace("line 5\n", "line 5 changed\n"));
+    repo.git(&["config", "diff.context", "0"]);
+    let repo_info = info(&repo).await;
+    let target = DiffTarget::Unstaged {
+        path: "a.txt".into(),
+    };
+
+    let (exec, cancel) = env();
+    let err = stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        fp(&repo_info, &target).await,
+        &cancel,
+    )
+    .await
+    .expect_err("git places no context-free hunk mid-file");
+    assert!(err.report().is_none(), "not a refusal of this end's: {err}");
+    assert!(err.to_string().contains("patch does not apply"), "{err}");
+    let (staged, _, _) = buckets(&repo).await;
+    assert!(staged.is_empty(), "{staged:?}");
 }
 
 /// An untracked partial stage checks the fingerprint against the same

@@ -34,8 +34,11 @@ pub enum ReportKind {
 
     /// A part of a file that was not taken because the file changed since
     /// the selection (fingerprint mismatch, or the hunk is gone) — refused
-    /// here before git was asked; the pane rereads the file on this answer.
-    /// One kind per verb, since the heading says what did not happen.
+    /// here before git was asked, or after git's apply turned the patch
+    /// down and a second read showed the file had moved
+    /// (`stage::partial::apply_built`); the pane rereads the file on this
+    /// answer. One kind per verb, since the heading says what
+    /// did not happen.
     StaleStage,
     StaleUnstage,
     StaleDiscard,
