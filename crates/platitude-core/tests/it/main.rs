@@ -6,6 +6,7 @@ mod support;
 
 mod answer_reads;
 mod branch_integration;
+mod carried_apply;
 mod clone_integration;
 mod commit_integration;
 mod config_reads;

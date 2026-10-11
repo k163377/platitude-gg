@@ -30,7 +30,10 @@ mod record;
 mod records;
 mod restore;
 
-pub use copy::{Copied, CopyOf, CopyOperation, copy_work, record_copy, recorded_whole};
+pub use copy::{
+    Copied, CopyOf, CopyOperation, WorkStash, copy_work, put_untracked, record_copy,
+    recorded_whole, stash_of_work,
+};
 pub use read::read_repo;
 pub use record::{
     BranchBefore, RemoteTip, StashBefore, TagBefore, branch_before, commit_of,
@@ -39,6 +42,7 @@ pub use record::{
     tag_before,
 };
 pub use restore::{Restored, restore};
+pub(crate) use restore::{lies_free, worktree_at};
 
 use crate::oid::Oid;
 

@@ -48,6 +48,9 @@ use crate::process::{GitCommand, GitExecutor};
 /// - `branch`: `-d`, `-D`, `-m`, `-M`, `--set-upstream-to=`,
 ///   `--end-of-options`.
 /// - `cat-file`: `-s`, `blob`, `commit`; `check-attr`: `-z`, names, `--`.
+/// - `checkout-index`: `--all`, over a temporary index (`GIT_INDEX_FILE`) —
+///   another worktree's untracked files put in as `stash apply` puts a
+///   stash's back; `carried_apply` runs it on the minimum binary.
 /// - `cherry-pick` / `revert`: `--no-edit`, `--continue`, `--abort`,
 ///   `--skip`, `--quit`; `--no-edit` follows gitcli's negation rule.
 /// - `clean`: `-f`, `-d`; `clone`: `[--] <repository> <directory>`.

@@ -100,7 +100,7 @@ pub async fn restore(
 /// is gone, or it is a folder left where one was removed, which git takes
 /// for a folder of whatever repository holds it (and `git apply` there
 /// passes over every path outside it, answering 0).
-pub(super) async fn worktree_at(
+pub(crate) async fn worktree_at(
     executor: &GitExecutor,
     path: &str,
     cancel: &CancellationToken,
@@ -348,7 +348,7 @@ async fn created_lie_free(
 /// Whether nothing stands where `path` (git's, `/`-separated) would be
 /// written under `root`: neither the path itself nor a file where one of
 /// its folders would be.
-fn lies_free(root: &Path, path: &str) -> bool {
+pub(crate) fn lies_free(root: &Path, path: &str) -> bool {
     let mut at = root.to_path_buf();
     let mut parts = path.split('/').peekable();
     while let Some(part) = parts.next() {

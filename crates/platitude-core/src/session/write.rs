@@ -97,6 +97,31 @@ impl RepoSession {
         self.accept(kind, after, &[], orders, task)
     }
 
+    /// [`Self::write`] for one that reads work out of the worktree at
+    /// `there` (as git spells its path): where a session of this process
+    /// stands on that worktree, it takes its turn in that one's order as
+    /// well ([`Self::write_into`]), so what was accepted there before it
+    /// — a commit, a stash — is done before it reads. A tree nobody here
+    /// writes to has no order to wait in.
+    pub(super) fn write_reading<F, Fut>(
+        self: &Arc<Self>,
+        kind: OperationKind,
+        after: AfterWrite,
+        there: &str,
+        task: F,
+    ) -> Option<OperationId>
+    where
+        F: FnOnce(GitExecutor, RepoInfo, CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<(), GitError>> + Send + 'static,
+    {
+        let own = self.write_order();
+        let orders: Vec<Arc<WriteOrder>> = write_order::on_workdir(there)
+            .filter(|order| !own.iter().any(|held| Arc::ptr_eq(held, order)))
+            .into_iter()
+            .collect();
+        self.accept(kind, after, &[], orders, task)
+    }
+
     fn accept<F, Fut>(
         self: &Arc<Self>,
         kind: OperationKind,

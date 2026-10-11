@@ -54,6 +54,7 @@ mod author;
 mod auto_fetch;
 mod build;
 mod carried;
+mod carried_apply;
 mod chips;
 mod details_read;
 mod diff_reads;

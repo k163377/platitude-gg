@@ -64,6 +64,27 @@ pub(super) fn of(git_dir: &Path) -> Arc<WriteOrder> {
     order
 }
 
+/// The order of the worktree at `workdir`, where a session of this process
+/// stands on it; none where none does. Found by the sessions' own working
+/// trees, compared as git's spellings are (`joins::same_path_key`): the
+/// orders are keyed by git directory, which a path read off a listing does
+/// not give.
+pub(super) fn on_workdir(workdir: &str) -> Option<Arc<WriteOrder>> {
+    let key = joins::same_path_key(workdir);
+    let orders: Vec<Arc<WriteOrder>> = relock(&ORDERS)
+        .values()
+        .filter_map(std::sync::Weak::upgrade)
+        .collect();
+    // The sessions are asked with no lock held (`WriteOrder::others`).
+    orders.into_iter().find(|order| {
+        order.members().iter().any(|session| {
+            session
+                .workdir()
+                .is_some_and(|dir| joins::same_path_key(&dir.to_string_lossy()) == key)
+        })
+    })
+}
+
 /// The order the local writes of one worktree run in.
 pub(super) struct WriteOrder {
     held: Mutex<Held>,
@@ -141,6 +162,16 @@ impl WriteOrder {
             .members
             .iter()
             .filter(|member| member.as_ptr() != writer)
+            .filter_map(std::sync::Weak::upgrade)
+            .collect()
+    }
+
+    /// Every session on this tree, for the caller to ask with this lock let
+    /// go ([`Self::others`]).
+    fn members(&self) -> Vec<Arc<RepoSession>> {
+        relock(&self.held)
+            .members
+            .iter()
             .filter_map(std::sync::Weak::upgrade)
             .collect()
     }

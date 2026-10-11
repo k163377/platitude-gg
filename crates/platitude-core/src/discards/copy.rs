@@ -202,6 +202,116 @@ pub async fn copy_work(
     }))
 }
 
+/// A worktree's uncommitted work as `git stash push --include-untracked`
+/// keeps it, made without the stash: its tree the working tree's side, its
+/// first parent HEAD, its second the index's side on HEAD — what `git stash
+/// apply` takes in any worktree — and the untracked files beside it, the
+/// tree a stash keeps in a third parent. Apart, so they go in only once the
+/// rest has: git's own apply puts them in after turning the rest down
+/// ([`put_untracked`]). Nothing names it.
+#[derive(Debug)]
+pub struct WorkStash {
+    pub commit: Oid,
+    pub untracked: Option<Oid>,
+    /// The paths git would not take, left out of it ([`copy_work`]).
+    pub not_copied: Vec<String>,
+}
+
+/// Reads `workdir`'s work over `tracked` and `untracked` (as a status
+/// lists them) into a [`WorkStash`], touching neither the worktree, its
+/// index nor `refs/stash`: read as a whole-file discard reads its paths, in
+/// a temporary index begun from a copy of the worktree's own (§2.1).
+/// `None` while HEAD has no commit.
+pub async fn stash_of_work(
+    executor: &GitExecutor,
+    workdir: &Path,
+    git_dir: &Path,
+    tracked: &[String],
+    untracked: &[String],
+    cancel: &CancellationToken,
+) -> Result<Option<WorkStash>, GitError> {
+    let Some((head, head_tree, branch)) = head_of(executor, workdir, cancel).await? else {
+        return Ok(None);
+    };
+    // Only the place is read off `of` below; nothing is recorded.
+    let of = CopyOf {
+        workdir,
+        git_dir,
+        tracked,
+        untracked,
+        operation: CopyOperation::Discard,
+        touches_index: false,
+        moved: None,
+    };
+    let mut not_copied = Vec::new();
+    let (index_side, work) = if tracked.is_empty() {
+        (head_tree, head_tree)
+    } else {
+        let index = IndexCopy::now(executor, &of, &head, cancel).await?;
+        let index_side = index.tree(executor, &of, &head, cancel).await?;
+        // A path that is a folder on disk — a submodule's checkout, or a file
+        // a folder replaced — keeps what the index holds, as in git's own
+        // stash (`stash_working_tree` passes over a directory).
+        let takes: Vec<String> = tracked
+            .iter()
+            .filter(|path| {
+                !std::fs::symlink_metadata(workdir.join(path)).is_ok_and(|meta| meta.is_dir())
+            })
+            .cloned()
+            .collect();
+        index
+            .take(executor, &of, &takes, &mut not_copied, cancel)
+            .await?;
+        (index_side, index.tree(executor, &of, &head, cancel).await?)
+    };
+    let untracked = untracked_tree(executor, &of, untracked, &mut not_copied, cancel).await?;
+    let on = branch.as_deref().unwrap_or("(no branch)");
+    let index = commit(
+        executor,
+        workdir,
+        &index_side,
+        &[head],
+        &format!("index on {on}"),
+        cancel,
+    )
+    .await?;
+    let stash = commit(
+        executor,
+        workdir,
+        &work,
+        &[head, index],
+        &format!("WIP on {on}"),
+        cancel,
+    )
+    .await?;
+    Ok(Some(WorkStash {
+        commit: stash,
+        untracked,
+        not_copied,
+    }))
+}
+
+/// Writes `tree` — a [`WorkStash`]'s untracked files — into `workdir` as
+/// `git stash apply` puts a stash's back (git's `restore_untracked`): read
+/// into an index of its own and checked out from there, so the worktree's
+/// index and its tracked files stay as they are. A file already standing at
+/// one of its paths is not written over, and git answers 1.
+pub async fn put_untracked(
+    executor: &GitExecutor,
+    workdir: &Path,
+    git_dir: &Path,
+    tree: &Oid,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let index = ScratchFile::fresh(git_dir, "untracked-index").map_err(io_error)?;
+    let read = isolated(workdir, git_dir, index.path())
+        .arg("read-tree")
+        .arg(tree.to_hex());
+    executor.run(read, cancel).await?;
+    let out = isolated(workdir, git_dir, index.path()).args(["checkout-index", "--all"]);
+    executor.run(out, cancel).await.map(drop)
+}
+
 /// Puts a copy on the record once the write it was made for answered:
 /// what the paths held before, over what the write left — the index and
 /// the working tree as the write leaves them where it landed, read as they

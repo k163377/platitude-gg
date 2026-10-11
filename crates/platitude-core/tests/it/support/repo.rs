@@ -178,6 +178,12 @@ impl TestRepo {
         assert!(!out.status.success(), "git {args:?} unexpectedly succeeded");
     }
 
+    /// Runs git in `dir` and hands back whatever it answered, a refusal
+    /// included — for observing how git turns something down.
+    pub fn git_attempt(&mut self, dir: &Path, args: &[&str]) -> Output {
+        self.run(dir, args)
+    }
+
     /// Runs git in an arbitrary directory (e.g. for `clone`).
     pub fn git_in(&mut self, dir: &Path, args: &[&str]) -> String {
         let out = self.run(dir, args);

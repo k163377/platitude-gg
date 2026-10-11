@@ -73,6 +73,25 @@ pub enum ReportKind {
     /// ([`crate::worktrees::add`]). Nothing was made, and there is nobody
     /// to quote.
     WorktreeFolderTaken,
+    /// Another worktree's work not applied here because git said the apply
+    /// would overwrite what is here: a file changed here that the work
+    /// changes too, or an untracked one where it adds one. Nothing was
+    /// written. `name` is that worktree's.
+    CarriedInTheWay,
+    /// The same, turned down before git: a file stands here — committed or
+    /// not — where one of its untracked files would go. git's own apply,
+    /// where the rest lands, would refuse that file only after it, and leave
+    /// the rest applied.
+    CarriedFileInTheWay,
+    /// The same, because of what is there: that worktree went, has a
+    /// conflict standing, or holds a file git would not take — found while
+    /// it was read, before anything was applied.
+    CarriedUnread,
+    /// The same, turned down by git for anything else — untracked files here
+    /// it would lose or remove rather than overwrite, a conflict standing
+    /// here, an index another tool holds (about which the minimum's git says
+    /// nothing). Its words, where it has any, are the log's.
+    CarriedRefused,
 
     /// The five shapes a history cannot be rewritten in, found before a
     /// rebase is spawned ([`crate::sequencer::plan_edit`]). git is never
@@ -243,6 +262,46 @@ pub fn worktree_folder_taken(name: &str, path: &str) -> crate::error::GitError {
             name,
             String::new(),
         )),
+    }
+}
+
+/// What git says when an apply would write over work here, tracked or
+/// untracked (`LC_ALL=C`; merge-ort's and unpack-trees' own words since
+/// long before the minimum).
+const CARRIED_OVERWRITES: &str = "would be overwritten";
+
+/// Another worktree's work that `git stash apply` would not put here. The
+/// screen writes both lines (what was in the way is all git's message
+/// says, and it ends in advice to the terminal); the log keeps git's words.
+/// Only the refusal that names work here as what it would overwrite says
+/// so; any other is one git's words have to explain.
+#[must_use]
+pub fn carried_refused(
+    name: &str,
+    command: String,
+    out: &crate::process::GitOutput,
+) -> crate::error::GitError {
+    let said = out.failure_message();
+    let kind = if said.contains(CARRIED_OVERWRITES) {
+        ReportKind::CarriedInTheWay
+    } else {
+        ReportKind::CarriedRefused
+    };
+    crate::error::GitError::Reported {
+        command,
+        code: out.code,
+        stderr: said,
+        report: Box::new(WriteReport::about(kind, name, String::new())),
+    }
+}
+
+/// The same, turned down before git ran — `kind` says why (a file standing
+/// here, or what was read there). `message` is only the log's record.
+#[must_use]
+pub fn carried_withheld(name: &str, kind: ReportKind, message: String) -> crate::error::GitError {
+    crate::error::GitError::Withheld {
+        message,
+        report: Box::new(WriteReport::about(kind, name, String::new())),
     }
 }
 
@@ -421,5 +480,41 @@ mod tests {
             "c74dfaf is not in the history of the current branch",
             "the log holds the sentence and nothing about a command"
         );
+    }
+
+    /// git's own refusals of a `stash apply` (unpack-trees at the minimum):
+    /// the two that would overwrite work here say so; one that would lose or
+    /// remove untracked files, and the minimum's silence over an index lock,
+    /// are left to git's words.
+    #[test]
+    fn a_carried_refusal_says_overwritten_only_where_git_does() {
+        let kind = |stderr: &str| {
+            let out = crate::process::GitOutput {
+                code: 1,
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            };
+            let err = carried_refused("topic", "git stash apply".to_string(), &out);
+            err.report().expect("a report").kind
+        };
+        assert_eq!(
+            kind(
+                "error: Your local changes to the following files would be overwritten by merge:\n\ta.txt\n"
+            ),
+            ReportKind::CarriedInTheWay
+        );
+        assert_eq!(
+            kind(
+                "error: The following untracked working tree files would be overwritten by merge:\n\tn.txt\n"
+            ),
+            ReportKind::CarriedInTheWay
+        );
+        assert_eq!(
+            kind(
+                "error: The following untracked working tree files would be removed by merge:\n\tx\n"
+            ),
+            ReportKind::CarriedRefused
+        );
+        assert_eq!(kind(""), ReportKind::CarriedRefused);
     }
 }
