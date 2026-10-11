@@ -131,6 +131,9 @@ Item {
             dropCommitItem: harness.commitRowMenu.dropItem
             tagHereCommitItem: harness.commitRowMenu.tagHereItem
             stashDeleteItem: harness.commitRowMenu.stashDropItem
+            carriedMenu: harness.commitRowMenu.carriedRowMenu
+            carriedOpenItem: harness.commitRowMenu.carriedOpenItem
+            carriedApplyItem: harness.commitRowMenu.carriedApplyItem
             resetMenu: harness.commitRowMenu.resetSubmenu
             commitBranchCard: harness.commitRowMenu.branchCard
             commitTagCard: harness.commitRowMenu.tagCard

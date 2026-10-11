@@ -30,7 +30,7 @@ QtObject {
                 "delete-upstream-go", "delete-both-go",
                 "delete-branch-chip", "delete-stood-down",
                 "set-upstream-go", "set-upstream-enter", "publish-upstream",
-                "delete-stash-row", "stash-apply-row", "stash-pop-row",
+                "delete-stash-row", "stash-apply-row", "stash-pop-row", "carried-apply", "carried-apply-refused",
                 "branch-at-tag", "dbl-local", "dbl-remote", "ref-list-pick", "graph-rename", "move-branch",
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
                 "fold-first-commit", "drop-last-commit",
@@ -225,6 +225,11 @@ QtObject {
                 // Three arrivals behind the press, each from a different tree: the worktree's row, its file list, and
                 // one of its files. `carried-stand` waits out the first two and the rows built from them.
                 "carried-read", "carried-stand",
+                // The row's menu has to be up before it is read or pressed; the apply waits out the tree read behind
+                // its write, the refusal the bar its answer brings down (`barrierNotice`).
+                "carried-menu", "carried-apply", "carried-apply-refused",
+                // The bar comes down before its place word can be pressed, and the panel it raises is built after.
+                "notice-link",
                 "divider-refuse", "commands-fail-shut", "commands-escape",
                 "commands-select", "commands-copy", "commands-sweep",
                 "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",

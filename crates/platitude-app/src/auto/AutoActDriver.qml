@@ -64,6 +64,10 @@ Item {
     property AppMenuItem dropCommitItem
     property AppMenuItem tagHereCommitItem
     property AppMenuItem stashDeleteItem
+    /// The menu on another worktree's uncommitted row and its two rows (`CommitRowMenu.carriedRowMenu`).
+    property AppMenu carriedMenu
+    property AppMenuItem carriedOpenItem
+    property AppMenuItem carriedApplyItem
     property AppMenu resetMenu
     property AppMenu commitBranchCard
     property AppMenu commitTagCard

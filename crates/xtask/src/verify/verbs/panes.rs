@@ -445,6 +445,16 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
                 said=The rename did not finish",
     },
+    // The one report whose own line names the command log
+    // (`Words.reportPlace`), raised through the same door: its place word
+    // pressed, the panel coming up marked. Nothing ran, so the panel was
+    // down before the press and `open=` is the press's own doing; `bar=true`
+    // is the report still standing over the graph.
+    Verb {
+        name: "notice-link",
+        when: &[],
+        plain: "notice_link pressed=true before=false open=true lit=true bar=true",
+    },
     // Another worktree's uncommitted work, as a pane of its own.
     // `files=` / `tally=` agree only because both fold a path's two sides
     // into one (`Bucket::Whole` / `Kinds::folded`); `cut=` / `tip=` are a
@@ -496,5 +506,51 @@ pub(super) const TABLE: &[Verb] = &[
             ),
         ],
         plain: "carried_stand worktree=topic files=1 litRows=0 reading=false corner=true folderPath=src",
+    },
+    // The menu on another worktree's uncommitted row: its door, named by
+    // the worktree's folder, and the apply — read off the rows as drawn, so
+    // `apply=true held=false` is the row there and live, not greyed.
+    Verb {
+        name: "carried-menu",
+        when: &[(
+            Arg::Is("here"),
+            "carried_menu open=true apply=true held=false name=here",
+        )],
+        plain: "carried_menu open=true apply=true held=false name=",
+    },
+    // That worktree's work applied here, landing as `stash apply` lands:
+    // `here=` is this tree's row after it and `there=` the row it came from,
+    // still drawn with what it had (it is only read). `here` stands on this
+    // window's commit and holds two untracked files; `topic` stands on
+    // another branch with a file this one never had, so the apply lands on
+    // a conflict — a landing, not a refusal (`notice=false`).
+    Verb {
+        name: "carried-apply",
+        when: &[
+            (
+                Arg::Is("here"),
+                "carried_apply notice=false here=2,1,0,0,0,0 there=2,0,0,0,0,0 conflicts=0",
+            ),
+            (
+                Arg::Is("topic"),
+                "carried_apply notice=false here=0,1,0,0,0,1 there=0,1,0,0,0,0 conflicts=1",
+            ),
+        ],
+        plain: "carried_apply notice=false",
+    },
+    // The same apply git turns down over a file changed here too: a report
+    // in the worktree's yellow, its name behind the tree mark inside the
+    // heading (`mark=true`), our own second line (`why=true`), and the
+    // command log left shut (`log=false`).
+    Verb {
+        name: "carried-apply-refused",
+        when: &[(
+            Arg::Starts("an-extremely-long"),
+            "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
+             said=Changes from an-extremely-long-worktree-folder-name-for-the-edge-case \
+             were not applied mark=true",
+        )],
+        plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
+                said=Changes from",
     },
 ];

@@ -56,6 +56,11 @@ Item {
             stalePartTimer.path = arg.substring(cut + 1)
             page.openDiff(stalePartTimer.bucket, stalePartTimer.path, "")
             stalePartTimer.start()
+        } else if (act === "notice-link") {
+            // The one report whose own line names the command log (`Words.reportPlace`), raised through the page's door
+            // as `report-tone` raises one, its place word pressed once the bar is down.
+            page.showReport("carried-refused", "", "topic", "")
+            noticeLinkTimer.start()
         } else if (act === "report-tone") {
             // Through the page's door (`showReport`) with only the kind: each kind's dress is proven in
             // `tests/qml/tst_reportdress.qml`, and this proves the door carries it through to the bar.
@@ -137,6 +142,11 @@ Item {
         } else if (act === "carried-stand") {
             // The same pane with nothing read yet — the argument is the worktree, as above.
             carriedStandTimer.start()
+        } else if (act === "carried-menu" || act === "carried-apply" || act === "carried-apply-refused") {
+            // The menu on that worktree's uncommitted row — the argument is the worktree, as above — and, for the
+            // two that apply, its work brought here.
+            carriedMenuTimer.applying = act !== "carried-menu"
+            carriedMenuTimer.start()
         } else if (act === "wip-tally") {
             // The kinds must add up to `rows` (`status::Kinds` counts rows); a drift means two statuses were read.
             page.showWip()
@@ -436,6 +446,120 @@ Item {
                               + " corner=" + gitCorner.visible
                               + " folderPath=" + carriedStandTimer.folderPath()
                               + " room=" + Math.round(gitCorner.roomLeft))
+            driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=notice-link: the notice bar's place word pressed, and the panel it names coming up marked
+    // (デザイン規約 §hover のツールチップ「送った先は名乗る」) — as `fetch-tip-link` presses a tip's. Nothing ran, so
+    // the panel is down before the press, and `open=` is the press's own doing.
+    SampleTimer {
+        id: noticeLinkTimer
+        property bool pressed: false
+        /// Whether the panel stood before the press — read at the press, so `open=` is shown to be the press's doing.
+        property bool openBefore: false
+        onTriggered: {
+            if (!noticeLinkTimer.pressed) {
+                if (!page.noticeCard.settled) {
+                    Awaited.at(Harness.autoAct, "bar")
+                    return
+                }
+                noticeLinkTimer.pressed = true
+                noticeLinkTimer.openBefore = page.commandsOpen
+                if (!page.noticeCard.pressDetailLink()) {
+                    noticeLinkTimer.stop()
+                    Harness.report("notice_link pressed=false")
+                    driver.complete()
+                }
+                return
+            }
+            // The panel is built as it is raised (`RepoPage.commandsSeat`), so wait for it to exist.
+            if (!page.commandsOpen || page.commandsPane === null) {
+                Awaited.at(Harness.autoAct, "log")
+                return
+            }
+            noticeLinkTimer.stop()
+            Harness.report("notice_link pressed=true before=" + noticeLinkTimer.openBefore
+                              + " open=" + page.commandsShown
+                              + " lit=" + page.commandsPane.attention
+                              + " bar=" + page.noticeCard.open)
+            driver.complete()
+        }
+    }
+    // Another worktree's uncommitted row right-clicked through the row itself (`GraphRowDelegate.askMenu`), its menu
+    // waited for up; the apply verbs then press the menu's row as a click does (`AppMenuItem.triggered`) and wait for
+    // what that leaves — this tree read again, or the bar a refusal comes down in (`barrierNotice`).
+    SampleTimer {
+        id: carriedMenuTimer
+        property bool applying: false
+        property bool armed: false
+        property bool pressed: false
+        /// The six tallies a row draws, in the order it draws them (`GraphModel::carried_tally`).
+        function tally(counts) {
+            return counts ? [counts.added, counts.modified, counts.deleted,
+                             counts.renamed, counts.copied, counts.conflicted].join(",") : ""
+        }
+        onTriggered: {
+            if (graphModel.finishCount === 0 || !worktree.loaded) {
+                Awaited.at(Harness.autoAct, "graph")
+                return
+            }
+            if (!carriedMenuTimer.pressed) {
+                // Asked again every beat until it stands: the row can arrive, or be rebuilt, after the first ask.
+                if (!driver.carriedMenu.visible) {
+                    Awaited.at(Harness.autoAct, "row")
+                    const row = driver.rowOfWorktree(Harness.autoActArg)
+                    const item = row < 0 ? null : graphPane.view.itemAtIndex(row)
+                    // Through the menu key's door (`GraphRowWalk.menuFromKeys`), which stands the menu at the row: a
+                    // run has no pointer, and `popup()` would put it in the window's corner.
+                    if (item !== null)
+                        KeyMenu.ask(item.mapToItem(null, 0, Theme.graphRowHeight), () => item.askMenu())
+                    return
+                }
+                if (!driver.carriedMenu.opened) {
+                    Awaited.at(Harness.autoAct, "menu")
+                    return
+                }
+                if (!carriedMenuTimer.applying) {
+                    carriedMenuTimer.stop()
+                    // Read off the rows as drawn: `apply=false` is the row taken off, `held=true` greyed.
+                    Harness.report("carried_menu open=" + driver.carriedOpenItem.visible
+                                      + " apply=" + driver.carriedApplyItem.visible
+                                      + " held=" + driver.carriedApplyItem.blocked
+                                      + " name=" + driver.carriedOpenItem.markName)
+                    driver.complete()
+                    return
+                }
+                Awaited.at(Harness.autoAct, "press")
+                if (!carriedMenuTimer.armed) {
+                    if (!driver.beginWrite(Harness.autoAct))
+                        return
+                    carriedMenuTimer.armed = true
+                }
+                // Pressed only where a hand could: the row there and not greyed (`AppMenuItem.blocked`).
+                const row = driver.carriedApplyItem
+                if (!driver.inputWent(row.visible && !row.blocked && (row.triggered(), true)))
+                    return
+                carriedMenuTimer.pressed = true
+                if (Harness.autoAct === "carried-apply-refused") {
+                    carriedMenuTimer.stop()
+                    driver.barrierNotice.start()
+                }
+                return
+            }
+            if (!driver.wroteAndSettled() || page.noticeCard.open && !page.noticeCard.settled) {
+                Awaited.at(Harness.autoAct, "landing")
+                return
+            }
+            carriedMenuTimer.stop()
+            // `here=` is this tree's own row after the apply, `there=` the row the work came from — still drawn, with
+            // what it had.
+            Harness.report("carried_apply notice=" + page.noticeCard.open
+                              + " here=" + [graphPane.view.wipAdded, graphPane.view.wipModified,
+                                            graphPane.view.wipDeleted, graphPane.view.wipRenamed,
+                                            graphPane.view.wipCopied, graphPane.view.wipConflicted].join(",")
+                              + " there=" + carriedMenuTimer.tally(
+                                  graphModel.carriedTally(driver.rowOfWorktree(Harness.autoActArg)))
+                              + " conflicts=" + worktree.conflictCount)
             driver.complete()
         }
     }
