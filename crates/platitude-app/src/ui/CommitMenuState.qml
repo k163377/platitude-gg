@@ -226,6 +226,27 @@ QtObject {
             branch, remote, GitFacts.branchOfRef(remoteRef, menuState.repoTab.remoteNames), forced, expect)
     }
 
+    /// The menu on another worktree's uncommitted row (デザイン規約 §別の worktree を読む), at `path` as the row names
+    /// it — read off the tree as `openRowMenu` reads it, and greyed while a command is out as every menu is.
+    function openCarriedMenu(path, name) {
+        const menu = menuState.menu
+        menu.releaseShape()
+        menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree
+        menu.carriedPath = path
+        menu.carriedName = name
+        menuState.standCarried()
+        menu.offerCarried()
+    }
+    /// Whether that worktree's work can be applied here: not where a conflict stands on either side — there it leaves
+    /// no telling which side to bring, and git applies nothing over one here. Both are already on screen, the row's
+    /// tally and the band's badge (デザイン規約 §メニュー「選べない行は消す」). False where the row is gone.
+    function standCarried() {
+        const menu = menuState.menu
+        const tally = menuState.graphModel.carriedTally(menuState.graphModel.carriedRowOf(menu.carriedPath))
+        menu.carriedCanApply = menuState.repoTab.state === "open" && tally !== undefined
+            && tally.conflicted === 0 && menuState.tree.conflictCount === 0
+    }
+
     function openRowMenu(oidHex) {
         menuState.menu.releaseShape()
         menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree
@@ -245,6 +266,17 @@ QtObject {
         const menu = menuState.menu
         if (menu === null || !menu.showing)
             return
+        // Another worktree's row: gone where that worktree went clean, its apply read again otherwise.
+        if (menu.carriedShowing) {
+            if (menuState.graphModel.carriedRowOf(menu.carriedPath) < 0) {
+                menu.withdraw()
+                return
+            }
+            menu.holdShape()
+            menuState.tree = menuState.worktree
+            menuState.standCarried()
+            return
+        }
         const wasStash = menuState.menuStashRef !== ""
         const aimAt = menuState.aimedAt()
         if (menuState.graphModel.rowOf(menuState.menuOid) < 0 || aimAt === ""

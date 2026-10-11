@@ -36,6 +36,8 @@ Rectangle {
     signal rowSwitchRequested(string oidHex, var chip)
     /// Another worktree's uncommitted row was opened (see `GraphList`).
     signal carriedOpenRequested(string path)
+    /// …and right-clicked (see `GraphList`).
+    signal carriedMenuRequested(string path, string name)
     /// The chip whose stacked list the page has out (null when none). Rows read it through the view
     /// (`GraphRowDelegate.listOnThisChip`).
     property var chipListAnchor: null
@@ -420,6 +422,7 @@ Rectangle {
         onRowSelected: (oidHex, atRow, modifiers) => graphArea.rowActivated(oidHex, atRow, modifiers)
         onRowSwitchRequested: (oidHex, chip) => graphArea.rowSwitchRequested(oidHex, chip)
         onCarriedOpenRequested: path => graphArea.carriedOpenRequested(path)
+        onCarriedMenuRequested: (path, name) => graphArea.carriedMenuRequested(path, name)
         onRowRenameRequested: (oidHex, chip) => graphArea.rowRenameRequested(oidHex, chip)
         onChipExpandRequested: (oidHex, atRow, records, anchor) =>
             graphArea.chipExpandRequested(oidHex, atRow, records, anchor)

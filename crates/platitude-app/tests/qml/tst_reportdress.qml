@@ -24,6 +24,11 @@ Item {
         target: bar
         signalName: "acknowledged"
     }
+    SignalSpy {
+        id: linked
+        target: bar
+        signalName: "linkAsked"
+    }
     /// Somewhere else for the focus to go, since the bar hands the pill the focus as it opens.
     Item { id: elsewhere }
 
@@ -48,6 +53,9 @@ Item {
             bar.detail = reason !== "" ? reason : Words.writeReportedWhy(kind, remote, name)
             bar.tone = Words.reportTone(kind)
             bar.markWord = Words.reportNamesWorktree(kind) ? name : ""
+            bar.markWordAt = Words.reportNamesWorktree(kind) ? Words.reportNameSeat(kind, remote) : -1
+            bar.detailPlace = reason !== "" ? "" : Words.reportPlace(kind)
+            bar.detailHref = bar.detailPlace === "" ? "" : Words.commandsHref
             bar.open = true
         }
 
@@ -89,6 +97,54 @@ Item {
             compare(Words.markSeatIn("Den Ordner topic gibt es", "topic", true), -1, "a translation that moved it: none")
             compare(Words.markSeatIn("anything", "", true), -1)
             compare(Words.roomInSentence("anything", -1, 2), "", "no seat, no room: drawn as it came")
+            // A heading's: the seat its own sentence gives the name, first or within.
+            compare(Words.reportNameSeat("worktree-kept", ""), 0)
+            compare(Words.reportNameSeat("carried-in-the-way", ""), 13)
+            compare(Words.reportNameSeat("rename", "origin"), 0)
+        }
+
+        /// Another worktree's changes not applied here: the worktree's yellow, its name behind the tree mark inside
+        /// the heading's sentence, and our own line under it — git's says which files, the log keeps it.
+        function test_changes_not_applied_name_their_worktree_inside_the_heading() {
+            for (const kind of ["carried-in-the-way", "carried-file-in-the-way", "carried-unread", "carried-refused"]) {
+                compare(Words.reportTone(kind), "warning", kind)
+                verify(Words.reportNamesWorktree(kind), kind)
+                compare(Words.writeReported(kind, "", "topic"), "Changes from topic were not applied", kind)
+            }
+            compare(Words.writeReportedWhy("carried-in-the-way"),
+                    "Uncommitted changes in this worktree would be overwritten.")
+            compare(Words.writeReportedWhy("carried-file-in-the-way"), "Files in this worktree would be overwritten.")
+            compare(Words.writeReportedWhy("carried-unread"), "Not all of its changes could be read.")
+            compare(Words.writeReportedWhy("carried-refused"), "git did not apply them — see GIT COMMANDS")
+            dress("carried-in-the-way", "", "topic", "")
+            tryVerify(() => bar.settled && bar.markShown && bar.markInk > 0)
+        }
+
+        /// The one report whose line sends the reader to the command log names it as a place to go, pressed through to
+        /// the page with the log's href; the others' lines hold nothing to press.
+        function test_a_line_sending_the_reader_to_the_log_names_it_as_a_place_to_go() {
+            linked.clear()
+            dress("carried-refused", "", "topic", "")
+            tryVerify(() => bar.settled)
+            verify(bar.pressDetailLink(), "the place word is there to press")
+            compare(linked.count, 1)
+            compare(linked.signalArguments[0][0], Words.commandsHref)
+
+            dress("carried-in-the-way", "", "topic", "")
+            tryVerify(() => bar.settled)
+            verify(!bar.pressDetailLink(), "a line naming no place has nothing to press")
+            compare(linked.count, 1)
+        }
+
+        /// The mark stands where the heading's sentence puts the name, not on the first word spelled like it: a
+        /// worktree called `from` is marked where `zzzz`, a name no word of the sentence spells, is.
+        function test_a_worktree_named_like_a_word_of_the_heading_is_marked_at_its_own_seat() {
+            dress("carried-in-the-way", "", "zzzz", "")
+            tryVerify(() => bar.settled && bar.markShown)
+            const seat = bar.markSeat.x
+            dress("carried-in-the-way", "", "from", "")
+            tryVerify(() => bar.settled && bar.markShown)
+            compare(bar.markSeat.x, seat)
         }
 
         /// A worktree that was not made: the same yellow, the same mark, in the heading the folder would have been

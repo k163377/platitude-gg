@@ -1289,6 +1289,12 @@ FocusScope {
         menu.targetName = target
         commitMenuState.openRowMenu(oidHex)
     }
+    /// The menu on another worktree's uncommitted row, which is no commit: its own (デザイン規約 §別の worktree を読む).
+    function openCarriedMenu(path, name) {
+        page.rowMenuOnList = false
+        commitMenuSeat.active = true
+        commitMenuState.openCarriedMenu(path, name)
+    }
 
     CommitMenuState {
         id: commitMenuState
@@ -1352,6 +1358,9 @@ FocusScope {
             onApplyStashRequested: selector => repoTab.applyStash(selector)
             onPopStashRequested: selector => page.popStash(selector)
             onDropStashRequested: selector => page.dropStashNow(selector)
+            // Another worktree's uncommitted row: the door its double-click opens, and its work applied here.
+            onCarriedOpenRequested: path => page.openRepositoryPathRequested(path)
+            onCarriedApplyRequested: path => repoTab.applyCarried(path)
             // The branch card's own rows, answered where the ref menu's are.
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
@@ -1604,23 +1613,32 @@ FocusScope {
     /// The one door, so a headless run handing it a kind enters the same body the answer does. `reason` is the
     /// refuser's words; empty where this end refused, and then the second line is ours (`Words.writeReportedWhy`).
     function showReport(kind, remote, name, reason) {
+        const names = Words.reportNamesWorktree(kind)
+        // Only our own line can send the reader somewhere: a refuser's words are quoted as they came.
         page.showNotice(Words.writeReported(kind, remote, name),
                         reason !== "" ? reason : Words.writeReportedWhy(kind, remote, name),
                         Words.reportTone(kind),
-                        Words.reportNamesWorktree(kind) ? name : "")
+                        names ? name : "",
+                        names ? Words.reportNameSeat(kind, remote) : -1,
+                        reason !== "" ? "" : Words.reportPlace(kind))
     }
     /// Automation only: git's answer to a write has been taken all the way — bar raised, mark down, standing questions
     /// cleared. What it was about rides the signal: a drain can bring several reports, so the tab holds none to read
     /// back.
     signal writeReported(string kind, string remote, string name)
     /// `label` is what did not happen, `detail` the refuser's words, `tone` the state colour, if any; `markWord` the
-    /// worktree's name in `label` that wears the tree mark, left out for none (`NoticeBar.markWord`).
-    function showNotice(label, detail, tone, markWord) {
+    /// worktree's name in `label` that wears the tree mark, left out for none (`NoticeBar.markWord`), and `markAt` where
+    /// the sentence put it, left out for the heading's start; `place` the word of `detail` that opens the command log,
+    /// left out for none (`NoticeBar.detailPlace`).
+    function showNotice(label, detail, tone, markWord, markAt, place) {
         // Dressed, then raised — so nothing is written on a bar the reader can see (`NoticeBar.open`).
         noticeBar.label = label
         noticeBar.detail = detail
         noticeBar.tone = tone
         noticeBar.markWord = markWord === undefined ? "" : markWord
+        noticeBar.markWordAt = markAt === undefined ? -1 : markAt
+        noticeBar.detailPlace = place === undefined ? "" : place
+        noticeBar.detailHref = noticeBar.detailPlace === "" ? "" : Words.commandsHref
         noticeBar.open = true
     }
     /// Only lowered: the words stay while the bar slides up.
@@ -2027,7 +2045,8 @@ FocusScope {
         page.commandsOpen = true
         page.commandsAttention = true
     }
-    /// The one link tooltips carry (`Words.commandsHref`); other hrefs are ignored — a tip is not a browser.
+    /// The one link tooltips and the notice bar's line carry (`Words.commandsHref`); other hrefs are ignored — a tip is
+    /// not a browser.
     function tipLinkAsked(href) {
         if (href === Words.commandsHref)
             page.raiseCommands()
@@ -3245,6 +3264,8 @@ FocusScope {
                         // takes the focus as it opens) and stands until answered — a report is only read.
                         yieldsEscape: graphPane.asking
                         onAcknowledged: page.hideNotice()
+                        // The place its line names, gone to as a tooltip's is.
+                        onLinkAsked: href => page.tipLinkAsked(href)
                     }
                     // The discard log's entry on the graph, named over it with what it would bring back and the press
                     // that does — over the graph alone, which is what it describes (P3-確認事項 §破棄記録と復元).
@@ -3293,6 +3314,7 @@ FocusScope {
                             // The same door the WORKTREES row opens: the tab stands in that worktree, where its
                             // changes can be staged.
                             onCarriedOpenRequested: path => page.openRepositoryPathRequested(path)
+                            onCarriedMenuRequested: (path, name) => page.openCarriedMenu(path, name)
                             onRowRenameRequested: (oidHex, chip) => page.startRename(oidHex, chip)
                             onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
                             namingRefused: page.graphNameRefusedWhy !== ""

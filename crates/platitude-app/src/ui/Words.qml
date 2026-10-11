@@ -211,6 +211,11 @@ QtObject {
         case "worktree-half": return qsTr("%1 was not removed completely").arg(name)
         case "worktree-not-added":
         case "worktree-folder-taken": return qsTr("%1 was not created").arg(name)
+        // Another worktree's changes, applied here from its uncommitted row: `name` is that worktree's folder.
+        case "carried-in-the-way":
+        case "carried-file-in-the-way":
+        case "carried-unread":
+        case "carried-refused": return qsTr("Changes from %1 were not applied").arg(name)
         // All seven rewrite refusals: which one it was is the line underneath.
         case "across-merge":
         case "off-branch":
@@ -276,6 +281,23 @@ QtObject {
         // says what was in the way, as the row's tip did before the press (`worktreePlaceTaken`).
         case "worktree-folder-taken":
             return qsTr("The folder is not empty.")
+        // git's own words list the files and end in advice to the terminal; the log keeps them. What stood in the way
+        // is this worktree's own work: a file changed here that they change too, or one standing where they put a
+        // file — said as the other tools say it, by what would have been lost.
+        case "carried-in-the-way":
+            return qsTr("Uncommitted changes in this worktree would be overwritten.")
+        // Turned down before git: a file here — committed or not — stands where one of their untracked files goes.
+        case "carried-file-in-the-way":
+            return qsTr("Files in this worktree would be overwritten.")
+        // There: a conflict standing, a file git would not take, or the worktree gone — found before anything was
+        // applied.
+        case "carried-unread":
+            return qsTr("Not all of its changes could be read.")
+        // Anything else git turned down (an index another tool holds, a conflict standing here): its words say why, so
+        // the line names where they are, as the fetch's tip does (デザイン規約 §リモートから取り込む).
+        //: %1 is the command log's own title.
+        case "carried-refused":
+            return qsTr("git did not apply them — see %1").arg(Words.commandsTitle)
         // The rewrite refusals live in `rewriteRefusedWhy`, which the plan's door reads too. Delegated whole: a
         // second copy of that list gets a new refusal on one side only.
         default: return Words.rewriteRefusedWhy(kind)
@@ -308,17 +330,25 @@ QtObject {
         }
     }
 
+    /// The word of a report's second line that is a place to go — the command log, for the one report whose line sends
+    /// the reader there (デザイン規約 §答えの要らない報せ) — and `""` for the rest. Its href is `commandsHref`.
+    function reportPlace(kind) {
+        return kind === "carried-refused" ? Words.commandsTitle : ""
+    }
+
     /// Whether a report's heading names a worktree — the name then wears the tree mark (`NoticeBar.markWord`,
     /// デザイン規約 §ref の種別「名前の印」).
     function reportNamesWorktree(kind) {
         return kind === "worktree-kept" || kind === "worktree-half"
             || kind === "worktree-not-added" || kind === "worktree-folder-taken"
+            || kind.startsWith("carried-")
     }
 
     /// The colour a report's own hairline wears: `warning` while the gesture is still going (the rename box is open,
     /// or a half-done rename is left standing), `danger` once it is over (デザイン規約 §答えの要らない報せ). A worktree
     /// git would not remove is `warning` too: the worktree still stands, with what kept it there. So is one that was
     /// not made: what stood in its way was there before the press, which the menus warn of (デザイン規約 §答えの要らない報せ).
+    /// So are another worktree's changes not applied: nothing was written, and they are still there to try again.
     function reportTone(kind) {
         return kind === "rename" || kind === "half-rename" || Words.reportNamesWorktree(kind) ? "warning" : "danger"
     }
@@ -411,6 +441,12 @@ QtObject {
             return -1
         const beside = atEnd ? sentence.charAt(seat - 1) : sentence.charAt(word.length)
         return beside === "" || beside === " " ? seat : -1
+    }
+    /// Where a report's heading puts the worktree it names — first (`<name> was not removed`) or within
+    /// (`Changes from <name> were not applied`): the `%1` seat of its own sentence, never searched for, as
+    /// `nameInSentence` (a worktree called `from` would be found in `Changes from`). -1 for a heading with no seat.
+    function reportNameSeat(kind, remote) {
+        return Words.writeReported(kind, remote, "%1").indexOf("%1")
     }
     /// The same sentence with `spaces` of room opened at `seat` (`markSeatIn`), for a drawn mark to stand in
     /// (`SharedToolTip`; where the gap lands is `CardText.charRect`'s to answer). `""` for no seat, so the caller draws

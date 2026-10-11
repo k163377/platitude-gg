@@ -129,6 +129,8 @@ AppListView {
     /// Another worktree's uncommitted row was opened: the repository's tab moves onto that worktree
     /// (`tabs::strip::landing_for`).
     signal carriedOpenRequested(string path)
+    /// …and right-clicked: its menu, on that worktree, named by its folder.
+    signal carriedMenuRequested(string path, string name)
     /// A second click, late enough to rule out a double-click: rename the chip's first ref, whatever its kind.
     signal rowRenameRequested(string oidHex, var chip)
     signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)

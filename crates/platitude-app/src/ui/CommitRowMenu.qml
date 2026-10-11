@@ -3,9 +3,10 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// The right-click on a graph row: one menu for a commit, another for a stash (デザイン規約 §グラフ行の右クリック). The
-// first level acts on the row's commit; the cards at the foot act on the name the chip draws, or the name pressed in
-// the chip's stacked list.
+// The right-click on a graph row: one menu for a commit, another for a stash, a third for another worktree's
+// uncommitted row (デザイン規約 §グラフ行の右クリック) — this worktree's own uncommitted row has none. The first level
+// acts on the row's commit; the cards at the foot act on the name the chip draws, or the name pressed in the chip's
+// stacked list.
 //
 // Nothing here is looked up and nothing is run: answers arrive as plain values, held still from the moment the menu
 // opens until a command it waited for has ended (`CommitMenuState`, デザイン規約 §メニュー), and presses leave as
@@ -72,6 +73,11 @@ Item {
     property string landedDelete: ""
     property string checkedBranch: ""
     property string checkedMerged: ""
+    /// Another worktree's uncommitted row the third menu stands on: where that worktree is (as its row names it), its
+    /// folder's name, and whether its work can be applied here (`CommitMenuState.standCarried`).
+    property string carriedPath: ""
+    property string carriedName: ""
+    property bool carriedCanApply: false
 
     /// Move the worktree to the row's name, by the road a double-click takes (`RepoPage.switchToRef`).
     signal switchRequested(string kind, string name)
@@ -107,6 +113,9 @@ Item {
     signal worktreeHereRequested(string oidHex)
     signal worktreeAddRequested(string mode, string branch, string start, string path, string name)
     signal removeWorktreeRequested(string path, string name, string holds)
+    /// The third menu's two: that worktree opened, by the road its row's double-click takes, and its work applied here.
+    signal carriedOpenRequested(string path)
+    signal carriedApplyRequested(string path)
     /// The menu went away — and the stacked list it may have been standing on is the pointer's to answer for again.
     signal dismissed()
     /// A level of this menu waited for a git command and it has ended with the menu up: the page reads again what the
@@ -115,10 +124,12 @@ Item {
 
     /// Either menu is on screen — what the page reads to hide hover behind it. Read this, not `visible`, which comes
     /// back stale from another file (rules-refs/app-ui.md「メニューが立っている間、裏の hover は伏せる」).
-    readonly property bool showing: commitMenu.visible || stashMenu.visible
-    /// Every level of this menu: the two menus, the reset card and the three cards at the foot.
-    readonly property var levels: [stashMenu, commitMenu, resetMenu, branchCommitMenu, worktreeCommitMenu,
-                                   tagCommitMenu]
+    readonly property bool showing: commitMenu.visible || stashMenu.visible || carriedMenu.visible
+    /// Whether the one standing is the third, on another worktree's uncommitted row (`CommitMenuState.standAgain`).
+    readonly property bool carriedShowing: carriedMenu.visible
+    /// Every level of this menu: the three menus, the reset card and the three cards at the foot.
+    readonly property var levels: [stashMenu, carriedMenu, commitMenu, resetMenu, branchCommitMenu,
+                                   worktreeCommitMenu, tagCommitMenu]
 
     /// The automation's handles into these rows, an automation-only exposure the same as `GraphPane.view` is
     /// (rules-refs/app-ui.md「製品の部品はハーネスへ答える相手を丸ごと渡す」).
@@ -137,6 +148,9 @@ Item {
     readonly property alias branchCard: branchCommitMenu
     readonly property alias worktreeCard: worktreeCommitMenu
     readonly property alias tagCard: tagCommitMenu
+    readonly property alias carriedRowMenu: carriedMenu
+    readonly property alias carriedOpenItem: carriedOpenRow
+    readonly property alias carriedApplyItem: carriedApplyRow
 
     anchors.fill: parent
 
@@ -156,6 +170,9 @@ Item {
     // closes them — but for a row the command it waited for took away (`CommitMenuState.standAgain`).
     function offerStash() {
         stashMenu.offer()
+    }
+    function offerCarried() {
+        carriedMenu.offer()
     }
     /// `facts` is what the cards stand on, read where the models are (`CommitMenuState.cardFacts`): `branch` and
     /// `tag`, each already aimed at the target or emptied because the target is the other's kind, `worktree` — the
@@ -179,9 +196,10 @@ Item {
         const tagged = rowMenu.targetKind === "tag"
         tagCommitMenu.standOn(tagged ? "tag" : "", tagged ? rowMenu.targetName : "", rowMenu.oid, facts.tag)
     }
-    /// The commit or the stash the menu stands on is gone with the command it waited for: nothing left to act on.
+    /// The commit, the stash or the other worktree's work the menu stands on is gone with the command it waited for:
+    /// nothing left to act on.
     function withdraw() {
-        (stashMenu.visible ? stashMenu : commitMenu).dismiss()
+        (stashMenu.visible ? stashMenu : carriedMenu.visible ? carriedMenu : commitMenu).dismiss()
     }
 
     AppMenu {
@@ -210,6 +228,34 @@ Item {
                 stashDeleteItem.closeMenu()
                 rowMenu.dropStashRequested(rowMenu.stashRef)
             }
+        }
+    }
+
+    // Another worktree's uncommitted row: its door, then its work brought here (デザイン規約 §別の worktree を読む).
+    AppMenu {
+        id: carriedMenu
+        heldReason: rowMenu.heldReason
+        runningWhy: rowMenu.runningWhy
+        onWaitEnded: rowMenu.waitEnded()
+        onClosed: rowMenu.dismissed()
+        // The row's double-click, in the words and seat a branch another worktree holds has (`switchCommitItem`).
+        AppMenuItem {
+            id: carriedOpenRow
+            //: The row that leads to the worktree whose uncommitted changes these are; the folder's name follows it.
+            text: qsTr("Open")
+            nameMark: "tree"
+            nameMarkTint: Theme.success
+            markName: rowMenu.carriedName
+            onTriggered: rowMenu.carriedOpenRequested(rowMenu.carriedPath)
+        }
+        AppMenuSeparator {}
+        // Words, not a command: it lands as `stash apply` lands, but no one command a reader would type does this
+        // (デザイン規約 §git 用語のコード表記).
+        AppMenuItem {
+            id: carriedApplyRow
+            text: qsTr("Apply changes to this worktree")
+            offered: rowMenu.carriedCanApply
+            onTriggered: rowMenu.carriedApplyRequested(rowMenu.carriedPath)
         }
     }
 

@@ -555,9 +555,19 @@ Item {
         // **A right-click takes the choice down to this row**: the menu acts on one commit, and several left
         // highlighted would offer to act on all of them (デザイン規約 §複数のコミットを選ぶ).
         rowItem.claimRow(Qt.NoModifier)
-        // The WIP row is not a commit, so it has no menu. **One menu wherever along the row the press landed**:
-        // its rows are about this commit, the cards at its foot about `menuChip` (デザイン規約 §グラフ行の右クリック)
-        // — unlike a rest, a right-click has nothing to divide (`partAt`).
+        // Another worktree's uncommitted row has a menu of its own: its door and its work brought here
+        // (デザイン規約 §別の worktree を読む). Asked of the model by row, as the double-click does — every uncommitted row
+        // carries the same all-zero id.
+        if (rowItem.carried) {
+            const view = rowItem.ListView.view
+            const path = view.model.carriedPath(rowItem.index)
+            if (path !== "")
+                view.carriedMenuRequested(path, rowItem.carriedName)
+            return
+        }
+        // This worktree's own uncommitted row is not a commit, so it has no menu. **One menu wherever along the row the
+        // press landed**: its rows are about this commit, the cards at its foot about `menuChip`
+        // (デザイン規約 §グラフ行の右クリック) — unlike a rest, a right-click has nothing to divide (`partAt`).
         if (!rowItem.isWip)
             rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.menuChip)
     }

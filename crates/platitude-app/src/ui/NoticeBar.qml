@@ -18,9 +18,26 @@ Rectangle {
     /// Which state, if any, this report is in — `danger` / `warning` / empty (`Words.reportTone`).
     property string tone: ""
     /// The word in the heading that is a worktree's name, which wears the tree mark in front of it (デザイン規約
-    /// §ref の種別「名前の印」); empty for none. Set in the heading's own text, so a translation that moves the word
-    /// leaves the sentence plain (`Words.roomInSentence`).
+    /// §ref の種別「名前の印」); empty for none. Set in the heading's own text at the seat its sentence gives it
+    /// (`markWordAt`), so a translation that moves the name moves the mark with it (`Words.roomInSentence`).
     property string markWord: ""
+    /// Where in the heading that name stands (`Words.reportNameSeat`); -1 for the heading's start.
+    property int markWordAt: -1
+    /// The one word of `detail` that is a place to go, and where (デザイン規約 §hover のツールチップ「2 行目の中の 1 語は
+    /// 行き先にできる」, `Words.commandsHref`); empty for none.
+    property string detailPlace: ""
+    property string detailHref: ""
+    /// That word was pressed; the page goes there (`RepoPage.tipLinkAsked`).
+    signal linkAsked(string href)
+    /// Automation (`PGG_AUTO_ACT=notice-link`): presses the place word at its own signal — the glyphs are the one part
+    /// a run cannot press (`Main.pressTipLink`). Answers whether there was one to press.
+    function pressDetailLink() {
+        // Only a line that drew its link has one to press: the place word missing from the sentence leaves it plain.
+        if (bar.detailPlace === "" || bar.detailHref === "" || !detailLink.visible || detailLink.markup === "")
+            return false
+        bar.linkAsked(bar.detailHref)
+        return true
+    }
     /// Whether the report stands. **The words stay put while the bar goes back up** (`AskBar.open`).
     property bool open: false
     /// Whether Escape goes to something standing above this report — two enabled `StandardKey.Cancel` shortcuts in
@@ -102,8 +119,12 @@ Rectangle {
                 readonly property int markRoom:
                     bar.markWord === "" || spaceRuler.advanceWidth <= 0
                     ? 0 : Math.ceil(headMark.inkWidth / spaceRuler.advanceWidth)
-                /// Where the name stands: a heading opens with it (`Words.markSeatIn`).
-                readonly property int markAt: Words.markSeatIn(bar.label, bar.markWord, false)
+                /// Where the name stands in the heading: the seat its sentence gives it, checked against the word, else
+                /// the heading's start (`Words.markSeatIn`) — a heading that does not hold it there stays plain.
+                readonly property int markAt: bar.markWordAt < 0 ? Words.markSeatIn(bar.label, bar.markWord, false)
+                    : bar.markWord !== ""
+                      && bar.label.substring(bar.markWordAt, bar.markWordAt + bar.markWord.length) === bar.markWord
+                    ? bar.markWordAt : -1
                 /// Where that gap came out (empty when none). One binding over its inputs, since `charRect` is a call
                 /// (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
                 readonly property rect markSeat: {
@@ -142,10 +163,25 @@ Rectangle {
             Label {
                 id: detailWord
                 Layout.fillWidth: true
+                visible: bar.detailPlace === ""
                 text: bar.detail
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
                 wrapMode: Text.Wrap
+            }
+            // A line naming a place to go: a `CardText`, the one field whose words can carry a link (as
+            // `SharedToolTip`), the place in the tip's dress — `textMuted`, `textSecondary` under the pointer, underlined.
+            CardText {
+                id: detailLink
+                Layout.fillWidth: true
+                visible: bar.detailPlace !== ""
+                text: bar.detail
+                markup: bar.detailPlace === "" ? ""
+                        : Words.placeInSentence(bar.detail, bar.detailPlace, bar.detailHref,
+                                                detailLink.pointedLink !== "" ? Theme.textSecondary : Theme.textMuted)
+                color: Theme.textSecondary
+                pixelSize: Theme.fontSm
+                onLinkAsked: href => bar.linkAsked(href)
             }
         }
         Rectangle {

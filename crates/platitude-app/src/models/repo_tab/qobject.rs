@@ -971,6 +971,15 @@ impl RepoTab {
         self.ask_session(|s| s.stash_apply(selector.clone()));
     }
 
+    /// Another worktree's uncommitted work, at `path` as its row names it,
+    /// applied here as `git stash apply` would apply it (デザイン規約
+    /// §別の worktree を読む). Its refusal is a report the page raises like
+    /// any other.
+    #[qslot]
+    fn apply_carried(&mut self, path: String) {
+        self.ask_session(|s| s.apply_carried(path.clone()));
+    }
+
     /// `git stash drop` (destructive): the entry's row goes at the press.
     #[qslot]
     fn drop_stash(&mut self, selector: String) {

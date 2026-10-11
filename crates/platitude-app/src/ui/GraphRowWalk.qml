@@ -77,7 +77,8 @@ Item {
         // The rows a move brought on are built at the next polish; the menu needs this one now.
         walk.view.forceLayout()
         const item = walk.view.itemAtIndex(row)
-        if (!item || item.isWip)
+        // This worktree's own uncommitted row has no menu; another worktree's has (`GraphRowDelegate.askMenu`).
+        if (!item || item.isWip && !item.carried)
             return false
         KeyMenu.ask(item.mapToItem(null, 0, Theme.graphRowHeight), () => item.askMenu())
         return true

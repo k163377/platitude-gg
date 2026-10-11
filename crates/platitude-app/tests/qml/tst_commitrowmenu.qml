@@ -52,6 +52,8 @@ Item {
             root.asked = "delete-remote-tag " + remote + " " + tag + " " + expect
         onDeleteRemoteRequested: (remoteRef, expect) => root.asked = "delete-remote " + remoteRef + " " + expect
         onWorktreeHereRequested: oidHex => root.asked = "worktree-here " + oidHex
+        onCarriedOpenRequested: path => root.asked = "carried-open " + path
+        onCarriedApplyRequested: path => root.asked = "carried-apply " + path
         onWorktreeAddRequested: (mode, branch, start, path, name) =>
             root.asked = "worktree-add " + mode + " " + branch + " " + start + " " + path + " " + name
     }
@@ -306,6 +308,42 @@ Item {
             verify(!menu.hardResetRow.completeHold(), "and its rows take no press")
             menu.canMoveBranch = true
             verify(!menu.hardResetRow.withdrawn, "back on offer, back live")
+        }
+
+        /// Another worktree's uncommitted row has a menu of its own — its door named by the folder, and the apply, both
+        /// handing up the path the row names — and it waits as the others do: raised under a command, every row greys
+        /// and the end is said; stood again, an apply that stopped applying greys where it is; and a withdrawal takes
+        /// this menu down, not the commit's (`CommitMenuState.standAgain`).
+        function test_the_carried_row_menu_waits_and_withdraws_as_the_others() {
+            menu.carriedPath = "C:/w/topic"
+            menu.carriedName = "topic"
+            menu.carriedCanApply = true
+            menu.runningWhy = Words.otherCommandRunning
+            menu.offerCarried()
+            verify(menu.carriedShowing)
+            const under = root.rowsOf(menu.carriedRowMenu)
+            compare(under.rows, 2, "the door and the apply")
+            compare(under.greyed, 2, "every one waiting")
+            menu.runningWhy = ""
+            compare(root.rowsOf(menu.carriedRowMenu).greyed, 0, "back the moment it ends")
+            verify(waitEnded.count > 0, "which says so")
+            compare(menu.carriedOpenItem.markName, "topic")
+
+            menu.holdShape()
+            menu.carriedCanApply = false
+            verify(menu.carriedApplyItem.withdrawn, "an apply that stopped applying greys where it is")
+            menu.withdraw()
+            verify(!menu.carriedShowing, "the withdrawal takes this menu down")
+            menu.releaseShape()
+
+            menu.carriedCanApply = true
+            menu.offerCarried()
+            menu.carriedApplyItem.triggered()
+            compare(root.asked, "carried-apply C:/w/topic")
+            menu.offerCarried()
+            menu.carriedOpenItem.triggered()
+            compare(root.asked, "carried-open C:/w/topic")
+            menu.carriedRowMenu.dismiss()
         }
 
         /// Only a command running as the menu opened is waited for: one started under a menu already up — the branch
