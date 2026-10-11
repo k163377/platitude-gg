@@ -215,7 +215,15 @@ async fn an_edit_stop_says_so_and_names_the_commit_it_sits_on() {
     assert!(matches!(outcome, RebaseOutcome::Stopped), "{outcome:?}");
 
     let (progress, stop) = integrate::rebase_standing(&repo.path.join(".git"));
-    assert!(stop.editing, "the amend marker is what says edit");
+    // A step git could not carry out stands the same way, the step put back
+    // in the todo and no marker: another process holding `c.txt` while the
+    // onto checkout removes it leaves it untracked, and the edit's
+    // fast-forward will not write over it.
+    assert!(
+        stop.editing,
+        "the amend marker is what says edit; git stood here:\n{}",
+        repo.git(&["status"])
+    );
     assert!(!stop.oid.is_empty(), "git names the commit it stopped on");
     assert_eq!(
         progress.map(|p| (p.current, p.total)),
