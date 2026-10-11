@@ -90,12 +90,13 @@ SlimField {
     // Why Enter did nothing (規約 §hover のツールチップ). Asks `visible`, not focus: the reparent's keyboard hand-off
     // lands inside this binding and Qt drops it as a loop
     // (rules-refs/app-ui.md「添付 `ToolTip.visible` の式が読むのは `visible`」).
-    ToolTip.visible: box.refused && box.visible && box.refusedWhy !== ""
+    ToolTip.visible: box.tipTyped
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: box.refusedWhy
-    /// That tip answers what is typed, not a hand: a held scroll bar leaves it standing (`SharedToolTip.tipTyped`) —
-    /// in the folded rail's peek the box stays open while the peek's own bar is used to look through the names.
-    readonly property bool tipTyped: true
+    /// That tip answers what is typed, not a hand: it stands until the typing changes it (`SharedToolTip.typedAsker`) —
+    /// a hand walking elsewhere, another target's hover and a held scroll bar leave it standing (in the folded rail's
+    /// peek the box stays open while the peek's own bar is used to look through the names).
+    readonly property bool tipTyped: box.refused && box.visible && box.refusedWhy !== ""
 
     /// Where the box came out (PGG_AUTO_ACT=nav-branch-box / nav-rename-box): a clipped or scrolled-away box is
     /// nothing a picture answers.

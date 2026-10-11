@@ -65,6 +65,41 @@ Item {
         ToolTip.visible: onName.hovered || onAside.hovered
     }
 
+    // A name box's refusal (`NavNameBox` / the graph's box): asked for by what is typed, not by a hand.
+    Item {
+        id: typedBox
+        x: 320
+        y: 20
+        width: 60
+        height: 24
+        property bool refused: false
+        readonly property bool tipTyped: typedBox.refused
+        ToolTip.text: "A branch called that already exists"
+        ToolTip.delay: Metrics.tipDelayMs
+        ToolTip.visible: typedBox.tipTyped
+    }
+    // The same, wider than its words: what decides where the box stands across it. Off the window's edge, which the
+    // seat keeps a step clear of.
+    Item {
+        id: wideTyped
+        x: 40
+        y: 190
+        width: 300
+        height: 24
+        property bool refused: false
+        readonly property bool tipTyped: wideTyped.refused
+        ToolTip.text: "A name is needed"
+        ToolTip.delay: Metrics.tipDelayMs
+        ToolTip.visible: wideTyped.tipTyped
+    }
+
+    // Every time the one box comes out, put back by the beat included.
+    SignalSpy {
+        id: tipShows
+        target: shared.sharedTip
+        signalName: "aboutToShow"
+    }
+
     TestCase {
         name: "TipHandoff"
         when: windowShown
@@ -148,6 +183,56 @@ Item {
             mouseMove(root, aside.x + tip.x + tip.width / 2, at)
             tryVerify(() => shared.pointed && tip.visible, undefined,
                       "a hand that only went sideways is inside the box, and the box is still out")
+        }
+
+        // A refusal of what is typed stands until the typing changes it (デザイン規約 §hover のツールチップ「入力の
+        // 拒否への補足は一律」): a hand resting on rows that ask for their own boxes, and a hand walking into the box and
+        // out again, leave it up with its own words; the typing that ends it takes it down for good.
+        function test_f_a_refusal_of_typing_stands_until_the_typing_changes() {
+            const tip = shared.sharedTip
+            try {
+                typedBox.refused = true
+                tryVerify(() => tip.visible && tip.parent === typedBox, undefined, "the refusal puts its box out")
+                // The row asks the moment the hand is on it, and Qt moves the one box over there on the spot; the
+                // hand-over that answers it runs a turn later (`SharedToolTip.handOver`).
+                mouseMove(root, 150, middleOf(rowA))
+                tryVerify(() => onA.hovered, undefined, "the row is asking for its own box")
+                tryVerify(() => tip.parent === typedBox, undefined, "the box went back to the refusal")
+                verify(tip.visible, "and never came down on the way")
+                compare(tip.text, typedBox.ToolTip.text, "with its own words")
+                mouseMove(root, typedBox.x + tip.x + tip.width / 2, typedBox.y + tip.y + tip.height / 2)
+                tryVerify(() => shared.pointed, undefined, "the hand inside the box")
+                // Leaving the box starts the beat that takes a hover's box down where nothing wants it.
+                mouseMove(root, root.width - 1, root.height - 1)
+                tryVerify(() => !shared.pointed && !shared.keep.running, undefined, "the beat has run out")
+                verify(tip.visible && tip.parent === typedBox, "a hand that left the box does not take it down")
+                tipShows.clear()
+                typedBox.refused = false
+                tryVerify(() => !tip.visible && !shared.keeping, undefined, "typing that ends the refusal takes it down")
+                compare(tipShows.count, 0, "for good: the fall is the typing's, not a hand walking into the box")
+            } finally {
+                typedBox.refused = false
+            }
+        }
+
+        // A refusal of what is typed stands on its field, not the hand: no hand asked for it, and the hand may be
+        // anywhere in the window — here, the far corner `init` left it on (デザイン規約 §hover のツールチップ「入力の
+        // 拒否への補足は一律」).
+        function test_g_a_refusal_of_typing_stands_on_its_field() {
+            const tip = shared.sharedTip
+            try {
+                wideTyped.refused = true
+                tryVerify(() => tip.visible && tip.parent === wideTyped, undefined, "the refusal puts its box out")
+                verify(tip.width < wideTyped.width, "a box narrower than its field, so where it stands across is asked")
+                const ground = tip.background
+                const corner = ground.mapToItem(root, 0, 0)
+                verify(Math.abs(corner.x - wideTyped.x) <= 1,
+                       "from the field's left edge, not the hand at the corner: " + corner.x + " for " + wideTyped.x)
+                verify(Math.abs(corner.y + ground.height - wideTyped.y) <= 1,
+                       "flush on the field's top: " + (corner.y + ground.height) + " for " + wideTyped.y)
+            } finally {
+                wideTyped.refused = false
+            }
         }
 
         // A target that moved while its box was down, under a hand back on the pixel it rested on: nothing the seat's

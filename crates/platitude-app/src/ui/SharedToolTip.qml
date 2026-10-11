@@ -119,11 +119,15 @@ Item {
         const at = shared.sharedTip.parent
         return at !== null && at.tipRowSide !== undefined ? at.tipRowSide : ""
     }
-    /// The target's tip answers what is being typed, not a hand (`NavNameBox`'s refusal), so a held scroll bar leaves
-    /// it be (`yieldToBar`). Read off the target like `tipPlace`.
-    readonly property bool tipTyped: {
-        const at = shared.sharedTip.parent
-        return at !== null && at.tipTyped === true
+    /// `at` is a field whose tip answers what is typed, not a hand (the name boxes' refusal): it declares `tipTyped`,
+    /// its own word, true exactly while it asks — Qt's attached `ToolTip.visible` reads false the moment another target
+    /// has borrowed the box. That box stands until the typing changes it: a held scroll bar (`yieldToBar`), a hand gone
+    /// (`wanted`) and another target's ask (`handOver`) all leave it be, and its fall is the typing's to make, never a
+    /// hand walking into it. No hand asked for it, so it stands on the field (`seatX`, `readAnchor`)
+    /// (デザイン規約 §hover のツールチップ「入力の拒否への補足は一律」). Read live off the target, never through a
+    /// binding of this item's: one here can trail the ask that opened the box in the same change.
+    function typedAsker(at) {
+        return at !== null && at.tipTyped !== undefined
     }
     /// The target has taken its ask back for a reason of its own — a tab taken up (`TabItemDelegate.tipWithheld`) —
     /// so the fall is no hand walking into the box, and the box goes for good. Not left to the beat: `wanted` reads a
@@ -158,10 +162,13 @@ Item {
         }
         if (shared.tipRowSide !== "")
             return shared.rowSeatX(tip.width, at, p) - p.x
-        const mid = shared.anchorKnown ? shared.anchorX : p.x + at.width / 2
-        const want = tip.implicitWidth >= at.width ? p.x : mid - tip.implicitWidth / 2
         const edge = Theme.spaceXs
         const room = shared.host.width - tip.implicitWidth - edge
+        // A field's refusal starts where the field does, whatever its length.
+        if (shared.typedAsker(at))
+            return Math.max(edge, Math.min(p.x, room)) - p.x
+        const mid = shared.anchorKnown ? shared.anchorX : p.x + at.width / 2
+        const want = tip.implicitWidth >= at.width ? p.x : mid - tip.implicitWidth / 2
         return Math.max(edge, Math.min(want, room)) - p.x
     }
 
@@ -228,7 +235,8 @@ Item {
     }
     function readAnchor() {
         const at = shared.sharedTip.parent
-        if (at === null) {
+        // A field's refusal: the hand may be anywhere in the window.
+        if (at === null || shared.typedAsker(at)) {
             shared.anchorKnown = false
             shared.anchorDown = false
             return
@@ -257,6 +265,9 @@ Item {
             return false
         if (at.hovered === true)
             return true
+        // A refusal of what is typed stands until the typing changes it, wherever the hand goes (`typedAsker`).
+        if (at.tipTyped === true)
+            return true
         return shared.hand.over(at)
     }
 
@@ -273,9 +284,10 @@ Item {
     /// A scroll bar was taken (`Hand.heldBar`): the targets are about to slide from under a hand Qt no longer hears, so
     /// the box goes now, and a rest already counting goes with it — `drop` leaves a box that is not up yet, and closing
     /// that one stops its count (規約 §hover のツールチップ「スクロールバーを掴んだら、hover で開いたものは閉じる」). A box
-    /// that answers typing is no hover's, and stays (`tipTyped`).
+    /// that answers typing is no hover's, and stays (`typedAsker`).
     function yieldToBar() {
-        if (shared.tipTyped)
+        const at = shared.sharedTip.parent
+        if (at !== null && at.tipTyped === true)
             return
         shared.drop()
         shared.sharedTip.close()
@@ -306,6 +318,15 @@ Item {
         const tip = shared.sharedTip
         if (!tip.visible || tip.parent === shared.standing)
             return
+        // A refusal of what is typed keeps the one box until the typing changes it (デザイン規約 §hover のツールチップ
+        // 「入力の拒否への補足は一律」): a hover's ask meanwhile is turned away, and the box goes back with its words
+        // still up. The hover's own fall later closes nothing — Qt's `hide()` closes only its own parent's box.
+        const typed = shared.standing
+        if (typed !== null && typed.tipTyped === true) {
+            tip.parent = typed
+            tip.text = typed.ToolTip.text
+            return
+        }
         shared.drop()
         // On the delay, which starts the new target's count; a hand that left the row closes it through the site's
         // own binding.
@@ -349,7 +370,7 @@ Item {
                 shared.dropping = false
                 return
             }
-            if (!shared.walkable)
+            if (!shared.walkable || shared.typedAsker(shared.sharedTip.parent))
                 return
             shared.keeping = true
             Qt.callLater(shared.reopen)

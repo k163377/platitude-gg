@@ -87,9 +87,9 @@ Item {
         y: 250
         width: 200
         height: 40
-        readonly property bool tipTyped: true
+        readonly property bool tipTyped: root.refusedNow
         ToolTip.text: "refused"
-        ToolTip.visible: root.refusedNow
+        ToolTip.visible: typedBox.tipTyped
     }
     // A bar over rows that ask for nothing, so the hand reaching it does not take the shared box off the name box —
     // which any hover ask does, bar or no bar.

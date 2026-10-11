@@ -131,9 +131,13 @@ Item {
             // (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダ」).
             placeholderText: nameField.namesKind === "tag" ? qsTr("Tag name") : qsTr("Branch name")
             refused: chipColumn.namingRefused
-            ToolTip.visible: nameField.refused && nameField.activeFocus && chipColumn.namingRefusedWhy !== ""
+            ToolTip.visible: nameField.tipTyped
             ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: chipColumn.namingRefusedWhy
+            /// That tip answers what is typed, not a hand: it stands until the typing changes it
+            /// (`SharedToolTip.typedAsker`).
+            readonly property bool tipTyped: nameField.refused && nameField.activeFocus
+                                             && chipColumn.namingRefusedWhy !== ""
             // Refused text stays in the box; Enter does nothing, and the frame and tooltip say why.
             onAccepted: {
                 if (!chipColumn.namingRefused)
