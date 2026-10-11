@@ -88,6 +88,8 @@ QtObject {
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
                 "wip-landing-stopped",
                 "merge-commit",
+                // Framed with the commit still out (or once it has landed), the menu raised under it.
+                "menu-wait",
                 "code-send", "code-grow", "code-shrink", "code-swap",
                 "line-back", "diff-follow", "line-run",
                 "stage-all", "unstage-all", "resolve-all",

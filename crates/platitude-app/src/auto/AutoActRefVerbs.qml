@@ -255,8 +255,9 @@ Item {
                           + " blocked=" + (row.blockedReason !== ""))
         return page.deleteRowAsked
     }
-    // The delete asked of the left pane's card. The card goes up and the row is pressed here, not in `run`: while a
-    // write runs the card has no delete row (`offers::ref_menu`) and the page drops the request (`RepoPage.deleteRow`).
+    // The delete asked of the left pane's card. The card goes up and the row is pressed here, not in `run`: a card
+    // opened while a write runs greys its delete row (`AppMenu.runningWhy`) and the page drops the request
+    // (`RepoPage.deleteRow`).
     SampleTimer {
         id: deleteRowTimer
         /// After the press: `hold` runs the held `-D` git's refusal leaves, `refused` reads the row it turned into,
@@ -264,7 +265,7 @@ Item {
         property string after: ""
         onTriggered: {
             // The precondition is read here and nowhere else (app-ui.md §UI 自動化).
-            if (repoTab.busyCount !== 0)
+            if (!driver.menusLive())
                 return
             deleteRowTimer.stop()
             const arg = Harness.autoActArg
@@ -304,7 +305,7 @@ Item {
         property string tag: ""
         property int row: 0
         onTriggered: {
-            if (!driver.wroteAndSettled() || repoTab.busyCount !== 0)
+            if (!driver.wroteAndSettled() || !driver.menusLive())
                 return
             const oid = graphModel.oidAt(tagChipTimer.row)
             if (oid === "")
@@ -455,7 +456,7 @@ Item {
             return true
         }
         onTriggered: {
-            if (!tagMenuTimer.ready() || repoTab.busyCount !== 0)
+            if (!tagMenuTimer.ready() || !driver.menusLive())
                 return
             tagMenuTimer.stop()
             page.openRefMenu("tag", tagMenuTimer.tag, tagMenuTimer.tag,
@@ -573,10 +574,10 @@ Item {
         onTriggered: {
             const arg = Harness.autoActArg
             if (!earlyDeleteTimer.cardUp) {
-                // The precondition is read here and nowhere else (app-ui.md §UI 自動化): the delete row exists only
-                // while nothing runs (`offers::ref_menu`), and the card works its answers out once as it opens — put up
-                // a tick early, it asks nobody and the run waits out the watchdog.
-                if (repoTab.busyCount !== 0)
+                // The precondition is read here and nowhere else (app-ui.md §UI 自動化): the delete row is live only
+                // on a card raised while nothing runs (`AppMenu.runningWhy`), and the card works its answers out once
+                // as it opens — put up a tick early, it asks nobody and the run waits out the watchdog.
+                if (!driver.menusLive())
                     return
                 earlyDeleteTimer.cardUp = true
                 page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
@@ -620,9 +621,9 @@ Item {
         property bool pressed: false
         onTriggered: {
             if (!chipDeleteTimer.pressed) {
-                // The precondition is read here and nowhere else (app-ui.md §UI 自動化): the page drops the request
-                // while a write runs.
-                if (repoTab.busyCount !== 0)
+                // The precondition is read here and nowhere else (app-ui.md §UI 自動化): a card raised while a write
+                // runs greys its rows, and the page drops the request.
+                if (!driver.menusLive())
                     return
                 const arg = Harness.autoActArg
                 page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })

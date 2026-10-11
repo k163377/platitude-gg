@@ -253,8 +253,9 @@ Item {
             return true
         }
         onTriggered: {
-            // The row's gate is read as the menu opens (`RefWorktreeMenu.standOn`): opened while a write runs, it greys.
-            if (repoTab.busyCount !== 0)
+            // The row's gate is read as the menu opens (`RefWorktreeMenu.standOn`): opened while a write runs, every
+            // row greys until it ends (`AppMenu.runningWhy`).
+            if (!driver.menusLive())
                 return
             if (!worktreeMenuTimer.menu.opened) {
                 worktreeMenuTimer.raise()
@@ -581,10 +582,11 @@ Item {
             // ---- the graph's two doors, before the pane's ----------------
             // Every switch on the graph side ends at `RepoPage.switchToRef`; `false` is a press it turned away.
             acts.heldSwitch = page.switchToRef("branch", acts.heldBranch) === false
-            // The row menu keeps its rows, greyed; `drop` is read as the one row that cannot be undone.
+            // The row menu keeps its rows, greyed; `drop` is read as the one row that cannot be undone — on show, as a
+            // replay's mid-rewrite HEAD would take it off a menu standing on it (`RepoPage.treeAtAsk`).
             page.openRowMenu(worktree.headOid)
             acts.heldRowMenu = commitMenu.opened
-            acts.heldDrop = dropCommitItem.blocked
+            acts.heldDrop = dropCommitItem.present && dropCommitItem.blocked
             commitMenu.close()
             // ---- and the pane's ------------------------------------------
             // The box, asked for where a hand asks. The double-click's refusal shares its gate

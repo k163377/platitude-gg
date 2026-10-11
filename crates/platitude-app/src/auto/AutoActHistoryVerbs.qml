@@ -23,11 +23,13 @@ Item {
     readonly property var refRebaseItem: driver.refRebaseItem
     readonly property var refPullItem: driver.refPullItem
     readonly property var refMenu: driver.refMenu
+    readonly property var refRowMenu: driver.refRowMenu
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
     readonly property var wipPane: driver.wipPane
     readonly property var commitMenuState: driver.commitMenuState
     readonly property var commitMenu: driver.commitMenu
+    readonly property var stashMenu: driver.stashMenu
     readonly property var dropCommitItem: driver.dropCommitItem
     readonly property var resetMenu: driver.resetMenu
     readonly property var commitBranchCard: driver.commitBranchCard
@@ -95,6 +97,8 @@ Item {
                 resetLandedTimer.begin(wipeTo, "hard")
                 hardResetItem.completeHold()
             }
+        } else if (act === "menu-wait") {
+            menuWaitTimer.begin(arg)
         } else if (act === "commit-menu" || act === "reset-menu"
                    || act === "branch-card" || act === "tag-card") {
             // With no row named, the row under HEAD's: most of this menu is about a commit the branch is not on, and
@@ -230,6 +234,164 @@ Item {
             page.activateRow(oidHex, row)
     }
 
+    // `menu-wait` / `menu-wait after`, over `--preset slowhook`'s sleeping pre-commit hook: the graph row's menu raised
+    // while that commit is out keeps the rows the same row offers with nothing running, every one greyed for it, and
+    // gives them back once what the commit left is read — the same menu, still up, stood again on that reading
+    // (デザイン規約 §メニュー). `same=` holds the rows to a count taken off the menu raised and put down on that row
+    // before the commit; `held=` is how many of them grey, which a picture of grey rows next to a picture of missing
+    // ones cannot say.
+    // `menu-wait stash`, over `--preset stashes`: the second entry's graph row menu, raised in the turn the first is
+    // popped — the pop asked for and not started — waits for it all the same, and stands again on the selector the
+    // entry answers to once the pop is read (`CommitMenuState.standAgain`): `was=` is the one it went up on,
+    // `selector=` the one a press now acts on. `menu-wait stash-ref` is the same over the left menu's STASHES row
+    // (`RefRowMenu.standAgain`).
+    // `menu-wait replay`, over `--preset replay`: the plain form's line with a rebase out instead of the commit, the
+    // menu raised once the rewrite shows mid-way.
+    SampleTimer {
+        id: menuWaitTimer
+        /// `""`, `after`, `stash`, `stash-ref` or `replay`, as above.
+        property string mode: ""
+        /// `idle` (the count with nothing running), `out` (the write pressed, the menu not raised yet), `up` (raised
+        /// under the write; `after` and the stash forms wait there for the menu to stand again).
+        property string stage: ""
+        property string oid: ""
+        property int idleRows: -1
+        property string raisedOn: ""
+        /// The level the menu opens as: a stash's graph row has its own, and the left menu is another.
+        readonly property var level: menuWaitTimer.mode === "stash" ? acts.stashMenu
+                                   : menuWaitTimer.mode === "stash-ref" ? refMenu : commitMenu
+        /// The selector the stash's menu acts on.
+        readonly property string selector: menuWaitTimer.mode === "stash-ref" ? refRowMenu.refId
+                                                                              : commitMenuState.menuStashRef
+        function begin(mode) {
+            menuWaitTimer.mode = mode
+            menuWaitTimer.stage = "idle"
+            menuWaitTimer.start()
+        }
+        /// The row's own right-click (`GraphRowDelegate.askMenu`), or the left menu's door. False while the row has no
+        /// delegate to answer.
+        function raise() {
+            if (menuWaitTimer.mode === "stash-ref")
+                return page.openRefMenu("stash", stashesModel.nameAt(1), stashesModel.fullAt(1), menuWaitTimer.oid,
+                                        true)
+            const item = graphPane.view.itemAtIndex(graphModel.rowOf(menuWaitTimer.oid))
+            if (item === null)
+                return false
+            item.askMenu()
+            return menuWaitTimer.level.visible
+        }
+        /// The rows that start git — every row on show but the cards' titles, which stay live while the rows inside
+        /// say why — and how many of them grey.
+        function held() {
+            const level = menuWaitTimer.level
+            let rows = 0
+            let greyed = 0
+            for (let i = 0; i < level.count; i++) {
+                const row = level.itemAt(i)
+                if (!row || !row.present || row.codeColSeat === undefined || row.subMenu)
+                    continue
+                rows++
+                if (row.blocked)
+                    greyed++
+            }
+            return greyed === rows ? "all" : greyed === 0 ? "none" : greyed + "/" + rows
+        }
+        function report(stage) {
+            const level = menuWaitTimer.level
+            Harness.report("menu_wait stage=" + stage
+                              + " same=" + (level.offeredRows === menuWaitTimer.idleRows)
+                              + " held=" + menuWaitTimer.held()
+                              + " open=" + level.visible
+                              + (menuWaitTimer.raisedOn !== ""
+                                 ? " was=" + menuWaitTimer.raisedOn + " selector=" + menuWaitTimer.selector : "")
+                              + " rows=" + level.offeredRows + " busy=" + repoTab.busyCount)
+        }
+        /// The second stash's menu, counted and put down; then the first popped and the menu raised again in the same
+        /// turn. False while the listing is not in.
+        function popUnder() {
+            if (stashesModel.fullAt(1) === "")
+                return false
+            menuWaitTimer.oid = stashesModel.oidOfName(stashesModel.nameAt(1))
+            if (!menuWaitTimer.raise())
+                return false
+            menuWaitTimer.idleRows = menuWaitTimer.level.offeredRows
+            menuWaitTimer.level.dismiss()
+            const popped = stashesModel.fullAt(0)
+            driver.pressWrite("stash-pop", () => {
+                page.popStash(popped)
+                return true
+            })
+            menuWaitTimer.raise()
+            menuWaitTimer.raisedOn = menuWaitTimer.selector
+            return true
+        }
+        onTriggered: {
+            Awaited.at("menu_wait", menuWaitTimer.stage)
+            if (menuWaitTimer.stage === "idle") {
+                if (repoTab.state !== "open" || repoTab.busyCount !== 0 || !PageSettled.settled(page))
+                    return
+                if (menuWaitTimer.mode === "stash" || menuWaitTimer.mode === "stash-ref") {
+                    if (menuWaitTimer.popUnder())
+                        menuWaitTimer.stage = "up"
+                    return
+                }
+                // The row under HEAD's where there is one, as `commit-menu` takes; HEAD's own over a single commit.
+                const below = graphModel.oidAt(graphModel.rowOf(worktree.headOid) + 1)
+                menuWaitTimer.oid = below !== "" ? below : worktree.headOid
+                if (!menuWaitTimer.raise())
+                    return
+                menuWaitTimer.idleRows = commitMenu.offeredRows
+                commitMenu.dismiss()
+                if (menuWaitTimer.mode === "replay") {
+                    driver.pressWrite("rebase", () => {
+                        // `--preset replay`'s other line: three hundred steps, replayed for seconds.
+                        repoTab.rebase("base", "", true)
+                        return true
+                    })
+                } else {
+                    page.showWip()
+                    wipPane.setMessage("chore: held by a sleeping hook", "")
+                    driver.pressWrite("commit", () => {
+                        page.commitNow()
+                        return true
+                    })
+                }
+                menuWaitTimer.stage = "out"
+            } else if (menuWaitTimer.stage === "out") {
+                // The hook sleeps for seconds, so the commit is still out when the menu goes up. One that has landed
+                // already left no moment to raise it in, and says so rather than wait out the watchdog.
+                if (driver.wroteAndSettled()) {
+                    menuWaitTimer.stop()
+                    Harness.report("menu_wait_missed the write landed before the menu could go up under it")
+                    driver.complete()
+                    return
+                }
+                if (repoTab.busyCount === 0 || commitMenu.visible)
+                    return
+                // A replay's menu goes up once the rewrite shows mid-way — HEAD detached, `REBASING` counted — which
+                // is what a menu standing on the worktree as it is would lose its rows to (`RepoPage.treeAtAsk`).
+                if (menuWaitTimer.mode === "replay" && worktree.opText === "")
+                    return
+                if (!menuWaitTimer.raise())
+                    return
+                menuWaitTimer.stage = "up"
+                if (menuWaitTimer.mode === "after")
+                    return
+                menuWaitTimer.stop()
+                menuWaitTimer.report("during")
+                driver.complete()
+            } else if (menuWaitTimer.stage === "up") {
+                // The menu's own word that it stood again: the write's settle reaches the tab a drain before the
+                // models it was read into are through (`RepoTab::settling`).
+                if (!driver.wroteAndSettled() || menuWaitTimer.level.waiting)
+                    return
+                menuWaitTimer.stop()
+                menuWaitTimer.report("after")
+                driver.complete()
+            }
+        }
+    }
+
     // `replay-running`: the screen while git is out — the step badge, the doors held down, the ring beside the hand.
     // This only watches: the page ticks the count itself (`Metrics.opProgressMs`), so a build whose tick never
     // reaches the badge waits out the watchdog. Then the face is held (`RepoPage.autoReplayHeld`, the latch
@@ -328,7 +490,7 @@ Item {
         id: pullPressTimer
         property string after: "pull-go"
         onTriggered: {
-            if (repoTab.busyCount !== 0)
+            if (!driver.menusLive())
                 return
             const branch = worktree.branch
             if (!refMenu.opened)

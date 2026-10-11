@@ -169,8 +169,9 @@ Item {
             Harness.report(line)
         }
         onTriggered: {
-            // Asked as the menu opens (`offers::worktree_rows`): opened while a write runs, the rows are not there.
-            if (acts.repoTab.busyCount !== 0)
+            // Asked as the menu opens (`offers::worktree_rows`): opened while a write runs, the rows grey until it ends
+            // (`AppMenu.runningWhy`).
+            if (!acts.driver.menusLive())
                 return
             if (worktreeTimer.step === 0) {
                 if (worktreeTimer.raise())

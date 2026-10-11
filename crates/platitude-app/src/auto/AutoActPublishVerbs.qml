@@ -299,7 +299,7 @@ Item {
     SampleTimer {
         id: remoteMenuTimer
         onTriggered: {
-            if (repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0)
+            if (repoTab.markedOrigin !== driver.markWanted || !driver.menusLive())
                 return
             if (!driver.remoteMenu.opened && !page.openRemoteMenu(driver.remoteTarget))
                 return

@@ -95,6 +95,30 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "overlay saved=true popups=2",
     },
+    // The graph row's menu raised while a commit is still out (デザイン規約
+    // §メニュー). A row that went is a row nobody can tell from one the
+    // commit never had, so `same=` holds the count to the one the same row
+    // gave with nothing running; `held=` is how many of them grey — every
+    // one while the commit runs, none once it has landed, the menu still up.
+    // Raised on the second stash as the first is popped — its graph row or
+    // its left menu row — the menu stands again on the selector that entry
+    // answers to once the pop is read. Raised mid-rebase (`replay`), it
+    // answers the commit's line: the rows stand on the tree as it was
+    // asked, not on the rewrite's detached HEAD.
+    Verb {
+        name: "menu-wait",
+        when: &[
+            (
+                Arg::OneOf(&["stash", "stash-ref"]),
+                "menu_wait stage=after same=true held=none open=true was=stash@{1} selector=stash@{0}",
+            ),
+            (
+                Arg::Is("after"),
+                "menu_wait stage=after same=true held=none open=true",
+            ),
+        ],
+        plain: "menu_wait stage=during same=true held=all open=true",
+    },
     // The delete that card offers, run to git's answer. The row stays up
     // for a refusal (the plain delete's `onHeld` in `RefBranchMenu`), so what is judged is the
     // card going once none came; `code=` tells a landing (still

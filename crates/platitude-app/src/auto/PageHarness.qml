@@ -119,6 +119,7 @@ Item {
             refTagHereItem: harness.refRowMenu.tagHereItem
             refRemoteTagDeleteItem: harness.refRowMenu.deleteRemoteTagItem
             refTagBothDeleteItem: harness.refRowMenu.deleteTagBothItem
+            refRowMenu: harness.refRowMenu
             fileRowMenu: harness.fileRowMenu
             fileMenu: harness.fileRowMenu.menu
             fileDiscardItem: harness.fileRowMenu.discardItem
@@ -126,6 +127,7 @@ Item {
             clipboard: harness.clipboard
             commitMenuState: harness.commitMenuState
             commitMenu: harness.commitRowMenu.menu
+            stashMenu: harness.commitRowMenu.stashLevel
             dropCommitItem: harness.commitRowMenu.dropItem
             tagHereCommitItem: harness.commitRowMenu.tagHereItem
             stashDeleteItem: harness.commitRowMenu.stashDropItem

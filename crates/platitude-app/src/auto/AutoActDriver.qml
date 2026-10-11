@@ -51,6 +51,7 @@ Item {
     property AppMenuItem refTagDeleteItem
     property AppMenuItem refRemoteTagDeleteItem
     property AppMenuItem refTagBothDeleteItem
+    property RefRowMenu refRowMenu
     property FileRowMenu fileRowMenu
     property AppMenu fileMenu
     property AppMenuItem fileDiscardItem
@@ -59,6 +60,7 @@ Item {
     property ClipboardHelper clipboard
     property CommitMenuState commitMenuState
     property AppMenu commitMenu
+    property AppMenu stashMenu
     property AppMenuItem dropCommitItem
     property AppMenuItem tagHereCommitItem
     property AppMenuItem stashDeleteItem
@@ -371,6 +373,12 @@ Item {
     /// nothing else it started is in flight — **the whole write barrier**; a verb with a sub-barrier asks this.
     function wroteAndSettled() {
         return repoTab.wroteThrough() && repoTab.busyCount === 0
+    }
+    /// Whether a menu raised now opens live: nothing this window asked git for is out, its reading included. One
+    /// raised before then waits with every row greyed (`RepoPage.runningWhy`, `AppMenu.runningWhy`) — the
+    /// precondition of every run that raises a menu to read or press its rows; `busyCount` falls ahead of it.
+    function menusLive() {
+        return page.runningWhy === ""
     }
     /// Runs a control's presses to their end, armed on the end: a write this run never pressed can answer before then
     /// (the opening fetch, or `push-tag`'s own on a drifted tag), and a barrier armed at the start would pass on it
