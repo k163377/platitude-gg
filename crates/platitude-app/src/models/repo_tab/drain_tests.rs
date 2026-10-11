@@ -1033,3 +1033,60 @@ fn a_ref_rows_push_does_not_hand_the_next_press_the_last_answer() {
         "and the row waited for is the one just pressed"
     );
 }
+
+/// A write keeps the tab settling from its asking past git's answer, until
+/// what it left has been read again and drained into the models — what a
+/// menu raised under it waits on before it stands its rows again
+/// (`AppMenu.runningWhy`). One queued behind it keeps the tab settling
+/// across the gap before it starts. A settle for an id this tab never
+/// asked for (an unasked fetch's) settles nothing.
+#[test]
+fn a_write_settles_after_its_answer_not_at_it() {
+    let feed = Arc::new(Feed::default());
+    let mut tab = RepoTab {
+        feed: Some(feed.clone()),
+        ..RepoTab::default()
+    };
+    assert!(tab.unsettle(1), "asked for on a settled tab");
+    assert!(!tab.unsettle(2), "and another queued behind it");
+    tab.absorb(vec![started(1, K::Commit)]);
+    tab.absorb(vec![answered(1, K::Commit, "")]);
+    assert_eq!(tab.busy_count, 0, "git has answered");
+    assert!(tab.settling, "and its reading is still out");
+    tab.absorb(vec![TabMsg::WriteSettled { id: 9 }]);
+    tab.absorb(vec![TabMsg::WriteSettled { id: 1 }]);
+    assert!(
+        feed.drain().is_empty(),
+        "nothing is drained for while the one queued behind has not started"
+    );
+    tab.absorb(vec![started(2, K::Stash)]);
+    tab.absorb(vec![
+        answered(2, K::Stash, ""),
+        TabMsg::WriteSettled { id: 2 },
+    ]);
+    assert!(
+        tab.settling,
+        "counted once, at its asking, and the models still to drain"
+    );
+    let posted = feed.drain();
+    assert!(matches!(posted.as_slice(), [TabMsg::ReadsDrained]));
+    tab.absorb(posted);
+    assert!(!tab.settling);
+}
+
+/// A write this tab did not ask for itself — a restore off the discard
+/// record — is counted from its start; one asked for before the models
+/// have drained the last keeps the tab settling.
+#[test]
+fn a_write_asked_elsewhere_settles_from_its_start() {
+    let mut tab = RepoTab::default();
+    tab.absorb(vec![started(3, K::Restore)]);
+    assert!(tab.settling);
+    tab.absorb(vec![
+        answered(3, K::Restore, ""),
+        TabMsg::WriteSettled { id: 3 },
+    ]);
+    tab.unsettle(4);
+    tab.absorb(vec![TabMsg::ReadsDrained]);
+    assert!(tab.settling);
+}

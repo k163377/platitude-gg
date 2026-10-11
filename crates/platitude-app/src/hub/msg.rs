@@ -97,6 +97,14 @@ pub enum TabMsg {
     WriteSettled {
         id: u64,
     },
+    /// Pushed by the tab itself on the settle of the last write it was
+    /// waiting on (`RepoTab::unsettled`). The other models' feeds were
+    /// woken for the reads that write's settle waited for before the settle
+    /// was pushed, so their drains run ahead of this one's: those reads are
+    /// in the models by the time it is drained (`RepoTab::settling`). A
+    /// read the settle does not wait for — the tip's reach — may land
+    /// after.
+    ReadsDrained,
     /// A branch move would leave commits unreachable and was not made.
     MoveNeedsAsk {
         local: String,

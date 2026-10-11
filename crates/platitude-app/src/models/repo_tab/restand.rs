@@ -91,6 +91,9 @@ impl RepoTab {
         self.fetch_failures = 0;
         self.fetch_log_raised = false;
         self.auto_fetch_suspended = false;
+        // The retired sink never delivers the settles still owed.
+        self.unsettled.clear();
+        self.settling = false;
         // Last, the one thing this leaves standing: one command in flight
         // until the new session says where it is (`RepoTab::standing`).
         self.busy_count = 1;

@@ -8,8 +8,12 @@ impl RepoTab {
         let Some(feed) = self.feed.clone() else {
             return;
         };
+        let was_settling = self.settling;
         self.absorb(feed.drain());
         self.changed();
+        if self.settling != was_settling {
+            self.settling_changed();
+        }
     }
 
     /// Everything the feed had waiting, folded into the properties QML
@@ -216,6 +220,10 @@ impl RepoTab {
                 } => {
                     if running {
                         self.busy_count += 1;
+                        // Counted already where this tab asked for it
+                        // (`ask_session`); a write asked elsewhere — a
+                        // restore off the discard record — counts here.
+                        self.unsettle(id);
                         self.replaying = kind.replays_history();
                         self.busy_op = kind.label().to_string();
                         // Whatever the last write left standing, this one
@@ -226,8 +234,21 @@ impl RepoTab {
                     }
                 }
                 // The last of the three boundaries: everything the write
-                // invalidated has been read again and published.
-                TabMsg::WriteSettled { id, .. } => self.write_watch.settled(id),
+                // invalidated has been read again and published. An unasked
+                // fetch settles too, under an id nothing here started.
+                TabMsg::WriteSettled { id, .. } => {
+                    self.write_watch.settled(id);
+                    if let Some(at) = self.unsettled.iter().position(|out| *out == id) {
+                        self.unsettled.remove(at);
+                        if self.unsettled.is_empty()
+                            && let Some(feed) = &self.feed
+                        {
+                            feed.push(TabMsg::ReadsDrained);
+                        }
+                    }
+                }
+                // A write asked for since keeps the tab settling.
+                TabMsg::ReadsDrained => self.settling = !self.unsettled.is_empty(),
             }
         }
     }

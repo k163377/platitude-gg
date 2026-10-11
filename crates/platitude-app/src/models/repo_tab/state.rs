@@ -23,6 +23,8 @@ impl Default for RepoTab {
             tags_shown: true,
             busy_count: 0,
             busy_op: String::new(),
+            unsettled: Vec::new(),
+            settling: false,
             standing: false,
             replaying: false,
             merge_tools: Vec::new(),
@@ -148,7 +150,25 @@ impl RepoTab {
     ) -> Option<platitude_core::OperationId> {
         let asked = crate::hub::from_session(self.tab_id, f).flatten();
         self.write_watch.asked(asked.map(|id| id.as_u64()));
+        // From here, not from its start: a write queued behind another
+        // starts only once that one has settled.
+        if let Some(id) = asked
+            && self.unsettle(id.as_u64())
+        {
+            self.settling_changed();
+        }
         asked
+    }
+
+    /// Counts a write of this tab's out until what it left has been read
+    /// again (`settling`). Says whether the tab was settled before.
+    pub(super) fn unsettle(&mut self, id: u64) -> bool {
+        if !self.unsettled.contains(&id) {
+            self.unsettled.push(id);
+        }
+        let was_settled = !self.settling;
+        self.settling = true;
+        was_settled
     }
 
     /// The session of the worktree this tab was stood in has answered (open

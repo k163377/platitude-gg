@@ -215,21 +215,17 @@ impl DiscardModel {
     }
 
     /// Queues the restore of the entry's part `part`, or of every part
-    /// (`part` < 0); whether the session took it.
-    fn restore(&self, index: i32, part: i32) -> bool {
-        let Some(entry) = self.entry(index) else {
-            return false;
-        };
+    /// (`part` < 0); the id the session took it under.
+    fn restore(&self, index: i32, part: i32) -> Option<platitude_core::OperationId> {
+        let entry = self.entry(index)?;
         let parts = match usize::try_from(part) {
             Ok(at) => entry.parts.get(at).cloned().into_iter().collect(),
             Err(_) => entry.parts.clone(),
         };
         if parts.is_empty() {
-            return false;
+            return None;
         }
-        crate::hub::from_session(self.tab_id, |session| session.restore_discard(parts))
-            .flatten()
-            .is_some()
+        crate::hub::from_session(self.tab_id, |session| session.restore_discard(parts)).flatten()
     }
 }
 

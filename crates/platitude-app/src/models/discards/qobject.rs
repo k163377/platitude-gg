@@ -86,11 +86,13 @@ impl DiscardModel {
     }
 
     /// Brings back the entry's part `part`, or all of it with -1 — a write
-    /// on the tab's session, answered as any other; false where the session
-    /// did not take it.
+    /// on the tab's session, answered as any other. Answers the id the
+    /// session took it under, for the tab to count it out from here
+    /// (`RepoTab.countWrite`); 0 where the session did not take it.
     #[qslot]
-    fn restore_at(&self, index: i32, part: i32) -> bool {
+    fn restore_at(&self, index: i32, part: i32) -> i32 {
         self.restore(index, part)
+            .map_or(0, |id| i32::try_from(id.as_u64()).unwrap_or(i32::MAX))
     }
 
     /// The only slot an invoker ever calls (`models::mod`).

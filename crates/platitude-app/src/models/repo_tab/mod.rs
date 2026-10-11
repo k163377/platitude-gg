@@ -85,6 +85,16 @@ pub struct RepoTab {
     /// but requests can queue up).
     busy_count: i32,
     busy_op: String,
+    /// The writes asked for (or started, where asked elsewhere) whose
+    /// re-reads have not been published yet (`TabMsg::WriteSettled`), by
+    /// id. `busy_count` rises at a write's start and drops at git's answer,
+    /// ahead of what it left being read again; a menu that waits on a
+    /// write stands its rows on that reading, so it waits on this
+    /// (`settling`).
+    unsettled: Vec<u64>,
+    /// A write is in `unsettled`, or the models have not drained the reads
+    /// behind the last one out yet (`TabMsg::ReadsDrained`).
+    settling: bool,
     /// The tab moved to another worktree and the new session has not
     /// said where it is yet (`Hub::restand_tab`).
     ///

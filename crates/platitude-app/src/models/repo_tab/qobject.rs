@@ -31,6 +31,7 @@ impl RepoTab {
     qproperty!("lastError", Member = last_error, Notify = changed);
     qproperty!("tagsShown", Member = tags_shown, Notify = changed);
     qproperty!("busyCount", Member = busy_count, Notify = changed);
+    qproperty!("settling", Member = settling, Notify = settling_changed);
     qproperty!("busyOp", Member = busy_op, Notify = changed);
     qproperty!("standing", Member = standing, Notify = changed);
     qproperty!("replaying", Member = replaying, Notify = changed);
@@ -251,6 +252,13 @@ impl RepoTab {
 
     #[qsignal]
     pub(super) fn changed(&mut self);
+
+    /// `settling` moved. Its own: it rises inside the slot that asks for a
+    /// write (`ask_session`), where `changed` would run every reader of
+    /// this tab — the page's absorbing ones too — before the slot has done
+    /// its own bookkeeping.
+    #[qsignal]
+    pub(super) fn settling_changed(&mut self);
 
     /// The worktree this tab stands in would not open, and the repository has
     /// its own to stand in instead (`Hub::home_worktree`); the strip moves the
@@ -528,8 +536,26 @@ impl RepoTab {
     /// and what stays is `forget_the_worktree`'s.
     #[qslot]
     fn restand(&mut self) {
+        let was_settling = self.settling;
         self.forget_the_worktree();
         self.changed();
+        if was_settling {
+            self.settling_changed();
+        }
+    }
+
+    /// A write the page had another model ask for in this same turn
+    /// (`DiscardModel.restoreAt`), counted out from its acceptance as the
+    /// tab's own are (`ask_session`): queued behind another write, it
+    /// would otherwise only count from its start.
+    #[qslot]
+    fn count_write(&mut self, id: i32) {
+        if let Ok(id) = u64::try_from(id)
+            && id > 0
+            && self.unsettle(id)
+        {
+            self.settling_changed();
+        }
     }
 
     /// Hands the commit editor's unsent words to the hub, which is what
