@@ -36,7 +36,7 @@ VM が抱えられる量は上限の 2 倍まで。
 | 同じ 4 本 | 前 | 8GB | 7.9GB(MemAvailable 12 MB) | 8GB(使い切り) | 8185 MB | 7437 MB | 197 s | 10 | 進まなくなり 300 s で止めた(4 本とも exit 137) |
 | `gate --fresh`(段 2 の全ステップ。Linux の target は空から = イメージが組み直された直後の席の最初の gate。ホスト側も 498 ステップを同時に回した。席 1 つ) | 最終 | 12GB | 5.1GB(anon 最大 4.8GB) | 0 | 10236 MB | **678 MB** | 0 | 0 | PASS 6m40s(Linux 側 399 s / ホスト側 389 s) |
 | 席 2 つを模した負荷: 上と同じ冷えた `gate --fresh` に、45 s 後からもう 1 席ぶんの Linux 側の冷えたビルド 2 本(app の clippy と release、同じ予算から ticket を取る)を重ねた。**もう 1 席の Windows 側は無い** | 最終(コンテナの incremental を切っていた版) | 12GB | 11.4GB(MemAvailable 102 MB) | 1.7GB | 12229 MB | **73 MB**(Windows のコミット最大 45.3GB) | 9.0 s | 0 | 全部 PASS(gate 8m27s / clippy 3m49s / release 4m30s)。コンテナは同時に最大 4 つ |
-| `gate --all`(段 3。Linux 側 625 ステップ = 未スタンプの動詞。target は温まっていた。席 1 つ) | 前 | 12GB | 1.9GB | 0 | 4103 MB | 9029 MB | 0 | 0 | PASS 4m07s(コンテナは同時に最大 2 つ)。**最終イメージの `gate --all` は 3m34s(625 ステップ)で、footprint は取っていない** |
+| 段 3 の計画をスタンプありで(Linux 側 625 ステップ = 未スタンプの動詞。target は温まっていた。席 1 つ) | 前 | 12GB | 1.9GB | 0 | 4103 MB | 9029 MB | 0 | 0 | PASS 4m07s(コンテナは同時に最大 2 つ)。**最終イメージの段 3 の計画(スタンプあり)は 3m34s(625 ステップ)で、footprint は取っていない** |
 | VM 全体の OOM(`head -c 24G /dev/zero \| tail -n 1` を 1 本) | 前 | 8GB | 8GB + swap 8GB を使い切り | 8GB | — | — | — | 1(殺されたのは `tail` だけ) | エンジンは直後の `run` に 1 秒で答えた |
 
 ## 確かめた範囲

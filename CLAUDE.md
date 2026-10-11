@@ -27,7 +27,7 @@
 
 前提: 日常のビルド・テストは debug。起動・UI 検証・性能計測は各 xtask コマンドの手順に従う。以下 `cargo` / `cargo xtask` を省略。
 
-**確認は 3 段**: **1 日常** = <!--call:gate.daily-->`gate --host-only`(コンテナ無し)/ **2 反映前** = `gate`(差分の依存木と `verb-tiers.txt` の段で選んだテストを回し、緑を commit にスタンプ = `land` と git hook が要求)/ **3 フル** = `gate --all`(`periodic` のテストと全動詞を両 OS で回す。それ以外で回すのはユーザーがテストを指示した時だけ)+ <!--call:linux.bare-->`linux bare --discover` + 3OS CI + 性能実測(リリース前と依存・環境を触った時。**版(crate・toolchain・Qt・最低 git)を動かす差分は `gate` 自身が段 3 の計画へ上がる**、残りは手で)。
+**確認は 3 段**: **1 日常** = <!--call:gate.daily-->`gate --host-only`(コンテナ無し)/ **2 反映前** = `gate`(差分の依存木と `verb-tiers.txt` の段で選んだテストを回し、緑を commit にスタンプ = `land` と git hook が要求)/ **3 全体** = <!--call:gate.whole-->`gate --whole`(差分を見ず census の全行と `periodic` を両 OS で回す。それ以外で回すのはユーザーがテストを指示した時だけ)+ <!--call:linux.bare-->`linux bare --discover` + CI の Whole test + 性能実測(リリース前と依存・環境を触った時。**版(crate・toolchain・Qt・最低 git)を動かす差分は `gate` 自身が段 3 の計画へ上がる**、残りは手で)。
 
 **変更作業の完了には、依頼範囲の作業完了(§Git 運用)と、現在の commit に対する `gate` の PASS の両方が必要**。UI 配線では **触った動詞が両 OS で PASS し、両方の PNG を目視するまで**(verify-ui スキルを必ず呼ぶ)。
 
@@ -56,7 +56,7 @@
 
 - **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**。残作業と要判断は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読む**。配布準備期の検証項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 - 性能は起動・スクロールが予算内、**メモリ(net)と操作応答は縁**。数値は [実測記録](ci/baseline/perf-windows-x64.md)、増分の調査と残件は P3-確認事項 §性能
-- CI は **push = mac の Light** / **版を動かした land のタグ・PR・週 1・手動 = 3OS の Full** / **手動 = mac の Snapshot**。構成と runner の上の事実は P5-確認事項 §3.5 / §3.6。mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ(mac の絵は verify-ui スキル mac.md)、実機検証は Phase 5 ゲート
+- CI は **push = mac の Push check** / **版を動かした land のタグ・PR・週 1・手動 = 3OS の Whole test** / **手動 = mac の Snapshot**。構成と runner の上の事実は P5-確認事項 §3.5 / §3.6。mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ(mac の絵は verify-ui スキル mac.md)、実機検証は Phase 5 ゲート
 
 ## 規約の置き場所と本ファイルの運用
 

@@ -4,7 +4,7 @@
 
 **`cargo xtask linux verify-ui <動詞> [引数]`** が Ubuntu 側の同じ 1 コマンド。オプションも動詞も **verbs.md の表がそのまま通る**。フォントスタックも Qt のビルドも別物で、**片方の PASS はもう片方を保証しない**。
 
-- **反映前の gate がコンテナで回す動詞は `linux` 行だけ**(段分け表)。gate の緑は、触った動詞が Linux で通ることを言わない —— **UI を配線したら、その動詞は自分で `cargo xtask linux verify-ui` を撃つ**
+- **反映前の gate がコンテナで回す動詞は `fonts` 行だけ**(段分け表)。gate の緑は、触った動詞が Linux で通ることを言わない —— **UI を配線したら、その動詞は自分で `cargo xtask linux verify-ui` を撃つ**
 - **スクショはホスト側の一時ディレクトリに出る**。パスは実行時に `screenshots and settings: <path>` として印字されるので、そこを読む。**Linux の run の shot dir は既定のまま** — Windows のパスは MSYS に書き換えられ、**カレントディレクトリの下に `C:` という名前のディレクトリが生えて**その中に絵が出る(`PASS` は出るので、`git status` に `?? "C:/"` が並ぶまで気付かない。掃除は `rm -rf "./C:"`)
 - フォントは fontconfig が解決する(`QT_QPA_FONTDIR` も .ttc の罠も Windows 側の話)。**日本語はそのまま出る**。コンテナは日本語の Ubuntu デスクトップのフォントと `LANG=ja_JP.UTF-8` を積む(P5-確認事項 §実測済み)ので、**英文中の `…` `—` は和文字形**(中央の三点・細いダッシュ)で写るのが正しい
 - **判定は各 OS で `screenshot saved=true` + 目視**。フォントのラスタライズが違うので 2 枚の画素は一致しないのが正常

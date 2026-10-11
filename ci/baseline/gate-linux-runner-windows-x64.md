@@ -18,7 +18,7 @@ cgroup の `memory.peak` と、中で測った経過時間。3 回ずつ。
 
 ## そこからの**算術上の見積もり**(実測ではない)
 
-`--all` の linux 側は 523 ステップ中 **515 本**がこの動詞(`verify-linux` 514 + `qmltest-linux`)。
+`--whole` の linux 側は 523 ステップ中 **515 本**がこの動詞(`verify-linux` 514 + `qmltest-linux`)。
 
 - 起動器の時間 **515 × 0.39–0.41s ≒ 200–210 秒**が linux 側の動詞の合計から消える
 - 動詞は既定 8 並列なので、**gate の実時間では ≒ 25 秒**
@@ -26,7 +26,7 @@ cgroup の `memory.peak` と、中で測った経過時間。3 回ずつ。
 
 ## gate 1 本 — **区間を揃えても分離しない**
 
-`cargo xtask gate --all --fresh`(jobs 8、両側、`run 1049`)を BEFORE / AFTER 2 本ずつ。
+`cargo xtask gate --whole`(jobs 8、両側、`run 1049`)を BEFORE / AFTER 2 本ずつ。
 各 arm の前に `wsl --shutdown` → エンジン復帰待ち → `cargo xtask linux demo-repo basic` の暖機。
 
 - **BEFORE 2 本の幅の中に AFTER が入る** — gate 全体で 5m43–6m27 に対し AFTER 6m02s、

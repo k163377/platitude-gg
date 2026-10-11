@@ -1,6 +1,6 @@
 # gate の linux 側のコンテナを gate 単位で再利用する代金(Windows x64)
 
-`--all --fresh` の gate の linux 側の動詞(`verify-linux` + `qmltest-linux`)を、1 本ごとに `docker run --rm` で
+`--whole` の gate の linux 側の動詞(`verify-linux` + `qmltest-linux`)を、1 本ごとに `docker run --rm` で
 コンテナを作って捨てる形(A)と、gate 所有の 1 コンテナへ `docker exec` で入れる形(B = `linux::container`)で、
 同じ仕事で比べたもの。B の差分は xtask の linux 側と gate の起動経路だけで、`platitude-core` / `platitude-app` / `ui` は
 バイト一致。テスト対象・並列度(jobs 8)・予算・キャッシュ条件(`--fresh`)・image・volume は
@@ -53,7 +53,7 @@ host 側の `linux` は HELD なので、この待ちは無い。
 
 ## gate の比較
 
-`cargo xtask footprint --settle 1200 gate --all --fresh`、jobs 8、両 arm とも直前に host と container の
+`cargo xtask footprint --settle 1200 gate --whole`、jobs 8、両 arm とも直前に host と container の
 release ビルドを 1 動詞(`verify-ui commit`)で暖めてから。生の行は
 `target/footprint/<run>/`(`host.csv` / `vm.txt` / `docker-*.txt`)と `target/events-<arm>.txt`。
 
