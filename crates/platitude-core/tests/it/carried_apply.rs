@@ -14,6 +14,7 @@ use crate::support::{TestRepo, barrier_hook};
 use platitude_core::OperationId;
 use platitude_core::commit::CommitOptions;
 use platitude_core::discards;
+use platitude_core::process::CommandEnd;
 use platitude_core::report::{ReportKind, WriteReport};
 use platitude_core::session::{RepoSession, SessionEvent};
 
@@ -72,6 +73,40 @@ async fn apply_side(repo: &TestRepo, side: &Path) -> (Option<String>, Option<Wri
     let answer = answered(&sink, id).await;
     session.close();
     answer
+}
+
+/// [`apply_side`], with how the `stash apply` row in the log ended and what
+/// stands under it.
+async fn apply_side_logged(
+    repo: &TestRepo,
+    side: &Path,
+) -> ((Option<String>, Option<WriteReport>), (CommandEnd, String)) {
+    let (sink, session) = opened(repo).await;
+    let id = session
+        .apply_carried(side.to_string_lossy().into_owned())
+        .expect("the apply is accepted");
+    let answer = answered(&sink, id).await;
+    session.close();
+    let events = sink.events.lock().unwrap();
+    let row = events
+        .iter()
+        .find_map(|e| match e {
+            SessionEvent::CommandStarted { id, display, .. } if display.contains("stash apply") => {
+                Some(*id)
+            }
+            _ => None,
+        })
+        .expect("the apply ran");
+    let ended = events
+        .iter()
+        .find_map(|e| match e {
+            SessionEvent::CommandFinished {
+                id, end, message, ..
+            } if *id == row => Some((*end, message.clone())),
+            _ => None,
+        })
+        .expect("the apply ended");
+    (answer, ended)
 }
 
 /// Every side a stash keeps — a staged edit, a staged new file, an
@@ -226,12 +261,68 @@ async fn a_refusal_over_nothing_it_would_overwrite_is_reported_as_gits() {
     repo.commit_file("a.txt", "1\n2\n3 main\n4\n5\n", "m");
     repo.git_expect_failure(&["merge", "other"]);
 
-    let (error, report) = apply_side(&repo, &side).await;
+    let ((error, report), (end, said)) = apply_side_logged(&repo, &side).await;
 
     assert!(error.is_some());
     assert_eq!(report.map(|r| r.kind), Some(ReportKind::CarriedRefused));
+    // 2.55 says it could not write the index (its refresh over the unmerged
+    // entries fails first); the minimum says nothing at that step.
+    if !said.is_empty() {
+        assert_eq!(end, CommandEnd::Exited(1), "a refusal is a failed row");
+        assert!(
+            said.contains("could not write index"),
+            "git's words are under it, where the report sends the reader: {said}"
+        );
+    }
     let here = repo.path.clone();
     assert_eq!(status_in(&mut repo, &here), "UU a.txt");
+}
+
+/// Another git holding the index's lock: git turns the apply down, and the
+/// report names the lock only where git did — 2.55 says so, the minimum
+/// says nothing, which is the plain refusal (the lock file on disk is no
+/// word of git's). Nothing is written.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_index_another_git_holds_is_reported_as_locked_where_git_says_so() {
+    let (repo, side) = two_trees();
+    write_in(&side, "a.txt", "1\n2\n3\n4\n5 side\n");
+    let lock = repo.path.join(".git/index.lock");
+    std::fs::write(&lock, "").expect("lock");
+
+    let ((error, report), (end, said)) = apply_side_logged(&repo, &side).await;
+    std::fs::remove_file(&lock).expect("unlock");
+
+    assert!(error.is_some());
+    let named = said.contains(".lock': File exists");
+    assert_eq!(
+        report.map(|r| r.kind),
+        Some(match named {
+            true => ReportKind::CarriedLocked,
+            false => ReportKind::CarriedRefused,
+        }),
+        "{said}"
+    );
+    if !said.is_empty() {
+        assert_eq!(end, CommandEnd::Exited(1), "git's words are a failed row's");
+    }
+    assert_eq!(read_in(&repo.path, "a.txt"), "1\n2\n3\n4\n5\n");
+}
+
+/// `stash.index` (git 2.55) would apply what was staged there as staged
+/// here; the apply lands it unstaged, as every apply here does.
+#[tokio::test(flavor = "multi_thread")]
+async fn what_was_staged_there_lands_unstaged_whatever_stash_index_says() {
+    let (mut repo, side) = two_trees();
+    write_in(&side, "a.txt", "1 staged\n2\n3\n4\n5\n");
+    repo.git_in(&side, &["add", "a.txt"]);
+    repo.git(&["config", "stash.index", "true"]);
+
+    assert_eq!(apply_side(&repo, &side).await, (None, None));
+
+    let here = repo.path.clone();
+    // The first line's leading blank goes with `git_in`'s trim.
+    assert_eq!(status_in(&mut repo, &here), "M a.txt");
+    assert_eq!(repo.git(&["diff", "--cached", "--name-only"]), "");
 }
 
 /// A file changed here that the work changes too: git turns the apply
@@ -245,9 +336,11 @@ async fn a_change_here_in_the_way_is_reported_and_nothing_is_written() {
     write_in(&side, "u.txt", "untracked\n");
     repo.write_file("a.txt", "1 here\n2\n3\n4\n5\n");
 
-    let (error, report) = apply_side(&repo, &side).await;
+    let ((error, report), (end, said)) = apply_side_logged(&repo, &side).await;
 
     assert!(error.is_some_and(|e| e.contains("would be overwritten")));
+    assert_eq!(end, CommandEnd::Exited(1), "a refusal is a failed row");
+    assert!(said.contains("would be overwritten"), "{said}");
     let report = report.expect("a report");
     assert_eq!(report.kind, ReportKind::CarriedInTheWay);
     assert_eq!(report.name, "side");

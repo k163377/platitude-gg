@@ -227,11 +227,10 @@ pub async fn rename(
     }
     let moved = !has_branch(executor, workdir, from, cancel).await?
         && has_branch(executor, workdir, to, cancel).await?;
-    Err(if moved {
-        crate::report::rename_unfinished(to, command, &out)
-    } else {
-        crate::report::rename_refused(from, command, &out)
-    })
+    if moved {
+        return Err(crate::report::rename_unfinished(to, command, &out));
+    }
+    Err(crate::report::rename_refused(from, command, &out))
 }
 
 /// Whether `refs/heads/<name>` is there (`rev-parse --verify` exit 1 = not).

@@ -62,6 +62,24 @@ impl TestRepo {
         Self::init_with_autocrlf("true")
     }
 
+    /// A repository whose refs live in the reftable store (git 2.45+), or
+    /// `None` where this git has none — the minimum's `init` knows no
+    /// `--ref-format`.
+    pub fn init_reftable() -> Option<Self> {
+        let mut repo = Self::init();
+        let top = repo.path.clone();
+        std::fs::remove_dir_all(top.join(".git")).expect("start over");
+        let made = repo.git_attempt(&top, &["init", "--ref-format=reftable", "-b", "main"]);
+        if !made.status.success() {
+            return None;
+        }
+        let config = top.join(".git").join("config");
+        let existing = std::fs::read_to_string(&config).expect("read repo config");
+        let repo_config = REPO_CONFIG.replace("{autocrlf}", "false");
+        std::fs::write(&config, format!("{existing}{repo_config}")).expect("write repo config");
+        Some(repo)
+    }
+
     fn init_with_autocrlf(autocrlf: &str) -> Self {
         let dir = super::temp::dir();
         let path = dir.path().join("repo");

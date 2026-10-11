@@ -201,7 +201,10 @@ pub async fn push(
     executor.run(cmd, cancel).await.map(|_| ())
 }
 
-/// `git stash pop <selector>`: restores and removes the entry.
+/// `git stash pop <selector>`: restores and removes the entry, what was
+/// staged in it unstaged — `--no-index` holds that against git 2.55's
+/// `stash.index`, which would make it [`pop_with_index`] (builtin/stash.c
+/// `git_stash_config`; the option is the minimum's too).
 ///
 /// Answers by code: exit 1 covers both a conflicted restore and a no-op,
 /// so the caller weighs it against the working tree, and the write it
@@ -212,10 +215,12 @@ pub async fn pop(
     selector: &str,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        .answers_by_code(1)
-        .args(["stash", "pop", selector]);
+    let cmd = GitCommand::new().cwd(workdir).answers_by_code(1).args([
+        "stash",
+        "pop",
+        "--no-index",
+        selector,
+    ]);
     executor.run(cmd, cancel).await.map(|_| ())
 }
 
@@ -238,18 +243,20 @@ pub async fn pop_with_index(
     executor.run(cmd, cancel).await.map(|_| ())
 }
 
-/// `git stash apply <selector>`: restores and keeps the entry. Exit 1 as
-/// in [`pop`].
+/// `git stash apply <selector>`: restores and keeps the entry. Exit 1 and
+/// `--no-index` as in [`pop`].
 pub async fn apply(
     executor: &GitExecutor,
     workdir: &Path,
     selector: &str,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        .answers_by_code(1)
-        .args(["stash", "apply", selector]);
+    let cmd = GitCommand::new().cwd(workdir).answers_by_code(1).args([
+        "stash",
+        "apply",
+        "--no-index",
+        selector,
+    ]);
     executor.run(cmd, cancel).await.map(|_| ())
 }
 

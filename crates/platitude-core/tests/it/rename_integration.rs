@@ -6,7 +6,7 @@
 use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::ReportKind;
-use platitude_core::{stash, tag};
+use platitude_core::{branch, stash, tag};
 
 #[tokio::test]
 async fn renaming_a_tag_keeps_the_object_it_names() {
@@ -213,7 +213,8 @@ async fn a_stash_another_git_holds_the_lock_of_is_reported_as_locked() {
 }
 
 /// The new entry went in and the old one would not go — its log's lock
-/// taken after the store: both stand, which is the rename half done.
+/// taken after the store: both stand, which is the rename half done, and
+/// the lock is what stopped it.
 #[tokio::test]
 async fn a_stash_whose_old_entry_would_not_go_is_half_renamed() {
     let mut repo = TestRepo::init();
@@ -233,7 +234,7 @@ async fn a_stash_whose_old_entry_would_not_go_is_half_renamed() {
     std::fs::remove_file(repo.path.join(".git/logs/refs/stash.lock")).expect("unlock");
     assert_eq!(
         err.report().map(|report| report.kind),
-        Some(ReportKind::HalfRenamed),
+        Some(ReportKind::HalfRenamedLocked),
         "{err}"
     );
     assert_eq!(
@@ -241,6 +242,80 @@ async fn a_stash_whose_old_entry_would_not_go_is_half_renamed() {
             .lines()
             .collect::<Vec<_>>(),
         vec!["renamed", "On main: chosen"]
+    );
+}
+
+/// A reftable store keeps one lock for every ref and names no file: a tag's
+/// and a stash entry's refusal say `cannot lock references`, and are the
+/// lock's report; a branch's rename says only `branch rename failed`, and
+/// is the plain refusal — the store's lock file on disk is no word of git's.
+/// Only where this git has the store.
+#[tokio::test]
+async fn a_reftable_stores_lock_is_reported_as_a_lock_where_git_names_it() {
+    let Some(mut repo) = TestRepo::init_reftable() else {
+        return;
+    };
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.git(&["branch", "feature"]);
+    repo.git(&["tag", "v1.0"]);
+    repo.write_file("a.txt", "one\n");
+    repo.git(&["stash", "push", "-m", "chosen"]);
+    let chosen = repo.git(&["rev-parse", "stash@{0}"]);
+    let lock = repo.path.join(".git/reftable/tables.list.lock");
+    std::fs::write(&lock, "").expect("lock");
+    let (exec, cancel) = env();
+    let kind = |err: platitude_core::GitError| err.report().map(|report| report.kind);
+
+    let branch = branch::rename(&exec, &repo.path, "feature", "feat", false, &cancel)
+        .await
+        .expect_err("the store is locked");
+    let tag = tag::rename(&exec, &repo.path, "v1.0", "v1.1", &cancel)
+        .await
+        .expect_err("the store is locked");
+    let stashed = stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
+        .await
+        .expect_err("the store is locked");
+    std::fs::remove_file(&lock).expect("unlock");
+    assert!(
+        !branch.to_string().contains("lock"),
+        "git names no lock over a branch: {branch}"
+    );
+    assert_eq!(kind(branch), Some(ReportKind::RenameRefused));
+    assert_eq!(kind(tag), Some(ReportKind::RenameLocked));
+    assert_eq!(kind(stashed), Some(ReportKind::StashRenameLocked));
+    assert_eq!(repo.git(&["branch", "--list", "feat*"]), "feature");
+}
+
+/// The same lock taken between the new entry going in and the old one's
+/// drop: git's drop says only that it could not, so the half-done rename is
+/// git's refusal, not a lock's.
+#[tokio::test]
+async fn a_reftable_stash_whose_old_entry_would_not_go_is_half_renamed_by_git() {
+    let Some(mut repo) = TestRepo::init_reftable() else {
+        return;
+    };
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.write_file("a.txt", "one\n");
+    repo.git(&["stash", "push", "-m", "chosen"]);
+    let chosen = repo.git(&["rev-parse", "stash@{0}"]);
+    repo.write_hook(
+        "reference-transaction",
+        "if [ \"$1\" = committed ]; then : > \"$(git rev-parse --git-dir)/reftable/tables.list.lock\"; fi\n",
+    );
+    let (exec, cancel) = env();
+
+    let err = stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
+        .await
+        .expect_err("the old entry stays");
+    std::fs::remove_file(repo.path.join(".git/reftable/tables.list.lock")).expect("unlock");
+    assert!(
+        !err.to_string().contains("lock"),
+        "git names no lock here: {err}"
+    );
+    assert_eq!(
+        err.report().map(|report| report.kind),
+        Some(ReportKind::HalfRenamedRefused),
+        "{err}"
     );
 }
 

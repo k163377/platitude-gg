@@ -58,6 +58,35 @@ async fn stash_push_drop_and_pop() {
     );
 }
 
+/// git 2.55's `stash.index` would make a plain apply or pop put back what
+/// was staged as staged (`--index`); here they put it back unstaged, as
+/// their names say, and only `pop_with_index` keeps the split.
+#[tokio::test]
+async fn apply_and_pop_put_staged_work_back_unstaged_whatever_stash_index_says() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["config", "stash.index", "true"]);
+    repo.write_file("a.txt", "staged\n");
+    repo.git(&["add", "a.txt"]);
+    repo.git(&["stash", "push", "-m", "staged work"]);
+    let (exec, cancel) = env();
+
+    stash::apply(&exec, &repo.path, "stash@{0}", &cancel)
+        .await
+        .expect("stash apply");
+    assert_eq!(repo.git(&["diff", "--cached", "--name-only"]), "", "apply");
+    repo.git(&["checkout", "--", "a.txt"]);
+
+    stash::pop(&exec, &repo.path, "stash@{0}", &cancel)
+        .await
+        .expect("stash pop");
+    assert_eq!(repo.git(&["diff", "--cached", "--name-only"]), "", "pop");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("a.txt")).unwrap(),
+        "staged\n"
+    );
+}
+
 #[tokio::test]
 async fn stash_includes_untracked_when_asked() {
     let mut repo = TestRepo::init();

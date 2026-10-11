@@ -97,11 +97,14 @@ async fn apply_work(
     }
     let settled_first = !conflicts_now(exec, repo, cancel).await?;
     // Exit 1 is a conflicted apply as well as a refusal, as for `stash apply`
-    // of an entry (`stash::apply`); the working tree tells them apart.
+    // of an entry (`stash::apply`); the working tree tells them apart, and a
+    // refusal's words keep its row a failure. `--no-index`: what was staged
+    // there lands unstaged here whatever `stash.index` says.
     let cmd = GitCommand::new()
         .cwd(&repo.workdir)
         .answers_by_code(1)
-        .args(["stash", "apply"])
+        .except_when_it_says(&report::CARRIED_TURNED_DOWN)
+        .args(["stash", "apply", "--no-index"])
         .arg(stash.commit.to_hex());
     let command = cmd.describe();
     let out = exec.run_unchecked(cmd, cancel).await?;

@@ -102,13 +102,7 @@ pub async fn rename(
     if found.stdout_utf8().trim() != entry.oid {
         // Half done: the list moved, so which entry to drop cannot be
         // worked out (デザイン規約 §答えの要らない報せ / §状態).
-        return Err(crate::report::half_renamed(
-            selector,
-            GitError::UnexpectedOutput {
-                command: "git rev-parse --verify".to_string(),
-                message: "the stash list moved while renaming".to_string(),
-            },
-        ));
+        return Err(crate::report::half_renamed_list_moved(selector));
     }
     run_selector(executor, workdir, "drop", &shifted, cancel)
         .await

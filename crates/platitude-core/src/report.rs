@@ -19,6 +19,17 @@ pub enum ReportKind {
     PrePush,
     /// The same for a delete.
     PrePushDelete,
+    /// A signed push (`push.gpgSign`) whose certificate the signing program
+    /// would not sign — git dies before it sends anything.
+    PushUnsigned {
+        deleting: bool,
+    },
+    /// A signed push the far side does not take (`push.gpgSign=true`
+    /// against a remote with no `receive.certNonceSeed`): git dies before
+    /// it sends anything.
+    SignedPushUntaken {
+        deleting: bool,
+    },
     /// git would not send at all: the remote holds commits the send would
     /// drop (`fetch first`, `non-fast-forward`, `remote ref updated since
     /// checkout`). The session has already queued the fetch that shows
@@ -46,7 +57,7 @@ pub enum ReportKind {
     CommitHook,
     /// git could not sign it: a key gone, a signing program that failed.
     CommitUnsigned,
-    /// Another git process held a lock the commit needed.
+    /// git said a lock the commit needed was taken ([`lock_taken`]).
     CommitLocked,
 
     /// A part of a file that was not taken because the file changed since
@@ -63,15 +74,22 @@ pub enum ReportKind {
     /// cannot be cut into a patch. The pane withholds the pieces; this is
     /// for a write that got here anyway.
     ConflictedPart,
+    /// Nothing staged — files or a part of one — because git said the
+    /// index's lock was taken ([`lock_taken`]). One kind per verb, as the
+    /// heading says what did not happen.
+    StageLocked,
+    UnstageLocked,
+    DiscardLocked,
     /// A rename git would not make. The name itself is answered before the
-    /// press, so what reaches git is the rest — a name taken in the moment
-    /// since, a branch being rebased or bisected. Nothing moved and the box
+    /// press, and a branch being rebased or bisected too, so what reaches
+    /// git is what changed since — a name taken in the moment, a rebase or
+    /// a bisect begun. Nothing moved and the box
     /// stays open, so the gesture goes on
     /// (デザイン規約 §答えの要らない報せ「下端の線は必ず状態色を着る」).
     /// git's words are the log's; the screen says it in its own.
     RenameRefused,
-    /// The same, because another git process held a lock it needed — at
-    /// that moment, or one that crashed and left the lock file behind.
+    /// The same, because git said a lock it needed was taken
+    /// ([`lock_taken`]).
     RenameLocked,
     /// A branch rename git stopped after moving the ref: the new name is
     /// there and the old one gone, but what follows it — the branch's
@@ -81,13 +99,22 @@ pub enum ReportKind {
     /// A rename that stopped between its two halves: the new name was
     /// made and the old one is still there. The one report about something
     /// half done, hence its state colour (デザイン規約 §状態「進行中で対処が要る」).
+    /// This one stopped here: the stash list moved, so which entry to drop
+    /// could not be worked out, and nothing turned anything down.
     HalfRenamed,
+    /// The same, because git turned the old name's removal down — a tag's
+    /// delete, a stash entry's drop.
+    HalfRenamedRefused,
+    /// The same, because git said a lock that removal needed was taken
+    /// ([`lock_taken`]).
+    HalfRenamedLocked,
     /// A stash git would not store under the new message, or whose entry
     /// could not be read again — nothing moved, and the box stays open as
     /// a branch's does ([`Self::RenameRefused`]). The heading names no
     /// entry: `stash@{n}` is not a name the screen shows.
     StashRenameRefused,
-    /// The same, because another git process held the stash's lock.
+    /// The same, because git said the stash's lock was taken
+    /// ([`lock_taken`]).
     StashRenameLocked,
     /// The stash chosen left the list before anything was written — a
     /// drop or a pop elsewhere. Nothing to try again, so the box closes.
@@ -144,9 +171,11 @@ pub enum ReportKind {
     CarriedUnread,
     /// The same, turned down by git for anything else — untracked files here
     /// it would lose or remove rather than overwrite, a conflict standing
-    /// here, an index another tool holds (about which the minimum's git says
-    /// nothing). Its words, where it has any, are the log's.
+    /// here. Its words are the log's.
     CarriedRefused,
+    /// The same, because git said the index's lock was taken (2.55; the
+    /// minimum's apply says nothing over it, which is the plain refusal).
+    CarriedLocked,
     /// A worktree whose folder git did not rename (`git worktree move`) —
     /// nothing moved and the name box stays open holding the name. The name
     /// boxes answer what they know before the press (one folder's name the
@@ -194,8 +223,8 @@ pub enum ReportKind {
     /// band names the operation.
     RewriteWhileStanding,
 
-    /// The three only git's run can tell — after it started, so its row is
-    /// in the log with the words.
+    /// What only git's run can tell — after it started, so its row is in
+    /// the log with the words.
     ///
     /// The `pre-rebase` hook here turned the rewrite down; nothing moved.
     RewritePreRebase,
@@ -205,6 +234,15 @@ pub enum ReportKind {
     /// A commit hook here turned down a commit the replay remade; put back
     /// the same way.
     RewriteCommitHook,
+    /// git said a lock the replay needed was taken ([`lock_taken`]) — put
+    /// back the same way, or turned down before it began (the first
+    /// checkout).
+    RewriteLocked,
+    /// git turned the replay down at its first checkout, which would write
+    /// over untracked files here ([`crate::integrate::UNTRACKED_IN_THE_WAY`]);
+    /// nothing moved. Which commit that checkout lands on is git's to work
+    /// out (sequencer.c `skip_unnecessary_picks`), so nothing asks first.
+    RewriteUntrackedInTheWay,
 }
 
 /// What the far side said no for, as far as its answer tells — the reason
@@ -230,7 +268,8 @@ pub enum RemoteWhy {
     TooLarge,
     /// A push from a shallow clone, which it does not take.
     Shallow,
-    /// Another git process over there held the ref's lock.
+    /// The git over there said the ref's lock was taken ([`lock_taken`],
+    /// on its `remote:` lines).
     Locked,
     /// Anything else.
     Other,
@@ -299,29 +338,38 @@ pub fn withheld_about(kind: ReportKind, name: &str, message: String) -> crate::e
     }
 }
 
-/// How git says a lock file it needed was there already (`LC_ALL=C`; the
-/// same words in lockfile.c's `unable_to_lock_message` from the minimum to
-/// 2.55, whatever advice follows them, and on a remote's `remote:` lines
-/// too). The files backend's: a reftable repository's words fall to the
-/// plain refusal.
-const LOCK_TAKEN: &str = ".lock': File exists";
+/// How git says a lock it needed was taken already (`LC_ALL=C`): a file's,
+/// in lockfile.c's `unable_to_lock_message` from the minimum to 2.55
+/// whatever advice follows, and on a remote's `remote:` lines too; and the
+/// reftable ref store's (git 2.45+, refs/reftable-backend.c — untranslated),
+/// which holds one lock for all its refs and names no file.
+const LOCK_TAKEN: [&str; 2] = [".lock': File exists", "cannot lock references"];
 
-/// Whether git said another git held a lock it needed — at that moment,
-/// or one that crashed and left the lock file behind.
+/// What git 2.55 adds where `core.lockfilePid` left the holder's pid beside
+/// the lock and that process is gone: the lock is stale, not another git's.
+const LOCK_LEFT_BEHIND: &str = "which is no longer running";
+
+/// Whether git said a lock it needed was taken and left open whether
+/// another git holds it — its own words are `Another git process seems to
+/// be running`, or a live pid that may be reused. Not where git says the
+/// holder is gone ([`LOCK_LEFT_BEHIND`]): that is a plain refusal.
+/// Only git's words: where it names no lock (a reftable branch rename says
+/// `branch rename failed`, the minimum's stash apply nothing at all), a lock
+/// file found on disk afterwards is no proof of what turned it down.
 #[must_use]
 pub(crate) fn lock_taken(said: &str) -> bool {
-    said.contains(LOCK_TAKEN)
+    LOCK_TAKEN.iter().any(|words| said.contains(words)) && !said.contains(LOCK_LEFT_BEHIND)
 }
 
 /// A rename git would not make; `from` is the name the row still carries,
-/// since nothing moved.
+/// since nothing moved. A lock git named is its own report ([`lock_taken`]).
 #[must_use]
 pub fn rename_refused(
     from: &str,
     command: String,
     out: &crate::process::GitOutput,
 ) -> crate::error::GitError {
-    let kind = if lock_taken(&out.stderr_utf8()) {
+    let kind = if lock_taken(&out.failure_message()) {
         ReportKind::RenameLocked
     } else {
         ReportKind::RenameRefused
@@ -344,16 +392,48 @@ pub fn rename_unfinished(
     )
 }
 
-/// A rename that got as far as the new name and no further. No command of
-/// its own ran, so the message carried for the log is the failed step's
-/// error ([`GitError::Reported`]'s display).
+/// A rename that got as far as the new name, whose old name git would not
+/// remove ([`ReportKind::HalfRenamedRefused`], [`ReportKind::HalfRenamedLocked`]
+/// where it named a lock). `failed` is that removal's error, carried for
+/// the log ([`GitError::Reported`]'s display); one git did not answer — a
+/// cancel, a git that did not start — comes back as it is.
 #[must_use]
-pub fn half_renamed(name: &str, from: crate::error::GitError) -> crate::error::GitError {
+pub fn half_renamed(name: &str, failed: crate::error::GitError) -> crate::error::GitError {
+    let crate::error::GitError::Failed { stderr, .. } = &failed else {
+        return failed;
+    };
+    let kind = if lock_taken(stderr) {
+        ReportKind::HalfRenamedLocked
+    } else {
+        ReportKind::HalfRenamedRefused
+    };
+    half_done(name, kind, &failed)
+}
+
+/// A stash rename that got as far as the new entry, stopped here because
+/// the list moved: which entry to drop could not be worked out
+/// ([`ReportKind::HalfRenamed`]).
+#[must_use]
+pub fn half_renamed_list_moved(selector: &str) -> crate::error::GitError {
+    let moved = crate::error::GitError::UnexpectedOutput {
+        command: "git rev-parse --verify".to_string(),
+        message: "the stash list moved while renaming".to_string(),
+    };
+    half_done(selector, ReportKind::HalfRenamed, &moved)
+}
+
+/// No command of its own ran, so the message for the log is the step's
+/// error.
+fn half_done(
+    name: &str,
+    kind: ReportKind,
+    step: &crate::error::GitError,
+) -> crate::error::GitError {
     crate::error::GitError::Reported {
         command: "rename".to_string(),
         code: 0,
-        stderr: from.to_string(),
-        report: Box::new(WriteReport::about(ReportKind::HalfRenamed, name)),
+        stderr: step.to_string(),
+        report: Box::new(WriteReport::about(kind, name)),
     }
 }
 
@@ -480,19 +560,40 @@ pub fn worktree_folder_taken(name: &str, path: &str) -> crate::error::GitError {
 /// long before the minimum).
 const CARRIED_OVERWRITES: &str = "would be overwritten";
 
+/// What `git stash apply --no-index` says when it turns the apply down —
+/// the exit 1 it also lands a conflicted apply with, which says nothing on
+/// stderr (builtin/stash.c `do_apply_stash` at the minimum and 2.55: the
+/// index it could not refresh and write — 2.55's words over unmerged
+/// entries here as over a lock, where the minimum says nothing — unmerged
+/// entries again, work here it would overwrite or untracked files it would
+/// remove). Named so its row in the log is a failure with these words under
+/// it, as a report sends the reader there.
+pub(crate) const CARRIED_TURNED_DOWN: [&str; 4] = [
+    "could not write index",
+    "cannot apply a stash in the middle of a merge",
+    CARRIED_OVERWRITES,
+    "would be removed by merge",
+];
+
 /// Another worktree's work that `git stash apply` would not put here. The
 /// screen writes both lines (what was in the way is all git's message
 /// says, and it ends in advice to the terminal); the log keeps git's words.
 /// Only the refusal that names work here as what it would overwrite says
-/// so; any other is one git's words have to explain.
+/// so, and only one that names a lock says that; any other is one git's
+/// words have to explain — another git's lock on the index among them,
+/// over which `stash apply` says only `could not write index` (2.55, as over
+/// an unmerged index) or nothing (the minimum).
 #[must_use]
 pub fn carried_refused(
     name: &str,
     command: String,
     out: &crate::process::GitOutput,
 ) -> crate::error::GitError {
-    let kind = if out.failure_message().contains(CARRIED_OVERWRITES) {
+    let said = out.failure_message();
+    let kind = if said.contains(CARRIED_OVERWRITES) {
         ReportKind::CarriedInTheWay
+    } else if lock_taken(&said) {
+        ReportKind::CarriedLocked
     } else {
         ReportKind::CarriedRefused
     };
@@ -523,7 +624,7 @@ pub fn worktree_rename_refused(name: &str, message: String) -> crate::error::Git
     withheld_about(ReportKind::WorktreeRenameTaken, name, message)
 }
 
-/// The seven rewrites this end turns down before git runs. There is no
+/// The eight rewrites this end turns down before git runs. There is no
 /// command to name, and the screen writes both lines (rules-refs/app-ui.md
 /// 「Rust に文言を置かない」); `message` is only the log's record.
 fn withheld(kind: ReportKind, message: String) -> crate::error::GitError {
@@ -602,8 +703,9 @@ pub fn rewrite_while_standing(standing: &str) -> crate::error::GitError {
 
 /// A rewrite git started and something here turned down
 /// ([`ReportKind::RewritePreRebase`], [`ReportKind::RewriteUnsigned`],
-/// [`ReportKind::RewriteCommitHook`]) — from the rebase's failure, whose
-/// words its row in the log keeps.
+/// [`ReportKind::RewriteCommitHook`], [`ReportKind::RewriteLocked`],
+/// [`ReportKind::RewriteUntrackedInTheWay`]) — from the rebase's failure,
+/// whose words its row in the log keeps.
 #[must_use]
 pub fn rewrite_refused(
     kind: ReportKind,
@@ -673,11 +775,7 @@ mod tests {
     /// words go only to the log.
     #[test]
     fn a_half_done_rename_names_the_ref_and_quotes_nobody() {
-        let inner = crate::error::GitError::UnexpectedOutput {
-            command: "git rev-parse --verify".to_string(),
-            message: "the stash list moved while renaming".to_string(),
-        };
-        let err = half_renamed("stash@{0}", inner);
+        let err = half_renamed_list_moved("stash@{0}");
 
         let report = err.report().expect("a report");
         assert_eq!(report.kind, ReportKind::HalfRenamed);
@@ -689,11 +787,80 @@ mod tests {
         );
     }
 
+    /// git turning the old name's removal down: a lock it names in either
+    /// ref store, and anything else — a reftable store's lock among it,
+    /// where a stash entry's drop names none.
+    #[test]
+    fn a_half_done_rename_git_stopped_says_whether_it_was_a_lock() {
+        let failed = |stderr: &str| crate::error::GitError::Failed {
+            command: "git stash drop".to_string(),
+            code: 1,
+            stderr: stderr.to_string(),
+        };
+        let kind = |err: crate::error::GitError| err.report().map(|report| report.kind);
+        assert_eq!(
+            kind(half_renamed(
+                "stash@{0}",
+                failed(
+                    "error: Unable to create 'C:/t/.git/logs/refs/stash.lock': File exists.\n\
+                     error: stash@{1}: Could not drop stash entry"
+                )
+            )),
+            Some(ReportKind::HalfRenamedLocked)
+        );
+        assert_eq!(
+            kind(half_renamed(
+                "v1.0",
+                failed("error: could not delete reference refs/tags/v1: cannot lock references")
+            )),
+            Some(ReportKind::HalfRenamedLocked),
+            "a reftable store's words"
+        );
+        assert_eq!(
+            kind(half_renamed(
+                "stash@{0}",
+                failed("error: stash@{1}: Could not drop stash entry")
+            )),
+            Some(ReportKind::HalfRenamedRefused)
+        );
+        let cancelled = half_renamed(
+            "stash@{0}",
+            crate::error::GitError::Cancelled {
+                command: "git stash drop".to_string(),
+            },
+        );
+        assert!(
+            cancelled.is_cancelled(),
+            "no answer is no refusal: {cancelled}"
+        );
+    }
+
+    /// Copied off real runs (git 2.55.0.windows.3, `git add` under
+    /// `core.lockfilePid=true` over an `index.lock` with its pid file): a
+    /// live pid leaves open whether another git holds it, as the plain
+    /// words do; a gone one is git saying no git holds it.
+    #[test]
+    fn a_lock_whose_holder_git_says_is_gone_is_no_other_gits() {
+        let taken = "fatal: Unable to create 'C:/t/.git/index.lock': File exists.\n\n";
+        assert!(lock_taken(&format!(
+            "{taken}Another git process seems to be running in this repository, \
+             or the lock file may be stale"
+        )));
+        assert!(lock_taken(&format!(
+            "{taken}Lock may be held by process 7840; if no git process is running, \
+             the lock file may be stale (PIDs can be reused)"
+        )));
+        assert!(!lock_taken(&format!(
+            "{taken}Lock was held by process 4000000, which is no longer running; \
+             the lock file appears to be stale"
+        )));
+    }
+
     fn out(code: i32, stderr: &str) -> crate::process::GitOutput {
         crate::process::GitOutput {
             code,
-            stdout: Vec::new(),
             stderr: stderr.as_bytes().to_vec(),
+            ..Default::default()
         }
     }
 
@@ -852,20 +1019,34 @@ mod tests {
     }
 
     /// git's own refusals of a `stash apply` (unpack-trees at the minimum):
-    /// the two that would overwrite work here say so; one that would lose or
-    /// remove untracked files, and the minimum's silence over an index lock,
-    /// are left to git's words.
+    /// the two that would overwrite work here say so; a lock says so where
+    /// git named it (2.55) — the minimum's silence over one is no lock's; one
+    /// that would lose or remove untracked files is left to git's words.
     #[test]
     fn a_carried_refusal_says_overwritten_only_where_git_does() {
         let kind = |stderr: &str| {
             let out = crate::process::GitOutput {
                 code: 1,
-                stdout: Vec::new(),
                 stderr: stderr.as_bytes().to_vec(),
+                ..Default::default()
             };
             let err = carried_refused("topic", "git stash apply".to_string(), &out);
             err.report().expect("a report").kind
         };
+        assert_eq!(
+            kind(
+                "error: Unable to create 'C:/t/.git/index.lock': File exists.\n\n\
+                 Another git process seems to be running in this repository, or the lock file \
+                 may be stale\nerror: could not write index"
+            ),
+            ReportKind::CarriedLocked,
+            "2.55's words"
+        );
+        assert_eq!(
+            kind("error: could not write index"),
+            ReportKind::CarriedRefused,
+            "2.55 over an unmerged index: no lock named"
+        );
         assert_eq!(
             kind(
                 "error: Your local changes to the following files would be overwritten by merge:\n\ta.txt\n"

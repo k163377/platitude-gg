@@ -56,12 +56,11 @@ pub async fn rename(
     if out.code != 0 {
         return Err(crate::report::rename_refused(from, command, &out));
     }
+    // git names a lock its delete met, in either ref store.
     delete(executor, workdir, from, cancel)
         .await
         .map_err(|error| {
-            // A closing session cancels, and `session::write` tells that
-            // apart; as a report it would raise a bar over a closing window.
-            if error.is_cancelled() || error.report().is_some() {
+            if error.report().is_some() {
                 return error;
             }
             crate::report::half_renamed(from, error)
