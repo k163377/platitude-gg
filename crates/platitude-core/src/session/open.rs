@@ -178,6 +178,7 @@ impl RepoSession {
             remote_branch_read: Latest::default(),
             head_published_read: Latest::default(),
             amend_read: Latest::default(),
+            amend_watch: Mutex::default(),
             carried_read: Latest::default(),
             carried_pane: super::carried::Pane::default(),
             eol_baselines: Mutex::new(HashMap::new()),

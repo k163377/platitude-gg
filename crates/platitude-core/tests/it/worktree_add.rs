@@ -293,10 +293,17 @@ async fn a_branch_a_stopped_rebase_or_bisect_holds_is_named_by_the_listing() {
             .find(|entry| entry.path.ends_with(leaf))
             .map(|entry| (entry.detached, entry.held.clone()))
     };
-    assert_eq!(held("rebasing"), Some((true, Some("rebasing".to_string()))));
+    let by = |branch: &str, by| worktrees::Held {
+        branch: branch.to_string(),
+        by,
+    };
+    assert_eq!(
+        held("rebasing"),
+        Some((true, Some(by("rebasing", worktrees::HeldBy::Rebase))))
+    );
     assert_eq!(
         held("bisecting"),
-        Some((true, Some("bisecting".to_string())))
+        Some((true, Some(by("bisecting", worktrees::HeldBy::Bisect))))
     );
     assert_eq!(
         listed
@@ -311,7 +318,29 @@ async fn a_branch_a_stopped_rebase_or_bisect_holds_is_named_by_the_listing() {
             !repo.git_ok(&["switch", branch]),
             "git keeps {branch} to the worktree it stopped in"
         );
+        // A rename of it is turned down from any worktree, the one it stopped
+        // in too — the name box asks first (`NavSectionModel.heldByOperation`).
+        assert!(
+            !repo.git_ok(&["branch", "-m", branch, "renamed"]),
+            "git renames no {branch} here"
+        );
     }
+    assert!(
+        !repo.git_ok(&[
+            "-C",
+            &rebasing.to_string_lossy(),
+            "branch",
+            "-m",
+            "rebasing",
+            "renamed"
+        ]),
+        "nor in the worktree it stopped in"
+    );
+    // A branch checked out elsewhere, nothing standing, is renamed: git moves
+    // that worktree's HEAD with it.
+    let plain = beside(&repo, "plain");
+    repo.git(&["worktree", "add", "-b", "plain", &plain.to_string_lossy()]);
+    assert!(repo.git_ok(&["branch", "-m", "plain", "plain-renamed"]));
 }
 
 /// What git does with a folder that holds something: it makes the `-b`

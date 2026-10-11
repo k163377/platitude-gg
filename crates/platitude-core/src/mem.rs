@@ -315,6 +315,12 @@ impl Footprint for crate::worktrees::WorktreeEntry {
     }
 }
 
+impl Footprint for crate::worktrees::Held {
+    fn heap_bytes(&self) -> usize {
+        self.branch.heap_bytes()
+    }
+}
+
 impl Footprint for crate::status::StatusItem {
     fn heap_bytes(&self) -> usize {
         match self {

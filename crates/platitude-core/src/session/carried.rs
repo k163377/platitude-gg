@@ -747,7 +747,10 @@ mod tests {
             prunable: false,
             prune_reason: String::new(),
             main,
-            held: held.map(str::to_string),
+            held: held.map(|branch| crate::worktrees::Held {
+                branch: branch.to_string(),
+                by: crate::worktrees::HeldBy::Rebase,
+            }),
         }
     }
 

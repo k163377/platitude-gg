@@ -315,6 +315,12 @@ pub enum SessionEvent {
     AuthorLoaded {
         config: identity::AuthorConfig,
     },
+    /// That read failed: who a commit would be attributed to is not known,
+    /// so the commit button says so rather than waiting on an answer that
+    /// is not coming. The next read that lands answers with
+    /// [`Self::AuthorLoaded`]; the failure itself is the error surface's
+    /// (`OpFailed`).
+    AuthorUnread,
     StashesLoaded {
         stashes: Vec<StashEntry>,
         /// When this listing looked, read like

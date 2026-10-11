@@ -257,6 +257,7 @@ impl RepoSession {
                 let stale = self.eol_marks_stale.swap(false, Ordering::SeqCst);
                 let key = status_key(&status);
                 let moved = relock(&self.status_key).replace(key) != Some(key);
+                self.amend_status(&status);
                 let (eol_marks, lfs) = tokio::join!(
                     async {
                         if stale || moved {

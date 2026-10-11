@@ -55,6 +55,14 @@ pub struct WorktreeStatus {
     pub ahead: i32,
     pub behind: i32,
     pub items: Vec<StatusItem>,
+    /// What the index holds where it differs from HEAD, as one number: a
+    /// hash of each staged entry's whole `--porcelain=v2` record — its index
+    /// mode and blob among it, and its working-tree side too, which moves it
+    /// for an edit the index never saw (one more ask, never one missed). The
+    /// counts stay put when another git stages another hunk of a file
+    /// already staged; this does not — what an amend would make of the
+    /// index is asked again on it (`RepoSession::watch_amend`).
+    pub staged_print: u64,
 }
 
 impl WorktreeStatus {
@@ -239,7 +247,9 @@ pub struct StatusParseError(pub String);
 
 /// Parses `git status --porcelain=v2 -z --branch` output.
 pub fn parse_status(bytes: &[u8]) -> Result<WorktreeStatus, StatusParseError> {
+    use std::hash::{Hash, Hasher};
     let mut status = WorktreeStatus::default();
+    let mut staged_print = std::collections::hash_map::DefaultHasher::new();
     let mut tokens = bytes
         .split(|b| *b == 0)
         .filter(|t| !t.is_empty())
@@ -257,6 +267,9 @@ pub fn parse_status(bytes: &[u8]) -> Result<WorktreeStatus, StatusParseError> {
             // `1 XY sub mH mI mW hH hI path`: 6 fields between XY and path.
             "1" => {
                 let (xy, path) = split_fields(rest, 6, &token)?;
+                if xy.0 != '.' {
+                    token.hash(&mut staged_print);
+                }
                 status.items.push(StatusItem::Tracked {
                     staged: xy.0,
                     unstaged: xy.1,
@@ -270,6 +283,9 @@ pub fn parse_status(bytes: &[u8]) -> Result<WorktreeStatus, StatusParseError> {
                 let orig = tokens
                     .next()
                     .ok_or_else(|| StatusParseError(token.clone()))?;
+                if xy.0 != '.' {
+                    (&token, &orig).hash(&mut staged_print);
+                }
                 status.items.push(StatusItem::Tracked {
                     staged: xy.0,
                     unstaged: xy.1,
@@ -295,6 +311,7 @@ pub fn parse_status(bytes: &[u8]) -> Result<WorktreeStatus, StatusParseError> {
             _ => return Err(StatusParseError(token.clone())),
         }
     }
+    status.staged_print = staged_print.finish();
     Ok(status)
 }
 

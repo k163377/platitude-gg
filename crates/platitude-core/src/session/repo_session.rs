@@ -125,6 +125,9 @@ pub struct RepoSession {
     /// ([`RepoSession::check_amend`]): the tree moves under a ticked amend
     /// box, and only the newest ask answers.
     pub(super) amend_read: Latest,
+    /// Whether an amend is in view, and what the last ask was about
+    /// ([`RepoSession::watch_amend`]).
+    pub(super) amend_watch: Mutex<super::author::AmendWatch>,
     /// One read of another worktree's files at a time
     /// ([`RepoSession::read_carried_status`]), which also orders the
     /// answers: reads of different trees finish in any order, and the pane
@@ -547,7 +550,10 @@ impl RepoSession {
         };
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            match read(Arc::clone(&s), workdir, cancel).await {
+            match read(Arc::clone(&s), workdir, cancel.clone()).await {
+                // A newer ask took over after git answered: its answer is
+                // the one that stands.
+                Ok(_) if cancel.is_cancelled() => {}
                 Ok(event) => s.sink.event(event),
                 Err(e) => s.fail(op, e),
             }

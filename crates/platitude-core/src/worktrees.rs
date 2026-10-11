@@ -32,10 +32,38 @@ pub struct WorktreeEntry {
     /// A bare repository's bare entry takes that place and is still the
     /// main one; the caller drops it for having no working tree.
     pub main: bool,
-    /// The branch a rebase or bisect standing in this worktree is about
-    /// ([`held_by_operation`]): listed `detached`, yet git keeps it to
-    /// this worktree as if it were checked out. `None` elsewhere.
-    pub held: Option<String>,
+    /// The branch a rebase or bisect standing in this worktree is about,
+    /// and which of the two ([`held_by_operation`]): listed `detached`, yet
+    /// git keeps the branch to this worktree as if it were checked out —
+    /// and turns a rename of it down from any worktree (builtin/branch.c
+    /// `reject_rebase_or_bisect_branch`). `None` elsewhere.
+    pub held: Option<Held>,
+}
+
+/// A branch an operation standing in a worktree keeps to it
+/// ([`WorktreeEntry::held`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Held {
+    pub branch: String,
+    pub by: HeldBy,
+}
+
+/// What keeps a branch to a worktree listed `detached` ([`Held`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeldBy {
+    Rebase,
+    Bisect,
+}
+
+impl HeldBy {
+    /// The word the screen branches on.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Rebase => "rebase",
+            Self::Bisect => "bisect",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -151,28 +179,23 @@ pub async fn load(
 ///
 /// Plain file reads, a few per detached worktree: no git process. `None`
 /// where nothing stands, or the worktree's git directory cannot be found.
-fn held_by_operation(path: &Path) -> Option<String> {
-    // A folder for most of the repository's own worktrees; a `gitdir:` file
-    // for a linked one, and for its own under `--separate-git-dir` or as a
-    // submodule's checkout.
-    let dot_git = path.join(".git");
-    let git_dir = if dot_git.is_dir() {
-        dot_git
-    } else {
-        let text = std::fs::read_to_string(&dot_git).ok()?;
-        path.join(text.trim().strip_prefix("gitdir:")?.trim())
-    };
+fn held_by_operation(path: &Path) -> Option<Held> {
+    let git_dir = crate::repo::git_dir_of(path)?;
     let read = |name: &str| {
         std::fs::read_to_string(git_dir.join(name))
             .ok()
             .map(|text| text.trim().to_string())
+    };
+    let held = |branch: &str, by| Held {
+        branch: branch.to_string(),
+        by,
     };
     for head_name in ["rebase-merge/head-name", "rebase-apply/head-name"] {
         if let Some(branch) = read(head_name)
             .as_deref()
             .and_then(|full| full.strip_prefix("refs/heads/"))
         {
-            return Some(branch.to_string());
+            return Some(held(branch, HeldBy::Rebase));
         }
     }
     if !git_dir.join("BISECT_LOG").exists() {
@@ -181,7 +204,8 @@ fn held_by_operation(path: &Path) -> Option<String> {
     let start = read("BISECT_START")?;
     let branch = start.strip_prefix("refs/heads/").unwrap_or(&start);
     let detached = branch.len() >= 40 && branch.bytes().all(|b| b.is_ascii_hexdigit());
-    (!branch.is_empty() && !detached && !branch.starts_with("refs/")).then(|| branch.to_string())
+    (!branch.is_empty() && !detached && !branch.starts_with("refs/"))
+        .then(|| held(branch, HeldBy::Bisect))
 }
 
 /// What a new worktree is made to stand on. Always a branch: every
@@ -226,12 +250,12 @@ pub enum WorktreeOn {
 /// writes to the pipe too once it runs past two seconds — ahead of any
 /// refusal after it.
 ///
-/// A non-zero answer is read against what it left: a worktree git made
-/// and kept is one whose `post-checkout` hook failed
-/// ([`crate::report::worktree_hook_failed`]). Otherwise a `-b` branch there
-/// now was git's — made before it turned the rest down; the branch's own
-/// refusal (its name taken since) ends the command with 255 before
-/// anything else.
+/// A non-zero answer is read against what git recorded and left: a
+/// `post-checkout` hook that ended non-zero in its trace failed over a
+/// worktree git made and kept ([`crate::report::worktree_hook_failed`]).
+/// Otherwise a `-b` branch there now was git's — made before it turned the
+/// rest down; the branch's own refusal (its name taken since) ends the
+/// command with 255 before anything else.
 pub async fn add(
     executor: &GitExecutor,
     workdir: &Path,
@@ -254,6 +278,7 @@ pub async fn add(
     }
     let cmd = GitCommand::new()
         .cwd(workdir)
+        .traced()
         .args(["worktree", "add", "--quiet"]);
     let cmd = match on {
         WorktreeOn::NewBranch { name, start } => cmd.args(["-b", name.as_str(), "--", path, start]),
@@ -272,10 +297,11 @@ pub async fn add(
     if out.code == 0 {
         return Ok(());
     }
-    // git takes back a worktree it began on any failure but the hook's:
-    // a `.git` there now is the one it made and kept (the folder was empty
-    // or absent before, `folder_free`).
-    if Path::new(path).join(".git").is_file() {
+    // git runs the hook only once the worktree is whole, and keeps it over
+    // the hook's no (builtin/worktree.c, the minimum to 2.55); its trace has
+    // the hook's end — a worktree left behind by a take-back that failed is
+    // no hook's.
+    if out.trace.hook_failed(&["post-checkout"]) {
         return Err(crate::report::worktree_hook_failed(name, command, &out));
     }
     // A read that fails here answers "none left": git's refusal is the

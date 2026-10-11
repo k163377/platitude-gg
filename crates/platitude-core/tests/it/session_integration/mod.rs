@@ -7,6 +7,7 @@
 // An inner attribute here covers the child modules too.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
+mod amend_watch;
 mod auto_fetch;
 mod carried;
 mod carried_moved;
