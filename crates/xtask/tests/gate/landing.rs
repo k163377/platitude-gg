@@ -514,7 +514,7 @@ fn ask(sb: &Sandbox, session: &str, at: u64) {
     std::fs::create_dir_all(&permits).expect("the permits' directory");
     std::fs::write(
         permits.join(format!("{session}.land")),
-        format!("open\t{at}\tmain反映して\n"),
+        format!("open\t{at}\t/land\n"),
     )
     .expect("the permit");
 }
@@ -562,7 +562,7 @@ fn a_landing_waits_for_approval_of_pictures_put_up_after_the_ask() {
         text.contains("「行メニューの影」") && !text.contains("見せる前の絵"),
         "only what went up after the ask waits: {text}"
     );
-    assert!(text.contains("「main反映して」"), "{text}");
+    assert!(text.contains("「/land」"), "{text}");
     assert_eq!(sb.main_sha(), before, "nothing moved: {text}");
     assert_eq!(sb.head(&seat), tip, "not even the census: {text}");
     assert!(

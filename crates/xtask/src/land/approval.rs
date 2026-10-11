@@ -53,7 +53,7 @@ fn refusal(seat: &str, asked: &str, unseen: &[String]) -> String {
         "{found}. A landing takes the seat's runs off the board, so they would go unseen — and a \
          picture put up after the ask shows UI the user has not approved. Nothing has moved: \
          tell the user the board holds them (F5) and ask for their approval; the user's next \
-         反映 lands the branch, and putting them up again after a landing is no substitute \
+         /land lands the branch, and putting them up again after a landing is no substitute \
          (CLAUDE.md §Git 運用)."
     )
 }
@@ -66,25 +66,25 @@ mod tests {
     fn the_refusal_names_the_pictures_the_message_and_the_way_on() {
         let text = refusal(
             "c",
-            "「main反映して」 (5m ago)",
+            "「/land」 (5m ago)",
             &["行メニューの影".to_string(), "帯の高さ".to_string()],
         );
         for part in [
             "seat c put 2 run(s)",
-            "「main反映して」 (5m ago)",
+            "「/land」 (5m ago)",
             "「行メニューの影」, 「帯の高さ」",
             "Nothing has moved",
             "approval",
-            "next 反映",
+            "next /land",
             "CLAUDE.md §Git 運用",
         ] {
             assert!(text.contains(part), "{part:?} missing from: {text}");
         }
-        let taken_down = refusal("c", "「main反映して」 (5m ago)", &[]);
+        let taken_down = refusal("c", "「/land」 (5m ago)", &[]);
         for part in [
             "already found runs seat c put",
             "approves nothing",
-            "next 反映",
+            "next /land",
         ] {
             assert!(
                 taken_down.contains(part),

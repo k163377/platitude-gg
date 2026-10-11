@@ -640,14 +640,14 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
   land [<branch>]
       Put a branch on main — the one sanctioned way (CLAUDE.md Git 運用;
       the pre-shell hook lets it through only on the permit the user's
-      latest message opened by saying 反映, and the fast-forward is what
-      spends that permit — one message, one landing that moved main; a
-      landing that stops short spends nothing). In the branch's own
-      worktree: commits a census a gate or a verb run there left dirty
-      (that one generated file, nothing else), rebases the branch onto
-      main when it is behind (a rebase that stops is walked back), runs
-      `gate` there — cached steps are not paid twice, and a census the
-      verbs rewrote is committed as
+      latest message opened by typing /land, the land skill; the
+      fast-forward is what spends that permit — one message, one landing
+      that moved main; a landing that stops short spends nothing). In the
+      branch's own worktree: commits a census a gate or a verb run
+      there left dirty (that one generated file, nothing else), rebases
+      the branch onto main when it is behind (a rebase that stops is
+      walked back), runs `gate` there — cached steps are not paid twice,
+      and a census the verbs rewrote is committed as
       `chore(xtask): the verb census as the land's gate rewrote it` and
       gated once more (a second rewrite stops the landing for a person
       to read) — and only then fast-forwards main, in the primary
@@ -661,7 +661,7 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       (the one the session's permit records): the landing takes them
       off, and what went up after the ask is UI the user has not
       approved, so the session asks for that approval and lands on the
-      next 反映. The landing that found them leaves the permit waiting
+      next /land. The landing that found them leaves the permit waiting
       for that message, so taking them off the board approves nothing.
       Bare `land` from a seat lands the seat's own branch. Once main
       has moved it clears what the session running it made: the

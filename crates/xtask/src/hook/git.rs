@@ -221,9 +221,9 @@ impl Offence {
                  main (CLAUDE.md Git 運用): it rebases the branch in its seat, gates it, \
                  fast-forwards main where main actually is (a hand-typed merge inherits \
                  whatever HEAD the primary checkout happens to be on), and runs only on \
-                 the permit the user's own message opened by asking for it (反映). If the \
-                 user asked for this landing, run `{}`; otherwise leave the work on its \
-                 branch and report it as ready to merge.",
+                 the permit the user's own /land opened. If the user typed /land for this \
+                 landing, run `{}`; otherwise leave the work on its branch and report it as \
+                 ready to merge.",
                 crate::land::LAND.instruction(),
                 crate::land::LAND.line()
             ),

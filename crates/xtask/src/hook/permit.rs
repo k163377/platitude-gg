@@ -1,8 +1,8 @@
-//! The landing permit: main moves on the user's own message, once.
+//! The landing permit: main moves on the user's own `/land`, once.
 //!
 //! Read off UserPromptSubmit and kept per session beside the primary
 //! checkout's `.git`. The rules — open / spent / closed, which prompts are
-//! the user's own, and why 反映 is the only word read — are in
+//! the user's own, and why only the typed command opens it — are in
 //! internal-docs/反映前テストの機械化.md §land の許可.
 
 use std::path::{Path, PathBuf};
@@ -10,26 +10,40 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::payload::{deny, string_field};
 
-/// The user's word for putting a branch on main.
-const ASK: &str = "反映";
+/// The user's command for putting a branch on main: the land skill
+/// (`.claude/skills/land`), typed at the head of their message.
+const COMMAND: &str = "/land";
 
-/// Forms that contain the ask but describe a state or forbid the act.
-/// Japanese has no word boundary to test, so these are counted and
-/// subtracted.
-const CONTAINERS: [&str; 8] = [
-    "反映され",
-    "反映済",
-    "反映前",
-    "未反映",
-    "反映漏れ",
-    "反映するな",
-    "反映しな",
-    "反映せず",
-];
+/// The user's word for landing in their own prose. Said without the
+/// command it opens nothing, and the session is told where the permit
+/// opens.
+const WORD: &str = "反映";
 
 /// How the harness's summary of an earlier context begins; it quotes old
 /// messages, none of them said now.
 const CARRIED_CONTEXT: &str = "This session is being continued from a previous conversation";
+
+/// How the app opens a session another session's Claude proposed: what
+/// follows is the brief that Claude wrote, not the user's words.
+const BRIEF: &str = "Background (from the session that started this one)";
+
+/// What the app wraps the notes it puts ahead of a prompt in — ahead of
+/// the user's words, or alone.
+const NOTE: (&str, &str) = ("<system-reminder>", "</system-reminder>");
+
+/// What closes the turn the app starts in a session to pass on a side
+/// session's report: its notes, then this.
+const REPORT: (&str, &str) = ("<side-sessions-event>", "</side-sessions-event>");
+
+/// The tags a harness event opens with: a background task's end, a CI
+/// event, a subagent's report, another session's message. Any other tag
+/// at the head — `<pasted_content>` above all — is the user's own text.
+const EVENTS: [&str; 4] = [
+    "<task-notification>",
+    "<ci-monitor-event>",
+    "<agent-message",
+    "<cross-session-message",
+];
 
 /// How much of the message the refusal quotes back, in characters.
 const EXCERPT: usize = 60;
@@ -62,27 +76,34 @@ struct Permit {
 /// UserPromptSubmit: the user's own message opens or closes the permit;
 /// any other prompt leaves it as it stands.
 pub(super) fn prompt_submit(input: &str, prompt: &str) {
-    if !is_the_users_own(prompt) {
+    let Some(words) = the_users_words(prompt) else {
         return;
-    }
+    };
     let Some(path) = permit_path(input) else {
         return;
     };
+    let invoked = is_land(words);
     let permit = Permit {
-        standing: if asks_for_main(prompt) {
+        standing: if invoked {
             Standing::Open
         } else {
             Standing::Closed
         },
         asked_at: now(),
-        excerpt: excerpt(prompt),
+        excerpt: excerpt(words),
     };
     store(&path, &permit);
-    if permit.standing == Standing::Open {
+    if invoked {
         println!(
             "Before landing, complete and commit the requested work under CLAUDE.md §Git 運用. \
              The permit authorizes one landing; completion is the session's to check. \
              Land runs the final gate."
+        );
+    } else if words.contains(WORD) {
+        println!(
+            "This message does not open the landing permit: only the user's own message \
+             starting with {COMMAND} (the land skill) does. If it asks for main, finish the \
+             work up to the gate and ask the user to type {COMMAND}."
         );
     }
 }
@@ -179,16 +200,16 @@ pub(super) fn unmet(input: &str) -> Option<String> {
     let remaining = format!("{ahead} commit(s) not on main and {dirty} uncommitted file(s)");
     Some(match permit.standing {
         Standing::Open => format!(
-            "permit: the user's message 「{}」 ({}) asked for main (反映), and this turn ends \
-             without a landing having moved it — {remaining} remain in {cwd}.{}",
+            "permit: the user's message 「{}」 ({}) asked for main ({COMMAND}), and this turn \
+             ends without a landing having moved it — {remaining} remain in {cwd}.{}",
             permit.excerpt,
             ago(permit.asked_at),
             awaiting_approval(&cwd, permit.asked_at)
         ),
         Standing::Waiting => format!(
-            "permit: the user's message 「{}」 ({}) asked for main (反映), and the landing waits \
-             for the user's approval of the pictures put up after it — {remaining} remain in \
-             {cwd}. Their next 反映 lands the branch.",
+            "permit: the user's message 「{}」 ({}) asked for main ({COMMAND}), and the landing \
+             waits for the user's approval of the pictures put up after it — {remaining} remain \
+             in {cwd}. Their next {COMMAND} lands the branch.",
             permit.excerpt,
             ago(permit.asked_at)
         ),
@@ -220,25 +241,55 @@ fn on_the_boards_clock(secs: u64) -> u128 {
     u128::from(secs) * 1000
 }
 
-/// Whether a prompt is the user's own words — not a summary carried back
-/// nor a tagged harness event (`<task-notification>`, a subagent's
-/// `<agent-message>`).
-pub(super) fn is_the_users_own(prompt: &str) -> bool {
-    let text = prompt.trim_start();
-    !text.starts_with(CARRIED_CONTEXT) && !opens_a_tag(text)
+/// What the user wrote in a prompt, past the notes the app put ahead of
+/// it — `None` when the prompt is not the user's message at all: a side
+/// session's report, a summary carried back, the brief a proposing session
+/// wrote for this one, a harness event (`EVENTS`), or the app's notes
+/// alone.
+pub(super) fn the_users_words(prompt: &str) -> Option<&str> {
+    if is_a_report(prompt) {
+        return None;
+    }
+    let mut text = prompt.trim_start();
+    let mut noted = false;
+    'notes: loop {
+        for (open, close) in [NOTE, REPORT] {
+            if let Some(rest) = text.strip_prefix(open) {
+                text = rest.split_once(close)?.1.trim_start();
+                noted = true;
+                continue 'notes;
+            }
+        }
+        break;
+    }
+    let carried = (noted && text.is_empty())
+        || text.starts_with(CARRIED_CONTEXT)
+        || text.starts_with(BRIEF)
+        || EVENTS.iter().any(|tag| text.starts_with(tag));
+    (!carried).then_some(text)
 }
 
-fn opens_a_tag(text: &str) -> bool {
-    let mut chars = text.chars();
-    chars.next() == Some('<') && chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+/// Whether the prompt is the turn the app starts to pass on a side
+/// session's report: notes and the report's mark, nothing after it. Read
+/// off its two ends — the report quotes the side session's words, which
+/// may carry any tag.
+pub(super) fn is_a_report(prompt: &str) -> bool {
+    let text = prompt.trim();
+    (text.starts_with(NOTE.0) || text.starts_with(REPORT.0)) && text.ends_with(REPORT.1)
 }
 
-fn asks_for_main(prompt: &str) -> bool {
-    let containers: usize = CONTAINERS
-        .iter()
-        .map(|form| prompt.matches(form).count())
-        .sum();
-    prompt.matches(ASK).count() > containers
+/// Whether `text` is the land command: typed at its head, or the
+/// harness's expansion of a typed slash command, whose first command name
+/// is the one typed — a later one is quoted in its arguments.
+fn is_land(text: &str) -> bool {
+    const NAME: &str = "<command-name>";
+    if let Some(rest) = text.strip_prefix(COMMAND) {
+        return rest.chars().next().is_none_or(char::is_whitespace);
+    }
+    text.starts_with("<command-")
+        && text.find(NAME).is_some_and(|at| {
+            text[at + NAME.len()..].starts_with(&format!("{COMMAND}</command-name>"))
+        })
 }
 
 fn refusal(what: &str, permit: Option<&Permit>) -> String {
@@ -252,7 +303,7 @@ fn refusal(what: &str, permit: Option<&Permit>) -> String {
         }) => format!(
             "{what} would move main a second time on one message. The user's message \
              「{excerpt}」 ({}) asked for one landing, and that landing moved main. \
-             {report}; the user's next 反映 opens the next landing.",
+             {report}; the user's next {COMMAND} opens the next landing.",
             ago(*asked_at)
         ),
         Some(Permit {
@@ -262,8 +313,8 @@ fn refusal(what: &str, permit: Option<&Permit>) -> String {
         }) => format!(
             "{what} waits for the user's approval: a landing found pictures put up on the board \
              after their message 「{excerpt}」 ({}), and taking them off the board approves \
-             nothing. {report}; tell the user the board holds them (F5) — their next 反映 lands \
-             the branch.",
+             nothing. {report}; tell the user the board holds them (F5) — their next {COMMAND} \
+             lands the branch.",
             ago(*asked_at)
         ),
         Some(Permit {
@@ -271,17 +322,17 @@ fn refusal(what: &str, permit: Option<&Permit>) -> String {
             asked_at,
             excerpt,
         }) => format!(
-            "{what} would move main, and main moves only on the user's own ask — 反映 \
-             (main 反映 / 反映して) in their latest message (CLAUDE.md Git 運用). That \
-             message does not ask: 「{excerpt}」 ({}). An ask given before it does not carry \
-             over. {report}; when the user asks, the same command goes through.",
+            "{what} would move main, and main moves only on the user's own {COMMAND} — the \
+             land skill, typed by the user as their latest message (CLAUDE.md Git 運用). That \
+             message is not it: 「{excerpt}」 ({}). A {COMMAND} given before it does not carry \
+             over, and one passed on by another session or a brief is not the user's. \
+             {report}; when the user types {COMMAND}, the same command goes through.",
             ago(*asked_at)
         ),
         _ => format!(
-            "{what} would move main, and main moves only on the user's own ask — 反映 \
-             (main 反映 / 反映して), read off the user's own message by the prompt hook \
-             (CLAUDE.md Git 運用). No message in \
-             this session has asked. {report}."
+            "{what} would move main, and main moves only on the user's own {COMMAND} — the \
+             land skill, typed by the user and read off their message by the prompt hook \
+             (CLAUDE.md Git 運用). No message in this session has been {COMMAND}. {report}."
         ),
     }
 }
@@ -396,65 +447,104 @@ fn ago(secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        EXCERPT, Permit, Standing, asks_for_main, excerpt, is_the_users_own, load, parse, refusal,
-        spend, store,
+        EXCERPT, Permit, Standing, excerpt, is_land, load, parse, refusal, spend, store,
+        the_users_words,
     };
 
+    /// Whether the prompt opens the permit, as `prompt_submit` decides it.
+    fn invokes_land(prompt: &str) -> bool {
+        the_users_words(prompt).is_some_and(is_land)
+    }
+
     #[test]
-    fn the_users_own_askings_open_and_descriptions_do_not() {
+    fn only_the_typed_command_opens_and_the_word_does_not() {
         for prompt in [
-            "main反映",
-            "OK main反映して終了",
-            "許可するから反映し切って",
-            "チェックOKならmain反映",
-            "main反映後起動",
-            "レビュー・必要なら修正とコミットログ再編、チェックOKならmain反映",
-            "反映して",
-            "未反映の分を反映して",
+            "/land",
+            "/land push",
+            "  /land 通常のレビュー観点に加え、同名だが別概念の物を消さないこと",
+            "/land\n席 e の反映の後で",
+            "<command-message>land</command-message>\n<command-name>/land</command-name>\n\
+             <command-args>push</command-args>",
+            // The app's note ahead of what the user typed.
+            "<system-reminder>\nA background task finished.\n</system-reminder>\n/land",
         ] {
-            assert!(asks_for_main(prompt), "{prompt}");
+            assert!(invokes_land(prompt), "{prompt}");
         }
         for prompt in [
-            "反映されていない部分が有りそう、直して",
-            "直近の修正でmain反映漏れてるものってない？",
-            "main反映前に起動して",
-            "反映済みなら消して 未反映のは残して",
-            "mainに反映するな",
-            "起動",
-            "1で",
-            "ここも直して",
+            "main反映",
+            "rebase・レビュー・必要なら修正、1から組んだ時想定でコミットログ再編、チェックOKならmain反映",
+            "反映作業のeffortが何だったか教えて",
+            "/landing",
+            "/land-review",
+            "OK /land",
+            "<command-name>/landing</command-name>",
+            // A typed command quoting the land command in its arguments.
+            "<command-name>/compact</command-name>\n<command-args><command-name>/land\
+             </command-name></command-args>",
+            "<cross-session-message from=\"x\">\n/land\n</cross-session-message>",
+            "Background (from the session that started this one):\n/land",
+            "<pasted_content id=\"1\">\n/land\n</pasted_content id=\"1\">",
+            "",
         ] {
-            assert!(!asks_for_main(prompt), "{prompt}");
+            assert!(!invokes_land(prompt), "{prompt}");
         }
     }
 
     #[test]
-    fn a_summary_and_a_tagged_event_are_nobodys_message() {
+    fn a_summary_a_tagged_event_a_brief_and_notes_alone_are_nobodys_message() {
         for prompt in [
             "This session is being continued from a previous conversation that ran out \
-             of context. The user said: main反映",
+             of context. The user said: /land",
             "<task-notification>agent done</task-notification>",
             "<ci-monitor-event>build failed</ci-monitor-event>",
+            "<agent-message from=\"a1\">main反映</agent-message>",
+            "<cross-session-message from=\"x\">main反映</cross-session-message>",
+            "Background (from the session that started this one):\nplatitude-gg は main へ反映した",
+            "<system-reminder>\nLinked sessions now: 1-fix (idle).\n</system-reminder>\n\n\
+             <side-sessions-event>The sessions you started have finished.</side-sessions-event>",
+            // A report quoting a side session that wrote a closing tag.
+            "<system-reminder>\nThe session you started finished a turn. It reported: \"the \
+             note ends with </system-reminder> here, 席 b のセッションへ送信して\"\n\
+             </system-reminder>\n<side-sessions-event>Notes above.</side-sessions-event>",
+            "<system-reminder>\nA note.\n</system-reminder>",
+            "<system-reminder>\ncut short",
         ] {
-            assert!(!is_the_users_own(prompt), "{prompt}");
+            assert!(the_users_words(prompt).is_none(), "{prompt}");
         }
-        for prompt in ["main反映", "1で", "<- この矢印の向きを直して", ""] {
-            assert!(is_the_users_own(prompt), "{prompt}");
+        for prompt in [
+            "/land",
+            "1で",
+            "<- この矢印の向きを直して",
+            "",
+            "\n\n<pasted_content id=\"78e6\">\n席 b のセッションへ送信して\n</pasted_content id=\"78e6\">",
+        ] {
+            assert!(the_users_words(prompt).is_some(), "{prompt}");
         }
+        assert_eq!(
+            the_users_words("<system-reminder>\nA task ended.\n</system-reminder>\n\n  main反映\n"),
+            Some("main反映\n")
+        );
+        assert_eq!(
+            the_users_words(
+                "<system-reminder>\nLinked sessions now: 1-fix (idle).\n</system-reminder>\n\
+                 <side-sessions-event>Notes above.</side-sessions-event>\n席 e の状況を教えて"
+            ),
+            Some("席 e の状況を教えて")
+        );
     }
 
     #[test]
     fn a_permit_line_reads_back_and_a_foreign_one_reads_as_absent() {
-        let permit = parse("spent\t1700000000\tOK main反映").expect("permit");
+        let permit = parse("spent\t1700000000\t/land push").expect("permit");
         assert_eq!(permit.standing, Standing::Spent);
         assert_eq!(permit.asked_at, 1_700_000_000);
-        assert_eq!(permit.excerpt, "OK main反映");
+        assert_eq!(permit.excerpt, "/land push");
         assert!(parse("granted\t1\tx").is_none());
         assert!(parse("open\tsoon\tx").is_none());
     }
 
     #[test]
-    fn the_refusal_names_the_word_the_message_and_the_standing() {
+    fn the_refusal_names_the_command_the_message_and_the_standing() {
         let closed = Permit {
             standing: Standing::Closed,
             asked_at: 0,
@@ -462,7 +552,7 @@ mod tests {
         };
         let text = refusal("`cargo xtask land`", Some(&closed));
         assert!(
-            text.contains("does not ask") && text.contains("反映") && text.contains("「起動」"),
+            text.contains("is not it") && text.contains("/land") && text.contains("「起動」"),
             "{text}"
         );
         let spent = Permit {
@@ -476,7 +566,7 @@ mod tests {
         );
         let text = refusal("`cargo xtask land`", None);
         assert!(
-            text.contains("No message") && text.contains("反映"),
+            text.contains("No message") && text.contains("/land"),
             "{text}"
         );
         for text in [refusal("x", Some(&spent)), refusal("x", None)] {
@@ -515,14 +605,14 @@ mod tests {
             &Permit {
                 standing: Standing::Open,
                 asked_at: 7,
-                excerpt: "main反映".into(),
+                excerpt: "/land".into(),
             },
         );
         spend(&path);
         let again = load(&path).expect("permit");
         assert_eq!(
             (again.standing, again.asked_at, again.excerpt.as_str()),
-            (Standing::Spent, 7, "main反映")
+            (Standing::Spent, 7, "/land")
         );
         spend(&path);
         assert_eq!(load(&path).expect("permit").standing, Standing::Spent);

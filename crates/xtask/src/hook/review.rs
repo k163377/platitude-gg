@@ -31,9 +31,10 @@ pub(super) fn prompt_submit(input: &str) -> Result<(), String> {
 
 /// Whether the note answers this prompt: the user's own message asking for
 /// a review. A tagged event — a background task's end, a subagent's report
-/// — asks for nothing, whatever words it carries (`permit`).
+/// — asks for nothing, whatever words it carries, and neither do the app's
+/// notes ahead of the user's words (`permit`).
 fn answers(prompt: &str) -> bool {
-    super::permit::is_the_users_own(prompt) && asks_for_review(prompt)
+    super::permit::the_users_words(prompt).is_some_and(asks_for_review)
 }
 
 /// Whether this prompt asks for a review. One that only mentions a review

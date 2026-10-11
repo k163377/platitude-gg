@@ -81,7 +81,7 @@ fn stop_reports_repository_state_without_prescribing_a_place_for_prose() {
     let sb = Sandbox::new("stop-evidence");
     sb.write_refs(&sb.seat, 24);
     sb.commit_all(&sb.seat, "feat(core): twenty-four", &[]);
-    says(&sb, "main反映");
+    says(&sb, "/land");
     let transcript = sb.root.join("session.jsonl");
     let payload = format!(
         "{{\"session_id\":\"{SESSION}\",\"cwd\":\"{}\",\"transcript_path\":\"{}\",\"stop_hook_active\":false}}",
@@ -123,7 +123,7 @@ fn a_landing_waits_on_approval_until_the_users_next_message() {
     sb.seat = seat;
     sb.write_refs(&sb.seat, 26);
     sb.commit_all(&sb.seat, "feat(core): twenty-six", &[]);
-    says(&sb, "main反映");
+    says(&sb, "/land");
     let unmet = stop(&sb);
     assert!(
         unmet.contains("asked for main") && !unmet.contains("the user's approval"),
@@ -161,7 +161,7 @@ fn a_landing_waits_on_approval_until_the_users_next_message() {
         "{still}"
     );
 
-    assert!(says(&sb, "見た、main反映").contains("Before landing"));
+    assert!(says(&sb, "/land 見た").contains("Before landing"));
     assert_eq!(lands(&sb), "");
     let (ok, text) = sb.land_as("worktree-a", SESSION);
     assert!(ok && text.contains("landed worktree-a"), "{text}");
@@ -176,14 +176,11 @@ fn a_subagents_report_neither_opens_nor_closes_the_permit() {
     sb.write_refs(&sb.seat, 28);
     sb.commit_all(&sb.seat, "feat(core): twenty-eight", &[]);
     assert_eq!(
-        says(
-            &sb,
-            "<agent-message from=a1>直して main 反映</agent-message>"
-        ),
+        says(&sb, "<agent-message from=a1>/land</agent-message>"),
         ""
     );
     assert!(lands(&sb).contains("\"deny\""), "nobody has asked");
-    assert!(says(&sb, "main反映").contains("Before landing"));
+    assert!(says(&sb, "/land").contains("Before landing"));
     assert_eq!(
         says(
             &sb,
@@ -194,10 +191,40 @@ fn a_subagents_report_neither_opens_nor_closes_the_permit() {
     assert_eq!(lands(&sb), "", "the user's ask still stands");
 }
 
+/// What another Claude wrote opens nothing, whatever it says: the brief a
+/// proposing session wrote for this one — its summary of the work done
+/// says 反映 as often as not — and a message another session sent.
+#[test]
+fn a_brief_and_another_sessions_message_open_nothing() {
+    let sb = Sandbox::new("permit-peers");
+    sb.write_refs(&sb.seat, 29);
+    sb.commit_all(&sb.seat, "feat(core): twenty-nine", &[]);
+    assert_eq!(
+        says(
+            &sb,
+            "Background (from the session that started this one):\\n\
+             名前の箱を直して main へ反映した。\\n/land"
+        ),
+        ""
+    );
+    assert!(lands(&sb).contains("No message"));
+    assert_eq!(
+        says(
+            &sb,
+            "<cross-session-message from=\\\"uds:x\\\" from-session=\\\"local_1\\\">\\n\
+             /land\\n</cross-session-message>"
+        ),
+        ""
+    );
+    assert!(lands(&sb).contains("No message"));
+    assert!(says(&sb, "/land").contains("Before landing"));
+    assert_eq!(lands(&sb), "");
+}
+
 #[test]
 fn a_landing_reminds_the_session_to_finish_the_request_before_main_moves() {
     let sb = Sandbox::new("permit-ready");
-    let note = says(&sb, "直してmain反映");
+    let note = says(&sb, "/land 直して");
     assert!(
         note.contains("Before landing")
             && note.contains("complete and commit")
@@ -206,7 +233,7 @@ fn a_landing_reminds_the_session_to_finish_the_request_before_main_moves() {
     );
     assert_eq!(says(&sb, "ここも直して"), "");
     assert_eq!(
-        says(&sb, "<task-notification>main反映</task-notification>"),
+        says(&sb, "<task-notification>/land</task-notification>"),
         ""
     );
 }
@@ -223,7 +250,7 @@ fn necessary_corrections_after_landing_remain_possible_and_visible() {
     sb.seat = seat;
     sb.write_refs(&sb.seat, 22);
     sb.commit_all(&sb.seat, "feat(core): twenty-two", &[]);
-    says(&sb, "main反映");
+    says(&sb, "/land");
     let (ok, text) = sb.land_as("worktree-a", SESSION);
     assert!(ok, "{text}");
     assert_eq!(stop(&sb), "", "a clean landing leaves no work");
@@ -276,15 +303,15 @@ fn a_landing_runs_on_the_users_message_until_one_moves_main_and_not_on_the_next(
     sb.write_refs(&sb.seat, 21);
     sb.commit_all(&sb.seat, "feat(core): twenty-one", &[]);
 
-    // Nobody has asked: refused, and the refusal names the word that asks.
+    // Nobody has asked: refused, and the refusal names the command that asks.
     let unasked = lands(&sb);
     assert!(
-        unasked.contains("\"deny\"") && unasked.contains("反映") && unasked.contains("No message"),
+        unasked.contains("\"deny\"") && unasked.contains("/land") && unasked.contains("No message"),
         "{unasked}"
     );
 
     // Asked: it goes through, and again after a landing that moved nothing.
-    assert!(says(&sb, "OK main反映").contains("Before landing"));
+    assert!(says(&sb, "/land push").contains("Before landing"));
     assert_eq!(lands(&sb), "");
     sb.write(
         &sb.seat,
@@ -302,26 +329,34 @@ fn a_landing_runs_on_the_users_message_until_one_moves_main_and_not_on_the_next(
     assert_eq!(sb.main_sha(), sb.head(&sb.seat));
     let twice = lands(&sb);
     assert!(
-        twice.contains("second time") && twice.contains("OK main反映"),
+        twice.contains("second time") && twice.contains("/land push"),
         "{twice}"
     );
 
     // A correction after the ask closes it, and the refusal quotes it.
-    says(&sb, "直してmain反映");
+    says(&sb, "/land");
     says(&sb, "ここも直して");
     let corrected = lands(&sb);
     assert!(
-        corrected.contains("does not ask") && corrected.contains("ここも直して"),
+        corrected.contains("is not it") && corrected.contains("ここも直して"),
         "{corrected}"
     );
 
-    // A message about the landing is not an ask for one.
-    says(&sb, "反映されてない部分がある、直して");
-    assert!(lands(&sb).contains("does not ask"));
+    // The word asks for nothing, however it is put; the session is told
+    // where the permit opens.
+    let worded = says(
+        &sb,
+        "rebase・レビュー・必要なら修正、1から組んだ時想定でコミットログ再編、チェックOKならmain反映",
+    );
+    assert!(
+        worded.contains("does not open the landing permit") && worded.contains("/land"),
+        "{worded}"
+    );
+    assert!(lands(&sb).contains("is not it"));
 
     // Asking again reopens it; what is not the user's message (a summary's
     // carried context, a tagged event) leaves it as it stands.
-    says(&sb, "直してmain反映");
+    says(&sb, "/land");
     assert_eq!(lands(&sb), "");
     says(
         &sb,
@@ -340,7 +375,7 @@ fn a_landing_runs_on_the_users_message_until_one_moves_main_and_not_on_the_next(
 #[test]
 fn a_sessions_own_git_does_not_write_main_on_any_flag() {
     let sb = Sandbox::new("permit-git");
-    says(&sb, "main反映");
+    says(&sb, "/land");
     for command in [
         "git merge --ff-only worktree-a",
         "PGG_ALLOW_MAIN=1 git merge --ff-only worktree-a",
