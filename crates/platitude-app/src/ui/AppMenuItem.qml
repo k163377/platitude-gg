@@ -8,10 +8,22 @@ MenuItem {
     id: menuItem
 
     /// Whether this row is on offer — false where it cannot be chosen, and then the row goes (デザイン規約 §メニュー).
-    /// Kept apart from `visible`, which it drives: a closed menu's list turns its rows' `visible` off behind the
-    /// binding, and the menu and its dividers read this before it opens.
+    /// Kept apart from `visible`, which `present` drives: a closed menu's list turns its rows' `visible` off behind the
+    /// binding, and the menu and its dividers read these before it opens.
     property bool offered: true
-    visible: menuItem.offered
+    /// Set while the menu keeps its shape (`AppMenu.holdShape`): the row stays as it was then — on show as
+    /// `shownAtHold` says — whatever `offered` turns to. A row gone from under the hand would put another in its place,
+    /// a row come would push the rest down.
+    property bool shapeHeld: false
+    property bool shownAtHold: false
+    /// On show. What the menu lays its rows out and measures by.
+    readonly property bool present: menuItem.shapeHeld ? menuItem.shownAtHold : menuItem.offered
+    /// On show though no longer on offer — the row itself, or the whole card it is on (`AppMenu.applies`: a title row
+    /// greyed for it still opens the card): greyed, saying the menu has to be raised again (デザイン規約 §メニュー).
+    readonly property bool withdrawn:
+        menuItem.shapeHeld && menuItem.shownAtHold
+        && (!menuItem.offered || menuItem.menu !== null && menuItem.menu.applies === false)
+    visible: menuItem.present
 
     /// A short warning tag after the row's words ("already pushed"); the row still runs on click.
     property string note: ""
@@ -93,14 +105,22 @@ MenuItem {
     /// (§無効) but still hoverable, since the line is the point (デザイン規約 §メニュー の削除の表). Presses and holds
     /// do nothing.
     property string blockedReason: ""
-    /// The same, said once for the whole menu (`AppMenu.heldReason`). A card's title row skips it: the rows inside
-    /// carry the line (the card sets its own `heldReason`).
+    /// Whether pressing this row starts git — itself, or through the box or bar it opens — which is what the menu's
+    /// held doors and a command already running hold back (`AppMenu.rowsHeldWhy`). A row that only reads what is on
+    /// screen (`Copy path`) is never held.
+    property bool startsCommand: true
+    /// The same, said once for the whole menu (`AppMenu.rowsHeldWhy`). A card's title row skips it: the rows inside
+    /// carry the line (the card holds and waits on its own).
     readonly property string menuHeldReason:
-        menuItem.subMenu ? ""
-        : menuItem.menu !== null && menuItem.menu.heldReason !== undefined ? menuItem.menu.heldReason : ""
-    /// The row's own reason wins over the menu's: it is about the ref the row names, the more particular line.
+        menuItem.subMenu || !menuItem.startsCommand ? ""
+        : menuItem.menu !== null && menuItem.menu.rowsHeldWhy !== undefined ? menuItem.menu.rowsHeldWhy : ""
+    /// What a row that stopped applying while its menu stood says (`withdrawn`).
+    readonly property string withdrawnWhy: qsTr("The command that ran changed this — open the menu again")
+    /// A row out of offer says only that; else the row's own reason wins over the menu's: it is about the ref the row
+    /// names, the more particular line.
     readonly property string blockedWhy:
-        menuItem.blockedReason !== "" ? menuItem.blockedReason : menuItem.menuHeldReason
+        menuItem.withdrawn ? menuItem.withdrawnWhy
+        : menuItem.blockedReason !== "" ? menuItem.blockedReason : menuItem.menuHeldReason
     readonly property bool blocked: menuItem.blockedWhy !== ""
     /// A worktree's folder inside the row's own reason (`blockedReason`); empty for none.
     property string reasonMarkWord: ""
@@ -154,7 +174,7 @@ MenuItem {
     /// Automation: every press at once without a hand behind them — on a row a hand could press. Answers whether
     /// they went in, so a run that met the row out of reach waits rather than counting presses nothing landed.
     function completeHold() {
-        if (!menuItem.offered || menuItem.blocked || !menuItem.enabled)
+        if (!menuItem.present || menuItem.blocked || !menuItem.enabled)
             return false
         holdDrive.runOut()
         return true
@@ -186,9 +206,9 @@ MenuItem {
                : menuItem.padding + menuItem.holdIndent
     topPadding: 0
     bottomPadding: 0
-    // A row this menu is not offering takes no room: the list lays rows out by height, so an invisible row that keeps
+    // A row this menu is not showing takes no room: the list lays rows out by height, so an invisible row that keeps
     // one leaves a hole.
-    implicitHeight: menuItem.offered ? Theme.rowHeight : 0
+    implicitHeight: menuItem.present ? Theme.rowHeight : 0
     // The chip and the marked name are bid in whole pixels, as the layout hands them out: the row's `RowLayout` rounds
     // each of those up, and a sum rounded once comes up the fractions short — the marked name, laid out last, elides
     // (a Linux font's `worktree remove` + folder).

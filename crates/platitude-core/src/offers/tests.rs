@@ -4,7 +4,7 @@ use super::*;
 /// a time.
 fn offers_on(kind: RefKind, full: &str) -> RefMenuOffers {
     ref_menu(
-        kind, full, "abc123", true, 0, "main", false, "", 0, "", "", false, "origin", "here", "",
+        kind, full, "abc123", true, "main", false, "", 0, "", "", false, "origin", "here", "",
     )
 }
 
@@ -15,7 +15,6 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
         "feat",
         "abc123",
         true,
-        0,
         "main",
         false,
         "",
@@ -81,7 +80,6 @@ fn there_is_nothing_to_be_measured_against_without_a_remote() {
         "feat",
         "abc123",
         true,
-        0,
         "main",
         false,
         "",
@@ -94,24 +92,6 @@ fn there_is_nothing_to_be_measured_against_without_a_remote() {
         "",
     );
     assert!(!offers.set_upstream, "no remote is no question to ask");
-    let busy = ref_menu(
-        RefKind::Branch,
-        "feat",
-        "abc123",
-        true,
-        1,
-        "main",
-        false,
-        "",
-        0,
-        "",
-        "",
-        false,
-        "origin",
-        "here",
-        "",
-    );
-    assert!(!busy.set_upstream, "another git is still running");
 }
 
 #[test]
@@ -127,8 +107,7 @@ fn the_current_branch_keeps_its_rows_but_moves_and_deletes_nowhere() {
 /// [`offers_on`], with `main` tracking `upstream`.
 fn offers_tracked(kind: RefKind, full: &str, upstream: &str) -> RefMenuOffers {
     ref_menu(
-        kind, full, "abc123", true, 0, "main", false, "", 0, "", "", false, "origin", "here",
-        upstream,
+        kind, full, "abc123", true, "main", false, "", 0, "", "", false, "origin", "here", upstream,
     )
 }
 
@@ -166,15 +145,14 @@ fn a_pull_is_offered_on_the_two_ends_of_the_trees_own_comparison() {
     );
 }
 
-/// The upstream's own row, bent by the three things that hold a write
+/// The upstream's own row, bent by the two things that hold a write
 /// back.
-fn pull_on_the_upstream(busy: i32, op_text: &str, detached: bool) -> RefMenuOffers {
+fn pull_on_the_upstream(op_text: &str, detached: bool) -> RefMenuOffers {
     ref_menu(
         RefKind::Remote,
         "origin/main",
         "abc123",
         true,
-        busy,
         if detached { "" } else { "main" },
         detached,
         op_text,
@@ -191,19 +169,15 @@ fn pull_on_the_upstream(busy: i32, op_text: &str, detached: bool) -> RefMenuOffe
 #[test]
 fn a_pull_asks_the_same_standing_the_rows_that_integrate_ask() {
     assert!(
-        pull_on_the_upstream(0, "", false).pull,
+        pull_on_the_upstream("", false).pull,
         "with nothing in the way it is on offer"
     );
     assert!(
-        !pull_on_the_upstream(1, "", false).pull,
-        "another git is still running"
-    );
-    assert!(
-        !pull_on_the_upstream(0, "REBASE 1/3", false).pull,
+        !pull_on_the_upstream("REBASE 1/3", false).pull,
         "an operation is standing in the way"
     );
     assert!(
-        !pull_on_the_upstream(0, "", true).pull,
+        !pull_on_the_upstream("", true).pull,
         "detached there is no branch to pull into"
     );
 }
@@ -215,7 +189,6 @@ fn a_branch_out_in_another_worktree_keeps_switch_and_asks_nothing() {
         "feat",
         "abc123",
         true,
-        0,
         "main",
         false,
         "",
@@ -243,7 +216,7 @@ fn a_branch_out_in_another_worktree_asks_nothing_while_an_operation_stands() {
         for (kind, full) in [(RefKind::Branch, "feat"), (RefKind::Remote, "origin/feat")] {
             let asks = |held: &str| {
                 ref_menu(
-                    kind, full, "abc123", true, 0, "main", false, op, conflicts, held, "", false,
+                    kind, full, "abc123", true, "main", false, op, conflicts, held, "", false,
                     "origin", "here", "",
                 )
                 .switch_asks
@@ -269,7 +242,6 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
         "origin/feat",
         "abc123",
         true,
-        0,
         "main",
         false,
         "",
@@ -298,7 +270,6 @@ fn a_drifted_reading_keeps_the_local_delete_and_loses_the_remote_one() {
         "feat",
         "abc123",
         true,
-        0,
         "main",
         false,
         "",
@@ -325,7 +296,6 @@ fn a_standing_operation_asks_and_holds_back_new_history_but_not_deletes() {
         "feat",
         "abc123",
         true,
-        0,
         "main",
         false,
         "REBASING",
@@ -350,7 +320,6 @@ fn conflicts_alone_make_the_move_ask() {
         "feat",
         "abc123",
         true,
-        0,
         "main",
         false,
         "",
@@ -367,39 +336,12 @@ fn conflicts_alone_make_the_move_ask() {
 }
 
 #[test]
-fn a_running_command_holds_back_every_write_but_not_the_switch() {
-    let offers = ref_menu(
-        RefKind::Branch,
-        "feat",
-        "abc123",
-        true,
-        3,
-        "main",
-        false,
-        "",
-        0,
-        "",
-        "origin/feat",
-        false,
-        "origin",
-        "here",
-        "",
-    );
-    assert!(offers.switch_to);
-    assert!(!offers.branch_here);
-    assert!(!offers.integrate_from);
-    assert!(!offers.delete);
-    assert!(!offers.delete_remote);
-}
-
-#[test]
 fn detached_or_unborn_has_no_branch_to_integrate_into() {
     let detached = ref_menu(
         RefKind::Branch,
         "feat",
         "abc123",
         true,
-        0,
         "",
         true,
         "",
@@ -418,7 +360,6 @@ fn detached_or_unborn_has_no_branch_to_integrate_into() {
         "feat",
         "abc123",
         true,
-        0,
         "",
         false,
         "",
@@ -443,13 +384,12 @@ fn a_tag_moves_nowhere_but_starts_branches_and_deletes() {
 
 /// A tag row on an idle repository, bent by the two things that decide
 /// its own rows: where the pushes go, and which sides the name stands on.
-fn tag_offers(sides: &str, default_remote: &str, busy: i32) -> RefMenuOffers {
+fn tag_offers(sides: &str, default_remote: &str) -> RefMenuOffers {
     ref_menu(
         RefKind::Tag,
         "v1.0",
         "abc123",
         true,
-        busy,
         "main",
         false,
         "",
@@ -465,11 +405,11 @@ fn tag_offers(sides: &str, default_remote: &str, busy: i32) -> RefMenuOffers {
 
 #[test]
 fn only_a_tag_is_pushed_from_this_menu_and_only_with_a_remote_to_send_it_to() {
-    assert!(tag_offers("here", "origin", 0).push_tag);
+    assert!(tag_offers("here", "origin").push_tag);
     for kind in [RefKind::Branch, RefKind::Remote, RefKind::Stash] {
         assert!(
             !ref_menu(
-                kind, "feat", "abc123", true, 0, "main", false, "", 0, "", "", false, "origin",
+                kind, "feat", "abc123", true, "main", false, "", 0, "", "", false, "origin",
                 "here", ""
             )
             .push_tag,
@@ -477,15 +417,11 @@ fn only_a_tag_is_pushed_from_this_menu_and_only_with_a_remote_to_send_it_to() {
         );
     }
     assert!(
-        !tag_offers("here", "", 0).push_tag,
+        !tag_offers("here", "").push_tag,
         "no remote is no destination"
     );
     assert!(
-        !tag_offers("here", "origin", 2).push_tag,
-        "another git command is still running"
-    );
-    assert!(
-        !tag_offers("remote", "origin", 0).push_tag,
+        !tag_offers("remote", "origin").push_tag,
         "a name only a remote has is nothing this repository can send"
     );
 }
@@ -494,12 +430,12 @@ fn only_a_tag_is_pushed_from_this_menu_and_only_with_a_remote_to_send_it_to() {
 /// fixed table: a row with nothing to name is gone rather than greyed.
 #[test]
 fn each_delete_row_needs_the_side_it_names() {
-    let here = tag_offers("here", "origin", 0);
+    let here = tag_offers("here", "origin");
     assert!(here.delete, "made here, so `tag --delete` names it");
     assert!(!here.delete_remote_tag, "no remote is known to carry it");
     assert!(!here.delete_tag_everywhere);
 
-    let over_there = tag_offers("remote", "origin", 0);
+    let over_there = tag_offers("remote", "origin");
     assert!(
         !over_there.delete,
         "`tag --delete` would have nothing to name"
@@ -510,7 +446,7 @@ fn each_delete_row_needs_the_side_it_names() {
         "there is no local half to take with it"
     );
 
-    let both = tag_offers("both", "origin", 0);
+    let both = tag_offers("both", "origin");
     assert!(both.delete && both.delete_remote_tag && both.delete_tag_everywhere);
     assert_eq!(
         both.words(),
@@ -535,7 +471,6 @@ fn a_tag_the_remote_has_elsewhere_loses_both_rows_that_reach_it() {
         "v1.0",
         "abc123",
         true,
-        0,
         "main",
         false,
         "",
@@ -558,7 +493,7 @@ fn a_tag_the_remote_has_elsewhere_loses_both_rows_that_reach_it() {
 /// (`remote::delete_remote_tag`).
 #[test]
 fn an_unread_tag_keeps_its_local_delete_and_offers_no_remote_one() {
-    let unread = tag_offers("", "origin", 0);
+    let unread = tag_offers("", "origin");
     assert!(unread.delete);
     assert!(unread.push_tag);
     assert!(!unread.delete_remote_tag);
@@ -568,7 +503,7 @@ fn an_unread_tag_keeps_its_local_delete_and_offers_no_remote_one() {
 /// No remote configured outweighs a stale reading.
 #[test]
 fn no_remote_leaves_the_tag_only_its_local_delete() {
-    let offers = tag_offers("both", "", 0);
+    let offers = tag_offers("both", "");
     assert!(offers.delete);
     assert!(!offers.delete_remote_tag);
     assert!(!offers.delete_tag_everywhere);
@@ -583,7 +518,6 @@ fn a_stopped_operation_does_not_hold_a_tag_back() {
         "v1.0",
         "abc123",
         true,
-        0,
         "main",
         false,
         "REBASING",

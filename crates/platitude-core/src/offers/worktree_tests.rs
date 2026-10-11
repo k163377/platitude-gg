@@ -9,7 +9,6 @@ fn worktree_row(holder: &str) -> RefMenuOffers {
         "C:/work/topic",
         "abc123",
         true,
-        0,
         "main",
         false,
         "",
@@ -44,33 +43,29 @@ fn the_worktree_the_tab_stands_in_leads_nowhere() {
 #[test]
 fn the_repositorys_own_worktree_has_nothing_to_remove() {
     assert_eq!(
-        worktree_card(true, false, false, 0),
+        worktree_card(true, false, false),
         WorktreeCardOffers::default()
     );
-    assert!(worktree_card(true, false, true, 0).words().is_empty());
+    assert!(worktree_card(true, false, true).words().is_empty());
 }
 
 #[test]
 fn a_worktree_nothing_holds_is_removed_as_it_stands() {
-    let card = worktree_card(false, false, false, 0);
+    let card = worktree_card(false, false, false);
     assert_eq!(card.words(), vec!["remove"]);
 }
 
 /// Every reason keeps the row; the lock goes first, then the tab's own
-/// worktree, then a running write.
+/// worktree.
 #[test]
 fn what_stands_in_the_way_greys_the_row_and_says_which() {
     assert_eq!(
-        worktree_card(false, true, true, 1).words(),
+        worktree_card(false, true, true).words(),
         vec!["remove", "out-locked"]
     );
     assert_eq!(
-        worktree_card(false, false, true, 1).words(),
+        worktree_card(false, false, true).words(),
         vec!["remove", "out-here"]
-    );
-    assert_eq!(
-        worktree_card(false, false, false, 1).words(),
-        vec!["remove", "out-busy"]
     );
 }
 
@@ -82,7 +77,7 @@ fn the_kind_word_is_the_chips() {
 /// The two rows that make a worktree, asked of an idle repository on `main`
 /// with no worktree holding anything.
 fn making(kind: Option<RefKind>, full: &str) -> WorktreeOffers {
-    worktree_rows(kind, full, "abc123", true, 0, "main", "", false)
+    worktree_rows(kind, full, "abc123", true, "main", "", false)
 }
 
 #[test]
@@ -108,7 +103,6 @@ fn a_branch_already_out_offers_only_a_new_one() {
         "feature/topic-a",
         "abc123",
         true,
-        0,
         "main",
         "C:/work/topic",
         false,
@@ -119,16 +113,7 @@ fn a_branch_already_out_offers_only_a_new_one() {
 /// On a detached HEAD every local branch is free.
 #[test]
 fn a_detached_tree_holds_no_branch() {
-    let offers = worktree_rows(
-        Some(RefKind::Branch),
-        "main",
-        "abc123",
-        true,
-        0,
-        "",
-        "",
-        false,
-    );
+    let offers = worktree_rows(Some(RefKind::Branch), "main", "abc123", true, "", "", false);
     assert_eq!(offers.checkout, Some(WorktreeCheckout::Branch));
 }
 
@@ -145,7 +130,6 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
         "origin/feature/login",
         "abc123",
         true,
-        0,
         "main",
         "",
         true,
@@ -154,22 +138,16 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
 }
 
 /// Not even a stopped operation keeps a new worktree from being made: nothing
-/// here is touched. A write out, a stash, a closed tab and a row with no
-/// commit do.
+/// here is touched. A stash, a closed tab and a row with no commit do.
 #[test]
-fn only_a_write_out_or_no_commit_keeps_a_worktree_from_being_made() {
+fn only_a_closed_tab_or_no_commit_keeps_a_worktree_from_being_made() {
     assert!(
-        worktree_rows(None, "", "abc123", true, 1, "main", "", false)
+        worktree_rows(None, "", "abc123", false, "main", "", false)
             .words()
             .is_empty()
     );
     assert!(
-        worktree_rows(None, "", "abc123", false, 0, "main", "", false)
-            .words()
-            .is_empty()
-    );
-    assert!(
-        worktree_rows(None, "", "", true, 0, "main", "", false)
+        worktree_rows(None, "", "", true, "main", "", false)
             .words()
             .is_empty()
     );
@@ -179,7 +157,6 @@ fn only_a_write_out_or_no_commit_keeps_a_worktree_from_being_made() {
             "stash@{0}",
             "abc123",
             true,
-            0,
             "main",
             "",
             false

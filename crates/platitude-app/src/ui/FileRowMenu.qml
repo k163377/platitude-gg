@@ -13,13 +13,22 @@ Item {
 
     required property RepoTab repoTab
     required property WorktreeModel worktree
+    /// The worktree as it stood when the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while
+    /// nothing is out.
+    property var treeAtAsk: null
+    /// What the rows are read off, set by the door that stands them: the worktree — or, for a menu raised under a
+    /// command, `treeAtAsk`.
+    property var tree: fileRowMenu.worktree
     /// Which rows are chosen (`chosenRows()` skips folder rows, which nothing here acts on).
     required property WipPane wipPane
+
+    /// What the rows say while they wait for a git command this window started (`RepoPage.runningWhy`): a menu opened
+    /// under one keeps its rows and greys them until it ends (`AppMenu.runningWhy`).
+    property string runningWhy: ""
 
     /// Decided as it opens and held while it stands (デザイン規約 §メニュー).
     property string bucket: ""
     property string path: ""
-    property bool canWrite: false
     /// Whether git could stash at all — **a question about the tree**: one unmerged path anywhere and git refuses the
     /// whole command, named paths or not, and an unborn repository has nowhere to put one (`BandStashButton`,
     /// `platitude_core::stash::standing`).
@@ -43,15 +52,34 @@ Item {
     anchors.fill: parent
 
     function offer(bucket, path) {
+        fileMenu.releaseShape()
         fileRowMenu.bucket = bucket
         fileRowMenu.path = path
-        fileRowMenu.canWrite = fileRowMenu.repoTab.busyCount === 0
-        fileRowMenu.canStash = fileRowMenu.canWrite && fileRowMenu.worktree.stashStanding === "ready"
+        fileRowMenu.tree = fileRowMenu.treeAtAsk !== null ? fileRowMenu.treeAtAsk : fileRowMenu.worktree
+        fileRowMenu.standOn()
+        fileMenu.offer()
+        fileRowMenu.offered(bucket)
+    }
+    /// Reads and freezes what the rows stand on, off the pane's choice as it is now.
+    function standOn() {
+        fileRowMenu.canStash = fileRowMenu.tree.stashStanding === "ready"
         fileRowMenu.plan = fileRowMenu.planDiscard()
         // Rows, not `chosenCount`: a folder in the choice is a chosen key no command here reaches.
         fileRowMenu.count = fileRowMenu.wipPane.chosenRows().length
-        fileMenu.offer()
-        fileRowMenu.offered(bucket)
+    }
+    /// The command the menu waited for has ended with the menu up: the rows stand on what it left, the menu keeping its
+    /// shape (`AppMenu.holdShape`) — what a discard would now take, whether a stash could now be made. Files the
+    /// command took out of their place in the list leave the menu nothing to act on.
+    function standAgain() {
+        if (!fileRowMenu.showing)
+            return
+        if (fileRowMenu.wipPane.chosenRows().length === 0) {
+            fileMenu.dismiss()
+            return
+        }
+        fileMenu.holdShape()
+        fileRowMenu.tree = fileRowMenu.worktree
+        fileRowMenu.standOn()
     }
 
     /// Automation: the card was asked for on a row of `bucket`.
@@ -75,7 +103,7 @@ Item {
             count: fileRowMenu.repoTab.discardCount,
             only: fileRowMenu.repoTab.discardOnly,
             // Answered before the row is shown, as the colour has to be (デザイン規約 §回数押し).
-            unrecorded: GitFacts.discardUnrecorded(fileRowMenu.worktree.unborn, fileRowMenu.worktree.notCopied,
+            unrecorded: GitFacts.discardUnrecorded(fileRowMenu.tree.unborn, fileRowMenu.tree.notCopied,
                                                    paths)
         }
     }
@@ -136,27 +164,29 @@ Item {
 
     AppMenu {
         id: fileMenu
+        runningWhy: fileRowMenu.runningWhy
+        onWaitEnded: fileRowMenu.standAgain()
         // Named by branch — during a rebase `--ours` / `--theirs` swap over (デザイン規約 §conflict の ours / theirs).
         // Plain clicks: a conflicted file has no settled version to lose.
         AppMenuItem {
             text: fileRowMenu.worktree.sideOurs !== ""
                   ? qsTr("Keep %1's version").arg(fileRowMenu.worktree.sideOurs)
                   : qsTr("Keep this branch's version")
-            offered: fileRowMenu.bucket === "conflicts" && fileRowMenu.canWrite
+            offered: fileRowMenu.bucket === "conflicts"
             onTriggered: fileRowMenu.takeSideNow("ours")
         }
         AppMenuItem {
             text: fileRowMenu.worktree.sideTheirs !== ""
                   ? qsTr("Take %1's version").arg(fileRowMenu.worktree.sideTheirs)
                   : qsTr("Take the incoming version")
-            offered: fileRowMenu.bucket === "conflicts" && fileRowMenu.canWrite
+            offered: fileRowMenu.bucket === "conflicts"
             onTriggered: fileRowMenu.takeSideNow("theirs")
         }
         AppMenuItem {
             text: fileRowMenu.worktree.mergeTool !== ""
                   ? qsTr("Edit in %1").arg(fileRowMenu.worktree.mergeTool)
                   : qsTr("Edit in <merge editor>…")
-            offered: fileRowMenu.bucket === "conflicts" && fileRowMenu.canWrite
+            offered: fileRowMenu.bucket === "conflicts"
             onTriggered: fileRowMenu.openInMergeTool()
         }
         AppMenuSeparator {}
@@ -181,7 +211,7 @@ Item {
             id: fileDiscardItem
             text: fileRowMenu.discardWords(fileRowMenu.plan)
             note: fileRowMenu.discardNote(fileRowMenu.plan)
-            offered: fileRowMenu.bucket !== "conflicts" && fileRowMenu.canWrite
+            offered: fileRowMenu.bucket !== "conflicts"
             holdPresses: Metrics.holdPressesWarned
             holdTone: fileRowMenu.plan && fileRowMenu.plan.unrecorded ? Theme.danger : Theme.warning
             onHeld: {
@@ -192,6 +222,8 @@ Item {
         AppMenuSeparator {}
         AppMenuItem {
             text: fileRowMenu.count > 1 ? qsTr("Copy paths") : qsTr("Copy path")
+            // Reads the screen only, so a running command does not hold it.
+            startsCommand: false
             onTriggered: {
                 const rows = fileRowMenu.wipPane.chosenRows()
                 const paths = []

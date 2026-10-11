@@ -82,6 +82,33 @@ FocusScope {
     /// `AppMenu.heldReason`) — one line, so the pane and the menus cannot disagree.
     readonly property string doorsHeldWhy:
         page.replayRunning || page.planRunOut ? Words.otherCommandRunning : ""
+    /// What a menu's rows say while they wait for a git command this window asked for (`AppMenu.runningWhy`): until
+    /// what it left has been read again (`RepoTab.settling` — git answers ahead of that) and the doors are let go (a
+    /// plan's run is asked for elsewhere, and counted only once it starts). A menu opened under one stands again on
+    /// that reading the moment it ends.
+    readonly property string runningWhy:
+        repoTab.busyCount > 0 || repoTab.settling || page.doorsHeldWhy !== "" ? Words.otherCommandRunning : ""
+    /// The worktree as it stood when the command the menus wait for was asked: what a menu raised under it stands its
+    /// rows on (`CommitMenuState.tree`, `RefRowMenu.tree`, `FileRowMenu.tree`). A replay's poll reads straight through
+    /// the rewrite — a detached HEAD, `REBASING` partway — and rows standing on that are not the rows the menu has with
+    /// nothing running (デザイン規約 §メニュー). Null while nothing is out: a menu standing again reads the worktree.
+    property var treeAtAsk: null
+    onRunningWhyChanged: {
+        if (page.runningWhy === "")
+            page.treeAtAsk = null
+        else if (page.treeAtAsk === null)
+            page.treeAtAsk = page.treeNow()
+    }
+    /// What the menus read of the worktree, copied out.
+    function treeNow() {
+        return {
+            "branch": worktree.branch, "detached": worktree.detached, "opText": worktree.opText,
+            "conflictCount": worktree.conflictCount, "headOid": worktree.headOid, "upstream": worktree.upstream,
+            "pullBlocked": worktree.pullBlocked, "hardResetTakes": worktree.hardResetTakes,
+            "hardResetNotCopied": worktree.hardResetNotCopied, "headReachedElsewhere": worktree.headReachedElsewhere,
+            "stashStanding": worktree.stashStanding, "unborn": worktree.unborn, "notCopied": worktree.notCopied
+        }
+    }
     /// A press landed away from whatever held the keyboard (Main's `FocusRelease`), at `scenePos` — `null` for a press
     /// with no place of its own (the headless run's door). The left menu's name box goes unasked
     /// (デザイン規約 §左メニューの所作), and so does whatever over the graph stands on an empty box (§コミットを探す).
@@ -886,12 +913,16 @@ FocusScope {
             // Every row moves something, so the whole card is held while the doors are, raised from a graph chip too
             // (デザイン規約 §メニュー「入口が違っても同じ操作は同じ文」).
             heldReason: page.doorsHeldWhy
+            runningWhy: page.runningWhy
             repoTab: repoTab
             worktree: worktree
+            treeAtAsk: page.treeAtAsk
             graphModel: graphModel
             branchesModel: branchesModel
             worktreesModel: worktreesModel
             tagsModel: tagsModel
+            remotesModel: remotesModel
+            stashesModel: stashesModel
             onSwitchRequested: (kind, name) => page.switchToRef(kind, name)
             onBranchHereRequested: oidHex => page.startBranchAt(oidHex)
             onTagHereRequested: oidHex => page.startTagAt(oidHex)
@@ -912,6 +943,7 @@ FocusScope {
         active: page.keepBuilt
         sourceComponent: RemoteRowMenu {
             heldReason: page.doorsHeldWhy
+            runningWhy: page.runningWhy
             repoTab: repoTab
             onUrlRequested: name => publishFlow.startEditRemote(name)
         }
@@ -1186,8 +1218,10 @@ FocusScope {
         anchors.fill: parent
         active: page.keepBuilt
         sourceComponent: FileRowMenu {
+            runningWhy: page.runningWhy
             repoTab: repoTab
             worktree: worktree
+            treeAtAsk: page.treeAtAsk
             wipPane: wipPane
             onMergeToolWanted: page.gitSettingsRequested()
             onCopyRequested: text => clipboard.copy(text)
@@ -1250,10 +1284,12 @@ FocusScope {
         id: commitMenuState
         repoTab: repoTab
         worktree: worktree
+        treeAtAsk: page.treeAtAsk
         graphModel: graphModel
         worktreesModel: worktreesModel
         branchesModel: branchesModel
         tagsModel: tagsModel
+        remotesModel: remotesModel
         // Null until the menu is first raised; the one function that reads it is the door that raises it.
         menu: commitMenuSeat.item
     }
@@ -1266,6 +1302,8 @@ FocusScope {
             // Held on the same answer as the left pane's rows: a reset or drop mid-replay is the same accident a
             // switch would be.
             heldReason: page.doorsHeldWhy
+            runningWhy: page.runningWhy
+            onWaitEnded: commitMenuState.standAgain()
             branch: worktree.branch
             oid: commitMenuState.menuOid
             stashRef: commitMenuState.menuStashRef
@@ -2200,7 +2238,11 @@ FocusScope {
         const looks = page.recoverPicked.parts.map(p => p.look)
         const first = part >= 0 ? part : looks.findIndex(look => look !== "uncommitted")
         page.recoverLanding = first >= 0 && looks[first] !== "uncommitted" ? tips[first] : ""
-        page.recoverAwaits = discardModel.restoreAt(page.recoverPick, part)
+        const asked = discardModel.restoreAt(page.recoverPick, part)
+        // Counted out from here, as the tab's own writes are: a menu raised while it waits its turn waits for it.
+        if (asked !== 0)
+            repoTab.countWrite(asked)
+        page.recoverAwaits = asked !== 0
         return page.recoverAwaits
     }
     property string recoverLanding: ""

@@ -56,6 +56,12 @@ Item {
             root.asked = "worktree-add " + mode + " " + branch + " " + start + " " + path + " " + name
     }
 
+    SignalSpy {
+        id: waitEnded
+        target: menu
+        signalName: "waitEnded"
+    }
+
     /// The row wearing that command, read the way the menu reads itself (`AppMenu.offeredRows`), so a row nothing
     /// declares comes back undefined rather than quietly passing.
     function row(code) {
@@ -65,6 +71,33 @@ Item {
                 return item
         }
         return undefined
+    }
+
+    /// A level's own rows on show — not the cards' title rows, which stay live while the rows inside say why — and how
+    /// many of them grey.
+    function rowsOf(level) {
+        let rows = 0
+        let greyed = 0
+        for (let i = 0; i < level.count; i++) {
+            const item = level.itemAt(i)
+            if (!item || item.codeColSeat === undefined || !item.present || item.subMenu)
+                continue
+            rows++
+            if (item.blocked)
+                greyed++
+        }
+        return { "rows": rows, "greyed": greyed }
+    }
+
+    /// What the cards stand on for a row drawing a branch nothing holds (`CommitMenuState.cardFacts`).
+    function branchFacts() {
+        return {
+            "branch": { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
+                        "remoteCounterpartOid": "abc123", "remoteDrifted": false, "open": true, "merged": "yes",
+                        "offers": ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream"] },
+            "tag": { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] },
+            "making": root.makingNothing
+        }
     }
 
     /// `fields` names only what this case is about.
@@ -83,6 +116,14 @@ Item {
     TestCase {
         name: "CommitRowMenu"
         when: windowShown
+
+        function cleanup() {
+            menu.menu.dismiss()
+            menu.runningWhy = ""
+            menu.canMoveBranch = true
+            menu.releaseShape()
+            waitEnded.clear()
+        }
 
         /// The move row is there exactly when core says so (offers::ref_menu `switch_to`); a move that cannot be
         /// made has no row, not a grey one.
@@ -197,6 +238,90 @@ Item {
             verify(Qt.colorEqual(menu.hardResetRow.holdTone, Theme.danger), "a file the copy cannot take")
         }
 
+        /// A menu raised under a git command this window started keeps the rows it has with nothing running, every one
+        /// greyed with what it waits for, and gives them back the moment the command ends — the same menu, still up,
+        /// saying so for the page to stand the rows on what the command left (デザイン規約 §メニュー).
+        function test_a_menu_raised_under_a_running_command_waits_for_it_with_every_row() {
+            root.aimAt({})
+            menu.runningWhy = ""
+            menu.offerCommit(root.branchFacts())
+            const idle = root.rowsOf(menu.menu)
+            menu.menu.dismiss()
+            verify(idle.rows > 0)
+            compare(idle.greyed, 0, "nothing runs, nothing greys")
+
+            menu.runningWhy = Words.otherCommandRunning
+            menu.offerCommit(root.branchFacts())
+            verify(menu.menu.visible, "the menu comes up")
+            const under = root.rowsOf(menu.menu)
+            compare(under.rows, idle.rows, "with the rows it has with nothing running")
+            compare(under.greyed, under.rows, "every one of them waiting")
+            compare(menu.switchItem.blockedWhy, Words.otherCommandRunning, "and saying what for")
+            verify(menu.menu.openSub(menu.branchCard))
+            const card = root.rowsOf(menu.branchCard)
+            verify(card.rows > 0)
+            compare(card.greyed, card.rows, "a card opened under it waits too")
+
+            menu.runningWhy = ""
+            compare(root.rowsOf(menu.menu).greyed, 0, "back the moment it ends")
+            compare(root.rowsOf(menu.branchCard).greyed, 0)
+            verify(menu.menu.visible, "with the menu still up")
+            verify(waitEnded.count > 0, "which says so")
+            menu.menu.dismiss()
+        }
+
+        /// Stood again on a newer reading with the menu up (`CommitMenuState.standAgain`), every level keeps its shape:
+        /// a row the reading takes away greys where it is, in a card as on the first level, and none comes in.
+        function test_a_menu_stood_again_keeps_its_shape_at_every_level() {
+            root.aimAt({ canPull: false })
+            menu.offerCommit(root.branchFacts())
+            verify(menu.menu.openSub(menu.branchCard))
+            const first = root.rowsOf(menu.menu).rows
+            const card = root.rowsOf(menu.branchCard).rows
+            verify(!menu.pullItem.present)
+
+            menu.holdShape()
+            root.aimAt({ canSwitch: false })
+            const facts = root.branchFacts()
+            facts.branch.offers = ["switch", "branch-here", "integrate", "delete", "delete-remote"]
+            menu.standCards(facts)
+            verify(menu.switchItem.withdrawn, "a row the reading takes away greys where it is")
+            compare(menu.switchItem.blockedWhy, menu.switchItem.withdrawnWhy)
+            verify(menu.branchCard.upstreamItem.withdrawn, "in a card as on the first level")
+            verify(!menu.pullItem.present, "a row the reading brings waits for the menu to be raised again")
+            compare(root.rowsOf(menu.menu).rows, first)
+            compare(root.rowsOf(menu.branchCard).rows, card)
+        }
+
+        /// A card the newer reading takes away greys its rows with its title: the greyed title still opens the card,
+        /// and the reset card's rows have no offer of their own to lose.
+        function test_a_card_stood_away_greys_every_row_in_it() {
+            root.aimAt({})
+            menu.offerCommit(root.branchFacts())
+            verify(menu.menu.openSub(menu.resetSubmenu))
+            menu.holdShape()
+            menu.canMoveBranch = false
+            verify(menu.hardResetRow.withdrawn, "the card no longer applies")
+            compare(menu.hardResetRow.blockedWhy, menu.hardResetRow.withdrawnWhy)
+            verify(!menu.hardResetRow.completeHold(), "and its rows take no press")
+            menu.canMoveBranch = true
+            verify(!menu.hardResetRow.withdrawn, "back on offer, back live")
+        }
+
+        /// Only a command running as the menu opened is waited for: one started under a menu already up — the branch
+        /// card's plain delete stands for git's answer with the card up — greys nothing.
+        function test_a_menu_already_up_greys_nothing_for_a_command_started_under_it() {
+            root.aimAt({})
+            menu.runningWhy = ""
+            menu.offerCommit(root.branchFacts())
+            verify(menu.menu.openSub(menu.branchCard))
+            menu.runningWhy = Words.otherCommandRunning
+            compare(root.rowsOf(menu.menu).greyed, 0)
+            compare(root.rowsOf(menu.branchCard).greyed, 0)
+            menu.runningWhy = ""
+            menu.menu.dismiss()
+        }
+
         /// They ask less of the repository than the rest (offers::commit_menu `sequence`).
         function test_the_rows_that_only_add_a_commit_take_the_row_they_stand_on() {
             root.aimAt({})
@@ -272,7 +397,7 @@ Item {
                              "start": "", "path": "C:/work/repo.worktrees/feature-topic-a",
                              "place": "feature-topic-a", "taken": "" }
             root.aimAt({})
-            menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": making })
+            menu.offerCommit({ "branch": empty, "tag": notag, "making": making })
             const card = menu.worktreeCard
             verify(card.applies, "the card stands on a row that names no worktree")
             verify(!card.removeWorktreeItem.offered, "with nothing to take away")
@@ -295,7 +420,7 @@ Item {
                     "worktree-add branch feature/topic-a  C:/work/repo.worktrees/feature-topic-a feature-topic-a")
 
             root.aimAt({ targetKind: "remote", targetName: "origin/feature/remote-only" })
-            menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": {
+            menu.offerCommit({ "branch": empty, "tag": notag, "making": {
                 "oid": menu.oid, "here": true, "checkout": "track", "branch": "feature/remote-only",
                 "start": "origin/feature/remote-only", "path": "C:/work/repo.worktrees/feature-remote-only",
                 "place": "feature-remote-only", "taken": "" } })
@@ -303,19 +428,19 @@ Item {
             compare(root.asked, "worktree-add track feature/remote-only origin/feature/remote-only "
                     + "C:/work/repo.worktrees/feature-remote-only feature-remote-only")
 
-            menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": {
+            menu.offerCommit({ "branch": empty, "tag": notag, "making": {
                 "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/blocked", "start": "",
                 "path": "C:/work/repo.worktrees/feature-blocked", "place": "feature-blocked", "taken": "folder" } })
             compare(card.worktreeAddItem.blockedReason, "The folder is not empty — feature-blocked")
             compare(card.worktreeAddItem.tipMarkWord, "feature-blocked", "the tip's tree mark stands before the folder")
 
-            menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": {
+            menu.offerCommit({ "branch": empty, "tag": notag, "making": {
                 "oid": menu.oid, "here": true, "checkout": "branch", "branch": "fix/listed", "start": "",
                 "path": "C:/work/repo.worktrees/fix-listed", "place": "fix-listed", "taken": "listed" } })
             compare(card.worktreeAddItem.blockedReason, "Taken by another worktree — fix-listed")
             compare(card.worktreeAddItem.tipMarkWord, "fix-listed")
 
-            menu.offerCommit({ "branch": empty, "tag": notag, "busy": 0, "making": root.makingNothing })
+            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.makingNothing })
             verify(!card.worktreeAddItem.offered, "a branch out somewhere has no row, not a grey one")
             verify(!card.applies, "and a row with nothing to make or take away has no card")
             menu.menu.dismiss()

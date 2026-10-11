@@ -32,7 +32,7 @@ Menu {
             return false
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
-            if (row && row.offered && row.wearsSeat === true)
+            if (row && row.present && row.wearsSeat === true)
                 return true
         }
         return false
@@ -49,7 +49,7 @@ Menu {
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
-            if (row && row.offered && row.headInk !== undefined && row.headInk > 0)
+            if (row && row.present && row.headInk !== undefined && row.headInk > 0)
                 widest = Math.max(widest, row.headInk + Theme.spaceXs)
         }
         return widest
@@ -64,14 +64,58 @@ Menu {
     /// Non-empty: every row is out right now, for this reason (read through `AppMenuItem.blockedWhy`). The rows grey
     /// and stay (デザイン規約 §メニュー「「今できない」行は無効で残す」); title rows stay live, since the rows inside say why.
     property string heldReason: ""
+    /// Non-empty while a git command this window asked for is out, its reading included (`RepoPage.runningWhy`): what
+    /// a row says while it waits for it. Live, but **what greys the rows is whether one was out as this menu opened**
+    /// (`waiting`): a menu opened under one keeps the rows it has with nothing out, so its shape does not depend on
+    /// when it was opened (デザイン規約 §メニュー). One opened before it greys nothing — a row of its own may have
+    /// started it and still stand for git's answer (`RefBranchMenu`'s plain delete).
+    property string runningWhy: ""
+    /// Opened while `runningWhy` stood, and it has not ended since.
+    property bool waiting: false
+    /// What this menu waited for has ended with the menu up. The opener reads again what the menu stands on and stands
+    /// the rows on it, the menu keeping its shape (`holdShape`): the rows a press would now act on wrongly — a stash
+    /// renumbered under its selector, a reset over a merge that stopped — are only right off the new reading.
+    signal waitEnded()
+    onRunningWhyChanged: {
+        if (appMenu.runningWhy !== "" || !appMenu.waiting)
+            return
+        appMenu.waiting = false
+        if (appMenu.visible)
+            appMenu.waitEnded()
+    }
+    /// Why every row is out right now, as the rows read it: the held doors first, then the command this menu waits for.
+    readonly property string rowsHeldWhy: appMenu.heldReason !== "" ? appMenu.heldReason
+                                        : appMenu.waiting ? appMenu.runningWhy : ""
 
-    /// Rows on offer — possibly none, since a menu shows only what can be chosen (デザイン規約 §メニュー).
+    /// Before the opener stands the rows on a newer reading with the menu up: the rows on show stay and no other comes
+    /// (`AppMenuItem.shapeHeld`), so no row moves under the hand. A row that stops applying greys where it is; one that
+    /// starts applying waits for the menu to be raised again. Holding a held shape again changes nothing.
+    function holdShape() {
+        for (let i = 0; i < appMenu.count; i++) {
+            const row = appMenu.itemAt(i)
+            // Dividers have no `shapeHeld`: they follow the rows (AppMenuSeparator).
+            if (!row || row.shapeHeld !== false)
+                continue
+            row.shownAtHold = row.offered
+            row.shapeHeld = true
+        }
+    }
+    /// Lets the shape go, for an opener about to stand a fresh menu.
+    function releaseShape() {
+        for (let i = 0; i < appMenu.count; i++) {
+            const row = appMenu.itemAt(i)
+            if (row && row.shapeHeld === true)
+                row.shapeHeld = false
+        }
+    }
+
+    /// Rows on show — possibly none, since a menu shows only what can be chosen (デザイン規約 §メニュー).
     readonly property int offeredRows: {
         let n = 0
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
             // Not dividers, which decide for themselves (AppMenuSeparator).
-            if (row && row.offered && row.codeColSeat !== undefined)
+            if (row && row.present && row.codeColSeat !== undefined)
                 n++
         }
         return n
@@ -123,10 +167,11 @@ Menu {
     // chip that changes while the card stands (`branch -D`) moves no row's words.
     property real codeColW: 0
     onAboutToShow: {
+        appMenu.waiting = appMenu.runningWhy !== ""
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
-            if (row && row.offered && row.codeColSeat !== undefined)
+            if (row && row.present && row.codeColSeat !== undefined)
                 widest = Math.max(widest, row.codeColSeat)
         }
         appMenu.codeColW = widest
@@ -138,7 +183,7 @@ Menu {
     readonly property real holdIndent: {
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
-            if (!row || !row.offered)
+            if (!row || !row.present)
                 continue
             // Either mark takes the same seat, so either one opens it (`AppMenuItem.asks`).
             if ((row.holdPresses !== undefined && row.holdPresses > 0) || row.asks === true)
@@ -154,8 +199,8 @@ Menu {
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
-            // A divider has no `offered`.
-            if (row && row.offered)
+            // A divider has no `present`.
+            if (row && row.present)
                 widest = Math.max(widest, row.implicitWidth)
         }
         return Math.ceil(widest)

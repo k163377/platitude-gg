@@ -31,7 +31,7 @@ AppMenu {
     readonly property alias deleteAnswered: state.deleteAnswered
     readonly property alias deleteMerged: state.deleteMerged
     /// Whether the delete row has an answer coming at all (off the rows, or asked of git). False when the delete is
-    /// out (current branch, held by another worktree, busy); frozen at open, so no answer comes later either.
+    /// out (current branch, held by another worktree); frozen at open, so no answer comes later either.
     /// Only the automation reads it, as "did the input land".
     readonly property alias deleteAsked: state.deleteAsked
     /// The folder the other worktree stands in, as the blocked row names it. The automation reads this as the
@@ -160,7 +160,6 @@ AppMenu {
     /// Why the delete table's rows are out — worn as the rows' `blockedReason` (デザイン規約 §無効).
     readonly property string deleteBlockedOnCurrent:
         qsTr("Switch away first — this is the branch you are on")
-    readonly property string deleteBlockedWhileBusy: Words.otherCommandRunning
     // The state and where, not why (デザイン規約 §hover のツールチップ). The folder, not the whole path git prints:
     // nobody reads a tooltip that wide.
     //: %1 is the folder of the other worktree that has this branch checked out.
@@ -214,8 +213,7 @@ AppMenu {
         offered: branchRow || (heldRow && state.canDelete)
         blockedReason: !branchRow || state.canDelete ? ""
                      : state.onCurrentBranch ? branchCard.deleteBlockedOnCurrent
-                     : state.heldByWorktree !== "" ? branchCard.blockedByWorktree
-                     : branchCard.deleteBlockedWhileBusy
+                     : branchCard.blockedByWorktree
         // Asked of the sentence this row shows, not of the state: a row blocked for another reason names no worktree.
         reasonMarkWord: refDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
         // The plain delete is a delete too: two presses, in the plain ink (デザイン規約 §回数押し). Refused, or reaching
@@ -248,12 +246,10 @@ AppMenu {
         code: "push --delete"
         text: state.remoteCounterpart
         growsForText: false
-        // Seated only while a remote reading exists; grey is "not now" — busy, or on another commit
+        // Seated only while a remote reading exists; grey is "not now" — the reading stands on another commit
         // (デザイン規約 §左メニューの所作 の削除の表).
         offered: state.kind === "branch" && state.remoteCounterpart !== ""
-        blockedReason: state.canDeleteRemote ? ""
-                     : state.remoteDrifted ? Words.differsFrom(state.remoteCounterpart)
-                     : branchCard.deleteBlockedWhileBusy
+        blockedReason: state.canDeleteRemote ? "" : Words.differsFrom(state.remoteCounterpart)
         holdPresses: Metrics.holdPressesWarned
         holdTone: Theme.warning
         onHeld: {
@@ -285,8 +281,7 @@ AppMenu {
         blockedReason: state.canDelete && state.canDeleteRemote ? ""
                      : state.onCurrentBranch ? branchCard.deleteBlockedOnCurrent
                      : state.heldByWorktree !== "" ? branchCard.blockedByWorktree
-                     : state.remoteDrifted ? Words.differsFrom(state.remoteCounterpart)
-                     : branchCard.deleteBlockedWhileBusy
+                     : Words.differsFrom(state.remoteCounterpart)
         // As on the local row.
         reasonMarkWord: refBothDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
         holdPresses: Metrics.holdPressesWarned

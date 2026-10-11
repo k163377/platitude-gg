@@ -4,7 +4,10 @@
 //! encoded here is git's own (the doc on each item).
 //!
 //! Nothing here runs git; the menus freeze the answers as they open
-//! (rules/app-ui.md「メニューは `AppMenu` 系で書く」).
+//! (rules/app-ui.md「メニューは `AppMenu` 系で書く」). A git command
+//! still running is no input: a menu opened under one keeps these rows
+//! and greys them until it ends (`AppMenu.runningWhy`), so its shape does
+//! not depend on when it was opened.
 
 mod message;
 mod moves;
@@ -210,7 +213,6 @@ pub fn ref_menu(
     full: &str,
     oid_hex: &str,
     open: bool,
-    busy_count: i32,
     current_branch: &str,
     detached: bool,
     op_text: &str,
@@ -223,7 +225,6 @@ pub fn ref_menu(
     current_upstream: &str,
 ) -> RefMenuOffers {
     let branchy = matches!(kind, RefKind::Branch | RefKind::Remote);
-    let busy = busy_count > 0;
     let op_standing = !op_text.is_empty();
     let held = !held_by_worktree.is_empty();
     let on_current_branch = kind == RefKind::Branch && full == current_branch;
@@ -241,9 +242,8 @@ pub fn ref_menu(
         // in it, which is when the caller hands no holder.
         switch_to: (branchy && full != current_branch) || (kind == RefKind::Worktree && held),
         switch_asks: !held && (op_standing || conflict_count > 0),
-        branch_here: kind != RefKind::Stash && !oid_hex.is_empty() && !busy && !op_standing,
+        branch_here: kind != RefKind::Stash && !oid_hex.is_empty() && !op_standing,
         integrate_from: open
-            && !busy
             && !detached
             && !current_branch.is_empty()
             && !op_standing
@@ -252,7 +252,6 @@ pub fn ref_menu(
         // What integrating asks for, on one of the two ends of the tree's
         // own comparison.
         pull: open
-            && !busy
             && !detached
             && !current_branch.is_empty()
             && !op_standing
@@ -264,22 +263,20 @@ pub fn ref_menu(
             },
         // A worktree's own delete is the WORKTREE card's
         // ([`worktree_card`]).
-        delete: !busy
-            && kind != RefKind::Worktree
+        delete: kind != RefKind::Worktree
             && !(kind == RefKind::Branch && (full == current_branch || held))
             // A remote-only tag leaves `tag --delete` nothing to name.
             && tag_here,
-        delete_remote: !busy && !remote_counterpart.is_empty() && !remote_drifted,
+        delete_remote: !remote_counterpart.is_empty() && !remote_drifted,
         // Not gated on drift: a remote holding the name elsewhere turns
         // the row into the leased overwrite (デザイン規約 §相手の履歴を置き換える).
-        push_tag: kind == RefKind::Tag && !busy && !default_remote.is_empty() && tag_here,
-        delete_remote_tag: !busy && !default_remote.is_empty() && tag_on_remote && !remote_drifted,
-        delete_tag_everywhere: !busy
-            && !default_remote.is_empty()
+        push_tag: kind == RefKind::Tag && !default_remote.is_empty() && tag_here,
+        delete_remote_tag: !default_remote.is_empty() && tag_on_remote && !remote_drifted,
+        delete_tag_everywhere: !default_remote.is_empty()
             && tag_on_remote
             && tag_here
             && !remote_drifted,
-        set_upstream: kind == RefKind::Branch && !busy && !default_remote.is_empty(),
+        set_upstream: kind == RefKind::Branch && !default_remote.is_empty(),
         on_current_branch,
     }
 }
@@ -341,10 +338,8 @@ impl CommitMenuOffers {
 /// The offers themselves. `stash_ref` is the stash selector (`""` on an
 /// ordinary commit) and routes between the two menus; `head_oid` is the
 /// commit HEAD is on. The other inputs read as in [`ref_menu`].
-#[expect(clippy::too_many_arguments)]
 pub fn commit_menu(
     open: bool,
-    busy_count: i32,
     current_branch: &str,
     detached: bool,
     op_text: &str,
@@ -352,19 +347,17 @@ pub fn commit_menu(
     head_oid: &str,
     stash_ref: &str,
 ) -> CommitMenuOffers {
-    let busy = busy_count > 0;
     let op_standing = !op_text.is_empty();
     let commit_row = !oid_hex.is_empty() && stash_ref.is_empty();
-    let on_branch =
-        open && !busy && !detached && !current_branch.is_empty() && !op_standing && commit_row;
+    let on_branch = open && !detached && !current_branch.is_empty() && !op_standing && commit_row;
     let elsewhere = oid_hex != head_oid;
     CommitMenuOffers {
-        sequence: !busy && !op_standing && commit_row,
+        sequence: !op_standing && commit_row,
         integrate: on_branch && elsewhere,
         edit_history: on_branch,
         move_branch: on_branch && elsewhere,
-        branch_here: open && !busy && !op_standing && commit_row,
-        stash_write: !busy && !stash_ref.is_empty(),
+        branch_here: open && !op_standing && commit_row,
+        stash_write: !stash_ref.is_empty(),
     }
 }
 
@@ -376,8 +369,6 @@ pub enum RemoveOut {
     /// The tab stands in that worktree: git runs inside the folder it would be
     /// deleting, and on Windows stops part-way through it.
     Here,
-    /// Another write is out.
-    Busy,
 }
 
 /// What the WORKTREE card offers for one worktree, decided as the
@@ -394,7 +385,7 @@ pub struct WorktreeCardOffers {
 
 impl WorktreeCardOffers {
     /// The offers as words, the shape `GitFacts.worktreeCardOffers` answers
-    /// with: `remove`, then `out-locked` / `out-here` / `out-busy`.
+    /// with: `remove`, then `out-locked` / `out-here`.
     pub fn words(&self) -> Vec<&'static str> {
         let mut words: Vec<&'static str> = Vec::new();
         if self.remove {
@@ -403,7 +394,6 @@ impl WorktreeCardOffers {
         match self.remove_out {
             Some(RemoveOut::Locked) => words.push("out-locked"),
             Some(RemoveOut::Here) => words.push("out-here"),
-            Some(RemoveOut::Busy) => words.push("out-busy"),
             None => {}
         }
         words
@@ -412,7 +402,7 @@ impl WorktreeCardOffers {
 
 /// The WORKTREE card's rule. `main` is the repository's own worktree, `here`
 /// the one the asking tab stands in.
-pub fn worktree_card(main: bool, locked: bool, here: bool, busy_count: i32) -> WorktreeCardOffers {
+pub fn worktree_card(main: bool, locked: bool, here: bool) -> WorktreeCardOffers {
     if main {
         return WorktreeCardOffers::default();
     }
@@ -420,8 +410,6 @@ pub fn worktree_card(main: bool, locked: bool, here: bool, busy_count: i32) -> W
         Some(RemoveOut::Locked)
     } else if here {
         Some(RemoveOut::Here)
-    } else if busy_count > 0 {
-        Some(RemoveOut::Busy)
     } else {
         None
     };
@@ -482,18 +470,15 @@ impl WorktreeOffers {
 /// `worktree add` — the `switch` row's `Open` leads to the holder. A
 /// remote branch whose local one exists leaves it to that branch's own
 /// row: making the worktree off the remote would mean moving the local one.
-#[expect(clippy::too_many_arguments)]
 pub fn worktree_rows(
     kind: Option<RefKind>,
     full: &str,
     oid_hex: &str,
     open: bool,
-    busy_count: i32,
     current_branch: &str,
     held_by_worktree: &str,
     local_exists: bool,
 ) -> WorktreeOffers {
-    let free = open && busy_count <= 0;
     let held = !held_by_worktree.is_empty();
     let checkout = match kind {
         Some(RefKind::Branch) if !held && full != current_branch => Some(WorktreeCheckout::Branch),
@@ -501,8 +486,8 @@ pub fn worktree_rows(
         _ => None,
     };
     WorktreeOffers {
-        here: free && !oid_hex.is_empty() && kind != Some(RefKind::Stash),
-        checkout: checkout.filter(|_| free && !full.is_empty()),
+        here: open && !oid_hex.is_empty() && kind != Some(RefKind::Stash),
+        checkout: checkout.filter(|_| open && !full.is_empty()),
     }
 }
 

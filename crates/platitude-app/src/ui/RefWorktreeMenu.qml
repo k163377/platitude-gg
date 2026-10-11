@@ -37,7 +37,7 @@ AppMenu {
         property string path: ""
         property string name: ""
         property bool canRemove: false
-        /// Why the row is out — `locked` / `here` / `busy`, or empty (`offers::worktree_card`).
+        /// Why the row is out — `locked` / `here`, or empty (`offers::worktree_card`).
         property string out: ""
         /// What `git worktree lock --reason` was given, empty for none.
         property string lockReason: ""
@@ -53,21 +53,20 @@ AppMenu {
     }
 
     /// Stands the card on a row. `facts` is the worktree the row names (`NavSectionModel.worktreeFacts`) — undefined
-    /// for none, which takes `worktree remove` off the card; `here` is whether this tab stands in it, `busy` the count
-    /// the offers are asked with. `making` is what the carrying menu worked out for the two rows that make a worktree
+    /// for none, which takes `worktree remove` off the card; `here` is whether this tab stands in it. `making` is what
+    /// the carrying menu worked out for the two rows that make a worktree
     /// (`offers::worktree_rows`, `CommitMenuState.askWorktreeRows` / `RefRowMenu.askWorktreeRows`): `oid` (the row's
     /// commit), `here` (`Create worktree here…` has a row), `checkout` (`branch` / `track` / empty for no
     /// `worktree add`), `branch` / `start` (what that row takes out, and the remote branch a tracking one is made off),
     /// and where it goes — `path`, `place` (its folder) and `taken` (what is in the way there).
-    function standOn(facts, here, busy, making) {
-        const offers = facts ? GitFacts.worktreeCardOffers(facts.change, here, busy) : []
+    function standOn(facts, here, making) {
+        const offers = facts ? GitFacts.worktreeCardOffers(facts.change, here) : []
         state.path = facts ? facts.full : ""
         state.name = facts ? facts.name : ""
         state.lockReason = offers.includes("out-locked") ? facts.reason : ""
         state.canRemove = offers.includes("remove")
         state.out = offers.includes("out-locked") ? "locked"
-                  : offers.includes("out-here") ? "here"
-                  : offers.includes("out-busy") ? "busy" : ""
+                  : offers.includes("out-here") ? "here" : ""
         state.oid = making.oid
         state.canHere = making.here
         state.checkout = making.checkout
@@ -126,8 +125,7 @@ AppMenu {
         blockedReason: state.out === "locked"
                        ? (state.lockReason === "" ? qsTr("This worktree is locked")
                                                   : qsTr("Locked — %1").arg(state.lockReason))
-                       : state.out === "here" ? qsTr("This tab is showing this worktree")
-                       : state.out === "busy" ? Words.otherCommandRunning : ""
+                       : state.out === "here" ? qsTr("This tab is showing this worktree") : ""
         holdPresses: Metrics.holdPressesPlain
         holdTone: Theme.textPrimary
         onHeld: {

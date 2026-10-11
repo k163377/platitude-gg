@@ -3,8 +3,9 @@ import platitude
 import platitude.ui
 
 // ---- what the commit menu is standing on ----------------------------
-// The row the menu was opened on and what it may offer there, decided once in `openRowMenu` and held still while the
-// menu stands (デザイン規約 §メニュー) — one place to look for why a row is not on offer.
+// The row the menu was opened on and what it may offer there, decided in `openRowMenu` and held still while the menu
+// stands — read again only when a command the menu waited for has ended (`standAgain`, デザイン規約 §メニュー). One
+// place to look for why a row is not on offer.
 //
 // A `QtObject`: it holds no child (rules-refs/structure.md「切り出した非表示のホストは `Item` にする」). The menu
 // itself is declared on the page, which gives it an item to measure the window through (「描かないホスト」).
@@ -13,6 +14,12 @@ QtObject {
 
     required property RepoTab repoTab
     required property WorktreeModel worktree
+    /// The worktree as it stood when the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while
+    /// nothing is out.
+    property var treeAtAsk: null
+    /// What the rows are read off, set by the door that stands them: the worktree — or, for a menu raised under a
+    /// command, `treeAtAsk`.
+    property var tree: menuState.worktree
     required property GraphModel graphModel
     /// Which worktree has a branch checked out — what the `switch` row needs beyond the commit's own rules.
     required property NavSectionModel worktreesModel
@@ -20,6 +27,8 @@ QtObject {
     /// (`cardFacts`).
     required property NavSectionModel branchesModel
     required property NavSectionModel tagsModel
+    /// Where a remote branch the menu is aimed at points now (`aimedAt`).
+    required property NavSectionModel remotesModel
     /// The menu these answers are handed to, and the one this opens.
     required property CommitRowMenu menu
 
@@ -55,7 +64,8 @@ QtObject {
     /// row.
     property bool menuHardResetNotCopied: false
     /// Whether anything besides this branch still reaches the tip, which decides whether the drop row is held. Held
-    /// still too: a hold mark arriving later re-indents every row (`AppMenu.holdIndent`).
+    /// still too: a hold mark arriving later re-indents every row (`AppMenu.holdIndent`) — but for the menu standing
+    /// again after a command it waited for, where the press count the commit now needs wins over the words' x.
     property bool menuTipHeldElsewhere: false
 
     /// What the WORKTREE card's two making rows stand on (`RefWorktreeMenu.standOn`'s `making`), asked of the commit
@@ -67,8 +77,7 @@ QtObject {
         const offers = GitFacts.worktreeOffers(
             kind, name, oidHex,
             menuState.repoTab.state === "open",
-            menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
-            menuState.worktree.branch,
+            menuState.tree.branch,
             kind === "branch" || kind === "remote" ? menuState.worktreesModel.worktreeHolding(local) : "",
             kind === "remote" && menuState.branchesModel.oidOfName(local) !== "")
         const checkout = offers.includes("checkout-branch") ? "branch"
@@ -102,18 +111,17 @@ QtObject {
         const offers = GitFacts.refMenuOffers(
             kind, name, oidHex,
             menuState.repoTab.state === "open",
-            menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
-            menuState.worktree.branch, menuState.worktree.detached,
-            menuState.worktree.opText, menuState.worktree.conflictCount,
+            menuState.tree.branch, menuState.tree.detached,
+            menuState.tree.opText, menuState.tree.conflictCount,
             // No drift: the rows that reach a remote are the card's (`RefBranchMenu`). The last is the worktree's
             // own upstream, which the `pull` row reads.
             held, "", false, menuState.repoTab.defaultRemote, "",
-            menuState.worktree.upstream)
+            menuState.tree.upstream)
         menuState.menuCanSwitch = offers.includes("switch")
         menuState.menuSwitchAsks = offers.includes("asks")
         menuState.menuHeldLeaf = held === "" ? "" : GitFacts.pathLeaf(held)
         menuState.menuCanPull = offers.includes("pull")
-        menuState.menuPullBlocked = menuState.menuCanPull && menuState.worktree.pullBlocked
+        menuState.menuPullBlocked = menuState.menuCanPull && menuState.tree.pullBlocked
     }
 
     /// The other worktree the menu's name leads to: the one holding the branch (a remote row through the local
@@ -129,21 +137,20 @@ QtObject {
     }
 
     /// What the cards at the foot stand on, aimed at the menu's name — each emptied where that name is another's
-    /// kind, so that card holds only what can still be made here. The WORKTREE card stands on the worktree a
-    /// folder's chip names, or on the one holding the chip's local branch — not a remote chip's, which only leads there
-    /// (`RefRowMenu.offerOn`) — and on what its making rows would make (`askWorktreeRows`). Read here, where the models
-    /// are.
-    function cardFacts(oidHex) {
+    /// kind, so that card holds only what can still be made here. The BRANCH card stands where its branch points,
+    /// `aimAt` (`aimedAt`). The WORKTREE card stands on the worktree a folder's chip names, or on the one holding the
+    /// chip's local branch — not a remote chip's, which only leads there (`RefRowMenu.offerOn`) — and on what its
+    /// making rows would make (`askWorktreeRows`). Read here, where the models are.
+    function cardFacts(oidHex, aimAt) {
         const kind = menuState.menu.targetKind
         const branchy = kind === "branch" || kind === "remote"
         const name = menuState.menu.targetName
         const worktree = kind === "worktree" ? name : kind === "branch" ? menuState.worktreeLeadingFrom(kind, name) : ""
         return {
-            "branch": menuState.branchFacts(branchy ? kind : "", branchy ? name : "", oidHex),
+            "branch": menuState.branchFacts(branchy ? kind : "", branchy ? name : "", aimAt),
             "tag": menuState.tagFacts(kind === "tag" ? "tag" : "", kind === "tag" ? name : "", oidHex),
             "worktree": worktree === "" ? undefined : menuState.worktreesModel.worktreeFacts(worktree),
             "worktreeHere": GitFacts.samePath(worktree, menuState.repoTab.repoPath),
-            "busy": menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
             "making": menuState.askWorktreeRows(kind, name, oidHex)
         }
     }
@@ -167,12 +174,11 @@ QtObject {
             "remoteDrifted": drifted,
             "open": open,
             "merged": !open || kind !== "branch" ? "" : menuState.graphModel.branchDeleteMerged(
-                oidHex, menuState.branchesModel.upstreamOidOf(full), menuState.worktree.headOid),
+                oidHex, menuState.branchesModel.upstreamOidOf(full), menuState.tree.headOid),
             "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex, open,
-                menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
-                menuState.worktree.branch, menuState.worktree.detached,
-                menuState.worktree.opText, menuState.worktree.conflictCount,
+                menuState.tree.branch, menuState.tree.detached,
+                menuState.tree.opText, menuState.tree.conflictCount,
                 held, counterpart, drifted, menuState.repoTab.defaultRemote, "", "")
         }
     }
@@ -196,9 +202,8 @@ QtObject {
             "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex,
                 menuState.repoTab.state === "open",
-                menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
-                menuState.worktree.branch, menuState.worktree.detached,
-                menuState.worktree.opText, menuState.worktree.conflictCount,
+                menuState.tree.branch, menuState.tree.detached,
+                menuState.tree.opText, menuState.tree.conflictCount,
                 "", "", menu.heldBack !== "", menu.pushRemote, sides, "")
         }
     }
@@ -222,30 +227,79 @@ QtObject {
     }
 
     function openRowMenu(oidHex) {
-        menuState.menuOid = oidHex
-        menuState.menuStashRef = menuState.graphModel.stashRefOf(oidHex)
-        const offers = GitFacts.commitMenuOffers(
-            // Nothing running while the doors are held, so the menu keeps its shape
-            // (rules-refs/app-ui.md「ロック中のメニューは `busyCount` を 0 として offers を訊く」).
-            menuState.repoTab.state === "open",
-            menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
-            menuState.worktree.branch, menuState.worktree.detached, menuState.worktree.opText,
-            oidHex, menuState.worktree.headOid, menuState.menuStashRef)
-        if (menuState.menuStashRef !== "") {
-            menuState.menuStashCanWrite = offers.includes("stash-write")
+        menuState.menu.releaseShape()
+        menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree
+        const facts = menuState.standRow(oidHex, oidHex)
+        if (facts === null)
             menuState.menu.offerStash()
+        else
+            menuState.menu.offerCommit(facts)
+    }
+
+    /// The command the menu waited for has ended with the menu up: what it left is read again and the rows stand on
+    /// it, the menu keeping its shape (`AppMenu.holdShape`) — the stash's selector the row now answers to, the notes
+    /// and the presses off where HEAD now is, the BRANCH card off where its branch now points, the rows an operation it
+    /// stopped in takes away greyed. A row the command took off the graph (a stash popped, a commit dropped), or the
+    /// name the menu was aimed at taken away, leaves the menu nothing to act on.
+    function standAgain() {
+        const menu = menuState.menu
+        if (menu === null || !menu.showing)
+            return
+        const wasStash = menuState.menuStashRef !== ""
+        const aimAt = menuState.aimedAt()
+        if (menuState.graphModel.rowOf(menuState.menuOid) < 0 || aimAt === ""
+                || (menuState.graphModel.stashRefOf(menuState.menuOid) !== "") !== wasStash) {
+            menu.withdraw()
             return
         }
+        menu.holdShape()
+        menuState.tree = menuState.worktree
+        const facts = menuState.standRow(menuState.menuOid, aimAt)
+        if (facts !== null)
+            menu.standCards(facts, aimAt)
+    }
+    /// Where the name the menu was aimed at points now, empty where it is gone: a local branch may have moved off the
+    /// row (a commit takes the current branch with it) and its card goes with it. A remote branch that moved counts as
+    /// gone: its `push --delete` is leased to where it stood as the menu went up, and stood again on the new tip it
+    /// would take commits the menu never showed. The rest stand on the row's commit — a tag's chip may be one remote's
+    /// reading, and the WORKTREE card's rows act on the commit.
+    function aimedAt() {
+        const kind = menuState.menu.targetKind
+        const name = menuState.menu.targetName
+        if (kind === "branch")
+            return menuState.branchesModel.oidOfName(name)
+        if (kind === "remote")
+            return menuState.remotesModel.oidOfName(name) === menuState.menuOid ? menuState.menuOid : ""
+        const there = kind === "tag" ? menuState.tagsModel.oidOfName(name) !== ""
+                    : kind !== "worktree" || menuState.worktreesModel.worktreeFacts(name) !== undefined
+        return there ? menuState.menuOid : ""
+    }
+
+    /// Reads and freezes everything the rows stand on, for the row `oidHex` with its name at `aimAt`: what the cards
+    /// stand on, or null for a stash's row, which has no cards.
+    function standRow(oidHex, aimAt) {
+        menuState.menuOid = oidHex
+        menuState.menuStashRef = menuState.graphModel.stashRefOf(oidHex)
+        // No running command is asked about: the menu waits for one with its rows greyed (`AppMenu.runningWhy`), so it
+        // has one shape whenever it is opened.
+        const offers = GitFacts.commitMenuOffers(
+            menuState.repoTab.state === "open",
+            menuState.tree.branch, menuState.tree.detached, menuState.tree.opText,
+            oidHex, menuState.tree.headOid, menuState.menuStashRef)
+        if (menuState.menuStashRef !== "") {
+            menuState.menuStashCanWrite = offers.includes("stash-write")
+            return null
+        }
         menuState.menuPublished = menuState.graphModel.publishedAt(oidHex)
-        menuState.menuHardResetTakes = menuState.worktree.hardResetTakes
-        menuState.menuHardResetNotCopied = menuState.worktree.hardResetNotCopied
-        menuState.menuTipHeldElsewhere = menuState.worktree.headReachedElsewhere
+        menuState.menuHardResetTakes = menuState.tree.hardResetTakes
+        menuState.menuHardResetNotCopied = menuState.tree.hardResetNotCopied
+        menuState.menuTipHeldElsewhere = menuState.tree.headReachedElsewhere
         menuState.menuCanSequence = offers.includes("sequence")
         menuState.menuCanIntegrate = offers.includes("integrate")
         menuState.menuCanEditHistory = offers.includes("edit-history")
         menuState.menuCanMoveBranch = offers.includes("move-branch")
         menuState.menuCanBranchHere = offers.includes("branch-here")
-        menuState.askRefRows(menuState.menu.targetKind, menuState.menu.targetName, oidHex)
-        menuState.menu.offerCommit(menuState.cardFacts(oidHex))
+        menuState.askRefRows(menuState.menu.targetKind, menuState.menu.targetName, aimAt)
+        return menuState.cardFacts(oidHex, aimAt)
     }
 }

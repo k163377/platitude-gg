@@ -12,9 +12,14 @@ Item {
     /// Why both rows are out while the write doors are held (`RepoPage.doorsHeldWhy`): configuration, but still a
     /// write (`AppMenu.heldReason`).
     property string heldReason: ""
+    /// What the rows say while they wait for a git command this window started (`RepoPage.runningWhy`): a menu opened
+    /// under one greys them until it ends (`AppMenu.runningWhy`).
+    property string runningWhy: ""
 
     /// The remote the menu stands on.
     property string remote: ""
+    /// Whether the mark row is on offer: decided as the menu opens and held while it stands (デザイン規約 §メニュー).
+    property bool canMark: false
 
     readonly property alias menu: menu
     readonly property alias opened: menu.opened
@@ -27,13 +32,33 @@ Item {
 
     /// The one door in. Says whether it opened.
     function offerOn(name) {
+        menu.releaseShape()
         remoteRowMenu.remote = name
+        remoteRowMenu.standOn()
         return menu.offer()
+    }
+    function standOn() {
+        remoteRowMenu.canMark = remoteRowMenu.remote !== ""
+                                && remoteRowMenu.remote !== remoteRowMenu.repoTab.markedOrigin
+    }
+    /// The command the menu waited for has ended with the menu up: the rows stand on what it left, the menu keeping
+    /// its shape (`AppMenu.holdShape`). A remote the command took away leaves the menu nothing to act on.
+    function standAgain() {
+        if (!remoteRowMenu.showing)
+            return
+        if (remoteRowMenu.repoTab.remoteNames.indexOf(remoteRowMenu.remote) < 0) {
+            menu.dismiss()
+            return
+        }
+        menu.holdShape()
+        remoteRowMenu.standOn()
     }
 
     AppMenu {
         id: menu
         heldReason: remoteRowMenu.heldReason
+        runningWhy: remoteRowMenu.runningWhy
+        onWaitEnded: remoteRowMenu.standAgain()
 
         AppMenuItem {
             //: Opens the form that holds this remote's URL. Says the same words as the form's own heading.
@@ -45,8 +70,7 @@ Item {
         AppMenuItem {
             id: markItem
             text: qsTr("Mark as origin (default remote)")
-            offered: remoteRowMenu.remote !== "" && remoteRowMenu.remote !== remoteRowMenu.repoTab.markedOrigin
-            blockedReason: remoteRowMenu.repoTab.busyCount === 0 ? "" : Words.otherCommandRunning
+            offered: remoteRowMenu.canMark
             onTriggered: remoteRowMenu.repoTab.markOrigin(remoteRowMenu.remote)
         }
     }

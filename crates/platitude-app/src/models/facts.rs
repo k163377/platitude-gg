@@ -76,12 +76,11 @@ impl GitFacts {
     /// `state` is the worktree's row word (`models::nav::item` — `MAIN` /
     /// `LOCKED` / `PRUNABLE` / empty), `here` whether the tab stands in it.
     #[qslot]
-    fn worktree_card_offers(&self, state: String, here: bool, busy_count: i32) -> Vec<String> {
+    fn worktree_card_offers(&self, state: String, here: bool) -> Vec<String> {
         platitude_core::offers::worktree_card(
             state == crate::models::nav::MAIN,
             state == crate::models::nav::LOCKED,
             here,
-            busy_count,
         )
         .words()
         .into_iter()
@@ -101,7 +100,6 @@ impl GitFacts {
         full: String,
         oid_hex: String,
         open: bool,
-        busy_count: i32,
         current_branch: String,
         held_by_worktree: String,
         local_exists: bool,
@@ -111,7 +109,6 @@ impl GitFacts {
             &full,
             &oid_hex,
             open,
-            busy_count,
             &current_branch,
             &held_by_worktree,
             local_exists,
@@ -246,7 +243,6 @@ impl GitFacts {
         full: String,
         oid_hex: String,
         open: bool,
-        busy_count: i32,
         current_branch: String,
         detached: bool,
         op_text: String,
@@ -266,7 +262,6 @@ impl GitFacts {
             &full,
             &oid_hex,
             open,
-            busy_count,
             &current_branch,
             detached,
             &op_text,
@@ -291,7 +286,6 @@ impl GitFacts {
     fn commit_menu_offers(
         &self,
         open: bool,
-        busy_count: i32,
         current_branch: String,
         detached: bool,
         op_text: String,
@@ -301,7 +295,6 @@ impl GitFacts {
     ) -> Vec<String> {
         platitude_core::offers::commit_menu(
             open,
-            busy_count,
             &current_branch,
             detached,
             &op_text,

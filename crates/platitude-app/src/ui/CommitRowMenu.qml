@@ -8,8 +8,8 @@ import platitude.ui
 // the chip's stacked list.
 //
 // Nothing here is looked up and nothing is run: answers arrive as plain values, held still from the moment the menu
-// opens (`CommitMenuState`, デザイン規約 §メニュー), and presses leave as signals for `RepoPage` — which is what lets
-// `tst_commitrowmenu.qml` drive the real menu.
+// opens until a command it waited for has ended (`CommitMenuState`, デザイン規約 §メニュー), and presses leave as
+// signals for `RepoPage` — which is what lets `tst_commitrowmenu.qml` drive the real menu.
 //
 // An `Item` because a menu measures the window through the item it was declared under (`AppMenu.ownerItem`).
 Item {
@@ -18,6 +18,9 @@ Item {
     /// Why every row is out while a history-replaying write holds the doors (`RepoPage.doorsHeldWhy`). Every card
     /// takes it; the rows stay and grey (`AppMenu.heldReason`).
     property string heldReason: ""
+    /// What the rows say while they wait for a git command this window started (`RepoPage.runningWhy`). Every card
+    /// takes it; a card opened under one keeps its rows and greys them until it ends (`AppMenu.runningWhy`).
+    property string runningWhy: ""
 
     /// The name this menu is aimed at: the one the chip draws, or the one pressed in the chip's stacked list. `kind`
     /// is `branch` / `remote` / `tag`, or `worktree` for a worktree's folder chip — its name then the worktree's path —
@@ -106,14 +109,22 @@ Item {
     signal removeWorktreeRequested(string path, string name)
     /// The menu went away — and the stacked list it may have been standing on is the pointer's to answer for again.
     signal dismissed()
+    /// A level of this menu waited for a git command and it has ended with the menu up: the page reads again what the
+    /// rows stand on (`CommitMenuState.standAgain`).
+    signal waitEnded()
 
     /// Either menu is on screen — what the page reads to hide hover behind it. Read this, not `visible`, which comes
     /// back stale from another file (rules-refs/app-ui.md「メニューが立っている間、裏の hover は伏せる」).
     readonly property bool showing: commitMenu.visible || stashMenu.visible
+    /// Every level of this menu: the two menus, the reset card and the three cards at the foot.
+    readonly property var levels: [stashMenu, commitMenu, resetMenu, branchCommitMenu, worktreeCommitMenu,
+                                   tagCommitMenu]
 
     /// The automation's handles into these rows, an automation-only exposure the same as `GraphPane.view` is
     /// (rules-refs/app-ui.md「製品の部品はハーネスへ答える相手を丸ごと渡す」).
     readonly property alias menu: commitMenu
+    /// What a stash's row raises in its place.
+    readonly property alias stashLevel: stashMenu
     readonly property alias branchHereItem: branchHereCommitItem
     readonly property alias switchItem: switchCommitItem
     readonly property alias pullItem: pullCommitItem
@@ -129,31 +140,55 @@ Item {
 
     anchors.fill: parent
 
+    /// Before the rows stand again on a newer reading with the menu up: every level keeps its shape
+    /// (`AppMenu.holdShape`).
+    function holdShape() {
+        for (let i = 0; i < rowMenu.levels.length; i++)
+            rowMenu.levels[i].holdShape()
+    }
+    /// Before a fresh menu stands: the shape a standing one held goes.
+    function releaseShape() {
+        for (let i = 0; i < rowMenu.levels.length; i++)
+            rowMenu.levels[i].releaseShape()
+    }
+
     // Each menu closes itself (a row's `dismiss()`, or `RefBranchMenu` when a delete's answer lands), so nothing here
-    // closes them.
+    // closes them — but for a row the command it waited for took away (`CommitMenuState.standAgain`).
     function offerStash() {
         stashMenu.offer()
     }
     /// `facts` is what the cards stand on, read where the models are (`CommitMenuState.cardFacts`): `branch` and
     /// `tag`, each already aimed at the target or emptied because the target is the other's kind, `worktree` — the
-    /// worktree the target names or the one holding its branch (undefined for none) — with `worktreeHere` / `busy`,
-    /// and `making`, the two rows that make a worktree (`RefWorktreeMenu.standOn`).
+    /// worktree the target names or the one holding its branch (undefined for none) — with `worktreeHere`, and
+    /// `making`, the two rows that make a worktree (`RefWorktreeMenu.standOn`).
     function offerCommit(facts) {
-        worktreeCommitMenu.standOn(facts.worktree, facts.worktreeHere, facts.busy, facts.making)
         // Every card stands on its facts before `offer()`: its `applies` decides whether its row counts
         // (`AppMenu.offeredRows`).
+        rowMenu.standCards(facts)
+        commitMenu.offer()
+    }
+    /// The cards' half of `offerCommit`, for the menu standing again on a newer reading as well — where the BRANCH
+    /// card's branch may point elsewhere by then, `branchAt` (`CommitMenuState.aimedAt`); left out, the row's commit.
+    function standCards(facts, branchAt) {
+        worktreeCommitMenu.standOn(facts.worktree, facts.worktreeHere, facts.making)
         const branchy = rowMenu.targetKind === "branch" || rowMenu.targetKind === "remote"
         const branchKind = branchy ? rowMenu.targetKind : ""
         const branchName = branchy ? rowMenu.targetName : ""
-        branchCommitMenu.standOn(branchKind, branchName, branchName, rowMenu.oid, facts.branch)
+        branchCommitMenu.standOn(branchKind, branchName, branchName, branchAt === undefined ? rowMenu.oid : branchAt,
+                                 facts.branch)
         const tagged = rowMenu.targetKind === "tag"
         tagCommitMenu.standOn(tagged ? "tag" : "", tagged ? rowMenu.targetName : "", rowMenu.oid, facts.tag)
-        commitMenu.offer()
+    }
+    /// The commit or the stash the menu stands on is gone with the command it waited for: nothing left to act on.
+    function withdraw() {
+        (stashMenu.visible ? stashMenu : commitMenu).dismiss()
     }
 
     AppMenu {
         id: stashMenu
         heldReason: rowMenu.heldReason
+        runningWhy: rowMenu.runningWhy
+        onWaitEnded: rowMenu.waitEnded()
         AppMenuItem {
             code: "apply"
             offered: rowMenu.stashCanWrite
@@ -181,6 +216,8 @@ Item {
     AppMenu {
         id: commitMenu
         heldReason: rowMenu.heldReason
+        runningWhy: rowMenu.runningWhy
+        onWaitEnded: rowMenu.waitEnded()
         onClosed: rowMenu.dismissed()
         // The first level holds the rows that move the reader, in order of widening reach; what is done to a ref goes
         // in the cards at the foot (デザイン規約 §メニュー).
@@ -279,6 +316,8 @@ Item {
         AppMenu {
             id: resetMenu
             heldReason: rowMenu.heldReason
+            runningWhy: rowMenu.runningWhy
+            onWaitEnded: rowMenu.waitEnded()
             titleCode: "reset"
             //: Follows the `reset` chip: "reset main here".
             titleSentence: qsTr("%1 here")
@@ -331,6 +370,8 @@ Item {
         RefBranchMenu {
             id: branchCommitMenu
             heldReason: rowMenu.heldReason
+            runningWhy: rowMenu.runningWhy
+            onWaitEnded: rowMenu.waitEnded()
             refusedDelete: rowMenu.refusedDelete
             landedDelete: rowMenu.landedDelete
             checkedBranch: rowMenu.checkedBranch
@@ -350,6 +391,8 @@ Item {
         RefWorktreeMenu {
             id: worktreeCommitMenu
             heldReason: rowMenu.heldReason
+            runningWhy: rowMenu.runningWhy
+            onWaitEnded: rowMenu.waitEnded()
             onWorktreeHereRequested: oidHex => rowMenu.worktreeHereRequested(oidHex)
             onWorktreeAddRequested: (mode, branch, start, path, name) =>
                 rowMenu.worktreeAddRequested(mode, branch, start, path, name)
@@ -361,6 +404,8 @@ Item {
         RefTagMenu {
             id: tagCommitMenu
             heldReason: rowMenu.heldReason
+            runningWhy: rowMenu.runningWhy
+            onWaitEnded: rowMenu.waitEnded()
             canBranchHere: rowMenu.canBranchHere
             onTagHereRequested: oidHex => rowMenu.tagHereRequested(oidHex)
             onPushTagRequested: (remote, tag, lease) => rowMenu.pushTagRequested(remote, tag, lease)

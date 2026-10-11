@@ -535,8 +535,8 @@ Item {
                     navRow.factsMenuAsked()
                 navRow.refMenuRequested(navRow.name, navRow.fullName, navRow.oid_hex, aim === undefined ? "" : aim)
                 // **The ask is answered before it returns**: the menu stands, or nothing was on offer and it stayed
-                // shut (`AppMenu.offer` — a tag row while any write runs). A note no menu followed would keep this row
-                // open under the next menu raised elsewhere, so it is taken back.
+                // shut (`AppMenu.offer`). A note no menu followed would keep this row open under the next menu raised
+                // elsewhere, so it is taken back.
                 if (navRow.factsOpen && !navRow.menuStanding)
                     navRow.factsMenuRefused()
             } else if (!navRow.folder && navRow.kindHint === "file")

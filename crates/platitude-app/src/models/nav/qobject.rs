@@ -592,6 +592,14 @@ impl NavSectionModel {
         self.told(Role::Full, &full, Role::Name)
     }
 
+    /// What git knows the entry standing on `oid` by — for a stash, the
+    /// selector it answers to now, a write having renumbered the list.
+    /// Asked of every entry, whatever the filter; empty for none.
+    #[qslot]
+    fn full_of_oid(&self, oid: String) -> String {
+        self.told(Role::OidHex, &oid, Role::Full)
+    }
+
     /// Local branch name a remote-tracking ref would take. The remotes
     /// snapshot owns both the visible row and its configured prefixes.
     #[qslot]

@@ -24,8 +24,6 @@ Item {
     readonly property var held: ["switch", "branch-here", "integrate", "set-upstream"]
     /// A reading standing on another commit: the local delete stays, the one that reaches over there goes.
     readonly property var drifted: ["switch", "branch-here", "integrate", "delete", "set-upstream"]
-    /// Something running: every write is out at once.
-    readonly property var busy: ["switch"]
 
     RefBranchMenu {
         id: card
@@ -80,11 +78,6 @@ Item {
                     // mark (デザイン規約 §ref の種別).
                     marks: "topic",
                 },
-                {
-                    tag: "something running",
-                    fields: { offers: root.busy },
-                    reason: Words.otherCommandRunning,
-                },
             ]
         }
 
@@ -127,8 +120,6 @@ Item {
             verify(card.upstreamItem.offered)
             root.standOn({ offers: root.current })
             verify(card.upstreamItem.offered, "the branch the tree is on writes settings like any other")
-            root.standOn({ offers: root.busy })
-            verify(!card.upstreamItem.offered, "and nothing writes while something is running")
         }
 
         /// A remote-tracking row keeps the assembled rule; its own delete is the held one reaching past this machine.
