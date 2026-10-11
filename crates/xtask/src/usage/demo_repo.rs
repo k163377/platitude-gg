@@ -92,6 +92,11 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   turned away the way a forge turns one away from a
                   protected branch, and it holds a tag as well
                   (remote-refused, tag-refused)
+        marker    HEAD made empty on purpose (--allow-empty) over a clean
+                  tree: the amend that rewrites its message alone
+                  (amend <message>)
+        undone    HEAD's one change taken back in the index: an amend
+                  now would leave HEAD changing nothing (amend-tip)
         hooked    a pre-commit hook that says no, over something staged
                   for it to say it about (commit-refused, notice-over-diff)
         slowhook  a pre-commit hook that takes its time, over something

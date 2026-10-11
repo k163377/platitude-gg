@@ -25,6 +25,9 @@ Flickable {
     required property int mateCount
     required property string commitTarget
     required property bool signingPointedAt
+    /// The commit button is pointed at without a pointer (`WipPane.pointAtCommit`): its card and its refusal come out
+    /// as for a hand.
+    required property bool commitPointedAt
     required property real blockRoom
     required property real listHeight
 
@@ -42,6 +45,20 @@ Flickable {
     /// and message, a pick's message. The edit step keeps them: amending is what it stops for. A merge keeps them too:
     /// its `--continue` is the commit this button makes.
     readonly property bool composeHidden: block.worktree.opStepping && !block.worktree.opEditing
+    /// A stopped merge takes the amend row away, as no first commit does: git will not amend in the middle of one, and
+    /// the button there is the merge's own `--continue` (デザイン規約 §進行中の操作から出る). A tick from before the
+    /// merge goes with the row, or the button would still send `--amend`.
+    readonly property bool amendBarred: block.worktree.opMerging
+    /// What is staged takes back all the last commit changed, so amending would leave it changing nothing — git refuses
+    /// that amend, so the button does first (`RepoPage.amendQuestion`).
+    readonly property bool amendEmpties: block.amending && block.worktree.stagedCount > 0
+                                         && block.repoTab.amendEmpties
+    onAmendBarredChanged: {
+        if (block.amendBarred && amendBox.checked) {
+            amendBox.checked = false
+            block.amendToggled(false)
+        }
+    }
 
     // -- what the pane reads back out of here --
     readonly property alias subjectText: msgEditor.subjectText
@@ -69,6 +86,8 @@ Flickable {
     /// Automation: the message pair itself, to read whether it stands (`composeHidden` takes it down).
     readonly property alias messageSeat: msgEditor
     readonly property alias commitEnabled: commitButton.enabled
+    /// Automation: whether the amend row stands (`amendBarred` and the rest take it down).
+    readonly property alias amendRowShown: amendRow.visible
     readonly property alias signingTipShown: commitButton.phraseSignatureTipShown
     /// Automation only: the block's own hand and the two the boxes carry, started and drifted without a pointer (a
     /// middle button cannot be injected).
@@ -134,10 +153,11 @@ Flickable {
                 onWheelPastEnd: pixels => block.rollBlock(pixels)
             }
             RowLayout {
+                id: amendRow
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
-                // Nothing to amend before the first commit.
-                visible: block.worktree.headOid !== "" && !block.composeHidden
+                // Nothing to amend before the first commit, nor in a stopped merge.
+                visible: block.worktree.headOid !== "" && !block.composeHidden && !block.amendBarred
                 AppCheckBox {
                     id: amendBox
                     text: qsTr("Amend the last commit")
@@ -233,9 +253,11 @@ Flickable {
                 // Unmerged paths stop it: git will not commit over them (デザイン規約 §可否・警告の出し場所). A stopped
                 // merge presses on its own, with an empty box and nothing staged — git writes the merge commit
                 // either way, and this seat is the whole way out of a merge (§進行中の操作から出る).
-                // Not while hidden either: the pane's own press (`WipPane.pressCommit`) reads this.
-                enabled: !block.composeHidden && block.repoTab.busyCount === 0 && block.repoTab.identityReady
-                         && block.worktree.conflictCount === 0
+                // Not while hidden either: the pane's own press (`WipPane.pressCommit`) reads this. Nor before the
+                // identity's read has landed: `identityReady` starts true so the band stays quiet meanwhile.
+                enabled: !block.composeHidden && block.repoTab.busyCount === 0
+                         && block.repoTab.identityRead && block.repoTab.identityReady
+                         && block.worktree.conflictCount === 0 && !block.amendEmpties
                          && (block.onStandingMessage
                              || (msgEditor.subjectText.trim() !== ""
                                  && (block.amending || block.worktree.stagedCount > 0
@@ -245,14 +267,18 @@ Flickable {
                 onActivated: block.commitClicked()
                 // Why it cannot be pressed. The line-ending warning is the card's (`settleCommitCard`), and only
                 // on a button that can be pressed.
-                ToolTip.visible: commitHover.containsMouse && !enabled
+                ToolTip.visible: (commitHover.containsMouse || block.commitPointedAt) && !enabled
                 ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: !block.repoTab.identityReady
+                ToolTip.text: !block.repoTab.identityRead
+                              ? Words.otherCommandRunning
+                              : !block.repoTab.identityReady
                               ? qsTr("No name or email set for commits")
                               : block.worktree.conflictCount > 0
                               ? qsTr("Files are still waiting on a decision")
                               : msgEditor.subjectText.trim() === ""
                               ? qsTr("A commit needs a summary")
+                              : block.amendEmpties
+                              ? qsTr("Amending would leave the last commit empty — what is staged undoes it")
                               : qsTr("Stage something to commit")
                 MouseArea {
                     id: commitHover

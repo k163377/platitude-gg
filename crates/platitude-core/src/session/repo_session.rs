@@ -118,6 +118,10 @@ pub struct RepoSession {
     /// for the rare pass that could not read it off its rows
     /// ([`RepoSession::settle_head_published`]).
     pub(super) head_published_read: Latest,
+    /// One check of whether an amend would leave HEAD empty at a time
+    /// ([`RepoSession::check_amend`]): the tree moves under a ticked amend
+    /// box, and only the newest ask answers.
+    pub(super) amend_read: Latest,
     /// One read of another worktree's files at a time
     /// ([`RepoSession::read_carried_status`]), which also orders the
     /// answers: reads of different trees finish in any order, and the pane

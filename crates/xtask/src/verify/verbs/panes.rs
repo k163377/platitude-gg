@@ -384,6 +384,27 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "commit_answered landed=true empty=true amend=false",
     },
+    // A stopped merge takes the amend row away (git will not amend in the
+    // middle of one, and the button is the merge's `--continue`); any other
+    // tree with a commit keeps it. Neither shows in a picture of a row
+    // that is simply not there.
+    Verb {
+        name: "amend-row",
+        when: &[(
+            Arg::WithPreset("conflict-staged"),
+            "amend_row shown=false barred=true",
+        )],
+        plain: "amend_row shown=true barred=false",
+    },
+    // The amend box ticked over a stage that takes back all HEAD changed
+    // (`--preset undone`): git's answer arrived, and the button refuses
+    // with the tip that says why. A button refusing for an empty summary
+    // looks the same, so the words are read too.
+    Verb {
+        name: "amend-tip",
+        when: &[],
+        plain: "amend_tip empties=true enabled=false tip=true why=Amending would leave the last commit empty",
+    },
     // The offer to take HEAD's authorship over, standing only where there
     // is something to take. `differs=` is why the row is there (a window
     // that never read HEAD's author also leaves it off); the name, because

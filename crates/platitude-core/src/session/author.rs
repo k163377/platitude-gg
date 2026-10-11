@@ -70,4 +70,18 @@ impl RepoSession {
             Ok(SessionEvent::HeadCommitLoaded { head })
         });
     }
+
+    /// Asks whether an amend pressed now would leave HEAD changing nothing
+    /// ([`commit::amend_would_empty`]) — the commit button's to refuse
+    /// before git does. A newer ask cancels the one still out.
+    pub fn check_amend(self: &Arc<Self>) {
+        self.spawn_read_latest(
+            "amend-empties",
+            &self.amend_read,
+            |s, workdir, cancel| async move {
+                let empties = commit::amend_would_empty(&s.executor, &workdir, &cancel).await?;
+                Ok(SessionEvent::AmendChecked { empties })
+            },
+        );
+    }
 }

@@ -322,8 +322,21 @@ FocusScope {
             repoTab.requestHeadCommit()
         } else {
             page.clearCommitEditor()
+            // A stopped merge takes the tick away itself (`WipCommitBlock.amendBarred`), on the same status that brings
+            // the merge's message — which may already have passed the box over while it held HEAD's. Asked again, so
+            // the emptied box takes it.
+            if (worktree.opMerging) {
+                page.seenOpMessage = ""
+                page.absorbOpMessage()
+            }
         }
     }
+    /// Whether an amend pressed now would leave HEAD changing nothing (`RepoTab.amendEmpties`) is asked again whenever
+    /// what is staged or HEAD may have moved under a ticked amend box. With nothing staged nothing is asked: that amend
+    /// rewrites the message alone, which core lets through even for an empty HEAD (`commit::commit`).
+    readonly property string amendQuestion: page.amending && worktree.stagedCount > 0
+        ? worktree.treeRevision + ":" + worktree.headSeq + ":" + repoTab.writeSeq : ""
+    onAmendQuestionChanged: if (page.amendQuestion !== "") repoTab.requestAmendCheck()
     function absorbHeadMessage() {
         if (repoTab.headCommitSeq === page.seenHeadCommitSeq)
             return

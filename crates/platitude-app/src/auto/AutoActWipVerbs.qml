@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+// For the attached `ToolTip.toolTip` alone (rules-refs/app-ui.md「attached 型は宣言元モジュールを import しないと」).
+import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
@@ -220,6 +222,19 @@ Item {
             // leave that ordering untested.
             wipPane.pointAtCommit = true
             eolCommitTimer.start()
+        } else if (act === "amend-row") {
+            // Whether the amend row stands over this tree — a stopped merge takes it away (`WipCommitBlock.amendBarred`,
+            // `--preset conflict-staged`).
+            page.showWip()
+            amendRowTimer.start()
+        } else if (act === "amend-tip") {
+            // The commit button's refusal with the amend box ticked over a stage that takes back all HEAD changed
+            // (`--preset undone`): the tip comes up once git has answered whether the amend would leave HEAD empty
+            // and HEAD's message has filled the box. Ticked as a hand ticks it, so the message is asked for too.
+            page.showWip()
+            wipPane.setAmendChecked(true)
+            page.amendToggled(true)
+            amendTipTimer.start()
         } else if (act === "commit-face") {
             // The signing tick's tip on the commit button's face; writes what a real pointer writes (`AvatarButton`).
             page.showWip()
@@ -716,6 +731,41 @@ Item {
             Harness.report("eol_commit staged=" + worktree.stagedCount
                               + " warned=" + worktree.eolStagedCount
                               + " card=" + wipPane.eolCardOpen)
+            driver.complete()
+        }
+    }
+    // The row is read once the stopped operation the status reports has reached the pane (`opText`), or once a status
+    // has landed at all where nothing stands.
+    SampleTimer {
+        id: amendRowTimer
+        onTriggered: {
+            if (!worktree.loaded)
+                return
+            amendRowTimer.stop()
+            Harness.report("amend_row shown=" + wipPane.commitBlock.amendRowShown
+                              + " barred=" + wipPane.commitBlock.amendBarred
+                              + " op=" + worktree.opText)
+            driver.complete()
+        }
+    }
+    // Two things land apart: HEAD's message into the box and git's answer about the amend. The pointer goes on after
+    // both, as a hand arriving later does — the shared tip keeps the words it was asked with while its delay runs
+    // (rules-refs/app-ui.md). Its own words are then read, not the button's state: a tip naming the summary is the
+    // box still empty.
+    SampleTimer {
+        id: amendTipTimer
+        onTriggered: {
+            if (!repoTab.amendEmpties || wipPane.subjectText === "")
+                return
+            wipPane.pointAtCommit = true
+            const tip = wipPane.commitBlock.commitSeat.ToolTip.toolTip
+            if (!tip.visible)
+                return
+            amendTipTimer.stop()
+            Harness.report("amend_tip empties=" + repoTab.amendEmpties
+                              + " enabled=" + wipPane.commitBlock.commitEnabled
+                              + " tip=" + tip.visible
+                              + " why=" + tip.text)
             driver.complete()
         }
     }

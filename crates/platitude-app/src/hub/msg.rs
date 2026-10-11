@@ -180,6 +180,10 @@ pub enum TabMsg {
         author_name: String,
         author_email: String,
     },
+    /// Whether an amend pressed now would leave HEAD changing nothing.
+    AmendChecked {
+        empties: bool,
+    },
     /// A fetch nobody asked for (the interval's, or an opening's) started
     /// or ended. Kept off the error surface — the toolbar indicator
     /// carries it, so an offline machine stays quiet.

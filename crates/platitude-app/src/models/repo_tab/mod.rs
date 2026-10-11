@@ -192,6 +192,9 @@ pub struct RepoTab {
     author_name: String,
     author_email: String,
     identity_ready: bool,
+    /// Whether that read has landed at all. `identity_ready` starts true so
+    /// the band stays quiet while it is out; a commit waits for this one.
+    identity_read: bool,
     /// The identity's face: its identicon, and the picture assigned to its
     /// address if any (デザイン規約 §アバターを与える). Properties because
     /// the commit editor's badge is a binding.
@@ -248,6 +251,10 @@ pub struct RepoTab {
     /// Bumped each time an answer arrives, so an editor waiting for one
     /// can tell "not loaded yet" from "loaded, and it is empty".
     head_commit_seq: i32,
+    /// Whether an amend pressed now would leave HEAD changing nothing —
+    /// asked while the amend box is ticked over something staged
+    /// (`requestAmendCheck`), refused by the commit button.
+    amend_empties: bool,
     /// The most recently finished write: git's message (empty on success)
     /// and a counter QML compares to spot a new one — the bridge carries
     /// only parameterless signals. Shown raw; what an answer means is the

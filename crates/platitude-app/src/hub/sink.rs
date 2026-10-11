@@ -517,6 +517,9 @@ impl SessionSink for BridgeSink {
                     author_email: head.author_email,
                 });
             }
+            SessionEvent::AmendChecked { empties } => {
+                self.feeds.tab.push(TabMsg::AmendChecked { empties });
+            }
             // Unasked fetches go to the toolbar indicator only: nobody holds
             // an id for them.
             SessionEvent::WriteStarted {

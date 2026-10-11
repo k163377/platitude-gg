@@ -156,6 +156,27 @@ pub(super) fn embedded(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// HEAD made empty on purpose (`--allow-empty`, a release marker) over a
+/// clean tree: the amend that only rewrites its message, which git turns
+/// down without `--allow-empty` (`amend "<message>"`).
+pub(super) fn marker(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.git(&["commit", "--allow-empty", "-m", "chore: mark the release"])?;
+    Ok(())
+}
+
+/// HEAD's one change taken back in the index: an amend now would leave
+/// HEAD changing nothing, which the commit button refuses (`amend-tip`).
+pub(super) fn undone(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.commit("src/app.txt", "app v2\n", "feat: grow the app")?;
+    repo.write("src/app.txt", "app v1\n")?;
+    repo.git(&["add", "--", "src/app.txt"])?;
+    Ok(())
+}
+
 /// All four line-ending cases at once, in a directory with a house style.
 ///
 /// The neighbours make the two estimated cases sayable: three usable votes

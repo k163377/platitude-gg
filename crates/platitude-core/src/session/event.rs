@@ -305,6 +305,11 @@ pub enum SessionEvent {
     HeadCommitLoaded {
         head: commit::HeadCommit,
     },
+    /// Answer to [`RepoSession::check_amend`]: whether an amend pressed
+    /// now would leave HEAD changing nothing.
+    AmendChecked {
+        empties: bool,
+    },
     /// Author identity and signing configuration. Emitted on open so the
     /// UI can ask for an identity before the first commit fails.
     AuthorLoaded {

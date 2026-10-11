@@ -56,6 +56,7 @@ impl Default for RepoTab {
             // Assumed fine until the check says otherwise, so startup
             // stays quiet.
             identity_ready: true,
+            identity_read: false,
             signs_commits: false,
             signing_format: String::new(),
             signature_oid: String::new(),
@@ -78,6 +79,7 @@ impl Default for RepoTab {
             head_author_email: String::new(),
             head_author_differs: false,
             head_commit_seq: 0,
+            amend_empties: false,
             last_write_error: String::new(),
             last_write_stopped: false,
             write_seq: 0,

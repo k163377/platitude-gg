@@ -119,6 +119,7 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("identityReady", Member = identity_ready, Notify = changed);
+    qproperty!("identityRead", Member = identity_read, Notify = changed);
     qproperty!("signsCommits", Member = signs_commits, Notify = changed);
     qproperty!("signingFormat", Member = signing_format, Notify = changed);
     qproperty!("signatureOid", Member = signature_oid, Notify = changed);
@@ -156,6 +157,7 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("headCommitSeq", Member = head_commit_seq, Notify = changed);
+    qproperty!("amendEmpties", Member = amend_empties, Notify = changed);
     qproperty!(
         "lastWriteError",
         Member = last_write_error,
@@ -792,6 +794,19 @@ impl RepoTab {
     #[qslot]
     fn request_head_commit(&mut self) {
         self.with_session(|s| s.load_head_commit());
+    }
+
+    /// Asks whether an amend pressed now would leave HEAD changing nothing
+    /// (`amendEmpties`). The last answer goes with the ask: it was about an
+    /// index or a HEAD that may be gone, and a button refusing on it would
+    /// stay refused for nothing until the new one lands.
+    #[qslot]
+    fn request_amend_check(&mut self) {
+        if self.amend_empties {
+            self.amend_empties = false;
+            self.changed();
+        }
+        self.with_session(|s| s.check_amend());
     }
 
     // Every move is one job, whichever way it gets there: a failed half

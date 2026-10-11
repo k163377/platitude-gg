@@ -53,6 +53,7 @@ impl RepoTab {
         self.head_author_email = String::new();
         self.head_author_differs = false;
         self.head_commit_seq = 0;
+        self.amend_empties = false;
         self.last_write_error = String::new();
         self.last_write_stopped = false;
         self.write_watch = WriteWatch::default();

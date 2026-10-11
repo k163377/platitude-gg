@@ -95,6 +95,7 @@ impl RepoTab {
                     self.author_email = email;
                     self.read_author_avatar();
                     self.identity_ready = complete;
+                    self.identity_read = true;
                     self.signs_commits = sign_commits;
                     self.signing_format = signing_format;
                     self.compare_head_author();
@@ -168,6 +169,7 @@ impl RepoTab {
                     self.compare_head_author();
                     self.head_commit_seq += 1;
                 }
+                TabMsg::AmendChecked { empties } => self.amend_empties = empties,
                 TabMsg::AutoFetch {
                     running,
                     error,

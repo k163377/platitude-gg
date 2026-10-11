@@ -750,6 +750,7 @@ ColumnLayout {
         mateCount: wipPane.mateCount
         commitTarget: wipPane.commitTarget
         signingPointedAt: wipPane.signingPointedAt
+        commitPointedAt: wipPane.pointAtCommit
         blockRoom: wipPane.blockRoom
         listHeight: buckets.height
         onAmendToggled: on => wipPane.amendToggled(on)
