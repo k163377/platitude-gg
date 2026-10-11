@@ -534,6 +534,8 @@ fn report_word(kind: ReportKind) -> &'static str {
         ReportKind::StaleDiscard => "stale-discard",
         ReportKind::ConflictedPart => "conflicted-part",
         ReportKind::RenameRefused => "rename",
+        ReportKind::RenameLocked => "rename-locked",
+        ReportKind::RenameUnfinished => "rename-unfinished",
         ReportKind::HalfRenamed => "half-rename",
         ReportKind::WorktreeKept => "worktree-kept",
         ReportKind::WorktreeHalfRemoved => "worktree-half",

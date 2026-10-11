@@ -119,10 +119,10 @@ Item {
             if (act !== "nav-rename")
                 sidebarPane.submitEdit(arg)
         } else if (act === "rename-taken") {
-            // A name git refuses for a reason the box cannot see coming — another git holding the ref's lock
+            // A rename git turns down for a reason the box cannot see coming — another git holding the ref's lock
             // (`--preset reflock`, `held`) — sent through the box's Enter, behind its refusal gate as a hand's is: the
-            // box stays open holding the name, with git's words under it and in the bar (デザイン規約
-            // §答えの要らない報せ). A name the box itself refuses is not sent, and the run says nothing.
+            // box stays open holding the name, and the bar says who turned it down (デザイン規約 §答えの要らない報せ).
+            // A name the box itself refuses is not sent, and the run says nothing.
             sidebarPane.beginRename("branch", worktree.branch, arg)
             if (!sidebarPane.editRefused)
                 sidebarPane.submitEdit(arg)
@@ -182,20 +182,23 @@ Item {
         }
         return true
     }
-    // Reported off the box's own state: a closed box and one left open with a warning frame are two pixels apart.
+    // Reported off the box's and the bar's own state: a box closed and one left open holding the name, and the bar's
+    // place word, are a few pixels apart.
     SampleTimer {
         id: renameTakenTimer
         onTriggered: {
-            // And the bar settled: its height animates in after the words, so a shot on the refusal alone catches it
-            // still on its way down (`NoticeBar.settled`).
-            if (repoTab.busyCount !== 0 || !sidebarPane.editRefused || !page.noticeCard.settled)
+            // git's answer is the bar coming down — the box keeps the name either way — and the bar settled: its height
+            // animates in after the words, so a shot on the answer alone catches it still on its way down
+            // (`NoticeBar.settled`).
+            if (repoTab.busyCount !== 0 || !page.noticeCard.open || !page.noticeCard.settled)
                 return
             renameTakenTimer.stop()
             Harness.report("rename_taken open=" + (sidebarPane.editKey !== "")
                               + " refused=" + sidebarPane.editRefused
-                              + " bar=" + page.noticeCard.open
                               + " tone=" + page.noticeCard.tone
-                              + " why=" + sidebarPane.editRefusedWhy)
+                              // The word of the line that opens the log, then the line. Last, because it is a sentence.
+                              + " place=" + page.noticeCard.detailPlace
+                              + " says=" + page.noticeCard.detail)
             driver.complete()
         }
     }

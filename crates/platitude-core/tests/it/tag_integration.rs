@@ -87,14 +87,39 @@ async fn a_name_a_tag_cannot_take_is_reported_under_the_old_one() {
     };
     assert_eq!(report.kind, ReportKind::RenameRefused);
     assert_eq!(report.name, "v1.0", "the tag still carries the old name");
+    assert_eq!(
+        report.reason, "",
+        "git's words are the log's; the screen's line points there"
+    );
     assert!(
-        !report.reason.is_empty(),
-        "git said why, and that goes under the box"
+        err.to_string().contains("already exists"),
+        "git said why, and the log keeps it: {err}"
     );
     assert!(
         repo.git(&["tag", "--list"]).contains("v1.0"),
         "nothing moved"
     );
+}
+
+/// The new name's lock held by another git: its own report, nothing made.
+#[tokio::test]
+async fn a_tag_rename_another_git_holds_the_lock_for_is_reported_as_locked() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.git(&["tag", "v1.0"]);
+    std::fs::create_dir_all(repo.path.join(".git/refs/tags")).expect("tags folder");
+    std::fs::write(repo.path.join(".git/refs/tags/v1.1.lock"), "").expect("lock");
+    let (exec, cancel) = env();
+
+    let err = tag::rename(&exec, &repo.path, "v1.0", "v1.1", &cancel)
+        .await
+        .expect_err("git will not write a ref another process has locked");
+    assert_eq!(
+        err.report().map(|report| report.kind),
+        Some(ReportKind::RenameLocked),
+        "{err}"
+    );
+    assert_eq!(repo.git(&["tag", "--list"]), "v1.0", "nothing moved");
 }
 
 /// A tag deleted elsewhere between the menu and the press, with a branch

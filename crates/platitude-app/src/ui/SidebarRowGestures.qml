@@ -108,7 +108,6 @@ QtObject {
         && (gestures.editTaken
             || gestures.editCaseOnly
             || gestures.editWorktreeWhy !== ""
-            || gestures.editGitRefusal !== ""
             || !gestures.editNameRuled
             || gestures.editClashWhy !== "")
     /// A tag rename that changes only the letters' case. git writes a ref as a file, so on a case-insensitive disk the
@@ -119,9 +118,6 @@ QtObject {
         && gestures.editText.trim() !== gestures.editId
         && gestures.editText.trim().toLowerCase() === gestures.editId.toLowerCase()
     readonly property string editRefusedWhy: !gestures.editRefused ? ""
-        // git's own words win: it answered about this very name; the rest were worked out before asking.
-        : gestures.editGitRefusal !== ""
-          ? gestures.editGitRefusal
         : gestures.editText.trim() === ""
           ? qsTr("A name is needed")
           : gestures.editWorktreeWhy !== ""
@@ -163,9 +159,7 @@ QtObject {
         gestures.editText = ""
         gestures.editMode = ""
         gestures.editWaiting = false
-        gestures.editGitRefusal = ""
     }
-    onEditTextChanged: gestures.editGitRefusal = ""
     function submitEdit(text) {
         const kind = gestures.editKind
         const id = gestures.editId
@@ -195,26 +189,23 @@ QtObject {
             gestures.stopEdit()
             return
         }
-        // A rename keeps its box until git answers (デザイン規約 §答えの要らない報せ): git turns down names nothing here
-        // could know about (one already taken), and a box closed first loses what was typed and leaves the answer
-        // nowhere but the log. The page takes it down on the landing (`RepoPage.absorbWriteResult`).
+        // A rename keeps its box until git answers (デザイン規約 §答えの要らない報せ): git can still turn it down for what
+        // nothing here could know (another git holding a lock, a name taken in the moment since), and a box closed
+        // first loses what was typed. The page takes it down on the landing (`RepoPage.absorbWriteResult`).
         gestures.editWaiting = true
         gestures.host.renameSubmitted(kind, id, oid, text.trim())
     }
-    /// A rename is out and git has not answered; the answer takes the box down or writes its refusal under it
-    /// (`editGitRefusal`).
+    /// A rename is out and git has not answered; the answer takes the box down, or leaves it holding the name to try
+    /// again — the report says why, and the name was not what git turned down.
     property bool editWaiting: false
-    /// git's refusal of the name in the box, cleared by the next keystroke — it is about the name git was asked about.
-    property string editGitRefusal: ""
     function renameLanded() {
         if (gestures.editWaiting)
             gestures.stopEdit()
     }
-    function renameRefused(why) {
+    function renameRefused() {
         if (!gestures.editWaiting)
             return
         gestures.editWaiting = false
-        gestures.editGitRefusal = why
     }
     /// Which BRANCHES row has its facts open under it on hover (`NavRowFacts`), by its git name. Held here like the
     /// gestures above: delegates are recycled, only one row is ever open, and it may be in the sections, the sticky

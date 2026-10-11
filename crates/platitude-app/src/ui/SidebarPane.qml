@@ -119,13 +119,13 @@ Rectangle {
     function beginRename(kind, id, text) {
         rowGestures.beginRename(kind, id, text, kind === "stash" ? sidebar.stashesModel.oidOfFull(id) : "")
     }
-    /// git's answer to a rename this pane's box sent (`SidebarRowGestures.submitEdit`): it landed, or git would not
-    /// have the name and says so under the box the name is still in.
+    /// git's answer to a rename this pane's box sent (`SidebarRowGestures.submitEdit`): it landed, or git turned it
+    /// down and the box holds the name to try again.
     function noteRenameLanded() {
         rowGestures.renameLanded()
     }
-    function noteRenameRefused(why) {
-        rowGestures.renameRefused(why)
+    function noteRenameRefused() {
+        rowGestures.renameRefused()
     }
     function beginBranchAt(kind, id, oidHex) {
         rowGestures.beginBranchAt(kind, id, oidHex)

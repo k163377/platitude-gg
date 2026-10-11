@@ -1101,9 +1101,9 @@ FocusScope {
         sidebarPane.noteRenameLanded()
         graphPane.renameLanded()
     }
-    function noteRenameRefused(why) {
-        sidebarPane.noteRenameRefused(why)
-        graphPane.renameRefused(why)
+    function noteRenameRefused() {
+        sidebarPane.noteRenameRefused()
+        graphPane.renameRefused()
     }
 
     /// Replacing a branch on a remote with one under a new name, which git has no command for: core pushes the new
@@ -1463,9 +1463,6 @@ FocusScope {
         }
         if (graphPane.namingMode !== "rename")
             return ""
-        // git's answer on this very name; the rest is worked out before asking.
-        if (graphPane.namingGitRefusal !== "")
-            return graphPane.namingGitRefusal
         if (name === "")
             return qsTr("A name is needed")
         // As `SidebarRowGestures.editCaseOnly`: a tag renamed to its own name in other case loses both names on a
@@ -1732,15 +1729,16 @@ FocusScope {
             // press is refused forever.
             if (repoTab.writeStaleDiff)
                 page.readDiffForAnswer()
-            // Unless the name itself was refused, the box has nothing to answer and closes as on a landing (a
+            // Unless git turned the rename down, the box has nothing to answer and closes as on a landing (a
             // half-finished rename too: its row is what could not be found).
-            if (repoTab.writeReportKind !== "rename")
+            if (repoTab.writeReportKind !== "rename" && repoTab.writeReportKind !== "rename-locked")
                 page.noteRenameLanded()
             // Refused from outside: a report, as `reportRefusal`.
             if (repoTab.writeReportKind !== "") {
-                // A refused name goes into the still-open box as well as the bar (デザイン規約 §答えの要らない報せ).
-                if (repoTab.writeReportKind === "rename")
-                    page.noteRenameRefused(repoTab.writeReportReason)
+                // A refused rename leaves its box open holding the name, to try again; the bar says why
+                // (デザイン規約 §答えの要らない報せ).
+                if (repoTab.writeReportKind === "rename" || repoTab.writeReportKind === "rename-locked")
+                    page.noteRenameRefused()
                 page.showReport(repoTab.writeReportKind,
                                 repoTab.writeReportRemote,
                                 repoTab.writeReportName,

@@ -165,7 +165,9 @@ Item {
         /// Both arms, because either alone passes against a bar painted one colour.
         function test_the_gesture_that_is_still_going_wears_the_other_colour() {
             compare(Words.reportTone("rename"), "warning")
+            compare(Words.reportTone("rename-locked"), "warning")
             compare(Words.reportTone("half-rename"), "warning")
+            compare(Words.reportTone("rename-unfinished"), "warning")
             compare(Words.reportTone("update"), "danger")
             compare(Words.reportTone("delete"), "danger")
             compare(Words.reportTone("outdated"), "danger")
@@ -183,7 +185,9 @@ Item {
             compare(Words.writeReported("update", "origin", "main"), "origin would not update main")
             compare(Words.writeReported("outdated", "origin", "main"), "main was not sent to origin")
             compare(Words.writeReported("rename", "origin", "main"), "main was not renamed")
+            compare(Words.writeReported("rename-locked", "origin", "main"), "main was not renamed")
             compare(Words.writeReported("half-rename", "origin", "main"), "The rename did not finish")
+            compare(Words.writeReported("rename-unfinished", "", "renamed"), "The rename did not finish")
             compare(Words.writeReported("stale-stage", "", ""), "Nothing was staged")
             compare(Words.writeReported("stale-unstage", "", ""), "Nothing was unstaged")
             compare(Words.writeReported("stale-discard", "", ""), "Nothing was discarded")
@@ -207,13 +211,26 @@ Item {
                           "tip-moved", "op-standing",
                           // Refused by git before the far side heard it: nobody to quote, and git's own text is
                           // terminal advice.
-                          "outdated", "moved", "moved-delete", "tag-elsewhere"]
+                          "outdated", "moved", "moved-delete", "tag-elsewhere",
+                          // A rename git turned down or stopped part way: never the name, which the box answers
+                          // before the press, and git's words are the log's.
+                          "rename", "rename-locked", "rename-unfinished"]
             for (const kind of owed)
                 verify(Words.writeReportedWhy(kind, "origin", "main").length > 0, kind)
             compare(Words.writeReportedWhy("delete"), "")
             compare(Words.writeReportedWhy("update"), "")
-            compare(Words.writeReportedWhy("rename"), "", "the box that is still holding the name answers instead")
             compare(Words.writeReportedWhy(""), "")
+        }
+
+        /// A line that sends the reader to the log names it, and the name is the one word that goes there — said for
+        /// the rename's two as for another worktree's changes git turned down (デザイン規約 §答えの要らない報せ).
+        function test_a_line_pointing_to_the_log_carries_its_title_as_the_place() {
+            for (const kind of ["rename", "rename-locked", "rename-unfinished", "carried-refused"]) {
+                compare(Words.reportPlace(kind), Words.commandsTitle, kind)
+                verify(Words.writeReportedWhy(kind, "", "main").endsWith(Words.commandsTitle), kind)
+            }
+            compare(Words.writeReportedWhy("rename-locked"), "Another git process was working here — see GIT COMMANDS")
+            compare(Words.reportPlace("half-rename"), "", "a line of its own sends nobody anywhere")
         }
 
         /// The refusals a read answers, told apart by what the remote turned out to be: holding commits the push would

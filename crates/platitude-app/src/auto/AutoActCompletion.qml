@@ -151,7 +151,7 @@ QtObject {
                 "plan-off-branch",
                 // Dress only: nothing is written, and the bar is raised through the page's own door.
                 "report-tone", "rename-tag-box", "rename-branch-box",
-                // Photographs the box still standing after git's answer, which is what puts the words in it.
+                // Photographs the box still standing after git's answer, with the bar that answer brings down.
                 "rename-taken",
                 "delete-blocked-tip", "switch-stopped", "switch-lands",
                 // The second press is turned away before any write, so the subject is past the first one's answer.

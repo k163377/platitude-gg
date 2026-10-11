@@ -43,10 +43,21 @@ pub enum ReportKind {
     /// cannot be cut into a patch. The pane withholds the pieces; this is
     /// for a write that got here anyway.
     ConflictedPart,
-    /// A rename git would not make (most often: the name is taken). Nothing
-    /// moved and the box stays open, so the gesture goes on
+    /// A rename git would not make. The name itself is answered before the
+    /// press, so what reaches git is the rest — a name taken in the moment
+    /// since, a branch being rebased or bisected. Nothing moved and the box
+    /// stays open, so the gesture goes on
     /// (デザイン規約 §答えの要らない報せ「下端の線は必ず状態色を着る」).
+    /// git's words are the log's; the screen says it in its own.
     RenameRefused,
+    /// The same, because another git process held a lock it needed — at
+    /// that moment, or one that crashed and left the lock file behind.
+    RenameLocked,
+    /// A branch rename git stopped after moving the ref: the new name is
+    /// there and the old one gone, but what follows it — the branch's
+    /// config section, another worktree's HEAD — did not move. `name` is the
+    /// new name; the row under the old one is gone, so no box answers it.
+    RenameUnfinished,
     /// A rename that stopped between its two halves: the new name was
     /// made and the old one is still there. The one report about something
     /// half done, hence its state colour (デザイン規約 §状態「進行中で対処が要る」).
@@ -154,15 +165,18 @@ pub struct WriteReport {
     /// Whoever said no, in their own words with git's framing (`remote:`,
     /// `hint:`) taken off — carried word for word for the screen to quote.
     ///
-    /// Empty when this end refused on its own: that is how the screen knows
-    /// the sentence is its own to write (`Words.writeReportedWhy`,
-    /// rules-refs/app-ui.md「Rust に文言を置かない」).
+    /// Empty where the screen writes the sentence itself: this end refused
+    /// on its own, or the refuser's words are terminal advice or the log's
+    /// to keep (the outdated push, a worktree with changes, the renames).
+    /// That is how the screen knows the sentence is its own
+    /// (`Words.writeReportedWhy`, rules-refs/app-ui.md「Rust に文言を置かない」).
     pub reason: String,
 }
 
-/// A rename git would not make, in git's own words; `from` is the name the
-/// row still carries, since nothing moved. git ran, so the command is named
-/// and the log keeps its failed row (デザイン規約 §git が言ったことを読む場所).
+/// A rename git would not make; `from` is the name the row still carries,
+/// since nothing moved. git ran, so the command is named and the log keeps
+/// its failed row with git's words (デザイン規約 §git が言ったことを読む場所);
+/// the screen's line is its own, pointing there (§答えの要らない報せ).
 #[must_use]
 pub fn rename_refused(
     from: &str,
@@ -170,11 +184,42 @@ pub fn rename_refused(
     out: &crate::process::GitOutput,
 ) -> crate::error::GitError {
     let said = out.failure_message();
+    let kind = if said.contains(LOCK_TAKEN) {
+        ReportKind::RenameLocked
+    } else {
+        ReportKind::RenameRefused
+    };
     crate::error::GitError::Reported {
         command,
         code: out.code,
-        stderr: said.clone(),
-        report: Box::new(WriteReport::about(ReportKind::RenameRefused, from, said)),
+        stderr: said,
+        report: Box::new(WriteReport::about(kind, from, String::new())),
+    }
+}
+
+/// How git says a lock file it needed was there already (`LC_ALL=C`; the
+/// same words in lockfile.c's `unable_to_lock_message` from the minimum to
+/// 2.55, whatever advice follows them). The files backend's: a reftable
+/// repository's words fall to [`ReportKind::RenameRefused`].
+const LOCK_TAKEN: &str = ".lock': File exists";
+
+/// A branch rename git stopped after the ref moved
+/// ([`ReportKind::RenameUnfinished`]); `to` is the name the branch has now.
+#[must_use]
+pub fn rename_unfinished(
+    to: &str,
+    command: String,
+    out: &crate::process::GitOutput,
+) -> crate::error::GitError {
+    crate::error::GitError::Reported {
+        command,
+        code: out.code,
+        stderr: out.failure_message(),
+        report: Box::new(WriteReport::about(
+            ReportKind::RenameUnfinished,
+            to,
+            String::new(),
+        )),
     }
 }
 

@@ -139,31 +139,21 @@ Rectangle {
         graphArea.namingOpenedWith = text
         graphList.namingOid = oidHex
     }
-    /// A rename is out of this box and git has not answered yet, and what git said about the name still in it — the
-    /// pair the left menu's box carries as `SidebarRowGestures.editWaiting` / `editGitRefusal`.
+    /// A rename is out of this box and git has not answered yet — as the left menu's box carries it
+    /// (`SidebarRowGestures.editWaiting`).
     property bool namingWaiting: false
-    property string namingGitRefusal: ""
-    // git's refusal is about the name it was asked about; one key later that is no longer the name in the box.
-    Connections {
-        target: graphList
-        function onNamingTextChanged() {
-            graphArea.namingGitRefusal = ""
-        }
-    }
-    /// git's answer: the box has done its job, or the refusal belongs in the box.
+    /// git's answer: the box has done its job, or it holds the name to try again (the report says why).
     function renameLanded() {
         if (graphArea.namingWaiting)
             graphArea.stopNaming()
     }
-    function renameRefused(why) {
+    function renameRefused() {
         if (!graphArea.namingWaiting)
             return
         graphArea.namingWaiting = false
-        graphArea.namingGitRefusal = why
     }
     function stopNaming() {
         graphArea.namingWaiting = false
-        graphArea.namingGitRefusal = ""
         // **A box coming down spends the gesture that opened it**: the press away from a box lands before its click,
         // and a click that found no box would count as a second one and reopen it (rules-refs/app-ui.md
         // 「箱が立っている間の押下は press の側で先に効く」).

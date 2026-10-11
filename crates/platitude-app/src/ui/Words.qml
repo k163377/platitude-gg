@@ -260,8 +260,10 @@ QtObject {
         case "stale-unstage": return qsTr("Nothing was unstaged")
         case "stale-discard": return qsTr("Nothing was discarded")
         case "conflicted-part": return qsTr("Nothing was taken from this file")
-        case "rename": return qsTr("%1 was not renamed").arg(name)
-        case "half-rename": return qsTr("The rename did not finish")
+        case "rename":
+        case "rename-locked": return qsTr("%1 was not renamed").arg(name)
+        case "half-rename":
+        case "rename-unfinished": return qsTr("The rename did not finish")
         case "worktree-kept": return qsTr("%1 was not removed").arg(name)
         case "worktree-half": return qsTr("%1 was not removed completely").arg(name)
         case "worktree-not-added":
@@ -329,6 +331,22 @@ QtObject {
             return qsTr("This file is still conflicted. It has to be resolved before parts of it can be taken.")
         case "half-rename":
             return qsTr("The new name was made; the old one is still there.")
+        // The name was answered before the press, so git turned down something else — a name taken in the moment
+        // since, a branch being rebased or bisected. Its words are the log's (デザイン規約 §答えの要らない報せ).
+        //: %1 is the command log's own title.
+        case "rename":
+            return qsTr("git turned it down — see %1").arg(Words.commandsTitle)
+        // A lock file another git held at that moment, or one a crashed git left behind: trying again is the answer
+        // to the first, and the log's line names the file for the second.
+        //: %1 is the command log's own title.
+        case "rename-locked":
+            return qsTr("Another git process was working here — see %1").arg(Words.commandsTitle)
+        // git moves the ref first: the branch has its new name, and what follows it — its settings, another
+        // worktree's HEAD — stayed behind.
+        //: %1 is the command log's own title.
+        case "rename-unfinished":
+            return qsTr("The branch has its new name, but git stopped before the rest moved — see %1")
+                .arg(Words.commandsTitle)
         // Only when git said it was the changes: its own words end in advice to force it, which nothing here offers.
         case "worktree-kept":
             return qsTr("It has uncommitted changes.")
@@ -385,10 +403,11 @@ QtObject {
         }
     }
 
-    /// The word of a report's second line that is a place to go — the command log, for the one report whose line sends
+    /// The word of a report's second line that is a place to go — the command log, for the reports whose line sends
     /// the reader there (デザイン規約 §答えの要らない報せ) — and `""` for the rest. Its href is `commandsHref`.
     function reportPlace(kind) {
-        return kind === "carried-refused" ? Words.commandsTitle : ""
+        return kind === "carried-refused" || kind === "rename" || kind === "rename-locked"
+               || kind === "rename-unfinished" ? Words.commandsTitle : ""
     }
 
     /// Whether a report's heading names a worktree — the name then wears the tree mark (`NoticeBar.markWord`,
@@ -405,7 +424,8 @@ QtObject {
     /// not made: what stood in its way was there before the press, which the menus warn of (デザイン規約 §答えの要らない報せ).
     /// So are another worktree's changes not applied: nothing was written, and they are still there to try again.
     function reportTone(kind) {
-        return kind === "rename" || kind === "half-rename" || Words.reportNamesWorktree(kind) ? "warning" : "danger"
+        return kind === "rename" || kind === "rename-locked" || kind === "half-rename" || kind === "rename-unfinished"
+               || Words.reportNamesWorktree(kind) ? "warning" : "danger"
     }
 
     /// What the two sides each did to a conflicted file, from git's two stage letters (デザイン規約 §conflict の種別).

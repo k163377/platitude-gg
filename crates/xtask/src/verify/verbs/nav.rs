@@ -16,15 +16,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "write_barrier mine=true settled=true",
     },
-    // A name git will not take (a sibling branch carries it): the box stays
-    // open holding what was typed, git's words under it
-    // (デザイン規約 §答えの要らない報せ). A closed box and an open one are a
-    // frame's colour apart and the words are in a tooltip, so none of it is
-    // a picture. `tone=warning`: the gesture is still going.
+    // A rename git turns down for what the box could not know (`--preset
+    // reflock`: another git holds the new name's lock): the box stays open
+    // holding what was typed, not refused, to try again; the bar says who
+    // turned it down and sends the reader to the log for git's words
+    // (デザイン規約 §答えの要らない報せ). `tone=warning`: the gesture is still
+    // going.
     Verb {
         name: "rename-taken",
         when: &[],
-        plain: "rename_taken open=true refused=true bar=true tone=warning why=",
+        plain: "rename_taken open=true refused=false tone=warning place=GIT COMMANDS \
+                says=Another git process was working here — see GIT COMMANDS",
     },
     // A tag renamed to its own name in other letters: git writes a ref as
     // a file, so on a case-insensitive disk both names would go — core

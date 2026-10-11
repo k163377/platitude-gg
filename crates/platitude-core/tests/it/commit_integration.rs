@@ -344,7 +344,8 @@ async fn a_commit_a_hook_declines_comes_back_as_a_report_in_the_hooks_words() {
 }
 
 /// A report: nothing moved, and the box the name was typed into stays open
-/// for the answer (デザイン規約 §答えの要らない報せ).
+/// for the answer (デザイン規約 §答えの要らない報せ). A name taken since the
+/// press is the one the box could not have answered.
 #[tokio::test]
 async fn a_rename_to_a_name_that_is_taken_is_reported_under_the_old_name() {
     let mut repo = TestRepo::init();
@@ -360,15 +361,66 @@ async fn a_rename_to_a_name_that_is_taken_is_reported_under_the_old_name() {
     };
     assert_eq!(report.kind, ReportKind::RenameRefused);
     assert_eq!(report.name, "main", "the row still carries the old name");
-    assert!(
-        report.reason.contains("already exists"),
-        "git said why, and that is what goes under the box: {}",
-        report.reason
+    assert_eq!(
+        report.reason, "",
+        "git's words are not the screen's: its line points to the log"
     );
     assert!(
-        err.to_string().contains("git branch"),
+        err.to_string().contains("git branch") && err.to_string().contains("already exists"),
         "git's whole message is still there for the log: {err}"
     );
+    assert_eq!(
+        repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
+        "main",
+        "nothing moved"
+    );
+}
+
+/// git moves the ref before it carries the branch's config section over,
+/// so a config another git holds stops it half way: the branch has its new
+/// name and the old one is gone. That is not "not renamed", whatever lock
+/// the message names.
+#[tokio::test]
+async fn a_rename_stopped_after_the_ref_moved_is_reported_unfinished() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    std::fs::write(repo.path.join(".git/config.lock"), "").expect("lock");
+    let (exec, cancel) = env();
+
+    let err = branch::rename(&exec, &repo.path, "main", "renamed", false, &cancel)
+        .await
+        .expect_err("git stops when it cannot write the config");
+    std::fs::remove_file(repo.path.join(".git/config.lock")).expect("unlock");
+    let Some(report) = err.report() else {
+        panic!("a rename git stopped half way is a report: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::RenameUnfinished, "{err}");
+    assert_eq!(report.name, "renamed", "the row now carries the new name");
+    assert_eq!(report.reason, "", "the screen says it in its own words");
+    assert_eq!(
+        repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
+        "renamed",
+        "the ref moved before git stopped"
+    );
+}
+
+/// Another git holding the new name's lock — at that moment, or one that
+/// crashed and left the file — is its own report, which says so.
+#[tokio::test]
+async fn a_rename_another_git_holds_the_lock_for_is_reported_as_locked() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    std::fs::write(repo.path.join(".git/refs/heads/held.lock"), "").expect("lock");
+    let (exec, cancel) = env();
+
+    let err = branch::rename(&exec, &repo.path, "main", "held", false, &cancel)
+        .await
+        .expect_err("git will not write a ref another process has locked");
+    let Some(report) = err.report() else {
+        panic!("a lock is a report, not a failure of ours: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::RenameLocked, "{err}");
+    assert_eq!(report.reason, "", "the screen says it in its own words");
     assert_eq!(
         repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
         "main",

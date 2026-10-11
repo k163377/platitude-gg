@@ -202,8 +202,12 @@ pub async fn delete(
 
 /// Renames a local branch. `force` allows overwriting an existing name.
 ///
-/// A refusal is a report shown in the still-open name box
-/// ([`crate::report::ReportKind::RenameRefused`]; デザイン規約 §答えの要らない報せ).
+/// A refusal is a report, under a name box that stays open
+/// ([`crate::report::rename_refused`]; デザイン規約 §答えの要らない報せ).
+/// git moves the ref first and the branch's config section and the
+/// worktrees' HEADs after it, dying on a failure there with the ref already
+/// moved — so a failure is checked against the refs, whatever the message
+/// says ([`crate::report::rename_unfinished`]).
 pub async fn rename(
     executor: &GitExecutor,
     workdir: &Path,
@@ -218,10 +222,31 @@ pub async fn rename(
         .args(["branch", flag, "--", from, to]);
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
-    match out.code {
-        0 => Ok(()),
-        _ => Err(crate::report::rename_refused(from, command, &out)),
+    if out.code == 0 {
+        return Ok(());
     }
+    let moved = !has_branch(executor, workdir, from, cancel).await?
+        && has_branch(executor, workdir, to, cancel).await?;
+    Err(if moved {
+        crate::report::rename_unfinished(to, command, &out)
+    } else {
+        crate::report::rename_refused(from, command, &out)
+    })
+}
+
+/// Whether `refs/heads/<name>` is there (`rev-parse --verify` exit 1 = not).
+async fn has_branch(
+    executor: &GitExecutor,
+    workdir: &Path,
+    name: &str,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["rev-parse", "--verify", "--quiet", "--end-of-options"])
+        .arg(format!("refs/heads/{name}"))
+        .answers_by_code(1);
+    Ok(executor.run_unchecked(cmd, cancel).await?.code == 0)
 }
 
 /// Records which remote branch a local one is measured against
