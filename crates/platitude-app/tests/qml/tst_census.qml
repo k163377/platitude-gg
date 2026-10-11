@@ -89,6 +89,7 @@ Item {
         property var pageWorktree: ({loaded: true, wipRowStands: false})
         property bool pageRefsLoaded: true
         property bool pageDetailsSettled: true
+        property bool pageCarriedSettled: true
         property bool pageLanding: false
         property var pageGraphPane: ({placing: false})
         property var pageGraph: graphState
@@ -137,9 +138,20 @@ Item {
             graphState.loading = false
             graphState.failed = false
             graphState.stale = false
+            page.pageCarriedSettled = true
             census.waiting = false
             census.armed = false
             window.curPage = null
+        }
+
+        // A right-click on another worktree's row stands the pane on it before its file list has come: settled there,
+        // the census walks a list with no rows, and the run after it walks one with them.
+        function test_a_page_standing_on_another_worktree_owes_its_file_list() {
+            verify(Automation.PageSettled.settled(page))
+            page.pageCarriedSettled = false
+            compare(Automation.PageSettled.missing(page), ["carried"])
+            page.pageCarriedSettled = true
+            verify(Automation.PageSettled.settled(page))
         }
 
         function test_files_arrive_before_or_after_the_pane_is_hidden_data() {

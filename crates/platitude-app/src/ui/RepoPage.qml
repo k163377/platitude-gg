@@ -2168,6 +2168,10 @@ FocusScope {
     /// and pick the row, `trySelectDefault`). A page on the worktree, or with no commit to select, waits for none.
     readonly property bool pageDetailsSettled: page.wipShown || page.selectedOid === ""
                                                || !detailsModel.loading
+    /// Whether the right pane holds a file list of the other worktree it stands on — the one `standOnWorktree` asks
+    /// for, or one read when it stood there before. A pane on this window's own tree waits for none: its list is the
+    /// worktree's own read.
+    readonly property bool pageCarriedSettled: page.carriedPath === "" || carriedModel.carriedAt === page.carriedPath
     /// Whether the page still owes a landing it has decided on (`pendingHeadSelect` / `pendingWipSelect`). Read by
     /// `PageSettled`: until it lands, every other reading is of the repository as the write found it.
     readonly property bool pageLanding: page.pendingHeadSelect || page.pendingWipSelect

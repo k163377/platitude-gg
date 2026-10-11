@@ -56,6 +56,8 @@ QtObject {
             owed.push("graph")
         if (!page.pageDetailsSettled)
             owed.push("details")
+        if (!page.pageCarriedSettled)
+            owed.push("carried")
         if (!graph.failed && !graph.stale) {
             if (!graph.readingsSettled())
                 owed.push("readings")
