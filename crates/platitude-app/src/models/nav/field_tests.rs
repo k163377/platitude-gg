@@ -651,10 +651,13 @@ fn the_worktree_holding_a_branch_answers_for_every_other_worktree() {
 }
 
 /// A worktree stopped part-way through a rebase is listed detached, yet
-/// holds its branch as git counts it (`WorktreeEntry::held`).
+/// holds its branch as git counts it (`WorktreeEntry::held`) — and what
+/// holds it, for the name box, which git turns a rename of it down for from
+/// any worktree, the one this window stands on too (`held_by_operation`).
 #[test]
 fn a_branch_a_stopped_rebase_holds_is_held_by_that_worktree() {
-    let entry = |path: &str, branch: Option<&str>, held: Option<&str>| {
+    use platitude_core::worktrees::HeldBy;
+    let entry = |path: &str, branch: Option<&str>, held: Option<(&str, HeldBy)>| {
         platitude_core::worktrees::WorktreeEntry {
             path: path.to_string(),
             branch: branch.map(str::to_string),
@@ -666,15 +669,19 @@ fn a_branch_a_stopped_rebase_holds_is_held_by_that_worktree() {
             prunable: false,
             prune_reason: String::new(),
             main: path.ends_with("repo"),
-            held: held.map(str::to_string),
+            held: held.map(|(branch, by)| platitude_core::worktrees::Held {
+                branch: branch.to_string(),
+                by,
+            }),
         }
     };
     let mut model = section(
         "worktrees",
         Source::Worktrees {
             list: vec![
-                entry("C:/work/repo", Some("main"), None),
-                entry("C:/work/rebasing", None, Some("topic")),
+                entry("C:/work/repo", None, Some(("main", HeldBy::Bisect))),
+                entry("C:/work/rebasing", None, Some(("topic", HeldBy::Rebase))),
+                entry("C:/work/plain", Some("plain"), None),
             ],
             current: "c:/work/repo".to_string(),
         },
@@ -684,4 +691,24 @@ fn a_branch_a_stopped_rebase_holds_is_held_by_that_worktree() {
         model.worktree_holding("topic".to_string()),
         "C:/work/rebasing"
     );
+    let held = |branch: &str| {
+        model
+            .held_by_operation_of(branch)
+            .map(|mark| (mark.by, mark.path, mark.here))
+    };
+    assert_eq!(
+        held("topic"),
+        Some(("rebase".to_string(), "C:/work/rebasing".to_string(), false))
+    );
+    assert_eq!(
+        held("main"),
+        Some(("bisect".to_string(), "C:/work/repo".to_string(), true)),
+        "this window's own worktree holds it too"
+    );
+    assert_eq!(
+        held("plain"),
+        None,
+        "checked out is no stop: git renames it"
+    );
+    assert_eq!(held("nobody"), None);
 }

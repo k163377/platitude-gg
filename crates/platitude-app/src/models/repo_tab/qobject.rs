@@ -120,6 +120,7 @@ impl RepoTab {
     );
     qproperty!("identityReady", Member = identity_ready, Notify = changed);
     qproperty!("identityRead", Member = identity_read, Notify = changed);
+    qproperty!("identityUnread", Member = identity_unread, Notify = changed);
     qproperty!("signsCommits", Member = signs_commits, Notify = changed);
     qproperty!("signingFormat", Member = signing_format, Notify = changed);
     qproperty!("signatureOid", Member = signature_oid, Notify = changed);
@@ -818,17 +819,22 @@ impl RepoTab {
         self.with_session(|s| s.load_head_commit());
     }
 
-    /// Asks whether an amend pressed now would leave HEAD changing nothing
-    /// (`amendEmpties`). The last answer goes with the ask: it was about an
-    /// index or a HEAD that may be gone, and a button refusing on it would
-    /// stay refused for nothing until the new one lands.
+    /// Whether an amend is in view — the amend box ticked, or HEAD's own
+    /// commit open in the details pane, whose save is an amend too. While
+    /// one is, core asks whether it would leave HEAD changing nothing
+    /// (`amendEmpties`) and asks again as the index or HEAD moves
+    /// (`RepoSession::watch_amend`). The last answer goes as the watch
+    /// starts: it was about an index or a HEAD that may be gone, and a
+    /// button refusing on it would stay refused for nothing until the new
+    /// one lands.
     #[qslot]
-    fn request_amend_check(&mut self) {
-        if self.amend_empties {
+    fn watch_amend(&mut self, on: bool) {
+        self.amend_watched = on;
+        if on && self.amend_empties {
             self.amend_empties = false;
             self.changed();
         }
-        self.with_session(|s| s.check_amend());
+        self.with_session(|s| s.watch_amend(on));
     }
 
     // Every move is one job, whichever way it gets there: a failed half

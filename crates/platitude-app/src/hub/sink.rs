@@ -426,6 +426,7 @@ impl SessionSink for BridgeSink {
                     signing_format: config.signing.format.as_str().to_string(),
                 });
             }
+            SessionEvent::AuthorUnread => self.feeds.tab.push(TabMsg::AuthorUnread),
             SessionEvent::RemoteBranchChecked {
                 remote,
                 branch,

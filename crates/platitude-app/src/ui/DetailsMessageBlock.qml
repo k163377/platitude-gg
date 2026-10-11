@@ -19,6 +19,7 @@ Flickable {
     required property string editBlocked
     required property bool busy
     required property bool published
+    required property bool amendEmpties
     required property bool intoPlan
     required property bool messageDirty
     required property string signatureKind
@@ -34,6 +35,7 @@ Flickable {
     required property bool avatarPointedAt
     required property bool signaturePointedAt
     required property bool summaryPointedAt
+    required property bool savePointedAt
     required property bool mateCardInside
     required property bool authorCardInside
     required property bool parentCardInside
@@ -73,6 +75,8 @@ Flickable {
     readonly property alias descriptionFocused: msgEditor.descriptionFocused
     /// The row that saves is on screen — what a caret in the boxes puts up (the output side).
     readonly property alias saveRowShown: saveRow.visible
+    readonly property alias saveEnabled: saveRow.saveEnabled
+    readonly property alias saveTip: saveRow.saveTip
     readonly property alias descriptionBarInk: msgEditor.descriptionBarInk
     readonly property alias descriptionAt: msgEditor.descriptionAt
     readonly property alias summaryAt: msgEditor.summaryAt
@@ -194,6 +198,11 @@ Flickable {
                 published: block.published
                 busy: block.busy
                 canSave: msgEditor.subjectText.trim() !== ""
+                // The save is `commit --amend`, which takes what is staged too: one that would leave HEAD changing
+                // nothing is git's to refuse, so it is refused first, as the commit button refuses it. A plan's
+                // reword runs nothing here.
+                refusedWhy: block.amendEmpties && !block.intoPlan ? Words.amendEmpties : ""
+                pointedAt: block.savePointedAt
                 committerFace: block.committerFace
                 committerFaceUrl: block.committerFaceUrl
                 signature: block.signsCommits ? "signed" : ""

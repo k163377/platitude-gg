@@ -55,6 +55,11 @@ impl RepoTab {
                     self.picker_folder_url = picker_folder_url(std::path::Path::new(&beside));
                     self.repo_path = path;
                     self.stood();
+                    // A session of its own, which has not heard the page's
+                    // word: an amend in view across a stand stays in view.
+                    if self.amend_watched {
+                        self.with_session(|s| s.watch_amend(true));
+                    }
                 }
                 TabMsg::OpenFailed {
                     kind,
@@ -98,9 +103,15 @@ impl RepoTab {
                     self.read_author_avatar();
                     self.identity_ready = complete;
                     self.identity_read = true;
+                    self.identity_unread = false;
                     self.signs_commits = sign_commits;
                     self.signing_format = signing_format;
                     self.compare_head_author();
+                }
+                // An answer too: the button stops waiting and says why it cannot be pressed.
+                TabMsg::AuthorUnread => {
+                    self.identity_read = true;
+                    self.identity_unread = true;
                 }
                 TabMsg::Signature {
                     oid,
@@ -477,9 +488,10 @@ impl RepoTab {
     /// write to trip over.
     fn fold_into_group(&mut self, kind: OperationKind, landed: bool, at: usize) {
         // A landed write moved what the two sides hold; a refused stage,
-        // unstage or discard was refused *because* the rows on screen
-        // drifted (the fingerprint refuses on nothing else). Both mean
-        // the shown diff no longer describes the file.
+        // unstage or discard may have been refused *because* the rows on
+        // screen drifted (the fingerprint's refusal), and the shown diff
+        // then no longer describes the file. Refused for anything else —
+        // another git's lock — the read finds the file as it was.
         self.write_stale_diff = matches!(
             kind,
             OperationKind::Stage | OperationKind::Unstage | OperationKind::Discard
@@ -536,6 +548,10 @@ fn report_word(kind: ReportKind) -> String {
         ReportKind::RemoteUpdate(why) => return format!("update-{}", remote_why_word(why)),
         ReportKind::PrePush => "pre-push",
         ReportKind::PrePushDelete => "pre-push-delete",
+        ReportKind::PushUnsigned { deleting: false } => "push-unsigned",
+        ReportKind::PushUnsigned { deleting: true } => "push-unsigned-delete",
+        ReportKind::SignedPushUntaken { deleting: false } => "signed-push-untaken",
+        ReportKind::SignedPushUntaken { deleting: true } => "signed-push-untaken-delete",
         ReportKind::Outdated => "outdated",
         ReportKind::Moved => "moved",
         ReportKind::MovedDelete => "moved-delete",
@@ -548,10 +564,15 @@ fn report_word(kind: ReportKind) -> String {
         ReportKind::StaleUnstage => "stale-unstage",
         ReportKind::StaleDiscard => "stale-discard",
         ReportKind::ConflictedPart => "conflicted-part",
+        ReportKind::StageLocked => "stage-locked",
+        ReportKind::UnstageLocked => "unstage-locked",
+        ReportKind::DiscardLocked => "discard-locked",
         ReportKind::RenameRefused => "rename",
         ReportKind::RenameLocked => "rename-locked",
         ReportKind::RenameUnfinished => "rename-unfinished",
         ReportKind::HalfRenamed => "half-rename",
+        ReportKind::HalfRenamedRefused => "half-rename-refused",
+        ReportKind::HalfRenamedLocked => "half-rename-locked",
         ReportKind::StashRenameRefused => "stash-rename",
         ReportKind::StashRenameLocked => "stash-rename-locked",
         ReportKind::StashGone => "stash-gone",
@@ -568,6 +589,7 @@ fn report_word(kind: ReportKind) -> String {
         ReportKind::CarriedFileInTheWay => "carried-file-in-the-way",
         ReportKind::CarriedUnread => "carried-unread",
         ReportKind::CarriedRefused => "carried-refused",
+        ReportKind::CarriedLocked => "carried-locked",
         ReportKind::WorktreeNotRenamed => "worktree-not-renamed",
         ReportKind::WorktreeRenameTaken => "worktree-rename-taken",
         ReportKind::RewriteAcrossMerge => "across-merge",
@@ -580,6 +602,8 @@ fn report_word(kind: ReportKind) -> String {
         ReportKind::RewritePreRebase => "pre-rebase",
         ReportKind::RewriteUnsigned => "rewrite-unsigned",
         ReportKind::RewriteCommitHook => "rewrite-commit-hook",
+        ReportKind::RewriteLocked => "rewrite-locked",
+        ReportKind::RewriteUntrackedInTheWay => "rewrite-untracked",
     };
     word.to_string()
 }

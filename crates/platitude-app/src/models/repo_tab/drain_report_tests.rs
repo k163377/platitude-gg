@@ -129,30 +129,131 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
     }
 }
 
-/// The reports git's run brings back, from core's producers: the page
-/// picks both lines by these names (`Words.writeReported`,
-/// `Words.writeReportedWhy`), and a worktree's carries the one fact its
-/// line names.
+fn out(code: i32, stderr: &str) -> platitude_core::GitOutput {
+    platitude_core::GitOutput {
+        code,
+        stderr: stderr.as_bytes().to_vec(),
+        ..Default::default()
+    }
+}
+
+/// git's words over an index another git holds.
+const LOCK: &str = "Unable to create 'C:/t/.git/index.lock': File exists.";
+
+/// Lands each report as a write's answer: the page picks both lines by
+/// these names (`Words.writeReported`, `Words.writeReportedWhy`), and a
+/// worktree's carries the one fact its line names.
+fn reach_the_page(reports: Vec<(platitude_core::GitError, &str, &str)>) {
+    for (refused, named, fact) in reports {
+        let mut tab = RepoTab::default();
+        tab.settle_write(
+            1,
+            K::Stash,
+            refused.to_string(),
+            refused.report().cloned(),
+            0,
+            0,
+        );
+        assert_eq!(tab.write_report_kind, named);
+        assert_eq!(tab.write_report_fact, fact, "{named}");
+    }
+}
+
+/// What another git's index lock and an unsigned push come back as, from
+/// core's producers: the lock's report for each verb that met it, and a
+/// send's or a delete's.
+#[test]
+fn a_lock_and_an_unsigned_push_reach_the_page_under_their_names() {
+    use platitude_core::report;
+    let local = |kind| {
+        report::reported(
+            report::WriteReport::local(kind),
+            "git".into(),
+            &out(128, LOCK),
+        )
+    };
+    let pushed = |kind| {
+        report::reported(
+            report::WriteReport::on_remote(kind, "origin", "main"),
+            "git push".into(),
+            &out(128, ""),
+        )
+    };
+    reach_the_page(vec![
+        (
+            report::carried_refused("topic", "git stash apply".into(), &out(1, LOCK)),
+            "carried-locked",
+            "",
+        ),
+        (local(ReportKind::StageLocked), "stage-locked", ""),
+        (local(ReportKind::UnstageLocked), "unstage-locked", ""),
+        (local(ReportKind::DiscardLocked), "discard-locked", ""),
+        (
+            pushed(ReportKind::PushUnsigned { deleting: false }),
+            "push-unsigned",
+            "",
+        ),
+        (
+            pushed(ReportKind::PushUnsigned { deleting: true }),
+            "push-unsigned-delete",
+            "",
+        ),
+        (
+            pushed(ReportKind::SignedPushUntaken { deleting: false }),
+            "signed-push-untaken",
+            "",
+        ),
+        (
+            pushed(ReportKind::SignedPushUntaken { deleting: true }),
+            "signed-push-untaken-delete",
+            "",
+        ),
+    ]);
+}
+
+/// The rest git's run brings back — a replay, a rename, a stash, a
+/// worktree — from core's producers.
 #[test]
 fn the_refusals_only_gits_run_tells_reach_the_page_under_their_names() {
     use platitude_core::report;
-    let out = |code: i32, stderr: &str| platitude_core::GitOutput {
-        code,
-        stdout: Vec::new(),
-        stderr: stderr.as_bytes().to_vec(),
-    };
     let rewrite = |kind| report::rewrite_refused(kind, "git rebase".into(), 1, String::new());
     let failed = platitude_core::GitError::Failed {
         command: "git stash store".into(),
         code: 1,
         stderr: "Unable to create 'C:/t/.git/refs/stash.lock': File exists.".into(),
     };
-    let reports = [
+    let refused_with = |stderr: &str| platitude_core::GitError::Failed {
+        command: "git stash drop".into(),
+        code: 1,
+        stderr: stderr.into(),
+    };
+    reach_the_page(vec![
         (rewrite(ReportKind::RewritePreRebase), "pre-rebase", ""),
         (rewrite(ReportKind::RewriteUnsigned), "rewrite-unsigned", ""),
         (
             rewrite(ReportKind::RewriteCommitHook),
             "rewrite-commit-hook",
+            "",
+        ),
+        (rewrite(ReportKind::RewriteLocked), "rewrite-locked", ""),
+        (
+            rewrite(ReportKind::RewriteUntrackedInTheWay),
+            "rewrite-untracked",
+            "",
+        ),
+        (
+            report::half_renamed("v1", refused_with("error: Could not drop stash entry")),
+            "half-rename-refused",
+            "",
+        ),
+        (
+            report::half_renamed("v1", refused_with(LOCK)),
+            "half-rename-locked",
+            "",
+        ),
+        (
+            report::half_renamed_list_moved("stash@{0}"),
+            "half-rename",
             "",
         ),
         (report::stash_not_renamed(failed), "stash-rename-locked", ""),
@@ -172,20 +273,7 @@ fn the_refusals_only_gits_run_tells_reach_the_page_under_their_names() {
             "worktree-hook",
             "",
         ),
-    ];
-    for (refused, named, fact) in reports {
-        let mut tab = RepoTab::default();
-        tab.settle_write(
-            1,
-            K::Stash,
-            refused.to_string(),
-            refused.report().cloned(),
-            0,
-            0,
-        );
-        assert_eq!(tab.write_report_kind, named);
-        assert_eq!(tab.write_report_fact, fact, "{named}");
-    }
+    ]);
 }
 
 /// The kind is all the page writes both lines from
@@ -377,4 +465,27 @@ fn a_rename_press_says_whether_the_tab_stands_in_that_worktree() {
         "loose-twin".into(),
     );
     assert!(!tab.worktree_move_standing, "another worktree");
+}
+
+/// An identity read that failed is an answer too: the commit button stops
+/// waiting on a running command and says the name and email could not be
+/// read — until a read lands (`TabMsg::AuthorUnread`).
+#[test]
+fn an_identity_that_could_not_be_read_is_an_answer() {
+    let mut tab = RepoTab::default();
+    assert!(!tab.identity_read, "nothing read yet");
+
+    tab.absorb(vec![TabMsg::AuthorUnread]);
+    assert!(tab.identity_read, "the button waits no longer");
+    assert!(tab.identity_unread);
+
+    tab.absorb(vec![TabMsg::Author {
+        name: "Ada".into(),
+        email: "ada@example.com".into(),
+        complete: true,
+        sign_commits: false,
+        signing_format: String::new(),
+    }]);
+    assert!(tab.identity_read && tab.identity_ready);
+    assert!(!tab.identity_unread, "the read that landed answers instead");
 }

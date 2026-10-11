@@ -138,6 +138,13 @@ QtObject {
     /// (`Words.worktreeRenameRefused`). A folder's name follows the disk's rules, not git's.
     readonly property string editFolderWhy: gestures.editKind !== "worktreeFolder" ? ""
         : Words.worktreeRenameRefused(gestures.editText, gestures.editFolderPlace)
+    /// A branch being renamed that a rebase or bisect stopped in some worktree holds — this one's too: git renames none
+    /// such, whatever the name (`NavSectionModel.heldByOperation`). Undefined for every other box.
+    readonly property var editHeld: gestures.editMode === "rename" && gestures.editKind === "branch"
+        ? gestures.worktreesModel.heldByOperation(gestures.editId) : undefined
+    readonly property string editHeldWhy: gestures.editHeld === undefined ? ""
+        : Words.heldByOperation(gestures.editHeld.by, gestures.editHeld.here,
+                                gestures.worktreesModel.worktreeCalled(gestures.editHeld.path))
     /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free text, a
     /// worktree's name a folder's).
     readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
@@ -145,6 +152,7 @@ QtObject {
             || gestures.editCaseOnly
             || gestures.editWorktreeWhy !== ""
             || gestures.editFolderWhy !== ""
+            || gestures.editHeldWhy !== ""
             || !gestures.editNameRuled
             || gestures.editClashWhy !== "")
     /// A tag rename that changes only the letters' case. git writes a ref as a file, so on a case-insensitive disk the
@@ -159,6 +167,8 @@ QtObject {
           ? gestures.editFolderWhy
         : gestures.editText.trim() === ""
           ? Words.nameNeeded
+          : gestures.editHeldWhy !== ""
+            ? gestures.editHeldWhy
           : gestures.editWorktreeWhy !== ""
             ? gestures.editWorktreeWhy
           : gestures.editCaseOnly
@@ -174,6 +184,9 @@ QtObject {
     /// (`Words.worktreeNameMark`); empty where the line names none.
     readonly property string editRefusedMark: gestures.editKind === "worktreeFolder"
         ? Words.worktreeRenameMark(gestures.editRefusedWhy, gestures.editFolderPlace)
+        : gestures.editHeldWhy !== "" && gestures.editRefusedWhy === gestures.editHeldWhy
+          && !gestures.editHeld.here
+        ? gestures.worktreesModel.worktreeCalled(gestures.editHeld.path)
         : Words.worktreeNameMark(gestures.editRefusedWhy, gestures.editWorktreePlace)
 
     function startEdit(kind, key, mode, id, oid, text) {

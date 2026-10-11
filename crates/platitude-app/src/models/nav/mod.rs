@@ -85,6 +85,35 @@ impl From<platitude_core::session::NameClash> for NameClashed {
     }
 }
 
+/// The worktree a stopped rebase or bisect holds a branch in
+/// (`NavSectionModel::held_by_operation`): `by` is `rebase` or `bisect`,
+/// `path` the worktree as git lists it, `here` whether it is the one this
+/// window stands on.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HeldMark {
+    pub by: String,
+    pub path: String,
+    pub here: bool,
+}
+
+impl Record for HeldMark {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("by", &self.by)
+            .put("path", &self.path)
+            .put("here", &self.here)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            by: field(map, "by")?,
+            path: field(map, "path")?,
+            here: field(map, "here")?,
+        })
+    }
+}
+
 /// What a tag's menu stands on (`NavSectionModel::tag_menu`,
 /// `platitude_core::session::TagMenuFacts`), in the words the card reads.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

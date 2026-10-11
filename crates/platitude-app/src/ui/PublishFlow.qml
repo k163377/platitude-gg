@@ -247,8 +247,9 @@ Item {
         value: !publishFlow.publishFilled ? qsTr("Pick where it goes.")
                : !publishFlow.publishChecked
                  ? qsTr("Asking %1 what it has…").arg(publishFlow.publishRemote)
+                 // Any failure of the ask, an answer of a refusal included: git's words are in the log.
                  : publishFlow.publishState === "unreachable"
-                   ? qsTr("%1 did not answer — it may already have that branch.")
+                   ? qsTr("Asking %1 failed — it may already have that branch.")
                      .arg(publishFlow.publishRemote)
                    : publishFlow.publishState === "unknown"
                      ? qsTr("%1 already exists, and what it holds is not here.")
@@ -279,7 +280,7 @@ Item {
                  ? qsTr("%1 was never fetched here, so what it holds cannot be read — the push can only fast-forward it.")
                    .arg(publishFlow.publishTarget)
                  : publishFlow.publishState === "unreachable"
-                   ? qsTr("%1 did not answer; the push can only fast-forward, and its answer will say what went wrong.")
+                   ? qsTr("Asking %1 failed; the push can only fast-forward, and its answer will say what went wrong.")
                      .arg(publishFlow.publishRemote)
                    : ""
         when: publishFlow.publishAsking

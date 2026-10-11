@@ -182,7 +182,11 @@ impl NavSectionModel {
         let home = list
             .iter()
             .find(|w| w.main && w.path.replace('\\', "/").to_lowercase() != current)
-            .and_then(|w| w.branch.clone().or_else(|| w.held.clone()))
+            .and_then(|w| {
+                w.branch
+                    .clone()
+                    .or_else(|| w.held.as_ref().map(|held| held.branch.clone()))
+            })
             .unwrap_or_default();
         let moved = self.home_branch != home;
         self.home_branch = home;

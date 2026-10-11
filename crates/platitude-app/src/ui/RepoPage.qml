@@ -362,12 +362,12 @@ FocusScope {
             }
         }
     }
-    /// Whether an amend pressed now would leave HEAD changing nothing (`RepoTab.amendEmpties`) is asked again whenever
-    /// what is staged or HEAD may have moved under a ticked amend box. With nothing staged nothing is asked: that amend
-    /// rewrites the message alone, which core lets through even for an empty HEAD (`commit::commit`).
-    readonly property string amendQuestion: page.amending && worktree.stagedCount > 0
-        ? worktree.treeRevision + ":" + worktree.headSeq + ":" + repoTab.writeSeq : ""
-    onAmendQuestionChanged: if (page.amendQuestion !== "") repoTab.requestAmendCheck()
+    /// Whether an amend is in view — the amend box ticked, or HEAD's own commit open in the details pane, whose save is
+    /// an amend too. While one is, core asks whether it would leave HEAD changing nothing (`RepoTab.amendEmpties`) and
+    /// asks again as the index or HEAD moves, whoever moves them (`RepoTab.watchAmend`).
+    readonly property bool amendInView: !page.blank && repoTab.state === "open"
+        && (page.amending || page.messageEdit === "amend")
+    onAmendInViewChanged: repoTab.watchAmend(page.amendInView)
     function absorbHeadMessage() {
         if (repoTab.headCommitSeq === page.seenHeadCommitSeq)
             return
@@ -796,7 +796,7 @@ FocusScope {
                             qsTr("The plan was put away; nothing has run."), "warning")
         }
         function onStandingOp() {
-            page.showNotice(qsTr("An operation started here"),
+            page.showNotice(qsTr("An operation started"),
                             qsTr("The plan was put away; nothing has run. Finish what is in progress first."),
                             "warning")
         }
@@ -1551,10 +1551,20 @@ FocusScope {
     /// (`NavSectionModel.renamedWorktreeFor`); undefined for every other box.
     readonly property var graphFolderPlace: graphPane.namingMode === "rename" && graphPane.namingKind === "worktreeFolder"
         ? worktreesModel.renamedWorktreeFor(graphPane.namingId, graphPane.namingText.trim()) : undefined
+    /// A local branch being renamed that a rebase or bisect stopped in some worktree holds — this one's too: git
+    /// renames none such (`NavSectionModel.heldByOperation`, as `SidebarRowGestures.editHeld`).
+    readonly property var graphNameHeld: graphPane.namingMode === "rename" && graphPane.namingKind === "branch"
+        ? worktreesModel.heldByOperation(graphPane.namingId) : undefined
+    readonly property string graphNameHeldWhy: page.graphNameHeld === undefined ? ""
+        : Words.heldByOperation(page.graphNameHeld.by, page.graphNameHeld.here,
+                                worktreesModel.worktreeCalled(page.graphNameHeld.path))
     /// The folder the box's tip stands the tree mark in front of, where the refusal names one
     /// (`Words.worktreeNameMark` / `worktreeRenameMark`).
     readonly property string graphNameRefusedMark: graphPane.namingKind === "worktreeFolder"
         ? Words.worktreeRenameMark(page.graphNameRefusedWhy, page.graphFolderPlace)
+        : page.graphNameHeldWhy !== "" && page.graphNameRefusedWhy === page.graphNameHeldWhy
+          && !page.graphNameHeld.here
+        ? worktreesModel.worktreeCalled(page.graphNameHeld.path)
         : Words.worktreeNameMark(page.graphNameRefusedWhy, page.graphWorktreePlace)
     readonly property string graphNameRefusedWhy: {
         if (graphPane.namingOid === "")
@@ -1583,6 +1593,8 @@ FocusScope {
             return ""
         if (name === "")
             return Words.nameNeeded
+        if (page.graphNameHeldWhy !== "")
+            return page.graphNameHeldWhy
         // As `SidebarRowGestures.editCaseOnly`: a tag renamed to its own name in other case loses both names on a
         // case-insensitive disk.
         const tag = graphPane.namingKind === "tag"
@@ -3648,6 +3660,9 @@ FocusScope {
                                 : ""
                         busy: repoTab.busyCount > 0
                         published: page.selectedPublished
+                        // Only HEAD's own commit is saved, and only over something staged can that empty it.
+                        amendEmpties: page.messageEdit === "amend" && worktree.stagedCount > 0
+                                      && repoTab.amendEmpties
                         signatureKind: page.selectedSignatureKind
                         signatureCode: page.selectedSignatureCode
                         signatureSigner: page.selectedSignatureSigner

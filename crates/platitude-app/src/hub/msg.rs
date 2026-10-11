@@ -152,6 +152,8 @@ pub enum TabMsg {
         sign_commits: bool,
         signing_format: String,
     },
+    /// The read behind [`Self::Author`] failed (`SessionEvent::AuthorUnread`).
+    AuthorUnread,
     /// One commit's signature: the outcome the UI shows (empty for an
     /// unsigned commit), git's own `%G?` letter behind it, and who signed.
     Signature {

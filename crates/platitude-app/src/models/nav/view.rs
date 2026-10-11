@@ -262,6 +262,33 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
+    /// The worktree a stopped rebase or bisect holds `branch` in, this
+    /// window's own among them (contract on the `held_by_operation` slot):
+    /// git turns that branch's rename down from any worktree.
+    pub(super) fn held_by_operation_of(&self, branch: &str) -> Option<super::HeldMark> {
+        if branch.is_empty() || self.section != "worktrees" {
+            return None;
+        }
+        (0..self.all.len())
+            .filter_map(|at| self.all.entry(at))
+            .find_map(|of| {
+                let Entry::Worktree { entry, .. } = of else {
+                    return None;
+                };
+                let by = entry.held.as_ref().filter(|held| held.branch == branch)?.by;
+                let row = Row::Shown {
+                    of,
+                    depth: 0,
+                    from: 0,
+                };
+                Some(super::HeldMark {
+                    by: by.as_str().to_string(),
+                    path: entry.path.clone(),
+                    here: self.field(row, Role::IsHead).flag(),
+                })
+            })
+    }
+
     /// The path of the other worktree holding `branch` (contract on
     /// the `worktree_holding` slot). Not `told`: two fields decide it — the
     /// row's branch, and not being this window's own worktree. A rebase or
@@ -275,7 +302,7 @@ impl NavSectionModel {
             .filter_map(|at| self.all.entry(at))
             .find_map(|of| {
                 let held = matches!(of, Entry::Worktree { entry, .. }
-                    if entry.held.as_deref() == Some(branch));
+                    if entry.held.as_ref().is_some_and(|held| held.branch == branch));
                 let row = Row::Shown {
                     of,
                     depth: 0,

@@ -588,6 +588,17 @@ impl NavSectionModel {
         self.worktree_with(&branch)
     }
 
+    /// The worktree a stopped rebase or bisect holds this branch in —
+    /// this window's own too — `undefined` where none does. git renames no
+    /// such branch, from any worktree (builtin/branch.c
+    /// `reject_rebase_or_bisect_branch`), so the name box asks this first.
+    ///
+    /// Held to the worktrees section, as [`Self::worktree_holding`] is.
+    #[qslot]
+    pub(super) fn held_by_operation(&self, branch: String) -> Optional<super::HeldMark> {
+        Optional::new(self.held_by_operation_of(&branch))
+    }
+
     /// Where the worktree at `path` is standing — the HEAD git listed
     /// with the entry, as hex; empty for a path this listing does not hold
     /// and for a bare entry.

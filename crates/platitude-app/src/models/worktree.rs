@@ -708,6 +708,7 @@ mod tests {
                 ahead,
                 behind: 0,
                 items,
+                staged_print: 0,
             },
             head_seq,
             looked: 0,

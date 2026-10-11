@@ -139,6 +139,9 @@ QtObject {
         default: return ""
         }
     }
+    /// Why an amend cannot be pressed when what is staged takes back all the last commit changed — git refuses that
+    /// amend, so the commit button and the details pane's save say so first (`RepoTab.amendEmpties`).
+    readonly property string amendEmpties: qsTr("Amending would leave the last commit empty — what is staged undoes it")
 
     /// Opening a repository, as the graph's empty state, the tab strip's `+` menu and its accessible name offer it.
     readonly property string openRepository: qsTr("Open repository…")
@@ -193,6 +196,23 @@ QtObject {
         case "held": return Words.checkedOutElsewhere(leaf)
         default: return ""
         }
+    }
+
+    /// Why a rename box turns its branch down: a rebase or bisect stopped in some worktree holds it — this window's own
+    /// too — and git renames none such (`NavSectionModel.heldByOperation`). The state and where, as a greyed row says
+    /// it (デザイン規約 §hover のツールチップ); another worktree by the name it goes by, behind a dash where the tip stands
+    /// the tree mark.
+    function heldByOperation(by, here, leaf) {
+        if (by === "bisect") {
+            if (here)
+                return qsTr("Being bisected in this worktree")
+            //: %1 is the name of the other worktree the bisect stopped in.
+            return qsTr("Being bisected in another worktree — %1").arg(leaf)
+        }
+        if (here)
+            return qsTr("Being rebased in this worktree")
+        //: %1 is the name of the other worktree the rebase stopped in.
+        return qsTr("Being rebased in another worktree — %1").arg(leaf)
     }
 
     /// Why a row acting on a branch another worktree has checked out is greyed — the branch card's delete rows and the
@@ -304,19 +324,28 @@ QtObject {
         // A branch and a tag alike, whatever stopped them; the line underneath says what did.
         //: %1 is a branch or a tag, %2 a remote.
         case "pre-push":
+        case "push-unsigned":
+        case "signed-push-untaken":
         case "outdated":
         case "moved":
         case "tag-elsewhere": return qsTr("%1 was not sent to %2").arg(name).arg(remote)
         //: %1 is a branch or a tag, %2 a remote.
         case "pre-push-delete":
+        case "push-unsigned-delete":
+        case "signed-push-untaken-delete":
         case "moved-delete": return qsTr("%1 was not deleted from %2").arg(name).arg(remote)
-        case "stale-stage": return qsTr("Nothing was staged")
-        case "stale-unstage": return qsTr("Nothing was unstaged")
-        case "stale-discard": return qsTr("Nothing was discarded")
+        case "stale-stage":
+        case "stage-locked": return qsTr("Nothing was staged")
+        case "stale-unstage":
+        case "unstage-locked": return qsTr("Nothing was unstaged")
+        case "stale-discard":
+        case "discard-locked": return qsTr("Nothing was discarded")
         case "conflicted-part": return qsTr("Nothing was taken from this file")
         case "rename":
         case "rename-locked": return qsTr("%1 was not renamed").arg(name)
         case "half-rename":
+        case "half-rename-refused":
+        case "half-rename-locked":
         case "rename-unfinished": return qsTr("The rename did not finish")
         // `stash@{n}` is no name the screen shows, and the message the row shows can be long.
         case "stash-rename":
@@ -337,10 +366,11 @@ QtObject {
         case "carried-in-the-way":
         case "carried-file-in-the-way":
         case "carried-unread":
-        case "carried-refused": return qsTr("Changes from %1 were not applied").arg(name)
+        case "carried-refused":
+        case "carried-locked": return qsTr("Changes from %1 were not applied").arg(name)
         case "worktree-not-renamed":
         case "worktree-rename-taken": return qsTr("%1 was not renamed").arg(name)
-        // All seven rewrite refusals: which one it was is the line underneath.
+        // Every rewrite refusal: which one it was is the line underneath.
         case "across-merge":
         case "off-branch":
         case "fold-first":
@@ -350,12 +380,14 @@ QtObject {
         case "op-standing":
         case "pre-rebase":
         case "rewrite-unsigned":
-        case "rewrite-commit-hook": return Words.historyNotRewritten
+        case "rewrite-commit-hook":
+        case "rewrite-locked":
+        case "rewrite-untracked": return Words.historyNotRewritten
         default: return qsTr("The commit was not made")
         }
     }
 
-    /// The row menu's heading for all seven rewrite refusals, and `planRefused`'s fallback.
+    /// The row menu's heading for every rewrite refusal, and `planRefused`'s fallback.
     readonly property string historyNotRewritten: qsTr("The history was not rewritten")
 
     /// The heading at the plan's door, where a preview turns the range down before it opens
@@ -397,17 +429,27 @@ QtObject {
         //: %1 is a remote, %2 a tag.
         case "tag-elsewhere":
             return qsTr("%1 already has %2 on another commit.").arg(remote).arg(name)
-        // Run here before git talked to the remote, which heard nothing.
+        // Run before git talked to the remote, which heard nothing.
         //: %1 is the command log's own title.
         case "pre-push":
         case "pre-push-delete":
-            return qsTr("The pre-push hook here turned it down — see %1").arg(Words.commandsTitle)
+            return qsTr("The pre-push hook turned it down — see %1").arg(Words.commandsTitle)
+        // `push.gpgSign`: git could not sign the push before sending it — a key gone, a signing program that failed.
+        //: %1 is the command log's own title.
+        case "push-unsigned":
+        case "push-unsigned-delete":
+            return qsTr("The push could not be signed — see %1").arg(Words.commandsTitle)
+        // `push.gpgSign=true` against a remote that takes no signed push: git stopped before sending anything.
+        //: %1 is a remote, %2 the command log's own title.
+        case "signed-push-untaken":
+        case "signed-push-untaken-delete":
+            return qsTr("%1 does not take signed pushes — see %2").arg(remote).arg(Words.commandsTitle)
         // `pre-commit`, `commit-msg`, `prepare-commit-msg` alike — and a reword's or a replayed commit's, in a
         // rewrite put back where it began.
         //: %1 is the command log's own title.
         case "commit-hook":
         case "rewrite-commit-hook":
-            return qsTr("A commit hook here turned it down — see %1").arg(Words.commandsTitle)
+            return qsTr("A commit hook turned it down — see %1").arg(Words.commandsTitle)
         // A key gone, a signing program that failed: what the program said is the log's.
         //: %1 is the command log's own title.
         case "commit-unsigned":
@@ -415,25 +457,47 @@ QtObject {
             return qsTr("The commit could not be signed — see %1").arg(Words.commandsTitle)
         //: %1 is the command log's own title.
         case "pre-rebase":
-            return qsTr("The pre-rebase hook here turned it down — see %1").arg(Words.commandsTitle)
+            return qsTr("The pre-rebase hook turned it down — see %1").arg(Words.commandsTitle)
+        // git's first checkout would write over files it does not track; its words list them. Said as the other tools
+        // say it, by what would be lost.
+        //: %1 is the command log's own title.
+        case "rewrite-untracked":
+            return qsTr("Untracked files would be overwritten — see %1").arg(Words.commandsTitle)
         case "stale-stage":
         case "stale-unstage":
         case "stale-discard":
             return qsTr("The file changed on disk since these rows were read. It has been read again — make the selection on the rows that are there now.")
         case "conflicted-part":
             return qsTr("This file is still conflicted. It has to be resolved before parts of it can be taken.")
+        // Stopped here: the stash list moved under the rename, so which entry to drop could not be worked out. Nothing
+        // turned anything down, and no row in the log says more.
         case "half-rename":
             return qsTr("The new name was made; the old one is still there.")
+        // git turned the old name's removal down — a tag's delete, a stash entry's drop.
+        //: %1 is the command log's own title.
+        case "half-rename-refused":
+            return qsTr("The new name was made, but git did not remove the old one — see %1").arg(Words.commandsTitle)
+        // git's own words over a lock, which may be a crashed git's left behind.
+        //: %1 is the command log's own title.
+        case "half-rename-locked":
+            return qsTr("The new name was made, but another git process seems to be running — see %1")
+                .arg(Words.commandsTitle)
         // Dropped or popped elsewhere since it was chosen.
         case "stash-gone":
             return qsTr("It is no longer in the stash list.")
-        // A lock file another git held at that moment, or one a crashed git left behind: trying again is the answer
-        // to the first, and the log's line names the file for the second.
+        // A lock file another git held at that moment, or one a crashed git left behind — git's own words leave both
+        // open, and so does this line: trying again is the answer to the first, and the log's line names the file for
+        // the second.
         //: %1 is the command log's own title.
         case "rename-locked":
         case "commit-locked":
         case "stash-rename-locked":
-            return qsTr("Another git process was working here — see %1").arg(Words.commandsTitle)
+        case "rewrite-locked":
+        case "carried-locked":
+        case "stage-locked":
+        case "unstage-locked":
+        case "discard-locked":
+            return qsTr("Another git process seems to be running — see %1").arg(Words.commandsTitle)
         // What git said in words of its own that none of the above name. A rename's name was answered before the
         // press, so git turned down something else — a name taken in the moment since, a branch being rebased or
         // bisected.
@@ -449,11 +513,11 @@ QtObject {
         //: %1 is the reason the worktree was locked with.
         case "worktree-locked":
             return fact === "" ? qsTr("It is locked.") : qsTr("It is locked: %1.").arg(fact)
-        // git takes its record off and stops at what it could not delete — a file held open on Windows, a path too
-        // long. It names the worktree's own folder, not the file.
+        // git goes on past what it could not delete — in the worktree's folder (a file held open on Windows, a path
+        // too long) or its own record of it — and names the folder, not the file.
         //: %1 is the command log's own title.
         case "worktree-half":
-            return qsTr("git could not delete everything in its folder — see %1").arg(Words.commandsTitle)
+            return qsTr("git could not delete everything — see %1").arg(Words.commandsTitle)
         // git still lists this place for a worktree whose folder went (`worktree prune` would clear it).
         case "worktree-place-taken":
             return qsTr("It is taken by another worktree.")
@@ -489,8 +553,8 @@ QtObject {
         // applied.
         case "carried-unread":
             return qsTr("Not all of its changes could be read.")
-        // Anything else git turned down (an index another tool holds, a conflict standing here): its words say why, so
-        // the line names where they are, as the fetch's tip does (デザイン規約 §リモートから取り込む).
+        // Anything else git turned down (a conflict standing here, untracked files it would remove): its words say why,
+        // so the line names where they are, as the fetch's tip does (デザイン規約 §リモートから取り込む).
         //: %1 is the command log's own title.
         case "carried-refused":
             return qsTr("git did not apply them — see %1").arg(Words.commandsTitle)
@@ -543,7 +607,8 @@ QtObject {
             return qsTr("%1 does not take pushes from a shallow clone — see %2").arg(remote).arg(Words.commandsTitle)
         //: %1 is a remote, %2 the command log's own title.
         case "locked":
-            return qsTr("Another git process was working on %1 — see %2").arg(remote).arg(Words.commandsTitle)
+            return qsTr("Another git process seems to be running on %1 — see %2").arg(remote)
+                .arg(Words.commandsTitle)
         //: %1 is a remote, %2 the command log's own title.
         default:
             return qsTr("%1 turned it down — see %2").arg(remote).arg(Words.commandsTitle)
@@ -571,7 +636,7 @@ QtObject {
         case "tip-moved":
             return qsTr("The branch moved after this was worked out.")
         case "op-standing":
-            return qsTr("An operation is in progress here. Finish it or put it down first.")
+            return qsTr("An operation is in progress. Finish it or put it down first.")
         default: return ""
         }
     }
@@ -603,7 +668,7 @@ QtObject {
     /// of (デザイン規約 §答えの要らない報せ). So are another worktree's changes not applied: nothing was written, and they
     /// are still there to try again.
     function reportTone(kind) {
-        return Words.renameStillOpen(kind) || kind === "half-rename" || kind === "rename-unfinished"
+        return Words.renameStillOpen(kind) || kind.startsWith("half-rename") || kind === "rename-unfinished"
                || Words.reportNamesWorktree(kind) ? "warning" : "danger"
     }
 

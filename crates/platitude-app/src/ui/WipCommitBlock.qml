@@ -50,7 +50,7 @@ Flickable {
     /// merge goes with the row, or the button would still send `--amend`.
     readonly property bool amendBarred: block.worktree.opMerging
     /// What is staged takes back all the last commit changed, so amending would leave it changing nothing — git refuses
-    /// that amend, so the button does first (`RepoPage.amendQuestion`).
+    /// that amend, so the button does first (`RepoPage.amendInView`).
     readonly property bool amendEmpties: block.amending && block.worktree.stagedCount > 0
                                          && block.repoTab.amendEmpties
     onAmendBarredChanged: {
@@ -254,9 +254,11 @@ Flickable {
                 // merge presses on its own, with an empty box and nothing staged — git writes the merge commit
                 // either way, and this seat is the whole way out of a merge (§進行中の操作から出る).
                 // Not while hidden either: the pane's own press (`WipPane.pressCommit`) reads this. Nor before the
-                // identity's read has landed: `identityReady` starts true so the band stays quiet meanwhile.
+                // identity's read has landed: `identityReady` starts true so the band stays quiet meanwhile — nor
+                // after it failed, which is an answer too (`identityUnread`).
                 enabled: !block.composeHidden && block.repoTab.busyCount === 0
-                         && block.repoTab.identityRead && block.repoTab.identityReady
+                         && block.repoTab.identityRead && !block.repoTab.identityUnread
+                         && block.repoTab.identityReady
                          && block.worktree.conflictCount === 0 && !block.amendEmpties
                          && (block.onStandingMessage
                              || (msgEditor.subjectText.trim() !== ""
@@ -271,6 +273,8 @@ Flickable {
                 ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: !block.repoTab.identityRead
                               ? Words.otherCommandRunning
+                              : block.repoTab.identityUnread
+                              ? qsTr("The name and email for commits could not be read")
                               : !block.repoTab.identityReady
                               ? qsTr("No name or email set for commits")
                               : block.worktree.conflictCount > 0
@@ -278,7 +282,7 @@ Flickable {
                               : msgEditor.subjectText.trim() === ""
                               ? qsTr("A commit needs a summary")
                               : block.amendEmpties
-                              ? qsTr("Amending would leave the last commit empty — what is staged undoes it")
+                              ? Words.amendEmpties
                               : qsTr("Stage something to commit")
                 MouseArea {
                     id: commitHover

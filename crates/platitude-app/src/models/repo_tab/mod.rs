@@ -195,6 +195,9 @@ pub struct RepoTab {
     /// Whether that read has landed at all. `identity_ready` starts true so
     /// the band stays quiet while it is out; a commit waits for this one.
     identity_read: bool,
+    /// Whether the last of those reads failed — an answer as well: the
+    /// commit button says so instead of waiting (`TabMsg::AuthorUnread`).
+    identity_unread: bool,
     /// The identity's face: its identicon, and the picture assigned to its
     /// address if any (デザイン規約 §アバターを与える). Properties because
     /// the commit editor's badge is a binding.
@@ -252,9 +255,12 @@ pub struct RepoTab {
     /// can tell "not loaded yet" from "loaded, and it is empty".
     head_commit_seq: i32,
     /// Whether an amend pressed now would leave HEAD changing nothing —
-    /// asked while the amend box is ticked over something staged
-    /// (`requestAmendCheck`), refused by the commit button.
+    /// asked while an amend is in view (`watchAmend`), refused by the commit
+    /// button and the details pane's save.
     amend_empties: bool,
+    /// Whether an amend is in view — the page's word, kept to say again to
+    /// the session of a worktree the tab is stood in next.
+    amend_watched: bool,
     /// The most recently finished write: git's message (empty on success)
     /// and a counter QML compares to spot a new one — the bridge carries
     /// only parameterless signals. Shown raw; what an answer means is the
@@ -298,9 +304,9 @@ pub struct RepoTab {
     /// git would not do it, or could not reach the far side to;
     /// `last_write_error` holds its words.
     write_refused: bool,
-    /// The shown diff is stale: a landed stage / unstage / discard /
-    /// commit / stash moved it, and a refused stage / unstage / discard
-    /// was refused because the rows on screen drifted.
+    /// The shown diff is to be read again: a landed stage / unstage /
+    /// discard / commit / stash moved it, and a refused stage / unstage /
+    /// discard may have been refused because the rows on screen drifted.
     write_stale_diff: bool,
     /// HEAD moved (a checkout or a reset landed), so the worktree
     /// under an open diff was rewritten.

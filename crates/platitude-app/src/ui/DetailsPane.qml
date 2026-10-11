@@ -47,6 +47,9 @@ ColumnLayout {
     property string editBlocked: ""
     // A remote already has this commit: the save row says so (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」).
     property bool published: false
+    /// Saving — an amend, which takes what is staged too — would leave HEAD changing nothing (`RepoTab.amendEmpties`):
+    /// the save row refuses first, as git would.
+    property bool amendEmpties: false
     // What git makes of the signature: "" (unsigned, or not answered yet), "verified", "signed" or "bad".
     // `signatureCode` is git's `%G?`, for the tooltip: an unjudged signature has one of five reasons.
     property string signatureKind: ""
@@ -75,6 +78,10 @@ ColumnLayout {
     readonly property bool signatureTipShown: block.signatureTipShown
     property bool summaryPointedAt: false
     readonly property bool summaryTipShown: block.summaryTipShown
+    /// The save row's button, pointed at as `summaryPointedAt` is (edit-message-refused).
+    property bool savePointedAt: false
+    readonly property bool saveEnabled: block.saveEnabled
+    readonly property var saveTip: block.saveTip
     property int pointedTipRow: -1
     /// A right-click menu of the page's stands over this pane (デザイン規約 §メニュー).
     property bool menuStanding: false
@@ -353,6 +360,7 @@ ColumnLayout {
         editBlocked: detailsPane.editBlocked
         busy: detailsPane.busy
         published: detailsPane.published
+        amendEmpties: detailsPane.amendEmpties
         intoPlan: detailsPane.intoPlan
         messageDirty: detailsPane.messageDirty
         signatureKind: detailsPane.signatureKind
@@ -366,6 +374,7 @@ ColumnLayout {
         avatarPointedAt: detailsPane.avatarPointedAt
         signaturePointedAt: detailsPane.signaturePointedAt
         summaryPointedAt: detailsPane.summaryPointedAt
+        savePointedAt: detailsPane.savePointedAt
         mateCardInside: cards.matesPointerInside
         authorCardInside: cards.authorPointerInside
         parentCardInside: cards.parentsPointerInside

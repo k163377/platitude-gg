@@ -395,7 +395,10 @@ mod tests {
         );
 
         let mut rebasing = worktree_entry("C:/work/home", None, false);
-        rebasing.held = Some("main".to_string());
+        rebasing.held = Some(platitude_core::worktrees::Held {
+            branch: "main".to_string(),
+            by: platitude_core::worktrees::HeldBy::Rebase,
+        });
         model.settle_home_branch(&[rebasing], "c:/work/plain");
         assert_eq!(
             model.home_branch, "main",
