@@ -105,7 +105,8 @@ use crate::process::{GitCommand, GitExecutor};
 ///   stale info and exit 1; a followTags user's push sends the branch alone.
 /// - `read-tree <tree-ish>` / `write-tree` use a temporary index.
 /// - `rebase`: `--interactive`, `--no-rebase-merges`, `--onto`, `--root`,
-///   `--update-refs` (2.38), `--continue`, `--abort`, `--skip`, `--quit`.
+///   `--update-refs` (2.38), `--continue`, `--abort`, `--skip`, `--quit`,
+///   `--no-autostash` (`OPT_AUTOSTASH` in v2.43.0 `builtin/rebase.c`).
 /// - `remote`: `add`, `set-url`, `--end-of-options`, `get-url --push --`.
 /// - `reset`: `--quiet`, `--soft`, `--mixed`, `--hard`; see the
 ///   unsupported forms at the end of this file for option termination.

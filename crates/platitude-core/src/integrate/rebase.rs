@@ -228,6 +228,10 @@ pub(crate) fn rebase_command(
             .args(["--interactive", "--no-rebase-merges"])
             .env("GIT_SEQUENCE_EDITOR", editor);
     }
+    // `--no-autostash` pins off `rebase.autoStash`: git would stash a dirty
+    // tree itself and restore it with a plain apply, ahead of the carry
+    // that keeps the staged half staged (`session::build`).
+    cmd = cmd.arg("--no-autostash");
     if let Some(onto) = &options.onto {
         cmd = cmd.args(["--onto", onto]);
     }

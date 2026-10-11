@@ -173,6 +173,55 @@ async fn a_rebase_onto_over_a_dirty_tree_carries_the_work_across() {
     session.close();
 }
 
+/// A user's `rebase.autoStash` does not get there first: git's own stash
+/// would take the dirty tree before the refusal the carry starts from, and
+/// put it all back unstaged. Both the plain rebase and the driven one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_users_autostash_leaves_the_carry_to_the_session() {
+    install_todo_editor();
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["switch", "-c", "topic"]);
+    repo.commit_file("t.txt", "topic\n", "topic one");
+    repo.commit_file("f.txt", "fold\n", "fold me in");
+    repo.git(&["switch", "main"]);
+    repo.commit_file("m.txt", "main\n", "main moved");
+    repo.git(&["switch", "topic"]);
+    repo.git(&["config", "rebase.autoStash", "true"]);
+    repo.write_file("a.txt", "staged edit\n");
+    repo.git(&["add", "--", "a.txt"]);
+    repo.write_file("t.txt", "unstaged edit\n");
+
+    let (sink, session) = opened(&repo).await;
+    session.rebase("main".into(), rebase_onto());
+    assert_eq!(write_result(&sink, OperationKind::Rebase).await, None);
+    let fold = repo.git(&["rev-parse", "HEAD"]);
+    session.squash_into_parent(fold);
+    assert_eq!(write_result(&sink, OperationKind::Squash).await, None);
+
+    assert_eq!(
+        rewrite_route(&sink),
+        vec![
+            "rebase",
+            "stash push",
+            "rebase",
+            "stash pop --index",
+            "rebase --interactive",
+            "stash push",
+            "rebase --interactive",
+            "stash pop --index",
+        ]
+    );
+    assert_eq!(
+        repo.git(&["diff", "--name-only", "--cached"]),
+        "a.txt",
+        "the staged half is still staged"
+    );
+    assert_eq!(repo.git(&["diff", "--name-only"]), "t.txt");
+    assert_eq!(repo.git(&["stash", "list"]), "");
+    session.close();
+}
+
 /// When that rebase stops, the work waits in the stash as a stopped
 /// replay's does — the entry is the person's to pop, where `--autostash`
 /// would have restored it after `--continue` / `--abort`.
