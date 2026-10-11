@@ -1,6 +1,6 @@
-//! The task-chip guard (`spawn_task` / `dismiss_task`): what may become
-//! a chip at all, the number one leads with, the paths a chip holds
-//! alone, and the ledger they are judged against.
+//! The task-chip guard (a `start_session` proposal / `dismiss_task`):
+//! what may become a chip at all, the number one leads with, the paths a
+//! chip holds alone, and the ledger they are judged against.
 //!
 //! Every chip this session stacked is remembered beside the primary
 //! checkout's `.git`, and:

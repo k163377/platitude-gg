@@ -887,7 +887,7 @@ const TAIL: &str = "  replay [--tier <linux|merge|all>] [--line '<verify-ui line
       Claude Code hook handler (wired from .claude/settings.json; reads
       the hook payload from stdin). Events: pre-write, post-write,
       pre-shell, pre-tool (which also guards messages to other
-      sessions), pre-chip, post-chip, post-tool,
+      sessions and chips), post-tool,
       permission-request, permission-denied, elicitation,
       elicitation-result, subagent-start, subagent-stop, stop,
       stop-failure, pre-worktree, post-worktree, prompt-submit (which

@@ -6,7 +6,17 @@ use std::collections::BTreeSet;
 use super::Chip;
 use super::at_hand;
 use super::ledger::{load, store};
-use crate::hook::payload::{deny, printable, string_field};
+use crate::hook::payload::{deny, own_value_field, printable, string_field};
+
+/// The tool a chip is proposed with.
+const PROPOSE: &str = "mcp__ccd_session__start_session";
+
+/// The tool that withdraws one.
+const WITHDRAW: &str = "mcp__ccd_session__dismiss_task";
+
+/// The initiation of a start that only puts a card in front of the user:
+/// the chip. An offer and a session the user asked for are not on the list.
+const PROPOSAL: &str = "own_initiative";
 
 /// The mark a chip wears when it asks the user to decide. It sits right
 /// after the number (`3. [任意] …`) and has one spelling, so the list reads
@@ -24,9 +34,13 @@ const ROOTS: [&str; 6] = [
     "spike",
 ];
 
-/// PreToolUse(spawn_task): the three things a chip cannot be judged on
-/// alone — where it stands, what weight it carries, and what it claims.
+/// PreToolUse(start_session, proposing): the three things a chip cannot
+/// be judged on alone — where it stands, what weight it carries, and what
+/// it claims.
 pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
+    if !proposes(input) {
+        return Ok(());
+    }
     let asked = section(input, "\"tool_input\"");
     let title = string_field(asked, "title").unwrap_or_default();
     let Some((priority, body, optional)) = numbered(&title) else {
@@ -58,7 +72,7 @@ pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
             "Priority {priority} is already the live chip '{}'. Two chips at one \
              number leave the list with no order to read. Renumber the whole live \
              set around where this one belongs first — for each chip that moves, \
-             spawn it again under its new number and then dismiss its old task_id \
+             propose it again under its new number and then dismiss its old task_id \
              — and stack this chip once its number is free. Live now: {}.",
             taken.label(),
             roster(&live)
@@ -86,16 +100,31 @@ pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// PostToolUse(spawn_task|dismiss_task): the ledger follows what the
-/// list actually holds.
+/// PostToolUse(start_session|dismiss_task), and their failures: the ledger
+/// follows what the list actually holds. A chip is recorded only once the
+/// proposal went through; a withdrawal takes it off either way (the user
+/// may have got there first). A chip the user started keeps its number:
+/// the list goes on reading 1..N until the session withdraws it.
 pub(crate) fn post_chip(input: &str) -> Result<(), String> {
     let tool = string_field(input, "tool_name").unwrap_or_default();
-    if tool.contains("dismiss_task") {
+    if tool == WITHDRAW {
         dismissed(input);
-    } else if tool.contains("spawn_task") {
+    } else if proposes(input)
+        && string_field(input, "hook_event_name").as_deref() == Some("PostToolUse")
+    {
         spawned(input);
     }
     Ok(())
+}
+
+/// Whether the call puts a new chip on the list: a proposal of this
+/// session's own, not the start of one proposed already.
+fn proposes(input: &str) -> bool {
+    string_field(input, "tool_name").as_deref() == Some(PROPOSE)
+        && own_value_field(input, "tool_input").is_some_and(|asked| {
+            string_field(asked, "initiation").as_deref() == Some(PROPOSAL)
+                && string_field(asked, "proposal_id").is_none()
+        })
 }
 
 /// Stop: a turn ends only on a live set that reads 1..N. Judged here, not
@@ -113,7 +142,7 @@ pub(crate) fn stop(input: &str) -> Result<bool, String> {
             "The task chips this session stacked are left out of order: {}. Live \
              now: {}. The list is read by its numbers, so before a turn ends the \
              live set reads 1..N, each number once and each chip once, \
-             1 being the most important. Re-stack whatever moved — spawn the chip \
+             1 being the most important. Re-stack whatever moved — propose the chip \
              again under its new number, then dismiss its old task_id — and say in \
              the reply which chips changed number.",
             problems.join("; "),
@@ -311,7 +340,7 @@ fn covers(wide: &str, narrow: &str) -> bool {
 }
 
 fn words(asked: &str) -> String {
-    ["title", "tldr", "prompt"]
+    ["title", "prompt"]
         .iter()
         .filter_map(|field| string_field(asked, field))
         .collect::<Vec<String>>()
@@ -383,7 +412,7 @@ const UNNUMBERED: &str = "A task chip's title must lead with its priority: '1. �
      of the list, and a chip stacked without one is read wherever it happens to \
      land. Stack it again as '<n>. <title>' — or '<n>. [任意] <title>' when the chip \
      asks the user to decide — and if it outranks \
-     chips already live, renumber those first: spawn each one again under its new \
+     chips already live, renumber those first: propose each one again under its new \
      number, then dismiss its old task_id.";
 
 const MISSPELT: &str = "says 任意 where the weight mark goes and does not spell it \
@@ -401,8 +430,8 @@ const UNMARKED: &str = "asks a question: the user answers it and may answer no, 
 #[cfg(test)]
 mod tests {
     use super::{
-        Chip, asks, covers, id_in, misspelt_mark, numbered, problems, resolution, shared, standing,
-        targets,
+        Chip, asks, covers, id_in, misspelt_mark, numbered, problems, proposes, resolution, shared,
+        standing, targets,
     };
     use std::collections::BTreeSet;
 
@@ -544,5 +573,34 @@ mod tests {
             Some("abc_9".to_string())
         );
         assert_eq!(id_in("nothing here"), None);
+        // A proposal's result, as the app words it.
+        assert_eq!(
+            id_in(
+                r#"[{"type":"text","text":"Proposed \"1. 直す\" (task_id: task_a18c448e). The user sees a card."}]"#
+            ),
+            Some("task_a18c448e".to_string())
+        );
+    }
+
+    #[test]
+    fn a_chip_is_a_proposal_of_this_sessions_own() {
+        let call = |asked: &str| {
+            format!(
+                r#"{{"session_id":"x","tool_name":"mcp__ccd_session__start_session","tool_input":{asked},"tool_use_id":"t"}}"#
+            )
+        };
+        assert!(proposes(&call(
+            r#"{"initiation":"own_initiative","title":"1. 直す","prompt":"p","context":"fresh"}"#
+        )));
+        assert!(!proposes(&call(
+            r#"{"initiation":"offer","title":"1. 直す"}"#
+        )));
+        assert!(!proposes(&call(
+            r#"{"initiation":"user_asked","title":"直す","prompt":"p"}"#
+        )));
+        assert!(!proposes(&call(r#"{"proposal_id":"task_a18c448e"}"#)));
+        assert!(!proposes(
+            r#"{"tool_name":"mcp__ccd_session__spawn_task","tool_input":{"initiation":"own_initiative","title":"1. 直す"}}"#
+        ));
     }
 }

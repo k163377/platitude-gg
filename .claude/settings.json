@@ -29,15 +29,6 @@
         ]
       },
       {
-        "matcher": "mcp__ccd_session__spawn_task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "git -c alias.pgg-claude-hook=!.claude/hooks/runner.sh pgg-claude-hook pre-chip"
-          }
-        ]
-      },
-      {
         "hooks": [
           {
             "type": "command",
@@ -80,15 +71,6 @@
           {
             "type": "command",
             "command": "git -c alias.pgg-claude-hook=!.claude/hooks/runner.sh pgg-claude-hook post-worktree"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__ccd_session__(spawn|dismiss)_task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "git -c alias.pgg-claude-hook=!.claude/hooks/runner.sh pgg-claude-hook post-chip"
           }
         ]
       }

@@ -1,40 +1,55 @@
-//! The chip guard's git side: what a seat already has open is read from
-//! the repository, and a chip over it is refused.
+//! The chip guard's git side and its ledger: what a seat already has open
+//! is read from the repository, and a chip over it is refused; a chip
+//! holds its number until the session withdraws it.
 
-use std::fs::File;
 use std::path::Path;
-use std::process::{Command, Stdio};
 
-use crate::support::{EXE, Sandbox, output_past_a_busy_image};
+use crate::support::Sandbox;
 
-/// What `hook pre-chip` prints for a chip whose prompt names `path`,
-/// asked from `dir`; empty is no objection.
+/// The session every payload here comes from.
+const SESSION: &str = "gate-chips";
+
+/// How the app answers a proposal that went through, JSON-escaped.
+const PROPOSED: &str = ",\"tool_response\":[{\"type\":\"text\",\"text\":\"Proposed \\\"1. 直す\\\" \
+     (task_id: task_a18c448e). The user sees a card and nothing runs until they start it.\"}]";
+
+fn forward(dir: &Path) -> String {
+    dir.display().to_string().replace('\\', "/")
+}
+
+/// The start_session call `event` reports, proposing `title` with
+/// `prompt` from `dir`; `extra` is the payload's tail after the input.
+fn proposal(
+    dir: &Path,
+    event: &str,
+    initiation: &str,
+    title: &str,
+    prompt: &str,
+    extra: &str,
+) -> String {
+    format!(
+        "{{\"session_id\":\"{SESSION}\",\"cwd\":\"{}\",\"hook_event_name\":\"{event}\",\
+         \"tool_name\":\"mcp__ccd_session__start_session\",\
+         \"tool_input\":{{\"initiation\":\"{initiation}\",\"title\":\"{title}\",\
+         \"context\":\"fresh\",\"prompt\":\"{prompt}\"}}{extra}}}",
+        forward(dir)
+    )
+}
+
+/// What the guard says to a chip whose prompt names `path`, asked from
+/// `dir`; empty is no objection.
 fn pre_chip(sb: &Sandbox, dir: &Path, path: &str) -> String {
-    let payload = sb.root.join("chip.json");
-    std::fs::write(
-        &payload,
-        format!(
-            "{{\"session_id\":\"gate-chips\",\"cwd\":\"{}\",\
-             \"hook_event_name\":\"PreToolUse\",\
-             \"tool_name\":\"mcp__ccd_session__spawn_task\",\
-             \"tool_input\":{{\"title\":\"1. 直す\",\"tldr\":\"直す\",\
-             \"prompt\":\"{path} を直す\"}}}}",
-            dir.display().to_string().replace('\\', "/")
+    sb.hook(
+        "pre-tool",
+        &proposal(
+            dir,
+            "PreToolUse",
+            "own_initiative",
+            "1. 直す",
+            &format!("{path} を直す"),
+            "",
         ),
     )
-    .expect("payload");
-    let mut command = Command::new(EXE);
-    command
-        .args(["hook", "pre-chip"])
-        .stdin(Stdio::from(File::open(&payload).expect("payload open")));
-    sb.env(&mut command);
-    let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
-    assert!(
-        output.status.success(),
-        "hook pre-chip failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
 #[test]
@@ -62,4 +77,52 @@ fn a_chip_is_refused_over_the_work_the_seat_is_already_holding() {
         ""
     );
     assert_eq!(pre_chip(&sb, &sb.repo, core), "");
+}
+
+/// A proposal that went through holds its number until the session
+/// withdraws it; one that failed is no chip, and neither is an offer or a
+/// session the user asked for.
+#[test]
+fn a_chip_holds_its_number_until_it_is_withdrawn() {
+    let sb = Sandbox::new("chips-ledger");
+    let (fix, more) = ("internal-docs/P3.md を直す", "internal-docs/P5.md を足す");
+    let second = proposal(
+        &sb.repo,
+        "PreToolUse",
+        "own_initiative",
+        "1. 別の直し",
+        more,
+        "",
+    );
+    let first = |event: &str, extra: &str| {
+        proposal(&sb.repo, event, "own_initiative", "1. 直す", fix, extra)
+    };
+    assert_eq!(sb.hook("pre-tool", &first("PreToolUse", "")), "");
+    assert_eq!(
+        sb.hook("post-tool", &first("PostToolUseFailure", PROPOSED)),
+        ""
+    );
+    assert_eq!(
+        sb.hook("pre-tool", &second),
+        "",
+        "a failed proposal is no chip"
+    );
+
+    assert_eq!(sb.hook("post-tool", &first("PostToolUse", PROPOSED)), "");
+    let taken = sb.hook("pre-tool", &second);
+    assert!(taken.contains("already the live chip '1. 直す'"), "{taken}");
+    for initiation in ["offer", "user_asked"] {
+        let not_a_chip = proposal(&sb.repo, "PreToolUse", initiation, "1. 別の直し", more, "");
+        assert_eq!(sb.hook("pre-tool", &not_a_chip), "", "{initiation}");
+    }
+
+    let withdrawn = format!(
+        "{{\"session_id\":\"{SESSION}\",\"cwd\":\"{}\",\"hook_event_name\":\"PostToolUse\",\
+         \"tool_name\":\"mcp__ccd_session__dismiss_task\",\
+         \"tool_input\":{{\"task_id\":\"task_a18c448e\"}},\
+         \"tool_response\":[{{\"type\":\"text\",\"text\":\"Task task_a18c448e withdrawn.\"}}]}}",
+        forward(&sb.repo)
+    );
+    assert_eq!(sb.hook("post-tool", &withdrawn), "");
+    assert_eq!(sb.hook("pre-tool", &second), "");
 }

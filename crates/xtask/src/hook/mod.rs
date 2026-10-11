@@ -72,25 +72,30 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "post-write" => write::post_write(&input),
         "pre-shell" => pre_shell(&input),
         "pre-tool" => pre_tool(&input),
-        "pre-chip" => chips::pre_spawn(&input),
-        "post-chip" => chips::post_chip(&input),
+        "post-tool" => chips::post_chip(&input),
         "stop" => stop(&input),
         "pre-worktree" => seat::pre_worktree(&input),
         "post-worktree" => seat::post_worktree(&input),
         "prompt-submit" => prompt_submit(&input),
         "session-start" => greeting::session_start(&input),
         "session-end" => session_end(&input),
-        "stop-failure" | "post-tool" | "permission-request" | "permission-denied"
-        | "elicitation" | "elicitation-result" | "subagent-start" | "subagent-stop" => Ok(()),
+        // A session that loaded an older settings.json still names these,
+        // for a tool that no longer exists; `pre-tool` / `post-tool` carry
+        // the chip guard.
+        "pre-chip" | "post-chip" => Ok(()),
+        "stop-failure" | "permission-request" | "permission-denied" | "elicitation"
+        | "elicitation-result" | "subagent-start" | "subagent-stop" => Ok(()),
         other => Err(format!("unknown hook event: {other:?}")),
     }
 }
 
-/// PreToolUse, of any tool: the guard on tools no matcher names — the
-/// other sessions (`contact`).
+/// PreToolUse, of any tool: the guards on tools no matcher names — the
+/// other sessions (`contact`) and the chips. One decision per call.
 fn pre_tool(input: &str) -> Result<(), String> {
-    let _refused = contact::pre_tool(input);
-    Ok(())
+    if contact::pre_tool(input) {
+        return Ok(());
+    }
+    chips::pre_spawn(input)
 }
 
 /// UserPromptSubmit. A side session's report that is refused is answered
