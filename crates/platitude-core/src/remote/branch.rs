@@ -59,8 +59,9 @@ pub enum RemoteBranchState {
     /// It is there, but its commit is not in this repository, so the
     /// histories cannot be compared without a fetch.
     Unknown,
-    /// The remote never answered (bad URL, no credentials, no network).
-    /// Silence is not "nothing is there".
+    /// Asking the remote failed — no answer (bad URL, no network) or an
+    /// answer that refused the ask (no credentials); git's words say which.
+    /// A failed ask is not "nothing is there".
     Unreachable,
 }
 
@@ -121,7 +122,7 @@ pub async fn delete_remote_branch(
         return Ok(());
     }
     let sent = super::refusal::Sent::branch(remote, branch, true);
-    Err(super::refusal::refusal(executor, workdir, command, &out, &sent, cancel).await)
+    Err(super::refusal::refusal(command, &out, &sent))
 }
 
 /// After [`delete_remote_branch`] went: takes the upstream off the local

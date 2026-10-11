@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use crate::support::TestRepo;
-use crate::support::exec::{Said, env, observed_env};
+use crate::support::exec::{Said, env, logged, observed_env};
 use crate::support::remote::origin_and_clone;
 const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 use platitude_core::GitError;
@@ -246,6 +246,127 @@ async fn a_far_side_with_the_branch_checked_out_says_so() {
     assert_eq!(
         kind_of(&err),
         Some(ReportKind::RemoteUpdate(RemoteWhy::CheckedOut)),
+        "{err}"
+    );
+}
+
+/// The hook's no is read off git's own record of the push: no other git
+/// runs to tell it, whatever the log keeps.
+#[tokio::test]
+async fn naming_the_hook_runs_no_git_besides_the_push() {
+    let (_bare, mut work) = origin_and_clone();
+    work.commit_file("b.txt", "ours\n", "work of our own");
+    work.write_hook("pre-push", SAYS_NO);
+    let (exec, log, cancel) = logged();
+
+    let err = push_main_with(&exec, &work, "origin", PushForce::None, &cancel)
+        .await
+        .expect_err("the hook says no");
+    assert_eq!(kind_of(&err), Some(ReportKind::PrePush), "{err}");
+    let rows = log.displays();
+    assert!(
+        rows.iter().all(|row| row.starts_with("git push")),
+        "no git but the push: {rows:?}"
+    );
+}
+
+/// git from 2.54 runs a hook the config names for the event
+/// (`hook.<name>.event`) beside the hooks directory's — the same no as a
+/// file's. The minimum reads no such hook and the push goes; whichever git
+/// this is, the answer follows what it did.
+#[tokio::test]
+async fn a_pre_push_hook_the_config_names_is_the_hooks_too() {
+    let (_bare, mut work) = origin_and_clone();
+    work.commit_file("b.txt", "ours\n", "work of our own");
+    work.git(&["config", "hook.lint.event", "pre-push"]);
+    work.git(&[
+        "config",
+        "hook.lint.command",
+        "echo \"lint: the config's hook says no\" >&2; exit 1",
+    ]);
+    let runs_it = work.git_ok(&["hook", "list", "pre-push"]);
+
+    let pushed = push_main(&work, "origin", PushForce::None).await;
+    match (runs_it, pushed) {
+        (true, Err(err)) => assert_eq!(kind_of(&err), Some(ReportKind::PrePush), "{err}"),
+        (false, Ok(())) => {}
+        (runs_it, pushed) => panic!("git runs the config's hook: {runs_it}, the push: {pushed:?}"),
+    }
+}
+
+/// `push.gpgSign=true` against a far side that takes no signed push (no
+/// `receive.certNonceSeed` there): git dies before sending — a send and a
+/// delete alike.
+#[tokio::test]
+async fn a_signed_push_the_far_side_does_not_take_says_so() {
+    let (_bare, mut work) = origin_and_clone();
+    work.commit_file("b.txt", "ours\n", "work of our own");
+    work.git(&["config", "push.gpgSign", "true"]);
+    let (exec, cancel) = env();
+
+    let err = push_main_with(&exec, &work, "origin", PushForce::None, &cancel)
+        .await
+        .expect_err("the far side takes no signed push");
+    assert_eq!(
+        kind_of(&err),
+        Some(ReportKind::SignedPushUntaken { deleting: false }),
+        "{err}"
+    );
+    let tip = work.git(&["rev-parse", "origin/main"]);
+    let err = remote::delete_remote_branch(&exec, &work.path, "origin", "main", &tip, NET, &cancel)
+        .await
+        .expect_err("nor a signed delete");
+    assert_eq!(
+        kind_of(&err),
+        Some(ReportKind::SignedPushUntaken { deleting: true }),
+        "{err}"
+    );
+}
+
+/// The far side takes signed pushes, and the key to sign with is not
+/// there: the certificate cannot be signed.
+#[tokio::test]
+async fn a_push_whose_certificate_cannot_be_signed_says_so() {
+    let (mut bare, mut work) = origin_and_clone();
+    bare.git(&["config", "receive.certNonceSeed", "a seed of our own"]);
+    work.commit_file("b.txt", "ours\n", "work of our own");
+    let key = work.path.join("no-such-key.pub");
+    work.git(&["config", "push.gpgSign", "true"]);
+    work.git(&["config", "gpg.format", "ssh"]);
+    work.git(&["config", "user.signingkey", &key.to_string_lossy()]);
+
+    let err = push_main(&work, "origin", PushForce::None)
+        .await
+        .expect_err("nothing signs the certificate");
+    assert_eq!(
+        kind_of(&err),
+        Some(ReportKind::PushUnsigned { deleting: false }),
+        "{err}"
+    );
+}
+
+/// The same with an openpgp key, whose signing program never ran: git
+/// names the certificate it could not sign.
+#[tokio::test]
+async fn a_push_whose_signing_program_fails_says_so() {
+    let (mut bare, mut work) = origin_and_clone();
+    bare.git(&["config", "receive.certNonceSeed", "a seed of our own"]);
+    work.commit_file("b.txt", "ours\n", "work of our own");
+    work.git(&["config", "push.gpgSign", "true"]);
+    work.git(&["config", "user.signingkey", "0123456789ABCDEF"]);
+    work.git(&["config", "gpg.program", "no-such-signing-program"]);
+
+    let err = push_main(&work, "origin", PushForce::None)
+        .await
+        .expect_err("nothing signs the certificate");
+    assert!(
+        err.to_string()
+            .contains("failed to sign the push certificate"),
+        "the certificate's own words: {err}"
+    );
+    assert_eq!(
+        kind_of(&err),
+        Some(ReportKind::PushUnsigned { deleting: false }),
         "{err}"
     );
 }

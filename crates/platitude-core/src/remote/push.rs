@@ -166,7 +166,9 @@ pub async fn plan_publish(
 ///
 /// Its stdout goes under a failed row in the log beside stderr: the ref
 /// lines say what was refused and why, and a `pre-push` hook's words come
-/// out there (transport.c leaves the hook's stdout git's own).
+/// out there (transport.c leaves the hook's stdout git's own). Traced: git
+/// says nothing of its own over that hook's no but `failed to push some
+/// refs`, and its trace records the hook's end ([`super::refusal`]).
 pub(super) fn porcelain_push(workdir: &Path, timeout: Duration) -> GitCommand {
     GitCommand::new()
         .cwd(workdir)
@@ -174,6 +176,7 @@ pub(super) fn porcelain_push(workdir: &Path, timeout: Duration) -> GitCommand {
         .timeout(timeout)
         .paced_elsewhere()
         .logs_stdout()
+        .traced()
 }
 
 /// `git push` for one branch.
@@ -209,7 +212,7 @@ pub async fn push(
         return Ok(());
     }
     let sent = Sent::branch(&spec.remote, &spec.remote_branch, false);
-    Err(refusal(executor, workdir, command, &out, &sent, cancel).await)
+    Err(refusal(command, &out, &sent))
 }
 
 /// How `branch` stands against the tracking ref of where a mark sends

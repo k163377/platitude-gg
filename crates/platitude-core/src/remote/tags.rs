@@ -47,7 +47,9 @@ pub async fn list_tags(
 /// answered as sent: git refuses it (`already exists`) wherever the objects
 /// differ — a lightweight tag over there for an annotated one here, or
 /// another annotation — but the screen shows one commit on both sides, so
-/// it is no collision to report. The remote's object is left as it is.
+/// it is no collision to report. The remote's object is left as it is. A
+/// name the remote no longer holds when it is read again is git's failure
+/// as git said it: nothing says it stands on another commit.
 ///
 /// A lease the remote has left, and a name it holds on another commit,
 /// read as outdated; what puts them right is reading the remote's tags
@@ -83,25 +85,42 @@ pub async fn push_tag(
         return Ok(replaced);
     }
     let sent = super::refusal::Sent::tag(remote, tag, false);
-    if super::refusal::is_taken(&out.stdout_utf8(), &sent.refname)
-        && holds_same_commit(executor, workdir, remote, tag, timeout, cancel).await?
-    {
-        return Ok(None);
+    if super::refusal::is_taken(&out.stdout_utf8(), &sent.refname) {
+        // `already exists` says only that the objects differ: what the
+        // remote holds now says whether the commit does.
+        match held_against_here(executor, workdir, remote, tag, timeout, cancel).await? {
+            Held::OnTheSameCommit => return Ok(None),
+            Held::OnAnotherCommit => {}
+            // Gone since git looked: nothing to say it stands elsewhere.
+            Held::Nowhere => {
+                return Err(GitError::Failed {
+                    command,
+                    code: out.code,
+                    stderr: out.failure_message(),
+                });
+            }
+        }
     }
-    Err(super::refusal::tag_refusal(executor, workdir, command, &out, &sent, cancel).await)
+    Err(super::refusal::tag_refusal(command, &out, &sent))
 }
 
-/// Whether `remote` holds `tag` on the commit the tag here peels to.
-async fn holds_same_commit(
+/// Where `remote` holds `tag`, against the commit the tag here peels to.
+enum Held {
+    OnTheSameCommit,
+    OnAnotherCommit,
+    Nowhere,
+}
+
+async fn held_against_here(
     executor: &GitExecutor,
     workdir: &Path,
     remote: &str,
     tag: &str,
     timeout: Duration,
     cancel: &CancellationToken,
-) -> Result<bool, GitError> {
+) -> Result<Held, GitError> {
     let Some(there) = holding(executor, workdir, remote, tag, timeout, cancel).await? else {
-        return Ok(false);
+        return Ok(Held::Nowhere);
     };
     let cmd = GitCommand::new().cwd(workdir).args([
         "rev-parse",
@@ -110,7 +129,10 @@ async fn holds_same_commit(
         &format!("refs/tags/{tag}^{{commit}}"),
     ]);
     let here = executor.run(cmd, cancel).await?;
-    Ok(here.stdout_utf8().trim() == there.commit.to_hex())
+    Ok(match here.stdout_utf8().trim() == there.commit.to_hex() {
+        true => Held::OnTheSameCommit,
+        false => Held::OnAnotherCommit,
+    })
 }
 
 /// Takes one tag off one remote. Nothing here is touched.
@@ -142,7 +164,7 @@ pub async fn delete_remote_tag(
         return Ok(there);
     }
     let sent = super::refusal::Sent::tag(remote, tag, true);
-    Err(super::refusal::tag_refusal(executor, workdir, command, &out, &sent, cancel).await)
+    Err(super::refusal::tag_refusal(command, &out, &sent))
 }
 
 /// What a delete of this tag is leased to: the object the remote holds it

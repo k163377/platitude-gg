@@ -1,15 +1,11 @@
 //! What a non-zero push was: outdated, turned down here by the `pre-push`
-//! hook, turned down over there and for what, or a plain failure.
+//! hook, unsigned where it was to be signed, turned down over there and for
+//! what, or a plain failure.
 //!
 //! Kept apart from [`super::push`] because the tag commands read it too
 //! ([`super::tags`]) and none of it looks at a [`super::PushSpec`].
 
-use std::path::Path;
-
-use tokio_util::sync::CancellationToken;
-
 use crate::error::GitError;
-use crate::process::{GitCommand, GitExecutor};
 use crate::report::{RemoteWhy, ReportKind, WriteReport};
 
 /// The one ref a push sent, whose line in git's answer is the one read:
@@ -46,26 +42,23 @@ impl<'a> Sent<'a> {
 }
 
 /// Which a non-zero push of a branch is: one that would drop the remote's
-/// commits, leased to a reading the remote has left, turned down by the
-/// `pre-push` hook here or by the far side, or a failure.
+/// commits, leased to a reading the remote has left, or one no read here
+/// answers ([`refused`]).
 ///
 /// The refusals are told apart because only some have a next move (a
 /// fetch answers `fetch first`, nothing answers a protected branch), and
 /// the ones a fetch answers by what they found, so each reaches the screen
 /// as its own report (デザイン規約 §答えの要らない報せ).
-pub(super) async fn refusal(
-    executor: &GitExecutor,
-    workdir: &Path,
+pub(super) fn refusal(
     command: String,
     out: &crate::process::GitOutput,
     sent: &Sent<'_>,
-    cancel: &CancellationToken,
 ) -> GitError {
     let porcelain = out.stdout_utf8();
     let kind = match sent_line(&porcelain, &sent.refname) {
         Some(line) if line.rejected_for("(stale info)") => moved(sent.deleting),
         Some(line) if line.would_drop() => ReportKind::Outdated,
-        _ => return refused(executor, workdir, command, out, sent, cancel).await,
+        _ => return refused(command, out, sent),
     };
     outdated(kind, command, out, sent)
 }
@@ -75,19 +68,16 @@ pub(super) async fn refusal(
 /// (`already exists`) — both answered by reading the remote's tags again
 /// (`session::push_tag`), which a fetch does not do (`--prune` keeps the
 /// local tag, `--prune-tags` exits 1).
-pub(super) async fn tag_refusal(
-    executor: &GitExecutor,
-    workdir: &Path,
+pub(super) fn tag_refusal(
     command: String,
     out: &crate::process::GitOutput,
     sent: &Sent<'_>,
-    cancel: &CancellationToken,
 ) -> GitError {
     let porcelain = out.stdout_utf8();
     let kind = match sent_line(&porcelain, &sent.refname) {
         Some(line) if line.rejected_for("(stale info)") => moved(sent.deleting),
         Some(line) if line.rejected_for("(already exists)") => ReportKind::TagElsewhere,
-        _ => return refused(executor, workdir, command, out, sent, cancel).await,
+        _ => return refused(command, out, sent),
     };
     outdated(kind, command, out, sent)
 }
@@ -122,16 +112,11 @@ fn outdated(
     )
 }
 
-/// The reading for a refusal no read here answers: the `pre-push` hook
-/// here, the far side, or a plain failure, which the log answers.
-async fn refused(
-    executor: &GitExecutor,
-    workdir: &Path,
-    command: String,
-    out: &crate::process::GitOutput,
-    sent: &Sent<'_>,
-    cancel: &CancellationToken,
-) -> GitError {
+/// The reading for a refusal no read here answers: the far side by its ref
+/// line; before any, the `pre-push` hook here, a push git could not sign
+/// or one the far side takes no signature on; or a plain failure, which
+/// the log answers.
+fn refused(command: String, out: &crate::process::GitOutput, sent: &Sent<'_>) -> GitError {
     let porcelain = out.stdout_utf8();
     let stderr = out.stderr_utf8();
     let kind = match sent_line(&porcelain, &sent.refname) {
@@ -142,9 +127,21 @@ async fn refused(
                 false => ReportKind::RemoteUpdate(why),
             }
         }
-        None if hook_turned_down(executor, workdir, out, cancel).await => match sent.deleting {
+        // git runs the hook before it signs or talks to the remote, and
+        // stops at its non-zero end with nothing of its own but `failed to
+        // push some refs` (transport.c): its trace has the end. Whatever
+        // the hook printed is the hook's.
+        None if out.trace.hook_failed(&["pre-push"]) => match sent.deleting {
             true => ReportKind::PrePushDelete,
             false => ReportKind::PrePush,
+        },
+        None if PUSH_UNSIGNED.iter().any(|said| stderr.contains(said)) => {
+            ReportKind::PushUnsigned {
+                deleting: sent.deleting,
+            }
+        }
+        None if stderr.contains(SIGNED_PUSH_UNTAKEN) => ReportKind::SignedPushUntaken {
+            deleting: sent.deleting,
         },
         _ => {
             return GitError::Failed {
@@ -164,6 +161,23 @@ async fn refused(
 /// How git marks a ref the far side turned down, against `[rejected]` for
 /// one this end turned down itself, each with a next move here.
 const REMOTE_REJECTED: &str = "[remote rejected]";
+
+/// What git dies with when `push.gpgSign` asks for a signed push and it
+/// cannot sign (`LC_ALL=C`, the same at the minimum and 2.55, before any
+/// ref line): the signing program would not sign the certificate (send-pack.c
+/// — a gpg key gone, a prompt put away), and before that, for ssh, the key
+/// it would name as the pusher's is not there or none is named
+/// (gpg-interface.c `get_ssh_key_fingerprint` / `get_default_ssh_signing_key`).
+const PUSH_UNSIGNED: [&str; 3] = [
+    "failed to sign the push certificate",
+    "failed to get the ssh fingerprint for key",
+    "either user.signingkey or gpg.ssh.defaultKeyCommand needs to be configured",
+];
+
+/// What git dies with when `push.gpgSign` is `true` rather than `if-asked`
+/// and the far side takes no signed push at all (no `receive.certNonceSeed`
+/// over there; send-pack.c, the minimum and 2.55).
+const SIGNED_PUSH_UNTAKEN: &str = "the receiving end does not support --signed push";
 
 /// What the far side said no for: git's own reason in the brackets
 /// (receive-pack's, the same words at the minimum and 2.55), and for the
@@ -210,74 +224,6 @@ fn bracket_reason(summary: &str) -> &str {
         .split_once('(')
         .and_then(|(_, rest)| rest.rsplit_once(')'))
         .map_or("", |(inner, _)| inner.trim())
-}
-
-/// Whether git answered the refspec itself, before any hook runs
-/// (remote.c `match_explicit_lhs` / `match_explicit`, `LC_ALL=C`, the same
-/// at the minimum and 2.55): a `src` / `dst refspec` that matches nothing
-/// or more than one ref — the ref to send went from here since the press,
-/// or a tag shares the branch's name — and a ref to delete the remote no
-/// longer holds. Read off git's own `error:` lines, not a hook's words.
-fn refspec_refused(stderr: &str) -> bool {
-    stderr.lines().any(|line| {
-        line.strip_prefix("error: ").is_some_and(|said| {
-            said.starts_with("src refspec ")
-                || said.starts_with("dst refspec ")
-                || said.ends_with("remote ref does not exist")
-        })
-    })
-}
-
-/// Whether the `pre-push` hook here turned the push down. git runs it
-/// before it talks to the remote and stops at its non-zero exit with
-/// nothing of its own but `failed to push some refs` — no `To` line, no ref
-/// line (transport.c `run_pre_push_hook`, then `goto done`). So: exit 1, no
-/// line for the ref, none of git's refspec answers, and a hook there to
-/// have run.
-async fn hook_turned_down(
-    executor: &GitExecutor,
-    workdir: &Path,
-    out: &crate::process::GitOutput,
-    cancel: &CancellationToken,
-) -> bool {
-    out.code == 1
-        && !refspec_refused(&out.stderr_utf8())
-        && has_pre_push_hook(executor, workdir, cancel).await
-}
-
-/// Whether git has a `pre-push` hook to run here: the file it would run,
-/// wherever `core.hooksPath` puts it — `rev-parse --git-path` follows that
-/// setting (path.c `adjust_git_path`), relative to the worktree's top.
-/// A failed read is no hook: the push's own failure then goes to the log.
-async fn has_pre_push_hook(
-    executor: &GitExecutor,
-    workdir: &Path,
-    cancel: &CancellationToken,
-) -> bool {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        .args(["rev-parse", "--git-path", "hooks/pre-push"]);
-    let Ok(out) = executor.run(cmd, cancel).await else {
-        return false;
-    };
-    runnable(&workdir.join(out.stdout_utf8().trim()))
-}
-
-/// Whether git would run the file at `path` as a hook: there, and on Unix
-/// executable — git passes over one that is not, with a hint.
-fn runnable(path: &Path) -> bool {
-    let Ok(meta) = std::fs::metadata(path) else {
-        return false;
-    };
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        meta.is_file() && meta.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(not(unix))]
-    {
-        meta.is_file()
-    }
 }
 
 /// One ref line of a `--porcelain` push: `<flag>\t<from>:<to>\t<summary>`,
