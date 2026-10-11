@@ -223,10 +223,10 @@ pub fn worktree_not_removed(
     }
 }
 
-/// A worktree git did not make, from its answer to `worktree add`,
-/// quoted down to what it said about the worktree: the `Preparing worktree`
-/// line is its progress, and a `hint:` is advice to the terminal
-/// (デザイン規約 §答えの要らない報せ「`hint:` は引用しない」).
+/// A worktree git did not make, from its answer to `worktree add
+/// --quiet`, quoted down to what it said about the worktree: a `hint:` is
+/// advice to the terminal (デザイン規約 §答えの要らない報せ「`hint:` は
+/// 引用しない」).
 #[must_use]
 pub fn worktree_not_added(
     name: &str,
@@ -236,7 +236,7 @@ pub fn worktree_not_added(
     let said = out.failure_message();
     let reason = said
         .lines()
-        .filter(|line| !line.starts_with("Preparing worktree") && !line.starts_with("hint:"))
+        .filter(|line| !line.starts_with("hint:"))
         .collect::<Vec<_>>()
         .join("\n");
     crate::error::GitError::Reported {

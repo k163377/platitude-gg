@@ -167,6 +167,10 @@ pub enum WorktreeOn {
 ///
 /// The remote branch is spelled in full: `origin/feature` is ambiguous, and
 /// refused, where a local branch has that name.
+///
+/// `--quiet` reaches the checkout's own `reset`, whose progress git
+/// writes to the pipe too once it runs past two seconds — ahead of any
+/// refusal after it.
 pub async fn add(
     executor: &GitExecutor,
     workdir: &Path,
@@ -187,7 +191,9 @@ pub async fn add(
     if !folder_free(Path::new(path)) {
         return Err(crate::report::worktree_folder_taken(name, path));
     }
-    let cmd = GitCommand::new().cwd(workdir).args(["worktree", "add"]);
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["worktree", "add", "--quiet"]);
     let cmd = match on {
         WorktreeOn::NewBranch { name, start } => cmd.args(["-b", name.as_str(), "--", path, start]),
         WorktreeOn::Branch(branch) => cmd.args(["--", path, branch.as_str()]),

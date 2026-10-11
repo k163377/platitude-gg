@@ -80,6 +80,17 @@ pub fn dated(stamp: &str) -> GitExecutor {
         .with_env(env)
 }
 
+/// [`isolated`] with git's progress shown at once (`GIT_PROGRESS_DELAY=0`)
+/// rather than after two seconds: a slow command's progress, on any
+/// machine.
+pub fn progress_at_once() -> GitExecutor {
+    let mut env = isolated_env();
+    env.push((OsString::from("GIT_PROGRESS_DELAY"), OsString::from("0")));
+    GitExecutor::new()
+        .with_stock_timeout(super::wait::OVERALL_BUDGET)
+        .with_env(env)
+}
+
 /// The same pair, reporting every invocation to `observer`.
 ///
 /// `kept` is the caller's to say: a test of the command log wants

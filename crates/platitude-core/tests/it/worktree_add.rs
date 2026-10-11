@@ -135,7 +135,7 @@ async fn a_remote_branch_gets_a_local_one_that_follows_it() {
 
 /// The one the menus cannot see coming — another worktree took the branch
 /// after they opened: a report under the folder's name, in git's words,
-/// with its progress line left out.
+/// and nothing of git's ahead of them (`--quiet`).
 #[tokio::test]
 async fn a_branch_out_in_another_worktree_is_a_report_in_gits_words() {
     let (mut repo, _tip) = two_commits();
@@ -158,10 +158,41 @@ async fn a_branch_out_in_another_worktree_is_a_report_in_gits_words() {
         report.reason
     );
     assert!(
-        err.to_string().contains("Preparing worktree"),
-        "the log keeps all of it: {err}"
+        !err.to_string().contains("Preparing worktree"),
+        "no progress line in what the log keeps either: {err}"
     );
     assert!(!worktree.exists(), "nothing was made");
+}
+
+/// A checkout past two seconds has git's child `reset` write its progress
+/// to the pipe as well, ahead of whatever fails after it; `--quiet` reaches
+/// that `reset`. The delay is taken to zero, and a failing `post-checkout`
+/// hook is the failure after the checkout.
+#[tokio::test]
+async fn a_slow_checkout_says_nothing_before_a_refusal() {
+    let (repo, _tip) = two_commits();
+    repo.write_hook("post-checkout", "echo \"the hook says no\" >&2\nexit 1\n");
+    let worktree = beside(&repo, "slow");
+    let exec = crate::support::exec::progress_at_once();
+    let cancel = tokio_util::sync::CancellationToken::new();
+
+    let err = worktrees::add(
+        &exec,
+        &repo.path,
+        &worktree.to_string_lossy(),
+        &WorktreeOn::Branch("free".to_string()),
+        "slow",
+        &cancel,
+    )
+    .await
+    .expect_err("the hook fails the add");
+
+    let said = err.to_string();
+    assert!(said.contains("the hook says no"), "{said}");
+    assert!(
+        !said.contains("Updating files"),
+        "the checkout's progress stays out of it: {said}"
+    );
 }
 
 /// What git does with a folder that holds something: it makes the `-b`

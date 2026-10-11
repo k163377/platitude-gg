@@ -134,7 +134,8 @@ use crate::process::{GitCommand, GitExecutor};
 ///   `--force-remove`, `--`; `update-ref`: `--create-reflog` (2.6), `-m`,
 ///   `<ref> <new>`, `--end-of-options <ref> <new> ""` (create-only CAS).
 /// - `worktree`: `list --porcelain -z` (`-z` 2.36), `remove -- <path>`
-///   (2.17), `add [-b <name>] [--track] [--detach] -- <path> <start>`.
+///   (2.17), `add --quiet [-b <name>] [--track] [--detach] -- <path>
+///   <start>` (`OPT__QUIET` in v2.43.0, passed on to the checkout's `reset`).
 ///   `worktree_add` tests the branch-before-directory check and the
 ///   option-like branch name trap; the app rejects both before writing.
 ///

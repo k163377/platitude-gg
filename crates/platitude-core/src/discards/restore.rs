@@ -69,7 +69,11 @@ pub async fn restore(
             Ok(Restored::Whole)
         }
         Restore::Worktree { path, branch, head } => {
-            let cmd = GitCommand::new().cwd(workdir).args(["worktree", "add"]);
+            // `--quiet`, as `worktrees::add`: the checkout's own progress
+            // otherwise heads any refusal after it.
+            let cmd = GitCommand::new()
+                .cwd(workdir)
+                .args(["worktree", "add", "--quiet"]);
             let cmd = match branch {
                 Some(branch) => cmd.args(["--", path, branch]),
                 None => cmd.args(["--detach", "--", path]).arg(head.to_hex()),
