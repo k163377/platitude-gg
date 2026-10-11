@@ -16,8 +16,10 @@ use super::command::{
 };
 use super::live::Live;
 use super::slots::{GroupKey, Lead, Priority, Shared, Slots, WayIn};
+use super::trace::Trace;
 use crate::error::GitError;
 use crate::operation::OperationId;
+use crate::scratch::ScratchDir;
 
 #[cfg(test)]
 #[path = "tests.rs"]
@@ -509,7 +511,8 @@ impl GitExecutor {
         if let Some(lead) = &mut lead {
             lead.spawning();
         }
-        let mut command = self.assemble(cmd);
+        // The folder goes once git has ended and its trace is read.
+        let (mut command, trace_folder) = self.assemble_traced(cmd);
 
         tracing::debug!(
             command = %described,
@@ -563,7 +566,35 @@ impl GitExecutor {
             started,
             spawned,
         };
-        Self::ended(cmd, described, outcome, &kept, budget, clocks, &report)
+        let left = Left {
+            stdout: kept,
+            trace: trace_folder.map_or_else(Trace::default, |f| Trace::read(f.path())),
+        };
+        Self::ended(cmd, described, outcome, left, budget, clocks, &report)
+    }
+
+    /// [`Self::assemble`], and for a traced command (`GitCommand::traced`)
+    /// the folder git writes its trace into ([`super::trace::folder_for`]).
+    fn assemble_traced(&self, cmd: &GitCommand) -> (Command, Option<ScratchDir>) {
+        let mut command = self.assemble(cmd);
+        let folder = match cmd.traced {
+            true => super::trace::folder_for(cmd.cwd.as_deref()),
+            false => None,
+        };
+        if let Some(folder) = &folder {
+            command.env("GIT_TRACE2_EVENT", folder.path());
+            // A user's `trace2.eventBrief` leaves out the times that tell a
+            // hook's own git from the command's (`super::trace::Trace`).
+            command.env("GIT_TRACE2_EVENT_BRIEF", "false");
+            // `trace2.maxFiles` would stop recording a long replay's later
+            // gits; 0 is no cap (trace2/tr2_dst.c).
+            command.env("GIT_TRACE2_MAX_FILES", "0");
+            // The command is the root of its own record: a parent's session
+            // id — this application run under a traced git — would prefix
+            // every id in it (trace2/tr2_sid.c).
+            command.env_remove("GIT_TRACE2_PARENT_SID");
+        }
+        (command, folder)
     }
 
     /// A spawn that failed: git missing where the folder it was to run in
@@ -582,13 +613,12 @@ impl GitExecutor {
     }
 
     /// The child's end: the log line, the observer's report, and the
-    /// answer or the error. `stdout` is what the row may show of it
-    /// (empty unless the command keeps it, `GitCommand::logs_stdout`).
+    /// answer or the error.
     fn ended(
         cmd: &GitCommand,
         described: String,
         outcome: ChildOutcome,
-        stdout: &[u8],
+        left: Left,
         budget: Option<Duration>,
         clocks: Clocks,
         report: &dyn Fn(CommandEnd, Duration, Duration, &str),
@@ -615,11 +645,15 @@ impl GitExecutor {
                     // Only the code this command named is an answer: a 128
                     // from one that named 1 is still a failure.
                     Some(answer) => {
-                        code == answer && !cmd.not_an_answer.iter().any(|w| said.contains(w))
+                        code == answer
+                            && !cmd.not_an_answer.iter().any(|w| said.contains(w))
+                            && !cmd
+                                .not_an_answer_when
+                                .is_some_and(|refused| refused(said, &left.trace))
                     }
                     None => false,
                 };
-                let shown = String::from_utf8_lossy(stdout);
+                let shown = String::from_utf8_lossy(&left.stdout);
                 let message = match shown.trim_end() {
                     out if out.is_empty() || code == 0 || answered => said.to_string(),
                     out if said.is_empty() => out.to_string(),
@@ -639,6 +673,7 @@ impl GitExecutor {
                     code,
                     stdout: Vec::new(),
                     stderr,
+                    trace: left.trace,
                 })
             }
             ChildOutcome::TimedOut => {
@@ -686,4 +721,13 @@ struct Clocks {
     waited: Duration,
     started: Instant,
     spawned: Duration,
+}
+
+/// What a run left besides its end.
+struct Left {
+    /// What the row may show of stdout: empty unless the command keeps it
+    /// (`GitCommand::logs_stdout`).
+    stdout: Vec<u8>,
+    /// git's record of the programs it ran (`GitCommand::traced`).
+    trace: Trace,
 }

@@ -69,27 +69,32 @@ pub fn env() -> (GitExecutor, CancellationToken) {
     (isolated(), CancellationToken::new())
 }
 
+/// [`isolated`] with `extra` set besides — `GitExecutor::with_env` replaces
+/// the whole set, so an executor that adds one goes through here.
+pub fn isolated_with(extra: &[(&str, &str)]) -> GitExecutor {
+    let mut env = isolated_env();
+    env.extend(
+        extra
+            .iter()
+            .map(|(name, value)| (OsString::from(name), OsString::from(value))),
+    );
+    GitExecutor::new()
+        .with_stock_timeout(super::wait::OVERALL_BUDGET)
+        .with_env(env)
+}
+
 /// [`isolated`] with every commit and reflog line it writes dated `stamp`
 /// (`GIT_AUTHOR_DATE` / `GIT_COMMITTER_DATE`): writes made in one second on
 /// purpose, where a second boundary would decide the answer.
 pub fn dated(stamp: &str) -> GitExecutor {
-    let mut env = isolated_env();
-    env.push((OsString::from("GIT_AUTHOR_DATE"), OsString::from(stamp)));
-    env.push((OsString::from("GIT_COMMITTER_DATE"), OsString::from(stamp)));
-    GitExecutor::new()
-        .with_stock_timeout(super::wait::OVERALL_BUDGET)
-        .with_env(env)
+    isolated_with(&[("GIT_AUTHOR_DATE", stamp), ("GIT_COMMITTER_DATE", stamp)])
 }
 
 /// [`isolated`] with git's progress shown at once (`GIT_PROGRESS_DELAY=0`)
 /// rather than after two seconds: a slow command's progress, on any
 /// machine.
 pub fn progress_at_once() -> GitExecutor {
-    let mut env = isolated_env();
-    env.push((OsString::from("GIT_PROGRESS_DELAY"), OsString::from("0")));
-    GitExecutor::new()
-        .with_stock_timeout(super::wait::OVERALL_BUDGET)
-        .with_env(env)
+    isolated_with(&[("GIT_PROGRESS_DELAY", "0")])
 }
 
 /// The same pair, reporting every invocation to `observer`.
@@ -114,6 +119,16 @@ pub fn observed_env(
 pub struct Log(pub Mutex<Vec<(String, Option<CommandEnd>)>>);
 
 impl Log {
+    /// Every row's display, in the order they ran.
+    pub fn displays(&self) -> Vec<String> {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(display, _)| display.clone())
+            .collect()
+    }
+
     /// The ends of the rows whose display carries every one of `needles`.
     pub fn ends_of(&self, needles: &[&str]) -> Vec<CommandEnd> {
         self.0

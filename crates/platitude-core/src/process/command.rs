@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use super::slots::Pace;
+use super::trace::Trace;
 use crate::operation::OperationId;
 
 /// Wraps a path so git reads it back as that exact path (a file really
@@ -106,8 +107,13 @@ pub struct GitCommand {
     /// What git says when that code is no answer after all
     /// ([`Self::except_when_it_says`]).
     pub(super) not_an_answer: &'static [&'static str],
+    /// The same as a reading of what git said and recorded, where no one
+    /// phrase tells it ([`Self::except_when`]).
+    pub(super) not_an_answer_when: Option<fn(&str, &Trace) -> bool>,
     /// Whether a failed row in the log carries stdout too ([`Self::logs_stdout`]).
     pub(super) logs_stdout: bool,
+    /// Whether git's trace of the programs it ran is kept ([`Self::traced`]).
+    pub(super) traced: bool,
     /// Which share of the slots it waits for ([`super::slots`]).
     pub(super) pace: Pace,
 }
@@ -121,7 +127,9 @@ impl GitCommand {
             env: Vec::new(),
             answer_code: None,
             not_an_answer: &[],
+            not_an_answer_when: None,
             logs_stdout: false,
+            traced: false,
             pace: Pace::Here,
         }
     }
@@ -152,6 +160,15 @@ impl GitCommand {
         self
     }
 
+    /// [`Self::except_when_it_says`] for a refusal no single phrase names —
+    /// `said` reads stderr whole and, for a [`Self::traced`] command, what
+    /// git recorded (a rebase stopped by a commit a hook turned down says
+    /// only what it says after any stop; its trace has the hook's end).
+    pub fn except_when(mut self, said: fn(&str, &Trace) -> bool) -> Self {
+        self.not_an_answer_when = Some(said);
+        self
+    }
+
     /// Puts stdout under a failed row in the log too, ahead of stderr —
     /// for a command whose answer is half on stdout (a push's ref lines,
     /// its `pre-push` hook's words, which come before git's own `failed to
@@ -159,6 +176,14 @@ impl GitCommand {
     /// kept it would hold the whole of it.
     pub fn logs_stdout(mut self) -> Self {
         self.logs_stdout = true;
+        self
+    }
+
+    /// Keeps git's trace of the programs it ran — every hook with how it
+    /// ended, every other program with its arguments ([`GitOutput::trace`],
+    /// [`Trace`]) — for a write whose refusal git's words do not name.
+    pub fn traced(mut self) -> Self {
+        self.traced = true;
         self
     }
 
@@ -228,6 +253,9 @@ pub struct GitOutput {
     pub stdout: Vec<u8>,
     /// Raw stderr, capped at an internal limit.
     pub stderr: Vec<u8>,
+    /// What git recorded of the programs it ran, for a
+    /// [`GitCommand::traced`] command; empty for the rest.
+    pub trace: Trace,
 }
 
 impl GitOutput {

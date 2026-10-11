@@ -62,10 +62,21 @@ pub async fn open(
         let stderr = out.stderr_utf8().trim().to_string();
         // Both "not a git repository" and a bare repository land here; the
         // screen tells them apart, so a second question is asked only here.
+        // Anything else git turned the folder down for — one another user
+        // owns (`safe.directory`), one it cannot read — is git's words to
+        // explain, not "not a repository".
+        let bare = is_bare(executor, path, cancel).await;
+        if !bare && !stderr.contains(NOT_A_REPOSITORY) {
+            return Err(GitError::Failed {
+                command: described.to_string(),
+                code: out.code,
+                stderr,
+            });
+        }
         return Err(GitError::NotARepository {
             path: path.to_path_buf(),
             stderr,
-            bare: is_bare(executor, path, cancel).await,
+            bare,
         });
     }
 
@@ -98,6 +109,24 @@ pub async fn open(
         object_format,
     })
 }
+
+/// The git directory of the worktree whose top is `workdir`, read off its
+/// `.git` without asking git: a folder for most of a repository's own
+/// worktrees, a `gitdir:` file for a linked one — and for a repository's
+/// own under `--separate-git-dir` or as a submodule's checkout
+/// (gitrepository-layout(5)). `None` where neither stands.
+pub(crate) fn git_dir_of(workdir: &Path) -> Option<PathBuf> {
+    let dot_git = workdir.join(".git");
+    if dot_git.is_dir() {
+        return Some(dot_git);
+    }
+    let text = std::fs::read_to_string(&dot_git).ok()?;
+    Some(workdir.join(text.trim().strip_prefix("gitdir:")?.trim()))
+}
+
+/// What git says of a folder in no repository, whichever way it looked
+/// (`LC_ALL=C`; setup.c, every form at the minimum and 2.55).
+const NOT_A_REPOSITORY: &str = "not a git repository";
 
 /// Whether `path` is a bare repository. Only asked once [`open`] has
 /// failed. `false` for no repository at all and for a question git could

@@ -107,6 +107,25 @@ async fn open_rejects_a_non_repository() {
     }
 }
 
+/// A repository git will not open for its owner (`safe.directory`, made
+/// here by git's own test switch) is no "not a repository": git said
+/// something else, and its words are the answer.
+#[tokio::test]
+async fn open_leaves_a_folder_git_will_not_trust_to_gits_words() {
+    let repo = TestRepo::init();
+    let executor = crate::support::exec::isolated_with(&[("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")]);
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let err = bounded("repo open", repo::open(&executor, &repo.path, &cancel))
+        .await
+        .unwrap_err();
+    match err {
+        GitError::Failed { stderr, .. } => {
+            assert!(stderr.contains("dubious ownership"), "{stderr}");
+        }
+        other => panic!("git's own refusal, not a reading of it: {other:?}"),
+    }
+}
+
 /// The screen has a line of its own for a bare repository, and this flag
 /// is the only thing it may read to choose it.
 #[tokio::test]
