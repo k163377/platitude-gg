@@ -143,6 +143,24 @@ impl TabsModel {
     /// (`Hub::restand_tab`). The title stays; only `TabItem::worktree_name`
     /// moves.
     pub(super) fn switch_worktree(&mut self, at: usize, worktree: String) {
+        self.stand_at(at, worktree, false);
+    }
+
+    /// Stands the tab holding `tab_id` again, in `worktree`: the worktree it
+    /// stood in, its folder renamed, or the same folder after a rename git
+    /// refused, on a session of its own either way — the one it had stood
+    /// down for the move (`RepoSession::move_worktree`). The same worktree
+    /// both ways, so what was typed there goes with it (`Hub::carry_draft`):
+    /// git's spelling of the old folder need not be the tab's.
+    pub(super) fn follow_tab_worktree(&mut self, tab_id: i32, worktree: String) {
+        let Some(at) = self.items.iter().position(|t| t.tab_id == tab_id) else {
+            return;
+        };
+        self.stand_at(at, crate::urlpath::shown_path(&worktree), true);
+    }
+
+    /// [`Self::switch_worktree`] and [`Self::follow_tab_worktree`]'s one road.
+    fn stand_at(&mut self, at: usize, worktree: String, carried: bool) {
         let Some(item) = self.items.get(at) else {
             return;
         };
@@ -157,6 +175,9 @@ impl TabsModel {
             self.leaving_worktree(at as i32);
         } else {
             self.leave_front();
+        }
+        if carried {
+            Hub::with(|hub| hub.carry_draft(standing, &worktree));
         }
         if Hub::with(|hub| hub.restand_tab(standing, std::path::PathBuf::from(&worktree)))
             != Some(true)

@@ -313,6 +313,11 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editTipShown : false
     }
+    /// What the box on that row says it takes (PGG_AUTO_ACT=worktree-rename-box). Empty on an unbuilt row.
+    function rowBoxPlaceholder(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.editPlaceholder : ""
+    }
     /// What the pointed row would say, and its name (PGG_AUTO_ACT=nav-tip). Read off `hoverText`: the attached
     /// `ToolTip.visible` reads back the shared instance, false during the delay. An empty name: the row is unbuilt.
     function rowTipWords(index) {
@@ -469,7 +474,11 @@ AppListView {
         menuStanding: navList.gestures ? navList.gestures.menuOpen : false
         menuOnOpenRow: navList.gestures ? navList.gestures.menuOpen && navList.gestures.menuFromFacts : false
         editMode: navList.gestures ? navList.gestures.editMode : ""
+        editKind: navList.gestures ? navList.gestures.editKind : navList.kindHint
         editText: navList.gestures ? navList.gestures.editText : ""
+        withheldKey: navList.gestures ? navList.gestures.withheldKey : ""
+        withheldWhy: navList.gestures ? navList.gestures.withheldWhy : ""
+        withheldMark: navList.gestures ? navList.gestures.withheldMark : ""
         editRefused: navList.gestures ? navList.gestures.editRefused : false
         editRefusedWhy: navList.gestures ? navList.gestures.editRefusedWhy : ""
         editRefusedMark: navList.gestures ? navList.gestures.editRefusedMark : ""

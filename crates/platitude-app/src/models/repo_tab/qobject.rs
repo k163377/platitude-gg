@@ -205,6 +205,28 @@ impl RepoTab {
         Member = worktree_answer_path,
         Notify = changed
     );
+    // …and where the folder a name box renamed answered, with both folders
+    // and whether this tab stood in it (`moveWorktree`).
+    qproperty!(
+        "worktreeMoveAnswer",
+        Member = worktree_move_answer,
+        Notify = changed
+    );
+    qproperty!(
+        "worktreeMoveFrom",
+        Member = worktree_move_from,
+        Notify = changed
+    );
+    qproperty!(
+        "worktreeMoveTo",
+        Member = worktree_move_to,
+        Notify = changed
+    );
+    qproperty!(
+        "worktreeMoveStanding",
+        Member = worktree_move_standing,
+        Notify = changed
+    );
     // Meanings, classified in `drain::settle_write`, of the last answer in
     // this notify nobody was waiting for by name; a reader waiting for one
     // answer reads the `writeAnswer*` slots.
@@ -1019,6 +1041,17 @@ impl RepoTab {
         name: String,
     ) {
         self.worktree_add(path, &mode, branch, start, name);
+    }
+
+    /// `git worktree move`: the worktree at `from` takes the folder `to`,
+    /// beside it — a name box's rename of a worktree on no branch. `name` is
+    /// its folder now, for a refusal's heading. The answer is the page's to
+    /// wait for (`worktreeMoveAnswer`); a tab standing in it stands anew after.
+    /// Says whether the write was taken — there is no answer to wait for
+    /// otherwise.
+    #[qslot]
+    fn move_worktree(&mut self, from: String, to: String, name: String) -> bool {
+        self.worktree_move(from, to, name)
     }
 
     /// `git worktree remove` (destructive): the worktree's row goes at the

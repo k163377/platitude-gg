@@ -102,6 +102,9 @@ Item {
     /// "rename" (the name is in the box), "branch", "tag" or "worktree" (a name for a new one on this row's commit —
     /// the last a branch out in a worktree of its own).
     property string editMode: ""
+    /// What a rename in that box renames — `branch` / `remote` / `tag` / `stash` / `worktreeFolder`, held by the sidebar
+    /// (`SidebarRowGestures.editKind`); the row's own kind until something is typed into.
+    property string editKind: navRow.kindHint
     /// What has been typed so far, held by the sidebar so a row that scrolls off and back keeps it.
     property string editText: ""
     property bool editRefused: false
@@ -216,8 +219,10 @@ Item {
             mode: navRow.editMode
             // What the box is naming, which is not always what the row is: `Create tag here…` opens on a branch row
             // too.
+            // **Not the row's kind on a worktree row**: there `worktree` is the new worktree's box, and a rename names
+            // the branch the row has out or its folder (`editKind`).
             namesKind: navRow.editMode === "tag" || navRow.editMode === "branch" || navRow.editMode === "worktree"
-                       ? navRow.editMode : navRow.kindHint
+                       ? navRow.editMode : navRow.editKind
             carried: navRow.editText
             refused: navRow.editRefused
             refusedWhy: navRow.editRefusedWhy
@@ -228,10 +233,41 @@ Item {
         }
     }
     // Rows whose name can be changed from here. A remote branch counts though git has no rename there: its box leads
-    // to a replace (a push and a delete, asked first). A folder is only the shape of the names below it.
+    // to a replace (a push and a delete, asked first). A folder is only the shape of the names below it. A worktree
+    // counts but the repository's own one on no branch, which git never moves (`worktreeRename`).
     readonly property bool nameable: !navRow.folder
         && (navRow.kindHint === "branch" || navRow.kindHint === "tag"
-            || navRow.kindHint === "stash" || navRow.kindHint === "remote")
+            || navRow.kindHint === "stash" || navRow.kindHint === "remote"
+            || (navRow.kindHint === "worktree" && (navRow.bucket !== "" || navRow.worktreeRename !== "")))
+    /// What the spaced second click does on a worktree row on no branch (`GitFacts.worktreeRename`): `box`, `locked`,
+    /// `gone`, or empty for nothing. A worktree with a branch out renames the branch.
+    readonly property string worktreeRename: navRow.kindHint === "worktree" && navRow.bucket === ""
+        ? GitFacts.worktreeRename(navRow.change) : ""
+    /// The spaced second click on this row opened no box, and why (`SidebarRowGestures.withholdRename`) — said where
+    /// the box would have stood, as a refused name's reason is (`NavNameBox`).
+    property string withheldKey: ""
+    property string withheldWhy: ""
+    property string withheldMark: ""
+    readonly property bool renameWithheld: navRow.withheldKey !== "" && navRow.withheldKey === navRow.rowKey
+    // Built only while it says so (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」), on the name — the box's
+    // own seat is drawn only while a box stands in it (`NavRowBody.boxSeat`).
+    Loader {
+        id: withheldSeat
+        active: navRow.renameWithheld
+        sourceComponent: Item {
+            parent: rowLayout.nameInk
+            anchors.fill: parent
+            /// Answers the press that asked, not a hand (`SharedToolTip.tipTyped`).
+            readonly property bool tipTyped: true
+            /// The folder the line names, behind the tree mark (デザイン規約 §ref の種別「名前の印」).
+            readonly property string tipMarkWord: navRow.withheldMark
+            // Asked only once there are words: the attached show takes the text it has at the ask, and keeps it through
+            // the delay.
+            ToolTip.visible: visible && navRow.withheldWhy !== ""
+            ToolTip.delay: Metrics.tipDelayMs
+            ToolTip.text: navRow.withheldWhy
+        }
+    }
     /// The gesture the rows of this section share, or null for a list whose rows cannot be typed into (the working
     /// tree's files). Held by the sidebar, since it has to outlive this delegate (`SidebarRowGestures`).
     property ReclickGesture reclick: null
@@ -333,6 +369,9 @@ Item {
     /// box's attached `ToolTip`, which weighs the target; the instance's own `visible` answers for anybody's tip
     /// (`tests/qml/tst_tipowner.qml`).
     readonly property bool editTipShown: editSeat.item ? editSeat.item.ToolTip.visible : false
+    /// What the box says it takes, rubbed out (PGG_AUTO_ACT=worktree-rename-box): a picture of a box holding a name
+    /// does not show it.
+    readonly property string editPlaceholder: editSeat.item ? editSeat.item.placeholderText : ""
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
     /// the row itself (PGG_AUTO_ACT=nav-reclick).
     function leftClick(modifiers) {
@@ -347,10 +386,15 @@ Item {
         navRow.ordinaryClick(modifiers)
     }
     /// What the box a second click opens is named after: the row's kind, what git knows it by, the commit it is on,
-    /// and the name it shows (a stash is typed by its message, not by its selector).
+    /// and the name it shows (a stash is typed by its message, not by its selector). A worktree row renames the branch
+    /// it has out, else its folder (known to git by its path) — or opens no box and says why (`withheld`).
     function renameNames() {
+        if (navRow.kindHint === "worktree" && navRow.bucket !== "")
+            return { "kind": "branch", "id": navRow.bucket, "oid": navRow.oid_hex, "name": navRow.bucket }
+        if (navRow.kindHint === "worktree" && navRow.worktreeRename !== "box")
+            return { "withheld": Words.worktreeRenameWithheld(navRow.worktreeRename, navRow.name), "mark": navRow.name }
         return {
-            "kind": navRow.kindHint,
+            "kind": navRow.kindHint === "worktree" ? "worktreeFolder" : navRow.kindHint,
             "id": navRow.full !== "" ? navRow.full : navRow.name,
             "oid": navRow.oid_hex,
             "name": navRow.name

@@ -81,7 +81,11 @@ FocusScope {
     /// started. Nothing freezes; each door is held and says this line until git answers (`SidebarPane.doorsHeld` /
     /// `AppMenu.heldReason`) — one line, so the pane and the menus cannot disagree.
     readonly property string doorsHeldWhy:
-        page.replayRunning || page.planRunOut ? Words.otherCommandRunning : ""
+        page.replayRunning || page.planRunOut || page.worktreeMoveOut ? Words.otherCommandRunning : ""
+    /// A worktree's rename is out, from the press to its answer (`absorbWorktreeMove`): its answer is waited for by
+    /// name, one at a time, and the session of a tab standing in that worktree has stood down for it
+    /// (`RepoSession::move_worktree`) — nothing else may be written meanwhile.
+    property bool worktreeMoveOut: false
     /// What a menu's rows say while they wait for a git command this window asked for (`AppMenu.runningWhy`): until
     /// what it left has been read again (`RepoTab.settling` — git answers ahead of that) and the doors are let go (a
     /// plan's run is asked for elsewhere, and counted only once it starts). A menu opened under one stands again on
@@ -120,9 +124,16 @@ FocusScope {
     /// mark that sent the reader here (デザイン規約 §hover のツールチップ).
     function notePress() {
         detailsPane.dropAttention()
+        page.dropWithheld()
         // And the commands mark (`raiseCommands`). A link answers on the release, after this press, so the mark it
         // raises stands.
         page.commandsAttention = false
+    }
+    /// A rename the second click opened no box for: its reason stands until the next input — a press, Escape, a key
+    /// the history answers, the search, a menu (デザイン規約 §worktree の名前を変える「箱を開かないもの」).
+    function dropWithheld() {
+        sidebarPane.dropWithheld()
+        graphPane.dropWithheld()
     }
     /// And Escape, which every standing thing in this window answers (デザイン規約 §hover のツールチップ).
     /// **A key handler, not a shortcut**: this is reached only when no bar, popup or box took the key first, and two
@@ -133,6 +144,11 @@ FocusScope {
         // First: a middle-click autoscroll holds the pointer and the view, on whichever surface (`MiddleHand`).
         if (MiddleHand.stop())
             return true
+        // A rename's reason standing where no box opened — the topmost thing a key can take down (`notePress`).
+        if (sidebarPane.renameWithheld || graphPane.renameWithheld) {
+            page.dropWithheld()
+            return true
+        }
         // The plan's own way out — **only while that door is a press**. With something composed to lose it is a
         // hold (規約 §回数押し — `RebasePlanPane.discards`), and one key down must not throw away what the hold guards.
         if (page.planShown) {
@@ -687,6 +703,7 @@ FocusScope {
     /// Ctrl+F is quietly refused while a plan covers the graph, as a standing question refuses it
     /// (`GraphPane.startFind`).
     function startFind() {
+        page.dropWithheld()
         if (page.planShown)
             return
         graphPane.startFind()
@@ -1062,6 +1079,8 @@ FocusScope {
             repoTab.renameTag(id, name)
         } else if (kind === "stash") {
             repoTab.renameStash(id, oid, name)
+        } else if (kind === "worktreeFolder") {
+            page.renameWorktreeFolder(id, name)
         } else if (kind === "remote") {
             // A remote branch's box leads to the replace over there, whose question carries both names
             // (`askReplaceRemote`) — so, unlike every rename, the box comes down now: left waiting, a dismissed
@@ -1070,6 +1089,48 @@ FocusScope {
             page.askReplaceRemote(id, name)
         }
     }
+
+    /// A worktree on no branch takes the folder `name` beside its own (`git worktree move`); `path` is where it is. Both
+    /// boxes turned down every name that cannot go there. Its answer is waited for by name (`absorbWorktreeMove`).
+    function renameWorktreeFolder(path, name) {
+        const facts = worktreesModel.worktreeFacts(path)
+        const place = worktreesModel.renamedWorktreeFor(path, name)
+        // Gone from the listing since the box opened (or no folder's name, which the box never sends): nothing to ask,
+        // and the box stops waiting. What came into the way at the new path since is core's to turn down, with its
+        // report (`worktrees::check_move`).
+        // A box opened before the doors were held (another rename out) is not sent either.
+        if (facts === undefined || place === undefined || page.doorsHeldWhy !== "") {
+            page.noteRenameRefused()
+            return
+        }
+        page.worktreeMoveOut = repoTab.moveWorktree(path, place.path, facts.name)
+        if (!page.worktreeMoveOut)
+            page.noteRenameRefused()
+    }
+    /// The answer to a worktree's rename (`RepoTab.worktreeMoveAnswer`, -1 for none): either box comes down on it, or —
+    /// refused — stays open holding the name with no refusal on it, so Enter tries again; the bar says why and points
+    /// at the log for git's words (デザイン規約 §答えの要らない報せ). **A tab standing in that worktree stands again**: its
+    /// session stood down for the move (`RepoSession::move_worktree`), so it takes up the new folder — or the old one,
+    /// refused — on a session of its own, the graph staying (デザイン規約 §タブの所作「立ち位置を変えても、画面は建て直さない」).
+    function absorbWorktreeMove() {
+        const answer = repoTab.worktreeMoveAnswer
+        if (answer < 0)
+            return
+        page.worktreeMoveOut = false
+        const failed = repoTab.writeAnswerFailed(answer)
+        if (failed) {
+            // The name itself was answered before the press: nothing goes into the box.
+            page.noteRenameRefused()
+            page.tellRefusal(answer)
+        } else {
+            page.noteRenameLanded()
+        }
+        if (repoTab.worktreeMoveStanding)
+            page.worktreeFollowRequested(failed ? repoTab.worktreeMoveFrom : repoTab.worktreeMoveTo)
+    }
+    /// The tab stands in `path` again — the worktree it stood in, its folder renamed or kept
+    /// (`TabsModel.followWorktree`).
+    signal worktreeFollowRequested(string path)
 
     /// The remote branch a just-renamed local one spoke for, and the name it took — the question about what the remote
     /// does with it waits until git says the local rename landed.
@@ -1284,7 +1345,7 @@ FocusScope {
     }
 
     // ---- context menu on a graph row -------------------------------
-    /// The first chip a graph row draws (what a right-click hands over — `GraphRowDelegate.menuChip`), for callers with
+    /// The first chip a graph row draws (what a right-click hands over — `GraphRowDelegate.nameChip`), for callers with
     /// no row in hand; null where it draws neither a ref nor a worktree's folder. Chips already taken off screen
     /// are filtered as the delegate does, so a gone name puts no card up (デザイン規約 §消す操作は先に画面から消す).
     function rowChipAt(oidHex) {
@@ -1294,7 +1355,7 @@ FocusScope {
         const shown = GitFacts.chipsShown(graphModel.labelsAt(row), graphModel.goneChips)
         if (shown.length === 0)
             return null
-        return GitFacts.menuKind(shown[0].kind) === "" ? null : shown[0]
+        return GitFacts.namedKind(shown[0].kind) === "" ? null : shown[0]
     }
 
     /// Whether the standing row menu was raised on a row of the chip's stacked list, which it stands on rather than
@@ -1309,7 +1370,7 @@ FocusScope {
         const named = chip === undefined ? page.rowChipAt(oidHex) : chip
         commitMenuSeat.active = true
         const menu = commitMenuSeat.item
-        const kind = named ? GitFacts.menuKind(named.kind) : ""
+        const kind = named ? GitFacts.namedKind(named.kind) : ""
         // A folder's chip carries only the folder: the worktree is the one of that name standing on this commit.
         const target = kind === "" ? ""
                      : kind === "worktree" ? worktreesModel.worktreeAt(named.name, oidHex) : named.name
@@ -1435,6 +1496,11 @@ FocusScope {
     function startRename(oidHex, chip) {
         if (repoTab.state !== "open" || !chip)
             return
+        // A worktree's folder chip renames the folder (`startFolderRename`).
+        if (GitFacts.namedKind(chip.kind) === "worktree") {
+            page.startFolderRename(oidHex, chip)
+            return
+        }
         const kind = GitFacts.refKind(chip.kind)
         // The detached-HEAD marker names no ref.
         if (kind === "")
@@ -1445,6 +1511,26 @@ FocusScope {
         graphPane.startRenaming(oidHex, kind, id,
                                 kind === "remote" ? GitFacts.branchOfRef(id, repoTab.remoteNames) : id)
         // デザイン規約 §左メニューの所作「開く行は必ず見える所へ送る」 — the gesture's wait is long enough to scroll away in.
+        const row = graphModel.rowOf(oidHex)
+        if (row >= 0)
+            graphPane.showRowSoon(row)
+    }
+    /// The folder chip of a worktree on no branch: the box opens on its folder's name (`Worktree name`), or — where git
+    /// would keep the folder — says why on the chip instead, or does nothing on the repository's own worktree
+    /// (`GitFacts.worktreeRename`, デザイン規約 §グラフ行のダブルクリック). The chip carries the folder; which worktree
+    /// it is, is told by the commit it stands on (`NavSectionModel.worktreeAt`).
+    function startFolderRename(oidHex, chip) {
+        const facts = worktreesModel.worktreeFacts(worktreesModel.worktreeAt(chip.name, oidHex))
+        if (facts === undefined || page.doorsHeldWhy !== "")
+            return
+        const answer = GitFacts.worktreeRename(facts.change)
+        rowHost.closeRefList()
+        if (answer === "box")
+            graphPane.startRenaming(oidHex, "worktreeFolder", facts.full, facts.name)
+        else if (answer !== "")
+            graphPane.withholdRename(oidHex, Words.worktreeRenameWithheld(answer, facts.name), facts.name)
+        else
+            return
         const row = graphModel.rowOf(oidHex)
         if (row >= 0)
             graphPane.showRowSoon(row)
@@ -1461,13 +1547,22 @@ FocusScope {
     /// undefined for every other box.
     readonly property var graphWorktreePlace: graphPane.namingMode === "worktree"
         ? worktreesModel.newWorktreeFor(graphPane.namingText.trim()) : undefined
+    /// Where a worktree's folder would go renamed to what is typed in the graph's box
+    /// (`NavSectionModel.renamedWorktreeFor`); undefined for every other box.
+    readonly property var graphFolderPlace: graphPane.namingMode === "rename" && graphPane.namingKind === "worktreeFolder"
+        ? worktreesModel.renamedWorktreeFor(graphPane.namingId, graphPane.namingText.trim()) : undefined
     /// The folder the box's tip stands the tree mark in front of, where the refusal names one
-    /// (`Words.worktreeNameMark`).
-    readonly property string graphNameRefusedMark: Words.worktreeNameMark(page.graphNameRefusedWhy,
-                                                                          page.graphWorktreePlace)
+    /// (`Words.worktreeNameMark` / `worktreeRenameMark`).
+    readonly property string graphNameRefusedMark: graphPane.namingKind === "worktreeFolder"
+        ? Words.worktreeRenameMark(page.graphNameRefusedWhy, page.graphFolderPlace)
+        : Words.worktreeNameMark(page.graphNameRefusedWhy, page.graphWorktreePlace)
     readonly property string graphNameRefusedWhy: {
         if (graphPane.namingOid === "")
             return ""
+        // A worktree's folder follows the disk's rules, not git's, and nothing git said goes into its box
+        // (`SidebarRowGestures.editFolderWhy`).
+        if (graphPane.namingMode === "rename" && graphPane.namingKind === "worktreeFolder")
+            return Words.worktreeRenameRefused(graphPane.namingText, page.graphFolderPlace)
         // A new worktree is warned of what stands in its way before the press — that is the box's whole answer.
         if (graphPane.namingMode === "worktree")
             return Words.worktreeNameRefused(graphPane.namingText,
@@ -1487,7 +1582,7 @@ FocusScope {
         if (graphPane.namingMode !== "rename")
             return ""
         if (name === "")
-            return qsTr("A name is needed")
+            return Words.nameNeeded
         // As `SidebarRowGestures.editCaseOnly`: a tag renamed to its own name in other case loses both names on a
         // case-insensitive disk.
         const tag = graphPane.namingKind === "tag"
@@ -1739,6 +1834,7 @@ FocusScope {
         page.absorbBranchDelete()
         page.absorbStashAnswer()
         page.absorbWorktreeAnswer()
+        page.absorbWorktreeMove()
         // The status and this answer drain apart: the tree a stash emptied may already be read, with nothing left to
         // ask. No edge of its own — the landing is the edge, and with nothing standing it is a poll it ignores.
         page.leaveWipWhenDone(false)
@@ -3360,6 +3456,7 @@ FocusScope {
                             chosenOids: page.chosenOids
                             chosenCount: page.chosenCount
                             onRowActivated: (oidHex, atRow, modifiers) => page.pickRow(oidHex, atRow, modifiers)
+                            onKeyReached: page.dropWithheld()
                             // The bar moves between matches — landing on the same row twice changes nothing and
                             // costs no git.
                             onFindLanded: oidHex => {

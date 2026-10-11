@@ -38,6 +38,7 @@ impl RepoTab {
         self.ref_push_out.new_notify();
         self.read_ref_push_out();
         self.worktree_out.new_notify();
+        self.worktree_move_out.new_notify();
         self.read_worktree_out();
         self.clear_write_group();
         for msg in batch {
@@ -400,7 +401,7 @@ impl RepoTab {
             self.read_ref_push_out();
             answered_for = true;
         }
-        if self.worktree_out.answered(id, at) {
+        if self.worktree_out.answered(id, at) || self.worktree_move_out.answered(id, at) {
             self.read_worktree_out();
             answered_for = true;
         }
@@ -453,11 +454,17 @@ impl RepoTab {
         self.ref_push_target = self.ref_push_out.branch().to_string();
     }
 
-    /// The same for the worktree a menu asked for. Its folder is the
-    /// press's own, written down as it was asked (`worktree_add`).
+    /// The same for the worktree a menu asked for, and the one a name box
+    /// renamed. Their folders are the presses' own, written down as they were
+    /// asked (`worktree_add` / `worktree_move`).
     fn read_worktree_out(&mut self) {
         self.worktree_answer = self
             .worktree_out
+            .answer()
+            .and_then(|at| i32::try_from(at).ok())
+            .unwrap_or(-1);
+        self.worktree_move_answer = self
+            .worktree_move_out
             .answer()
             .and_then(|at| i32::try_from(at).ok())
             .unwrap_or(-1);

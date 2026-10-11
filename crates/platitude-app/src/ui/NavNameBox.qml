@@ -73,13 +73,17 @@ SlimField {
          : Math.max(box.seat.width,
                     Math.min(box.wantWidth, box.Window.width - box.x - Theme.spaceXxl))
     font.pixelSize: Theme.fontMd
-    // A tag has a colour to say, and so does a branch made out in another worktree (that worktree's green, as the
-    // graph's box wears it — `GraphRowChips`); the others would read as the plain focus ring anyway.
-    focusTone: box.namesKind === "tag" ? Theme.refTag : box.namesKind === "worktree" ? Theme.success : Theme.borderFocus
+    // A tag has a colour to say, and so does a worktree — a branch made out in another one, or a worktree's own folder
+    // (that worktree's green, as the graph's box wears it — `GraphRowChips`); the others would read as the plain focus
+    // ring anyway.
+    focusTone: box.namesKind === "tag" ? Theme.refTag
+             : box.namesKind === "worktree" || box.namesKind === "worktreeFolder" ? Theme.success : Theme.borderFocus
     // What goes in the box, by kind — a rename rubbed out shows it too. A new worktree's and a remote's are branch
-    // names; a stash's name is its message (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダ」).
+    // names; a stash's name is its message, a worktree on no branch is named by its folder
+    // (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダ」).
     placeholderText: box.namesKind === "tag" ? qsTr("Tag name")
-                   : box.namesKind === "stash" ? qsTr("Stash name") : qsTr("Branch name")
+                   : box.namesKind === "stash" ? qsTr("Stash name")
+                   : box.namesKind === "worktreeFolder" ? qsTr("Worktree name") : qsTr("Branch name")
     onTextEdited: box.typed(box.text)
     // Refused: Enter does nothing, and the frame and tooltip say why.
     onAccepted: {

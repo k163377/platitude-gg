@@ -35,6 +35,8 @@ QtObject {
     /// A name box's refusal of a name git's rules turn down — a branch's (`GitFacts.validBranchName`) or a tag's
     /// (`GitFacts.validTagName`), in the graph's box, the left menu's and the new worktree's alike.
     readonly property string notAName: qsTr("git will not take this as a name")
+    /// A rename box rubbed out — every rename box's refusal of nothing, the left menu's and the graph's alike.
+    readonly property string nameNeeded: qsTr("A name is needed")
 
     /// Why a name cannot stand beside the branches or tags already there (`NavSectionModel.nameClash`, undefined where
     /// nothing is in the way): one of that name, one under it or above it — one sentence each way, naming which of
@@ -92,6 +94,50 @@ QtObject {
     function worktreeNameMark(why, place) {
         return place !== undefined && why !== "" && why === Words.worktreePlaceTaken(place.taken, place.name)
                ? place.name : ""
+    }
+
+    /// Why a worktree's folder cannot take the name typed into its rename box — the graph's box and the left menu's
+    /// alike, said before the press. `place` is what `NavSectionModel.renamedWorktreeFor` answered for it (undefined
+    /// for a name that is not one folder's). A rename rubbed out is refused, as every rename box's is.
+    function worktreeRenameRefused(typed, place) {
+        if (typed.trim() === "")
+            return Words.nameNeeded
+        if (place === undefined)
+            return qsTr("Not a folder name")
+        switch (place.taken) {
+        // What Windows keeps out of a name (`worktrees::Disk`): git would turn it down, or — a device's name — leave
+        // the worktree in a folder nothing reaches.
+        //: %1 is the character Windows does not allow, such as ?.
+        case "character": return qsTr("Not a folder name on Windows — %1 is not allowed").arg(place.kept)
+        //: %1 is the device name Windows keeps, such as CON.
+        case "device": return qsTr("Not a folder name on Windows — %1 is kept for a device").arg(place.kept)
+        // A dot only: the boxes ask with the spaces at the ends cut off, so a trailing space never reaches here.
+        case "trailing": return qsTr("Not a folder name on Windows — it cannot end in a dot")
+        case "case": return qsTr("Only the letter case differs — on this disk that is the same folder")
+        case "listed": return Words.worktreePlaceTaken("listed", place.name)
+        //: %1 is the folder the worktree would be renamed to. Anything there is in the way, an empty folder too.
+        case "folder": return qsTr("Something is already there — %1").arg(place.name)
+        default: return ""
+        }
+    }
+    /// The word that tip stands the tree mark in front of: the folder, where the sentence names one.
+    function worktreeRenameMark(why, place) {
+        return place !== undefined && why !== "" && (place.taken === "listed" || place.taken === "folder")
+               && why === Words.worktreeRenameRefused(place.name, place) ? place.name : ""
+    }
+    /// Why the spaced second click on a worktree opened no box (`GitFacts.worktreeRename`): what cannot be done —
+    /// nothing was sent, so not "not renamed", which is the word for a press git turned down — then what the worktree
+    /// `name` is — locked, or missing (git's word for a worktree whose folder is gone). The name
+    /// wears the tree mark (`SharedToolTip.tipMarkWord`); a lock's own reason is not quoted — it is whatever the person
+    /// who locked it typed, and says nothing of the rename.
+    function worktreeRenameWithheld(answer, name) {
+        switch (answer) {
+        //: %1 is the worktree's folder.
+        case "locked": return qsTr("Cannot rename — %1 is locked").arg(name)
+        //: %1 is the worktree's folder, which is gone from the disk.
+        case "gone": return qsTr("Cannot rename — %1 is missing").arg(name)
+        default: return ""
+        }
     }
 
     /// Opening a repository, as the graph's empty state, the tab strip's `+` menu and its accessible name offer it.
@@ -292,6 +338,8 @@ QtObject {
         case "carried-file-in-the-way":
         case "carried-unread":
         case "carried-refused": return qsTr("Changes from %1 were not applied").arg(name)
+        case "worktree-not-renamed":
+        case "worktree-rename-taken": return qsTr("%1 was not renamed").arg(name)
         // All seven rewrite refusals: which one it was is the line underneath.
         case "across-merge":
         case "off-branch":
@@ -446,6 +494,15 @@ QtObject {
         //: %1 is the command log's own title.
         case "carried-refused":
             return qsTr("git did not apply them — see %1").arg(Words.commandsTitle)
+        // The boxes answered what they know before the press (one folder's name the system allows, free, not another
+        // worktree's), so git turned down the rest — submodules, a lock taken since, a program holding the folder. Its
+        // words are the log's (デザイン規約 §答えの要らない報せ).
+        //: %1 is the command log's own title.
+        case "worktree-not-renamed":
+            return qsTr("git turned it down — see %1").arg(Words.commandsTitle)
+        // Turned down here before git ran (`worktrees::move_to`): git moves a worktree into a folder already there.
+        case "worktree-rename-taken":
+            return qsTr("Something is already there.")
         // The rewrite refusals live in `rewriteRefusedWhy`, which the plan's door reads too. Delegated whole: a
         // second copy of that list gets a new refusal on one side only.
         default: return Words.rewriteRefusedWhy(kind)
@@ -628,16 +685,23 @@ QtObject {
              + Words.inked(sentence.substring(seat + place.length))
     }
     /// Where `word` stands in `sentence` as the name a drawn mark goes in front of: a whole word at the sentence's end
-    /// (`atEnd` — a tooltip names it after its conclusion, `<conclusion> — <name>`, and a cut row's line ends in it)
-    /// or at its start (a report's heading, `<name> was not removed`). -1 anywhere else — a translation that moved
-    /// it, or the same letters inside another word (`old` in `folder`) — so the sentence is drawn as it came, with no
-    /// mark on the wrong word.
+    /// (`atEnd` — a tooltip names it after its conclusion, `<conclusion> — <name>`, and a cut row's line ends in it,
+    /// or opens what follows the conclusion, `<conclusion> — <name> is locked`) or at its start (a report's heading,
+    /// `<name> was not removed`). -1 anywhere else — a translation that moved it, or the same letters inside another
+    /// word (`old` in `folder`) — so the sentence is drawn as it came, with no mark on the wrong word.
     function markSeatIn(sentence, word, atEnd) {
-        const seat = atEnd ? sentence.length - word.length : 0
-        if (word === "" || seat < 0 || sentence.substring(seat, seat + word.length) !== word)
+        if (word === "")
             return -1
-        const beside = atEnd ? sentence.charAt(seat - 1) : sentence.charAt(word.length)
-        return beside === "" || beside === " " ? seat : -1
+        const seat = atEnd ? sentence.length - word.length : 0
+        if (seat >= 0 && sentence.substring(seat, seat + word.length) === word) {
+            const beside = atEnd ? sentence.charAt(seat - 1) : sentence.charAt(word.length)
+            if (beside === "" || beside === " ")
+                return seat
+        }
+        if (!atEnd)
+            return -1
+        const after = sentence.indexOf(" — " + word + " ")
+        return after < 0 ? -1 : after + 3
     }
     /// Where a report's heading puts the worktree it names — first (`<name> was not removed`) or within
     /// (`Changes from <name> were not applied`): the `%1` seat of its own sentence, never searched for, as

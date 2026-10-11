@@ -63,13 +63,14 @@ impl GitFacts {
         crate::encode::ref_kind_word(&kind).to_string()
     }
 
-    /// What a right-click on a chip of that word aims the menu at: the ref
-    /// kinds, and `worktree` for a worktree's folder chip — a worktree has a
-    /// menu (its WORKTREE card), where it has no name to rename or switch
-    /// to (`ref_kind`). `""` for the detached HEAD.
+    /// What a right-click on a chip of that word aims the menu at, and what a
+    /// spaced second click renames: the ref kinds, and `worktree` for a
+    /// worktree's folder chip — a worktree has a menu (its WORKTREE card) and
+    /// a folder to rename (`worktree_rename`), where it is no ref to switch to
+    /// (`ref_kind`). `""` for the detached HEAD.
     #[qslot]
-    fn menu_kind(&self, kind: String) -> String {
-        crate::encode::menu_kind_word(&kind).to_string()
+    fn named_kind(&self, kind: String) -> String {
+        crate::encode::named_kind_word(&kind).to_string()
     }
 
     /// What the WORKTREE card offers for one worktree (`RefWorktreeMenu.standOn`):
@@ -86,6 +87,20 @@ impl GitFacts {
         .into_iter()
         .map(str::to_string)
         .collect()
+    }
+
+    /// What the spaced second click does on a worktree on no branch
+    /// (`offers::worktree_rename`): `box`, `locked`, `gone`, or empty for
+    /// nothing. `state` is the worktree's row word, as above.
+    #[qslot]
+    fn worktree_rename(&self, state: String) -> String {
+        platitude_core::offers::worktree_rename(
+            state == crate::models::nav::MAIN,
+            state == crate::models::nav::LOCKED,
+            state == crate::models::nav::PRUNABLE,
+        )
+        .word()
+        .to_string()
     }
 
     /// The two rows that make a worktree (`offers::worktree_rows`), as

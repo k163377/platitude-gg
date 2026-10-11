@@ -52,18 +52,27 @@ impl Record for WorktreeRow {
     }
 }
 
-/// Where a new worktree for a branch would go, and whether something
-/// is already there — what the two rows that make one stand on.
+/// A folder a worktree would stand in, and what is in its way — where a new
+/// worktree for a branch would go (`new_worktree`, what the two rows that
+/// make one stand on) or where one renamed would (`renamed_worktree`, what
+/// its name box stands on).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NewWorktree {
-    /// git's spelling of the folder (`platitude_core::worktrees::new_worktree_path`).
+    /// git's spelling of the folder (`platitude_core::worktrees::new_worktree_path`
+    /// / `renamed_worktree_path`).
     pub path: String,
-    /// Its last segment — the worktree's name on screen once it is made.
+    /// Its last segment — the worktree's name on screen once it stands there.
     pub name: String,
-    /// Why git would not make it there: `listed` (git still lists a worktree at
-    /// that path — its folder may be gone), `folder` (something is in the
-    /// folder), or empty where nothing is.
+    /// What is in the way, empty for nothing. Both: `listed` (git still lists
+    /// a worktree at that path — its folder may be gone) and `folder` —
+    /// something in the folder for a new one (git makes a worktree in an empty
+    /// folder), anything there at all for a rename (git would move into it). A
+    /// rename's only: `case` (the same folder to a disk that ignores case) and
+    /// what the system keeps out of a name — `character`, `device`, `trailing`.
     pub taken: String,
+    /// What the system keeps out of the name, where `taken` says so: the
+    /// character, the device's name, or the last letter. Empty otherwise.
+    pub kept: String,
 }
 
 impl Record for NewWorktree {
@@ -72,6 +81,7 @@ impl Record for NewWorktree {
             .put("path", &self.path)
             .put("name", &self.name)
             .put("taken", &self.taken)
+            .put("kept", &self.kept)
             .done()
     }
 
@@ -80,6 +90,7 @@ impl Record for NewWorktree {
             path: field(map, "path")?,
             name: field(map, "name")?,
             taken: field(map, "taken")?,
+            kept: field(map, "kept")?,
         })
     }
 }
@@ -113,6 +124,72 @@ impl NavSectionModel {
             name: crate::urlpath::path_leaf(&path).to_string(),
             taken: taken.to_string(),
             path,
+            kept: String::new(),
+        })
+    }
+
+    /// Where the worktree at `from` goes renamed `name` — beside where it is
+    /// (`renamed_worktree_path`) — and what is in the way there, said in
+    /// `taken`: what this system keeps out of the name (`character`, `device`,
+    /// `trailing` — `Disk::refuses`, with `kept` the part it keeps), `case`
+    /// (only the letters' case differs, and the disk calls that the same
+    /// folder), `listed` (git lists another worktree there), `folder` (anything
+    /// at all is there: git would move the worktree into it), or empty — the
+    /// folder's own name too, which is no rename. What a worktree's name box
+    /// stands on, asked per keystroke. `None` for a name that is not one
+    /// folder's, and for a path with no parent.
+    pub(super) fn renamed_worktree(&self, from: &str, name: &str) -> Option<NewWorktree> {
+        use platitude_core::session::same_path_key;
+        use platitude_core::worktrees::{
+            Disk, DiskRefusal, is_folder_name, path_free, renamed_worktree_path,
+        };
+        if !is_folder_name(name) {
+            return None;
+        }
+        let path = renamed_worktree_path(from, name);
+        if path.is_empty() {
+            return None;
+        }
+        let own = path == from.trim_end_matches('/');
+        let refused = Disk::HERE.refuses(name).filter(|_| !own);
+        if let Some(refused) = refused {
+            let (taken, kept) = match refused {
+                DiskRefusal::Character(c) => ("character", c.to_string()),
+                DiskRefusal::Device => (
+                    "device",
+                    name.split('.').next().unwrap_or_default().to_string(),
+                ),
+                DiskRefusal::Trailing(c) => ("trailing", c.to_string()),
+            };
+            return Some(NewWorktree {
+                name: name.to_string(),
+                taken: taken.to_string(),
+                path,
+                kept,
+            });
+        }
+        let key = same_path_key(&path);
+        let free = path_free(std::path::Path::new(&path));
+        let taken = if own {
+            ""
+        } else if key == same_path_key(from) {
+            if free { "" } else { "case" }
+        } else if self
+            .worktree_rows()
+            .iter()
+            .any(|row| same_path_key(&row.full) == key)
+        {
+            "listed"
+        } else if !free {
+            "folder"
+        } else {
+            ""
+        };
+        Some(NewWorktree {
+            name: name.to_string(),
+            taken: taken.to_string(),
+            path,
+            kept: String::new(),
         })
     }
 
@@ -456,6 +533,107 @@ mod tests {
         assert!(!model.has_place_for_worktrees());
         assert!(worktrees().new_worktree("").is_none());
         assert!(worktrees().has_place_for_worktrees());
+    }
+
+    /// A renamed worktree stays in its parent, and a name that is not one
+    /// folder's has no place; its own name is no rename, and a path git still
+    /// lists for another worktree is taken.
+    #[test]
+    fn a_renamed_worktree_stays_beside_where_it_was() {
+        let model = worktrees();
+        // Looked at on disk too: a name no machine has there.
+        let leaf = format!("pgg-renamed-beside-{}", std::process::id());
+        let place = model
+            .renamed_worktree("C:/work/held", &leaf)
+            .expect("a place");
+        assert_eq!(place.path, format!("C:/work/{leaf}"));
+        assert_eq!(place.taken, "");
+        assert_eq!(
+            model
+                .renamed_worktree("C:/work/held", "held")
+                .expect("a place")
+                .taken,
+            "",
+            "its own name is the way out"
+        );
+        assert_eq!(
+            model
+                .renamed_worktree("C:/work/held", "plain")
+                .expect("a place")
+                .taken,
+            "listed"
+        );
+        for not in ["", "..", "a/b", "a\\b"] {
+            assert!(
+                model.renamed_worktree("C:/work/held", not).is_none(),
+                "{not:?}"
+            );
+        }
+    }
+
+    /// What this system keeps out of a name is said before the disk is looked
+    /// at, with the part it keeps — on Windows; elsewhere the same names are
+    /// free. The folder's own name stays the way out.
+    #[test]
+    fn a_name_the_system_keeps_has_its_reason_and_the_part_it_keeps() {
+        let model = worktrees();
+        let answer = |name: &str| {
+            let place = model
+                .renamed_worktree("C:/work/held", name)
+                .expect("one folder's name");
+            (place.taken, place.kept)
+        };
+        let owed = [
+            ("why?", ("character", "?")),
+            ("con.txt", ("device", "con")),
+            ("dot.", ("trailing", ".")),
+        ];
+        for (name, (taken, kept)) in owed {
+            let want = if cfg!(windows) {
+                (taken.to_string(), kept.to_string())
+            } else {
+                (String::new(), String::new())
+            };
+            assert_eq!(answer(name), want, "{name:?}");
+        }
+        assert_eq!(
+            model
+                .renamed_worktree("C:/work/con", "con")
+                .expect("its own")
+                .taken,
+            "",
+            "its own name is no rename"
+        );
+    }
+
+    /// Looked at on disk: anything at all takes the place, an empty folder too
+    /// (git would move the worktree into it); a case-only rename is taken where
+    /// the disk calls it the same folder.
+    #[test]
+    fn anything_at_a_renamed_worktrees_place_takes_it() {
+        let dir = std::env::temp_dir().join(format!("pgg-renamed-worktree-{}", std::process::id()));
+        let at = |leaf: &str| dir.join(leaf).to_string_lossy().replace('\\', "/");
+        let model = section(
+            "worktrees",
+            Source::Worktrees {
+                list: vec![worktree_entry(&at("loose"), None, false)],
+                current: at("home"),
+            },
+        );
+        std::fs::create_dir_all(dir.join("loose")).unwrap();
+        std::fs::create_dir_all(dir.join("empty")).unwrap();
+        let empty = model
+            .renamed_worktree(&at("loose"), "empty")
+            .expect("a place")
+            .taken;
+        let case = model
+            .renamed_worktree(&at("loose"), "LOOSE")
+            .expect("a place")
+            .taken;
+        let case_free = !dir.join("LOOSE").exists();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(empty, "folder");
+        assert_eq!(case, if case_free { "" } else { "case" });
     }
 
     #[test]

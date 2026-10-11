@@ -169,9 +169,9 @@ mod walk_tests;
 mod worktree_card;
 
 use card::CardRows;
-use item::{FOLDED, HELD, NavItem, PRUNABLE, fold_state};
+use item::{FOLDED, HELD, NavItem, fold_state};
 /// The worktree rows' state words, which `GitFacts` hands to core's card rule.
-pub(crate) use item::{LOCKED, MAIN};
+pub(crate) use item::{LOCKED, MAIN, PRUNABLE};
 use role::{Arranged, Role, Row, Value};
 use source::{Bucket, Entry, Source, letters_of, pr_key};
 use worktree_card::{NewWorktree, WorktreeRow, WorktreeRows};

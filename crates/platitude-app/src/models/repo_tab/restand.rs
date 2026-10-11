@@ -80,6 +80,11 @@ impl RepoTab {
         self.worktree_out = crate::ops::Press::default();
         self.worktree_answer = -1;
         self.worktree_answer_path = String::new();
+        self.worktree_move_out = crate::ops::Press::default();
+        self.worktree_move_answer = -1;
+        self.worktree_move_from = String::new();
+        self.worktree_move_to = String::new();
+        self.worktree_move_standing = false;
         self.write_report_kind = String::new();
         self.write_report_remote = String::new();
         self.write_report_name = String::new();

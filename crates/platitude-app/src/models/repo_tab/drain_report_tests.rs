@@ -317,3 +317,64 @@ fn the_worktree_a_menu_asked_for_is_answered_by_name_with_its_report() {
     }]);
     assert_eq!(tab.worktree_answer, -1, "told once");
 }
+
+/// A worktree's folder renamed from a name box answers to its own press,
+/// with its report — the bar says it, the box keeps the name — and to
+/// nobody else's.
+#[test]
+fn a_renamed_worktree_is_answered_by_name() {
+    let mut tab = RepoTab::default();
+    tab.worktree_move_out.asked(Some(9));
+    let refused = platitude_core::WriteReport::about(ReportKind::WorktreeNotRenamed, "loose");
+    tab.absorb(vec![TabMsg::WriteState {
+        id: 9,
+        kind: K::Worktree,
+        running: false,
+        error: "git worktree move exited with code 128".into(),
+        report: Some(refused),
+        head_seq: 0,
+        reads_from: 0,
+    }]);
+    let answer = tab
+        .write_answer_at(tab.worktree_move_answer)
+        .expect("its own answer");
+    assert!(answer.failed);
+    assert_eq!(answer.report_kind, "worktree-not-renamed");
+    assert_eq!(answer.report_name, "loose");
+    assert_eq!(tab.worktree_answer, -1, "not the made worktree's answer");
+    assert_eq!(
+        tab.write_report_kind, "",
+        "nobody else reads it off the group"
+    );
+}
+
+/// The press writes down whether this tab stands in the worktree it renames
+/// — however the tab and git spell the folder — and that tab stands again on
+/// the answer (`RepoPage.absorbWorktreeMove`). No session here: nothing is
+/// asked, the note is the press's own.
+#[test]
+fn a_rename_press_says_whether_the_tab_stands_in_that_worktree() {
+    let mut tab = RepoTab {
+        repo_path: "C:\\Work\\Loose".into(),
+        ..RepoTab::default()
+    };
+    tab.worktree_move(
+        "c:/work/loose".into(),
+        "c:/work/renamed".into(),
+        "loose".into(),
+    );
+    assert!(tab.worktree_move_standing, "the tab's own worktree");
+    assert_eq!(
+        (
+            tab.worktree_move_from.as_str(),
+            tab.worktree_move_to.as_str()
+        ),
+        ("c:/work/loose", "c:/work/renamed")
+    );
+    tab.worktree_move(
+        "c:/work/loose-twin".into(),
+        "c:/work/twin".into(),
+        "loose-twin".into(),
+    );
+    assert!(!tab.worktree_move_standing, "another worktree");
+}

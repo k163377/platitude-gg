@@ -20,9 +20,14 @@ Item {
     /// rename opens holding the name.
     required property bool naming
     required property string namingMode
-    /// What a rename box is naming ("branch" / "remote" / "tag"), for the frame's tone and the placeholder; empty
-    /// while making a name.
+    /// What a rename box is naming ("branch" / "remote" / "tag" / "worktreeFolder"), for the frame's tone and the
+    /// placeholder; empty while making a name.
     required property string namingKind
+    /// Why the spaced second click on this row's chip opened no box (a worktree's lock or gone folder —
+    /// `GraphPane.withholdRename`), empty for none: said on the chip, as a refused name's reason is on the box.
+    required property string withheldWhy
+    /// The worktree's folder in that line, behind the tree mark (デザイン規約 §ref の種別「名前の印」).
+    required property string withheldMark
     /// Whether what is typed can be accepted, and why not — the page's answer (デザイン規約 §可否・警告の出し場所).
     required property bool namingRefused
     required property string namingRefusedWhy
@@ -42,6 +47,8 @@ Item {
     /// The name box's width (the column, or its floor where wider); 0 without a box. Read by the row and by
     /// `PGG_AUTO_ACT=name-box`.
     readonly property real nameBoxWidth: nameSeat.item ? nameSeat.item.width : 0
+    /// What the box says it takes, rubbed out (PGG_AUTO_ACT=worktree-rename-box).
+    readonly property string nameBoxPlaceholder: nameSeat.item ? nameSeat.item.placeholderText : ""
 
     signal namingSubmitted(string name)
     signal namingEdited(string text)
@@ -126,10 +133,12 @@ Item {
             // so a tag differs, and so does a branch made out in another worktree — that worktree's green, as its chip
             // wears.
             focusTone: nameField.namesKind === "tag" ? Theme.refTag
-                     : nameField.namesKind === "worktree" ? Theme.success : Theme.borderFocus
-            // What goes in the box, by kind: a new worktree and a remote's are branch names too
-            // (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダ」).
-            placeholderText: nameField.namesKind === "tag" ? qsTr("Tag name") : qsTr("Branch name")
+                     : nameField.namesKind === "worktree" || nameField.namesKind === "worktreeFolder" ? Theme.success
+                     : Theme.borderFocus
+            // What goes in the box, by kind: a new worktree and a remote's are branch names too, a worktree on no
+            // branch is named by its folder (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダ」).
+            placeholderText: nameField.namesKind === "tag" ? qsTr("Tag name")
+                           : nameField.namesKind === "worktreeFolder" ? qsTr("Worktree name") : qsTr("Branch name")
             refused: chipColumn.namingRefused
             ToolTip.visible: nameField.tipTyped
             ToolTip.delay: Metrics.tipDelayMs
@@ -160,6 +169,21 @@ Item {
                 text: nameField.inkText
                 font: nameField.font
             }
+        }
+    }
+    // Built only while it says so (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」).
+    Loader {
+        id: withheldSeat
+        active: chipColumn.withheldWhy !== ""
+        anchors.fill: rowStack
+        sourceComponent: Item {
+            /// Answers the press that asked, not a hand (`SharedToolTip.tipTyped`).
+            readonly property bool tipTyped: true
+            readonly property string tipMarkWord: chipColumn.withheldMark
+            // Asked only once there are words: the attached show takes the text it has at the ask.
+            ToolTip.visible: visible && chipColumn.withheldWhy !== ""
+            ToolTip.delay: Metrics.tipDelayMs
+            ToolTip.text: chipColumn.withheldWhy
         }
     }
     // Nothing here is hovered on its own: the row's MouseArea, declared after this, takes every hover

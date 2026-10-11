@@ -392,6 +392,17 @@ pub struct RepoTab {
     /// this notify carried none of it, and the folder it was to make.
     worktree_answer: i32,
     worktree_answer_path: String,
+    /// The worktree whose folder a name box asked git to rename, waiting for
+    /// its own answer: the box comes down on it or keeps the refusal, and a
+    /// tab that stood in that worktree stands in its new place — or back in
+    /// the old one (`RepoPage.absorbWorktreeMove`). Owned, as `worktree_out`.
+    worktree_move_out: crate::ops::Press,
+    /// Where that press's answer stands in `write_answers`, or -1; the folder
+    /// it was in and the one it was to take; and whether this tab stood in it.
+    worktree_move_answer: i32,
+    worktree_move_from: String,
+    worktree_move_to: String,
+    worktree_move_standing: bool,
     /// That write did not happen, and something outside this application
     /// said so — a protected branch, a rule, a hook, a stale picture of
     /// the remote (デザイン規約 §答えの要らない報せ).

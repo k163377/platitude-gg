@@ -111,6 +111,11 @@ impl Default for RepoTab {
             worktree_out: crate::ops::Press::default(),
             worktree_answer: -1,
             worktree_answer_path: String::new(),
+            worktree_move_out: crate::ops::Press::default(),
+            worktree_move_answer: -1,
+            worktree_move_from: String::new(),
+            worktree_move_to: String::new(),
+            worktree_move_standing: false,
             diff_reread: crate::ops::DiffReread::default(),
             tree_seen: 0,
             tree_emptied: false,
@@ -357,6 +362,21 @@ impl RepoTab {
         self.worktree_out
             .asked(asked.map(platitude_core::OperationId::as_u64));
         self.worktree_answer_path = path;
+    }
+
+    /// `git worktree move`: the folder at `from` renamed to `to`, beside it.
+    /// Whether this tab stands in it is written down at the press — the
+    /// answer decides where the tab stands next (`worktreeMoveStanding`).
+    /// Says whether the queue took it: only then does an answer come.
+    pub(super) fn worktree_move(&mut self, from: String, to: String, name: String) -> bool {
+        let asked = self.ask_session(|s| s.move_worktree(from.clone(), to.clone(), name.clone()));
+        self.worktree_move_out
+            .asked(asked.map(platitude_core::OperationId::as_u64));
+        self.worktree_move_standing = platitude_core::session::same_path_key(&self.repo_path)
+            == platitude_core::session::same_path_key(&from);
+        self.worktree_move_from = from;
+        self.worktree_move_to = to;
+        asked.is_some()
     }
 
     /// The reset slot's mode word, turned into core's enum; an unknown

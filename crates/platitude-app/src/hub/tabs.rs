@@ -310,6 +310,20 @@ impl Hub {
         }
     }
 
+    /// Files what was typed in the worktree a tab stands in under `to`: the
+    /// same worktree, its folder renamed or kept after a refusal and spelled
+    /// as git lists it (`TabsModel::follow_worktree`). Before the tab is
+    /// pointed there, while `Tab::path` still names the old folder; nothing
+    /// moves where the two are spelled alike.
+    pub fn carry_draft(&mut self, id: i32, to: &str) {
+        if let Some(tab) = self.tabs.get_mut(&id) {
+            let from = tab.path.to_string_lossy().into_owned();
+            if let Some(draft) = tab.drafts.remove(&from) {
+                tab.drafts.insert(to.to_string(), draft);
+            }
+        }
+    }
+
     /// What was typed in the worktree this tab stands in; empty for none, or
     /// for an unknown tab.
     pub fn draft(&self, id: i32) -> Draft {

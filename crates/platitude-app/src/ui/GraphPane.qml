@@ -52,6 +52,9 @@ Rectangle {
     /// the card the chip unfolds into as well** — its rows answer through the four below: a hand clicking one spot
     /// twice clicks the row and then the card, and those are one target.
     signal rowRenameRequested(string oidHex, var chip)
+    /// A key the history answers (an arrow, the menu key) reached it: other input, which takes down a rename's reason
+    /// standing where no box opened (`RepoPage.dropWithheld`), stepped or not.
+    signal keyReached()
     /// How the graph's rows answer a click, for the card that stands on them (`RowHoverHost`) — one door, so the two
     /// cannot disagree on "the same target".
     function noteRowClick(oidHex, chip) {
@@ -124,11 +127,28 @@ Rectangle {
         graphArea.openNameBox(oidHex, "worktree", "", "", "")
     }
     /// The box opens holding the existing name, to be typed over. `kind` is what git renames ("branch" / "remote" /
-    /// "tag"), `id` the ref, `text` the name as typed — a remote branch is typed without its remote, so the two differ.
+    /// "tag" / "worktreeFolder"), `id` the ref (a worktree's path), `text` the name as typed — a remote branch is typed
+    /// without its remote, a worktree by its folder, so the two differ.
     function startRenaming(oidHex, kind, id, text) {
         graphArea.openNameBox(oidHex, "rename", kind, id, text)
     }
+    /// The spaced second click on the chip of `oidHex` opened no box (a worktree's lock or gone folder): `why` stands
+    /// on the chip, as a refused name's reason does on the box, until the next press or key (`dropWithheld`).
+    function withholdRename(oidHex, why, mark) {
+        graphArea.stopNaming()
+        // The words before the row: the chip builds its tip as the row arrives (`GraphRowChips.withheldSeat`).
+        graphList.withheldWhy = why
+        graphList.withheldMark = mark
+        graphList.withheldOid = oidHex
+    }
+    function dropWithheld() {
+        graphList.withheldOid = ""
+        graphList.withheldWhy = ""
+        graphList.withheldMark = ""
+    }
+    readonly property bool renameWithheld: graphList.withheldOid !== ""
     function openNameBox(oidHex, mode, kind, id, text) {
+        graphArea.dropWithheld()
         graphList.askOid = ""
         // All before `namingOid`: the box comes up already wearing its own placeholder, and what it opened holding is
         // what a press elsewhere weighs against (`dropEmptyBoxes`).
@@ -404,10 +424,19 @@ Rectangle {
         rowCardOid: graphArea.rowCardOid
         // The arrows are answered here, where the history is walked (規約 §矢印で履歴を辿る). `isAutoRepeat` is the only
         // thing that tells a run apart from a press (`GraphRowWalk.noteStep`).
-        Keys.onUpPressed: event => event.accepted = graphArea.stepRow(-1, event.isAutoRepeat)
-        Keys.onDownPressed: event => event.accepted = graphArea.stepRow(1, event.isAutoRepeat)
+        Keys.onUpPressed: event => {
+            graphArea.keyReached()
+            event.accepted = graphArea.stepRow(-1, event.isAutoRepeat)
+        }
+        Keys.onDownPressed: event => {
+            graphArea.keyReached()
+            event.accepted = graphArea.stepRow(1, event.isAutoRepeat)
+        }
         // The menu key; Windows' Shift+F10 comes through the window (`Main.keyMenuAsked`).
-        Keys.onMenuPressed: event => event.accepted = graphArea.menuFromKeys()
+        Keys.onMenuPressed: event => {
+            graphArea.keyReached()
+            event.accepted = graphArea.menuFromKeys()
+        }
         onRowMenuRequested: (oidHex, chip) => graphArea.rowMenuOpenRequested(oidHex, chip)
         onRowSelected: (oidHex, atRow, modifiers) => graphArea.rowActivated(oidHex, atRow, modifiers)
         onRowSwitchRequested: (oidHex, chip) => graphArea.rowSwitchRequested(oidHex, chip)

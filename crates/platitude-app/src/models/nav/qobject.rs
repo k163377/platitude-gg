@@ -322,6 +322,14 @@ impl NavSectionModel {
         Optional::new(self.new_worktree(&branch))
     }
 
+    /// Where the worktree at `path` would go renamed `name`, and what is in
+    /// the way there (`renamed_worktree`) — what a worktree's name box stands
+    /// on. `undefined` for a name that is not one folder's.
+    #[qslot]
+    fn renamed_worktree_for(&self, path: String, name: String) -> Optional<NewWorktree> {
+        Optional::new(self.renamed_worktree(&path, &name))
+    }
+
     /// Whether new worktrees have a place at all (`has_place_for_worktrees`) —
     /// not before the listing lands, nor for a bare repository's linked
     /// worktrees.

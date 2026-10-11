@@ -91,6 +91,9 @@ StackLayout {
                 onAvatarSettingsRequested: (name, email) => stack.avatarSettingsRequested(name, email)
                 onCloseTabRequested: stack.tabsModel.closeTab(seat.tab_id)
                 onStandHomeRequested: stack.tabsModel.standTabHome(seat.tab_id)
+                // Called later, as the stand home is: the page is still sequencing the answer that asked.
+                onWorktreeFollowRequested: path =>
+                    Qt.callLater(() => stack.tabsModel.followWorktree(seat.tab_id, path))
             }
         }
     }

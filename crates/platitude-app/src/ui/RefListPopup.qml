@@ -342,6 +342,8 @@ AppCard {
                 // Whether there is a ref name to change — every row but the two markers. Apart from `leadsNowhere`:
                 // the current branch and a tag lead nowhere but can still be renamed.
                 readonly property bool nameable: GitFacts.refKind(refRow.modelData.kind) !== ""
+                // …and a worktree's folder, which is no ref but has a name to change (`RepoPage.startRename`).
+                readonly property bool renameable: GitFacts.namedKind(refRow.modelData.kind) !== ""
                 /// A left click and a double-click, named so a run puts its clicks in here
                 /// (PGG_AUTO_ACT=graph-reclick-list / ref-list-pick). Every row takes the click: a row leading nowhere
                 /// still has a name, and renaming starts with a click.
@@ -363,7 +365,7 @@ AppCard {
                     // A marker names no ref, so it goes in as a row with nothing on it.
                     if (refList.rowClicks
                             && !refList.rowClicks.noteRowClick(
-                                refList.rowOid, refRow.nameable ? refRow.modelData : null))
+                                refList.rowOid, refRow.renameable ? refRow.modelData : null))
                         return
                     if (refRow.nameable)
                         refList.chose(refRow.modelData)

@@ -152,15 +152,11 @@ Item {
         rowItem.movable && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : null
     // **The name this row draws**: the chip's first record, whatever kind. The spaced second click renames it and a
     // right-click aims the menu's cards at it — one answer, so the row cannot rename one name and offer another.
-    // **Not `primaryChip`**: a tag leads nowhere but can still be renamed (デザイン規約 §左メニューの所作). The two
-    // markers (the detached HEAD, a worktree standing here) name no ref, so they answer null.
-    readonly property var renameChip:
-        rowItem.labelRecords.length > 0 && GitFacts.refKind(rowItem.labelRecords[0].kind) !== ""
-            ? rowItem.labelRecords[0] : null
-    // **What a right-click aims the menu's cards at**: the same first record, and a worktree's folder chip too —
-    // a worktree has a card (its WORKTREE card) though no name to rename (デザイン規約 §グラフ行の右クリック).
-    readonly property var menuChip:
-        rowItem.labelRecords.length > 0 && GitFacts.menuKind(rowItem.labelRecords[0].kind) !== ""
+    // **Not `primaryChip`**: a tag leads nowhere but can still be renamed (デザイン規約 §左メニューの所作), and so can
+    // a worktree's folder chip — what its folder is called (`RepoPage.startRename`), with its WORKTREE card
+    // (デザイン規約 §グラフ行の右クリック). The detached HEAD names nothing, so it answers null.
+    readonly property var nameChip:
+        rowItem.labelRecords.length > 0 && GitFacts.namedKind(rowItem.labelRecords[0].kind) !== ""
             ? rowItem.labelRecords[0] : null
     // The chip, sheets and all — what the card it unfolds into stands on (`GraphRowChips.chipItem`).
     readonly property alias chipItem: chipColumn.chipItem
@@ -168,6 +164,7 @@ Item {
     readonly property alias chipWaiting: chipColumn.chipWaiting
     // What the name box on this row came out to (see the column — a headless run reads it off here).
     readonly property alias nameBoxWidth: chipColumn.nameBoxWidth
+    readonly property alias nameBoxPlaceholder: chipColumn.nameBoxPlaceholder
     // This row's chip column is a name box right now.
     readonly property bool naming: rowItem.ListView.view ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
     // The standing question is about this row. Its words are on the bar above the graph; the row answers "which one"
@@ -251,6 +248,9 @@ Item {
                            ? rowItem.ListView.view.namingRefused : false
             namingRefusedWhy: rowItem.ListView.view ? rowItem.ListView.view.namingRefusedWhy : ""
             namingRefusedMark: rowItem.ListView.view ? rowItem.ListView.view.namingRefusedMark : ""
+            withheldWhy: rowItem.ListView.view && rowItem.ListView.view.withheldOid === rowItem.oid_hex
+                         ? rowItem.ListView.view.withheldWhy : ""
+            withheldMark: rowItem.ListView.view ? rowItem.ListView.view.withheldMark : ""
             onNamingSubmitted: name => rowItem.ListView.view.namingSubmitted(
                 rowItem.oid_hex, name, rowItem.ListView.view.namingMode)
             onNamingEdited: text => rowItem.ListView.view.namingText = text
@@ -498,7 +498,7 @@ Item {
     /// counted as the other half of a double-click — what a headless run reads to time its second click
     /// (PGG_AUTO_ACT=graph-reclick). Both are the list's answer: this delegate is pooled when its row scrolls off.
     readonly property bool renameArmed:
-        rowItem.ListView.view ? rowItem.ListView.view.renameArmed(rowItem.renameChip) : false
+        rowItem.ListView.view ? rowItem.ListView.view.renameArmed(rowItem.nameChip) : false
     readonly property bool clickGuarded: rowItem.ListView.view ? rowItem.ListView.view.clickGuarded : false
     /// A left press, as this row answers one — **at the press, not at the release**: answered at the release, the row
     /// sits unlit while the button is down. Named so that a run with no pointer can press the row itself.
@@ -519,7 +519,7 @@ Item {
             return
         }
         // The second press of a double-click belongs to the gesture: the first one already did what a press does.
-        if (!rowItem.ListView.view.noteClick(rowItem.oid_hex, rowItem.renameChip))
+        if (!rowItem.ListView.view.noteClick(rowItem.oid_hex, rowItem.nameChip))
             return
         rowItem.claimRow(Qt.NoModifier)
     }
@@ -578,10 +578,10 @@ Item {
             return
         }
         // This worktree's own uncommitted row is not a commit, so it has no menu. **One menu wherever along the row the
-        // press landed**: its rows are about this commit, the cards at its foot about `menuChip`
+        // press landed**: its rows are about this commit, the cards at its foot about `nameChip`
         // (デザイン規約 §グラフ行の右クリック) — unlike a rest, a right-click has nothing to divide (`partAt`).
         if (!rowItem.isWip)
-            rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.menuChip)
+            rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.nameChip)
     }
 
     MouseArea {

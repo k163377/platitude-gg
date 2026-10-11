@@ -98,6 +98,10 @@ Rectangle {
     /// Automation only: whether the box refuses what is typed, and its line — a frame colour and a tooltip.
     readonly property bool editRefused: rowGestures.editRefused
     readonly property string editRefusedWhy: rowGestures.editRefusedWhy
+    /// …what the box renames and what it holds, and the reason standing where none opened.
+    readonly property string editKind: rowGestures.editKind
+    readonly property string editText: rowGestures.editText
+    readonly property string withheldWhy: rowGestures.withheldWhy
     /// Where the page's standing menu was raised (`RepoPage.menuRaisedOn`), "" while none stands; `sidebar` is these
     /// rows. The page sets it, the menus being its.
     property string menuRaisedOn: ""
@@ -111,6 +115,12 @@ Rectangle {
     }
     function stopEdit() {
         rowGestures.stopEdit()
+    }
+    /// A rename's reason standing where the second click opened no box (`SidebarRowGestures.withholdRename`), and
+    /// the next input taking it down.
+    readonly property bool renameWithheld: rowGestures.withheldKey !== ""
+    function dropWithheld() {
+        rowGestures.dropWithheld()
     }
     function submitEdit(text) {
         rowGestures.submitEdit(text)

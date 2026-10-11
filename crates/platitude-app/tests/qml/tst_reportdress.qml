@@ -94,6 +94,10 @@ Item {
             compare(Words.markSeatIn("Checked out in another worktree — rework", "work", true), -1,
                     "the letters, not the word")
             compare(Words.markSeatIn("Den Ordner topic gibt es", "topic", true), -1, "a translation that moved it: none")
+            compare(Words.markSeatIn("Cannot rename — vaulted is locked", "vaulted", true), 16,
+                    "a tip may open what follows its conclusion with the name")
+            compare(Words.markSeatIn("Cannot rename — revaulted is locked", "vaulted", true), -1, "the letters, not the word")
+            compare(Words.markSeatIn("vaulted — vaulted", "vaulted", false), 0, "a heading's seat is only its first")
             compare(Words.markSeatIn("anything", "", true), -1)
             compare(Words.roomInSentence("anything", -1, 2), "", "no seat, no room: drawn as it came")
             // A heading's: the seat its own sentence gives the name, first or within.
@@ -184,6 +188,25 @@ Item {
                     "git turned it down — see GIT COMMANDS")
             compare(Words.writeReportedWhy("worktree-half", "", "topic", ""),
                     "git could not delete everything in its folder — see GIT COMMANDS")
+        }
+
+        /// A worktree whose folder kept its name: the same yellow and mark, the folder as it still is. git's turning down
+        /// sends the reader to the log; what stood at the new path is said here, nobody to quote
+        /// (デザイン規約 §worktree の名前を変える).
+        function test_a_worktree_not_renamed_is_named_behind_the_tree_mark_and_says_where_to_look() {
+            for (const kind of ["worktree-not-renamed", "worktree-rename-taken"]) {
+                compare(Words.reportTone(kind), "warning", kind)
+                verify(Words.reportNamesWorktree(kind), kind)
+                compare(Words.writeReported(kind, "", "loose"), "loose was not renamed", kind)
+            }
+            compare(Words.writeReportedWhy("worktree-not-renamed"), "git turned it down — see GIT COMMANDS")
+            compare(Words.reportPlace("worktree-not-renamed"), Words.commandsTitle)
+            compare(Words.writeReportedWhy("worktree-rename-taken"), "Something is already there.")
+            compare(Words.reportPlace("worktree-rename-taken"), "", "a line of its own sends nobody anywhere")
+            dress("worktree-not-renamed", "", "loose", "")
+            tryVerify(() => bar.settled && bar.markShown)
+            compare(bar.detail, "git turned it down — see GIT COMMANDS")
+            compare(bar.detailPlace, Words.commandsTitle)
         }
 
         /// Both arms, because either alone passes against a bar painted one colour.

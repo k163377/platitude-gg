@@ -219,6 +219,14 @@ impl TabsModel {
         self.stand_home(tab_id);
     }
 
+    /// The worktree the tab holding `tab_id` stood in was asked to take a new
+    /// folder: the tab stands in `path`, the new folder once git moved it or
+    /// the old one after a refusal (`TabsModel::follow_tab_worktree`).
+    #[qslot]
+    fn follow_worktree(&mut self, tab_id: i32, path: String) {
+        self.follow_tab_worktree(tab_id, path);
+    }
+
     #[qslot]
     fn close_tab(&mut self, tab_id: i32) {
         let closing = self.items.iter().position(|t| t.tab_id == tab_id);

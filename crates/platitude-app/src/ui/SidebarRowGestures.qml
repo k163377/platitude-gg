@@ -31,15 +31,40 @@ QtObject {
     /// The sidebar's one `ReclickGesture` (rules-refs/app-ui.md「間を空けた 2 回目のクリック」). What the wait was
     /// aimed at is read at the click (`p`): by the time it runs out the row may be showing another name.
     property ReclickGesture reclick: ReclickGesture {
-        onRenameAsked: (key, p) => gestures.startEdit(p.kind, key, "rename", p.id, p.oid,
-                                                      gestures.typedName(p.kind, p.id, p.name))
+        onRenameAsked: (key, p) => {
+            if (p.withheld !== undefined)
+                gestures.withholdRename(key, p.withheld, p.mark)
+            else
+                gestures.startEdit(p.kind, key, "rename", p.id, p.oid, gestures.typedName(p.kind, p.id, p.name))
+        }
     }
     property alias activeKey: gestures.reclick.activeKey
-    /// The name a row is typed and renamed by: a stash's message (git knows it by its selector), a remote branch
-    /// without the remote it lives on, and the id for everything else.
+    /// The name a row is typed and renamed by: a stash's message (git knows it by its selector), a worktree's folder
+    /// (git knows it by its path), a remote branch without the remote it lives on, and the id for everything else.
     function typedName(kind, id, name) {
-        return kind === "stash" ? name
+        return kind === "stash" || kind === "worktreeFolder" ? name
              : kind === "remote" ? gestures.remoteBranchHalf(id) : id
+    }
+    /// A spaced second click a worktree's lock or gone folder turned down (`GitFacts.worktreeRename`): the row, and
+    /// why — said where the box would have stood, as a refused name's reason is, until the next press or key
+    /// (デザイン規約 §worktree の名前を変える「箱を開かないもの」).
+    property string withheldKey: ""
+    property string withheldWhy: ""
+    /// The worktree's folder in that line, which the tip stands the tree mark in front of.
+    property string withheldMark: ""
+    function withholdRename(key, why, mark) {
+        if (gestures.held)
+            return
+        gestures.stopEdit()
+        // The words before the row: the row builds its tip as the key arrives (`NavItemDelegate.withheldSeat`).
+        gestures.withheldWhy = why
+        gestures.withheldMark = mark
+        gestures.withheldKey = key
+    }
+    function dropWithheld() {
+        gestures.withheldKey = ""
+        gestures.withheldWhy = ""
+        gestures.withheldMark = ""
     }
     property string editKey: ""
     property string editKind: ""
@@ -76,12 +101,14 @@ QtObject {
                                 gestures.branchesModel.nameClash(gestures.editText.trim(), ""),
                                 gestures.editWorktreePlace)
     /// The box names a tag: a new one, or a tag's rename. Every other ref box names a branch — a new one, a branch's
-    /// rename, a remote branch's (a branch over there) — and a stash's is free text.
+    /// rename, a remote branch's (a branch over there) — a stash's is free text, and a worktree's folder is a folder.
     readonly property bool editNamesTag: gestures.editMode === "tag"
         || (gestures.editMode === "rename" && gestures.editKind === "tag")
-    /// git's rules for the kind of name the box takes, asked of core.
+    /// git's rules for the kind of name the box takes, asked of core. A worktree's folder follows the disk's rules
+    /// instead (`editFolderWhy`).
     readonly property bool editNameRuled: gestures.editMode === "rename" && gestures.editKind === "stash"
         ? GitFacts.validStashMessage(gestures.editText)
+        : gestures.editMode === "rename" && gestures.editKind === "worktreeFolder" ? true
         : gestures.editNamesTag ? GitFacts.validTagName(gestures.editText.trim())
         : GitFacts.validBranchName(gestures.editText.trim())
     /// What git would refuse the name for beside the branches or tags already there (`Words.nameClashed`): a new
@@ -103,11 +130,21 @@ QtObject {
             return Words.nameClashed(gestures.tagsModel.nameClash(name, gestures.editId), true)
         return ""
     }
-    /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free text).
+    /// Where a worktree's folder would go renamed to what is typed (`NavSectionModel.renamedWorktreeFor`), asked per
+    /// keystroke; undefined for every other box, and for a name that is not one folder's.
+    readonly property var editFolderPlace: gestures.editKind !== "worktreeFolder" ? undefined
+        : gestures.worktreesModel.renamedWorktreeFor(gestures.editId, gestures.editText.trim())
+    /// What stands in that folder's way, said before the press — the graph's box says the same
+    /// (`Words.worktreeRenameRefused`). A folder's name follows the disk's rules, not git's.
+    readonly property string editFolderWhy: gestures.editKind !== "worktreeFolder" ? ""
+        : Words.worktreeRenameRefused(gestures.editText, gestures.editFolderPlace)
+    /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free text, a
+    /// worktree's name a folder's).
     readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
         && (gestures.editTaken
             || gestures.editCaseOnly
             || gestures.editWorktreeWhy !== ""
+            || gestures.editFolderWhy !== ""
             || !gestures.editNameRuled
             || gestures.editClashWhy !== "")
     /// A tag rename that changes only the letters' case. git writes a ref as a file, so on a case-insensitive disk the
@@ -118,8 +155,10 @@ QtObject {
         && gestures.editText.trim() !== gestures.editId
         && gestures.editText.trim().toLowerCase() === gestures.editId.toLowerCase()
     readonly property string editRefusedWhy: !gestures.editRefused ? ""
+        : gestures.editFolderWhy !== ""
+          ? gestures.editFolderWhy
         : gestures.editText.trim() === ""
-          ? qsTr("A name is needed")
+          ? Words.nameNeeded
           : gestures.editWorktreeWhy !== ""
             ? gestures.editWorktreeWhy
           : gestures.editCaseOnly
@@ -133,14 +172,16 @@ QtObject {
             : gestures.editClashWhy
     /// The worktree's folder in that line, which the box's tip stands the tree mark in front of
     /// (`Words.worktreeNameMark`); empty where the line names none.
-    readonly property string editRefusedMark: Words.worktreeNameMark(gestures.editRefusedWhy,
-                                                                     gestures.editWorktreePlace)
+    readonly property string editRefusedMark: gestures.editKind === "worktreeFolder"
+        ? Words.worktreeRenameMark(gestures.editRefusedWhy, gestures.editFolderPlace)
+        : Words.worktreeNameMark(gestures.editRefusedWhy, gestures.editWorktreePlace)
 
     function startEdit(kind, key, mode, id, oid, text) {
         // The one door into the box (the second click and the menu's four `begin*`), so the hold is asked here: a box
         // opened while the doors are held would take a name nothing can be done with.
         if (gestures.held)
             return
+        gestures.dropWithheld()
         // The box opens where the row is; folded, that is the peek beside the rail, and the list stays folded
         // (デザイン規約 §左メニューを畳む). The box holds the peek open the way a menu does (`pinned`).
         gestures.editKind = kind
@@ -148,8 +189,12 @@ QtObject {
         gestures.editId = id
         gestures.editOid = oid
         gestures.editText = text
+        gestures.editOpenedWith = text
         gestures.editKey = key
     }
+    /// What the box opened holding — a worktree's folder name, which is no rename to send back (git knows the worktree
+    /// by its path, `editId`).
+    property string editOpenedWith: ""
     function stopEdit() {
         // A box coming down spends the gesture that opened it (as `GraphPane.stopNaming` does), or the next click on
         // the same row reopens it a window later — a blink.
@@ -168,7 +213,8 @@ QtObject {
         // Enter on a box nobody has typed in leaves it standing, as on a refused one (`editUnanswered`).
         if ((mode === "branch" || mode === "tag" || mode === "worktree") && text.trim() === "")
             return
-        const was = kind === "remote" ? gestures.remoteBranchHalf(id) : id
+        const was = kind === "worktreeFolder" ? gestures.editOpenedWith
+                  : kind === "remote" ? gestures.remoteBranchHalf(id) : id
         if (mode === "branch") {
             gestures.stopEdit()
             gestures.host.branchAtRequested(oid, text.trim())
@@ -268,6 +314,9 @@ QtObject {
     /// Nothing opens over a name box or under a menu: opening moves the rows under both (デザイン規約 §左メニューの所作).
     onEditKeyChanged: if (gestures.editKey !== "") gestures.openKey = ""
     onMenuOpenChanged: {
+        // A menu is other input, raised by the keyboard too (the press's own door is `RepoPage.notePress`).
+        if (gestures.menuOpen)
+            gestures.dropWithheld()
         if (gestures.menuOpen && !gestures.menuFromFacts)
             gestures.openKey = ""
         if (!gestures.menuOpen)
@@ -326,7 +375,9 @@ QtObject {
     }
     /// The menu's way into the rename box, for anyone who cannot use the two-click gesture.
     function beginRename(kind, id, text, oid) {
-        gestures.startEdit(kind, kind + ":" + id, "rename", id, oid, text)
+        // On the row it names: a worktree's folder is renamed on the WORKTREES row (`NavList.keyOf`).
+        const row = kind === "worktreeFolder" ? "worktree" : kind
+        gestures.startEdit(kind, row + ":" + id, "rename", id, oid, text)
     }
     /// The new-branch box on any row that names a commit, not just a tag's.
     function beginBranchAt(kind, id, oidHex) {
