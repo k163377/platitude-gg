@@ -283,8 +283,21 @@ impl RepoSession {
                 let looked = self.standing.stamp();
                 let cancel = self.root_cancel.clone();
                 match crate::worktrees::load(&self.executor, &workdir, &cancel).await {
-                    Ok(worktrees) => {
-                        let news = self.note_worktree_holders(&worktrees, &workdir);
+                    Ok(listed) => {
+                        let worktrees = super::removals::left_out(listed.clone(), self);
+                        self.note_worktree_heads(&worktrees, &workdir);
+                        // The holds only from a listing no write has ended
+                        // behind (`Standing::current`): one that looked before
+                        // a worktree's removal answered would note it back,
+                        // and the refs read that follows would draw its marks
+                        // again. A write that moves the holds reads a listing
+                        // behind itself (`AfterWrite::Worktrees`).
+                        let news = if self.standing.current(looked) {
+                            *relock(&self.worktrees_listed) = Arc::new(listed);
+                            self.note_worktree_holders(&worktrees, &workdir)
+                        } else {
+                            super::joins::WorktreeNews::default()
+                        };
                         self.sink
                             .event(SessionEvent::WorktreesLoaded { worktrees, looked });
                         WorktreeRead {

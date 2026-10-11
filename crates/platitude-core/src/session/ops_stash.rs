@@ -116,12 +116,15 @@ impl RepoSession {
     }
 
     /// `git stash drop <selector>`; the entry goes on the discard record
-    /// (破棄記録仕様.md §2).
+    /// (破棄記録仕様.md §2). Its row leaves the graph at the press, with the
+    /// commits only it held (`session::leaving`).
     pub fn stash_drop(self: &Arc<Self>, selector: String) -> Option<OperationId> {
         let s = Arc::clone(self);
-        self.write(
+        let going = selector.clone();
+        self.write_taking(
             OperationKind::Stash,
             AfterWrite::Graph,
+            &[LeavingRef::Stash(&going)],
             move |exec, repo, cancel| async move {
                 let before =
                     discards::stash_before(&exec, &repo.workdir, &selector, &cancel).await?;

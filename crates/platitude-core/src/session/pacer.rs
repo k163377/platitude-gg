@@ -181,7 +181,9 @@ impl RepoSession {
         // read. The walk waits for it, so it draws the worktrees against
         // where the listing says they stand now — a worktree that has
         // committed since its reading is asked for again by that walk
-        // (`relay::carried_current`).
+        // (`relay::carried_current`). The stashes too where this read answers
+        // for a write another session landed here (`RepoSession::read_again`).
+        let with_stashes = with_stashes || ticket.owed;
         let listings = async {
             if with_stashes {
                 self.read_listings().await

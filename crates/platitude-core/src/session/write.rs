@@ -350,8 +350,12 @@ impl RepoSession {
                     reads_from: fence.reads_from,
                 });
                 // The rest walk where a read behind them moved
-                // (`settle_after`).
-                matches!(after, AfterWrite::Graph | AfterWrite::Name { .. })
+                // (`settle_after`) — or where they took rows off at the
+                // press: the reads behind a removed worktree can find
+                // nothing moved, its holds having gone at the press
+                // (`RepoSession::note_worktrees_going`), yet the record still
+                // holds its commits (`Leaving::unwalked`).
+                matches!(after, AfterWrite::Graph | AfterWrite::Name { .. }) || self.takes_rows(id)
             }
             // Only a network write lands here (a local token is nobody's
             // to cancel): the session is closing. The boundaries must

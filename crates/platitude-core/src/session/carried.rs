@@ -499,6 +499,8 @@ impl super::RepoSession {
         else {
             return CarriedOutcome::Dropped;
         };
+        // Not one git is still deleting: its `status` reads a folder going.
+        let worktrees = super::removals::left_out(worktrees, self);
         // Recorded before the reads, so a reading is never newer than the
         // listing it is drawn against (`RepoSession::note_worktree_heads`).
         self.note_worktree_heads(&worktrees, workdir);

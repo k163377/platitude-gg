@@ -312,6 +312,7 @@ fn a_worktree_standing_on_no_branch_gets_a_chip_of_its_own() {
         oid: oid(2),
         name: crate::Name::const_new("spike"),
         locked: true,
+        path: "c:/work/spike".to_string(),
     });
     let joins = RefJoins::new(&refs, &held);
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);

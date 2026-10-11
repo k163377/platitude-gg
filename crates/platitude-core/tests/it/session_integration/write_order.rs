@@ -556,6 +556,162 @@ async fn a_read_in_flight_at_the_close_does_not_refill_what_it_gave_back() {
     );
 }
 
+/// A worktree whose removal a closed tab let run on is out of what a tab
+/// opened meanwhile lists (`session::removals`) — git can take minutes over
+/// a large folder — and listed again the moment git refuses it: the landing
+/// tells the tree, and the reopened tab reads the listings with the rest
+/// (`RepoSession::read_again`). Refused, because only a worktree still there
+/// can say the listing was read again.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_worktree_being_removed_is_out_of_a_reopened_tab_s_listing_until_git_answers() {
+    let (mut repo, release) = held_at_the_first_commit();
+    let kept = repo.path.with_file_name("kept");
+    let kept_arg = kept.to_string_lossy().into_owned();
+    repo.git(&["worktree", "add", "--detach", &kept_arg]);
+    // Work git will not throw away unforced.
+    std::fs::write(kept.join("untracked.txt"), b"work\n").expect("write into the worktree");
+    // As the menu hands it over: the listing's spelling.
+    let listed = repo.git_in(&kept, &["rev-parse", "--show-toplevel"]);
+    let lists = |worktrees: &[platitude_core::worktrees::WorktreeEntry]| {
+        let key = platitude_core::session::same_path_key(&listed);
+        worktrees
+            .iter()
+            .any(|worktree| platitude_core::session::same_path_key(&worktree.path) == key)
+    };
+
+    let (closing_sink, closing) = opened(&repo).await;
+    let commit = closing
+        .commit(
+            "held by the hook".into(),
+            platitude_core::commit::CommitOptions::default(),
+        )
+        .expect("the commit was accepted");
+    closing_sink
+        .wait_for("the commit reached git", |evs| {
+            evs.iter()
+                .any(|e| matches!(e, SessionEvent::WriteStarted { id, .. } if *id == commit))
+                .then_some(())
+        })
+        .await;
+    // Queued behind the held commit: what the close lets run on.
+    let removal = closing
+        .remove_worktree(listed.clone(), "kept".into())
+        .expect("the removal was accepted");
+    closing.close();
+
+    let (reopened_sink, reopened) = opened(&repo).await;
+    let opening = reopened_sink
+        .wait_for("the reopened tab's first worktree listing", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::WorktreesLoaded { worktrees, .. } => Some(lists(worktrees)),
+                _ => None,
+            })
+        })
+        .await;
+
+    // Judged once git has answered the hook's commit: a failure with git held
+    // takes the repository away under the release file, and the run would
+    // wait out the hook's cap.
+    std::fs::write(&release, b"go").expect("release the hook");
+    assert_eq!(
+        write_answer(&closing_sink, commit).await,
+        None,
+        "the commit landed"
+    );
+    assert!(!opening, "the worktree being removed was listed");
+    assert!(
+        write_answer(&closing_sink, removal).await.is_some(),
+        "git kept the worktree for its untracked work"
+    );
+    // Nothing asks the reopened tab to look: only the landing's news can.
+    reopened_sink
+        .wait_for("the worktree git kept, listed again", |evs| {
+            evs.iter()
+                .any(|e| {
+                    matches!(e, SessionEvent::WorktreesLoaded { worktrees, .. } if lists(worktrees))
+                })
+                .then_some(())
+        })
+        .await;
+
+    reopened.close();
+}
+
+/// A tab stood in another worktree of the repository is on a write order
+/// of its own, which the removal's landing does not tell: the removal does,
+/// having written down who left it out (`session::removals`) — refused,
+/// the worktree is listed there again at once, not at the next paced read.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_tab_in_another_worktree_lists_a_refused_removal_again() {
+    let (mut repo, release) = held_at_the_first_commit();
+    let kept = repo.path.with_file_name("kept");
+    let beside = repo.path.with_file_name("beside");
+    for at in [&kept, &beside] {
+        repo.git(&["worktree", "add", "--detach", &at.to_string_lossy()]);
+    }
+    std::fs::write(kept.join("untracked.txt"), b"work\n").expect("write into the worktree");
+    let listed = repo.git_in(&kept, &["rev-parse", "--show-toplevel"]);
+    let lists = |worktrees: &[platitude_core::worktrees::WorktreeEntry]| {
+        let key = platitude_core::session::same_path_key(&listed);
+        worktrees
+            .iter()
+            .any(|worktree| platitude_core::session::same_path_key(&worktree.path) == key)
+    };
+
+    let (writer_sink, writer) = opened(&repo).await;
+    let commit = writer
+        .commit(
+            "held by the hook".into(),
+            platitude_core::commit::CommitOptions::default(),
+        )
+        .expect("the commit was accepted");
+    writer_sink
+        .wait_for("the commit reached git", |evs| {
+            evs.iter()
+                .any(|e| matches!(e, SessionEvent::WriteStarted { id, .. } if *id == commit))
+                .then_some(())
+        })
+        .await;
+    let removal = writer
+        .remove_worktree(listed.clone(), "kept".into())
+        .expect("the removal was accepted");
+
+    let (beside_sink, beside_tab) = crate::support::session::opened_at(&beside).await;
+    let opening = beside_sink
+        .wait_for("the other worktree's first listing", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::WorktreesLoaded { worktrees, .. } => Some(lists(worktrees)),
+                _ => None,
+            })
+        })
+        .await;
+
+    // Judged once git has answered the hook's commit (the test above).
+    std::fs::write(&release, b"go").expect("release the hook");
+    assert_eq!(
+        write_answer(&writer_sink, commit).await,
+        None,
+        "the commit landed"
+    );
+    assert!(!opening, "the worktree being removed was listed");
+    assert!(
+        write_answer(&writer_sink, removal).await.is_some(),
+        "git kept the worktree for its untracked work"
+    );
+    beside_sink
+        .wait_for("the worktree git kept, listed again beside", |evs| {
+            evs.iter()
+                .any(|e| {
+                    matches!(e, SessionEvent::WorktreesLoaded { worktrees, .. } if lists(worktrees))
+                })
+                .then_some(())
+        })
+        .await;
+
+    beside_tab.close();
+    writer.close();
+}
+
 /// A write whose far half reaches the network still takes its turn for
 /// the half that is here.
 ///

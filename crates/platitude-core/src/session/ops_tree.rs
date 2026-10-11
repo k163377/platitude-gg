@@ -316,14 +316,26 @@ impl RepoSession {
     /// nothing.
     ///
     /// Moves no ref, so the refs are read first and the tree only where
-    /// they moved; the listing behind it frees the branch, and drops a
-    /// branchless worktree's graph row with the one walk the write makes
+    /// they moved; the listing behind it frees the branch
     /// (`AfterWrite::Worktrees`).
+    ///
+    /// Gone at the press, as a deleted name is (デザイン規約
+    /// §消す操作は先に画面から消す): from every listing until git has answered
+    /// (`session::removals` — a folder can take minutes to delete, and a tab
+    /// opened meanwhile lists it), from the joins at once
+    /// ([`Self::note_worktrees_going`]), and the commits only a branchless
+    /// one held from the graph (`session::leaving`).
     pub fn remove_worktree(self: &Arc<Self>, path: String, name: String) -> Option<OperationId> {
+        let removal = super::removals::Removal::begin(&path, self);
+        // Before the write is sent: answered first, its own listing would be
+        // noted over by the older one in hand.
+        self.note_worktrees_going();
         let s = Arc::clone(self);
-        self.write(
+        let going = path.clone();
+        self.write_taking(
             OperationKind::Worktree,
             AfterWrite::Worktrees,
+            &[LeavingRef::Worktree(&going)],
             move |exec, repo, cancel| async move {
                 let listed = crate::worktrees::load(&exec, &repo.workdir, &cancel).await?;
                 let before = listed
@@ -331,6 +343,9 @@ impl RepoSession {
                     .find(|entry| same_path_key(&entry.path) == same_path_key(&path));
                 let done =
                     crate::worktrees::remove(&exec, &repo.workdir, &path, &name, &cancel).await;
+                // git has answered: what it left is the listings' to say, a
+                // refusal's worktree included.
+                drop(removal);
                 let gone = match &done {
                     Ok(()) => true,
                     Err(_) => crate::worktrees::load(&exec, &repo.workdir, &cancel)
@@ -363,6 +378,28 @@ impl RepoSession {
                 done
             },
         )
+    }
+
+    /// Notes the other worktrees' holds again from the listing in hand, less
+    /// the removals under way, and reads the refs for them: the chip, the
+    /// branch's mark and the walk's starting point go with the press. The app
+    /// hides them at once (`GraphModel.setGone`); this is what keeps every
+    /// joins after it — the write's own refs read among them — from drawing
+    /// them back, so nothing flickers when the app lets go. Refused, they come
+    /// back with the listing behind the write and the refs read it asks for.
+    fn note_worktrees_going(self: &Arc<Self>) {
+        let Some(workdir) = self.workdir() else {
+            return;
+        };
+        let listed = Arc::clone(&relock(&self.worktrees_listed));
+        // No listing yet: the first is left out of already.
+        if listed.is_empty() {
+            return;
+        }
+        let worktrees = super::removals::left_out(listed.as_ref().clone(), self);
+        if self.note_worktree_holders(&worktrees, &workdir).joins {
+            self.refresh_refs();
+        }
     }
 }
 

@@ -294,3 +294,278 @@ fn their_branch(bare: &TestRepo, work: &mut TestRepo, name: &str) -> String {
     work.git(&["fetch", "origin"]);
     tip
 }
+
+/// A commit git is held inside until it is let go, so what is asked behind
+/// it waits in the queue: what a press did before git ran is seen while git
+/// provably has not. The file is staged, so the graph carries an uncommitted
+/// row on top.
+fn hold_a_commit(repo: &mut TestRepo) -> std::path::PathBuf {
+    repo.write_file("held.txt", "content\n");
+    repo.git(&["add", "held.txt"]);
+    let release = release_of(repo);
+    repo.write_hook("pre-commit", &barrier_hook(&release));
+    release
+}
+
+async fn commit_held(
+    sink: &CaptureSink,
+    session: &std::sync::Arc<platitude_core::session::RepoSession>,
+) -> platitude_core::OperationId {
+    let id = session
+        .commit(
+            "held".into(),
+            platitude_core::commit::CommitOptions::default(),
+        )
+        .expect("accepted");
+    sink.wait_for("the commit reached git", |evs| {
+        evs.iter()
+            .any(|e| matches!(e, SessionEvent::WriteStarted { id: got, .. } if *got == id))
+            .then_some(())
+    })
+    .await;
+    id
+}
+
+/// Lets the held commit go and waits for git to have answered it. Judged
+/// only after this: a failing assertion with git still held takes the
+/// repository away under the hook's release file, and the run waits out the
+/// hook's cap.
+async fn let_the_commit_go(
+    sink: &CaptureSink,
+    release: &std::path::Path,
+    commit: platitude_core::OperationId,
+) {
+    std::fs::write(release, b"go").expect("release the hook");
+    assert_eq!(write_answer(sink, commit).await, None, "the held commit");
+}
+
+/// A worktree's path as git lists it — what the menu hands a removal. The
+/// suite's temporary folder can come spelled otherwise (an 8.3 name on
+/// Windows), and a removal is known by the listing's spelling.
+fn listed_as(repo: &mut TestRepo, worktree: &std::path::Path) -> String {
+    repo.git_in(worktree, &["rev-parse", "--show-toplevel"])
+}
+
+/// A stash entry is a row of its own: dropped, it leaves with the press.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dropped_stash_leaves_the_graph_at_the_press() {
+    let (mut repo, _head) = scenario();
+    let stash = repo.git(&["rev-parse", "stash@{0}"]);
+    let release = hold_a_commit(&mut repo);
+    let (sink, session) = opened(&repo).await;
+    let drawn = sink.opened_graph(&session, 6).await;
+
+    let commit = commit_held(&sink, &session).await;
+    let id = session.stash_drop("stash@{0}".into()).expect("accepted");
+    let rows = relaid(&sink, 0).await;
+    let early = answered(&sink, id);
+
+    let_the_commit_go(&sink, &release, commit).await;
+    assert!(!early, "git had not reached the drop");
+    assert!(!rows.contains(&stash), "{rows:#?}");
+    assert_eq!(rows.len() as u32, drawn.total - 1, "{rows:#?}");
+    assert_eq!(write_settled(&sink, id).await, []);
+    session.close();
+}
+
+/// A worktree on no branch is a starting point of the walk: removed, the
+/// commits only it held leave with the press.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_removed_worktree_takes_what_only_it_held_off_the_graph_at_the_press() {
+    let (mut repo, _head) = scenario();
+    let loose = repo.path.with_file_name("loose");
+    let loose_arg = loose.to_string_lossy().into_owned();
+    repo.git(&["worktree", "add", "--detach", &loose_arg]);
+    repo.git_in(
+        &loose,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            "only the worktree has this",
+        ],
+    );
+    let tip = repo.git_in(&loose, &["rev-parse", "HEAD"]);
+    let listed = listed_as(&mut repo, &loose);
+    let release = hold_a_commit(&mut repo);
+    let (sink, session) = opened(&repo).await;
+    let drawn = sink.opened_graph(&session, 7).await;
+
+    let commit = commit_held(&sink, &session).await;
+    let id = session
+        .remove_worktree(listed, "loose".into())
+        .expect("accepted");
+    let rows = relaid(&sink, 0).await;
+    let early = answered(&sink, id);
+
+    let_the_commit_go(&sink, &release, commit).await;
+    assert!(!early, "git had not reached the removal");
+    assert!(!rows.contains(&tip), "{rows:#?}");
+    assert_eq!(rows.len() as u32, drawn.total - 1, "{rows:#?}");
+    assert_eq!(write_settled(&sink, id).await, []);
+    assert!(!loose.exists(), "git removed the folder");
+    session.close();
+}
+
+/// A worktree on no branch at `<repo>/../<folder>` with a commit nobody
+/// else holds: its listed path and that commit.
+fn loose_worktree(repo: &mut TestRepo, folder: &str) -> (String, String) {
+    let at = repo.path.with_file_name(folder);
+    let arg = at.to_string_lossy().into_owned();
+    repo.git(&["worktree", "add", "--detach", &arg]);
+    repo.git_in(
+        &at,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            "only the worktree has this",
+        ],
+    );
+    let tip = repo.git_in(&at, &["rev-parse", "HEAD"]);
+    (listed_as(repo, &at), tip)
+}
+
+/// The reads behind a removal find nothing moved — its holds went at the
+/// press — so the walk it asks for is what takes its commits out of the
+/// record: without it, the next delete's laying-out draws them back.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_landed_removal_s_commits_stay_off_the_next_delete_s_graph() {
+    let (mut repo, _head) = scenario();
+    let (listed, tip) = loose_worktree(&mut repo, "loose");
+    let unmerged = off_main(&mut repo, "unmerged");
+    let (sink, session) = opened(&repo).await;
+    sink.opened_graph(&session, 7).await;
+
+    let id = session
+        .remove_worktree(listed, "loose".into())
+        .expect("accepted");
+    assert_eq!(write_settled(&sink, id).await, []);
+    let id = session
+        .delete_branch("unmerged".into(), true)
+        .expect("accepted");
+    let rows = relaid(&sink, 1).await;
+    assert!(!rows.contains(&unmerged), "{rows:#?}");
+    assert!(
+        !rows.contains(&tip),
+        "the removed worktree's commit was drawn back: {rows:#?}"
+    );
+    assert_eq!(write_settled(&sink, id).await, []);
+    session.close();
+}
+
+/// Refused, a branchless worktree's commits are drawn again: laid out at the
+/// answer where the record still holds them, else walked behind it — here a
+/// commit lands ahead of the removal, and its walk, the holds already let
+/// go, leaves them out of the record.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_removal_puts_its_commits_back_at_the_answer() {
+    let (mut repo, _head) = scenario();
+    let (listed, tip) = loose_worktree(&mut repo, "loose");
+    // Work git will not throw away unforced.
+    std::fs::write(
+        repo.path.with_file_name("loose").join("untracked.txt"),
+        b"work\n",
+    )
+    .expect("write into the worktree");
+    let release = hold_a_commit(&mut repo);
+    let (sink, session) = opened(&repo).await;
+    // Its untracked work is a row of its own too, as this tree's staged file is.
+    sink.opened_graph(&session, 8).await;
+
+    let commit = commit_held(&sink, &session).await;
+    let id = session
+        .remove_worktree(listed, "loose".into())
+        .expect("accepted");
+    let gone = relaid(&sink, 0).await;
+
+    let_the_commit_go(&sink, &release, commit).await;
+    assert!(!gone.contains(&tip), "{gone:#?}");
+    assert!(
+        write_answer(&sink, id).await.is_some(),
+        "git kept the worktree for its untracked work"
+    );
+    let answered_at = sink
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .position(|e| matches!(e, SessionEvent::WriteFinished { id: got, .. } if *got == id));
+    let answered_at = answered_at.expect("the answer is in the record");
+    sink.wait_for("the worktree's commit drawn again", |evs| {
+        evs[answered_at..]
+            .iter()
+            .any(|e| drawn_in(e, &tip))
+            .then_some(())
+    })
+    .await;
+    assert_eq!(write_settled(&sink, id).await, []);
+    session.close();
+}
+
+/// Whether a graph event puts the commit `oid` (hex) on screen — laid out
+/// again, swapped in, or streamed.
+fn drawn_in(event: &SessionEvent, oid: &str) -> bool {
+    match event {
+        SessionEvent::LogRelaid { rows, .. } => rows.iter().any(|row| match row {
+            RelaidRow::Moved { oid: at, .. } => at.to_hex() == oid,
+            RelaidRow::Made(row) => row.oid_hex == oid,
+        }),
+        SessionEvent::LogReplaced { rows, .. } | SessionEvent::LogChunk { rows, .. } => {
+            rows.iter().any(|row| row.oid_hex == oid)
+        }
+        _ => false,
+    }
+}
+
+/// A worktree with a branch out holds no commit of its own, but marks the
+/// branch as another's: the mark goes with the press, before git runs.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_removed_worktree_s_branch_is_given_back_at_the_press() {
+    let (mut repo, _head) = scenario();
+    let out = repo.path.with_file_name("out");
+    let out_arg = out.to_string_lossy().into_owned();
+    repo.git(&["worktree", "add", "-b", "topic", &out_arg]);
+    let listed = listed_as(&mut repo, &out);
+    let release = hold_a_commit(&mut repo);
+    let (sink, session) = opened(&repo).await;
+    let held = |snapshot: &platitude_core::session::RefsSnapshot| {
+        snapshot
+            .locals
+            .iter()
+            .find(|branch| branch.short == "topic")
+            .map(|branch| branch.held_elsewhere)
+    };
+    sink.wait_for("the branch read as the worktree's", |evs| {
+        evs.iter()
+            .rev()
+            .find_map(|e| match e {
+                SessionEvent::RefsLoaded { snapshot, .. } => held(snapshot),
+                _ => None,
+            })
+            .filter(|held| *held)
+    })
+    .await;
+
+    let commit = commit_held(&sink, &session).await;
+    let from = sink.count(|_| true);
+    let id = session
+        .remove_worktree(listed, "out".into())
+        .expect("accepted");
+    sink.wait_for("the branch given back", |evs| {
+        evs[from..]
+            .iter()
+            .find_map(|e| match e {
+                SessionEvent::RefsLoaded { snapshot, .. } => held(snapshot),
+                _ => None,
+            })
+            .filter(|held| !*held)
+    })
+    .await;
+    let early = answered(&sink, id);
+
+    let_the_commit_go(&sink, &release, commit).await;
+    assert!(!early, "git had not reached the removal");
+    assert_eq!(write_settled(&sink, id).await, []);
+    session.close();
+}

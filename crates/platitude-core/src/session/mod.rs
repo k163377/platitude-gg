@@ -96,6 +96,7 @@ mod relay;
 #[cfg(test)]
 mod relay_tests;
 mod remote_tags;
+mod removals;
 mod repo_session;
 mod rows;
 mod shown_discard;

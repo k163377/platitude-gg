@@ -42,6 +42,9 @@ pub struct DetachedCheckout {
     pub oid: Oid,
     pub name: crate::Name,
     pub locked: bool,
+    /// Where it is, as [`same_path_key`] spells it — what a removal under
+    /// way names it by (`session::leaving`).
+    pub path: String,
 }
 
 impl<'a> RefJoins<'a> {
@@ -461,13 +464,17 @@ impl RepoSession {
     /// Answers which reads have to run again; the caller asks for them at
     /// once, since a session's first worktree read lands after its first
     /// refs read (rules-refs/app-ui.md「他所が持っている」).
+    ///
+    /// The heads record is the caller's (`relay::note_worktree_heads`): a
+    /// listing in hand noted again (`RepoSession::note_worktrees_going`) is
+    /// older than what the carried pass may have written since, and would
+    /// drop the row of a worktree that has committed.
     pub(super) fn note_worktree_holders(
         &self,
         worktrees: &[crate::worktrees::WorktreeEntry],
         workdir: &Path,
     ) -> WorktreeNews {
         let here = same_path_key(&workdir.to_string_lossy());
-        self.note_worktree_heads(worktrees, workdir);
         let mine = worktrees
             .iter()
             .filter(|w| !w.bare && same_path_key(&w.path) != here);
@@ -489,6 +496,7 @@ impl RepoSession {
                             oid,
                             name: shown_name(&worktree.path),
                             locked: worktree.locked,
+                            path: same_path_key(&worktree.path),
                         });
                     }
                 }

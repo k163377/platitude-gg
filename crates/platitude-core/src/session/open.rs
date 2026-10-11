@@ -209,6 +209,7 @@ impl RepoSession {
             remote_tag_index: Mutex::new(Arc::new(RemoteTagIndex::default())),
             remote_tag_gen: AtomicU64::new(0),
             worktree_holders: Mutex::new(Arc::new(super::joins::WorktreeHolders::default())),
+            worktrees_listed: Mutex::new(Arc::new(Vec::new())),
             worktree_heads: Mutex::new(Arc::new(std::collections::HashMap::new())),
             worktree_gen: AtomicU64::new(0),
             remote_tags_slot: super::auto_fetch::RemoteTagSlot::default(),

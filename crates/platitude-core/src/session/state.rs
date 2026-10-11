@@ -171,6 +171,15 @@ impl StashListings {
     pub(super) fn newest(&self) -> u64 {
         self.count
     }
+
+    /// The commit the newest listing has under `selector` (`stash@{0}`).
+    pub(super) fn oid_of(&self, selector: &str) -> Option<Oid> {
+        self.last
+            .as_ref()?
+            .iter()
+            .find(|entry| entry.name == selector)
+            .map(|entry| entry.oid)
+    }
 }
 
 /// What the worktree listing came back with — the flight's shared answer,

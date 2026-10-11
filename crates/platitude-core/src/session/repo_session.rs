@@ -254,6 +254,10 @@ pub struct RepoSession {
     /// and the graph chips get one answer between them; shared as the tag
     /// index is.
     pub(super) worktree_holders: Mutex<Arc<super::joins::WorktreeHolders>>,
+    /// The worktree listing as git last gave it, before the removals under
+    /// way were left out: what the holders are noted from again when a
+    /// removal is asked for (`RepoSession::remove_worktree`).
+    pub(super) worktrees_listed: Mutex<Arc<Vec<crate::worktrees::WorktreeEntry>>>,
     /// Where each other worktree's HEAD stood when the listing last
     /// named it, by the key its path is compared on (`joins::same_path_key`).
     ///

@@ -408,9 +408,9 @@ impl RepoSession {
 
     /// Refs and status read again, and the rebuild they ask for — the half
     /// of the page's paced read (`session::pacer`, which adds the worktree
-    /// listing) that a write landing in this tree asks for too
-    /// ([`Self::read_again`]). Stashes ride the focus and post-write
-    /// refreshes.
+    /// listing). Stashes ride the focus and post-write refreshes, and a
+    /// write landing in this tree from another session asks for both
+    /// listings too ([`Self::read_again`]).
     ///
     /// Skipped while the previous poll is still going (a slow repository
     /// polls less often) and while any write of this worktree runs
@@ -437,6 +437,11 @@ impl RepoSession {
     /// the write, so dropping this would leave a stale repository on
     /// screen. Refused, it is noted and taken by that read as it hands the
     /// slot back.
+    ///
+    /// With the stash and worktree listings: the write may be a stash drop
+    /// or a worktree removal a closed tab let run on, which moves no ref —
+    /// and nothing else this session reads would say so before the
+    /// page's own paced read comes round.
     pub(super) fn read_again(self: &Arc<Self>) {
         self.read_owed.store(true, Ordering::SeqCst);
         drop(self.start_refresh_poll());
@@ -474,8 +479,15 @@ impl RepoSession {
         // Nobody follows a tick that was taken over (`RefreshTask::ask`).
         let (finished, task) = RefreshTask::pending(None);
         self.runtime.spawn(async move {
-            let nothing_listed = async { (StashRead::default(), Listed::default()) };
-            let poll = s.poll_reads(ticket, nothing_listed).await;
+            let owed = ticket.owed;
+            let listings = async {
+                if owed {
+                    s.read_listings().await
+                } else {
+                    (StashRead::default(), Listed::default())
+                }
+            };
+            let poll = s.poll_reads(ticket, listings).await;
             // The completion is also the single-flight ownership boundary:
             // a caller woken by it must be able to start the following poll.
             if finished.send(poll.outcome).is_err() {
@@ -506,10 +518,11 @@ impl RepoSession {
         // The reads below answer for anything that landed before this
         // moment; a write landing inside them sets this again
         // ([`Self::read_again`]).
-        self.read_owed.store(false, Ordering::SeqCst);
+        let owed = self.read_owed.swap(false, Ordering::SeqCst);
         Ok(PollTicket {
             permit,
             held: self.graph_passes.enter(),
+            owed,
         })
     }
 
@@ -523,7 +536,7 @@ impl RepoSession {
         ticket: PollTicket,
         listings: impl Future<Output = (StashRead, Listed)>,
     ) -> PollRead {
-        let PollTicket { permit, held } = ticket;
+        let PollTicket { permit, held, .. } = ticket;
         // Settled before either read starts: inside the join, the status
         // read could consume the line-ending staleness before the refs
         // read sets it, leaving a withdrawn notice standing. Idempotent —
@@ -572,6 +585,10 @@ impl RepoSession {
 pub(super) struct PollTicket {
     permit: tokio::sync::OwnedSemaphorePermit,
     held: GraphPassHeld,
+    /// Whether a write landing in this tree from another session is
+    /// answered by this poll ([`RepoSession::read_again`]): it then reads
+    /// the listings too, whoever started it.
+    pub(super) owed: bool,
 }
 
 /// What a poll came to, and its place among the graph passes, held until

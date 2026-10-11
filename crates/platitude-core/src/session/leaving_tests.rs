@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use super::leaving::{Holders, Walked, doomed, footer_without, lay_walked};
+use super::leaving::{Going, Holders, Walked, doomed, footer_without, lay_walked};
 use super::model::LabelIndex;
 use super::relay::Standing;
 use super::{BranchItem, Footer, LabelKind, LogRow, RefLabel, RefsSnapshot, RelaidRow, RowPrint};
@@ -168,7 +168,11 @@ fn holders(locals: Vec<BranchItem>, tags: bool) -> Holders {
 /// Whether commit 5, wearing `chips`, stays while `leaving` goes.
 fn held(holders: &Holders, chips: Vec<RefLabel>, leaving: &[&str]) -> bool {
     let labels = LabelIndex::from_pairs(chips.into_iter().map(|chip| (oid(5), chip)).collect());
-    holders.hold(&oid(5), false, &labels, &leaving.iter().copied().collect())
+    let going = Going {
+        refs: leaving.iter().copied().collect(),
+        ..Going::default()
+    };
+    holders.hold(&oid(5), false, &labels, &going)
 }
 
 /// A remote branch on the same commit rides on the local chip, and holds
@@ -230,16 +234,11 @@ fn a_tag_holds_only_where_the_walk_starts_from_it() {
 #[test]
 fn head_a_stash_a_merge_side_and_a_worktree_hold_what_they_stand_on() {
     let none = LabelIndex::default();
-    let nothing = HashSet::new();
+    let nothing = Going::default();
     let plain = holders(Vec::new(), true);
     assert!(!plain.hold(&oid(5), false, &none, &nothing));
     assert!(plain.hold(&oid(5), true, &none, &nothing), "a stash");
     assert!(held(&plain, vec![label("HEAD", LabelKind::Head)], &[]));
-    assert!(held(
-        &plain,
-        vec![label("worktree", LabelKind::Worktree)],
-        &[]
-    ));
     for standing in [
         Holders {
             head_tip: Some(oid(5)),
@@ -250,7 +249,7 @@ fn head_a_stash_a_merge_side_and_a_worktree_hold_what_they_stand_on() {
             ..holders(Vec::new(), true)
         },
         Holders {
-            detached: vec![oid(5)],
+            detached: vec![("c:/work/spike".to_string(), oid(5))],
             ..holders(Vec::new(), true)
         },
         Holders {
@@ -260,6 +259,85 @@ fn head_a_stash_a_merge_side_and_a_worktree_hold_what_they_stand_on() {
     ] {
         assert!(standing.hold(&oid(5), false, &none, &nothing));
     }
+}
+
+/// A worktree on no branch is known by where it is: its chip names the folder
+/// alone, which two worktrees can share.
+#[test]
+fn a_worktree_going_lets_go_of_its_commit_and_another_on_it_holds_on() {
+    let none = LabelIndex::default();
+    let going = Going {
+        worktrees: ["c:/work/spike"].into(),
+        ..Going::default()
+    };
+    let alone = Holders {
+        detached: vec![("c:/work/spike".to_string(), oid(5))],
+        ..holders(Vec::new(), true)
+    };
+    assert!(!alone.hold(&oid(5), false, &none, &going));
+    let beside = Holders {
+        detached: vec![
+            ("c:/work/spike".to_string(), oid(5)),
+            ("c:/other/spike".to_string(), oid(5)),
+        ],
+        ..holders(Vec::new(), true)
+    };
+    assert!(beside.hold(&oid(5), false, &none, &going));
+    assert!(
+        !held(
+            &holders(Vec::new(), true),
+            vec![label("spike", LabelKind::Worktree)],
+            &[]
+        ),
+        "the chip says nothing the listing does not: a worktree gone from it holds nothing"
+    );
+}
+
+/// A stash going lets go of its own row; another stash's row still holds.
+#[test]
+fn a_stash_going_lets_go_of_its_row() {
+    let none = LabelIndex::default();
+    let going = Going {
+        stashes: [oid(7)].into(),
+        ..Going::default()
+    };
+    let plain = holders(Vec::new(), true);
+    assert!(!plain.hold(&oid(7), true, &none, &going));
+    assert!(plain.hold(&oid(6), true, &none, &going));
+}
+
+/// The stash's row goes, and the commits only it reached with it.
+#[test]
+fn a_stash_dropped_takes_its_row_and_what_only_it_reached() {
+    let mut stashed = vec![(7, &[4][..], true)];
+    stashed.extend(forked());
+    let walked = Walked::of(&walk(&stashed));
+    let going = Going {
+        stashes: [oid(7)].into(),
+        ..Going::default()
+    };
+    let plain = holders(Vec::new(), true);
+    let labels = LabelIndex::default();
+    let named = |names: &[u8]| -> Vec<u8> {
+        let named: HashSet<Oid> = names.iter().map(|n| oid(*n)).collect();
+        ids(&doomed(&walked, &[oid(7)], |at, stash| {
+            named.contains(at) || plain.hold(at, stash, &labels, &going)
+        }))
+    };
+    assert_eq!(named(&[3, 5]), [7], "the topic's 5 reaches 4");
+    // The topic gone before it: the stash was all that held 4 on screen.
+    let mut orphaned = vec![(7, &[4][..], true)];
+    orphaned.extend([
+        (3, &[2][..], false),
+        (4, &[2][..], false),
+        (2, &[1][..], false),
+        (1, &[][..], false),
+    ]);
+    let walked = Walked::of(&walk(&orphaned));
+    let gone = doomed(&walked, &[oid(7)], |at, stash| {
+        *at == oid(3) || plain.hold(at, stash, &labels, &going)
+    });
+    assert_eq!(ids(&gone), [4, 7]);
 }
 
 #[test]
