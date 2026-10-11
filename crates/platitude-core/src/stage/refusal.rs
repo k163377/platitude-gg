@@ -45,6 +45,37 @@ pub(super) fn moved(kind: ReportKind, command: String, out: &GitOutput) -> GitEr
     crate::report::reported(WriteReport::local(kind), command, out)
 }
 
+/// git turning a stage, an unstage or a discard down because another git
+/// held the index's lock (`index.lock': File exists`, the same at the
+/// minimum and 2.55) — a report, as a commit's is; any other failure goes
+/// through as it was. `kind` is the lock's report for that verb
+/// ([`ReportKind::StageLocked`] and the two beside it).
+pub(super) fn locked_out(kind: ReportKind) -> impl Fn(GitError) -> GitError {
+    move |error| match error {
+        GitError::Failed {
+            command,
+            code,
+            stderr,
+        } if crate::report::lock_taken(&stderr) => GitError::Reported {
+            command,
+            code,
+            stderr,
+            report: Box::new(WriteReport::local(kind)),
+        },
+        other => other,
+    }
+}
+
+/// The lock's report for the verb a part was taken in ([`taking`]'s or the
+/// discard's stale kind).
+pub(super) fn locked_kind(stale: ReportKind) -> ReportKind {
+    match stale {
+        ReportKind::StaleUnstage => ReportKind::UnstageLocked,
+        ReportKind::StaleDiscard => ReportKind::DiscardLocked,
+        _ => ReportKind::StageLocked,
+    }
+}
+
 /// A refusal this end made before git was asked. Nothing ran, so the
 /// screen says both lines in its own language (デザイン規約
 /// §答えの要らない報せ).

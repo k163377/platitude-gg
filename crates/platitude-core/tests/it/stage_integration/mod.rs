@@ -4,6 +4,7 @@
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 mod line_endings;
+mod new_and_converted;
 mod partial;
 mod refusals;
 mod whole;

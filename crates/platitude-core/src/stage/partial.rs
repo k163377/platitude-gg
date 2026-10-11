@@ -15,7 +15,9 @@ use crate::report::ReportKind;
 use crate::scratch::ScratchFile;
 
 use super::endings;
-use super::refusal::{moved, refuse_combined, stale, taking, verify_fingerprint};
+use super::refusal::{
+    locked_kind, locked_out, moved, refuse_combined, stale, taking, verify_fingerprint,
+};
 use super::whole::unstage_paths;
 
 /// Stages or unstages part of one file's diff.
@@ -30,7 +32,9 @@ use super::whole::unstage_paths;
 /// [`DiffTarget::Untracked`] is marked intent-to-add first (git's own
 /// requirement for partially staging a new file), then treated as unstaged.
 /// Its fingerprint is checked *before* the mark: marking first would change
-/// which command the diff even is.
+/// which command the diff even is. The diff read after the mark, which the
+/// patch is built from, has to hold the same hunks as the one checked — a
+/// file moved in between would have the selection counted in other lines.
 pub async fn apply_partial(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -45,8 +49,18 @@ pub async fn apply_partial(
     let workdir = repo.workdir.as_path();
 
     let (target, side, verify, intent_path) = match target {
-        DiffTarget::Unstaged { .. } => (target.clone(), PatchSide::Forward, Some(seen), None),
-        DiffTarget::Staged { .. } => (target.clone(), PatchSide::Reverse, Some(seen), None),
+        DiffTarget::Unstaged { .. } => (
+            target.clone(),
+            PatchSide::Forward,
+            Verify::Print(seen),
+            None,
+        ),
+        DiffTarget::Staged { .. } => (
+            target.clone(),
+            PatchSide::Reverse,
+            Verify::Print(seen),
+            None,
+        ),
         DiffTarget::Untracked { path } => {
             let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
             verify_fingerprint(&raw, seen, taking(PatchSide::Forward))?;
@@ -54,11 +68,14 @@ pub async fn apply_partial(
                 .cwd(workdir)
                 .args(["add", "--intent-to-add", "--"])
                 .arg(literal_pathspec(path));
-            executor.run(cmd, cancel).await?;
+            executor
+                .run(cmd, cancel)
+                .await
+                .map_err(locked_out(ReportKind::StageLocked))?;
             (
                 DiffTarget::Unstaged { path: path.clone() },
                 PatchSide::Forward,
-                None,
+                Verify::Hunks(raw),
                 Some(path.clone()),
             )
         }
@@ -86,21 +103,33 @@ pub async fn apply_partial(
     result
 }
 
-/// The staging half of [`apply_partial`]. `verify` is `None` when the
-/// untracked arm already checked the fingerprint.
+/// What the diff read for the patch is checked against: the fingerprint the
+/// selection was made on, or — for an untracked file, whose fingerprint was
+/// checked on the `--no-index` read before the intent-to-add mark — that
+/// read's hunks.
+enum Verify {
+    Print(u64),
+    Hunks(Vec<u8>),
+}
+
+/// The staging half of [`apply_partial`].
 async fn apply_prepared(
     executor: &GitExecutor,
     repo: &RepoInfo,
     target: &DiffTarget,
     selects: &[HunkSelect],
     side: PatchSide,
-    verify: Option<u64>,
+    verify: Verify,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let workdir = repo.workdir.as_path();
     let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
-    if let Some(seen) = verify {
-        verify_fingerprint(&raw, seen, taking(side))?;
+    match &verify {
+        Verify::Print(seen) => verify_fingerprint(&raw, *seen, taking(side))?,
+        Verify::Hunks(checked) if hunks_of(checked) != hunks_of(&raw) => {
+            return Err(stale(taking(side)));
+        }
+        Verify::Hunks(_) => {}
     }
     refuse_combined(&raw)?;
     let Some(built) = patch::build_partial(&raw, selects, side) else {
@@ -131,8 +160,10 @@ async fn apply_prepared(
 /// the patch does not fit what is there (`patch does not apply`, `does not
 /// exist in index`, `No such file or directory`) with nothing written; when
 /// the diff reads differently now, the file moved after the fingerprint
-/// check and it is `kind`'s refusal. A diff that reads the same was turned
-/// down for a reason of git's own, and git's words are the answer.
+/// check and it is `kind`'s refusal. Another git holding the index (128 —
+/// only `--cached` takes its lock) is the lock's report for the same verb
+/// ([`locked_kind`]). A diff that reads the same was turned down for a
+/// reason of git's own, and git's words are the answer.
 async fn apply_built(
     executor: &GitExecutor,
     workdir: &Path,
@@ -155,11 +186,23 @@ async fn apply_built(
     {
         return Err(moved(kind, command, &out));
     }
-    Err(GitError::Failed {
+    Err(locked_out(locked_kind(kind))(GitError::Failed {
         command,
         code: out.code,
         stderr: out.failure_message(),
-    })
+    }))
+}
+
+/// A diff's hunks, its file header left off — what a selection's indexes
+/// count in. The `--no-index` read of an untracked file and the read of the
+/// same file marked intent-to-add differ in the header alone.
+fn hunks_of(raw: &[u8]) -> &[u8] {
+    if raw.starts_with(b"@@") {
+        return raw;
+    }
+    raw.windows(3)
+        .position(|w| w == b"\n@@")
+        .map_or(&[], |at| &raw[at + 1..])
 }
 
 /// Throws away part of one file's unstaged diff: built like an unstaging

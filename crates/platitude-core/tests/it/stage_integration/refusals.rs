@@ -413,6 +413,53 @@ async fn a_stale_untracked_selection_is_refused_before_the_mark() {
     assert_eq!(untracked, vec!["new.txt"]);
 }
 
+/// The fingerprint is checked before the intent-to-add mark, and the patch
+/// is built from the diff read after it: a file that moves in between would
+/// have the selection's lines counted in the new bytes, staging others than
+/// the ones chosen. A `post-index-change` hook moves it right after the
+/// mark, the once: the hunks read after it are not the ones checked, so the
+/// stage is refused as stale and the mark taken back.
+#[tokio::test]
+async fn an_untracked_file_that_moves_under_the_mark_is_refused_as_stale() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.write_file("new.txt", "keep\ndrop\n");
+    repo.write_hook(
+        "post-index-change",
+        "[ -e moved ] && exit 0\n: > moved\nprintf 'pushed in\\nkeep\\ndrop\\n' > new.txt\n",
+    );
+    repo.write_file(".git/info/exclude", "moved\n");
+    let repo_info = info(&repo).await;
+    let (exec, cancel) = env();
+    let target = DiffTarget::Untracked {
+        path: "new.txt".into(),
+    };
+    let seen = fp(&repo_info, &target).await;
+
+    // Body: 0 "+keep", 1 "+drop" — keep only the first.
+    let err = stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::lines(0, [0])],
+        seen,
+        &cancel,
+    )
+    .await
+    .expect_err("the file moved under the mark");
+    assert_eq!(
+        err.report().map(|r| r.kind),
+        Some(ReportKind::StaleStage),
+        "{err}"
+    );
+    let (staged, unstaged, untracked) = buckets(&repo).await;
+    assert!(
+        staged.is_empty() && unstaged.is_empty(),
+        "no mark left, nothing staged: {staged:?} {unstaged:?}"
+    );
+    assert_eq!(untracked, vec!["new.txt"]);
+}
+
 /// A conflicted file's diff is the combined form, which has no single old
 /// side for a rebuilt patch (`git apply` refuses it). The pane withholds
 /// the pieces there; this is the floor under that, in this app's words.
@@ -477,4 +524,191 @@ async fn no_part_of_a_conflicted_file_can_be_taken_or_thrown_away() {
             .contains("<<<<<<<"),
         "the markers are untouched"
     );
+}
+
+/// `a.txt` changed in the working tree, `s.txt` changed and staged.
+fn staged_and_unstaged() -> TestRepo {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\ntwo\n", "root");
+    repo.commit_file("s.txt", "s\n", "staged one");
+    repo.write_file("s.txt", "s staged\n");
+    repo.git(&["add", "s.txt"]);
+    repo.write_file("a.txt", "one\ntwo changed\n");
+    repo
+}
+
+fn report_kind(err: platitude_core::GitError) -> Option<ReportKind> {
+    err.report().map(|r| r.kind)
+}
+
+/// Another git holding the index's lock turns every whole-file verb down,
+/// and each is the lock's report for its verb, as a commit's is. Nothing
+/// moves.
+#[tokio::test]
+async fn another_gits_index_lock_is_reported_for_each_whole_file_verb() {
+    let repo = staged_and_unstaged();
+    let (exec, cancel) = env();
+    let before = buckets(&repo).await;
+    let lock = repo.path.join(".git/index.lock");
+    std::fs::write(&lock, "").expect("lock");
+    let a = || vec!["a.txt".to_string()];
+    let s = || vec!["s.txt".to_string()];
+    let side = vec![("a.txt".to_string(), stage::DiscardSide::Unstaged)];
+
+    let refused = [
+        (
+            report_kind(
+                stage::stage_paths(&exec, &repo.path, &a(), &cancel)
+                    .await
+                    .unwrap_err(),
+            ),
+            ReportKind::StageLocked,
+        ),
+        (
+            report_kind(
+                stage::stage_all(&exec, &repo.path, &cancel)
+                    .await
+                    .unwrap_err(),
+            ),
+            ReportKind::StageLocked,
+        ),
+        (
+            report_kind(
+                stage::unstage_paths(&exec, &repo.path, &s(), &cancel)
+                    .await
+                    .unwrap_err(),
+            ),
+            ReportKind::UnstageLocked,
+        ),
+        (
+            report_kind(
+                stage::unstage_all(&exec, &repo.path, &cancel)
+                    .await
+                    .unwrap_err(),
+            ),
+            ReportKind::UnstageLocked,
+        ),
+        (
+            report_kind(
+                stage::discard_rows(&exec, &repo.path, &side, &cancel)
+                    .await
+                    .unwrap_err(),
+            ),
+            ReportKind::DiscardLocked,
+        ),
+    ];
+    std::fs::remove_file(&lock).expect("unlock");
+
+    for (got, owed) in refused {
+        assert_eq!(got, Some(owed));
+    }
+    let after = buckets(&repo).await;
+    assert_eq!(after.0, before.0, "nothing was staged or unstaged");
+    assert_eq!(after.1, before.1, "nothing was thrown away");
+}
+
+/// "Nothing was discarded" holds only until a side has gone: a lock met by
+/// the staged side, after the unstaged one went, is git's failure as git
+/// said it. The lock is taken between the two by a `post-index-change`
+/// hook, which runs once the first side's write has let the index go.
+#[tokio::test]
+async fn a_lock_met_after_a_side_was_discarded_is_gits_failure() {
+    let repo = staged_and_unstaged();
+    repo.write_hook("post-index-change", "touch .git/index.lock\n");
+    let (exec, cancel) = env();
+    let rows = vec![
+        ("a.txt".to_string(), stage::DiscardSide::Unstaged),
+        ("s.txt".to_string(), stage::DiscardSide::Staged),
+    ];
+
+    let err = stage::discard_rows(&exec, &repo.path, &rows, &cancel)
+        .await
+        .unwrap_err();
+    let lock = repo.path.join(".git/index.lock");
+    assert!(lock.exists(), "the hook took the lock between the sides");
+    std::fs::remove_file(&lock).expect("unlock");
+    match &err {
+        platitude_core::GitError::Failed { stderr, .. } => {
+            assert!(stderr.contains("index.lock': File exists"), "{stderr}");
+        }
+        other => panic!("past a side that went, git's own failure: {other:?}"),
+    }
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("a.txt")).expect("read"),
+        "one\ntwo\n",
+        "the unstaged side went"
+    );
+}
+
+/// The same lock turns a part staged or unstaged down with the lock's
+/// report for its verb. A part thrown away writes the working tree alone,
+/// takes no lock, and goes.
+#[tokio::test]
+async fn another_gits_index_lock_turns_parts_down_but_not_a_part_thrown_away() {
+    let repo = staged_and_unstaged();
+    let repo_info = info(&repo).await;
+    let (exec, cancel) = env();
+    let unstaged = DiffTarget::Unstaged {
+        path: "a.txt".into(),
+    };
+    let staged = DiffTarget::Staged {
+        path: "s.txt".into(),
+        orig_path: None,
+    };
+    let seen_unstaged = fp(&repo_info, &unstaged).await;
+    let seen_staged = fp(&repo_info, &staged).await;
+    let lock = repo.path.join(".git/index.lock");
+    std::fs::write(&lock, "").expect("lock");
+
+    let refused = [
+        (
+            report_kind(
+                stage::apply_partial(
+                    &exec,
+                    &repo_info,
+                    &unstaged,
+                    &[HunkSelect::whole(0)],
+                    seen_unstaged,
+                    &cancel,
+                )
+                .await
+                .unwrap_err(),
+            ),
+            ReportKind::StageLocked,
+        ),
+        (
+            report_kind(
+                stage::apply_partial(
+                    &exec,
+                    &repo_info,
+                    &staged,
+                    &[HunkSelect::whole(0)],
+                    seen_staged,
+                    &cancel,
+                )
+                .await
+                .unwrap_err(),
+            ),
+            ReportKind::UnstageLocked,
+        ),
+    ];
+    let before = buckets(&repo).await;
+    stage::discard_partial(
+        &exec,
+        &repo_info,
+        &unstaged,
+        &[HunkSelect::whole(0)],
+        seen_unstaged,
+        &cancel,
+    )
+    .await
+    .expect("a part thrown away writes no index");
+    std::fs::remove_file(&lock).expect("unlock");
+
+    for (got, owed) in refused {
+        assert_eq!(got, Some(owed));
+    }
+    let (staged_now, unstaged_now, _) = buckets(&repo).await;
+    assert_eq!(staged_now, before.0, "nothing was staged or unstaged");
+    assert!(unstaged_now.is_empty(), "the part went: {unstaged_now:?}");
 }

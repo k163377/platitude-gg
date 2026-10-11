@@ -13,8 +13,14 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 use crate::refs;
+use crate::report::ReportKind;
 use crate::status::{self, StatusItem};
 
+use super::refusal::locked_out;
+
+/// Runs `cmd` over `paths`, nothing for none. The callers whose command
+/// takes the index's lock name its report for a lock git met
+/// ([`locked_out`]).
 async fn run_over_paths(
     executor: &GitExecutor,
     cmd: GitCommand,
@@ -46,7 +52,9 @@ pub async fn stage_paths(
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let cmd = GitCommand::new().cwd(workdir).args(["add", "--"]);
-    run_over_paths(executor, cmd, paths, cancel).await
+    run_over_paths(executor, cmd, paths, cancel)
+        .await
+        .map_err(locked_out(ReportKind::StageLocked))
 }
 
 /// `git add --all`: untracked files included — never the tracked-only
@@ -57,7 +65,11 @@ pub async fn stage_all(
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let cmd = GitCommand::new().cwd(workdir).args(["add", "--all"]);
-    executor.run(cmd, cancel).await.map(drop)
+    executor
+        .run(cmd, cancel)
+        .await
+        .map(drop)
+        .map_err(locked_out(ReportKind::StageLocked))
 }
 
 /// Empties the index back to HEAD, leaving the working tree alone.
@@ -82,7 +94,11 @@ pub async fn unstage_all(
     } else {
         GitCommand::new().cwd(workdir).args(["reset", "--quiet"])
     };
-    executor.run(cmd, cancel).await.map(drop)
+    executor
+        .run(cmd, cancel)
+        .await
+        .map(drop)
+        .map_err(locked_out(ReportKind::UnstageLocked))
 }
 
 /// Removes staged changes for `paths`, keeping the working tree as-is.
@@ -109,7 +125,9 @@ pub async fn unstage_paths(
             .cwd(workdir)
             .args(["restore", "--staged", "--"])
     };
-    run_over_paths(executor, cmd, paths, cancel).await
+    run_over_paths(executor, cmd, paths, cancel)
+        .await
+        .map_err(locked_out(ReportKind::UnstageLocked))
 }
 
 /// `git restore --worktree -- <paths>`: throws away unstaged modifications
@@ -123,7 +141,9 @@ pub async fn discard_working_tree(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["restore", "--worktree", "--"]);
-    run_over_paths(executor, cmd, paths, cancel).await
+    run_over_paths(executor, cmd, paths, cancel)
+        .await
+        .map_err(locked_out(ReportKind::DiscardLocked))
 }
 
 /// `git restore --staged --worktree -- <paths>`: throws away both sides at
@@ -152,7 +172,9 @@ pub async fn discard_to_head(
             .cwd(workdir)
             .args(["restore", "--staged", "--worktree", "--"])
     };
-    run_over_paths(executor, cmd, paths, cancel).await
+    run_over_paths(executor, cmd, paths, cancel)
+        .await
+        .map_err(locked_out(ReportKind::DiscardLocked))
 }
 
 /// `git clean -f -d -- <paths>`: deletes untracked files. `-d` so a
@@ -165,6 +187,7 @@ pub async fn remove_untracked(
     paths: &[String],
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
+    // `clean` reads the index and never writes it, so it takes no lock.
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["clean", "-f", "-d", "--"]);
@@ -260,7 +283,22 @@ pub async fn discard_rows(
     }
     discard_working_tree(executor, workdir, &unstaged, cancel).await?;
     remove_untracked(executor, workdir, &untracked, cancel).await?;
-    discard_to_head(executor, workdir, &staged, cancel).await
+    let last = discard_to_head(executor, workdir, &staged, cancel).await;
+    // "Nothing was discarded" is the lock's report only while it is true:
+    // past a side that went, git's own failure is the answer.
+    match last {
+        Err(GitError::Reported {
+            command,
+            code,
+            stderr,
+            ..
+        }) if !unstaged.is_empty() || !untracked.is_empty() => Err(GitError::Failed {
+            command,
+            code,
+            stderr,
+        }),
+        last => last,
+    }
 }
 
 #[cfg(test)]
