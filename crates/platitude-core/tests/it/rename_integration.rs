@@ -178,6 +178,28 @@ async fn a_stash_gone_since_the_selection_is_turned_down() {
     );
 }
 
+/// What the name boxes refuse beside the names already there
+/// (`RefsSnapshot::local_clash` / `tag_clash`): git keeps a ref as a
+/// file, so `a` and `a/b` cannot both be, either way round, for a branch
+/// or a tag. Letter case is the disk's to decide and is not held here.
+#[test]
+fn git_refuses_a_name_that_is_a_folder_of_another() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.git(&["branch", "solo"]);
+    repo.git(&["branch", "group/member"]);
+    repo.git(&["tag", "v1"]);
+    repo.git(&["tag", "rc/1"]);
+    for (args, why) in [
+        (["branch", "solo/inner"], "a branch under a branch"),
+        (["branch", "group"], "a branch over a folder of branches"),
+        (["tag", "v1/patch"], "a tag under a tag"),
+        (["tag", "rc"], "a tag over a folder of tags"),
+    ] {
+        assert!(!repo.git_ok(&args), "{why}");
+    }
+}
+
 #[tokio::test]
 async fn the_name_rules_are_the_ones_git_applies() {
     let mut repo = TestRepo::init();
@@ -217,9 +239,16 @@ async fn the_name_rules_are_the_ones_git_applies() {
     for name in names {
         let git_says = repo.git_ok(&["check-ref-format", &format!("refs/heads/{name}")]);
         assert_eq!(
-            tag::is_valid_name(name),
+            tag::ref_format_ok(name),
             git_says,
             "disagreed about {name:?} (git says {git_says})"
         );
     }
+    // Past the format, the two names `git tag` itself turns down (2.55's
+    // `check_tag_ref`; 2.43 still makes `refs/tags/HEAD`), as a branch's
+    // box does (`branch::is_valid_name`).
+    for name in ["-dash", "HEAD"] {
+        assert!(!tag::is_valid_name(name), "{name:?}");
+    }
+    assert!(tag::is_valid_name("HEADS-UP"), "only the whole name");
 }

@@ -92,6 +92,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   turned away the way a forge turns one away from a
                   protected branch, and it holds a tag as well
                   (remote-refused, tag-refused)
+        reflock   basic, with a lock on refs/heads/held as another git
+                  would hold it mid-write: the rename git turns down for a
+                  reason no name box can see (rename-taken held)
         marker    HEAD made empty on purpose (--allow-empty) over a clean
                   tree: the amend that rewrites its message alone
                   (amend <message>)
@@ -216,12 +219,13 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   out in another worktree, one commit past that reading: the
                   one shape where a REMOTES row opens on all three of
                   its lines (nav-open)
-        worktree-places  where new worktrees would go, two of them in
+        worktree-places  where new worktrees would go, three of them in
                   the way before the press: feature/blocked's folder
                   holds a file, git still lists a worktree at fix/listed's,
-                  and feature/free's is free — as is the folder of one
-                  branch named too long for the menu row to hold
-                  (worktree-add-menu, worktree-box)
+                  and fix/rebasing is held by a worktree stopped part-way
+                  through a rebase (listed detached); feature/free's is
+                  free — as is the folder of one branch named too long
+                  for the menu row to hold (worktree-add-menu, worktree-box)
         longnames every name the operation panel writes, long enough to
                   be cut — a branch ahead and behind its upstream, and a
                   worktree with a folder of its own (ops-panel <width>,

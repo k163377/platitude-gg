@@ -32,22 +32,46 @@ QtObject {
     /// (デザイン規約 §worktree を作る).
     readonly property string createWorktreeHere: qsTr("Create worktree here…")
 
-    /// A name box's refusal of a name git's rules turn down (`GitFacts.validRefName`) — the graph's box, the left
-    /// menu's, and the new worktree's, asked by a branch's rules (`worktreeNameRefused`, `GitFacts.validBranchName`).
+    /// A name box's refusal of a name git's rules turn down — a branch's (`GitFacts.validBranchName`) or a tag's
+    /// (`GitFacts.validTagName`), in the graph's box, the left menu's and the new worktree's alike.
     readonly property string notAName: qsTr("git will not take this as a name")
 
+    /// Why a name cannot stand beside the branches or tags already there (`NavSectionModel.nameClash`, undefined where
+    /// nothing is in the way): one of that name, one under it or above it — one sentence each way, naming which of
+    /// the two would have to be the folder — or one that differs only in letter case. `tag` picks the noun. Said
+    /// before the press by every box that makes or renames a branch or a tag (デザイン規約 §左メニューの所作「名前の衝突」).
+    function nameClashed(clash, tag) {
+        if (clash === undefined)
+            return ""
+        switch (clash.kind) {
+        case "taken": return tag ? qsTr("A tag called that already exists")
+                                 : qsTr("A branch called that already exists")
+        //: %1 is the branch or tag under the typed name: `a` typed beside `a/b`.
+        case "holds": return qsTr("%1 already uses this name as a folder").arg(clash.with)
+        //: %1 is the branch or tag the typed name would go inside: `a/b` typed beside `a`.
+        case "under": return tag ? qsTr("%1 is already a tag and cannot also be a folder").arg(clash.with)
+                                 : qsTr("%1 is already a branch and cannot also be a folder").arg(clash.with)
+        //: %1 is the branch or tag whose name differs from the typed one only in letter case.
+        case "case": return qsTr("%1 differs only in letter case — some disks take it for the same name")
+                                .arg(clash.with)
+        default: return ""
+        }
+    }
+
     /// Why the name typed into the new-worktree box cannot be taken — the box's tip in the graph and in the left
-    /// menu alike, everything git would refuse that this end can see, said before the press. `branchTaken` is whether
-    /// a branch of that name is there; `place` what `NavSectionModel.newWorktreeFor` answered for it. Empty while
-    /// nothing is typed: a box opened empty would turn the reader's arrival down (デザイン規約 §可否・警告の出し場所).
-    function worktreeNameRefused(typed, branchTaken, place) {
+    /// menu alike, everything git would refuse that this end can see, said before the press. `clash` is what
+    /// `NavSectionModel.nameClash` answered for it among the branches; `place` what `NavSectionModel.newWorktreeFor`
+    /// answered. Empty while nothing is typed: a box opened empty would turn the reader's arrival down
+    /// (デザイン規約 §可否・警告の出し場所).
+    function worktreeNameRefused(typed, clash, place) {
         const name = typed.trim()
         if (name === "")
             return ""
         if (!GitFacts.validBranchName(name))
             return Words.notAName
-        if (branchTaken)
-            return qsTr("A branch called that already exists")
+        const clashed = Words.nameClashed(clash, false)
+        if (clashed !== "")
+            return clashed
         return place === undefined ? "" : Words.worktreePlaceTaken(place.taken, place.name)
     }
 

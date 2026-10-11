@@ -69,6 +69,7 @@ Rectangle {
         remotesModel: sidebar.remotesModel
         branchesModel: sidebar.branchesModel
         worktreesModel: sidebar.worktreesModel
+        tagsModel: sidebar.tagsModel
     }
     /// Where this panel last saw the hand, in its own coordinates.
     property point handAt: Qt.point(-1, -1)

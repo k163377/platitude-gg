@@ -1,7 +1,7 @@
 //! The preset for the WORKTREES section: every annotation `git worktree
 //! list` can put on an entry, in one repository.
 
-use super::repo::{DemoRepo, file_url};
+use super::repo::{DemoRepo, file_url, output_of};
 
 /// Other worktrees with something uncommitted in them, so the rows
 /// they draw on the graph have something to say. Its own preset because
@@ -281,6 +281,9 @@ pub(super) fn worktree_detached(repo: &mut DemoRepo) -> Result<(), String> {
 /// file somebody left there; and git still lists a worktree at
 /// `fix/listed`'s, whose folder was taken away by hand. One more branch
 /// has a free folder too long for the menu row, which the hover gives back.
+/// And `fix/rebasing` is held by a worktree of its own stopped part-way
+/// through a rebase, which the list shows detached: git still refuses to
+/// check the branch out anywhere else (`is already used by worktree at`).
 pub(super) fn worktree_places(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -293,7 +296,18 @@ pub(super) fn worktree_places(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["branch", "fix/listed"])?;
     repo.commit("src/lib.txt", "lib v1\n", "feat: add the library")?;
     repo.git(&["branch", "feature/free"])?;
+    repo.git(&["branch", "fix/rebasing"])?;
     repo.commit("docs/guide.md", "guide v1\n", "docs: add a guide")?;
+
+    // Beside the places rather than in one, so the only thing in the way
+    // of `fix/rebasing` is the rebase holding it.
+    repo.git(&["worktree", "add", "../rebasing", "fix/rebasing"])?;
+    let rebasing = repo.root.join("rebasing");
+    output_of(&mut repo.command(&rebasing, &["rebase", "--exec", "exit 1", "HEAD~1"]))?;
+    let marker = repo.work.join(".git/worktrees/rebasing/rebase-merge");
+    if !marker.exists() {
+        return Err("the rebase in ../rebasing was expected to stop, but none is standing".into());
+    }
 
     let places = repo.root.join("repo.worktrees");
     let blocked = places.join("feature-blocked");

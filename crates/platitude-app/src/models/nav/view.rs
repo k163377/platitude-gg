@@ -264,23 +264,27 @@ impl NavSectionModel {
 
     /// The path of the other worktree holding `branch` (contract on
     /// the `worktree_holding` slot). Not `told`: two fields decide it — the
-    /// row's branch, and not being this window's own worktree.
+    /// row's branch, and not being this window's own worktree. A rebase or
+    /// bisect standing in a worktree holds its branch too, listed
+    /// detached (`WorktreeEntry::held`).
     pub(super) fn worktree_with(&self, branch: &str) -> String {
         if branch.is_empty() || self.section != "worktrees" {
             return String::new();
         }
         (0..self.all.len())
             .filter_map(|at| self.all.entry(at))
-            .map(|of| Row::Shown {
-                of,
-                depth: 0,
-                from: 0,
+            .find_map(|of| {
+                let held = matches!(of, Entry::Worktree { entry, .. }
+                    if entry.held.as_deref() == Some(branch));
+                let row = Row::Shown {
+                    of,
+                    depth: 0,
+                    from: 0,
+                };
+                ((held || self.field(row, Role::Bucket).as_str() == branch)
+                    && !self.field(row, Role::IsHead).flag())
+                .then(|| self.field(row, Role::Full).as_str().to_string())
             })
-            .find(|row| {
-                self.field(*row, Role::Bucket).as_str() == branch
-                    && !self.field(*row, Role::IsHead).flag()
-            })
-            .map(|row| self.field(row, Role::Full).as_str().to_string())
             .unwrap_or_default()
     }
 

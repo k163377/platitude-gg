@@ -378,6 +378,7 @@ fn the_short_sections_read_out_of_what_arrived() {
             prune_reason: String::new(),
             // A real listing always opens with the repository's own worktree.
             main: path.ends_with("repo"),
+            held: None,
         }
     };
     let mut model = section(
@@ -427,6 +428,7 @@ fn a_worktree_row_wears_the_state_of_its_checkout() {
                 String::new()
             },
             main: path.ends_with("home"),
+            held: None,
         }
     };
     let mut model = section(
@@ -533,6 +535,8 @@ fn a_branch_another_worktree_holds_wears_the_state_in_the_shared_slot() {
         remotes: Vec::new(),
         tags: Vec::new(),
         tags_by_name: Vec::new(),
+        locals_folded: Vec::new(),
+        tags_folded: Vec::new(),
         tag_drifts: Vec::new(),
         remote_tags: Arc::default(),
         head: None,
@@ -585,6 +589,8 @@ fn a_branch_carries_the_upstream_that_is_not_here_in_the_shared_slot() {
         remotes: Vec::new(),
         tags: Vec::new(),
         tags_by_name: Vec::new(),
+        locals_folded: Vec::new(),
+        tags_folded: Vec::new(),
         tag_drifts: Vec::new(),
         remote_tags: Arc::default(),
         head: None,
@@ -620,6 +626,7 @@ fn the_worktree_holding_a_branch_answers_for_every_other_worktree() {
         prunable: false,
         prune_reason: String::new(),
         main: path.ends_with("repo"),
+        held: None,
     };
     let mut model = section(
         "worktrees",
@@ -641,4 +648,40 @@ fn the_worktree_holding_a_branch_answers_for_every_other_worktree() {
     assert_eq!(model.worktree_holding("nobody".to_string()), "");
     // A detached row names no branch; the empty string finds nothing.
     assert_eq!(model.worktree_holding(String::new()), "");
+}
+
+/// A worktree stopped part-way through a rebase is listed detached, yet
+/// holds its branch as git counts it (`WorktreeEntry::held`).
+#[test]
+fn a_branch_a_stopped_rebase_holds_is_held_by_that_worktree() {
+    let entry = |path: &str, branch: Option<&str>, held: Option<&str>| {
+        platitude_core::worktrees::WorktreeEntry {
+            path: path.to_string(),
+            branch: branch.map(str::to_string),
+            head_hex: None,
+            bare: false,
+            detached: branch.is_none(),
+            locked: false,
+            lock_reason: String::new(),
+            prunable: false,
+            prune_reason: String::new(),
+            main: path.ends_with("repo"),
+            held: held.map(str::to_string),
+        }
+    };
+    let mut model = section(
+        "worktrees",
+        Source::Worktrees {
+            list: vec![
+                entry("C:/work/repo", Some("main"), None),
+                entry("C:/work/rebasing", None, Some("topic")),
+            ],
+            current: "c:/work/repo".to_string(),
+        },
+    );
+    model.arrange();
+    assert_eq!(
+        model.worktree_holding("topic".to_string()),
+        "C:/work/rebasing"
+    );
 }

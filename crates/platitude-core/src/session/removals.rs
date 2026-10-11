@@ -164,6 +164,7 @@ mod tests {
             prunable: false,
             prune_reason: String::new(),
             main: false,
+            held: None,
         }
     }
 

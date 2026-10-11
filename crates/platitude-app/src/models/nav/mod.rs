@@ -44,6 +44,47 @@ impl Record for TagCarrier {
     }
 }
 
+/// Why git would not take a name beside the branches or tags a section
+/// holds (`NavSectionModel::name_clash`): `kind` is `taken`, `folder` or
+/// `case`, and `with` the name in the way (empty for `taken`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NameClashed {
+    pub kind: String,
+    pub with: String,
+}
+
+impl Record for NameClashed {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("kind", &self.kind)
+            .put("with", &self.with)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            kind: field(map, "kind")?,
+            with: field(map, "with")?,
+        })
+    }
+}
+
+impl From<platitude_core::session::NameClash> for NameClashed {
+    fn from(clash: platitude_core::session::NameClash) -> Self {
+        use platitude_core::session::NameClash;
+        let (kind, with) = match clash {
+            NameClash::Taken => ("taken", String::new()),
+            NameClash::Holds(with) => ("holds", with),
+            NameClash::Under(with) => ("under", with),
+            NameClash::Case(with) => ("case", with),
+        };
+        Self {
+            kind: kind.to_string(),
+            with,
+        }
+    }
+}
+
 /// What a tag's menu stands on (`NavSectionModel::tag_menu`,
 /// `platitude_core::session::TagMenuFacts`), in the words the card reads.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

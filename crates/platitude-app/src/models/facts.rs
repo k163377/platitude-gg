@@ -473,16 +473,17 @@ impl GitFacts {
         crate::encode::mates_of(&platitude_core::trailers::co_authors_in(&body))
     }
 
-    /// Whether a name is one git would take for a branch or a tag —
-    /// asked per keystroke by the rename box, so it never runs git.
+    /// Whether a name is one git would take for a tag — asked per
+    /// keystroke by the tag boxes (a new tag, a tag's rename), so it never
+    /// runs git (`platitude_core::tag`).
     #[qslot]
-    fn valid_ref_name(&self, name: String) -> bool {
+    fn valid_tag_name(&self, name: String) -> bool {
         platitude_core::tag::is_valid_name(&name)
     }
 
-    /// The same for a branch alone, which git also refuses to open with `-`
-    /// or to call `HEAD` — what the new worktree's box asks, whose name git
-    /// hands on as an option otherwise (`platitude_core::branch`).
+    /// The same for a branch, which git also refuses to open with `-` or to
+    /// call `HEAD` — the branch boxes (a new branch, a branch's rename, a
+    /// remote branch's, a new worktree's) (`platitude_core::branch`).
     #[qslot]
     fn valid_branch_name(&self, name: String) -> bool {
         platitude_core::branch::is_valid_name(&name)

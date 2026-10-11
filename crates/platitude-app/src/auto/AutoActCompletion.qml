@@ -150,7 +150,7 @@ QtObject {
                 // The same bar with nothing written: the preview turns the plan down before it opens.
                 "plan-off-branch",
                 // Dress only: nothing is written, and the bar is raised through the page's own door.
-                "report-tone", "rename-tag-box",
+                "report-tone", "rename-tag-box", "rename-branch-box",
                 // Photographs the box still standing after git's answer, which is what puts the words in it.
                 "rename-taken",
                 "delete-blocked-tip", "switch-stopped", "switch-lands",

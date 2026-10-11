@@ -17,6 +17,8 @@ QtObject {
     /// (`Words.worktreeNameRefused`).
     required property NavSectionModel branchesModel
     required property NavSectionModel worktreesModel
+    /// Asked by the tag boxes, for the names already there (`nameClash`).
+    required property NavSectionModel tagsModel
 
     /// One of the page's menus is standing, raised on these rows or anywhere else (`SidebarPane.menuRaisedOn`).
     property bool menuOpen: false
@@ -71,17 +73,44 @@ QtObject {
     /// (`Words.worktreeNameRefused`).
     readonly property string editWorktreeWhy: gestures.editMode !== "worktree" ? ""
         : Words.worktreeNameRefused(gestures.editText,
-                                gestures.branchesModel.oidOfName(gestures.editText.trim()) !== "",
+                                gestures.branchesModel.nameClash(gestures.editText.trim(), ""),
                                 gestures.editWorktreePlace)
+    /// The box names a tag: a new one, or a tag's rename. Every other ref box names a branch — a new one, a branch's
+    /// rename, a remote branch's (a branch over there) — and a stash's is free text.
+    readonly property bool editNamesTag: gestures.editMode === "tag"
+        || (gestures.editMode === "rename" && gestures.editKind === "tag")
+    /// git's rules for the kind of name the box takes, asked of core.
+    readonly property bool editNameRuled: gestures.editMode === "rename" && gestures.editKind === "stash"
+        ? GitFacts.validStashMessage(gestures.editText)
+        : gestures.editNamesTag ? GitFacts.validTagName(gestures.editText.trim())
+        : GitFacts.validBranchName(gestures.editText.trim())
+    /// What git would refuse the name for beside the branches or tags already there (`Words.nameClashed`): a new
+    /// branch or tag, or a local one's rename, the row's own name out of its own way. A remote branch's rename asks the
+    /// remote's names instead (`editTaken`).
+    readonly property string editClashWhy: {
+        const name = gestures.editText.trim()
+        if (name === "")
+            return ""
+        if (gestures.editMode === "branch")
+            return Words.nameClashed(gestures.branchesModel.nameClash(name, ""), false)
+        if (gestures.editMode === "tag")
+            return Words.nameClashed(gestures.tagsModel.nameClash(name, ""), true)
+        if (gestures.editMode !== "rename")
+            return ""
+        if (gestures.editKind === "branch")
+            return Words.nameClashed(gestures.branchesModel.nameClash(name, gestures.editId), false)
+        if (gestures.editKind === "tag")
+            return Words.nameClashed(gestures.tagsModel.nameClash(name, gestures.editId), true)
+        return ""
+    }
     /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free text).
     readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
         && (gestures.editTaken
             || gestures.editCaseOnly
             || gestures.editWorktreeWhy !== ""
             || gestures.editGitRefusal !== ""
-            || !(gestures.editKind === "stash"
-                 ? GitFacts.validStashMessage(gestures.editText)
-                 : GitFacts.validRefName(gestures.editText)))
+            || !gestures.editNameRuled
+            || gestures.editClashWhy !== "")
     /// A tag rename that changes only the letters' case. git writes a ref as a file, so on a case-insensitive disk the
     /// new name lands on the old one's and both are gone; core refuses it (`tag::rename`), and asking here puts the
     /// answer in the box (デザイン規約 §答えの要らない報せ). `tag` is the row's kind — mode `tag` is the new-tag box.
@@ -101,9 +130,11 @@ QtObject {
             ? qsTr("Only the letter case differs — on this disk that deletes both names")
           : gestures.editTaken
             ? qsTr("%1 already has a branch called that").arg(gestures.editRemote)
-            : gestures.editKind === "stash"
-              ? qsTr("One line, and nothing invisible in it")
-              : Words.notAName
+          : !gestures.editNameRuled
+            ? (gestures.editMode === "rename" && gestures.editKind === "stash"
+               ? qsTr("One line, and nothing invisible in it")
+               : Words.notAName)
+            : gestures.editClashWhy
     /// The worktree's folder in that line, which the box's tip stands the tree mark in front of
     /// (`Words.worktreeNameMark`); empty where the line names none.
     readonly property string editRefusedMark: Words.worktreeNameMark(gestures.editRefusedWhy,

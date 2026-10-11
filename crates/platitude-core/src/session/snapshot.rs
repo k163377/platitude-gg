@@ -17,6 +17,11 @@ pub struct RefsSnapshot {
     pub tags: Vec<TagItem>,
     /// `tags` in name order, as indices into it.
     pub tags_by_name: Vec<u32>,
+    /// `locals` and the tags held here in name order with letter case set
+    /// aside, as indices — what a name box searches for the names git would
+    /// refuse beside them ([`Self::local_clash`]).
+    pub locals_folded: Vec<u32>,
+    pub tags_folded: Vec<u32>,
     /// Tags this repository holds that a remote carries on some other
     /// commit. A run of its own rather than a field on every tag: drift is
     /// rare, and tens of thousands of tags would each pay for the field.
@@ -199,6 +204,32 @@ impl RefsSnapshot {
             .and_then(|at| sorted.get(at))
     }
 
+    /// Why git would not make a local branch called `name` beside the
+    /// ones here ([`NameClash`]); `except` is the branch being renamed,
+    /// which steps out of the way of its own new name.
+    pub fn local_clash(&self, name: &str, except: &str) -> Option<NameClash> {
+        name_clash(
+            |at| {
+                self.locals
+                    .get(at as usize)
+                    .map(|branch| branch.short.as_str())
+            },
+            &self.locals_folded,
+            name,
+            except,
+        )
+    }
+
+    /// The same for a tag.
+    pub fn tag_clash(&self, name: &str, except: &str) -> Option<NameClash> {
+        name_clash(
+            |at| self.tags.get(at as usize).map(|tag| tag.short.as_str()),
+            &self.tags_folded,
+            name,
+            except,
+        )
+    }
+
     /// Builds the name-ordered index over `tags`; whoever last sorted the
     /// tags calls it.
     pub fn index_tags(&mut self) {
@@ -210,7 +241,126 @@ impl RefsSnapshot {
             .collect();
         by_name.sort_unstable();
         self.tags_by_name = by_name.into_iter().map(|(_, at)| at).collect();
+        // The tags this repository holds: a name only a remote has is no
+        // ref here, and git makes a tag of it.
+        self.tags_folded = folded_order(
+            self.tags
+                .iter()
+                .enumerate()
+                .filter(|(_, tag)| tag.here)
+                .map(|(at, tag)| (at as u32, tag.short.as_str())),
+        );
     }
+
+    /// The same order with letter case set aside, over `locals`; whoever
+    /// last sorted them calls it.
+    pub fn index_locals(&mut self) {
+        self.locals_folded = folded_order(
+            self.locals
+                .iter()
+                .enumerate()
+                .map(|(at, branch)| (at as u32, branch.short.as_str())),
+        );
+    }
+}
+
+/// Why git would refuse a new name for a branch or a tag beside the ones
+/// it already has — what a name box says before the press
+/// (デザイン規約 §左メニューの所作「名前の衝突」).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NameClash {
+    /// One of that very name.
+    Taken,
+    /// `a` and `a/b` cannot both be: git keeps a ref as a file, and a
+    /// file cannot be a folder too. The name would be the folder of the
+    /// one carried — `a` typed beside `a/b` — and the two are told apart
+    /// because the box says which of them would have to be the folder.
+    Holds(String),
+    /// The same, the other way: the name would go inside the one carried,
+    /// taken as a folder — `a/b` typed beside `a`.
+    Under(String),
+    /// One that differs only in letter case: the same file to a disk
+    /// that ignores case, which a repository may be opened from at any
+    /// time. Carries the one in the way.
+    Case(String),
+}
+
+/// The characters a name is compared by with letter case set aside.
+fn folded(name: &str) -> impl Iterator<Item = char> + '_ {
+    name.chars().flat_map(char::to_lowercase)
+}
+
+fn folded_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    folded(a).cmp(folded(b))
+}
+
+/// Positions of `names` in their order with letter case set aside: what
+/// [`name_clash`] searches, so a keystroke costs a few binary searches
+/// whatever the number of refs (CLAUDE.md 性能予算).
+/// `names` are the positions to index and the names at them. Each name is
+/// folded once: a comparator folding both sides on every step would fold
+/// tens of thousands of tags many times over, on every read of the refs.
+/// The folded strings order as [`folded_cmp`] does (UTF-8 keeps the order
+/// of the characters).
+fn folded_order<'a>(names: impl Iterator<Item = (u32, &'a str)>) -> Vec<u32> {
+    let mut named: Vec<(u32, &str)> = names.collect();
+    named.sort_by_cached_key(|(_, name)| folded(name).collect::<String>());
+    named.into_iter().map(|(at, _)| at).collect()
+}
+
+/// [`NameClash`] over one section's names, `order` being their
+/// [`folded_order`]. Three questions, each a binary search: is the name
+/// there in any case, is any folder above it a name, is it the folder of
+/// some name. `except` steps aside from all three but one: git refuses a
+/// rename that changes only the letter case where the ref is a file, so
+/// that one is a clash with itself.
+fn name_clash<'a>(
+    name_at: impl Fn(u32) -> Option<&'a str>,
+    order: &[u32],
+    name: &str,
+    except: &str,
+) -> Option<NameClash> {
+    let run_from = |key: &str| {
+        order.partition_point(|at| {
+            name_at(*at).is_some_and(|there| folded_cmp(there, key) == std::cmp::Ordering::Less)
+        })
+    };
+    // Collected: the run is a name and its case variants, a handful at most.
+    let same = |key: &str| -> Vec<&'a str> {
+        order[run_from(key)..]
+            .iter()
+            .filter_map(|at| name_at(*at))
+            .take_while(|there| folded_cmp(there, key) == std::cmp::Ordering::Equal)
+            .collect()
+    };
+    let mut case = None;
+    for there in same(name) {
+        if there == name && there != except {
+            return Some(NameClash::Taken);
+        }
+        if there != name {
+            case = Some(NameClash::Case(there.to_string()));
+        }
+    }
+    if case.is_some() {
+        return case;
+    }
+    for (cut, _) in name.match_indices('/') {
+        if let Some(there) = same(&name[..cut])
+            .into_iter()
+            .find(|there| *there != except)
+        {
+            return Some(NameClash::Under(there.to_string()));
+        }
+    }
+    let folder = format!("{name}/");
+    let key: Vec<char> = folded(&folder).collect();
+    order[run_from(&folder)..]
+        .iter()
+        .filter_map(|at| name_at(*at))
+        .take_while(|there| folded(there).take(key.len()).eq(key.iter().copied()))
+        .find(|there| *there != except)
+        .map(|there| NameClash::Holds(there.to_string()))
 }
 
 /// One sidebar branch row.
@@ -333,4 +483,98 @@ pub struct TagDrift {
     pub remote: crate::Name,
     /// Where that remote has it, peeled the same way the local reading is.
     pub commit: Oid,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{NameClash, folded_order, name_clash};
+
+    const NAMES: [&str; 6] = [
+        "main",
+        "feature/topic-a",
+        "C3",
+        "Release/1.0",
+        "x/y",
+        "feat",
+    ];
+
+    fn clash(name: &str, except: &str) -> Option<NameClash> {
+        let order = folded_order(
+            NAMES
+                .iter()
+                .enumerate()
+                .map(|(at, name)| (at as u32, *name)),
+        );
+        name_clash(|at| NAMES.get(at as usize).copied(), &order, name, except)
+    }
+
+    fn holds(with: &str) -> Option<NameClash> {
+        Some(NameClash::Holds(with.to_string()))
+    }
+
+    fn under(with: &str) -> Option<NameClash> {
+        Some(NameClash::Under(with.to_string()))
+    }
+
+    fn case(with: &str) -> Option<NameClash> {
+        Some(NameClash::Case(with.to_string()))
+    }
+
+    #[test]
+    fn a_name_already_there_is_taken_in_its_own_case_only() {
+        assert_eq!(clash("main", ""), Some(NameClash::Taken));
+        assert_eq!(clash("Main", ""), case("main"));
+        assert_eq!(clash("c3", ""), case("C3"));
+        assert_eq!(clash("new", ""), None);
+    }
+
+    #[test]
+    fn a_name_cannot_be_a_folder_of_another_nor_have_one_above_it() {
+        assert_eq!(clash("feature", ""), holds("feature/topic-a"));
+        assert_eq!(clash("main/x", ""), under("main"));
+        assert_eq!(clash("feature/topic-a/more", ""), under("feature/topic-a"));
+        assert_eq!(
+            clash("release/1.0/fix", ""),
+            under("Release/1.0"),
+            "with letter case set aside, as a disk that ignores it reads the folders"
+        );
+        assert_eq!(clash("FEATURE", ""), holds("feature/topic-a"));
+        assert_eq!(clash("featured", ""), None, "a longer name is not a folder");
+        assert_eq!(clash("feature/topic-b", ""), None, "beside a name is free");
+    }
+
+    /// git renames `a` to `a/b` and back (measured on 2.55), so the name
+    /// being renamed is out of its own way — all but its letter case,
+    /// which git refuses where the ref is a file.
+    #[test]
+    fn the_name_being_renamed_steps_aside_but_for_its_case() {
+        assert_eq!(clash("main/x", "main"), None);
+        assert_eq!(clash("x", "x/y"), None);
+        assert_eq!(clash("main", "main"), None, "unchanged");
+        assert_eq!(clash("c3", "C3"), case("C3"));
+        assert_eq!(clash("main", "C3"), Some(NameClash::Taken));
+    }
+
+    /// A name only a remote has is no ref here: git makes a tag of it, so
+    /// the box lets it through, whatever its case or folders.
+    #[test]
+    fn a_tag_only_a_remote_has_is_in_nobodys_way() {
+        let tag = |short: &str, here: bool| super::TagItem {
+            short: short.into(),
+            oid: crate::oid::Oid::from_hex(&[b'a'; 40]).expect("an oid"),
+            annotated: false,
+            created_unix: 0,
+            has_remote: true,
+            here,
+        };
+        let mut snapshot = super::RefsSnapshot {
+            tags: vec![tag("v1.0", true), tag("v2.0", false)],
+            ..Default::default()
+        };
+        snapshot.index_tags();
+        assert_eq!(snapshot.tag_clash("v1.0", ""), Some(NameClash::Taken));
+        assert_eq!(snapshot.tag_clash("v2.0", ""), None);
+        assert_eq!(snapshot.tag_clash("V2.0", ""), None);
+        assert_eq!(snapshot.tag_clash("v2.0/fix", ""), None);
+    }
 }

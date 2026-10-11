@@ -447,6 +447,7 @@ pub(super) fn build_snapshot(
     snapshot.tags.shrink_to_fit();
     // After the sort: the index holds positions.
     snapshot.index_tags();
+    snapshot.index_locals();
     // Sorted for the menu's lookup by name and remote.
     snapshot
         .tag_drifts
@@ -485,8 +486,12 @@ impl RepoSession {
                     fresh.branches.insert(branch.clone(), worktree.locked);
                 }
                 // Only a bare entry lacks a `HEAD` line, and bare ones are
-                // filtered out above.
+                // filtered out above. A rebase or bisect standing there keeps
+                // its branch to that worktree, as git counts it.
                 None => {
+                    if let Some(held) = &worktree.held {
+                        fresh.branches.insert(held.clone(), worktree.locked);
+                    }
                     if let Some(oid) = worktree
                         .head_hex
                         .as_deref()

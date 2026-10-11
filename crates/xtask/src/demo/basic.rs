@@ -156,6 +156,15 @@ pub(super) fn embedded(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// `basic`, with a lock on `refs/heads/held` as another git would hold it
+/// mid-write: a rename onto that name git turns down for a reason no name
+/// box can see (`rename-taken held`). git lists no branch for a `.lock`.
+pub(super) fn reflock(repo: &mut DemoRepo) -> Result<(), String> {
+    basic(repo)?;
+    let lock = repo.work.join(".git/refs/heads/held.lock");
+    std::fs::write(&lock, "").map_err(|e| format!("writing {}: {e}", lock.display()))
+}
+
 /// HEAD made empty on purpose (`--allow-empty`, a release marker) over a
 /// clean tree: the amend that only rewrites its message, which git turns
 /// down without `--allow-empty` (`amend "<message>"`).

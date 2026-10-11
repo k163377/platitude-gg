@@ -250,6 +250,16 @@ impl NavSectionModel {
         }
     }
 
+    /// Why git would not take `name` for a new branch or tag beside the
+    /// ones this section holds — taken, a folder of another or under one,
+    /// another's in letter case only — `undefined` where nothing is in the
+    /// way. `except` is the ref being renamed, out of its own way. Asked
+    /// per keystroke: a few binary searches, whatever the number of refs.
+    #[qslot]
+    fn name_clash(&self, name: String, except: String) -> Optional<NameClashed> {
+        Optional::new(self.all.name_clash(&name, &except).map(NameClashed::from))
+    }
+
     /// The branches `remote` carries here, by the name half alone — what
     /// the upstream question offers (`Source::branches_on`). Empty for
     /// every section but the remotes; the whole section, whatever the

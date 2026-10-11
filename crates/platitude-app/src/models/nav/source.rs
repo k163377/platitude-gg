@@ -111,6 +111,21 @@ impl Source {
             .collect()
     }
 
+    /// Why git would not take `name` beside this section's branches or
+    /// tags (`RefsSnapshot::local_clash` / `tag_clash`); `None` for every
+    /// other section, and where nothing stands in the way.
+    pub(super) fn name_clash(
+        &self,
+        name: &str,
+        except: &str,
+    ) -> Option<platitude_core::session::NameClash> {
+        match self {
+            Self::Locals(snapshot) => snapshot.local_clash(name, except),
+            Self::Tags(snapshot) => snapshot.tag_clash(name, except),
+            _ => None,
+        }
+    }
+
     /// The tag row named `short`, through a separate name index — tags
     /// are not name-ordered (`RefsSnapshot::tag_named`).
     pub(super) fn tag_named(&self, short: &str) -> Option<&platitude_core::session::TagItem> {

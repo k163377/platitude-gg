@@ -195,6 +195,64 @@ async fn a_slow_checkout_says_nothing_before_a_refusal() {
     );
 }
 
+/// A worktree stopped part-way through a rebase, or in a bisect, is
+/// listed `detached`, yet git refuses its branch to any other worktree.
+/// The listing names the branch it holds, so the menus can say so first.
+#[tokio::test]
+async fn a_branch_a_stopped_rebase_or_bisect_holds_is_named_by_the_listing() {
+    let (mut repo, _tip) = two_commits();
+    repo.git(&["branch", "rebasing"]);
+    repo.git(&["branch", "bisecting"]);
+    let rebasing = beside(&repo, "rebasing");
+    let bisecting = beside(&repo, "bisecting");
+    repo.git(&["worktree", "add", &rebasing.to_string_lossy(), "rebasing"]);
+    repo.git(&["worktree", "add", &bisecting.to_string_lossy(), "bisecting"]);
+    let rebased = repo.git_ok(&[
+        "-C",
+        &rebasing.to_string_lossy(),
+        "rebase",
+        "--exec",
+        "exit 1",
+        "HEAD~1",
+    ]);
+    assert!(!rebased, "the exec stops the rebase");
+    // Two more commits, so the bisect has a middle to check out: one with
+    // nothing between good and bad leaves the branch out as it was.
+    repo.git_in(&bisecting, &["commit", "--allow-empty", "-m", "third"]);
+    repo.git_in(&bisecting, &["commit", "--allow-empty", "-m", "fourth"]);
+    repo.git_in(&bisecting, &["bisect", "start", "HEAD", "HEAD~3"]);
+    let (exec, cancel) = env();
+
+    let listed = worktrees::load(&exec, &repo.path, &cancel)
+        .await
+        .expect("a listing");
+    let held = |leaf: &str| {
+        listed
+            .iter()
+            .find(|entry| entry.path.ends_with(leaf))
+            .map(|entry| (entry.detached, entry.held.clone()))
+    };
+    assert_eq!(held("rebasing"), Some((true, Some("rebasing".to_string()))));
+    assert_eq!(
+        held("bisecting"),
+        Some((true, Some("bisecting".to_string())))
+    );
+    assert_eq!(
+        listed
+            .iter()
+            .find(|entry| entry.main)
+            .map(|entry| entry.held.clone()),
+        Some(None),
+        "a worktree on its branch holds nothing more"
+    );
+    for branch in ["rebasing", "bisecting"] {
+        assert!(
+            !repo.git_ok(&["switch", branch]),
+            "git keeps {branch} to the worktree it stopped in"
+        );
+    }
+}
+
 /// What git does with a folder that holds something: it makes the `-b`
 /// branch and only then looks — the reason `worktrees::add` asks first.
 #[test]

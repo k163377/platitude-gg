@@ -110,6 +110,8 @@ pub(super) fn carried(
         remotes,
         tags,
         tags_by_name: Vec::new(),
+        locals_folded: Vec::new(),
+        tags_folded: Vec::new(),
         tag_drifts,
         remote_tags: Arc::new(platitude_core::session::RemoteTagIndex::build(
             readings
@@ -124,6 +126,7 @@ pub(super) fn carried(
     };
     // The index the name lookups go through, the way the joins build it.
     snapshot.index_tags();
+    snapshot.index_locals();
     Arc::new(snapshot)
 }
 

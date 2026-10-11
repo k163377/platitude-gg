@@ -99,11 +99,19 @@ pub async fn delete(
     executor.run(cmd, cancel).await.map(drop)
 }
 
-/// Whether git will take a name for a branch or a tag: the rules of
-/// `git check-ref-format` for `refs/heads/<name>` (the same for tags), as
-/// a pure function because an input box asks on every keystroke.
-/// `tests/it/rename_integration.rs` holds it to real git.
+/// Whether git will take a name for a tag: [`ref_format_ok`], less a name
+/// that opens with `-` or is `HEAD` — what git 2.55's `check_tag_ref`
+/// refuses, the same pair a branch name is refused for
+/// ([`crate::branch::is_valid_name`]). git 2.43 refuses only the `-`, and
+/// makes `refs/tags/HEAD`, a tag every revision read then steps past.
 pub fn is_valid_name(name: &str) -> bool {
+    !crate::branch::reads_as_option(name) && name != "HEAD" && ref_format_ok(name)
+}
+
+/// The rules of `git check-ref-format` for `refs/heads/<name>` (the same
+/// for tags), as a pure function because an input box asks on every
+/// keystroke. `tests/it/rename_integration.rs` holds it to real git.
+pub fn ref_format_ok(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }

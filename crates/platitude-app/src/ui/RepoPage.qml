@@ -1448,24 +1448,40 @@ FocusScope {
         // A new worktree is warned of what stands in its way before the press — that is the box's whole answer.
         if (graphPane.namingMode === "worktree")
             return Words.worktreeNameRefused(graphPane.namingText,
-                                         branchesModel.oidOfName(graphPane.namingText.trim()) !== "",
+                                         branchesModel.nameClash(graphPane.namingText.trim(), ""),
                                          page.graphWorktreePlace)
+        const name = graphPane.namingText.trim()
+        // A new branch or tag: git's rules, then the names already there. Empty is not refused — the box answers for
+        // what was typed (デザイン規約 §可否・警告の出し場所).
+        if (graphPane.namingMode === "branch" || graphPane.namingMode === "tag") {
+            const tag = graphPane.namingMode === "tag"
+            if (name === "")
+                return ""
+            if (!(tag ? GitFacts.validTagName(name) : GitFacts.validBranchName(name)))
+                return Words.notAName
+            return Words.nameClashed((tag ? tagsModel : branchesModel).nameClash(name, ""), tag)
+        }
         if (graphPane.namingMode !== "rename")
             return ""
         // git's answer on this very name; the rest is worked out before asking.
         if (graphPane.namingGitRefusal !== "")
             return graphPane.namingGitRefusal
-        const typed = graphPane.namingText
-        if (typed.trim() === "")
+        if (name === "")
             return qsTr("A name is needed")
         // As `SidebarRowGestures.editCaseOnly`: a tag renamed to its own name in other case loses both names on a
         // case-insensitive disk.
-        if (graphPane.namingKind === "tag" && typed.trim() !== graphPane.namingId
-            && typed.trim().toLowerCase() === graphPane.namingId.toLowerCase())
+        const tag = graphPane.namingKind === "tag"
+        if (tag && name !== graphPane.namingId && name.toLowerCase() === graphPane.namingId.toLowerCase())
             return qsTr("Only the letter case differs — on this disk that deletes both names")
         if (page.graphNameTaken)
             return qsTr("%1 already has a branch called that").arg(page.graphRenameRemote)
-        return GitFacts.validRefName(typed) ? "" : Words.notAName
+        if (!(tag ? GitFacts.validTagName(name) : GitFacts.validBranchName(name)))
+            return Words.notAName
+        // A remote branch's rename asks the remote's names (`graphNameTaken`); a local ref's, the ones here, its own
+        // out of its own way.
+        if (graphPane.namingKind === "remote")
+            return ""
+        return Words.nameClashed((tag ? tagsModel : branchesModel).nameClash(name, graphPane.namingId), tag)
     }
 
     // ---- double-click on a graph row -------------------------------

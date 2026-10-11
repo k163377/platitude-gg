@@ -33,14 +33,68 @@ pub(super) const TABLE: &[Verb] = &[
     // refusing everything frames the same. Every field is the output side
     // (rules-refs/app-ui.md「断りのツールチップ」): `box=` drawn and focused,
     // `tip=` read through the box, `text=` the sentence the reader gets.
+    // The other names a tag's box refuses before the press: git 2.55's own
+    // rules (`HEAD`), and the tags already there — taken, a folder's
+    // clash, letter case alone (デザイン規約 §左メニューの所作「名前の衝突」).
     Verb {
         name: "rename-tag-box",
-        when: &[(
-            Arg::Is("v1.0"),
-            "tag_name_box was=v0.3-local typed=v1.0 box=true refused=false tip=false text=",
-        )],
+        when: &[
+            (
+                Arg::Is("v1.0"),
+                "tag_name_box was=v0.3-local typed=v1.0 box=true refused=false tip=false text=",
+            ),
+            (
+                Arg::Is("HEAD"),
+                "typed=HEAD box=true refused=true tip=true text=git will not take this as a name",
+            ),
+            (
+                Arg::Is("v0.2"),
+                "typed=v0.2 box=true refused=true tip=true text=A tag called that already exists",
+            ),
+            (
+                Arg::Is("v0.2/fix"),
+                "typed=v0.2/fix box=true refused=true tip=true \
+                 text=v0.2 is already a tag and cannot also be a folder",
+            ),
+            (
+                Arg::Is("V0.2"),
+                "typed=V0.2 box=true refused=true tip=true \
+                 text=v0.2 differs only in letter case — some disks take it for the same name",
+            ),
+        ],
         plain: "tag_name_box was=v0.3-local typed=V0.3-LOCAL box=true refused=true tip=true \
                 text=Only the letter case differs — on this disk that deletes both names",
+    },
+    // The same box on a branch (`--preset basic`: `main`, beside
+    // `feature/topic-a`): the branch rules, and the branches already there.
+    Verb {
+        name: "rename-branch-box",
+        when: &[
+            (
+                Arg::OneOf(&["HEAD", "-x"]),
+                "box=true refused=true tip=true text=git will not take this as a name",
+            ),
+            (
+                Arg::Is("feature/topic-a"),
+                "box=true refused=true tip=true text=A branch called that already exists",
+            ),
+            (
+                Arg::Is("feature"),
+                "box=true refused=true tip=true \
+                 text=feature/topic-a already uses this name as a folder",
+            ),
+            (
+                Arg::Is("feature/topic-a/more"),
+                "box=true refused=true tip=true \
+                 text=feature/topic-a is already a branch and cannot also be a folder",
+            ),
+            (
+                Arg::Is("Feature/Topic-A"),
+                "box=true refused=true tip=true \
+                 text=feature/topic-a differs only in letter case — some disks take it for the same name",
+            ),
+        ],
+        plain: "box=true refused=false tip=false text=",
     },
     // A tag both sides hold, renamed here, and the bar asking what the
     // remote does about it (デザイン規約 §手元の改名の後のリモート).
@@ -362,6 +416,13 @@ pub(super) const TABLE: &[Verb] = &[
                  mark=feature-a-name-long-enough-to-cut-its-folder cut=true \
                  says=worktree add feature-a-name-long-enough-to-cut-its-folder",
             ),
+            // Held by a worktree stopped part-way through a rebase, which the
+            // list shows detached (`WorktreeEntry::held`): git refuses it
+            // to any other worktree, so the row is not offered.
+            (
+                Arg::Is("branch:fix/rebasing"),
+                "worktree_add_menu card=true here=true add=false folder= blocked=false",
+            ),
             (
                 Arg::WithPreset("worktrees"),
                 "worktree_add_menu card=true here=true add=false folder= blocked=false",
@@ -409,6 +470,18 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Ends("=-m"),
                 "worktree_box where=graph open=true mode=worktree refused=true tip=true mark= \
                  why=git will not take this as a name",
+            ),
+            // A folder of branches already there, and a branch's name in
+            // other letter case (`RefsSnapshot::local_clash`).
+            (
+                Arg::Ends("=feature"),
+                "worktree_box where=graph open=true mode=worktree refused=true tip=true mark= \
+                 why=feature/a-name-long-enough-to-cut-its-folder already uses this name as a folder",
+            ),
+            (
+                Arg::Ends("=Feature/Free"),
+                "worktree_box where=graph open=true mode=worktree refused=true tip=true mark= \
+                 why=feature/free differs only in letter case — some disks take it for the same name",
             ),
             (
                 Arg::Ends("@graph"),

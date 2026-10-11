@@ -48,9 +48,9 @@ async fn no_commit_is_head() {
     assert_eq!(repo.git(&["rev-parse", "here"]), head);
 }
 
-/// `check-ref-format` takes a leading dash but `git tag` does not, so
-/// [`tag::is_valid_name`] says yes and the command still refuses. Left to
-/// git (デザイン規約 §左メニューの所作「規則は git のもの」).
+/// `check-ref-format` takes a leading dash but `git tag` does not. The
+/// boxes turn it down first ([`tag::is_valid_name`]); this is git's
+/// refusal under them, should one get through.
 #[tokio::test]
 async fn a_leading_dash_reaches_git_as_a_name_and_git_refuses_it() {
     let mut repo = TestRepo::init();

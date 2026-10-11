@@ -46,14 +46,14 @@ pub fn reads_as_option(name: &str) -> bool {
     name.starts_with('-')
 }
 
-/// Whether git will take a name for a branch: a tag's rules
-/// ([`crate::tag::is_valid_name`]), less a name that reads as an option or
+/// Whether git will take a name for a branch: `check-ref-format`'s rules
+/// ([`crate::tag::ref_format_ok`]), less a name that reads as an option or
 /// is `HEAD` (`git check-ref-format --branch`). A pure function, since a
 /// name box asks on every keystroke; `tests/it/worktree_add.rs` holds it
 /// to real git.
 #[must_use]
 pub fn is_valid_name(name: &str) -> bool {
-    !reads_as_option(name) && name != "HEAD" && crate::tag::is_valid_name(name)
+    !reads_as_option(name) && name != "HEAD" && crate::tag::ref_format_ok(name)
 }
 
 /// Whether git's refusal is the "your work is in the way" one, which a

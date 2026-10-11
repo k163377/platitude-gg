@@ -119,16 +119,19 @@ Item {
             if (act !== "nav-rename")
                 sidebarPane.submitEdit(arg)
         } else if (act === "rename-taken") {
-            // A name git refuses, submitted for real: the box stays open holding it, with git's words under it and in
-            // the bar (デザイン規約 §答えの要らない報せ).
+            // A name git refuses for a reason the box cannot see coming — another git holding the ref's lock
+            // (`--preset reflock`, `held`) — sent through the box's Enter, behind its refusal gate as a hand's is: the
+            // box stays open holding the name, with git's words under it and in the bar (デザイン規約
+            // §答えの要らない報せ). A name the box itself refuses is not sent, and the run says nothing.
             sidebarPane.beginRename("branch", worktree.branch, arg)
-            sidebarPane.submitEdit(arg)
+            if (!sidebarPane.editRefused)
+                sidebarPane.submitEdit(arg)
             renameTakenTimer.start()
-        } else if (act === "rename-tag-box") {
+        } else if (act === "rename-tag-box" || act === "rename-branch-box") {
             // The box opened with the argument typed in, so a name the box itself refuses can be photographed
             // (デザイン規約 §答えの要らない報せ「押す前に断れるものは、名前の箱で断る」). `was=` names the row, so a
             // run that opened the box on the wrong one says so.
-            tagNameBoxTimer.begin(arg)
+            tagNameBoxTimer.begin(arg, act === "rename-tag-box" ? "tag" : "branch")
         } else if (act === "replace-remote" || act === "replace-remote-box"
                    || act === "replace-remote-go" || act === "replace-remote-tip") {
             // Named outright (`origin/billing:billing-v2`) because the remote's rows are behind a fold. "-box" leaves
@@ -196,7 +199,8 @@ Item {
             driver.complete()
         }
     }
-    // PGG_AUTO_ACT=rename-tag-box: the box, and whether the reason for refusing the name reached the reader.
+    // PGG_AUTO_ACT=rename-tag-box / rename-branch-box: the box on the first tag or on the branch HEAD is on, the
+    // argument typed in, and whether the reason for refusing the name reached the reader.
     //
     // `editKey` is only the ask: the box is built by a `Loader` in a row not yet laid out, so `box=` reads the box as
     // drawn and holding the keyboard (`NavList.rowBoxShown` / `rowFocused`). `refused=` alone passes a box refusing in
@@ -205,17 +209,23 @@ Item {
     SampleTimer {
         id: tagNameBoxTimer
         property string typed: ""
-        function begin(arg) {
+        property string kind: "tag"
+        function begin(arg, kind) {
             tagNameBoxTimer.typed = "" + arg
-            sidebarPane.beginRename("tag", tagsModel.nameAt(0), tagNameBoxTimer.typed)
+            tagNameBoxTimer.kind = kind
+            sidebarPane.beginRename(kind, tagNameBoxTimer.was(), tagNameBoxTimer.typed)
             tagNameBoxTimer.start()
+        }
+        function was() {
+            return tagNameBoxTimer.kind === "tag" ? tagsModel.nameAt(0) : worktree.branch
         }
         onTriggered: {
             // Asked every beat: a binding on a call would hold the empty model's answer
             // (rules/app-ui.md「QML バインディングはプロパティにしか反応しない」).
-            const was = tagsModel.nameAt(0)
-            const row = tagsModel.rowOfName(was)
-            const list = navProbe.listOf("tag")
+            const was = tagNameBoxTimer.was()
+            const model = tagNameBoxTimer.kind === "tag" ? tagsModel : branchesModel
+            const row = model.rowOfName(was)
+            const list = navProbe.listOf(tagNameBoxTimer.kind)
             const open = row >= 0 && list.rowBoxShown(row) && list.rowFocused(row)
             if (!open)
                 return
@@ -224,7 +234,7 @@ Item {
             if (sidebarPane.editRefused && !tipped)
                 return
             tagNameBoxTimer.stop()
-            Harness.report("tag_name_box was=" + was
+            Harness.report(tagNameBoxTimer.kind + "_name_box was=" + was
                               + " typed=" + tagNameBoxTimer.typed
                               + " box=" + open
                               + " refused=" + sidebarPane.editRefused

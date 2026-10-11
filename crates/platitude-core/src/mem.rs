@@ -267,6 +267,8 @@ impl Footprint for crate::session::RefsSnapshot {
             + self.remotes.heap_bytes()
             + self.tags.heap_bytes()
             + self.tags_by_name.heap_bytes()
+            + self.locals_folded.heap_bytes()
+            + self.tags_folded.heap_bytes()
             + self.tag_drifts.heap_bytes()
             // Not `remote_tags`: it points at the session's one index,
             // counted as `remote-tag-index` (`session::heap`).
@@ -309,6 +311,7 @@ impl Footprint for crate::worktrees::WorktreeEntry {
             + self.head_hex.heap_bytes()
             + self.lock_reason.heap_bytes()
             + self.prune_reason.heap_bytes()
+            + self.held.heap_bytes()
     }
 }
 

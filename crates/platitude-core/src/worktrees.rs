@@ -32,6 +32,10 @@ pub struct WorktreeEntry {
     /// A bare repository's bare entry takes that place and is still the
     /// main one; the caller drops it for having no working tree.
     pub main: bool,
+    /// The branch a rebase or bisect standing in this worktree is about
+    /// ([`held_by_operation`]): listed `detached`, yet git keeps it to
+    /// this worktree as if it were checked out. `None` elsewhere.
+    pub held: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -69,6 +73,7 @@ pub fn parse_worktrees(bytes: &[u8]) -> Result<Vec<WorktreeEntry>, WorktreeParse
                 lock_reason: String::new(),
                 prunable: false,
                 prune_reason: String::new(),
+                held: None,
             });
             continue;
         }
@@ -124,10 +129,59 @@ pub async fn load(
         .cwd(workdir)
         .args(["worktree", "list", "--porcelain", "-z"]);
     let out = executor.run(cmd, cancel).await?;
-    parse_worktrees(&out.stdout).map_err(|e| GitError::UnexpectedOutput {
+    let mut entries = parse_worktrees(&out.stdout).map_err(|e| GitError::UnexpectedOutput {
         command: "git worktree list".to_string(),
         message: e.to_string(),
-    })
+    })?;
+    for entry in entries
+        .iter_mut()
+        .filter(|entry| entry.detached && !entry.bare && !entry.prunable)
+    {
+        entry.held = held_by_operation(Path::new(&entry.path));
+    }
+    Ok(entries)
+}
+
+/// The branch a rebase or bisect standing in the worktree at `path` is
+/// about, read off the files git keeps for it: `rebase-merge/head-name` /
+/// `rebase-apply/head-name` (a full ref), and `BISECT_START` beside
+/// `BISECT_LOG` (a short name, or a commit where the bisect started
+/// detached). What git's own `is_shared_symref` reads before refusing the
+/// branch to any other worktree — the listing only says `detached`.
+///
+/// Plain file reads, a few per detached worktree: no git process. `None`
+/// where nothing stands, or the worktree's git directory cannot be found.
+fn held_by_operation(path: &Path) -> Option<String> {
+    // A folder for most of the repository's own worktrees; a `gitdir:` file
+    // for a linked one, and for its own under `--separate-git-dir` or as a
+    // submodule's checkout.
+    let dot_git = path.join(".git");
+    let git_dir = if dot_git.is_dir() {
+        dot_git
+    } else {
+        let text = std::fs::read_to_string(&dot_git).ok()?;
+        path.join(text.trim().strip_prefix("gitdir:")?.trim())
+    };
+    let read = |name: &str| {
+        std::fs::read_to_string(git_dir.join(name))
+            .ok()
+            .map(|text| text.trim().to_string())
+    };
+    for head_name in ["rebase-merge/head-name", "rebase-apply/head-name"] {
+        if let Some(branch) = read(head_name)
+            .as_deref()
+            .and_then(|full| full.strip_prefix("refs/heads/"))
+        {
+            return Some(branch.to_string());
+        }
+    }
+    if !git_dir.join("BISECT_LOG").exists() {
+        return None;
+    }
+    let start = read("BISECT_START")?;
+    let branch = start.strip_prefix("refs/heads/").unwrap_or(&start);
+    let detached = branch.len() >= 40 && branch.bytes().all(|b| b.is_ascii_hexdigit());
+    (!branch.is_empty() && !detached && !branch.starts_with("refs/")).then(|| branch.to_string())
 }
 
 /// What a new worktree is made to stand on. Always a branch: every

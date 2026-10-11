@@ -207,6 +207,7 @@ mod tests {
             prunable: false,
             prune_reason: String::new(),
             main: path.ends_with("home"),
+            held: None,
         }
     }
 
