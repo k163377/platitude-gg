@@ -35,12 +35,14 @@ MenuItem {
     /// A git term in git's own spelling, on a chip (デザイン規約 §git 用語のコード表記). It sits ahead of `text`, which
     /// carries whatever of the sentence is left ("this file"), often nothing.
     property string code: ""
-    /// A ref name inside the row's words, and the sentence with the name's seat left in it ("into %1"). These sentences
-    /// only ever name the current branch, so the name is `textLink`
+    /// A ref name inside the row's words, and the sentence with the name's seat left in it ("into %1"). The name wears
+    /// its kind's colour (`refTint`): `textLink` for the current branch, which is what these sentences mostly name
     /// (デザイン規約 §ref の種別「現在のブランチは、名前が出る場所すべてで textLink」).
     /// The seat is cut out of the sentence, not searched for in `text`: a branch `it` would be found in `into it`.
     property string refSentence: ""
     property string refName: ""
+    /// That name's own colour — `textPrimary` for a local branch the worktree is not on (`pull` into it).
+    property color refTint: Theme.textLink
     text: menuItem.refSentence !== "" ? menuItem.refSentence.arg(menuItem.refName) : ""
     /// The mark a row wears, and its colour. On a row that opens a card it is the `NavIcon` kind of what the card acts
     /// on (デザイン規約 §メニュー の入れ子), and the row becomes a heading: the sidebar's section band in a menu, its
@@ -239,7 +241,7 @@ MenuItem {
     /// The colour the name inside those words takes: its own only while the row has no colour of its own
     /// (デザイン規約 §メニュー「文の中に入った名前も、色は名前のもの」).
     readonly property color refColor: !menuItem.enabled || menuItem.blocked || menuItem.armedPresses > 0
-                                      ? menuItem.wordColor : Theme.textLink
+                                      ? menuItem.wordColor : menuItem.refTint
     /// Those words as `Text.StyledText` markup, in one label so the line elides, measures and hovers like any row's.
     /// Every piece is escaped: the name is the repository's (a branch called `<b>`), and spaces go as `&nbsp;` because
     /// rich text folds a run of them (`encode::markup`).

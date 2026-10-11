@@ -1327,8 +1327,9 @@ FocusScope {
             canSwitch: commitMenuState.menuCanSwitch
             switchAsks: commitMenuState.menuSwitchAsks
             heldLeaf: commitMenuState.menuHeldLeaf
-            canPull: commitMenuState.menuCanPull
-            pullBlocked: commitMenuState.menuPullBlocked
+            pullRuns: commitMenuState.menuPullRuns
+            pullOut: commitMenuState.menuPullOut
+            pullUpstream: commitMenuState.menuPullUpstream
             canSequence: commitMenuState.menuCanSequence
             canIntegrate: commitMenuState.menuCanIntegrate
             canEditHistory: commitMenuState.menuCanEditHistory
@@ -1370,7 +1371,7 @@ FocusScope {
             onRevertRequested: oidHex => repoTab.revert(oidHex)
             onMergeRequested: ref => repoTab.merge(ref, false, false, "")
             onRebaseRequested: ref => repoTab.rebase(ref, "", true)
-            onPullRequested: repoTab.pull()
+            onPullRequested: branch => repoTab.pull(branch)
             onCheckDeleteRequested: branch => repoTab.checkBranchDelete(branch)
             onForceDeleteRequested: branch => repoTab.deleteBranch(branch, true)
             onDeleteRemoteRequested: (remoteRef, expect) => commitMenuState.deleteRemoteNow(remoteRef, expect)

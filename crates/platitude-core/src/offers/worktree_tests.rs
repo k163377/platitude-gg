@@ -18,7 +18,6 @@ fn worktree_row(holder: &str) -> RefMenuOffers {
         false,
         "origin",
         "",
-        "",
     )
 }
 
@@ -29,7 +28,6 @@ fn another_worktree_leads_to_itself_and_offers_what_its_commit_does() {
     assert!(!offers.switch_asks, "opening another worktree asks nothing");
     assert!(offers.branch_here);
     assert!(offers.integrate_from);
-    assert!(!offers.pull);
     assert!(!offers.delete, "its delete is the WORKTREE card's");
     assert!(!offers.set_upstream);
     assert!(!offers.push_tag);

@@ -1070,12 +1070,18 @@ impl RepoTab {
         self.ask_session(|s| s.fetch(remote.clone()));
     }
 
-    /// `git pull` naming nothing: git resolves the branch and its upstream,
-    /// and how the far side comes in is git's own setting
-    /// (デザイン規約 §取り込んで合流させる, `remote::pull`).
+    /// The `pull` row's press (デザイン規約 §取り込んで合流させる). An empty
+    /// `branch` is the worktree's own: `git pull` naming nothing, git
+    /// resolving the branch, its upstream and how the far side comes in
+    /// (`remote::pull`). A name is a branch the worktree is not on,
+    /// fast-forwarded to its upstream (`remote::fast_forward`).
     #[qslot]
-    fn pull(&mut self) {
-        self.ask_session(platitude_core::session::RepoSession::pull);
+    fn pull(&mut self, branch: String) {
+        if branch.is_empty() {
+            self.ask_session(platitude_core::session::RepoSession::pull);
+        } else {
+            self.ask_session(|s| s.fast_forward(branch.clone()));
+        }
     }
 
     /// Pushes the checked-out branch to wherever it tracks, or to the

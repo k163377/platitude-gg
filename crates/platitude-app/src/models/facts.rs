@@ -252,7 +252,6 @@ impl GitFacts {
         remote_drifted: bool,
         default_remote: String,
         tag_sides: String,
-        current_upstream: String,
     ) -> Vec<String> {
         let Some(kind) = platitude_core::offers::RefKind::from_word(&kind) else {
             return Vec::new();
@@ -271,12 +270,50 @@ impl GitFacts {
             remote_drifted,
             &default_remote,
             &tag_sides,
-            &current_upstream,
         )
         .words()
         .into_iter()
         .map(str::to_string)
         .collect()
+    }
+
+    /// The `pull` row of a ref's menu as words — what it runs, then why it
+    /// is greyed (`offers::PullOffer::words`); empty where there is no row.
+    /// Asked beside `refMenuOffers` wherever the menu stands its rows.
+    #[qslot]
+    #[expect(clippy::too_many_arguments)]
+    fn pull_row(
+        &self,
+        kind: String,
+        full: String,
+        open: bool,
+        current_branch: String,
+        detached: bool,
+        op_text: String,
+        current_upstream: String,
+        current_diverged: bool,
+        held_by_worktree: String,
+        row_upstream: String,
+        row_ahead: i32,
+    ) -> Vec<String> {
+        let Some(kind) = platitude_core::offers::RefKind::from_word(&kind) else {
+            return Vec::new();
+        };
+        platitude_core::offers::pull_row(
+            kind,
+            &full,
+            open,
+            &current_branch,
+            detached,
+            &op_text,
+            &current_upstream,
+            current_diverged,
+            &held_by_worktree,
+            &row_upstream,
+            row_ahead,
+        )
+        .map(|offer| offer.words().into_iter().map(str::to_string).collect())
+        .unwrap_or_default()
     }
 
     /// What the right-click menu on a commit row may offer, the same way

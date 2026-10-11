@@ -11,12 +11,14 @@
 
 mod message;
 mod moves;
+mod pull;
 
 pub use message::{MessageEdit, message_edit};
 pub use moves::{
     SwitchAction, leave_code, leaving_undoes, move_landed, moves_blocked, skip_is_free,
     switch_action,
 };
+pub use pull::{PullOffer, PullOut, PullRuns, pull_row};
 
 /// The kind of ref a menu row stands on, in the words the chip records
 /// carry (`branch` / `remote` / `tag` / `stash`), and `worktree` for a
@@ -106,16 +108,6 @@ pub struct RefMenuOffers {
     /// merge / rebase with this row as the far side: needs a current
     /// branch to move, and a row that is not it.
     pub integrate_from: bool,
-    /// `git pull` — the branch the worktree is on, brought in line
-    /// with its upstream.
-    ///
-    /// Offered on exactly the two ends of that comparison (the current
-    /// branch and its upstream's remote-tracking ref): a pull moves the
-    /// branch it is run on, so another branch's upstream would move a
-    /// branch the row does not name (デザイン規約 §取り込んで合流させる).
-    /// The upstream has to be there — git refuses a pull with no tracking
-    /// information (デザイン規約 §メニュー「対象が存在しない」は席ごと消える).
-    pub pull: bool,
     /// The everyday delete. git refuses the branch the tree is on or one
     /// any other worktree has checked out (`cannot delete branch …
     /// used by worktree at …`), locked or not.
@@ -162,9 +154,6 @@ impl RefMenuOffers {
         if self.integrate_from {
             words.push("integrate");
         }
-        if self.pull {
-            words.push("pull");
-        }
         if self.delete {
             words.push("delete");
         }
@@ -203,10 +192,8 @@ impl RefMenuOffers {
 /// ([`crate::session::BranchItem::upstream_drifted`] /
 /// [`crate::session::RefsSnapshot::tag_drifts`]); `default_remote` is
 /// where pushes go, empty with no remote; `tag_sides` is
-/// [`TagSides::from_word`]'s word (ignored for other kinds);
-/// `current_upstream` is what the tree's branch tracks
-/// (`WorktreeModel.upstream`), not this row's — a pull goes there
-/// whichever end the menu opened on.
+/// [`TagSides::from_word`]'s word (ignored for other kinds). The `pull`
+/// row is [`pull_row`]'s.
 #[expect(clippy::too_many_arguments)]
 pub fn ref_menu(
     kind: RefKind,
@@ -222,7 +209,6 @@ pub fn ref_menu(
     remote_drifted: bool,
     default_remote: &str,
     tag_sides: &str,
-    current_upstream: &str,
 ) -> RefMenuOffers {
     let branchy = matches!(kind, RefKind::Branch | RefKind::Remote);
     let op_standing = !op_text.is_empty();
@@ -249,18 +235,6 @@ pub fn ref_menu(
             && !op_standing
             && !full.is_empty()
             && full != current_branch,
-        // What integrating asks for, on one of the two ends of the tree's
-        // own comparison.
-        pull: open
-            && !detached
-            && !current_branch.is_empty()
-            && !op_standing
-            && !current_upstream.is_empty()
-            && match kind {
-                RefKind::Branch => full == current_branch,
-                RefKind::Remote => full == current_upstream,
-                RefKind::Tag | RefKind::Stash | RefKind::Worktree => false,
-            },
         // A worktree's own delete is the WORKTREE card's
         // ([`worktree_card`]).
         delete: kind != RefKind::Worktree

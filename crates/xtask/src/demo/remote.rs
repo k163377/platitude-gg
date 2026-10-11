@@ -209,6 +209,54 @@ pub(super) fn diverged(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// Branches beside the checked-out one, each tracking its own name on
+/// `origin` and standing differently against it once the fetch at the end
+/// has read the far side: `release` behind (two commits pushed from another
+/// clone), `feature/mine` ahead with a commit of its own, `feature/split`
+/// both, and `scratch` tracking nothing. The `pull` of a branch the tree is
+/// not on (デザイン規約 §取り込んで合流させる): `release` takes it, the two
+/// with commits of their own grey it, `scratch` has no row.
+pub(super) fn others_behind(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    for name in ["release", "feature/mine", "feature/split"] {
+        repo.git(&["branch", name])?;
+        repo.git(&["push", "--set-upstream", "origin", name])?;
+    }
+    repo.git(&["branch", "scratch"])?;
+
+    let seeder = repo.seeder("origin.git")?;
+    for (branch, file, message) in [
+        ("release", "CHANGELOG.md", "docs: note the release"),
+        ("release", "src/app.txt", "fix: patch the release"),
+        (
+            "feature/split",
+            "src/split.txt",
+            "feat: theirs on the split",
+        ),
+    ] {
+        repo.git_at(&seeder.clone(), &["switch", branch])?;
+        let body = format!("{message}\n");
+        std::fs::write(seeder.join(file), body).map_err(|e| e.to_string())?;
+        repo.git_at(&seeder.clone(), &["add", "--", file])?;
+        repo.git_at(&seeder.clone(), &["commit", "-m", message])?;
+        repo.git_at(&seeder.clone(), &["push", "origin", branch])?;
+    }
+
+    for (name, file) in [
+        ("feature/mine", "src/mine.txt"),
+        ("feature/split", "src/ours.txt"),
+    ] {
+        repo.git(&["switch", name])?;
+        repo.commit(file, "ours\n", "feat: work of our own")?;
+    }
+    repo.git(&["switch", "main"])?;
+    repo.git(&["fetch", "origin"])?;
+    Ok(())
+}
+
 /// A remote nothing can reach: `origin` is pushed to and tracked, then its
 /// URL names a directory that was never made — the only shape a fetch
 /// fails in without a network (`fetch-fail`, `fetch-resume`; the runs

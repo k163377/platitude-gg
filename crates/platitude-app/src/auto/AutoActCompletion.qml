@@ -35,7 +35,7 @@ QtObject {
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
                 "fold-first-commit", "drop-last-commit",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
-                "pull-go", "pull-ahead",
+                "pull-go", "pull-ahead", "pull-branch-go",
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
                 "wip-landing-stopped",
                 "rebase-plan-run", "rebase-edit-stop", "rebase-edit-stop-out",
@@ -235,8 +235,9 @@ QtObject {
                 "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
                 // Pressed off the card once nothing else runs; the tip it lands on is waited out behind the write
                 // barrier. `pull-ahead` is answered without moving anything — it waits for the panel it opens to
-                // show the row git wrote.
-                "pull-go", "pull-ahead",
+                // show the row git wrote. `pull-branch-go` lands on no tip of this worktree's: it waits for the branch
+                // to read level with its upstream.
+                "pull-go", "pull-ahead", "pull-branch-go",
                 "edit-message-leave", "edit-message-focus", "edit-message-away",
                 // All four end in their own samplers: the plan arrives through the feed, and the three that run wait
                 // out the write's own landing (the gone row / the edit marker) behind the write barrier. The last

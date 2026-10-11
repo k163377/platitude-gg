@@ -37,6 +37,14 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "pull_ahead refused=false log=true moved=false",
     },
+    // The same row on a branch the worktree is not on: the press
+    // fast-forwards it (`level=` / `behind=0`) and lands on no tip here —
+    // `head=false` is the worktree's own branch left where it stood.
+    Verb {
+        name: "pull-branch-go",
+        when: &[],
+        plain: "pull_branch refused=false level=true behind=0 head=false",
+    },
     // A divergence is refused before the press (`pull-blocked`).
     // A merge stopped on a conflict: `error=false log=false` are no red
     // line and no command log over an ordinary conflict.

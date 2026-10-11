@@ -36,8 +36,9 @@ Item {
         canSwitch: true
         switchAsks: false
         heldLeaf: ""
-        canPull: true
-        pullBlocked: false
+        pullRuns: "here"
+        pullOut: ""
+        pullUpstream: "origin/feature/topic-a"
         hardResetTakes: 0
         hardResetNotCopied: false
         onSwitchRequested: (kind, name) => root.asked = "switch " + kind + " " + name
@@ -45,7 +46,7 @@ Item {
         onRevertRequested: oidHex => root.asked = "revert " + oidHex
         onMergeRequested: ref => root.asked = "merge " + ref
         onRebaseRequested: ref => root.asked = "rebase " + ref
-        onPullRequested: root.asked = "pull"
+        onPullRequested: branch => root.asked = branch === "" ? "pull" : "pull " + branch
         onResetRequested: mode => root.asked = "reset " + mode
         onPushTagRequested: (remote, tag, lease) => root.asked = "push " + remote + " " + tag + " " + lease
         onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
@@ -105,9 +106,9 @@ Item {
     /// `fields` names only what this case is about.
     function aimAt(fields) {
         const all = { "targetKind": "branch", "targetName": "feature/topic-a", "canSwitch": true,
-                      "switchAsks": false, "heldLeaf": "", "canPull": true, "pullBlocked": false,
-                      "published": false, "canIntegrate": true, "canSequence": true, "hardResetTakes": 0,
-                      "hardResetNotCopied": false }
+                      "switchAsks": false, "heldLeaf": "", "pullRuns": "here", "pullOut": "",
+                      "pullUpstream": "origin/feature/topic-a", "published": false, "canIntegrate": true,
+                      "canSequence": true, "hardResetTakes": 0, "hardResetNotCopied": false }
         for (const key in fields)
             all[key] = fields[key]
         for (const key in all)
@@ -184,18 +185,35 @@ Item {
             compare(root.asked, "switch remote origin/feature/topic-a")
         }
 
-        /// Greying is the only thing this file decides about `pull`: git would turn a diverged press down, so the
-        /// row stays and says why (デザイン規約 §メニュー).
+        /// What this file decides about `pull`: where git would turn the press down the row stays and says why
+        /// (デザイン規約 §メニュー), and a press that moves a branch aside carries the chip's name.
         function test_the_pull_row_is_there_on_the_word_and_grey_on_the_answer() {
             root.aimAt({})
             verify(root.row("pull").offered)
             compare(root.row("pull").blockedReason, "")
+            compare(root.row("pull").text, "into main", "the row names the branch that moves")
+            compare(root.row("pull").refTint, Theme.textLink, "in the current branch's colour")
+            root.row("pull").triggered()
+            compare(root.asked, "pull", "the worktree's own: git resolves the branch and its far side")
 
-            root.aimAt({ pullBlocked: true })
+            root.aimAt({ pullOut: "diverged" })
             verify(root.row("pull").offered, "the row stays: it is the reader's question, not a missing one")
             compare(root.row("pull").blockedReason, Words.pullDiverged)
 
-            root.aimAt({ canPull: false })
+            root.aimAt({ pullRuns: "aside" })
+            compare(root.row("pull").text, "into feature/topic-a", "aside, the chip's own branch is the one that moves")
+            compare(root.row("pull").refTint, Theme.textPrimary, "in a local branch's colour")
+            root.row("pull").triggered()
+            compare(root.asked, "pull feature/topic-a", "a branch the worktree is not on is named to the press")
+
+            root.aimAt({ pullRuns: "aside", pullOut: "own" })
+            compare(root.row("pull").blockedReason,
+                    "Cannot fast-forward — it has commits not on origin/feature/topic-a", "naming the upstream")
+            root.aimAt({ pullRuns: "aside", pullOut: "held", heldLeaf: "topic" })
+            compare(root.row("pull").blockedReason, Words.checkedOutElsewhere("topic"))
+            compare(root.row("pull").reasonMarkWord, "topic", "the holder's folder wears the tree mark in the tip")
+
+            root.aimAt({ pullRuns: "" })
             verify(!root.row("pull").offered, "a row with no far side to go to is no row")
         }
 
@@ -275,7 +293,7 @@ Item {
         /// Stood again on a newer reading with the menu up (`CommitMenuState.standAgain`), every level keeps its shape:
         /// a row the reading takes away greys where it is, in a card as on the first level, and none comes in.
         function test_a_menu_stood_again_keeps_its_shape_at_every_level() {
-            root.aimAt({ canPull: false })
+            root.aimAt({ pullRuns: "" })
             menu.offerCommit(root.branchFacts())
             verify(menu.menu.openSub(menu.branchCard))
             const first = root.rowsOf(menu.menu).rows

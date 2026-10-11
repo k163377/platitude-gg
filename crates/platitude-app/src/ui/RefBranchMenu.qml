@@ -160,11 +160,7 @@ AppMenu {
     /// Why the delete table's rows are out — worn as the rows' `blockedReason` (デザイン規約 §無効).
     readonly property string deleteBlockedOnCurrent:
         qsTr("Switch away first — this is the branch you are on")
-    // The state and where, not why (デザイン規約 §hover のツールチップ). The folder, not the whole path git prints:
-    // nobody reads a tooltip that wide.
-    //: %1 is the folder of the other worktree that has this branch checked out.
-    readonly property string blockedByWorktree:
-        qsTr("Checked out in another worktree — %1").arg(state.holderLeaf)
+    readonly property string blockedByWorktree: Words.checkedOutElsewhere(state.holderLeaf)
 
     titleKind: "branch"
     titleTint: Theme.accent

@@ -164,6 +164,13 @@ Item {
             // divergence is not this row's: the row is out before the press (`pull-blocked`).
             // The press waits for an idle tick: a pull queued behind the opening fetch would be judged on its answer.
             pullPressTimer.after = act
+            pullPressTimer.branch = ""
+            pullPressTimer.start()
+        } else if (act === "pull-branch-go") {
+            // The same row on a branch the worktree is not on (`--preset others-behind`'s `release`): the press
+            // fast-forwards that branch and nothing this worktree stands on.
+            pullPressTimer.after = act
+            pullPressTimer.branch = arg
             pullPressTimer.start()
         } else if (act === "merge-branch" || act === "merge-stops" || act === "rebase-onto"
                    || act === "rebase-stops" || act === "replay-running" || act === "revert-commit"
@@ -484,21 +491,23 @@ Item {
         }
     }
 
-    /// The press behind `pull-go` / `pull-ahead`. A pull answers at the tip (`RepoTab::settle_write`), so `pull-go`
-    /// finishes on `tipLandedTimer`.
+    /// The press behind `pull-go` / `pull-ahead` / `pull-branch-go`. A pull answers at the tip
+    /// (`RepoTab::settle_write`), so `pull-go` finishes on `tipLandedTimer`; the other two on what they read back.
     SampleTimer {
         id: pullPressTimer
         property string after: "pull-go"
+        /// The row's branch: the worktree's own where empty.
+        property string branch: ""
         onTriggered: {
             if (!driver.menusLive())
                 return
-            const branch = worktree.branch
+            const branch = pullPressTimer.branch === "" ? worktree.branch : pullPressTimer.branch
             if (!refMenu.opened)
                 page.openRefMenu("branch", branch, branch, branchesModel.oidOfName(branch))
             if (!refMenu.opened || !refPullItem.offered)
                 return
             pullPressTimer.stop()
-            // Read back as `pull-ahead`'s `moved=`: a picture cannot say whether a graph was redrawn or never touched.
+            // Read back as `moved=` / `head=`: a picture cannot say whether a graph was redrawn or never touched.
             driver.headOidBefore = worktree.headOid
             if (pullPressTimer.after === "pull-go")
                 tipLandedTimer.begin()
@@ -508,10 +517,34 @@ Item {
             })
             if (pullPressTimer.after === "pull-ahead")
                 pullAheadTimer.start()
+            if (pullPressTimer.after === "pull-branch-go")
+                pullBranchTimer.start()
             // A hand's press takes the card down; this one must be told, and completion waits out its exit
             // (`menuGoing` — the census walks what is visible).
             driver.menuGoing = refMenu
             refMenu.close()
+        }
+    }
+    /// `pull-branch-go`: the branch level with the commit its upstream stands on, read off one listing — before the
+    /// press the two differ, and nothing but the fast-forward makes them meet — with the write answered first, so a
+    /// refusal reads as one.
+    SampleTimer {
+        id: pullBranchTimer
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore)
+                return
+            const branch = pullPressTimer.branch
+            // Both slots answer "" for a name the listing lost, which must not read as level.
+            const tip = branchesModel.oidOfName(branch)
+            const level = tip !== "" && tip === branchesModel.upstreamOidOf(branch)
+            if (!level && !repoTab.writeRefused)
+                return
+            pullBranchTimer.stop()
+            Harness.report("pull_branch refused=" + repoTab.writeRefused
+                              + " level=" + level
+                              + " behind=" + branchesModel.behindOf(branch)
+                              + " head=" + (worktree.headOid !== driver.headOidBefore))
+            driver.complete()
         }
     }
     /// `pull-ahead`: git brings nothing (`Already up to date.`) and nothing on screen changes, so the command panel is

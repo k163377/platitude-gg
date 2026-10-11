@@ -52,11 +52,11 @@ QtObject {
     /// …or leads to another worktree instead: the folder of the one holding that name, empty when none does
     /// (`RefRowMenu.heldLeaf`).
     property string menuHeldLeaf: ""
-    /// Whether that name has a far side a `git pull` would go to (the same `offers::ref_menu` ask).
-    property bool menuCanPull: false
-    /// And whether git would turn that press down for want of orders, which greys the row
-    /// (`WorktreeModel.pullBlocked`).
-    property bool menuPullBlocked: false
+    /// What the `pull` row runs on that name and why it is greyed — the same `offers::pull_row` ask as
+    /// `RefRowMenu.pullRuns` / `pullOut`.
+    property string menuPullRuns: ""
+    property string menuPullOut: ""
+    property string menuPullUpstream: ""
     /// How many files the `--hard` row would take besides the commits — held still with the rest, since its tag
     /// widens the card (デザイン規約 §メニュー).
     property int menuHardResetTakes: 0
@@ -103,8 +103,9 @@ QtObject {
         menuState.menuCanSwitch = false
         menuState.menuSwitchAsks = false
         menuState.menuHeldLeaf = ""
-        menuState.menuCanPull = false
-        menuState.menuPullBlocked = false
+        menuState.menuPullRuns = ""
+        menuState.menuPullOut = ""
+        menuState.menuPullUpstream = ""
         if (kind !== "branch" && kind !== "remote" && kind !== "worktree")
             return
         const held = menuState.worktreeLeadingFrom(kind, name)
@@ -113,15 +114,19 @@ QtObject {
             menuState.repoTab.state === "open",
             menuState.tree.branch, menuState.tree.detached,
             menuState.tree.opText, menuState.tree.conflictCount,
-            // No drift: the rows that reach a remote are the card's (`RefBranchMenu`). The last is the worktree's
-            // own upstream, which the `pull` row reads.
-            held, "", false, menuState.repoTab.defaultRemote, "",
-            menuState.tree.upstream)
+            // No drift: the rows that reach a remote are the card's (`RefBranchMenu`).
+            held, "", false, menuState.repoTab.defaultRemote, "")
         menuState.menuCanSwitch = offers.includes("switch")
         menuState.menuSwitchAsks = offers.includes("asks")
         menuState.menuHeldLeaf = held === "" ? "" : GitFacts.pathLeaf(held)
-        menuState.menuCanPull = offers.includes("pull")
-        menuState.menuPullBlocked = menuState.menuCanPull && menuState.tree.pullBlocked
+        menuState.menuPullUpstream = menuState.branchesModel.upstreamOf(name)
+        const pull = GitFacts.pullRow(
+            kind, name, menuState.repoTab.state === "open",
+            menuState.tree.branch, menuState.tree.detached, menuState.tree.opText,
+            menuState.tree.upstream, menuState.tree.pullBlocked,
+            held, menuState.menuPullUpstream, menuState.branchesModel.aheadOf(name))
+        menuState.menuPullRuns = pull.length > 0 ? pull[0] : ""
+        menuState.menuPullOut = pull.length > 1 ? pull[1].replace("out-", "") : ""
     }
 
     /// The other worktree the menu's name leads to: the one holding the branch (a remote row through the local
@@ -179,7 +184,7 @@ QtObject {
                 kind, full, oidHex, open,
                 menuState.tree.branch, menuState.tree.detached,
                 menuState.tree.opText, menuState.tree.conflictCount,
-                held, counterpart, drifted, menuState.repoTab.defaultRemote, "", "")
+                held, counterpart, drifted, menuState.repoTab.defaultRemote, "")
         }
     }
 
@@ -204,7 +209,7 @@ QtObject {
                 menuState.repoTab.state === "open",
                 menuState.tree.branch, menuState.tree.detached,
                 menuState.tree.opText, menuState.tree.conflictCount,
-                "", "", menu.heldBack !== "", menu.pushRemote, sides, "")
+                "", "", menu.heldBack !== "", menu.pushRemote, sides)
         }
     }
 

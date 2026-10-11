@@ -63,11 +63,14 @@ Item {
     property string heldLeaf: ""
     property bool canBranchHere: false
     property bool canIntegrateFrom: false
-    /// Whether this row is either end of the current branch's upstream comparison, where `git pull` runs
-    /// (offers::ref_menu).
-    property bool canPull: false
-    /// Whether the sides have diverged, which greys the row (`WorktreeModel.pullBlocked`).
-    property bool pullBlocked: false
+    /// What the `pull` row runs (`offers::pull_row`): `here` — `git pull`, on either end of the current branch's
+    /// upstream comparison —, `aside` — this row's own branch fast-forwarded, the worktree being on another —, or ""
+    /// for no row.
+    property string pullRuns: ""
+    /// Why that row is greyed — `diverged` / `own` / `held` (`Words.pullOut`) — or "" while it is live.
+    property string pullOut: ""
+    /// The remote branch this row's branch tracks, which the `own` reason names.
+    property string pullUpstream: ""
     /// The stash's drop — the only delete on this level; branch and tag deletes are their cards' (`RefBranchMenu` /
     /// `RefTagMenu`).
     property bool canDelete: false
@@ -157,7 +160,7 @@ Item {
                 kind, full, oidHex, open,
                 refRowMenu.tree.branch, refRowMenu.tree.detached,
                 refRowMenu.tree.opText, refRowMenu.tree.conflictCount,
-                held, counterpart, drifted, refRowMenu.repoTab.defaultRemote, "", "")
+                held, counterpart, drifted, refRowMenu.repoTab.defaultRemote, "")
         }
     }
 
@@ -182,7 +185,7 @@ Item {
 
     /// The TAG card's `facts` (`RefTagMenu.standOn`), read here because this is where the models are. What the card
     /// reaches and why its rows are held back live in the TAGS section alone (`NavSectionModel.tagMenu`); `aim` is a
-    /// remote the reader named on its own. The last argument is the `pull` row's upstream, which no tag carries.
+    /// remote the reader named on its own.
     function tagFacts(kind, full, oidHex, aim) {
         if (kind !== "tag")
             return { "pushRemote": refRowMenu.repoTab.defaultRemote, "offers": "" }
@@ -202,7 +205,7 @@ Item {
                 refRowMenu.repoTab.state === "open",
                 refRowMenu.tree.branch, refRowMenu.tree.detached,
                 refRowMenu.tree.opText, refRowMenu.tree.conflictCount,
-                "", "", menu.heldBack !== "", menu.pushRemote, sides, "")
+                "", "", menu.heldBack !== "", menu.pushRemote, sides)
         }
     }
 
@@ -321,17 +324,22 @@ Item {
             refRowMenu.repoTab.state === "open",
             refRowMenu.tree.branch, refRowMenu.tree.detached,
             refRowMenu.tree.opText, refRowMenu.tree.conflictCount,
-            // No drift: the remote rows are the branch card's (`RefBranchMenu`). The last is the tree's own upstream,
-            // which the `pull` row reads.
-            held, "", false, refRowMenu.repoTab.defaultRemote, "",
-            refRowMenu.tree.upstream)
+            // No drift: the remote rows are the branch card's (`RefBranchMenu`).
+            held, "", false, refRowMenu.repoTab.defaultRemote, "")
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
         refRowMenu.heldLeaf = held === "" ? "" : GitFacts.pathLeaf(held)
         refRowMenu.canBranchHere = offers.includes("branch-here")
         refRowMenu.canIntegrateFrom = offers.includes("integrate")
-        refRowMenu.canPull = offers.includes("pull")
-        refRowMenu.pullBlocked = refRowMenu.canPull && refRowMenu.tree.pullBlocked
+        // The tree's own comparison for `git pull`, the row's branch's for its fast-forward (offers::pull_row).
+        refRowMenu.pullUpstream = refRowMenu.branchesModel.upstreamOf(full)
+        const pull = GitFacts.pullRow(
+            kind, full, refRowMenu.repoTab.state === "open",
+            refRowMenu.tree.branch, refRowMenu.tree.detached, refRowMenu.tree.opText,
+            refRowMenu.tree.upstream, refRowMenu.tree.pullBlocked,
+            held, refRowMenu.pullUpstream, refRowMenu.branchesModel.aheadOf(full))
+        refRowMenu.pullRuns = pull.length > 0 ? pull[0] : ""
+        refRowMenu.pullOut = pull.length > 1 ? pull[1].replace("out-", "") : ""
         refRowMenu.canDelete = offers.includes("delete")
         // Only where the row that wears it is offered.
         refRowMenu.rebasePublished =
@@ -378,8 +386,7 @@ Item {
         AppMenuSeparator {}
         AppMenuItem {
             code: "merge"
-            //: Follows the `merge` chip: "merge into main".
-            refSentence: qsTr("into %1")
+            refSentence: Words.intoBranch
             refName: refRowMenu.worktree.branch
             offered: refRowMenu.integrateOffered
             onTriggered: refRowMenu.repoTab.merge(refRowMenu.integrateRef, false, false, "")
@@ -398,15 +405,20 @@ Item {
             onTriggered: refRowMenu.repoTab.rebase(refRowMenu.integrateRef, "", true)
         }
         AppMenuSeparator {}
-        // A group of its own above the cards, and the word alone (デザイン規約 §取り込んで合流させる).
+        // A group of its own above the cards, naming the branch that moves in its own colour — the worktree's, which
+        // the row may not name (its upstream's), or this row's own (デザイン規約 §取り込んで合流させる).
         AppMenuItem {
             id: refPullItem
             code: "pull"
-            offered: refRowMenu.canPull
-            // Diverged: greys and points at the remote branch's own rows (デザイン規約 §取り込んで合流させる).
-            blockedReason: refRowMenu.pullBlocked ? Words.pullDiverged : ""
-            // git resolves the other end itself.
-            onTriggered: refRowMenu.repoTab.pull()
+            refSentence: Words.intoBranch
+            refName: refRowMenu.pullRuns === "aside" ? refRowMenu.refId : refRowMenu.worktree.branch
+            refTint: refRowMenu.pullRuns === "aside" ? Theme.textPrimary : Theme.textLink
+            offered: refRowMenu.pullRuns !== ""
+            // Greyed where git would turn the press down, saying where to go instead (デザイン規約 §取り込んで合流させる).
+            blockedReason: Words.pullOut(refRowMenu.pullOut, refRowMenu.heldLeaf, refRowMenu.pullUpstream)
+            reasonMarkWord: refRowMenu.pullOut === "held" ? refRowMenu.heldLeaf : ""
+            // `git pull` resolves the other end itself; the fast-forward is told the branch.
+            onTriggered: refRowMenu.repoTab.pull(refRowMenu.pullRuns === "aside" ? refRowMenu.refId : "")
         }
         // A stash's drop stays on this level: it has no card to nest in.
         AppMenuItem {

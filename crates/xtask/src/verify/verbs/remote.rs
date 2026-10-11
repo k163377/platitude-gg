@@ -365,35 +365,65 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "tracked=false state=publish",
     },
-    // The `pull` row on the current branch, on its upstream, and on a
-    // remote nothing here tracks, which must not carry it (a pull there
-    // would move a branch the row does not name). `sentence=false`: both
-    // offered rows run the same `git pull`, so both are the chip alone.
+    // The `pull` row on the current branch, on its upstream, on a branch
+    // the worktree is not on (`--preset others-behind`'s `release`), and on
+    // a remote nothing here tracks, which must not carry it (a pull there
+    // would move a branch the row does not name). `into=`: every offered
+    // row names the branch that moves — `main` on its upstream's row too.
+    // `runs=` tells `git pull` from the fast-forward, which the picture
+    // cannot.
     Verb {
         name: "pull-menu",
         when: &[
             (
                 Arg::Is(""),
-                "pull_menu open=true kind=branch pull=true code=pull sentence=false",
+                "pull_menu open=true kind=branch pull=true code=pull sentence=true runs=here \
+                 into=main",
             ),
             (
                 Arg::Is("origin/main"),
-                "pull_menu open=true kind=remote pull=true code=pull sentence=false",
+                "pull_menu open=true kind=remote pull=true code=pull sentence=true runs=here \
+                 into=main",
+            ),
+            (
+                Arg::Is("release"),
+                "pull_menu open=true kind=branch pull=true code=pull sentence=true runs=aside \
+                 into=release",
             ),
         ],
         plain: "pull_menu open=true kind=remote pull=false",
     },
-    // The same row once both sides moved: bringing them together is a
-    // choice, so the row is out and its tooltip says where the choice is
-    // made. The sidebar's row and the graph chip's get the answer from the
-    // same place, but a run through one says nothing about the other.
+    // The same row where git would turn the press down: both sides of the
+    // tree moved (bringing them together is a choice), a branch aside with
+    // commits of its own (`--preset others-behind`'s `feature/mine`), or
+    // one another worktree has out (`--preset tracked-elsewhere`'s
+    // `feature/topic-a`). The row is out and its tooltip says where to go.
+    // The sidebar's row and the graph chip's get the answer from the same
+    // place, but a run through one says nothing about the other.
     Verb {
         name: "pull-blocked",
-        when: &[(
-            Arg::Is("chip"),
-            "pull_blocked where=chip offered=true blocked=true tip=true \
-             says=The branches have diverged, so pick the remote branch and rebase onto it",
-        )],
+        when: &[
+            (
+                Arg::Is("chip"),
+                "pull_blocked where=chip offered=true blocked=true tip=true \
+                 says=The branches have diverged, so pick the remote branch and rebase onto it",
+            ),
+            (
+                Arg::Is("feature/mine"),
+                "pull_blocked where=row offered=true blocked=true tip=true \
+                 says=Cannot fast-forward — it has commits not on origin/feature/mine",
+            ),
+            (
+                Arg::Is("chip:feature/topic-a"),
+                "pull_blocked where=chip offered=true blocked=true tip=true \
+                 says=Checked out in another worktree — topic",
+            ),
+            (
+                Arg::Is("feature/topic-a"),
+                "pull_blocked where=row offered=true blocked=true tip=true \
+                 says=Checked out in another worktree — topic",
+            ),
+        ],
         plain: "pull_blocked where=row offered=true blocked=true tip=true \
                 says=The branches have diverged, so pick the remote branch and rebase onto it",
     },

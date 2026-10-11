@@ -133,11 +133,12 @@ Item {
             driver.beginWrite(act)
             chipDeleteTimer.start()
         } else if (act === "pull-menu") {
-            // Bare: the current branch's row. An argument: a remote-tracking row, its fold opened as `delete-remote`
-            // does. Two remote rows tell the offer apart — only the upstream this branch is measured against carries
-            // it (`offers::ref_menu`).
-            const onRemote = arg !== ""
-            const name = onRemote ? arg : worktree.branch
+            // Bare: the current branch's row. A local branch's name: that branch's own row, the worktree being on
+            // another. Anything else: a remote-tracking row, its fold opened as `delete-remote` does. Two remote rows
+            // tell the offer apart — only the upstream this branch is measured against carries it
+            // (`offers::pull_row`).
+            const onRemote = arg !== "" && branchesModel.oidOfName(arg) === ""
+            const name = arg === "" ? worktree.branch : arg
             if (onRemote)
                 remotesModel.toggleFolder(GitFacts.remoteOfRef(arg, repoTab.remoteNames))
             const oid = onRemote ? remotesModel.oidOfName(arg) : branchesModel.oidOfName(name)
@@ -145,16 +146,19 @@ Item {
             page.openRefMenu(onRemote ? "remote" : "branch", name, name, oid)
             pullMenuTimer.start()
         } else if (act === "pull-blocked") {
-            // The row out where both sides have moved, its reason under the pointer (規約 §取り込んで合流させる). Bare
-            // is the sidebar's entrance, `chip` the graph's: the same answer from each needs a run through each.
+            // The row out where git would turn the press down, its reason under the pointer (規約 §取り込んで合流させる).
+            // `[chip][:<branch>]`: bare is the sidebar's entrance, `chip` the graph's — the same answer from each needs
+            // a run through each —; a branch names the row of one the worktree is not on (the current one otherwise).
             // Forced, because a pointer cannot be put on a row from here (verify-ui §hover の絵の撮り方).
-            const onBranch = worktree.branch
-            if (arg === "chip")
+            const onChip = arg === "chip" || arg.startsWith("chip:")
+            const named = onChip ? arg.slice("chip".length).replace(/^:/, "") : arg
+            const onBranch = named === "" ? worktree.branch : named
+            if (onChip)
                 page.openRowMenu(branchesModel.oidOfName(onBranch), { "kind": "branch", "name": onBranch })
             else
                 page.openRefMenu("branch", onBranch, onBranch, branchesModel.oidOfName(onBranch))
-            pullBlockedTimer.onChip = arg === "chip"
-            pullBlockedTimer.row = arg === "chip" ? pullCommitItem : refPullItem
+            pullBlockedTimer.onChip = onChip
+            pullBlockedTimer.row = onChip ? pullCommitItem : refPullItem
             pullBlockedTimer.row.tipForced = true
             pullBlockedTimer.start()
         } else if (act === "tag-chip-menu") {
@@ -356,7 +360,7 @@ Item {
             driver.complete()
         }
     }
-    /// The `pull` row as the card opens. Whether it was offered is the claim (`offers::ref_menu`): a row wired to
+    /// The `pull` row as the card opens. Whether it was offered is the claim (`offers::pull_row`): a row wired to
     /// nothing frames like one that reaches git.
     SampleTimer {
         id: pullMenuTimer
@@ -366,12 +370,16 @@ Item {
             if (!refMenu.opened)
                 return
             pullMenuTimer.stop()
-            // `sentence=`: both rows run the same `git pull`, so both are the word alone (デザイン規約 §取り込んで合流させる).
+            // `sentence=` / `into=`: every row names the branch that moves (デザイン規約 §取り込んで合流させる) — on the
+            // upstream's row, one the row does not name. `runs=`: what the press would run — `here` (`git pull`) or
+            // `aside` (the fast-forward). The name last: it is free text.
             Harness.report("pull_menu open=" + refMenu.opened
                               + " kind=" + (pullMenuTimer.onRemote ? "remote" : "branch")
                               + " pull=" + refPullItem.offered
                               + " code=" + refPullItem.code
-                              + " sentence=" + (refPullItem.refSentence !== ""))
+                              + " sentence=" + (refPullItem.refSentence !== "")
+                              + " runs=" + driver.refRowMenu.pullRuns
+                              + " into=" + (refPullItem.offered ? refPullItem.refName : ""))
             driver.complete()
         }
     }

@@ -56,11 +56,12 @@ Item {
     required property bool switchAsks
     /// …or leads to the worktree holding that name instead: that worktree's folder (`RefRowMenu.heldLeaf`).
     required property string heldLeaf
-    /// And whether that name has a far side to pull from — the third answer off those same rules.
-    required property bool canPull
-    /// Whether that press would be turned down before git did anything, which greys the row
-    /// (`RefRowMenu.pullBlocked`).
-    required property bool pullBlocked
+    /// What the `pull` row runs on that name — `here` / `aside`, "" for no row — and why it is greyed — `diverged` /
+    /// `own` / `held`, "" while live (`RefRowMenu.pullRuns` / `pullOut`).
+    required property string pullRuns
+    required property string pullOut
+    /// The remote branch that name tracks, which the `own` reason names (`RefRowMenu.pullUpstream`).
+    required property string pullUpstream
     /// How many uncommitted files `--hard` takes besides the commits (`status::Counts::hard_reset_takes`); 0 on a
     /// clean tree.
     required property int hardResetTakes
@@ -99,7 +100,8 @@ Item {
     signal revertRequested(string oidHex)
     signal mergeRequested(string ref)
     signal rebaseRequested(string ref)
-    signal pullRequested()
+    /// `branch` is the name a fast-forward moves, "" for the worktree's own `git pull` (`RepoTab.pull`).
+    signal pullRequested(string branch)
     signal checkDeleteRequested(string branch)
     signal forceDeleteRequested(string branch)
     signal deleteRemoteRequested(string remoteRef, string expect)
@@ -344,8 +346,7 @@ Item {
         AppMenuSeparator {}
         AppMenuItem {
             code: "merge"
-            //: Follows the `merge` chip: "merge into main".
-            refSentence: qsTr("into %1")
+            refSentence: Words.intoBranch
             refName: rowMenu.branch
             offered: rowMenu.canIntegrate
             onTriggered: rowMenu.mergeRequested(rowMenu.integrateRef)
@@ -401,14 +402,19 @@ Item {
             }
         }
         AppMenuSeparator {}
-        // The sidebar's `pull` row, in the same seat: a group of its own above the cards, since a pull acts on the
-        // worktree's branch, not this commit (デザイン規約 §取り込んで合流させる).
+        // The sidebar's `pull` row, in the same seat: a group of its own above the cards, since a pull acts on a
+        // branch, not this commit (デザイン規約 §取り込んで合流させる).
         AppMenuItem {
             id: pullCommitItem
             code: "pull"
-            offered: rowMenu.canPull
-            blockedReason: rowMenu.pullBlocked ? Words.pullDiverged : ""
-            onTriggered: rowMenu.pullRequested()
+            // The branch that moves, in its own colour: the worktree's, or the chip's where the pull runs aside.
+            refSentence: Words.intoBranch
+            refName: rowMenu.pullRuns === "aside" ? rowMenu.targetName : rowMenu.branch
+            refTint: rowMenu.pullRuns === "aside" ? Theme.textPrimary : Theme.textLink
+            offered: rowMenu.pullRuns !== ""
+            blockedReason: Words.pullOut(rowMenu.pullOut, rowMenu.heldLeaf, rowMenu.pullUpstream)
+            reasonMarkWord: rowMenu.pullOut === "held" ? rowMenu.heldLeaf : ""
+            onTriggered: rowMenu.pullRequested(rowMenu.pullRuns === "aside" ? rowMenu.targetName : "")
         }
         AppMenuSeparator {}
         // The same card the sidebar's row opens (デザイン規約 §メニュー); a row that draws no branch hands it "" and the

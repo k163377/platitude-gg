@@ -97,10 +97,41 @@ QtObject {
     /// that one is — a tag's holders on the left panel and in a chip's card (`NavFacts.apartNote`).
     readonly property string remotesDisagree: qsTr("Remotes disagree")
 
+    /// The sentence after the `merge` and `pull` chips, naming the branch that takes the commits in — the current one
+    /// for a merge, the one that moves for a pull (`AppMenuItem.refSentence`; デザイン規約 §履歴を合流させる).
+    //: Follows the `merge` or `pull` chip: "merge into main", "pull into release". %1 is a branch name.
+    readonly property string intoBranch: qsTr("into %1")
+
     /// Why the `pull` row is greyed while both sides have moved, from both entrances (`RefRowMenu` / `CommitRowMenu`;
     /// デザイン規約 §取り込んで合流させる).
     readonly property string pullDiverged: qsTr(
         "The branches have diverged, so pick the remote branch and rebase onto it")
+    /// …and while a branch the worktree is not on has commits its upstream lacks: a fast-forward is all a pull does
+    /// from here. What cannot happen, then why, the way other clients put it (lazygit, GitLens); `upstream` is what it
+    /// tracks.
+    function pullOwnCommits(upstream) {
+        //: %1 is the remote branch this branch tracks, e.g. origin/feature/login.
+        return qsTr("Cannot fast-forward — it has commits not on %1").arg(upstream)
+    }
+    /// Why the `pull` row is greyed, by the word `GitFacts.pullRow` answered after `out-`: the tree diverged, the row's
+    /// branch has commits its `upstream` lacks, or another worktree has it out — `leaf` is that worktree's folder.
+    /// Empty where the row is live.
+    function pullOut(out, leaf, upstream) {
+        switch (out) {
+        case "diverged": return Words.pullDiverged
+        case "own": return Words.pullOwnCommits(upstream)
+        case "held": return Words.checkedOutElsewhere(leaf)
+        default: return ""
+        }
+    }
+
+    /// Why a row acting on a branch another worktree has checked out is greyed — the branch card's delete rows and the
+    /// `pull` row. The state and where, not why (デザイン規約 §hover のツールチップ); the folder, not the whole path git
+    /// prints: nobody reads a tooltip that wide.
+    function checkedOutElsewhere(leaf) {
+        //: %1 is the folder of the other worktree that has this branch checked out.
+        return qsTr("Checked out in another worktree — %1").arg(leaf)
+    }
 
     /// The window band's badge words (BandStateGroup measures and draws them, BandStateCard titles them);
     /// the WIP pane's conflicts bucket header shares the first.
