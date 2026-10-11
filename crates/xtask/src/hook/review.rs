@@ -1,7 +1,11 @@
-//! UserPromptSubmit: the half of a review that is not in the diff — every
-//! instruction the user gave in the session, met exactly once. A
-//! summarized context drops those turns first, so the ask for a review
-//! carries them back in.
+//! UserPromptSubmit: what a review is judged by, added to the user's ask
+//! for one. The points are the review-points skill's, named by path
+//! because a review run by another recipe (`/code-review`) need not load
+//! the skill. The instructions are every one the user gave in the
+//! session, met exactly once; a summarized context drops those turns
+//! first, so the note names the session record.
+
+use std::path::PathBuf;
 
 use super::payload::string_field;
 
@@ -12,6 +16,9 @@ const ASKS: [&str; 2] = ["レビュー", "review"];
 /// Everyday words that contain an ask. Japanese has no word boundary to
 /// test, so these are counted and subtracted.
 const CONTAINERS: [&str; 2] = ["プレビュー", "preview"];
+
+/// The review-points skill, from the workspace root.
+const SKILL: &str = ".claude/skills/review-points/SKILL.md";
 
 /// UserPromptSubmit: plain stdout becomes this turn's context. The
 /// landing permit reads the same message first (`permit`).
@@ -48,9 +55,17 @@ fn occurrences(text: &str, words: &[&str]) -> usize {
     words.iter().map(|word| text.matches(word).count()).sum()
 }
 
-/// What the review covers besides the code. Both directions are named
-/// because only missing work shows itself; work nobody asked for reads as
-/// diligence.
+/// The skill's full path in the tree this hook was built from: the
+/// session's cwd may be a subfolder of that tree, which [`SKILL`] does
+/// not reach from.
+fn skill_path() -> PathBuf {
+    crate::tree::workspace_root().join(SKILL)
+}
+
+/// What the review is judged by: the skill's points, of which the user's
+/// instructions are the session's own to check. Both directions of the
+/// instructions are named because only missing work shows itself; work
+/// nobody asked for reads as diligence.
 fn note(transcript: Option<&str>) -> String {
     let record = transcript
         .map(|path| {
@@ -61,16 +76,19 @@ fn note(transcript: Option<&str>) -> String {
         })
         .unwrap_or_default();
     format!(
-        "Review the implementation and verification against the applicable user instructions, \
-         including corrections during the task. Check for missing work and unauthorized scope \
-         changes; necessary supporting edits belong to the requested work. Report findings \
-         and material verification limits.{record}"
+        "Judge the change by the points of the review-points skill ({skill}), and hand that \
+         path to any agent that does the reviewing. The user's instructions are this session's \
+         to check: review the implementation and verification against the applicable user \
+         instructions, including corrections during the task. Check for missing work and \
+         unauthorized scope changes; necessary supporting edits belong to the requested work. \
+         Report findings and material verification limits.{record}",
+        skill = skill_path().display()
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{answers, asks_for_review, note, prompt_submit};
+    use super::{answers, asks_for_review, note, prompt_submit, skill_path};
 
     #[test]
     fn a_report_handed_back_asks_for_nothing() {
@@ -103,6 +121,13 @@ mod tests {
     fn names_the_record_only_when_the_payload_carries_it() {
         assert!(note(Some("C:/x/session.jsonl")).contains("C:/x/session.jsonl"));
         assert!(!note(None).contains("record"));
+    }
+
+    #[test]
+    fn names_a_skill_that_is_there() {
+        let skill = skill_path();
+        assert!(note(None).contains(&skill.display().to_string()));
+        assert!(skill.is_file(), "{}", skill.display());
     }
 
     #[test]
