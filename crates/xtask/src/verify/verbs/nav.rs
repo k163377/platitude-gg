@@ -411,6 +411,13 @@ pub(super) const TABLE: &[Verb] = &[
                  aside=true mark=fix-listed cut=false \
                  says=Taken by another worktree — fix-listed",
             ),
+            // The one branch whose place is free there: offered as on `basic`,
+            // its own folder named.
+            (
+                Arg::Is("branch:feature/free"),
+                "worktree_add_menu card=true here=true add=true folder=feature-free blocked=false tip=false \
+                 aside=false mark= cut=false",
+            ),
             (
                 Arg::Has("long-enough"),
                 "worktree_add_menu card=true here=true add=true \
