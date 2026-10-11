@@ -111,6 +111,7 @@ fn a_worktree_is_laid_where_its_reading_puts_it_now() {
         path: "/tmp/seat".to_string(),
         head: oid(head),
         kinds: Kinds::default(),
+        main: false,
     };
 
     let (was, _) = lay(history(), &standing(None, vec![worktree(1)]), Some(oid(3)));
@@ -163,6 +164,7 @@ fn a_reading_the_listing_has_moved_past_draws_nothing() {
         path: path.to_string(),
         head: oid(head),
         kinds: Kinds::default(),
+        main: false,
     };
     let readings = vec![reading("/tmp/a", 1), reading("/tmp/b", 2)];
 

@@ -71,6 +71,10 @@ pub struct RefLabel {
     /// holder, or the `Worktree` marker's worktree. False where no worktree
     /// stands.
     pub locked: bool,
+    /// The `Worktree` marker's worktree is the repository's own, whose
+    /// name wears the house instead of the tree (デザイン規約 §ref の種別).
+    /// False on every other chip.
+    pub main: bool,
 }
 
 /// The chips every commit carries, as one sorted run.

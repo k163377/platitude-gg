@@ -129,6 +129,7 @@ fn label(text: &str, kind: LabelKind) -> RefLabel {
         remote: String::new(),
         held_elsewhere: false,
         locked: false,
+        main: false,
     }
 }
 

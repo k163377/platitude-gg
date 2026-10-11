@@ -230,6 +230,7 @@ mod tests {
             remote: String::new(),
             held_elsewhere: false,
             locked: false,
+            main: false,
         }
     }
 

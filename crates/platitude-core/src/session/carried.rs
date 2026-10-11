@@ -31,8 +31,9 @@ use super::pace::WorktreesPace;
 /// One other worktree's uncommitted work, as a row draws it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Carried {
-    /// The row's chip name: the path's last segment, as the WORKTREES row
-    /// shows it (`joins::shown_name`).
+    /// The row's chip name, as the WORKTREES row shows it: the path's last
+    /// segment (`joins::shown_name`), or for the repository's own worktree
+    /// the branch it keeps (`Listed::home_branch`).
     pub name: crate::Name,
     /// Where that worktree is, as git printed it — what the row opens, in a
     /// tab of its own (the only place that can stage and commit there).
@@ -42,6 +43,9 @@ pub struct Carried {
     pub head: Oid,
     /// The six tallies the row shows — that worktree's, not this window's.
     pub kinds: Kinds,
+    /// Whether it is the repository's own worktree (`WorktreeEntry::main`),
+    /// which wears the house where the others wear the tree.
+    pub main: bool,
 }
 
 /// The interval a fixed pace starts at, before anyone sets one.
@@ -71,6 +75,12 @@ pub(super) struct Listed {
     /// As git printed it.
     pub(super) path: String,
     pub(super) head: Option<Oid>,
+    pub(super) main: bool,
+    /// The branch the repository's own worktree has out, which names its
+    /// row the way its WORKTREES row is named (デザイン規約 §ref の種別).
+    /// `None` on every other worktree, and on that one while it is
+    /// detached — a rebase or bisect standing there too, as that row has it.
+    pub(super) home_branch: Option<String>,
 }
 
 /// The worktrees a listing names that can be read: every one but this
@@ -89,6 +99,8 @@ pub(super) fn listed(worktrees: &[WorktreeEntry], here: &Path) -> Vec<Listed> {
                 .head_hex
                 .as_deref()
                 .and_then(|hex| Oid::from_hex_str(hex.trim()).ok()),
+            main: w.main,
+            home_branch: w.main.then(|| w.branch.clone()).flatten(),
         })
         .filter(|worktree| worktree.key != here)
         .collect()
@@ -127,11 +139,21 @@ async fn read_one(
         return Ok(None);
     }
     Ok(Some(Carried {
-        name: crate::session::joins::shown_name(&worktree.path),
+        name: row_name(worktree),
         path: worktree.path.clone(),
         head,
         kinds,
+        main: worktree.main,
     }))
+}
+
+/// What a worktree's row is called ([`Carried::name`]): the branch the
+/// repository's own has out, the folder otherwise.
+fn row_name(worktree: &Listed) -> crate::Name {
+    worktree.home_branch.as_deref().map_or_else(
+        || crate::session::joins::shown_name(&worktree.path),
+        crate::Name::from,
+    )
 }
 
 /// The pane's worktree as a read of the worktrees meets it ([`read_one`]):
@@ -713,6 +735,54 @@ mod tests {
         );
     }
 
+    fn entry(path: &str, main: bool, branch: Option<&str>, held: Option<&str>) -> WorktreeEntry {
+        WorktreeEntry {
+            path: path.to_string(),
+            branch: branch.map(str::to_string),
+            head_hex: Some("1".repeat(40)),
+            bare: false,
+            detached: branch.is_none(),
+            locked: false,
+            lock_reason: String::new(),
+            prunable: false,
+            prune_reason: String::new(),
+            main,
+            held: held.map(str::to_string),
+        }
+    }
+
+    /// The repository's own worktree is listed as such and its row goes by
+    /// the branch it has out — the folder while it is detached, a rebase
+    /// keeping the branch there too, as its WORKTREES row says it.
+    #[test]
+    fn the_repositorys_own_worktree_goes_by_the_branch_it_has_out() {
+        let here = Path::new("/work/here");
+        let rows = listed(
+            &[
+                entry("/work/repo", true, Some("main"), None),
+                entry("/work/topic", false, Some("topic"), None),
+                entry("/work/here", false, Some("here"), None),
+            ],
+            here,
+        );
+        let seen: Vec<_> = rows
+            .iter()
+            .map(|w| (w.main, row_name(w).to_string()))
+            .collect();
+        assert_eq!(
+            seen,
+            [(true, "main".to_string()), (false, "topic".to_string())]
+        );
+
+        let rebasing = listed(&[entry("/work/repo", true, None, Some("main"))], here);
+        assert!(rebasing[0].main);
+        assert_eq!(
+            row_name(&rebasing[0]),
+            "repo",
+            "detached, it goes by its folder"
+        );
+    }
+
     fn listed_as(names: &[&str]) -> Vec<Listed> {
         names
             .iter()
@@ -720,6 +790,8 @@ mod tests {
                 key: crate::session::joins::same_path_key(&format!("/worktrees/{name}")),
                 path: format!("/worktrees/{name}"),
                 head: None,
+                main: false,
+                home_branch: None,
             })
             .collect()
     }
@@ -730,6 +802,7 @@ mod tests {
             path: format!("/worktrees/{name}"),
             head: Oid::from_hex_str(&"a".repeat(40)).expect("an oid"),
             kinds: Kinds::default(),
+            main: false,
         }
     }
 

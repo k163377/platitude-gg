@@ -45,6 +45,9 @@ pub struct DetachedCheckout {
     /// Where it is, as [`same_path_key`] spells it — what a removal under
     /// way names it by (`session::leaving`).
     pub path: String,
+    /// The repository's own worktree (`WorktreeEntry::main`), whose chip
+    /// wears the house (`RefLabel::main`).
+    pub main: bool,
 }
 
 impl<'a> RefJoins<'a> {
@@ -177,6 +180,7 @@ pub(super) fn build_label_map(
                 remote: String::new(),
                 held_elsewhere: joins.held_elsewhere(r),
                 locked: joins.held_locked(r),
+                main: false,
             },
         ));
     }
@@ -204,6 +208,7 @@ pub(super) fn build_label_map(
                         .join(", "),
                     held_elsewhere: false,
                     locked: false,
+                    main: false,
                 },
             ));
         }
@@ -223,6 +228,7 @@ pub(super) fn build_label_map(
                 // This window's own worktree, which the holders never carry.
                 held_elsewhere: false,
                 locked: false,
+                main: false,
             },
         ));
     }
@@ -243,6 +249,7 @@ pub(super) fn build_label_map(
                 // its kind.
                 held_elsewhere: false,
                 locked: worktree.locked,
+                main: worktree.main,
             },
         ));
     }
@@ -502,6 +509,7 @@ impl RepoSession {
                             name: shown_name(&worktree.path),
                             locked: worktree.locked,
                             path: same_path_key(&worktree.path),
+                            main: worktree.main,
                         });
                     }
                 }

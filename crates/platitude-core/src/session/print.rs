@@ -207,6 +207,7 @@ mod tests {
                 remote: String::new(),
                 held_elsewhere: false,
                 locked: false,
+                main: false,
             }],
             stash_ref: String::new(),
             published: false,
@@ -255,6 +256,7 @@ mod tests {
                             modified: 1,
                             ..crate::status::Kinds::default()
                         },
+                        main: false,
                     })
                 }),
             ),

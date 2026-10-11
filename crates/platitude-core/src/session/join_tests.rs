@@ -313,6 +313,7 @@ fn a_worktree_standing_on_no_branch_gets_a_chip_of_its_own() {
         name: crate::Name::const_new("spike"),
         locked: true,
         path: "c:/work/spike".to_string(),
+        main: false,
     });
     let joins = RefJoins::new(&refs, &held);
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
@@ -340,6 +341,36 @@ fn a_worktree_standing_on_no_branch_gets_a_chip_of_its_own() {
             .iter()
             .any(|l| l.kind == LabelKind::Worktree),
         "the eye takes the tag and leaves the worktree"
+    );
+    assert!(!worktree.main, "a linked worktree's chip wears the tree");
+}
+
+/// The repository's own worktree, detached while this window stands in a
+/// linked one, says so on its chip: the house instead of the tree.
+#[test]
+fn the_repositorys_own_worktree_standing_on_no_branch_says_it_is_home() {
+    let refs = vec![branch("main", oid(1))];
+    let remote_tags = index_of("origin", Vec::new());
+    let mut held = WorktreeHolders::default();
+    held.detached.push(super::joins::DetachedCheckout {
+        oid: oid(2),
+        name: crate::Name::const_new("repo"),
+        locked: false,
+        path: "c:/work/repo".to_string(),
+        main: true,
+    });
+    let joins = RefJoins::new(&refs, &held);
+    let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
+
+    let run = map.labels_of(&oid(2), true);
+    let worktree = run
+        .iter()
+        .find(|l| l.kind == LabelKind::Worktree)
+        .expect("the worktree is on the row it is standing on");
+    assert!(worktree.main);
+    assert!(
+        map.labels_of(&oid(1), true).iter().all(|l| !l.main),
+        "and no other chip says it"
     );
 }
 
