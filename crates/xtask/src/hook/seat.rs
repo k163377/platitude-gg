@@ -314,6 +314,9 @@ pub(super) fn write_objection(input: &str, path: &str) -> Option<(&'static str, 
             // branch, and the write door has nothing to say about it.
             None => Landing::Outside,
         },
+        // The task runner's throwaway trees stand in the primary's ignored
+        // `target/` (`crate::temp`): a run's files, not the checkout's.
+        None if in_throwaway_trees(path) => Landing::Outside,
         // Everything outside this repository is somebody else's business:
         // a memory file, a scratchpad, a sibling project.
         None if in_primary_checkout(&cwd, path) => Landing::Primary,
@@ -392,6 +395,13 @@ fn work_already_there(tree: &str) -> String {
          clean `git status` says nothing about: {}.",
         printable(&subjects)
     )
+}
+
+/// Whether `path` is in the task runner's throwaway trees — a demo
+/// repository, a run's settings, a state file written by hand for one.
+fn in_throwaway_trees(path: &str) -> bool {
+    let place = crate::temp::place().to_string_lossy().replace('\\', "/");
+    under(&place, path)
 }
 
 /// Whether `path` is inside the primary checkout of the repository the
@@ -484,8 +494,8 @@ fn worktree_objection(name: Option<&str>, path: Option<&str>) -> Option<&'static
 #[cfg(test)]
 mod tests {
     use super::{
-        Entry, Landing, entry_verdict, reclaims_on_entry, takes_over_unasked, tree_named, under,
-        worktree_objection, write_verdict,
+        Entry, Landing, entry_verdict, in_throwaway_trees, reclaims_on_entry, takes_over_unasked,
+        tree_named, under, worktree_objection, write_verdict,
     };
     use crate::hook::payload::printable;
     use crate::seats::{Identity, Standing, WorktreeBlock};
@@ -682,6 +692,24 @@ mod tests {
         ] {
             assert!(!takes_over_unasked(command), "{command}");
         }
+    }
+
+    /// A state file written by hand beside a demo repository is a run's,
+    /// though on the desk the folder stands in the primary checkout's
+    /// `target/`; what stands beside the folder and above it is not.
+    #[test]
+    fn the_throwaway_trees_are_no_write_into_the_primary() {
+        let spelled = |path: &std::path::Path| path.to_string_lossy().replace('\\', "/");
+        let place = crate::temp::place();
+        assert!(in_throwaway_trees(&spelled(
+            &place.join("pgg-demo/basic-1/config/state.toml")
+        )));
+        let beside = place.parent().expect("a folder holds it");
+        assert!(!in_throwaway_trees(&spelled(
+            &beside.join("debug/xtask.exe")
+        )));
+        let above = beside.parent().unwrap_or(beside);
+        assert!(!in_throwaway_trees(&spelled(&above.join("CLAUDE.md"))));
     }
 
     #[test]

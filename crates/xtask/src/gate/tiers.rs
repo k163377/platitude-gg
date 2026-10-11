@@ -382,7 +382,7 @@ mod tests {
     /// path; none is an empty table.
     #[test]
     fn a_table_that_cannot_be_read_is_refused_by_path_and_cause() {
-        let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-tiers"), "load")
+        let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-tiers"), "load")
             .expect("a root of this test's own");
         let path = root.join(super::FILE);
         std::fs::create_dir_all(path.parent().expect("crates/xtask")).expect("xtask dir");

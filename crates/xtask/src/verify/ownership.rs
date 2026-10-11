@@ -31,7 +31,7 @@ pub(crate) fn claim_resource(
 ) -> Result<Option<ResourceClaim>, String> {
     let canonical = std::fs::canonicalize(target)
         .map_err(|e| format!("could not resolve {kind} {}: {e}", target.display()))?;
-    let locks = std::env::temp_dir().join(LOCKS);
+    let locks = crate::temp::root().join(LOCKS);
     let (lock, key) = lock_of(&locks, &canonical);
     if claimed.contains(&key) {
         return Ok(None);
@@ -107,10 +107,10 @@ fn note(file: &mut std::fs::File, canonical: &Path) -> std::io::Result<()> {
 /// Claim a run-owned directory before any repository, shim, config, or PNG
 /// is created in it.
 pub(super) fn fresh_shot_dir(verb: &str) -> Result<PathBuf, String> {
-    claim_dir(&std::env::temp_dir().join("pgg-verify"), verb)
+    claim_dir(&crate::temp::root().join("pgg-verify"), verb)
 }
 
-/// The bases under the system temp a run leaves something in: the
+/// The bases under [`crate::temp::root`] a run leaves something in: the
 /// directories `claim_dir` makes — pictures and settings, demo
 /// repositories (`demo::claim_root`), a container run's mount
 /// (`keepsakes::keepsake_dir`), test roots, and [`crate::yard`]'s trees —
@@ -222,7 +222,7 @@ fn give_back(roots: Vec<PathBuf>, others: Option<Vec<u32>>) -> usize {
 /// sweep's. Silent: a gate's verdict is about its tests.
 pub(crate) fn sweep_yesterdays_runs() {
     std::thread::spawn(|| {
-        let temp = std::env::temp_dir();
+        let temp = crate::temp::root();
         let now = SystemTime::now();
         for base in RUN_BASES {
             sweep_older_than(&temp.join(base), now, RUN_LITTER_AGE);
@@ -307,7 +307,7 @@ mod tests {
     /// entries stand now and go two days on.
     #[test]
     fn a_sweep_takes_the_runs_of_a_day_ago_and_leaves_todays() {
-        let base = super::claim_dir(&std::env::temp_dir().join("pgg-census"), "sweep")
+        let base = super::claim_dir(&crate::temp::root().join("pgg-census"), "sweep")
             .expect("a base of this test's own");
         let run = super::claim_dir(&base, "run").expect("a run directory");
         std::fs::write(run.join("app.png"), b"picture").expect("a picture in it");
@@ -328,7 +328,7 @@ mod tests {
     /// neighbour goes, and a month on.
     #[test]
     fn a_sweep_leaves_a_marked_tree_and_takes_the_run_beside_it() {
-        let base = super::claim_dir(&std::env::temp_dir().join("pgg-census"), "sweep-keep")
+        let base = super::claim_dir(&crate::temp::root().join("pgg-census"), "sweep-keep")
             .expect("a base of this test's own");
         let run = super::claim_dir(&base, "run").expect("a run directory");
         let kept = super::claim_dir(&base, "by-hand").expect("a hand-built directory");
@@ -437,7 +437,7 @@ mod tests {
         // Asked before this run claims anything, so the file standing
         // here is the dead run's own.
         let canonical = std::fs::canonicalize(&target).expect("the resolved target");
-        let (lock, _) = super::lock_of(&std::env::temp_dir().join(super::LOCKS), &canonical);
+        let (lock, _) = super::lock_of(&crate::temp::root().join(super::LOCKS), &canonical);
         assert!(lock.is_file(), "{} went with its owner", lock.display());
 
         // When the OS lets the lock go is the machine's affair, so the

@@ -605,9 +605,9 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       its image is built stops there and builds nothing. The first line
       to meet a silence keeps what stood on the host — the engine's
       processes, its session process's threads and memory, the disks'
-      last events — under the temp directory's pgg-engine, and says
-      where; `witness` takes the same by hand, for a wslc seen hanging
-      anywhere else. Take it BEFORE anything ends the session (`wslc
+      last events — under pgg-engine in the primary checkout's
+      target/tmp, and says where; `witness` takes the same by hand, for
+      a wslc seen hanging anywhere else. Take it BEFORE anything ends the session (`wslc
       system session terminate`, ending wslcsession.exe, a reboot): the
       README it leaves says what an administrator can add.
         cargo xtask linux witness

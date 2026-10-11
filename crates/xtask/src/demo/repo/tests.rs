@@ -4,7 +4,7 @@ use super::DemoRepo;
 
 #[test]
 fn a_commit_written_earlier_is_authored_exactly_that_long_before_it_is_committed() {
-    let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-demo"), "earlier")
+    let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-demo"), "earlier")
         .expect("a directory of its own");
     let earlier = 2 * 24 * 3600;
     let mut repo = DemoRepo::init(&root, "repo").expect("a repository");

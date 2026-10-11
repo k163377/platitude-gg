@@ -172,7 +172,7 @@ fn runs_started_together_are_handed_one_template() {
 /// named root is built in place.
 #[test]
 fn a_named_root_is_built_where_it_was_named() {
-    let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-demo"), "named-root")
+    let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-demo"), "named-root")
         .expect("a root of this test's own");
     let work = crate::demo::create("one-commit", Some(root.clone())).expect("a run at the root");
     assert_eq!(work, root.join("repo"));
@@ -181,7 +181,7 @@ fn a_named_root_is_built_where_it_was_named() {
 
 #[test]
 fn a_bare_repository_is_gits_own_and_a_name_ending_in_git_is_not() {
-    let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-demo"), "metadata")
+    let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-demo"), "metadata")
         .expect("a root of this test's own");
     let bare = root.join("origin.git");
     std::fs::create_dir_all(bare.join("objects")).expect("a bare repository's objects");
@@ -257,9 +257,9 @@ fn modules_named(text: &str) -> Vec<String> {
 #[test]
 fn the_fingerprint_reads_every_source_a_preset_is_built_by() {
     /// Named by the demo module, and shaping nothing a template holds:
-    /// `verify` claims and sweeps the runs' directories, `command`
-    /// declares the `demo-repo` verb.
-    const PLACES_OR_DECLARES: [&str; 2] = ["verify", "command"];
+    /// `verify` claims and sweeps the runs' directories, `temp` says where
+    /// they stand, `command` declares the `demo-repo` verb.
+    const PLACES_OR_DECLARES: [&str; 3] = ["verify", "temp", "command"];
     /// The PNG writer (`png::rgba`) and what it is built from.
     const PNG_WRITER: [&str; 3] = ["png/checksum.rs", "png/mod.rs", "png/write.rs"];
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");

@@ -1,10 +1,11 @@
 //! The tree a test stands its files in, and the one place every one of
 //! them stands.
 //!
-//! One entry under the system temp for the whole suite: a pid-named
-//! entry flat under temp is a name no later run spells again, so nothing
-//! ever removes it. What a killed run leaves under [`BASE`] is taken by
-//! the day-old sweep ([`crate::verify::sweep_yesterdays_runs`]).
+//! One entry under the throwaway folder (`crate::temp::root`) for the
+//! whole suite: a pid-named entry flat in it is a name no later run
+//! spells again, so nothing ever removes it. What a killed run leaves
+//! under [`BASE`] is taken by the day-old sweep
+//! ([`crate::verify::sweep_yesterdays_runs`]).
 
 /// The one directory the tests' trees stand under. Named among
 /// [`crate::verify`]'s run bases, which is what sweeps it, and spelled
@@ -28,7 +29,7 @@ pub(crate) struct Yard(std::path::PathBuf);
 impl Yard {
     #[must_use]
     pub(crate) fn new(what: &str) -> Self {
-        let base = std::env::temp_dir().join(BASE);
+        let base = crate::temp::root().join(BASE);
         Self(crate::verify::claim_dir(&base, what).expect("a tree of this test's own"))
     }
 }
@@ -84,6 +85,15 @@ mod tests {
         assert!(
             text.contains(&format!("\"{BASE}\"")),
             "{} stands its sandboxes somewhere {BASE} does not cover",
+            support.display()
+        );
+        // And under the folder the sweep reads (`crate::temp::place`), found
+        // the same way: the primary checkout's `target/tmp`.
+        assert!(
+            text.contains(".join(\"target\").join(\"tmp\")")
+                && text.contains(crate::linux::IN_CONTAINER)
+                && text.contains("gitdir:"),
+            "{} no longer finds crate::temp's folder the way it does",
             support.display()
         );
     }

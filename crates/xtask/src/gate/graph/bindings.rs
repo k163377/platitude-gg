@@ -3,8 +3,8 @@
 //! changes what the reader gets without touching what it named before,
 //! so the reader is owed by either; a `pub use` passes no data, so what
 //! the binding's file reads elsewhere is not handed on through it. Built
-//! on a tree of its own under the temp directory, so the shape can be
-//! rewritten mid-test.
+//! on a tree of its own under the throwaway folder (`crate::temp::root`),
+//! so the shape can be rewritten mid-test.
 
 use std::path::{Path, PathBuf};
 
@@ -15,7 +15,7 @@ struct Tree(PathBuf);
 
 impl Tree {
     fn new(name: &str) -> Self {
-        let root = std::env::temp_dir()
+        let root = crate::temp::root()
             .join("pgg-tests")
             .join(format!("graph-bindings-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);

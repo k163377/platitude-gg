@@ -9,11 +9,10 @@
 //! would push into the template and take the next run's worktrees with
 //! it, so a copy is rebound as it is made.
 //!
-//! That path is spelled two ways on Windows: `std::env::temp_dir()` gives
-//! the profile's short name (`WRONGW~1`), while git writes a worktree's
-//! paths with the long one. So the template stands beside the runs and
-//! only the leaf they differ in is rewritten — ASCII, which neither git
-//! nor Windows respells.
+//! That path can be spelled two ways on Windows — with a folder's short
+//! name (`WRONGW~1`) or its long one, which git writes a worktree's paths
+//! with. So the template stands beside the runs and only the leaf they
+//! differ in is rewritten — ASCII, which neither git nor Windows respells.
 //!
 //! A preset that names its own path anywhere but git's metadata is
 //! refused — rewriting a tracked file would leave the copy dirty where

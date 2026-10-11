@@ -145,7 +145,7 @@ mod tests {
     /// Through the file: every line is judged by a fresh process.
     #[test]
     fn a_ledger_written_and_read_back_holds_the_fourth_ask() {
-        let dir = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-hook"), "repeats")
+        let dir = crate::verify::claim_dir(&crate::temp::root().join("pgg-hook"), "repeats")
             .expect("a directory of its own");
         let path = dir.join(".repeats").join("session.tsv");
         let asking = fingerprint("tail -2 target/gate.log");

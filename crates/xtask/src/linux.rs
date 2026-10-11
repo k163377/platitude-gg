@@ -21,7 +21,7 @@
 //! A worktree's `.git` names an absolute Windows path that git inside
 //! cannot follow, so any git run with /work as its working directory sees
 //! a broken repository. Nothing a run depends on stands there
-//! (`verify::run` starts the app outside every checkout).
+//! (`verify::run` starts the app in a run folder of its own, off `/work`).
 
 use std::collections::BTreeSet;
 use std::io::IsTerminal;

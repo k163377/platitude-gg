@@ -89,7 +89,7 @@ gate が何に時間を払っているかの実測。**出典は gate 自身の�
 
 ## Defender
 
-gate 1 本(`gate --fresh`・16 分・全 preset の雛形を組んだ回)の `New-MpPerformanceRecording`:
+gate 1 本(`gate --fresh`・16 分・全 preset の雛形を組んだ回。run の置き場が `%TEMP%` の構成)の `New-MpPerformanceRecording`:
 走査は計 396 秒・44 万回、うち `%TEMP%` が 280 秒(`pgg-demo` 139 秒 = うち拡張子無し 81 秒・`.sample` 22 秒 /
 `pgg-linux` 49 秒 / `pgg-tests` 42 秒 / `pgg-verify` 39 秒)、
 除外(`IdeaProjects` の下 = 各席の `target\` を含む)の内は 3 万回で 2 秒。**平均 0.4 コアぶんで、CPU が律速でない

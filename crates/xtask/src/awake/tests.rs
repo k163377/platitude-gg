@@ -53,7 +53,7 @@ fn claim_file(whose: &str) -> String {
 /// holder started there would otherwise read the user's.
 fn scratch(stem: &str) -> Scratch {
     let dir = Scratch(
-        crate::verify::claim_dir(&std::env::temp_dir().join("pgg-awake"), stem)
+        crate::verify::claim_dir(&crate::temp::root().join("pgg-awake"), stem)
             .expect("a directory of its own"),
     );
     std::fs::write(dir.join(crate::awake::DESKTOP_OFF), "test isolation")

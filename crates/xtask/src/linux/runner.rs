@@ -179,7 +179,8 @@ pub(crate) fn prepare(root: &Path, name: &str, gate: u32) -> Result<(), String> 
 /// space would come apart into two operands.
 ///
 /// `demo` is the demo volume to sweep, `None` where the host runs this
-/// itself: there `/tmp/pgg-demo` is the host's, under its own sweep
+/// itself: there the demo repositories are the host's
+/// (`crate::temp::root`), under its own sweep
 /// (`verify::ownership::sweep_yesterdays_runs`).
 fn line(root: &Path, name: &str, note: &str, demo: Option<&str>) -> Vec<String> {
     vec![

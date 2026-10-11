@@ -36,6 +36,7 @@ mod still;
 mod structure;
 mod subprocess;
 mod sweep;
+mod temp;
 mod tree;
 mod usage;
 mod verify;

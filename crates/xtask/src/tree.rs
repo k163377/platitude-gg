@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn a_seat_and_its_checkout_name_one_root() {
-        let base = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-hook"), "roots")
+        let base = crate::verify::claim_dir(&crate::temp::root().join("pgg-hook"), "roots")
             .expect("a directory of its own");
         let primary = base.join("platitude-gg");
         let seat = primary.join(".claude/worktrees/a");

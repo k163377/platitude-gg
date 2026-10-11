@@ -366,7 +366,7 @@ readonly property string uiFamily: _pickFamily(fontFamilyUi)
     /// nobody declares.
     #[test]
     fn a_sync_that_writes_a_cell_still_says_the_token_the_source_does_not_have() {
-        let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-docs"), "sync")
+        let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-docs"), "sync")
             .expect("a directory of its own");
         for (source, text) in SOURCES
             .iter()

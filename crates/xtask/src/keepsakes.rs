@@ -63,7 +63,7 @@ pub(crate) fn bridge(
 /// ([`keepsake_dir`]), made if it is not there: what the gate's
 /// container mounts whole.
 pub(crate) fn keepsake_base() -> Result<PathBuf, String> {
-    let base = std::env::temp_dir().join("pgg-linux");
+    let base = crate::temp::root().join("pgg-linux");
     std::fs::create_dir_all(&base)
         .map_err(|e| format!("could not make {}: {e}", base.display()))?;
     Ok(base)

@@ -222,8 +222,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // Git reads "who is sitting here" from a config file and from the
     // directory it runs in, so every run gets both of its own: a gitconfig
     // (`shim::global_seed`, which the identity verbs write to) and a
-    // working directory outside every checkout. Without the directory, a
-    // container's checkout `.git` names a Windows path git calls fatal.
+    // working directory of its own where git finds no repository: the
+    // primary checkout around it is kept out (`temp::stop_git_above`), and
+    // in the container a checkout's `.git` names a Windows path git calls
+    // fatal.
     let config = gitconfig_home(
         std::env::var_os(crate::linux::IN_CONTAINER).is_some(),
         &shot_dir,
@@ -374,7 +376,7 @@ fn gitconfig_home(
     if !in_container {
         return Ok(shot_dir.to_path_buf());
     }
-    claim_dir(&std::env::temp_dir().join("pgg-verify"), "gitconfig")
+    claim_dir(&crate::temp::root().join("pgg-verify"), "gitconfig")
 }
 
 #[cfg(test)]
@@ -392,13 +394,13 @@ mod tests {
             "{} is under the mount",
             own.display()
         );
-        assert!(own.starts_with(std::env::temp_dir().join("pgg-verify")));
+        assert!(own.starts_with(crate::temp::root().join("pgg-verify")));
         let _ = std::fs::remove_dir_all(&own);
     }
 
     /// A tree of one test's own, holding one component and no census yet.
     fn tree() -> std::path::PathBuf {
-        let root = super::claim_dir(&std::env::temp_dir().join("pgg-census"), "told")
+        let root = super::claim_dir(&crate::temp::root().join("pgg-census"), "told")
             .expect("a root of this test's own");
         let ui = root.join("crates/platitude-app/src/ui");
         std::fs::create_dir_all(&ui).expect("ui dir");

@@ -1088,7 +1088,7 @@ mod tests {
     /// has those, where links can be made.
     #[test]
     fn carried_reads_a_bundles_directories_and_skips_what_is_no_module() {
-        let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-package"), "carried")
+        let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-package"), "carried")
             .expect("a directory of its own");
         let contents = root.join("Contents");
         let dirs = [
@@ -1150,7 +1150,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_modules_link_reaches_its_plugin_and_no_linked_directory_is_walked() {
-        let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-package"), "linked")
+        let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-package"), "linked")
             .expect("a directory of its own");
         let quick = root.join("Contents/PlugIns/quick");
         let module = root.join("Contents/Resources/qml/QtQuick/Layouts");

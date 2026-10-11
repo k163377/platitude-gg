@@ -127,7 +127,7 @@ mod tests {
 
     /// A directory of this test's own: the tests write the same file name.
     fn config_dir(stem: &str) -> PathBuf {
-        crate::verify::claim_dir(&std::env::temp_dir().join("pgg-verify"), stem)
+        crate::verify::claim_dir(&crate::temp::root().join("pgg-verify"), stem)
             .expect("a config directory nobody else has")
     }
 

@@ -17,6 +17,44 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 /// failed is still taken away.
 const YARD: &str = "pgg-tests";
 
+/// `xtask`'s `temp::place()`, spelled again for the same reason, with
+/// `tree::primary_root`'s walk: the primary checkout's `target/tmp`, found
+/// from the tree this suite was built in, or the container's own temp
+/// folder (`linux::IN_CONTAINER`).
+fn temp_root() -> PathBuf {
+    if std::env::var_os("PGG_IN_CONTAINER").is_some() {
+        return std::env::temp_dir();
+    }
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("the suite sits two folders under the workspace");
+    let primary = primary_of(workspace).unwrap_or_else(|| workspace.to_path_buf());
+    let root = primary.join("target").join("tmp");
+    std::path::absolute(&root).unwrap_or(root)
+}
+
+/// The checkout whose `.git` is a directory, at `from` or above it; a
+/// linked worktree's `.git` file names it.
+fn primary_of(from: &Path) -> Option<PathBuf> {
+    let mut at = from;
+    loop {
+        let dot_git = at.join(".git");
+        if dot_git.is_dir() {
+            return Some(at.to_path_buf());
+        }
+        if dot_git.is_file() {
+            let text = std::fs::read_to_string(&dot_git).ok()?;
+            let named = text
+                .lines()
+                .find_map(|line| line.trim().strip_prefix("gitdir:"))?;
+            let root = Path::new(named.trim()).ancestors().nth(3)?.to_path_buf();
+            return root.join(".git").is_dir().then_some(root);
+        }
+        at = at.parent()?;
+    }
+}
+
 /// The steps every gate runs regardless of the diff.
 pub const ALWAYS: [&str; 6] = ["structure", "waits", "versions", "docs", "verbs", "fmt"];
 
@@ -68,7 +106,7 @@ pub struct Sandbox {
 impl Sandbox {
     pub fn new(name: &str) -> Self {
         let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let root = std::env::temp_dir()
+        let root = temp_root()
             .join(YARD)
             .join(format!("gate-{name}-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&root).expect("temp root");
@@ -95,6 +133,9 @@ impl Sandbox {
         command
             .env("GIT_CONFIG_GLOBAL", &self.gitconfig)
             .env("GIT_CONFIG_NOSYSTEM", "1")
+            // The sandbox stands inside the primary checkout: git in a
+            // folder of it that holds no repository must not find main.
+            .env("GIT_CEILING_DIRECTORIES", temp_root())
             .env("LC_ALL", "C")
             .env("PGG_GATE_FAKE_LOG", &self.fake_log)
             .env_remove("PGG_GATE_FAKE_FAIL")

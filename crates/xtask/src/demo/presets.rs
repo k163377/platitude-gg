@@ -61,7 +61,7 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
 }
 
 /// Where the repository gets built: `--at` made absolute, or one claimed
-/// under the system temp.
+/// under [`crate::temp::root`].
 ///
 /// A relative `--at` would reach `origin`'s URL (`repo::file_url`) as
 /// `file:///target/probe/origin.git`, which git.exe resolves under its own
@@ -103,7 +103,7 @@ pub(crate) fn claimed_roots() -> Vec<PathBuf> {
 /// The one directory the runs and their templates share, so a copy is a
 /// rewrite of one path segment (`template`).
 pub(super) fn base() -> PathBuf {
-    std::env::temp_dir().join("pgg-demo")
+    crate::temp::root().join("pgg-demo")
 }
 
 /// Builds `preset` with the worktree called `name` — a tab is titled

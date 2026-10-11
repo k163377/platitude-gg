@@ -509,7 +509,7 @@ mod tests {
         let opts = super::super::options::parse(&["wip".to_string(), "--no-board".to_string()])
             .expect("a line");
         let shot_dir =
-            super::super::ownership::claim_dir(&std::env::temp_dir().join("pgg-verify"), "shots")
+            super::super::ownership::claim_dir(&crate::temp::root().join("pgg-verify"), "shots")
                 .expect("a shot dir of this test's own");
         let well = super::announce(&opts, &shot_dir, &ran(false, Some(0)), &WELL, None);
         let unwritten = super::announce(

@@ -40,7 +40,7 @@ use crate::subprocess::{Answer, bounded, bounded_both_streams};
 /// The engine's session process: the one of the engine's a user may open.
 const SESSION: &str = "wslcsession.exe";
 
-/// The directory under the system temp the witnesses stand in. No sweep
+/// The directory under [`crate::temp::root`] the witnesses stand in. No sweep
 /// reads it (`verify::sweep_yesterdays_runs`): what bounds it is
 /// [`forget_all_but_the_newest`].
 const BASE: &str = "pgg-engine";
@@ -179,7 +179,7 @@ enum Taken {
 }
 
 fn take(account: &str, by_hand: bool) -> Result<Taken, String> {
-    let base = std::env::temp_dir().join(BASE);
+    let base = crate::temp::root().join(BASE);
     std::fs::create_dir_all(&base).map_err(|e| format!("{}: {e}", base.display()))?;
     let now = crate::note::now_secs();
     let asking = base.join(format!("asking-{}.txt", std::process::id()));

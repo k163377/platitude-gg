@@ -58,7 +58,7 @@ mod tests {
 
     #[test]
     fn a_seat_is_entered_by_one_session_for_one_letter() {
-        let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-hook"), "entered")
+        let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-hook"), "entered")
             .expect("a directory of its own");
         assert!(!entered(&root, "s1", "a"));
         mark(&root, "s1", "a");

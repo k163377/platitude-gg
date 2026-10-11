@@ -227,6 +227,10 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
 
     let mut cmd = Command::new(exe);
     crate::app_env::clear_automation(&mut cmd);
+    // The run stands in a folder no repository is, which the open-refused
+    // verbs hand the app (`repos::folder_for`), and all of it is inside the
+    // primary checkout.
+    crate::temp::stop_git_above(&mut cmd);
     cmd.current_dir(shot_dir)
         .env("GIT_CONFIG_GLOBAL", config)
         .env("GIT_CONFIG_NOSYSTEM", "1")

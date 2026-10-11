@@ -675,7 +675,7 @@ mod tests {
     /// are never cleaned up, and a census an earlier holder left would be
     /// read back as this test's own.
     fn root_with(components: &[&str]) -> PathBuf {
-        let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-census"), "root")
+        let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-census"), "root")
             .expect("a root of this test's own");
         let ui = root.join("crates/platitude-app/src/ui");
         std::fs::create_dir_all(&ui).expect("ui dir");
