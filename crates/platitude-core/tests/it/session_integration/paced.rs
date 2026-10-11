@@ -178,16 +178,16 @@ async fn a_read_asked_for_now_runs_and_says_so() {
 /// The listing a paced read takes sees the worktree's commit; the worktree's
 /// reading, now behind it, is due at once and read at the pace — and the
 /// row comes back on the commit the worktree stands on.
+///
+/// The commit waits for the opening's last read and walk: a refs read of
+/// the opening's that sees it first walks against the listing before it,
+/// and the paced read then finds no ref moved to walk for.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_worktree_behind_the_listing_is_read_at_the_page_s_pace() {
     let (mut repo, _head) = scenario();
     let worktree = a_worktree_beside(&mut repo);
     let (sink, session) = opened_with(&repo, crate::support::exec::isolated()).await;
-    sink.wait_for("a graph drawing the worktree's row", |events| {
-        events.iter().find_map(worktree_row_head)
-    })
-    .await;
-    bounded("the opening's pass", session.wait_for_carried_pass()).await;
+    worktrees_settled(&sink, &session, 1).await;
     paced_off_the_clock(&session);
 
     repo.git_in(&worktree, &["add", "carried.txt"]);
