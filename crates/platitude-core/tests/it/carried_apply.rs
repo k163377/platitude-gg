@@ -251,7 +251,7 @@ async fn a_change_here_in_the_way_is_reported_and_nothing_is_written() {
     let report = report.expect("a report");
     assert_eq!(report.kind, ReportKind::CarriedInTheWay);
     assert_eq!(report.name, "side");
-    assert!(report.reason.is_empty(), "the screen writes the reason");
+    assert!(report.fact.is_empty(), "the screen writes the reason");
     let here = repo.path.clone();
     assert_eq!(status_in(&mut repo, &here), "M a.txt");
     assert_eq!(read_in(&repo.path, "a.txt"), "1 here\n2\n3\n4\n5\n");

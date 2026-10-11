@@ -122,37 +122,50 @@ pub async fn commit(
 }
 
 /// A commit that was not made, as something to report
-/// (デザイン規約 §答えの要らない報せ).
-///
-/// The kind is fixed whatever git said: refusals this end could answer
-/// are taken away before the button can be pressed, so a non-zero exit is
-/// something outside saying no (a hook, a signing key, another git holding
-/// the index), with no machine-readable line to tell them apart.
-///
-/// The words are both streams: a hook writes to whichever it likes (a
-/// wrapped linter often complains on stdout), so stderr alone would drop
-/// the complaint.
+/// (デザイン規約 §答えの要らない報せ): refusals this end could answer are
+/// taken away before the button can be pressed, so a non-zero exit is
+/// something outside saying no ([`refused_by`]).
 fn refused(command: String, out: &crate::process::GitOutput) -> GitError {
-    let stderr = out.stderr_utf8();
-    let stdout = out.stdout_utf8();
-    let mut said = String::new();
-    for part in [stderr.trim(), stdout.trim()] {
-        if part.is_empty() {
-            continue;
-        }
-        if !said.is_empty() {
-            said.push(' ');
-        }
-        said.push_str(&part.split_whitespace().collect::<Vec<_>>().join(" "));
-    }
-    GitError::Reported {
+    crate::report::reported(
+        crate::report::WriteReport::local(refused_by(out)),
         command,
-        code: out.code,
-        stderr: out.failure_message(),
-        report: Box::new(crate::report::WriteReport::local(
-            crate::report::ReportKind::Commit,
-            said,
-        )),
+        out,
+    )
+}
+
+/// What git says when it could not sign (`LC_ALL=C`, the same at the
+/// minimum and 2.55): `commit_tree_extended` failing dies with the first
+/// whatever the signing program said — gpg, ssh-keygen, gpgsm — and an
+/// ssh signing with no key named dies with the second before it starts
+/// (gpg-interface.c `get_default_ssh_signing_key`). The first is also what
+/// an object store git cannot write to ends with (a full disk, objects a
+/// root-run git left behind) — outside what a repository meets in normal
+/// use, and read as signing.
+pub(crate) const UNSIGNED: [&str; 2] = [
+    "failed to write commit object",
+    "either user.signingkey or gpg.ssh.defaultKeyCommand needs to be configured",
+];
+
+/// Which of the outside's refusals a failed `git commit` was. git adds
+/// nothing of its own to a hook's no — `pre-commit`, `prepare-commit-msg`
+/// and `commit-msg` alike end the command with exit 1 and the hook's words
+/// on stderr (git sends a commit hook's stdout there too, hook.c), and an
+/// empty stdout: git's own exit 1s (`nothing to commit`, an amend that
+/// would empty the commit) print the status there. A lock and a signing
+/// failure are git's own words. (A tree git cannot write, `Error building
+/// trees`, ends the same way as a hook's no: a full disk, outside what a
+/// repository meets in normal use.)
+fn refused_by(out: &crate::process::GitOutput) -> crate::report::ReportKind {
+    use crate::report::ReportKind;
+    let said = out.stderr_utf8();
+    if crate::report::lock_taken(&said) {
+        ReportKind::CommitLocked
+    } else if UNSIGNED.iter().any(|words| said.contains(words)) {
+        ReportKind::CommitUnsigned
+    } else if out.code == 1 && out.stdout.iter().all(u8::is_ascii_whitespace) {
+        ReportKind::CommitHook
+    } else {
+        ReportKind::Commit
     }
 }
 

@@ -225,6 +225,13 @@ pub enum WorktreeOn {
 /// `--quiet` reaches the checkout's own `reset`, whose progress git
 /// writes to the pipe too once it runs past two seconds — ahead of any
 /// refusal after it.
+///
+/// A non-zero answer is read against what it left: a worktree git made
+/// and kept is one whose `post-checkout` hook failed
+/// ([`crate::report::worktree_hook_failed`]). Otherwise a `-b` branch there
+/// now was git's — made before it turned the rest down; the branch's own
+/// refusal (its name taken since) ends the command with 255 before
+/// anything else.
 pub async fn add(
     executor: &GitExecutor,
     workdir: &Path,
@@ -262,11 +269,33 @@ pub async fn add(
     };
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
-    match out.code {
-        0 => Ok(()),
-        _ => Err(crate::report::worktree_not_added(name, command, &out)),
+    if out.code == 0 {
+        return Ok(());
     }
+    // git takes back a worktree it began on any failure but the hook's:
+    // a `.git` there now is the one it made and kept (the folder was empty
+    // or absent before, `folder_free`).
+    if Path::new(path).join(".git").is_file() {
+        return Err(crate::report::worktree_hook_failed(name, command, &out));
+    }
+    // A read that fails here answers "none left": git's refusal is the
+    // answer to report, not this read's failure.
+    let left = match made {
+        Some(made) if out.code != BRANCH_REFUSED => {
+            crate::branch::has_branch(executor, workdir, made, cancel)
+                .await
+                .is_ok_and(|there| there)
+                .then_some(made.as_str())
+        }
+        _ => None,
+    };
+    Err(crate::report::worktree_not_added(name, command, &out, left))
 }
+
+/// The code `worktree add` ends with where its own `git branch` for `-b`
+/// failed: the child's failure returns -1 from the command
+/// (builtin/worktree.c `add`, the minimum to 2.55).
+const BRANCH_REFUSED: i32 = 255;
 
 /// The folder every worktree made here lives in: beside the
 /// repository's own worktree `main`, of the repository's name with `.worktrees`
@@ -311,7 +340,8 @@ pub fn folder_free(path: &Path) -> bool {
 /// Unforced, so git keeps what it refuses for (uncommitted changes, a
 /// lock, submodules); ignored files go with the folder
 /// (git-worktree(1)). Every refusal is a report
-/// ([`crate::report::worktree_not_removed`]).
+/// ([`crate::report::worktree_not_removed`]) but one: a worktree git does
+/// not know — removed elsewhere since the menu opened — is gone as asked.
 pub async fn remove(
     executor: &GitExecutor,
     workdir: &Path,
@@ -324,10 +354,42 @@ pub async fn remove(
         .args(["worktree", "remove", "--", path]);
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
-    match out.code {
-        0 => Ok(()),
-        _ => Err(crate::report::worktree_not_removed(name, command, &out)),
+    if out.code == 0 {
+        return Ok(());
     }
+    let said = out.stderr_utf8();
+    if out.code == 128 && said.contains(NOT_A_WORKTREE) {
+        return Ok(());
+    }
+    Err(crate::report::worktree_not_removed(
+        name,
+        command,
+        &out,
+        lock_reason(&said),
+    ))
+}
+
+/// What git says for a path it lists no worktree at (`LC_ALL=C`,
+/// builtin/worktree.c, the minimum to 2.55).
+const NOT_A_WORKTREE: &str = "' is not a working tree";
+
+/// The reason a worktree was locked with, out of git's refusal to remove
+/// it — the owner's own words, which git sets between its two halves
+/// (builtin/worktree.c `remove_worktree`, the minimum to 2.55): `Some("")`
+/// for a lock without one, `None` for no lock. A full stop the owner ended
+/// it with is left off: the screen's sentence closes it (`It is locked: …`).
+fn lock_reason(said: &str) -> Option<&str> {
+    const LOCKED: &str = "cannot remove a locked working tree";
+    const REASON: &str = ", lock reason: ";
+    const ADVICE: &str = "\nuse 'remove -f -f'";
+    let (_, rest) = said.split_once(LOCKED)?;
+    let Some(reason) = rest.strip_prefix(REASON) else {
+        return Some("");
+    };
+    let reason = reason
+        .rsplit_once(ADVICE)
+        .map_or(reason, |(reason, _)| reason);
+    Some(reason.strip_suffix('.').unwrap_or(reason))
 }
 
 #[cfg(test)]
@@ -493,6 +555,45 @@ mod tests {
         assert_eq!(
             worktrees_folder("C:/work/repo").as_deref(),
             Some("C:/work/repo.worktrees")
+        );
+    }
+
+    /// git's two refusals of a locked worktree (the minimum and 2.55), a
+    /// reason over two lines, and a refusal for something else.
+    #[test]
+    fn a_locks_reason_is_read_out_of_gits_refusal() {
+        assert_eq!(
+            lock_reason(
+                "fatal: cannot remove a locked working tree, lock reason: on a stick\n\
+                 use 'remove -f -f' to override or unlock first"
+            ),
+            Some("on a stick")
+        );
+        assert_eq!(
+            lock_reason(
+                "fatal: cannot remove a locked working tree, lock reason: one\ntwo\n\
+                 use 'remove -f -f' to override or unlock first"
+            ),
+            Some("one\ntwo")
+        );
+        assert_eq!(
+            lock_reason(
+                "fatal: cannot remove a locked working tree, lock reason: on a stick.\n\
+                 use 'remove -f -f' to override or unlock first"
+            ),
+            Some("on a stick"),
+            "the screen's sentence closes it, so its own full stop goes"
+        );
+        assert_eq!(
+            lock_reason(
+                "fatal: cannot remove a locked working tree;\n\
+                 use 'remove -f -f' to override or unlock first"
+            ),
+            Some("")
+        );
+        assert_eq!(
+            lock_reason("fatal: 'C:/t/wt' contains modified or untracked files"),
+            None
         );
     }
 

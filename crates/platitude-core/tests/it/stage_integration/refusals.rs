@@ -131,7 +131,7 @@ async fn a_selection_from_a_stale_diff_is_refused() {
         "{err}"
     );
     assert!(
-        err.report().is_some_and(|r| r.reason.is_empty()),
+        err.report().is_some_and(|r| r.fact.is_empty()),
         "nobody outside said anything — the words are the screen's own"
     );
 
@@ -229,7 +229,7 @@ async fn hold_the_read(
 fn assert_moved_under_the_apply(err: &platitude_core::error::GitError, kind: ReportKind) {
     assert_eq!(err.report().map(|r| r.kind), Some(kind), "{err}");
     assert!(
-        err.report().is_some_and(|r| r.reason.is_empty()),
+        err.report().is_some_and(|r| r.fact.is_empty()),
         "the words are the screen's own: {err}"
     );
     assert!(

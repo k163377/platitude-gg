@@ -4,8 +4,10 @@
 
 use super::*;
 use platitude_core::OperationKind as K;
+use platitude_core::RemoteWhy;
 
-/// The page words these four itself (`Words.writeReported`).
+/// The page words both lines itself (`Words.writeReported`,
+/// `Words.writeReportedWhy`); the far side's words are the log's.
 #[test]
 fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
     let mut tab = RepoTab::default();
@@ -14,44 +16,71 @@ fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
         K::Push,
         "`git push` exited with code 1: remote: error: Cannot delete a protected branch".into(),
         Some(platitude_core::WriteReport::on_remote(
-            ReportKind::RemoteDelete,
+            ReportKind::RemoteDelete(RemoteWhy::Rule),
             "origin",
             "main",
-            "Cannot delete a protected branch".into(),
         )),
         0,
         0,
     );
     assert!(tab.write_refused, "nothing happened over there");
-    assert_eq!(tab.write_report_kind, "delete");
+    assert_eq!(tab.write_report_kind, "delete-rule");
     assert_eq!(tab.write_report_remote, "origin");
     assert_eq!(tab.write_report_name, "main");
-    assert_eq!(tab.write_report_reason, "Cannot delete a protected branch");
+    assert_eq!(tab.write_report_fact, "");
 
     // And it goes with its answer: a report left standing would come
     // back up under the next write.
     tab.settle_write(1, K::Push, String::new(), None, 0, 0);
     assert_eq!(tab.write_report_kind, "");
-    assert_eq!(tab.write_report_reason, "");
+    assert_eq!(tab.write_report_fact, "");
 }
 
+/// What was asked and what for, as two words: the heading turns on the
+/// first, the line under it on the second. A `match`, so a reason added to
+/// core stops the build here.
 #[test]
-fn a_refused_send_is_told_apart_from_a_refused_delete() {
-    let mut tab = RepoTab::default();
-    tab.settle_write(
-        1,
-        K::Push,
-        "! [remote rejected]".into(),
-        Some(platitude_core::WriteReport::on_remote(
-            ReportKind::RemoteUpdate,
-            "origin",
-            "main",
-            "Changes must be made through a pull request.".into(),
-        )),
-        0,
-        0,
-    );
-    assert_eq!(tab.write_report_kind, "update");
+fn a_far_side_refusal_is_named_by_what_was_asked_and_what_for() {
+    let why_word = |why: RemoteWhy| match why {
+        RemoteWhy::Rule => "rule",
+        RemoteWhy::Rewrite => "rewrite",
+        RemoteWhy::NoDeletes => "no-deletes",
+        RemoteWhy::CheckedOut => "checked-out",
+        RemoteWhy::Current => "current",
+        RemoteWhy::TooLarge => "too-large",
+        RemoteWhy::Shallow => "shallow",
+        RemoteWhy::Locked => "locked",
+        RemoteWhy::Other => "refused",
+    };
+    for why in [
+        RemoteWhy::Rule,
+        RemoteWhy::Rewrite,
+        RemoteWhy::NoDeletes,
+        RemoteWhy::CheckedOut,
+        RemoteWhy::Current,
+        RemoteWhy::TooLarge,
+        RemoteWhy::Shallow,
+        RemoteWhy::Locked,
+        RemoteWhy::Other,
+    ] {
+        for (kind, asked) in [
+            (ReportKind::RemoteUpdate(why), "update"),
+            (ReportKind::RemoteDelete(why), "delete"),
+        ] {
+            let mut tab = RepoTab::default();
+            tab.settle_write(
+                1,
+                K::Push,
+                "! [remote rejected]".into(),
+                Some(platitude_core::WriteReport::on_remote(
+                    kind, "origin", "main",
+                )),
+                0,
+                0,
+            );
+            assert_eq!(tab.write_report_kind, format!("{asked}-{}", why_word(why)));
+        }
+    }
 }
 
 #[test]
@@ -65,7 +94,6 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
             ReportKind::Outdated,
             "origin",
             "main",
-            "Updates were rejected because the remote contains work that you do not have.".into(),
         )),
         0,
         0,
@@ -74,27 +102,90 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
     assert_eq!(tab.write_report_remote, "origin");
     assert_eq!(tab.write_report_name, "main");
 
-    tab.settle_write(
-        1,
-        K::Commit,
-        "`git commit` exited with code 1".into(),
-        Some(platitude_core::WriteReport::local(
-            ReportKind::Commit,
-            "lint found 1 problem".into(),
-        )),
-        0,
-        0,
-    );
-    assert_eq!(tab.write_report_kind, "commit");
-    assert_eq!(
+    for (kind, named) in [
+        (ReportKind::Commit, "commit"),
+        (ReportKind::CommitHook, "commit-hook"),
+        (ReportKind::CommitUnsigned, "commit-unsigned"),
+        (ReportKind::CommitLocked, "commit-locked"),
+    ] {
+        tab.settle_write(
+            1,
+            K::Commit,
+            "`git commit` exited with code 1".into(),
+            Some(platitude_core::WriteReport::local(kind)),
+            0,
+            0,
+        );
+        assert_eq!(tab.write_report_kind, named);
+        assert_eq!(
+            (
+                tab.write_report_remote.as_str(),
+                tab.write_report_name.as_str(),
+                tab.write_report_fact.as_str(),
+            ),
+            ("", "", ""),
+            "{named}: nothing over a network, no ref, no words"
+        );
+    }
+}
+
+/// The reports git's run brings back, from core's producers: the page
+/// picks both lines by these names (`Words.writeReported`,
+/// `Words.writeReportedWhy`), and a worktree's carries the one fact its
+/// line names.
+#[test]
+fn the_refusals_only_gits_run_tells_reach_the_page_under_their_names() {
+    use platitude_core::report;
+    let out = |code: i32, stderr: &str| platitude_core::GitOutput {
+        code,
+        stdout: Vec::new(),
+        stderr: stderr.as_bytes().to_vec(),
+    };
+    let rewrite = |kind| report::rewrite_refused(kind, "git rebase".into(), 1, String::new());
+    let failed = platitude_core::GitError::Failed {
+        command: "git stash store".into(),
+        code: 1,
+        stderr: "Unable to create 'C:/t/.git/refs/stash.lock': File exists.".into(),
+    };
+    let reports = [
+        (rewrite(ReportKind::RewritePreRebase), "pre-rebase", ""),
+        (rewrite(ReportKind::RewriteUnsigned), "rewrite-unsigned", ""),
         (
-            tab.write_report_remote.as_str(),
-            tab.write_report_name.as_str()
+            rewrite(ReportKind::RewriteCommitHook),
+            "rewrite-commit-hook",
+            "",
         ),
-        ("", ""),
-        "nothing over a network and no ref"
-    );
-    assert_eq!(tab.write_report_reason, "lint found 1 problem");
+        (report::stash_not_renamed(failed), "stash-rename-locked", ""),
+        (report::stash_gone("9f4a21c0"), "stash-gone", ""),
+        (
+            report::worktree_not_removed("wt", "git".into(), &out(128, ""), Some("on a stick")),
+            "worktree-locked",
+            "on a stick",
+        ),
+        (
+            report::worktree_not_added("wt", "git".into(), &out(128, ""), Some("topic")),
+            "worktree-branch-left",
+            "topic",
+        ),
+        (
+            report::worktree_hook_failed("wt", "git".into(), &out(2, "")),
+            "worktree-hook",
+            "",
+        ),
+    ];
+    for (refused, named, fact) in reports {
+        let mut tab = RepoTab::default();
+        tab.settle_write(
+            1,
+            K::Stash,
+            refused.to_string(),
+            refused.report().cloned(),
+            0,
+            0,
+        );
+        assert_eq!(tab.write_report_kind, named);
+        assert_eq!(tab.write_report_fact, fact, "{named}");
+    }
 }
 
 /// The kind is all the page writes both lines from
@@ -141,7 +232,7 @@ fn every_withheld_rewrite_reaches_the_page_under_its_own_name() {
             (
                 tab.write_report_remote.as_str(),
                 tab.write_report_name.as_str(),
-                tab.write_report_reason.as_str(),
+                tab.write_report_fact.as_str(),
             ),
             ("", "", ""),
             "{named}: nothing over a network, no ref, and nobody else's words to quote"
@@ -195,11 +286,7 @@ fn the_worktree_a_menu_asked_for_is_answered_by_name_with_its_report() {
     let mut tab = RepoTab::default();
     tab.worktree_out.asked(Some(7));
     tab.worktree_answer_path = "C:/work/repo.worktrees/hotfix-patch".into();
-    let refused = platitude_core::WriteReport::about(
-        ReportKind::WorktreeNotAdded,
-        "hotfix-patch",
-        "fatal: a branch named 'hotfix/patch' already exists".into(),
-    );
+    let refused = platitude_core::WriteReport::about(ReportKind::WorktreeNotAdded, "hotfix-patch");
     tab.absorb(vec![TabMsg::WriteState {
         id: 7,
         kind: K::Worktree,

@@ -22,6 +22,7 @@ mod lfs_integration;
 mod logparse;
 mod preview_integration;
 mod push_default_integration;
+mod push_refusals;
 mod reachable_integration;
 mod refs_integration;
 mod remote_integration;

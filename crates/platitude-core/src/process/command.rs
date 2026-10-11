@@ -103,6 +103,11 @@ pub struct GitCommand {
     pub(super) env: Vec<(OsString, OsString)>,
     /// The non-zero exit code this command answers by, where it has one.
     pub(super) answer_code: Option<i32>,
+    /// What git says when that code is no answer after all
+    /// ([`Self::except_when_it_says`]).
+    pub(super) not_an_answer: &'static [&'static str],
+    /// Whether a failed row in the log carries stdout too ([`Self::logs_stdout`]).
+    pub(super) logs_stdout: bool,
     /// Which share of the slots it waits for ([`super::slots`]).
     pub(super) pace: Pace,
 }
@@ -115,6 +120,8 @@ impl GitCommand {
             timeout: TimeBudget::Stock,
             env: Vec::new(),
             answer_code: None,
+            not_an_answer: &[],
+            logs_stdout: false,
             pace: Pace::Here,
         }
     }
@@ -132,6 +139,26 @@ impl GitCommand {
     /// Named per command: a code means what its command says it means.
     pub fn answers_by_code(mut self, code: i32) -> Self {
         self.answer_code = Some(code);
+        self
+    }
+
+    /// Marks the words with which the [`Self::answers_by_code`] code is a
+    /// refusal after all, on stderr — where a command answers and refuses
+    /// with one code (a rebase stops with 1, and git 2.55 refuses its
+    /// `pre-rebase` hook's no with 1 too). The row is then a failure with
+    /// git's words under it, which a report sends the reader to.
+    pub fn except_when_it_says(mut self, words: &'static [&'static str]) -> Self {
+        self.not_an_answer = words;
+        self
+    }
+
+    /// Puts stdout under a failed row in the log too, ahead of stderr —
+    /// for a command whose answer is half on stdout (a push's ref lines,
+    /// its `pre-push` hook's words, which come before git's own `failed to
+    /// push` on stderr). The rest keep stdout out: a read's is the data, and
+    /// kept it would hold the whole of it.
+    pub fn logs_stdout(mut self) -> Self {
+        self.logs_stdout = true;
         self
     }
 

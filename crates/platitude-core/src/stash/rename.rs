@@ -20,6 +20,11 @@ use super::*;
 /// selector alone would rename whichever entry stands there now — or name
 /// none, past the end of a list that got shorter. One that has left the
 /// list is turned down before anything is written.
+///
+/// Every refusal is a report, as a branch's and a tag's are: git turning
+/// the new entry down — another git holding the stash's lock, mostly —
+/// before it went in ([`crate::report::stash_not_renamed`]), and the old
+/// one staying beside it after ([`crate::report::half_renamed`]).
 pub async fn rename(
     executor: &GitExecutor,
     workdir: &Path,
@@ -38,11 +43,11 @@ pub async fn rename(
                 .into_iter()
                 .find(|listed| listed.oid.to_hex() == oid)
             else {
-                return Err(GitError::Rejected {
-                    message: format!("the stash {oid} is no longer in the list"),
-                });
+                return Err(crate::report::stash_gone(oid));
             };
-            let entry = read_entry(executor, workdir, &moved.name, cancel).await?;
+            let entry = read_entry(executor, workdir, &moved.name, cancel)
+                .await
+                .map_err(crate::report::stash_not_renamed)?;
             selector = moved.name;
             entry
         }
@@ -65,7 +70,8 @@ pub async fn rename(
                 .env("GIT_COMMITTER_DATE", &entry.committer_date),
             cancel,
         )
-        .await?;
+        .await
+        .map_err(crate::report::stash_not_renamed)?;
     let stored = out.stdout_utf8().trim().to_string();
     if stored.is_empty() {
         return Err(GitError::Rejected {
@@ -76,7 +82,10 @@ pub async fn rename(
     let store = GitCommand::new()
         .cwd(workdir)
         .args(["stash", "store", "-m", message, &stored]);
-    executor.run(store, cancel).await?;
+    executor
+        .run(store, cancel)
+        .await
+        .map_err(crate::report::stash_not_renamed)?;
 
     // `store` prepends, so the old entry is one further down than it was.
     let Some(shifted) = shift_selector(selector) else {
@@ -101,7 +110,9 @@ pub async fn rename(
             },
         ));
     }
-    run_selector(executor, workdir, "drop", &shifted, cancel).await
+    run_selector(executor, workdir, "drop", &shifted, cancel)
+        .await
+        .map_err(|failed| crate::report::half_renamed(selector, failed))
 }
 
 /// `stash@{n}` → `stash@{n+1}`.

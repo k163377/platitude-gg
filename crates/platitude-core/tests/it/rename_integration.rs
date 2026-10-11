@@ -5,6 +5,7 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
+use platitude_core::ReportKind;
 use platitude_core::{stash, tag};
 
 #[tokio::test]
@@ -168,13 +169,78 @@ async fn a_stash_gone_since_the_selection_is_turned_down() {
     repo.git(&["stash", "drop", "stash@{0}"]);
     let (exec, cancel) = env();
 
-    stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
+    let err = stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
         .await
         .expect_err("there is nothing left to rename");
 
     assert_eq!(
+        err.report().map(|report| report.kind),
+        Some(ReportKind::StashGone),
+        "{err}"
+    );
+    assert_eq!(
         repo.git(&["stash", "list", "--format=%gs"]),
         "On main: kept"
+    );
+}
+
+/// Another git holding the stash's lock turns the new entry down: nothing
+/// moved, and the report says who.
+#[tokio::test]
+async fn a_stash_another_git_holds_the_lock_of_is_reported_as_locked() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.write_file("a.txt", "one\n");
+    repo.git(&["stash", "push", "-m", "chosen"]);
+    let chosen = repo.git(&["rev-parse", "stash@{0}"]);
+    let lock = repo.path.join(".git/refs/stash.lock");
+    std::fs::write(&lock, "").expect("lock");
+    let (exec, cancel) = env();
+
+    let err = stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
+        .await
+        .expect_err("git will not write a ref another process has locked");
+    std::fs::remove_file(&lock).expect("unlock");
+    assert_eq!(
+        err.report().map(|report| report.kind),
+        Some(ReportKind::StashRenameLocked),
+        "{err}"
+    );
+    assert_eq!(
+        repo.git(&["stash", "list", "--format=%gs"]),
+        "On main: chosen"
+    );
+}
+
+/// The new entry went in and the old one would not go — its log's lock
+/// taken after the store: both stand, which is the rename half done.
+#[tokio::test]
+async fn a_stash_whose_old_entry_would_not_go_is_half_renamed() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "a\n", "root");
+    repo.write_file("a.txt", "one\n");
+    repo.git(&["stash", "push", "-m", "chosen"]);
+    let chosen = repo.git(&["rev-parse", "stash@{0}"]);
+    repo.write_hook(
+        "reference-transaction",
+        "if [ \"$1\" = committed ]; then : > \"$(git rev-parse --git-dir)/logs/refs/stash.lock\"; fi\n",
+    );
+    let (exec, cancel) = env();
+
+    let err = stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
+        .await
+        .expect_err("the old entry stays");
+    std::fs::remove_file(repo.path.join(".git/logs/refs/stash.lock")).expect("unlock");
+    assert_eq!(
+        err.report().map(|report| report.kind),
+        Some(ReportKind::HalfRenamed),
+        "{err}"
+    );
+    assert_eq!(
+        repo.git(&["stash", "list", "--format=%gs"])
+            .lines()
+            .collect::<Vec<_>>(),
+        vec!["renamed", "On main: chosen"]
     );
 }
 

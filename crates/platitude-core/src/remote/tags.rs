@@ -82,14 +82,13 @@ pub async fn push_tag(
     if out.code == 0 {
         return Ok(replaced);
     }
-    if super::refusal::is_taken(&out.stdout_utf8())
+    let sent = super::refusal::Sent::tag(remote, tag, false);
+    if super::refusal::is_taken(&out.stdout_utf8(), &sent.refname)
         && holds_same_commit(executor, workdir, remote, tag, timeout, cancel).await?
     {
         return Ok(None);
     }
-    Err(super::refusal::tag_refusal(
-        command, &out, remote, tag, false,
-    ))
+    Err(super::refusal::tag_refusal(executor, workdir, command, &out, &sent, cancel).await)
 }
 
 /// Whether `remote` holds `tag` on the commit the tag here peels to.
@@ -142,9 +141,8 @@ pub async fn delete_remote_tag(
     if out.code == 0 {
         return Ok(there);
     }
-    Err(super::refusal::tag_refusal(
-        command, &out, remote, tag, true,
-    ))
+    let sent = super::refusal::Sent::tag(remote, tag, true);
+    Err(super::refusal::tag_refusal(executor, workdir, command, &out, &sent, cancel).await)
 }
 
 /// What a delete of this tag is leased to: the object the remote holds it

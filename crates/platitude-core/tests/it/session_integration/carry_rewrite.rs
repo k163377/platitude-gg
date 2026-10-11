@@ -530,7 +530,7 @@ async fn a_commit_landing_after_a_one_commit_edits_todo_is_refused() {
         platitude_core::report::ReportKind::RewriteTipMoved
     );
     assert!(
-        report.reason.is_empty(),
+        report.fact.is_empty(),
         "nobody outside wrote a sentence for this one: {report:?}"
     );
     assert!(

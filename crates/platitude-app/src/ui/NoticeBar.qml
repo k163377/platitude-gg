@@ -12,8 +12,7 @@ Rectangle {
 
     /// What did not happen, in this application's words (`Words.writeReported`).
     property string label: ""
-    /// Why, in the words of whoever said no — the far side's as they came, or this application's where the write
-    /// never reached it (`Words.writeReportedWhy`).
+    /// Why, in this application's words too — who said no, and where their own words are (`Words.writeReportedWhy`).
     property string detail: ""
     /// Which state, if any, this report is in — `danger` / `warning` / empty (`Words.reportTone`).
     property string tone: ""
@@ -169,13 +168,14 @@ Rectangle {
                     font.weight: Theme.fontWeightStrong
                 }
             }
-            // Wrapped: a forge writes the broken rule last (after `GH006: …`), so a cut drops the sentence the reader
-            // came for. Nothing caps the height (デザイン規約 §答えの要らない報せ).
+            // Wrapped, never cut: nothing caps the height (デザイン規約 §答えの要らない報せ). Plain text: a lock's reason
+            // is somebody's own words, and a `<` in them is a character, not markup.
             Label {
                 id: detailWord
                 Layout.fillWidth: true
                 visible: bar.detailPlace === ""
                 text: bar.detail
+                textFormat: Text.PlainText
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
                 wrapMode: Text.Wrap

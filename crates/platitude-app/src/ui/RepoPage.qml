@@ -510,7 +510,7 @@ FocusScope {
             return false
         const remote = repoTab.writeAnswerReportRemote(answer)
         const name = repoTab.writeAnswerReportName(answer)
-        page.showReport(kind, remote, name, repoTab.writeAnswerReportReason(answer))
+        page.showReport(kind, remote, name, repoTab.writeAnswerReportFact(answer))
         // The `>_` mark goes quiet with the report (`answeredFailures`).
         if (!commandsModel.failed)
             page.answeredFailures++
@@ -1660,28 +1660,28 @@ FocusScope {
     // ---- a report with nothing to answer ----------------------------
     // A write that did not happen, and whoever said no (デザイン規約 §答えの要らない報せ).
 
-    /// The one door, so a headless run handing it a kind enters the same body the answer does. `reason` is the
-    /// refuser's words; empty where this end refused, and then the second line is ours (`Words.writeReportedWhy`).
-    function showReport(kind, remote, name, reason) {
+    /// The one door, so a headless run handing it a kind enters the same body the answer does. Both lines are ours
+    /// (`Words.writeReported`, `Words.writeReportedWhy`); `fact` is the one thing core hands the second line besides
+    /// the names (`RepoTab.writeReportFact`).
+    function showReport(kind, remote, name, fact) {
         const names = Words.reportNamesWorktree(kind)
         // The only reports that can name the repository's own worktree (it is never removed or made), which goes by
         // the branch it keeps (デザイン規約 §ref の種別「リポジトリ自身の worktree の呼び名」).
         const home = kind.startsWith("carried-") && page.appliedFromHome
         const shown = home ? page.appliedName : name
-        // Only our own line can send the reader somewhere: a refuser's words are quoted as they came.
         page.showNotice(Words.writeReported(kind, remote, shown),
-                        reason !== "" ? reason : Words.writeReportedWhy(kind, remote, shown),
+                        Words.writeReportedWhy(kind, remote, shown, fact),
                         Words.reportTone(kind),
                         names ? shown : "",
                         names ? Words.reportNameSeat(kind, remote) : -1,
-                        reason !== "" ? "" : Words.reportPlace(kind),
+                        Words.reportPlace(kind),
                         home ? "home" : "tree")
     }
     /// Automation only: git's answer to a write has been taken all the way — bar raised, mark down, standing questions
     /// cleared. What it was about rides the signal: a drain can bring several reports, so the tab holds none to read
     /// back.
     signal writeReported(string kind, string remote, string name)
-    /// `label` is what did not happen, `detail` the refuser's words, `tone` the state colour, if any; `markWord` the
+    /// `label` is what did not happen, `detail` the line under it, `tone` the state colour, if any; `markWord` the
     /// worktree's name in `label` that wears its mark, left out for none (`NoticeBar.markWord`), and `markAt` where
     /// the sentence put it, left out for the heading's start; `place` the word of `detail` that opens the command log,
     /// left out for none (`NoticeBar.detailPlace`); `markKind` that name's mark, left out for the tree.
@@ -1760,18 +1760,18 @@ FocusScope {
                 page.readDiffForAnswer()
             // Unless git turned the rename down, the box has nothing to answer and closes as on a landing (a
             // half-finished rename too: its row is what could not be found).
-            if (repoTab.writeReportKind !== "rename" && repoTab.writeReportKind !== "rename-locked")
+            if (!Words.renameStillOpen(repoTab.writeReportKind))
                 page.noteRenameLanded()
             // Refused from outside: a report, as `reportRefusal`.
             if (repoTab.writeReportKind !== "") {
                 // A refused rename leaves its box open holding the name, to try again; the bar says why
                 // (デザイン規約 §答えの要らない報せ).
-                if (repoTab.writeReportKind === "rename" || repoTab.writeReportKind === "rename-locked")
+                if (Words.renameStillOpen(repoTab.writeReportKind))
                     page.noteRenameRefused()
                 page.showReport(repoTab.writeReportKind,
                                 repoTab.writeReportRemote,
                                 repoTab.writeReportName,
-                                repoTab.writeReportReason)
+                                repoTab.writeReportFact)
                 // The `>_` mark goes quiet with the report (`answeredFailures`).
                 if (!commandsModel.failed)
                     page.answeredFailures++

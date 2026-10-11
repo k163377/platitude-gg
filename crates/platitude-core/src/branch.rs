@@ -235,7 +235,7 @@ pub async fn rename(
 }
 
 /// Whether `refs/heads/<name>` is there (`rev-parse --verify` exit 1 = not).
-async fn has_branch(
+pub(crate) async fn has_branch(
     executor: &GitExecutor,
     workdir: &Path,
     name: &str,

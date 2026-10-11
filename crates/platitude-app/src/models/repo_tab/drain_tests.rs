@@ -126,7 +126,6 @@ fn a_push_refused_with_a_report_hands_the_report_to_the_press() {
             ReportKind::Outdated,
             "origin",
             "topic",
-            "fetch first".into(),
         )),
     )]);
     assert_eq!(tab.push_answer, 0);
@@ -135,7 +134,7 @@ fn a_push_refused_with_a_report_hands_the_report_to_the_press() {
     assert_eq!(answer.report_kind, "outdated");
     assert_eq!(answer.report_remote, "origin");
     assert_eq!(answer.report_name, "topic");
-    assert_eq!(answer.report_reason, "fetch first");
+    assert_eq!(answer.report_fact, "");
     assert!(
         !tab.write_refused,
         "the report is the answer's, not the group's"
@@ -456,10 +455,9 @@ fn a_refusal_with_a_report_turns_no_row() {
         K::Branch,
         "remote: refused",
         Some(platitude_core::WriteReport::on_remote(
-            ReportKind::RemoteDelete,
+            ReportKind::RemoteDelete(platitude_core::RemoteWhy::Other),
             "origin",
             "feature",
-            "refused".into(),
         )),
     )]);
     assert_eq!(tab.branch_delete_refused, "");
@@ -467,8 +465,7 @@ fn a_refusal_with_a_report_turns_no_row() {
     let answer = tab
         .write_answer_at(tab.branch_delete_answer)
         .expect("the card's own answer");
-    assert_eq!(answer.report_kind, "delete");
-    assert_eq!(answer.report_reason, "refused");
+    assert_eq!(answer.report_kind, "delete-refused");
 }
 
 /// One answer as the bridge carries it.
@@ -645,17 +642,13 @@ fn a_refused_commit_keeps_its_words_past_the_landing_beside_it() {
             OURS,
             K::Commit,
             "`git commit` exited with code 1",
-            Some(platitude_core::WriteReport::local(
-                ReportKind::Commit,
-                "lint found 1 problem".into(),
-            )),
+            Some(platitude_core::WriteReport::local(ReportKind::CommitHook)),
         ),
         answered(SOMEBODY_ELSE, K::Stash, ""),
     ]);
     let answer = for_the_editor(&tab).expect("the editor's own answer");
     assert!(answer.failed, "a rejected commit keeps the editor's text");
-    assert_eq!(answer.report_kind, "commit");
-    assert_eq!(answer.report_reason, "lint found 1 problem");
+    assert_eq!(answer.report_kind, "commit-hook");
     // Reported once: the group is the stash's.
     assert!(!tab.write_refused);
     assert!(
@@ -982,10 +975,9 @@ fn a_ref_rows_push_keeps_its_refusal_when_a_fetch_answers_beside_it() {
             K::Push,
             "remote: Cannot delete a protected branch",
             Some(platitude_core::WriteReport::on_remote(
-                ReportKind::RemoteDelete,
+                ReportKind::RemoteDelete(platitude_core::RemoteWhy::Rule),
                 "origin",
                 "topic",
-                "Cannot delete a protected branch".into(),
             )),
         );
         let fetch = answered(SOMEBODY_ELSE, K::Fetch, "");
@@ -1002,8 +994,7 @@ fn a_ref_rows_push_keeps_its_refusal_when_a_fetch_answers_beside_it() {
         );
         let answer = tab.write_answer_at(at).expect("the answer it points at");
         assert!(answer.failed, "and it is the refusal, not the fetch");
-        assert_eq!(answer.report_kind, "delete");
-        assert_eq!(answer.report_reason, "Cannot delete a protected branch");
+        assert_eq!(answer.report_kind, "delete-rule");
         assert_eq!(
             tab.ref_push_target, "origin/topic",
             "named with the row it was sent for"

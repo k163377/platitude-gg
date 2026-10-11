@@ -1,6 +1,7 @@
 //! One tab's feed, drained into the properties QML reads.
 
 use super::*;
+use platitude_core::RemoteWhy;
 use platitude_core::discards::Restored;
 
 impl RepoTab {
@@ -318,12 +319,12 @@ impl RepoTab {
         // Who said no and what about. It rides the answer below: a drain
         // can bring several, each with its own report.
         let reported = report.is_some();
-        let (report_kind, remote, name, reason) = match report {
+        let (report_kind, remote, name, fact) = match report {
             Some(report) => (
-                report_word(report.kind).to_string(),
+                report_word(report.kind),
                 report.remote,
                 report.name,
-                report.reason,
+                report.fact,
             ),
             None => (String::new(), String::new(), String::new(), String::new()),
         };
@@ -372,7 +373,7 @@ impl RepoTab {
             report_kind,
             report_remote: remote,
             report_name: name,
-            report_reason: reason,
+            report_fact: fact,
         });
         let at = self.write_answers.len() - 1;
         // Handed to whoever named this write at the press, and stops
@@ -499,7 +500,7 @@ impl RepoTab {
         self.write_report_kind = answer.report_kind.clone();
         self.write_report_remote = answer.report_remote.clone();
         self.write_report_name = answer.report_name.clone();
-        self.write_report_reason = answer.report_reason.clone();
+        self.write_report_fact = answer.report_fact.clone();
     }
 
     /// The group at rest — values that ask the page to do nothing.
@@ -514,21 +515,28 @@ impl RepoTab {
         self.write_report_kind = String::new();
         self.write_report_remote = String::new();
         self.write_report_name = String::new();
-        self.write_report_reason = String::new();
+        self.write_report_fact = String::new();
     }
 }
 
 /// The word the page picks a report's two lines by (`Words.writeReported`,
-/// `Words.writeReportedWhy`).
-fn report_word(kind: ReportKind) -> &'static str {
-    match kind {
-        ReportKind::RemoteDelete => "delete",
-        ReportKind::RemoteUpdate => "update",
+/// `Words.writeReportedWhy`). A far-side refusal is two words, what was
+/// asked and what for (`update-rule`): the heading turns on the first, the
+/// line under it on the second.
+fn report_word(kind: ReportKind) -> String {
+    let word = match kind {
+        ReportKind::RemoteDelete(why) => return format!("delete-{}", remote_why_word(why)),
+        ReportKind::RemoteUpdate(why) => return format!("update-{}", remote_why_word(why)),
+        ReportKind::PrePush => "pre-push",
+        ReportKind::PrePushDelete => "pre-push-delete",
         ReportKind::Outdated => "outdated",
         ReportKind::Moved => "moved",
         ReportKind::MovedDelete => "moved-delete",
         ReportKind::TagElsewhere => "tag-elsewhere",
         ReportKind::Commit => "commit",
+        ReportKind::CommitHook => "commit-hook",
+        ReportKind::CommitUnsigned => "commit-unsigned",
+        ReportKind::CommitLocked => "commit-locked",
         ReportKind::StaleStage => "stale-stage",
         ReportKind::StaleUnstage => "stale-unstage",
         ReportKind::StaleDiscard => "stale-discard",
@@ -537,9 +545,17 @@ fn report_word(kind: ReportKind) -> &'static str {
         ReportKind::RenameLocked => "rename-locked",
         ReportKind::RenameUnfinished => "rename-unfinished",
         ReportKind::HalfRenamed => "half-rename",
+        ReportKind::StashRenameRefused => "stash-rename",
+        ReportKind::StashRenameLocked => "stash-rename-locked",
+        ReportKind::StashGone => "stash-gone",
         ReportKind::WorktreeKept => "worktree-kept",
+        ReportKind::WorktreeLocked => "worktree-locked",
+        ReportKind::WorktreeRemoveRefused => "worktree-refused",
         ReportKind::WorktreeHalfRemoved => "worktree-half",
         ReportKind::WorktreeNotAdded => "worktree-not-added",
+        ReportKind::WorktreePlaceTaken => "worktree-place-taken",
+        ReportKind::WorktreeBranchLeft => "worktree-branch-left",
+        ReportKind::WorktreeHookFailed => "worktree-hook",
         ReportKind::WorktreeFolderTaken => "worktree-folder-taken",
         ReportKind::CarriedInTheWay => "carried-in-the-way",
         ReportKind::CarriedFileInTheWay => "carried-file-in-the-way",
@@ -552,6 +568,24 @@ fn report_word(kind: ReportKind) -> &'static str {
         ReportKind::DropAllCommits => "drop-all",
         ReportKind::RewriteTipMoved => "tip-moved",
         ReportKind::RewriteWhileStanding => "op-standing",
+        ReportKind::RewritePreRebase => "pre-rebase",
+        ReportKind::RewriteUnsigned => "rewrite-unsigned",
+        ReportKind::RewriteCommitHook => "rewrite-commit-hook",
+    };
+    word.to_string()
+}
+
+fn remote_why_word(why: RemoteWhy) -> &'static str {
+    match why {
+        RemoteWhy::Rule => "rule",
+        RemoteWhy::Rewrite => "rewrite",
+        RemoteWhy::NoDeletes => "no-deletes",
+        RemoteWhy::CheckedOut => "checked-out",
+        RemoteWhy::Current => "current",
+        RemoteWhy::TooLarge => "too-large",
+        RemoteWhy::Shallow => "shallow",
+        RemoteWhy::Locked => "locked",
+        RemoteWhy::Other => "refused",
     }
 }
 

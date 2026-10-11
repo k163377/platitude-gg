@@ -72,5 +72,5 @@ pub use process::{
     CommandEnd, CommandObserver, DEFAULT_TIMEOUT, GitCommand, GitExecutor, GitOutput, Kept,
 };
 pub use repo::{ObjectFormat, RepoInfo};
-pub use report::{ReportKind, WriteReport};
+pub use report::{RemoteWhy, ReportKind, WriteReport};
 pub use version::{GitVersion, MINIMUM_GIT};

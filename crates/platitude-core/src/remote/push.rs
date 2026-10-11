@@ -14,7 +14,7 @@ use crate::process::{GitCommand, GitExecutor};
 
 use super::list::current_branch;
 use super::marks::{PushMarks, push_marks};
-use super::refusal::refusal;
+use super::refusal::{Sent, refusal};
 use super::standing::PushTrack;
 
 /// How hard a push may overwrite the remote.
@@ -163,12 +163,17 @@ pub async fn plan_publish(
 /// ref asked for and nothing beside it: a user's `push.followTags` would
 /// add every annotated tag on the pushed commits, and the far side turning
 /// one of those away fails a push whose branch landed.
+///
+/// Its stdout goes under a failed row in the log beside stderr: the ref
+/// lines say what was refused and why, and a `pre-push` hook's words come
+/// out there (transport.c leaves the hook's stdout git's own).
 pub(super) fn porcelain_push(workdir: &Path, timeout: Duration) -> GitCommand {
     GitCommand::new()
         .cwd(workdir)
         .args(["push", "--porcelain", "--no-follow-tags"])
         .timeout(timeout)
         .paced_elsewhere()
+        .logs_stdout()
 }
 
 /// `git push` for one branch.
@@ -203,13 +208,8 @@ pub async fn push(
     if out.code == 0 {
         return Ok(());
     }
-    Err(refusal(
-        command,
-        &out,
-        &spec.remote,
-        &spec.remote_branch,
-        false,
-    ))
+    let sent = Sent::branch(&spec.remote, &spec.remote_branch, false);
+    Err(refusal(executor, workdir, command, &out, &sent, cancel).await)
 }
 
 /// How `branch` stands against the tracking ref of where a mark sends

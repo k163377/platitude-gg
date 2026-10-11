@@ -41,7 +41,7 @@ Item {
             // Both bars standing at once, the one arrangement where Escape has to pick one
             // (デザイン規約 §答えの要らない報せ). The report goes up first, the order a hand meets them in
             // (`RepoPage.startRowAsk` leaves a standing report where it is); which report it is does not matter.
-            page.showReport("update", "origin", "main", "")
+            page.showReport("update-rule", "origin", "main", "")
             askOverNoticeTimer.ref = arg === "" ? "origin/main" : arg
             askOverNoticeTimer.start()
         } else if (act === "ask-sweep") {

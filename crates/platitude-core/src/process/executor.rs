@@ -520,7 +520,7 @@ impl GitExecutor {
             TimeBudget::At(timeout) => Some(timeout),
             TimeBudget::Never => None,
         };
-        let outcome = run_child(&mut child, budget, cancel, on_stdout).await;
+        let (outcome, kept) = run_keeping(&mut child, cmd, budget, cancel, on_stdout).await;
         // Reaped (or killed) whichever way it ended: the life is spent.
         super::meter::charge(started.elapsed());
         let outcome = outcome.map_err(|source| {
@@ -541,15 +541,17 @@ impl GitExecutor {
             started,
             spawned,
         };
-        Self::ended(cmd, described, outcome, budget, clocks, &report)
+        Self::ended(cmd, described, outcome, &kept, budget, clocks, &report)
     }
 
     /// The child's end: the log line, the observer's report, and the
-    /// answer or the error.
+    /// answer or the error. `stdout` is what the row may show of it
+    /// (empty unless the command keeps it, `GitCommand::logs_stdout`).
     fn ended(
         cmd: &GitCommand,
         described: String,
         outcome: ChildOutcome,
+        stdout: &[u8],
         budget: Option<Duration>,
         clocks: Clocks,
         report: &dyn Fn(CommandEnd, Duration, Duration, &str),
@@ -569,17 +571,32 @@ impl GitExecutor {
                     elapsed_ms = started.elapsed().as_millis() as u64,
                     "git finished"
                 );
-                report(
+                let said = String::from_utf8_lossy(&stderr);
+                let said = said.trim_end();
+                let answered = match cmd.answer_code {
+                    _ if code == 0 => cmd.answer_code.is_some(),
                     // Only the code this command named is an answer: a 128
                     // from one that named 1 is still a failure.
-                    if cmd.answer_code.is_some_and(|a| code == 0 || code == a) {
+                    Some(answer) => {
+                        code == answer && !cmd.not_an_answer.iter().any(|w| said.contains(w))
+                    }
+                    None => false,
+                };
+                let shown = String::from_utf8_lossy(stdout);
+                let message = match shown.trim_end() {
+                    out if out.is_empty() || code == 0 || answered => said.to_string(),
+                    out if said.is_empty() => out.to_string(),
+                    out => format!("{out}\n{said}"),
+                };
+                report(
+                    if answered {
                         CommandEnd::Answered(code)
                     } else {
                         CommandEnd::Exited(code)
                     },
                     waited,
                     started.elapsed(),
-                    String::from_utf8_lossy(&stderr).trim_end(),
+                    &message,
                 );
                 Ok(GitOutput {
                     code,
@@ -604,6 +621,27 @@ impl GitExecutor {
             }
         }
     }
+}
+
+/// [`run_child`], with a copy of stdout for the log's row where the
+/// command asks for one (`GitCommand::logs_stdout`); empty otherwise.
+async fn run_keeping(
+    child: &mut tokio::process::Child,
+    cmd: &GitCommand,
+    budget: Option<Duration>,
+    cancel: &CancellationToken,
+    on_stdout: &mut (dyn FnMut(&[u8]) + Send),
+) -> (std::io::Result<ChildOutcome>, Vec<u8>) {
+    let mut kept = Vec::new();
+    if !cmd.logs_stdout {
+        return (run_child(child, budget, cancel, on_stdout).await, kept);
+    }
+    let mut both = |chunk: &[u8]| {
+        kept.extend_from_slice(chunk);
+        on_stdout(chunk);
+    };
+    let outcome = run_child(child, budget, cancel, &mut both).await;
+    (outcome, kept)
 }
 
 /// What one command's end is reported against.

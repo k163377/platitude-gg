@@ -83,7 +83,7 @@ impl RepoTab {
         self.write_report_kind = String::new();
         self.write_report_remote = String::new();
         self.write_report_name = String::new();
-        self.write_report_reason = String::new();
+        self.write_report_fact = String::new();
         self.move_ask_local = String::new();
         self.move_ask_start = String::new();
         self.paced_worktrees = Vec::new();

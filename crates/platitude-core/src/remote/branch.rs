@@ -120,7 +120,8 @@ pub async fn delete_remote_branch(
     if out.code == 0 {
         return Ok(());
     }
-    Err(super::refusal::refusal(command, &out, remote, branch, true))
+    let sent = super::refusal::Sent::branch(remote, branch, true);
+    Err(super::refusal::refusal(executor, workdir, command, &out, &sent, cancel).await)
 }
 
 /// After [`delete_remote_branch`] went: takes the upstream off the local

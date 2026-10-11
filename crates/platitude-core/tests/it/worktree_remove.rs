@@ -112,9 +112,9 @@ async fn uncommitted_work_keeps_the_worktree_and_the_reason_is_the_screens() {
         "the heading names the worktree as the screen does"
     );
     assert!(
-        report.reason.is_empty(),
+        report.fact.is_empty(),
         "the screen writes the reason: {}",
-        report.reason
+        report.fact
     );
     assert!(
         err.to_string().contains("modified or untracked"),
@@ -124,10 +124,11 @@ async fn uncommitted_work_keeps_the_worktree_and_the_reason_is_the_screens() {
     assert!(listed(&mut repo, &worktree));
 }
 
-/// A lock the menu did not see (taken after it opened) keeps the worktree,
-/// in git's words.
+/// A lock the menu did not see (taken after it opened) keeps the worktree;
+/// the report carries the reason it was locked with — its owner's words,
+/// not git's.
 #[tokio::test]
-async fn a_lock_keeps_the_worktree_in_gits_words() {
+async fn a_lock_keeps_the_worktree_and_says_its_reason() {
     let (mut repo, worktree) = with_worktree("locked");
     repo.git(&[
         "worktree",
@@ -149,13 +150,46 @@ async fn a_lock_keeps_the_worktree_in_gits_words() {
     .expect_err("git keeps a locked worktree");
 
     let report = err.report().expect("a refusal is a report");
-    assert_eq!(report.kind, ReportKind::WorktreeKept);
-    assert!(
-        report.reason.contains("locked"),
-        "git's own sentence: {}",
-        report.reason
-    );
+    assert_eq!(report.kind, ReportKind::WorktreeLocked, "{err}");
+    assert_eq!(report.fact, "held", "the lock's own reason");
     assert!(worktree.exists());
+
+    repo.git(&["worktree", "unlock", &worktree.to_string_lossy()]);
+    repo.git(&["worktree", "lock", &worktree.to_string_lossy()]);
+    let err = worktrees::remove(
+        &exec,
+        &repo.path,
+        &worktree.to_string_lossy(),
+        "locked",
+        &cancel,
+    )
+    .await
+    .expect_err("git keeps a locked worktree, reason or none");
+    let report = err.report().expect("a refusal is a report");
+    assert_eq!(
+        (report.kind, report.fact.as_str()),
+        (ReportKind::WorktreeLocked, "")
+    );
+}
+
+/// A worktree removed elsewhere since the menu opened is gone as asked:
+/// nothing to report.
+#[tokio::test]
+async fn a_worktree_already_gone_is_removed_as_asked() {
+    let (mut repo, worktree) = with_worktree("twice");
+    repo.git(&["worktree", "remove", &worktree.to_string_lossy()]);
+    let (exec, cancel) = env();
+
+    worktrees::remove(
+        &exec,
+        &repo.path,
+        &worktree.to_string_lossy(),
+        "twice",
+        &cancel,
+    )
+    .await
+    .expect("nothing left to remove is no refusal");
+    assert!(!listed(&mut repo, &worktree));
 }
 
 /// The repository's own worktree is never git's to remove.
@@ -176,7 +210,7 @@ async fn the_main_worktree_is_refused() {
 
     assert_eq!(
         err.report().expect("a report").kind,
-        ReportKind::WorktreeKept
+        ReportKind::WorktreeRemoveRefused
     );
     assert!(repo.path.join("a.txt").exists());
 }

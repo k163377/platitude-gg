@@ -252,6 +252,54 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
     );
 }
 
+/// A code a command answers by is a failure after all where git says the
+/// words the command named, and a failed row of a command that keeps its
+/// stdout carries it ahead of stderr. A shell alias stands in for git
+/// writing to both streams and exiting with the code.
+#[tokio::test]
+async fn named_words_and_kept_stdout_reach_the_row() {
+    use crate::support::Said;
+    use platitude_core::process::CommandEnd;
+    use std::sync::Arc;
+
+    let repo_dir = TestRepo::init();
+    let said = Arc::new(Said::default());
+    let (executor, cancel) = observed_env(said.clone(), Kept::Asked);
+    let probe = || {
+        GitCommand::new().cwd(&repo_dir.path).args([
+            "-c",
+            "alias.pggprobe=!echo on stdout; echo refused here >&2; exit 3",
+            "pggprobe",
+        ])
+    };
+
+    for cmd in [
+        probe().answers_by_code(3),
+        probe()
+            .answers_by_code(3)
+            .except_when_it_says(&["refused here"]),
+        probe().logs_stdout(),
+        probe().answers_by_code(3).logs_stdout(),
+    ] {
+        let out = bounded("the probe", executor.run_unchecked(cmd, &cancel))
+            .await
+            .expect("spawn");
+        assert_eq!(out.code, 3);
+    }
+
+    let seen = said.0.lock().unwrap().clone();
+    assert_eq!(
+        seen,
+        vec![
+            (CommandEnd::Answered(3), "refused here".to_string()),
+            (CommandEnd::Exited(3), "refused here".to_string()),
+            (CommandEnd::Exited(3), "on stdout\nrefused here".to_string()),
+            (CommandEnd::Answered(3), "refused here".to_string(),),
+        ],
+        "an answer keeps its row quiet, stdout or none"
+    );
+}
+
 /// A read must leave `.git/index.lock` alone: a write dies where it cannot
 /// take it, and reads run beside writes (the queue orders only writes,
 /// `session::write`). A working-tree `git diff` refreshes the index under

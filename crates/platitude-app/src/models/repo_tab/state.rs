@@ -117,7 +117,7 @@ impl Default for RepoTab {
             write_report_kind: String::new(),
             write_report_remote: String::new(),
             write_report_name: String::new(),
-            write_report_reason: String::new(),
+            write_report_fact: String::new(),
             move_ask_local: String::new(),
             move_ask_start: String::new(),
             move_ask_seq: 0,

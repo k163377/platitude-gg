@@ -56,10 +56,17 @@ pub async fn rebase(
 ) -> Result<RebaseOutcome, GitError> {
     // Exit 1 is an answer; 128 stays a failure
     // (rules/core.md「終了コードで答える問い合わせは」).
-    let cmd = rebase_command(workdir, upstream, options, None).answers_by_code(1);
+    let cmd = rebase_command(workdir, upstream, options, None)
+        .answers_by_code(1)
+        .except_when_it_says(&[PRE_REBASE_REFUSED]);
     let result = executor.run(cmd, cancel).await.map(drop);
     landed(executor, workdir, result, cancel).await
 }
+
+/// What git says when the `pre-rebase` hook here turned the rebase down,
+/// before anything moved (builtin/rebase.c): `error:` and exit 1 at 2.55 —
+/// the code a stop answers with — and `fatal:` with 128 at the minimum.
+pub(crate) const PRE_REBASE_REFUSED: &str = "The pre-rebase hook refused to rebase.";
 
 /// Sorts a rebase's result into [`RebaseOutcome`], shared by the plain
 /// rebase above and the driven one in [`crate::sequencer`].
@@ -73,6 +80,10 @@ pub async fn rebase(
 ///
 /// Exit 0 is not always Done: an `edit` stop exits 0 with the marker
 /// standing (`an_edit_stop_says_so_and_names_the_commit_it_sits_on`).
+///
+/// The `pre-rebase` hook's no is a report
+/// ([`crate::report::ReportKind::RewritePreRebase`]): nothing moved, and
+/// only the hook's words — the log's — say why.
 pub(crate) async fn landed(
     executor: &GitExecutor,
     workdir: &Path,
@@ -103,6 +114,14 @@ pub(crate) async fn landed(
             code,
             stderr,
         }));
+    }
+    if stderr.contains(PRE_REBASE_REFUSED) {
+        return Err(crate::report::rewrite_refused(
+            crate::report::ReportKind::RewritePreRebase,
+            command,
+            code,
+            stderr,
+        ));
     }
     if code == 1
         && opstate::detect(executor, workdir, cancel)

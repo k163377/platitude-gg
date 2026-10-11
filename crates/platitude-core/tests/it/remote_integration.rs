@@ -15,7 +15,7 @@ use platitude_core::OperationKind;
 use platitude_core::commit;
 use platitude_core::integrate::Landing;
 use platitude_core::remote::{self, PushForce, PushSpec};
-use platitude_core::report::ReportKind;
+use platitude_core::report::{RemoteWhy, ReportKind};
 
 /// A `file://` remote answers instantly; the budget just has to exist.
 const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
@@ -618,13 +618,10 @@ async fn a_branch_the_far_side_keeps_comes_back_as_a_refusal_with_its_words() {
     assert_eq!(report.name, "main");
     assert_eq!(
         report.kind,
-        ReportKind::RemoteDelete,
-        "what was asked for was the removal"
+        ReportKind::RemoteDelete(RemoteWhy::Rule),
+        "what was asked for was the removal, and a hook over there said no"
     );
-    assert_eq!(
-        report.reason, "GH006: Protected branch update failed for refs/heads/main.",
-        "the words are the far side's own, without git's framing"
-    );
+    assert_eq!(report.fact, "", "the screen says it in its own words");
     // Under `--porcelain` the per-ref result is on stdout and stderr keeps
     // the prose: the far side's lines and git's own last word.
     assert!(
@@ -660,12 +657,13 @@ async fn a_push_the_far_side_turns_down_is_not_one_a_fetch_would_answer() {
     };
     assert_eq!(
         report.kind,
-        ReportKind::RemoteUpdate,
+        ReportKind::RemoteUpdate(RemoteWhy::Rule),
         "this one was sending, not removing"
     );
-    assert_eq!(
-        report.reason,
-        "Changes must be made through a pull request."
+    assert!(
+        err.to_string()
+            .contains("Changes must be made through a pull request."),
+        "the far side's words are the log's: {err}"
     );
 }
 
@@ -730,10 +728,9 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
     let Some(report) = err.report() else {
         panic!("a tag the far side keeps is a report, not a failure of ours: {err}");
     };
-    assert_eq!(report.kind, ReportKind::RemoteDelete);
+    assert_eq!(report.kind, ReportKind::RemoteDelete(RemoteWhy::Rule));
     assert_eq!(report.remote, "origin");
     assert_eq!(report.name, "v1.0", "the tag names itself, not a branch");
-    assert_eq!(report.reason, "Tag protection rules prevent this.");
 
     work.commit_file("c.txt", "more\n", "something to tag");
     work.git(&["tag", "v1.1"]);
@@ -743,9 +740,8 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
     let Some(report) = err.report() else {
         panic!("a tag the far side would not take is a report as well: {err}");
     };
-    assert_eq!(report.kind, ReportKind::RemoteUpdate);
+    assert_eq!(report.kind, ReportKind::RemoteUpdate(RemoteWhy::Rule));
     assert_eq!(report.name, "v1.1");
-    assert_eq!(report.reason, "Tag protection rules prevent this.");
     assert!(
         !err.is_outdated(),
         "nothing about a tag is answered by fetching, whatever the refusal was"
@@ -802,12 +798,14 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
     let err = remote::delete_remote_tag(&exec, &work.path, "origin", "v1.0", &shown, NET, &cancel)
         .await
         .expect_err("the far side keeps the tag");
-    let Some(report) = err.report() else {
-        panic!("a tag the far side keeps is a report, not a failure of ours: {err}");
-    };
-    assert_eq!(
-        report.reason, "Tag protection rules prevent this.",
-        "the hook's own words, not git's parenthetical over a hook it could not run: {err}"
+    assert!(
+        err.report().is_some(),
+        "a tag the far side keeps is a report, not a failure of ours: {err}"
+    );
+    assert!(
+        err.to_string()
+            .contains("Tag protection rules prevent this."),
+        "the hook ran and said its words, which the log keeps — not a hook git could not run: {err}"
     );
     drop(held);
 }
@@ -849,11 +847,11 @@ async fn a_push_that_is_only_out_of_date_reports_gits_own_advice() {
     assert_eq!(report.remote, "origin");
     assert_eq!(report.name, "main");
     assert!(
-        report.reason.is_empty(),
-        "nobody over there saw this push, so there is nobody to quote: the line under the heading \
-         is the screen's own (`Words.writeReportedWhy`), and git's advice — written for somebody \
-         at a terminal — is read in the log with the command it came from. Carried: {}",
-        report.reason
+        report.fact.is_empty(),
+        "the line under the heading is the screen's own (`Words.writeReportedWhy`), and git's \
+         advice — written for somebody at a terminal — is read in the log with the command it \
+         came from. Carried: {}",
+        report.fact
     );
 }
 

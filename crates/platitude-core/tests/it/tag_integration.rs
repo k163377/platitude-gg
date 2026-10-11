@@ -88,7 +88,7 @@ async fn a_name_a_tag_cannot_take_is_reported_under_the_old_one() {
     assert_eq!(report.kind, ReportKind::RenameRefused);
     assert_eq!(report.name, "v1.0", "the tag still carries the old name");
     assert_eq!(
-        report.reason, "",
+        report.fact, "",
         "git's words are the log's; the screen's line points there"
     );
     assert!(

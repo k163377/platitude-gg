@@ -119,13 +119,33 @@ pub async fn rebase_interactive(
     let editor = sequence_editor_command(helper, plan.path());
     // Exit 1 answers (work in the way, or a stopped replay), each with its
     // own landing on screen; a 128 stays a failure
-    // (.claude/rules/core.md「終了コードで答える問い合わせ」).
-    let cmd = rebase_command(&repo.workdir, upstream, options, Some(&editor)).answers_by_code(1);
+    // (.claude/rules/core.md「終了コードで答える問い合わせ」) — and so does a
+    // 1 that is a commit turned down, which the replay is put back for.
+    let cmd = rebase_command(&repo.workdir, upstream, options, Some(&editor))
+        .answers_by_code(1)
+        .except_when_it_says(&NOT_A_STOP);
     let result = executor.run(cmd, cancel).await;
     // The todo is installed (or refused) by now; only the message files
     // may still have a reader.
     drop(plan);
-    let outcome = crate::integrate::landed(executor, &repo.workdir, result.map(drop), cancel).await;
+    let refused = match &result {
+        Err(GitError::Failed {
+            command,
+            code,
+            stderr,
+        }) => commit_refused(stderr).map(|kind| (kind, command.clone(), *code, stderr.clone())),
+        _ => None,
+    };
+    let mut outcome =
+        crate::integrate::landed(executor, &repo.workdir, result.map(drop), cancel).await;
+    if let Some((kind, command, code, stderr)) = refused
+        && left_standing(executor, repo, &outcome, cancel).await
+    {
+        outcome = Err(match put_back(executor, repo, cancel).await {
+            Ok(()) => report::rewrite_refused(kind, command, code, stderr),
+            Err(left_standing) => left_standing,
+        });
+    }
     match &outcome {
         // Kept for the `--continue`; what an abort strands is swept on the
         // next rebase that runs to the end. An error keeps them too:
@@ -143,6 +163,80 @@ pub async fn rebase_interactive(
         Ok(RebaseOutcome::Blocked(_)) => drop(message_files),
     }
     outcome
+}
+
+/// What git says, part-way through a replay, when a commit it remade was
+/// turned down — the replay then stops as over a conflict, with exit 1, or
+/// dies with it standing (128: no signing key named at all, which git
+/// dies over in its own process) (sequencer.c, the same words at the
+/// minimum and 2.55). Signing: [`crate::commit::UNSIGNED`]. A hook:
+/// `prepare-commit-msg` on a pick, or any commit hook on a reword's `exec`
+/// (the one `exec` a plan writes, whose `git commit` runs them all). And
+/// the `pre-rebase` hook's no, which stops nothing.
+const NOT_A_STOP: [&str; 5] = [
+    crate::commit::UNSIGNED[0],
+    crate::commit::UNSIGNED[1],
+    PREPARE_HOOK_FAILED,
+    REWORD_EXEC_FAILED,
+    crate::integrate::PRE_REBASE_REFUSED,
+];
+const PREPARE_HOOK_FAILED: &str = "'prepare-commit-msg' hook failed";
+const REWORD_EXEC_FAILED: &str = "execution failed: git commit --amend";
+
+/// Which refusal a stopped replay's words are, for one that stopped over
+/// a commit turned down rather than to be settled: a plan is one press, so
+/// it is put back and reported (デザイン規約 §答えの要らない報せ), where a
+/// conflict or an `edit` stop is the reader's to carry on. A lock is left a
+/// stop: the next `--continue` gets past one that has gone.
+fn commit_refused(stderr: &str) -> Option<report::ReportKind> {
+    if crate::commit::UNSIGNED
+        .iter()
+        .any(|said| stderr.contains(said))
+    {
+        Some(report::ReportKind::RewriteUnsigned)
+    } else if crate::report::lock_taken(stderr) {
+        None
+    } else if stderr.contains(PREPARE_HOOK_FAILED) || stderr.contains(REWORD_EXEC_FAILED) {
+        Some(report::ReportKind::RewriteCommitHook)
+    } else {
+        None
+    }
+}
+
+/// Whether the replay a commit was refused in is still standing: stopped
+/// (exit 1), or died with it standing — a signing key git cannot even name
+/// dies (128) inside the rebase's own process when it remakes a pick,
+/// where a reword's `exec` answers 1.
+async fn left_standing(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    outcome: &Result<RebaseOutcome, GitError>,
+    cancel: &CancellationToken,
+) -> bool {
+    match outcome {
+        Ok(RebaseOutcome::Stopped) => true,
+        Ok(_) => false,
+        Err(_) => crate::opstate::detect(executor, &repo.workdir, cancel)
+            .await
+            .is_ok_and(|state| state.rebasing),
+    }
+}
+
+/// Puts a replay that stopped over a refused commit back where it began.
+/// A failed abort leaves the rebase standing, which the band then shows.
+async fn put_back(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    crate::integrate::resolve(
+        executor,
+        &repo.workdir,
+        crate::integrate::InProgress::Rebase,
+        crate::integrate::Continuation::Abort,
+        cancel,
+    )
+    .await
 }
 
 /// The `GIT_SEQUENCE_EDITOR` value that installs `plan` as the todo list.

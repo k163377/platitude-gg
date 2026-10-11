@@ -396,14 +396,14 @@ pub struct RepoTab {
     /// said so — a protected branch, a rule, a hook, a stale picture of
     /// the remote (デザイン規約 §答えの要らない報せ).
     ///
-    /// `kind` (`delete` / `update` / `outdated` / `commit`) is what the
-    /// sentence turns on; `remote` and `name` are what it is about, and
-    /// the reason is shown as it came. Empty `kind` is "no report in this
-    /// answer".
+    /// `kind` (`drain::report_word`) is what both sentences turn on;
+    /// `remote` and `name` are what it is about, and `fact` the one thing
+    /// the second line names beside them. Empty `kind` is "no report in
+    /// this answer".
     write_report_kind: String,
     write_report_remote: String,
     write_report_name: String,
-    write_report_reason: String,
+    write_report_fact: String,
     /// A branch move that would leave commits unreachable, waiting to be
     /// asked about. Nothing has happened yet.
     move_ask_local: String,
@@ -455,14 +455,13 @@ struct WriteAnswer {
     at_tip: bool,
     head_seq: u64,
     reads_from: u64,
-    /// What the far side, a hook, or this end said about refusing it — per
-    /// answer, since a drain can bring several. Empty `kind` is git's
-    /// plain refusal, the command log's news
-    /// (デザイン規約 §答えの要らない報せ).
+    /// Who refused it — the far side, a hook, this end — per answer, since
+    /// a drain can bring several. Empty `kind` is git's plain refusal, the
+    /// command log's news (デザイン規約 §答えの要らない報せ).
     report_kind: String,
     report_remote: String,
     report_name: String,
-    report_reason: String,
+    report_fact: String,
 }
 
 /// A session's running number (a write's id, a HEAD report's) as the

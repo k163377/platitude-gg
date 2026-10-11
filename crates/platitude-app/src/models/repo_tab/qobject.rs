@@ -241,8 +241,8 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!(
-        "writeReportReason",
-        Member = write_report_reason,
+        "writeReportFact",
+        Member = write_report_fact,
         Notify = changed
     );
     qproperty!("moveAskLocal", Member = move_ask_local, Notify = changed);
@@ -505,12 +505,12 @@ impl RepoTab {
             .unwrap_or_default()
     }
 
-    /// Whoever said no, in their own words — carried across as they
-    /// came, the way `lastWriteError` is.
+    /// The one thing the report's second line names beside the heading's
+    /// names (`WriteReport::fact`) — never anybody's message.
     #[qslot]
-    fn write_answer_report_reason(&self, index: i32) -> String {
+    fn write_answer_report_fact(&self, index: i32) -> String {
         self.write_answer_at(index)
-            .map(|a| a.report_reason.clone())
+            .map(|a| a.report_fact.clone())
             .unwrap_or_default()
     }
 

@@ -248,15 +248,21 @@ QtObject {
     /// The heading for a write that did not happen, from the kind core answered with (`RepoTab.writeReportKind`).
     /// Whoever decided is the subject, and a branch and a tag share one sentence (デザイン規約 §答えの要らない報せ).
     function writeReported(kind, remote, name) {
+        // The far side's refusals are two words, what was asked and what for (`drain::report_word`): the heading turns
+        // on the first.
+        if (kind.startsWith("delete-"))
+            return qsTr("%1 would not delete %2").arg(remote).arg(name)
+        if (kind.startsWith("update-"))
+            return qsTr("%1 would not update %2").arg(remote).arg(name)
         switch (kind) {
-        case "delete": return qsTr("%1 would not delete %2").arg(remote).arg(name)
-        case "update": return qsTr("%1 would not update %2").arg(remote).arg(name)
         // A branch and a tag alike, whatever stopped them; the line underneath says what did.
         //: %1 is a branch or a tag, %2 a remote.
+        case "pre-push":
         case "outdated":
         case "moved":
         case "tag-elsewhere": return qsTr("%1 was not sent to %2").arg(name).arg(remote)
         //: %1 is a branch or a tag, %2 a remote.
+        case "pre-push-delete":
         case "moved-delete": return qsTr("%1 was not deleted from %2").arg(name).arg(remote)
         case "stale-stage": return qsTr("Nothing was staged")
         case "stale-unstage": return qsTr("Nothing was unstaged")
@@ -266,10 +272,20 @@ QtObject {
         case "rename-locked": return qsTr("%1 was not renamed").arg(name)
         case "half-rename":
         case "rename-unfinished": return qsTr("The rename did not finish")
-        case "worktree-kept": return qsTr("%1 was not removed").arg(name)
+        // `stash@{n}` is no name the screen shows, and the message the row shows can be long.
+        case "stash-rename":
+        case "stash-rename-locked":
+        case "stash-gone": return qsTr("The stash was not renamed")
+        case "worktree-kept":
+        case "worktree-locked":
+        case "worktree-refused": return qsTr("%1 was not removed").arg(name)
         case "worktree-half": return qsTr("%1 was not removed completely").arg(name)
         case "worktree-not-added":
-        case "worktree-folder-taken": return qsTr("%1 was not created").arg(name)
+        case "worktree-folder-taken":
+        case "worktree-place-taken":
+        case "worktree-branch-left": return qsTr("%1 was not created").arg(name)
+        // git kept the worktree: it is made, and the hook is what failed.
+        case "worktree-hook": return qsTr("%1 was made, but its post-checkout hook failed").arg(name)
         // Another worktree's changes, applied here from its uncommitted row: `name` is the name that worktree goes by —
         // its folder, or the branch the repository's own has out (`RepoPage.showReport`).
         case "carried-in-the-way":
@@ -283,7 +299,10 @@ QtObject {
         case "unfetched-base":
         case "drop-all":
         case "tip-moved":
-        case "op-standing": return Words.historyNotRewritten
+        case "op-standing":
+        case "pre-rebase":
+        case "rewrite-unsigned":
+        case "rewrite-commit-hook": return Words.historyNotRewritten
         default: return qsTr("The commit was not made")
         }
     }
@@ -308,11 +327,15 @@ QtObject {
         }
     }
 
-    /// The second line for the reports nobody outside answered, so there is nobody to quote. Empty for the reports
-    /// that quote somebody else; the page uses what came across (デザイン規約 §答えの要らない報せ). `remote` and `name`
-    /// are the heading's. The refusals a read answers say what the remote turned out to be, and no more: the graph
+    /// The second line of every report: always this application's own words, never anybody's message
+    /// (デザイン規約 §答えの要らない報せ). Where git ran and something said no — a hook, a signing key, another git, a rule
+    /// over there — the line says who, and sends the reader to the log, where that row has what they said
+    /// (`reportPlace`). `remote` and `name` are the heading's; `fact` the one thing core hands over besides
+    /// (`WriteReport::fact`). The refusals a read answers say what the remote turned out to be, and no more: the graph
     /// shows the rest once the read that follows has landed.
-    function writeReportedWhy(kind, remote, name) {
+    function writeReportedWhy(kind, remote, name, fact) {
+        if (kind.startsWith("delete-") || kind.startsWith("update-"))
+            return Words.remoteRefusedWhy(kind, remote, name)
         switch (kind) {
         // Not git's own advice under the refusal: it ends in `git pull`, and the session is fetching already.
         //: %1 is a remote.
@@ -326,6 +349,25 @@ QtObject {
         //: %1 is a remote, %2 a tag.
         case "tag-elsewhere":
             return qsTr("%1 already has %2 on another commit.").arg(remote).arg(name)
+        // Run here before git talked to the remote, which heard nothing.
+        //: %1 is the command log's own title.
+        case "pre-push":
+        case "pre-push-delete":
+            return qsTr("The pre-push hook here turned it down — see %1").arg(Words.commandsTitle)
+        // `pre-commit`, `commit-msg`, `prepare-commit-msg` alike — and a reword's or a replayed commit's, in a
+        // rewrite put back where it began.
+        //: %1 is the command log's own title.
+        case "commit-hook":
+        case "rewrite-commit-hook":
+            return qsTr("A commit hook here turned it down — see %1").arg(Words.commandsTitle)
+        // A key gone, a signing program that failed: what the program said is the log's.
+        //: %1 is the command log's own title.
+        case "commit-unsigned":
+        case "rewrite-unsigned":
+            return qsTr("The commit could not be signed — see %1").arg(Words.commandsTitle)
+        //: %1 is the command log's own title.
+        case "pre-rebase":
+            return qsTr("The pre-rebase hook here turned it down — see %1").arg(Words.commandsTitle)
         case "stale-stage":
         case "stale-unstage":
         case "stale-discard":
@@ -334,16 +376,46 @@ QtObject {
             return qsTr("This file is still conflicted. It has to be resolved before parts of it can be taken.")
         case "half-rename":
             return qsTr("The new name was made; the old one is still there.")
-        // The name was answered before the press, so git turned down something else — a name taken in the moment
-        // since, a branch being rebased or bisected. Its words are the log's (デザイン規約 §答えの要らない報せ).
-        //: %1 is the command log's own title.
-        case "rename":
-            return qsTr("git turned it down — see %1").arg(Words.commandsTitle)
+        // Dropped or popped elsewhere since it was chosen.
+        case "stash-gone":
+            return qsTr("It is no longer in the stash list.")
         // A lock file another git held at that moment, or one a crashed git left behind: trying again is the answer
         // to the first, and the log's line names the file for the second.
         //: %1 is the command log's own title.
         case "rename-locked":
+        case "commit-locked":
+        case "stash-rename-locked":
             return qsTr("Another git process was working here — see %1").arg(Words.commandsTitle)
+        // What git said in words of its own that none of the above name. A rename's name was answered before the
+        // press, so git turned down something else — a name taken in the moment since, a branch being rebased or
+        // bisected.
+        //: %1 is the command log's own title.
+        case "rename":
+        case "commit":
+        case "stash-rename":
+        case "worktree-refused":
+        case "worktree-not-added":
+            return qsTr("git turned it down — see %1").arg(Words.commandsTitle)
+        // Locked after the menu opened. The reason is the lock's owner's own words (`worktree lock --reason`), as the
+        // row's tip says it before the press.
+        //: %1 is the reason the worktree was locked with.
+        case "worktree-locked":
+            return fact === "" ? qsTr("It is locked.") : qsTr("It is locked: %1.").arg(fact)
+        // git takes its record off and stops at what it could not delete — a file held open on Windows, a path too
+        // long. It names the worktree's own folder, not the file.
+        //: %1 is the command log's own title.
+        case "worktree-half":
+            return qsTr("git could not delete everything in its folder — see %1").arg(Words.commandsTitle)
+        // git still lists this place for a worktree whose folder went (`worktree prune` would clear it).
+        case "worktree-place-taken":
+            return qsTr("It is taken by another worktree.")
+        // git made the `-b` branch before it turned the rest down, and does not take it back.
+        //: %1 is a branch, %2 the command log's own title.
+        case "worktree-branch-left":
+            return qsTr("The branch %1 was made anyway — see %2").arg(fact).arg(Words.commandsTitle)
+        //: %1 is the command log's own title.
+        case "worktree-hook":
+            return qsTr("See %1 for what the hook said.").arg(Words.commandsTitle)
         // git moves the ref first: the branch has its new name, and what follows it — its settings, another
         // worktree's HEAD — stayed behind.
         //: %1 is the command log's own title.
@@ -380,6 +452,47 @@ QtObject {
         }
     }
 
+    /// The far side's refusals, by what for — the second word of `delete-…` / `update-…` (`drain::report_word`): what
+    /// its rules or its own settings are, in this application's words. Its own words are the log's: a forge's are
+    /// several sentences, git's own end in advice to whoever runs the server.
+    function remoteRefusedWhy(kind, remote, name) {
+        switch (kind.substring(kind.indexOf("-") + 1)) {
+        // A hook over there — `pre-receive`, `update`, a forge's protected branch.
+        //: %1 is a remote, %2 the command log's own title.
+        case "rule":
+            return qsTr("A rule on %1 turned it down — see %2").arg(remote).arg(Words.commandsTitle)
+        // `receive.denyNonFastForwards`: forced or not, nothing it holds is dropped.
+        //: %1 is a remote, %2 the command log's own title.
+        case "rewrite":
+            return qsTr("%1 does not take pushes that rewrite its history — see %2").arg(remote)
+                .arg(Words.commandsTitle)
+        //: %1 is a remote, %2 the command log's own title.
+        case "no-deletes":
+            return qsTr("%1 does not let branches be deleted — see %2").arg(remote).arg(Words.commandsTitle)
+        // A repository with a working tree of its own: a clone on the same disk, a shared folder.
+        //: %1 is a remote, %2 a branch, %3 the command log's own title.
+        case "checked-out":
+            return qsTr("%1 has %2 checked out in a working tree of its own — see %3").arg(remote).arg(name)
+                .arg(Words.commandsTitle)
+        // The branch its HEAD names.
+        //: %1 is a branch, %2 a remote, %3 the command log's own title.
+        case "current":
+            return qsTr("%1 is the current branch of %2 — see %3").arg(name).arg(remote).arg(Words.commandsTitle)
+        //: %1 is a remote, %2 the command log's own title.
+        case "too-large":
+            return qsTr("The push is larger than %1 accepts — see %2").arg(remote).arg(Words.commandsTitle)
+        //: %1 is a remote, %2 the command log's own title.
+        case "shallow":
+            return qsTr("%1 does not take pushes from a shallow clone — see %2").arg(remote).arg(Words.commandsTitle)
+        //: %1 is a remote, %2 the command log's own title.
+        case "locked":
+            return qsTr("Another git process was working on %1 — see %2").arg(remote).arg(Words.commandsTitle)
+        //: %1 is a remote, %2 the command log's own title.
+        default:
+            return qsTr("%1 turned it down — see %2").arg(remote).arg(Words.commandsTitle)
+        }
+    }
+
     /// Why a rewrite was turned down — the one line both doors share: the row menu (`writeReportedWhy`) and the plan
     /// (`RepoPage.onRefusedPlan`), which reaches three of the five (デザイン規約 §答えの要らない報せ).
     ///
@@ -407,27 +520,33 @@ QtObject {
     }
 
     /// The word of a report's second line that is a place to go — the command log, for the reports whose line sends
-    /// the reader there (デザイン規約 §答えの要らない報せ) — and `""` for the rest. Its href is `commandsHref`.
+    /// the reader there (デザイン規約 §答えの要らない報せ) — and `""` for the rest. Its href is `commandsHref`. Read off
+    /// the line itself, so a line that names the log is never left without the link.
     function reportPlace(kind) {
-        return kind === "carried-refused" || kind === "rename" || kind === "rename-locked"
-               || kind === "rename-unfinished" ? Words.commandsTitle : ""
+        return Words.writeReportedWhy(kind, "", "", "").indexOf(Words.commandsTitle) >= 0 ? Words.commandsTitle : ""
     }
 
     /// Whether a report's heading names a worktree — the name then wears the tree mark (`NoticeBar.markWord`,
     /// デザイン規約 §ref の種別「名前の印」).
     function reportNamesWorktree(kind) {
-        return kind === "worktree-kept" || kind === "worktree-half"
-            || kind === "worktree-not-added" || kind === "worktree-folder-taken"
-            || kind.startsWith("carried-")
+        return kind.startsWith("worktree-") || kind.startsWith("carried-")
+    }
+
+    /// Whether a rename git turned down leaves its box open holding the name, to try again: nothing moved, and the
+    /// row the box stands on is still there (デザイン規約 §答えの要らない報せ「改名の箱は書き込みが着いてから閉じる」).
+    function renameStillOpen(kind) {
+        return kind === "rename" || kind === "rename-locked"
+               || kind === "stash-rename" || kind === "stash-rename-locked"
     }
 
     /// The colour a report's own hairline wears: `warning` while the gesture is still going (the rename box is open,
     /// or a half-done rename is left standing), `danger` once it is over (デザイン規約 §答えの要らない報せ). A worktree
     /// git would not remove is `warning` too: the worktree still stands, with what kept it there. So is one that was
-    /// not made: what stood in its way was there before the press, which the menus warn of (デザイン規約 §答えの要らない報せ).
-    /// So are another worktree's changes not applied: nothing was written, and they are still there to try again.
+    /// not made, or made with its hook failed: what stood in its way was there before the press, which the menus warn
+    /// of (デザイン規約 §答えの要らない報せ). So are another worktree's changes not applied: nothing was written, and they
+    /// are still there to try again.
     function reportTone(kind) {
-        return kind === "rename" || kind === "rename-locked" || kind === "half-rename" || kind === "rename-unfinished"
+        return Words.renameStillOpen(kind) || kind === "half-rename" || kind === "rename-unfinished"
                || Words.reportNamesWorktree(kind) ? "warning" : "danger"
     }
 

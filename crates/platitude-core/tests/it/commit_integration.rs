@@ -6,6 +6,7 @@
 
 use crate::support::exec::env;
 use crate::support::{TestRepo, info};
+use platitude_core::GitError;
 use platitude_core::branch;
 use platitude_core::commit::{self, CommitOptions};
 use platitude_core::report::ReportKind;
@@ -291,55 +292,138 @@ async fn amending_keeps_the_author_until_reset_author_is_asked_for() {
     assert_eq!(head.author_email, "test@example.com");
 }
 
-/// A report: nothing was half written and `--no-verify` stays off, so
-/// there is no next move (デザイン規約 §答えの要らない報せ). The reason reads
-/// both streams — a linter in a hook complains on stdout, so stderr alone
-/// drops the complaint.
-#[tokio::test]
-async fn a_commit_a_hook_declines_comes_back_as_a_report_in_the_hooks_words() {
+/// A commit of `a.txt` the outside is set up to turn down, and what came
+/// back. `set_up` runs on a repository with a root commit and `a.txt`
+/// staged.
+async fn refused_commit(set_up: impl FnOnce(&mut TestRepo)) -> (TestRepo, GitError) {
     let mut repo = TestRepo::init();
     repo.commit_file("seed.txt", "seed\n", "root");
     repo.write_file("a.txt", "content\n");
     repo.git(&["add", "--", "a.txt"]);
-    repo.write_hook(
-        "pre-commit",
-        "echo \"a.txt:1 trailing whitespace\"\necho \"lint found 1 problem\" >&2\nexit 1\n",
-    );
+    set_up(&mut repo);
     let (exec, cancel) = env();
     let repo_info = info(&repo).await;
-
     let err = commit::commit(
         &exec,
         &repo_info,
-        "feat: something the hook will not have",
+        "feat: something the outside will not have",
         CommitOptions::default(),
         &cancel,
     )
     .await
-    .expect_err("the hook declines");
+    .expect_err("the commit is turned down");
+    (repo, err)
+}
+
+/// A report: nothing was half written and `--no-verify` stays off, so
+/// there is no next move (デザイン規約 §答えの要らない報せ). The screen says
+/// who said no; the hook's words — both streams, as git sends a commit
+/// hook's stdout to its stderr — are the log's.
+#[tokio::test]
+async fn a_commit_a_hook_declines_is_reported_as_the_hooks() {
+    let (mut repo, err) = refused_commit(|repo| {
+        repo.write_hook(
+            "pre-commit",
+            "echo \"a.txt:1 trailing whitespace\"\necho \"lint found 1 problem\" >&2\nexit 1\n",
+        );
+    })
+    .await;
 
     let Some(report) = err.report() else {
         panic!("a commit a hook refused is a report, not a failure of ours: {err}");
     };
-    assert_eq!(report.kind, ReportKind::Commit);
+    assert_eq!(report.kind, ReportKind::CommitHook, "{err}");
     assert!(
-        report.remote.is_empty() && report.name.is_empty(),
-        "nothing over a network and no ref: {report:?}"
-    );
-    assert!(
-        report.reason.contains("lint found 1 problem")
-            && report.reason.contains("a.txt:1 trailing whitespace"),
-        "both streams come across: {}",
-        report.reason
+        report.remote.is_empty() && report.name.is_empty() && report.fact.is_empty(),
+        "nothing over a network, no ref, no words: {report:?}"
     );
     assert_eq!(
         repo.git(&["log", "-1", "--format=%s"]),
         "root",
         "the commit was not made"
     );
+    let said = err.to_string();
     assert!(
-        err.to_string().contains("git commit"),
-        "git's whole message is still there for the log: {err}"
+        said.contains("git commit")
+            && said.contains("lint found 1 problem")
+            && said.contains("a.txt:1 trailing whitespace"),
+        "the hook's words, both streams, are there for the log: {said}"
+    );
+}
+
+/// A hook that says nothing, the `commit-msg` hook, and 2.55's warning and
+/// hints for `core.commentChar=auto` ahead of the hook's words: each is the
+/// hook's no all the same.
+#[tokio::test]
+async fn a_hook_is_told_apart_from_whatever_git_says_around_it() {
+    let (_, silent) = refused_commit(|repo| repo.write_hook("pre-commit", "exit 1\n")).await;
+    assert_eq!(
+        silent.report().map(|report| report.kind),
+        Some(ReportKind::CommitHook),
+        "a silent hook: {silent}"
+    );
+    let (_, message) = refused_commit(|repo| {
+        repo.write_hook("commit-msg", "echo \"subject too long\" >&2\nexit 1\n");
+    })
+    .await;
+    assert_eq!(
+        message.report().map(|report| report.kind),
+        Some(ReportKind::CommitHook),
+        "commit-msg: {message}"
+    );
+    let (_, auto) = refused_commit(|repo| {
+        repo.git(&["config", "core.commentChar", "auto"]);
+        repo.write_hook("pre-commit", "echo \"lint found 1 problem\" >&2\nexit 1\n");
+    })
+    .await;
+    assert_eq!(
+        auto.report().map(|report| report.kind),
+        Some(ReportKind::CommitHook),
+        "commentChar=auto: {auto}"
+    );
+}
+
+/// Another git holding the index's lock.
+#[tokio::test]
+async fn a_commit_another_git_holds_the_index_for_is_reported_as_locked() {
+    let (_, err) = refused_commit(|repo| {
+        std::fs::write(repo.path.join(".git/index.lock"), "").expect("lock");
+    })
+    .await;
+    assert_eq!(
+        err.report().map(|report| report.kind),
+        Some(ReportKind::CommitLocked),
+        "{err}"
+    );
+}
+
+/// A key that is not there, and ssh signing with no key named: git cannot
+/// sign, and nothing was made.
+#[tokio::test]
+async fn a_commit_git_could_not_sign_is_reported_as_unsigned() {
+    let (mut repo, missing) = refused_commit(|repo| {
+        repo.git(&["config", "commit.gpgsign", "true"]);
+        repo.git(&["config", "gpg.format", "ssh"]);
+        let key = repo.path.join("no-such-key.pub");
+        repo.git(&["config", "user.signingkey", &key.to_string_lossy()]);
+    })
+    .await;
+    assert_eq!(
+        missing.report().map(|report| report.kind),
+        Some(ReportKind::CommitUnsigned),
+        "a key that is not there: {missing}"
+    );
+    assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "root");
+
+    let (_, unnamed) = refused_commit(|repo| {
+        repo.git(&["config", "commit.gpgsign", "true"]);
+        repo.git(&["config", "gpg.format", "ssh"]);
+    })
+    .await;
+    assert_eq!(
+        unnamed.report().map(|report| report.kind),
+        Some(ReportKind::CommitUnsigned),
+        "no key named: {unnamed}"
     );
 }
 
@@ -362,7 +446,7 @@ async fn a_rename_to_a_name_that_is_taken_is_reported_under_the_old_name() {
     assert_eq!(report.kind, ReportKind::RenameRefused);
     assert_eq!(report.name, "main", "the row still carries the old name");
     assert_eq!(
-        report.reason, "",
+        report.fact, "",
         "git's words are not the screen's: its line points to the log"
     );
     assert!(
@@ -396,7 +480,7 @@ async fn a_rename_stopped_after_the_ref_moved_is_reported_unfinished() {
     };
     assert_eq!(report.kind, ReportKind::RenameUnfinished, "{err}");
     assert_eq!(report.name, "renamed", "the row now carries the new name");
-    assert_eq!(report.reason, "", "the screen says it in its own words");
+    assert_eq!(report.fact, "", "the screen says it in its own words");
     assert_eq!(
         repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
         "renamed",
@@ -420,7 +504,7 @@ async fn a_rename_another_git_holds_the_lock_for_is_reported_as_locked() {
         panic!("a lock is a report, not a failure of ours: {err}");
     };
     assert_eq!(report.kind, ReportKind::RenameLocked, "{err}");
-    assert_eq!(report.reason, "", "the screen says it in its own words");
+    assert_eq!(report.fact, "", "the screen says it in its own words");
     assert_eq!(
         repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
         "main",

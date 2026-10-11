@@ -10,10 +10,9 @@ Item {
     width: 420
     height: 200
 
-    /// A forge's answer, wider than the bar, with the rule it enforced at the end — the part a cut bar drops.
-    readonly property string longReason: "GH006: Protected branch update failed for refs/heads/main."
-                                         + " Cannot force-push to a protected branch."
-                                         + " Review this repository's branch protection rules."
+    /// A lock's reason as its owner wrote it, wider than the bar — the one thing of somebody else's a line carries.
+    readonly property string longReason: "kept on the release laptop until the 2.0 build is signed off"
+                                         + " by the whole team, then moved to the archive disk"
 
     NoticeBar {
         id: bar
@@ -45,16 +44,16 @@ Item {
             tryVerify(() => bar.shut)
         }
 
-        /// A copy of the page's door (`RepoPage.showReport`): heading, our second line where nobody outside spoke,
-        /// tone. It proves nothing about the real door — one dropping an answer leaves every case here green; that
-        /// claim is carried by `report-tone half-rename`.
-        function dress(kind, remote, name, reason) {
+        /// A copy of the page's door (`RepoPage.showReport`): heading, our second line, tone. It proves nothing about
+        /// the real door — one dropping an answer leaves every case here green; that claim is carried by
+        /// `report-tone half-rename`.
+        function dress(kind, remote, name, fact) {
             bar.label = Words.writeReported(kind, remote, name)
-            bar.detail = reason !== "" ? reason : Words.writeReportedWhy(kind, remote, name)
+            bar.detail = Words.writeReportedWhy(kind, remote, name, fact)
             bar.tone = Words.reportTone(kind)
             bar.markWord = Words.reportNamesWorktree(kind) ? name : ""
             bar.markWordAt = Words.reportNamesWorktree(kind) ? Words.reportNameSeat(kind, remote) : -1
-            bar.detailPlace = reason !== "" ? "" : Words.reportPlace(kind)
+            bar.detailPlace = Words.reportPlace(kind)
             bar.detailHref = bar.detailPlace === "" ? "" : Words.commandsHref
             bar.open = true
         }
@@ -80,7 +79,7 @@ Item {
             verify(bar.markSeat.x >= bar.markInk, "the name was pushed by the whole mark: " + bar.markSeat.x
                    + " < " + bar.markInk)
 
-            dress("update", "origin", "main", "")
+            dress("update-rule", "origin", "main", "")
             tryVerify(() => bar.settled)
             verify(!bar.markShown, "no worktree named, no mark")
         }
@@ -120,8 +119,8 @@ Item {
             tryVerify(() => bar.settled && bar.markShown && bar.markInk > 0)
         }
 
-        /// The one report whose line sends the reader to the command log names it as a place to go, pressed through to
-        /// the page with the log's href; the others' lines hold nothing to press.
+        /// A report whose line sends the reader to the command log names it as a place to go, pressed through to the
+        /// page with the log's href; a line of its own holds nothing to press.
         function test_a_line_sending_the_reader_to_the_log_names_it_as_a_place_to_go() {
             linked.clear()
             dress("carried-refused", "", "topic", "")
@@ -147,90 +146,150 @@ Item {
             compare(bar.markSeat.x, seat)
         }
 
-        /// A worktree that was not made: the same yellow, the same mark, in the heading the folder would have been
-        /// (デザイン規約 §worktree を作る). git's words come as the reason; where nothing was asked of
-        /// git, the second line is the screen's.
+        /// A worktree that was not made — or made with its hook failed: the same yellow, the same mark, in the heading
+        /// the folder would have been (デザイン規約 §worktree を作る). The second line is the screen's, a branch git left
+        /// behind named in it.
         function test_a_worktree_not_made_is_named_behind_the_tree_mark_in_yellow() {
-            for (const kind of ["worktree-not-added", "worktree-folder-taken"]) {
+            for (const kind of ["worktree-not-added", "worktree-folder-taken", "worktree-place-taken",
+                                "worktree-branch-left"]) {
                 compare(Words.reportTone(kind), "warning", kind)
                 verify(Words.reportNamesWorktree(kind), kind)
                 compare(Words.writeReported(kind, "", "hotfix-patch"), "hotfix-patch was not created", kind)
             }
-            compare(Words.writeReportedWhy("worktree-folder-taken"), "The folder is not empty.")
-            dress("worktree-not-added", "", "hotfix-patch", "fatal: a branch named 'hotfix/patch' already exists")
+            compare(Words.writeReportedWhy("worktree-folder-taken", "", "", ""), "The folder is not empty.")
+            compare(Words.writeReportedWhy("worktree-not-added", "", "", ""), "git turned it down — see GIT COMMANDS")
+            compare(Words.writeReportedWhy("worktree-place-taken", "", "", ""), "It is taken by another worktree.")
+            compare(Words.writeReportedWhy("worktree-branch-left", "", "hotfix-patch", "hotfix/patch"),
+                    "The branch hotfix/patch was made anyway — see GIT COMMANDS")
+            compare(Words.reportTone("worktree-hook"), "warning")
+            compare(Words.writeReported("worktree-hook", "", "hotfix-patch"),
+                    "hotfix-patch was made, but its post-checkout hook failed")
+            compare(Words.writeReportedWhy("worktree-hook", "", "", ""), "See GIT COMMANDS for what the hook said.")
+            compare(Words.reportNameSeat("worktree-hook", ""), 0)
+            dress("worktree-branch-left", "", "hotfix-patch", "hotfix/patch")
             tryVerify(() => bar.settled && bar.markShown)
-            compare(bar.detail, "fatal: a branch named 'hotfix/patch' already exists")
+            compare(bar.detail, "The branch hotfix/patch was made anyway — see GIT COMMANDS")
+        }
+
+        /// A worktree git would not remove, by what kept it: changes, a lock — with its owner's reason, or none —
+        /// anything else, and a removal that stopped part way. Each line the screen's own.
+        function test_a_worktree_kept_says_what_kept_it() {
+            for (const kind of ["worktree-kept", "worktree-locked", "worktree-refused"]) {
+                compare(Words.writeReported(kind, "", "topic"), "topic was not removed", kind)
+                compare(Words.reportTone(kind), "warning", kind)
+            }
+            compare(Words.writeReportedWhy("worktree-locked", "", "topic", "on a stick"), "It is locked: on a stick.")
+            compare(Words.writeReportedWhy("worktree-locked", "", "topic", ""), "It is locked.")
+            compare(Words.writeReportedWhy("worktree-refused", "", "topic", ""),
+                    "git turned it down — see GIT COMMANDS")
+            compare(Words.writeReportedWhy("worktree-half", "", "topic", ""),
+                    "git could not delete everything in its folder — see GIT COMMANDS")
         }
 
         /// Both arms, because either alone passes against a bar painted one colour.
         function test_the_gesture_that_is_still_going_wears_the_other_colour() {
-            compare(Words.reportTone("rename"), "warning")
-            compare(Words.reportTone("rename-locked"), "warning")
-            compare(Words.reportTone("half-rename"), "warning")
-            compare(Words.reportTone("rename-unfinished"), "warning")
-            compare(Words.reportTone("update"), "danger")
-            compare(Words.reportTone("delete"), "danger")
-            compare(Words.reportTone("outdated"), "danger")
-            compare(Words.reportTone("stale-stage"), "danger")
-            compare(Words.reportTone("conflicted-part"), "danger")
-            compare(Words.reportTone("tip-moved"), "danger")
-            compare(Words.reportTone("op-standing"), "danger")
+            for (const kind of ["rename", "rename-locked", "half-rename", "rename-unfinished", "stash-rename",
+                                "stash-rename-locked"])
+                compare(Words.reportTone(kind), "warning", kind)
+            for (const kind of ["update-rule", "delete-rule", "outdated", "pre-push", "pre-push-delete", "commit",
+                                "commit-hook", "commit-unsigned", "commit-locked", "stash-gone", "stale-stage",
+                                "conflicted-part", "tip-moved", "op-standing", "pre-rebase", "rewrite-unsigned",
+                                "rewrite-commit-hook"])
+                compare(Words.reportTone(kind), "danger", kind)
             compare(Words.reportTone(""), "danger", "a kind nobody spelled still says so in colour")
         }
 
-        /// The subject is whoever decided: the far side for the two it decided, the thing that did not move for the
-        /// rest.
+        /// A refused rename keeps its box open holding the name: nothing moved and the row is there (デザイン規約
+        /// §答えの要らない報せ「改名の箱は書き込みが着いてから閉じる」). A stash that left the list has no row to stand on.
+        function test_a_rename_git_turned_down_keeps_its_box() {
+            for (const kind of ["rename", "rename-locked", "stash-rename", "stash-rename-locked"])
+                verify(Words.renameStillOpen(kind), kind)
+            for (const kind of ["half-rename", "rename-unfinished", "stash-gone", "commit", ""])
+                verify(!Words.renameStillOpen(kind), kind)
+        }
+
+        /// The subject is whoever decided: the far side for what it decided, the thing that did not move for the
+        /// rest. The far side's refusals are two words, and the heading turns on the first whatever the second.
         function test_the_heading_names_what_did_not_happen() {
-            compare(Words.writeReported("delete", "origin", "v1.0"), "origin would not delete v1.0")
-            compare(Words.writeReported("update", "origin", "main"), "origin would not update main")
+            compare(Words.writeReported("delete-rule", "origin", "v1.0"), "origin would not delete v1.0")
+            compare(Words.writeReported("delete-current", "origin", "main"), "origin would not delete main")
+            compare(Words.writeReported("update-rule", "origin", "main"), "origin would not update main")
+            compare(Words.writeReported("update-too-large", "origin", "main"), "origin would not update main")
             compare(Words.writeReported("outdated", "origin", "main"), "main was not sent to origin")
+            compare(Words.writeReported("pre-push", "origin", "main"), "main was not sent to origin")
+            compare(Words.writeReported("pre-push-delete", "origin", "main"), "main was not deleted from origin")
             compare(Words.writeReported("rename", "origin", "main"), "main was not renamed")
             compare(Words.writeReported("rename-locked", "origin", "main"), "main was not renamed")
             compare(Words.writeReported("half-rename", "origin", "main"), "The rename did not finish")
             compare(Words.writeReported("rename-unfinished", "", "renamed"), "The rename did not finish")
+            for (const kind of ["stash-rename", "stash-rename-locked", "stash-gone"])
+                compare(Words.writeReported(kind, "", ""), "The stash was not renamed", kind)
             compare(Words.writeReported("stale-stage", "", ""), "Nothing was staged")
             compare(Words.writeReported("stale-unstage", "", ""), "Nothing was unstaged")
             compare(Words.writeReported("stale-discard", "", ""), "Nothing was discarded")
             compare(Words.writeReported("conflicted-part", "", ""), "Nothing was taken from this file")
-            compare(Words.writeReported("", "", ""), "The commit was not made")
+            for (const kind of ["commit", "commit-hook", "commit-unsigned", "commit-locked", ""])
+                compare(Words.writeReported(kind, "", ""), "The commit was not made", kind)
         }
 
-        /// One heading over all seven refusals (five the plan's own, two the world moving after the press); the line
-        /// underneath says which.
+        /// One heading over every refused rewrite (five the plan's own, two the world moving after the press, three
+        /// something here after git started); the line underneath says which.
         function test_every_refused_rewrite_says_the_same_thing_did_not_happen() {
             const kinds = ["across-merge", "off-branch", "fold-first", "unfetched-base", "drop-all",
-                           "tip-moved", "op-standing"]
+                           "tip-moved", "op-standing", "pre-rebase", "rewrite-unsigned", "rewrite-commit-hook"]
             for (const kind of kinds)
                 compare(Words.writeReported(kind, "origin", "main"), "The history was not rewritten", kind)
         }
 
-        /// An empty second line is an answer: the page puts what came across there instead.
-        function test_the_second_line_is_ours_only_where_nobody_outside_spoke() {
-            const owed = ["stale-stage", "stale-unstage", "stale-discard", "conflicted-part", "half-rename",
-                          "across-merge", "off-branch", "fold-first", "unfetched-base", "drop-all",
-                          "tip-moved", "op-standing",
-                          // Refused by git before the far side heard it: nobody to quote, and git's own text is
-                          // terminal advice.
-                          "outdated", "moved", "moved-delete", "tag-elsewhere",
-                          // A rename git turned down or stopped part way: never the name, which the box answers
-                          // before the press, and git's words are the log's.
-                          "rename", "rename-locked", "rename-unfinished"]
-            for (const kind of owed)
-                verify(Words.writeReportedWhy(kind, "origin", "main").length > 0, kind)
-            compare(Words.writeReportedWhy("delete"), "")
-            compare(Words.writeReportedWhy("update"), "")
-            compare(Words.writeReportedWhy(""), "")
+        /// Every second line is ours, never anybody's message (デザイン規約 §答えの要らない報せ). Where git ran and
+        /// something said no, the line says who and sends the reader to the log, where its words are. Source text, as
+        /// below.
+        function test_who_said_no_is_said_and_the_log_is_where_their_words_are() {
+            const owed = {
+                "pre-push": "The pre-push hook here turned it down — see GIT COMMANDS",
+                "pre-push-delete": "The pre-push hook here turned it down — see GIT COMMANDS",
+                "update-rule": "A rule on origin turned it down — see GIT COMMANDS",
+                "delete-rule": "A rule on origin turned it down — see GIT COMMANDS",
+                "update-rewrite": "origin does not take pushes that rewrite its history — see GIT COMMANDS",
+                "delete-no-deletes": "origin does not let branches be deleted — see GIT COMMANDS",
+                "update-checked-out": "origin has main checked out in a working tree of its own — see GIT COMMANDS",
+                "delete-current": "main is the current branch of origin — see GIT COMMANDS",
+                "update-too-large": "The push is larger than origin accepts — see GIT COMMANDS",
+                "update-shallow": "origin does not take pushes from a shallow clone — see GIT COMMANDS",
+                "update-locked": "Another git process was working on origin — see GIT COMMANDS",
+                "delete-refused": "origin turned it down — see GIT COMMANDS",
+                "update-refused": "origin turned it down — see GIT COMMANDS",
+                "commit": "git turned it down — see GIT COMMANDS",
+                "commit-hook": "A commit hook here turned it down — see GIT COMMANDS",
+                "commit-unsigned": "The commit could not be signed — see GIT COMMANDS",
+                "commit-locked": "Another git process was working here — see GIT COMMANDS",
+                "pre-rebase": "The pre-rebase hook here turned it down — see GIT COMMANDS",
+                "rewrite-unsigned": "The commit could not be signed — see GIT COMMANDS",
+                "rewrite-commit-hook": "A commit hook here turned it down — see GIT COMMANDS",
+                "rename": "git turned it down — see GIT COMMANDS",
+                "rename-locked": "Another git process was working here — see GIT COMMANDS",
+                "stash-rename": "git turned it down — see GIT COMMANDS",
+                "stash-rename-locked": "Another git process was working here — see GIT COMMANDS",
+                "stash-gone": "It is no longer in the stash list."
+            }
+            for (const kind in owed) {
+                compare(Words.writeReportedWhy(kind, "origin", "main", ""), owed[kind], kind)
+                compare(Words.reportPlace(kind), owed[kind].indexOf("GIT COMMANDS") >= 0 ? Words.commandsTitle : "",
+                        kind + ": the place word is the line's own")
+            }
+            compare(Words.writeReportedWhy("", "", "", ""), "", "a kind nobody spelled is owed no line")
         }
 
-        /// A line that sends the reader to the log names it, and the name is the one word that goes there — said for
-        /// the rename's two as for another worktree's changes git turned down (デザイン規約 §答えの要らない報せ).
+        /// A line that sends the reader to the log names it, and the name is the one word that goes there
+        /// (デザイン規約 §答えの要らない報せ). Read off the line, so a line naming the log never goes without the link.
         function test_a_line_pointing_to_the_log_carries_its_title_as_the_place() {
-            for (const kind of ["rename", "rename-locked", "rename-unfinished", "carried-refused"]) {
+            for (const kind of ["rename", "rename-locked", "rename-unfinished", "carried-refused", "update-rule",
+                                "pre-push", "commit-hook", "pre-rebase", "worktree-hook", "worktree-branch-left"]) {
                 compare(Words.reportPlace(kind), Words.commandsTitle, kind)
-                verify(Words.writeReportedWhy(kind, "", "main").endsWith(Words.commandsTitle), kind)
+                verify(Words.writeReportedWhy(kind, "", "main", "").indexOf(Words.commandsTitle) >= 0, kind)
             }
-            compare(Words.writeReportedWhy("rename-locked"), "Another git process was working here — see GIT COMMANDS")
-            compare(Words.reportPlace("half-rename"), "", "a line of its own sends nobody anywhere")
+            for (const kind of ["half-rename", "outdated", "worktree-kept", "worktree-locked", "stash-gone"])
+                compare(Words.reportPlace(kind), "", kind + ": a line of its own sends nobody anywhere")
         }
 
         /// The refusals a read answers, told apart by what the remote turned out to be: holding commits the push would
@@ -318,44 +377,50 @@ Item {
             const rule = findRule()
             compare(rule.color, Theme.warning)
 
-            dress("update", "origin", "main", "")
+            dress("update-rule", "origin", "main", "")
             compare(bar.tone, "danger")
             compare(rule.color, Theme.danger)
-            compare(bar.detail, "", "the page puts the far side's own words there")
+            compare(bar.detail, "A rule on origin turned it down — see GIT COMMANDS", "our own line, never theirs")
 
             bar.tone = ""
             compare(rule.color, Theme.borderSubtle, "a report in no state at all still closes with an edge")
         }
 
-        function test_the_far_sides_own_words_are_the_ones_quoted() {
-            dress("update", "origin", "main", "GH006: protected branch hook declined")
-            compare(bar.detail, "GH006: protected branch hook declined")
+        /// The one thing of somebody else's a line carries — a lock's reason — is plain text: a `<` in it is a
+        /// character, not markup that takes the rest of the line away.
+        function test_a_line_without_a_place_is_drawn_as_plain_text() {
+            dress("worktree-locked", "", "topic", "held <b>until</b> Friday")
+            tryVerify(() => bar.settled)
+            compare(bar.detail, "It is locked: held <b>until</b> Friday.")
+            const field = findDetail()
+            compare(field.textFormat, Text.PlainText)
+            compare(field.text, bar.detail)
         }
 
         /// Quoted whole (デザイン規約 §答えの要らない報せ). Both halves are the claim: `wordsCut` for the words, and the
         /// height, since a bar wrapping inside a height it never grew shows as much as one that elided.
-        function test_a_long_quote_wraps_and_the_bar_grows_by_it() {
-            dress("update", "origin", "main", "GH006: protected branch hook declined")
+        function test_a_long_line_wraps_and_the_bar_grows_by_it() {
+            dress("worktree-locked", "", "topic", "on a stick")
             tryVerify(() => bar.settled)
             const oneLine = bar.openHeight
-            verify(!bar.wordsCut, "a quote that fits is not cut either")
+            verify(!bar.wordsCut, "a line that fits is not cut either")
 
-            dress("update", "origin", "main", root.longReason)
+            dress("worktree-locked", "", "topic", root.longReason)
             // Both: the words ask for their room a frame before the bar gets it, and the bar animates there.
             tryVerify(() => bar.openHeight > oneLine && bar.settled)
             verify(!bar.wordsCut, "and not one word of it was cut")
-            compare(bar.detail, root.longReason, "with the whole of it still in the field")
+            compare(bar.detail, "It is locked: " + root.longReason + ".", "with the whole of it still in the field")
         }
 
         /// `OK` keeps the middle of the bar (デザイン規約 §答えの要らない報せ). Asked on a bar the words made taller than the
         /// pill: on one line, every rule about the pill's place answers the same.
         function test_the_pill_keeps_the_middle_however_many_lines_the_words_take() {
-            dress("update", "origin", "main", "GH006: protected branch hook declined")
+            dress("worktree-locked", "", "topic", "on a stick")
             tryVerify(() => bar.settled)
-            fuzzyCompare(pillMiddle(), bar.height / 2, 1, "centred while the quote is one line")
+            fuzzyCompare(pillMiddle(), bar.height / 2, 1, "centred while the line is one line")
             const oneLine = bar.openHeight
 
-            dress("update", "origin", "main", root.longReason)
+            dress("worktree-locked", "", "topic", root.longReason)
             tryVerify(() => bar.openHeight > oneLine && bar.settled)
             verify(bar.height > bar.pill.height + 2 * Theme.spaceMd,
                    "the words, not the pill, are what the bar is now as tall as: " + bar.height)
@@ -369,7 +434,7 @@ Item {
         /// The pill and the key walk the same body (`dismiss`), which is what a headless run presses — and neither
         /// lowers the bar: that is the page's.
         function test_the_pill_and_the_key_both_answer_for_the_reader() {
-            dress("update", "origin", "main", "")
+            dress("update-rule", "origin", "main", "")
             // The pill is pressed where it is standing, so the bar has to be all the way down first.
             tryVerify(() => bar.settled)
             verify(bar.escapes, "the report takes Escape while nothing stands over it")
@@ -385,12 +450,27 @@ Item {
         /// Two enabled `StandardKey.Cancel` shortcuts in one window fire neither (`tst_escape.qml`), so the bar gives
         /// way under a question, keeping its words.
         function test_a_question_standing_over_it_takes_the_key() {
-            dress("update", "origin", "main", "")
+            dress("update-rule", "origin", "main", "")
             bar.yieldsEscape = true
             verify(!bar.escapes)
             compare(bar.label, "origin would not update main", "giving way is not going away")
             bar.yieldsEscape = false
             verify(bar.escapes)
+        }
+
+        /// The second line's field when it names no place, found by what it shows: the one visible text item holding
+        /// the line.
+        function findDetail() {
+            const stack = [bar]
+            while (stack.length > 0) {
+                const item = stack.pop()
+                if (item !== bar && item.visible && item.text === bar.detail && item.textFormat !== undefined)
+                    return item
+                for (let i = 0; i < item.children.length; i++)
+                    stack.push(item.children[i])
+            }
+            fail("no field shows the second line")
+            return null
         }
 
         /// The bar's closing hairline, found by shape rather than name: the child at the border's own thickness.

@@ -42,12 +42,7 @@ pub(super) fn taking(side: PatchSide) -> ReportKind {
 /// check: [`stale`] found one step later. The screen says it the same way;
 /// the log keeps git's words.
 pub(super) fn moved(kind: ReportKind, command: String, out: &GitOutput) -> GitError {
-    GitError::Reported {
-        command,
-        code: out.code,
-        stderr: out.failure_message(),
-        report: Box::new(WriteReport::local(kind, String::new())),
-    }
+    crate::report::reported(WriteReport::local(kind), command, out)
 }
 
 /// A refusal this end made before git was asked. Nothing ran, so the
@@ -60,6 +55,6 @@ pub(super) fn stale(kind: ReportKind) -> GitError {
         command: "stage".to_string(),
         code: 0,
         stderr: format!("{kind:?}"),
-        report: Box::new(WriteReport::local(kind, String::new())),
+        report: Box::new(WriteReport::local(kind)),
     }
 }

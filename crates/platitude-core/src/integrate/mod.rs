@@ -19,7 +19,7 @@ pub use rebase::{
 };
 pub use resolve::{Continuation, InProgress, resolve, resolve_current};
 
-pub(crate) use rebase::{landed, rebase_command};
+pub(crate) use rebase::{PRE_REBASE_REFUSED, landed, rebase_command};
 
 /// Where an operation that can stop part-way came to rest. A conflict stop
 /// is where an ordinary merge or pick ends up, so it must not read as a

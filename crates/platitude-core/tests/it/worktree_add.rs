@@ -134,10 +134,10 @@ async fn a_remote_branch_gets_a_local_one_that_follows_it() {
 }
 
 /// The one the menus cannot see coming — another worktree took the branch
-/// after they opened: a report under the folder's name, in git's words,
-/// and nothing of git's ahead of them (`--quiet`).
+/// after they opened: a report under the folder's name, git's words the
+/// log's, and nothing of git's ahead of them (`--quiet`).
 #[tokio::test]
-async fn a_branch_out_in_another_worktree_is_a_report_in_gits_words() {
+async fn a_branch_out_in_another_worktree_is_a_report() {
     let (mut repo, _tip) = two_commits();
     let holder = beside(&repo, "holder");
     repo.git(&["worktree", "add", &holder.to_string_lossy(), "free"]);
@@ -150,18 +150,79 @@ async fn a_branch_out_in_another_worktree_is_a_report_in_gits_words() {
     let report = err.report().expect("a refusal is a report");
     assert_eq!(report.kind, ReportKind::WorktreeNotAdded);
     assert_eq!(report.name, "again", "the heading names the folder");
+    assert!(report.fact.is_empty(), "the screen says it: {report:?}");
     assert!(
-        report
-            .reason
-            .starts_with("fatal: 'free' is already used by worktree at"),
-        "git's own sentence and nothing before it: {}",
-        report.reason
+        err.to_string()
+            .contains("fatal: 'free' is already used by worktree at"),
+        "git's own sentence is the log's: {err}"
     );
     assert!(
         !err.to_string().contains("Preparing worktree"),
-        "no progress line in what the log keeps either: {err}"
+        "no progress line in what the log keeps: {err}"
     );
     assert!(!worktree.exists(), "nothing was made");
+}
+
+/// A place git still lists for a worktree whose folder went: git makes the
+/// `-b` branch first and turns the place down after — the report says the
+/// place, or the branch it left where it made one.
+#[tokio::test]
+async fn a_place_still_listed_is_a_report_and_says_what_it_left() {
+    let (mut repo, tip) = two_commits();
+    let worktree = beside(&repo, "gone");
+    repo.git(&[
+        "worktree",
+        "add",
+        "-b",
+        "elsewhere",
+        &worktree.to_string_lossy(),
+    ]);
+    std::fs::remove_dir_all(&worktree).expect("the folder goes, the record stays");
+
+    let err = add(&repo, &worktree, &WorktreeOn::Branch("free".to_string()))
+        .await
+        .expect_err("git keeps the place for the listed one");
+    let report = err.report().expect("a refusal is a report");
+    assert_eq!(report.kind, ReportKind::WorktreePlaceTaken, "{err}");
+
+    let err = add(
+        &repo,
+        &worktree,
+        &WorktreeOn::NewBranch {
+            name: "topic".to_string(),
+            start: tip,
+        },
+    )
+    .await
+    .expect_err("the same place, with a branch made for it");
+    let report = err.report().expect("a refusal is a report");
+    assert_eq!(report.kind, ReportKind::WorktreeBranchLeft, "{err}");
+    assert_eq!(report.fact, "topic", "the branch git made before saying no");
+    assert!(repo.git_ok(&["rev-parse", "--verify", "--quiet", "refs/heads/topic"]));
+}
+
+/// A `post-checkout` hook that fails leaves the worktree made — git keeps
+/// it — so the report says that, not that nothing was made.
+#[tokio::test]
+async fn a_post_checkout_hook_that_fails_leaves_the_worktree_made() {
+    let (mut repo, _tip) = two_commits();
+    repo.write_hook(
+        "post-checkout",
+        "echo \"git-lfs was not found\" >&2\nexit 2\n",
+    );
+    let worktree = beside(&repo, "hooked");
+
+    let err = add(&repo, &worktree, &WorktreeOn::Branch("free".to_string()))
+        .await
+        .expect_err("the hook's failure is git's answer");
+    let report = err.report().expect("a report");
+    assert_eq!(report.kind, ReportKind::WorktreeHookFailed, "{err}");
+    assert_eq!(report.name, "hooked");
+    assert!(listed(&mut repo, &worktree), "git kept the worktree");
+    assert!(
+        err.to_string().contains("git-lfs was not found"),
+        "the hook's words are the log's: {err}"
+    );
 }
 
 /// A checkout past two seconds has git's child `reset` write its progress
@@ -325,7 +386,7 @@ async fn a_folder_holding_something_is_turned_down_before_git() {
     let report = err.report().expect("a refusal is a report");
     assert_eq!(report.kind, ReportKind::WorktreeFolderTaken);
     assert_eq!(report.name, "occupied");
-    assert!(report.reason.is_empty(), "the screen writes the reason");
+    assert!(report.fact.is_empty(), "the screen writes the reason");
     assert!(
         matches!(err, platitude_core::GitError::Withheld { .. }),
         "git was never asked: {err}"
@@ -441,10 +502,11 @@ async fn an_empty_folder_is_filled() {
     assert!(listed(&mut repo, &worktree));
 }
 
-/// git's advice to the terminal is not quoted.
+/// A `-b` name git's own `git branch` turns down ends the add with 255
+/// before anything is made: no branch left to speak of.
 #[tokio::test]
-async fn a_hint_is_not_quoted() {
-    let (repo, tip) = two_commits();
+async fn a_branch_git_would_not_make_leaves_nothing_behind() {
+    let (mut repo, tip) = two_commits();
     let worktree = beside(&repo, "bad");
 
     let err = add(
@@ -459,5 +521,35 @@ async fn a_hint_is_not_quoted() {
     .expect_err("git will not take the name");
 
     let report = err.report().expect("a refusal is a report");
-    assert_eq!(report.reason, "fatal: 'a..b' is not a valid branch name");
+    assert_eq!(report.kind, ReportKind::WorktreeNotAdded, "{err}");
+    assert!(report.fact.is_empty());
+    assert!(!listed(&mut repo, &worktree));
+}
+
+/// A `-b` name taken since the menu opened: git's `git branch` turns it
+/// down (255), and the branch there is somebody else's, not one git left
+/// behind — the one case where the branch exists after the refusal.
+#[tokio::test]
+async fn a_name_taken_since_is_not_a_branch_left_behind() {
+    let (mut repo, tip) = two_commits();
+    let worktree = beside(&repo, "taken");
+
+    let err = add(
+        &repo,
+        &worktree,
+        &WorktreeOn::NewBranch {
+            name: "free".to_string(),
+            start: tip,
+        },
+    )
+    .await
+    .expect_err("the name is taken");
+
+    let report = err.report().expect("a refusal is a report");
+    assert_eq!(report.kind, ReportKind::WorktreeNotAdded, "{err}");
+    assert!(
+        report.fact.is_empty(),
+        "nothing of git's own was left: {report:?}"
+    );
+    assert!(!listed(&mut repo, &worktree));
 }
