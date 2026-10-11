@@ -1,7 +1,9 @@
 //! Staging: [`whole`] runs one command over a list of paths, [`partial`]
 //! rebuilds a patch out of the diff a selection was made on, and
 //! [`refusal`] is what the second one says when that file has moved.
+//! [`endings`] keeps a partial discard off the lines it was not asked about.
 
+mod endings;
 mod partial;
 mod refusal;
 mod whole;

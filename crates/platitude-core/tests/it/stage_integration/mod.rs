@@ -3,6 +3,7 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
+mod line_endings;
 mod partial;
 mod refusals;
 mod whole;

@@ -14,6 +14,7 @@ use crate::repo::RepoInfo;
 use crate::report::ReportKind;
 use crate::scratch::ScratchFile;
 
+use super::endings;
 use super::refusal::{moved, refuse_combined, stale, taking, verify_fingerprint};
 use super::whole::unstage_paths;
 
@@ -181,12 +182,12 @@ pub async fn discard_partial(
     if selects.is_empty() {
         return Ok(());
     }
-    if !matches!(target, DiffTarget::Unstaged { .. }) {
+    let DiffTarget::Unstaged { path } = target else {
         return Err(GitError::UnexpectedOutput {
             command: "git apply --reverse".to_string(),
             message: "only unstaged changes can be discarded piecemeal".to_string(),
         });
-    }
+    };
     let workdir = repo.workdir.as_path();
     let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
     // Destructive and index-addressed: bytes that drifted since the
@@ -204,8 +205,11 @@ pub async fn discard_partial(
                 source,
             }
         })?;
-    let cmd = GitCommand::new()
-        .cwd(workdir)
+    let mut cmd = GitCommand::new().cwd(workdir);
+    if let Some(setting) = endings::kept(executor, workdir, path, &built, cancel).await? {
+        cmd = cmd.args(["-c", setting]);
+    }
+    let cmd = cmd
         // Pinned against `apply.whitespace`, as when staging.
         .args(["apply", "--whitespace=nowarn", "--reverse"])
         .arg(scratch.path());
