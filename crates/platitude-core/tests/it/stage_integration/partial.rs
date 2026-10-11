@@ -302,6 +302,163 @@ async fn stage_part_of_an_untracked_file() {
     assert_eq!(unstaged, vec!["newdir/new.txt"], "the rest stays unstaged");
 }
 
+/// A deleted file's lines are all on the old side, and staging some of them
+/// leaves a file in the index that still holds the rest — git refuses a
+/// patch that calls itself a deletion and keeps lines (`deleted file … still
+/// has contents`). Taking every line that is left is the deletion itself.
+#[tokio::test]
+async fn stage_part_of_a_deleted_file() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "a\nb\nc\n", "root");
+    std::fs::remove_file(repo.path.join("f.txt")).expect("delete the file");
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+    let target = DiffTarget::Unstaged {
+        path: "f.txt".into(),
+    };
+
+    // Body: 0 "-a", 1 "-b", 2 "-c".
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::lines(0, [1])],
+        fp(&repo_info, &target).await,
+        &cancel,
+    )
+    .await
+    .expect("stage one deleted line");
+    assert_eq!(indexed(&mut repo, "f.txt"), "a\nc");
+    let (staged, unstaged, _) = buckets(&repo).await;
+    assert_eq!(staged, vec!["f.txt"]);
+    assert_eq!(unstaged, vec!["f.txt"], "still gone from the working tree");
+
+    // Body: 0 "-a", 1 "-c".
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::lines(0, [0, 1])],
+        fp(&repo_info, &target).await,
+        &cancel,
+    )
+    .await
+    .expect("stage the rest of the deletion");
+    assert_eq!(
+        repo.git(&["diff", "--cached", "--name-status"]),
+        "D\tf.txt",
+        "the last lines staged are the deletion"
+    );
+    let (_, unstaged, _) = buckets(&repo).await;
+    assert!(unstaged.is_empty(), "{unstaged:?}");
+}
+
+/// The other two ways into a deletion's lines already wrote what they were
+/// asked: unstaging part of a staged deletion puts those lines back in the
+/// index, and discarding part of one puts them back on disk.
+#[tokio::test]
+async fn unstage_and_discard_part_of_a_deletion() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "a\nb\nc\n", "root");
+    repo.commit_file("g.txt", "a\nb\nc\n", "second");
+    repo.git(&["rm", "-q", "--", "f.txt"]);
+    std::fs::remove_file(repo.path.join("g.txt")).expect("delete the file");
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+    let staged = DiffTarget::Staged {
+        path: "f.txt".into(),
+        orig_path: None,
+    };
+    let unstaged = DiffTarget::Unstaged {
+        path: "g.txt".into(),
+    };
+
+    // Both bodies: 0 "-a", 1 "-b", 2 "-c".
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &staged,
+        &[HunkSelect::lines(0, [1])],
+        fp(&repo_info, &staged).await,
+        &cancel,
+    )
+    .await
+    .expect("unstage one deleted line");
+    assert_eq!(indexed(&mut repo, "f.txt"), "b");
+    assert!(
+        !repo.path.join("f.txt").exists(),
+        "the working tree is not touched"
+    );
+
+    stage::discard_partial(
+        &exec,
+        &repo_info,
+        &unstaged,
+        &[HunkSelect::lines(0, [1])],
+        fp(&repo_info, &unstaged).await,
+        &cancel,
+    )
+    .await
+    .expect("bring one deleted line back");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("g.txt")).unwrap(),
+        "b\n"
+    );
+    assert_eq!(
+        indexed(&mut repo, "g.txt"),
+        "a\nb\nc",
+        "the index is untouched"
+    );
+}
+
+/// A staged rename is a file-level change the lines do not carry: taking
+/// some lines back reverts those lines under the new name, and the rename
+/// stays staged — the reversed rename would put the old name back in the
+/// index and leave the new one untracked. The new name has a space in it,
+/// which git's header writes with a tab after it.
+#[tokio::test]
+async fn unstage_part_of_a_staged_rename() {
+    let mut repo = TestRepo::init();
+    let base: String = (1..=20).map(|n| format!("line {n}\n")).collect();
+    repo.commit_file("s.txt", &base, "root");
+    repo.git(&["mv", "--", "s.txt", "new name.txt"]);
+    let edited = base
+        .replace("line 2\n", "line 2 EDITED\n")
+        .replace("line 18\n", "line 18 EDITED\n");
+    repo.write_file("new name.txt", &edited);
+    repo.git(&["add", "--", "new name.txt"]);
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+    let target = DiffTarget::Staged {
+        path: "new name.txt".into(),
+        orig_path: Some("s.txt".into()),
+    };
+
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        fp(&repo_info, &target).await,
+        &cancel,
+    )
+    .await
+    .expect("unstage the first hunk");
+
+    assert_eq!(
+        indexed(&mut repo, "new name.txt"),
+        base.replace("line 18\n", "line 18 EDITED\n").trim_end(),
+        "only the chosen hunk went back"
+    );
+    let names = repo.git(&["diff", "--cached", "--name-status", "--find-renames"]);
+    assert!(
+        names.starts_with('R') && names.ends_with("\ts.txt\tnew name.txt"),
+        "the rename is still staged: {names}"
+    );
+    let (_, _, untracked) = buckets(&repo).await;
+    assert!(untracked.is_empty(), "{untracked:?}");
+}
+
 /// Paths are pathspecs to git, and pathspecs glob by default. A file whose
 /// name contains glob characters must only ever stage itself.
 #[tokio::test]

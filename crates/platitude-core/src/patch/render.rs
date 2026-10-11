@@ -156,13 +156,24 @@ fn render_block<'a>(block: &[SourceLine<'a>], side: PatchSide, out: &mut Vec<Emi
     out.append(&mut body);
 }
 
-/// Rewrites one hunk for the selection, updating the running side offset.
+/// What the hunks written so far add up to, within one file.
+#[derive(Default)]
+pub(super) struct Tally {
+    /// The applied side's offset over the emitted hunks; per file, as line
+    /// numbers are.
+    offset: i64,
+    /// Lines the emitted hunks leave on each side.
+    pub(super) old: u32,
+    pub(super) new: u32,
+}
+
+/// Rewrites one hunk for the selection, adding it to the file's tally.
 /// Returns `None` when nothing changed remains.
 pub(super) fn render_hunk(
     hunk: &RawHunk<'_>,
     select: &HunkSelect,
     side: PatchSide,
-    offset: &mut i64,
+    tally: &mut Tally,
 ) -> Option<Vec<u8>> {
     let (old_start, new_start, heading) = parse_header(hunk.header)?;
 
@@ -208,13 +219,15 @@ pub(super) fn render_hunk(
     }
 
     let (old_start, new_start) = match side {
-        PatchSide::Forward => (old_start, (old_start as i64 + *offset).max(0) as u32),
-        PatchSide::Reverse => ((new_start as i64 + *offset).max(0) as u32, new_start),
+        PatchSide::Forward => (old_start, (old_start as i64 + tally.offset).max(0) as u32),
+        PatchSide::Reverse => ((new_start as i64 + tally.offset).max(0) as u32, new_start),
     };
-    *offset += match side {
+    tally.offset += match side {
         PatchSide::Forward => new_count as i64 - old_count as i64,
         PatchSide::Reverse => old_count as i64 - new_count as i64,
     };
+    tally.old += old_count;
+    tally.new += new_count;
 
     let mut out = Vec::with_capacity(body.len() + 64);
     out.extend_from_slice(

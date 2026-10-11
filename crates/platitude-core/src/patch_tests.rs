@@ -256,6 +256,129 @@ fn reverse_line_selection_keeps_an_unselected_line_in_place() {
     );
 }
 
+const DELETED: &str = "\
+diff --git a/f.txt b/f.txt
+deleted file mode 100644
+index 1111111..0000000
+--- a/f.txt
++++ /dev/null
+@@ -1,3 +0,0 @@
+-a
+-b
+-c
+";
+
+#[test]
+fn part_of_a_deletion_is_a_change_to_the_file() {
+    let out = text(
+        build_partial(
+            DELETED.as_bytes(),
+            &[HunkSelect::lines(0, [1])],
+            PatchSide::Forward,
+        )
+        .expect("patch"),
+    );
+    assert_eq!(
+        out,
+        "diff --git a/f.txt b/f.txt\nindex 1111111..0000000\n--- a/f.txt\n+++ a/f.txt\n\
+         @@ -1,3 +1,2 @@\n a\n-b\n c\n"
+    );
+}
+
+#[test]
+fn all_of_a_deletion_is_the_deletion() {
+    let out = text(
+        build_partial(
+            DELETED.as_bytes(),
+            &[HunkSelect::lines(0, [0, 1, 2])],
+            PatchSide::Forward,
+        )
+        .expect("patch"),
+    );
+    assert!(
+        out.starts_with("diff --git a/f.txt b/f.txt\ndeleted file mode 100644\n"),
+        "got: {out}"
+    );
+    assert!(
+        out.contains("--- a/f.txt\n+++ /dev/null\n@@ -1,3 +1,0 @@\n"),
+        "got: {out}"
+    );
+}
+
+#[test]
+fn taking_back_part_of_a_deletion_keeps_the_deletion_header() {
+    // Reverse keeps the new side whole, which a deletion has empty.
+    let out = text(
+        build_partial(
+            DELETED.as_bytes(),
+            &[HunkSelect::lines(0, [1])],
+            PatchSide::Reverse,
+        )
+        .expect("patch"),
+    );
+    assert!(out.starts_with("diff --git a/f.txt b/f.txt\ndeleted file mode 100644\n"));
+    assert!(
+        out.contains("+++ /dev/null\n@@ -0,1 +0,0 @@\n-b\n"),
+        "got: {out}"
+    );
+}
+
+#[test]
+fn taking_back_part_of_a_new_file_is_a_change_to_the_file() {
+    let raw = "\
+diff --git a/f.txt b/f.txt
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/f.txt
+@@ -0,0 +1,3 @@
++a
++b
++c
+";
+    let out = text(
+        build_partial(
+            raw.as_bytes(),
+            &[HunkSelect::lines(0, [1])],
+            PatchSide::Reverse,
+        )
+        .expect("patch"),
+    );
+    assert_eq!(
+        out,
+        "diff --git a/f.txt b/f.txt\nindex 0000000..1111111\n--- b/f.txt\n+++ b/f.txt\n\
+         @@ -1,2 +1,3 @@\n a\n+b\n c\n"
+    );
+}
+
+#[test]
+fn part_of_a_rename_is_a_change_to_the_file_it_applies_to() {
+    let raw = "\
+diff --git a/old name.txt b/new name.txt
+similarity index 80%
+rename from old name.txt
+rename to new name.txt
+index 1111111..2222222 100644
+--- a/old name.txt\t
++++ b/new name.txt\t
+@@ -1,3 +1,3 @@
+ a
+-b
++B
+ c
+";
+    let out = text(
+        build_partial(raw.as_bytes(), &[HunkSelect::whole(0)], PatchSide::Reverse).expect("patch"),
+    );
+    // git's tab after a name with a space stays on the `---` / `+++`
+    // lines and leaves the `diff --git` line.
+    assert_eq!(
+        out,
+        "diff --git b/new name.txt b/new name.txt\nindex 1111111..2222222 100644\n\
+         --- b/new name.txt\t\n+++ b/new name.txt\t\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"
+    );
+}
+
 #[test]
 fn multi_file_patch_keeps_only_files_with_selected_hunks() {
     let raw = format!(

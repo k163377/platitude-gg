@@ -6,11 +6,13 @@
 //! positions match what the parser yields for the same bytes, so the UI
 //! selects on the parsed model while the patch is rebuilt from source.
 //!
-//! This file is the scan; writing a hunk out again is [`render`].
+//! This file is the scan; writing a hunk out again is [`render`], and the
+//! file's header fitted to what the hunks left is [`header`].
 
+mod header;
 mod render;
 
-use render::render_hunk;
+use render::{Tally, render_hunk};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PatchSide {
@@ -61,23 +63,22 @@ pub fn build_partial(raw: &[u8], selects: &[HunkSelect], side: PatchSide) -> Opt
 
     for file in &files {
         let mut file_out: Vec<u8> = Vec::new();
-        // Side offset over the emitted hunks; per file, as line numbers are.
-        let mut offset: i64 = 0;
+        let mut tally = Tally::default();
         for hunk in &file.hunks {
             let index = hunk_index;
             hunk_index += 1;
             let Some(select) = selects.iter().find(|s| s.hunk == index) else {
                 continue;
             };
-            if let Some(rendered) = render_hunk(hunk, select, side, &mut offset) {
+            if let Some(rendered) = render_hunk(hunk, select, side, &mut tally) {
                 file_out.extend_from_slice(&rendered);
             }
         }
         if file_out.is_empty() {
             continue;
         }
-        for line in &file.header {
-            push_line(&mut out, line);
+        for line in header::fitted(&file.header, side, &tally) {
+            push_line(&mut out, &line);
         }
         out.extend_from_slice(&file_out);
     }
