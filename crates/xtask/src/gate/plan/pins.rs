@@ -60,10 +60,13 @@ fn pins() -> [Pin; 5] {
             container_only: true,
         },
         // Qt's version, which a desk, the container and CI install
-        // (`qt::PIN`): the file holds nothing else.
+        // (`qt::PIN`): every line but a blank one and a `#` comment.
         Pin {
             path: QT_PIN.to_string(),
-            carries: |_| true,
+            carries: |line| {
+                let line = line.trim();
+                !line.is_empty() && !line.starts_with('#')
+            },
             container_only: false,
         },
     ]
@@ -122,13 +125,17 @@ mod tests {
         assert_ne!(carried(&version, before), carried(&version, raised));
     }
 
-    /// Qt's version is the whole of its file, and the file is the one
-    /// every reader of the pin names (`qt::PIN`).
+    /// Qt's version is its file less the blank lines and the comments, and
+    /// the file is the one every reader of the pin names (`qt::PIN`).
     #[test]
     fn qt_is_read_off_its_own_file() {
         let qt = pin(crate::qt::PIN);
         assert_ne!(carried(&qt, "6.10.3\n"), carried(&qt, "6.11.0\n"));
         assert_eq!(carried(&qt, "6.10.3\n"), carried(&qt, "6.10.3  \n"));
+        assert_eq!(
+            carried(&qt, "6.10.3\n"),
+            carried(&qt, "6.10.3\n\n# Chosen for qtbridge.\n")
+        );
     }
 
     /// The base image moves the container's git; a package list does not.

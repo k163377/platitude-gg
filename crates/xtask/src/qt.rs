@@ -260,16 +260,19 @@ fn not_found(pinned: Option<&str>) -> String {
 }
 
 /// Where Qt's version is pinned, for a desk, the container and CI alike: a
-/// file of its own at the tree's root, holding the version and nothing
-/// else. Not a line of CI's workflow: the gate keys every container step
-/// by the pin, and an edit to a workflow changes nothing built here.
+/// file of its own at the tree's root, holding the version and `#` comment
+/// lines beside it. Not a line of CI's workflow: the gate keys every
+/// container step by the pin, and an edit to a workflow changes nothing
+/// built here. CI's Qt action reads the file by the same rule as
+/// [`pinned_in`], in shell.
 pub(crate) const PIN: &str = ".qt-version";
 
-/// The version a pin file names: its one line.
+/// The version a pin file names: its first line that is neither blank nor
+/// a `#` comment.
 pub(crate) fn pinned_in(pin: &str) -> Option<String> {
     pin.lines()
         .map(str::trim)
-        .find(|line| !line.is_empty())
+        .find(|line| !line.is_empty() && !line.starts_with('#'))
         .map(str::to_string)
 }
 
@@ -355,10 +358,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_pin_is_the_files_one_line() {
+    fn the_pin_is_the_first_line_neither_blank_nor_a_comment() {
         assert_eq!(pinned_in("6.12.0\n").as_deref(), Some("6.12.0"));
         assert_eq!(pinned_in("\n  6.12.0  \r\n").as_deref(), Some("6.12.0"));
         assert_eq!(pinned_in("\n"), None);
+        assert_eq!(
+            pinned_in("6.12.0\n# Chosen for qtbridge.\n").as_deref(),
+            Some("6.12.0")
+        );
+        assert_eq!(
+            pinned_in("# Chosen for qtbridge.\n  # indented\n6.12.0\n").as_deref(),
+            Some("6.12.0")
+        );
+        assert_eq!(pinned_in("# no version\n"), None);
     }
 
     /// The tree holds the pin every build here is held to, and it reads

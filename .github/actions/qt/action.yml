@@ -2,7 +2,8 @@
 # from the cache or installed, and put in front of every later step of the
 # job. A local action: the job checks out first. The aqtinstall that
 # installs it is the one ci/linux/Dockerfile's AQT_SOURCE names, the
-# container's too.
+# container's too. The version is the file's first line that is neither
+# blank nor a `#` comment, as xtask reads it (qt::pinned_in).
 name: Qt
 description: Install the Qt this tree pins and point the job's later steps at it
 
@@ -13,7 +14,7 @@ runs:
       id: pin
       shell: bash
       run: |
-        version="$(tr -d '[:space:]' < .qt-version)"
+        version="$(sed -n '/^[[:space:]]*#/d; s/^[[:space:]]*//; s/[[:space:]]*$//; /./{p;q;}' .qt-version)"
         if [ -z "${version}" ]; then
           echo ".qt-version names no Qt version" >&2
           exit 1
