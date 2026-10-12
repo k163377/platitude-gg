@@ -1190,8 +1190,9 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "find_drop open=true shown=true",
     },
     // The note under the find card once the typing stops: hex under the
-    // hash floor has one, a line with any other character or four hex
-    // characters none (`head:4` types HEAD's first four).
+    // hash floor has one, and so has a line nothing answers (`zzz`); a line
+    // that finds something, or four hex characters, none (`head:4` types
+    // HEAD's first four).
     Verb {
         name: "find-hint",
         when: &[
@@ -1200,11 +1201,28 @@ pub(super) const TABLE: &[Verb] = &[
                 "find_hint stopped=true shown=false matches=1",
             ),
             (
-                Arg::OneOf(&["", "fix", "feat", "zzz"]),
+                Arg::Is("zzz"),
+                "find_hint stopped=true shown=true matches=0 query=zzz \
+                 note=No results in the whole history",
+            ),
+            (
+                Arg::OneOf(&["", "fix", "feat"]),
                 "find_hint stopped=true shown=false",
             ),
         ],
         plain: "find_hint stopped=true shown=true",
+    },
+    // The note's press on a cut window (`--preset deep`, 2,000 of 2,100
+    // loaded), the caret left in the box: the next step lands and the
+    // search runs again — `root` names only the oldest commit, so it goes
+    // there; `zzz` names none, and the note says the whole history is read.
+    Verb {
+        name: "find-further",
+        when: &[(
+            Arg::Is("zzz"),
+            "focus=true truncated=false matches=0 at=0 note=No results in the whole history",
+        )],
+        plain: "focus=true truncated=false matches=1 at=1",
     },
     // The keystroke after the stop takes the note down, though the line is
     // still short of a hash.

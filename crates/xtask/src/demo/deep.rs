@@ -69,7 +69,13 @@ fn deep_history(repo: &mut DemoRepo, side: SideLine) -> Result<(), String> {
     let mut stream = String::from("blob\nmark :1\ndata 3\nv1\n\n");
     for n in 1..=DEEP_COMMITS {
         let from = (n > 1).then_some(n);
-        let message = format!("chore: filler commit {n}");
+        // The root says a word no other commit does, past the window the
+        // graph loads first: what a search finds only once more history is
+        // loaded (`find-further root`).
+        let message = match n {
+            1 => "chore: root of the deep history".to_string(),
+            _ => format!("chore: filler commit {n}"),
+        };
         deep_commit(
             &mut stream,
             "main",

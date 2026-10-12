@@ -726,6 +726,17 @@ QtObject {
         }
     }
 
+    /// The search's note when nothing answers and the whole history is loaded (デザイン規約 §コミットを探す).
+    readonly property string findNone: qsTr("No results in the whole history")
+    /// The same when older commits are not loaded: the press that loads the next `step` (`findLoadFurther`, the words a
+    /// press acts on — the graph's tail says the same, and the count it was cut at).
+    function findNoneWithMore(step) {
+        return qsTr("No results · %1").arg(Words.findLoadFurther(step))
+    }
+    function findLoadFurther(step) {
+        return qsTr("Load %L1 more commits").arg(step)
+    }
+
     /// A ref name inside a sentence, as rich-text markup: the name in `tint` (デザイン規約 §ref の種別
     /// 「名前が出る場所すべてで」), the rest in the line's own colour. The name goes at the `%1` seat rather than being
     /// searched for — a branch called `it` would be found in `into it`. `""` when the sentence has no seat; the caller

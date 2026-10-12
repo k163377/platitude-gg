@@ -92,6 +92,12 @@ Item {
             findHinted.key = act === "find-hint-key" ? line.slice(-1) : ""
             graphPane.findCard.query = line.slice(0, line.length - findHinted.key.length)
             findHinted.start()
+        } else if (act === "find-further") {
+            // The note's press on a window that is cut, through the entrance the link takes (`FindBar.actOnNote`),
+            // once the note stands; done when the step has landed and the search ran again.
+            page.startFind()
+            graphPane.findCard.query = arg
+            findFurther.begin()
         } else if (act === "find-scroll") {
             // The search drawn, then the list scrolled: rows come in on delegates handed on from rows just drawn
             // dimmed or lit, where one row's ink can carry into the next. `find` draws each row only once.
@@ -266,14 +272,44 @@ Item {
                 return
             findHinted.stop()
             if (findHinted.key === "") {
-                Harness.report("find_hint stopped=true shown=" + card.hintShown + " matches=" + card.matches
-                                  + " query=" + card.query + " hint=" + card.hint)
+                Harness.report("find_hint stopped=true shown=" + card.noteShown + " matches=" + card.matches
+                                  + " query=" + card.query + " note=" + card.note)
             } else {
-                const before = card.hintShown
+                const before = card.noteShown
                 card.query = card.query + findHinted.key
-                Harness.report("find_hint_key before=" + before + " after=" + card.hintShown
+                Harness.report("find_hint_key before=" + before + " after=" + card.noteShown
                                   + " stopped=" + card.typingStopped + " query=" + card.query)
             }
+            renderedBarrier.begin()
+        }
+    }
+    // PGG_AUTO_ACT=find-further: the press waits for the note to stand with its acting words, then for the step it
+    // asked for to land and the search to run again (`GraphFind.furtherFrom` going down). `before=` / `after=` are the
+    // rows loaded either side of it.
+    SampleTimer {
+        id: findFurther
+        property int before: -1
+        function begin() {
+            findFurther.before = -1
+            findFurther.start()
+        }
+        onTriggered: {
+            const card = graphPane.findCard
+            if (findFurther.before < 0) {
+                if (!card.noteShown || card.noteAction === "")
+                    return
+                findFurther.before = graphModel.rowTotal
+                card.actOnNote()
+                return
+            }
+            if (graphModel.growing || card.furtherFrom >= 0 || !card.typingStopped)
+                return
+            findFurther.stop()
+            // `focus=`: the caret stayed in the box; `at=`: the search went to what it found (0 where it stands on no
+            // match).
+            Harness.report("find_further before=" + findFurther.before + " after=" + graphModel.rowTotal
+                              + " focus=" + card.boxFocused + " truncated=" + graphModel.truncated
+                              + " matches=" + card.matches + " at=" + card.atMatch + " note=" + card.note)
             renderedBarrier.begin()
         }
     }

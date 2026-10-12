@@ -21,20 +21,31 @@ Rectangle {
     /// the matches narrow (§コミットを探す).
     property int loaded: 0
     /// Something was typed that nothing answers. No state colour — nothing spills over and nothing waits for a hand
-    /// (規約 §状態); the count says `0 / 0` and the reason waits in the tooltip.
+    /// (規約 §状態); the count says `0 / 0` and `unansweredNote` says why, under the card.
     property bool unanswered: false
-    property string unansweredTip: ""
+    property string unansweredNote: ""
+    /// The words of `unansweredNote` a press acts on (`noteActed`); `""` for none.
+    property string unansweredAction: ""
     /// How wide the card may grow before it covers a subject's first character; the owner measures it.
     property real maxWidth: 0
     /// A note on what was typed, hung under the card once the typing stops and gone with the next keystroke
     /// (§コミットを探す). Empty: nothing to note.
     property string hint: ""
+    /// What the note says: the line's own `hint` first — it says why there is no answer — else why nothing answers.
+    readonly property string note: findBar.hint !== "" ? findBar.hint
+                                                        : findBar.unanswered ? findBar.unansweredNote : ""
+    /// The words of the note a press acts on: `unansweredAction` while that note is the one up, never on a `hint`.
+    readonly property string noteAction: findBar.hint === "" && findBar.unanswered ? findBar.unansweredAction : ""
     /// The typing stopped a tooltip's wait ago — since the last keystroke, or since the card came up.
     readonly property bool typingStopped: typingPause.over
     /// The note is up: the typing stopped, on a line that has one.
-    readonly property bool hintShown: findBar.open && findBar.typingStopped && findBar.hint !== ""
+    readonly property bool noteShown: findBar.open && findBar.typingStopped && findBar.note !== ""
+    /// Automation: whether the caret is in the box — what a press on the note must leave as it was.
+    readonly property bool boxFocused: field.activeFocus
 
     signal dismissed()
+    /// The note's acting words were pressed (`actOnNote`).
+    signal noteActed()
     /// Enter and Shift+Enter: on to the next match, back to the previous.
     signal nextRequested()
     signal previousRequested()
@@ -59,6 +70,12 @@ Rectangle {
         findBar.open = false
         typingPause.halt()
     }
+    /// The note's acting words, pressed: the caret stays in the box — the note is no field of its own, and the keys
+    /// that step through matches (Enter, Shift+Enter) belong to the box.
+    function actOnNote() {
+        field.forceActiveFocus()
+        findBar.noteActed()
+    }
     /// Whether a press at `scenePos` (scene coordinates) landed on this card, `✕` and count included. `null` — a
     /// headless press with no place — is never on it.
     function holds(scenePos) {
@@ -69,7 +86,7 @@ Rectangle {
     }
 
     // Hangs from the edge above, so only the lower corners are rounded — the note's, while it hangs below.
-    bottomLeftRadius: findBar.hintShown ? 0 : Theme.radiusMd
+    bottomLeftRadius: findBar.noteShown ? 0 : Theme.radiusMd
     bottomRightRadius: findBar.bottomLeftRadius
     color: Theme.bgElevated
     border.width: Theme.borderWidth
@@ -112,9 +129,6 @@ Rectangle {
             Layout.minimumWidth: findRow.fieldMinWidth
             placeholderText: qsTr("Find commits")
             onTextChanged: typingPause.begin()
-            ToolTip.visible: findBar.unanswered && hovered
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: findBar.unansweredTip
             Keys.onEscapePressed: findBar.dismiss()
             Keys.onPressed: event => {
                 if (event.key !== Qt.Key_Return && event.key !== Qt.Key_Enter)
@@ -174,25 +188,30 @@ Rectangle {
         anchors.topMargin: -Theme.borderWidth
         anchors.left: parent.left
         anchors.right: parent.right
-        implicitHeight: hintWords.implicitHeight + 2 * Theme.spaceXs
-        visible: findBar.hintShown
+        implicitHeight: noteWords.implicitHeight + 2 * Theme.spaceXs
+        visible: findBar.noteShown
         bottomLeftRadius: Theme.radiusMd
         bottomRightRadius: Theme.radiusMd
         color: Theme.bgElevated
         border.width: Theme.borderWidth
         border.color: Theme.borderDefault
-        Label {
-            id: hintWords
+        // A `CardText`, the field whose words can carry a link: the place a press acts on is underlined in the line
+        // (as the report bar's `see GIT COMMANDS`).
+        CardText {
+            id: noteWords
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left
             anchors.right: parent.right
             // Level with the box's own words, and wrapped rather than cut: the card may be at its narrowest.
             anchors.leftMargin: findRow.anchors.leftMargin + field.leftPadding
             anchors.rightMargin: findRow.anchors.leftMargin
-            text: findBar.hint
-            wrapMode: Text.Wrap
+            text: findBar.note
+            markup: findBar.noteAction === "" ? ""
+                    : Words.placeInSentence(findBar.note, findBar.noteAction, "find:further",
+                                            noteWords.pointedLink !== "" ? Theme.textPrimary : Theme.textSecondary)
             color: Theme.textSecondary
-            font.pixelSize: Theme.fontSm
+            pixelSize: Theme.fontSm
+            onLinkAsked: findBar.actOnNote()
         }
     }
 }

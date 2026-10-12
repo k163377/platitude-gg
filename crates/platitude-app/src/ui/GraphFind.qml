@@ -23,6 +23,10 @@ FindBar {
     /// The newest row matched, so the graph steps out from under the card (規約 §コミットを探す). A WIP row never
     /// matches.
     readonly property bool findClears: find.open && find.graphModel.firstMatched
+    /// The note's press, waiting for the step it asked for: the graph's finish count when it was asked, `-1` while
+    /// nothing is out. Any walk that settles after it answers it — the one asked for, or a pass that overtook it
+    /// (`GraphModel` lowers `growing` at either).
+    property int furtherFrom: -1
 
     /// Brings the card up; refused while a question is standing (規約 §コミットを探す).
     function startFind() {
@@ -39,6 +43,13 @@ FindBar {
             return
         find.dropAway()
         find.runFind()
+    }
+    /// The note's press: the next step of history, as the graph's tail loads it; the search runs again once it lands.
+    function loadFurther() {
+        if (!find.graphModel.truncated || find.graphModel.growing)
+            return
+        find.furtherFrom = find.graphModel.finishCount
+        find.graphModel.growWindow()
     }
     /// Re-runs the search and goes to where it lands. Every keystroke: it only walks rows in memory, no git.
     function runFind() {
@@ -69,13 +80,37 @@ FindBar {
     matches: find.graphModel.matchCount
     atMatch: find.graphModel.matchCount > 0 ? find.graphModel.matchOrdinal(find.view.currentIndex) : 0
     searching: find.graphModel.searching
+    // Not while the history is being walked: until it settles, neither "the whole history" nor "more to load" is known
+    // (`truncated` is set when the walk ends).
     unanswered: find.open && find.graphModel.searching && find.graphModel.matchCount === 0
-    unansweredTip: find.graphModel.truncated
-                ? qsTr("Nothing in the loaded history matches — older commits are not loaded")
-                : qsTr("Nothing in this history matches")
+                && !find.graphModel.loading
+    // Older commits are not loaded: the note's press loads the next step as the graph's tail does, then searches again
+    // (規約 §コミットを探す).
+    unansweredNote: find.graphModel.truncated
+                    ? Words.findNoneWithMore(find.graphModel.windowStep)
+                    : Words.findNone
+    unansweredAction: find.graphModel.truncated && !find.graphModel.growing
+                      ? Words.findLoadFurther(find.graphModel.windowStep) : ""
+    onNoteActed: find.loadFurther()
     // Hex under the floor finds no commit by its hash, and nothing on screen would say why (規約 §コミットを探す).
     hint: find.graphModel.shortOfAnOid ? qsTr("Hashes need at least %1 characters").arg(GitFacts.oidFloor()) : ""
-    onQueryChanged: find.runFind()
+    // A new line drops a press's wait: the landing would search for a line nobody pressed for.
+    onQueryChanged: {
+        find.furtherFrom = -1
+        find.runFind()
+    }
     onNextRequested: find.findNext()
     onPreviousRequested: find.findPrevious()
+
+    Connections {
+        target: find.graphModel
+        function onStatsChanged() {
+            if (find.furtherFrom < 0 || find.graphModel.growing || find.graphModel.finishCount <= find.furtherFrom)
+                return
+            find.furtherFrom = -1
+            // Closed meanwhile: nothing to search.
+            if (find.open)
+                find.runFind()
+        }
+    }
 }
