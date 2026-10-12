@@ -37,7 +37,7 @@ mod tests;
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Configuration arguments prepended to every invocation.
-const FIXED_ARGS: [&str; 9] = [
+const FIXED_ARGS: [&str; 13] = [
     "-c",
     "color.ui=false",
     "-c",
@@ -46,6 +46,15 @@ const FIXED_ARGS: [&str; 9] = [
     // records.
     "-c",
     "log.showSignature=false",
+    // Every message read here is parsed as UTF-8, and every message
+    // written here is UTF-8 bytes: a reader's terminal encoding would
+    // re-encode what `log` prints, and a reader's commit encoding would
+    // stamp the commits made here with an `encoding` header the bytes do
+    // not match.
+    "-c",
+    "i18n.logOutputEncoding=utf-8",
+    "-c",
+    "i18n.commitEncoding=utf-8",
     // A working-tree `git diff` refreshes the index under `.git/index.lock`
     // unless this says not to (`--no-optional-locks` does not reach
     // diff), and a poll's diff on that lock kills a concurrent commit.

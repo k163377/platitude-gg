@@ -27,8 +27,9 @@ use crate::process::{GitCommand, GitExecutor};
 ///
 /// Shared arguments, environment and pathspecs:
 /// - Executor: `-c color.ui=false`, `core.quotepath=false`,
-///   `log.showSignature=false`, `diff.autoRefreshIndex=false`,
-///   `--no-optional-locks` (2.15); `LC_ALL=C`, `GIT_EDITOR=true`,
+///   `log.showSignature=false`, `i18n.logOutputEncoding=utf-8`,
+///   `i18n.commitEncoding=utf-8` (both 1.5-era keys),
+///   `diff.autoRefreshIndex=false`, `--no-optional-locks` (2.15); `LC_ALL=C`, `GIT_EDITOR=true`,
 ///   `GIT_TERMINAL_PROMPT=0` (2.3), `GIT_OPTIONAL_LOCKS=0` (2.15).
 /// - Rebase: `GIT_SEQUENCE_EDITOR` (1.7.8); paths: `:(literal)` (1.9).
 /// - A traced write's record (`process::trace`): `GIT_TRACE2_EVENT` set to

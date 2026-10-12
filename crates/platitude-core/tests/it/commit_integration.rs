@@ -223,6 +223,58 @@ async fn head_message_and_merge_detection() {
     );
 }
 
+/// A reader's `i18n.logOutputEncoding` — set for a terminal that is not
+/// UTF-8 — would have git re-encode every message `log` prints; the
+/// executor pins it to UTF-8, which is what every reader here parses.
+#[tokio::test]
+async fn a_readers_log_output_encoding_does_not_reach_what_is_read() {
+    let mut repo = TestRepo::init();
+    repo.git(&["config", "i18n.logOutputEncoding", "shift_jis"]);
+    repo.commit_file("a.txt", "one\n", "日本語の件名");
+    let (exec, cancel) = env();
+
+    let head = commit::head_commit(&exec, &repo.path, &cancel)
+        .await
+        .expect("head commit")
+        .expect("HEAD exists");
+    assert_eq!(head.message, "日本語の件名");
+}
+
+/// A reader's `i18n.commitEncoding` would stamp the commits made here
+/// with an `encoding` header the bytes do not match: every message this
+/// application writes is UTF-8, and the executor says so.
+#[tokio::test]
+async fn a_commit_made_here_is_utf_8_whatever_commit_encoding_says() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("seed.txt", "seed\n", "root");
+    repo.git(&["config", "i18n.commitEncoding", "shift_jis"]);
+    repo.write_file("a.txt", "content\n");
+    repo.git(&["add", "--", "a.txt"]);
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+
+    commit::commit(
+        &exec,
+        &repo_info,
+        "日本語の件名",
+        CommitOptions::default(),
+        &cancel,
+    )
+    .await
+    .expect("commit");
+
+    let object = repo.git_raw(&["cat-file", "commit", "HEAD"]);
+    let text = String::from_utf8_lossy(&object);
+    assert!(
+        !text.contains("\nencoding "),
+        "a UTF-8 commit carries no encoding header: {text}"
+    );
+    assert!(
+        text.contains("日本語の件名"),
+        "the message is the UTF-8 bytes that were written: {text}"
+    );
+}
+
 /// A failed read must stay distinguishable from the blank prefill, or a
 /// failure would blank a real message.
 #[tokio::test]
