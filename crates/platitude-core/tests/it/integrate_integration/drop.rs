@@ -2,9 +2,43 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
-use crate::support::integrate::apply;
+use crate::support::integrate::{apply, current_op};
 use platitude_core::process::Kept;
 use platitude_core::sequencer;
+
+/// A reader's `rebase.missingCommitsCheck=error` stops a rebase on a commit
+/// whose line was taken out of the todo (rebase-interactive.c
+/// `todo_list_check`, the minimum to 2.55: exit 1, standing on
+/// `--edit-todo`). The plan writes a `drop` line instead, which the check
+/// counts as seen, so the drop lands under that setting with nothing
+/// pinned and nothing left standing — what keeps the todo writer from
+/// ever leaving a line out.
+#[tokio::test]
+async fn a_readers_missing_commits_check_never_sees_the_plans_drop_lines() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let doomed = repo.commit_file_id("b.txt", "two\n", "the one to go");
+    repo.commit_file("c.txt", "three\n", "after it");
+    repo.git(&["config", "rebase.missingCommitsCheck", "error"]);
+    let (exec, cancel) = env();
+
+    let plan = sequencer::plan_edit(&exec, &repo.path, &doomed, sequencer::Edit::Drop, &cancel)
+        .await
+        .expect("plan");
+    apply(&repo, &plan).await;
+
+    assert_eq!(
+        current_op(&repo).await,
+        None,
+        "nothing is left standing on --edit-todo"
+    );
+    assert_eq!(
+        repo.git(&["log", "--format=%s"])
+            .lines()
+            .collect::<Vec<_>>(),
+        vec!["after it", "root"]
+    );
+}
 
 #[tokio::test]
 async fn dropping_a_commit_keeps_the_ones_after_it() {
