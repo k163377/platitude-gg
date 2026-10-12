@@ -94,7 +94,7 @@ submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §ス
 | **起きない**(釘付け) | 発行する引数・環境・読み方で、利用者の設定・環境が結果を変えないようにする | 低コストに固定できる物は全部(§発行前の釘付け) |
 | **ゲート** | 押す前に断る・行を出さない・灰にする・箱の枠で止める | **アプリが押す前に知り得る**失敗(名前の規則・衝突・立っている操作・別 worktree の保持・数の比較・identity・空の選択)。git に断らせて報せるのは往復を 1 つ増やすだけ |
 | **報せ**(`GitError::Reported` / `Withheld` = `ReportKind`) | 2 行の報せバー。見出し「何が起きなかったか」+ 2 行目「何が断ったか + `see GIT COMMANDS`」。ログは開かない | **走らせるまで分からず、こちらに直す手が無く、中途半端に残っていない**(外のフック・署名・他の git のロック・向こうの規則・こちらが古いリモート)か、**こちらが git を撃つ前に断った**物(指紋の不一致・書き換えの形) |
-| **ログ**(`GitError::Failed` 等) | GIT COMMANDS が自分で開き、ヘッダに 1 行、行の下に git の全文 | 残り全部: 通信・認証、分類しない稀な失敗、読みの失敗。2 行目の文を考える代金を払わない側 |
+| **ログ**(`GitError::Failed` 等) | GIT COMMANDS が自分で開き、ヘッダに 1 行、行の下に git の全文 | 残り全部: 通信・認証、分類しない稀な失敗、読みの失敗。2 行目の文を考える代金を払わない側。**ヘッダの 1 行だけは、届かなかった理由が資格情報・SSH の鍵・host key ならアプリの 1 節**(`remote::unreached`)。**例外は auto fetch(タイマー・開いた時)の失敗**: スリープ・オフラインで日常的に起きるのでログは開かず、fetch ボタンの `!` だけ(ユーザー決定 2026-10-12) |
 
 - **報せが名指す原因は git の文か git 自身の記録(trace2)が言う物だけ**。推さない(フックの在処・ロックファイルの
   在処は断った理由の証拠ではない)。名指せなければ `git turned it down — see GIT COMMANDS`。
@@ -111,11 +111,14 @@ submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §ス
 | 固定する物 | 手段 | 置き場 | 無いと何が起きるか |
 |---|---|---|---|
 | 色・パスの引用・署名表示・index の自動 refresh・任意ロック | `-c color.ui=false` `core.quotepath=false` `log.showSignature=false` `diff.autoRefreshIndex=false` `--no-optional-locks` | `process::executor` `FIXED_ARGS` | `--format` の記録に色・gpg 出力・`"..."` の引用が混ざる / ポーリングの diff が `index.lock` を取って commit を落とす |
+| コミット文の文字コード(読み・書き) | `-c i18n.logOutputEncoding=utf-8` `i18n.commitEncoding=utf-8` | `FIXED_ARGS` | 端末向けに Shift_JIS 等を設定した機械で `log` の文が変換されて化ける / アプリが書く UTF-8 の文に別の文字コードの `encoding` ヘッダが付く(ユーザー決定 2026-10-12) |
 | ロケール・資格情報の対話・任意ロック・エディタ | `LC_ALL=C` `GIT_TERMINAL_PROMPT=0` `GIT_OPTIONAL_LOCKS=0` `GIT_EDITOR=true` | `FIXED_ENV` | 分類器が読む語が翻訳される / 資格情報の入力で止まる / エディタで止まる |
 | 起動元から継いだリポジトリの所在と diff・pathspec の形 | `GIT_DIR` `GIT_WORK_TREE` `GIT_INDEX_FILE` `GIT_OBJECT_DIRECTORY` `GIT_COMMON_DIR` 等 git 自身の `local_repo_env`(environment.c、2.43〜2.55)+ `GIT_EXTERNAL_DIFF` `GIT_DIFF_OPTS` と pathspec magic の 4 変数を**毎 spawn で消す**(コマンド自身の `env` は後から載る) | `INHERITED_ENV_DROPPED` | フック・git alias・IDE の実行構成から起動されたアプリの全コマンドが別のリポジトリを指す / パーサが読まない diff の形 |
 | diff の形(prefix・文脈行・submodule の表示・外部 diff) | `-c diff.noprefix=false` `diff.mnemonicPrefix=false` `diff.srcPrefix=a/` `diff.dstPrefix=b/`(2.45+ のキー。最低版は無視)`diff.context=3` `diff.submodule=short` `diff.external=` と各 diff の `--no-ext-diff` | `details::DIFF_SHAPE_ARGS` | `a/` `b/` を剥がすヘッダのパースが壊れる / `diff.context=0` の hunk は `git apply` が当てられず部分ステージが常に断られる / gitlink が `diff --git` 無しの形で出る |
 | push の送る ref | 明示の refspec + `--no-follow-tags` | `remote::push::porcelain_push` | `push.followTags` で頼んでいないタグが一緒に出る |
 | rebase の autostash・merge 形・欠けたコミットの検査 | `--no-autostash`、駆動形だけ `--no-rebase-merges` と `-c rebase.missingCommitsCheck=ignore` | `integrate::rebase_command` | autostash が staged を unstaged に戻す / `label onto` が todo に入る / 意図した drop を `error` 設定の git が `--edit-todo` で止める(実測 2.55: exit 1・`rebase-merge` が立つ) |
+| pull の合流の仕方 | `--ff-only --no-rebase`(行が出るのは早送りできる木だけ) | `remote::pull` | `pull.rebase` を読ませると rebase 経路の clean-tree 検査が先に走り、早送りで足りる汚れた木を `cannot pull with rebase: You have unstaged changes` 128 で断る(実測 2.55。ユーザー決定 2026-10-12) |
+| merge / pull を塞ぐ作業ツリーの変更・untracked | 断られた時だけ `stash push -u` → 撃ち直し → `stash pop --index`(`build::integrate_carrying`。switch / rebase と同じ 3 手) | `session::build` | 直している当のファイルが向こうでも動いた日常の場面で、`would be overwritten by merge` の失敗がログに落ちる(ユーザー決定 2026-10-12) |
 | stash の index 復元 | `--no-index` | `stash::pop` / `apply` / `carried_apply` | `stash.index=true`(2.55)で `--index` 扱いになり着地が変わる |
 | mergetool の一時ファイル・ツール・GUI | `-c mergetool.writeToTemp=true` `--no-prompt --gui --tool=` | `conflict::tool` | 一時ファイルが隣に出て WIP が埋まる / ツール未設定で stdin を踏む |
 | 一時 index の写し | `core.hooksPath=<absent>` `core.splitIndex=false` `core.fsmonitor=false` `core.safecrlf=false` `index.skipHash=true` + `GIT_INDEX_FILE` | `discards::record::isolated` | 写しのフック・fsmonitor・改行検査が本体に混ざる |
@@ -127,12 +130,11 @@ submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §ス
 | 設定 | 従う理由 |
 |---|---|
 | `commit.gpgsign` / `tag.gpgSign` / `gpg.format` | 署名は利用者の約束(forge の required signatures)。署名できない時は報せ `CommitUnsigned` |
-| `pull.rebase` / `pull.ff` / `branch.<n>.merge` | `git pull` は端末と同じ答えを返す(デザイン規約 §取り込んで合流させる)。割れた木では行を出さない |
-| `merge.autoStash` | git が自分の `MERGE_AUTOSTASH` で退けて `--continue` / `--abort` / `--quit` で戻す(実測 2.55)。merge は carry の対象外(デザイン規約 §履歴を合流させる「merge は既定のまま」) |
+| `branch.<n>.merge` / `branch.<n>.remote` | pull がどこへ取りに行くかは利用者の設定(合流の仕方だけ釘付け = 上の表) |
+| `merge.autoStash` | 断られる前に git が自分の `MERGE_AUTOSTASH` で退けて `--continue` / `--abort` / `--quit` で戻す(実測 2.55)。こちらの carry は git が断った後に回るので、設定した人の木では git の流儀が先に動く |
 | `rebase.updateRefs` | 駆動形は `--update-refs` を自分で足す。枝のまとまりの読みは rules-refs/core.md |
 | `gc.auto` / `maintenance.auto` | リポジトリの保守は利用者の物。後ろで走る gc が取るロックは `*Locked` の報せで受ける |
 | `core.fsmonitor` / `core.untrackedCache` | 外すと書き込みが遅くなり index の印が消える(rules-refs/core.md)。trace2 の受け口はデーモンが繋いでも閉じるだけ |
-| `i18n.logOutputEncoding` | UTF-8 以外を設定した機械は稀(釘付け候補。§判断待ち) |
 
 ## 類型(出し先と判定)
 
@@ -158,8 +160,8 @@ submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §ス
 | LFS サーバーに届かない | git-lfs の `pre-push` の文 | オフライン | 報せ `PrePush`(断ったのはフック) |
 | **署名 push(`push.gpgSign`)**を署名できない・向こうが受けない | `fatal: failed to sign the push certificate` / `the receiving end does not support --signed push` | **稀な構成。GitHub / GitLab は signed push を受けない**(基準 3) | **ログ**(分類しない) |
 | `needs force` / `remote does not support deleting refs` / `[remote failure]` | stdout の ref 行 | 稀 | ログ(push の失敗行は stdout も載せる) |
-| 届かない・認証 | `could not read Username … terminal prompts disabled` / `Authentication failed` / `Permission denied (publickey)` / `Could not resolve host` | **日常**(初回・資格情報ヘルパー無し・オフライン) | ログ(通信の失敗は報せにしない = デザイン規約)。文を足すかは §判断待ち |
-| タイムアウト | `GitError::TimedOut` | ネットワーク | ログ |
+| 資格情報が無い・鍵が通らない・host key が未知 | `could not read Username … terminal prompts disabled` / `Authentication failed for` / `Permission denied (publickey)` / `Host key verification failed` | **日常**(新しい機械・WSL・初回の SSH) | ログ + **ヘッダの 1 行はアプリの 1 節**(`remote::unreached` → `Words.unreachedWhy`。ユーザー決定 2026-10-12) |
+| 届かない(名前解決・経路・タイムアウト) | `Could not resolve host` / `unable to access` / `GitError::TimedOut` | 日常(オフライン) | ログ(ヘッダは git の 1 行目)。**auto fetch の失敗だけはログを開かず fetch ボタンの `!`** |
 
 ### commit・amend
 
@@ -216,16 +218,16 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 | 作る前にフォルダが埋まっている / 記録だけ残る場所 / `-b` のブランチが残った / 他の拒否 | — / 128 / 255 | 押す前に言える衝突が押した後に起きた | 報せ `WorktreeFolderTaken`(`Withheld`)/ `WorktreePlaceTaken` / `WorktreeBranchLeft` / `WorktreeNotAdded` |
 | `post-checkout` が失敗(git-lfs 無し) | フックの終了コード、worktree は残る | ある(LFS) | 報せ `WorktreeHookFailed`(trace2) |
 | 別の worktree の変更を当てられない | `would be overwritten` / `could not write index` / 無言 | ある | 報せ `CarriedInTheWay / CarriedFileInTheWay / CarriedUnread / CarriedRefused / CarriedLocked` |
+| 同、ファイルとフォルダの入れ替わり・大小を区別しないディスク越しの 3 つの形(追跡分が当たった後に untracked を置けない 2 つ、`d/f` → untracked `d` を git の前に断り過ぎる 1 つ) | `checkout-index` 128 / — | 稀(手で作る形) | **据え置き**(ユーザー決定 2026-10-12): 追跡分は当たったまま git の文がログへ。詳細は P3-確認事項 §別の worktree の未コミット行 |
 
 ### merge・pull・switch・cherry-pick・revert
 
 | 類型 | 答え | 場面・頻度 | 出し先 |
 |---|---|---|---|
 | conflict で止まった | exit 1 + marker | 日常 | 停止(帯・出口カード) |
-| 早送りを作業ツリーの変更・untracked が塞ぐ | `would be overwritten by merge` exit 1、marker 無し | **日常**(merge / pull で、直している当のファイルが向こうでも動いた) | **ログ**(行に git のファイル一覧。報せ・carry にするかは §判断待ち) |
-| 本物の merge を塞ぐ | 同じ文 exit 2 | 同上 | ログ |
-| `pull.rebase=true` + 作業ツリーに変更 | `cannot pull with rebase: You have unstaged changes` 128 | **日常**(`pull.rebase` は普及した設定) | ログ(§判断待ち) |
-| 割れた木の pull | — | ゲート(行を灰にして行き先を言う) | — |
+| 早送り・本物の merge を作業ツリーの変更・untracked が塞ぐ | `would be overwritten by merge` exit 1(早送り)/ 2(本物の merge)、marker 無し | **日常**(merge / pull で、直している当のファイルが向こうでも動いた) | **carry**(`stash push -u` → 撃ち直し → `stash pop --index`。conflict で止まれば stash は残る。ユーザー決定 2026-10-12)。stash で越えられない断り(`--skip-worktree` 等)は戻して git の最初の文をログへ |
+| `pull.rebase=true` + 作業ツリーに変更 | — | 釘付けで起きない(`--ff-only --no-rebase`) | — |
+| 割れた木の pull | — / 数が古ければ `Not possible to fast-forward` 128 | ゲート(行を灰にして行き先を言う)/ 数が古い木だけ届く | ログ |
 | switch を塞ぐ変更 | `CheckoutOutcome::Blocked` | 日常 | carry(stash → switch → pop) |
 | 名前が merge できない・2 つ目の merge | 128 | 稀 | ログ |
 
@@ -236,7 +238,7 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 | git が無い | spawn の `NotFound` | 初回 | 全画面(デザイン規約 §git が無い時・古い時) |
 | 古い git | `--version` | ある | 帯の `OLD GIT`、操作は通す |
 | リポジトリでない・bare | `not a git repository` / `--is-bare-repository` | 日常 | 開けなかった画面・ダイアログ |
-| `safe.directory`(別の所有者のフォルダ) | `fatal: detected dubious ownership in repository` 128 | **ある(Windows のネットワークドライブ・別アカウントの clone・WSL の mount)** | 「Could not open this folder」+ git の文(§判断待ち) |
+| `safe.directory`(別の所有者のフォルダ) | `fatal: detected dubious ownership in repository` 128 | **ある(Windows のネットワークドライブ・別アカウントの clone・WSL の mount)** | 開けなかった画面の見出し `git does not trust this folder's owner` + git の文(末尾が許す手順。`GitError::UntrustedOwner`。ユーザー決定 2026-10-12) |
 | 読みの失敗(log・status・diff) | 非ゼロ | 稀 | 帯 `STALE GRAPH` / ログの背景読み |
 | 連続する fetch の失敗 | 非ゼロ | オフライン(日常) | ログが 1 回だけ開き、復帰で閉じる |
 
@@ -247,7 +249,7 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 | 署名 push(`push.gpgSign`)の 2 類型 | 稀な構成で主要 forge が受けない。再現に `receive.certNonceSeed` と鍵の設営が要る(基準 3) |
 | 半分済んだ改名の「何が止めたか」(ロック / 断り / 一覧が動いた) | 2 コマンドの隙間の競合は稀。1 つの報せとログで足りる(基準 3) |
 | `[rejected] (needs force)` 等 | 稀。理由は stdout の ref 行がログに持つ |
-| 通信・認証の失敗 | 断られたのではなく届かなかった(デザイン規約)。文を足すかは §判断待ち |
+| 届かない通信(名前解決・経路・タイムアウト) | git の 1 行目で足りる。資格情報・鍵・host key の 3 つだけはヘッダの 1 節(上の表) |
 | `core.safecrlf` の拒否・`checkout-index` が置けない untracked・大小を区別しないディスク越し | 稀・据え置き(P3-確認事項) |
 | リポジトリの破損・ディスク満杯・メモリ不足 | 範囲外 |
 
@@ -257,7 +259,7 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 
 | 仕組み | 代金 | 判定 |
 |---|---|---|
-| **trace2 の記録**(`GitCommand::traced` = commit / push / 駆動 rebase / worktree add。フック・ssh 署名プログラムの終わりを git 自身の記録で読む) | **Windows は git プロセス 1 本につき約 +19ms**(git が `cmd_ancestry` のために全プロセスを数える)。commit 345 → 388ms(+12%、2 プロセス)、push +約 180ms。Linux は `/proc` 読みで未実測 | 維持(ユーザー決定 2026-10-11「名指す原因は git の文か記録だけ」)。**サポート外化の候補 1 位**(§サポート外化の候補) |
+| **trace2 の記録**(`GitCommand::traced` = commit / push / 駆動 rebase / worktree add。フック・ssh 署名プログラムの終わりを git 自身の記録で読む) | **Windows は git プロセス 1 本につき約 +19ms**(git が `cmd_ancestry` のために `CreateToolhelp32Snapshot` で全プロセスを数える。compat/win32/trace2_win32_process_info.c —— 止める設定・環境変数は無く、どの target でも同じ)。commit 345 → 388ms(+12%、2 プロセス)、push +約 180ms。Linux は `/proc` 読みで未実測 | **維持**(ユーザー決定 2026-10-11・再確認 2026-10-12)。git にフックの断りを名指す無料の機構は無い: 終了コード(commit の 1)で推す案は空メッセージ等のゲートに精度が依存し、ssh 署名プログラムの失敗も名指せなくなる。他の GUI(GitHub Desktop・GitKraken・Sublime Merge)は名指さず、フックの生の出力を出して `--no-verify` の「それでも commit」を添える |
 | 部分ステージ前の指紋の照合(diff を 1 本読み直す) | press ごとに diff 1 本 | 維持(読んだ行と違う物を当てない保証) |
 | リモート削除前の lease(`ls-remote`) | press ごとに往復 1 つ | 維持(画面の先端への lease = 向こうの別の commit を消さない) |
 | 他の worktree の読み(carried) | worktree 数に比例する `status` | ペースで薄める(P3-確認事項 §別の worktree の未コミット行) |
@@ -267,24 +269,11 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 
 | 候補 | 状況 | 落とすと | 判定 |
 |---|---|---|---|
-| trace2 でフックの終わりを読む(4 つの書き込み) | Windows で書き込み 1 回に +20〜60ms(プロセス数分)。commit の +12% | `CommitHook` / `PrePush` / `RewriteCommitHook` / `WorktreeHookFailed` と ssh 署名プログラムの失敗を名指せず `git turned it down` へ。commit は exit 1 + stdout 空を git の答えとして読めるが、pre-push は ref 行の無い exit 1 が通信の失敗と区別できない | **判断待ち**(§判断待ち 1) |
+| trace2 でフックの終わりを読む(4 つの書き込み) | Windows で書き込み 1 回に +20〜60ms(プロセス数分)。commit の +12% | `CommitHook` / `PrePush` / `RewriteCommitHook` / `WorktreeHookFailed` と ssh 署名プログラムの失敗を名指せず `git turned it down` へ。commit は exit 1 + stdout 空を git の答えとして読めるが、pre-push は ref 行の無い exit 1 が通信の失敗と区別できない | **維持**(ユーザー決定 2026-10-12)。再検討するなら落とすのは commit の trace だけ |
 
 ## 判断待ち(要判断)
 
 状況と、基準に照らした選択肢。決まったら上の表へ写してここから消す。
 
-1. **trace2 の代金**: 維持(フックは日常 = 基準 2 を満たす)か、Windows の +19ms/プロセスを嫌って commit だけ
-   exit 1 で読む(pre-push と worktree add は trace2 のまま)か、全部落とすか。
-2. **merge / pull の早送りを塞ぐ作業ツリーの変更**(日常・UI から再現): 今はログ。選択肢は (a) switch /
-   rebase と同じ carry(stash → merge → pop。conflict で止まれば stash は残る)/ (b) 報せ
-   `The merge was not made / Uncommitted changes would be overwritten — see GIT COMMANDS` / (c) 現状。
-   「merge は既定のまま」(デザイン規約)の決定に触る。
-3. **`pull.rebase=true` + 作業ツリーに変更**(普及した設定): 行が出る木(遅れているだけ)は早送りで済むので
-   `git pull --ff-only --no-rebase` にすれば利用者の設定を読まずに通る。「素の `git pull`」(デザイン規約)の
-   決定に触る。
-4. **認証・資格情報の失敗の 1 行**(`terminal prompts disabled` / `Permission denied (publickey)` /
-   `Host key verification failed`): 日常で単純な文字列。ログのヘッダに「資格情報を訊けない — see GIT COMMANDS」
-   の 1 節を置くか。「通信の失敗は報せにしない」の決定に触る。
-5. **`safe.directory` の拒否**(Windows である): 開けなかった画面に専用の 1 文を置くか。
-6. **`i18n.logOutputEncoding`** を UTF-8 に釘付けするか(稀。1 行の `-c`)。
-7. **別の worktree の変更の適用の縁 3 つ**(据え置き中。P3-確認事項 §別の worktree の未コミット行)。
+(無し —— 2026-10-12 時点。trace2 は維持(§日常性能への代金)、`i18n.*` は釘付け(§発行前の釘付け)、別の worktree の
+変更の適用の縁 3 つは据え置き(§類型)で決着。)
