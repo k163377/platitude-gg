@@ -461,7 +461,153 @@ async fn a_counted_git_runs_until_it_is_reaped_and_no_longer() {
         "counted from the spawn to the reap, and only a spawn"
     );
     assert_eq!(live.count(), 0);
-    bounded("idle", live.idle()).await;
+    bounded("idle", live.idle()).await.expect("every end told");
+}
+
+/// A shell loop that holds until `release` exists, started where git starts
+/// an alias: the top of the tree. A spin, so nothing it needs is looked up
+/// on the PATH git hands its shell.
+#[cfg(windows)]
+fn held_until(release: &std::path::Path) -> String {
+    let release = release.to_string_lossy().replace('\\', "/");
+    format!(
+        "i=0; until [ -f \"{release}\" ]; do i=$((i+1)); [ \"$i\" -gt 200000000 ] && exit 1; done"
+    )
+}
+
+/// A run held where Windows would refuse its folder: a `git commit` an
+/// alias starts, waiting on its hook, standing in the tree's folder — as
+/// `git lfs version` leaves `git-lfs` when it is killed. (A shell does not
+/// hold its folder: MSYS opens it shared.) Counted, on a task of its own,
+/// and handed over once the hook has spoken, so that git is provably
+/// standing there.
+#[cfg(windows)]
+struct HeldOnItsHook {
+    repo: TestRepo,
+    live: std::sync::Arc<platitude_core::process::Live>,
+    cancel: CancellationToken,
+    run: tokio::task::JoinHandle<Result<platitude_core::process::GitOutput, GitError>>,
+}
+
+#[cfg(windows)]
+#[expect(
+    clippy::expect_used,
+    reason = "test scaffolding; `allow-*-in-tests` only covers `#[test]` fns"
+)]
+impl HeldOnItsHook {
+    async fn start() -> Self {
+        let repo = TestRepo::init();
+        repo.write_hook(
+            "pre-commit",
+            &format!(
+                "printf 'started\\n'\n{}\n",
+                held_until(&repo.path.join("never-released"))
+            ),
+        );
+        // The hook's words reach stdout: git sends them to stderr.
+        let held = GitCommand::new().cwd(&repo.path).args([
+            "-c",
+            "alias.held=!git commit --allow-empty -m held 2>&1",
+            "held",
+        ]);
+        let live = std::sync::Arc::new(platitude_core::process::Live::default());
+        let exec = crate::support::exec::isolated().counted(std::sync::Arc::clone(&live));
+        let cancel = CancellationToken::new();
+        let (word, spoken) = tokio::sync::oneshot::channel();
+        let run = tokio::spawn({
+            let cancel = cancel.clone();
+            async move {
+                let mut word = Some(word);
+                let mut said = Vec::new();
+                exec.run_streaming(held, &cancel, &mut |chunk| {
+                    said.extend_from_slice(chunk);
+                    if said.windows(7).any(|w| w == b"started")
+                        && let Some(word) = word.take()
+                    {
+                        let _ = word.send(());
+                    }
+                })
+                .await
+            }
+        });
+        bounded("the hook's word", spoken)
+            .await
+            .expect("the hook speaks");
+        assert_eq!(live.count(), 1, "counted while git waits on its hook");
+        Self {
+            repo,
+            live,
+            cancel,
+            run,
+        }
+    }
+
+    /// Waits for the count's end, then renames the folder straight away:
+    /// nothing of the run may stand there by then. Judged off the count,
+    /// not the run's answer — the count is what an owner standing down
+    /// waits on (`RepoSession::stand_down`).
+    async fn gone_with_the_count(&self) {
+        bounded("the count's end", self.live.idle())
+            .await
+            .expect("every end told");
+        let moved = self.repo.path.with_file_name("moved");
+        std::fs::rename(&self.repo.path, &moved)
+            .expect("nothing of the run stands in the tree's folder");
+        std::fs::rename(&moved, &self.repo.path).expect("and back");
+    }
+}
+
+/// A cancel ends what git started for the run, not git alone, and the
+/// owner's count of running gits comes down only once that is gone too.
+#[cfg(windows)]
+#[tokio::test]
+async fn a_cancel_ends_what_git_started_for_the_run_before_it_answers() {
+    let held = HeldOnItsHook::start().await;
+    held.cancel.cancel();
+    held.gone_with_the_count().await;
+    let ran = bounded("the run's answer", held.run)
+        .await
+        .expect("the run's task ends");
+    assert!(ran.as_ref().is_err_and(GitError::is_cancelled), "{ran:?}");
+}
+
+/// A run dropped mid-way — its task gone, as a runtime going down takes it
+/// — is ended whole all the same, and counted until it is gone.
+#[cfg(windows)]
+#[tokio::test]
+async fn a_run_dropped_mid_way_ends_what_git_started_before_the_count_comes_down() {
+    let held = HeldOnItsHook::start().await;
+    held.run.abort();
+    held.gone_with_the_count().await;
+}
+
+/// A run that ends by itself ends nothing it started: the fsmonitor daemon
+/// git starts and leaves running on purpose runs on after the run that
+/// started it, and stops when it is told to. It never holds the tree's
+/// folder — it moves to `$HOME` and watches the tree shared for deletion
+/// (git's `fsmonitor--daemon.c`, `fsm-listen-win32.c`) — so `stop`'s
+/// answer is all the folder waits on.
+#[cfg(windows)]
+#[tokio::test]
+async fn a_run_that_ends_by_itself_leaves_the_daemon_it_started() {
+    let repo = TestRepo::init();
+    let (exec, cancel) = env();
+    let daemon = |verb: &str| {
+        GitCommand::new()
+            .cwd(&repo.path)
+            .args(["fsmonitor--daemon", verb])
+    };
+    bounded("the daemon's start", exec.run(daemon("start"), &cancel))
+        .await
+        .expect("the daemon starts");
+    let running = bounded("the daemon's status", exec.run(daemon("status"), &cancel)).await;
+    // Told to stop before anything is judged, so a red leaves no daemon.
+    let stopped = bounded("the daemon's stop", exec.run(daemon("stop"), &cancel)).await;
+    assert!(
+        running.is_ok(),
+        "the daemon the run left behind still runs: {running:?}"
+    );
+    stopped.expect("the daemon stops when told");
 }
 
 /// Whether this machine's git meets the minimum is about the machine, not

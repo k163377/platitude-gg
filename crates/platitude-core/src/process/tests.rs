@@ -35,10 +35,12 @@ fn prepare(mut command: Command) -> Command {
 
 #[tokio::test]
 async fn timeout_kills_the_child() {
-    let mut child = prepare(sleeper()).spawn().unwrap();
+    let (mut child, mut family) =
+        super::super::family::spawn(&mut prepare(sleeper()), true, None).unwrap();
     let cancel = CancellationToken::new();
     let outcome = run_child(
         &mut child,
+        &mut family,
         Some(Duration::from_millis(300)),
         &cancel,
         &mut |_| {},
@@ -50,11 +52,12 @@ async fn timeout_kills_the_child() {
 
 #[tokio::test]
 async fn cancellation_kills_the_child() {
-    let mut child = prepare(sleeper()).spawn().unwrap();
+    let (mut child, mut family) =
+        super::super::family::spawn(&mut prepare(sleeper()), true, None).unwrap();
     let cancel = CancellationToken::new();
     let cancel_clone = cancel.clone();
     let mut ready = false;
-    let outcome = run_child(&mut child, None, &cancel, &mut |_| {
+    let outcome = run_child(&mut child, &mut family, None, &cancel, &mut |_| {
         ready = true;
         cancel_clone.cancel();
     })

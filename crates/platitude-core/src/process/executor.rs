@@ -14,8 +14,9 @@ use super::child::{ChildOutcome, run_child};
 use super::command::{
     CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, TimeBudget, shell_quote,
 };
+use super::family::Family;
 use super::live::Live;
-use super::slots::{GroupKey, Lead, Priority, Shared, Slots, WayIn};
+use super::slots::{GroupKey, Lead, Pace, Priority, Shared, Slots, WayIn};
 use super::trace::Trace;
 use crate::error::GitError;
 use crate::operation::OperationId;
@@ -34,9 +35,6 @@ mod tests;
 /// Counted from the spawn: a budget that counted the slot wait would kill
 /// a healthy git for the queue in front of it.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
-
-#[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Configuration arguments prepended to every invocation.
 const FIXED_ARGS: [&str; 9] = [
@@ -441,8 +439,6 @@ impl GitExecutor {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
-        #[cfg(windows)]
-        command.creation_flags(CREATE_NO_WINDOW);
         command
     }
 
@@ -520,10 +516,13 @@ impl GitExecutor {
             "spawning git"
         );
         let started = Instant::now();
-        let mut child = match command.spawn() {
-            Ok(child) => child,
+        // The count goes with the run: let go once it is gone (`family`). A
+        // run paced from outside is stopped at git alone: what it starts can
+        // be the person's own (a browser a credential helper opened).
+        let whole = cmd.pace == Pace::Here;
+        let (mut child, mut family) = match super::family::spawn(&mut command, whole, running) {
+            Ok(spawned) => spawned,
             Err(source) => {
-                drop(running);
                 report(
                     CommandEnd::Failed,
                     waited,
@@ -533,9 +532,6 @@ impl GitExecutor {
                 return Err(Self::unspawned(cmd, described, source));
             }
         };
-        // Held to the reap (`run_child` reaps on every road), which is the
-        // end of this function.
-        let _running = running;
         // The spawn's own cost: on Windows most of a round trip
         // (ci/baseline/code-costs-windows-x64.md).
         let spawned = started.elapsed();
@@ -545,7 +541,8 @@ impl GitExecutor {
             TimeBudget::At(timeout) => Some(timeout),
             TimeBudget::Never => None,
         };
-        let (outcome, kept) = run_keeping(&mut child, cmd, budget, cancel, on_stdout).await;
+        let (outcome, kept) =
+            run_keeping(&mut child, &mut family, cmd, budget, cancel, on_stdout).await;
         // Reaped (or killed) whichever way it ended: the life is spent.
         super::meter::charge(started.elapsed());
         let outcome = outcome.map_err(|source| {
@@ -699,6 +696,7 @@ impl GitExecutor {
 /// command asks for one (`GitCommand::logs_stdout`); empty otherwise.
 async fn run_keeping(
     child: &mut tokio::process::Child,
+    family: &mut Family,
     cmd: &GitCommand,
     budget: Option<Duration>,
     cancel: &CancellationToken,
@@ -706,13 +704,16 @@ async fn run_keeping(
 ) -> (std::io::Result<ChildOutcome>, Vec<u8>) {
     let mut kept = Vec::new();
     if !cmd.logs_stdout {
-        return (run_child(child, budget, cancel, on_stdout).await, kept);
+        return (
+            run_child(child, family, budget, cancel, on_stdout).await,
+            kept,
+        );
     }
     let mut both = |chunk: &[u8]| {
         kept.extend_from_slice(chunk);
         on_stdout(chunk);
     };
-    let outcome = run_child(child, budget, cancel, &mut both).await;
+    let outcome = run_child(child, family, budget, cancel, &mut both).await;
     (outcome, kept)
 }
 

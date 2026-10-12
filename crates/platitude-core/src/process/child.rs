@@ -7,6 +7,8 @@ use tokio::io::AsyncReadExt;
 use tokio::process::Child;
 use tokio_util::sync::CancellationToken;
 
+use super::family::Family;
+
 /// Stderr kept at most: git's messages are short, and a runaway process
 /// is capped here.
 const STDERR_CAP: usize = 256 * 1024;
@@ -19,10 +21,12 @@ pub(super) enum ChildOutcome {
     Cancelled,
 }
 
-/// The child is killed and reaped when the timeout or the token fires, or
-/// a pipe breaks: it is gone on every road out of here.
+/// The run is ended ([`Family::end`]) when the timeout or the token fires,
+/// or a pipe breaks, and git is reaped on every road out of here. A whole
+/// run's stop whose end cannot be told is an error, not a cancel.
 pub(super) async fn run_child(
     child: &mut Child,
+    family: &mut Family,
     timeout: Option<Duration>,
     cancel: &CancellationToken,
     on_stdout: &mut (dyn FnMut(&[u8]) + Send),
@@ -82,27 +86,27 @@ pub(super) async fn run_child(
     tokio::select! {
         biased;
         _ = cancel.cancelled() => {
-            kill_and_reap(child).await;
+            family.end(child).await?;
             Ok(ChildOutcome::Cancelled)
         }
         _ = deadline => {
-            kill_and_reap(child).await;
+            family.end(child).await?;
             Ok(ChildOutcome::TimedOut)
         }
         res = work => {
-            if res.is_err() {
-                kill_and_reap(child).await;
+            match res {
+                Ok(outcome) => {
+                    family.settle();
+                    Ok(outcome)
+                }
+                Err(e) => {
+                    // The pipe's error is the one told.
+                    if let Err(end) = family.end(child).await {
+                        tracing::debug!(error = %end, "a run broken off could not be told gone");
+                    }
+                    Err(e)
+                }
             }
-            res
         }
-    }
-}
-
-async fn kill_and_reap(child: &mut Child) {
-    if let Err(e) = child.start_kill() {
-        tracing::debug!(error = %e, "kill failed (process already exited?)");
-    }
-    if let Err(e) = child.wait().await {
-        tracing::debug!(error = %e, "failed to reap killed process");
     }
 }

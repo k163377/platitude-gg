@@ -1,6 +1,6 @@
 //! What a stretch of work spent in git: the lives of the children it
-//! spawned, summed — each from the spawn to the reap, the slot wait left
-//! out.
+//! spawned, summed — each from the spawn to the run's end (`family`), the
+//! slot wait left out.
 //!
 //! A proxy for how heavy the work was, not a CPU reading: a child's life
 //! holds its disk waits and the time the machine kept it off a core, and

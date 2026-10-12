@@ -531,8 +531,8 @@ impl Slots {
     }
 }
 
-/// One process's slot, held from the spawn to the reap and given back by
-/// dropping it — whichever way the run ended.
+/// One process's slot, held from the spawn to the run's end (`family`) and
+/// given back by dropping it — whichever way the run ended.
 #[must_use = "a slot is a running process until it is dropped"]
 pub struct Slot {
     /// `None` once the slot has been given back by hand (a grant that

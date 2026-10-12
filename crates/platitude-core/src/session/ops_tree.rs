@@ -431,7 +431,12 @@ impl RepoSession {
                 // Before anything can turn the rename down: every answer from
                 // here comes from a session that stood down, so the tab stands
                 // again on each (`RepoPage.absorbWorktreeMove`).
-                s.stand_down().await;
+                // A run whose end was not told may stand in the folder still:
+                // git is asked all the same, and turns the rename down in its
+                // own words if one does (`was not renamed`).
+                if let Err(untold) = s.stand_down().await {
+                    tracing::warn!(%untold, "moving a worktree a run of this tab may stand in");
+                }
                 // `--git-path config` is the repository's own config, in its own
                 // directory, whichever worktree asked (`repo::open`).
                 let Some(common) = repo.config_path.parent() else {

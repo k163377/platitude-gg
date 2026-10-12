@@ -22,8 +22,9 @@ pub struct RepoSession {
     /// (デザイン規約 §git が言ったことを読む場所).
     pub(super) exec_unasked_fetch: GitExecutor,
     pub(super) commands: Arc<CommandFeed>,
-    /// The git processes the four handles above have running, counted from
-    /// the spawn to the reap — what [`Self::stand_down`] waits out.
+    /// The git runs the four handles above have going, counted from the
+    /// spawn to the run's end (`process::family`) — what [`Self::stand_down`]
+    /// waits out.
     pub(super) live: Arc<crate::process::Live>,
     pub(super) runtime: tokio::runtime::Handle,
     pub(super) sink: Arc<dyn SessionSink>,
@@ -409,18 +410,20 @@ impl RepoSession {
     }
 
     /// Stops every read this session makes and waits until none of its
-    /// git processes is left running: from here no git of this session
-    /// stands in its worktree — what Windows needs of a folder it is asked to
-    /// rename. Git the app runs outside a session (a dialog's own reads) is
-    /// not counted here. The write asking goes on, on a token of its own, and
-    /// nothing is read behind it; what the session drew is kept for the tab
-    /// to stand on in a new one ([`Self::take_drawn_graph`]). Close it after,
-    /// as any other.
-    pub(super) async fn stand_down(&self) {
+    /// git processes is left running, and on Windows none of what a stopped
+    /// one had started (`process::family`): a run of this session standing
+    /// in its worktree is what Windows refuses a folder's rename for. Git the
+    /// app runs outside a session (a dialog's own reads) is not counted
+    /// here. The write asking goes on, on a token of its own, and nothing is
+    /// read behind it; what the session drew is kept for the tab to stand on
+    /// in a new one ([`Self::take_drawn_graph`]). Close it after, as any
+    /// other. An error names runs let go with their end not told: one may
+    /// stand there still.
+    pub(super) async fn stand_down(&self) -> Result<(), crate::process::UntoldEnds> {
         // The token first: a command not yet spawned ends at its slot, or
         // just before its spawn (`process::Live`).
         self.root_cancel.cancel();
-        self.live.idle().await;
+        self.live.idle().await
     }
 
     /// This worktree's write order, once the repository is open.
