@@ -74,6 +74,43 @@ const FIXED_ENV: [(&str, &str); 4] = [
     ("GIT_EDITOR", "true"),
 ];
 
+/// Environment taken off every invocation before anything is set, as
+/// inherited from whatever launched this process — a terminal inside a
+/// hook, a `git` alias, an IDE's run configuration. git's own
+/// repository-locating variables (environment.c `local_repo_env`, the
+/// minimum to 2.55: what git clears for a command it runs in another
+/// repository) would point every command here at some other repository,
+/// as would a ref namespace (`GIT_NAMESPACE`); a reflog action
+/// (`GIT_REFLOG_ACTION`, which a rebase exports to what it runs) would
+/// relabel the reflog lines `session::leaving` reads; the rest reshape a
+/// diff or a pathspec under the parsers. A command's own `env` is applied
+/// after, so a scratch index (`GIT_INDEX_FILE`) still reaches its git.
+const INHERITED_ENV_DROPPED: [&str; 23] = [
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_PREFIX",
+    "GIT_GRAFT_FILE",
+    "GIT_SHALLOW_FILE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+    "GIT_EXTERNAL_DIFF",
+    "GIT_DIFF_OPTS",
+    "GIT_LITERAL_PATHSPECS",
+    "GIT_GLOB_PATHSPECS",
+    "GIT_NOGLOB_PATHSPECS",
+    "GIT_ICASE_PATHSPECS",
+    "GIT_NAMESPACE",
+    "GIT_REFLOG_ACTION",
+];
+
 /// Spawns git subprocesses. Cheap to clone; every clone waits in the same
 /// [`Slots`] ([`GitExecutor::scheduled`]). A bare executor caps nothing,
 /// which is what a test wants of one.
@@ -417,13 +454,17 @@ impl GitExecutor {
         }
     }
 
-    /// Environment layers: fixed, executor, per-command — later layers win.
+    /// Environment layers: the inherited repository taken off, then fixed,
+    /// executor, per-command — later layers win.
     fn assemble(&self, cmd: &GitCommand) -> Command {
         let mut command = Command::new(self.program.as_ref());
         command.args(FIXED_ARGS);
         command.args(&cmd.args);
         if let Some(dir) = &cmd.cwd {
             command.current_dir(dir);
+        }
+        for name in INHERITED_ENV_DROPPED {
+            command.env_remove(name);
         }
         for (k, v) in FIXED_ENV {
             command.env(k, v);

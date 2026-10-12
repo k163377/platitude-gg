@@ -183,3 +183,44 @@ async fn a_token_cancelled_before_the_ask_spawns_nothing() {
         "it ended before any spawn"
     );
 }
+
+/// Whatever launched this process may carry a repository of its own in the
+/// environment; every spawn here takes it off before its own layers go on.
+#[test]
+fn a_repository_the_environment_names_is_taken_off_every_spawn() {
+    let executor = GitExecutor::with_program("git").with_env([("GIT_CONFIG_NOSYSTEM", "1")]);
+    let command = executor.assemble(
+        &GitCommand::new()
+            .env("GIT_INDEX_FILE", "scratch")
+            .arg("status"),
+    );
+    let envs: Vec<(String, Option<String>)> = command
+        .as_std()
+        .get_envs()
+        .map(|(key, value)| {
+            (
+                key.to_string_lossy().into_owned(),
+                value.map(|v| v.to_string_lossy().into_owned()),
+            )
+        })
+        .collect();
+    for taken_off in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_EXTERNAL_DIFF",
+        "GIT_LITERAL_PATHSPECS",
+        "GIT_NAMESPACE",
+        "GIT_REFLOG_ACTION",
+    ] {
+        assert!(
+            envs.contains(&(taken_off.to_string(), None)),
+            "{taken_off} is taken off: {envs:?}"
+        );
+    }
+    // The executor's and the command's own settings are applied after.
+    assert!(envs.contains(&("GIT_CONFIG_NOSYSTEM".to_string(), Some("1".to_string()))));
+    assert!(
+        envs.contains(&("GIT_INDEX_FILE".to_string(), Some("scratch".to_string()))),
+        "a command's scratch index survives the clearing: {envs:?}"
+    );
+}
