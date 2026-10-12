@@ -123,6 +123,8 @@ submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §14 
 | mergetool の一時ファイル・ツール・GUI | `-c mergetool.writeToTemp=true` `--no-prompt --gui --tool=` | `conflict::tool` | 一時ファイルが隣に出て WIP が埋まる / ツール未設定で stdin を踏む |
 | 一時 index の写し | `core.hooksPath=<absent>` `core.splitIndex=false` `core.fsmonitor=false` `core.safecrlf=false` `index.skipHash=true` + `GIT_INDEX_FILE` | `discards::record::isolated` | 写しのフック・fsmonitor・改行検査が本体に混ざる |
 | worktree add の進捗 | `--quiet` | `worktrees::add` | 2 秒を超える checkout の `Updating files:` が拒否の頭に付く |
+| 部分破棄の改行 | 作業ツリーのファイルの改行が一様なら、その書き方の `core.autocrlf` を渡す(LF = `input`、CRLF = git が変換した時だけ `true`) | `stage::endings` | `core.autocrlf` の下の `apply -R` がファイル全体を変換し直し、触っていない行まで改行が変わる |
+| 部分操作の mode | 部分 patch から `old mode` / `new mode` の対を落とす(ユーザー決定。デザイン規約 §mode の変更) | `patch::header::fitted` | 対があると `apply` がその mode を当て、選んだ行と一緒に実行ビットが動く(アンステージがステージ済みの `+x` を戻す) |
 | pathspec の魔法 | 各パスを `:(literal)` で包む(`GIT_LITERAL_PATHSPECS` は使わない —— git 内部の pathspec まで届き `stash push -u` が untracked を置き忘れる) | `process::literal_pathspec` | `*` `?` `[` を含むファイル名が glob と読まれる |
 
 ### 釘付けない物(意図して利用者の設定に従う)
@@ -204,9 +206,11 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 |---|---|---|---|
 | 読んだ diff の後にファイルが動いた(指紋の不一致・hunk が消えた・apply の後の読み直しが違う) | — / `patch does not apply` | 日常(編集中のファイル) | 報せ `StaleStage/Unstage/Discard`(`Withheld`、ペインは読み直す) |
 | conflict したファイルの一部 | — | ゲート(部分選択を出さない) | 届けば報せ `ConflictedPart` |
+| LFS のポインタ・gitlink の diff の一部 | git は通すが、壊れたポインタが index に入る / 破棄で作業ファイルがポインタの断片や 0 バイトになる / `corrupt patch for submodule` 128 | ゲート(diff は 1 枚 = ファイル単位の操作だけ。mode `160000` と属性 `filter=lfs` で見分け、hunk の上の 1 行が理由を言う) | — |
 | 他の git の `index.lock` | `index.lock': File exists` 128 | 日常(IDE) | 報せ `StageLocked / UnstageLocked / DiscardLocked` |
 | `diff.context=0` | — | 釘付けで起きない | — |
 | `core.safecrlf=true` の変換拒否・その他 | `LF would be replaced by CRLF` 128 | 稀 | ログ |
+| 改行が混ざったファイルの部分破棄(git が改行を変換する所) | git は通すが、触っていない行の改行まで一様に書き直す(渡せる `core.autocrlf` が無い)。git は改行を揃えて比べるので diff にもコミットにも出ない | 稀(基準 3) | 今のまま(ユーザー決定) |
 
 ### worktree(add / remove)・別の worktree の変更の適用
 
