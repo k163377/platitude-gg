@@ -1,18 +1,20 @@
-//! Deterministic interleavings in the shipped holder, with the OS request
-//! replaced by a recorder. The normal holder tests exercise the real API.
+//! Deterministic interleavings in the shipped holder, most with the OS
+//! request replaced by a recorder; the tests that start a holder process
+//! of their own exercise the real API, as the normal holder tests do.
 
 use super::{FakeClaude, claim_file, scratch};
 
-struct OtherBuild(std::process::Child);
+/// A holder process a test started itself, ended with the test.
+struct StartedHolder(std::process::Child);
 
-impl Drop for OtherBuild {
+impl Drop for StartedHolder {
     fn drop(&mut self) {
         super::end_tree(self.0.id());
         let _ = self.0.wait();
     }
 }
 
-fn other_build(dir: &std::path::Path) -> OtherBuild {
+fn other_build(dir: &std::path::Path) -> StartedHolder {
     use std::os::windows::process::CommandExt;
     let revision = crate::awake::REVISION + 1;
     let script = crate::awake::holder::script(dir, 0).replace(
@@ -38,7 +40,7 @@ fn other_build(dir: &std::path::Path) -> OtherBuild {
     .expect("the other build's name");
     // A session runs the other build too: its hooks were heard.
     heard(dir, revision, crate::awake::now_ms());
-    OtherBuild(child)
+    StartedHolder(child)
 }
 
 /// Stamps `revision`'s hooks as last heard at `at` ms.
@@ -201,9 +203,17 @@ pub(super) const REAL_CLOCK: &str = "public static long Now() { return System.Da
      public static long Ticks() { return System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 1000); }";
 
 /// Runs `body` — the shipped holder — as the holder of `revision` in
-/// `dir`, with the OS request recorded in place of asked (`Last`), its
-/// clock read off `clock`, and the commands in `stubs` replaced; the probe
-/// ends where a stub throws `PROBE_END`, and answers what it printed.
+/// `dir`, with the OS request recorded in place of asked (`Last`, the last
+/// request set), its clock read off `clock`, and the commands in `stubs`
+/// replaced; the probe ends where a stub throws `PROBE_END`, and answers
+/// what it printed. The recorder keeps the thread's request (`Held`), set
+/// to begin with as a holding thread's, and answers it as Windows does — a
+/// call without `ES_CONTINUOUS` changes nothing and answers it — and what
+/// the system counts, in the shapes a test sets:
+/// `Dropped`, the thread's request uncounted until the request changes;
+/// `Stuck`, uncounted however it changes; `Deaf`, a count that shows no
+/// request at all. A request kept on a thread of its own (`Kept`) is
+/// counted unless the count is deaf.
 pub(super) fn probe(
     dir: &std::path::Path,
     revision: u32,
@@ -213,7 +223,7 @@ pub(super) fn probe(
 ) -> String {
     let script = format!(
         r#"$ErrorActionPreference = 'Stop'
-Add-Type 'public static class PggAwake {{ public static uint Last=2147483649; public static uint SetThreadExecutionState(uint flags) {{ Last=flags; return 1; }} {clock} }}'
+Add-Type 'public static class PggAwake {{ public static uint Last=2147483649; public static uint Held=2147483649; public static bool Dropped; public static bool Stuck; public static bool Deaf; public static bool Kept; public static uint SetThreadExecutionState(uint flags) {{ uint was=Held; if ((flags & 2147483648u) != 0) {{ if (flags != Held) {{ Dropped=false; }} Held=flags; Last=flags; }} return was; }} public static uint SystemState() {{ if (Deaf) {{ return 0u; }} if (Kept) {{ return 1u; }} return (Dropped || Stuck) ? 0u : Held & 1u; }} public static void Keep() {{ Kept=true; }} public static void Unkeep() {{ Kept=false; }} {clock} }}'
 {stubs}
 [IO.File]::WriteAllText('{}', "$PID")
 try {{
@@ -519,6 +529,289 @@ fn a_new_holder_build_reads_the_existing_activity_protocol() {
     );
 }
 
+/// What a holder of a working claim does over a reading for each of
+/// `steps` and one more, `steps[i]` run before the reading after its
+/// `i`-th wait — a shape of the recorder's count, or the claim rewritten
+/// (`{owner}` names its owner): what the thread, the system's count and a
+/// kept request stand at at each wait (`AT<i> HELD=… SYSTEM=… KEPT=…`), and
+/// the history. It starts holding (`held`), or sets the hold itself at its
+/// first reading, after `before` has shaped the count.
+fn readings(stem: &str, held: bool, before: &str, steps: &[&str]) -> (String, Vec<String>) {
+    let (dir, claude) = working(stem);
+    let mut body = shipped(&dir, crate::awake::REVISION, "");
+    if held {
+        body = body.replace("$holding = $false", "$holding = $true");
+    }
+    let owner = claude.pid().to_string();
+    let cases: String = steps
+        .iter()
+        .enumerate()
+        .map(|(at, step)| format!("    {at} {{ {} }}\n", step.replace("{owner}", &owner)))
+        .collect();
+    let stubs = format!(
+        "{before}\n$script:readings = 0\n\
+         function Wait-Event {{\n  param($Timeout)\n  \
+           [Console]::WriteLine('AT' + $script:readings + ' HELD=' + [PggAwake]::Held + ' SYSTEM=' + [PggAwake]::SystemState() + ' KEPT=' + [PggAwake]::Kept)\n  \
+           if ($script:readings -ge {}) {{ throw 'PROBE_END' }}\n  \
+           switch ($script:readings) {{\n{cases}  }}\n  \
+           $script:readings++\n  return 'a claim changed'\n}}",
+        steps.len()
+    );
+    let said = probe(&dir, crate::awake::REVISION, REAL_CLOCK, &stubs, &body);
+    (said, super::told(&dir))
+}
+
+/// The claim of `readings`' session written `state` under the lock, as a
+/// hook writes it.
+fn rewritten(state: &str) -> String {
+    format!(
+        "$guard = Enter-Lock; try {{ [IO.File]::WriteAllText(\"$dir\\{}\", \"r1 {state} {{owner}} $([PggAwake]::Now()) a 0 - - -\") }} finally {{ Exit-Lock $guard }}",
+        claim_file("s")
+    )
+}
+
+/// A request that stops being counted while the holder holds the machine,
+/// with nothing said, is asked for again at the holder's next reading: the
+/// thread's request gone, the request set and uncounted until it changes,
+/// or uncounted however it changes, which a request kept on a thread of
+/// its own mends. The history says what the holder found.
+#[test]
+fn a_request_that_stops_being_counted_is_asked_again() {
+    for (stem, drop, kept, lost) in [
+        (
+            "dropped-thread",
+            "[PggAwake]::Held = 2147483648",
+            "False",
+            "lost thread:80000000,system:0,after:1",
+        ),
+        (
+            "dropped-count",
+            "[PggAwake]::Dropped = $true",
+            "False",
+            "lost thread:80000001,system:0,after:1",
+        ),
+        (
+            "dropped-stuck",
+            "[PggAwake]::Stuck = $true",
+            "True",
+            "lost thread:80000001,system:0,after:1",
+        ),
+    ] {
+        let (said, told) = readings(stem, true, "", &[drop]);
+        assert!(
+            said.contains(&format!("AT1 HELD=2147483649 SYSTEM=1 KEPT={kept}")),
+            "{stem}: the request stayed uncounted: {said}"
+        );
+        assert_eq!(told, ["holding turn:s", lost, "quit -"], "{stem}");
+    }
+}
+
+/// A request kept on a thread of its own goes when the holder lets go, and
+/// comes back when it holds again and its own thread's request is still
+/// not counted — as when the thread's request is not counted from the
+/// start: the hold just set is read at once.
+#[test]
+fn a_kept_request_goes_with_the_hold_and_comes_back_with_it() {
+    let lost = "lost thread:80000001,system:0,after:1";
+    let (said, told) = readings(
+        "kept-cycle",
+        true,
+        "",
+        &[
+            "[PggAwake]::Stuck = $true",
+            &rewritten("idle"),
+            &rewritten("working"),
+        ],
+    );
+    for (at, stands) in [
+        "HELD=2147483649 SYSTEM=1 KEPT=True",
+        "HELD=2147483648 SYSTEM=0 KEPT=False",
+        "HELD=2147483649 SYSTEM=1 KEPT=True",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert!(said.contains(&format!("AT{} {stands}", at + 1)), "{said}");
+    }
+    assert_eq!(
+        told,
+        [
+            "holding turn:s",
+            lost,
+            "released -",
+            "holding turn:s",
+            lost,
+            "quit -"
+        ],
+        "{said}"
+    );
+    let (said, told) = readings(
+        "stuck-before",
+        false,
+        "[PggAwake]::Stuck = $true\n[PggAwake]::Held = 2147483648",
+        &[""],
+    );
+    assert!(
+        said.contains("AT0 HELD=2147483649 SYSTEM=1 KEPT=True"),
+        "{said}"
+    );
+    assert_eq!(told, ["holding turn:s", lost, "quit -"], "{said}");
+}
+
+/// A loss nothing mends — not a request kept apart either: the count has
+/// stopped showing any — is one line, however many readings find it, and
+/// the count is not read for losses again; nor is a count that showed
+/// nothing of the hold just set, from its own thread or one apart.
+#[test]
+fn a_loss_is_told_once_and_a_count_that_shows_nothing_is_not_read() {
+    let (said, told) = readings(
+        "deaf-after",
+        true,
+        "",
+        &["[PggAwake]::Deaf = $true", "", ""],
+    );
+    assert!(
+        said.contains("AT3 HELD=2147483649 SYSTEM=0 KEPT=False"),
+        "{said}"
+    );
+    assert_eq!(
+        told,
+        [
+            "holding turn:s",
+            "lost thread:80000001,system:0,after:0",
+            "quit -"
+        ],
+        "{said}"
+    );
+    let (said, told) = readings(
+        "deaf-before",
+        false,
+        "[PggAwake]::Deaf = $true\n[PggAwake]::Held = 2147483648",
+        &["", "", ""],
+    );
+    assert!(
+        said.contains("AT3 HELD=2147483649 SYSTEM=0 KEPT=False"),
+        "{said}"
+    );
+    assert_eq!(told, ["holding turn:s", "quit -"], "{said}");
+}
+
+/// The same with the real request: a holder whose own request is let go
+/// of behind its back sets it again, as Windows answers it — the thread's
+/// request, read as each reading ends (`asks`), goes and comes back.
+#[test]
+fn a_real_request_let_go_of_behind_the_holder_is_asked_again() {
+    use std::os::windows::process::CommandExt;
+    let (dir, claude) = working("dropped-real");
+    let asks = dir.join("asks");
+    let script = crate::awake::holder::script(&dir, 0).replace(
+        "    $woken = Wait-Event",
+        &format!(
+            "    if ($holding -and -not $dropped) {{ [void][PggAwake]::SetThreadExecutionState([uint32]2147483648); $dropped = $true }}\n    \
+             if ($holding) {{ [IO.File]::AppendAllText('{}', \"$([PggAwake]::SetThreadExecutionState(0)) \") }}\n    \
+             $woken = Wait-Event",
+            asks.display().to_string().replace('\'', "''")
+        ),
+    );
+    assert!(script.contains("$dropped = $true"), "the drop is in place");
+    let path = dir.join("dropped.ps1");
+    std::fs::write(&path, script).expect("the holder's script");
+    let holder = {
+        let _held = crate::awake::lock(&dir).expect("its name is in place before it reads");
+        let child = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-File"])
+            .arg(&path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .creation_flags(0x0800_0000)
+            .spawn()
+            .expect("the holder starts");
+        std::fs::write(crate::awake::holder_path(&dir), child.id().to_string()).expect("its name");
+        StartedHolder(child)
+    };
+    observed(&dir, crate::awake::REVISION, "holding", 0);
+    let set_at = || {
+        let _held = crate::awake::lock(&dir).expect("the lock");
+        let named = std::fs::read_to_string(crate::awake::holder_path(&dir)).expect("its name");
+        let at: u64 = named
+            .split_whitespace()
+            .nth(4)
+            .and_then(|at| at.parse().ok())
+            .expect("when it last set its request");
+        at
+    };
+    let first = set_at();
+    // A claim rewritten wakes the reading that finds the request gone.
+    super::planted(
+        &dir,
+        &dir.join(claim_file("s")),
+        &format!(
+            "r1 working {} {} a 0 - - -",
+            claude.pid(),
+            crate::awake::now_ms()
+        ),
+    );
+    let asked = crate::wait::until(
+        "the thread's request set again",
+        || std::fs::read_to_string(&asks).unwrap_or_default(),
+        |asked| asked.contains("2147483648 2147483649"),
+    );
+    let told = {
+        let _held = crate::awake::lock(&dir).expect("the lock");
+        super::told(&dir)
+    };
+    assert!(
+        told.iter()
+            .any(|said| said.starts_with("lost thread:80000000,system:")),
+        "Windows answered something else for the request let go of: {told:?} ({asked})"
+    );
+    assert!(
+        set_at() > first,
+        "the request set again kept its first time"
+    );
+    drop(holder);
+}
+
+/// The thread a request is kept on, on the real API: kept, let go, kept
+/// again and let go, each at once — the holder waits on both under its
+/// lock — and letting go of none is nothing.
+#[test]
+fn a_request_kept_apart_starts_and_ends_on_the_real_api() {
+    let dir = scratch("kept-real");
+    let script = crate::awake::holder::script(&dir, 0);
+    let from = script.find("Add-Type").expect("the holder's type");
+    let to = script[from..].find("\n'@").expect("its end") + from + 3;
+    let probe = format!(
+        "$ErrorActionPreference = 'Stop'\n{}\n\
+         [PggAwake]::Unkeep(); [PggAwake]::Keep(); [PggAwake]::Unkeep(); \
+         [PggAwake]::Keep(); [PggAwake]::Keep(); [PggAwake]::Unkeep(); [PggAwake]::Unkeep()\n\
+         [Console]::WriteLine('DONE')",
+        &script[from..to]
+    );
+    let path = dir.join("kept.ps1");
+    std::fs::write(&path, probe).expect("the probe");
+    let mut child = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-File"])
+        .arg(&path)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("the probe starts");
+    let ended = crate::wait::until(
+        "the kept request's thread to start and end",
+        || child.try_wait().expect("the probe's state"),
+        Option::is_some,
+    );
+    let out = child.wait_with_output().expect("the probe's output");
+    assert!(
+        ended.is_some_and(|status| status.success())
+            && String::from_utf8_lossy(&out.stdout).contains("DONE"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 /// A working claim of a live Claude process, so that no holder quits for
 /// want of claims, and the process that keeps it alive.
 fn working(stem: &str) -> (super::super::Scratch, FakeClaude) {
@@ -580,7 +873,8 @@ fn a_quiet_build_s_holder_steps_down_for_one_in_use() {
 #[test]
 fn codex_activity_is_handed_only_to_a_capable_holder() {
     let revision = crate::awake::REVISION;
-    for (other, must_stay) in [(revision - 1, true), (revision + 1, false)] {
+    let incapable = crate::awake::CODEX_HANDOFF_REVISION - 1;
+    for (other, must_stay) in [(incapable, true), (revision + 1, false)] {
         let dir = scratch("codex-retire");
         let codex = FakeClaude::start_as(&dir, "codex.exe");
         std::fs::write(

@@ -797,7 +797,10 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       the turn stops, and each tool call from its start to its end, with
       whether a person is asked about it; a holder with no window, one
       per revision of its script, reading while any claim stands, asks
-      the system, never the display, to stay up while any counts. A
+      the system, never the display, to stay up while any counts — and
+      asks again whenever a reading finds the request no longer counted,
+      which can happen unsaid (seen once after a sleep started through
+      the API; what lets it go is not known). A
       working claim counts while one of its own calls runs (open, no
       result yet, no person asked — however long it runs), or for an
       hour after its last hook while none is open — never while its open
@@ -805,12 +808,16 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       on the user interrupting the turn. A subagent stopped from outside
       runs no SubagentStop: its claim goes once its session's transcript
       records its stop (a background task's notice naming it, or the
-      result of the call it runs under). A notice (a background task's
-      end, another session's message) written into a session's
-      transcript since its last hook starts a turn: the holder marks the
-      claim working from it, until the turn's Stop. An MCP server's
-      pending request for input holds up one of the session's running
-      calls on that server, and its answer frees that one request alone.
+      result of the call it runs under); one with a call and neither a
+      transcript nor a .meta.json of its own, of a session that keeps
+      its transcript — Claude Code's own, run between turns — stops as
+      a reading finds it. A notice (a
+      background task's end, another session's message) written into a
+      session's transcript since its last hook starts a turn: the holder
+      marks the claim working from it, until the turn's Stop. An MCP
+      server's pending request for input holds up one of the session's
+      running calls on that server, and its answer frees that one
+      request alone.
       No hook says when a person lets a call through, nor when a tool
       the desktop app runs asks a person itself: each holder reads
       those, best-effort, off the desktop app's own log
@@ -833,8 +840,9 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       higher revision — stands; the last one standing never does. The
       directory's lock is held for its files alone. The holders keep
       what each asked for, when, and on whose account in .awake/history
-      — a line each time a verdict or the claims it stands on change —
-      for a sleep, or the want of one, to be set against afterwards.
+      — a line each time a verdict or the claims it stands on change,
+      and one for each hold found no longer counted (lost) — for a
+      sleep, or the want of one, to be set against afterwards.
       Prints the claims as written, each holder's last verdict, when
       its build's hooks last ran, the last line it wrote in the
       history, and what it last made of the desktop app's log. The

@@ -25,7 +25,11 @@
 //! A subagent stopped from outside runs no SubagentStop: its claim goes,
 //! and its open calls end, once its session's transcript records its stop
 //! after its last hook — a background task's notice naming it, or the
-//! result of the call it runs under (the holder says how).
+//! result of the call it runs under (the holder says how). One that has
+//! made a call with neither its transcript nor its `.meta.json` written,
+//! its session's own standing, is Claude Code's own, run between turns,
+//! that says nothing of its end: it stops as the holder finds it, and
+//! stays stopped.
 //!
 //! A notice written into a session's transcript since its claim's last
 //! hook — a background task's end, another session's message — starts a
@@ -65,9 +69,11 @@
 //! One holder per [`REVISION`] (`holder-r<n>`), a PowerShell with no
 //! window, reads the shared protocol's claims while any stands, asks
 //! `ES_SYSTEM_REQUIRED` — never the display, which the power plan turns off
-//! as usual — while any counts, lets go while none does, and quits once no
-//! compatible claim is left. The claims are every build's, so a holder
-//! also steps down once the hooks of its own build have been quiet for
+//! as usual — while any counts, asks again whenever a reading finds the
+//! request no longer counted (one set once can stop counting, unsaid),
+//! lets go while none does, and quits once no compatible claim is left.
+//! The claims are every build's, so a holder also steps down once the
+//! hooks of its own build have been quiet for
 //! [`RETIRE_AFTER`] while a holder of another build stands whose hooks
 //! have not — or, when every build's hooks are quiet, one of a higher
 //! revision: the holder of a build no session runs any more goes, the last
@@ -176,7 +182,7 @@ const AGENT: char = '~';
 /// The holder implementation, independent of the activity protocol.
 /// A script change raises this; compatible builds still update the same
 /// claims, so a Stop or a question reaches every holder reading them.
-const REVISION: u32 = 16;
+const REVISION: u32 = 19;
 /// A Codex handoff requires a holder that accounts for its independent
 /// child agents. An older holder can count delegated work twice.
 #[cfg(windows)]
@@ -660,8 +666,9 @@ fn show_holders(dir: &Path) {
 }
 
 /// The last line the holder of `revision` running as `pid` wrote in the
-/// history: when, in milliseconds since the epoch, and its verdict and
-/// reasons. Another holder's lines — a build's before this one, one that
+/// history: when, in milliseconds since the epoch, and what it said — a
+/// verdict and its reasons, or a hold it found lost. Another holder's
+/// lines — a build's before this one, one that
 /// lost the name and quit after — are not its.
 fn last_told(dir: &Path, revision: &str, pid: &str) -> Option<(u64, String)> {
     let text = std::fs::read_to_string(dir.join(HISTORY)).ok()?;

@@ -113,9 +113,30 @@ const DELEGATED: &str = "'Agent', 'Task'";
 /// session counts — past its stop, or let through a prompt) and
 /// `wake:<session>` (a wake-up scheduled); `-` stands for a hold kept
 /// because the claims changed under the reading. They change with a
-/// turn's start and end, not with each call. A line that could not be
-/// written is written at the next reading. The file is cut back to its
-/// newer half at [`HISTORY_BYTES`].
+/// turn's start and end, not with each call. `… lost
+/// thread:<hex>,system:<hex>,after:<hex>` is a hold a reading found no
+/// longer counted, or a hold just set that it did not count, and asked for
+/// again: what the holder's thread asked for, what the system counted, and
+/// what it counted after — a line a loss, however many readings find it,
+/// after the verdict's line of its reading. A line that could not be written
+/// is written at the next reading. The file is cut back to its newer half
+/// at [`HISTORY_BYTES`].
+///
+/// A request once set can stop being counted, with nothing said: after a
+/// sleep started through the API, which no request stops, the request of a
+/// thread still alive and asking is counted for nothing, and the machine
+/// idle-sleeps under it (one case; what lets it go is not known). Each
+/// reading of a held machine reads what the thread asks for — a call
+/// without `ES_CONTINUOUS` changes nothing and answers it — and what the
+/// system counts, and asks again when either has dropped the hold: letting
+/// go first, so that the request changes, which takes nothing while
+/// nothing is counted. A hold the count does not show — just asked for
+/// again, or just set — is asked for from a thread of its own, kept until
+/// the holder lets go; one the count shows from neither thread is a count
+/// that shows no request, and then only the thread's request is read, until
+/// the holder next sets its hold. The system's count takes in every
+/// process's request: another's hides this one's loss until it lets go. A
+/// reading that cannot ask the system takes the hold for counted.
 ///
 /// A file another process holds open — a scanner, a reader that lets
 /// others only read — costs a reading at most, never the holder's run: a
@@ -143,7 +164,19 @@ const DELEGATED: &str = "'Agent', 'Task'";
 /// its `.meta.json` names (`toolUseId`) — other than a background start's
 /// acknowledgement (`async_launched`). Its claim goes and its open calls
 /// end then, as a SubagentStop would have done; one sent on later claims
-/// again with its next hook. A call still open is never timed out.
+/// again with its next hook. A call still open is never timed out. A
+/// subagent with a call and neither its transcript nor its `.meta.json`
+/// written, of a session whose own transcript stands — a session that
+/// keeps none keeps none for its subagents either — is none the Agent tool
+/// started, which writes both before its subagent's first call, but one
+/// Claude Code runs of its own between turns, which runs no stop of any
+/// kind (measured): nothing will say it
+/// ended, so it has stopped as the reading finds it, and what its shell
+/// calls started runs on as any stopped subagent's does. The holder keeps
+/// it stopped: a claim it writes again — a call's end hook writes one —
+/// goes at the next reading, call or no call. Before its first call it
+/// counts as a subagent starting does: the Agent tool's writes its
+/// `.meta.json` just after its start.
 ///
 /// The session's transcript tells what no hook of this repository is sure
 /// to. A turn the user interrupts — at a prompt, too: turning a tool down
@@ -169,6 +202,30 @@ using System;
 using System.Runtime.InteropServices;
 public static class PggAwake {
   [DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint flags);
+  [DllImport("powrprof.dll")] static extern uint CallNtPowerInformation(int level, IntPtr input, uint size, out uint state, uint outputSize);
+  public static uint SystemState() { uint state; return CallNtPowerInformation(16, IntPtr.Zero, 0, out state, 4) == 0 ? state : 1u; }
+  static System.Threading.Thread keeper;
+  static System.Threading.ManualResetEvent free;
+  public static void Keep() {
+    Unkeep();
+    var held = new System.Threading.ManualResetEvent(false);
+    var go = new System.Threading.ManualResetEvent(false);
+    var thread = new System.Threading.Thread(() => { SetThreadExecutionState(@HOLD@u); held.Set(); go.WaitOne(); SetThreadExecutionState(@LET_GO@u); });
+    thread.IsBackground = true;
+    thread.Start();
+    held.WaitOne();
+    held.Dispose();
+    keeper = thread;
+    free = go;
+  }
+  public static void Unkeep() {
+    if (keeper == null) { return; }
+    free.Set();
+    keeper.Join();
+    free.Dispose();
+    keeper = null;
+    free = null;
+  }
   [DllImport("kernel32.dll")] static extern void GetSystemTimePreciseAsFileTime(out long time);
   public static long Now() { long time; GetSystemTimePreciseAsFileTime(out time); return (time - 116444736000000000L) / 10000; }
   public static long Ticks() { return System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 1000); }
@@ -187,6 +244,10 @@ $applied = 0
 $readat = 0
 $told = $null
 $toldWhy = ''
+$unsaid = ''
+$lost = $false
+$reflects = $true
+$unwritten = @{}
 $paced = [int64]0
 $script:tails = @{}
 @PROCESSES@
@@ -340,6 +401,20 @@ function Get-Stop($transcript, $agent) {
   }
   return $stop
 }
+function Test-Unwritten($transcript) {
+  if ((-not $transcript) -or ($transcript -eq '-')) { return $false }
+  $parent = [IO.Path]::GetDirectoryName([IO.Path]::GetDirectoryName($transcript)) + '.jsonl'
+  $meta = [IO.Path]::ChangeExtension($transcript, '.meta.json')
+  if (-not (Test-Path -LiteralPath $parent)) { return $false }
+  return -not ((Test-Path -LiteralPath $transcript) -or (Test-Path -LiteralPath $meta))
+}
+function Find-Counted {
+  if (([PggAwake]::SystemState() -band 1) -ne 0) { return $true }
+  [PggAwake]::Keep()
+  if (([PggAwake]::SystemState() -band 1) -ne 0) { return $true }
+  [PggAwake]::Unkeep()
+  return $false
+}
 function Get-Children($owner) {
   if ($null -eq $script:spawned) { $script:spawned = Get-Processes }
   if (-not $script:kids.ContainsKey($owner)) { $script:kids[$owner] = @($script:spawned.Children($owner)) }
@@ -410,16 +485,25 @@ try {
         $born = $known
         $ended = @{}
         $stopped = @{}
+        $withCalls = @{}
         foreach ($entry in $entries) {
           $claim, $text, $word, $session, $who, $tail = $entry
           if (-not $ended.ContainsKey($session)) { $ended[$session] = @{}; $stopped[$session] = @{} }
           foreach ($id in $tail.Ended.Keys) { $ended[$session][$id] = $tail.Ended[$id] }
+          if (($who -eq '-') -and ($word[5] -ne '-')) {
+            foreach ($call in $word[5] -split ',') { $withCalls["$session~$(($call -split ':')[0])"] = $true }
+          }
         }
         $counted = @()
         foreach ($entry in $entries) {
           $claim, $text, $word, $session, $who, $tail = $entry
           if ($who -ne '-') {
             $stop = Get-Stop $word[7] $who
+            $agent = "$session~$who"
+            if (($stop -le [int64]$word[2]) -and ($withCalls[$agent] -or $unwritten[$agent]) -and (Test-Unwritten $word[7])) {
+              $stop = $readms
+              $unwritten[$agent] = $true
+            }
             if ($stop -gt [int64]$word[2]) {
               $stopped[$session][$who] = $stop
               $changes += ,@($claim.FullName, $text, $null)
@@ -566,8 +650,31 @@ try {
         if ((Test-Retiring $nowms) -and (Remove-Word $name)) { break }
         if ($keep -ne $holding) {
           if ($keep) { $previous = [PggAwake]::SetThreadExecutionState([uint32]@HOLD@) }
-          else { $previous = [PggAwake]::SetThreadExecutionState([uint32]@LET_GO@) }
-          if ($previous -ne 0) { $holding = $keep; $applied = [PggAwake]::Now() } else { $keep = $holding }
+          else { [PggAwake]::Unkeep(); $previous = [PggAwake]::SetThreadExecutionState([uint32]@LET_GO@) }
+          if ($previous -ne 0) {
+            $holding = $keep
+            $applied = [PggAwake]::Now()
+            $lost = $false
+            if ($keep) {
+              $system = [PggAwake]::SystemState()
+              $reflects = Find-Counted
+              if ($reflects -and (($system -band 1) -eq 0)) {
+                $unsaid = 'thread:{0:x},system:{1:x},after:{2:x}' -f [PggAwake]::SetThreadExecutionState(0), $system, [PggAwake]::SystemState()
+                $lost = $true
+              }
+            }
+          } else { $keep = $holding }
+        } elseif ($holding) {
+          $had = [PggAwake]::SetThreadExecutionState(0)
+          $system = [PggAwake]::SystemState()
+          if (($had -ne [uint32]@HOLD@) -or ($reflects -and (($system -band 1) -eq 0))) {
+            [void][PggAwake]::SetThreadExecutionState([uint32]@LET_GO@)
+            $previous = [PggAwake]::SetThreadExecutionState([uint32]@HOLD@)
+            $applied = [PggAwake]::Now()
+            if ($reflects) { $reflects = Find-Counted }
+            if (-not $lost) { $unsaid = 'thread:{0:x},system:{1:x},after:{2:x}' -f $had, $system, [PggAwake]::SystemState() }
+            $lost = $true
+          } else { $lost = $false }
         }
         $verdict = 'released'
         if ($keep) { $verdict = 'holding' }
@@ -577,6 +684,7 @@ try {
           $told = $keep
           $toldWhy = $reasons
         }
+        if ($unsaid -and (Add-History 'lost' $unsaid)) { $unsaid = '' }
         Write-Word $name "$me $verdict $readat $previous $applied"
         $transport='polling'
         if ($desktopWatch -and $desktopWatch.EnableRaisingEvents) { $transport='file-events' }
@@ -595,6 +703,7 @@ try {
     Get-Event | Remove-Event
   }
 } finally {
+  [PggAwake]::Unkeep()
   [void][PggAwake]::SetThreadExecutionState([uint32]@LET_GO@)
   try {
     $parting = Enter-Lock

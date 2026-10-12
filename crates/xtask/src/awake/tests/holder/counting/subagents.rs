@@ -3,9 +3,9 @@
 //! session's turn.
 
 use super::{
-    FakeClaude, INTERRUPTED, TURNED_DOWN, append, asked, calling, claim_file, ended, holding,
-    launched, long_ago, next_reading, planted, released, result, scratch, session, start, stopped,
-    subagent_transcript, transcript,
+    FakeClaude, INTERRUPTED, REPLY, TURNED_DOWN, append, asked, calling, claim_file, ended,
+    holding, launched, long_ago, next_reading, planted, released, result, scratch, session, start,
+    stopped, subagent_transcript, transcript,
 };
 use crate::awake::claim::State;
 use crate::awake::{Mark, apply};
@@ -142,6 +142,123 @@ fn a_foreground_subagent_stops_with_the_result_of_its_call() {
         "a subagent whose call has its result held the machine"
     );
     assert!(!dir.join(claim_file("s~a1")).exists());
+}
+
+/// A subagent that has written neither a transcript nor a `.meta.json` of
+/// its own by its first call is none the Agent tool started — those write
+/// both before their first call — but one of Claude Code's own, run between
+/// turns, that runs no stop of any kind (measured): nothing will ever say
+/// it ended. At its call it has stopped, as one stopped from outside has:
+/// its claim goes and its call ends — and it stays stopped when an end hook
+/// of its call writes its claim again. Before its first call it
+/// counts as any subagent starting does, and one with its `.meta.json` and
+/// no transcript yet is the Agent tool's.
+#[test]
+fn a_subagent_that_writes_nothing_of_its_own_stops_at_its_call() {
+    let dir = scratch("agent-unwritten");
+    let claude = FakeClaude::start(&dir);
+    let path = transcript(&dir.join("s.jsonl"), &[REPLY]);
+    apply(
+        &dir,
+        &claim_file("s"),
+        &claude.hook_with(&path),
+        Mark::Prompt,
+    )
+    .expect("claimed");
+    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("the session stops");
+    let unwritten = dir.join("s").join("subagents").join("agent-a9.jsonl");
+    let agent = || claude.agent_hook_with("a9", &unwritten);
+    apply(&dir, &claim_file("s~a9"), &agent(), Mark::Working).expect("its start");
+    assert_eq!(
+        next_reading(&dir),
+        holding(),
+        "a subagent starting, before anything of its own is written, ran unheld"
+    );
+    apply(
+        &dir,
+        &claim_file("s"),
+        &agent(),
+        start("toolu_x", "ToolSearch"),
+    )
+    .expect("its call");
+    assert_eq!(
+        next_reading(&dir),
+        released(),
+        "a subagent that writes nothing of its own held the machine"
+    );
+    assert!(!dir.join(claim_file("s~a9")).exists(), "its claim stood");
+    assert_eq!(session(&dir).calls, [], "its call was not ended");
+    // Its call's end hook writes its claim again, working, with no call.
+    apply(&dir, &claim_file("s~a9"), &agent(), Mark::Working).expect("its end hook");
+    apply(&dir, &claim_file("s"), &agent(), Mark::ToolEnd("toolu_x")).expect("its call's end");
+    assert_eq!(
+        next_reading(&dir),
+        released(),
+        "a stopped subagent that writes nothing held the machine again"
+    );
+    assert!(
+        !dir.join(claim_file("s~a9")).exists(),
+        "its claim written again stood"
+    );
+
+    let unread = subagent_transcript(&dir, "a1", "toolu_ag");
+    let agent = || claude.agent_hook_with("a1", &unread);
+    apply(&dir, &claim_file("s~a1"), &agent(), Mark::Working).expect("the Agent tool's");
+    apply(
+        &dir,
+        &claim_file("s"),
+        &agent(),
+        start("toolu_y", "mcp__docs__search"),
+    )
+    .expect("its call");
+    assert_eq!(
+        next_reading(&dir),
+        holding(),
+        "a subagent with its .meta.json and no transcript yet was taken for one that writes nothing"
+    );
+}
+
+/// A session that keeps no transcript keeps none for its subagents either:
+/// a subagent of its writes nothing of its own and is the Agent tool's all
+/// the same, so its call runs until its end.
+#[test]
+fn a_subagent_of_a_session_that_keeps_no_transcript_runs_its_call() {
+    let dir = scratch("agent-unkept");
+    let claude = FakeClaude::start(&dir);
+    let unkept = dir.join("s.jsonl");
+    apply(
+        &dir,
+        &claim_file("s"),
+        &claude.hook_with(&unkept),
+        Mark::Prompt,
+    )
+    .expect("claimed");
+    apply(
+        &dir,
+        &claim_file("s"),
+        &claude.hook_with(&unkept),
+        Mark::Idle,
+    )
+    .expect("the session stops");
+    let agent = || {
+        claude.agent_hook_with(
+            "a1",
+            &dir.join("s").join("subagents").join("agent-a1.jsonl"),
+        )
+    };
+    apply(&dir, &claim_file("s~a1"), &agent(), Mark::Working).expect("a subagent");
+    apply(
+        &dir,
+        &claim_file("s"),
+        &agent(),
+        start("toolu_x", "mcp__docs__search"),
+    )
+    .expect("its call");
+    assert_eq!(
+        next_reading(&dir),
+        holding(),
+        "a subagent of a session that keeps no transcript was taken for one that writes nothing"
+    );
 }
 
 /// Compatible builds use the same activity protocol for subagents too.
