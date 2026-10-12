@@ -36,7 +36,7 @@ async fn a_row_is_marked_exactly_when_a_remote_reaches_it() {
     let local = work.commit_file_id("c.txt", "three\n", "local");
     let tip = work.commit_file_id("d.txt", "four\n", "local tip");
 
-    let (sink, _session) = open_unawaited(&work);
+    let (sink, session) = open_unawaited(&work);
     sink.wait_for("Opened", |evs| {
         evs.iter()
             .find_map(|e| matches!(e, SessionEvent::Opened { .. }).then_some(()))
@@ -69,6 +69,7 @@ async fn a_row_is_marked_exactly_when_a_remote_reaches_it() {
         "the two commits after the push are ours alone"
     );
     assert!(rows.iter().any(|r| r.oid_hex == pushed && r.published));
+    session.close_and_wait().await;
 }
 
 /// A push from a terminal moves `refs/remotes/...`; the rebuild the refs
@@ -110,4 +111,5 @@ async fn a_push_from_outside_publishes_the_rows_it_reached() {
         .then_some(())
     })
     .await;
+    session.close_and_wait().await;
 }

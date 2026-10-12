@@ -247,7 +247,7 @@ async fn a_push_the_far_side_turns_down_still_leaves_the_upstream_written() {
         Some("refs/remotes/origin/main-renamed"),
         "and the branch is already measured against the name the push was to make"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// What `%(upstream:track)` prints for a local branch: `[gone]` where

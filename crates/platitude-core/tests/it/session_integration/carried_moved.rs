@@ -113,7 +113,7 @@ async fn a_reading_fresher_than_the_page_s_listing_keeps_its_row() {
         repo.git_in(&worktree, &["rev-parse", "HEAD"]).trim(),
         "the row was dropped, or drawn somewhere the worktree is not"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The listing sees the worktree's commit before its reading does: the graph
@@ -189,5 +189,5 @@ async fn a_worktree_that_has_committed_draws_no_row_until_its_reading_catches_up
             "a pass drew the worktree on the commit it had left: {drawn_behind:?}"
         );
     }
-    session.close();
+    session.close_and_wait().await;
 }

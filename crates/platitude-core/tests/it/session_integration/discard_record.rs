@@ -81,7 +81,7 @@ async fn discarded_files_are_on_the_record_and_come_back() {
         "the record, then the restore"
     );
     assert!(listed(&repo).await.is_empty(), "the restore is noted");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A discard git refuses leaves nothing on the record: the copy made first
@@ -106,7 +106,7 @@ async fn a_refused_discard_leaves_no_record() {
 
     assert!(told(&sink).is_empty());
     assert!(listed(&repo).await.is_empty());
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Twenty lines, the third `A` and the seventeenth `B` where asked.
@@ -177,7 +177,7 @@ async fn a_hunk_thrown_away_comes_back_beside_the_one_left() {
         hunks(true, true)
     );
     assert_eq!(told(&sink).last(), Some(&vec![Restored::Whole]));
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A hunk thrown away comes back alone after the file's other hunk was
@@ -202,7 +202,7 @@ async fn a_hunk_thrown_away_comes_back_without_the_one_thrown_away_after() {
         std::fs::read_to_string(repo.path.join("f.txt")).expect("read f.txt"),
         hunks(true, false)
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A hunk discard refused for a diff that moved on leaves nothing on the
@@ -233,7 +233,7 @@ async fn a_hunk_discard_refused_leaves_no_record() {
     );
     assert!(told(&sink).is_empty());
     assert!(listed(&repo).await.is_empty());
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A staged rename thrown away takes its old name along, read off the same
@@ -255,7 +255,7 @@ async fn a_staged_rename_comes_back_with_both_its_names() {
 
     assert_eq!(repo.git(&["status", "--porcelain=v1"]), before);
     assert_eq!(told(&sink).last(), Some(&vec![Restored::Whole]));
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Work thrown away in a linked worktree and brought back from the
@@ -346,8 +346,8 @@ async fn work_brought_back_into_another_worktree_waits_for_its_commit() {
         "f.txt",
         "f came back staged, behind it"
     );
-    session.close();
-    side.close();
+    session.close_and_wait().await;
+    side.close_and_wait().await;
 }
 
 /// A discard that fails after it threw some of the work away still puts
@@ -382,7 +382,7 @@ async fn a_discard_failing_half_way_is_on_the_record() {
         .expect("the restore is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     assert_eq!(repo.git(&["status", "--porcelain=v1"]), "M a.txt");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// `reset --hard` deletes the untracked files in the way of what it writes
@@ -434,7 +434,7 @@ async fn what_a_hard_reset_writes_over_is_copied() {
     }
     assert_eq!(repo.git(&["show", &format!("{copy}:g.txt")]), "mine");
     assert!(!repo.git_ok(&["cat-file", "-e", &format!("{copy}^3:g.txt")]));
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A repository of its own inside the working tree stays where it is
@@ -455,7 +455,7 @@ async fn a_repository_inside_stays_off_the_record() {
 
     assert!(repo.path.join("nested/n.txt").exists());
     assert!(listed(&repo).await.is_empty());
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A worktree on no commit yet takes nothing with it: its removal is no
@@ -498,7 +498,7 @@ async fn a_worktree_on_no_commit_goes_off_the_record() {
         .iter()
         .any(|event| matches!(event, SessionEvent::OpFailed { .. }));
     assert!(!failed);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A write that moves off commits only git's reflogs reach then tells the
@@ -550,7 +550,7 @@ async fn writes_that_leave_commits_behind_tell_the_log() {
         .expect("the move is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     assert_eq!(told(&sink).len(), 3, "only the detached HEAD had d1");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// `top` on `base` on `main`, and `main` one commit on — touching `b.txt`
@@ -598,7 +598,7 @@ async fn branches_the_setting_moves_together_are_one_entry() {
     assert_eq!(write_answer(&sink, id).await, None);
 
     one_rebase_of_both(&repo).await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A rebase moving branches together that stops on a conflict moves them
@@ -627,7 +627,7 @@ async fn branches_moved_together_after_a_stop_are_one_entry() {
     assert!(!repo.git_ok(&["rev-parse", "--verify", "--quiet", "REBASE_HEAD"]));
 
     one_rebase_of_both(&repo).await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Two branches on one tip that one rebase moved together off it onto one
@@ -676,7 +676,7 @@ async fn two_branches_on_one_tip_one_rebase_moved_both_come_back() {
     assert_eq!(write_answer(&sink, id).await, None);
     assert_eq!(repo.git(&["rev-parse", "alias-pgg-restored"]), tip);
     assert_eq!(repo.git(&["rev-parse", "topic-pgg-restored"]), tip);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A branch deleted is on the record with its upstream, and comes back
@@ -712,7 +712,7 @@ async fn a_deleted_branch_is_on_the_record_and_comes_back() {
         "refs/heads/spike"
     );
     assert!(listed(&repo).await.is_empty());
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A stash dropped is on the record, and comes back to the list under its
@@ -745,7 +745,7 @@ async fn a_dropped_stash_is_on_the_record_and_comes_back() {
         repo.git(&["stash", "list", "--format=%gs"]),
         "On main: keep"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// What went from a remote: a branch deleted there, one pushed over, and a
@@ -820,7 +820,7 @@ async fn what_went_from_a_remote_is_on_the_record_and_comes_back_here() {
         .expect("the restore is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     assert_eq!(work.git(&["rev-parse", "over-pgg-restored"]), first.trim());
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A remote's annotated tag goes on the record as the object the remote
@@ -871,7 +871,7 @@ async fn a_remote_annotated_tag_is_recorded_as_the_remote_held_it() {
         .expect("the restore is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     assert_eq!(work.git(&["rev-parse", "refs/tags/v1-pgg-restored"]), v1);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A leased push over a remote's annotated tag puts the object it replaced
@@ -904,5 +904,5 @@ async fn a_tag_pushed_over_is_recorded_as_the_remote_held_it() {
             object: oid(&held),
         }
     );
-    session.close();
+    session.close_and_wait().await;
 }

@@ -53,7 +53,7 @@ async fn concurrent_writes_are_serialized() {
 
     let staged = repo.git(&["diff", "--cached", "--name-only"]);
     assert_eq!(staged.lines().count(), COUNT, "all files staged: {staged}");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A conflicting rebase driven through the session: the stop is answered
@@ -134,7 +134,7 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
     })
     .await;
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "topic extra");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// `stage_conflicted` is `git add` over the unmerged paths and nothing
@@ -207,7 +207,7 @@ async fn marking_the_conflicts_resolved_leaves_the_rest_of_the_tree_alone() {
             .any(|l| l == "bystander.txt"),
         "and is still where it was"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A close loses nothing the queue was already asked for. The running
@@ -287,6 +287,7 @@ async fn a_close_waits_out_the_running_write_and_the_queue() {
         0,
         "the pending count drained with the loop"
     );
+    session.close_and_wait().await;
 }
 
 /// The id the queue hands back is the caller's own, and the events about
@@ -324,7 +325,7 @@ async fn each_ask_is_answered_under_the_id_it_was_given() {
     std::fs::write(&release, b"go").expect("the hook is released");
     assert_eq!(write_answer(&sink, held).await, None, "the commit landed");
     assert_eq!(write_answer(&sink, mine).await, None, "and the branch did");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Taking the branch back a commit runs as a queued write of its own,
@@ -346,7 +347,7 @@ async fn a_reset_moves_the_branch_through_the_write_queue() {
         "main",
         "the branch moved, not just HEAD"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Left out of the pre-merge run: single writes whose only claim beyond
@@ -401,6 +402,6 @@ mod periodic {
 
         assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "add new file");
         assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "feature");
-        session.close();
+        session.close_and_wait().await;
     }
 }

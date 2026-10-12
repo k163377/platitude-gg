@@ -375,6 +375,7 @@ async fn delete_both_refused_by_the_lease_keeps_the_commit_under_the_remote_trac
         work.git_ok(&["merge-base", "--is-ancestor", &shown, "origin/topic"]),
         "and the commit the screen showed is still reached from it"
     );
+    session.close_and_wait().await;
 }
 
 #[tokio::test]

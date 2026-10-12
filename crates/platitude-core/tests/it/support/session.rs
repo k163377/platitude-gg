@@ -1,5 +1,6 @@
 //! What the `RepoSession` tests open, and what they watch it with.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::support::wait::bounded;
@@ -274,22 +275,73 @@ pub fn scenario() -> (TestRepo, String) {
     (repo, head)
 }
 
-pub async fn opened(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
+/// A session a test opened, waited out before the test ends
+/// ([`Self::close_and_wait`]). A git of it still running stands in the
+/// repository's folder, and Windows lets no folder go while a git stands in
+/// it: the `TestRepo` would be left under `target/tmp`, emptied around the
+/// git still running there. Dropped unwaited it fails the test, so a test
+/// that forgets is red whether or not one of its gits happened to be
+/// running. The rest is the session's own (`Deref`).
+pub struct TestSession {
+    session: Arc<RepoSession>,
+    waited: AtomicBool,
+}
+
+impl TestSession {
+    /// Takes over a session the caller opened.
+    pub fn new(session: Arc<RepoSession>) -> Self {
+        Self {
+            session,
+            waited: AtomicBool::new(false),
+        }
+    }
+
+    /// [`RepoSession::close_and_wait`], and the mark that the test made it.
+    pub async fn close_and_wait(&self) {
+        bounded("the session's end", self.session.close_and_wait())
+            .await
+            .expect("the session's runs ended, every end told");
+        self.waited.store(true, Ordering::SeqCst);
+    }
+}
+
+impl std::ops::Deref for TestSession {
+    type Target = Arc<RepoSession>;
+
+    fn deref(&self) -> &Arc<RepoSession> {
+        &self.session
+    }
+}
+
+impl Drop for TestSession {
+    fn drop(&mut self) {
+        // A test already failing is not failed twice.
+        if !std::thread::panicking() {
+            assert!(
+                *self.waited.get_mut(),
+                "a session the test opened was not waited out: end it with \
+                 `close_and_wait().await` (support::session::TestSession)"
+            );
+        }
+    }
+}
+
+pub async fn opened(repo: &TestRepo) -> (Arc<CaptureSink>, TestSession) {
     opened_with(repo, crate::support::exec::isolated()).await
 }
 
 /// [`opened`] without the wait — for a test whose first assertion is about
 /// an event before, or instead of, `Opened`.
-pub fn open_unawaited(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
-    start(repo, crate::support::exec::isolated(), None)
+pub fn open_unawaited(repo: &TestRepo) -> (Arc<CaptureSink>, TestSession) {
+    start(&repo.path, crate::support::exec::isolated(), None)
 }
 
 /// [`open_unawaited`], with the doors into its graph passes in hand — for
 /// the tests that end a pass from inside it.
-pub fn open_with_doors(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>, Arc<PassDoors>) {
+pub fn open_with_doors(repo: &TestRepo) -> (Arc<CaptureSink>, TestSession, Arc<PassDoors>) {
     let doors = Arc::new(PassDoors::default());
     let hooks: Arc<dyn PassHooks> = Arc::clone(&doors) as _;
-    let (sink, session) = start(repo, crate::support::exec::isolated(), Some(hooks));
+    let (sink, session) = start(&repo.path, crate::support::exec::isolated(), Some(hooks));
     (sink, session, doors)
 }
 
@@ -299,8 +351,8 @@ pub fn open_with_doors(repo: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>, 
 pub async fn opened_with(
     repo: &TestRepo,
     exec: platitude_core::process::GitExecutor,
-) -> (Arc<CaptureSink>, Arc<RepoSession>) {
-    let (sink, session) = start(repo, exec, None);
+) -> (Arc<CaptureSink>, TestSession) {
+    let (sink, session) = start(&repo.path, exec, None);
     sink.wait_for("Opened", |evs| {
         evs.iter()
             .any(|e| matches!(e, SessionEvent::Opened { .. }))
@@ -312,15 +364,8 @@ pub async fn opened_with(
 
 /// [`opened`] on another worktree of a repository — a linked
 /// worktree at `path` — as a tab opened there is.
-pub async fn opened_at(path: &std::path::Path) -> (Arc<CaptureSink>, Arc<RepoSession>) {
-    let sink = CaptureSink::new();
-    let session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        path.to_path_buf(),
-        sink.clone(),
-        None,
-    );
+pub async fn opened_at(path: &std::path::Path) -> (Arc<CaptureSink>, TestSession) {
+    let (sink, session) = start(path, crate::support::exec::isolated(), None);
     sink.wait_for("Opened", |evs| {
         evs.iter()
             .any(|e| matches!(e, SessionEvent::Opened { .. }))
@@ -332,19 +377,19 @@ pub async fn opened_at(path: &std::path::Path) -> (Arc<CaptureSink>, Arc<RepoSes
 
 /// `None` doors is how the application opens.
 fn start(
-    repo: &TestRepo,
+    path: &std::path::Path,
     exec: platitude_core::process::GitExecutor,
     doors: Option<Arc<dyn PassHooks>>,
-) -> (Arc<CaptureSink>, Arc<RepoSession>) {
+) -> (Arc<CaptureSink>, TestSession) {
     let sink = CaptureSink::new();
     let session = RepoSession::open(
         exec,
         tokio::runtime::Handle::current(),
-        repo.path.clone(),
+        path.to_path_buf(),
         sink.clone(),
         doors,
     );
-    (sink, session)
+    (sink, TestSession::new(session))
 }
 
 /// The two doors into a graph pass ([`PassHooks`]) that tests drive one

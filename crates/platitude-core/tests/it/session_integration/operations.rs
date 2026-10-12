@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::session::{
-    CaptureSink, PassDoors, open_with_doors, opened, write_answer, write_settled,
+    CaptureSink, PassDoors, TestSession, open_with_doors, opened, write_answer, write_settled,
 };
 use crate::support::wait::bounded;
 use platitude_core::commit::CommitOptions;
@@ -72,26 +72,27 @@ async fn a_pop_behind_an_apply_answers_under_its_own_id() {
         "every read behind the pop landed"
     );
 
-    let events = sink.events.lock().unwrap();
-    let kinds: Vec<OperationKind> = events
-        .iter()
-        .filter_map(|e| match e {
-            SessionEvent::WriteFinished { kind, .. } => Some(*kind),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        kinds,
-        [OperationKind::Stash, OperationKind::Stash],
-        "the kind alone could not have told the two answers apart"
-    );
-    drop(events);
+    {
+        let events = sink.events.lock().unwrap();
+        let kinds: Vec<OperationKind> = events
+            .iter()
+            .filter_map(|e| match e {
+                SessionEvent::WriteFinished { kind, .. } => Some(*kind),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            kinds,
+            [OperationKind::Stash, OperationKind::Stash],
+            "the kind alone could not have told the two answers apart"
+        );
+    }
     assert_eq!(
         repo.git(&["stash", "list"]).lines().count(),
         1,
         "the refused pop kept the entry"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Under each id: start, git's answer, then the settling of the reads it
@@ -113,45 +114,46 @@ async fn each_write_is_settled_before_the_next_one_starts() {
         "every read behind the pop landed"
     );
 
-    let events = sink.events.lock().unwrap();
-    assert_eq!(
-        lifecycle_of(&events, apply),
-        ["started", "finished", "settled"]
-    );
-    assert_eq!(
-        lifecycle_of(&events, pop),
-        ["started", "finished", "settled"]
-    );
+    {
+        let events = sink.events.lock().unwrap();
+        assert_eq!(
+            lifecycle_of(&events, apply),
+            ["started", "finished", "settled"]
+        );
+        assert_eq!(
+            lifecycle_of(&events, pop),
+            ["started", "finished", "settled"]
+        );
 
-    let apply_settled = index_of(
-        &events,
-        |e| matches!(e, SessionEvent::WriteSettled { id, .. } if *id == apply),
-    );
-    let pop_started = index_of(
-        &events,
-        |e| matches!(e, SessionEvent::WriteStarted { id, .. } if *id == pop),
-    );
-    assert!(
-        apply_settled < pop_started,
-        "the queue is serial across the settled boundary"
-    );
+        let apply_settled = index_of(
+            &events,
+            |e| matches!(e, SessionEvent::WriteSettled { id, .. } if *id == apply),
+        );
+        let pop_started = index_of(
+            &events,
+            |e| matches!(e, SessionEvent::WriteStarted { id, .. } if *id == pop),
+        );
+        assert!(
+            apply_settled < pop_started,
+            "the queue is serial across the settled boundary"
+        );
 
-    let pop_finished = index_of(
-        &events,
-        |e| matches!(e, SessionEvent::WriteFinished { id, .. } if *id == pop),
-    );
-    let pop_settled = index_of(
-        &events,
-        |e| matches!(e, SessionEvent::WriteSettled { id, .. } if *id == pop),
-    );
-    assert!(
-        events[pop_finished..pop_settled]
-            .iter()
-            .any(|e| matches!(e, SessionEvent::StashesLoaded { .. })),
-        "the stash listing is one of the reads the settling waits for"
-    );
-    drop(events);
-    session.close();
+        let pop_finished = index_of(
+            &events,
+            |e| matches!(e, SessionEvent::WriteFinished { id, .. } if *id == pop),
+        );
+        let pop_settled = index_of(
+            &events,
+            |e| matches!(e, SessionEvent::WriteSettled { id, .. } if *id == pop),
+        );
+        assert!(
+            events[pop_finished..pop_settled]
+                .iter()
+                .any(|e| matches!(e, SessionEvent::StashesLoaded { .. })),
+            "the stash listing is one of the reads the settling waits for"
+        );
+    }
+    session.close_and_wait().await;
 }
 
 /// A pop is several commands (status reads around the pop itself), and
@@ -176,55 +178,56 @@ async fn every_command_of_a_compound_write_carries_its_id() {
         "every read behind the pop landed"
     );
 
-    let events = sink.events.lock().unwrap();
-    let pop_started = index_of(
-        &events,
-        |e| matches!(e, SessionEvent::WriteStarted { id, .. } if *id == pop),
-    );
-    let pop_finished = index_of(
-        &events,
-        |e| matches!(e, SessionEvent::WriteFinished { id, .. } if *id == pop),
-    );
-    let under_the_pop: Vec<Option<OperationId>> = events[pop_started..pop_finished]
-        .iter()
-        .filter_map(|e| match e {
-            SessionEvent::CommandStarted { operation, .. } => Some(*operation),
-            _ => None,
-        })
-        .collect();
-    assert!(
-        under_the_pop.len() >= 2,
-        "a pop is at least the status read and the pop: {under_the_pop:?}"
-    );
-    assert!(
-        under_the_pop.iter().all(|op| *op == Some(pop)),
-        "every command between the pop's boundaries is the pop's: {under_the_pop:?}"
-    );
-    let under = |id: OperationId| {
-        events
+    {
+        let events = sink.events.lock().unwrap();
+        let pop_started = index_of(
+            &events,
+            |e| matches!(e, SessionEvent::WriteStarted { id, .. } if *id == pop),
+        );
+        let pop_finished = index_of(
+            &events,
+            |e| matches!(e, SessionEvent::WriteFinished { id, .. } if *id == pop),
+        );
+        let under_the_pop: Vec<Option<OperationId>> = events[pop_started..pop_finished]
             .iter()
-            .filter(|e| {
-                matches!(e, SessionEvent::CommandStarted { operation, .. } if *operation == Some(id))
+            .filter_map(|e| match e {
+                SessionEvent::CommandStarted { operation, .. } => Some(*operation),
+                _ => None,
             })
-            .count()
-    };
-    assert!(under(apply) >= 2, "the apply is several commands too");
-    assert_eq!(
-        events
-            .iter()
-            .filter(|e| matches!(
-                e,
-                SessionEvent::CommandStarted {
-                    operation: None,
-                    ..
-                }
-            ))
-            .count(),
-        0,
-        "nothing in the log ran under no write"
-    );
-    drop(events);
-    session.close();
+            .collect();
+        assert!(
+            under_the_pop.len() >= 2,
+            "a pop is at least the status read and the pop: {under_the_pop:?}"
+        );
+        assert!(
+            under_the_pop.iter().all(|op| *op == Some(pop)),
+            "every command between the pop's boundaries is the pop's: {under_the_pop:?}"
+        );
+        let under = |id: OperationId| {
+            events
+                .iter()
+                .filter(|e| {
+                    matches!(e, SessionEvent::CommandStarted { operation, .. } if *operation == Some(id))
+                })
+                .count()
+        };
+        assert!(under(apply) >= 2, "the apply is several commands too");
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| matches!(
+                    e,
+                    SessionEvent::CommandStarted {
+                        operation: None,
+                        ..
+                    }
+                ))
+                .count(),
+            0,
+            "nothing in the log ran under no write"
+        );
+    }
+    session.close_and_wait().await;
 }
 
 /// A detached worktree made in a terminal reaches the graph only
@@ -297,7 +300,7 @@ async fn a_write_is_not_settled_until_the_reads_its_listings_asked_for_have_land
         write_settled(&sink, id).await.is_empty(),
         "settled once the walk landed, with every read landed"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The settling names the failed read under the write's id, where the
@@ -330,14 +333,14 @@ async fn a_read_that_failed_is_named_under_the_writes_own_id() {
         sink.count(|e| matches!(e, SessionEvent::OpFailed { op: "log", .. })) >= 1,
         "the failure itself still reaches the error surface"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// One commit and a staged change, opened with the doors into its passes
 /// and the opening's passes over — so the next pass at a door is the
 /// write's. A commit then moves both tree and ref, so its rebuild really
 /// changes the graph.
-async fn staged_with_doors() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, Arc<PassDoors>) {
+async fn staged_with_doors() -> (TestRepo, Arc<CaptureSink>, TestSession, Arc<PassDoors>) {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "base\n", "root");
     repo.write_file("f.txt", "changed\n");
@@ -427,28 +430,29 @@ async fn a_write_waits_for_the_rebuild_that_took_its_own_over() {
         "the replacement landed, and the write reads its answer as its own"
     );
 
-    let events = sink.events.lock().unwrap();
-    // The write's own pass was taken over and published nothing, so the
-    // one picture after its answer is the replacement's.
-    let answered = index_of(
-        &events,
-        |e| matches!(e, SessionEvent::WriteFinished { id: got, .. } if *got == id),
-    );
-    let replaced = answered
-        + index_of(&events[answered..], |e| {
-            matches!(e, SessionEvent::LogReplaced { .. })
-        });
-    let settled = index_of(
-        &events,
-        |e| matches!(e, SessionEvent::WriteSettled { id: got, .. } if *got == id),
-    );
-    assert!(
-        replaced < settled,
-        "the write settled only once the parked rebuild had published, \
-         which nothing before the release could have done"
-    );
-    drop(events);
-    session.close();
+    {
+        let events = sink.events.lock().unwrap();
+        // The write's own pass was taken over and published nothing, so the
+        // one picture after its answer is the replacement's.
+        let answered = index_of(
+            &events,
+            |e| matches!(e, SessionEvent::WriteFinished { id: got, .. } if *got == id),
+        );
+        let replaced = answered
+            + index_of(&events[answered..], |e| {
+                matches!(e, SessionEvent::LogReplaced { .. })
+            });
+        let settled = index_of(
+            &events,
+            |e| matches!(e, SessionEvent::WriteSettled { id: got, .. } if *got == id),
+        );
+        assert!(
+            replaced < settled,
+            "the write settled only once the parked rebuild had published, \
+             which nothing before the release could have done"
+        );
+    }
+    session.close_and_wait().await;
 }
 
 /// The request behind the write does not start until the rebuild that took
@@ -499,26 +503,27 @@ async fn the_queue_holds_the_next_write_until_the_replacement_has_landed() {
         "and the write behind it ran once it could"
     );
 
-    let events = sink.events.lock().unwrap();
-    let answered = index_of(
-        &events,
-        |e| matches!(e, SessionEvent::WriteFinished { id: got, .. } if *got == id),
-    );
-    let replaced = answered
-        + index_of(&events[answered..], |e| {
-            matches!(e, SessionEvent::LogReplaced { .. })
-        });
-    let started = index_of(
-        &events,
-        |e| matches!(e, SessionEvent::WriteStarted { id: got, .. } if *got == behind),
-    );
-    assert!(
-        replaced < started,
-        "the queue took the next write only once the rebuild the commit \
-         was waiting on had published"
-    );
-    drop(events);
-    session.close();
+    {
+        let events = sink.events.lock().unwrap();
+        let answered = index_of(
+            &events,
+            |e| matches!(e, SessionEvent::WriteFinished { id: got, .. } if *got == id),
+        );
+        let replaced = answered
+            + index_of(&events[answered..], |e| {
+                matches!(e, SessionEvent::LogReplaced { .. })
+            });
+        let started = index_of(
+            &events,
+            |e| matches!(e, SessionEvent::WriteStarted { id: got, .. } if *got == behind),
+        );
+        assert!(
+            replaced < started,
+            "the queue took the next write only once the rebuild the commit \
+             was waiting on had published"
+        );
+    }
+    session.close_and_wait().await;
 }
 
 /// The settling names the replacement's failure under the write's id.
@@ -546,7 +551,7 @@ async fn a_write_whose_replacement_failed_says_the_graph_did_not_land() {
         [FollowUp::Graph],
         "the rebuild that replaced the write's own failed, and the write says so by id"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Once the write loop has ended, a request gets no id: nothing would
@@ -578,4 +583,5 @@ async fn a_closed_session_accepts_nothing() {
         0,
         "and nothing was counted for the request that was not taken"
     );
+    session.close_and_wait().await;
 }

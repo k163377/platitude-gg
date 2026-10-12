@@ -134,7 +134,7 @@ async fn a_settled_graph_waits_for_carried_reads_and_their_applied_generation() 
     );
     bounded("the rebuild owner leaving", session.wait_for_graph_passes()).await;
     assert!(session.graph_settled_at(after.generation));
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A pass that landed after the switch would put the worktree's row back up,
@@ -198,7 +198,7 @@ async fn a_pass_in_flight_when_the_worktrees_are_turned_off_lands_nothing() {
         session.refresh_carried().is_none(),
         "and no pass begins while the worktrees are off"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// What the pane was handed, by worktree name, and whether each list was dirty.
@@ -246,7 +246,7 @@ fn listed_path(repo: &mut TestRepo, name: &str) -> String {
 async fn standing_on_the_worktree(
     repo: &mut TestRepo,
     exec: platitude_core::process::GitExecutor,
-) -> (Arc<CaptureSink>, Arc<platitude_core::session::RepoSession>) {
+) -> (Arc<CaptureSink>, crate::support::session::TestSession) {
     let (sink, session) = opened_with(repo, exec).await;
     sink.opening_settled(&session).await;
     bounded("the opening's pass", session.wait_for_carried_pass()).await;
@@ -288,7 +288,7 @@ async fn a_pass_hands_the_pane_the_worktree_it_stands_on() {
         1,
         "{ran:#?}"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A worktree gone clean drops its row, yet the pane standing on it still
@@ -306,7 +306,7 @@ async fn a_worktree_gone_clean_is_handed_its_empty_list() {
     let pass = session.refresh_carried().expect("a pass begins");
     bounded("the pass", pass.outcome()).await;
     assert_eq!(handed(&sink, from), [("worktree".to_string(), false)]);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A pass asked while the pane stood on one worktree, reading after it moved
@@ -349,5 +349,5 @@ async fn a_pass_hands_nothing_to_a_pane_that_moved_on() {
     })
     .await;
     assert_eq!(handed(&sink, from), [("other".to_string(), true)]);
-    session.close();
+    session.close_and_wait().await;
 }

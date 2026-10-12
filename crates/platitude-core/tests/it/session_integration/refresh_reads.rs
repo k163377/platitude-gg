@@ -141,7 +141,7 @@ async fn a_fetch_that_brings_nothing_down_reads_only_the_refs() {
     let ran = commands_since(&sink, from);
     assert_eq!(times(&ran, "status"), 1, "{ran:#?}");
     assert_eq!(times(&ran, "--eol"), 0, "{ran:#?}");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// One that brings nothing still walks where the graph is behind: a walk
@@ -178,7 +178,7 @@ async fn a_fetch_that_brings_nothing_down_walks_a_graph_left_behind() {
             _ => None,
         });
     assert_eq!(stale, Some(false), "the graph caught up");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// One that brings a commit walks once, and lists the stashes once — the
@@ -196,7 +196,7 @@ async fn a_fetch_that_brings_a_commit_down_walks_once() {
     for (needle, expected) in [("log -z", 1), ("status", 1), ("stash list", 1)] {
         assert_eq!(times(&ran, needle), expected, "`{needle}`: {ran:#?}");
     }
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// `Set upstream…` writes two config keys: the refs listing and the status
@@ -221,7 +221,7 @@ async fn setting_an_upstream_walks_nothing() {
     ] {
         assert_eq!(times(&ran, needle), expected, "`{needle}`: {ran:#?}");
     }
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A commit walks once and lists the stashes once: the walk takes the
@@ -243,7 +243,7 @@ async fn a_commit_lists_the_stashes_once() {
     for (needle, expected) in [("log -z", 1), ("stash list", 1), ("worktree list", 1)] {
         assert_eq!(times(&ran, needle), expected, "`{needle}`: {ran:#?}");
     }
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A worktree on no branch is a row only the walk puts there: removing it is
@@ -278,7 +278,7 @@ async fn removing_a_worktree_on_no_branch_walks_once() {
         2,
         "the write's and the listing's: {ran:#?}"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The window coming back after a commit made in a terminal: the refs moved
@@ -305,7 +305,7 @@ async fn coming_back_to_a_commit_made_outside_reads_each_thing_once() {
     ] {
         assert_eq!(times(&ran, needle), expected, "`{needle}`: {ran:#?}");
     }
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Coming back to a repository nothing moved in reads each snapshot once
@@ -323,7 +323,7 @@ async fn coming_back_to_nothing_new_walks_nothing() {
     for (needle, expected) in [("stash list", 1), ("log -z", 0)] {
         assert_eq!(times(&ran, needle), expected, "`{needle}`: {ran:#?}");
     }
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A stash dropped in a terminal moves no ref the refs read lists, nor
@@ -347,7 +347,7 @@ async fn a_stash_dropped_outside_is_walked_off_when_the_window_comes_back() {
         Vec::<String>::new(),
         "the dropped stash is gone"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// This tree's read the window coming back asks for at its pace
@@ -373,7 +373,7 @@ async fn the_paced_read_the_window_asks_for_reads_each_thing_once() {
     ] {
         assert_eq!(times(&ran, needle), expected, "`{needle}`: {ran:#?}");
     }
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A stash dropped in a terminal is walked off by the read the window
@@ -394,7 +394,7 @@ async fn a_stash_dropped_outside_is_walked_off_by_the_paced_read_the_window_asks
         Vec::<String>::new(),
         "the dropped stash is gone"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Paces the page with bounds no read falls due under, asks for this
@@ -491,5 +491,5 @@ async fn a_focus_does_not_walk_a_stash_list_a_newer_one_replaced() {
         Vec::<String>::new(),
         "the focus's walk drew the dropped stash back"
     );
-    session.close();
+    session.close_and_wait().await;
 }

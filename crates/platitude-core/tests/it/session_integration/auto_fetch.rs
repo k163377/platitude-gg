@@ -85,7 +85,7 @@ async fn auto_fetch_runs_on_its_interval_and_stops() {
         !stepped(&ticking, "the stopped timer's refusal").await,
         "turning it off stops the timer, so no further fetch can start"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The application sets the interval from the UI thread, outside any tokio
@@ -109,7 +109,7 @@ async fn the_interval_is_set_from_outside_the_runtime() {
         stepped(&ticker, "a tick of the timer set from outside").await,
         "the timer set from the UI thread runs"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Suspending keeps the interval for resuming, and says whether there was a
@@ -161,7 +161,7 @@ async fn a_suspended_timer_comes_back_on_the_interval_it_had() {
         None,
         "and the fetch it queued ran"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The fetch puts what the remote holds on screen before anything else is
@@ -174,7 +174,7 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
     session.push_current(String::new(), platitude_core::remote::PushForce::None);
 
     caught_up(&sink, &mut origin, &mut clone, &known).await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The same for the push that keeps a renamed branch's remote name
@@ -188,7 +188,7 @@ async fn a_rename_kept_over_there_refused_as_out_of_date_fetches_too() {
     session.point_upstream_and_push("main".into(), "origin".into(), "main".into());
 
     caught_up(&sink, &mut origin, &mut clone, &known).await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A bare origin, a clone that knows it at `known`, and a commit on each
@@ -294,7 +294,7 @@ async fn opening_a_repository_fetches_without_being_asked() {
         OpenFetch::Spent,
         "one to a session: a second ask fires nothing"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The application asks the instant it hands the session its settings,
@@ -324,7 +324,7 @@ async fn an_ask_that_beats_the_opening_is_kept_for_it() {
         origin.git(&["rev-parse", "main"]),
         "the opening redeemed the ask it was holding"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -343,7 +343,7 @@ async fn an_opening_reaches_nothing_where_automatic_fetching_is_off() {
         "",
         "nothing came down: the remote was never reached"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// `fetch --prune --all` with no remote exits clean, so an unasked one
@@ -361,7 +361,7 @@ async fn a_repository_with_no_remote_is_not_fetched_from() {
     sink.opening_snapshots().await;
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
     assert_eq!(session.fetch_on_open(), OpenFetch::NoRemote);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The same where the ask beats the opening — the application's shape — so
@@ -404,7 +404,7 @@ async fn an_ask_held_for_a_local_only_repository_fires_nothing() {
         0,
         "the opening reached for nothing"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Read off the queue: the tick is answered only once acted on and the
@@ -438,7 +438,7 @@ async fn the_timer_queues_nothing_where_there_is_no_remote() {
         0,
         "the tick in front of it queued nothing"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// `git remote add` moves no ref and lands no write here; what notices it
@@ -491,7 +491,7 @@ async fn a_remote_added_outside_the_app_is_picked_up_by_a_poll() {
         origin.git(&["rev-parse", "main"]),
         "the timer fetched from the remote that appeared under it"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A fetch never touches the index or the working tree, so its refresh
@@ -525,52 +525,53 @@ async fn a_fetch_that_brings_nothing_down_reads_no_status() {
     session.fetch(None);
     assert_eq!(write_result(&sink, OperationKind::Fetch).await, None);
 
-    let events = sink.events.lock().unwrap();
-    let ticked: Vec<usize> = events
-        .iter()
-        .enumerate()
-        .filter(|(_, e)| {
-            matches!(
-                e,
-                SessionEvent::WriteStarted {
-                    kind: OperationKind::AutoFetch,
-                    ..
-                }
-            )
-        })
-        .map(|(at, _)| at)
-        .collect();
-    assert_eq!(ticked.len(), 2, "two automatic fetches ran: {events:?}");
-    let asked = events
-        .iter()
-        .position(|e| {
-            matches!(
-                e,
-                SessionEvent::WriteStarted {
-                    kind: OperationKind::Fetch,
-                    ..
-                }
-            )
-        })
-        .expect("the fetch asked for by hand started");
-    let statuses = |from: usize, to: usize| {
-        events[from..to]
+    {
+        let events = sink.events.lock().unwrap();
+        let ticked: Vec<usize> = events
             .iter()
-            .filter(|e| matches!(e, SessionEvent::StatusLoaded { .. }))
-            .count()
-    };
-    assert_eq!(
-        statuses(ticked[0], ticked[1]),
-        1,
-        "the tick that brought a ref down read the status behind it: {events:?}"
-    );
-    assert_eq!(
-        statuses(ticked[1], asked),
-        0,
-        "the tick that brought nothing down read no status: {events:?}"
-    );
-    drop(events);
-    session.close();
+            .enumerate()
+            .filter(|(_, e)| {
+                matches!(
+                    e,
+                    SessionEvent::WriteStarted {
+                        kind: OperationKind::AutoFetch,
+                        ..
+                    }
+                )
+            })
+            .map(|(at, _)| at)
+            .collect();
+        assert_eq!(ticked.len(), 2, "two automatic fetches ran: {events:?}");
+        let asked = events
+            .iter()
+            .position(|e| {
+                matches!(
+                    e,
+                    SessionEvent::WriteStarted {
+                        kind: OperationKind::Fetch,
+                        ..
+                    }
+                )
+            })
+            .expect("the fetch asked for by hand started");
+        let statuses = |from: usize, to: usize| {
+            events[from..to]
+                .iter()
+                .filter(|e| matches!(e, SessionEvent::StatusLoaded { .. }))
+                .count()
+        };
+        assert_eq!(
+            statuses(ticked[0], ticked[1]),
+            1,
+            "the tick that brought a ref down read the status behind it: {events:?}"
+        );
+        assert_eq!(
+            statuses(ticked[1], asked),
+            0,
+            "the tick that brought nothing down read no status: {events:?}"
+        );
+    }
+    session.close_and_wait().await;
 }
 
 /// The panel the first failure raises has to hold the command that raised
@@ -635,5 +636,5 @@ async fn an_unasked_fetch_leaves_a_row_only_when_git_says_no() {
         platitude_core::CommandEnd::Exited(0),
         "the row carries what the fetch actually did"
     );
-    session.close();
+    session.close_and_wait().await;
 }

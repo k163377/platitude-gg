@@ -132,7 +132,7 @@ async fn a_plan_run_under_a_standing_merge_is_refused_before_anything_is_spawned
         "and the settled conflict is where it was left"
     );
     assert_eq!(repo.git(&["stash", "list"]), "", "nothing was stashed");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The carry's own guard, for rewrites with no plan in front: one spawn —
@@ -176,7 +176,7 @@ async fn a_squash_under_a_standing_merge_stops_at_the_carry() {
         "the tip is untouched"
     );
     assert_eq!(repo.git(&["stash", "list"]), "", "nothing was stashed");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The same guard on plain `rebase <upstream>`, under a cherry-pick.
@@ -213,7 +213,7 @@ async fn a_rebase_onto_under_a_standing_cherry_pick_stops_at_the_carry() {
         "the tip is untouched"
     );
     assert_eq!(repo.git(&["stash", "list"]), "", "nothing was stashed");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A bisect stands aside: a stash leaves it running, so the work carries as
@@ -258,5 +258,5 @@ async fn a_dirty_tree_under_a_bisect_still_carries() {
         repo.path.join(".git").join("BISECT_LOG").exists(),
         "and the bisect is still running"
     );
-    session.close();
+    session.close_and_wait().await;
 }

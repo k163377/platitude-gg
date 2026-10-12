@@ -87,7 +87,7 @@ async fn a_branch_delete_reads_the_refs_and_the_graph_and_nothing_else() {
             assert_eq!(times(&ran, "^remote"), 0, "{ran:#?}");
         }
     }
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Under `remote = .` HEAD is measured against a branch here: deleting it
@@ -117,7 +117,7 @@ async fn deleting_the_branch_head_is_measured_against_reads_the_status_again() {
         !last_status(&sink).upstream_tracked,
         "the status behind the delete no longer counts against base"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A remote branch is the same question: HEAD's own upstream is read for,
@@ -145,7 +145,7 @@ async fn a_remote_branch_delete_reads_the_status_only_for_heads_upstream() {
             "the delete of origin/{branch}: {ran:#?}"
         );
     }
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The listing behind a remote branch delete carries the upstream it took
@@ -183,7 +183,7 @@ async fn a_remote_branch_delete_leaves_no_gone_upstream_behind() {
         (topic.upstream.as_str(), topic.upstream_gone.as_str()),
         ("", "")
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A branch of its own on `origin`, tracked here; the commit it went up

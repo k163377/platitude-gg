@@ -88,7 +88,7 @@ async fn open_streams_the_full_pipeline() {
     })
     .await;
 
-    session.close();
+    session.close_and_wait().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -122,7 +122,7 @@ async fn restart_log_delivers_a_new_generation() {
     })
     .await;
 
-    session.close();
+    session.close_and_wait().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -144,7 +144,7 @@ async fn unborn_repository_finishes_with_zero_rows() {
     })
     .await;
 
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A `gh-pages`-shaped ref: a parentless commit only a remote-tracking ref
@@ -197,7 +197,7 @@ async fn an_independent_history_sits_where_its_date_puts_it() {
         "the orphan carries no chip naming it: {:?}",
         seen.labels
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A commit made in a detached worktree: `git log` reads only its own
@@ -242,7 +242,7 @@ async fn a_commit_only_a_detached_worktree_holds_is_a_row_with_its_own_chip() {
         !chip.held_elsewhere,
         "it names no branch, so there is none for anybody to be holding"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Conflicts all resolved as ours: `status` is empty with `MERGE_HEAD`
@@ -289,7 +289,7 @@ async fn a_merge_resolved_as_ours_keeps_the_row_a_clean_tree_would_not() {
         wip.segments
     );
     assert_eq!(rows[&2].oid_hex, theirs, "the side the leash reaches");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The same clean tree, with the side reachable only by `MERGE_HEAD`: the
@@ -324,7 +324,7 @@ async fn a_side_only_merge_head_names_is_never_on_screen_unleashed() {
         "and something reaches it: {:?}",
         rows[&2].segments
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A side no ref names (`git merge <sha>`, a one-off fetch's `FETCH_HEAD`)
@@ -356,7 +356,7 @@ async fn a_side_no_ref_names_still_joins_the_walk() {
         "its dotted edge lands: {:?}",
         rows[&2].segments
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Aborting the merge takes the second dotted edge away: the next commit is
@@ -396,5 +396,5 @@ async fn aborting_the_merge_takes_the_second_dotted_edge_away() {
         "only HEAD is left on a leash: {:?}",
         rows[&0].segments
     );
-    session.close();
+    session.close_and_wait().await;
 }

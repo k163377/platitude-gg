@@ -55,7 +55,7 @@ async fn a_b_a_submitted_before_workers_run_only_reads_the_last_attempt() {
         1,
         "superseded reads never spawned git"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -108,7 +108,7 @@ async fn a_replaced_read_stops_after_entering_the_executor() {
         ),
         1
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 #[tokio::test]
@@ -130,7 +130,7 @@ async fn a_current_failure_and_a_reopened_session_keep_their_request_identity() 
         ),
         1
     );
-    first_session.close();
+    first_session.close_and_wait().await;
     let (_, second_session) = opened(&repo).await;
     let second = second_session.load_details(bad).unwrap();
     assert!(
@@ -141,5 +141,5 @@ async fn a_current_failure_and_a_reopened_session_keep_their_request_identity() 
         bounded("reopened details", second.outcome()).await,
         DetailsOutcome::Failed
     );
-    second_session.close();
+    second_session.close_and_wait().await;
 }

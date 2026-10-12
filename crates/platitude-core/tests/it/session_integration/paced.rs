@@ -137,7 +137,7 @@ async fn a_settled_graph_waits_from_a_paced_worktree_becoming_due_to_its_applied
         "the UI still holds the old generation"
     );
     assert!(session.graph_settled_at(after.generation));
-    session.close();
+    session.close_and_wait().await;
 }
 
 fn paced_reads(events: &[SessionEvent]) -> Vec<Option<String>> {
@@ -172,7 +172,7 @@ async fn a_read_asked_for_now_runs_and_says_so() {
         paced_reads(events).contains(&None).then_some(())
     })
     .await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The listing a paced read takes sees the worktree's commit; the worktree's
@@ -227,7 +227,7 @@ async fn a_worktree_behind_the_listing_is_read_at_the_page_s_pace() {
             .then_some(())
     })
     .await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A worktree's path as `git worktree list` prints it — the spelling the app
@@ -283,7 +283,7 @@ async fn the_window_coming_back_reads_the_pane_s_worktree_and_hands_it_the_list(
         })
         .await;
     assert_eq!(handed_before_the_end, ["worktree".to_string()]);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Worktrees turned back on come back in one pass and one walk: read
@@ -315,18 +315,19 @@ async fn worktrees_turned_back_on_come_back_in_one_walk() {
     )
     .await;
     bounded("its walk", session.wait_for_graph_passes()).await;
-    let events = sink.events.lock().unwrap();
-    let walks = events[from..]
-        .iter()
-        .filter(|e| matches!(e, SessionEvent::CommandStarted { display, .. } if display.contains("log -z")))
-        .count();
-    assert_eq!(walks, 1, "one walk for both rows");
-    let drawn = events[from..]
-        .iter()
-        .rev()
-        .find_map(worktree_rows)
-        .expect("a picture drawn after the worktrees came back");
-    assert_eq!(drawn, 2, "both worktrees' rows are back");
-    drop(events);
-    session.close();
+    {
+        let events = sink.events.lock().unwrap();
+        let walks = events[from..]
+            .iter()
+            .filter(|e| matches!(e, SessionEvent::CommandStarted { display, .. } if display.contains("log -z")))
+            .count();
+        assert_eq!(walks, 1, "one walk for both rows");
+        let drawn = events[from..]
+            .iter()
+            .rev()
+            .find_map(worktree_rows)
+            .expect("a picture drawn after the worktrees came back");
+        assert_eq!(drawn, 2, "both worktrees' rows are back");
+    }
+    session.close_and_wait().await;
 }

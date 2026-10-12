@@ -166,7 +166,7 @@ async fn a_session_opens_whole_through_two_slots_and_gives_them_back() {
     );
     assert_eq!(report.running, 0, "and left no slot held: {report:?}");
     assert_eq!(report.queued_interactive, 0, "{report:?}");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A read queued for a page that then closes goes with the page: the
@@ -237,4 +237,5 @@ async fn a_closed_session_takes_its_queued_reads_with_it() {
     );
     assert_eq!(slots.report().queued_interactive, 0);
     drop(held);
+    session.close_and_wait().await;
 }

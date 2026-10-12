@@ -36,7 +36,7 @@ async fn a_snapshot_owed(refs: bool) {
     bounded("the snapshot ending", session.wait_for_snapshot_reads()).await;
     bounded("any walk it asked for", session.wait_for_graph_passes()).await;
     assert!(session.graph_settled_at(before.generation));
-    session.close();
+    session.close_and_wait().await;
 }
 
 #[tokio::test]

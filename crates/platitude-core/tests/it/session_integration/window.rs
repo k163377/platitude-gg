@@ -74,7 +74,7 @@ async fn tag_only_commits_follow_the_include_tags_option() {
         "the fast tag-less pass paints first, and paints whole"
     );
 
-    session.close();
+    session.close_and_wait().await;
 }
 
 fn chips_of(rows: &[platitude_core::session::LogRow]) -> Vec<LabelKind> {
@@ -182,7 +182,7 @@ async fn chips_catch_up_when_the_refs_read_lands_last() {
         "the chips were mirrored into the delivered rows"
     );
 
-    session.close();
+    session.close_and_wait().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -204,7 +204,7 @@ async fn log_limit_truncates_the_window() {
     assert_eq!(limited.walked, 2, "the footer's number is the limit itself");
     assert!(limited.truncated);
 
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A stash's synthetic index parent is walked but sifted out of the
@@ -234,7 +234,7 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
     assert_eq!(limited.walked, 4, "the walk count stays on the limit");
     assert!(limited.truncated, "the walk was cut before the root commit");
 
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The synthetic WIP row is shown but never walked: a window that holds the
@@ -271,7 +271,7 @@ async fn the_wip_row_does_not_trigger_truncation() {
     assert_eq!(whole.walked, 2, "the WIP row is shown but never walked");
     assert!(!whole.truncated, "the whole history fits the window");
 
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A window change's stream drops silently when a background rebuild
@@ -330,7 +330,7 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
          only thing that could have carried the window: {:?}",
         sink.events.lock().unwrap()
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The same interleaving over a change only the footer notices: two commits
@@ -386,7 +386,7 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
     assert_eq!(whole.total, 3, "WIP row + both commits, exactly as before");
     assert_eq!(whole.walked, 2, "the walk ran out of history");
     assert!(!whole.truncated, "so nothing is being kept from the user");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Growing the window lands as a replacement: the press is made at the
@@ -422,7 +422,7 @@ async fn growing_the_window_walks_further_without_starting_over() {
         "the wider walk was spliced in, not streamed over a cleared graph"
     );
 
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The step is measured from the window the graph *opened* with: a
@@ -468,5 +468,5 @@ async fn the_step_stays_a_quarter_of_the_window_the_graph_opened_with() {
         "there is nothing past the end of the history to load"
     );
 
-    session.close();
+    session.close_and_wait().await;
 }

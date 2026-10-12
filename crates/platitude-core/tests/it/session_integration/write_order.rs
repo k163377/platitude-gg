@@ -99,6 +99,8 @@ async fn a_reopened_tab_writes_behind_the_close_it_found_running() {
             "{whose} session has nothing left for the gate to wait on"
         );
     }
+    closing.close_and_wait().await;
+    reopened.close_and_wait().await;
 }
 
 /// The reopened tab reads the tree only when nobody is writing it, and is
@@ -166,7 +168,8 @@ async fn a_reopened_tab_keeps_out_of_the_tree_and_is_told_when_it_is_free() {
         )
         .await;
 
-    reopened.close();
+    reopened.close_and_wait().await;
+    closing.close_and_wait().await;
 }
 
 /// What the page drew is given back by the close, while the write
@@ -237,6 +240,7 @@ async fn a_close_lets_go_of_the_screens_copy_while_its_write_runs() {
     )
     .await;
     assert!(ended.is_ok(), "the loop ended cleanly: {ended:?}");
+    session.close_and_wait().await;
 }
 
 /// Whether a part of the memory report holds the page's copy of the
@@ -338,8 +342,15 @@ async fn a_write_landing_inside_a_read_is_read_again_when_that_read_ends() {
         )
         .await;
 
-    reader.close();
-    writer.close();
+    // Answered before the close, which would cancel it: the test sees the
+    // push it asked for to its end rather than leave it to the close.
+    assert_eq!(
+        write_answer(&writer_sink, pushed).await,
+        None,
+        "the push landed"
+    );
+    reader.close_and_wait().await;
+    writer.close_and_wait().await;
 }
 
 /// A read this session owes is taken when its own write ends too.
@@ -461,8 +472,14 @@ async fn a_read_owed_is_taken_when_this_session_s_own_write_ends() {
         })
         .await;
 
-    reader.close();
-    writer.close();
+    // Answered before the close (the test above).
+    assert_eq!(
+        write_answer(&writer_sink, pushed).await,
+        None,
+        "the push landed"
+    );
+    reader.close_and_wait().await;
+    writer.close_and_wait().await;
 }
 
 /// What a close gave back stays given back, even to a read already in
@@ -554,6 +571,7 @@ async fn a_read_in_flight_at_the_close_does_not_refill_what_it_gave_back() {
         "and nothing behind it filled the report again: {:?}",
         session.heap_report()
     );
+    session.close_and_wait().await;
 }
 
 /// A worktree whose removal a closed tab let run on is out of what a tab
@@ -634,7 +652,8 @@ async fn a_worktree_being_removed_is_out_of_a_reopened_tab_s_listing_until_git_a
         })
         .await;
 
-    reopened.close();
+    reopened.close_and_wait().await;
+    closing.close_and_wait().await;
 }
 
 /// A tab stood in another worktree of the repository is on a write order
@@ -708,8 +727,8 @@ async fn a_tab_in_another_worktree_lists_a_refused_removal_again() {
         })
         .await;
 
-    beside_tab.close();
-    writer.close();
+    beside_tab.close_and_wait().await;
+    writer.close_and_wait().await;
 }
 
 /// A write whose far half reaches the network still takes its turn for
@@ -790,4 +809,6 @@ async fn a_composite_delete_takes_its_turn_for_the_half_that_is_here() {
         .await;
         assert!(ended.is_ok(), "the loop ended cleanly: {ended:?}");
     }
+    closing.close_and_wait().await;
+    reopened.close_and_wait().await;
 }

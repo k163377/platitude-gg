@@ -11,13 +11,15 @@
 use std::sync::Arc;
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, PassDoors, is_stream_event, open_with_doors, scenario};
+use crate::support::session::{
+    CaptureSink, PassDoors, TestSession, is_stream_event, open_with_doors, scenario,
+};
 use crate::support::wait::bounded;
-use platitude_core::session::{PaceBounds, PassStep, RefreshOutcome, RepoSession, SessionEvent};
+use platitude_core::session::{PaceBounds, PassStep, RefreshOutcome, SessionEvent};
 
 /// `scenario()` opened with the doors in hand and the opening's passes
 /// over, so the pass each test takes down is the one it asked for.
-async fn settled() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, Arc<PassDoors>) {
+async fn settled() -> (TestRepo, Arc<CaptureSink>, TestSession, Arc<PassDoors>) {
     let (repo, _) = scenario();
     let (sink, session, doors) = open_with_doors(&repo);
     sink.opened_graph(&session, 5).await;
@@ -61,7 +63,7 @@ async fn a_stream_that_falls_over_answers_its_own_generation() {
         error.is_empty(),
         "no words were put in the graph: {error:?}"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Nothing on screen waits on it and a real (older) graph is standing, so
@@ -102,7 +104,7 @@ async fn an_offscreen_pass_that_falls_over_reports_the_operation() {
         "and was marked as no longer this repository's: {:?}",
         sink.events.lock().unwrap()
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The mark comes down when a pass reads the repository again — even an
@@ -142,7 +144,7 @@ async fn a_graph_read_again_is_no_longer_behind() {
         })
         .await;
     assert!(!taken, "the graph is this repository's again");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The fault the screen is driven with reaches the pass's ordinary
@@ -180,7 +182,7 @@ async fn the_fault_the_screen_is_driven_with_fails_the_walk() {
         "and the graph left standing was marked: {:?}",
         sink.events.lock().unwrap()
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A closing session has nobody left to read the report, and a closing tab
@@ -214,14 +216,17 @@ async fn a_closing_session_is_told_nothing() {
         announcements(&sink) > announced,
         "the pass did announce its stream before it fell over"
     );
-    let events = sink.events.lock().unwrap();
-    assert!(
-        !events.iter().any(|event| matches!(
-            event,
-            SessionEvent::LogFailed { .. } | SessionEvent::OpFailed { op: "log", .. }
-        )),
-        "a closing window heard nothing: {events:?}"
-    );
+    {
+        let events = sink.events.lock().unwrap();
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                SessionEvent::LogFailed { .. } | SessionEvent::OpFailed { op: "log", .. }
+            )),
+            "a closing window heard nothing: {events:?}"
+        );
+    }
+    session.close_and_wait().await;
 }
 
 /// A paced read of this tree whose walk falls over still ends for the
@@ -260,5 +265,5 @@ async fn a_paced_read_whose_walk_falls_over_still_ends_for_the_pace() {
             .then_some(())
     })
     .await;
-    session.close();
+    session.close_and_wait().await;
 }

@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, opened, write_answer};
+use crate::support::session::{CaptureSink, TestSession, opened, write_answer};
 use platitude_core::remote;
 use platitude_core::session::{
     LabelKind, Recording, RefLabel, RefsSnapshot, RemoteTagRefreshOutcome, RepoSession,
@@ -402,6 +402,7 @@ async fn delete_both_of_a_tag_refused_by_the_lease_touches_nothing() {
     assert_eq!(write_answer(&sink, id).await, None);
     assert!(!work.git_ok(&["rev-parse", "--verify", "refs/tags/v-local"]));
     assert_eq!(at_origin(&mut work, "v-local"), "");
+    session.close_and_wait().await;
 }
 
 /// A plain push onto a name the remote holds on another commit is read
@@ -425,6 +426,7 @@ async fn a_tag_the_remote_holds_elsewhere_is_read_again_on_the_refusal() {
         "read again, the name shows where the remote has it: {:?}",
         snapshot.tag_drifts
     );
+    session.close_and_wait().await;
 }
 
 /// The remote half landed and the local one did not (its ref is locked
@@ -473,6 +475,7 @@ async fn delete_both_of_a_tag_reads_the_remote_again_where_the_local_half_fails(
         after.tags.iter().find(|t| t.short == "v-both")
     );
     std::fs::remove_file(&lock).expect("let go of the lock");
+    session.close_and_wait().await;
 }
 
 /// The refs snapshot published after the write accepted under `id` —
@@ -556,7 +559,7 @@ async fn snapshot_after_the_fetch(sink: &CaptureSink) -> RefsSnapshot {
 
 /// Opens the session and waits for `Opened`: a write queued before it is
 /// dropped for having no repository to run in.
-async fn opened_recording(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
+async fn opened_recording(work: &TestRepo) -> (Arc<CaptureSink>, TestSession) {
     let sink = CaptureSink::new();
     // Recording from creation: baselines count the opening's own walks,
     // spawned the moment the path is accepted, so a flag set afterwards
@@ -575,7 +578,7 @@ async fn opened_recording(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession
             .then_some(())
     })
     .await;
-    (sink, session)
+    (sink, TestSession::new(session))
 }
 
 fn tag<'a>(snapshot: &'a RefsSnapshot, name: &str) -> &'a TagItem {
@@ -634,6 +637,7 @@ async fn the_fetch_is_what_tells_a_tag_whether_a_remote_has_it_too() {
         only_there.created_unix, 0,
         "an advertisement carries no date to sort by"
     );
+    session.close_and_wait().await;
 }
 
 /// Asks for a tracked remote-tag read until one runs.
@@ -705,6 +709,7 @@ async fn a_remote_that_would_not_answer_is_named_rather_than_left_silent() {
         RemoteTagRefreshOutcome::Unanswered
     );
     tags_loaded(&sink, some_tag_has_a_remote).await;
+    session.close_and_wait().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -721,6 +726,7 @@ async fn an_interval_that_is_on_is_permission_to_look_without_being_asked() {
         "and it does not travel the write queue, which would hold up \
          every write behind a badge"
     );
+    session.close_and_wait().await;
 }
 
 /// No ref moved, so only the badges are stale. Swapping the graph would
@@ -778,7 +784,7 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
         "and not a reason to re-walk the history either (chips {settled_chips} -> {})",
         chips(&sink)
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -807,6 +813,7 @@ async fn with_the_interval_off_nothing_reaches_the_network_unasked() {
     assert!(some_tag_has_a_remote(
         &snapshot_after_the_fetch(&sink).await.tags
     ));
+    session.close_and_wait().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -830,6 +837,7 @@ async fn tags_out_of_the_walk_are_not_worth_a_round_trip() {
         RemoteTagRefreshOutcome::Hidden,
         "the eager catch-up explicitly declines tags that cannot be shown"
     );
+    session.close_and_wait().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -860,6 +868,7 @@ async fn a_remote_tag_completion_returns_its_single_flight_slot() {
         ),
         "its ack returned the permit before the next request: {following:?}"
     );
+    session.close_and_wait().await;
 }
 
 /// A drift as the menu reads it: which remote, and the commit the lease
@@ -894,6 +903,7 @@ async fn a_drift_is_listed_by_remote_with_the_commit_a_lease_would_name() {
             .any(|t| t.short == "v-local" && !t.here),
         "a name only this repository has is nobody's drift"
     );
+    session.close_and_wait().await;
 }
 
 /// git's answer to deleting a name the remote has not got, behind the
@@ -966,5 +976,6 @@ mod periodic {
             Some(())
         })
         .await;
+        session.close_and_wait().await;
     }
 }

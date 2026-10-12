@@ -96,7 +96,7 @@ async fn head_is_reported_once_and_the_walk_says_whether_a_remote_has_it() {
         })
         .await;
     assert!(!published, "the local commit is on no remote");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The first read after a write reports HEAD even unmoved, under a number
@@ -143,7 +143,7 @@ async fn the_read_after_a_write_reports_head_even_where_it_stayed() {
         })
         .await;
     assert_eq!(beside, settled.1, "the status stands beside that report");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A consumer woken for an unchanged record would be woken for nothing.
@@ -162,7 +162,7 @@ async fn a_quiet_tick_reports_nothing_of_head() {
         before,
         "nothing moved, nothing said"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Read beside the plan's rows, and again on request, echoing the range it
@@ -206,5 +206,5 @@ async fn a_plan_opens_with_the_count_a_remote_already_has() {
         })
         .await;
     assert_eq!(again, 2);
-    session.close();
+    session.close_and_wait().await;
 }

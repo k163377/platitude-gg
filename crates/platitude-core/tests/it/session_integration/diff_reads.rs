@@ -94,7 +94,7 @@ async fn a_click_stops_the_git_of_the_read_it_passes() {
             .all(|(_, end)| *end == Some(CommandEnd::Cancelled)),
         "the passed read's source was read: {ran:#?}"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The re-read a tick or a focus asks for, out when the reader clicks
@@ -132,7 +132,7 @@ async fn a_re_read_does_not_pass_a_click_made_while_it_read() {
         DiffReadOutcome::Sent,
         "the file the reader moved to reached the pane"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A tick and a focus over one file: asks made while a re-read is out
@@ -176,7 +176,7 @@ async fn asks_while_a_re_read_is_out_share_the_one_after_it() {
         .filter(|display| display.contains(" diff ") && display.contains("f.txt"))
         .collect();
     assert_eq!(raw.len(), 2, "{raw:#?}");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A re-read asked and dropped before it ever ran lets its file go: held,
@@ -200,5 +200,5 @@ async fn a_re_read_dropped_unread_holds_nothing_up() {
         .await,
         DiffReadOutcome::Unchanged
     );
-    session.close();
+    session.close_and_wait().await;
 }

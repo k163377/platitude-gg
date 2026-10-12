@@ -562,6 +562,7 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
         asked(&sink) > 0,
         "the count above is of the command that read these"
     );
+    session.close_and_wait().await;
 }
 
 /// What git does with the checkout key once it is written. Writing it and

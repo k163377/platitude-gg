@@ -287,7 +287,7 @@ async fn the_worktree_a_session_stands_in_moves_from_the_repositorys_own_directo
             if display.contains("worktree move"))
     });
     assert_eq!(moves, 1, "one move, run once");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Another worktree than the one the session stands in moves as a plain
@@ -310,5 +310,5 @@ async fn another_worktree_moves_and_the_listing_names_it_anew() {
             if worktrees.iter().any(|entry| entry.path == to))
     });
     assert!(named > 0, "a listing names the new folder");
-    session.close();
+    session.close_and_wait().await;
 }

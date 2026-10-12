@@ -109,7 +109,7 @@ async fn a_picked_entry_walks_what_only_its_tip_reaches_dashed() {
         (subjects(&rows) == ["c1"]).then_some(())
     })
     .await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A hunk thrown out of `f.txt`, its other hunk left: the copy, whose base
@@ -196,7 +196,7 @@ async fn a_copy_on_a_base_of_its_own_draws_on_head() {
         .find(|row| oid(&row.oid_hex) == oid(&copy))
         .expect("the copy's row");
     assert_eq!(row.parents.to_vec(), vec![oid(&head)]);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A copy that went to the stashes keeps its base: the stash draws on the
@@ -215,5 +215,5 @@ async fn a_stash_on_a_base_of_its_own_draws_on_head() {
         })
         .await;
     assert_eq!(drawn(&rows), vec![oid(&copy), oid(&head)]);
-    session.close();
+    session.close_and_wait().await;
 }

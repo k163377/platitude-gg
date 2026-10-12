@@ -84,7 +84,7 @@ async fn a_forced_delete_takes_what_only_it_held_off_the_graph_before_git_answer
         swaps,
         "the walk behind the delete found the picture the stand-in drew"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A plain delete is refused unless the tip is merged into what the graph
@@ -103,7 +103,7 @@ async fn a_plain_delete_lays_nothing_out() {
         sink.count(|e| matches!(e, SessionEvent::LogRelaid { .. })),
         0
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Refused, the commits are back at the answer — before the reads behind
@@ -140,26 +140,28 @@ async fn a_refused_delete_puts_its_commits_back_at_the_answer() {
     );
 
     assert_eq!(write_settled(&sink, id).await, []);
-    let events = sink.events.lock().unwrap();
-    let at = |pred: &dyn Fn(&SessionEvent) -> bool| {
-        events
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| pred(e))
-            .map(|(at, _)| at)
-            .collect::<Vec<_>>()
-    };
-    let answer = at(&|e| matches!(e, SessionEvent::WriteFinished { id: got, .. } if *got == id));
-    let put_back = at(&|e| matches!(e, SessionEvent::LogRelaid { .. }));
-    let refs = at(&|e| matches!(e, SessionEvent::RefsLoaded { .. }));
-    let refs_behind = refs.iter().find(|at| **at > answer[0]);
-    assert!(
-        answer[0] < put_back[1] && refs_behind.is_none_or(|refs| put_back[1] < *refs),
-        "the commits came back at the answer, not with the reads behind it: \
-         answer {answer:?}, laid {put_back:?}, refs {refs:?}"
-    );
-    drop(events);
-    session.close();
+    {
+        let events = sink.events.lock().unwrap();
+        let at = |pred: &dyn Fn(&SessionEvent) -> bool| {
+            events
+                .iter()
+                .enumerate()
+                .filter(|(_, e)| pred(e))
+                .map(|(at, _)| at)
+                .collect::<Vec<_>>()
+        };
+        let answer =
+            at(&|e| matches!(e, SessionEvent::WriteFinished { id: got, .. } if *got == id));
+        let put_back = at(&|e| matches!(e, SessionEvent::LogRelaid { .. }));
+        let refs = at(&|e| matches!(e, SessionEvent::RefsLoaded { .. }));
+        let refs_behind = refs.iter().find(|at| **at > answer[0]);
+        assert!(
+            answer[0] < put_back[1] && refs_behind.is_none_or(|refs| put_back[1] < *refs),
+            "the commits came back at the answer, not with the reads behind it: \
+             answer {answer:?}, laid {put_back:?}, refs {refs:?}"
+        );
+    }
+    session.close_and_wait().await;
 }
 
 /// A walk landing while the delete is out lays the same graph: it cannot
@@ -192,7 +194,7 @@ async fn a_walk_landing_while_the_delete_is_out_keeps_the_commits_off() {
 
     std::fs::write(&release, b"go").expect("release the hook");
     assert_eq!(write_settled(&sink, id).await, []);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A remote branch's delete takes what only the remote-tracking ref held,
@@ -216,7 +218,7 @@ async fn a_remote_branch_delete_takes_what_only_the_remote_held() {
 
     std::fs::write(&release, b"go").expect("release the hook");
     assert_eq!(write_settled(&sink, id).await, []);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A tag is a starting point of the walk too: deleting the one tag on a
@@ -239,7 +241,7 @@ async fn a_tag_delete_takes_what_only_the_tag_held() {
 
     std::fs::write(&release, b"go").expect("release the hook");
     assert_eq!(write_settled(&sink, id).await, []);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A delete that landed while the walk behind it fell over stands on: the
@@ -279,7 +281,7 @@ async fn a_landed_delete_whose_walk_failed_stays_off_the_graph() {
         crate::support::wait::bounded("a walk that lands", session.refresh_log_tracked().outcome())
             .await;
     assert!(outcome.landed(), "{outcome:?}");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A branch somebody else pushed, fetched here and held by nothing but its
@@ -365,7 +367,7 @@ async fn a_dropped_stash_leaves_the_graph_at_the_press() {
     assert!(!rows.contains(&stash), "{rows:#?}");
     assert_eq!(rows.len() as u32, drawn.total - 1, "{rows:#?}");
     assert_eq!(write_settled(&sink, id).await, []);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A worktree on no branch is a starting point of the walk: removed, the
@@ -404,7 +406,7 @@ async fn a_removed_worktree_takes_what_only_it_held_off_the_graph_at_the_press()
     assert_eq!(rows.len() as u32, drawn.total - 1, "{rows:#?}");
     assert_eq!(write_settled(&sink, id).await, []);
     assert!(!loose.exists(), "git removed the folder");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A worktree on no branch at `<repo>/../<folder>` with a commit nobody
@@ -451,7 +453,7 @@ async fn a_landed_removal_s_commits_stay_off_the_next_delete_s_graph() {
         "the removed worktree's commit was drawn back: {rows:#?}"
     );
     assert_eq!(write_settled(&sink, id).await, []);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Refused, a branchless worktree's commits are drawn again: laid out at the
@@ -500,7 +502,7 @@ async fn a_refused_removal_puts_its_commits_back_at_the_answer() {
     })
     .await;
     assert_eq!(write_settled(&sink, id).await, []);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Whether a graph event puts the commit `oid` (hex) on screen — laid out
@@ -567,5 +569,5 @@ async fn a_removed_worktree_s_branch_is_given_back_at_the_press() {
     let_the_commit_go(&sink, &release, commit).await;
     assert!(!early, "git had not reached the removal");
     assert_eq!(write_settled(&sink, id).await, []);
-    session.close();
+    session.close_and_wait().await;
 }

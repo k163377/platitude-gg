@@ -29,7 +29,7 @@ async fn squash_and_reword_run_through_the_write_queue() {
     assert_eq!(write_result(&sink, OperationKind::Reword).await, None);
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "reworded head");
     assert_eq!(repo.git(&["rev-parse", "HEAD~1"]), parent);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The route a rewrite took, as the commands it issued.
@@ -111,7 +111,7 @@ async fn a_squash_over_a_dirty_tree_carries_the_work_across() {
         "u.txt"
     );
     assert_eq!(repo.git(&["stash", "list"]), "", "the entry was put back");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// What a `rebase <current> onto it` fires with: the flags the two menu
@@ -170,7 +170,7 @@ async fn a_rebase_onto_over_a_dirty_tree_carries_the_work_across() {
         "u.txt"
     );
     assert_eq!(repo.git(&["stash", "list"]), "", "the entry was put back");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A user's `rebase.autoStash` does not get there first: git's own stash
@@ -219,7 +219,7 @@ async fn a_users_autostash_leaves_the_carry_to_the_session() {
     );
     assert_eq!(repo.git(&["diff", "--name-only"]), "t.txt");
     assert_eq!(repo.git(&["stash", "list"]), "");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// When that rebase stops, the work waits in the stash as a stopped
@@ -261,7 +261,7 @@ async fn a_rebase_onto_that_stops_leaves_the_work_in_the_stash() {
         "keep\n",
         "the uncommitted edit is in the entry, not in the tree"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Untracked files are not in a replay's way, so no stash is taken for
@@ -290,7 +290,7 @@ async fn untracked_files_alone_are_replayed_straight_over() {
         repo.git(&["ls-files", "--others", "--exclude-standard"]),
         "u.txt"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The replay goes through and the restore collides: markers in the files
@@ -335,7 +335,7 @@ async fn a_restore_that_collides_lands_in_the_files_and_keeps_the_entry() {
         1,
         "and the work is still in the stash as well"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The replay stops part-way and the restore is held back: a pop onto an
@@ -376,7 +376,7 @@ async fn a_replay_that_stops_part_way_leaves_the_work_in_the_stash() {
         "base\n",
         "the uncommitted edit is in the entry, not in the tree"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Whether the carry has begun — the one delivery that lands between the
@@ -455,7 +455,7 @@ async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
         "uncommitted\n",
         "with the uncommitted edit back in the tree"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The tip check in front of the spawn, as the one-commit edits reach it.
@@ -555,7 +555,7 @@ async fn a_commit_landing_after_a_one_commit_edits_todo_is_refused() {
         ],
         "and nothing was rewritten — the commit the edit was about is still there"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The same pin across the carry's two spawns, the wider window. And the
@@ -622,5 +622,5 @@ async fn a_commit_landing_inside_a_one_commit_edits_carry_is_refused() {
         "unstaged edit\n",
         "and so is the one that was not"
     );
-    session.close();
+    session.close_and_wait().await;
 }

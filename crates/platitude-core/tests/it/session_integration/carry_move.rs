@@ -30,7 +30,7 @@ async fn a_move_that_fails_outright_stashes_nothing() {
         "the work never left the tree"
     );
     assert_eq!(repo.git(&["stash", "list"]), "", "no entry left behind");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A move still refused once the tree has been emptied puts the work back,
@@ -67,7 +67,7 @@ async fn a_move_nothing_can_unblock_puts_the_stashed_work_back() {
         "mine too\n",
         "the work is where it was before the refused move"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Two branches that disagree about `both.txt`, HEAD on `main`.
@@ -109,7 +109,7 @@ async fn a_move_git_refuses_goes_round_through_a_stash() {
         repo.git(&["stash", "list"]).is_empty(),
         "a clean restore takes the stash with it"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Going round through the stash is what keeps the staged/unstaged
@@ -143,7 +143,7 @@ async fn a_move_that_goes_round_keeps_what_was_staged_staged() {
         "staged.txt",
         "what was staged is staged still"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// When the sides cannot be combined, git leaves the markers and keeps the
@@ -177,7 +177,7 @@ async fn a_conflicting_carry_leaves_the_stash_as_the_way_back() {
         1,
         "the entry stays, so the work exists outside the marked-up file"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Somebody else's entry sits at `stash@{0}` when the move begins; the
@@ -201,7 +201,7 @@ async fn a_carry_leaves_other_stashes_alone() {
         list.contains("parked"),
         "the parked entry was not ours to pop: {list}"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The untracked file the target tracks has nowhere to go, but every
@@ -237,7 +237,7 @@ async fn a_carry_that_cannot_restore_reports_gits_message() {
         1,
         "the entry is the way back to the file that stayed behind"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A conflicting pop lands where an apply would have: git keeps the entry
@@ -268,7 +268,7 @@ async fn a_conflicting_pop_keeps_the_entry_and_is_not_a_failure() {
         1,
         "kept, the way an apply would have kept it"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// git refuses to restore onto an index that already has unmerged paths,
@@ -301,7 +301,7 @@ async fn a_pop_refused_by_a_conflicted_tree_is_still_a_failure() {
         "nothing was restored, so nothing was dropped"
     );
     assert!(!repo.path.join("spare.txt").exists(), "still in the entry");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Read the way a conflicting pop is; the entry was staying either way.
@@ -327,7 +327,7 @@ async fn a_conflicting_apply_is_not_a_failure_either() {
         "left unmerged to be settled"
     );
     assert_eq!(repo.git(&["stash", "list"]).lines().count(), 1);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Moving out of a stopped cherry-pick is one write: `--quit` puts the
@@ -370,7 +370,7 @@ async fn a_move_out_of_a_stopped_pick_puts_it_in_a_stash() {
         !repo.path.join(".git/sequencer").exists(),
         "nothing of the pick is left for the next command to trip over"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The same move out of a stopped rebase aborts instead: `rebase --quit`
@@ -400,7 +400,7 @@ async fn a_move_out_of_a_stopped_rebase_puts_the_branch_back() {
         "",
         "an abort leaves nothing to carry, so no entry is made"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// With no operation standing (a reader ran `cherry-pick --quit`), the
@@ -424,7 +424,7 @@ async fn a_move_out_of_unmerged_files_stashes_them_with_no_operation_to_put_down
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
     assert_eq!(repo.git(&["status", "--porcelain=v2"]), "");
     assert_eq!(repo.git(&["stash", "list"]).lines().count(), 1);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// With nothing standing and nothing colliding, git carries the work
@@ -451,7 +451,7 @@ async fn nothing_in_the_way_means_nothing_is_put_aside() {
         "uncommitted\n",
         "and the work came with it"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Walking away from `Move here?` costs the cherry-pick nothing.
@@ -477,7 +477,7 @@ async fn a_move_that_has_to_ask_leaves_the_operation_standing() {
         repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
         "and the pick it would have undone is still standing"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A carry whose session closes half-way finishes anyway, so the work it
@@ -521,6 +521,7 @@ async fn a_carry_whose_session_closes_half_way_still_puts_the_work_back() {
         "l1-THEIRS\nl2\nl3\nl4\nl5-MINE\n",
         "and the work is back in the tree the move landed in"
     );
+    session.close_and_wait().await;
 }
 
 /// The stash a carry makes on its way round, as the sink announces it.
@@ -558,6 +559,6 @@ mod periodic {
             repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
             "the stopped pick is untouched"
         );
-        session.close();
+        session.close_and_wait().await;
     }
 }

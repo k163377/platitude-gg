@@ -46,7 +46,7 @@ async fn a_diff_arrives_before_the_colours_for_it() {
     })
     .await;
 
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A read nobody is waiting for any more hands over nothing — not even its
@@ -108,7 +108,7 @@ async fn a_read_the_reader_has_left_hands_over_nothing() {
         "the abandoned read should have published neither rows nor colours"
     );
 
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Asked and answered apart from the details: verifying may run gpg, which
@@ -139,5 +139,5 @@ async fn a_signature_answer_names_the_commit_it_is_about() {
     })
     .await;
 
-    session.close();
+    session.close_and_wait().await;
 }

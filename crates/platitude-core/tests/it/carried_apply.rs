@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::support::exec::env;
-use crate::support::session::{CaptureSink, opened, write_answer};
+use crate::support::session::{CaptureSink, TestSession, opened, write_answer};
 use crate::support::{TestRepo, barrier_hook};
 use platitude_core::OperationId;
 use platitude_core::commit::CommitOptions;
@@ -71,7 +71,7 @@ async fn apply_side(repo: &TestRepo, side: &Path) -> (Option<String>, Option<Wri
         .apply_carried(side.to_string_lossy().into_owned())
         .expect("the apply is accepted");
     let answer = answered(&sink, id).await;
-    session.close();
+    session.close_and_wait().await;
     answer
 }
 
@@ -86,7 +86,7 @@ async fn apply_side_logged(
         .apply_carried(side.to_string_lossy().into_owned())
         .expect("the apply is accepted");
     let answer = answered(&sink, id).await;
-    session.close();
+    session.close_and_wait().await;
     let events = sink.events.lock().unwrap();
     let row = events
         .iter()
@@ -397,7 +397,7 @@ async fn a_conflict_there_is_refused_before_anything_is_read() {
 
 /// Opens a session on `path` that tells `sink`, waiting for its `Opened` —
 /// the `count`th the sink has heard, since two sessions share it.
-async fn open_on(sink: &Arc<CaptureSink>, path: &Path, count: usize) -> Arc<RepoSession> {
+async fn open_on(sink: &Arc<CaptureSink>, path: &Path, count: usize) -> TestSession {
     let session = RepoSession::open(
         crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
@@ -413,7 +413,7 @@ async fn open_on(sink: &Arc<CaptureSink>, path: &Path, count: usize) -> Arc<Repo
             .then_some(())
     })
     .await;
-    session
+    TestSession::new(session)
 }
 
 /// A tab open on the worktree the work comes from has a commit running
@@ -474,8 +474,8 @@ async fn a_write_accepted_there_first_is_done_before_the_work_is_read() {
         "the commit went first, so nothing of a.txt was left to bring"
     );
     assert_eq!(read_in(&repo.path, "extra.txt"), "e\n");
-    there.close();
-    here.close();
+    there.close_and_wait().await;
+    here.close_and_wait().await;
 }
 
 /// Why the untracked files are looked at before git runs: `git stash

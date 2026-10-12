@@ -50,7 +50,7 @@ async fn an_index_another_git_changes_under_the_same_counts_is_asked_about_again
         (answers(evs).last() == Some(&false)).then_some(())
     })
     .await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A status with nothing staged answers that an amend empties nothing — an
@@ -73,5 +73,5 @@ async fn an_index_with_nothing_staged_is_answered_as_no_empty_amend() {
         (answers(evs).last() == Some(&false)).then_some(())
     })
     .await;
-    session.close();
+    session.close_and_wait().await;
 }

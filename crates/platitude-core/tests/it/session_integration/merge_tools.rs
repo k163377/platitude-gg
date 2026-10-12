@@ -12,7 +12,7 @@
 use platitude_core::conflict;
 use platitude_core::session::{RepoSession, SessionEvent};
 
-use crate::support::session::CaptureSink;
+use crate::support::session::{CaptureSink, TestSession};
 use crate::support::{exec, repo::TestRepo};
 
 /// The first settled answer, whatever it names.
@@ -67,19 +67,20 @@ async fn a_session_whose_open_failed_answers_the_merge_tool_ask() {
     let plain = crate::support::temp::dir();
 
     let sink = CaptureSink::new();
-    let session = RepoSession::open(
+    let session = TestSession::new(RepoSession::open(
         exec::isolated(),
         tokio::runtime::Handle::current(),
         plain.path().to_path_buf(),
         sink.clone(),
         None,
-    );
+    ));
     session.ask_merge_tools();
 
     assert!(
         settled_names(&sink).await.is_empty(),
         "a session with nowhere to look offered something"
     );
+    session.close_and_wait().await;
 }
 
 /// An ask inside the opening (the settings verb's order) waits the opening
@@ -95,18 +96,19 @@ async fn an_ask_inside_the_opening_names_the_configured_tool_first() {
     repo.git(&["config", "mergetool.demo-editor.cmd", "true"]);
 
     let sink = CaptureSink::new();
-    let session = RepoSession::open(
+    let session = TestSession::new(RepoSession::open(
         exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
         None,
-    );
+    ));
     // Before anything is awaited: the opening is still out, so this is
     // the ask the screen makes while `workdir()` is `None`.
     session.ask_merge_tools();
 
     assert_eq!(settled_names(&sink).await, ["demo-editor", "meld"]);
+    session.close_and_wait().await;
 }
 
 /// The completion word is said once, here with nobody subscribed, so the
@@ -120,13 +122,13 @@ async fn an_ask_made_after_the_opening_gave_up_is_answered() {
     let plain = crate::support::temp::dir();
 
     let sink = CaptureSink::new();
-    let session = RepoSession::open(
+    let session = TestSession::new(RepoSession::open(
         exec::isolated(),
         tokio::runtime::Handle::current(),
         plain.path().to_path_buf(),
         sink.clone(),
         None,
-    );
+    ));
     the_opening_gave_up(&sink).await;
     session.ask_merge_tools();
 
@@ -134,6 +136,7 @@ async fn an_ask_made_after_the_opening_gave_up_is_answered() {
         settled_names(&sink).await.is_empty(),
         "a session that had already given up left the ask unanswered"
     );
+    session.close_and_wait().await;
 }
 
 /// A cancelled opening settles too, with no event beside the word, so the
@@ -146,13 +149,13 @@ async fn a_session_closed_inside_its_opening_answers_every_ask() {
     repo.git(&["config", "mergetool.demo-editor.cmd", "true"]);
 
     let sink = CaptureSink::new();
-    let session = RepoSession::open(
+    let session = TestSession::new(RepoSession::open(
         exec::isolated(),
         tokio::runtime::Handle::current(),
         repo.path.clone(),
         sink.clone(),
         None,
-    );
+    ));
     // Before anything is awaited: cancelled short of a working tree, and
     // silent about it.
     session.close();
@@ -168,6 +171,7 @@ async fn a_session_closed_inside_its_opening_answers_every_ask() {
         nth_settled(&sink, 2).await.is_empty(),
         "the second ask was left waiting on an opening that had already settled"
     );
+    session.close_and_wait().await;
 }
 
 /// Left out of the pre-merge run: the same ask against this machine's own
@@ -189,13 +193,13 @@ mod periodic {
         repo.git(&["config", "mergetool.demo-editor.cmd", "true"]);
 
         let sink = CaptureSink::new();
-        let session = RepoSession::open(
+        let session = TestSession::new(RepoSession::open(
             exec::isolated(),
             tokio::runtime::Handle::current(),
             repo.path.clone(),
             sink.clone(),
             None,
-        );
+        ));
         // Inside the opening, as above.
         session.ask_merge_tools();
 
@@ -208,5 +212,6 @@ mod periodic {
             names.iter().any(|n| n == "demo-editor"),
             "the configured tool is missing from {names:?}"
         );
+        session.close_and_wait().await;
     }
 }

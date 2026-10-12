@@ -108,7 +108,7 @@ async fn a_stopped_merge_is_read_without_asking_git_where_its_files_are() {
         standing.op_message.contains("Merge branch 'side'"),
         "{standing:?}"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -128,7 +128,7 @@ async fn a_stopped_rebase_is_read_without_asking_git_where_its_files_are() {
     let standing = last_standing(&sink);
     assert!(standing.rebasing, "{standing:?}");
     assert_eq!(standing.progress, Some((1, 1)), "{standing:?}");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Each worktree stands for itself: the main worktree stopped mid-rebase, the
@@ -166,6 +166,6 @@ async fn each_worktree_reads_its_own_stopped_operation() {
         there.op_message.contains("Merge branch 'side'"),
         "linked worktree: {there:?}"
     );
-    main.close();
-    worktree.close();
+    main.close_and_wait().await;
+    worktree.close_and_wait().await;
 }

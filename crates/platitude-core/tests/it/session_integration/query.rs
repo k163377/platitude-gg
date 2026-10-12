@@ -62,7 +62,7 @@ async fn a_request_made_while_a_read_runs_gets_a_read_of_its_own() {
             .then_some(())
     })
     .await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 fn is_status_spawn(event: &SessionEvent) -> bool {
@@ -140,7 +140,7 @@ async fn the_ways_in_to_a_status_read_never_run_two_at_once() {
         "two status reads overlapped: {:?}",
         commands_of(&sink)
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The same pair under a replay, the one write the poll is let through
@@ -202,7 +202,7 @@ async fn a_poll_let_through_by_a_replay_does_not_read_beside_it() {
         "the tick read status beside the replay's own: {:?}",
         commands_of(&sink)
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 fn commands_of(sink: &CaptureSink) -> Vec<String> {
@@ -248,7 +248,7 @@ async fn a_refs_read_takes_head_out_of_the_listing_it_already_has() {
         !seen.iter().any(|c| c.contains("rev-parse --verify")),
         "and so did the commit it is on: {seen:?}"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Detached HEAD marks no ref in the listing, so it is asked for.
@@ -271,7 +271,7 @@ async fn a_detached_head_is_still_read_correctly() {
     assert!(head.detached, "{head:?}");
     assert_eq!(head.branch, None);
     assert_eq!(head.oid.map(|o| o.to_hex()), Some(root));
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A read that finds nothing moved republishes the last snapshot, by
@@ -335,7 +335,7 @@ async fn an_unmoved_repository_republishes_the_snapshot_it_already_built() {
         "and it is the repository as it stands: {:?}",
         after.locals
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Once a refs read has said where HEAD is, the walk stops asking:
@@ -364,7 +364,7 @@ async fn the_walk_reads_head_from_the_refs_read_that_already_landed() {
         !seen.iter().any(|c| c.contains("symbolic-ref")),
         "and did not ask where HEAD is: {seen:?}"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The remotes are not read once per refs listing: a poll tick that
@@ -420,7 +420,7 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
         settle(from + n).await;
     }
     assert_eq!(reads(&sink), 1, "still the one: {:?}", commands_of(&sink));
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A push mark written into the global configuration reaches the refs
@@ -503,7 +503,7 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
         "a settled mark is not re-read: {:?}",
         commands_of(&sink)
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The line-ending setting written into this repository's own file
@@ -551,7 +551,7 @@ async fn the_line_ending_setting_written_beside_the_session_reaches_the_notices(
         (marked(evs) == Some(0)).then_some(())
     })
     .await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Whether git normalises line endings is repository configuration, so
@@ -606,7 +606,7 @@ async fn concurrent_diffs_share_the_line_ending_setting_read() {
         .filter(|c| c.contains("autocrlf"))
         .count();
     assert_eq!(reads, 1, "{:?}", commands_of(&sink));
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A file git's attributes send through Git LFS says so with its diff,
@@ -655,7 +655,7 @@ async fn a_diff_of_a_file_through_git_lfs_says_so() {
             .await,
         [false]
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A picture's blob side has no path a URL could name, so the session
@@ -750,6 +750,7 @@ async fn a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session()
     session.close();
     assert!(!second.exists());
     assert!(!dir.exists(), "the session's directory goes with the close");
+    session.close_and_wait().await;
 }
 
 /// Every ask about a delete is answered, a failed read included — as
@@ -778,7 +779,7 @@ async fn an_ask_about_a_delete_is_answered_even_where_the_read_fails() {
         None,
         "the failed read answered instead of going quiet"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The answer to one `check_branch_delete`, waited for by the name it
@@ -855,7 +856,7 @@ async fn a_re_read_of_a_file_nobody_touched_says_nothing() {
         published,
         "the re-read published a diff of a file nobody had touched"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A conflict resolved in another window, as a merge tool leaves one: the
@@ -897,7 +898,7 @@ async fn a_file_typed_over_outside_the_window_is_re_read() {
         published.last(),
         "the file the pane is holding was read again as the file it now is"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Two reads of the same file, the older landing last: the pane keeps the
@@ -982,7 +983,7 @@ async fn the_older_of_two_reads_of_one_file_publishes_nothing() {
     )
     .await
     .expect("the stage after the pair is not refused as stale");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The pane reads other worktrees' files under the same paths, so a
@@ -1031,7 +1032,7 @@ async fn a_worktrees_file_is_not_the_same_file_as_ours_of_that_name() {
         3,
         "the re-read published nothing for the reader to be handed"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Worktree reads take different times, and the pane shows the worktree
@@ -1089,5 +1090,5 @@ async fn the_worktree_asked_about_last_is_the_one_the_pane_is_handed() {
         vec!["second-worktree".to_string()],
         "the worktree the reader stepped off answered as well"
     );
-    session.close();
+    session.close_and_wait().await;
 }

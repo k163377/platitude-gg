@@ -4,9 +4,11 @@
 use std::sync::Arc;
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, is_stream_event, open_unawaited, opened, scenario};
+use crate::support::session::{
+    CaptureSink, TestSession, is_stream_event, open_unawaited, opened, scenario,
+};
 use platitude_core::OperationKind;
-use platitude_core::session::{Recording, RefreshOutcome, RepoSession, SessionEvent};
+use platitude_core::session::{Recording, RefreshOutcome, SessionEvent};
 
 /// Committing also turns the tree clean (the WIP row goes); reacting to
 /// that apart from the write would stream the graph twice.
@@ -87,12 +89,12 @@ async fn a_write_rebuilds_the_graph_once() {
             .then_some(())
     })
     .await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Opens `scenario()` and returns the stream-event baseline once the
 /// opening graph and snapshot reads have answered.
-async fn settled_graph() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize) {
+async fn settled_graph() -> (TestRepo, Arc<CaptureSink>, TestSession, usize) {
     let (repo, _) = scenario();
     let (sink, session) = open_unawaited(&repo);
     sink.opened_graph(&session, 5).await;
@@ -128,24 +130,25 @@ async fn background_refresh_swaps_only_on_change() {
     )
     .await;
     assert_eq!(changed, RefreshOutcome::Changed);
-    let events = sink.events.lock().unwrap();
-    let after: Vec<&SessionEvent> = events
-        .iter()
-        .filter(|e| is_stream_event(e))
-        .skip(baseline)
-        .collect();
-    assert_eq!(after.len(), 1, "one event for the whole change: {after:?}");
-    match after[0] {
-        SessionEvent::LogReplaced {
-            generation, rows, ..
-        } => {
-            assert!(*generation > 0);
-            assert_eq!(rows.len(), 6, "the replacement carries the whole graph");
+    {
+        let events = sink.events.lock().unwrap();
+        let after: Vec<&SessionEvent> = events
+            .iter()
+            .filter(|e| is_stream_event(e))
+            .skip(baseline)
+            .collect();
+        assert_eq!(after.len(), 1, "one event for the whole change: {after:?}");
+        match after[0] {
+            SessionEvent::LogReplaced {
+                generation, rows, ..
+            } => {
+                assert!(*generation > 0);
+                assert_eq!(rows.len(), 6, "the replacement carries the whole graph");
+            }
+            other => panic!("expected LogReplaced, got {other:?}"),
         }
-        other => panic!("expected LogReplaced, got {other:?}"),
     }
-    drop(events);
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A ref moved outside the session points at commits this graph never
@@ -180,25 +183,26 @@ async fn an_external_ref_move_rebuilds_the_graph() {
     repo.commit_file("outside.txt", "x\n", "outside commit");
     session.refresh_refs();
     sink.settled_pass(6).await;
-    let events = sink.events.lock().unwrap();
-    let replacements = events[..]
-        .iter()
-        .skip_while(|e| !matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 6))
-        .filter(|e| matches!(e, SessionEvent::LogReplaced { .. }))
-        .count();
-    assert_eq!(
-        replacements,
-        1,
-        "the moved ref rebuilt once: {:?}",
-        events[..].iter().collect::<Vec<_>>()
-    );
-    assert_eq!(
-        log_starts(&events[opened_at..]),
-        0,
-        "the rebuild replaced in place: nothing has streamed since the opening"
-    );
-    drop(events);
-    session.close();
+    {
+        let events = sink.events.lock().unwrap();
+        let replacements = events[..]
+            .iter()
+            .skip_while(|e| !matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 6))
+            .filter(|e| matches!(e, SessionEvent::LogReplaced { .. }))
+            .count();
+        assert_eq!(
+            replacements,
+            1,
+            "the moved ref rebuilt once: {:?}",
+            events[..].iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            log_starts(&events[opened_at..]),
+            0,
+            "the rebuild replaced in place: nothing has streamed since the opening"
+        );
+    }
+    session.close_and_wait().await;
 }
 
 /// Chips are diffed against the graph on screen, so they are only sent for
@@ -265,26 +269,27 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
     })
     .await;
 
-    let events = sink.events.lock().unwrap();
-    let rows = crate::support::replay_graph(&events[..]);
-    let wearing = |name: &str| -> Vec<&str> {
-        rows.values()
-            .filter(|seen| seen.labels.iter().any(|l| l.text == name))
-            .map(|seen| seen.oid_hex.as_str())
-            .collect()
-    };
-    assert_eq!(
-        wearing("v2"),
-        vec![root.as_str()],
-        "the tag reached the commit it names, and only it: {rows:?}"
-    );
-    assert_eq!(
-        wearing("main"),
-        vec![head.as_str()],
-        "and the branch stayed where it was: {rows:?}"
-    );
-    drop(events);
-    session.close();
+    {
+        let events = sink.events.lock().unwrap();
+        let rows = crate::support::replay_graph(&events[..]);
+        let wearing = |name: &str| -> Vec<&str> {
+            rows.values()
+                .filter(|seen| seen.labels.iter().any(|l| l.text == name))
+                .map(|seen| seen.oid_hex.as_str())
+                .collect()
+        };
+        assert_eq!(
+            wearing("v2"),
+            vec![root.as_str()],
+            "the tag reached the commit it names, and only it: {rows:?}"
+        );
+        assert_eq!(
+            wearing("main"),
+            vec![head.as_str()],
+            "and the branch stayed where it was: {rows:?}"
+        );
+    }
+    session.close_and_wait().await;
 }
 
 /// A pass superseded before it could start leaves the graph alone: both
@@ -334,26 +339,27 @@ async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
         RefreshOutcome::Unchanged
     );
 
-    let events = sink.events.lock().unwrap();
-    let after: Vec<&SessionEvent> = events[settled..]
-        .iter()
-        .filter(|e| {
-            matches!(
-                e,
-                SessionEvent::LogStarted { .. } | SessionEvent::LogReplaced { .. }
-            )
-        })
-        .collect();
-    assert!(
-        after.is_empty(),
-        "nothing repainted the graph: {after:?}\nall: {:?}",
-        events[settled..].iter().collect::<Vec<_>>()
-    );
+    {
+        let events = sink.events.lock().unwrap();
+        let after: Vec<&SessionEvent> = events[settled..]
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    SessionEvent::LogStarted { .. } | SessionEvent::LogReplaced { .. }
+                )
+            })
+            .collect();
+        assert!(
+            after.is_empty(),
+            "nothing repainted the graph: {after:?}\nall: {:?}",
+            events[settled..].iter().collect::<Vec<_>>()
+        );
 
-    let rows = crate::support::replay_graph(&events[..]);
-    assert_eq!(rows.len(), 4, "the WIP row and three commits: {rows:?}");
-    drop(events);
-    session.close();
+        let rows = crate::support::replay_graph(&events[..]);
+        assert_eq!(rows.len(), 4, "the WIP row and three commits: {rows:?}");
+    }
+    session.close_and_wait().await;
 }
 
 /// One tick, one rebuild: an outside commit moves a ref *and* cleans the
@@ -407,7 +413,7 @@ async fn a_poll_rebuilds_the_graph_once() {
         quiet_starts,
         "the rebuild replaced in place; a poll never resets the graph"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// One ask, one set of reads: a restart with tags runs two passes
@@ -448,7 +454,7 @@ async fn the_two_passes_of_one_ask_read_the_stashes_once() {
         "and read the stashes once between them: {:?}",
         commands(&sink)
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A rebuild taken over before it started does not walk: a cancelled pass
@@ -491,7 +497,7 @@ async fn a_rebuild_taken_over_before_it_started_never_walks() {
         "only the pass that still owned the stream walked: {:?}",
         commands(&sink)
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Setting an upstream moves no ref (it is two config keys), but the
@@ -544,7 +550,7 @@ async fn setting_an_upstream_rebuilds_what_the_rows_read() {
         upstream, "origin/other",
         "the rows read what the write said, not what they read before it"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 fn position_of(events: &[SessionEvent], kind: OperationKind) -> Option<usize> {

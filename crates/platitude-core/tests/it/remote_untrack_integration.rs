@@ -146,7 +146,7 @@ async fn delete_both_takes_the_upstream_off_the_branches_left_here() {
         .delete_branch_everywhere("topic".into(), "origin".into(), "topic".into(), true, shown)
         .expect("accepted");
     assert_eq!(write_answer(&sink, id).await, None);
-    session.close();
+    session.close_and_wait().await;
 
     assert!(!tracks(&mut work, "copy"));
     assert_eq!(
@@ -205,5 +205,5 @@ async fn an_upstream_that_will_not_come_off_is_the_logs_not_the_writes() {
         matches!(end, Some(CommandEnd::Exited(code)) if code != 0),
         "{end:?}"
     );
-    session.close();
+    session.close_and_wait().await;
 }

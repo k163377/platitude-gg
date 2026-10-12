@@ -233,7 +233,7 @@ async fn the_status_counts_what_needs_lfs_where_git_cannot_run_it() {
     let (sink, session) = opened(&repo).await;
 
     counted(&sink, "the two files counted", 2).await;
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// The paths a discard could not copy, as the last status carried them,
@@ -272,7 +272,7 @@ async fn a_required_filter_names_the_files_a_discard_cannot_copy() {
         last_not_copied(&sink.events.lock().unwrap()),
         Some(vec!["kept.psd".to_string(), "new.psd".to_string()])
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Where the filter is not required, the same files are counted for the
@@ -290,7 +290,7 @@ async fn a_filter_that_is_not_required_names_nothing_a_discard_cannot_copy() {
         last_not_copied(&sink.events.lock().unwrap()),
         Some(Vec::new())
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// Where git runs LFS nothing is counted, and LFS is asked once however
@@ -315,7 +315,7 @@ async fn where_git_runs_lfs_it_is_asked_once_and_nothing_is_counted() {
         0,
         "a status counted files that LFS was there for"
     );
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// LFS installed while the count stands clears it on the next tick,
@@ -344,7 +344,7 @@ async fn lfs_arriving_clears_the_count_on_the_next_tick() {
     poll(&session).await;
     counted(&sink, "the count cleared", 0).await;
     assert_eq!(counts_taken(&sink), before, "the tick counted again");
-    session.close();
+    session.close_and_wait().await;
 }
 
 /// A count that could not be had is tried again on the next tick, with
@@ -385,5 +385,5 @@ async fn a_count_that_could_not_be_had_is_tried_on_the_next_tick() {
     failing.store(false, Ordering::SeqCst);
     poll(&session).await;
     counted(&sink, "the two files counted after all", 2).await;
-    session.close();
+    session.close_and_wait().await;
 }
