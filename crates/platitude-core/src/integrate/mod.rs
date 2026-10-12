@@ -12,7 +12,7 @@ mod resolve;
 
 use crate::opstate;
 
-pub use merge::{MergeOptions, merge, stopped_message};
+pub use merge::{MergeOptions, merge, refused_over_work, stopped_message};
 pub use pick::{cherry_pick, revert};
 pub use rebase::{
     RebaseOptions, RebaseOutcome, RebaseStop, rebase, rebase_progress, rebase_standing,

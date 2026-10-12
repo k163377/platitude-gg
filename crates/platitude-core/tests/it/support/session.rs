@@ -450,6 +450,17 @@ impl PassHooks for PassDoors {
     }
 }
 
+/// A logged command's words after `git` and after the configuration pins a
+/// builder put first (`-c key=value`), so a test reads the subcommand
+/// (`rebase --interactive …`) rather than a pin.
+pub fn command_words(display: &str) -> &str {
+    let mut words = display.strip_prefix("git ").unwrap_or(display);
+    while let Some(after) = words.strip_prefix("-c ") {
+        words = after.split_once(' ').map_or("", |(_, rest)| rest);
+    }
+    words
+}
+
 /// Whether the session said this write came to rest on a stop
 /// ([`SessionEvent::WriteStopped`]).
 ///

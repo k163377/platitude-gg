@@ -82,7 +82,10 @@ use crate::process::{GitCommand, GitExecutor};
 ///   where the commit changes something).
 /// - `diff-index`: `--cached --quiet <tree-ish> --` (exit 1 where the index
 ///   differs). `commit_integration` holds both answers for an amend.
-/// - `fetch`: `--prune`, `--all`; `pull`: `--no-edit`.
+/// - `fetch`: `--prune`, `--all`; `pull`: `--ff-only`, `--no-rebase`
+///   (both long before the minimum; `--ff-only` wins over `pull.rebase`
+///   since 2.33, and `--no-rebase` keeps the rebase path's clean-tree check
+///   out of a fast-forward).
 /// - `for-each-ref`: `--points-at=` (2.7), `--count`,
 ///   `--sort=refname:short`, `--format=` with `refname[:short]`,
 ///   `objecttype`, `objectname`, `*objectname`, `upstream[:track]`,

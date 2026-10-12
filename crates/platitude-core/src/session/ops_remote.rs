@@ -25,14 +25,14 @@ impl RepoSession {
         )
     }
 
-    /// `git pull`: the branch the worktree is on and its upstream.
+    /// `git pull --ff-only --no-rebase`: the branch the worktree is on,
+    /// brought up to its upstream ([`remote::pull`]).
     ///
     /// Refreshed as a history move ([`AfterWrite::Graph`]): the
-    /// integrating half lands on this branch, its index and working tree.
-    /// A stop is not a failure, as with merge and rebase
-    /// (デザイン規約 §進行中の操作から出る). A pull that rebases moves the
-    /// branches the user's `rebase.updateRefs` moves with it, which go on
-    /// the discard record as one (破棄記録仕様.md §2).
+    /// fast-forward lands on this branch, its index and working tree.
+    /// Uncommitted work git would write over is carried across
+    /// ([`super::build::integrate_carrying`]), as a merge's is. A
+    /// fast-forward drops no commit, so nothing goes on the discard record.
     pub fn pull(self: &Arc<Self>) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let session = Arc::clone(self);
@@ -40,17 +40,10 @@ impl RepoSession {
             OperationKind::Pull,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let before = session.tips_before(&exec, &repo, &cancel).await?;
-                let head = session
-                    .moving_off(&exec, &repo, &["HEAD".to_string()], &cancel)
-                    .await?;
-                let landing = remote::pull(&exec, &repo.workdir, timeout, &cancel).await?;
+                let what = super::build::Integrate::Pull { timeout };
+                let landing =
+                    super::build::integrate_carrying(&exec, &repo, &what, &cancel).await?;
                 session.note_landing(landing);
-                let keep = record_token();
-                session
-                    .record_rebase_group(&exec, &repo, before, &keep)
-                    .await;
-                session.tell_if_left(&exec, &repo, &head, &keep).await;
                 Ok(())
             },
         )

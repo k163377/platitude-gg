@@ -13,7 +13,6 @@ use crate::support::session::{opened, write_answer, write_result};
 use platitude_core::GitError;
 use platitude_core::OperationKind;
 use platitude_core::commit;
-use platitude_core::integrate::Landing;
 use platitude_core::remote::{self, PushForce, PushSpec};
 use platitude_core::report::{RemoteWhy, ReportKind};
 
@@ -868,34 +867,65 @@ fn origin_that_moved_on(bare: &TestRepo, file: &str, message: &str) -> TestRepo 
     other
 }
 
-/// With `pull.rebase` set either way, a conflicting pull stops the way a
-/// merge or rebase does — a landing, not a failure.
+/// The row is offered only where the branch is behind, so a branch that
+/// diverged since the last read is refused whole, `pull.rebase` or not:
+/// nothing merges, nothing rebases, nothing is left standing.
 #[tokio::test]
-async fn a_pull_that_conflicts_stops_with_the_operation_standing() {
-    for (reconcile, marker) in [("false", "MERGE_HEAD"), ("true", "rebase-merge")] {
+async fn a_diverged_pull_is_refused_whatever_pull_rebase_says() {
+    for reconcile in ["false", "true"] {
         let (bare, mut work) = origin_and_clone();
         let (exec, cancel) = env();
         work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
         work.git(&["config", "pull.rebase", reconcile]);
         let _far = origin_that_moved_on(&bare, "a.txt", "their line");
-        work.commit_file("a.txt", "our line\n", "ours");
+        work.commit_file("b.txt", "our line\n", "ours");
 
-        assert_eq!(
-            remote::pull(&exec, &work.path, NET, &cancel)
-                .await
-                .expect("a conflict is an answer, not a failure"),
-            Landing::Stopped,
-            "pull.rebase={reconcile}"
-        );
+        let err = remote::pull(&exec, &work.path, NET, &cancel)
+            .await
+            .expect_err("a diverged branch is no fast-forward");
         assert!(
-            work.path.join(".git").join(marker).exists(),
-            "git left the {marker} standing to be finished"
+            matches!(err, GitError::Failed { code: 128, .. })
+                && err.to_string().contains("Not possible to fast-forward"),
+            "pull.rebase={reconcile}: {err}"
         );
+        for marker in ["MERGE_HEAD", "rebase-merge"] {
+            assert!(
+                !work.path.join(".git").join(marker).exists(),
+                "nothing was left standing: {marker}"
+            );
+        }
+        assert_eq!(work.git(&["log", "-1", "--format=%s"]), "ours");
     }
 }
 
+/// `pull.rebase` would have git check the tree is clean before any
+/// fast-forward (`cannot pull with rebase: You have unstaged changes`);
+/// pinned off, a fast-forward goes through over work it does not touch.
+#[tokio::test]
+async fn a_pull_rebase_setting_does_not_keep_a_fast_forward_from_a_dirty_tree() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+    work.git(&["config", "pull.rebase", "true"]);
+    let _far = origin_that_moved_on(&bare, "b.txt", "over there");
+    work.write_file("a.txt", "mine\n");
+
+    remote::pull(&exec, &work.path, NET, &cancel)
+        .await
+        .expect("a fast-forward over work it does not touch");
+    assert_eq!(
+        work.git(&["log", "-1", "--format=%s", "main"]),
+        "over there"
+    );
+    assert_eq!(
+        std::fs::read_to_string(work.path.join("a.txt")).unwrap(),
+        "mine\n",
+        "the work stayed where it was"
+    );
+}
+
 /// A refusal stays a failure: no tracking information and a tree the pull
-/// would write over both exit 1 with nothing standing, unlike the stop above.
+/// would write over both exit 1 with nothing standing.
 #[tokio::test]
 async fn a_pull_with_nothing_to_pull_from_is_a_failure() {
     let (_bare, mut work) = origin_and_clone();
@@ -943,12 +973,9 @@ async fn a_pull_brings_the_upstream_in_and_moves_the_branch() {
     work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
     let _far = origin_that_moved_on(&bare, "b.txt", "over there");
 
-    assert_eq!(
-        remote::pull(&exec, &work.path, NET, &cancel)
-            .await
-            .expect("pull"),
-        Landing::Done
-    );
+    remote::pull(&exec, &work.path, NET, &cancel)
+        .await
+        .expect("pull");
     assert_eq!(
         work.git(&["log", "-1", "--format=%s", "main"]),
         "over there",

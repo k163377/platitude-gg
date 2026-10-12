@@ -6,45 +6,40 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::GitError;
-use crate::integrate::Landing;
-use crate::opstate;
 use crate::process::{GitCommand, GitExecutor};
 
-/// `git pull`: the branch the worktree is on, brought in line with
-/// its upstream.
+/// `git pull --ff-only --no-rebase`: the branch the worktree is on, brought
+/// up to its upstream by a fast-forward.
 ///
-/// Handed no arguments: git's config decides how and from where
-/// (デザイン規約 §取り込んで合流させる). Composing a fetch and a merge
-/// here would answer differently from a terminal (CLAUDE.md §絶対制約).
+/// Where it pulls from is git's config (`branch.<name>.merge`); how to
+/// reconcile is not asked, since the row is offered only where the branch
+/// is behind (デザイン規約 §取り込んで合流させる). `--no-rebase` matters
+/// even then: with `pull.rebase` set, git runs the rebase path's clean-tree
+/// check first and turns a fast-forward down over any unstaged change
+/// (`cannot pull with rebase: You have unstaged changes`, 2.55). A branch
+/// that diverged since the last read is refused whole (`Not possible to
+/// fast-forward`, 128) and nothing is left standing.
 ///
-/// As with [`crate::integrate::merge`], exit 1 covers a conflict, a tree
-/// that would be overwritten, and a branch with no tracking information,
-/// so the repository is asked: an operation left standing is the stop, any
-/// other non-zero exit a failure.
+/// Every non-zero exit is a failure the log raises itself over (no
+/// `answers_by_code`): 1 is a fetch that did not reach the remote, a branch
+/// with no tracking information, or a tree the fast-forward would write
+/// over — the last names its files, as [`crate::integrate::merge`] does,
+/// and is the refusal the session carries work across
+/// (`session::build::integrate_carrying`).
 pub async fn pull(
     executor: &GitExecutor,
     workdir: &Path,
     timeout: Duration,
     cancel: &CancellationToken,
-) -> Result<Landing, GitError> {
+) -> Result<(), GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["pull", "--no-edit"])
+        // `--no-autostash` for the merge underneath, as `integrate::merge`
+        // pins it.
+        .args(["pull", "--ff-only", "--no-rebase", "--no-autostash"])
         .timeout(timeout)
-        .paced_elsewhere()
-        // Exit 1 answers as often as it fails
-        // (デザイン規約 §git が言ったことを読む場所) — except where git names
-        // work in the way of its merge, a refusal whose words list the
-        // files, so the row keeps them (as [`crate::integrate::merge`]).
-        .answers_by_code(1)
-        .except_when_it_says(crate::integrate::REFUSED_OVER_WORK);
-    match executor.run(cmd, cancel).await {
-        Ok(_) => Ok(Landing::Done),
-        Err(error) if stopped_partway(executor, workdir, &error, cancel).await => {
-            Ok(Landing::Stopped)
-        }
-        Err(error) => Err(error),
-    }
+        .paced_elsewhere();
+    executor.run(cmd, cancel).await.map(|_| ())
 }
 
 /// The pull of a branch the worktree is not on: `git fetch <remote>
@@ -82,27 +77,4 @@ pub async fn fast_forward(
         .timeout(timeout)
         .paced_elsewhere();
     executor.run(cmd, cancel).await.map(|_| ())
-}
-
-/// Whether a pull that exited non-zero left something standing to be
-/// finished.
-///
-/// Either way of integrating can stop (merge leaves `MERGE_HEAD`, rebase
-/// `rebase-merge`), so the question is about the repository, not the
-/// configured integration.
-///
-/// A read that fails answers "no", so git's own words about the pull
-/// reach the screen rather than a `rev-parse` error.
-async fn stopped_partway(
-    executor: &GitExecutor,
-    workdir: &Path,
-    error: &GitError,
-    cancel: &CancellationToken,
-) -> bool {
-    if !matches!(error, GitError::Failed { code: 1, .. }) {
-        return false;
-    }
-    opstate::detect(executor, workdir, cancel)
-        .await
-        .is_ok_and(|state| state.merging || state.rebasing)
 }

@@ -113,7 +113,7 @@ impl RepoSession {
     /// Every branch's tip before a write that rebases, for
     /// [`Self::record_rebase_group`] — read whatever the screen asked: the
     /// user's own `rebase.updateRefs` moves branches together as
-    /// `--update-refs` does, and a rebasing pull or a squash rebases too.
+    /// `--update-refs` does, and a squash rebases too.
     pub(super) async fn tips_before(
         &self,
         exec: &GitExecutor,

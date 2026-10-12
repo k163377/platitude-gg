@@ -11,6 +11,7 @@ mod amend_watch;
 mod auto_fetch;
 mod carried;
 mod carried_moved;
+mod carry_integrate;
 mod carry_move;
 mod carry_rewrite;
 mod command_log;

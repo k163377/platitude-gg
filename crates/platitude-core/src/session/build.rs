@@ -141,73 +141,127 @@ pub(super) async fn rewrite_carrying(
         integrate::RebaseOutcome::Stopped => Ok(integrate::Landing::Stopped),
         integrate::RebaseOutcome::Blocked(refusal) => {
             tracing::info!(%refusal, "rebase refused: going round through a stash");
-            carry_across_rewrite(executor, repo, rewrite, refusal, cancel).await
+            carry_across(executor, repo, &Carried::Rewrite(rewrite), refusal, cancel).await
         }
     }
 }
 
-/// Stash, rewrite, put back — [`carry_across`]'s three steps with the
-/// rewrite in the middle. Not `--autostash`: it restores with a plain
-/// `stash apply` (everything staged comes back unstaged), and a stopped
-/// rebase parks the work in `.git/rebase-merge/autostash`, out of
-/// `stash list` and the graph.
-///
-/// Unlike a move, the restore is skipped when the rebase stops part-way:
-/// git will not write into an index holding unmerged paths, so a `pop`
-/// does nothing while reporting the conflict it walked into
-/// (rules-refs/core.md「`stash pop` の非ゼロを conflict と読めるのは」).
-/// The entry stays in the stash list for the person settling the
-/// conflict, where the same commands typed by hand would leave it.
-async fn carry_across_rewrite(
-    executor: &GitExecutor,
-    repo: &RepoInfo,
-    rewrite: &Rewrite<'_>,
-    refusal: GitError,
-    cancel: &CancellationToken,
-) -> Result<integrate::Landing, GitError> {
-    // A standing merge / cherry-pick / revert gets the same dirty-tree
-    // refusal, and `git stash push` would take its marker (`MERGE_HEAD` …)
-    // down with it, so it ends the carry here; a bisect carries
-    // (rules-refs/core.md「立っている操作の上への rewrite は断る」).
-    let state = opstate::detect(executor, &repo.workdir, cancel).await?;
-    if integrate::InProgress::from_state(&state).is_some() {
-        return Err(report::rewrite_while_standing(standing_name(&state)));
-    }
-    if !stash_everything(executor, repo, cancel).await? {
-        // Cleaned since the refusal: nothing to carry, so just rerun.
-        return match rewrite.run(executor, repo, cancel).await? {
-            integrate::RebaseOutcome::Done => Ok(integrate::Landing::Done),
-            integrate::RebaseOutcome::Stopped => Ok(integrate::Landing::Stopped),
-            integrate::RebaseOutcome::Blocked(again) => Err(again),
-        };
-    }
-    match rewrite.run(executor, repo, cancel).await {
-        Ok(integrate::RebaseOutcome::Done) => {}
-        // No pop: the work stays in the stash (see above,
-        // デザイン規約 §未コミット変更がある状態で履歴を書き換える).
-        Ok(integrate::RebaseOutcome::Stopped) => return Ok(integrate::Landing::Stopped),
-        Ok(integrate::RebaseOutcome::Blocked(_)) => {
-            // Not something a stash gets past: put the work back and
-            // report git's first refusal, unless the pop fails.
-            stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await?;
-            return Err(refusal);
-        }
-        Err(error) => {
-            // A failure that left an operation standing keeps the work in
-            // the stash until that is dealt with; one that failed without
-            // starting gets it back.
-            if !opstate::detect(executor, &repo.workdir, cancel)
-                .await?
-                .any()
-            {
-                pop_back_after_failure(executor, repo, cancel).await;
+/// What one attempt at a carried command came to ([`Carried::attempt`]).
+enum Attempt {
+    Done,
+    /// Stopped on a conflict, git holding the tree.
+    Stopped,
+    /// Refused over uncommitted work in the way — the one refusal a stash
+    /// gets past ([`carry_across`]).
+    Blocked(GitError),
+}
+
+/// The commands git refuses over uncommitted work in their way, which a
+/// stash gets past: a move, a rewrite, a merge or a pull. Each tells its
+/// own refusal apart ([`Carried::attempt`]); the round through the stash
+/// is one ([`carry_across`]).
+enum Carried<'a> {
+    Move(&'a CheckoutTarget),
+    Rewrite(&'a Rewrite<'a>),
+    Integrate(&'a Integrate<'a>),
+}
+
+impl Carried<'_> {
+    async fn attempt(
+        &self,
+        executor: &GitExecutor,
+        repo: &RepoInfo,
+        cancel: &CancellationToken,
+    ) -> Result<Attempt, GitError> {
+        match self {
+            Carried::Move(target) => {
+                match branch::checkout(executor, &repo.workdir, target, cancel).await? {
+                    branch::CheckoutOutcome::Moved => Ok(Attempt::Done),
+                    branch::CheckoutOutcome::Blocked(refusal) => Ok(Attempt::Blocked(refusal)),
+                }
             }
-            return Err(error);
+            Carried::Rewrite(rewrite) => match rewrite.run(executor, repo, cancel).await? {
+                integrate::RebaseOutcome::Done => Ok(Attempt::Done),
+                integrate::RebaseOutcome::Stopped => Ok(Attempt::Stopped),
+                integrate::RebaseOutcome::Blocked(refusal) => Ok(Attempt::Blocked(refusal)),
+            },
+            Carried::Integrate(what) => match what.run(executor, repo, cancel).await {
+                Ok(integrate::Landing::Done) => Ok(Attempt::Done),
+                Ok(integrate::Landing::Stopped) => Ok(Attempt::Stopped),
+                Err(error) if integrate::refused_over_work(&error) => Ok(Attempt::Blocked(error)),
+                Err(error) => Err(error),
+            },
         }
     }
 
-    pop_back_split_first(executor, repo, cancel).await?;
-    Ok(integrate::Landing::Done)
+    /// The answer when an operation stands as the carry begins: `git
+    /// stash push` resets the tree and takes the operation's marker
+    /// (`MERGE_HEAD`, `REVERT_HEAD` …) down with it, so nothing is carried
+    /// under one. A rewrite says so in a report of its own; a merge or a
+    /// pull keeps git's refusal — the screen offers neither under a
+    /// standing operation, and git's own check before a merge reads
+    /// `MERGE_HEAD` and `CHERRY_PICK_HEAD` but not `REVERT_HEAD`
+    /// (builtin/merge.c, the minimum to 2.55), so this is the backstop. A
+    /// move cannot get here: git refuses every move under a standing
+    /// operation in words of its own
+    /// (rules-refs/core.md「立っている操作の上への rewrite は断る」).
+    fn under_standing(&self, state: &OpState, refusal: GitError) -> GitError {
+        match self {
+            Carried::Rewrite(_) => report::rewrite_while_standing(standing_name(state)),
+            Carried::Move(_) | Carried::Integrate(_) => refusal,
+        }
+    }
+}
+
+/// What a merge and a pull bring in: git turns both down over uncommitted
+/// work its fast-forward or merge would write over, in the same words
+/// ([`integrate::refused_over_work`]), so both go round through the same
+/// stash (デザイン規約 §履歴を合流させる).
+pub(super) enum Integrate<'a> {
+    /// `git merge <rev>`.
+    Merge {
+        rev: &'a str,
+        options: &'a integrate::MergeOptions,
+    },
+    /// `git pull --ff-only --no-rebase`, which lands or is refused and
+    /// never stops.
+    Pull { timeout: std::time::Duration },
+}
+
+impl Integrate<'_> {
+    async fn run(
+        &self,
+        executor: &GitExecutor,
+        repo: &RepoInfo,
+        cancel: &CancellationToken,
+    ) -> Result<integrate::Landing, GitError> {
+        match self {
+            Integrate::Merge { rev, options } => {
+                integrate::merge(executor, &repo.workdir, rev, options, cancel).await
+            }
+            Integrate::Pull { timeout } => remote::pull(executor, &repo.workdir, *timeout, cancel)
+                .await
+                .map(|()| integrate::Landing::Done),
+        }
+    }
+}
+
+/// Runs `what`, going round through a stash when git refuses it over work
+/// in the way — the one refusal a stash gets past; any other comes back as
+/// git said it.
+pub(super) async fn integrate_carrying(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    what: &Integrate<'_>,
+    cancel: &CancellationToken,
+) -> Result<integrate::Landing, GitError> {
+    match what.run(executor, repo, cancel).await {
+        Err(refusal) if integrate::refused_over_work(&refusal) => {
+            tracing::info!(%refusal, "refused over work in the way: going round through a stash");
+            carry_across(executor, repo, &Carried::Integrate(what), refusal, cancel).await
+        }
+        other => other,
+    }
 }
 
 /// The standing operation's name for a refusal: git's verb where
@@ -290,45 +344,76 @@ pub(super) async fn move_carrying(
         branch::CheckoutOutcome::Moved => Ok(()),
         branch::CheckoutOutcome::Blocked(refusal) => {
             tracing::info!(%refusal, "move refused: going round through a stash");
-            carry_across(executor, repo, target, refusal, cancel).await
+            carry_across(executor, repo, &Carried::Move(target), refusal, cancel)
+                .await
+                .map(drop)
         }
     }
 }
 
-/// Stash, move, put back. `refusal` is what git said first, kept for the
-/// dead ends with nothing better to report.
+/// Stash, run `what`, put back — with the staged/unstaged split kept
+/// (`--index`), so the work exists somewhere other than a marked-up file.
+/// `refusal` is what git said first, kept for the dead ends with nothing
+/// better to report.
 ///
-/// Through a stash, the staged/unstaged split survives (`--index`) and a
-/// conflict keeps the stash entry, so the work exists somewhere other
-/// than a marked-up file.
+/// Not `--autostash`: it restores with a plain `stash apply` (everything
+/// staged comes back unstaged), and a stopped rebase or merge parks the
+/// work in `.git/rebase-merge/autostash` / `MERGE_AUTOSTASH`, out of
+/// `stash list` and the graph.
+///
+/// The restore is skipped when the command stops part-way: git will not
+/// write into an index holding unmerged paths, so a `pop` does nothing
+/// while reporting the conflict it walked into
+/// (rules-refs/core.md「`stash pop` の非ゼロを conflict と読めるのは」).
+/// The entry stays in the stash list for the person settling the
+/// conflict, where the same commands typed by hand would leave it.
 async fn carry_across(
     executor: &GitExecutor,
     repo: &RepoInfo,
-    target: &CheckoutTarget,
+    what: &Carried<'_>,
     refusal: GitError,
     cancel: &CancellationToken,
-) -> Result<(), GitError> {
+) -> Result<integrate::Landing, GitError> {
+    // Asked before the stash, whatever is carried: one `rev-parse` on a
+    // path already four processes long (`Carried::under_standing`). A
+    // bisect carries — it is no `InProgress`.
+    let state = opstate::detect(executor, &repo.workdir, cancel).await?;
+    if integrate::InProgress::from_state(&state).is_some() {
+        return Err(what.under_standing(&state, refusal));
+    }
     if !stash_everything(executor, repo, cancel).await? {
         // Cleaned since the refusal: nothing to carry, so just rerun.
-        return match branch::checkout(executor, &repo.workdir, target, cancel).await? {
-            branch::CheckoutOutcome::Moved => Ok(()),
-            branch::CheckoutOutcome::Blocked(again) => Err(again),
+        return match what.attempt(executor, repo, cancel).await? {
+            Attempt::Done => Ok(integrate::Landing::Done),
+            Attempt::Stopped => Ok(integrate::Landing::Stopped),
+            Attempt::Blocked(again) => Err(again),
         };
     }
-    let outcome = match branch::checkout(executor, &repo.workdir, target, cancel).await {
-        Ok(outcome) => outcome,
+    match what.attempt(executor, repo, cancel).await {
+        Ok(Attempt::Done) => {}
+        // No pop: the work stays in the stash (see above,
+        // デザイン規約 §未コミット変更がある状態で履歴を書き換える).
+        Ok(Attempt::Stopped) => return Ok(integrate::Landing::Stopped),
+        Ok(Attempt::Blocked(_)) => {
+            // Not something a stash gets past (a `--skip-worktree` file,
+            // say): put the work back and report git's first refusal,
+            // unless the pop fails.
+            stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await?;
+            return Err(refusal);
+        }
         Err(error) => {
-            pop_back_after_failure(executor, repo, cancel).await;
+            // A failure that left an operation standing keeps the work in
+            // the stash until that is dealt with; one that failed without
+            // starting gets it back.
+            if !opstate::detect(executor, &repo.workdir, cancel)
+                .await?
+                .any()
+            {
+                pop_back_after_failure(executor, repo, cancel).await;
+            }
             return Err(error);
         }
-    };
-    if let branch::CheckoutOutcome::Blocked(_) = outcome {
-        // Not something a stash gets past (a `--skip-worktree` file, say):
-        // put the work back and report git's first refusal, unless the
-        // pop fails.
-        stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await?;
-        return Err(refusal);
     }
-
-    pop_back_split_first(executor, repo, cancel).await
+    pop_back_split_first(executor, repo, cancel).await?;
+    Ok(integrate::Landing::Done)
 }

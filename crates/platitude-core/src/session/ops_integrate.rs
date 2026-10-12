@@ -1,7 +1,9 @@
 //! History integration: merge, rebase (plain and interactive), sequencer
 //! edits, cherry-pick / revert, and conflict / merge-tool handling.
 
-use super::build::{Replay, Rewrite, rewrite_carrying, run_plan, standing_name};
+use super::build::{
+    Integrate, Replay, Rewrite, integrate_carrying, rewrite_carrying, run_plan, standing_name,
+};
 use super::discard_record::{rebase_began_on, stopped_rebase_tips};
 use super::*;
 
@@ -40,7 +42,8 @@ impl RepoSession {
         }
     }
 
-    /// `git merge <rev>`.
+    /// `git merge <rev>`, carrying uncommitted work across where git would
+    /// write over it ([`integrate_carrying`]).
     pub fn merge(
         self: &Arc<Self>,
         rev: String,
@@ -51,8 +54,11 @@ impl RepoSession {
             OperationKind::Merge,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let landing =
-                    integrate::merge(&exec, &repo.workdir, &rev, &options, &cancel).await?;
+                let what = Integrate::Merge {
+                    rev: &rev,
+                    options: &options,
+                };
+                let landing = integrate_carrying(&exec, &repo, &what, &cancel).await?;
                 session.note_landing(landing);
                 Ok(())
             },

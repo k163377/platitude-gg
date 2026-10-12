@@ -3,7 +3,7 @@
 
 use crate::support::TestRepo;
 use crate::support::session::{
-    CaptureSink, install_todo_editor, opened, write_result, write_stopped,
+    CaptureSink, command_words, install_todo_editor, opened, write_result, write_stopped,
 };
 use platitude_core::OperationKind;
 use platitude_core::sequencer::RebaseStep;
@@ -43,6 +43,7 @@ fn rewrite_route(sink: &CaptureSink) -> Vec<&'static str> {
         let SessionEvent::CommandStarted { display, .. } = event else {
             continue;
         };
+        let words = command_words(display);
         // Longest first: "stash pop --index" also starts with "stash
         // pop", and every interactive rebase with "rebase".
         for step in [
@@ -52,7 +53,7 @@ fn rewrite_route(sink: &CaptureSink) -> Vec<&'static str> {
             "stash pop",
             "rebase",
         ] {
-            if display.starts_with(&format!("git {step}")) {
+            if words.starts_with(step) {
                 out.push(step);
                 break;
             }

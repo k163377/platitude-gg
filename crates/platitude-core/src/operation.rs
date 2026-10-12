@@ -244,17 +244,16 @@ impl OperationKind {
     /// leaves a standing operation on disk while it runs. So the poll is
     /// let through under these to count the steps
     /// (`RepoSession::refresh_poll`), and the screen holds its write doors
-    /// down while one is out. A pull is in because it is a rebase or a
-    /// merge underneath (`pull.rebase`); the three one-commit edits
-    /// because each is a rebase (`sequencer::plan_edit` + `run_plan`).
+    /// down while one is out. The three one-commit edits are in because
+    /// each is a rebase (`sequencer::plan_edit` + `run_plan`); a pull is
+    /// not, since it fast-forwards only (`remote::pull`).
     ///
     /// **The one place the set is written**, as with [`Self::lane`].
     #[must_use]
     pub fn replays_history(self) -> bool {
         matches!(
             self,
-            Self::Pull
-                | Self::Merge
+            Self::Merge
                 | Self::Rebase
                 | Self::Squash
                 | Self::Drop
@@ -294,7 +293,6 @@ mod tests {
     #[test]
     fn the_writes_that_replay_are_the_ones_a_range_can_make_long() {
         for kind in [
-            OperationKind::Pull,
             OperationKind::Merge,
             OperationKind::Rebase,
             OperationKind::Squash,
@@ -318,6 +316,7 @@ mod tests {
             OperationKind::Tag,
             OperationKind::Push,
             OperationKind::Fetch,
+            OperationKind::Pull,
             OperationKind::FastForward,
             OperationKind::Config,
             OperationKind::Mergetool,

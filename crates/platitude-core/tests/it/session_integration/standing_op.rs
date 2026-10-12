@@ -6,7 +6,9 @@
 //! carry's stash would then put the merge down and report a success.
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, install_todo_editor, opened, write_result};
+use crate::support::session::{
+    CaptureSink, command_words, install_todo_editor, opened, write_result,
+};
 use platitude_core::OperationKind;
 use platitude_core::sequencer::{RebaseStep, TodoAction};
 use platitude_core::session::SessionEvent;
@@ -53,7 +55,7 @@ fn wrote_anything(sink: &CaptureSink) -> Vec<String> {
                 "revert",
             ]
             .iter()
-            .any(|verb| display.starts_with(&format!("git {verb}")))
+            .any(|verb| command_words(display).starts_with(verb))
         })
         .collect()
 }
@@ -166,7 +168,7 @@ async fn a_squash_under_a_standing_merge_stops_at_the_carry() {
         "git refused once and the carry did not go round: {spawned:?}"
     );
     assert!(
-        spawned[0].starts_with("git rebase --interactive"),
+        command_words(&spawned[0]).starts_with("rebase --interactive"),
         "and the one spawn is the replay git turned down: {spawned:?}"
     );
     assert!(merge_stands(&repo), "the merge is still standing");

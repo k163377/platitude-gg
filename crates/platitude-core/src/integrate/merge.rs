@@ -33,7 +33,14 @@ pub async fn merge(
     options: &MergeOptions,
     cancel: &CancellationToken,
 ) -> Result<Landing, GitError> {
-    let mut cmd = GitCommand::new().cwd(workdir).args(["merge", "--no-edit"]);
+    // `--no-autostash` pins off `merge.autoStash`: the stash a dirty tree
+    // goes round through is this end's, which puts staged work back staged
+    // (`session::build::carry_across`); git's own restores with a plain
+    // `apply` and parks a stopped merge's work in `MERGE_AUTOSTASH`, out
+    // of the stash list.
+    let mut cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["merge", "--no-edit", "--no-autostash"]);
     if options.no_ff {
         cmd = cmd.arg("--no-ff");
     }
@@ -57,11 +64,23 @@ pub async fn merge(
         .except_when_it_says(super::REFUSED_OVER_WORK);
     match executor.run(cmd, cancel).await {
         Ok(_) => Ok(Landing::Done),
+        // Nothing stands behind this one, so nothing is read.
+        Err(error) if refused_over_work(&error) => Err(error),
         Err(error) if stopped_on_a_conflict(executor, workdir, &error, cancel).await => {
             Ok(Landing::Stopped)
         }
         Err(error) => Err(error),
     }
+}
+
+/// Whether git turned a merge — or a pull's — down over work in the way:
+/// tracked changes or untracked files its fast-forward or merge would write
+/// over (exit 1 for the fast-forward, 2 for a real merge; nothing left
+/// standing either way). The refusal a stash gets past
+/// (`session::build::integrate_carrying`).
+#[must_use]
+pub fn refused_over_work(error: &GitError) -> bool {
+    matches!(error, GitError::Failed { stderr, .. } if stderr.contains(super::OVERWRITES_WORK))
 }
 
 /// The message a stopped merge is going to record, with git's own
