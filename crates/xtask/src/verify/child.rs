@@ -207,6 +207,36 @@ fn ordered_hold(opts: &Options) -> Option<&str> {
     (opts.fault_no_deadline && !opts.fault_hang.is_empty()).then_some(opts.fault_hang.as_str())
 }
 
+/// The faults a run asks for, as the app's `PGG_FAULT_*` knobs
+/// (`super::faults`). `clear_automation` already dropped what the parent
+/// shell carried, so an unset knob means no fault.
+fn fault_knobs(cmd: &mut Command, opts: &Options) {
+    if !opts.fault_hang.is_empty() {
+        cmd.env("PGG_FAULT_HANG", &opts.fault_hang);
+    }
+    if opts.fault_no_deadline {
+        cmd.env("PGG_FAULT_NO_DEADLINE", "1");
+    }
+    if opts.fault_hold_act {
+        cmd.env("PGG_FAULT_HOLD_ACT", "1");
+    }
+    // Raised by verb name: a run that needed a hand-typed flag is one the
+    // census could not record (`super::verbs::window`).
+    if HELD_WIP_ROW_VERBS.contains(&opts.verb.as_str()) {
+        cmd.env("PGG_FAULT_HOLD_WIP_ROW", "1");
+    }
+    // The save hold: where a run asked for it, and unasked for
+    // `HELD_SAVE_VERB` (`super::verbs::window`).
+    let hold_save = if opts.fault_hold_save.is_empty() && opts.verb == HELD_SAVE_VERB {
+        HELD_SAVE_STATION
+    } else {
+        opts.fault_hold_save.as_str()
+    };
+    if !hold_save.is_empty() {
+        cmd.env("PGG_FAULT_HOLD_SAVE", hold_save);
+    }
+}
+
 /// The environment one run hands the app: where it reads its git identity
 /// and its settings from, and every `PGG_*` knob the verb asked for.
 fn compose(start: &Start<'_>) -> Result<Command, String> {
@@ -252,32 +282,11 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     // Per build, so its runs share one compiled cache while a person's own
     // window and other seats' builds keep theirs (`platitude-app` qrc.rs).
     cmd.env("QML_DISK_CACHE_PATH", exe.with_file_name("qmlcache"));
-    // `clear_automation` already dropped what the parent shell carried, so
-    // an unset knob means no fault (`super::faults`).
-    if !opts.fault_hang.is_empty() {
-        cmd.env("PGG_FAULT_HANG", &opts.fault_hang);
+    // The app's alone: this runner's own git never sees them (`--app-env`).
+    for (key, value) in &opts.app_env {
+        cmd.env(key, value);
     }
-    if opts.fault_no_deadline {
-        cmd.env("PGG_FAULT_NO_DEADLINE", "1");
-    }
-    if opts.fault_hold_act {
-        cmd.env("PGG_FAULT_HOLD_ACT", "1");
-    }
-    // Raised by verb name: a run that needed a hand-typed flag is one the
-    // census could not record (`super::verbs::window`).
-    if HELD_WIP_ROW_VERBS.contains(&opts.verb.as_str()) {
-        cmd.env("PGG_FAULT_HOLD_WIP_ROW", "1");
-    }
-    // The save hold: where a run asked for it, and unasked for
-    // `HELD_SAVE_VERB` (`super::verbs::window`).
-    let hold_save = if opts.fault_hold_save.is_empty() && opts.verb == HELD_SAVE_VERB {
-        HELD_SAVE_STATION
-    } else {
-        opts.fault_hold_save.as_str()
-    };
-    if !hold_save.is_empty() {
-        cmd.env("PGG_FAULT_HOLD_SAVE", hold_save);
-    }
+    fault_knobs(&mut cmd, opts);
     // Set on the app so every git it starts inherits them, wherever the
     // staged copy stands (`--old-git` / `--no-lfs` on PATH, `--other-git`
     // where the settings point).

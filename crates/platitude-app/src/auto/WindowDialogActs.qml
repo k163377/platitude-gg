@@ -195,7 +195,17 @@ Item {
                  || Harness.autoAct === "open-fail-tab-log"
                  || Harness.autoAct === "open-fail-sweep"
         onTriggered: {
-            if (window.curPage === null || window.curPage.pageTab.state !== "open")
+            if (window.curPage === null)
+                return
+            // A tab that failed as the window came up — a restored folder git now refuses, which
+            // `--app-env GIT_TEST_ASSUME_DIFFERENT_OWNER=1` makes of any `--repo` — is already the
+            // screen this verb reads: nothing else is opened.
+            if (window.curPage.pageTab.state === "error") {
+                failTabActTimer.stop()
+                failTabTimer.start()
+                return
+            }
+            if (window.curPage.pageTab.state !== "open")
                 return
             failTabActTimer.stop()
             tabsModel.openRepositoryPath(Harness.autoActArg)
@@ -220,7 +230,7 @@ Item {
             failTabTimer.stop()
             if (Harness.autoAct === "open-fail-sweep") {
                 // The log's seat is here but the folder is not, and a reader pastes it into a shell
-                // (規約 §右のペインの字は掴める). `kind=`: only one of the three screens has a line from git.
+                // (規約 §右のペインの字は掴める). `kind=`: two of the four screens have a line from git.
                 Harness.report("open_fail_sweep "
                     + window.curPage.openFailedHand.sweepAir(7, "kind=" + window.curPage.pageTab.errorKind))
                 window.finishAutoAct()

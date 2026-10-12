@@ -35,6 +35,12 @@ pub(super) struct Options {
     /// Diagnostic ceiling for a run whose causal completion never arrives
     /// ([`WATCHDOG_MS`]).
     pub(super) watchdog_ms: u64,
+    /// Variables set on the app alone, not on this runner's own git
+    /// (`--app-env KEY=VALUE`): what makes git answer the app one way for
+    /// a verb — `GIT_TEST_ASSUME_DIFFERENT_OWNER=1` for the untrusted
+    /// folder's screen, which the runner's reads of the same folder must
+    /// not see.
+    pub(super) app_env: Vec<(String, String)>,
     /// Hold the app at the station this names, for good (`PGG_FAULT_HANG`;
     /// the words are `harness::deadline`'s). A run that always fails, for
     /// `super::faults`.
@@ -197,6 +203,7 @@ impl Default for Options {
             scroll_to: String::new(),
             system_title_bar: false,
             watchdog_ms: WATCHDOG_MS,
+            app_env: Vec::new(),
             fault_hang: String::new(),
             fault_no_deadline: false,
             fault_hold_act: false,
@@ -255,6 +262,14 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                     .ok_or("--watchdog-ms needs a number")?
                     .parse()
                     .map_err(|e| format!("--watchdog-ms: {e}"))?;
+            }
+            "--app-env" => {
+                let pair = it.next().ok_or("--app-env needs KEY=VALUE")?;
+                let (key, value) = pair
+                    .split_once('=')
+                    .filter(|(key, _)| !key.is_empty())
+                    .ok_or_else(|| format!("--app-env takes KEY=VALUE; got {pair:?}"))?;
+                opts.app_env.push((key.to_string(), value.to_string()));
             }
             "--fault-hang" => {
                 opts.fault_hang = it

@@ -51,6 +51,10 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           arrives, and only that — the shot is chosen by
                           the completion itself (default 600000).
                           Lower it only to diagnose the wait itself
+        --app-env KEY=VALUE
+                          set on the app alone, not on this runner's git
+                          (repeatable): GIT_TEST_ASSUME_DIFFERENT_OWNER=1
+                          makes open-fail-tab show the untrusted folder
         --fault-hang <station>
                           hold the app at that station for good, by the
                           word the trail names it with: starting,

@@ -581,9 +581,12 @@ Item {
             const row = graphModel.rowOf(page.selectedOid)
             // `pendingHeadSelect`: right after the answer the refs are still old, so `selected === headOid` holds
             // vacuously until it resolves. `cardSettled`: until its round trip returns, the right pane still shows the
-            // commit selected before the press — for a merge from a ref row, the old tip.
+            // commit selected before the press — for a merge from a ref row, the old tip. `settling`: the refs
+            // publish ahead of the status, the rebuilt graph and the sidebar, and a fast-forward lands on a row the
+            // graph already has (the upstream's), so every other gate here opens while the WIP row still leashes the
+            // old tip and the counts still say behind.
             if (tipLandedTimer.answeredOp === "" || page.pendingHeadSelect
-                    || repoTab.busyCount !== 0 || row < 0
+                    || repoTab.busyCount !== 0 || repoTab.settling || row < 0
                     || !graphPane.rowOnScreen(row) || page.selectedOid !== worktree.headOid
                     || !driver.cardSettled)
                 return
