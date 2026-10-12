@@ -9,7 +9,8 @@ AppDialog {
     id: openFailedDialog
 
     /// What was picked, and what git made of it: `plain` (no repository here or in any folder above), `bare` (one with
-    /// no working tree), or `other` (git had trouble of its own — `message` is its answer).
+    /// no working tree), `untrusted` (one another account owns — `message` is git's answer, with the line that allows
+    /// it), or `other` (git had trouble of its own — `message` is its answer).
     property string path: ""
     property string kind: ""
     property string message: ""
@@ -62,7 +63,7 @@ AppDialog {
         // (Main.qml).
         CardText {
             Layout.fillWidth: true
-            visible: openFailedDialog.kind === "other"
+            visible: Words.openFailureQuotesGit(openFailedDialog.kind)
             color: Theme.danger
             text: openFailedDialog.message
         }

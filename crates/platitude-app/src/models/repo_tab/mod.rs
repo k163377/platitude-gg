@@ -77,6 +77,10 @@ pub struct RepoTab {
     /// The folder that would not open, for the line under the heading.
     error_path: String,
     last_error: String,
+    /// The word the header line is written from where `last_error` is a
+    /// remote that could not be reached (`Words.unreachedWhy`); empty where
+    /// the line is git's own first line.
+    last_error_why: String,
     /// Whether `last_error` is fetch news — only that line is taken down
     /// by a later fetch that lands.
     last_error_from_fetch: bool,

@@ -87,8 +87,9 @@ impl RepoTab {
                         self.stood();
                     }
                 }
-                TabMsg::OpError { message } => {
+                TabMsg::OpError { message, why } => {
                     self.last_error = message;
+                    self.last_error_why = why;
                     self.last_error_from_fetch = false;
                 }
                 TabMsg::Author {
@@ -183,14 +184,10 @@ impl RepoTab {
                     self.head_commit_seq += 1;
                 }
                 TabMsg::AmendChecked { empties } => self.amend_empties = empties,
-                TabMsg::AutoFetch {
-                    running,
-                    error,
-                    announce,
-                } => {
+                TabMsg::AutoFetch { running, error } => {
                     self.auto_fetch_running = running;
                     if !running {
-                        self.fetch_settled(&error, announce);
+                        self.fetch_settled(&error, false);
                     }
                 }
                 TabMsg::MoveNeedsAsk { local, start } => {

@@ -16,6 +16,7 @@ impl Default for RepoTab {
             error_kind: String::new(),
             error_path: String::new(),
             last_error: String::new(),
+            last_error_why: String::new(),
             last_error_from_fetch: false,
             // Placeholder: the page's restore writes the saved flag
             // (`PageLayout.applySavedLayout`) and the session reads the
@@ -226,9 +227,12 @@ impl RepoTab {
     /// A fetch ended, whoever asked for it: counts consecutive failures
     /// and stops the timer after enough (デザイン規約 §リモートから取り込む).
     ///
-    /// `announce` is whether this one may raise the command log. The
-    /// opening fetch may not — it still counts, but an offline machine
-    /// would have the panel thrown up at every tab opened.
+    /// `announce` is whether this one may raise the command log: only a
+    /// fetch the user pressed may. The timer's and the opening's count but
+    /// say nothing beyond the button — a machine that slept or went offline
+    /// fails them as a matter of course, and the panel would be thrown up
+    /// at every interval and every tab opened (デザイン規約
+    /// §リモートから取り込む, the one exception to a failure raising the log).
     pub(super) fn fetch_settled(&mut self, error: &str, announce: bool) {
         if error.is_empty() {
             self.fetch_failures = 0;
@@ -238,6 +242,7 @@ impl RepoTab {
             // Rows are history and stay.
             if self.last_error_from_fetch {
                 self.last_error = String::new();
+                self.last_error_why = String::new();
                 self.last_error_from_fetch = false;
             }
             return;
@@ -245,9 +250,10 @@ impl RepoTab {
         self.fetch_failures += 1;
         if announce && !self.fetch_log_raised {
             // Once per run — later failures are the same news; a quiet
-            // opening fetch does not spend it.
+            // unasked fetch does not spend it.
             self.fetch_log_raised = true;
             self.last_error = error.to_string();
+            self.last_error_why = crate::hub::TabMsg::unreached_word(error);
             self.last_error_from_fetch = true;
             self.fetch_first_failed();
         }
@@ -432,9 +438,9 @@ mod tests {
     }
 
     #[test]
-    fn the_fetch_an_opening_fires_fails_without_a_word_to_the_panel() {
+    fn a_fetch_nobody_pressed_fails_without_a_word_to_the_panel() {
         let mut tab = RepoTab::default();
-        // Offline, and the tab has only just opened.
+        // Offline, and the tab has only just opened — or the timer fired.
         tab.fetch_settled("fatal: unable to access", false);
         assert_eq!(tab.fetch_failures, 1, "it is a failed fetch like any other");
         assert_eq!(

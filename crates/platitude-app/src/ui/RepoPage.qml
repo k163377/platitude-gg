@@ -3729,6 +3729,7 @@ FocusScope {
                     curPage: page
                     commandsModel: commandsModel
                     errorText: repoTab.lastError
+                    errorWhy: repoTab.lastErrorWhy
                     // Read off the page: the press that raises the mark often builds this seat, and a panel told
                     // afterwards would come up dark and light a frame later.
                     attention: page.commandsAttention

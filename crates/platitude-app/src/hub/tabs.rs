@@ -38,6 +38,11 @@ impl Hub {
                         platitude_core::GitError::NotARepository { bare, .. } => {
                             (if *bare { "bare" } else { "plain" }, String::new())
                         }
+                        // git's words alone: they end in the line that
+                        // allows the folder.
+                        platitude_core::GitError::UntrustedOwner { stderr, .. } => {
+                            ("untrusted", stderr.clone())
+                        }
                         _ => ("other", e.to_string()),
                     };
                     OpenMsg::Refused {

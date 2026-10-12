@@ -50,6 +50,11 @@ pub enum TabMsg {
     },
     OpError {
         message: String,
+        /// Why a remote could not be reached, as the word the command
+        /// log's header line is written from (`Words.unreachedWhy`); empty
+        /// for every other failure, whose header line is git's first line
+        /// ([`platitude_core::remote::unreached`]).
+        why: String,
     },
     /// git stopped part-way through the write in flight and left the
     /// operation standing. Arrives before the `WriteState` ending that
@@ -192,10 +197,25 @@ pub enum TabMsg {
     AutoFetch {
         running: bool,
         error: String,
-        /// Whether a failure may raise the command log. An opening's fetch
-        /// says no: opening a tab is not a request to reach the network.
-        announce: bool,
     },
+}
+
+impl TabMsg {
+    /// A failure for the command log's header line, with the word the
+    /// line is written from where the failure is a remote out of reach.
+    pub fn op_error(message: String) -> Self {
+        let why = Self::unreached_word(&message);
+        TabMsg::OpError { message, why }
+    }
+
+    /// The header line's word for a remote that could not be reached
+    /// ([`platitude_core::remote::unreached`]), empty for any other
+    /// failure.
+    pub fn unreached_word(said: &str) -> String {
+        platitude_core::remote::unreached(said)
+            .map_or("", |why| why.word())
+            .to_string()
+    }
 }
 
 /// Where HEAD stands, from the one record (`session::standing`) — handed

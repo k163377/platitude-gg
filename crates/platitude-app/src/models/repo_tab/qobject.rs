@@ -29,6 +29,7 @@ impl RepoTab {
     qproperty!("errorKind", Member = error_kind, Notify = changed);
     qproperty!("errorPath", Member = error_path, Notify = changed);
     qproperty!("lastError", Member = last_error, Notify = changed);
+    qproperty!("lastErrorWhy", Member = last_error_why, Notify = changed);
     qproperty!("tagsShown", Member = tags_shown, Notify = changed);
     qproperty!("busyCount", Member = busy_count, Notify = changed);
     qproperty!("settling", Member = settling, Notify = settling_changed);
@@ -688,6 +689,7 @@ impl RepoTab {
     #[qslot]
     fn clear_last_error(&mut self) {
         self.last_error = String::new();
+        self.last_error_why = String::new();
         self.last_error_from_fetch = false;
         self.changed();
     }

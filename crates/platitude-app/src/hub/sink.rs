@@ -96,15 +96,22 @@ impl SessionSink for BridgeSink {
                 });
             }
             SessionEvent::OpenFailed { path, error } => {
-                let kind = match &error {
-                    platitude_core::GitError::NotARepository { bare: true, .. } => "bare",
-                    platitude_core::GitError::NotARepository { .. } => "plain",
-                    _ => "other",
+                let (kind, message) = match &error {
+                    platitude_core::GitError::NotARepository { bare: true, .. } => {
+                        ("bare", error.to_string())
+                    }
+                    platitude_core::GitError::NotARepository { .. } => ("plain", error.to_string()),
+                    // git's words alone: they end in the line that allows
+                    // the folder.
+                    platitude_core::GitError::UntrustedOwner { stderr, .. } => {
+                        ("untrusted", stderr.clone())
+                    }
+                    _ => ("other", error.to_string()),
                 };
                 self.feeds.tab.push(TabMsg::OpenFailed {
                     kind,
                     path: path.to_string_lossy().into_owned(),
-                    message: error.to_string(),
+                    message,
                 });
             }
             SessionEvent::LogStarted { generation } => {
@@ -408,9 +415,10 @@ impl SessionSink for BridgeSink {
                     message,
                 });
             }
-            SessionEvent::OpFailed { op, error } => self.feeds.tab.push(TabMsg::OpError {
-                message: format!("{op}: {error}"),
-            }),
+            SessionEvent::OpFailed { op, error } => self
+                .feeds
+                .tab
+                .push(TabMsg::op_error(format!("{op}: {error}"))),
             SessionEvent::MoveNeedsAsk { local, start } => {
                 self.feeds.tab.push(TabMsg::MoveNeedsAsk { local, start })
             }
@@ -522,26 +530,25 @@ impl SessionSink for BridgeSink {
                 self.feeds.tab.push(TabMsg::AmendChecked { empties });
             }
             // Unasked fetches go to the toolbar indicator only: nobody holds
-            // an id for them.
+            // an id for them, and their failure raises no panel (デザイン規約
+            // §リモートから取り込む).
             SessionEvent::WriteStarted {
-                kind: kind @ (OperationKind::AutoFetch | OperationKind::OpenFetch),
+                kind: OperationKind::AutoFetch | OperationKind::OpenFetch,
                 ..
             } => {
                 self.feeds.tab.push(TabMsg::AutoFetch {
                     running: true,
                     error: String::new(),
-                    announce: kind == OperationKind::AutoFetch,
                 });
             }
             SessionEvent::WriteFinished {
-                kind: kind @ (OperationKind::AutoFetch | OperationKind::OpenFetch),
+                kind: OperationKind::AutoFetch | OperationKind::OpenFetch,
                 error,
                 ..
             } => {
                 self.feeds.tab.push(TabMsg::AutoFetch {
                     running: false,
                     error: error.unwrap_or_default(),
-                    announce: kind == OperationKind::AutoFetch,
                 });
             }
             SessionEvent::WriteSettled { id, .. } => {
@@ -574,9 +581,9 @@ impl SessionSink for BridgeSink {
                 if let Some(message) = &error
                     && report.is_none()
                 {
-                    self.feeds.tab.push(TabMsg::OpError {
-                        message: format!("{}: {message}", kind.label()),
-                    });
+                    self.feeds
+                        .tab
+                        .push(TabMsg::op_error(format!("{}: {message}", kind.label())));
                 }
                 self.feeds.tab.push(TabMsg::WriteState {
                     id: id.as_u64(),

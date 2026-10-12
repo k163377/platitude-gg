@@ -17,6 +17,9 @@ Rectangle {
     /// A failure that never became a command row (a background read that gave up). Shown in the header; cleared by
     /// clicking it or by `Clear`.
     property string errorText: ""
+    /// The word the header line is written from instead of `errorText` where the failure is a remote that could not
+    /// be reached (`Words.unreachedWhy`); empty for git's own first line.
+    property string errorWhy: ""
 
     /// A reader was sent here from elsewhere in the window: framed in `accent` until their next move
     /// (`RepoPage.commandsAttention`, デザイン規約 §hover のツールチップ).
@@ -153,7 +156,9 @@ Rectangle {
                 Label {
                     Layout.fillWidth: true
                     visible: pane.errorText !== ""
-                    text: "— " + pane.errorText
+                    // A remote out of reach is said in this application's words; the rest is git's first line, and
+                    // the whole of it is under the row (デザイン規約 §git が言ったことを読む場所).
+                    text: "— " + (pane.errorWhy !== "" ? Words.unreachedWhy(pane.errorWhy) : pane.errorText)
                     elide: Text.ElideRight
                     maximumLineCount: 1
                     font.pixelSize: Theme.fontSm

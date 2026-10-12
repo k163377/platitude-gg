@@ -80,6 +80,15 @@ pub enum GitError {
         bare: bool,
     },
 
+    /// A repository git will not open for the account running it: the
+    /// folder is owned by someone else and `safe.directory` does not name
+    /// it (setup.c, 2.37.1 to 2.55 — a network drive, a clone another
+    /// account made, a WSL mount). `stderr` is git's whole answer, which
+    /// ends in the `git config --global --add safe.directory` line that
+    /// allows it; the screen puts a heading of its own over it.
+    #[error("git does not trust the owner of {}: {stderr}", path.display())]
+    UntrustedOwner { path: PathBuf, stderr: String },
+
     /// The command succeeded but printed something we cannot interpret.
     #[error("unexpected output from {command}: {message}")]
     UnexpectedOutput { command: String, message: String },

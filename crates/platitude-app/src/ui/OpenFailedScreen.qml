@@ -8,8 +8,8 @@ import platitude.ui
 Item {
     id: screen
 
-    /// core's answer (`errorKind`): `plain` / `bare` / `other` (`message` is git's own words, and only `other` has
-    /// any).
+    /// core's answer (`errorKind`): `plain` / `bare` / `untrusted` / `other` (`message` is git's own words, which only
+    /// the last two have — `Words.openFailureQuotesGit`).
     required property string kind
     required property string path
     required property string message
@@ -56,7 +56,7 @@ Item {
         // git's words, and the only red on this screen: the gate that reports a git it cannot use draws the line the
         // same way (Main.qml).
         NoticeLine {
-            visible: screen.kind === "other"
+            visible: Words.openFailureQuotesGit(screen.kind)
             text: screen.message
             color: Theme.danger
             width: parent.width

@@ -11,6 +11,7 @@ impl RepoTab {
         // this button's to take down.
         if self.last_error_from_fetch {
             self.last_error = String::new();
+            self.last_error_why = String::new();
             self.last_error_from_fetch = false;
         }
         self.with_session(|s| s.resume_auto_fetch());

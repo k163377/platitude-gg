@@ -19,6 +19,7 @@ mod push;
 mod refusal;
 mod standing;
 mod tags;
+mod unreached;
 
 pub use self::branch::{
     RemoteBranchState, branch_tip, delete_remote_branch, replace_remote_branch, untrack_deleted,
@@ -36,6 +37,7 @@ pub use self::tags::{
     HeldTag, RemoteTag, delete_remote_tag, list_tags, parse_ls_remote_tags, push_tag,
     replace_remote_tag,
 };
+pub use self::unreached::{Unreached, unreached};
 
 /// Default time budget for commands that talk to a remote.
 ///

@@ -60,11 +60,18 @@ pub async fn open(
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code != 0 {
         let stderr = out.stderr_utf8().trim().to_string();
+        // A folder owned by someone else is a kind of its own: git's words
+        // carry the line that allows it, and the screen heads them.
+        if stderr.contains(DUBIOUS_OWNERSHIP) {
+            return Err(GitError::UntrustedOwner {
+                path: path.to_path_buf(),
+                stderr,
+            });
+        }
         // Both "not a git repository" and a bare repository land here; the
         // screen tells them apart, so a second question is asked only here.
-        // Anything else git turned the folder down for — one another user
-        // owns (`safe.directory`), one it cannot read — is git's words to
-        // explain, not "not a repository".
+        // Anything else git turned the folder down for — one it cannot
+        // read, say — is git's words to explain, not "not a repository".
         let bare = is_bare(executor, path, cancel).await;
         if !bare && !stderr.contains(NOT_A_REPOSITORY) {
             return Err(GitError::Failed {
@@ -127,6 +134,12 @@ pub(crate) fn git_dir_of(workdir: &Path) -> Option<PathBuf> {
 /// What git says of a folder in no repository, whichever way it looked
 /// (`LC_ALL=C`; setup.c, every form at the minimum and 2.55).
 const NOT_A_REPOSITORY: &str = "not a git repository";
+
+/// What git says of a repository another account owns that
+/// `safe.directory` does not name (`LC_ALL=C`; setup.c `ensure_valid_ownership`,
+/// 2.37.1 to 2.55 and the maintenance releases beside it, 2.30.5 to 2.36.2
+/// — 2.37.0 said `unsafe repository`, under the minimum).
+const DUBIOUS_OWNERSHIP: &str = "detected dubious ownership";
 
 /// Whether `path` is a bare repository. Only asked once [`open`] has
 /// failed. `false` for no repository at all and for a question git could

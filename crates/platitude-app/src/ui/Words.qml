@@ -272,14 +272,37 @@ QtObject {
         return name !== "" ? name : qsTr("the incoming side")
     }
 
-    /// Why a folder would not open, from the kind core answered with (`plain` / `bare` / `other`), for both the
-    /// picker's dialog and a tab's failed screen (デザイン規約 §リポジトリを開く). `other` says only that much: what
-    /// happened is git's to say, quoted underneath.
+    /// Why a folder would not open, from the kind core answered with (`plain` / `bare` / `untrusted` / `other`), for
+    /// both the picker's dialog and a tab's failed screen (デザイン規約 §リポジトリを開く). `untrusted` is a folder
+    /// another account owns (`safe.directory`), whose heading is this application's and whose way out — the
+    /// `git config --global --add safe.directory` line — is in git's own words underneath. `other` says only that
+    /// much: what happened is git's to say, quoted underneath.
     function openFailure(kind) {
         switch (kind) {
         case "bare": return qsTr("A bare repository has nothing to show")
+        case "untrusted": return qsTr("git does not trust this folder's owner")
         case "other": return qsTr("Could not open this folder")
         default: return qsTr("Not a git repository")
+        }
+    }
+
+    /// Whether the folder's failure comes with git's own words to show under the heading (`openFailure`).
+    function openFailureQuotesGit(kind) {
+        return kind === "other" || kind === "untrusted"
+    }
+
+    /// What kept a remote out of reach, from the word core answered with (`remote::Unreached`) — the command log's
+    /// header line in this application's words, where git's own would name a URL and a terminal's prompt. Every
+    /// other failure's header line is git's first line (デザイン規約 §git が言ったことを読む場所).
+    function unreachedWhy(kind) {
+        switch (kind) {
+        case "credentials":
+            return qsTr("The remote asked for credentials, which this window cannot type — sign in once from a terminal")
+        case "ssh-key":
+            return qsTr("The remote did not accept this machine's SSH key")
+        case "host-key":
+            return qsTr("SSH has not met this remote's host key yet — connect once from a terminal")
+        default: return ""
         }
     }
 

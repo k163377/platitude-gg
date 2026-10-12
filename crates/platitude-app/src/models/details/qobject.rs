@@ -186,7 +186,7 @@ impl DetailsModel {
                     self.requested_at = None;
                     Hub::with(|hub| {
                         if let Some(feeds) = hub.feeds(self.tab_id) {
-                            feeds.tab.push(crate::hub::TabMsg::OpError { message });
+                            feeds.tab.push(crate::hub::TabMsg::op_error(message));
                         }
                     });
                     self.changed();
