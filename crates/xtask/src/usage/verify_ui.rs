@@ -115,7 +115,7 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           checkedout, prerebase, plan-unsigned,
                           plan-untracked, stash-lock, stash-droplock,
                           postcheckout, unsigned, hooked-auto,
-                          signed-push, push-unsigned, prepush-config,
+                          prepush-config,
                           stage-lock, plan-lock, squash-hooked,
                           carried-lock, reftable-lock, reftable-droplock,
                           remote-lock, tag-hidden). A replay that stops

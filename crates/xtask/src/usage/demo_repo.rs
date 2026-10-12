@@ -132,10 +132,6 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         postcheckout  basic, with a post-checkout hook that fails: a
                   worktree git makes is kept, its hook's failure the answer
                   (worktree-add branch:feature/topic-a)
-        signed-push  a commit to push with push.gpgSign=true, onto an origin
-                  that takes no signed push (push)
-        push-unsigned  the same onto an origin that takes them, with the
-                  ssh key to sign with not there (push)
         prepush-config  a commit to push and a pre-push hook the config
                   names (hook.<name>.event — git 2.54+) that says no (push)
         stage-lock  dirty, with another git holding the index's lock

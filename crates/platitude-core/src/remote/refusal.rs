@@ -1,6 +1,5 @@
 //! What a non-zero push was: outdated, turned down here by the `pre-push`
-//! hook, unsigned where it was to be signed, turned down over there and for
-//! what, or a plain failure.
+//! hook, turned down over there and for what, or a plain failure.
 //!
 //! Kept apart from [`super::push`] because the tag commands read it too
 //! ([`super::tags`]) and none of it looks at a [`super::PushSpec`].
@@ -113,9 +112,11 @@ fn outdated(
 }
 
 /// The reading for a refusal no read here answers: the far side by its ref
-/// line; before any, the `pre-push` hook here, a push git could not sign
-/// or one the far side takes no signature on; or a plain failure, which
-/// the log answers.
+/// line; before any, the `pre-push` hook here; or a plain failure, which
+/// the log answers. A signed push (`push.gpgSign`) git could not sign, or
+/// that the far side takes none of, is the plain failure: the setting is
+/// rare and the forges take no signed push, so nothing names it
+/// (gitの扱い.md §類型).
 fn refused(command: String, out: &crate::process::GitOutput, sent: &Sent<'_>) -> GitError {
     let porcelain = out.stdout_utf8();
     let stderr = out.stderr_utf8();
@@ -135,14 +136,6 @@ fn refused(command: String, out: &crate::process::GitOutput, sent: &Sent<'_>) ->
             true => ReportKind::PrePushDelete,
             false => ReportKind::PrePush,
         },
-        None if PUSH_UNSIGNED.iter().any(|said| stderr.contains(said)) => {
-            ReportKind::PushUnsigned {
-                deleting: sent.deleting,
-            }
-        }
-        None if stderr.contains(SIGNED_PUSH_UNTAKEN) => ReportKind::SignedPushUntaken {
-            deleting: sent.deleting,
-        },
         _ => {
             return GitError::Failed {
                 command,
@@ -161,23 +154,6 @@ fn refused(command: String, out: &crate::process::GitOutput, sent: &Sent<'_>) ->
 /// How git marks a ref the far side turned down, against `[rejected]` for
 /// one this end turned down itself, each with a next move here.
 const REMOTE_REJECTED: &str = "[remote rejected]";
-
-/// What git dies with when `push.gpgSign` asks for a signed push and it
-/// cannot sign (`LC_ALL=C`, the same at the minimum and 2.55, before any
-/// ref line): the signing program would not sign the certificate (send-pack.c
-/// — a gpg key gone, a prompt put away), and before that, for ssh, the key
-/// it would name as the pusher's is not there or none is named
-/// (gpg-interface.c `get_ssh_key_fingerprint` / `get_default_ssh_signing_key`).
-const PUSH_UNSIGNED: [&str; 3] = [
-    "failed to sign the push certificate",
-    "failed to get the ssh fingerprint for key",
-    "either user.signingkey or gpg.ssh.defaultKeyCommand needs to be configured",
-];
-
-/// What git dies with when `push.gpgSign` is `true` rather than `if-asked`
-/// and the far side takes no signed push at all (no `receive.certNonceSeed`
-/// over there; send-pack.c, the minimum and 2.55).
-const SIGNED_PUSH_UNTAKEN: &str = "the receiving end does not support --signed push";
 
 /// What the far side said no for: git's own reason in the brackets
 /// (receive-pack's, the same words at the minimum and 2.55), and for the

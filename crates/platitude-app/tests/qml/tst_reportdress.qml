@@ -216,12 +216,11 @@ Item {
 
         /// Both arms, because either alone passes against a bar painted one colour.
         function test_the_gesture_that_is_still_going_wears_the_other_colour() {
-            for (const kind of ["rename", "rename-locked", "half-rename", "half-rename-refused", "half-rename-locked",
+            for (const kind of ["rename", "rename-locked", "half-rename",
                                 "rename-unfinished", "stash-rename", "stash-rename-locked", "carried-locked"])
                 compare(Words.reportTone(kind), "warning", kind)
             for (const kind of ["update-rule", "delete-rule", "outdated", "pre-push", "pre-push-delete",
-                                "push-unsigned", "push-unsigned-delete", "signed-push-untaken",
-                                "signed-push-untaken-delete", "commit", "commit-hook", "commit-unsigned",
+                                "commit", "commit-hook", "commit-unsigned",
                                 "commit-locked", "stash-gone", "stale-stage", "stage-locked", "unstage-locked",
                                 "discard-locked", "conflicted-part", "tip-moved", "op-standing", "pre-rebase",
                                 "rewrite-unsigned", "rewrite-commit-hook", "rewrite-locked", "rewrite-untracked"])
@@ -235,8 +234,7 @@ Item {
         function test_a_rename_git_turned_down_keeps_its_box() {
             for (const kind of ["rename", "rename-locked", "stash-rename", "stash-rename-locked"])
                 verify(Words.renameStillOpen(kind), kind)
-            for (const kind of ["half-rename", "half-rename-refused", "half-rename-locked", "rename-unfinished",
-                                "stash-gone", "commit", ""])
+            for (const kind of ["half-rename", "rename-unfinished", "stash-gone", "commit", ""])
                 verify(!Words.renameStillOpen(kind), kind)
         }
 
@@ -247,14 +245,12 @@ Item {
             compare(Words.writeReported("delete-current", "origin", "main"), "origin would not delete main")
             compare(Words.writeReported("update-rule", "origin", "main"), "origin would not update main")
             compare(Words.writeReported("update-too-large", "origin", "main"), "origin would not update main")
-            for (const kind of ["outdated", "pre-push", "push-unsigned", "signed-push-untaken"])
+            for (const kind of ["outdated", "pre-push"])
                 compare(Words.writeReported(kind, "origin", "main"), "main was not sent to origin", kind)
-            for (const kind of ["pre-push-delete", "push-unsigned-delete", "signed-push-untaken-delete"])
-                compare(Words.writeReported(kind, "origin", "main"), "main was not deleted from origin", kind)
+            compare(Words.writeReported("pre-push-delete", "origin", "main"), "main was not deleted from origin")
             compare(Words.writeReported("rename", "origin", "main"), "main was not renamed")
             compare(Words.writeReported("rename-locked", "origin", "main"), "main was not renamed")
-            for (const kind of ["half-rename", "half-rename-refused", "half-rename-locked"])
-                compare(Words.writeReported(kind, "origin", "main"), "The rename did not finish", kind)
+            compare(Words.writeReported("half-rename", "origin", "main"), "The rename did not finish")
             compare(Words.writeReported("rename-unfinished", "", "renamed"), "The rename did not finish")
             for (const kind of ["stash-rename", "stash-rename-locked", "stash-gone"])
                 compare(Words.writeReported(kind, "", ""), "The stash was not renamed", kind)
@@ -287,10 +283,6 @@ Item {
             const owed = {
                 "pre-push": "The pre-push hook turned it down — see GIT COMMANDS",
                 "pre-push-delete": "The pre-push hook turned it down — see GIT COMMANDS",
-                "push-unsigned": "The push could not be signed — see GIT COMMANDS",
-                "push-unsigned-delete": "The push could not be signed — see GIT COMMANDS",
-                "signed-push-untaken": "origin does not take signed pushes — see GIT COMMANDS",
-                "signed-push-untaken-delete": "origin does not take signed pushes — see GIT COMMANDS",
                 "update-rule": "A rule on origin turned it down — see GIT COMMANDS",
                 "delete-rule": "A rule on origin turned it down — see GIT COMMANDS",
                 "update-rewrite": "origin does not take pushes that rewrite its history — see GIT COMMANDS",
@@ -315,11 +307,7 @@ Item {
                 "rename-locked": "Another git process seems to be running — see GIT COMMANDS",
                 "rename-unfinished": "The branch has its new name, but git stopped before the rest moved"
                                      + " — see GIT COMMANDS",
-                "half-rename": "The new name was made; the old one is still there.",
-                "half-rename-refused": "The new name was made, but git did not remove the old one"
-                                       + " — see GIT COMMANDS",
-                "half-rename-locked": "The new name was made, but another git process seems to be running"
-                                      + " — see GIT COMMANDS",
+                "half-rename": "The new name was made, but the old one is still there — see GIT COMMANDS",
                 "stash-rename": "git turned it down — see GIT COMMANDS",
                 "stash-rename-locked": "Another git process seems to be running — see GIT COMMANDS",
                 "stash-gone": "It is no longer in the stash list.",
@@ -431,7 +419,7 @@ Item {
             // All the way down, which is where the hairline is the width of the bar.
             tryVerify(() => bar.settled)
             compare(bar.label, "The rename did not finish")
-            compare(bar.detail, "The new name was made; the old one is still there.")
+            compare(bar.detail, "The new name was made, but the old one is still there — see GIT COMMANDS")
             compare(bar.tone, "warning")
             const rule = findRule()
             compare(rule.color, Theme.warning)

@@ -159,24 +159,16 @@ fn reach_the_page(reports: Vec<(platitude_core::GitError, &str, &str)>) {
     }
 }
 
-/// What another git's index lock and an unsigned push come back as, from
-/// core's producers: the lock's report for each verb that met it, and a
-/// send's or a delete's.
+/// What another git's index lock comes back as, from core's producers: the
+/// lock's report for each verb that met it.
 #[test]
-fn a_lock_and_an_unsigned_push_reach_the_page_under_their_names() {
+fn a_lock_reaches_the_page_under_the_name_of_the_verb_that_met_it() {
     use platitude_core::report;
     let local = |kind| {
         report::reported(
             report::WriteReport::local(kind),
             "git".into(),
             &out(128, LOCK),
-        )
-    };
-    let pushed = |kind| {
-        report::reported(
-            report::WriteReport::on_remote(kind, "origin", "main"),
-            "git push".into(),
-            &out(128, ""),
         )
     };
     reach_the_page(vec![
@@ -188,26 +180,6 @@ fn a_lock_and_an_unsigned_push_reach_the_page_under_their_names() {
         (local(ReportKind::StageLocked), "stage-locked", ""),
         (local(ReportKind::UnstageLocked), "unstage-locked", ""),
         (local(ReportKind::DiscardLocked), "discard-locked", ""),
-        (
-            pushed(ReportKind::PushUnsigned { deleting: false }),
-            "push-unsigned",
-            "",
-        ),
-        (
-            pushed(ReportKind::PushUnsigned { deleting: true }),
-            "push-unsigned-delete",
-            "",
-        ),
-        (
-            pushed(ReportKind::SignedPushUntaken { deleting: false }),
-            "signed-push-untaken",
-            "",
-        ),
-        (
-            pushed(ReportKind::SignedPushUntaken { deleting: true }),
-            "signed-push-untaken-delete",
-            "",
-        ),
     ]);
 }
 
@@ -243,12 +215,12 @@ fn the_refusals_only_gits_run_tells_reach_the_page_under_their_names() {
         ),
         (
             report::half_renamed("v1", refused_with("error: Could not drop stash entry")),
-            "half-rename-refused",
+            "half-rename",
             "",
         ),
         (
             report::half_renamed("v1", refused_with(LOCK)),
-            "half-rename-locked",
+            "half-rename",
             "",
         ),
         (

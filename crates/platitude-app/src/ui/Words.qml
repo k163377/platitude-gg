@@ -324,15 +324,11 @@ QtObject {
         // A branch and a tag alike, whatever stopped them; the line underneath says what did.
         //: %1 is a branch or a tag, %2 a remote.
         case "pre-push":
-        case "push-unsigned":
-        case "signed-push-untaken":
         case "outdated":
         case "moved":
         case "tag-elsewhere": return qsTr("%1 was not sent to %2").arg(name).arg(remote)
         //: %1 is a branch or a tag, %2 a remote.
         case "pre-push-delete":
-        case "push-unsigned-delete":
-        case "signed-push-untaken-delete":
         case "moved-delete": return qsTr("%1 was not deleted from %2").arg(name).arg(remote)
         case "stale-stage":
         case "stage-locked": return qsTr("Nothing was staged")
@@ -344,8 +340,6 @@ QtObject {
         case "rename":
         case "rename-locked": return qsTr("%1 was not renamed").arg(name)
         case "half-rename":
-        case "half-rename-refused":
-        case "half-rename-locked":
         case "rename-unfinished": return qsTr("The rename did not finish")
         // `stash@{n}` is no name the screen shows, and the message the row shows can be long.
         case "stash-rename":
@@ -434,16 +428,6 @@ QtObject {
         case "pre-push":
         case "pre-push-delete":
             return qsTr("The pre-push hook turned it down — see %1").arg(Words.commandsTitle)
-        // `push.gpgSign`: git could not sign the push before sending it — a key gone, a signing program that failed.
-        //: %1 is the command log's own title.
-        case "push-unsigned":
-        case "push-unsigned-delete":
-            return qsTr("The push could not be signed — see %1").arg(Words.commandsTitle)
-        // `push.gpgSign=true` against a remote that takes no signed push: git stopped before sending anything.
-        //: %1 is a remote, %2 the command log's own title.
-        case "signed-push-untaken":
-        case "signed-push-untaken-delete":
-            return qsTr("%1 does not take signed pushes — see %2").arg(remote).arg(Words.commandsTitle)
         // `pre-commit`, `commit-msg`, `prepare-commit-msg` alike — and a reword's or a replayed commit's, in a
         // rewrite put back where it began.
         //: %1 is the command log's own title.
@@ -469,19 +453,11 @@ QtObject {
             return qsTr("The file changed on disk since these rows were read. It has been read again — make the selection on the rows that are there now.")
         case "conflicted-part":
             return qsTr("This file is still conflicted. It has to be resolved before parts of it can be taken.")
-        // Stopped here: the stash list moved under the rename, so which entry to drop could not be worked out. Nothing
-        // turned anything down, and no row in the log says more.
+        // Both names stand. What stopped the second half — git turning the old name's removal down or a lock it named
+        // — is the step's row in the log; a stash list that moved leaves only a `rev-parse` answering another entry.
+        //: %1 is the command log's own title.
         case "half-rename":
-            return qsTr("The new name was made; the old one is still there.")
-        // git turned the old name's removal down — a tag's delete, a stash entry's drop.
-        //: %1 is the command log's own title.
-        case "half-rename-refused":
-            return qsTr("The new name was made, but git did not remove the old one — see %1").arg(Words.commandsTitle)
-        // git's own words over a lock, which may be a crashed git's left behind.
-        //: %1 is the command log's own title.
-        case "half-rename-locked":
-            return qsTr("The new name was made, but another git process seems to be running — see %1")
-                .arg(Words.commandsTitle)
+            return qsTr("The new name was made, but the old one is still there — see %1").arg(Words.commandsTitle)
         // Dropped or popped elsewhere since it was chosen.
         case "stash-gone":
             return qsTr("It is no longer in the stash list.")
@@ -668,7 +644,7 @@ QtObject {
     /// of (デザイン規約 §答えの要らない報せ). So are another worktree's changes not applied: nothing was written, and they
     /// are still there to try again.
     function reportTone(kind) {
-        return Words.renameStillOpen(kind) || kind.startsWith("half-rename") || kind === "rename-unfinished"
+        return Words.renameStillOpen(kind) || kind === "half-rename" || kind === "rename-unfinished"
                || Words.reportNamesWorktree(kind) ? "warning" : "danger"
     }
 

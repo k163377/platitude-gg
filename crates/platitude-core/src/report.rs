@@ -19,17 +19,6 @@ pub enum ReportKind {
     PrePush,
     /// The same for a delete.
     PrePushDelete,
-    /// A signed push (`push.gpgSign`) whose certificate the signing program
-    /// would not sign — git dies before it sends anything.
-    PushUnsigned {
-        deleting: bool,
-    },
-    /// A signed push the far side does not take (`push.gpgSign=true`
-    /// against a remote with no `receive.certNonceSeed`): git dies before
-    /// it sends anything.
-    SignedPushUntaken {
-        deleting: bool,
-    },
     /// git would not send at all: the remote holds commits the send would
     /// drop (`fetch first`, `non-fast-forward`, `remote ref updated since
     /// checkout`). The session has already queued the fetch that shows
@@ -99,15 +88,13 @@ pub enum ReportKind {
     /// A rename that stopped between its two halves: the new name was
     /// made and the old one is still there. The one report about something
     /// half done, hence its state colour (デザイン規約 §状態「進行中で対処が要る」).
-    /// This one stopped here: the stash list moved, so which entry to drop
-    /// could not be worked out, and nothing turned anything down.
+    /// Whatever stopped the second half — git turning the old name's
+    /// removal down, a lock it named, or this end finding the stash list
+    /// moved so that which entry to drop could not be worked out — the log
+    /// has that step's words, and the screen says one thing: both names
+    /// stand (gitの扱い.md §類型 — a lock race in the gap between two commands
+    /// is too rare to tell apart).
     HalfRenamed,
-    /// The same, because git turned the old name's removal down — a tag's
-    /// delete, a stash entry's drop.
-    HalfRenamedRefused,
-    /// The same, because git said a lock that removal needed was taken
-    /// ([`lock_taken`]).
-    HalfRenamedLocked,
     /// A stash git would not store under the new message, or whose entry
     /// could not be read again — nothing moved, and the box stays open as
     /// a branch's does ([`Self::RenameRefused`]). The heading names no
@@ -212,7 +199,7 @@ pub enum ReportKind {
 
     /// The two the outside world makes after the plan was worked out — the
     /// premise going while the write is on its way
-    /// (rules-refs/core.md「`Withheld` へ寄せたのは画面から届く 3 つだけ」).
+    /// (rules-refs/core.md「`Withheld` は git を撃つ前にこちらが断った書き込み」).
     ///
     /// The branch moved after the plan was composed: a rebase silently
     /// drops what the fixed todo leaves out, so the replay is refused with
@@ -393,21 +380,15 @@ pub fn rename_unfinished(
 }
 
 /// A rename that got as far as the new name, whose old name git would not
-/// remove ([`ReportKind::HalfRenamedRefused`], [`ReportKind::HalfRenamedLocked`]
-/// where it named a lock). `failed` is that removal's error, carried for
-/// the log ([`GitError::Reported`]'s display); one git did not answer — a
-/// cancel, a git that did not start — comes back as it is.
+/// remove ([`ReportKind::HalfRenamed`]). `failed` is that removal's error,
+/// carried for the log ([`GitError::Reported`]'s display); one git did not
+/// answer — a cancel, a git that did not start — comes back as it is.
 #[must_use]
 pub fn half_renamed(name: &str, failed: crate::error::GitError) -> crate::error::GitError {
-    let crate::error::GitError::Failed { stderr, .. } = &failed else {
+    if !matches!(failed, crate::error::GitError::Failed { .. }) {
         return failed;
-    };
-    let kind = if lock_taken(stderr) {
-        ReportKind::HalfRenamedLocked
-    } else {
-        ReportKind::HalfRenamedRefused
-    };
-    half_done(name, kind, &failed)
+    }
+    half_done(name, ReportKind::HalfRenamed, &failed)
 }
 
 /// A stash rename that got as far as the new entry, stopped here because
@@ -786,42 +767,32 @@ mod tests {
         );
     }
 
-    /// git turning the old name's removal down: a lock it names in either
-    /// ref store, and anything else — a reftable store's lock among it,
-    /// where a stash entry's drop names none.
+    /// git turning the old name's removal down is one report whatever it
+    /// said — a lock in either ref store, or nothing more than that it
+    /// could not — and its words go to the log under the step's row.
     #[test]
-    fn a_half_done_rename_git_stopped_says_whether_it_was_a_lock() {
+    fn a_half_done_rename_git_stopped_is_one_report_with_gits_words_for_the_log() {
         let failed = |stderr: &str| crate::error::GitError::Failed {
             command: "git stash drop".to_string(),
             code: 1,
             stderr: stderr.to_string(),
         };
-        let kind = |err: crate::error::GitError| err.report().map(|report| report.kind);
-        assert_eq!(
-            kind(half_renamed(
-                "stash@{0}",
-                failed(
-                    "error: Unable to create 'C:/t/.git/logs/refs/stash.lock': File exists.\n\
-                     error: stash@{1}: Could not drop stash entry"
-                )
-            )),
-            Some(ReportKind::HalfRenamedLocked)
-        );
-        assert_eq!(
-            kind(half_renamed(
-                "v1.0",
-                failed("error: could not delete reference refs/tags/v1: cannot lock references")
-            )),
-            Some(ReportKind::HalfRenamedLocked),
-            "a reftable store's words"
-        );
-        assert_eq!(
-            kind(half_renamed(
-                "stash@{0}",
-                failed("error: stash@{1}: Could not drop stash entry")
-            )),
-            Some(ReportKind::HalfRenamedRefused)
-        );
+        for said in [
+            "error: Unable to create 'C:/t/.git/logs/refs/stash.lock': File exists.\n\
+             error: stash@{1}: Could not drop stash entry",
+            "error: could not delete reference refs/tags/v1: cannot lock references",
+            "error: stash@{1}: Could not drop stash entry",
+        ] {
+            let err = half_renamed("stash@{0}", failed(said));
+            let report = err.report().expect("a report");
+            assert_eq!(report.kind, ReportKind::HalfRenamed, "{said}");
+            assert_eq!(report.name, "stash@{0}");
+            assert!(
+                err.to_string().contains("Could not drop stash entry")
+                    || err.to_string().contains("could not delete reference"),
+                "git's words reach the log: {err}"
+            );
+        }
         let cancelled = half_renamed(
             "stash@{0}",
             crate::error::GitError::Cancelled {

@@ -234,8 +234,12 @@ async fn a_stash_whose_old_entry_would_not_go_is_half_renamed() {
     std::fs::remove_file(repo.path.join(".git/logs/refs/stash.lock")).expect("unlock");
     assert_eq!(
         err.report().map(|report| report.kind),
-        Some(ReportKind::HalfRenamedLocked),
+        Some(ReportKind::HalfRenamed),
         "{err}"
+    );
+    assert!(
+        err.to_string().contains("stash.lock"),
+        "the lock git named is the log's: {err}"
     );
     assert_eq!(
         repo.git(&["stash", "list", "--format=%gs"])
@@ -314,7 +318,7 @@ async fn a_reftable_stash_whose_old_entry_would_not_go_is_half_renamed_by_git() 
     );
     assert_eq!(
         err.report().map(|report| report.kind),
-        Some(ReportKind::HalfRenamedRefused),
+        Some(ReportKind::HalfRenamed),
         "{err}"
     );
 }

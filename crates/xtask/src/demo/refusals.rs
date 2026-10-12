@@ -24,8 +24,6 @@ pub(super) fn build(preset: &str, repo: &mut DemoRepo) -> Option<Result<(), Stri
         "stash-lock" => stash_lock(repo),
         "stash-droplock" => stash_droplock(repo),
         "postcheckout" => postcheckout(repo),
-        "signed-push" => signed_push(repo),
-        "push-unsigned" => push_unsigned(repo),
         "prepush-config" => prepush_config(repo),
         "stage-lock" => stage_lock(repo),
         "plan-lock" => plan_lock(repo),
@@ -47,29 +45,6 @@ pub(super) fn build(preset: &str, repo: &mut DemoRepo) -> Option<Result<(), Stri
 fn lock(repo: &DemoRepo, rel: &str) -> Result<(), String> {
     let lock = repo.work.join(".git").join(rel);
     std::fs::write(&lock, "").map_err(|e| format!("writing {}: {e}", lock.display()))
-}
-
-/// [`ahead_of_origin`] asking for a signed push (`push.gpgSign=true`) of a
-/// remote that takes none — no `receive.certNonceSeed` there.
-fn signed_push(repo: &mut DemoRepo) -> Result<(), String> {
-    ahead_of_origin(repo)?;
-    repo.git(&["config", "push.gpgSign", "true"])?;
-    Ok(())
-}
-
-/// The same against a remote that takes signed pushes, with the ssh key to
-/// sign with not there.
-fn push_unsigned(repo: &mut DemoRepo) -> Result<(), String> {
-    signed_push(repo)?;
-    let origin = repo.root.join("origin.git");
-    repo.git_at(
-        &origin,
-        &["config", "receive.certNonceSeed", "a seed of its own"],
-    )?;
-    let key = repo.root.join("no-such-key.pub");
-    repo.git(&["config", "gpg.format", "ssh"])?;
-    repo.git(&["config", "user.signingkey", &config_path(&key)])?;
-    Ok(())
 }
 
 /// [`prepush`]'s no from a hook the config names (`hook.<name>.event`) —
