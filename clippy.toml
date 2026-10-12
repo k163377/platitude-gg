@@ -8,4 +8,12 @@ disallowed-types = [
     { path = "std::net::TcpStream", reason = "the app must never open a socket; network I/O happens only inside the git CLI subprocess" },
     { path = "std::net::TcpListener", reason = "the app must never open a socket; network I/O happens only inside the git CLI subprocess" },
     { path = "std::net::UdpSocket", reason = "the app must never open a socket; network I/O happens only inside the git CLI subprocess" },
+    { path = "tokio::net::TcpStream", reason = "the app must never open a socket; network I/O happens only inside the git CLI subprocess" },
+    { path = "tokio::net::TcpListener", reason = "the app must never open a socket; network I/O happens only inside the git CLI subprocess" },
+    { path = "tokio::net::TcpSocket", reason = "the app must never open a socket; network I/O happens only inside the git CLI subprocess" },
+    { path = "tokio::net::UdpSocket", reason = "the app must never open a socket; network I/O happens only inside the git CLI subprocess" },
+]
+
+disallowed-methods = [
+    { path = "tokio::net::lookup_host", reason = "the app must never resolve a host name; network I/O happens only inside the git CLI subprocess" },
 ]

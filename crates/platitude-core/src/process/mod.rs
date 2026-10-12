@@ -10,6 +10,7 @@ mod meter;
 mod program;
 mod slots;
 mod trace;
+mod trace_sink;
 
 pub use command::{CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, literal_pathspec};
 pub use executor::{DEFAULT_TIMEOUT, GitExecutor};

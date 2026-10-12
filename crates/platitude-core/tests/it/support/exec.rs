@@ -22,8 +22,9 @@ fn nowhere() -> PathBuf {
 /// Configuration from no file outside the repository: [`KNOBS`] travel in
 /// the environment (`GIT_CONFIG_COUNT`, git 2.31), since a file needs a
 /// folder, and one shared by the suite would be a static never dropped —
-/// left under `target/tmp` by every run.
-fn isolated_env() -> Vec<(OsString, OsString)> {
+/// left under `target/tmp` by every run. Also for a git a test runs by
+/// hand, outside any executor.
+pub fn isolated_env() -> Vec<(OsString, OsString)> {
     let mut env = vec![
         (
             OsString::from("GIT_CONFIG_GLOBAL"),

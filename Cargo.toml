@@ -15,7 +15,10 @@ license = "MIT"
 [workspace.dependencies]
 platitude-core = { path = "crates/platitude-core" }
 thiserror = "2"
-tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "time", "sync", "macros", "fs"] }
+# `net` for the receiver of a traced git's record alone — a named pipe on
+# Windows, an AF_UNIX socket elsewhere (process::trace_sink); its TCP and UDP
+# types and its name lookup are disallowed in clippy.toml (実装計画.md §11.1).
+tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "time", "sync", "macros", "fs", "net"] }
 # Settings/state files, through `toml::Table` with no derive: per-key
 # fallback needs the parsed tree anyway, and serde_derive/syn stay out.
 toml = "1"
@@ -49,6 +52,7 @@ unsafe_code = "warn"
 
 [workspace.lints.clippy]
 disallowed_types = "deny"
+disallowed_methods = "deny"
 unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"

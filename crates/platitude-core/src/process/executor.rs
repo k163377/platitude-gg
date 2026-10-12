@@ -18,9 +18,9 @@ use super::family::Family;
 use super::live::Live;
 use super::slots::{GroupKey, Lead, Pace, Priority, Shared, Slots, WayIn};
 use super::trace::Trace;
+use super::trace_sink::TraceSink;
 use crate::error::GitError;
 use crate::operation::OperationId;
-use crate::scratch::ScratchDir;
 
 #[cfg(test)]
 #[path = "tests.rs"]
@@ -507,8 +507,8 @@ impl GitExecutor {
         if let Some(lead) = &mut lead {
             lead.spawning();
         }
-        // The folder goes once git has ended and its trace is read.
-        let (mut command, trace_folder) = self.assemble_traced(cmd);
+        // The receiver closes once git has ended and its record is read.
+        let (mut command, trace_sink) = self.assemble_traced(cmd);
 
         tracing::debug!(
             command = %described,
@@ -565,33 +565,39 @@ impl GitExecutor {
         };
         let left = Left {
             stdout: kept,
-            trace: trace_folder.map_or_else(Trace::default, |f| Trace::read(f.path())),
+            trace: Self::record_of(trace_sink).await,
         };
         Self::ended(cmd, described, outcome, left, budget, clocks, &report)
     }
 
+    /// What a traced command's gits recorded, once git is reaped
+    /// ([`TraceSink::finish`]); nothing for one not traced.
+    async fn record_of(sink: Option<TraceSink>) -> Trace {
+        match sink {
+            Some(sink) => Trace::parse(&sink.finish().await),
+            None => Trace::default(),
+        }
+    }
+
     /// [`Self::assemble`], and for a traced command (`GitCommand::traced`)
-    /// the folder git writes its trace into ([`super::trace::folder_for`]).
-    fn assemble_traced(&self, cmd: &GitCommand) -> (Command, Option<ScratchDir>) {
+    /// the receiver its gits write their record to ([`TraceSink`]).
+    fn assemble_traced(&self, cmd: &GitCommand) -> (Command, Option<TraceSink>) {
         let mut command = self.assemble(cmd);
-        let folder = match cmd.traced {
-            true => super::trace::folder_for(cmd.cwd.as_deref()),
+        let sink = match cmd.traced {
+            true => TraceSink::open(),
             false => None,
         };
-        if let Some(folder) = &folder {
-            command.env("GIT_TRACE2_EVENT", folder.path());
+        if let Some(sink) = &sink {
+            command.env("GIT_TRACE2_EVENT", sink.target());
             // A user's `trace2.eventBrief` leaves out the times that tell a
             // hook's own git from the command's (`super::trace::Trace`).
             command.env("GIT_TRACE2_EVENT_BRIEF", "false");
-            // `trace2.maxFiles` would stop recording a long replay's later
-            // gits; 0 is no cap (trace2/tr2_dst.c).
-            command.env("GIT_TRACE2_MAX_FILES", "0");
             // The command is the root of its own record: a parent's session
             // id — this application run under a traced git — would prefix
             // every id in it (trace2/tr2_sid.c).
             command.env_remove("GIT_TRACE2_PARENT_SID");
         }
-        (command, folder)
+        (command, sink)
     }
 
     /// A spawn that failed: git missing where the folder it was to run in

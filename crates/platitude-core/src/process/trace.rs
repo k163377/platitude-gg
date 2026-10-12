@@ -6,12 +6,13 @@
 //! that program's own words (gpg-interface.c `sign_buffer_ssh`). The screen
 //! then names only what git recorded ([`GitCommand::traced`]).
 //!
-//! git writes trace2's event stream, one file per process, into the folder
-//! `GIT_TRACE2_EVENT` names ([`folder_for`]) — every git the command started
-//! included, since they inherit the variable (trace2/tr2_dst.c, the minimum
-//! to 2.55). A folder, not stderr: a hook's own git inherits the variable
-//! too, and a hook that reads its git's stderr would read the events. Each
-//! line is one JSON object; a hook's `child_start` carries `child_class`
+//! git writes trace2's event stream to the receiver `GIT_TRACE2_EVENT`
+//! names (`super::trace_sink`), each process's events on a connection of
+//! its own — every git the command started included, since they inherit
+//! the variable (trace2/tr2_dst.c, the minimum to 2.55). A receiver of its
+//! own, not stderr: a hook's own git inherits the variable too, and a hook
+//! that reads its git's stderr would read the events. Each line is one
+//! JSON object; a hook's `child_start` carries `child_class`
 //! `hook` and its `hook_name` (hook.c and the minimum's own `pre-push` in
 //! transport.c), and its `child_exit` the code, by `child_id` within the
 //! process's `sid` (trace2/tr2_tgt_event.c).
@@ -19,7 +20,6 @@
 //! [`GitCommand::traced`]: super::GitCommand::traced
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 
 /// The programs one command's own gits started, as their trace recorded
 /// them. Empty for a command that was not traced, or whose trace could not
@@ -88,22 +88,8 @@ impl Trace {
             .filter(|child| self.own.contains(&child.parent))
     }
 
-    /// Every file git wrote into `folder`.
-    pub(super) fn read(folder: &Path) -> Self {
-        let Ok(files) = std::fs::read_dir(folder) else {
-            return Self::default();
-        };
-        let mut text = String::new();
-        for file in files.flatten() {
-            if let Ok(bytes) = std::fs::read(file.path()) {
-                text.push_str(&String::from_utf8_lossy(&bytes));
-                text.push('\n');
-            }
-        }
-        Self::parse(&text)
-    }
-
-    fn parse(text: &str) -> Self {
+    /// What the command's gits wrote, every connection's lines together.
+    pub(super) fn parse(text: &str) -> Self {
         let mut children: Vec<Child> = Vec::new();
         let mut at: HashMap<(String, i64), usize> = HashMap::new();
         let mut starts: Vec<(String, Option<String>)> = Vec::new();
@@ -195,18 +181,6 @@ fn ran_during(hook: &Child, when: &str) -> bool {
         None => true,
         Some(started) => when >= started && hook.ended.as_deref().is_none_or(|ended| when <= ended),
     }
-}
-
-/// The folder one traced command's gits write into: a scratch folder under
-/// the repository's git directory (`<git_dir>/platitude/`, where the
-/// commit messages and patches handed to git go too — `crate::scratch`),
-/// found from the command's working directory, the top of its worktree.
-/// `None` where none can be made, and the command then runs untraced — its
-/// refusals named by git's words alone. Removed with what git wrote when the
-/// handle drops.
-pub(super) fn folder_for(workdir: Option<&Path>) -> Option<crate::scratch::ScratchDir> {
-    let git_dir = crate::repo::git_dir_of(workdir?)?;
-    crate::scratch::ScratchDir::fresh(&git_dir, "TRACE").ok()
 }
 
 /// Just enough JSON for trace2's lines: the top level's keys, with string,

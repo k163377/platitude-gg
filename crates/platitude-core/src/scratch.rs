@@ -1,5 +1,4 @@
-//! Short-lived files handed to git by path (patches, commit messages), and
-//! folders git writes into (its trace of a command).
+//! Short-lived files handed to git by path (patches, commit messages).
 //!
 //! They live under `<git_dir>/platitude/` (same filesystem, owner-private,
 //! recognisable if left behind) and go by path because the process layer
@@ -13,15 +12,6 @@ const DIR_NAME: &str = "platitude";
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// A name of this process's own (its pid and count) under the scratch
-/// folder, made if it is not there yet.
-fn own_name(git_dir: &Path, tag: &str) -> std::io::Result<PathBuf> {
-    let dir = git_dir.join(DIR_NAME);
-    std::fs::create_dir_all(&dir)?;
-    let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
-    Ok(dir.join(format!("{tag}-{}-{unique}", std::process::id())))
-}
-
 /// A file removed when the handle drops.
 #[derive(Debug)]
 pub struct ScratchFile {
@@ -31,7 +21,10 @@ pub struct ScratchFile {
 impl ScratchFile {
     /// Writes `contents` to a fresh file named after `tag`.
     pub fn create(git_dir: &Path, tag: &str, contents: &[u8]) -> std::io::Result<Self> {
-        let path = own_name(git_dir, tag)?;
+        let dir = git_dir.join(DIR_NAME);
+        std::fs::create_dir_all(&dir)?;
+        let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = dir.join(format!("{tag}-{}-{unique}", std::process::id()));
         let mut file = std::fs::File::create(&path)?;
         file.write_all(contents)?;
         file.sync_all()?;
@@ -47,7 +40,10 @@ impl ScratchFile {
     /// process gone before this one took its pid, and goes: git would read a
     /// stale index as where to start.
     pub fn fresh(git_dir: &Path, tag: &str) -> std::io::Result<Self> {
-        let path = own_name(git_dir, tag)?;
+        let dir = git_dir.join(DIR_NAME);
+        std::fs::create_dir_all(&dir)?;
+        let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = dir.join(format!("{tag}-{}-{unique}", std::process::id()));
         let mut lock = path.clone().into_os_string();
         lock.push(".lock");
         for left in [path.as_path(), Path::new(&lock)] {
@@ -103,54 +99,6 @@ impl Drop for ScratchFile {
     }
 }
 
-/// A folder in the same place, for files git writes there itself (its
-/// trace of a command, one file per process, `process::trace`) — removed
-/// with everything in it when the handle drops.
-#[derive(Debug)]
-pub struct ScratchDir {
-    path: PathBuf,
-}
-
-impl ScratchDir {
-    /// A fresh, empty folder named after `tag`. Its name is this process's
-    /// own, as [`ScratchFile::fresh`]'s is, so what is there already was
-    /// left by a process gone before this one took its pid, and goes.
-    pub fn fresh(git_dir: &Path, tag: &str) -> std::io::Result<Self> {
-        let path = own_name(git_dir, tag)?;
-        match std::fs::remove_dir_all(&path) {
-            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
-            _ => {}
-        }
-        std::fs::create_dir(&path)?;
-        Ok(Self { path })
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-/// Folders this process could not remove — on Windows, a git that outlived
-/// its command (a daemon it started) still holding a file in it — tried
-/// again each time another goes.
-static NOT_REMOVED: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
-
-impl Drop for ScratchDir {
-    fn drop(&mut self) {
-        let mut left = NOT_REMOVED
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        left.push(self.path.clone());
-        left.retain(|path| match std::fs::remove_dir_all(path) {
-            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-                tracing::debug!(path = %path.display(), %error, "scratch folder not removed");
-                true
-            }
-            _ => false,
-        });
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,54 +141,5 @@ mod tests {
         let a = ScratchFile::create(dir.path(), "msg", b"a").expect("create");
         let b = ScratchFile::create(dir.path(), "msg", b"b").expect("create");
         assert_ne!(a.path(), b.path());
-    }
-
-    /// The folder starts empty — what a process gone before this one left
-    /// under its name goes — and goes with what git wrote into it.
-    #[test]
-    fn a_scratch_folder_starts_empty_and_goes_whole() {
-        let dir = crate::temp::dir();
-        let next = COUNTER.load(Ordering::Relaxed);
-        let left = dir.path().join(DIR_NAME);
-        for at in next..next + 64 {
-            let stale = left.join(format!("TRACE-{}-{at}", std::process::id()));
-            std::fs::create_dir_all(&stale).expect("leftover");
-            std::fs::write(stale.join("event"), b"stale").expect("leftover's file");
-        }
-        let path = {
-            let fresh = ScratchDir::fresh(dir.path(), "TRACE").expect("fresh");
-            assert_eq!(
-                std::fs::read_dir(fresh.path()).expect("read").count(),
-                0,
-                "nothing left on it"
-            );
-            std::fs::write(fresh.path().join("written"), b"by git").expect("write");
-            fresh.path().to_path_buf()
-        };
-        assert!(!path.exists(), "dropped handle removes the folder");
-    }
-
-    /// A file held open without leave to delete it — as a git that outlived
-    /// its command holds its trace — keeps its folder; the next folder to go
-    /// takes it along.
-    #[cfg(windows)]
-    #[test]
-    fn a_folder_held_open_goes_once_another_one_does() {
-        use std::os::windows::fs::OpenOptionsExt;
-        const READ_AND_WRITE_ONLY: u32 = 1 | 2;
-        let dir = crate::temp::dir();
-        let held = ScratchDir::fresh(dir.path(), "TRACE").expect("fresh");
-        let path = held.path().to_path_buf();
-        let file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .share_mode(READ_AND_WRITE_ONLY)
-            .open(path.join("event"))
-            .expect("open");
-        drop(held);
-        assert!(path.exists(), "a file held open keeps it");
-        drop(file);
-        drop(ScratchDir::fresh(dir.path(), "TRACE").expect("another"));
-        assert!(!path.exists(), "gone with the next one");
     }
 }

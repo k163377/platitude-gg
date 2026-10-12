@@ -32,12 +32,16 @@ use crate::process::{GitCommand, GitExecutor};
 ///   `GIT_TERMINAL_PROMPT=0` (2.3), `GIT_OPTIONAL_LOCKS=0` (2.15).
 /// - Rebase: `GIT_SEQUENCE_EDITOR` (1.7.8); paths: `:(literal)` (1.9).
 /// - A traced write's record (`process::trace`): `GIT_TRACE2_EVENT` set to
-///   a folder (one file per process, trace2/tr2_dst.c),
-///   `GIT_TRACE2_EVENT_BRIEF`, `GIT_TRACE2_MAX_FILES`; `GIT_TRACE2_PARENT_SID`
-///   taken away (trace2/tr2_sid.c) — all at the minimum's
-///   `v<minimum>.0` sources, the event fields read the same
-///   (trace2/tr2_tgt_event.c). `integrate_integration::refused` and
-///   `push_refusals` read hooks off it on the minimum binary.
+///   a receiver of the write's own (`process::trace_sink`) — a named pipe
+///   on Windows, `af_unix:stream:<absolute path>` elsewhere, each process's
+///   events on a connection of its own (trace2/tr2_dst.c) — and
+///   `GIT_TRACE2_EVENT_BRIEF`;
+///   `GIT_TRACE2_PARENT_SID` taken away (trace2/tr2_sid.c) — all at the
+///   minimum's `v<minimum>.0` sources, the event fields read the same
+///   (trace2/tr2_tgt_event.c), a write to a closed receiver failing with
+///   `SIGPIPE` ignored. `integrate_integration::refused`, `push_refusals`
+///   and `trace_record` read hooks off it over the socket on the minimum
+///   binary.
 /// - Diff shape: `-c diff.noprefix=false`, `diff.mnemonicPrefix=false`,
 ///   `diff.external=`; mergetool: `-c mergetool.writeToTemp=true`.
 /// - Temporary index / discard records: `-c core.hooksPath=<absent>`
