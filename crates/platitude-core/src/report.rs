@@ -556,9 +556,8 @@ pub fn worktree_folder_taken(name: &str, path: &str) -> crate::error::GitError {
 }
 
 /// What git says when an apply would write over work here, tracked or
-/// untracked (`LC_ALL=C`; merge-ort's and unpack-trees' own words since
-/// long before the minimum).
-const CARRIED_OVERWRITES: &str = "would be overwritten";
+/// untracked — the words a merge and a pull are refused with too.
+const CARRIED_OVERWRITES: &str = crate::integrate::OVERWRITES_WORK;
 
 /// What `git stash apply --no-index` says when it turns the apply down —
 /// the exit 1 it also lands a conflicted apply with, which says nothing on

@@ -47,8 +47,14 @@ pub async fn merge(
         cmd = cmd.args(["-m", message]);
     }
     // Exit 1 is as often an answer as a failure: the log keeps the row
-    // without raising itself (デザイン規約 §git が言ったことを読む場所).
-    let cmd = cmd.args(["--", rev]).answers_by_code(1);
+    // without raising itself (デザイン規約 §git が言ったことを読む場所) —
+    // except where git names work in the way, which is a refusal whose
+    // words list the files, so the row keeps them (a fast-forward refused
+    // exits 1; a real merge refused exits 2, a failure as it stands).
+    let cmd = cmd
+        .args(["--", rev])
+        .answers_by_code(1)
+        .except_when_it_says(super::REFUSED_OVER_WORK);
     match executor.run(cmd, cancel).await {
         Ok(_) => Ok(Landing::Done),
         Err(error) if stopped_on_a_conflict(executor, workdir, &error, cancel).await => {

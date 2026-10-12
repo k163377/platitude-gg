@@ -1,15 +1,47 @@
 //! Merging: fast-forward, `--no-ff`, and a conflict taken either to a
 //! resolution or to an abort.
 
+use std::sync::Arc;
+
 use crate::support::TestRepo;
-use crate::support::exec::env;
+use crate::support::exec::{Said, env, observed_env};
 use crate::support::integrate::{conflicting_branches, current_op};
+use platitude_core::GitError;
 use platitude_core::commit;
 use platitude_core::conflict::{self, ConflictKind, Side};
 use platitude_core::integrate::{self, Continuation, InProgress, Landing, MergeOptions};
 use platitude_core::oid::Oid;
 use platitude_core::opstate;
+use platitude_core::process::{CommandEnd, Kept};
 use platitude_core::status;
+
+/// A fast-forward git refuses over work in the way exits 1 like a stop,
+/// with nothing standing: a failure, whose row in the log keeps git's list
+/// of the files (デザイン規約 §git が言ったことを読む場所).
+#[tokio::test]
+async fn a_merge_refused_over_work_in_the_way_keeps_gits_words_in_the_log() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["checkout", "-b", "side"]);
+    repo.commit_file("a.txt", "two\n", "side work");
+    repo.git(&["checkout", "main"]);
+    repo.write_file("a.txt", "mine\n");
+    let said = Arc::new(Said::default());
+    let (exec, cancel) = observed_env(said.clone(), Kept::Asked);
+
+    let err = integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
+        .await
+        .expect_err("the work in the way is refused");
+    assert!(matches!(err, GitError::Failed { code: 1, .. }), "{err}");
+    assert_eq!(current_op(&repo).await, None, "nothing was left standing");
+    let row = said
+        .message_of(CommandEnd::Exited(1))
+        .expect("the merge's row is a failure, not an answer");
+    assert!(
+        row.contains("a.txt") && row.contains("would be overwritten"),
+        "the files in the way are under the row: {row}"
+    );
+}
 
 #[tokio::test]
 async fn merge_fast_forward_and_no_ff() {

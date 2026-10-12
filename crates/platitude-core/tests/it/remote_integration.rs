@@ -911,6 +911,31 @@ async fn a_pull_with_nothing_to_pull_from_is_a_failure() {
     );
 }
 
+/// The fast-forward git refuses over work in the way exits 1 with nothing
+/// standing, and its row keeps git's list of the files (as a merge's does).
+#[tokio::test]
+async fn a_pull_refused_over_work_in_the_way_keeps_gits_words_in_the_log() {
+    let (bare, mut work) = origin_and_clone();
+    work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+    let _far = origin_that_moved_on(&bare, "a.txt", "their line");
+    work.write_file("a.txt", "mine\n");
+    let said = std::sync::Arc::new(crate::support::exec::Said::default());
+    let (exec, cancel) =
+        crate::support::exec::observed_env(said.clone(), platitude_core::process::Kept::Asked);
+
+    let err = remote::pull(&exec, &work.path, NET, &cancel)
+        .await
+        .expect_err("the work in the way is refused");
+    assert!(matches!(err, GitError::Failed { code: 1, .. }), "{err}");
+    let row = said
+        .message_of(platitude_core::process::CommandEnd::Exited(1))
+        .expect("the pull's row is a failure, not an answer");
+    assert!(
+        row.contains("a.txt") && row.contains("would be overwritten"),
+        "the files in the way are under the row: {row}"
+    );
+}
+
 #[tokio::test]
 async fn a_pull_brings_the_upstream_in_and_moves_the_branch() {
     let (bare, mut work) = origin_and_clone();

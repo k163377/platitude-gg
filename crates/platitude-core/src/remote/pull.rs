@@ -33,8 +33,11 @@ pub async fn pull(
         .timeout(timeout)
         .paced_elsewhere()
         // Exit 1 answers as often as it fails
-        // (デザイン規約 §git が言ったことを読む場所).
-        .answers_by_code(1);
+        // (デザイン規約 §git が言ったことを読む場所) — except where git names
+        // work in the way of its merge, a refusal whose words list the
+        // files, so the row keeps them (as [`crate::integrate::merge`]).
+        .answers_by_code(1)
+        .except_when_it_says(crate::integrate::REFUSED_OVER_WORK);
     match executor.run(cmd, cancel).await {
         Ok(_) => Ok(Landing::Done),
         Err(error) if stopped_partway(executor, workdir, &error, cancel).await => {
