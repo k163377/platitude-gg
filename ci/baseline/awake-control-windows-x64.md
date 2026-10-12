@@ -1,12 +1,12 @@
 # Windows のスリープ保持: 実測
 
-2026-10-05。holder revision 6、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
+2026-10-13。holder revision 19、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
 デスクトップアプリのログによる補助と実スリープ試験の記録は [ログ補助](../../internal-docs/awake-ログ補助.md)。
 
 ## 判定
 
 保持・解除の Windows API 呼び出し、互換ビルドの holder が共有する activity、読取りと hook の競合、
-保持中の読取りの間引き、判定の履歴を確かめた。
+保持中の読取りの間引き、判定の履歴、消えた保持の出し直し、書き手の無い subagent の扱いを確かめた。
 要望全体の完了ではない。Claude から通知されない許可・入力待ちは
 [P3 の未達](../../internal-docs/P3-確認事項.md#開発環境スリープ止め-cargo-xtask-awake)に残る。
 ここのテストは、実際の Claude の許可画面からのイベント配信を証明しない。
@@ -14,8 +14,8 @@
 ## 実 API 試験
 
 `awake::tests::holder::coordination::compatible_holders_apply_and_clear_real_windows_requests_together`。
-テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r6)と、
-同じスクリプトで holder 名だけ r7 にした互換ビルドを同時に動かす。OS API は置き換えない。
+テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r19)と、
+同じスクリプトで holder 名だけ r20 にした互換ビルドを同時に動かす。OS API は置き換えない。
 session / hook の入力は fixture で、Claude 本体ではない。
 
 `SetThreadExecutionState` の非 0 の戻り値は、成功とそのスレッドの直前の状態を示す
@@ -23,29 +23,85 @@ session / hook の入力は fixture で、Claude 本体ではない。
 両 holder とも保持時の戻り値は `0x80000000`、解除時は `0x80000001` —— system の継続要求を設定・解除でき、
 display の継続要求は加えていない。
 
-| 遷移 | r6(WMI 起動) | r7(互換ビルド) |
+| 遷移 | r19(WMI 起動) | r20(互換ビルド) |
 | --- | ---: | ---: |
-| 最初の Prompt → 保持 | 2747 ms | 2208 ms |
-| s が Stop、t は質問待ち → 解除 | 62 ms | 24 ms |
-| t の質問への回答 → 保持 | 30 ms | 70 ms |
-| t も Stop → 解除 | 47 ms | 91 ms |
+| 最初の Prompt → 保持 | 1438 ms | 1066 ms |
+| s が Stop、t は質問待ち → 解除 | 54 ms | 16 ms |
+| t の質問への回答 → 保持 | 20 ms | 60 ms |
+| t も Stop → 解除 | 85 ms | 38 ms |
 
 質問待ちになる前から s が作業中なら、t の質問だけでは解除しないことも同じテストで確かめる。
 数値は単発の観測値で、遅延の上限ではない。最初の保持は
 WMI の起動と PowerShell の C# 型のコンパイルを含み、成立するまで保持の無い区間がある ——
 「呼び出しの実行前に必ず保持済み」の保証には使えない。
 
-使われなくなったビルドの holder は `a_started_holder_of_a_quiet_build_quits` で確かめる。WMI で起動した r6 の
-hook の印(`hooks-r6`)を 10 分より前に戻し、hook が動いている r7 と並べると、r6 は次の読取りで名前を外して
-プロセスごと終わり、claim は残り、r7 が保持を続けた。降りる判定そのものは、holder 本体を 1 回だけ読ませる試験で
-場合分けする(使用中の別ビルドがある / 1 本だけ / 全部静か / 相手の心拍が古い)。
+使われなくなったビルドの holder は `a_started_holder_of_a_quiet_build_quits` で確かめる。WMI で起動した holder の
+hook の印(`hooks-r<n>`)を 10 分より前に戻し、hook が動いている互換ビルドと並べると、前者は次の読取りで名前を外して
+プロセスごと終わり、claim は残り、互換ビルドが保持を続けた。降りる判定そのものは、holder 本体を 1 回だけ読ませる
+試験で場合分けする(使用中の別ビルドがある / 1 本だけ / 全部静か / 相手の心拍が古い)。
 
-awake の Windows テストは **86 passed / 0 failed / 3 ignored**(39.64 秒。律速は tick 待ちを 2 回含むテストで、
-他席の負荷で 38〜54 秒に揺れる)。
+awake の Windows テストは **110 passed / 0 failed / 3 ignored**(65.66 秒。律速は tick 待ちを含むテストで、
+他席の負荷で揺れる)。
 ignored は、親テストが専用環境で呼ぶ子プロセスの入口 2 本と、手動の実スリープ試験 1 本。子コマンドの背景実行、
 質問・許可待ち、複数セッション、subagent、通知、所有者の終了、読取りの妨害、同時起動、hook のパイプの解放、
 互換ビルドの同居、照会中に始まった仕事、owner の一覧の後に始まったコマンド、使われなくなったビルドの holder が
 降りること、ログ補助、保持中の読取りの間引き、履歴(理由の表記・切り詰め・書き手ごとの最後の行)を含む。
+
+## 保持の消失と出し直し
+
+一度立てた継続要求は、黙って数えられなくなることがある。2026-10-12〜13 の本番(holder r16、アプリ側の保持は Off):
+
+| 時刻(JST) | 出来事 |
+| --- | --- |
+| 10/12 10:30:08 | r16 が保持を立てる(`SetThreadExecutionState` の戻り値 `0x80000000`)。以後、判定は 10/13 01:12 まで holding のまま変わらず、API を呼び直していない |
+| 10/12 16:00:48 | スリープ(Kernel-Power 42 の理由 Application API = スタートメニュー等の API から始めたスリープ)。16:40:39 に復帰 |
+| 10/12 17:52:34・21:04:03、10/13 00:43:52 | スリープ(理由 System Idle)。どれも履歴は holding、作業中のセッションあり |
+| 10/13 00:47 | `CallNtPowerInformation(SystemExecutionState)` は `0x0`。r16 の台本を回すスレッド(10/11 03:00:45 起動、CPU の大半を使う 1 本)は生きている |
+
+保持を立てたスレッドが生きたまま、要求は数えられていなかった。その間の出来事は API からのスリープと復帰だけで、
+何が要求を外したかは確かめていない(制御したスリープ試験は未実施)。
+
+`SetThreadExecutionState(0)`(`ES_CONTINUOUS` 無し・フラグ無し)は要求を変えず、そのスレッドの今の要求を返す
+(別プロセスでの実測: 新しいスレッド `0x80000000`、保持中 `0x80000001`、解除後 `0x80000000`。その間の
+`SystemExecutionState` は保持中だけ `0x1`)。holder(r19〜)は保持中の読取りのたびにこの読みと
+`SystemExecutionState` を見て、どちらかが保持を失っていれば解除してから立て直す(要求を変えるため。何も
+数えられていない間の解除は何も外さない)。立て直した直後と、保持を立てた直後に数えに映らなければ、要求を
+専用のスレッドから立て、解除まで持たせる。専用スレッドからも映らなければ、数えが要求を映さない環境として、
+次に保持を立てるまでスレッドの要求だけを読む(映らない値を毎回の消失と読まないため)。履歴には消失 1 回に
+つき `lost` 行を 1 行書く。
+
+同じスレッドからの立て直しで数え直されるか、専用スレッドからなら数えられるかは、実機では確かめていない
+(消失を起こせないため)。確かめたのは、新しいプロセスの holder を起こした直後に `SystemExecutionState` が
+`0x1` に戻ったこと(10/13 01:12)と、下のテスト:
+
+- `a_request_that_stops_being_counted_is_asked_again` — OS 要求を記録係に置き換え、スレッドの要求が消えた形・
+  要求が変わるまで数えられない形・どう変えても数えられない形(専用スレッドで直る)の 3 つ
+- `a_kept_request_goes_with_the_hold_and_comes_back_with_it` — 専用スレッドの要求は解除で外れ、元のスレッドが
+  数えられないまま保持し直すと専用スレッドから立て直す。保持を立てた時から数えられない場合も同じ
+- `a_loss_is_told_once_and_a_count_that_shows_nothing_is_not_read` — 何をしても直らない消失は 1 行だけで、
+  専用スレッドも残さない。保持を立てた時から何も映らない数えは読まない
+- `a_real_request_let_go_of_behind_the_holder_is_asked_again` — 実 API。holder 自身のスレッドの要求を裏で外すと、
+  次の読取りが `lost thread:80000000,system:…,after:…` を書き、そのスレッドの要求が `0x80000000` から
+  `0x80000001` に戻り、名前の最後の設定時刻が最初の保持より進む
+- `a_request_kept_apart_starts_and_ends_on_the_real_api` — 実 API。専用スレッドの立て・外しを繰り返しても止まらない
+
+どれも、この読みを外した台本では赤になる(最後の 1 本は専用スレッドそのものの試験)。
+
+## 書き手の無い subagent
+
+2026-10-12 11:05:17 に席 c のセッションのターンが終わり、11:05:23 に次の発話が来るまでの間に、agent id
+`a0fc47cb794da2a01` の subagent が ToolSearch を始めた(PreToolUse だけ)。transcript も `.meta.json` も
+どこにも書かれず、PostToolUse・SubagentStop・停止の通知も無いまま、その呼び出しは開いたままの扱いで
+セッションの終わり(10/13 00:49)まで 13 時間 44 分、保持の理由(`turn:`)に載り続けた。
+Agent ツールの subagent は、`.meta.json` を最初の記録の約 0.25 秒後に書き(直近 6 件)、transcript の最初の
+記録は最初の tool_use より 1.4 秒以上前にある(下の「未実施・限界」の 965 件)。holder(r19〜)は、呼び出しを
+持ちながら transcript も `.meta.json` も無い subagent を、そのセッションの transcript が在る時に限って、読取りが
+見つけた時点で止まったものとして扱い、覚えておく — 呼び出しの終わりの hook が claim を書き直しても、次の読取りで
+外す(`a_subagent_that_writes_nothing_of_its_own_stops_at_its_call`)。transcript を残さないセッションの subagent は
+何も書かないので、この扱いに掛けない(`a_subagent_of_a_session_that_keeps_no_transcript_runs_its_call`)。
+どちらも、この扱いを外した台本では赤になる。
+呼び出しの前は数える(SubagentStart の直後、`.meta.json` が書かれる前の Agent ツールの subagent を外さないため)。
+holder を起こし直すと覚えは消え、書き直された claim は呼び出しが無ければ最後の hook から 1 時間数える。
 
 ## holder の負荷
 
@@ -116,6 +172,9 @@ holder(revision 5 以降)の判定は `.awake/history` に残る。全 revision 
 `turn:<session>`(応答か呼び出しが数えられている。subagent の分も session に寄せる)、
 `process:<session>`(シェル呼び出しのプロセスが走っていて、その session の `turn` が数えられていない)、
 `wake:<session>`(予約した再開が先にある)。`holding -` は、読取りの途中で claim が変わったので保持を続けた、の意。
+`lost thread:<16 進>,system:<16 進>,after:<16 進>`(r19〜)は、読取りが保持の消失(または立てたばかりの保持が
+数えられていないこと)を見つけて立て直した行で、スレッドが求めていた値、system が数えていた値
+(`SystemExecutionState`)、立て直した後に数えた値を書く。消失 1 回につき 1 行、その読取りの判定の行の後。
 4 MB を超えたら新しい側の半分を残す。数セッションが動く時間帯で 1 時間に 50〜90 行。
 `cargo xtask awake` は、holder ごとにその holder が最後に書いた 1 行を出す。
 スリープの記録(上の System ログ)との突き合わせは、この履歴で直接できる。
@@ -123,7 +182,16 @@ holder(revision 5 以降)の判定は `.awake/history` に残る。全 revision 
 ## 未実施・限界
 
 - `powercfg /requests` は管理者権限が無く取得できない。`CallNtPowerInformation(SystemExecutionState)` は
-  他アプリの要求も含む全体の値で、この実装の保持・解除の帰属には使わない
+  他アプリの要求も含む全体の値で、この実装の保持・解除の帰属には使わない。holder は「何も数えられていない」
+  ことの確認にだけ使うので、他プロセスの要求が立っている間は自分の保持の消失を見落とし、相手が解く次の読取りで
+  立て直す
+- 要求が数えられなくなる仕組みは確かめていない(API からのスリープを挟んだ 1 例だけ)。強制スリープと復帰を
+  制御して挟む試験は、作業中のセッションを止めるので行っていない
+- 書き手の無い subagent の判定は、Claude Code の置き場(`<session>/subagents/agent-<id>.jsonl` と
+  `.meta.json`)に何も無いことを根拠にする。置き場が変わると、Agent ツールの subagent も最初の呼び出しで
+  止まった扱いになり、背景の subagent の MCP・fetch・思考の間を保持しない。置き場の実測は、このプロジェクトの
+  2026-07-24 以降の `.meta.json` 968 件: 965 件は transcript と組で、どれも transcript の最初の記録が最初の
+  tool_use より 1.4 秒以上前(残り 3 件は `.meta.json` だけ = この規則には掛からない)
 - Claude の実際の許可操作、アプリ独自の許可画面、実際の MCP の内部実行は再現していない。
   P3 の upstream の未達を fixture の成功で解消したとは扱わない
 - 無入力タイマーの設定値(AC のスリープまでの時間)と人の入力は記録に残らない。運用中の記録の期間は

@@ -1,6 +1,6 @@
 # Claude Desktop の許可ログによるスリープ制御補助
 
-Windows の holder revision 16、activity protocol 1。実装は `crates/xtask/src/awake/desktop.rs`
+Windows の holder revision 19、activity protocol 1。実装は `crates/xtask/src/awake/desktop.rs`
 (holder のスクリプトに埋め込まれる)。Codex の native activity と Desktop ログも同じ holder が読むが、
 対応付けは別の観測器が担当する([Codex ハーネス](Codexハーネス.md))。
 
