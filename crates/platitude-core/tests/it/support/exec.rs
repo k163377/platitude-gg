@@ -3,53 +3,54 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 use platitude_core::OperationId;
 use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor, Kept};
 use tokio_util::sync::CancellationToken;
 
-struct IsolatedGit {
-    _dir: tempfile::TempDir,
-    global_config: PathBuf,
-    xdg_config: PathBuf,
+/// No fsync (the repositories are throwaway), no auto-gc mid-test.
+const KNOBS: [(&str, &str); 2] = [("core.fsync", "none"), ("gc.auto", "0")];
+
+/// Where the shared executor's `--global` file and XDG folder are: a folder
+/// nobody makes, so git reads nothing there and a `--global` write through
+/// it fails (a test that writes one has its own — [`isolated_global`]).
+fn nowhere() -> PathBuf {
+    super::temp::root().join(".no-config")
 }
 
-static ISOLATED_GIT: OnceLock<IsolatedGit> = OnceLock::new();
-
-fn isolated_git() -> &'static IsolatedGit {
-    ISOLATED_GIT.get_or_init(|| {
-        let dir = super::temp::dir();
-        let global_config = dir.path().join("global-config");
-        let xdg_config = dir.path().join("xdg-config");
-        std::fs::write(
-            &global_config,
-            b"[core]\n\tfsync = none\n[gc]\n\tauto = 0\n",
-        )
-        .expect("write isolated global config");
-        std::fs::create_dir(&xdg_config).expect("create isolated xdg config dir");
-        IsolatedGit {
-            _dir: dir,
-            global_config,
-            xdg_config,
-        }
-    })
-}
-
+/// Configuration from no file outside the repository: [`KNOBS`] travel in
+/// the environment (`GIT_CONFIG_COUNT`, git 2.31), since a file needs a
+/// folder, and one shared by the suite would be a static never dropped —
+/// left under `target/tmp` by every run.
 fn isolated_env() -> Vec<(OsString, OsString)> {
-    let config = isolated_git();
-    vec![
+    let mut env = vec![
         (
             OsString::from("GIT_CONFIG_GLOBAL"),
-            config.global_config.clone().into_os_string(),
+            nowhere().join("global-config").into_os_string(),
         ),
         (OsString::from("GIT_CONFIG_NOSYSTEM"), OsString::from("1")),
         (
             OsString::from("XDG_CONFIG_HOME"),
-            config.xdg_config.clone().into_os_string(),
+            nowhere().into_os_string(),
         ),
         super::temp::ceiling(),
-    ]
+        (
+            OsString::from("GIT_CONFIG_COUNT"),
+            OsString::from(KNOBS.len().to_string()),
+        ),
+    ];
+    for (i, (key, value)) in KNOBS.iter().enumerate() {
+        env.push((
+            OsString::from(format!("GIT_CONFIG_KEY_{i}")),
+            OsString::from(key),
+        ));
+        env.push((
+            OsString::from(format!("GIT_CONFIG_VALUE_{i}")),
+            OsString::from(value),
+        ));
+    }
+    env
 }
 
 /// Git executor for integration tests. The raw `GitExecutor::new()` remains
@@ -180,7 +181,7 @@ pub fn logged() -> (GitExecutor, Arc<Log>, CancellationToken) {
 
 /// [`isolated`] with `--global` pointed at a file of the caller's own
 /// (`TestRepo::global_config`), for reads and writes that reach outside a
-/// repository: [`isolated`] shares one file across the parallel suite.
+/// repository: [`isolated`] names no file there.
 pub fn isolated_global(global_config: &Path) -> GitExecutor {
     GitExecutor::new()
         .with_stock_timeout(super::wait::OVERALL_BUDGET)
@@ -192,7 +193,7 @@ pub fn isolated_global(global_config: &Path) -> GitExecutor {
             (OsString::from("GIT_CONFIG_NOSYSTEM"), OsString::from("1")),
             (
                 OsString::from("XDG_CONFIG_HOME"),
-                isolated_git().xdg_config.clone().into_os_string(),
+                nowhere().into_os_string(),
             ),
             super::temp::ceiling(),
         ])

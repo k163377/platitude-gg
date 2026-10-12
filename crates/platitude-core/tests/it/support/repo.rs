@@ -105,7 +105,7 @@ impl TestRepo {
 
     /// The file this repository's git reads and writes `--global` in — a
     /// `--global` write test needs its own, since the executor's isolated
-    /// one is shared by the parallel suite (`support::exec::logged_global`).
+    /// one names no file (`support::exec::logged_global`).
     pub fn global_config(&self) -> &Path {
         &self.global_config
     }
