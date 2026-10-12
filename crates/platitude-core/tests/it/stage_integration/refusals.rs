@@ -338,12 +338,12 @@ async fn a_file_that_moves_under_the_discard_is_refused_as_stale() {
     );
 }
 
-/// git can turn a patch down that nothing moved under: a diff read with
-/// `diff.context=0` has hunks without context, and `apply` will not place
-/// one that does not end the file. The file reads the same afterwards, so
-/// this is not the stale refusal — it is git's to say, and the log has it.
+/// A reader's `diff.context=0` would leave the diff's hunks without
+/// context, and `apply` places no context-free hunk mid-file: the part could
+/// never be taken. The read pins the context (`details::DIFF_SHAPE_ARGS`),
+/// so the part applies as on any other machine.
 #[tokio::test]
-async fn a_patch_git_refuses_on_an_unmoved_file_is_not_called_stale() {
+async fn a_readers_context_setting_does_not_keep_a_part_from_applying() {
     let mut repo = TestRepo::init();
     let base: String = (1..=9).map(|n| format!("line {n}\n")).collect();
     repo.commit_file("a.txt", &base, "root");
@@ -355,7 +355,7 @@ async fn a_patch_git_refuses_on_an_unmoved_file_is_not_called_stale() {
     };
 
     let (exec, cancel) = env();
-    let err = stage::apply_partial(
+    stage::apply_partial(
         &exec,
         &repo_info,
         &target,
@@ -364,11 +364,13 @@ async fn a_patch_git_refuses_on_an_unmoved_file_is_not_called_stale() {
         &cancel,
     )
     .await
-    .expect_err("git places no context-free hunk mid-file");
-    assert!(err.report().is_none(), "not a refusal of this end's: {err}");
-    assert!(err.to_string().contains("patch does not apply"), "{err}");
-    let (staged, _, _) = buckets(&repo).await;
-    assert!(staged.is_empty(), "{staged:?}");
+    .expect("the hunk carries its context whatever diff.context says");
+    let (staged, unstaged, _) = buckets(&repo).await;
+    assert_eq!(staged, vec!["a.txt".to_string()], "{staged:?}");
+    assert!(
+        unstaged.is_empty(),
+        "the whole change went in: {unstaged:?}"
+    );
 }
 
 /// An untracked partial stage checks the fingerprint against the same

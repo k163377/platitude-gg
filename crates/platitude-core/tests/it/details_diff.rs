@@ -197,6 +197,47 @@ async fn staged_and_unstaged_diffs_are_separate() {
     assert_eq!(unstaged_adds, vec!["working tree version"]);
 }
 
+/// A reader's diff configuration does not reach the shape read here: the
+/// prefixes the header parser strips (`diff.srcPrefix` / `diff.dstPrefix`
+/// are 2.45's, which the minimum ignores) and the context a part needs to
+/// apply, where `diff.context=0` would leave a hunk no `git apply` takes.
+#[tokio::test]
+async fn a_readers_diff_configuration_does_not_reshape_what_is_read() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "1\n2\n3\n4\n5\n6\n7\n", "base");
+    repo.git(&["config", "diff.noprefix", "true"]);
+    repo.git(&["config", "diff.srcPrefix", "x/"]);
+    repo.git(&["config", "diff.dstPrefix", "y/"]);
+    repo.git(&["config", "diff.context", "0"]);
+    repo.write_file("f.txt", "1\n2\n3\nfour\n5\n6\n7\n");
+    let (executor, cancel) = env();
+
+    let files = details::file_diff(
+        &executor,
+        &repo.path,
+        &DiffTarget::Unstaged {
+            path: "f.txt".to_string(),
+        },
+        &cancel,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        (files[0].old_path.as_deref(), files[0].new_path.as_deref()),
+        (Some("f.txt"), Some("f.txt")),
+        "the prefixes are the ones the parser strips: {files:?}"
+    );
+    let context = files[0].hunks[0]
+        .lines
+        .iter()
+        .filter(|l| l.kind == DiffLineKind::Context)
+        .count();
+    assert_eq!(
+        context, 6,
+        "three lines of context each side, whatever diff.context says"
+    );
+}
+
 #[tokio::test]
 async fn untracked_file_renders_as_all_additions() {
     let mut repo = TestRepo::init();

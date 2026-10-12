@@ -26,12 +26,26 @@ const DETAILS_FORMAT_ARG: &str = "--format=%H%x00%P%x00%aN%x00%aE%x00%at%x00%cN%
      %(trailers:key=Co-authored-by,valueonly,unfold,separator=%x1F)%x00%B";
 const DETAILS_FIELDS: usize = 10;
 
-/// Arguments pinning diff output shape against user configuration.
-const DIFF_SHAPE_ARGS: [&str; 6] = [
+/// Arguments pinning diff output shape against user configuration: the
+/// `a/` and `b/` the header parser reads (`diff.srcPrefix` /
+/// `diff.dstPrefix` are 2.45's, and a key the minimum does not know is
+/// ignored), the three lines of context a part needs to apply where
+/// `diff.context=0` would leave none, the gitlink lines the parser knows
+/// (`diff.submodule=log` writes a shape with no `diff --git` header), and
+/// no external diff program.
+const DIFF_SHAPE_ARGS: [&str; 14] = [
     "-c",
     "diff.noprefix=false",
     "-c",
     "diff.mnemonicPrefix=false",
+    "-c",
+    "diff.srcPrefix=a/",
+    "-c",
+    "diff.dstPrefix=b/",
+    "-c",
+    "diff.context=3",
+    "-c",
+    "diff.submodule=short",
     "-c",
     "diff.external=",
 ];
