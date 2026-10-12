@@ -12,16 +12,18 @@ use super::wire::{Fields, Record, field, has_field};
 /// One flattened row of the diff pane.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DiffRow {
-    /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` — and `""` for
-    /// the empty side of a split row.
+    /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` / `mode` (a
+    /// commit's mode change, under its band) — and `""` for the empty side
+    /// of a split row.
     pub kind: &'static str,
     /// -1 when the side has no line number.
     pub old_no: i32,
     pub new_no: i32,
     /// What the row draws: the line as `markup::styled` marks it up,
-    /// coloured or not. Only the markup is kept: a copy reads the source
-    /// (`models::diff::selection`), and holding both doubles what a long
-    /// diff costs.
+    /// coloured or not — but a `mode` row carries the two modes, a colon
+    /// apart, for the pane to word. Only the markup is kept: a copy reads
+    /// the source (`models::diff::selection`), and holding both doubles
+    /// what a long diff costs.
     pub text: String,
     /// What changed inside this row (`platitude_core::intraline`), as runs
     /// of places in the line as spelled ([`spelled_ranges`]); the pane
@@ -143,11 +145,29 @@ pub fn is_new_file(patches: &[FilePatch]) -> bool {
 }
 
 /// Whether the patch is one `git apply` cannot take a part of without
-/// breaking what it stores: a gitlink's `Subproject commit` line, or a file
-/// that goes through Git LFS (the pointer git keeps). The pane offers the
-/// whole file only, as for a new one (デザイン規約 §diff の中のステージ).
-pub fn is_whole_only(patches: &[FilePatch]) -> bool {
-    patches.iter().any(|p| p.gitlink || p.lfs)
+/// breaking what it stores, and which: `"gitlink"` (a `Subproject commit`
+/// line) or `"lfs"` (a file through Git LFS — the pointer git keeps); `""`
+/// where parts can be taken. The pane offers the whole file only, as for a
+/// new one, and says why (デザイン規約 §diff の中のステージ).
+pub fn whole_only_why(patches: &[FilePatch]) -> &'static str {
+    if patches.iter().any(|p| p.gitlink) {
+        "gitlink"
+    } else if patches.iter().any(|p| p.lfs) {
+        "lfs"
+    } else {
+        ""
+    }
+}
+
+/// The mode the file changes from and to, where its patch says — for the
+/// line over the rows (no part of the patch carries it,
+/// `platitude_core::patch`). `None` on a reading of several commits'
+/// patches: each says its own under its band (`flatten_patches`).
+pub fn mode_change(patches: &[FilePatch]) -> Option<&(String, String)> {
+    if patches.iter().any(|p| !p.from_commit.is_empty()) {
+        return None;
+    }
+    patches.iter().find_map(|p| p.mode_change.as_ref())
 }
 
 /// Whether the diff compares its file against more than one side (a
@@ -163,6 +183,25 @@ pub fn is_combined(patches: &[FilePatch]) -> bool {
 /// what the two sides did instead.
 pub fn is_unmerged_only(patches: &[FilePatch]) -> bool {
     !patches.is_empty() && patches.iter().all(|p| p.unmerged)
+}
+
+/// A row that is no line of the file: no numbers, no hunk, spanning the
+/// row either way it is read — a commit's band, its mode change, the
+/// binary note. `patch` is the patch it belongs to, -1 for none.
+fn spanning(kind: &'static str, text: &str, patch: i32) -> DiffRow {
+    DiffRow {
+        kind,
+        old_no: -1,
+        new_no: -1,
+        text: styled(text, &[]),
+        emph: Runs::default(),
+        fence: false,
+        no_newline: false,
+        hunk: -1,
+        line: -1,
+        patch,
+        markers: String::new(),
+    }
 }
 
 /// Flattens parsed patches into rows (hunk headers inline).
@@ -181,19 +220,14 @@ pub fn flatten_patches(
         // (デザイン規約 §複数のコミットを選ぶ), above everything — the
         // binary note included.
         if !patch.from_commit.is_empty() {
-            rows.push(DiffRow {
-                kind: "commit",
-                old_no: -1,
-                new_no: -1,
-                text: styled(&patch.from_commit, &[]),
-                emph: Runs::default(),
-                fence: false,
-                no_newline: false,
-                hunk: -1,
-                line: -1,
-                patch: i32::try_from(patch_index).unwrap_or(-1),
-                markers: String::new(),
-            });
+            let at = i32::try_from(patch_index).unwrap_or(-1);
+            rows.push(spanning("commit", &patch.from_commit, at));
+            // That commit's mode change, under its band: the two modes as
+            // git prints them, a colon apart (markup keeps it as it is, as
+            // it would not a space), worded by the pane (`Words.modeLineOf`).
+            if let Some((from, to)) = &patch.mode_change {
+                rows.push(spanning("mode", &format!("{from}:{to}"), at));
+            }
         }
         if patch.unmerged {
             // No rows: the pane builds the unmerged sentence from the
@@ -202,19 +236,7 @@ pub fn flatten_patches(
         }
         if patch.is_binary {
             if binary_note {
-                rows.push(DiffRow {
-                    kind: "meta",
-                    old_no: -1,
-                    new_no: -1,
-                    text: styled("(binary file)", &[]),
-                    emph: Runs::default(),
-                    fence: false,
-                    no_newline: false,
-                    hunk: -1,
-                    line: -1,
-                    patch: -1,
-                    markers: String::new(),
-                });
+                rows.push(spanning("meta", "(binary file)", -1));
             }
             continue;
         }

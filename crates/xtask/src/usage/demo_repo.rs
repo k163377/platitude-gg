@@ -18,6 +18,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   whose own history has moved on: the Subproject commit
                   diff, which no line of can be staged on its own
                   (diff-file vendor/nest)
+        modes     scripts committed executable whose copies are not:
+                  tool.sh changed its mode alone, build.sh its mode and
+                  two lines, flip.sh its mode and every line's ending
+                  (diff-file tool.sh, stage-hunk build.sh, diff-file flip.sh)
         eol       all four line-ending cases, in a directory of LF files
         clashing  two branches that will not merge cleanly, unmerged yet
                   (also the pick that will not copy cleanly)

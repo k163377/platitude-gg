@@ -41,13 +41,16 @@ Rectangle {
     property string worktreeName: ""
     /// That worktree is the repository's own (`DiffPaneHeader.worktreeHome`).
     property bool worktreeHome: false
-    /// Whether a hunk and a line can be staged on their own. Not on a new file — its one hunk is the whole file
-    /// (デザイン規約 §diff の中のステージ) — nor a conflicted one, whose combined diff `git apply` refuses (and so does
-    /// core, `stage::refuse_combined`), nor a gitlink or a file through Git LFS, a part of whose patch breaks what git
-    /// stores (`DiffModel.wholeOnly`); all keep the header's one word. Nor on another worktree's file.
-    readonly property bool partial: diffPane.fromWorktree && diffPane.writable
-                                    && !diffPane.diffModel.isNewFile && !diffPane.combined
-                                    && !diffPane.diffModel.wholeOnly
+    /// Whether a part of this diff could be staged at all: this window's own file, a write it may make, not a new file —
+    /// its one hunk is the whole file (デザイン規約 §diff の中のステージ) — nor a conflicted one, whose combined diff
+    /// `git apply` refuses (and so does core, `stage::refuse_combined`). All keep the header's one word.
+    readonly property bool partsPossible: diffPane.fromWorktree && diffPane.writable && !diffPane.diffModel.isNewFile
+                                          && !diffPane.combined
+    /// Why the file goes whole where parts were possible: a gitlink or a file through Git LFS, a part of whose patch
+    /// breaks what git stores (`DiffModel.wholeWhy`) — said above the rows (`Words.wholeOnlyLine`); `""` elsewhere.
+    readonly property string wholeWhy: diffPane.partsPossible ? diffPane.diffModel.wholeWhy : ""
+    /// Whether a hunk and a line can be staged on their own.
+    readonly property bool partial: diffPane.partsPossible && diffPane.diffModel.wholeWhy === ""
 
     // ---- one column or two ----------------------------------------
     /// Side by side (old left, new right) rather than one column (デザイン規約 §diff を 2 列で読む). The model's: it
@@ -353,12 +356,15 @@ Rectangle {
     function diffSettled() {
         const m = diffPane.diffModel
         // `embedded` never becomes rows: git will not open a nested repository, so the pane shows a line about it
-        // (`DiffFileNotices`).
-        return !m.loading && (diffList.count > 0 || m.isBinary || m.previewKind !== "" || m.embedded)
+        // (`DiffFileNotices`); nor does a read of headers alone.
+        return !m.loading && (diffList.count > 0 || m.isBinary || m.previewKind !== "" || m.embedded
+                              || fileNotices.headersOnly)
     }
     /// Automation: a settled read is not yet a picture on screen — the decode is asynchronous
     /// (`DiffFileNotices.picturesSettled`).
     readonly property bool picturesSettled: fileNotices.picturesSettled
+    /// Automation: the lines over the rows as they stand (`DiffFileNotices.modeShown` and its neighbours).
+    readonly property alias notices: fileNotices
     readonly property int picturesShown: fileNotices.picturesShown
 
     // The widths the rows are laid out from, measured off rulers that are never drawn.
@@ -415,6 +421,7 @@ Rectangle {
             Layout.fillHeight: diffPane.diffModel.previewKind === "image"
             diffModel: diffPane.diffModel
             rowCount: diffList.count
+            wholeWhy: diffPane.wholeWhy
             conflictChange: diffPane.conflictChange
             sideOurs: diffPane.sideOurs
             sideTheirs: diffPane.sideTheirs

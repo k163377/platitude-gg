@@ -142,8 +142,10 @@ Rectangle {
     /// A heading: a hunk's, or — where several commits' patches of one file stand one after another — the commit a
     /// block is of (デザイン規約 §複数のコミットを選ぶ). No number, no seat; it spans the row either way it is read.
     readonly property bool banded: diffRow.kind === "hunk" || diffRow.kind === "commit"
-    /// Side by side, and a line of the file — a band or the binary note (`meta`) has no side and spans the row.
+    /// Side by side, and a line of the file — a band, the binary note (`meta`) or a commit's mode change (`mode`) has
+    /// no side and spans the row.
     readonly property bool twoColumns: diffRow.split && !diffRow.banded && diffRow.kind !== "meta"
+                                       && diffRow.kind !== "mode"
     /// A changed line is bold, a fence is not (規約 §シンタックスハイライト). Named here because **the ruler has to be
     /// set in the weight the row is drawn in** — a bold face that advances differently puts every wash and press out
     /// (`DiffTextSelect` reads it off this row for the same reason).

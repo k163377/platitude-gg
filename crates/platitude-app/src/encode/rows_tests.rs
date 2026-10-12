@@ -155,6 +155,47 @@ fn a_file_with_only_a_new_side_is_a_new_file() {
     assert_eq!(patches[0].old_path, None);
 }
 
+/// The two things a diff can be offered whole for say which they are.
+#[test]
+fn a_whole_only_diff_names_why() {
+    let mut gitlink = parse_patch(EDITED.as_bytes());
+    gitlink[0].gitlink = true;
+    let mut lfs = parse_patch(EDITED.as_bytes());
+    lfs[0].lfs = true;
+    assert_eq!(whole_only_why(&gitlink), "gitlink");
+    assert_eq!(whole_only_why(&lfs), "lfs");
+    assert_eq!(whole_only_why(&parse_patch(EDITED.as_bytes())), "");
+}
+
+/// A mode change rides alongside its lines without being one: the line over
+/// the rows says it for a patch read alone, and on a reading of several
+/// commits each band carries its own.
+#[test]
+fn a_mode_change_is_said_over_one_patch_and_under_each_band() {
+    let made_executable = "\
+diff --git a/run.sh b/run.sh
+old mode 100644
+new mode 100755
+";
+    assert_eq!(
+        mode_change(&parse_patch(made_executable.as_bytes())),
+        Some(&("100644".to_string(), "100755".to_string()))
+    );
+    assert_eq!(mode_change(&parse_patch(EDITED.as_bytes())), None);
+
+    // Several commits' patches of the file: each band carries its own, and
+    // the line over the rows says nothing.
+    let mut stacked = parse_patch(made_executable.as_bytes());
+    stacked.extend(parse_patch(EDITED.as_bytes()));
+    stacked[0].from_commit = "1234abcd make it run".into();
+    stacked[1].from_commit = "5678ef90 edit it".into();
+    assert_eq!(mode_change(&stacked), None);
+    let rows = flatten_patches(&stacked, true, &DiffColors::default(), None);
+    let kinds: Vec<&str> = rows.iter().take(3).map(|r| r.kind).collect();
+    assert_eq!(kinds, ["commit", "mode", "commit"]);
+    assert_eq!(rows[1].text, "100644:100755");
+}
+
 #[test]
 fn a_file_that_existed_before_is_not_a_new_one() {
     assert!(!is_new_file(&parse_patch(EDITED.as_bytes())));

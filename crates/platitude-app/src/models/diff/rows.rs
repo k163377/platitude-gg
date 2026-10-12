@@ -123,7 +123,9 @@ impl DiffModel {
             // Kept while the rows stay: the pane offers what the rows on
             // screen are.
             self.is_new_file = false;
-            self.whole_only = false;
+            self.whole_why = String::new();
+            self.mode_from = String::new();
+            self.mode_to = String::new();
             self.is_combined = false;
             self.unmerged = false;
             self.embedded = false;

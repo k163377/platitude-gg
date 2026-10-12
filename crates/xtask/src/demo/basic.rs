@@ -194,6 +194,56 @@ pub(super) fn gitlink(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// Mode changes, committed and not. In the history, `hook.sh` is added,
+/// made executable alone, then edited and made plain again, with notes in
+/// between — graph rows 3, 5 and 6 under the WIP row are its three commits,
+/// two of them changing its mode (`graph-choose-diff hook.sh`). Every mode
+/// is named with `--chmod`, which every OS takes the same way.
+///
+/// Then three scripts committed executable whose working copies are not:
+/// written plain and read with `core.filemode` on (Windows has no bit to
+/// set, and the written file has none elsewhere). `tool.sh` changed its
+/// mode alone (`100755 → 100644`, no line); `build.sh` its mode and two
+/// lines far apart, two hunks the mode rides beside; `flip.sh` its mode and
+/// every line's ending (LF → CRLF), the mode line over the line-ending
+/// warning.
+pub(super) fn modes(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "hook.sh",
+        "#!/bin/sh\necho one\necho two\n",
+        "feat: add the hook",
+    )?;
+    repo.git(&["update-index", "--chmod=+x", "--", "hook.sh"])?;
+    repo.git(&["commit", "-m", "chore: make the hook executable"])?;
+    repo.commit("notes.txt", "a\n", "docs: a note")?;
+    repo.write("hook.sh", "#!/bin/sh\necho one\necho TWO\n")?;
+    repo.git(&["update-index", "--chmod=-x", "--", "hook.sh"])?;
+    repo.git(&["commit", "-m", "fix: reword the hook, not run directly"])?;
+    repo.commit("notes.txt", "a\nb\n", "docs: another note")?;
+    let steps = |name: &str| -> String {
+        std::iter::once("#!/bin/sh\n".to_string())
+            .chain((1..=30).map(|n| format!("echo \"{name} step {n:02}\"\n")))
+            .collect()
+    };
+    let flip: String = (1..=6).map(|n| format!("echo {n}\n")).collect();
+    repo.write("flip.sh", &flip)?;
+    repo.git(&["add", "--chmod=+x", "--", "flip.sh"])?;
+    for name in ["tool", "build"] {
+        repo.write(&format!("{name}.sh"), &steps(name))?;
+        repo.git(&["add", "--chmod=+x", "--", &format!("{name}.sh")])?;
+    }
+    repo.git(&["commit", "-m", "feat: the scripts"])?;
+    repo.git(&["config", "core.filemode", "true"])?;
+    repo.write(
+        "build.sh",
+        &steps("build")
+            .replace("build step 02\"", "build step 02, reworded\"")
+            .replace("build step 25\"", "build step 25, reworded\""),
+    )?;
+    repo.write("flip.sh", &flip.replace('\n', "\r\n"))?;
+    Ok(())
+}
+
 /// `basic`, with a lock on `refs/heads/held` as another git would hold it
 /// mid-write: a rename onto that name git turns down for a reason no name
 /// box can see (`rename-taken held`). git lists no branch for a `.lock`.

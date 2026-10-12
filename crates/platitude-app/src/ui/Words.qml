@@ -737,6 +737,37 @@ QtObject {
         return qsTr("Load %L1 more commits").arg(step)
     }
 
+    /// A file's mode change as its one line (`DiffModel.modeFrom` / `modeTo`), each side as `modeSide` says it
+    /// (デザイン規約 §mode の変更).
+    function modeLine(from, to) {
+        return qsTr("File mode changed · %1 → %2").arg(Words.modeSide(from)).arg(Words.modeSide(to))
+    }
+    /// The same off a row of a reading of several commits, which carries the two modes as git prints them, a colon
+    /// apart (`encode::flatten_patches`).
+    function modeLineOf(pair) {
+        const sides = pair.split(":")
+        return sides.length === 2 ? Words.modeLine(sides[0], sides[1]) : pair
+    }
+    /// One side of a mode change (`DiffModel.modeFrom` / `modeTo`): the octal as git prints it, and what it means for
+    /// the one permission git records — whether the file runs (デザイン規約 §mode の変更).
+    function modeSide(mode) {
+        switch (mode) {
+        case "100755": return qsTr("%1 (executable)").arg(mode)
+        case "100644": return qsTr("%1 (not executable)").arg(mode)
+        default: return mode
+        }
+    }
+
+    /// The line saying why a diff offers its whole file only (`DiffModel.wholeWhy`); `""` when it offers parts
+    /// (デザイン規約 §diff の中のステージ).
+    function wholeOnlyLine(why) {
+        switch (why) {
+        case "gitlink": return qsTr("Whole file only · a submodule's commit")
+        case "lfs": return qsTr("Whole file only · stored by Git LFS")
+        default: return ""
+        }
+    }
+
     /// A ref name inside a sentence, as rich-text markup: the name in `tint` (デザイン規約 §ref の種別
     /// 「名前が出る場所すべてで」), the rest in the line's own colour. The name goes at the `%1` seat rather than being
     /// searched for — a branch called `it` would be found in `into it`. `""` when the sentence has no seat; the caller

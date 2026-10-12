@@ -12,8 +12,8 @@ Item {
 
     /// What this cell draws, as `Text.StyledText` reads it — every line, coloured or not (`encode::DiffRow`).
     required property string text
-    /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` — what colour the words are, and whether they are a
-    /// line of the file at all.
+    /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` / `mode` — what colour the words are, and whether they are
+    /// a line of the file at all.
     required property string kind
     /// What changed inside this line, as runs of layout places (`[{ from, len }, …]`, `encode::DiffRow.emph`).
     required property var emph
@@ -106,7 +106,9 @@ Item {
         verticalAlignment: Text.AlignVCenter
         // A heading starts at the row's left edge, not past the empty number columns (デザイン規約 §diff の中のステージ).
         leftPadding: cell.banded ? Theme.spaceXs : 0
-        text: cell.text
+        // A commit's mode change under its band carries the two modes alone; the words are the pane's
+        // (デザイン規約 §mode の変更).
+        text: cell.kind === "mode" ? Words.inked(Words.modeLineOf(cell.text)) : cell.text
         // Every line is markup, coloured or not (`markup::styled`), so the format never changes under a row.
         textFormat: Text.StyledText
         font.family: Theme.monoFamily

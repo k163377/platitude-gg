@@ -160,15 +160,16 @@ Item {
             // The line endings get a report line: the picture cannot say which kind the pane decided on.
             if (act === "diff-file") {
                 const d = diffPane.diffModel
-                Harness.report("line_endings kind=" + d.endingKind
-                                  + " scope=" + d.endingScope
-                                  + " lines=" + d.endingLines
-                                  + " text=" + Words.lineEndings(
-                                      d.endingKind, d.endingFrom, d.endingTo,
-                                  d.endingLines, d.endingScope, d.endingExt))
+                Harness.report("line_endings kind=" + d.endingKind + " scope=" + d.endingScope
+                                  + " lines=" + d.endingLines + " text=" + Words.lineEndings(d.endingKind, d.endingFrom,
+                                      d.endingTo, d.endingLines, d.endingScope, d.endingExt))
                 // Whether a hunk or a line puts a seat out, and the band's word: a line's mark comes up under a hand
-                // alone, so a picture without one cannot say whether the lines offer one.
-                Harness.report("diff_pieces offered=" + diffPane.piecesOffered + " whole=" + diffPane.stageOffered)
+                // alone, so a picture without one cannot say whether the lines offer one. `why=` and `mode=` are the
+                // lines over the rows as they stand, `order=` which of them stand, top to bottom (`DiffFileNotices`).
+                const notes = diffPane.notices
+                Harness.report("diff_pieces offered=" + diffPane.piecesOffered + " whole=" + diffPane.stageOffered
+                                  + " why=" + notes.wholeShown + " mode=" + notes.modeShown
+                                  + " order=" + notes.fileLinesOrder)
                 driver.complete()
                 return
             }

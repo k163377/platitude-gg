@@ -12,8 +12,8 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject,
 use crate::encode::{
     Candidates, DiffRow, Ended, Fields, LineMarks, Marks, One, Optional, Record, Runs, SplitRow,
     TextEnd, diff_key, field, flatten_patches, human_size, is_combined, is_new_file,
-    is_unmerged_only, is_whole_only, pair_rows, source_byte, spelled_place, spelled_ranges,
-    widest_lines,
+    is_unmerged_only, mode_change, pair_rows, source_byte, spelled_place, spelled_ranges,
+    whole_only_why, widest_lines,
 };
 use crate::hub::{DiffMsg, Feed};
 
@@ -39,8 +39,8 @@ pub(super) use rows::wanted;
 /// about a line goes into `marks`, not a role.
 #[derive(QModelItem, Default, Clone)]
 pub struct DiffLineItem {
-    /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` — and `""` on a
-    /// split row whose old side has nothing.
+    /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` / `mode` — and `""`
+    /// on a split row whose old side has nothing.
     kind: String,
     old_no: i32,
     new_no: i32,
@@ -164,9 +164,13 @@ pub struct DiffModel {
     is_binary: bool,
     /// The file has no old side (`encode::is_new_file`).
     is_new_file: bool,
-    /// A gitlink or a file through Git LFS, which `git apply` cannot take a
-    /// part of (`encode::is_whole_only`).
-    whole_only: bool,
+    /// `"gitlink"` or `"lfs"` where `git apply` cannot take a part of the
+    /// file, `""` where it can (`encode::whole_only_why`).
+    whole_why: String,
+    /// The mode the file changes from and to (`encode::mode_change`); both
+    /// empty where it keeps its mode.
+    mode_from: String,
+    mode_to: String,
     /// git's combined diff of a conflicted path — none of it can be
     /// staged in pieces.
     is_combined: bool,

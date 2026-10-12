@@ -412,9 +412,17 @@ pub(super) const TABLE: &[Verb] = &[
     // of that file, one band after another: `bands=2` because two of the
     // three touched it, where a diff across the span would be one block
     // carrying the work of a commit not chosen.
+    // On `modes` the three chosen commits all touch `hook.sh`, two of them
+    // its mode alone or beside a line: each band says its own mode change
+    // (デザイン規約 §mode の変更). The bands run oldest first, so the first
+    // is the one that made it executable.
     Verb {
         name: "graph-choose-diff",
-        when: &[],
+        when: &[(
+            Arg::WithPreset("modes"),
+            "bands=3 chosen=3 path=hook.sh modes=2 \
+             mode=File mode changed · 100644 (not executable) → 100755 (executable)",
+        )],
         plain: "bands=2 chosen=3",
     },
     // Toggling a row out of the choice and back quickly is two presses at

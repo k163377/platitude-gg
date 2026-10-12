@@ -365,10 +365,21 @@ Item {
                 }
                 if (!diffPane.diffSettled() || diffPane.view.count === 0)
                     return
+                // Each band's own mode change is a row of its own (`encode::flatten_patches`), worded by the pane:
+                // `modes=` counts them, `mode=` is the first as the row puts it. The stack is a few rows, read off
+                // their delegates — so once every one is built, which comes a beat after the rows.
+                const items = []
+                for (let i = 0; i < diffPane.view.count; i++)
+                    items.push(diffPane.view.itemAtIndex(i))
+                if (items.some(item => item === null))
+                    return
                 chosenRowTimer.stop()
+                const modeRows = items.filter(item => item.kind === "mode").map(item => Words.modeLineOf(item.text))
                 Harness.report("chosen_diff bands=" + diffPane.diffModel.commitBands
                                   + " chosen=" + page.chosenCount
-                                  + " path=" + page.diffPath)
+                                  + " path=" + page.diffPath
+                                  + " modes=" + modeRows.length
+                                  + " mode=" + (modeRows.length > 0 ? modeRows[0] : ""))
                 driver.complete()
                 return
             }

@@ -100,15 +100,30 @@ pub(super) const TABLE: &[Verb] = &[
         name: "diff-file",
         // A gitlink and a file through Git LFS offer the whole file alone:
         // `git apply` cannot take a part of either without breaking what git
-        // stores (デザイン規約 §diff の中のステージ).
+        // stores, and a line over the rows says which (デザイン規約 §diff の中の
+        // ステージ). A mode change has its line too, the only one where no
+        // line of the file changed, and it stands over the line-ending
+        // warning (§mode の変更). The lines are read as they stand.
         when: &[
             (
                 Arg::WithPreset("gitlink"),
-                "diff_pieces offered=false whole=true",
+                "diff_pieces offered=false whole=true \
+                 why=Whole file only · a submodule's commit mode= order=whole",
             ),
             (
                 Arg::WithPreset("lfs"),
-                "diff_pieces offered=false whole=true",
+                "diff_pieces offered=false whole=true why=Whole file only · stored by Git LFS mode= \
+                 order=whole",
+            ),
+            (
+                Arg::Is("flip.sh"),
+                "why= mode=File mode changed · 100755 (executable) → 100644 (not executable) \
+                 order=mode,endings",
+            ),
+            (
+                Arg::WithPreset("modes"),
+                "why= mode=File mode changed · 100755 (executable) → 100644 (not executable) \
+                 order=mode",
             ),
         ],
         plain: "diff_row act=diff-file ready=true",
