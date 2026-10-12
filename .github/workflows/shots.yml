@@ -74,6 +74,11 @@ jobs:
           env-vars: QMAKE
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
+      # As in ci.yml: the cache brings target/tmp's folders back without
+      # their files, and a template folder so emptied makes every verb build
+      # its preset twice.
+      - name: Drop the throwaway trees the cache brought back
+        run: rm -rf target/tmp
       # csrutil: whether SIP is on decides which way a build finds Qt's
       # frameworks (.github/actions/qt), so the run says which it stood on.
       - name: What this run builds and shoots with

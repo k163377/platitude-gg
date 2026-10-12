@@ -70,6 +70,17 @@ jobs:
           env-vars: QMAKE
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
+      # The cache saves target/ as one path, target/tmp with it, and its
+      # cleanup before saving takes only the files out of a folder holding no
+      # build, deps or .fingerprint, leaving the folders. A demo template's
+      # folder brought back without its marker holds the template's name, and
+      # every run of that preset builds its own — on the day the template's
+      # key still matches (`demo::template`). Dropped after the restore, not
+      # before the save: an entry restored on a full key match is not saved
+      # again, so one already holding the folders comes back until the key
+      # moves. Nothing under target/tmp is meant to outlive the job.
+      - name: Drop the throwaway trees the cache brought back
+        run: rm -rf target/tmp
       # On the record: the git is the image's own, not the oldest one
       # supported (internal-docs/P5-確認事項.md §6).
       - name: What this run builds and tests with
