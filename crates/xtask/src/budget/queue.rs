@@ -132,12 +132,13 @@ pub(crate) type Served = BTreeMap<(Rank, String), u64>;
 /// by what it is running now, hands a seat with two waiting units the
 /// machine twice in a row.
 ///
-/// A seat that arrives late starts at the least any seat here has
-/// ([`floor_of`]): at zero it would take the machine until it caught up,
-/// at its old count it would pay a debt it never asked for. Counted
-/// inside a rank, so a seat's landing costs its ordinary work no place.
+/// A seat that arrives late starts at the least any seat of its rank
+/// here has ([`floor_of`]): at zero it would take the machine until it
+/// caught up, at its old count it would pay a debt it never asked for.
+/// Counted inside a rank, floor included, so a seat's landing costs its
+/// ordinary work no place and no other rank's total moves where a seat
+/// starts.
 pub(crate) fn order<'a>(tickets: &'a [Ticket], served: &Served) -> Vec<&'a Ticket> {
-    let floor = floor_of(tickets, served);
     let mut so_far: BTreeMap<(Rank, &str), u64> = BTreeMap::new();
     let mut waiting: Vec<&Ticket> = tickets.iter().filter(|t| !t.running && !t.turn).collect();
     waiting.sort_by_key(|t| t.seq);
@@ -146,7 +147,7 @@ pub(crate) fn order<'a>(tickets: &'a [Ticket], served: &Served) -> Vec<&'a Ticke
         let key = (ticket.rank, ticket.seat.as_str());
         let at = *so_far
             .entry(key)
-            .or_insert_with(|| stood_at(served, ticket.rank, &ticket.seat, floor));
+            .or_insert_with(|| stood_at(tickets, served, ticket.rank, &ticket.seat));
         ranked.push((ticket.rank, at, ticket.seq, ticket));
         so_far.insert(key, at + u64::from(ticket.weight));
     }
@@ -154,22 +155,23 @@ pub(crate) fn order<'a>(tickets: &'a [Ticket], served: &Served) -> Vec<&'a Ticke
     ranked.into_iter().map(|(_, _, _, ticket)| ticket).collect()
 }
 
-/// Where a seat stands: what it has been served, never below the floor
-/// the seats with work here are standing on.
-pub(crate) fn stood_at(served: &Served, rank: Rank, seat: &str, floor: u64) -> u64 {
+/// Where a seat stands in `rank`: what it has been served, or the floor
+/// of that rank ([`floor_of`]) while it has no row there. `served` holds
+/// rows of live seats only (`ledger::Pool::served`), so a row is never
+/// below the floor.
+pub(crate) fn stood_at(tickets: &[Ticket], served: &Served, rank: Rank, seat: &str) -> u64 {
     served
         .get(&(rank, seat.to_string()))
         .copied()
-        .unwrap_or(floor)
-        .max(floor)
+        .unwrap_or_else(|| floor_of(tickets, served, rank))
 }
 
-/// The least any seat with a live ticket has been served — where a seat
-/// with no count of its own starts.
-pub(crate) fn floor_of(tickets: &[Ticket], served: &Served) -> u64 {
+/// The least any seat with a live ticket of `rank` has been served —
+/// where a seat with no count of its own in that rank starts.
+fn floor_of(tickets: &[Ticket], served: &Served, rank: Rank) -> u64 {
     tickets
         .iter()
-        .filter(|t| !t.turn)
+        .filter(|t| !t.turn && t.rank == rank)
         .filter_map(|t| served.get(&(t.rank, t.seat.clone())).copied())
         .min()
         .unwrap_or(0)
@@ -262,9 +264,7 @@ fn line(ticket: &Ticket) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        Rank, Served, Ticket, admits, budget_of, floor_of, order, stood_at, turn_is, used,
-    };
+    use super::{Rank, Served, Ticket, admits, budget_of, order, stood_at, turn_is, used};
 
     fn waiting(seq: u64, seat: &str, weight: u32, rank: Rank) -> Ticket {
         Ticket {
@@ -411,28 +411,68 @@ mod tests {
     fn a_seat_that_arrives_late_starts_where_the_others_stand() {
         let here = vec![waiting(1, "a", 1, Rank::Normal)];
         let long_run = served_of(&[("a", 900)]);
-        let floor = floor_of(&here, &long_run);
-        assert_eq!(floor, 900, "the seat already here is what the floor is");
         assert_eq!(
-            stood_at(&long_run, Rank::Normal, "newcomer", floor),
+            stood_at(&here, &long_run, Rank::Normal, "newcomer"),
             900,
             "a seat with no row of its own arrived with credit"
-        );
-        assert_eq!(
-            stood_at(
-                &served_of(&[("newcomer", 0)]),
-                Rank::Normal,
-                "newcomer",
-                floor
-            ),
-            900,
-            "a stale row read as credit"
         );
         // Level with the seat already here, so arrival order decides.
         let both = vec![here[0].clone(), waiting(2, "newcomer", 1, Rank::Normal)];
         assert_eq!(
             seqs(&order(&both, &served_of(&[("a", 900), ("newcomer", 900)]))),
             vec![1, 2]
+        );
+    }
+
+    /// The floor is read inside the newcomer's rank: another rank's lower
+    /// total would hand it credit over the seats it actually takes turns
+    /// with.
+    #[test]
+    fn a_seat_that_arrives_late_starts_where_its_own_rank_stands() {
+        let landing_running = Ticket {
+            running: true,
+            ..waiting(2, "b", 4, Rank::Landing)
+        };
+        let tickets = vec![
+            waiting(1, "a", 1, Rank::Normal),
+            landing_running,
+            waiting(3, "c", 1, Rank::Normal),
+        ];
+        let served: Served = [
+            ((Rank::Normal, "a".to_string()), 100),
+            ((Rank::Landing, "b".to_string()), 4),
+        ]
+        .into();
+        assert_eq!(
+            stood_at(&tickets, &served, Rank::Normal, "c"),
+            100,
+            "c started on a landing's total"
+        );
+        assert_eq!(
+            seqs(&order(&tickets, &served)),
+            vec![1, 3],
+            "the newcomer stood on a landing's total and went ahead of a"
+        );
+        // The other way round: a landing that arrives late does not start
+        // on the ordinary work's lower total.
+        let normal_running = Ticket {
+            running: true,
+            ..waiting(2, "b", 4, Rank::Normal)
+        };
+        let tickets = vec![
+            waiting(1, "a", 1, Rank::Landing),
+            normal_running,
+            waiting(3, "c", 1, Rank::Landing),
+        ];
+        let served: Served = [
+            ((Rank::Landing, "a".to_string()), 100),
+            ((Rank::Normal, "b".to_string()), 4),
+        ]
+        .into();
+        assert_eq!(
+            seqs(&order(&tickets, &served)),
+            vec![1, 3],
+            "the late landing stood on ordinary work's total and went ahead of a"
         );
     }
 

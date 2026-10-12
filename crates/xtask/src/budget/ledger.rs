@@ -26,7 +26,7 @@ pub(super) const SEQ: &str = "seq";
 /// Each seat's running total, by rank ([`queue::Served`]). A file of its
 /// own because it must outlive the units it counts: read off the live
 /// tickets alone, a seat just served would be handed the machine again.
-const SERVED: &str = "served";
+pub(super) const SERVED: &str = "served";
 
 /// A lock file's extension; a ticket's own file has none.
 const LOCK: &str = "lock";
@@ -266,14 +266,14 @@ impl Pool {
         let live = self.read()?;
         // The seat's row is made on arrival, not on first service: a seat
         // queued from the start and served nothing must stand below a
-        // served one, while a latecomer stands level with the others.
-        // Without the row both look alike and the older unit — the served
-        // seat's — wins (`queue::order`).
+        // served one, while a latecomer stands level with the others of
+        // its rank. Without the row both look alike and the older unit —
+        // the served seat's — wins (`queue::order`).
         if !turn {
             let served = self.served(&live);
             if !served.contains_key(&(ask.rank, ask.seat.to_string())) {
-                let floor = queue::floor_of(&live, &served);
-                self.serve(&served, floor, ask.rank, ask.seat, 0);
+                let at = queue::stood_at(&live, &served, ask.rank, ask.seat);
+                self.serve(&served, at, ask.rank, ask.seat, 0);
             }
         }
         let mut seq = self.next_seq()?;
@@ -358,8 +358,7 @@ impl Pool {
         // A turn asks for none of the machine, so it is not counted
         // against the seat.
         if !turn {
-            let floor = queue::floor_of(&mine, &served);
-            let at = queue::stood_at(&served, ask.rank, ask.seat, floor);
+            let at = queue::stood_at(&mine, &served, ask.rank, ask.seat);
             self.serve(&served, at, ask.rank, ask.seat, ask.weight);
         }
         Ok((true, standing))
@@ -494,9 +493,10 @@ impl Pool {
     }
 
     /// What each seat has been handed so far, by rank; held under
-    /// [`Pool::decide`] by every caller. Rows of seats with nothing live
-    /// are dropped: such a seat restarts from the floor whatever its row
-    /// said (`queue::stood_at`).
+    /// [`Pool::decide`] by every caller. A row with no live ticket of its
+    /// rank and seat is dropped: that seat's next unit in the rank
+    /// restarts from the rank's floor whatever the row said
+    /// ([`Self::register`], `queue::stood_at`).
     fn served(&self, tickets: &[Ticket]) -> queue::Served {
         let text = std::fs::read_to_string(self.dir.join(SERVED)).unwrap_or_default();
         let mut served = queue::Served::new();

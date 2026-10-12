@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
-use super::ledger::{self, DIR, Pool, SEQ, now};
+use super::ledger::{self, DIR, Pool, SEQ, SERVED, now};
 use super::unit;
 use super::{Admitted, Ask, LIGHT, Rank, demand, under, weight_of};
 use crate::yard::Yard;
@@ -167,6 +167,39 @@ fn room_a_landing_will_not_use_goes_on_down_the_queue() {
     );
     ordinary.let_go();
     landing.let_go();
+}
+
+/// The row a late seat is made with on arrival: another rank's smaller
+/// total would put it ahead of the seats it takes turns with, and the row
+/// its last stay left would read as credit.
+#[test]
+fn a_late_seat_s_row_is_made_at_its_own_rank_s_floor() {
+    let dir = common("floor-by-rank");
+    let ledger = dir.join(DIR);
+    let holder = Held::start(&dir, "held", 4, Rank::Normal, "a", 4);
+    holder.taken();
+    let landing = Held::start(&dir, "land's test", 4, Rank::Landing, "b", 4);
+    until_polled(&landing.looks);
+    {
+        let _decision = ledger::decide_in(&ledger).expect("the ledger's lock");
+        std::fs::write(
+            ledger.join(SERVED),
+            "landing b 4\nnormal a 100\nnormal c 0\n",
+        )
+        .expect("the totals");
+    }
+    let late = Held::start(&dir, "verb", 4, Rank::Normal, "c", 4);
+    until_polled(&late.looks);
+    let totals = std::fs::read_to_string(ledger.join(SERVED)).expect("the totals back");
+    assert!(
+        totals.lines().any(|line| line == "normal c 100"),
+        "c's row was not made at the ordinary seats' floor:\n{totals}"
+    );
+    holder.let_go();
+    landing.taken();
+    landing.let_go();
+    late.taken();
+    late.let_go();
 }
 
 #[test]
