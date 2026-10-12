@@ -478,6 +478,132 @@ async fn a_glob_shaped_filename_stages_only_itself() {
     assert_eq!(untracked, vec!["a.txt"], "the glob did not expand");
 }
 
+/// A file committed executable whose working copy is not (written plain,
+/// read with `core.filemode` on — the same on every OS), with two edits
+/// far apart: a mode change and two hunks on the unstaged side.
+fn mode_and_two_hunks() -> TestRepo {
+    let mut repo = TestRepo::init();
+    let base: String = (1..=20).map(|n| format!("line {n}\n")).collect();
+    repo.write_file("tool.sh", &base);
+    repo.git(&["add", "--chmod=+x", "--", "tool.sh"]);
+    repo.git(&["commit", "-q", "-m", "root"]);
+    repo.git(&["config", "core.filemode", "true"]);
+    repo.write_file(
+        "tool.sh",
+        &base
+            .replace("line 2\n", "line 2 EDITED\n")
+            .replace("line 18\n", "line 18 EDITED\n"),
+    );
+    repo
+}
+
+/// The mode the index holds for `path`.
+fn index_mode(repo: &mut TestRepo, path: &str) -> String {
+    let entry = repo.git(&["ls-files", "--stage", "--", path]);
+    entry.split(' ').next().unwrap_or_default().to_string()
+}
+
+/// Staging a hunk moves its lines and nothing else: the mode change stays
+/// unstaged (`patch::header` drops the pair).
+#[tokio::test]
+async fn a_staged_hunk_leaves_the_mode_change_behind() {
+    let mut repo = mode_and_two_hunks();
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+    let target = DiffTarget::Unstaged {
+        path: "tool.sh".into(),
+    };
+
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        fp(&repo_info, &target).await,
+        &cancel,
+    )
+    .await
+    .expect("stage hunk");
+
+    assert!(indexed(&mut repo, "tool.sh").contains("line 2 EDITED"));
+    assert_eq!(index_mode(&mut repo, "tool.sh"), "100755");
+    assert!(
+        repo.git(&["diff", "--summary"])
+            .contains("mode change 100755 => 100644"),
+        "the mode change is still the working tree's"
+    );
+}
+
+/// Unstaging a hunk of a staged `+x` keeps the `+x` staged — where the
+/// file system has no executable bit, the index is the only place it is.
+#[tokio::test]
+async fn an_unstaged_hunk_keeps_the_staged_mode() {
+    let mut repo = TestRepo::init();
+    let base: String = (1..=20).map(|n| format!("line {n}\n")).collect();
+    repo.commit_file("tool.sh", &base, "root");
+    repo.write_file(
+        "tool.sh",
+        &base
+            .replace("line 2\n", "line 2 EDITED\n")
+            .replace("line 18\n", "line 18 EDITED\n"),
+    );
+    repo.git(&["add", "--", "tool.sh"]);
+    repo.git(&["update-index", "--chmod=+x", "--", "tool.sh"]);
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+    let target = DiffTarget::Staged {
+        path: "tool.sh".into(),
+        orig_path: None,
+    };
+
+    stage::apply_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        fp(&repo_info, &target).await,
+        &cancel,
+    )
+    .await
+    .expect("unstage hunk");
+
+    let staged = indexed(&mut repo, "tool.sh");
+    assert!(!staged.contains("line 2 EDITED") && staged.contains("line 18 EDITED"));
+    assert_eq!(index_mode(&mut repo, "tool.sh"), "100755");
+}
+
+/// Discarding a hunk takes its lines out of the working tree and leaves the
+/// file's mode as it is there (on an OS with the executable bit, the old
+/// patch would have set it back).
+#[tokio::test]
+async fn a_discarded_hunk_keeps_the_working_tree_mode() {
+    let mut repo = mode_and_two_hunks();
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+    let target = DiffTarget::Unstaged {
+        path: "tool.sh".into(),
+    };
+
+    stage::discard_partial(
+        &exec,
+        &repo_info,
+        &target,
+        &[HunkSelect::whole(0)],
+        fp(&repo_info, &target).await,
+        &cancel,
+    )
+    .await
+    .expect("discard hunk");
+
+    let on_disk = std::fs::read_to_string(repo.path.join("tool.sh")).unwrap();
+    assert!(!on_disk.contains("line 2 EDITED") && on_disk.contains("line 18 EDITED"));
+    assert!(
+        repo.git(&["diff", "--summary"])
+            .contains("mode change 100755 => 100644"),
+        "the working tree keeps its mode"
+    );
+}
+
 /// Left out of the pre-merge run: the builder's verbatim path is pinned by
 /// `patch`'s unit tests and the marker shape git has to accept by
 /// `stage_a_line_above_a_missing_trailing_newline`. Run by the full gate

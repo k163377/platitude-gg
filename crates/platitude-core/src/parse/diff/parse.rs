@@ -111,6 +111,16 @@ impl Reading {
             }
             return true;
         }
+        // A mode change comes as a pair, `old mode` first.
+        if let Some(f) = self.current.as_mut() {
+            if let Some(old) = line.strip_prefix("old mode ") {
+                f.mode_change = Some((old.trim().to_string(), String::new()));
+            } else if let Some(new) = line.strip_prefix("new mode ")
+                && let Some((_, to)) = f.mode_change.as_mut()
+            {
+                *to = new.trim().to_string();
+            }
+        }
         // The mode lines: a gitlink says `160000` on whichever its side has
         // (`index a..b 160000`, `new file mode 160000`, `old mode …`).
         if [
@@ -376,5 +386,41 @@ index 1111111..2222222 100644
             2,
             "the mode line is header, not a row"
         );
+    }
+
+    /// git 2.55's patch of a file made executable along with a line, and of
+    /// one whose mode alone changed: the pair is read, and is no row.
+    #[test]
+    fn a_mode_change_is_read_off_its_pair() {
+        let with_lines = "\
+diff --git a/tool.sh b/tool.sh
+old mode 100644
+new mode 100755
+index 21797cf..26af3fb
+--- a/tool.sh
++++ b/tool.sh
+@@ -24,3 +24,3 @@ echo \"step 22 of the tool\"
+ echo \"step 24 of the tool\"
+-echo \"step 25 of the tool\"
++echo \"step 25 of the tool, reworded\"
+";
+        let alone = "\
+diff --git a/tool.sh b/tool.sh
+old mode 100755
+new mode 100644
+";
+        let changed = parse_patch(with_lines.as_bytes());
+        assert_eq!(
+            changed[0].mode_change,
+            Some(("100644".to_string(), "100755".to_string()))
+        );
+        assert_eq!(changed[0].hunks[0].lines.len(), 3);
+        let bare = parse_patch(alone.as_bytes());
+        assert_eq!(
+            bare[0].mode_change,
+            Some(("100755".to_string(), "100644".to_string()))
+        );
+        assert!(bare[0].hunks.is_empty());
+        assert_eq!(bare[0].new_path.as_deref(), Some("tool.sh"));
     }
 }

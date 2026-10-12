@@ -118,6 +118,11 @@ pub struct FilePatch {
     /// broken in the index (or in the file, undone). Not read off the
     /// patch: the reader asks git and sets it (`session::query`).
     pub lfs: bool,
+    /// The file's mode before and after where the patch changes it (`old
+    /// mode` / `new mode`: the executable bit, in octal as git prints it).
+    /// No hunk carries it, and a part of the patch never moves it
+    /// (`crate::patch`).
+    pub mode_change: Option<(String, String)>,
     /// Which commit this patch is of, as a line to put above it: filled
     /// only where several commits' patches of a file stand one after
     /// another (`DiffTarget::Choice`, デザイン規約 §複数のコミットを選ぶ),

@@ -390,3 +390,59 @@ fn multi_file_patch_keeps_only_files_with_selected_hunks() {
     assert!(out.contains("g.txt"));
     assert!(!out.contains("f.txt"), "unselected file dropped: {out}");
 }
+
+#[test]
+fn a_part_leaves_the_mode_change_behind() {
+    let raw = "\
+diff --git a/tool.sh b/tool.sh
+old mode 100644
+new mode 100755
+index 1111111..2222222
+--- a/tool.sh
++++ b/tool.sh
+@@ -1,3 +1,3 @@
+ a
+-b
++B
+ c
+";
+    // Either side, and a hunk or a line of it — the header left as it is.
+    for side in [PatchSide::Forward, PatchSide::Reverse] {
+        for select in [HunkSelect::whole(0), HunkSelect::lines(0, [2])] {
+            let out = text(build_partial(raw.as_bytes(), &[select], side).expect("patch"));
+            assert!(
+                out.starts_with("diff --git a/tool.sh b/tool.sh\nindex 1111111..2222222\n--- "),
+                "{side:?}: {out}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_part_of_a_renamed_file_leaves_the_mode_change_behind_too() {
+    // The header rewritten for a rename: the mode pair goes with the rename.
+    let raw = "\
+diff --git a/old.sh b/new.sh
+old mode 100755
+new mode 100644
+similarity index 80%
+rename from old.sh
+rename to new.sh
+index 1111111..2222222
+--- a/old.sh
++++ b/new.sh
+@@ -1,3 +1,3 @@
+ a
+-b
++B
+ c
+";
+    let out = text(
+        build_partial(raw.as_bytes(), &[HunkSelect::whole(0)], PatchSide::Reverse).expect("patch"),
+    );
+    assert_eq!(
+        out,
+        "diff --git b/new.sh b/new.sh\nindex 1111111..2222222\n--- b/new.sh\n+++ b/new.sh\n\
+         @@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"
+    );
+}

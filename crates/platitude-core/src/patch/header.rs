@@ -7,6 +7,11 @@
 //! part comes back whole, the old name in the index and the new one
 //! untracked. A selection changes lines of one file, so a header that would
 //! say more is rewritten as a plain change to the file the patch applies to.
+//! A mode change is the same kind of thing: `apply` sets the mode a patch
+//! names, so the executable bit would ride along with any hunk of its file
+//! — staged with it, unstaged with it, or discarded from the working tree
+//! with it. Without the pair, `apply` keeps the mode the file has where it
+//! lands, and the change stays on its side until the whole file moves.
 
 use std::borrow::Cow;
 
@@ -20,6 +25,13 @@ const RENAME: [&[u8]; 4] = [
     b"rename from ",
     b"rename to ",
 ];
+
+/// Lines that change the file's mode, which a selection never carries.
+const MODE: [&[u8]; 2] = [b"old mode ", b"new mode "];
+
+fn changes_mode(line: &[u8]) -> bool {
+    MODE.iter().any(|m| line.starts_with(m))
+}
 
 /// `header` as the selection's patch has to open. A whole selection of a
 /// creation or a deletion leaves the emptied side empty, and that header
@@ -42,14 +54,22 @@ pub(super) fn fitted<'a>(
         .find_map(|l| l.strip_prefix(applied))
         .filter(|_| renamed || not_emptied)
     else {
-        return header.iter().copied().map(Cow::Borrowed).collect();
+        return header
+            .iter()
+            .copied()
+            .filter(|l| !changes_mode(l))
+            .map(Cow::Borrowed)
+            .collect();
     };
 
     // git appends a tab to a name with a space in it, on these lines only.
     let bare = name.strip_suffix(b"\t").unwrap_or(name);
     let mut out = Vec::with_capacity(header.len());
     for &line in header {
-        if line.starts_with(emptied) || RENAME.iter().any(|r| line.starts_with(r)) {
+        if line.starts_with(emptied)
+            || RENAME.iter().any(|r| line.starts_with(r))
+            || changes_mode(line)
+        {
             continue;
         }
         if renamed && line.starts_with(b"diff --git ") {

@@ -143,6 +143,61 @@ async fn an_amend_empties_only_a_commit_whose_changes_are_staged_back() {
     );
 }
 
+/// A mode change is a change with no lines: a HEAD that only made a file
+/// executable takes a new message alone, staging the mode back empties it
+/// as staging lines back does, and lines staged back over a mode left
+/// changed do not.
+#[tokio::test]
+async fn an_amend_counts_a_mode_change_as_a_change() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.git(&["update-index", "--chmod=+x", "--", "a.txt"]);
+    repo.git(&["commit", "-q", "-m", "make it executable"]);
+    let (exec, cancel) = env();
+    let empties = async |repo: &TestRepo| {
+        commit::amend_would_empty(&exec, &repo.path, &cancel)
+            .await
+            .expect("a read")
+    };
+    // Its message amended alone: git takes the mode as the commit's change.
+    let repo_info = info(&repo).await;
+    commit::commit(
+        &exec,
+        &repo_info,
+        "chore: make a.txt executable",
+        CommitOptions {
+            amend: true,
+            ..Default::default()
+        },
+        &cancel,
+    )
+    .await
+    .expect("the message changes and nothing else");
+    assert_eq!(
+        repo.git(&["ls-tree", "HEAD", "--", "a.txt"])
+            .split(' ')
+            .next(),
+        Some("100755")
+    );
+
+    repo.git(&["update-index", "--chmod=-x", "--", "a.txt"]);
+    assert!(empties(&repo).await, "the mode staged back");
+
+    // A HEAD of lines over the executable file, its lines staged back with
+    // the mode left off: the index differs from HEAD's parent by the mode
+    // alone. `--chmod` names the mode outright: a bare refresh would read it
+    // off the file where `core.filemode` is on.
+    repo.write_file("a.txt", "two\n");
+    repo.git(&["update-index", "--chmod=+x", "--", "a.txt"]);
+    repo.git(&["commit", "-q", "-m", "change a"]);
+    repo.write_file("a.txt", "one\n");
+    repo.git(&["update-index", "--chmod=-x", "--", "a.txt"]);
+    assert!(
+        !empties(&repo).await,
+        "the lines staged back, the mode still changed"
+    );
+}
+
 #[tokio::test]
 async fn amend_without_a_message_keeps_the_old_one() {
     let mut repo = TestRepo::init();
