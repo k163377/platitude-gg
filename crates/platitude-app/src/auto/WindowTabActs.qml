@@ -362,6 +362,9 @@ Item {
         id: worktreeMadeTimer
         running: Harness.autoAct === "worktree-new" || Harness.autoAct === "worktree-add"
         property string from: ""
+        /// The kind of the report the press's answer raised, latched off the page's signal (`Connections` below): a
+        /// worktree made over a failed `post-checkout` reports and moves too, so the bar alone does not end the run.
+        property string reported: ""
         onTriggered: {
             const page = window.curPage
             if (page === null || page.pageTab.state !== "open")
@@ -375,9 +378,10 @@ Item {
                 acts.holdStand(page)
                 return
             }
-            // Answered with a report instead (a preset whose git says no after the press — `postcheckout`): the tab
-            // stays, and the bar is the run's subject once it is down.
-            if (acts.standsIn(page, worktreeMadeTimer.from) && page.noticeCard.settled) {
+            // Answered with a report instead (a preset whose git says no after the press): the tab stays, and the bar
+            // is the run's subject once it is down.
+            const refused = worktreeMadeTimer.reported !== "" && worktreeMadeTimer.reported !== "worktree-hook"
+            if (refused && acts.standsIn(page, worktreeMadeTimer.from) && page.noticeCard.settled) {
                 stop()
                 Harness.report("worktree_refused stood=false said=" + page.noticeCard.label
                                   + " place=" + page.noticeCard.detailPlace
@@ -386,18 +390,30 @@ Item {
                 return
             }
             if (acts.standsIn(page, worktreeMadeTimer.from) || !PageSettled.settled(page)
-                    || page.pageWorktree.branch === "")
+                    || page.pageWorktree.branch === ""
+                    || (worktreeMadeTimer.reported !== "" && !page.noticeCard.settled))
                 return
             stop()
             const where = page.pageTab.repoPath
+            // A made worktree's report (`postcheckout`) is the page's, which stood anew: the bar came along.
+            const said = worktreeMadeTimer.reported === "" ? ""
+                : " said=" + page.noticeCard.label + " place=" + page.noticeCard.detailPlace
+                  + " says=" + page.noticeCard.detail
             Harness.report("worktree_made stood=" + !acts.standsIn(page, worktreeMadeTimer.from)
                               + " worktree=" + GitFacts.pathLeaf(where)
                               + " branch=" + page.pageWorktree.branch
                               + " tabs=" + pageRepeater.count
                               + " kept=" + acts.standKept(page)
                               + " log=" + page.commandsOpen
+                              + said
                               + " where=" + where)
             window.finishAutoAct()
+        }
+    }
+    Connections {
+        target: worktreeMadeTimer.running ? window.curPage : null
+        function onWriteReported(kind, remote, name) {
+            worktreeMadeTimer.reported = kind
         }
     }
 

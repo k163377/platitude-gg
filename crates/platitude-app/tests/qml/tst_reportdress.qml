@@ -172,7 +172,7 @@ Item {
                     "The branch hotfix/patch was made anyway — see GIT COMMANDS")
             compare(Words.reportTone("worktree-hook"), "warning")
             compare(Words.writeReported("worktree-hook", "", "hotfix-patch"),
-                    "hotfix-patch was made, but its post-checkout hook failed")
+                    "hotfix-patch was opened in this tab, but its post-checkout hook failed")
             compare(Words.writeReportedWhy("worktree-hook", "", "", ""), "See GIT COMMANDS for what the hook said.")
             compare(Words.reportNameSeat("worktree-hook", ""), 0)
             dress("worktree-branch-left", "", "hotfix-patch", "hotfix/patch")

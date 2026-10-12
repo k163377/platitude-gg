@@ -627,11 +627,13 @@ pub(super) const TABLE: &[Verb] = &[
                  tabs=1 kept=true log=false",
             ),
             // Made, and its `post-checkout` hook failed: git keeps the
-            // worktree, and the report says so where the tab still stands.
+            // worktree, so the tab stands in it as for any made one, and the
+            // report came along with the page.
             (
                 Arg::WithPreset("postcheckout"),
-                "worktree_refused stood=false \
-                 said=feature-topic-a was made, but its post-checkout hook failed \
+                "worktree_made stood=true worktree=feature-topic-a branch=feature/topic-a tabs=1 \
+                 kept=true log=false \
+                 said=feature-topic-a was opened in this tab, but its post-checkout hook failed \
                  place=GIT COMMANDS says=See GIT COMMANDS for what the hook said.",
             ),
         ],

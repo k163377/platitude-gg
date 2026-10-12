@@ -489,14 +489,18 @@ FocusScope {
     }
     /// The answer to a worktree a menu asked for — its own answer (`RepoTab.worktreeAnswer`, -1 for none). Made, the
     /// tab goes and stands in it, as the box and the row said it would: the worktree is where the reader went to work
-    /// (デザイン規約 §worktree を作る). Refused, the report comes down over the graph, the log left shut.
+    /// (デザイン規約 §worktree を作る). Refused, the report comes down over the graph, the log left shut. A failed
+    /// `post-checkout` is both: git keeps the worktree, so the tab goes all the same, the report riding along — the bar
+    /// is the page's, and the page is what stands anew.
     function absorbWorktreeAnswer() {
         const answer = repoTab.worktreeAnswer
         if (answer < 0)
             return
         if (repoTab.writeAnswerFailed(answer)) {
+            const made = repoTab.writeAnswerReportKind(answer) === "worktree-hook"
             page.tellRefusal(answer)
-            return
+            if (!made)
+                return
         }
         page.openRepositoryPathRequested(repoTab.worktreeAnswerPath)
     }

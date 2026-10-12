@@ -376,8 +376,9 @@ QtObject {
         case "worktree-folder-taken":
         case "worktree-place-taken":
         case "worktree-branch-left": return qsTr("%1 was not created").arg(name)
-        // git kept the worktree: it is made, and the hook is what failed.
-        case "worktree-hook": return qsTr("%1 was made, but its post-checkout hook failed").arg(name)
+        // git kept the worktree and the tab stands in it, as for any made one — opened says made — and the hook is what
+        // failed.
+        case "worktree-hook": return qsTr("%1 was opened in this tab, but its post-checkout hook failed").arg(name)
         // Another worktree's changes, applied here from its uncommitted row: `name` is the name that worktree goes by —
         // its folder, or the branch the repository's own has out (`RepoPage.showReport`).
         case "carried-in-the-way":
