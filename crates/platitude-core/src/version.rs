@@ -29,8 +29,12 @@ use crate::process::{GitCommand, GitExecutor};
 /// - Executor: `-c color.ui=false`, `core.quotepath=false`,
 ///   `log.showSignature=false`, `i18n.logOutputEncoding=utf-8`,
 ///   `i18n.commitEncoding=utf-8` (both 1.5-era keys),
-///   `diff.autoRefreshIndex=false`, `--no-optional-locks` (2.15); `LC_ALL=C`, `GIT_EDITOR=true`,
-///   `GIT_TERMINAL_PROMPT=0` (2.3), `GIT_OPTIONAL_LOCKS=0` (2.15).
+///   `diff.autoRefreshIndex=false`, `--no-optional-locks` (2.15);
+///   `LC_ALL=C`, `GIT_EDITOR=true`, `GIT_TERMINAL_PROMPT=0` (2.3),
+///   `GIT_OPTIONAL_LOCKS=0` (2.15); taken off every spawn, git's own
+///   `local_repo_env` (environment.c, the same fifteen at the minimum and
+///   2.55) with `GIT_EXTERNAL_DIFF`, `GIT_DIFF_OPTS`, the four pathspec
+///   variables (environment.h), `GIT_NAMESPACE` and `GIT_REFLOG_ACTION`.
 /// - Rebase: `GIT_SEQUENCE_EDITOR` (1.7.8); paths: `:(literal)` (1.9).
 /// - A traced write's record (`process::trace`): `GIT_TRACE2_EVENT` set to
 ///   a receiver of the write's own (`process::trace_sink`) — a named pipe
@@ -44,7 +48,9 @@ use crate::process::{GitCommand, GitExecutor};
 ///   and `trace_record` read hooks off it over the socket on the minimum
 ///   binary.
 /// - Diff shape: `-c diff.noprefix=false`, `diff.mnemonicPrefix=false`,
-///   `diff.external=`; mergetool: `-c mergetool.writeToTemp=true`.
+///   `diff.context=3`, `diff.submodule=short`, `diff.external=`, and
+///   `diff.srcPrefix=a/` / `diff.dstPrefix=b/` (2.45; an unknown key is
+///   ignored below it); mergetool: `-c mergetool.writeToTemp=true`.
 /// - Temporary index / discard records: `-c core.hooksPath=<absent>`
 ///   (2.9), `core.splitIndex=false` (2.12), `core.fsmonitor=false`
 ///   (boolean form 2.36), `core.safecrlf=false`, `index.skipHash=true`
@@ -83,10 +89,10 @@ use crate::process::{GitCommand, GitExecutor};
 ///   where the commit changes something).
 /// - `diff-index`: `--cached --quiet <tree-ish> --` (exit 1 where the index
 ///   differs). `commit_integration` holds both answers for an amend.
-/// - `fetch`: `--prune`, `--all`; `pull`: `--ff-only`, `--no-rebase`
-///   (both long before the minimum; `--ff-only` wins over `pull.rebase`
-///   since 2.33, and `--no-rebase` keeps the rebase path's clean-tree check
-///   out of a fast-forward).
+/// - `fetch`: `--prune`, `--all`; `pull`: `--ff-only`, `--no-rebase`,
+///   `--no-autostash` (2.9) (the first two long before the minimum;
+///   `--ff-only` wins over `pull.rebase` since 2.33, and `--no-rebase`
+///   keeps the rebase path's clean-tree check out of a fast-forward).
 /// - `for-each-ref`: `--points-at=` (2.7), `--count`,
 ///   `--sort=refname:short`, `--format=` with `refname[:short]`,
 ///   `objecttype`, `objectname`, `*objectname`, `upstream[:track]`,
@@ -111,7 +117,8 @@ use crate::process::{GitCommand, GitExecutor};
 /// - `ls-tree`: `-r`, `-z`, `--name-only`, `--full-tree`,
 ///   `--end-of-options`.
 /// - `merge`: `--no-edit`, `--no-ff`, `--ff-only`, `--squash`,
-///   `--continue`, `--abort`, `--quit`; `merge-base`: `--is-ancestor`.
+///   `--no-autostash` (2.27), `--continue`, `--abort`, `--quit`;
+///   `merge-base`: `--is-ancestor`.
 /// - `mergetool`: `--no-prompt`, `--gui`, `--tool=`, `--tool-help`;
 ///   custom recipes are read with `config --get-regexp`.
 /// - `name-rev`: `--name-only`, `--refs=refs/heads/*`.
@@ -142,7 +149,8 @@ use crate::process::{GitCommand, GitExecutor};
 ///   `--diff-merges=first-parent` (2.31), `--format=`.
 /// - `stash`: `list -z --format=`, `push -m` / `--message`,
 ///   `--include-untracked`, `--keep-index`, `--staged` (2.35),
-///   `pop --index`, `apply`, `drop`, `store -m`.
+///   `pop --index` / `--no-index` and `apply --no-index` (gitcli's negation
+///   of the `OPT_BOOL`, against `stash.index` (2.52)), `drop`, `store -m`.
 /// - `status`: `--porcelain=v2` (2.11), `-z`, `--branch`, `-uall`, `-uno`.
 /// - `switch`: `--create`, `--force-create`, `--track`, `--no-track`.
 ///   `upstream_integration` checks `--no-track` plus `--force-create`;

@@ -39,7 +39,7 @@ git が見つからず実行できない場合は、git を導入するまでリ
 (`Hub::resolve_git`)。設定画面では版が返ったパスだけを再起動の候補にでき、下限未満も候補に含める。
 
 Git-LFS とマージツール本体は別途導入する物で、git の最低版だけでは存在を保証しない。
-submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §スコープ)。
+submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §14 Post-MVPバックログ)。
 
 ## 互換性の確認
 
@@ -113,13 +113,13 @@ submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §ス
 | 色・パスの引用・署名表示・index の自動 refresh・任意ロック | `-c color.ui=false` `core.quotepath=false` `log.showSignature=false` `diff.autoRefreshIndex=false` `--no-optional-locks` | `process::executor` `FIXED_ARGS` | `--format` の記録に色・gpg 出力・`"..."` の引用が混ざる / ポーリングの diff が `index.lock` を取って commit を落とす |
 | コミット文の文字コード(読み・書き) | `-c i18n.logOutputEncoding=utf-8` `i18n.commitEncoding=utf-8` | `FIXED_ARGS` | 端末向けに Shift_JIS 等を設定した機械で `log` の文が変換されて化ける / アプリが書く UTF-8 の文に別の文字コードの `encoding` ヘッダが付く(ユーザー決定 2026-10-12) |
 | ロケール・資格情報の対話・任意ロック・エディタ | `LC_ALL=C` `GIT_TERMINAL_PROMPT=0` `GIT_OPTIONAL_LOCKS=0` `GIT_EDITOR=true` | `FIXED_ENV` | 分類器が読む語が翻訳される / 資格情報の入力で止まる / エディタで止まる |
-| 起動元から継いだリポジトリの所在と diff・pathspec の形 | `GIT_DIR` `GIT_WORK_TREE` `GIT_INDEX_FILE` `GIT_OBJECT_DIRECTORY` `GIT_COMMON_DIR` 等 git 自身の `local_repo_env`(environment.c、2.43〜2.55)+ `GIT_EXTERNAL_DIFF` `GIT_DIFF_OPTS` と pathspec magic の 4 変数を**毎 spawn で消す**(コマンド自身の `env` は後から載る) | `INHERITED_ENV_DROPPED` | フック・git alias・IDE の実行構成から起動されたアプリの全コマンドが別のリポジトリを指す / パーサが読まない diff の形 |
+| 起動元から継いだリポジトリの所在と diff・pathspec の形 | `GIT_DIR` `GIT_WORK_TREE` `GIT_INDEX_FILE` `GIT_OBJECT_DIRECTORY` `GIT_COMMON_DIR` 等 git 自身の `local_repo_env`(environment.c、2.43〜2.55)+ `GIT_EXTERNAL_DIFF` `GIT_DIFF_OPTS` と pathspec magic の 4 変数、`GIT_NAMESPACE`(ref の名前空間)と `GIT_REFLOG_ACTION`(reflog の文 —— `session::leaving` が読む)を**毎 spawn で消す**(コマンド自身の `env` は後から載る) | `INHERITED_ENV_DROPPED` | フック・git alias・IDE の実行構成から起動されたアプリの全コマンドが別のリポジトリを指す / パーサが読まない diff の形 |
 | diff の形(prefix・文脈行・submodule の表示・外部 diff) | `-c diff.noprefix=false` `diff.mnemonicPrefix=false` `diff.srcPrefix=a/` `diff.dstPrefix=b/`(2.45+ のキー。最低版は無視)`diff.context=3` `diff.submodule=short` `diff.external=` と各 diff の `--no-ext-diff` | `details::DIFF_SHAPE_ARGS` | `a/` `b/` を剥がすヘッダのパースが壊れる / `diff.context=0` の hunk は `git apply` が当てられず部分ステージが常に断られる / gitlink が `diff --git` 無しの形で出る |
 | push の送る ref | 明示の refspec + `--no-follow-tags` | `remote::push::porcelain_push` | `push.followTags` で頼んでいないタグが一緒に出る |
-| rebase の autostash・merge 形・欠けたコミットの検査 | `--no-autostash`、駆動形だけ `--no-rebase-merges` と `-c rebase.missingCommitsCheck=ignore` | `integrate::rebase_command` | autostash が staged を unstaged に戻す / `label onto` が todo に入る / 意図した drop を `error` 設定の git が `--edit-todo` で止める(実測 2.55: exit 1・`rebase-merge` が立つ) |
+| rebase・merge・pull の autostash、駆動 rebase の merge 形 | 3 つとも `--no-autostash`、駆動形だけ `--no-rebase-merges` | `integrate::rebase_command` / `integrate::merge` / `remote::pull` | `rebase.autoStash` / `merge.autoStash` の git が先に自分で退けて素の `apply` で戻し(staged が unstaged に落ちる)、止まった時の作業が `rebase-merge/autostash` / `MERGE_AUTOSTASH` に入って stash list の外へ行く / `label onto` が todo に入る |
 | pull の合流の仕方 | `--ff-only --no-rebase`(行が出るのは早送りできる木だけ) | `remote::pull` | `pull.rebase` を読ませると rebase 経路の clean-tree 検査が先に走り、早送りで足りる汚れた木を `cannot pull with rebase: You have unstaged changes` 128 で断る(実測 2.55。ユーザー決定 2026-10-12) |
 | merge / pull を塞ぐ作業ツリーの変更・untracked | 断られた時だけ `stash push -u` → 撃ち直し → `stash pop --index`(`build::integrate_carrying`。switch / rebase と同じ 3 手) | `session::build` | 直している当のファイルが向こうでも動いた日常の場面で、`would be overwritten by merge` の失敗がログに落ちる(ユーザー決定 2026-10-12) |
-| stash の index 復元 | `--no-index` | `stash::pop` / `apply` / `carried_apply` | `stash.index=true`(2.55)で `--index` 扱いになり着地が変わる |
+| stash の index 復元 | `--no-index` | `stash::pop` / `apply` / `carried_apply` | `stash.index=true`(2.52 からの鍵)で `--index` 扱いになり着地が変わる |
 | mergetool の一時ファイル・ツール・GUI | `-c mergetool.writeToTemp=true` `--no-prompt --gui --tool=` | `conflict::tool` | 一時ファイルが隣に出て WIP が埋まる / ツール未設定で stdin を踏む |
 | 一時 index の写し | `core.hooksPath=<absent>` `core.splitIndex=false` `core.fsmonitor=false` `core.safecrlf=false` `index.skipHash=true` + `GIT_INDEX_FILE` | `discards::record::isolated` | 写しのフック・fsmonitor・改行検査が本体に混ざる |
 | worktree add の進捗 | `--quiet` | `worktrees::add` | 2 秒を超える checkout の `Updating files:` が拒否の頭に付く |
@@ -131,7 +131,6 @@ submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §ス
 |---|---|
 | `commit.gpgsign` / `tag.gpgSign` / `gpg.format` | 署名は利用者の約束(forge の required signatures)。署名できない時は報せ `CommitUnsigned` |
 | `branch.<n>.merge` / `branch.<n>.remote` | pull がどこへ取りに行くかは利用者の設定(合流の仕方だけ釘付け = 上の表) |
-| `merge.autoStash` | 断られる前に git が自分の `MERGE_AUTOSTASH` で退けて `--continue` / `--abort` / `--quit` で戻す(実測 2.55)。こちらの carry は git が断った後に回るので、設定した人の木では git の流儀が先に動く |
 | `rebase.updateRefs` | 駆動形は `--update-refs` を自分で足す。枝のまとまりの読みは rules-refs/core.md |
 | `gc.auto` / `maintenance.auto` | リポジトリの保守は利用者の物。後ろで走る gc が取るロックは `*Locked` の報せで受ける |
 | `core.fsmonitor` / `core.untrackedCache` | 外すと書き込みが遅くなり index の印が消える(rules-refs/core.md)。trace2 の受け口はデーモンが繋いでも閉じるだけ |
@@ -184,7 +183,7 @@ merge 中の amend・unmerged)。残る失敗は常に外が断った物。
 | 置き直すコミットのフック・署名・ロック | 文 + 止まり、または trace2 | 日常(husky・署名) | `rebase --abort` で戻してから報せ `RewriteCommitHook` / `RewriteUnsigned` / `RewriteLocked` |
 | 最初の checkout が untracked を上書き | `untracked working tree files would be overwritten by checkout` exit 1 | ある(git の前に推さない —— carry が先に退ける) | 報せ `RewriteUntrackedInTheWay` |
 | conflict・`edit`・空になった pick の停止 | exit 1 + `rebase-merge` | 日常 | 停止(帯と出口カード) |
-| `rebase.missingCommitsCheck=error` | — | 釘付けで起きない | — |
+| `rebase.missingCommitsCheck=error` | — | 起きない: 検査は todo から消えた行だけを数え(rebase-interactive.c `todo_list_check`)、プランは `drop` 行を書く(網 `drop::a_readers_missing_commits_check_never_sees_the_plans_drop_lines`) | — |
 
 ### 改名(ブランチ / タグ / stash)・worktree のフォルダ名
 
@@ -193,9 +192,9 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 
 | 類型 | 答え | 場面・頻度 | 出し先 |
 |---|---|---|---|
-| git が改名を断った(押した後の競争・ロック) | 文 128 | 稀(ロックは日常) | 報せ `RenameRefused` / `RenameLocked`、箱は開いたまま |
+| git が改名を断った(押した後の競争・ロック) | 文 128 | 稀(ロックは日常) | 報せ `RenameRefused` / `RenameLocked`(stash は `StashRenameRefused` / `StashRenameLocked`)、箱は開いたまま |
 | ブランチの ref は動いた後で止まった | `branch is renamed, but update of config-file failed` / `HEAD is not updated` | 稀 | 報せ `RenameUnfinished` |
-| **2 手の改名が途中で止まった**(タグの削除・stash の drop・一覧が動いた) | 文 1 / 無し | **稀(2 コマンドの隙間の競合)** | 報せ **`HalfRenamed` 1 つ**。何が止めたかは分けない —— ログのその段の行が持つ(基準 3) |
+| **2 手の改名が途中で止まった**(タグの削除・stash の drop・一覧が動いた) | 文 1 / 無し | **稀(2 コマンドの隙間の競合)** | 報せ **`HalfRenamed` 1 つ**。何が止めたかは分けない(基準 3)—— git の断り・ロックはログのその段の行が持ち、一覧が動いた形は赤い行が無い(`rev-parse` が別の entry を答えただけ) |
 | stash が選択の後に消えた | — | 稀 | 報せ `StashGone`(箱は閉じる) |
 | worktree のフォルダ名を git が断った / 行き先に物 | 文 128 / — | 稀 | 報せ `WorktreeNotRenamed` / `WorktreeRenameTaken` |
 
@@ -240,7 +239,7 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 | リポジトリでない・bare | `not a git repository` / `--is-bare-repository` | 日常 | 開けなかった画面・ダイアログ |
 | `safe.directory`(別の所有者のフォルダ) | `fatal: detected dubious ownership in repository` 128 | **ある(Windows のネットワークドライブ・別アカウントの clone・WSL の mount)** | 開けなかった画面の見出し `git does not trust this folder's owner` + git の文(末尾が許す手順。`GitError::UntrustedOwner`。ユーザー決定 2026-10-12) |
 | 読みの失敗(log・status・diff) | 非ゼロ | 稀 | 帯 `STALE GRAPH` / ログの背景読み |
-| 連続する fetch の失敗 | 非ゼロ | オフライン(日常) | ログが 1 回だけ開き、復帰で閉じる |
+| 押した fetch の失敗(連なり) | 非ゼロ | オフライン(日常) | 最初の失敗だけログが開き、復帰で閉じる。タイマー・開いた時の fetch はボタンの `!` だけ(§出し先) |
 
 ## 分類しない物(ログに落とす)と理由
 
@@ -259,7 +258,7 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 
 | 仕組み | 代金 | 判定 |
 |---|---|---|
-| **trace2 の記録**(`GitCommand::traced` = commit / push / 駆動 rebase / worktree add。フック・ssh 署名プログラムの終わりを git 自身の記録で読む) | **Windows は git プロセス 1 本につき約 +19ms**(git が `cmd_ancestry` のために `CreateToolhelp32Snapshot` で全プロセスを数える。compat/win32/trace2_win32_process_info.c —— 止める設定・環境変数は無く、どの target でも同じ)。commit 345 → 388ms(+12%、2 プロセス)、push +約 180ms。Linux は `/proc` 読みで未実測 | **維持**(ユーザー決定 2026-10-11・再確認 2026-10-12)。git にフックの断りを名指す無料の機構は無い: 終了コード(commit の 1)で推す案は空メッセージ等のゲートに精度が依存し、ssh 署名プログラムの失敗も名指せなくなる。他の GUI(GitHub Desktop・GitKraken・Sublime Merge)は名指さず、フックの生の出力を出して `--no-verify` の「それでも commit」を添える |
+| **trace2 の記録**(`GitCommand::traced` = commit / push / 駆動 rebase / worktree add。フック・ssh 署名プログラムの終わりを git 自身の記録で読む) | **Windows は git プロセス 1 本につき約 +19ms**(git が `cmd_ancestry` のために `CreateToolhelp32Snapshot` で全プロセスを数える。compat/win32/trace2_win32_process_info.c —— 止める設定・環境変数は無く、どの target でも同じ)。commit・push の増分は code-costs の行。Linux は `/proc` 読みで未実測 | **維持**(ユーザー決定 2026-10-12)。git にフックの断りを名指す無料の機構は無い: 終了コード(commit の 1)で推す案は空メッセージ等のゲートに精度が依存し、ssh 署名プログラムの失敗も名指せなくなる。他の GUI(GitHub Desktop・GitKraken・Sublime Merge)は名指さず、フックの生の出力を出して `--no-verify` の「それでも commit」を添える |
 | 部分ステージ前の指紋の照合(diff を 1 本読み直す) | press ごとに diff 1 本 | 維持(読んだ行と違う物を当てない保証) |
 | リモート削除前の lease(`ls-remote`) | press ごとに往復 1 つ | 維持(画面の先端への lease = 向こうの別の commit を消さない) |
 | 他の worktree の読み(carried) | worktree 数に比例する `status` | ペースで薄める(P3-確認事項 §別の worktree の未コミット行) |
@@ -269,11 +268,10 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 
 | 候補 | 状況 | 落とすと | 判定 |
 |---|---|---|---|
-| trace2 でフックの終わりを読む(4 つの書き込み) | Windows で書き込み 1 回に +20〜60ms(プロセス数分)。commit の +12% | `CommitHook` / `PrePush` / `RewriteCommitHook` / `WorktreeHookFailed` と ssh 署名プログラムの失敗を名指せず `git turned it down` へ。commit は exit 1 + stdout 空を git の答えとして読めるが、pre-push は ref 行の無い exit 1 が通信の失敗と区別できない | **維持**(ユーザー決定 2026-10-12)。再検討するなら落とすのは commit の trace だけ |
+| trace2 でフックの終わりを読む(4 つの書き込み) | §日常性能への代金の行(Windows は git プロセス 1 本ごと) | `CommitHook` / `PrePush` / `RewriteCommitHook` / `WorktreeHookFailed` と ssh 署名プログラムの失敗を名指せず `git turned it down` へ。commit は exit 1 + stdout 空を git の答えとして読めるが、pre-push は ref 行の無い exit 1 が通信の失敗と区別できない | **維持**(ユーザー決定 2026-10-12)。再検討するなら落とすのは commit の trace だけ |
 
 ## 判断待ち(要判断)
 
 状況と、基準に照らした選択肢。決まったら上の表へ写してここから消す。
 
-(無し —— 2026-10-12 時点。trace2 は維持(§日常性能への代金)、`i18n.*` は釘付け(§発行前の釘付け)、別の worktree の
-変更の適用の縁 3 つは据え置き(§類型)で決着。)
+(無し)

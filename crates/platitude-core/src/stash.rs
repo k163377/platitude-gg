@@ -202,8 +202,8 @@ pub async fn push(
 }
 
 /// `git stash pop <selector>`: restores and removes the entry, what was
-/// staged in it unstaged — `--no-index` holds that against git 2.55's
-/// `stash.index`, which would make it [`pop_with_index`] (builtin/stash.c
+/// staged in it unstaged — `--no-index` holds that against `stash.index`
+/// (a key since 2.52), which would make it [`pop_with_index`] (builtin/stash.c
 /// `git_stash_config`; the option is the minimum's too).
 ///
 /// Answers by code: exit 1 covers both a conflicted restore and a no-op,
