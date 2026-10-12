@@ -1,6 +1,6 @@
 //! The installed git version against the supported minimum. Below it is a
 //! fact reported, not an error: the app keeps working and says so
-//! (internal-docs/git互換性.md).
+//! (internal-docs/gitの扱い.md).
 
 use std::time::Duration;
 
@@ -12,7 +12,7 @@ use crate::process::{GitCommand, GitExecutor};
 /// Minimum supported git version; this definition alone owns the number
 /// and its rationale: Ubuntu 24.04 LTS ships this git series.
 /// Package evidence: <https://packages.ubuntu.com/noble/git>.
-/// Support policy and the addition procedure: internal-docs/git互換性.md.
+/// Support policy and the addition procedure: internal-docs/gitの扱い.md.
 ///
 /// # Command compatibility audit
 ///

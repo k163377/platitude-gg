@@ -30,6 +30,7 @@
 | `eol::working_tree`(`ls-files --eol` は作業ツリーのファイルを全部読む) | 120MB のファイル 1 本で 213ms |
 | `conflict::tool`(`mergetool --tool-help`) | 約 8 秒(ウォーム) |
 | `process::trace_sink`(記録付きの書き込みの記録を名前付きパイプで受ける) | 合成コーパスの `--shared` の複製・`core.fsmonitor=true`・デーモン稼働中・git 2.55.0.windows.3・`core.fscache=true`、製品の関数で 6 回ずつの中央値: commit 139ms・続けての commit(30 本)142ms・5 コミットの reword 4.83s・その後の status 0.90–0.92s。記録をファイルに書く形と交互に測った差は揺れの内 |
+| `GitCommand::traced` の代金(`GIT_TRACE2_EVENT` を受けると git は Windows で自分の祖先プロセスを数える = `cmd_ancestry`。git 2.55.0.windows.3、素の git を交互に 30 本ずつ・12 本ずつの中央値) | git プロセス 1 本につき約 +19ms(`git version` 19 → 38ms)。合成コーパスの `--shared` の複製(tracked 109,652)で `commit` 345 → 388ms(+12%。gc --auto の子で 2 プロセス)、ローカル bare への `push` 5.37 → 5.54s。記録は commit 約 16KB・push 約 47KB(約 100 行)。Linux は `/proc` 読みで未実測 |
 | `process::executor` の `diff.autoRefreshIndex=false` の代金 | stat が全部動いた 780 ファイルで `status` 72ms、refresh 後なら 28ms |
 | `session::refresh` の refs listing | 300ms(kotlin) |
 | `session::mod` / `session::read_flight` の `status --porcelain=v2 -uall` | 2.9s wall / 2.3 CPU 秒(合成コーパス = tracked 109,652 + ignored 78,000) |
