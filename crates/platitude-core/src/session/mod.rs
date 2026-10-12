@@ -142,7 +142,7 @@ use published::{PublishMarks, RemoteTips};
 pub use query::DiffReadOutcome;
 use read_flight::{ReadFlight, Stamp};
 pub use remote_tags::RemoteTagIndex;
-pub use repo_session::RepoSession;
+pub use repo_session::{CloseError, RepoSession};
 pub use shown_discard::ShownDiscard;
 pub use snapshot::{
     BranchItem, NameClash, RefsSnapshot, TagDeleteHeld, TagDrift, TagItem, TagMenuFacts,

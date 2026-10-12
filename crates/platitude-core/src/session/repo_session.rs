@@ -24,7 +24,7 @@ pub struct RepoSession {
     pub(super) commands: Arc<CommandFeed>,
     /// The git runs the four handles above have going, counted from the
     /// spawn to the run's end (`process::family`) — what [`Self::stand_down`]
-    /// waits out.
+    /// and [`Self::close_and_wait`] wait out.
     pub(super) live: Arc<crate::process::Live>,
     pub(super) runtime: tokio::runtime::Handle,
     pub(super) sink: Arc<dyn SessionSink>,
@@ -315,6 +315,16 @@ pub struct RepoSession {
     pub(super) opened: tokio::sync::watch::Sender<bool>,
 }
 
+/// What kept [`RepoSession::close_and_wait`] from answering that the
+/// session's runs have ended cleanly: the write loop's own end, runs let go
+/// with their end not told, or both.
+#[derive(Debug, thiserror::Error)]
+#[error("the session did not end cleanly (write loop: {write_loop:?}; {untold:?})")]
+pub struct CloseError {
+    pub write_loop: Option<tokio::task::JoinError>,
+    pub untold: Option<crate::process::UntoldEnds>,
+}
+
 impl RepoSession {
     /// Workdir of the opened repository (None until `Opened`).
     pub fn workdir(&self) -> Option<PathBuf> {
@@ -409,6 +419,37 @@ impl RepoSession {
         self.forget_the_screens_copy();
     }
 
+    /// [`Self::close`], answered once the runs this session manages have
+    /// ended: the local writes the close lets run on have landed, every git
+    /// the session started is reaped, and on Windows a run the close
+    /// stopped is gone with what its git had started (`process::family`).
+    /// A process outside those runs is not its to wait for. A write loop
+    /// already handed out ([`Self::take_write_join`]) is the taker's to wait
+    /// out.
+    ///
+    /// # Errors
+    ///
+    /// The write loop's own end, when it did not end cleanly, and the runs
+    /// let go with their end not told ([`crate::process::UntoldEnds`]) —
+    /// both, where both. Either way the wait is over: nothing is left
+    /// running to wait for.
+    pub async fn close_and_wait(&self) -> Result<(), CloseError> {
+        self.close();
+        // The loop first: between two of its writes none is running, and a
+        // wait for none would answer there.
+        let looped = match self.take_write_join() {
+            Some(write) => write.await,
+            None => Ok(()),
+        };
+        // Past the cancel nothing spawns (`process::Live`): none running now
+        // is none for good.
+        let idle = self.live.idle().await;
+        match (looped.err(), idle.err()) {
+            (None, None) => Ok(()),
+            (write_loop, untold) => Err(CloseError { write_loop, untold }),
+        }
+    }
+
     /// Stops every read this session makes and waits until none of its
     /// git processes is left running, and on Windows none of what a stopped
     /// one had started (`process::family`): a run of this session standing
@@ -495,10 +536,11 @@ impl RepoSession {
         self.local_writes.load(Ordering::SeqCst)
     }
 
-    /// The write loop's task, for the one caller that has to outwait it:
-    /// the application's shutdown joins it after [`RepoSession::close`]
-    /// so a local write in flight is not dropped with the runtime.
-    /// `None` after the first take.
+    /// The write loop's task, for a caller that has to outwait it: the
+    /// application's shutdown joins it after [`RepoSession::close`] so a
+    /// local write in flight is not dropped with the runtime, and
+    /// [`RepoSession::close_and_wait`] takes it the same way. `None` after
+    /// the first take.
     pub fn take_write_join(&self) -> Option<tokio::task::JoinHandle<()>> {
         relock(&self.write_join).take()
     }
