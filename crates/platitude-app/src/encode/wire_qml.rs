@@ -19,6 +19,7 @@
 )]
 
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use qtbridge::qtbridge_type_lib::{QGuiApplication, QQmlApplicationEngine, QVariantMap};
@@ -444,35 +445,55 @@ fn child_qml(child: &str) -> String {
     )
 }
 
-/// The child: a Qt application whose QML is [`child_qml`]. Nothing without
-/// the parent's mark, so a run of every ignored test does not start one in
-/// a process the other tests share.
+/// The child: a Qt application running the QML file the parent wrote.
+/// Nothing without the parent's mark, so a run of every ignored test does
+/// not start one in a process the other tests share.
 #[test]
 #[ignore = "started by the tests below, offscreen, as a process of its own"]
 fn qml_side() {
-    let Some(child) = std::env::var_os("WIRE_QML_CHILD") else {
+    let Some(file) = std::env::var_os("WIRE_QML_FILE") else {
         return;
     };
-    let dir = crate::temp::root().join(format!("pgg-wire-qml-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("a directory for the QML");
-    let file = dir.join("WireChecks.qml");
-    std::fs::write(&file, child_qml(&child.to_string_lossy())).expect("the QML");
     let mut app = QGuiApplication::new();
     let mut engine = QQmlApplicationEngine::new();
     crate::qml_engine::arm(engine.pin_mut());
     WireProbe::register();
     WireRows::register();
-    crate::qml_engine::load(engine.pin_mut(), &crate::urlpath::file_url(&file))
-        .expect("the checks load");
+    crate::qml_engine::load(
+        engine.pin_mut(),
+        &crate::urlpath::file_url(Path::new(&file)),
+    )
+    .expect("the checks load");
     app.pin_mut().exec();
     drop(engine);
     qtbridge::collect_garbage();
     drop(app);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
-fn start(child: &str) -> Child {
-    Command::new(std::env::current_exe().expect("this test binary"))
+/// A child at work, and the folder its QML is in. The folder is the
+/// parent's, gone once the child has ended: a write the bridge takes down
+/// ends the child inside `exec()`, before anything after it runs.
+struct Running {
+    child: Child,
+    dir: PathBuf,
+}
+
+impl Running {
+    /// Waits the child out, then takes its folder away.
+    fn wait_with_output(self) -> std::process::Output {
+        let out = self.child.wait_with_output().expect("the child ends");
+        std::fs::remove_dir_all(&self.dir).expect("the child's folder, with the child gone");
+        out
+    }
+}
+
+/// Starts a child on [`child_qml`] for `child`, in a folder of its own.
+fn start(child: &str) -> Running {
+    let dir = crate::temp::root().join(format!("pgg-wire-qml-{}-{child}", std::process::id()));
+    std::fs::create_dir(&dir).expect("a folder of this child's own for its QML");
+    let file = dir.join("WireChecks.qml");
+    std::fs::write(&file, child_qml(child)).expect("the QML");
+    let child = Command::new(std::env::current_exe().expect("this test binary"))
         .args([
             "encode::wire_qml::qml_side",
             "--exact",
@@ -480,12 +501,13 @@ fn start(child: &str) -> Child {
             "--nocapture",
             "--test-threads=1",
         ])
-        .env("WIRE_QML_CHILD", child)
+        .env("WIRE_QML_FILE", &file)
         .env("QT_QPA_PLATFORM", "offscreen")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("the child starts")
+        .expect("the child starts");
+    Running { child, dir }
 }
 
 /// What a child said, by check: (`ok`, detail).
@@ -504,9 +526,7 @@ fn said(stdout: &str) -> BTreeMap<&str, (&str, &str)> {
 /// boundary, with what QML hands a slot that does not read.
 #[test]
 fn the_wire_shapes_cross_the_qml_boundary() {
-    let out = start("checks")
-        .wait_with_output()
-        .expect("the checks child ends");
+    let out = start("checks").wait_with_output();
     let text = String::from_utf8_lossy(&out.stdout);
     let checks = said(&text);
     for (name, (ok, detail)) in &checks {
@@ -574,7 +594,7 @@ fn writes(which: impl Fn(Checked) -> bool) -> Vec<(&'static str, Checked, Outcom
     children
         .into_iter()
         .map(|(name, checked, child)| {
-            let out = child.wait_with_output().expect("the write child ends");
+            let out = child.wait_with_output();
             let came = outcome(&out);
             println!("{name} ({checked:?}): {came:?}");
             (name, checked, came)
