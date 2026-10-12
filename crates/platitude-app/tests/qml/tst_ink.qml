@@ -171,26 +171,21 @@ Item {
             Qt.callLater(() => ran = true)
             tryVerify(() => ran)
         }
-        /// `component` built the way a list builds the rows past its edge, and cut where the product's build is cut:
-        /// the mark `markOf` picks has its window and its size, Qt's first ask has been and gone, and it has no
-        /// picture. Whether the ask lands before the sizes is a race `spent` nearly always loses for the builder; a
-        /// build that got its sizes in first has a painted mark, and is thrown away and made again.
-        function cutInTheBackground(component, markOf) {
-            for (let attempt = 0; attempt < 5; attempt++) {
-                const incubator = component.incubateObject(root, {}, Qt.Asynchronous)
-                tryVerify(() => incubator.status === Component.Ready)
-                const row = incubator.object
-                const mark = markOf(row)
-                tryCompare(mark, "available", true)
-                // The ask is a queued call posted as `available` was set.
-                letTheQueueRun()
-                if (!mark.inked) {
-                    built = built.concat([row])
-                    return row
-                }
-                row.destroy()
-            }
-            fail("five builds, and none was cut between its window and its sizes")
+        /// `component` built the way a list builds the rows past its edge, stopped by `spent` between its window and
+        /// its sizes as the product's build can be, and settled: the mark `markOf` picks has its window and its size,
+        /// and Qt's first ask has been and gone. Whether the ask ran in the gap — on a canvas with no size — or after
+        /// the sizes — painting the hidden mark — is a race inside Qt (two queued calls against the builder's next
+        /// slice), and both are builds the product makes: the mark is taken painted or not. The never-painted order
+        /// is held by hand in `test_sized_while_hidden_draws_once_shown`.
+        function builtInTheBackground(component, markOf) {
+            const incubator = component.incubateObject(root, {}, Qt.Asynchronous)
+            tryVerify(() => incubator.status === Component.Ready)
+            const row = incubator.object
+            built = built.concat([row])
+            tryCompare(markOf(row), "available", true)
+            // The ask is a queued call posted as `available` was set.
+            letTheQueueRun()
+            return row
         }
 
         function test_hidden_parent_does_not_hold_the_screenshot() {
@@ -220,7 +215,8 @@ Item {
 
         /// Made drawable while it had no size, then sized while hidden, a canvas has had no picture asked of it: Qt's
         /// one first ask finds nothing to paint, and a resize while hidden asks for none. Shown, it draws. The order
-        /// by hand; the two tests below reach it the way the product does.
+        /// by hand, so it is held whatever the machine's timing: the two tests below build the way the product does,
+        /// and reach it only when Qt's first ask runs before the sizes are in.
         function test_sized_while_hidden_draws_once_shown() {
             const item = createTemporaryObject(fixture, root, { "width": 0, "height": 0 })
             verify(item !== null)
@@ -235,12 +231,12 @@ Item {
             verify(item.mark.inked)
         }
 
-        /// A row built in the background has its window before its bindings have run. When the builder's time slice
-        /// ends in between and Qt's first ask runs in the gap, the ask reaches a canvas with no size, and the size
-        /// then lands on a hidden seat, which asks for nothing: the mark has never been painted. Shown later — the
-        /// row given a commit that carries a name — it draws.
-        function test_a_mark_built_in_the_background_draws_once_shown() {
-            const row = cutInTheBackground(lateRow, made => made.mark)
+        /// A row built in the background has its window before its bindings have run, and its builder stops in
+        /// between. Qt's first ask runs either in the gap, reaching a canvas with no size whose size then lands on a
+        /// hidden seat, or after the sizes, painting the hidden mark. Shown later — the row given a commit that
+        /// carries a name — the mark is on screen either way.
+        function test_a_mark_built_in_the_background_is_on_screen_once_shown() {
+            const row = builtInTheBackground(lateRow, made => made.mark)
             compare(row.mark.width, 16)
             row.shown = true
             tryVerify(() => Qt.colorEqual(grabImage(row).pixel(8, 8), root.ink), undefined,
@@ -250,9 +246,9 @@ Item {
 
         /// The graph's chip through the same build: its row gains a branch that is on a remote, and the cloud is
         /// drawn — read off the pixels against a chip built at once on the same records.
-        function test_a_chip_built_in_the_background_draws_the_cloud_its_row_gains() {
+        function test_a_chip_built_in_the_background_shows_the_cloud_its_row_gains() {
             const cloudOf = made => marksOf(made.chip, []).find(mark => mark.kind === "remote")
-            const row = cutInTheBackground(lateChip, cloudOf)
+            const row = builtInTheBackground(lateChip, cloudOf)
             const cloud = cloudOf(row)
             compare(cloud.width, Theme.iconSm)
             row.records = [root.onRemote("sample")]
