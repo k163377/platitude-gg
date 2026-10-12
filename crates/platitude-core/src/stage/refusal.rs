@@ -80,12 +80,9 @@ pub(super) fn locked_kind(stale: ReportKind) -> ReportKind {
 /// screen says both lines in its own language (デザイン規約
 /// §答えの要らない報せ).
 pub(super) fn stale(kind: ReportKind) -> GitError {
-    GitError::Reported {
-        // No command ran, but the write log still prints this error
-        // (`session::write`), so the kind is what it says.
-        command: "stage".to_string(),
-        code: 0,
-        stderr: format!("{kind:?}"),
+    GitError::Withheld {
+        // No command ran; the message is only the write log's record.
+        message: format!("refused here before git ran: {kind:?}"),
         report: Box::new(WriteReport::local(kind)),
     }
 }
