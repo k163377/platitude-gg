@@ -514,6 +514,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "armed=true box=true list=false",
     },
+    // Something between the two clicks: a press on the details pane through
+    // the window's own watcher (`pane=`), then a step down the history and
+    // back (`step=`). Both false: back on the row, one click is a first
+    // one; `armed=true box=true`: the next one names, so the gesture is alive.
+    Verb {
+        name: "graph-reclick-elsewhere",
+        when: &[],
+        plain: "pane=false step=false armed=true box=true",
+    },
     // The history scrolled away under the wait. The clicked row is pooled
     // by the scroll, so a wait carried by the row goes down with it; the
     // box that opens has to be brought back into sight (`shown=true`) — a

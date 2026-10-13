@@ -1102,6 +1102,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "away=true armed=false collapsed=true box=false",
     },
+    // The same gesture on the open list by a hand's road: each press heard
+    // by the window first, the click at the release where the row answers.
+    // `pane=false`: a press on the details pane in between makes the click
+    // back a first one; `armed=true box=true`: the next one names — a row
+    // that did not claim its press before its release never would.
+    Verb {
+        name: "nav-reclick-elsewhere",
+        when: &[],
+        plain: "pane=false armed=true box=true",
+    },
     // The same by the menu's `beginRename`: a box opens where its row is,
     // so a peeked row keeps the fold and what it was made for. `diff=`:
     // only the second verb has a file open to lose.

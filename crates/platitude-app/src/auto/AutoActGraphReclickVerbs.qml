@@ -5,8 +5,9 @@ import platitude
 import platitude.ui
 
 /// The gesture that names a graph row: the two clicks at a row, the same pair put in through the strip over the lane
-/// column, and the pair (with the double-clicks that move beside it — to a branch, or to the worktree holding one) put
-/// in at a row of the card a chip unfolds into.
+/// column, the pair with a press elsewhere and a step through the history between them, and the pair (with the
+/// double-clicks that move beside it — to a branch, or to the worktree holding one) put in at a row of the card a chip
+/// unfolds into.
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
@@ -21,6 +22,7 @@ Item {
     readonly property var worktree: driver.worktree
     readonly property var graphModel: driver.graphModel
     readonly property var graphPane: driver.graphPane
+    readonly property var detailsPane: driver.detailsPane
     readonly property var refList: driver.refList
     readonly property var rowCard: driver.rowCard
 
@@ -30,6 +32,10 @@ Item {
             // The argument is the row the presses land on.
             laneClickTimer.row = Number(arg === "" ? "0" : arg)
             laneClickTimer.start()
+        } else if (act === "graph-reclick-elsewhere") {
+            // The argument is the row the presses land on.
+            elsewhereClickTimer.row = Number(arg === "" ? "0" : arg)
+            elsewhereClickTimer.start()
         } else if (act === "graph-reclick" || act === "graph-rename"
                    || act === "graph-reclick-scrolled" || act === "graph-reclick-mark"
                    || act === "graph-reclick-still") {
@@ -206,6 +212,73 @@ Item {
                 + " branch=" + worktree.branch)
                 driver.complete()
             }
+        }
+    }
+    // PGG_AUTO_ACT=graph-reclick-elsewhere: the two clicks with something between them, twice — a press on the details
+    // pane (`pane=`), then a step down the history and back up (`step=`) — each time the click back is a first one;
+    // the next one names (`armed=` / `box=`; デザイン規約 §左メニューの所作「間を空けた 2 回目」). Every press goes in as
+    // a hand's does, the window's watcher first (`FocusRelease.pressedAt`), and the steps where the arrows enter
+    // (`GraphPane.stepRow`).
+    property bool elsewherePane: false
+    property bool elsewhereStepped: false
+    property bool elsewhereArmed: false
+    property int elsewhereStep: 0
+    SampleTimer {
+        id: elsewhereClickTimer
+        property int row: 0
+        function press(item) {
+            page.Window.window.caretHand.pressedAt(item.mapToItem(null, 2, item.height / 2))
+            item.leftClick(Qt.NoModifier)
+        }
+        onTriggered: {
+            const item = graphPane.view.itemAtIndex(elsewhereClickTimer.row)
+            if (!item)
+                return
+            const step = acts.elsewhereStep
+            // Spaced from the click before: inside its window the next press would be half a double-click.
+            if ((step === 1 || step === 3 || step === 6) && item.clickGuarded)
+                return
+            if (step === 0) {
+                elsewhereClickTimer.press(item)
+            } else if (step === 1) {
+                page.Window.window.caretHand.pressedAt(detailsPane.mapToItem(null, detailsPane.width / 2,
+                                                                             detailsPane.height / 2))
+            } else if (step === 2) {
+                // A beat after: the gesture settles an input once it is through (`ReclickGesture.settle`).
+                elsewhereClickTimer.press(item)
+                acts.elsewherePane = item.renameArmed
+            } else if (step === 3) {
+                if (!graphPane.stepRow(1))
+                    return
+            } else if (step === 4) {
+                if (!graphPane.stepRow(-1))
+                    return
+            } else if (step === 5) {
+                // Back on the row once the step is read (`GraphRowWalk.noteStep`): read later, it would land after
+                // the click and come between this click and the next.
+                if (graphPane.stepSettling)
+                    return
+                elsewhereClickTimer.press(item)
+                acts.elsewhereStepped = item.renameArmed
+            } else if (step === 6) {
+                elsewhereClickTimer.press(item)
+                acts.elsewhereArmed = item.renameArmed
+            } else {
+                if (acts.elsewhereArmed && graphPane.namingOid === "")
+                    return
+                elsewhereClickTimer.stop()
+                Harness.report(
+                "graph_reclick_elsewhere row=" + elsewhereClickTimer.row
+                + " pane=" + acts.elsewherePane
+                + " step=" + acts.elsewhereStepped
+                + " armed=" + acts.elsewhereArmed
+                + " box=" + (graphPane.namingOid !== "")
+                + " typed=" + graphPane.namingText
+                + " branch=" + worktree.branch)
+                driver.complete()
+                return
+            }
+            acts.elsewhereStep = step + 1
         }
     }
     property bool reclickListArmed: false

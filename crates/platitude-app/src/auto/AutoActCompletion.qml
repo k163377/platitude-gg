@@ -102,7 +102,7 @@ QtObject {
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close", "menu-peek",
                 "nav-filter", "nav-tip", "nav-jump", "nav-open", "nav-open-foot", "nav-open-then", "nav-open-held",
                 "nav-drag-open", "nav-peek-open", "nav-open-tip", "nav-open-tag", "nav-follow", "nav-follow-lit",
-                "nav-reclick", "nav-reclick-away", "nav-rename-far",
+                "nav-reclick", "nav-reclick-away", "nav-reclick-elsewhere", "nav-rename-far",
                 // Framed in their own sampler once the fold, the pick's walk, the card or the restore they may ask for
                 // has landed (`AutoActRecoverVerbs`).
                 "recover", "recover-open",
@@ -189,7 +189,7 @@ QtObject {
                 "graph-head-list",
                 "graph-reclick-list",
                 "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",
-                "graph-reclick-still", "graph-reclick-lanes", "rename-box-out",
+                "graph-reclick-still", "graph-reclick-lanes", "graph-reclick-elsewhere", "rename-box-out",
                 // The presses go in one per tick and the rows draw the choice a tick behind the last, so the
                 // sampler that watches the highlight settle owns the whole of it.
                 "graph-choose", "graph-choose-range",

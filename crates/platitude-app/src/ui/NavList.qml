@@ -265,6 +265,29 @@ AppListView {
         row.lineClicked(Qt.LeftButton, Qt.NoModifier)
         return true
     }
+    /// Smoke hooks (PGG_AUTO_ACT=nav-reclick-elsewhere): a hand's left click on a row in its two halves, through the
+    /// row's own handlers — the press, and on a later beat the release that makes it a click, which is where the row
+    /// answers. `rowPoint` is where that hand goes down, in the scene, for a run that presses through the window's
+    /// watcher first as a hand does. False / null as `clickRow`.
+    function pressRow(index) {
+        const row = navList.itemAtIndex(index)
+        if (!row)
+            return false
+        row.linePressed(Qt.LeftButton, 0, Theme.rowHeight / 2)
+        return true
+    }
+    function releaseRow(index) {
+        const row = navList.itemAtIndex(index)
+        if (!row)
+            return false
+        row.lineReleased()
+        row.lineClicked(Qt.LeftButton, Qt.NoModifier)
+        return true
+    }
+    function rowPoint(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.mapToItem(null, 0, Theme.rowHeight / 2) : null
+    }
     /// What a drag over the open row's name took, and whether the keyboard went with it (PGG_AUTO_ACT=nav-drag-open).
     function rowNameTook(index) {
         const row = navList.itemAtIndex(index)

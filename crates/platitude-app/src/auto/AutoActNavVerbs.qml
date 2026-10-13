@@ -27,6 +27,7 @@ Item {
     readonly property var sidebarPane: driver.sidebarPane
     readonly property var diffPane: driver.diffPane
     readonly property var navProbe: driver.navProbe
+    readonly property var detailsPane: driver.detailsPane
     readonly property var remoteDialog: driver.remoteDialog
     readonly property var refSwitchItem: driver.refSwitchItem
     readonly property var commitMenu: driver.commitMenu
@@ -118,6 +119,12 @@ Item {
             acts.reclickArmed = false
             acts.reclickStep = 0
             reclickTimer.start()
+        } else if (act === "nav-reclick-elsewhere") {
+            // The same gesture on the open list by the hand's own road — each click a press through the window's
+            // watcher, then the release the row answers at — with a press on the details pane after the first
+            // (デザイン規約 §左メニューの所作「間を空けた 2 回目」).
+            acts.elsewhereStep = 0
+            elsewhereTimer.start()
         } else if (act === "nav-add-remote") {
             // The `+` of the REMOTES band, live even while the band is unavailable (デザイン規約 §左メニューの所作), put
             // in at the band's own signal. "folded" is the other door: the rail's REMOTES cell, which at zero answers
@@ -823,6 +830,74 @@ Item {
                 + " box=" + (sidebarPane.editKey !== "")
                 + " focused=" + section.rowFocused(reclickTimer.row)
                 + " peek=" + sidebarPane.peekKind
+                + " editing=" + sidebarPane.editKey)
+                driver.complete()
+            }
+        }
+    }
+    // PGG_AUTO_ACT=nav-reclick-elsewhere: a click is two beats, as a hand's is — the press (the window's watcher, then
+    // the row's own handler) and then the release the row answers at; the gesture settles the press in between. The
+    // first click, a press on the details pane, the click back (`pane=`: no box), and the next one (`armed=`, `box=`).
+    property int elsewhereStep: 0
+    property bool elsewherePane: false
+    property bool elsewhereArmed: false
+    SampleTimer {
+        id: elsewhereTimer
+        /// The argument `<section>[:<row>]`, the row 0 by default.
+        readonly property string kind: {
+            const arg = Harness.autoActArg
+            const cut = arg.indexOf(":")
+            return cut < 0 ? arg : arg.substring(0, cut)
+        }
+        readonly property int row: {
+            const arg = Harness.autoActArg
+            const cut = arg.indexOf(":")
+            return cut < 0 ? 0 : Number(arg.substring(cut + 1))
+        }
+        /// The press half on the row; false while the row is not built.
+        function press(list) {
+            const at = list.rowPoint(elsewhereTimer.row)
+            if (at === null)
+                return false
+            page.Window.window.caretHand.pressedAt(at)
+            return list.pressRow(elsewhereTimer.row)
+        }
+        onTriggered: {
+            const list = navProbe.listOf(elsewhereTimer.kind)
+            if (!list)
+                return
+            const step = acts.elsewhereStep
+            if (step === 0 || step === 3 || step === 5) {
+                // Spaced from the click before: inside its window this would be half a double-click.
+                if (list.rowGuarded(elsewhereTimer.row) || !elsewhereTimer.press(list))
+                    return
+                acts.elsewhereStep = step + 1
+            } else if (step === 1 || step === 4 || step === 6) {
+                if (!list.releaseRow(elsewhereTimer.row))
+                    return
+                if (step === 4)
+                    acts.elsewherePane = list.rowArmed(elsewhereTimer.row)
+                if (step === 6)
+                    acts.elsewhereArmed = list.rowArmed(elsewhereTimer.row)
+                acts.elsewhereStep = step === 1 ? 2 : step + 1
+            } else if (step === 2) {
+                if (list.rowGuarded(elsewhereTimer.row))
+                    return
+                page.Window.window.caretHand.pressedAt(detailsPane.mapToItem(null, detailsPane.width / 2,
+                                                                             detailsPane.height / 2))
+                acts.elsewhereStep = 3
+            } else {
+                // Armed, the box opens on the row once the wait runs out (`SidebarRowGestures.startEdit`).
+                if (acts.elsewhereArmed && sidebarPane.editKey === "")
+                    return
+                elsewhereTimer.stop()
+                Harness.report(
+                "nav_reclick_elsewhere section=" + elsewhereTimer.kind
+                + " row=" + elsewhereTimer.row
+                + " marked=" + sidebarPane.activeKey
+                + " pane=" + acts.elsewherePane
+                + " armed=" + acts.elsewhereArmed
+                + " box=" + (sidebarPane.editKey !== "")
                 + " editing=" + sidebarPane.editKey)
                 driver.complete()
             }
