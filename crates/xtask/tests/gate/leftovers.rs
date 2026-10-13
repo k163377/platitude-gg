@@ -454,14 +454,18 @@ fn a_landing_clears_the_tree_its_session_started_in() {
 
 /// A session whose start wrote nothing down — a chip's first hooks run the
 /// code of the tree the app cut from origin/main — is found by its
-/// transcript at its landing, which takes the tree away. Another session's
-/// transcript is not this landing's to read a tree from.
+/// transcript at its landing, which takes the tree away — among every
+/// place Claude Code keeps one for it, the seat it went on into included.
+/// Another session's transcript is not this landing's to read a tree from.
 #[test]
 fn a_landing_finds_the_tree_its_session_started_in_by_its_transcript() {
     let sb = Sandbox::new("leftover-transcript");
     let chip = app_tree(&sb, "chip-start");
     let theirs = app_tree(&sb, "their-chip");
     transcript_in(&sb, &chip, "mine");
+    // A roster seat's place, named to list before the chip's, as it does
+    // on the desk.
+    transcript_in(&sb, &sb.roster_tree("b", "worktree-b"), "mine");
     transcript_in(&sb, &theirs, "theirs");
     sb.write_refs(&sb.seat, 14);
     sb.commit_all(&sb.seat, "feat(core): fourteen", &[]);

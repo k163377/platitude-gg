@@ -40,20 +40,19 @@ pub(crate) fn write_down(tree: &str, session: &str) -> Option<Result<String, Str
 /// nothing names its branch's maker yet — for a landing, whose session's
 /// start may not have: a chip's first hooks run the code of the tree the
 /// app cut from origin/main, which lags main until main is pushed. Found
-/// from where Claude Code keeps the session's transcript ([`started_at`]).
+/// from where Claude Code keeps the session's transcripts ([`places`]):
+/// of the trees named like one of those places, the one the app made — a
+/// session that went on into a seat keeps a transcript under the seat's
+/// name too.
 pub(crate) fn adopt(listing: &str, session: &str) {
-    let Some(started) = started_at(session) else {
-        return;
-    };
+    let places = places(session);
     // The first tree listed is the primary checkout, which no app made.
-    let Some(tree) = worktree_blocks(listing)
+    let made = worktree_blocks(listing)
         .into_iter()
         .skip(1)
-        .find(|tree| spelled_like(&tree.path, &started))
-    else {
-        return;
-    };
-    if let Some((Some(common), reference)) = app_made(&tree.path)
+        .filter(|tree| places.iter().any(|place| spelled_like(&tree.path, place)))
+        .find_map(|tree| app_made(&tree.path));
+    if let Some((Some(common), reference)) = made
         && hooks::maker(&common, &reference).is_none()
     {
         // Unwritten, the tree stays as it would have: nothing to say.
@@ -80,13 +79,15 @@ fn app_made(tree: &str) -> Option<(Option<PathBuf>, String)> {
     Some((common, reference))
 }
 
-/// The directory Claude Code keeps `session`'s transcript in, under its
-/// config directory's `projects/`: one per place a session started, named
-/// after that place.
-fn started_at(session: &str) -> Option<String> {
-    let transcripts = super::transcripts::transcripts(session);
-    let place = transcripts.first()?.parent()?.file_name()?;
-    Some(place.to_string_lossy().into_owned())
+/// The directories Claude Code keeps `session`'s transcripts in, under its
+/// config directory's `projects/`: one per place the session started or
+/// worked from, named after that place.
+fn places(session: &str) -> Vec<String> {
+    super::transcripts::transcripts(session)
+        .iter()
+        .filter_map(|transcript| transcript.parent()?.file_name())
+        .map(|place| place.to_string_lossy().into_owned())
+        .collect()
 }
 
 /// Whether the tree at `path` is the place a project directory is named
