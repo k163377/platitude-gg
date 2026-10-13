@@ -290,15 +290,28 @@ Item {
     }
     // git's refusal has to come back before the row it turns into `-D` (the warning's three presses) can be pressed
     // through — or photographed. The plain delete is pressed too, so a count is no sign of the refusal; this one is.
+    // The card went up under that delete and greys its rows until the reading behind it is in (`AppMenu.waiting`),
+    // a drain after the write's own settle (`RepoTab::settling`): a row out of reach takes no press
+    // (`AppMenuItem.completeHold`), and the sampler presses again on its next beat, naming the stage it waits at.
     SampleTimer {
         id: forceDeleteTimer
+        /// The refusal is in hand. Latched: a press that did not go has armed the watch again (`beginWrite`), so the
+        /// first delete no longer reads as written through.
+        property bool refused: false
         onTriggered: {
-            if (!driver.wroteAndSettled() || refDeleteItem.holdPresses < Metrics.holdPressesWarned)
+            if (!forceDeleteTimer.refused) {
+                if (!driver.wroteAndSettled() || refDeleteItem.holdPresses < Metrics.holdPressesWarned)
+                    return
+                forceDeleteTimer.refused = true
+            }
+            // The row as it stood when pressed: its handler runs inside the press (`holdToEnd`).
+            const said = "ref_menu delete=" + refDeleteItem.text + " note=" + refDeleteItem.note
+            const went = driver.holdToEnd(refDeleteItem)
+            Awaited.at(Harness.autoAct, went ? "pressed" : "row in reach")
+            if (!went)
                 return
             forceDeleteTimer.stop()
-            Harness.report("ref_menu delete=" + refDeleteItem.text
-                              + " note=" + refDeleteItem.note)
-            driver.holdToEnd(refDeleteItem)
+            Harness.report(said)
             writeBarrier.start()
         }
     }
