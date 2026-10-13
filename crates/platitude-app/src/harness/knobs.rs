@@ -78,7 +78,8 @@ pub(crate) struct Knobs {
     /// which can be run here.
     pub system_title_bar: bool,
     /// `PGG_AUTO_IDENTITY` — `"<name>|<email>"` prefills the identity
-    /// screen, and `PGG_AUTO_IDENTITY_SAVE` submits it straight away.
+    /// screen, and `PGG_AUTO_IDENTITY_SAVE` submits it once the opened
+    /// tab has settled (`WindowIdentityActs`).
     pub identity: String,
     pub identity_save: bool,
     /// `PGG_MEM_REPORT` — file and print the memory breakdown. The walks

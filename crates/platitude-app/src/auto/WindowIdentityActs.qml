@@ -12,6 +12,8 @@ Item {
 
     required property var identityGate
     required property var identityDialog
+    /// The tab in front (`WindowHarness.page`).
+    required property var page
 
     // `"<name>|<email>"` fills the two boxes, `PGG_AUTO_IDENTITY_SAVE=1` submits them, `skip` answers "Not now" to
     // show the state behind the dialog, and `edit` leaves an identity that is already set as it is.
@@ -33,7 +35,22 @@ Item {
         const parts = Harness.autoIdentity.split("|")
         hooks.identityDialog.fill(parts[0], parts.length > 1 ? parts[1] : "")
         if (Harness.autoIdentitySave)
+            submitTimer.start()
+    }
+    // The save rewrites the global configuration, and on Windows a git started while git replaces it cannot read it —
+    // the opening tab's reads among them, which the product asks once more (gitの扱い.md §設定の書き換えと重なった読み).
+    // A hand types for seconds first; the run submits once the tab it opened has settled (`PageSettled`), as a hand
+    // would, and says so.
+    SampleTimer {
+        id: submitTimer
+        onTriggered: {
+            const opened = Harness.autoOpen === ""
+                || hooks.page !== null && hooks.page.pageTab.state !== "" && PageSettled.settled(hooks.page)
+            if (!Awaited.all("identity_save", { "page": opened }))
+                return
+            stop()
             hooks.identityDialog.submit()
+        }
     }
 
     // `edit` opens the settings screen where the menu entry lands, once: a later identity answer is not a second press.

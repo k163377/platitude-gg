@@ -191,6 +191,7 @@ Item {
         sourceComponent: WindowIdentityActs {
             identityGate: harness.identityGate
             identityDialog: harness.identityDialog
+            page: harness.page
         }
     }
 }
