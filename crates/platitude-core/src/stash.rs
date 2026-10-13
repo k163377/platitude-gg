@@ -206,9 +206,10 @@ pub async fn push(
 /// (a key since 2.52), which would make it [`pop_with_index`] (builtin/stash.c
 /// `git_stash_config`; the option is the minimum's too).
 ///
-/// Answers by code: exit 1 covers both a conflicted restore and a no-op,
-/// so the caller weighs it against the working tree, and the write it
-/// belongs to says whether it failed.
+/// Answers by code: exit 1 covers both a conflicted restore and, up to
+/// 2.55, a no-op (from 2.56 git turns down with 128 and keeps 1 for a
+/// conflict), so the caller weighs any non-zero end against the working
+/// tree, and the write it belongs to says whether it failed.
 pub async fn pop(
     executor: &GitExecutor,
     workdir: &Path,

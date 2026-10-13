@@ -75,6 +75,13 @@ async fn apply_side(repo: &TestRepo, side: &Path) -> (Option<String>, Option<Wri
     answer
 }
 
+/// Whether a row ended as a failure, whatever its code: `stash` turns an
+/// apply down with exit 1 up to 2.55 and with 128 from 2.56, where 1 is a
+/// conflict alone (`786fc39046 stash: reserve exit status 1 for conflicts`).
+fn a_failed_row(end: &CommandEnd) -> bool {
+    matches!(end, CommandEnd::Exited(code) if *code != 0)
+}
+
 /// [`apply_side`], with how the `stash apply` row in the log ended and what
 /// stands under it.
 async fn apply_side_logged(
@@ -268,7 +275,7 @@ async fn a_refusal_over_nothing_it_would_overwrite_is_reported_as_gits() {
     // 2.55 says it could not write the index (its refresh over the unmerged
     // entries fails first); the minimum says nothing at that step.
     if !said.is_empty() {
-        assert_eq!(end, CommandEnd::Exited(1), "a refusal is a failed row");
+        assert!(a_failed_row(&end), "a refusal is a failed row: {end:?}");
         assert!(
             said.contains("could not write index"),
             "git's words are under it, where the report sends the reader: {said}"
@@ -303,7 +310,10 @@ async fn an_index_another_git_holds_is_reported_as_locked_where_git_says_so() {
         "{said}"
     );
     if !said.is_empty() {
-        assert_eq!(end, CommandEnd::Exited(1), "git's words are a failed row's");
+        assert!(
+            a_failed_row(&end),
+            "git's words are a failed row's: {end:?}"
+        );
     }
     assert_eq!(read_in(&repo.path, "a.txt"), "1\n2\n3\n4\n5\n");
 }
@@ -339,7 +349,7 @@ async fn a_change_here_in_the_way_is_reported_and_nothing_is_written() {
     let ((error, report), (end, said)) = apply_side_logged(&repo, &side).await;
 
     assert!(error.is_some_and(|e| e.contains("would be overwritten")));
-    assert_eq!(end, CommandEnd::Exited(1), "a refusal is a failed row");
+    assert!(a_failed_row(&end), "a refusal is a failed row: {end:?}");
     assert!(said.contains("would be overwritten"), "{said}");
     let report = report.expect("a report");
     assert_eq!(report.kind, ReportKind::CarriedInTheWay);
@@ -480,7 +490,8 @@ async fn a_write_accepted_there_first_is_done_before_the_work_is_read() {
 
 /// Why the untracked files are looked at before git runs: `git stash
 /// apply` puts the tracked changes in first, then refuses the untracked
-/// file in the way and leaves the rest applied.
+/// file in the way and leaves the rest applied — exit 1 up to 2.55, 128
+/// from 2.56 ([`a_failed_row`]'s reason).
 #[test]
 fn git_leaves_the_tracked_half_applied() {
     let (mut repo, side) = two_trees();
@@ -493,7 +504,7 @@ fn git_leaves_the_tracked_half_applied() {
     let here = repo.path.clone();
     let out = repo.git_attempt(&here, &["stash", "apply", &stash]);
 
-    assert_eq!(out.status.code(), Some(1));
+    assert!(!out.status.success(), "{:?}", out.status);
     assert!(String::from_utf8_lossy(&out.stderr).contains("could not restore untracked files"));
     assert_eq!(read_in(&repo.path, "a.txt"), "1\n2\n3\n4\n5 side\n");
 }

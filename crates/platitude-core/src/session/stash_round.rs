@@ -83,7 +83,8 @@ pub(super) async fn pop_back_after_failure(
 }
 
 /// Whether the working tree has unmerged paths right now — what tells a
-/// conflicting `stash pop` from a refusal, which exit alike.
+/// conflicting `stash pop` from a refusal, which exit alike up to 2.55 (1)
+/// and apart from 2.56 (1 against 128).
 pub(super) async fn conflicts_now(
     executor: &GitExecutor,
     repo: &RepoInfo,
