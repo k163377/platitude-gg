@@ -3,6 +3,7 @@
 //! tree holds while it runs.
 
 use crate::support::{ALWAYS, EXE, Sandbox, output_past_a_busy_image, set, without_always};
+use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
 #[test]
 fn a_copied_reader_reuses_the_graph_despite_its_new_timestamp() {
@@ -41,10 +42,9 @@ fn a_copied_reader_reuses_the_graph_despite_its_new_timestamp() {
     // Bytes past the loaded image leave a PE / ELF runnable.
     {
         use std::io::Write;
-        let mut file = std::fs::OpenOptions::new()
-            .append(true)
-            .open(&copy)
-            .expect("reader copy");
+        let mut file =
+            open_past_another_holder(std::fs::OpenOptions::new().append(true), &copy, || {})
+                .expect("reader copy");
         file.write_all(b"graph-cache-reader-probe")
             .expect("change the reader bytes");
         file.set_times(std::fs::FileTimes::new().set_modified(stamp))
@@ -54,10 +54,9 @@ fn a_copied_reader_reuses_the_graph_despite_its_new_timestamp() {
     assert!(!changed.contains(" (kept)"), "changed bytes: {changed}");
     {
         use std::io::{Seek, SeekFrom, Write};
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .open(&copy)
-            .expect("reader copy");
+        let mut file =
+            open_past_another_holder(std::fs::OpenOptions::new().write(true), &copy, || {})
+                .expect("reader copy");
         let replacement = b"Graph-cache-reader-probe";
         file.seek(SeekFrom::End(-(replacement.len() as i64)))
             .expect("same-sized trailing bytes");
@@ -72,6 +71,77 @@ fn a_copied_reader_reuses_the_graph_despite_its_new_timestamp() {
         "same length and time, different bytes: {same_metadata}"
     );
     assert!(run().contains(" (kept)"));
+}
+
+/// What refuses the copy above after a run comes too rarely to catch, so
+/// a handle that does not share writing stands in for it here.
+#[test]
+#[cfg(windows)]
+fn a_copy_held_without_shared_writing_is_opened_for_writing_once_the_handle_goes() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    // Only for the temp root: nothing here gates.
+    let sb = Sandbox::new("held-copy");
+    let copy = sb
+        .root
+        .join(format!("reader{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(EXE, &copy).expect("copy the reader");
+    // `FILE_SHARE_READ` alone: readers may open the copy beside it, writers
+    // may not.
+    let holder = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1)
+        .open(&copy)
+        .expect("hold the copy without sharing writing");
+    let mut append = std::fs::OpenOptions::new();
+    append.append(true);
+    let refused = append
+        .open(&copy)
+        .expect_err("a writer while the copy is held");
+    assert_eq!(refused.raw_os_error(), Some(SHARING_VIOLATION));
+
+    open_past_another_holder(&append, &copy, move || drop(holder))
+        .expect("open the copy once the handle goes");
+}
+
+/// `ERROR_SHARING_VIOLATION`: Windows refusing an open that something
+/// holding the file does not share — another handle's share mode, or a
+/// mapped image asked for `write`. `EPIPE`'s number elsewhere.
+const SHARING_VIOLATION: i32 = 32;
+
+/// Opens `path` as `options` ask, retrying while Windows answers with a
+/// sharing violation.
+///
+/// After a run of the copied reader, its next open for writing has been
+/// refused so by a holder the suite does not name
+/// (rules-refs/core.md「Windows は走らせた直後の複製への書きの open を稀に拒む」).
+/// Every attempt is the real open; the retries run under the suite's
+/// budget, and a file still held at the end reaches the caller as a
+/// failure. POSIX has no share modes, so elsewhere the first answer is
+/// the answer.
+fn open_past_another_holder(
+    options: &std::fs::OpenOptions,
+    path: &std::path::Path,
+    on_held: impl FnOnce(),
+) -> std::io::Result<std::fs::File> {
+    let mut wait = Wait::new(path.display().to_string(), Budget::SUITE, LOOK_AGAIN);
+    let mut on_held = Some(on_held);
+    loop {
+        let answer = options.open(path);
+        let held = match &answer {
+            Err(error) if cfg!(windows) && error.raw_os_error() == Some(SHARING_VIOLATION) => {
+                error.to_string()
+            }
+            _ => return answer,
+        };
+        if let Some(notify) = on_held.take() {
+            notify();
+        }
+        wait.saw(held);
+        if let Err(expired) = wait.look_again("its other holder to let go") {
+            return Err(std::io::Error::other(expired.to_string()));
+        }
+    }
 }
 
 #[test]
