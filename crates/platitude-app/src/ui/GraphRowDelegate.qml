@@ -163,8 +163,13 @@ Item {
     // The mark the chip wears while a second click waits out its window, as drawn (PGG_AUTO_ACT=graph-reclick-mark).
     readonly property alias chipWaiting: chipColumn.chipWaiting
     // What the name box on this row came out to (see the column — a headless run reads it off here).
+    readonly property alias nameBoxX: chipColumn.nameBoxX
     readonly property alias nameBoxWidth: chipColumn.nameBoxWidth
     readonly property alias nameBoxPlaceholder: chipColumn.nameBoxPlaceholder
+    readonly property alias nameBoxSelected: chipColumn.nameBoxSelected
+    /// The row's press area — automation-only exposure, like `GraphPane.view`: a run asks it where along the row a
+    /// press lands while a name box stands (PGG_AUTO_ACT=graph-rename-fit).
+    readonly property alias pressArea: rowMouse
     // This row's chip column is a name box right now.
     readonly property bool naming: rowItem.ListView.view ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
     // The standing question is about this row. Its words are on the bar above the graph; the row answers "which one"
@@ -243,6 +248,9 @@ Item {
             naming: rowItem.naming
             namingMode: rowItem.ListView.view ? rowItem.ListView.view.namingMode : "branch"
             namingKind: rowItem.ListView.view ? rowItem.ListView.view.namingKind : ""
+            namingOpenedWith: rowItem.ListView.view ? rowItem.ListView.view.namingOpenedWith : ""
+            // The row's far edge less the cards' cap (デザイン規約 §メニュー); the column stands at the row's left.
+            boxReach: rowItem.width - Theme.spaceXxl
             // Only the row holding the box can be refused: the answer is about what is typed, and one row is typed in.
             namingRefused: rowItem.naming && rowItem.ListView.view
                            ? rowItem.ListView.view.namingRefused : false
@@ -417,6 +425,10 @@ Item {
             return ""
         if (chipColumn.hasChip && px < rowItem.labelsW)
             return "chip"
+        // The column is the name box's while one stands, wherever along it the box ends: the room beside a box as
+        // short as its name is where the chip was, and a rest there opens nothing over what is being typed.
+        if (rowItem.naming && px < rowItem.labelsW)
+            return ""
         // The WIP row is not a commit: it has no card and no menu (規約 §hover のツールチップ / §グラフ行の右クリック).
         return rowItem.isWip ? "" : "row"
     }
@@ -588,9 +600,17 @@ Item {
         id: rowMouse
         anchors.fill: parent
         anchors.topMargin: -rowItem.topBleed
-        // While the name box is open this area starts at the box's own edge: it lies over everything in the row, and a
-        // box wider than its column reaches into the lanes and takes presses there too.
-        anchors.leftMargin: rowItem.naming ? Theme.spaceXs + chipColumn.nameBoxWidth : 0
+        // While the name box is open this area leaves the box's own span out: it lies over everything in the row, the
+        // box stands anywhere along its column and reaches into the lanes past it. Either side of the box is still the
+        // row. A mask is the whole of the hit test, so it says the area's own rectangle too.
+        containmentMask: QtObject {
+            function contains(point: point): bool {
+                if (point.x < 0 || point.y < 0 || point.x > rowMouse.width || point.y > rowMouse.height)
+                    return false
+                const boxX = chipColumn.x + chipColumn.nameBoxX
+                return !rowItem.naming || point.x < boxX || point.x >= boxX + chipColumn.nameBoxWidth
+            }
+        }
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         // **The row keeps the drag it is handed** (`tst_pressorder`): otherwise the list grabs at the drag distance and

@@ -156,7 +156,7 @@ Rectangle {
         graphList.namingMode = mode
         graphList.namingKind = kind
         graphArea.namingId = id
-        graphArea.namingOpenedWith = text
+        graphList.namingOpenedWith = text
         graphList.namingOid = oidHex
     }
     /// A rename is out of this box and git has not answered yet — as the left menu's box carries it
@@ -183,12 +183,12 @@ Rectangle {
         graphList.namingText = ""
         graphList.namingKind = ""
         graphArea.namingId = ""
-        graphArea.namingOpenedWith = ""
+        graphList.namingOpenedWith = ""
     }
     /// The ref a rename box is changing the name of, and the name it came up holding. Empty for the three
     /// boxes that make a name.
     property string namingId: ""
-    property string namingOpenedWith: ""
+    readonly property alias namingOpenedWith: graphList.namingOpenedWith
     /// What the box is standing on, for the page to decide whether what is typed can be accepted at all — the models
     /// that answer that are the page's (`RepoPage.graphNameRefusedWhy`).
     readonly property alias namingMode: graphList.namingMode

@@ -46,6 +46,10 @@ fonts	details-parents-card 0 --preset octopus	-	seat= clear= read the card's mea
 fonts	details-grow-squeeze 7 --preset edges	-	keeps= reads the description's laid-out height
 fonts	diff-band-sweep unstaged:crates/platitude-core/src/session/integration/support/fixtures/refs_join_snapshot.rs --preset longpaths	-	cut= reads whether a long path fits the band
 fonts	graph-min --preset co-authors	-	w= min= read the graph column's measured floor
+fonts	graph-rename-fit 0 --preset longnames	-	stands= reads whether the box keeps its head and grows past the column, a width the fonts decide
+fonts	graph-rename-fit 0 --preset tags	-	stands= reads whether the box ends where the chip ended, a width the fonts decide
+fonts	graph-rename-fit 0:/0:main-renamed-for-the-release-candidate --preset tags	-	stands= hits= read whether the typed box reaches under the lane strip and keeps its presses there, widths the fonts decide
+fonts	graph-rename-fit 0::main-renamed-for-the-release-candidate-past-the-reach-of-the-pane-so-the-box-stops-at-its-ceiling-and-the-words-scroll-inside --preset tags	-	stands= reads whether the typed width reached the ceiling, a width the fonts decide
 fonts	hunk-tools notes.txt --preset manyhunks	-	level= caption= read the baselines the face gives a label, a field and a held button
 fonts	nav-fold	-	counts= reads where the face puts the folded rail's counts under their marks
 fonts	old-git-fold	-	fitted= mark= read the band's measured floor

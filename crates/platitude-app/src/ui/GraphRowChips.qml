@@ -23,6 +23,12 @@ Item {
     /// What a rename box is naming ("branch" / "remote" / "tag" / "worktreeFolder"), for the frame's tone and the
     /// placeholder; empty while making a name.
     required property string namingKind
+    /// The name a rename box came up holding (`GraphList.namingOpenedWith`): its least width, and whether a rebuilt
+    /// box holds the name still or what was typed over it.
+    required property string namingOpenedWith
+    /// The farthest the box may reach to the right, in this column's frame: the cards' `spaceXxl` stop, measured from
+    /// the pane's edge, where the list clips.
+    required property real boxReach
     /// Why the spaced second click on this row's chip opened no box (a worktree's lock or gone folder —
     /// `GraphPane.withholdRename`), empty for none: said on the chip, as a refused name's reason is on the box.
     required property string withheldWhy
@@ -44,11 +50,16 @@ Item {
     /// For the runs: the wait mark as the chip wears it (`RefChip.waiting`) — read off the chip, so a cut binding
     /// shows.
     readonly property alias chipWaiting: rowStack.chipWaiting
-    /// The name box's width (the column, or its floor where wider); 0 without a box. Read by the row and by
-    /// `PGG_AUTO_ACT=name-box`.
+    /// The name box's left edge and width in this column's frame; 0 without a box. Read by the row, whose presses stop
+    /// at the box, and by `PGG_AUTO_ACT=name-box` / `graph-rename-fit`.
+    readonly property real nameBoxX: nameSeat.item ? nameSeat.x : 0
     readonly property real nameBoxWidth: nameSeat.item ? nameSeat.item.width : 0
     /// What the box says it takes, rubbed out (PGG_AUTO_ACT=worktree-rename-box).
     readonly property string nameBoxPlaceholder: nameSeat.item ? nameSeat.item.placeholderText : ""
+    /// Whether the box holds any of its words selected (PGG_AUTO_ACT=graph-rename-fit).
+    readonly property bool nameBoxSelected: nameSeat.item ? nameSeat.item.selectedText !== "" : false
+    /// The column's room for the box: its width less the `spaceXs` the chip keeps off each side.
+    readonly property real boxRoom: chipColumn.columnWidth - 2 * Theme.spaceXs
 
     signal namingSubmitted(string name)
     signal namingEdited(string text)
@@ -61,7 +72,8 @@ Item {
     /// What the box opens holding, kept here for whichever of the ask and the box lands second (`focusBox`).
     property string askedText: ""
     /// Opens the box on `text`, held on the view since this delegate is recycled. A rename opens with the name selected
-    /// whole, to be typed over (デザイン規約 §左メニューの所作).
+    /// whole, to be typed over (デザイン規約 §左メニューの所作); a box rebuilt holding what was typed over it takes the
+    /// caret at its end.
     function takeNamingFocus(text) {
         chipColumn.askedText = text === undefined ? "" : text
         chipColumn.focusBox()
@@ -73,12 +85,10 @@ Item {
         if (field === null || !chipColumn.naming)
             return
         field.text = chipColumn.askedText
-        field.inkText = chipColumn.namingMode === "rename" ? field.text : ""
-        if (chipColumn.namingMode === "rename")
+        if (chipColumn.namingMode === "rename" && field.text === chipColumn.namingOpenedWith)
             field.selectAll()
         field.forceActiveFocus()
     }
-
     // The open box can reach past the column onto the lane cell, which is laid out after this column and would draw
     // over it.
     z: chipColumn.naming ? 1 : 0
@@ -105,30 +115,38 @@ Item {
     Loader {
         id: nameSeat
         active: chipColumn.naming
-        // Anchored by the head and grown into the graph (規約 §グラフ行のダブルクリック「開く向きは 1 つ」).
-        anchors.left: parent.left
-        anchors.leftMargin: Theme.spaceXs
+        // Ends where the chip ended while the column holds it, and from there grows to the left; once it outgrows the
+        // column the head stays at the column's and the box grows into the graph (規約 §グラフ行のダブルクリック
+        // 「改名の箱は名前の幅」/「開く向きは 1 つ」).
+        x: Theme.spaceXs + Math.max(0, chipColumn.boxRoom - (nameSeat.item ? nameSeat.item.width : 0))
         anchors.verticalCenter: parent.verticalCenter
         onLoaded: chipColumn.focusBox()
         sourceComponent: SlimField {
             id: nameField
-            /// The narrowest the box goes: the whole of the placeholder and of what it opened holding (a rename's
-            /// name) — cut, neither says what it is. Measured off never-drawn labels, since `TextMetrics` comes out a
-            /// few pixels tight and a tight floor still elides; plus the field's paddings, which Controls takes out of
-            /// `width` before laying the placeholder out.
-            readonly property real nameBoxMinW:
-                Math.ceil(Math.max(placeholderInk.implicitWidth, openedInk.implicitWidth))
-                + nameField.leftPadding + nameField.rightPadding
-            /// The name a rename box opened holding, latched — measured per keystroke, the right edge would walk out
-            /// from under the caret. Empty for the boxes that make a name, even rebuilt holding what was typed.
-            property string inkText: ""
+            /// The words' widths, paddings included, which Controls takes out of `width` before laying the text and
+            /// the placeholder out. The placeholder and the name the box opened holding are measured off never-drawn
+            /// labels, since `TextMetrics` comes out a few pixels tight and a tight width still elides; what is typed
+            /// is the field's own `contentWidth`, the width at which it stands without scrolling.
+            readonly property real placeholderW: Math.ceil(placeholderInk.implicitWidth) + nameField.padsW
+            readonly property real openedW: Math.ceil(openedInk.implicitWidth) + nameField.padsW
+            readonly property real typedW: Math.ceil(nameField.contentWidth) + nameField.padsW
+            readonly property real padsW: nameField.leftPadding + nameField.rightPadding
+            /// What the box asks for. A box making a name takes the column, and the placeholder whole where that is
+            /// wider. A rename takes its words: what is typed, never narrower than the name it opened holding, and the
+            /// placeholder whole once rubbed out — a box cut short of either says nothing.
+            readonly property real wantW: chipColumn.namingMode !== "rename"
+                ? Math.max(chipColumn.boxRoom, nameField.placeholderW)
+                : Math.max(nameField.openedW, nameField.text === "" ? nameField.placeholderW : nameField.typedW)
             /// A worktree's folder in the refusal's line, which the shared tip stands the tree mark in front of
             /// (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別「名前の印」).
             readonly property string tipMarkWord: chipColumn.namingRefusedMark
             /// The kind of ref being typed: the mode, or on a rename the kind it renames.
             readonly property string namesKind:
                 chipColumn.namingMode === "rename" ? chipColumn.namingKind : chipColumn.namingMode
-            width: Math.max(chipColumn.columnWidth - 2 * Theme.spaceXs, nameField.nameBoxMinW)
+            // Up to the reach at most — past it what is typed scrolls in the box. The reach never cuts the box below
+            // the column's room.
+            width: Math.min(nameField.wantW,
+                            Math.max(chipColumn.boxRoom, chipColumn.boxReach - Theme.spaceXs))
             // The frame names the kind (デザイン規約 §ref の種別「枠 = 種別」); a branch's colour is the focus ring's own,
             // so a tag differs, and so does a branch made out in another worktree — that worktree's green, as its chip
             // wears.
@@ -155,8 +173,7 @@ Item {
             // Held on the view, which outlives this recycled delegate.
             onTextEdited: chipColumn.namingEdited(nameField.text)
             Keys.onEscapePressed: chipColumn.namingCancelled()
-            // The floor's rulers, never drawn: the field's own placeholder cannot be measured before the box has a
-            // width.
+            // The rulers, never drawn: the field's own placeholder cannot be measured before the box has a width.
             Label {
                 id: placeholderInk
                 visible: false
@@ -166,7 +183,7 @@ Item {
             Label {
                 id: openedInk
                 visible: false
-                text: nameField.inkText
+                text: chipColumn.namingMode === "rename" ? chipColumn.namingOpenedWith : ""
                 font: nameField.font
             }
         }

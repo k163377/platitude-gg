@@ -57,7 +57,7 @@ QtObject {
     readonly property RefChipStack chipFan: RefChipStack {}
     /// The `+N` count (`RefChip`) at the widest the floor prices it: two digits, where real repositories stop. Measured
     /// off a `Label` — metrics come out a few pixels tight, and a tight floor still elides
-    /// (`GraphRowChips.nameBoxMinW`). Draws nothing; the family is named as in `chipFont`. A deeper count is not
+    /// (`GraphRowChips.placeholderW`). Draws nothing; the family is named as in `chipFont`. A deeper count is not
     /// crushed: the card measures its own (`RefChip.countW`), and the extra digit comes out of the name.
     readonly property Label chipCountInk: Label {
         text: "+99"

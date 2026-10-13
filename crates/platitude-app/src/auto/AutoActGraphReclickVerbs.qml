@@ -46,10 +46,32 @@ Item {
             reclickGraphTimer.scrolls = act === "graph-reclick-scrolled"
             reclickGraphTimer.marks = act === "graph-reclick-mark"
             reclickGraphTimer.points = act === "graph-reclick-still"
+            reclickGraphTimer.fits = false
             // The submit is ticks away: armed now, the watch catches the ask whenever it comes
             // (`AutoActDriver.beginWrite`).
             if (act === "graph-rename")
                 driver.beginWrite("graph-rename")
+            reclickGraphTimer.start()
+        } else if (act === "graph-rename-fit") {
+            // The same gesture, stopped at the box with words in it: `<行>[:<列幅>[/<レーン列幅>][:<打つ文>]]`, a
+            // column left at its width where its part is empty — the lanes squeezed below what they need raise the
+            // strip over them (`GraphLanePan`). Without the last part the box holds the name it opened with; with it
+            // empty, the box is rubbed out.
+            const fitParts = arg.split(":")
+            reclickGraphTimer.row = fitParts[0] === "" ? 0 : Number(fitParts[0])
+            if (fitParts.length > 1 && fitParts[1] !== "") {
+                const widths = fitParts[1].split("/")
+                page.setGraphColumns(widths[0] === "" ? graphPane.labelW : Number(widths[0]),
+                                     widths.length > 1 && widths[1] !== "" ? Number(widths[1])
+                                                                           : graphPane.graphColWManual)
+            }
+            reclickGraphTimer.puts = fitParts.length > 2
+            reclickGraphTimer.typed = fitParts.slice(2).join(":")
+            reclickGraphTimer.name = ""
+            reclickGraphTimer.scrolls = false
+            reclickGraphTimer.marks = false
+            reclickGraphTimer.points = false
+            reclickGraphTimer.fits = true
             reclickGraphTimer.start()
         } else if (act === "graph-reclick-list" || act === "graph-reclick-across" || act === "ref-list-pick") {
             // At the card the chip unfolds into; the argument `<行>[:<カードの行>]` defaults to the card's first row.
@@ -92,6 +114,65 @@ Item {
         /// Whether the pointer rests on the chip first, so a card's rest is running under the wait — which the
         /// gesture has to hold still.
         property bool points: false
+        /// Whether the run reports where the box stands and how wide it came out (`graph-rename-fit`), after putting
+        /// `typed` in it when `puts` — otherwise the box holds the name it opened with.
+        property bool fits: false
+        property bool puts: false
+        property string typed: ""
+        /// What a press at `x` along the row lands on, asked of the areas themselves: the lane strip over the list and
+        /// the row's own area both hand it to the row (`GraphLanePan.pressLanded`); past them it is the box's, or
+        /// nothing's.
+        function landsAt(item, x) {
+            const y = item.height / 2
+            const strip = graphPane.lanePan
+            if (strip.visible && strip.contains(strip.mapFromItem(item, x, y)))
+                return "row"
+            if (item.pressArea.contains(item.pressArea.mapFromItem(item, x, y)))
+                return "row"
+            return x >= item.nameBoxX && x < item.nameBoxX + item.nameBoxWidth ? "box" : "none"
+        }
+        function reportFit(item) {
+            // The column's frame; the column stands at the row's left.
+            const boxX = item.nameBoxX
+            const right = boxX + item.nameBoxWidth
+            const chipRight = item.labelsW - Theme.spaceXs
+            const reach = item.width - Theme.spaceXxl
+            const near = (a, b) => Math.abs(a - b) < 0.5
+            // Where the box stands (`GraphRowChips.nameSeat`): ending where the chip ended with its head inside the
+            // column, the column's room exactly, its head at the column's and past the column, or stopped at the
+            // reach.
+            const stands = near(boxX, Theme.spaceXs) && near(right, reach) ? "capped"
+                         : near(right, chipRight) && boxX > Theme.spaceXs + 0.5 ? "right"
+                         : near(right, chipRight) && near(boxX, Theme.spaceXs) ? "full"
+                         : near(boxX, Theme.spaceXs) && right > chipRight && right < reach ? "head" : "other"
+            // Three presses along the row, asked of what takes them: left of the box, on it — on its part under the
+            // lane strip where the strip stands over it — and past it.
+            const strip = graphPane.lanePan
+            const underL = strip.visible ? Math.max(boxX, strip.mapToItem(item, 0, 0).x) : 0
+            const underR = strip.visible ? Math.min(right, strip.mapToItem(item, strip.width, 0).x) : 0
+            const onBox = underR - underL > 2 ? (underL + underR) / 2 : boxX + item.nameBoxWidth / 2
+            const probes = [boxX / 2, onBox, (right + item.width) / 2]
+            Harness.report(
+            "graph_rename_fit row=" + reclickGraphTimer.row
+            + " armed=" + acts.reclickGraphArmed
+            + " box=" + (graphPane.namingOid !== "")
+            + " mode=" + graphPane.namingMode
+            + " hits=" + probes.map(x => reclickGraphTimer.landsAt(item, x)).join("/")
+            // What a rest beside the box opens: nothing, the column being the box's (`GraphRowDelegate.partAt`).
+            + " rest_left=" + (item.partAt(probes[0]) || "none")
+            + " stands=" + stands
+            + " selected=" + item.nameBoxSelected
+            + " strip=" + graphPane.lanePan.visible
+            + " typed=" + graphPane.namingText
+            + " opened=" + graphPane.namingOpenedWith
+            + " label_w=" + Math.round(item.labelsW)
+            + " box_x=" + Math.round(boxX)
+            + " box_w=" + Math.round(item.nameBoxWidth)
+            + " right=" + Math.round(right)
+            + " chip_right=" + Math.round(chipRight)
+            + " reach=" + Math.round(reach))
+            driver.complete()
+        }
         onTriggered: {
             const item = graphPane.view.itemAtIndex(reclickGraphTimer.row)
             // Not laid out yet: latching a click here would wait for an answer to a question nobody put.
@@ -137,6 +218,16 @@ Item {
                 if (reclickGraphTimer.scrolls && !graphPane.rowOnScreen(reclickGraphTimer.row))
                     return
                 reclickGraphTimer.stop()
+                if (reclickGraphTimer.fits) {
+                    if (reclickGraphTimer.puts) {
+                        // In the way a recycled delegate puts it back (`GraphRowDelegate.takeNamingFocus`), so the box
+                        // on screen holds what the run says.
+                        graphPane.view.namingText = reclickGraphTimer.typed
+                        item.takeNamingFocus()
+                    }
+                    reclickGraphTimer.reportFit(item)
+                    return
+                }
                 Harness.report(
                 "graph_reclick row=" + reclickGraphTimer.row
                 + " armed=" + acts.reclickGraphArmed

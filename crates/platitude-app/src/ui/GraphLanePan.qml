@@ -19,6 +19,16 @@ MouseArea {
     z: 1
     visible: pan.columns.graphXMax > 0
     acceptedButtons: Qt.LeftButton
+    // A row's name box reaches into the lane column once it outgrows its own, and a press on it is the box's — handed
+    // to the row, it would close the box over what is being typed. A mask is the whole of the hit test, so it says the
+    // strip's own rectangle too.
+    containmentMask: QtObject {
+        function contains(point: point): bool {
+            if (point.x < 0 || point.y < 0 || point.x > pan.width || point.y > pan.height)
+                return false
+            return !pan.onNameBox(point)
+        }
+    }
     property real pressX: 0
     property real startGX: 0
     property bool panning: false
@@ -52,6 +62,14 @@ MouseArea {
         const p = pan.mapToItem(pan.view, mouse.x, mouse.y)
         const idx = pan.view.indexAt(pan.columns.labelW + 1, pan.view.contentY + p.y)
         return idx < 0 ? null : pan.view.itemAtIndex(idx)
+    }
+    /// Whether `at` (this strip's frame) is on the name box a row holds open.
+    function onNameBox(at) {
+        const row = pan.rowAt(at)
+        if (!row || !row.naming)
+            return false
+        const p = pan.mapToItem(row, at.x, at.y)
+        return p.x >= row.nameBoxX && p.x < row.nameBoxX + row.nameBoxWidth
     }
     // Handed straight to the row, which alone decides what a click and a second click mean (`GraphRowDelegate`) — a
     // partial copy here silently loses gestures on every repository wide enough to raise this strip.

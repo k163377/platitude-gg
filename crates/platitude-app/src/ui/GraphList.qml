@@ -57,6 +57,9 @@ AppListView {
     // Which row's chip column is a name box, and what has been typed into it.
     property string namingOid: ""
     property string namingText: ""
+    /// The name a rename box came up holding (`GraphPane.openNameBox`) — the box's least width, whichever
+    /// delegate holds it.
+    property string namingOpenedWith: ""
     // Which of the four the box is asking for ("branch" / "tag" / "worktree" / "rename").
     property string namingMode: "branch"
     // What a rename box is naming ("branch" / "remote" / "tag" / "worktreeFolder", as `renameRow` takes it), so the

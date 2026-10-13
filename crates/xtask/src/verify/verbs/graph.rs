@@ -463,6 +463,40 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "armed=true box=true",
     },
+    // The same box, read for where it stands and what takes the presses
+    // around it. A rename ends where the chip ended with its head inside
+    // the column (`right`; a column-wide box says `full`), keeps its head
+    // at the column's once it outgrows the column (`head`), and stops at
+    // the row's far edge less the cards' cap (`capped`). `hits=` asks the
+    // row's area and the lane strip about a press left of the box, on it
+    // and past it; `rest_left=` is what a rest beside it opens. A box
+    // opened on the name holds it selected, one holding what was typed
+    // does not. `longnames`' branch is longer than the column; a name
+    // holding `past-the-reach` is typed long enough to pass the pane; `/0`
+    // squeezes the lanes so their strip stands over the box's far part.
+    Verb {
+        name: "graph-rename-fit",
+        when: &[
+            (
+                Arg::Has("past-the-reach"),
+                "armed=true box=true mode=rename hits=row/box/row rest_left=none stands=capped selected=false",
+            ),
+            (
+                Arg::Has(":/0:"),
+                "armed=true box=true mode=rename hits=row/box/row rest_left=none stands=head selected=false \
+                 strip=true",
+            ),
+            (
+                Arg::WithPreset("longnames"),
+                "armed=true box=true mode=rename hits=row/box/row rest_left=none stands=head selected=true",
+            ),
+            (
+                Arg::Is("0"),
+                "armed=true box=true mode=rename hits=row/box/row rest_left=none stands=right selected=true",
+            ),
+        ],
+        plain: "armed=true box=true mode=rename hits=row/box/row rest_left=none",
+    },
     Verb {
         name: "graph-reclick-list",
         when: &[],

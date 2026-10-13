@@ -189,7 +189,8 @@ QtObject {
                 "graph-head-list",
                 "graph-reclick-list",
                 "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",
-                "graph-reclick-still", "graph-reclick-lanes", "graph-reclick-elsewhere", "rename-box-out",
+                "graph-reclick-still", "graph-reclick-lanes", "graph-reclick-elsewhere", "graph-rename-fit",
+                "rename-box-out",
                 // The presses go in one per tick and the rows draw the choice a tick behind the last, so the
                 // sampler that watches the highlight settle owns the whole of it.
                 "graph-choose", "graph-choose-range",
