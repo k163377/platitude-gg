@@ -26,6 +26,7 @@ mod push_default_integration;
 mod push_refusals;
 mod reachable_integration;
 mod refs_integration;
+mod relied_witnesses;
 mod remote_integration;
 mod remote_tags_integration;
 mod remote_untrack_integration;

@@ -11,6 +11,7 @@ pub(crate) fn all() -> Vec<&'static Command> {
         crate::structure::COMMANDS,
         crate::waits::COMMANDS,
         crate::versions::COMMANDS,
+        crate::relied_messages::COMMANDS,
         crate::docs::COMMANDS,
         crate::qmltest::COMMANDS,
         crate::deny::COMMANDS,

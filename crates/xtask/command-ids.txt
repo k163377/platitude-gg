@@ -35,6 +35,10 @@ linux.witness
 package.snapshot
 perf.measure
 qmltest.run
+relied-messages.audit
+relied-messages.check
+relied-messages.master
+relied-messages.watch
 replay.lines
 seat.release
 seat.roster

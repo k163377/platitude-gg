@@ -35,7 +35,8 @@ commands:
       not clippy or the harness's every verb; taken out, it owes what
       still names it. A module one system alone compiles owes the other
       side nothing. The always-steps
-      (structure, waits, versions, docs, verbs, fmt) run every time and first;
+      (structure, waits, versions, docs, relied-messages check, verbs, fmt) run every
+      time and first;
       a build input that changed (Cargo.toml, Cargo.lock, the toolchain,
       cargo's configuration, a vendored crate) makes the reach the whole
       tree, the Dockerfile the container's side of it, clippy.toml every
@@ -162,6 +163,24 @@ commands:
       crates' lock, the toolchain file, Qt's pin, the Dockerfile's
       AQT_SOURCE that CI's Qt action reads) is not read. An always-step
       of `gate`.
+
+  relied-messages check | audit | watch | master
+      git's words the product reads (platitude-core/src/relied_messages.rs),
+      held to git's sources. Each form names the file of git's tree it
+      is written in and words on that line; the ledger
+      (crates/xtask/relied-messages.txt) holds every such line of every tree
+      read — each release from the minimum on and master, Git for
+      Windows and its main, Apple Git, the container's Ubuntu, OpenSSH —
+      grouped where they are the same. `check` (an always-step of
+      `gate`, offline) holds the table to the ledger (that each witness is
+      a test by its full name is the suite's own relied_witnesses test,
+      off its binary's --list); `audit` fetches every tree into the primary
+      checkout's target/relied-messages and writes the ledger again; `watch`
+      (weekly in CI) holds the heads and any release the ledger has not
+      read to it, red only where a line changed, naming the trees that
+      carry the change; `master` (Linux — `cargo xtask linux relied-messages
+      master` elsewhere) builds master's git and runs the witnesses
+      under it, red too where one of them did not run.
 
   docs [--sync]
       The three ways an edit to internal-docs, .claude/rules,

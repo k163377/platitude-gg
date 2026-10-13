@@ -1,0 +1,382 @@
+# git's words the product reads (crates/platitude-core/src/relied_messages.rs), as each tree
+# read writes them: `cargo xtask relied-messages audit` writes this file, `check` holds the table to it
+# and `watch` holds git's sources to it. Not edited by hand.
+read	upstream	v2.43.0 v2.43.1 v2.43.2 v2.43.3 v2.43.4 v2.43.5 v2.43.6 v2.43.7 v2.44.0 v2.44.1 v2.44.2 v2.44.3 v2.44.4 v2.45.0 v2.45.1 v2.45.2 v2.45.3 v2.45.4 v2.46.0 v2.46.1 v2.46.2 v2.46.3 v2.46.4 v2.47.0 v2.47.1 v2.47.2 v2.47.3 v2.48.0 v2.48.1 v2.48.2 v2.49.0 v2.49.1 v2.50.0 v2.50.1 v2.51.0 v2.51.1 v2.51.2 v2.52.0 v2.53.0 v2.54.0 v2.55.0 v2.56.0 master
+read	gfw	v2.43.0.windows.1 v2.43.4.windows.1 v2.44.0.windows.1 v2.44.1.windows.1 v2.45.0.windows.1 v2.45.1.windows.1 v2.45.2.windows.1 v2.45.2.windows.2 v2.46.0.windows.1 v2.46.1.windows.1 v2.46.2.windows.1 v2.46.2.windows.2 v2.47.0.windows.1 v2.47.0.windows.2 v2.47.1.windows.1 v2.47.1.windows.2 v2.47.3.windows.1 v2.47.3.windows.2 v2.48.1.windows.1 v2.49.0.windows.1 v2.49.1.windows.1 v2.50.0.windows.1 v2.50.0.windows.2 v2.50.1.windows.1 v2.51.0.windows.1 v2.51.0.windows.2 v2.51.1.windows.1 v2.51.2.windows.1 v2.51.2.windows.2 v2.52.0.windows.1 v2.52.0.windows.2 v2.53.0.windows.1 v2.53.0.windows.2 v2.53.0.windows.3 v2.53.0.windows.4 v2.54.0.windows.1 v2.54.0.windows.2 v2.54.0.windows.3 v2.55.0.windows.1 v2.55.0.windows.2 v2.55.0.windows.3 v2.55.0.windows.4 v2.55.0.windows.5 v2.56.0.windows.1 v2.56.0.windows.2 main
+read	apple	Git-155
+read	ubuntu	noble-updates
+read	openssh	V_8_0_P1 V_8_1_P1 V_8_2_P1 V_8_3_P1 V_8_4_P1 V_8_5_P1 V_8_6_P1 V_8_7_P1 V_8_8_P1 V_8_9_P1 V_9_0_P1 V_9_1_P1 V_9_2_P1 V_9_3_P1 V_9_3_P2 V_9_4_P1 V_9_5_P1 V_9_6_P1 V_9_7_P1 V_9_8_P1 V_9_9_P1 V_9_9_P2 V_10_0_P1 V_10_0_P2 V_10_1_P1 V_10_2_P1 V_10_3_P1 V_10_4_P1 V_10_5_P1 V_10_6_P1 master
+head	upstream	master	6de20f6092dcf9bdb1c8efe03db4b70c82b423dd	
+head	gfw	main	cc4dbf752a05efdc0e04e71fd3e8110d11bdd35c	
+head	apple	Git-155	6b2f9bfe72d6d4b5c9bcc1c2d0236c026d321cba	2.50.1
+head	ubuntu	noble-updates	d7a675729ee7b10bff2808df5fbc9f8693cae8a0	2.43.0-1ubuntu7.3
+head	openssh	master	773771be4ae241380e5f2b65059c441f7eef2da7	
+
+form	LOCK_FILE_TAKEN	.lock': File exists
+source	git	lockfile.c	Unable to create '%s
+era	upstream v2.43.0..v2.53.0, gfw v2.43.0.windows.1..v2.53.0.windows.4, apple Git-155, ubuntu noble-updates
+held	lockfile.c	strbuf_addf: "Unable to create '%s.lock': %s.\\n\\n"
+held	lockfile.c	strbuf_addf: "Unable to create '%s.lock': %s"
+era	upstream v2.54.0..master, gfw v2.54.0.windows.1..main
+held	lockfile.c	strbuf_addf: "Unable to create '%s': %s.\\n\\n"
+held	lockfile.c	strbuf_addf: "Unable to create '%s.lock': %s"
+
+form	REFS_LOCK_TAKEN	cannot lock references
+source	git	refs/reftable-backend.c	cannot lock references
+era	upstream v2.43.0..v2.44.4, gfw v2.43.0.windows.1..v2.44.1.windows.1, ubuntu noble-updates
+era	upstream v2.45.0..master, gfw v2.45.0.windows.1..main, apple Git-155
+held	refs/reftable-backend.c	strbuf_addstr: "cannot lock references"
+
+form	LOCK_LEFT_BEHIND	which is no longer running
+source	git	lockfile.c	which is no longer running
+era	upstream v2.43.0..v2.53.0, gfw v2.43.0.windows.1..v2.53.0.windows.4, apple Git-155, ubuntu noble-updates
+era	upstream v2.54.0..master, gfw v2.54.0.windows.1..main
+held	lockfile.c	"which is no longer running; the lock file "
+
+form	WORKTREE_UNCLEAN	contains modified or untracked files
+source	git	builtin/worktree.c	contains modified or untracked files
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/worktree.c	die: "'%s' contains modified or untracked files, use --force to delete it"
+
+form	WORKTREE_PLACE_LISTED	is a missing but 
+source	git	builtin/worktree.c	is a missing but
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/worktree.c	die: "'%s' is a missing but locked worktree;\\nuse '%s -f -f' to override, or 'unlock' and 'prune' or 'remove' to clear"
+held	builtin/worktree.c	die: "'%s' is a missing but already registered worktree;\\nuse '%s -f' to override, or 'prune' or 'remove' to clear"
+
+form	NOT_A_WORKTREE	' is not a working tree
+source	git	builtin/worktree.c	is not a working tree
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/worktree.c	die: "'%s' is not a working tree"
+held	builtin/worktree.c	die: "'%s' is not a working tree"
+held	builtin/worktree.c	die: "'%s' is not a working tree"
+held	builtin/worktree.c	die: "'%s' is not a working tree"
+
+form	WORKTREE_LOCKED	cannot remove a locked working tree
+source	git	builtin/worktree.c	cannot remove a locked working tree
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/worktree.c	die: "cannot remove a locked working tree, lock reason: %s\\nuse 'remove -f -f' to override or unlock first"
+held	builtin/worktree.c	die: "cannot remove a locked working tree;\\nuse 'remove -f -f' to override or unlock first"
+
+form	LOCK_REASON	, lock reason: 
+source	git	builtin/worktree.c	lock reason:
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/worktree.c	die: "cannot move a locked working tree, lock reason: %s\\nuse 'move -f -f' to override or unlock first"
+held	builtin/worktree.c	die: "cannot remove a locked working tree, lock reason: %s\\nuse 'remove -f -f' to override or unlock first"
+
+form	REMOVE_ADVICE	\nuse 'remove -f -f'
+source	git	builtin/worktree.c	use 'remove -f -f'
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/worktree.c	die: "cannot remove a locked working tree, lock reason: %s\\nuse 'remove -f -f' to override or unlock first"
+held	builtin/worktree.c	die: "cannot remove a locked working tree;\\nuse 'remove -f -f' to override or unlock first"
+
+form	INDEX_UNWRITTEN	could not write index
+source	git	builtin/stash.c	could not write index
+era	upstream v2.43.0..v2.43.1, gfw v2.43.0.windows.1, ubuntu noble-updates
+held	builtin/stash.c	error: "could not write index"
+era	upstream v2.43.2..master, gfw v2.43.4.windows.1..main, apple Git-155
+held	builtin/stash.c	die: "could not write index"
+held	builtin/stash.c	error: "could not write index"
+held	builtin/stash.c	error: "could not write index"
+held	builtin/stash.c	error: "could not write index"
+held	builtin/stash.c	error: "could not write index"
+
+form	STASH_OVER_A_MERGE	cannot apply a stash in the middle of a merge
+source	git	builtin/stash.c	cannot apply a stash in the middle of a merge
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/stash.c	error: "cannot apply a stash in the middle of a merge"
+
+form	REMOVED_BY_MERGE	would be removed by merge
+source	git	unpack-trees.c	would be removed by merge
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	unpack-trees.c	"Untracked working tree file '%s' would be removed by merge."
+held	unpack-trees.c	"The following untracked working tree files would be removed by merge:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be removed by merge:\\n%%s"
+
+form	OVERWRITES_WORK	would be overwritten
+source	git	unpack-trees.c	would be overwritten
+source	git	builtin/merge.c	would be overwritten
+source	git	merge-ort-wrappers.c	would be overwritten
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/merge.c	error: "Your local changes to the following files would be overwritten by merge:\\n  %s"
+held	merge-ort-wrappers.c	error: "Your local changes to the following files would be overwritten by merge:\\n  %s"
+held	unpack-trees.c	"Entry '%s' would be overwritten by merge. Cannot merge."
+held	unpack-trees.c	"Untracked working tree file '%s' would be overwritten by merge."
+held	unpack-trees.c	"Your local changes to the following files would be overwritten by checkout:\\n%%s"
+held	unpack-trees.c	"Your local changes to the following files would be overwritten by checkout:\\n%%s"
+held	unpack-trees.c	"Your local changes to the following files would be overwritten by merge:\\n%%s"
+held	unpack-trees.c	"Your local changes to the following files would be overwritten by merge:\\n%%s"
+held	unpack-trees.c	"Your local changes to the following files would be overwritten by %s:\\n%%s"
+held	unpack-trees.c	"Your local changes to the following files would be overwritten by %s:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by checkout:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by checkout:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by merge:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by merge:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by %s:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by %s:\\n%%s"
+
+form	PRE_REBASE_REFUSED	The pre-rebase hook refused to rebase.
+source	git	builtin/rebase.c	The pre-rebase hook refused to rebase
+era	upstream v2.43.0..v2.46.4, gfw v2.43.0.windows.1..v2.46.2.windows.2, ubuntu noble-updates
+held	builtin/rebase.c	die: "The pre-rebase hook refused to rebase."
+era	upstream v2.47.0..master, gfw v2.47.0.windows.1..main, apple Git-155
+held	builtin/rebase.c	error: "The pre-rebase hook refused to rebase."
+
+form	UNTRACKED_IN_THE_WAY	untracked working tree files would be overwritten by checkout
+source	git	unpack-trees.c	untracked working tree files would be overwritten by checkout
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by checkout:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by checkout:\\n%%s"
+
+form	REBASE_OVER_CHANGES	cannot rebase:
+source	git	wt-status.c	cannot %s:
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	wt-status.c	error: "cannot %s: You have unstaged changes."
+held	wt-status.c	error: "cannot %s: Your index contains uncommitted changes."
+
+form	UNSTAGED_CHANGES	unstaged changes
+source	git	wt-status.c	You have unstaged changes
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	wt-status.c	error: "cannot %s: You have unstaged changes."
+
+form	UNCOMMITTED_CHANGES	uncommitted changes
+source	git	wt-status.c	contains uncommitted changes
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	wt-status.c	error: "additionally, your index contains uncommitted changes."
+held	wt-status.c	error: "cannot %s: Your index contains uncommitted changes."
+
+form	PREPARE_HOOK_FAILED	'prepare-commit-msg' hook failed
+source	git	sequencer.c	'prepare-commit-msg' hook failed
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	sequencer.c	error: "'prepare-commit-msg' hook failed"
+
+form	PICK_NOW_EMPTY	the previous cherry-pick is now empty
+source	git	builtin/commit.c	The previous cherry-pick is now empty
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/commit.c	"The previous cherry-pick is now empty, possibly due to conflict resolution.\\n"
+
+form	NOTHING_TO_COMMIT	nothing to commit
+source	git	wt-status.c	nothing to commit
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	wt-status.c	fprintf: "nothing to commit (create/"
+held	wt-status.c	fprintf: "nothing to commit\\n"
+held	wt-status.c	fprintf: "nothing to commit (use -u to "
+held	wt-status.c	fprintf: "nothing to commit\\n"
+held	wt-status.c	fprintf: "nothing to commit, working tree "
+
+form	GPG_UNSIGNED	gpg failed to sign the data
+source	git	gpg-interface.c	gpg failed to sign the data
+era	upstream v2.43.0..master, gfw v2.47.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	gpg-interface.c	error: "gpg failed to sign the data:\\n%s"
+era	gfw v2.43.0.windows.1..v2.46.2.windows.2
+held	gpg-interface.c	error: "gpg failed to sign the data"
+
+form	SSH_KEY_UNSET	user.signingKey needs to be set for ssh signing
+source	git	gpg-interface.c	user.signingKey needs to be set for ssh signing
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	gpg-interface.c	"user.signingKey needs to be set for ssh signing"
+
+form	SSH_KEY_UNNAMED	either user.signingkey or gpg.ssh.defaultKeyCommand needs to be configured
+source	git	gpg-interface.c	either user.signingkey or gpg.ssh.defaultKeyCommand needs to be configured
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	gpg-interface.c	die: "either user.signingkey or gpg.ssh.defaultKeyCommand needs to be configured"
+
+form	SSH_KEYGEN_CANNOT_SIGN	ssh-keygen -Y sign is needed for ssh signing
+source	git	gpg-interface.c	ssh-keygen -Y sign is needed for ssh signing
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	gpg-interface.c	error: "ssh-keygen -Y sign is needed for ssh signing (available in openssh version 8.2p1+)"
+
+form	SSH_KEY_UNWRITTEN	failed writing ssh signing key
+source	git	gpg-interface.c	failed writing ssh signing key
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	gpg-interface.c	error_errno: "failed writing ssh signing key to '%s'"
+held	gpg-interface.c	error_errno: "failed writing ssh signing key buffer to '%s'"
+
+form	SSH_SIGNATURE_UNREAD	failed reading ssh signing data buffer
+source	git	gpg-interface.c	failed reading ssh signing data buffer
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	gpg-interface.c	"failed reading ssh signing data buffer from '%s'"
+
+form	SWITCH_OVER_UNTRACKED	untracked working tree file
+source	git	unpack-trees.c	untracked working tree file
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	unpack-trees.c	"Untracked working tree file '%s' would be overwritten by merge."
+held	unpack-trees.c	"Untracked working tree file '%s' would be removed by merge."
+held	unpack-trees.c	"The following untracked working tree files would be removed by checkout:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be removed by checkout:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be removed by merge:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be removed by merge:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be removed by %s:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be removed by %s:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by checkout:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by checkout:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by merge:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by merge:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by %s:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by %s:\\n%%s"
+
+form	SWITCH_LOSES_UNTRACKED	would lose untracked files
+source	git	unpack-trees.c	would lose untracked files
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	unpack-trees.c	"Updating '%s' would lose untracked files in it"
+held	unpack-trees.c	"Updating the following directories would lose untracked files in them:\\n%s"
+
+form	SWITCH_OVER_CHANGES	would be overwritten by checkout
+source	git	unpack-trees.c	would be overwritten by checkout
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	unpack-trees.c	"Your local changes to the following files would be overwritten by checkout:\\n%%s"
+held	unpack-trees.c	"Your local changes to the following files would be overwritten by checkout:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by checkout:\\n%%s"
+held	unpack-trees.c	"The following untracked working tree files would be overwritten by checkout:\\n%%s"
+
+form	NOT_A_REPOSITORY	not a git repository
+source	git	setup.c	not a git repository
+era	upstream v2.43.0..v2.55.0, gfw v2.43.0.windows.1..v2.55.0.windows.5, apple Git-155, ubuntu noble-updates
+held	setup.c	die: "not a git repository: %s"
+held	setup.c	die: "not a git repository: '%s'"
+held	setup.c	die: "not a git repository (or any of the parent directories): %s"
+held	setup.c	die: "not a git repository (or any parent up to mount point %s)\\n"
+era	upstream v2.56.0..master, gfw v2.56.0.windows.1..main
+held	setup.c	die: "not a git repository: '%s'"
+held	setup.c	die: "not a git repository (or any of the parent directories): %s"
+held	setup.c	die: "not a git repository (or any parent up to mount point %s)\\n"
+
+form	DUBIOUS_OWNERSHIP	detected dubious ownership
+source	git	setup.c	detected dubious ownership
+era	upstream v2.43.0..v2.43.3 v2.44.0 v2.45.0, gfw v2.43.0.windows.1 v2.44.0.windows.1 v2.45.0.windows.1
+held	setup.c	die: "detected dubious ownership in repository at '%s'\\n"
+era	upstream v2.43.4..v2.43.7 v2.44.1..v2.44.4 v2.45.1..master, gfw v2.43.4.windows.1 v2.44.1.windows.1 v2.45.1.windows.1..main, apple Git-155, ubuntu noble-updates
+held	setup.c	die: "detected dubious ownership in repository at '%s'\\n"
+held	setup.c	die: "detected dubious ownership in repository at '%s'\\n"
+
+form	CONFIG_UNREAD	unknown error occurred while reading the configuration files
+source	git	config.c	unknown error occurred while reading the configuration files
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	config.c	die: "unknown error occurred while reading the configuration files"
+
+form	FILE_UNOPENED	unable to access '
+source	git	wrapper.c	unable to access '%s'
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	wrapper.c	warning_errno: "unable to access '%s'"
+held	wrapper.c	die_errno: "unable to access '%s'"
+
+form	FATAL_LEAD	fatal: 
+source	git	usage.c	_("fatal: ")
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	usage.c	vreportf: "fatal: "
+
+form	WARNING_LEAD	warning: 
+source	git	usage.c	_("warning: ")
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	usage.c	vreportf: "warning: "
+
+form	REJECTED	[rejected]
+source	git	transport.c	"[rejected]"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	transport.c	print_ref_status: "[rejected]"
+held	transport.c	print_ref_status: "[rejected]"
+held	transport.c	print_ref_status: "[rejected]"
+held	transport.c	print_ref_status: "[rejected]"
+held	transport.c	print_ref_status: "[rejected]"
+held	transport.c	print_ref_status: "[rejected]"
+held	transport.c	print_ref_status: "[rejected]"
+held	transport.c	print_ref_status: "[rejected]"
+held	transport.c	print_ref_status: "[rejected]"
+
+form	REMOTE_REJECTED	[remote rejected]
+source	git	transport.c	"[remote rejected]"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	transport.c	print_ref_status: "[remote rejected]"
+
+form	FETCH_FIRST	(fetch first)
+source	git	transport.c	"fetch first"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	transport.c	"fetch first"
+
+form	NOT_A_FAST_FORWARD	(non-fast-forward)
+source	git	transport.c	"non-fast-forward"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	transport.c	"non-fast-forward"
+
+form	UPDATED_SINCE_CHECKOUT	(remote ref updated since checkout)
+source	git	transport.c	"remote ref updated since checkout"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	transport.c	"remote ref updated since checkout"
+
+form	STALE_INFO	(stale info)
+source	git	transport.c	"stale info"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	transport.c	"stale info"
+
+form	ALREADY_EXISTS	(already exists)
+source	git	transport.c	"already exists"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	transport.c	"already exists"
+
+form	HOOK_DECLINED	hook declined
+source	git	builtin/receive-pack.c	hook declined
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/receive-pack.c	"push-to-checkout hook declined"
+held	builtin/receive-pack.c	rp_error: "hook declined to update %s"
+held	builtin/receive-pack.c	"hook declined"
+held	builtin/receive-pack.c	"pre-receive hook declined"
+
+form	FAR_NOT_A_FAST_FORWARD	non-fast-forward
+source	git	builtin/receive-pack.c	"non-fast-forward"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/receive-pack.c	"non-fast-forward"
+
+form	DELETION_PROHIBITED	deletion prohibited
+source	git	builtin/receive-pack.c	"deletion prohibited"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/receive-pack.c	"deletion prohibited"
+
+form	CHECKED_OUT_THERE	branch is currently checked out
+source	git	builtin/receive-pack.c	"branch is currently checked out"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/receive-pack.c	"branch is currently checked out"
+
+form	CURRENT_DELETION_PROHIBITED	deletion of the current branch prohibited
+source	git	builtin/receive-pack.c	"deletion of the current branch prohibited"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/receive-pack.c	"deletion of the current branch prohibited"
+
+form	SHALLOW_REFUSED	shallow update not allowed
+source	git	builtin/receive-pack.c	"shallow update not allowed"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/receive-pack.c	"shallow update not allowed"
+
+form	UNPACKER_ERROR	unpacker error
+source	git	builtin/receive-pack.c	"unpacker error"
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/receive-pack.c	"unpacker error"
+
+form	PACK_TOO_LARGE	pack exceeds maximum allowed size
+source	git	builtin/index-pack.c	pack exceeds maximum allowed size
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/index-pack.c	die: "pack exceeds maximum allowed size (%s)"
+
+form	REMOTE_LEAD	remote:
+source	git	sideband.c	DISPLAY_PREFIX "remote: "
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	sideband.c	"remote: "
+
+form	PROMPTS_DISABLED	terminal prompts disabled
+source	git	prompt.c	terminal prompts disabled
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	prompt.c	"terminal prompts disabled"
+
+form	AUTHENTICATION_FAILED	Authentication failed for
+source	git	remote-curl.c	Authentication failed for
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	remote-curl.c	die: "Authentication failed for '%s'"
+
+form	SSH_KEY_REFUSED	Permission denied (publickey
+source	openssh	sshconnect2.c	Permission denied (%s)
+era	openssh V_8_0_P1..master
+held	sshconnect2.c	fatal: "%s@%s: Permission denied (%s)."
+
+form	HOST_KEY_UNKNOWN	Host key verification failed
+source	openssh	sshconnect2.c	Host key verification failed
+era	openssh V_8_0_P1..master
+held	sshconnect2.c	fatal: "Host key verification failed."

@@ -28,6 +28,7 @@ mod png;
 mod qmltest;
 mod qt;
 mod reap;
+mod relied_messages;
 mod replay;
 mod seats;
 mod shipped;
@@ -60,6 +61,7 @@ fn main() -> ExitCode {
         Some("docs") => docs::run(&args[1..]),
         Some("waits") => waits::run(&args[1..]),
         Some("versions") => versions::run(&args[1..]),
+        Some("relied-messages") => relied_messages::run(&args[1..]),
         Some("qmltest") => qmltest::run(&args[1..]),
         Some("deny") => deny::run(&args[1..]),
         Some("demo-repo") => demo::run(&args[1..]).map(|path| {

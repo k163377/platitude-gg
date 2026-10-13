@@ -28,6 +28,15 @@ fn anything_that_can_reach_the_app_takes_the_other_one() {
 }
 
 #[test]
+fn building_gits_master_takes_the_stage_with_zlib() {
+    assert_eq!(stage_for(&words("relied-messages master")), "git-build");
+    assert_eq!(
+        command_line(&words("relied-messages master"), None),
+        words("cargo xtask relied-messages master")
+    );
+}
+
+#[test]
 fn an_xtask_verb_is_run_through_the_task_runner() {
     assert_eq!(
         command_line(&words("verify-ui commit --preset basic"), None),

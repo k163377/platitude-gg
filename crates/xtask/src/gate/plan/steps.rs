@@ -209,6 +209,18 @@ fn always_steps() -> Vec<Step> {
             &[format!(".{}", "github"), DOCKERFILE.to_string()],
         ),
         step("docs", Side::Host, true, xtask(&["docs"]), &DOCS),
+        // A form the table adds or changes is read against git's
+        // releases (`relied-messages audit`) before it stands.
+        step(
+            "relied-messages",
+            Side::Host,
+            true,
+            xtask(&["relied-messages", "check"]),
+            &[
+                "crates/platitude-core/src/relied_messages.rs",
+                crate::relied_messages::LEDGER,
+            ],
+        ),
         // Fails on a census line no verb answers: the app would ignore the
         // name and the run wait out its ceiling silently. Verbs with no
         // line are only counted (`verify::coverage`).

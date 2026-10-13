@@ -5,10 +5,10 @@
 //! xtask` in front. On Linux the container drops out and the command runs
 //! where it stands.
 //!
-//! Four images (the Dockerfile's stages): `core` and `app` are chosen by
+//! Five images (the Dockerfile's stages): `core` and `app` are chosen by
 //! what the command needs ([`stage_for`]) — the small one when it will do,
-//! so a run need not download Qt first; `bare` and `runtime` belong to the
-//! `bare` verb.
+//! so a run need not download Qt first; `git-build` is `relied-messages`'s, which
+//! builds git's master; `bare` and `runtime` belong to the `bare` verb.
 //!
 //! The build directory (/work/target) and the cargo registry are the
 //! engine's volumes, never the host's: one target/ shared between two
@@ -111,7 +111,7 @@ const IMAGE: &str = "pgg-linux";
 /// Every stage ci/linux/Dockerfile builds (a test holds the two together).
 /// A stage missing here is one whose images [`forget_older_images`] takes
 /// away from the checkout using them.
-const STAGES: [&str; 4] = ["core", "app", "bare", "runtime"];
+const STAGES: [&str; 5] = ["core", "git-build", "app", "bare", "runtime"];
 
 /// The kinds of volume a checkout mounts ([`volume`]), and so leaves
 /// behind when gone. `{IMAGE}-registry` is the machine's, not a
@@ -136,7 +136,13 @@ pub(crate) const IN_CONTAINER: &str = "PGG_IN_CONTAINER";
 
 /// Task-runner verbs worth running in there. Naming one means `cargo xtask
 /// <verb>`, so the command reads the same as on the host.
-const XTASK_VERBS: [&str; 4] = ["verify-ui", "demo-repo", "qmltest", "sweep"];
+const XTASK_VERBS: [&str; 5] = [
+    "verify-ui",
+    "demo-repo",
+    "qmltest",
+    "sweep",
+    "relied-messages",
+];
 
 /// Cargo verbs that build something (one-letter aliases included), and
 /// so care which stage they run in. A verb missing here only picks the
@@ -603,6 +609,10 @@ fn stage_for(rest: &[String]) -> &'static str {
         // image opens; --stage app asks for the other one.
         return "core";
     };
+    if verb == "relied-messages" {
+        // `master` builds git's master; the rest read no Qt either.
+        return "git-build";
+    }
     if XTASK_VERBS.contains(&verb) {
         // verify-ui and qmltest need Qt; the rest are not worth a second
         // answer.

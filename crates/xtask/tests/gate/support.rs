@@ -56,7 +56,15 @@ fn primary_of(from: &Path) -> Option<PathBuf> {
 }
 
 /// The steps every gate runs regardless of the diff.
-pub const ALWAYS: [&str; 6] = ["structure", "waits", "versions", "docs", "verbs", "fmt"];
+pub const ALWAYS: [&str; 7] = [
+    "structure",
+    "waits",
+    "versions",
+    "docs",
+    "relied-messages",
+    "verbs",
+    "fmt",
+];
 
 /// Runs a command, retrying while the kernel answers that somebody still
 /// holds its image open for writing (`ETXTBSY`).

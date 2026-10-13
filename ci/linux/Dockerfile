@@ -75,6 +75,18 @@ RUN git config --system --add safe.directory /work
 
 WORKDIR /work
 
+# core with what git's own build takes beyond build-essential: zlib's
+# headers. `cargo xtask linux relied-messages master` builds git's master here
+# (without HTTPS, translations, Perl, Python, Tcl/Tk) and runs the table's
+# witnesses under it; CI's weekly job installs the same on its runner
+# (.github/workflows/relied-messages.yml).
+FROM core AS git-build
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Everything platitude-app needs: Qt, a software GL stack for the offscreen
 # platform, and the fonts the design tokens name for Ubuntu.
 FROM core AS app
