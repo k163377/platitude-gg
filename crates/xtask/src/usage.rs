@@ -731,7 +731,10 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       A claim is a conversation's, and no process is asked about it: the
       app restarting under a session, the machine sleeping (the SessionEnd
       every open conversation is handed), a tab left open — none of it
-      lifts a claim. Three things do. `land` hands the seat back when the
+      lifts a claim. Nor does a new session id: a claim names the desktop
+      app's session too, under which a prompt edited after an interrupt,
+      or a /clear, goes on with a new id that renames the claim at its
+      next touch. Three things do lift one. `land` hands the seat back when the
       branch reaches main, whoever's claim was on it; a session that goes
       on working in the tree takes it again at its next edit — a picture
       takes nothing, and none goes up from a seat the session does not

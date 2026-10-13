@@ -188,9 +188,11 @@ impl Claim {
         // The session mark carries the pid too: a claim's reason is read
         // back as `<session> pid <pid>`, and an empty session leaves the
         // pid unparsed (`seats::standing`).
+        // No host: the rig's claim is this process's, not a conversation's.
         let me = Identity {
             session: format!("perf-{}", std::process::id()),
             pid: Some(std::process::id()),
+            host: None,
         };
         if !exists {
             git_query(

@@ -6,7 +6,14 @@
 //! A seat's claim is a conversation's, and no process is asked about it:
 //! the Claude process ends whenever the app restarts while the
 //! conversation goes on, so a claim judged by its process would hand the
-//! letter to a stranger. It moves three ways only — the branch lands
+//! letter to a stranger. Nor does the session id last as long as the
+//! conversation in the desktop app: a prompt edited after an interrupt
+//! goes on under a new session id in the same app session, so a claim
+//! names the app session too, and either one settles it
+//! (`Identity::host`). A `/clear` begins a new session id in the same app
+//! session and the same tree as well; the claim stays the app session's,
+//! and what the tree carries is said when the roster hands it back
+//! (`seats::held_seat`). It moves three ways only — the branch lands
 //! (`land::release_claim`), the session hands it back (`seats::release`),
 //! or the user has it taken over (`seats::takeover`). The rig's claim is
 //! the one that is a process's (`Held::ByRunner`).
@@ -14,36 +21,53 @@
 use std::io::Write;
 
 /// The mark a seat claim carries in `git worktree lock`'s reason:
-/// `claude-seat <session> pid <pid>`. For a seat the pid only names the tab
-/// that wrote it (`standing`); anything after it is ignored (older builds
-/// wrote more). A lock without this mark is a person's, and nothing
-/// automatic touches it.
+/// `claude-seat <session> pid <pid> host <app session>`, the pid and the
+/// host each where the environment names one. For a seat the pid only
+/// names the tab that wrote it (`standing`); any other word after the
+/// session is ignored (older builds wrote more). A lock without this mark
+/// is a person's, and nothing automatic touches it.
 pub(crate) const SEAT_CLAIM: &str = "claude-seat";
+
+/// The environment's name for the desktop app's session.
+const HOST_SESSION: &str = "CLAUDE_CODE_HOST_SESSION_ID";
 
 /// This session, as a claim records it.
 pub(crate) struct Identity {
-    /// The conversation: what a claim is matched on, kept across every
-    /// process it is run from.
+    /// The conversation's id with Claude: a claim is matched on it, and
+    /// it is the name of the transcript the work is in.
     pub session: String,
     /// The Claude process, when the environment names one — for the rig,
     /// the claim's whole liveness.
     pub pid: Option<u32>,
+    /// The desktop app's session (`CLAUDE_CODE_HOST_SESSION_ID`): the
+    /// conversation as the app lists it, which keeps this id while the
+    /// session id changes under it. None outside the desktop app, and for
+    /// the rig.
+    pub host: Option<String>,
 }
 
 impl Identity {
     /// This session's marks: the hook payload's session id, else the
     /// environment's (Claude's, then Codex's task id); the pid is
-    /// CLAUDE_PID's alone.
+    /// CLAUDE_PID's alone, and the host the desktop app's — for a Claude
+    /// session only: a Codex task is a conversation of its own, whatever
+    /// the shell it was started from carried.
     pub(crate) fn current(session: Option<&str>) -> Self {
+        let codex = std::env::var("CODEX_THREAD_ID").ok();
         let session = session_id(
             session,
             std::env::var("CLAUDE_CODE_SESSION_ID").ok().as_deref(),
-            std::env::var("CODEX_THREAD_ID").ok().as_deref(),
+            codex.as_deref(),
         );
         let pid = std::env::var("CLAUDE_PID")
             .ok()
             .and_then(|pid| pid.trim().parse().ok());
-        Self { session, pid }
+        let host = app_session(
+            std::env::var(HOST_SESSION).ok().as_deref(),
+            codex.as_deref(),
+            &session,
+        );
+        Self { session, pid, host }
     }
 
     pub(super) fn require_session(&self) -> Result<(), String> {
@@ -58,10 +82,21 @@ impl Identity {
 
     /// What this session writes into a lock's reason.
     pub(crate) fn reason(&self) -> String {
-        match self.pid {
-            Some(pid) => format!("{SEAT_CLAIM} {} pid {pid}", self.session),
-            None => format!("{SEAT_CLAIM} {}", self.session),
+        let mut reason = format!("{SEAT_CLAIM} {}", self.session);
+        if let Some(pid) = self.pid {
+            reason.push_str(&format!(" pid {pid}"));
         }
+        if let Some(host) = &self.host {
+            reason.push_str(&format!(" host {host}"));
+        }
+        reason
+    }
+
+    /// Whether `holder` is this conversation: the same session id, or the
+    /// same app session under another one.
+    fn is(&self, holder: &Identity) -> bool {
+        (!self.session.is_empty() && holder.session == self.session)
+            || self.host.is_some() && holder.host == self.host
     }
 
     /// This session as a person reads it beside a lock's reason.
@@ -81,6 +116,26 @@ fn session_id(hook: Option<&str>, claude: Option<&str>, codex: Option<&str>) -> 
         .find(|id| !id.is_empty())
         .unwrap_or_default()
         .to_string()
+}
+
+/// The app session `session` belongs to: none for a Codex task, which
+/// names itself by its task id.
+fn app_session(host: Option<&str>, codex: Option<&str>, session: &str) -> Option<String> {
+    if codex.map(str::trim) == Some(session) {
+        return None;
+    }
+    host.and_then(one_word)
+}
+
+/// `text` as one word of a lock's reason, which is read back word by
+/// word; None for anything else.
+fn one_word(text: &str) -> Option<String> {
+    let text = text.trim();
+    (!text.is_empty()
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+    .then(|| text.to_string())
 }
 
 /// What kind of holder a claim's pid names, which decides whether the
@@ -116,26 +171,49 @@ pub(crate) fn is_a_seat_claim(reason: &str) -> bool {
     holder(reason).is_some()
 }
 
-/// Who a claim names (session and pid only), read back out of a lock's
-/// reason; None for a person's lock. The mark ends at a word:
-/// `claude-seats are mine` is a person's sentence, and reading it as a
-/// claim would hand their lock to the first takeover that asked.
+/// Who a claim names, read back out of a lock's reason; None for a
+/// person's lock. The mark ends at a word: `claude-seats are mine` is a
+/// person's sentence, and reading it as a claim would hand their lock to
+/// the first takeover that asked.
 fn holder(reason: &str) -> Option<Identity> {
     let rest = reason.strip_prefix(SEAT_CLAIM)?;
     if !rest.is_empty() && !rest.starts_with(' ') {
         return None;
     }
-    let rest = rest.trim_start();
-    let (session, marks) = match rest.split_once(" pid ") {
-        Some((session, marks)) => (session, Some(marks)),
-        None => (rest, None),
+    let mut words = rest.split_whitespace().peekable();
+    // A claim written with no id goes straight on to its marks.
+    let session = match words.peek() {
+        Some(&word) if word != "pid" && word != "host" => words.next(),
+        _ => None,
     };
-    let pid = marks
-        .and_then(|marks| marks.split_whitespace().next())
-        .and_then(|pid| pid.parse().ok());
+    let (mut pid, mut host) = (None, None);
+    while let Some(word) = words.next() {
+        match word {
+            "pid" => pid = words.next().and_then(|pid| pid.parse().ok()),
+            "host" => host = words.next().and_then(one_word),
+            _ => {}
+        }
+    }
     Some(Identity {
-        session: session.trim().to_string(),
+        session: session.unwrap_or_default().to_string(),
         pid,
+        host,
+    })
+}
+
+/// Whether a claim this session's conversation holds names an earlier
+/// session id of it (`Identity::host`).
+pub(crate) fn carried_over(reason: &str, me: &Identity) -> bool {
+    holder(reason).is_some_and(|holder| me.is(&holder) && holder.session != me.session)
+}
+
+/// Whether a claim of this session's conversation lacks a name this
+/// session would write: its session id, or its host — a claim written
+/// before claims named one, which a later id of the conversation could
+/// not find.
+fn wants_renaming(reason: &str, me: &Identity) -> bool {
+    holder(reason).is_some_and(|holder| {
+        holder.session != me.session || (holder.host.is_none() && me.host.is_some())
     })
 }
 
@@ -163,7 +241,7 @@ pub(crate) fn standing(reason: Option<String>, me: &Identity, held: Held) -> Sta
     let Some(holder) = holder(&reason) else {
         return Standing::Foreign(reason);
     };
-    if !me.session.is_empty() && holder.session == me.session {
+    if me.is(&holder) {
         return Standing::Ours;
     }
     match (held, holder.pid) {
@@ -175,14 +253,21 @@ pub(crate) fn standing(reason: Option<String>, me: &Identity, held: Held) -> Sta
 }
 
 /// Takes `seat_path` for this session if it can: a free seat is locked, a
-/// stale rig claim lifted and replaced, anybody else's left. Only `Ours`
-/// means the session may work there.
+/// stale rig claim lifted and replaced, anybody else's left; a claim of
+/// this conversation's under an earlier session id is renamed for this
+/// one. Only `Ours` means the session may work there.
 pub(crate) fn take_seat(cwd: &str, seat_path: &str, me: &Identity, held: Held) -> Standing {
     if let Err(reason) = me.require_session() {
         return Standing::Foreign(reason);
     }
-    match standing(lock_reason(seat_path), me, held) {
-        Standing::Ours => Standing::Ours,
+    let reason = lock_reason(seat_path);
+    match standing(reason.clone(), me, held) {
+        Standing::Ours => {
+            if let Some(reason) = reason.filter(|reason| wants_renaming(reason, me)) {
+                rename(seat_path, &reason, me);
+            }
+            Standing::Ours
+        }
         Standing::Foreign(reason) => Standing::Foreign(reason),
         // Two runners can meet one dead claim at once; the claim's
         // creation refuses the second (`lock_or_read`).
@@ -216,6 +301,28 @@ fn lock_or_read(seat_path: &str, me: &Identity, held: Held) -> Standing {
     standing(lock_reason(seat_path), me, held)
 }
 
+/// Writes this session's claim over `judged`, which names an earlier
+/// session id of its conversation or no host, so the lock names the
+/// transcript the work goes on in. Swapped in whole: an unlock and a lock
+/// would leave a moment in which a stranger could take the seat, work and
+/// all, and a write in place a moment in which it reads empty — a
+/// person's lock. A lock that no longer says `judged` is left as it is;
+/// one left unwritten is still this conversation's, by its host.
+fn rename(seat_path: &str, judged: &str, me: &Identity) {
+    let Some(lock) = lock_file(seat_path) else {
+        return;
+    };
+    if !std::fs::read_to_string(&lock).is_ok_and(|reason| reason.trim() == judged) {
+        return;
+    }
+    let renamed = lock.with_extension(format!("renamed-{}", std::process::id()));
+    if std::fs::write(&renamed, format!("{}\n", me.reason())).is_err()
+        || std::fs::rename(&renamed, &lock).is_err()
+    {
+        let _ = std::fs::remove_file(&renamed);
+    }
+}
+
 /// Lifts whatever lock a seat carries. Callers check first whose it is.
 pub(crate) fn unlock_seat(cwd: &str, seat_path: &str) -> bool {
     crate::subprocess::git_query(cwd, &["worktree", "unlock", seat_path]).is_some()
@@ -243,6 +350,16 @@ mod tests {
         Identity {
             session: session.to_string(),
             pid,
+            host: None,
+        }
+    }
+
+    /// A session of the desktop app's session `host`.
+    fn in_app(session: &str, host: &str) -> Identity {
+        Identity {
+            session: session.to_string(),
+            pid: Some(42),
+            host: Some(host.to_string()),
         }
     }
 
@@ -370,6 +487,80 @@ mod tests {
             stood("claude-seat", &me("", None)),
             Standing::Foreign(_)
         ));
+    }
+
+    #[test]
+    fn a_claim_names_the_app_session_and_reads_it_back() {
+        let reason = in_app("s1", "local_a-1").reason();
+        assert_eq!(reason, "claude-seat s1 pid 42 host local_a-1");
+        let read = super::holder(&reason).expect("our mark");
+        assert_eq!(read.session, "s1");
+        assert_eq!(read.pid, Some(42));
+        assert_eq!(read.host.as_deref(), Some("local_a-1"));
+        let read = super::holder("claude-seat s1 host local_a").expect("our mark");
+        assert_eq!((read.pid, read.host.as_deref()), (None, Some("local_a")));
+        // No id of its own, and the host is still read.
+        let read = super::holder("claude-seat host local_a").expect("our mark");
+        assert_eq!(read.session, "");
+        assert_eq!(read.host.as_deref(), Some("local_a"));
+        assert_eq!(super::one_word(" local_a "), Some("local_a".into()));
+        assert_eq!(super::one_word("two words"), None);
+        assert_eq!(super::one_word(""), None);
+    }
+
+    #[test]
+    fn a_codex_task_belongs_to_no_app_session() {
+        let app = |host, codex, session| super::app_session(host, codex, session);
+        assert_eq!(app(Some("local_a"), None, "s1"), Some("local_a".into()));
+        assert_eq!(
+            app(Some("local_a"), Some("t1"), "s1"),
+            Some("local_a".into())
+        );
+        assert_eq!(
+            app(Some("local_a"), Some("t1"), "t1"),
+            None,
+            "a task named by its own id, in a shell a Claude session opened"
+        );
+        assert_eq!(app(Some("two words"), None, "s1"), None);
+        assert_eq!(app(None, None, "s1"), None);
+    }
+
+    /// The desktop app goes on with a conversation under a new session id
+    /// when a prompt is edited after an interrupt, in the same app session.
+    #[test]
+    fn a_claim_is_its_app_sessions_under_any_session_id() {
+        let claim = in_app("before", "local_a").reason();
+        let after = in_app("after", "local_a");
+        assert!(matches!(stood(&claim, &after), Standing::Ours));
+        assert!(super::carried_over(&claim, &after));
+        assert!(super::wants_renaming(&claim, &after));
+        assert!(!super::carried_over(&claim, &in_app("before", "local_a")));
+        assert!(!super::wants_renaming(&claim, &in_app("before", "local_a")));
+
+        // Another app session — a session started from this one included.
+        assert!(matches!(
+            stood(&claim, &in_app("after", "local_b")),
+            Standing::Foreign(_)
+        ));
+        // A session outside the app, and a claim that names no host, are
+        // matched on the session id alone.
+        assert!(matches!(
+            stood(&claim, &me("after", None)),
+            Standing::Foreign(_)
+        ));
+        assert!(matches!(
+            stood("claude-seat before pid 7", &after),
+            Standing::Foreign(_)
+        ));
+        // Written before claims named their host: its own session names it
+        // again, so a later id of the conversation finds it.
+        let unnamed = "claude-seat before pid 7";
+        assert!(matches!(
+            stood(unnamed, &in_app("before", "local_a")),
+            Standing::Ours
+        ));
+        assert!(super::wants_renaming(unnamed, &in_app("before", "local_a")));
+        assert!(!super::wants_renaming(unnamed, &me("before", None)));
     }
 
     /// The app restarts under a conversation, and the conversation comes

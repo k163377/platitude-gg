@@ -163,6 +163,10 @@ impl Sandbox {
             // would lend its own id to every branch made here.
             .env_remove("CLAUDE_CODE_SESSION_ID")
             .env_remove("CODEX_THREAD_ID")
+            // The desktop app's session settles a claim as surely as the
+            // session id (`seats::claim`): left in, it would make every
+            // session a test names one conversation.
+            .env_remove("CLAUDE_CODE_HOST_SESSION_ID")
             // Where a landing looks for a session's transcript: the
             // sandbox's own, never the user's.
             .env("CLAUDE_CONFIG_DIR", self.claude_config());
@@ -314,6 +318,12 @@ impl Sandbox {
     /// What a hook prints for `payload`, through the binary the harness
     /// runs. Empty is a hook's way of saying it has no objection.
     pub fn hook(&self, event: &str, payload: &str) -> String {
+        self.hook_with(event, payload, &[])
+    }
+
+    /// The same, with `extra` set in the hook's environment — as Claude
+    /// Code hands a hook its own (the desktop app's session, say).
+    pub fn hook_with(&self, event: &str, payload: &str, extra: &[(&str, &str)]) -> String {
         let file = self.root.join(format!(
             "{event}-{}.json",
             COUNTER.fetch_add(1, Ordering::SeqCst)
@@ -330,6 +340,7 @@ impl Sandbox {
         // The session id is the payload's, not that of a session running this suite.
         command.env_remove("CLAUDE_CODE_SESSION_ID");
         command.env_remove("CLAUDE_PID");
+        command.envs(extra.iter().copied());
         let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
         assert!(
             output.status.success(),

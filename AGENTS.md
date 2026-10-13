@@ -37,7 +37,8 @@ cargo xtask seat
 ```
 
 The identity is the current task ID alone. `CLAUDE_PID` and `CLAUDECODE` stay
-unset (a shell or desktop PID would name the wrong owner).
+unset (a shell or desktop PID would name the wrong owner); a
+`CLAUDE_CODE_HOST_SESSION_ID` the shell carries is not read for a task's seat.
 Report the seat's letter, branch, and absolute path immediately.
 Work only in the assigned tree. Apply the same identity bridge for <!--call:seat.release-->`seat release`.
 Follow `CLAUDE.md` for release, rebase, GUI launch, and land authorization.

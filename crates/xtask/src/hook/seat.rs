@@ -68,9 +68,11 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
 /// unclaimed seat the session is already standing in is claimed again: a
 /// claim can come off under a session that never left, and refusing it
 /// would send the session to a fresh letter, leaving its commits behind.
+/// A claim its conversation wrote under an earlier session id is renamed
+/// for this one on the way in (`seats::take_seat`).
 fn standing_here(cwd: &str, tree: &str, me: &Identity) -> Standing {
     let standing = standing(lock_reason(tree), me, Held::BySession);
-    match reclaims_on_entry(cwd, tree, &standing) {
+    match matches!(standing, Standing::Ours) || reclaims_on_entry(cwd, tree, &standing) {
         true => take_seat(tree, tree, me, Held::BySession),
         false => standing,
     }
@@ -553,6 +555,7 @@ mod tests {
         Identity {
             session: "mine".to_string(),
             pid: Some(std::process::id()),
+            host: None,
         }
     }
 

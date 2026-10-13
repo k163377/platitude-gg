@@ -83,6 +83,7 @@ fn record_owned(
     let me = Identity {
         session: session.clone(),
         pid: None,
+        host: None,
     };
     let seat = trees.iter().find(|tree| {
         roster_letter(&tree.path).is_some()

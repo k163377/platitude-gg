@@ -753,3 +753,143 @@ fn a_seat_this_session_entered_is_not_one_to_enter_again() {
     assert!(ok, "{other}");
     assert!(other.contains("enter it with EnterWorktree"), "{other}");
 }
+
+/// `cargo xtask seat` under `session`'s marks inside the desktop app's
+/// session `host` (`CLAUDE_CODE_HOST_SESSION_ID`).
+fn seat_in_app(sb: &Sandbox, session: &str, host: &str) -> (bool, String) {
+    let mut command = Command::new(EXE);
+    command.arg("seat").arg("--dir").arg(&sb.repo);
+    command.current_dir(&sb.repo);
+    sb.env(&mut command);
+    command.env("CLAUDE_CODE_SESSION_ID", session);
+    command.env("CLAUDE_PID", "4242");
+    command.env("CLAUDE_CODE_HOST_SESSION_ID", host);
+    let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
+    (
+        output.status.success(),
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ),
+    )
+}
+
+/// What a hook says to a tool call of `session` inside the app session
+/// `host`.
+fn hook_in_app(sb: &Sandbox, event: &str, session: &str, host: &str, input: &str) -> String {
+    let (phase, tool) = match event {
+        "pre-worktree" => ("PreToolUse", "EnterWorktree"),
+        "post-write" => ("PostToolUse", "Write"),
+        _ => ("PreToolUse", "Write"),
+    };
+    sb.hook_with(
+        event,
+        &format!(
+            "{{\"session_id\":\"{session}\",\"cwd\":\"{}\",\"hook_event_name\":\"{phase}\",\
+             \"tool_name\":\"{tool}\",\"tool_input\":{input}}}",
+            slashed(&sb.repo)
+        ),
+        &[("CLAUDE_CODE_HOST_SESSION_ID", host)],
+    )
+}
+
+/// The desktop app goes on with a conversation under a new session id when
+/// a prompt is edited after an interrupt, in the same app session, and
+/// the conversation's seat is still its own — work and all, at `cargo
+/// xtask seat` and at every door. The claim is renamed for the new id,
+/// whose transcript the work goes on in.
+#[test]
+fn a_conversation_the_app_goes_on_with_under_a_new_id_keeps_its_seat() {
+    let sb = Sandbox::new("seat-same-app-session");
+    let tree = letter_carrying_work(&sb, "b");
+    let carried = sb.head(&tree);
+    lock(
+        &sb,
+        &tree,
+        &format!("claude-seat old pid {GONE_PID} host local_app"),
+    );
+
+    let (ok, text) = seat_in_app(&sb, "new", "local_app");
+    assert!(ok, "{text}");
+    assert_eq!(letter_of(&text), "b", "{text}");
+    assert!(
+        text.contains("claimed as session old")
+            && text.contains("it carries 1 commit(s) main does not have"),
+        "{text}"
+    );
+    assert_eq!(lock_on(&sb, "b"), "claude-seat new pid 4242 host local_app");
+    assert_eq!(sb.head(&tree), carried, "nothing was moved: {text}");
+
+    let entered_tree = letter_carrying_work(&sb, "c");
+    lock(&sb, &entered_tree, "claude-seat entering-old host local_e");
+    let path = format!("{{\"path\":\"{}\"}}", slashed(&entered_tree));
+    assert_eq!(
+        hook_in_app(&sb, "pre-worktree", "entering-new", "local_e", &path),
+        "",
+        "entering it"
+    );
+    assert_eq!(lock_on(&sb, "c"), "claude-seat entering-new host local_e");
+
+    let written = letter_carrying_work(&sb, "d");
+    lock(&sb, &written, "claude-seat writing-old host local_w");
+    let file = format!(
+        "{{\"file_path\":\"{}\"}}",
+        slashed(&written.join("notes.md"))
+    );
+    assert_eq!(
+        hook_in_app(&sb, "pre-write", "writing-new", "local_w", &file),
+        "",
+        "and writing in it"
+    );
+    assert_eq!(
+        hook_in_app(&sb, "post-write", "writing-new", "local_w", &file),
+        "",
+        "its own seat, renamed without a word"
+    );
+    assert_eq!(lock_on(&sb, "d"), "claude-seat writing-new host local_w");
+}
+
+/// A session the app started from another — a chip, a fork run beside it
+/// — is an app session of its own, and so is a session outside the app:
+/// none of them takes the conversation's seat.
+#[test]
+fn another_app_session_takes_none_of_a_conversations_seats() {
+    let sb = Sandbox::new("seat-other-app-session");
+    let tree = letter_carrying_work(&sb, "b");
+    let theirs = "claude-seat origin pid 7 host local_origin";
+    lock(&sb, &tree, theirs);
+
+    let path = format!("{{\"path\":\"{}\"}}", slashed(&tree));
+    let refusal = hook_in_app(&sb, "pre-worktree", "child", "local_child", &path);
+    assert!(
+        refusal.contains("\"deny\"") && refusal.contains("held by session origin"),
+        "{refusal}"
+    );
+    let file = format!("{{\"file_path\":\"{}\"}}", slashed(&tree.join("notes.md")));
+    let refusal = hook_in_app(&sb, "pre-write", "child", "local_child", &file);
+    assert!(refusal.contains("\"deny\""), "{refusal}");
+    let (ok, text) = seat_in_app(&sb, "child", "local_child");
+    assert!(ok, "{text}");
+    assert_ne!(letter_of(&text), "b", "{text}");
+    let (ok, text) = seat(&sb, &[], "outside-the-app");
+    assert!(ok, "{text}");
+    assert_ne!(letter_of(&text), "b", "{text}");
+    assert_eq!(lock_on(&sb, "b"), theirs);
+}
+
+/// A claim written before claims named their app session is named at its
+/// own session's next touch, so the id the app goes on under finds it.
+#[test]
+fn a_claim_with_no_app_session_is_named_by_its_session() {
+    let sb = Sandbox::new("seat-named-host");
+    let tree = letter_carrying_work(&sb, "b");
+    lock(&sb, &tree, "claude-seat s1 pid 7");
+
+    let (ok, text) = seat_in_app(&sb, "s1", "local_s");
+    assert!(ok, "{text}");
+    assert!(text.contains("seat b was already this session's"), "{text}");
+    assert_eq!(lock_on(&sb, "b"), "claude-seat s1 pid 4242 host local_s");
+    let (ok, text) = seat_in_app(&sb, "s1-after-an-edit", "local_s");
+    assert!(ok && letter_of(&text) == "b", "{text}");
+}

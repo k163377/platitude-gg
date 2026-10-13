@@ -493,7 +493,11 @@ fn is_ours(block: &WorktreeBlock, me: &Identity) -> bool {
 }
 
 /// The seat this session already holds: of several (a takeover on top of
-/// its own), the one it stands in, else the first.
+/// its own), the one it stands in, else the first. A claim its app
+/// session wrote under an earlier session id is this session's too
+/// (`claim::Identity::host`), renamed for it here and said so, with what
+/// the tree carries: the session that remembers no claim learns where its
+/// work is — or, after a `/clear`, that the tree is not empty.
 fn held_seat(entries: &[SeatEntry], me: &Identity, here: Option<&str>) -> Option<Assigned> {
     let mine: Vec<&SeatEntry> = entries
         .iter()
@@ -503,10 +507,25 @@ fn held_seat(entries: &[SeatEntry], me: &Identity, here: Option<&str>) -> Option
         .iter()
         .find(|entry| here.is_some_and(|here| same_tree(&entry.tree.path, here)))
         .or_else(|| mine.first())?;
+    let path = &entry.tree.path;
+    if has_a_directory(path) {
+        // Renamed for this session where the claim names an earlier id, or
+        // no host (`claim::take_seat`).
+        take_seat(path, path, me, Held::BySession);
+    }
+    let note = match claim::carried_over(&entry.tree.reason, me) {
+        true => format!(
+            ", claimed as {} — an earlier session id of this app session (a prompt edited \
+             after an interrupt, or a /clear); {}",
+            whose(&entry.tree.reason).replacen("held by ", "", 1),
+            carrying(path)
+        ),
+        false => String::new(),
+    };
     Some(Assigned {
         seat: entry.seat,
-        path: entry.tree.path.clone(),
-        note: String::new(),
+        path: path.clone(),
+        note,
         held: true,
     })
 }
@@ -997,6 +1016,7 @@ mod tests {
         let me = Identity {
             session: "mine".to_string(),
             pid: None,
+            host: None,
         };
         assert!(picture_verdict("a", &me, Standing::Ours).is_ok());
         let after_landing =
@@ -1013,6 +1033,7 @@ mod tests {
         let nobody = Identity {
             session: String::new(),
             pid: None,
+            host: None,
         };
         assert!(picture_verdict("a", &nobody, Standing::Free).is_ok());
     }
