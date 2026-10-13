@@ -708,8 +708,9 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
   seat [release [<letter>]|takeover <letter>]
       Hands this session a worktree seat, and takes no argument: the
       letter is the answer (CLAUDE.md ビルド・テスト).
-      Letters are tried until `git worktree lock` takes one, so the seat
-      comes back already claimed — the lock is the only step that ever
+      Letters are tried until a lock is created on one (git's own lock
+      file, made only where none stands), so the seat comes back already
+      claimed — the lock is the only step that ever
       decided which of two sessions got a seat, and a session that picks
       a letter off a survey first is deciding from something the other
       session can read the same way. A letter taken from the roster comes

@@ -11,6 +11,8 @@
 //! or the user has it taken over (`seats::takeover`). The rig's claim is
 //! the one that is a process's (`Held::ByRunner`).
 
+use std::io::Write;
+
 /// The mark a seat claim carries in `git worktree lock`'s reason:
 /// `claude-seat <session> pid <pid>`. For a seat the pid only names the tab
 /// that wrote it (`standing`); anything after it is ignored (older builds
@@ -182,39 +184,33 @@ pub(crate) fn take_seat(cwd: &str, seat_path: &str, me: &Identity, held: Held) -
     match standing(lock_reason(seat_path), me, held) {
         Standing::Ours => Standing::Ours,
         Standing::Foreign(reason) => Standing::Foreign(reason),
-        // Two runners can meet one dead claim at once; git's lock refuses
-        // the second.
+        // Two runners can meet one dead claim at once; the claim's
+        // creation refuses the second (`lock_or_read`).
         Standing::Stale(_) => {
             unlock_seat(cwd, seat_path);
-            lock_or_read(cwd, seat_path, me, held)
+            lock_or_read(seat_path, me, held)
         }
-        Standing::Free => lock_or_read(cwd, seat_path, me, held),
+        Standing::Free => lock_or_read(seat_path, me, held),
     }
 }
 
-/// One atomic claim, and what the seat looked like afterwards.
-/// `git worktree lock` refuses a second lock, so the loser of a race is
-/// told here.
-fn lock_or_read(cwd: &str, seat_path: &str, me: &Identity, held: Held) -> Standing {
-    let mut command = std::process::Command::new("git");
-    command
-        .arg("-C")
-        .arg(cwd)
-        // The refusal below is read out of git's message, and a
-        // translated one would read as no refusal at all.
-        .env("LC_ALL", "C")
-        .args(["worktree", "lock", "--reason", &me.reason(), seat_path]);
-    if let Ok(output) = crate::subprocess::run_captured(&mut command)
-        && !output.status.success()
-        && let Some(rest) = String::from_utf8_lossy(&output.stderr)
-            .split("already locked")
-            .nth(1)
+/// One claim, and what the seat looked like afterwards. The lock is git's
+/// own file with git's own content (`git worktree lock --reason`), but
+/// created only where none stands: git reads whether a lock stands and
+/// then writes one, so two sessions asking at once can both pass the read
+/// and both read their own claim back. Of two creations, one fails.
+fn lock_or_read(seat_path: &str, me: &Identity, held: Held) -> Standing {
+    if let Some(lock) = lock_file(seat_path)
+        && let Ok(mut file) = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock)
+        && file
+            .write_all(format!("{}\n", me.reason()).as_bytes())
+            .is_err()
     {
-        let reason = rest
-            .split_once("reason:")
-            .map(|(_, reason)| reason.trim().to_string())
-            .unwrap_or_default();
-        return standing(Some(reason), me, held);
+        // An empty lock would read as a person's, which nothing lifts.
+        let _ = std::fs::remove_file(&lock);
     }
     // Not a claim until the seat, read back, names this session.
     standing(lock_reason(seat_path), me, held)
@@ -227,10 +223,16 @@ pub(crate) fn unlock_seat(cwd: &str, seat_path: &str) -> bool {
 
 /// The reason on this worktree's own lock, if it is locked at all.
 pub(crate) fn lock_reason(cwd: &str) -> Option<String> {
+    let reason = std::fs::read_to_string(lock_file(cwd)?).ok()?;
+    Some(reason.trim().to_string())
+}
+
+/// Where git keeps this worktree's lock: `locked` in its admin directory,
+/// there or not.
+fn lock_file(cwd: &str) -> Option<std::path::PathBuf> {
     let git_dir =
         crate::subprocess::git_query(cwd, &["rev-parse", "--path-format=absolute", "--git-dir"])?;
-    let reason = std::fs::read_to_string(format!("{git_dir}/locked")).ok()?;
-    Some(reason.trim().to_string())
+    Some(std::path::Path::new(&git_dir).join("locked"))
 }
 
 #[cfg(test)]
