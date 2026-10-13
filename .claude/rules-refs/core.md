@@ -6,6 +6,7 @@
 ## git サブプロセス規約(各論)
 
 - **コマンドログは executor の observer 1 本**(`process::CommandObserver` + `process::Kept` の 3 ハンドル)— 分類は `session::write::run_write` の 1 箇所: 利用者用 `Asked` / 背景の読み `Unasked` / 頼まれていない fetch `UnaskedUnlessItFails`(行になるのは git が断った時だけ)
+- **設定ファイルを開けなかった読みは executor が 1 回だけ撃ち直す**(`process::config_unread`。同じ枠・同じログの行、行は最後の答え)— 読みかどうかはサブコマンドとその形で決め、書き込みは撃ち直さない。**読みのサブコマンドを新しく撃つなら `reads_only` に足す**(足し忘れは撃ち直しが効かないだけ)。撃ち直しでも読めない設定は開きで `GitError::ConfigUnreadable`(gitの扱い.md §設定の書き換えと重なった読み)
 - **`&str` をバイト長で切らない** — キーの前方一致は `as_bytes().get(..KEY.len())` + `eq_ignore_ascii_case`。`l[..KEY.len()]` は多バイト文字を跨いだ瞬間に落ち、walk のワーカで落ちるとグラフはリングのまま無言で止まる(「サイドバーは出るのにグラフだけ空」はまず stderr のパニック)
 - **Windows の git は `CREATE_NO_WINDOW` のまま — `DETACHED_PROCESS`(console 無し)に替えない**。git 自身は console が無ければ子も console 無しで起こすが、その子が MSYS のシェル(`git mergetool` のスクリプト・フック・sh 経由の textconv / fsmonitor)だと自分で console を作り、既定のターミナルが Windows Terminal の機械では見える WT の窓が立って残る。代金は git 1 本ごとの `conhost.exe` で、払わずに済ませる形は internal-docs/ハング調査.md の要判断
 

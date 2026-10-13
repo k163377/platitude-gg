@@ -242,8 +242,31 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 | 古い git | `--version` | ある | 帯の `OLD GIT`、操作は通す |
 | リポジトリでない・bare | `not a git repository` / `--is-bare-repository` | 日常 | 開けなかった画面・ダイアログ |
 | `safe.directory`(別の所有者のフォルダ) | `fatal: detected dubious ownership in repository` 128 | **ある(Windows のネットワークドライブ・別アカウントの clone・WSL の mount)** | 開けなかった画面の見出し `git does not trust this folder's owner` + git の文(末尾が許す手順。`GitError::UntrustedOwner`。ユーザー決定 2026-10-12) |
+| 設定の書き換えと重なった読み(Windows) | `fatal: unknown error occurred while reading the configuration files` 128 / `fatal: unable to access '<file>'` 128 / `git config --get*` は `warning: unable to access '<file>'` だけで残りの設定から答える | ある(アプリ自身の設定の書き込みや外の `git config` と、開き・読み直しが重なった時) | **読みだけ 1 回撃ち直す**(`process::config_unread`。書き込みは撃ち直さない。ユーザー決定 2026-10-13)—— §設定の書き換えと重なった読み |
+| 設定がずっと読めない(権限・別のプログラムが掴む) | 同じ文が撃ち直しでも | 稀 | 開けなかった画面の見出し `git could not read its configuration` + 直してから開き直す 1 文 + git の文(ファイルを名指す。`GitError::ConfigUnreadable`。ユーザー決定 2026-10-13) |
 | 読みの失敗(log・status・diff) | 非ゼロ | 稀 | 帯 `STALE GRAPH` / ログの背景読み |
 | 押した fetch の失敗(連なり) | 非ゼロ | オフライン(日常) | 最初の失敗だけログが開き、復帰で閉じる。タイマー・開いた時の fetch はボタンの `!` だけ(§出し先) |
+
+### 設定の書き換えと重なった読み
+
+git は設定ファイルを `<file>.lock` に書いて rename で置き換える。**Windows ではその間に起動した git が
+ファイルを開けない**(削除待ちのファイル = `Permission denied`)。リポジトリのコマンドは上の 2 つの fatal で
+落ち、`git config --get*` は読めなかったファイルを飛ばして答える(builtin/config.c `get_value` は読みの結果を
+見ない)—— そこにだけ在るキーは「未設定」に読まれる。次に起動した git は普通に読める。mac / Linux の rename は
+読み手に対して一瞬で済み、この形は起きない。
+
+- **撃ち直すのは読みだけ・1 回だけ**(`process::config_unread`)。読みかどうかはサブコマンドとその形で決める
+  (`rev-parse` / `log` / `status` 等と、`config --get*` / `stash list` / `worktree list` / 値も `-d` も無い `symbolic-ref` 等)。
+  書き込みは書いた後で落ちうるので撃ち直さない。警告だけの形は `git config` の読みに限る —— 他のファイルが
+  ずっと読めないリポジトリで、毎回の `status` を 2 本にしない。流し読みは 1 バイトも渡していない時だけ。同じ実行枠・同じログの行のまま撃ち直し、行は最後の答えを言う
+- **文言の根拠**: 3 つの文は git 本家 2.43.0〜2.56.0 と Git for Windows 2.43.0.windows.1〜2.56.0.windows.2 の
+  全リリースで同じ(config.c `repo_read_config` の die、wrapper.c の `warn_on_fopen_errors` と `access_or_die`、
+  die は 128)。落ちる行は 2.20 から同じ。executor は `LC_ALL=C` で起こすので翻訳されない。将来の版で文が
+  変われば、その版では撃ち直さずに 1 回目の答えのまま失敗する(実 git を回す統合テスト `config_unread` が
+  文を釘付けしているので、変わった版では赤になる)
+- **効き目**(git 2.55、グローバル設定を書き換え続ける横で読む): 開きの `rev-parse` と `config --get-regexp` を
+  計 1,200 回 —— 撃ち直し無しで `rev-parse` が 13 回落ち、撃ち直し有りで 0 回(撃ち直し 18 回)
+- **2 回目も落ちれば、それはずっと読めない形**: 開きでは専用の画面(上の表)、それ以外の読みは今までどおり
 
 ## 分類しない物(ログに落とす)と理由
 
