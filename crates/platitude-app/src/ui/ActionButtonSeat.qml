@@ -18,6 +18,9 @@ Item {
     property bool busy: false
     /// The button's own `markFg`.
     property color tint: Theme.textPrimary
+    /// The hold mark's own colour (`ActionButton.holdInk`): the seat's, but off the live words', a step down.
+    property color holdTint: seat.tint
+    property bool holdOff: false
     /// The failure mark for a button with no word left (`ActionButton.folded`), at the icon's upper corner with the
     /// raise and half gap it keeps from a word (デザイン規約 §ウィンドウの縁).
     property bool cornerAlert: false
@@ -102,7 +105,8 @@ Item {
         anchors.verticalCenterOffset: Metrics.opticalDrop
         progress: seat.holdProgress
         presses: seat.holdPresses
-        tint: seat.tint
+        tint: seat.holdTint
+        off: seat.holdOff
         visible: seat.holdPresses > 0 && !seat.paired && !seat.busy
     }
     // A held button with an icon wears both as a fraction across a slash: the hold mark alone would cost `push -f` the
@@ -152,7 +156,8 @@ Item {
         HoldIcon {
             progress: seat.holdProgress
             presses: seat.holdPresses
-            tint: seat.tint
+            tint: seat.holdTint
+            off: seat.holdOff
             width: Theme.iconSm
             height: Theme.iconSm
             x: seat.pairAlong

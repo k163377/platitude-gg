@@ -73,6 +73,10 @@ Item {
                                      : !opRow.enabled ? Theme.textMuted
                                      : opRow.armedPresses > 0 ? opRow.holdTone
                                      : Theme.textPrimary
+    /// The row cannot be pressed: grey words, and the press mark keeps its tone a step down, as a menu row's does
+    /// (`AppMenuItem.holdOff`, which says why a fill keeps it out).
+    readonly property bool holdOff: !opRow.enabled && !opRow.holding
+    readonly property color holdInk: opRow.holdOff ? opRow.holdTone : opRow.wordColor
 
     Rectangle {
         anchors.fill: parent
@@ -94,7 +98,8 @@ Item {
         y: (Theme.rowHeight - holdMark.height) / 2 + Metrics.opticalDrop
         progress: opRow.holdProgress
         presses: opRow.armedPresses
-        tint: opRow.wordColor
+        tint: opRow.holdInk
+        off: opRow.holdOff
         visible: opRow.armedPresses > 0 && !holdDrive.loading
     }
     // The ring the row's work turns in the mark's seat once the floor has passed (デザイン規約 §回数押し).

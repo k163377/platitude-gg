@@ -78,6 +78,9 @@ Item {
     /// far from a centred phrase.
     property int phraseHoldPresses: 0
     property real phraseHoldProgress: 0
+    /// The words', but off the colour they wear when the button can be pressed, a step down (`ActionButton.holdOff`).
+    property color phraseHoldTint: btnLabel.tint
+    property bool phraseHoldOff: false
     /// The face the action is attributed to, at the phrase's end (`… by <face>`); -1 draws none
     /// (デザイン規約 §アバターを与える).
     property int phraseFace: -1
@@ -199,7 +202,8 @@ Item {
             visible: btnLabel.phraseHoldPresses > 0
             progress: btnLabel.phraseHoldProgress
             presses: btnLabel.phraseHoldPresses
-            tint: btnLabel.tint
+            tint: btnLabel.phraseHoldTint
+            off: btnLabel.phraseHoldOff
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: Metrics.opticalDrop
         }

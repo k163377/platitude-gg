@@ -12,11 +12,21 @@ InkCanvas {
     property real progress: 0
     /// How many presses confirm — the number of sectors (`HoldDriver.armedPresses`).
     property int presses: Metrics.holdPressesWarned
-    /// The colour of the words beside it, including the lift to `textOnAccent` over the fill.
+    /// The colour of the words beside it, including the lift to `textOnAccent` over the fill — or, where those words
+    /// grey because the control cannot be pressed ([`off`]), the colour they wear when it can (`AppMenuItem.holdInk`).
     property color tint: Theme.textPrimary
-    /// What the mark is drawn in: the words' colour, but a white delete's words keep the plain ink alone — the mark
-    /// carries the warning, as the fill does (デザイン規約 §回数押しの色).
-    readonly property color ink: Qt.colorEqual(holdIcon.tint, Theme.textPrimary) ? Theme.warning : holdIcon.tint
+    /// The control cannot be pressed: the mark keeps its hue a step down (デザイン規約 §暗く落とした段), under grey words.
+    property bool off: false
+    /// The words' colour, but a white delete's words keep the plain ink alone — the mark carries the warning, as the
+    /// fill does (デザイン規約 §回数押しの色).
+    readonly property color hue: Qt.colorEqual(holdIcon.tint, Theme.textPrimary) ? Theme.warning : holdIcon.tint
+    /// What the mark is drawn in: its hue, or while off that hue's dimmed step — and a grey mark, which has no step of
+    /// its own, greys with the words (§無効).
+    readonly property color ink: !holdIcon.off ? holdIcon.hue
+                               : Qt.colorEqual(holdIcon.hue, Theme.warning) ? Theme.warningDim
+                               : Qt.colorEqual(holdIcon.hue, Theme.danger) ? Theme.dangerDim
+                               : Qt.colorEqual(holdIcon.hue, Theme.accent) ? Theme.accentDim
+                               : Theme.textMuted
 
     width: Theme.iconSm
     height: Theme.iconSm

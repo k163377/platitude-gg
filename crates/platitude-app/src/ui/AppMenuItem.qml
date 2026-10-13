@@ -243,6 +243,12 @@ MenuItem {
     readonly property color wordColor: !menuItem.enabled || menuItem.blocked ? Theme.textMuted
                                      : menuItem.holding ? Theme.textOnAccent
                                      : menuItem.armedPresses > 0 ? menuItem.holdTone : Theme.textPrimary
+    /// The row cannot be pressed: the grey words say it is off, and the press mark keeps the tone it wears when the row
+    /// can be pressed, a step down — what pressing it would cost (デザイン規約 §回数押しの色). Not over a fill: there the
+    /// mark lifts with the words, and a step down would sink into the fill's own dimmed step.
+    readonly property bool holdOff: (!menuItem.enabled || menuItem.blocked) && !menuItem.holding
+    /// The press mark's colour: the words', or while [`holdOff`] the row's tone (`HoldIcon.off` steps it down).
+    readonly property color holdInk: menuItem.holdOff ? menuItem.holdTone : menuItem.wordColor
     /// The colour the name inside those words takes: its own only while the row has no colour of its own
     /// (デザイン規約 §メニュー「文の中に入った名前も、色は名前のもの」).
     readonly property color refColor: !menuItem.enabled || menuItem.blocked || menuItem.armedPresses > 0
@@ -283,7 +289,8 @@ MenuItem {
         anchors.verticalCenterOffset: Metrics.opticalDrop
         progress: menuItem.holdProgress
         presses: menuItem.armedPresses
-        tint: menuItem.wordColor
+        tint: menuItem.holdInk
+        off: menuItem.holdOff
         visible: menuItem.armedPresses > 0
     }
     // The `!` of a row that asks, sharing the hold mark's seat — a row is one or the other (`asks`). Ahead of the word,

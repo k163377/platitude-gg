@@ -164,6 +164,12 @@ HoverToolButton {
     /// wait says which button waits.
     readonly property color markFg: holdProgress > 0 ? Theme.textOnAccent
                                     : actionBtn.busy ? actionBtn.toneDim : actionBtn.fg
+    /// Off (not busy — a wait has its own step down), the hold mark keeps the colour the words wear when the button can
+    /// be pressed, a step down, while the words and an icon beside them grey: the grey says it cannot be pressed, the
+    /// mark what pressing it would cost (`AppMenuItem.holdOff`). An asleep button's grey stays grey (`HoldIcon.ink`).
+    readonly property bool holdOff: !actionBtn.enabled && !actionBtn.busy && actionBtn.holdProgress <= 0
+    /// The hold mark's colour in a seat: the marks', or while [`holdOff`] the live words' (`HoldIcon.off` dims it).
+    readonly property color holdInk: actionBtn.holdOff ? actionBtn.tone : actionBtn.markFg
     /// A press lands only with git off the network for this button.
     readonly property bool live: actionBtn.enabled && !actionBtn.busy
 
@@ -371,6 +377,8 @@ HoverToolButton {
                 holdProgress: actionBtn.holdProgress
                 busy: actionBtn.ringing
                 tint: actionBtn.markFg
+                holdTint: actionBtn.holdInk
+                holdOff: actionBtn.holdOff
                 // Folded, the `!` comes to the mark's corner: the warning survives the fold
                 // (規約 §回数押し「警告の色は枠と印が持つ」).
                 cornerAlert: actionBtn.folded && actionBtn.alert
@@ -401,6 +409,8 @@ HoverToolButton {
                 phraseHead: actionBtn.phraseHead
                 phraseHoldPresses: actionBtn.armedPresses
                 phraseHoldProgress: actionBtn.holdProgress
+                phraseHoldTint: actionBtn.holdOff ? actionBtn.tone : actionBtn.fg
+                phraseHoldOff: actionBtn.holdOff
                 phraseCount: actionBtn.phraseCount
                 phraseTail: actionBtn.phraseTail
                 phraseTailTint: actionBtn.phraseTailTint
@@ -477,6 +487,8 @@ HoverToolButton {
                 holdProgress: actionBtn.holdProgress
                 busy: actionBtn.ringing
                 tint: actionBtn.markFg
+                holdTint: actionBtn.holdInk
+                holdOff: actionBtn.holdOff
                 cornerAlert: actionBtn.folded && actionBtn.alert
                 cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
             }

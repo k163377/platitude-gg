@@ -88,6 +88,9 @@ Rectangle {
     }
     /// Whether the pill can be pressed yet — false while a form has no answer to give.
     property bool answerable: true
+    /// The pill cannot be pressed: its word greys, and the press mark keeps the bar's tone a step down
+    /// (`AppMenuItem.holdOff`).
+    readonly property bool holdOff: !bar.answerable && bar.holdProgress <= 0
     /// Automation: every press at once without a hand behind them.
     function completeHold() {
         holdDrive.runOut()
@@ -325,7 +328,8 @@ Rectangle {
                     visible: bar.armedPresses > 0
                     progress: bar.holdProgress
                     presses: bar.armedPresses
-                    tint: acceptPill.wordInk
+                    off: bar.holdOff
+                    tint: bar.holdOff ? bar.tone : acceptPill.wordInk
                 }
                 // The chip or the word (`code` decides). Only the word takes room in the row: the `!` hangs off the end
                 // of its advance into the pill's padding, as the toolbar sets the same pair (デザイン規約 §git 用語のコード表記).
