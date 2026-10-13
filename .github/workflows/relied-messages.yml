@@ -1,0 +1,56 @@
+# git's words the product reads (crates/platitude-core/src/relied_messages.rs),
+# held to what git, Git for Windows, Apple Git, the container's Ubuntu and
+# OpenSSH publish since the ledger was written (crates/xtask/relied-messages.txt).
+# Red only where a line a form of the table names changed, or a witness fails
+# under git's master — a release or a commit that touches none of them is green.
+# Its own workflow, so a red here says "git moved", never "this tree broke".
+name: Relied messages (weekly)
+
+on:
+  # The hour the Whole test runs (whole.yml), which says how GitHub keeps
+  # a schedule.
+  schedule:
+    - cron: "0 19 * * 5"
+      timezone: Asia/Tokyo
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # The heads and any release the ledger has not read, against the ledger;
+  # a change names the releases that carry it.
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - &checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - &toolchain
+        name: Rust toolchain
+        run: rustup toolchain install --no-self-update
+      - name: Against the ledger
+        run: cargo run --locked -p xtask -- relied-messages watch
+
+  # master's git, built here, under the witnesses the table names: a change
+  # of the path to the words, which no line of the sources shows.
+  master:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - *checkout
+      - *toolchain
+      # What git's build takes beyond the image's compiler and make — the
+      # container's git-build stage installs the same (ci/linux/Dockerfile).
+      - name: zlib's headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zlib1g-dev
+      - name: The witnesses under git's master
+        run: cargo run --locked -p xtask -- relied-messages master
