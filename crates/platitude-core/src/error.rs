@@ -89,6 +89,15 @@ pub enum GitError {
     #[error("git does not trust the owner of {}: {stderr}", path.display())]
     UntrustedOwner { path: PathBuf, stderr: String },
 
+    /// A repository git could not open a configuration file of — its own,
+    /// or the account's — after the read was asked once more
+    /// (`process::config_unread`): not the moment another git was replacing it, but
+    /// a file that stays unreadable (its permissions, a program holding it
+    /// open). `stderr` is git's whole answer, which names the file; the
+    /// screen puts a heading of its own over it.
+    #[error("git could not read the configuration of {}: {stderr}", path.display())]
+    ConfigUnreadable { path: PathBuf, stderr: String },
+
     /// The command succeeded but printed something we cannot interpret.
     #[error("unexpected output from {command}: {message}")]
     UnexpectedOutput { command: String, message: String },

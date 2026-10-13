@@ -3,6 +3,7 @@
 
 mod child;
 mod command;
+pub(crate) mod config_unread;
 mod executor;
 mod family;
 mod live;

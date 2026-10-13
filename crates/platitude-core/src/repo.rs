@@ -68,6 +68,15 @@ pub async fn open(
                 stderr,
             });
         }
+        // git died over a configuration file it could not open, on the run
+        // the executor asked once more too: a kind of its own, since git's
+        // words name the file to put right before the folder can open.
+        if crate::process::config_unread::died_over_a_file(&stderr) {
+            return Err(GitError::ConfigUnreadable {
+                path: path.to_path_buf(),
+                stderr,
+            });
+        }
         // Both "not a git repository" and a bare repository land here; the
         // screen tells them apart, so a second question is asked only here.
         // Anything else git turned the folder down for — one it cannot

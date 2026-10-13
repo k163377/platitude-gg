@@ -10,6 +10,7 @@ mod carried_apply;
 mod clone_integration;
 mod commit_integration;
 mod config_reads;
+mod config_unread;
 mod details_diff;
 mod discards_integration;
 mod edge_strings;

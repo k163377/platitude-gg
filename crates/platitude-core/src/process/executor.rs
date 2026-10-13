@@ -376,7 +376,9 @@ impl GitExecutor {
         on_stdout: &mut (dyn FnMut(&[u8]) + Send),
     ) -> Result<GitOutput, GitError> {
         let described = cmd.describe();
-        let out = self.execute(&cmd, cancel, on_stdout, None).await?;
+        let out = self
+            .execute(&cmd, cancel, &mut Out::Streamed(on_stdout), None)
+            .await?;
         if out.code != 0 {
             return Err(GitError::Failed {
                 command: described,
@@ -395,12 +397,7 @@ impl GitExecutor {
     ) -> Result<GitOutput, GitError> {
         let mut stdout = Vec::new();
         let mut out = self
-            .execute(
-                cmd,
-                cancel,
-                &mut |chunk| stdout.extend_from_slice(chunk),
-                lead,
-            )
+            .execute(cmd, cancel, &mut Out::Kept(&mut stdout), lead)
             .await?;
         out.stdout = stdout;
         Ok(out)
@@ -498,11 +495,15 @@ impl GitExecutor {
     ///
     /// `lead` is told of the spawn as it happens — the instant an identical
     /// ask stops being able to share this run.
+    ///
+    /// A read git ran without a configuration file it could not open runs
+    /// once more, in the same slot and under the same row
+    /// ([`super::config_unread`]): the row says what the last run said.
     async fn execute(
         &self,
         cmd: &GitCommand,
         cancel: &CancellationToken,
-        on_stdout: &mut (dyn FnMut(&[u8]) + Send),
+        out: &mut Out<'_>,
         mut lead: Option<&mut Lead>,
     ) -> Result<GitOutput, GitError> {
         let described = cmd.describe();
@@ -543,26 +544,98 @@ impl GitExecutor {
             report(CommandEnd::Cancelled, asked.elapsed(), Duration::ZERO, "");
             return Err(GitError::Cancelled { command: described });
         };
-        let waited = asked.elapsed();
+        let budget = match cmd.timeout {
+            TimeBudget::Stock => self.stock_timeout,
+            TimeBudget::At(timeout) => Some(timeout),
+            TimeBudget::Never => None,
+        };
+        let row = Row {
+            described: &described,
+            waited: asked.elapsed(),
+            budget,
+            report: &report,
+        };
+        // When the first spawn started: the row's time is the whole ask's.
+        let mut first: Option<Instant> = None;
+        // The spawn asked once more over, held until the next is counted.
+        let mut prior: Option<Attempt> = None;
+        loop {
+            let attempt = self
+                .attempt(cmd, &row, cancel, out, lead.take(), prior.take())
+                .await?;
+            let again = first.is_none()
+                && matches!(&attempt.outcome, ChildOutcome::Finished { code, stderr }
+                if super::config_unread::again(
+                    &cmd.args,
+                    *code,
+                    &String::from_utf8_lossy(stderr),
+                    attempt.restartable,
+                    out.is_kept(),
+                ));
+            let started = *first.get_or_insert(attempt.started);
+            if again {
+                tracing::info!(
+                    command = %described,
+                    "git could not open a configuration file; asking once more"
+                );
+                out.restart();
+                prior = Some(attempt);
+                continue;
+            }
+            let clocks = Clocks {
+                waited: row.waited,
+                started,
+                spawned: attempt.spawned,
+            };
+            return Self::ended(
+                cmd,
+                described.clone(),
+                attempt.outcome,
+                attempt.left,
+                budget,
+                clocks,
+                &report,
+            );
+        }
+    }
+
+    /// One spawn of `cmd` and its reap, the slot already held
+    /// ([`Self::execute`]). Every way it ends before git does is reported
+    /// here; git's own end is the caller's to report. `prior`, the spawn
+    /// this one asks again over, is let go once this one is counted and any
+    /// end it reports has been reported, so the count never reads none with
+    /// the row's end still owed.
+    async fn attempt(
+        &self,
+        cmd: &GitCommand,
+        row: &Row<'_>,
+        cancel: &CancellationToken,
+        out: &mut Out<'_>,
+        lead: Option<&mut Lead>,
+        prior: Option<Attempt>,
+    ) -> Result<Attempt, GitError> {
         // Counted before the spawn, the token read after: an owner that
         // cancels and then finds none running (`Live::idle`) cannot pass a
         // git that is still being spawned, and none is spawned after.
         let running = self.live.as_ref().map(Live::enter);
         if cancel.is_cancelled() {
             drop(running);
-            tracing::debug!(command = %described, "git cancelled before its spawn");
-            report(CommandEnd::Cancelled, waited, Duration::ZERO, "");
-            return Err(GitError::Cancelled { command: described });
+            tracing::debug!(command = %row.described, "git cancelled before its spawn");
+            (row.report)(CommandEnd::Cancelled, row.waited, Duration::ZERO, "");
+            return Err(GitError::Cancelled {
+                command: row.described.to_string(),
+            });
         }
-        if let Some(lead) = &mut lead {
+        drop(prior);
+        if let Some(lead) = lead {
             lead.spawning();
         }
         // The receiver closes once git has ended and its record is read.
         let (mut command, trace_sink) = self.assemble_traced(cmd);
 
         tracing::debug!(
-            command = %described,
-            waited_ms = waited.as_millis() as u64,
+            command = %row.described,
+            waited_ms = row.waited.as_millis() as u64,
             "spawning git"
         );
         let started = Instant::now();
@@ -573,51 +646,52 @@ impl GitExecutor {
         let (mut child, mut family) = match super::family::spawn(&mut command, whole, running) {
             Ok(spawned) => spawned,
             Err(source) => {
-                report(
+                (row.report)(
                     CommandEnd::Failed,
-                    waited,
+                    row.waited,
                     started.elapsed(),
                     &source.to_string(),
                 );
-                return Err(Self::unspawned(cmd, described, source));
+                return Err(Self::unspawned(cmd, row.described.to_string(), source));
             }
         };
         // The spawn's own cost: on Windows most of a round trip
         // (ci/baseline/code-costs-windows-x64.md).
         let spawned = started.elapsed();
 
-        let budget = match cmd.timeout {
-            TimeBudget::Stock => self.stock_timeout,
-            TimeBudget::At(timeout) => Some(timeout),
-            TimeBudget::Never => None,
+        let mut printed = false;
+        let (outcome, kept) = {
+            let mut each = |chunk: &[u8]| {
+                printed |= !chunk.is_empty();
+                out.take(chunk);
+            };
+            run_keeping(&mut child, &mut family, cmd, row.budget, cancel, &mut each).await
         };
-        let (outcome, kept) =
-            run_keeping(&mut child, &mut family, cmd, budget, cancel, on_stdout).await;
         // Reaped (or killed) whichever way it ended: the life is spent.
         super::meter::charge(started.elapsed());
         let outcome = outcome.map_err(|source| {
-            report(
+            (row.report)(
                 CommandEnd::Failed,
-                waited,
+                row.waited,
                 started.elapsed(),
                 &source.to_string(),
             );
             GitError::Io {
-                command: described.clone(),
+                command: row.described.to_string(),
                 source,
             }
         })?;
-
-        let clocks = Clocks {
-            waited,
+        Ok(Attempt {
+            outcome,
+            left: Left {
+                stdout: kept,
+                trace: Self::record_of(trace_sink).await,
+            },
             started,
             spawned,
-        };
-        let left = Left {
-            stdout: kept,
-            trace: Self::record_of(trace_sink).await,
-        };
-        Self::ended(cmd, described, outcome, left, budget, clocks, &report)
+            restartable: out.is_kept() || !printed,
+            _family: family,
+        })
     }
 
     /// What a traced command's gits recorded, once git is reaped
@@ -771,6 +845,58 @@ async fn run_keeping(
     };
     let outcome = run_child(child, family, budget, cancel, &mut both).await;
     (outcome, kept)
+}
+
+/// Where a run's stdout goes.
+enum Out<'a> {
+    /// Kept whole for the caller — and so dropped again for a run asked
+    /// once more ([`super::config_unread`]).
+    Kept(&'a mut Vec<u8>),
+    /// Handed on as it comes.
+    Streamed(&'a mut (dyn FnMut(&[u8]) + Send)),
+}
+
+impl Out<'_> {
+    fn take(&mut self, chunk: &[u8]) {
+        match self {
+            Out::Kept(kept) => kept.extend_from_slice(chunk),
+            Out::Streamed(on_stdout) => on_stdout(chunk),
+        }
+    }
+
+    fn is_kept(&self) -> bool {
+        matches!(self, Out::Kept(_))
+    }
+
+    /// Drops what the run kept, for the run asked once more.
+    fn restart(&mut self) {
+        if let Out::Kept(kept) = self {
+            kept.clear();
+        }
+    }
+}
+
+/// The log row one ask reports to, once, whichever of its spawns ends it —
+/// and the slot wait and budget every spawn of it runs under.
+struct Row<'r> {
+    described: &'r str,
+    waited: Duration,
+    budget: Option<Duration>,
+    report: &'r (dyn Fn(CommandEnd, Duration, Duration, &str) + Sync),
+}
+
+/// One spawn's end, to answer with or to ask once more over.
+struct Attempt {
+    outcome: ChildOutcome,
+    left: Left,
+    started: Instant,
+    spawned: Duration,
+    /// Nothing it printed has been handed on: a kept run, or a stream that
+    /// ended before its first byte.
+    restartable: bool,
+    /// The run's count, let go only after its end is reported: an owner that
+    /// finds none running (`Live::idle`) has heard every end.
+    _family: Family,
 }
 
 /// What one command's end is reported against.
