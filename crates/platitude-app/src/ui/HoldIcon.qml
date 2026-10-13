@@ -14,12 +14,15 @@ InkCanvas {
     property int presses: Metrics.holdPressesWarned
     /// The colour of the words beside it, including the lift to `textOnAccent` over the fill.
     property color tint: Theme.textPrimary
+    /// What the mark is drawn in: the words' colour, but a white delete's words keep the plain ink alone — the mark
+    /// carries the warning, as the fill does (デザイン規約 §回数押しの色).
+    readonly property color ink: Qt.colorEqual(holdIcon.tint, Theme.textPrimary) ? Theme.warning : holdIcon.tint
 
     width: Theme.iconSm
     height: Theme.iconSm
     onProgressChanged: requestPaint()
     onPressesChanged: requestPaint()
-    onTintChanged: requestPaint()
+    onInkChanged: requestPaint()
 
     /// Sector `i` of `n`, clockwise from 12 o'clock, its two edges pulled `h` in from the radii that bound it — the gap
     /// between two sectors is `2h` wide all the way in. Two such edges meet short of the centre; a half disc's are one
@@ -63,7 +66,7 @@ InkCanvas {
         const h = s
         const n = Math.max(2, holdIcon.presses)
         ctx.clearRect(0, 0, width, height)
-        ctx.fillStyle = holdIcon.tint
+        ctx.fillStyle = holdIcon.ink
         ctx.globalAlpha = Metrics.dimFade
         for (let i = 0; i < n; i++)
             holdIcon.sector(ctx, s, n, i, r, h)

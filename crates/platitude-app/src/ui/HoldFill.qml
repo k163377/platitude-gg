@@ -7,7 +7,7 @@ Rectangle {
 
     /// `HoldDriver.progress`.
     required property real progress
-    /// The colour the control wears: a warning, or the plain ink for a white delete.
+    /// The control's `holdTone`: a warning, or the plain ink a white delete names itself by.
     required property color tone
     /// `HoldDriver.dimmed`: full after the last press, so the fill takes the tone's step down — the work is running.
     property bool dimmed: false
@@ -18,12 +18,11 @@ Rectangle {
     /// mark at the row's edge has as much fill on its left as on its right (デザイン規約 §回数押し).
     property real bleed: 0
 
-    /// The plain ink is a word colour, too light to carry words over it: a white delete fills with the strong border.
-    readonly property bool plain: Qt.colorEqual(holdFill.tone, Theme.textPrimary)
-    readonly property color full: holdFill.plain ? Theme.borderStrong : holdFill.tone
-    /// The step down each tone has (デザイン規約 §暗く落とした段); the plain fill steps down to the default border.
-    readonly property color down: holdFill.plain ? Theme.borderDefault
-                                : Qt.colorEqual(holdFill.tone, Theme.warning) ? Theme.warningDim
+    /// A white delete keeps the plain ink for its words only: the fill carries the warning, as its mark does
+    /// (デザイン規約 §回数押しの色).
+    readonly property color full: Qt.colorEqual(holdFill.tone, Theme.textPrimary) ? Theme.warning : holdFill.tone
+    /// The step down each tone has (デザイン規約 §暗く落とした段).
+    readonly property color down: Qt.colorEqual(holdFill.full, Theme.warning) ? Theme.warningDim
                                 : Qt.colorEqual(holdFill.tone, Theme.danger) ? Theme.dangerDim
                                 : Qt.colorEqual(holdFill.tone, Theme.accent) ? Theme.accentDim
                                 : holdFill.tone
