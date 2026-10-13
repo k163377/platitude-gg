@@ -81,8 +81,17 @@ pub async fn open(
         // screen tells them apart, so a second question is asked only here.
         // Anything else git turned the folder down for — one it cannot
         // read, say — is git's words to explain, not "not a repository".
+        // So is a folder holding a `.git` git will not take: a `gitdir:`
+        // naming a repository that is gone or damaged, a `.git` folder whose
+        // HEAD a crash emptied. git says of those what it says of an empty
+        // folder (the folder, in every release; the file, up to 2.55); the
+        // folder says there is a repository. Bare first: a `.git` can lead
+        // to a bare repository (`gitdir: ./.bare`).
         let bare = is_bare(executor, path, cancel).await;
-        if !bare && !crate::relied_messages::NOT_A_REPOSITORY.found_in(&stderr) {
+        if !bare
+            && (!crate::relied_messages::NOT_A_REPOSITORY.found_in(&stderr)
+                || holds_a_dot_git(path))
+        {
             return Err(GitError::Failed {
                 command: described.to_string(),
                 code: out.code,
@@ -139,6 +148,14 @@ pub(crate) fn git_dir_of(workdir: &Path) -> Option<PathBuf> {
     }
     let text = std::fs::read_to_string(&dot_git).ok()?;
     Some(workdir.join(text.trim().strip_prefix("gitdir:")?.trim()))
+}
+
+/// Whether `folder` itself holds a `.git` — a folder, a `gitdir:` file or a
+/// link, whole or broken (the entry, not what it names). Only the folder:
+/// how far up git looked is git's alone (`GIT_CEILING_DIRECTORIES`, a
+/// filesystem boundary), so a parent's `.git` says nothing of its answer.
+fn holds_a_dot_git(folder: &Path) -> bool {
+    folder.join(".git").symlink_metadata().is_ok()
 }
 
 /// Whether `path` is a bare repository. Only asked once [`open`] has

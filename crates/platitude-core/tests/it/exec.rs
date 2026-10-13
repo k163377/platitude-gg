@@ -107,6 +107,51 @@ async fn open_rejects_a_non_repository() {
     }
 }
 
+/// A folder holding a `.git` git will not take is a repository git cannot
+/// open, never "not a repository" — whatever git calls it: a `gitdir:`
+/// naming a repository that is gone, one naming a repository a crash left
+/// with an empty HEAD (a submodule's checkout, `--separate-git-dir`), a
+/// repository whose own `.git` is in that state, a `.git` link to nothing.
+#[tokio::test]
+async fn open_leaves_a_broken_dot_git_to_gits_words() {
+    let dir = crate::support::temp::dir();
+    let gone = dir.path().join("gone");
+    std::fs::create_dir(&gone).unwrap();
+    let moved = dir.path().join("moved").join(".git");
+    std::fs::write(gone.join(".git"), format!("gitdir: {}\n", moved.display())).unwrap();
+    let emptied = TestRepo::init();
+    std::fs::write(emptied.path.join(".git").join("HEAD"), "").unwrap();
+    let separate = dir.path().join("separate");
+    std::fs::create_dir(&separate).unwrap();
+    std::fs::write(
+        separate.join(".git"),
+        format!("gitdir: {}\n", emptied.path.join(".git").display()),
+    )
+    .unwrap();
+    #[cfg_attr(not(unix), expect(unused_mut))]
+    let mut broken = vec![gone, separate, emptied.path.clone()];
+    // The entry is what holds: a link counts whatever it names.
+    #[cfg(unix)]
+    {
+        let linked = dir.path().join("linked");
+        std::fs::create_dir(&linked).unwrap();
+        std::os::unix::fs::symlink(&moved, linked.join(".git")).unwrap();
+        broken.push(linked);
+    }
+
+    let (executor, cancel) = env();
+    let mut wrong = Vec::new();
+    for path in &broken {
+        let err = bounded("repo open", repo::open(&executor, path, &cancel))
+            .await
+            .unwrap_err();
+        if !matches!(&err, GitError::Failed { stderr, .. } if !stderr.is_empty()) {
+            wrong.push(format!("{}: {err:?}", path.display()));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
 /// A repository git will not open for its owner (`safe.directory`, made
 /// here by git's own test switch) is a kind of its own, neither "not a
 /// repository" nor a plain failure: the screen heads it, and git's words
@@ -133,26 +178,37 @@ async fn open_names_a_folder_git_will_not_trust_as_untrusted() {
 }
 
 /// The screen has a line of its own for a bare repository, and this flag
-/// is the only thing it may read to choose it.
+/// is the only thing it may read to choose it — also where the folder's
+/// `.git` leads to one (a bare repository kept beside its worktrees,
+/// `gitdir: ./.bare`): that folder holds a `.git` and is still bare.
 #[tokio::test]
 async fn open_rejects_a_bare_repository_as_bare() {
     let dir = crate::support::temp::dir();
+    let init_bare = |at: &std::path::Path| {
+        let status = std::process::Command::new("git")
+            .args(["init", "--bare", "--quiet"])
+            .arg(at)
+            .status()
+            .expect("git init --bare");
+        assert!(status.success());
+    };
     let bare = dir.path().join("origin.git");
-    let status = std::process::Command::new("git")
-        .args(["init", "--bare", "--quiet"])
-        .arg(&bare)
-        .status()
-        .expect("git init --bare");
-    assert!(status.success());
+    init_bare(&bare);
+    let beside = dir.path().join("project");
+    init_bare(&beside.join(".bare"));
+    std::fs::write(beside.join(".git"), "gitdir: ./.bare\n").unwrap();
 
     let (executor, cancel) = env();
-    let err = bounded("repo open", repo::open(&executor, &bare, &cancel))
-        .await
-        .unwrap_err();
-    assert!(
-        matches!(err, GitError::NotARepository { bare: true, .. }),
-        "got {err:?}"
-    );
+    for path in [&bare, &beside] {
+        let err = bounded("repo open", repo::open(&executor, path, &cancel))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, GitError::NotARepository { bare: true, .. }),
+            "{}: got {err:?}",
+            path.display()
+        );
+    }
 }
 
 /// The two halves the strip needs to tell "another worktree of what is

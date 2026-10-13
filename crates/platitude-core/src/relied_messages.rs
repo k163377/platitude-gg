@@ -360,7 +360,10 @@ pub(crate) const SWITCH_IN_THE_WAY: Relied = Relied::any_case(&[
 
 // ---- Opening a folder (`repo::open`)
 
-/// A folder in no repository, whichever way git looked.
+/// A folder in no repository, whichever way git looked — and a `.git` git
+/// will not take, which it calls the same (a `.git` folder in every
+/// release, a `gitdir:` file up to 2.55), so `repo::open` reads the folder
+/// for that.
 ///
 /// - git: `setup.c` `not a git repository`
 /// - witness: `exec::open_rejects_a_non_repository`

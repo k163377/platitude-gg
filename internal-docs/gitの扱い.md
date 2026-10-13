@@ -280,6 +280,7 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 | git が無い | spawn の `NotFound` | 初回 | 全画面(デザイン規約 §git が無い時・古い時) |
 | 古い git | `--version` | ある | 帯の `OLD GIT`、操作は通す |
 | リポジトリでない・bare | `not a git repository` / `--is-bare-repository` | 日常 | 開けなかった画面・ダイアログ |
+| 壊れた `.git`(指す先が消えた・壊れた `.git` ファイル、HEAD の空いた `.git` フォルダ) | 128。`.git` フォルダは全版で `not a git repository (or any of the parent directories)`、`.git` ファイルは 2.55 まで `not a git repository: <指す先>`(2.54・2.55 は `(null)`)・2.56 から `gitfile does not point to a valid repository` —— 開いたフォルダ自身に `.git` が在ることで見分ける(git の文では分けられない)。中のフォルダを開いた時は見分けず git の文が決める(デザイン規約 §リポジトリを開く) | 稀(リンクした worktree の本体・submodule の git dir を動かした・消した、落ちた時の破損) | 開けなかった画面の「git が答えられなかった」+ git の文 |
 | `safe.directory`(別の所有者のフォルダ) | `fatal: detected dubious ownership in repository` 128 | **ある(Windows のネットワークドライブ・別アカウントの clone・WSL の mount)** | 開けなかった画面の見出し `git does not trust this folder's owner` + git の文(末尾が許す手順。`GitError::UntrustedOwner`。ユーザー決定 2026-10-12) |
 | 設定の書き換えと重なった読み(Windows) | `fatal: unknown error occurred while reading the configuration files` 128 / `fatal: unable to access '<file>'` 128 / `git config --get*` は `warning: unable to access '<file>'` だけで残りの設定から答える | ある(アプリ自身の設定の書き込みや外の `git config` と、開き・読み直しが重なった時) | **読みだけ 1 回撃ち直す**(`process::config_unread`。書き込みは撃ち直さない。ユーザー決定 2026-10-13)—— §設定の書き換えと重なった読み |
 | 設定がずっと読めない(権限・別のプログラムが掴む) | 同じ文が撃ち直しでも | 稀 | 開けなかった画面の見出し `git could not read its configuration` + 直してから開き直す 1 文 + git の文(ファイルを名指す。`GitError::ConfigUnreadable`。ユーザー決定 2026-10-13) |
@@ -339,4 +340,9 @@ git は設定ファイルを `<file>.lock` に書いて rename で置き換え�
 
 状況と、基準に照らした選択肢。決まったら上の表へ写してここから消す。
 
-(無し)
+- **別のリポジトリの作業ツリーの中に、HEAD の空いた `.git` フォルダを持つフォルダがあると、そこを開くと外側のリポジトリが
+  黙って開く**(実測 2.55: `rev-parse --show-toplevel` が exit 0 で外側の頂上を答える。git は受け取れない `.git` フォルダを
+  素通りして親へ辿る —— setup.c の discovery、全版。`.git` ファイルなら git がそこで止まるので起きない)。稀(入れ子の
+  リポジトリが落ちた時に壊れた)。選択肢: (a) 今のまま / (b) 開けた時に、開いたフォルダ自身が `.git` を持つのに git の
+  答えた頂上がそのフォルダでなければ開かずに「git が答えられなかった」へ(`repo::open` の成功側の比較 1 回、git は撃ち足さない。
+  ただし出す git の文が無いので、その画面の 3 行目を決める要がある)
