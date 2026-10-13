@@ -226,7 +226,7 @@ pub enum ReportKind {
     /// checkout).
     RewriteLocked,
     /// git turned the replay down at its first checkout, which would write
-    /// over untracked files here ([`crate::integrate::UNTRACKED_IN_THE_WAY`]);
+    /// over untracked files here ([`crate::relied_messages::UNTRACKED_IN_THE_WAY`]);
     /// nothing moved. Which commit that checkout lands on is git's to work
     /// out (sequencer.c `skip_unnecessary_picks`), so nothing asks first.
     RewriteUntrackedInTheWay,
@@ -325,27 +325,21 @@ pub fn withheld_about(kind: ReportKind, name: &str, message: String) -> crate::e
     }
 }
 
-/// How git says a lock it needed was taken already (`LC_ALL=C`): a file's,
-/// in lockfile.c's `unable_to_lock_message` from the minimum to 2.55
+/// Whether git said a lock it needed was taken (`LC_ALL=C`: a file's,
 /// whatever advice follows, and on a remote's `remote:` lines too; and the
-/// reftable ref store's (git 2.45+, refs/reftable-backend.c — untranslated),
-/// which holds one lock for all its refs and names no file.
-const LOCK_TAKEN: [&str; 2] = [".lock': File exists", "cannot lock references"];
-
-/// What git 2.55 adds where `core.lockfilePid` left the holder's pid beside
-/// the lock and that process is gone: the lock is stale, not another git's.
-const LOCK_LEFT_BEHIND: &str = "which is no longer running";
-
-/// Whether git said a lock it needed was taken and left open whether
-/// another git holds it — its own words are `Another git process seems to
-/// be running`, or a live pid that may be reused. Not where git says the
-/// holder is gone ([`LOCK_LEFT_BEHIND`]): that is a plain refusal.
+/// reftable ref store's, git 2.45+, which holds one lock for all its refs
+/// and names no file) and left open whether another git holds it — its
+/// own words are `Another git process seems to be running`, or a live pid
+/// that may be reused. Not where git says the holder is gone
+/// ([`crate::relied_messages::LOCK_LEFT_BEHIND`]): that is a plain refusal.
+///
 /// Only git's words: where it names no lock (a reftable branch rename says
-/// `branch rename failed`, the minimum's stash apply nothing at all), a lock
-/// file found on disk afterwards is no proof of what turned it down.
+/// `branch rename failed`, the minimum's stash apply nothing at all), a
+/// lock file found on disk afterwards is no proof of what turned it down.
 #[must_use]
 pub(crate) fn lock_taken(said: &str) -> bool {
-    LOCK_TAKEN.iter().any(|words| said.contains(words)) && !said.contains(LOCK_LEFT_BEHIND)
+    crate::relied_messages::LOCK_TAKEN.found_in(said)
+        && !crate::relied_messages::LOCK_LEFT_BEHIND.found_in(said)
 }
 
 /// A rename git would not make; `from` is the name the row still carries,
@@ -454,10 +448,6 @@ pub fn stash_gone(oid: &str) -> crate::error::GitError {
     }
 }
 
-/// What git says when changes stand in the way (`LC_ALL=C`; the same
-/// words since `worktree remove` came in, 2.17).
-const WORKTREE_UNCLEAN: &str = "contains modified or untracked files";
-
 /// A worktree git did not take away, from its answer to
 /// `worktree remove`. git's `die()` exits 128 before anything is deleted;
 /// any other failure came after the folder's deletion began, and git drops
@@ -476,7 +466,7 @@ pub fn worktree_not_removed(
         (128, Some(reason)) => {
             WriteReport::about(ReportKind::WorktreeLocked, name).with_fact(reason)
         }
-        (128, None) if out.stderr_utf8().contains(WORKTREE_UNCLEAN) => {
+        (128, None) if crate::relied_messages::WORKTREE_UNCLEAN.found_in(&out.stderr_utf8()) => {
             WriteReport::about(ReportKind::WorktreeKept, name)
         }
         (128, None) => WriteReport::about(ReportKind::WorktreeRemoveRefused, name),
@@ -484,11 +474,6 @@ pub fn worktree_not_removed(
     };
     reported(report, command, out)
 }
-
-/// What git says when the place is still listed for a worktree whose
-/// folder is gone, locked or not (`LC_ALL=C`; builtin/worktree.c
-/// `check_candidate_path`, the same words at the minimum and 2.55).
-const WORKTREE_PLACE_LISTED: &str = "is a missing but ";
 
 /// A worktree git did not make, from its answer to `worktree add`.
 /// `left` is the `-b` branch git made before it turned the rest down, for
@@ -502,7 +487,7 @@ pub fn worktree_not_added(
 ) -> crate::error::GitError {
     let report = match left {
         Some(branch) => WriteReport::about(ReportKind::WorktreeBranchLeft, name).with_fact(branch),
-        None if out.stderr_utf8().contains(WORKTREE_PLACE_LISTED) => {
+        None if crate::relied_messages::WORKTREE_PLACE_LISTED.found_in(&out.stderr_utf8()) => {
             WriteReport::about(ReportKind::WorktreePlaceTaken, name)
         }
         None => WriteReport::about(ReportKind::WorktreeNotAdded, name),
@@ -536,33 +521,16 @@ pub fn worktree_folder_taken(name: &str, path: &str) -> crate::error::GitError {
     )
 }
 
-/// What git says when an apply would write over work here, tracked or
-/// untracked — the words a merge and a pull are refused with too.
-const CARRIED_OVERWRITES: &str = crate::integrate::OVERWRITES_WORK;
-
-/// What `git stash apply --no-index` says when it turns the apply down —
-/// the exit 1 it also lands a conflicted apply with, which says nothing on
-/// stderr (builtin/stash.c `do_apply_stash` at the minimum and 2.55: the
-/// index it could not refresh and write — 2.55's words over unmerged
-/// entries here as over a lock, where the minimum says nothing — unmerged
-/// entries again, work here it would overwrite or untracked files it would
-/// remove). Named so its row in the log is a failure with these words under
-/// it, as a report sends the reader there.
-pub(crate) const CARRIED_TURNED_DOWN: [&str; 4] = [
-    "could not write index",
-    "cannot apply a stash in the middle of a merge",
-    CARRIED_OVERWRITES,
-    "would be removed by merge",
-];
-
 /// Another worktree's work that `git stash apply` would not put here. The
 /// screen writes both lines (what was in the way is all git's message
 /// says, and it ends in advice to the terminal); the log keeps git's words.
 /// Only the refusal that names work here as what it would overwrite says
 /// so, and only one that names a lock says that; any other is one git's
-/// words have to explain — another git's lock on the index among them,
-/// over which `stash apply` says only `could not write index` (2.55, as over
-/// an unmerged index) or nothing (the minimum).
+/// words have to explain — another git's lock on the index among them where
+/// git does not name it: from 2.51 `stash apply` names the lock (its index
+/// refresh reports the lock's error, read-cache.c), 2.43.2 to 2.50 say only
+/// `could not write index` (as over an unmerged index), 2.43.0 and 2.43.1
+/// nothing.
 #[must_use]
 pub fn carried_refused(
     name: &str,
@@ -570,7 +538,7 @@ pub fn carried_refused(
     out: &crate::process::GitOutput,
 ) -> crate::error::GitError {
     let said = out.failure_message();
-    let kind = if said.contains(CARRIED_OVERWRITES) {
+    let kind = if crate::relied_messages::OVERWRITES_WORK.found_in(&said) {
         ReportKind::CarriedInTheWay
     } else if lock_taken(&said) {
         ReportKind::CarriedLocked

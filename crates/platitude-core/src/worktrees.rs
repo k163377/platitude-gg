@@ -6,6 +6,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
+use crate::relied_messages;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeEntry {
@@ -384,7 +385,7 @@ pub async fn remove(
         return Ok(());
     }
     let said = out.stderr_utf8();
-    if out.code == 128 && said.contains(NOT_A_WORKTREE) {
+    if out.code == 128 && relied_messages::NOT_A_WORKTREE.found_in(&said) {
         return Ok(());
     }
     Err(crate::report::worktree_not_removed(
@@ -395,25 +396,18 @@ pub async fn remove(
     ))
 }
 
-/// What git says for a path it lists no worktree at (`LC_ALL=C`,
-/// builtin/worktree.c, the minimum to 2.55).
-const NOT_A_WORKTREE: &str = "' is not a working tree";
-
 /// The reason a worktree was locked with, out of git's refusal to remove
 /// it — the owner's own words, which git sets between its two halves
-/// (builtin/worktree.c `remove_worktree`, the minimum to 2.55): `Some("")`
-/// for a lock without one, `None` for no lock. A full stop the owner ended
-/// it with is left off: the screen's sentence closes it (`It is locked: …`).
+/// (builtin/worktree.c `remove_worktree`): `Some("")` for a lock without
+/// one, `None` for no lock. A full stop the owner ended it with is left
+/// off: the screen's sentence closes it (`It is locked: …`).
 fn lock_reason(said: &str) -> Option<&str> {
-    const LOCKED: &str = "cannot remove a locked working tree";
-    const REASON: &str = ", lock reason: ";
-    const ADVICE: &str = "\nuse 'remove -f -f'";
-    let (_, rest) = said.split_once(LOCKED)?;
-    let Some(reason) = rest.strip_prefix(REASON) else {
+    let (_, rest) = said.split_once(relied_messages::WORKTREE_LOCKED.text())?;
+    let Some(reason) = rest.strip_prefix(relied_messages::LOCK_REASON.text()) else {
         return Some("");
     };
     let reason = reason
-        .rsplit_once(ADVICE)
+        .rsplit_once(relied_messages::REMOVE_ADVICE.text())
         .map_or(reason, |(reason, _)| reason);
     Some(reason.strip_suffix('.').unwrap_or(reason))
 }

@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use super::{Landing, opstate};
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
+use crate::relied_messages;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MergeOptions {
@@ -61,7 +62,7 @@ pub async fn merge(
     let cmd = cmd
         .args(["--", rev])
         .answers_by_code(1)
-        .except_when_it_says(super::REFUSED_OVER_WORK);
+        .except_when_it_says(relied_messages::REFUSED_OVER_WORK);
     match executor.run(cmd, cancel).await {
         Ok(_) => Ok(Landing::Done),
         // Nothing stands behind this one, so nothing is read.
@@ -80,7 +81,7 @@ pub async fn merge(
 /// (`session::build::integrate_carrying`).
 #[must_use]
 pub fn refused_over_work(error: &GitError) -> bool {
-    matches!(error, GitError::Failed { stderr, .. } if stderr.contains(super::OVERWRITES_WORK))
+    matches!(error, GitError::Failed { stderr, .. } if relied_messages::OVERWRITES_WORK.found_in(stderr))
 }
 
 /// The message a stopped merge is going to record, with git's own

@@ -277,10 +277,11 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
     );
 }
 
-/// A code a command answers by is a failure after all where git says the
-/// words the command named, and a failed row of a command that keeps its
-/// stdout carries it ahead of stderr. A shell alias stands in for git
-/// writing to both streams and exiting with the code.
+/// A code a command answers by is a failure after all where what git said
+/// makes it one (`except_when` — `except_when_it_says` is the same mark,
+/// handed a message of the product's table), and a failed row of a command
+/// that keeps its stdout carries it ahead of stderr. A shell alias stands
+/// in for git writing to both streams and exiting with the code.
 #[tokio::test]
 async fn named_words_and_kept_stdout_reach_the_row() {
     use crate::support::Said;
@@ -302,7 +303,7 @@ async fn named_words_and_kept_stdout_reach_the_row() {
         probe().answers_by_code(3),
         probe()
             .answers_by_code(3)
-            .except_when_it_says(&["refused here"]),
+            .except_when(|said, _| said.contains("refused here")),
         probe().logs_stdout(),
         probe().answers_by_code(3).logs_stdout(),
     ] {

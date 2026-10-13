@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use super::{InProgress, Landing, opstate};
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
+use crate::relied_messages;
 
 /// `git cherry-pick <revs>`.
 ///
@@ -172,16 +173,15 @@ fn left_nothing_to_record(op: InProgress, error: &GitError) -> bool {
     let GitError::Failed { stderr, .. } = error else {
         return false;
     };
-    let said = stderr.to_ascii_lowercase();
     // cherry-pick weighs `--allow-empty` before writing, so it stops in
     // words of its own.
-    if said.contains(&format!("the previous {} is now empty", op.command())) {
+    if op == InProgress::CherryPick && relied_messages::PICK_NOW_EMPTY.found_in_any_case(stderr) {
         return true;
     }
     // revert never reaches that message: `git commit` refuses the commit on
     // stdout with stderr empty, and `GitOutput::failure_message` passes
     // stdout through here. Every other revert stop writes to stderr.
-    op == InProgress::Revert && said.contains("nothing to commit")
+    op == InProgress::Revert && relied_messages::NOTHING_TO_COMMIT.found_in_any_case(stderr)
 }
 
 #[cfg(test)]

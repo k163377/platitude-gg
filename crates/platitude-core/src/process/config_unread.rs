@@ -10,21 +10,13 @@
 //! stays unreadable fails the second run the same way, and that answer
 //! stands.
 //!
-//! The words are git's own, the same in every release from 2.43 through
-//! 2.56 and in Git for Windows (config.c `repo_read_config`, wrapper.c
-//! `warn_on_fopen_errors` and `access_or_die`); the executor runs git under
-//! `LC_ALL=C`, so they are never translated.
+//! The words are git's own (config.c `repo_read_config`, wrapper.c
+//! `warn_on_fopen_errors` and `access_or_die` — `crate::relied_messages`); the
+//! executor runs git under `LC_ALL=C`, so they are never translated.
 
 use std::ffi::OsString;
 
-/// What a repository command dies with when a configuration file it found
-/// would not open.
-const CONFIG_UNREAD: &str = "unknown error occurred while reading the configuration files";
-
-/// What git says of a file it could not open — as a warning before going
-/// on, or as the fatal line where it asked for the file first. A URL in the
-/// quotes is a remote out of reach, not a file.
-const FILE_UNOPENED: &str = "unable to access '";
+use crate::relied_messages;
 
 /// Whether a run that ended with `code` and `stderr` is asked once more.
 /// `restartable`: nothing it printed has been handed on yet (a buffered
@@ -44,22 +36,24 @@ pub(super) fn again(
     }
     // Only `git config` goes on without the file: a repository command that
     // warned and answered still answered about the repository.
-    buffered && is_config_read(args) && names_a_file(stderr, "warning: ")
+    buffered && is_config_read(args) && names_a_file(stderr, relied_messages::WARNING_LEAD)
 }
 
 /// Whether git's words are the ones it dies with over a configuration file
 /// it could not open — what a read is asked once more over, and what an
 /// opening that is still refused on that run is named by.
 pub(crate) fn died_over_a_file(stderr: &str) -> bool {
-    stderr.contains(CONFIG_UNREAD) || names_a_file(stderr, "fatal: ")
+    relied_messages::CONFIG_UNREAD.found_in(stderr)
+        || names_a_file(stderr, relied_messages::FATAL_LEAD)
 }
 
 /// Whether a line opening with `lead` names a file git could not open.
-fn names_a_file(stderr: &str, lead: &str) -> bool {
+fn names_a_file(stderr: &str, lead: relied_messages::Words) -> bool {
     stderr.lines().any(|line| {
-        line.strip_prefix(lead)
-            .and_then(|rest| rest.strip_prefix(FILE_UNOPENED))
+        line.strip_prefix(lead.text())
+            .and_then(|rest| rest.strip_prefix(relied_messages::FILE_UNOPENED.text()))
             .and_then(|rest| rest.split_once('\''))
+            // not git's words: a URL in the quotes is a remote, not a file
             .is_some_and(|(file, _)| !file.contains("://"))
     })
 }

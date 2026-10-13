@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use super::opstate;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
+use crate::relied_messages;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RebaseOptions {
@@ -63,27 +64,17 @@ pub async fn rebase(
     landed(executor, workdir, result, cancel).await
 }
 
-/// What git says when the `pre-rebase` hook here turned the rebase down,
-/// before anything moved (builtin/rebase.c): `error:` and exit 1 at 2.55 —
-/// the code a stop answers with — and `fatal:` with 128 at the minimum.
-const PRE_REBASE_REFUSED: &str = "The pre-rebase hook refused to rebase.";
-
-/// What git says when the checkout a rebase starts with would write over
-/// untracked files here (unpack-trees' words, then `could not detach HEAD`
-/// — sequencer.c `checkout_onto`, the same at the minimum and 2.55). Exit
-/// 1, nothing moved. Not the shorter tail: local changes to tracked files
-/// end in the same words.
-pub(crate) const UNTRACKED_IN_THE_WAY: &str =
-    "untracked working tree files would be overwritten by checkout";
-
 /// Whether a rebase's exit 1 is something turning it down rather than a
 /// stop, for its row in the log ([`GitCommand::except_when`]): the
-/// `pre-rebase` hook, untracked files its first checkout would overwrite,
-/// a lock another git held. A stop's words are the reader's to read on the
-/// band; these are what the log has to show.
+/// `pre-rebase` hook (`error:` and exit 1 from 2.47 — the code a stop
+/// answers with — `fatal:` and 128 before), untracked files its first
+/// checkout would overwrite (unpack-trees' words, then `could not detach
+/// HEAD`; exit 1, nothing moved), a lock another git held. A stop's words
+/// are the reader's to read on the band; these are what the log has to
+/// show.
 pub(crate) fn turned_down(said: &str) -> bool {
-    said.contains(PRE_REBASE_REFUSED)
-        || said.contains(UNTRACKED_IN_THE_WAY)
+    relied_messages::PRE_REBASE_REFUSED.found_in(said)
+        || relied_messages::UNTRACKED_IN_THE_WAY.found_in(said)
         || crate::report::lock_taken(said)
 }
 
@@ -134,7 +125,7 @@ pub(crate) async fn landed(
             stderr,
         }));
     }
-    if stderr.contains(PRE_REBASE_REFUSED) {
+    if relied_messages::PRE_REBASE_REFUSED.found_in(&stderr) {
         return Err(crate::report::rewrite_refused(
             crate::report::ReportKind::RewritePreRebase,
             command,
@@ -168,10 +159,9 @@ pub(crate) async fn landed(
 ///
 /// Anything unrecognised is `false` and travels on as an ordinary error:
 /// a reworded message costs the retry only.
-fn work_is_in_the_way(text: &str) -> bool {
-    let text = text.to_ascii_lowercase();
-    text.contains("cannot rebase:")
-        && (text.contains("unstaged changes") || text.contains("uncommitted changes"))
+fn work_is_in_the_way(said: &str) -> bool {
+    relied_messages::REBASE_OVER_CHANGES.found_in_any_case(said)
+        && relied_messages::REBASE_DIRT.found_in(said)
 }
 
 /// Why a standing rebase is standing: an `edit` stop leaves the tree as

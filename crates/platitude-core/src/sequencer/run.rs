@@ -182,10 +182,6 @@ pub async fn rebase_interactive(
     outcome
 }
 
-/// What git says when a pick's `prepare-commit-msg` hook said no, made in
-/// the rebase's own process (sequencer.c, the minimum to 2.55).
-const PREPARE_HOOK_FAILED: &str = "'prepare-commit-msg' hook failed";
-
 /// Whether the rebase's exit 1 is a refusal rather than a stop, for its
 /// row in the log ([`crate::process::GitCommand::except_when`]): what turns
 /// a plain rebase down ([`crate::integrate::turned_down`]) and what
@@ -210,13 +206,15 @@ fn not_a_stop(said: &str, trace: &Trace) -> bool {
 ///
 /// The last two stop the replay before it begins, with nothing to put back.
 fn refused_by(said: &str, trace: &Trace) -> Option<report::ReportKind> {
-    if said.contains(PREPARE_HOOK_FAILED) || trace.hook_failed(&crate::commit::COMMIT_HOOKS) {
+    if crate::relied_messages::PREPARE_HOOK_FAILED.found_in(said)
+        || trace.hook_failed(&crate::commit::COMMIT_HOOKS)
+    {
         Some(report::ReportKind::RewriteCommitHook)
     } else if crate::commit::signing_failed(said, trace) {
         Some(report::ReportKind::RewriteUnsigned)
     } else if crate::report::lock_taken(said) {
         Some(report::ReportKind::RewriteLocked)
-    } else if said.contains(crate::integrate::UNTRACKED_IN_THE_WAY) {
+    } else if crate::relied_messages::UNTRACKED_IN_THE_WAY.found_in(said) {
         Some(report::ReportKind::RewriteUntrackedInTheWay)
     } else {
         None

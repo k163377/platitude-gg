@@ -139,28 +139,14 @@ fn refused(command: String, out: &crate::process::GitOutput) -> GitError {
 /// changes nothing).
 pub(crate) const COMMIT_HOOKS: [&str; 3] = ["pre-commit", "prepare-commit-msg", "commit-msg"];
 
-/// What git says, in words of its own that name the signing, when it could
-/// not sign (`LC_ALL=C`, gpg-interface.c at the minimum and 2.55): gpg or
-/// gpgsm gave no signature, no ssh key is named or none can be had, the
-/// ssh-keygen there cannot sign, the key or the signature could not pass
-/// through the temporary file. Not `failed to write commit object`, which a
-/// commit ends with after any of them and after an object store git cannot
-/// write to alike.
-const UNSIGNED: [&str; 6] = [
-    "gpg failed to sign the data",
-    "user.signingKey needs to be set for ssh signing",
-    "either user.signingkey or gpg.ssh.defaultKeyCommand needs to be configured",
-    "ssh-keygen -Y sign is needed for ssh signing",
-    "failed writing ssh signing key",
-    "failed reading ssh signing data buffer",
-];
-
-/// Whether git could not sign: its own words name the signing, or — for an
-/// ssh signature, whose program's failure git passes on as that program's
-/// words alone (`sign_buffer_ssh`) — the program ended non-zero in its
-/// trace.
+/// Whether git could not sign: its own words name the signing (`LC_ALL=C`,
+/// gpg-interface.c — gpg or gpgsm gave no signature, no ssh key is named or
+/// none can be had, the ssh-keygen there cannot sign, the key or the
+/// signature could not pass through the temporary file), or — for an ssh
+/// signature, whose program's failure git passes on as that program's words
+/// alone (`sign_buffer_ssh`) — the program ended non-zero in its trace.
 pub(crate) fn signing_failed(said: &str, trace: &crate::process::Trace) -> bool {
-    UNSIGNED.iter().any(|words| said.contains(words)) || trace.ssh_signer_failed()
+    crate::relied_messages::SIGNING_FAILED.found_in(said) || trace.ssh_signer_failed()
 }
 
 /// Which of the outside's refusals a failed `git commit` was, as far as git

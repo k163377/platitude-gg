@@ -91,7 +91,7 @@ const FIXED_ENV: [(&str, &str); 4] = [
 /// repository) would point every command here at some other repository,
 /// as would a ref namespace (`GIT_NAMESPACE`); a reflog action
 /// (`GIT_REFLOG_ACTION`, which a rebase exports to what it runs) would
-/// relabel the reflog lines `session::leaving` reads; the rest reshape a
+/// relabel the reflog lines `discards::read` reads; the rest reshape a
 /// diff or a pathspec under the parsers. A command's own `env` is applied
 /// after, so a scratch index (`GIT_INDEX_FILE`) still reaches its git.
 const INHERITED_ENV_DROPPED: [&str; 23] = [
@@ -773,7 +773,7 @@ impl GitExecutor {
                     // from one that named 1 is still a failure.
                     Some(answer) => {
                         code == answer
-                            && !cmd.not_an_answer.iter().any(|w| said.contains(w))
+                            && !cmd.not_an_answer.is_some_and(|words| words.found_in(said))
                             && !cmd
                                 .not_an_answer_when
                                 .is_some_and(|refused| refused(said, &left.trace))

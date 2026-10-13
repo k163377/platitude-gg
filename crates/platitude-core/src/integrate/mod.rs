@@ -19,18 +19,7 @@ pub use rebase::{
 };
 pub use resolve::{Continuation, InProgress, resolve, resolve_current};
 
-pub(crate) use rebase::{UNTRACKED_IN_THE_WAY, landed, rebase_command, turned_down};
-
-/// What git says when work in the working tree stands in the way of what
-/// it would write — tracked changes or untracked files, under a merge, a
-/// pull's merge, a checkout or a stash's apply (`LC_ALL=C`; unpack-trees'
-/// and merge-ort's own words since long before the minimum).
-pub(crate) const OVERWRITES_WORK: &str = "would be overwritten";
-
-/// [`OVERWRITES_WORK`] as the words that make an exit 1 a refusal rather
-/// than an answer (`GitCommand::except_when_it_says`): the row then keeps
-/// git's list of the files in the way.
-pub(crate) const REFUSED_OVER_WORK: &[&str] = &[OVERWRITES_WORK];
+pub(crate) use rebase::{landed, rebase_command, turned_down};
 
 /// Where an operation that can stop part-way came to rest. A conflict stop
 /// is where an ordinary merge or pick ends up, so it must not read as a

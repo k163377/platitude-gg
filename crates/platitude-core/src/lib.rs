@@ -40,6 +40,7 @@ pub mod rebase_plan;
 pub mod refs;
 #[cfg(test)]
 mod refusing;
+pub(crate) mod relied_messages;
 pub mod remote;
 pub mod repo;
 pub mod report;

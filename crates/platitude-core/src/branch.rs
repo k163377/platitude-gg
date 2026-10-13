@@ -62,11 +62,8 @@ pub fn is_valid_name(name: &str) -> bool {
 /// Reads human-facing output (under `LC_ALL=C`) because git has no
 /// machine-readable answer to "why can I not move". Anything unrecognised
 /// is `false`: a reworded message costs the retry only.
-fn work_is_in_the_way(text: &str) -> bool {
-    let text = text.to_ascii_lowercase();
-    text.contains("untracked working tree file")
-        || text.contains("would lose untracked files")
-        || text.contains("would be overwritten by checkout")
+fn work_is_in_the_way(said: &str) -> bool {
+    crate::relied_messages::SWITCH_IN_THE_WAY.found_in(said)
 }
 
 /// Moves HEAD to `target`, taking uncommitted work along where git will

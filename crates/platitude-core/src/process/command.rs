@@ -106,7 +106,7 @@ pub struct GitCommand {
     pub(super) answer_code: Option<i32>,
     /// What git says when that code is no answer after all
     /// ([`Self::except_when_it_says`]).
-    pub(super) not_an_answer: &'static [&'static str],
+    pub(super) not_an_answer: Option<crate::relied_messages::Relied>,
     /// The same as a reading of what git said and recorded, where no one
     /// phrase tells it ([`Self::except_when`]).
     pub(super) not_an_answer_when: Option<fn(&str, &Trace) -> bool>,
@@ -126,7 +126,7 @@ impl GitCommand {
             timeout: TimeBudget::Stock,
             env: Vec::new(),
             answer_code: None,
-            not_an_answer: &[],
+            not_an_answer: None,
             not_an_answer_when: None,
             logs_stdout: false,
             traced: false,
@@ -152,11 +152,11 @@ impl GitCommand {
 
     /// Marks the words with which the [`Self::answers_by_code`] code is a
     /// refusal after all, on stderr — where a command answers and refuses
-    /// with one code (a rebase stops with 1, and git 2.55 refuses its
+    /// with one code (a rebase stops with 1, and from 2.47 git refuses its
     /// `pre-rebase` hook's no with 1 too). The row is then a failure with
     /// git's words under it, which a report sends the reader to.
-    pub fn except_when_it_says(mut self, words: &'static [&'static str]) -> Self {
-        self.not_an_answer = words;
+    pub(crate) fn except_when_it_says(mut self, words: crate::relied_messages::Relied) -> Self {
+        self.not_an_answer = Some(words);
         self
     }
 

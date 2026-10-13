@@ -5,13 +5,15 @@
 //! a remote (no route, a name that does not resolve, a timeout) is git's
 //! first line as it stands.
 
+use crate::relied_messages;
+
 /// What kept the remote out of reach.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Unreached {
     /// HTTPS, and git had no credential to send: no helper answered and
-    /// the prompt is off (`GIT_TERMINAL_PROMPT=0` — prompt.c `git_prompt`,
-    /// the minimum to 2.55), or a helper's answer was turned down
-    /// (remote-curl.c `Authentication failed for`).
+    /// the prompt is off (`GIT_TERMINAL_PROMPT=0` — prompt.c `git_prompt`),
+    /// or a helper's answer was turned down (remote-curl.c `Authentication
+    /// failed for`).
     Credentials,
     /// SSH, and the server took none of the keys offered — OpenSSH's own
     /// `Permission denied (publickey)`, which git repeats as the remote's
@@ -38,11 +40,11 @@ impl Unreached {
 /// is, if any.
 #[must_use]
 pub fn unreached(said: &str) -> Option<Unreached> {
-    if said.contains("terminal prompts disabled") || said.contains("Authentication failed for") {
+    if relied_messages::CREDENTIALS_UNSENT.found_in(said) {
         Some(Unreached::Credentials)
-    } else if said.contains("Permission denied (publickey") {
+    } else if relied_messages::SSH_KEY_REFUSED.found_in(said) {
         Some(Unreached::SshKey)
-    } else if said.contains("Host key verification failed") {
+    } else if relied_messages::HOST_KEY_UNKNOWN.found_in(said) {
         Some(Unreached::HostKey)
     } else {
         None

@@ -5,6 +5,7 @@
 //! ([`super::tags`]) and none of it looks at a [`super::PushSpec`].
 
 use crate::error::GitError;
+use crate::relied_messages::{self, Words};
 use crate::report::{RemoteWhy, ReportKind, WriteReport};
 
 /// The one ref a push sent, whose line in git's answer is the one read:
@@ -55,7 +56,7 @@ pub(super) fn refusal(
 ) -> GitError {
     let porcelain = out.stdout_utf8();
     let kind = match sent_line(&porcelain, &sent.refname) {
-        Some(line) if line.rejected_for("(stale info)") => moved(sent.deleting),
+        Some(line) if line.rejected_for(relied_messages::STALE_INFO) => moved(sent.deleting),
         Some(line) if line.would_drop() => ReportKind::Outdated,
         _ => return refused(command, out, sent),
     };
@@ -74,8 +75,10 @@ pub(super) fn tag_refusal(
 ) -> GitError {
     let porcelain = out.stdout_utf8();
     let kind = match sent_line(&porcelain, &sent.refname) {
-        Some(line) if line.rejected_for("(stale info)") => moved(sent.deleting),
-        Some(line) if line.rejected_for("(already exists)") => ReportKind::TagElsewhere,
+        Some(line) if line.rejected_for(relied_messages::STALE_INFO) => moved(sent.deleting),
+        Some(line) if line.rejected_for(relied_messages::ALREADY_EXISTS) => {
+            ReportKind::TagElsewhere
+        }
         _ => return refused(command, out, sent),
     };
     outdated(kind, command, out, sent)
@@ -92,7 +95,8 @@ fn moved(deleting: bool) -> ReportKind {
 /// Whether a plain tag push was refused for a name the remote already
 /// holds on something else (`already exists`).
 pub(super) fn is_taken(porcelain: &str, refname: &str) -> bool {
-    sent_line(porcelain, refname).is_some_and(|line| line.rejected_for("(already exists)"))
+    sent_line(porcelain, refname)
+        .is_some_and(|line| line.rejected_for(relied_messages::ALREADY_EXISTS))
 }
 
 /// Nothing is quoted: the far side never saw this push, and git's terminal
@@ -121,7 +125,11 @@ fn refused(command: String, out: &crate::process::GitOutput, sent: &Sent<'_>) ->
     let porcelain = out.stdout_utf8();
     let stderr = out.stderr_utf8();
     let kind = match sent_line(&porcelain, &sent.refname) {
-        Some(line) if line.summary.starts_with(REMOTE_REJECTED) => {
+        Some(line)
+            if line
+                .summary
+                .starts_with(relied_messages::REMOTE_REJECTED.text()) =>
+        {
             let why = remote_why(line.summary, &stderr);
             match sent.deleting {
                 true => ReportKind::RemoteDelete(why),
@@ -151,34 +159,37 @@ fn refused(command: String, out: &crate::process::GitOutput, sent: &Sent<'_>) ->
     )
 }
 
-/// How git marks a ref the far side turned down, against `[rejected]` for
-/// one this end turned down itself, each with a next move here.
-const REMOTE_REJECTED: &str = "[remote rejected]";
-
 /// What the far side said no for: git's own reason in the brackets
-/// (receive-pack's, the same words at the minimum and 2.55), and for the
-/// two the brackets leave open its `remote:` lines. A hook's is whatever
-/// it declined as — a forge names its own (`protected branch hook
-/// declined`).
+/// (receive-pack's), and for the two the brackets leave open its `remote:`
+/// lines. A hook's is whatever it declined as — a forge names its own
+/// (`protected branch hook declined`).
 fn remote_why(summary: &str, stderr: &str) -> RemoteWhy {
     let why = bracket_reason(summary);
     let far_side = remote_lines(stderr);
-    match why {
-        _ if why.ends_with("hook declined") => RemoteWhy::Rule,
-        "non-fast-forward" => RemoteWhy::Rewrite,
-        "deletion prohibited" => RemoteWhy::NoDeletes,
-        "branch is currently checked out" => RemoteWhy::CheckedOut,
-        "deletion of the current branch prohibited" => RemoteWhy::Current,
-        "shallow update not allowed" => RemoteWhy::Shallow,
+    if why.ends_with(relied_messages::HOOK_DECLINED.text()) {
+        RemoteWhy::Rule
+    } else if relied_messages::FAR_NOT_A_FAST_FORWARD.is(why) {
+        RemoteWhy::Rewrite
+    } else if relied_messages::DELETION_PROHIBITED.is(why) {
+        RemoteWhy::NoDeletes
+    } else if relied_messages::CHECKED_OUT_THERE.is(why) {
+        RemoteWhy::CheckedOut
+    } else if relied_messages::CURRENT_DELETION_PROHIBITED.is(why) {
+        RemoteWhy::Current
+    } else if relied_messages::SHALLOW_REFUSED.is(why) {
+        RemoteWhy::Shallow
+    } else if relied_messages::UNPACKER_ERROR.is(why)
+        && relied_messages::PACK_TOO_LARGE.found_in(&far_side)
+    {
         // index-pack's own words on the far side, which runs it in the
         // locale it was given — another language there reads as the rest.
-        "unpacker error" if far_side.contains("pack exceeds maximum allowed size") => {
-            RemoteWhy::TooLarge
-        }
+        RemoteWhy::TooLarge
+    } else if crate::report::lock_taken(&far_side) {
         // `failed to update ref` at the minimum, `reference already exists`
         // at 2.55: only its lines say it was a lock.
-        _ if crate::report::lock_taken(&far_side) => RemoteWhy::Locked,
-        _ => RemoteWhy::Other,
+        RemoteWhy::Locked
+    } else {
+        RemoteWhy::Other
     }
 }
 
@@ -187,7 +198,7 @@ fn remote_why(summary: &str, stderr: &str) -> RemoteWhy {
 fn remote_lines(stderr: &str) -> String {
     stderr
         .lines()
-        .filter_map(|line| line.strip_prefix("remote:"))
+        .filter_map(|line| line.strip_prefix(relied_messages::REMOTE_LEAD.text()))
         .map(str::trim)
         .collect::<Vec<_>>()
         .join("\n")
@@ -210,12 +221,17 @@ struct RefLine<'a> {
 }
 
 impl RefLine<'_> {
-    /// Whether this end turned the ref down with `why` in its summary —
-    /// `[rejected]` only: the far side's `[remote rejected]` can carry the
-    /// same words (`receive.denyNonFastForwards` answers `non-fast-forward`)
-    /// and is no reading of ours a fetch would put right.
-    fn rejected_for(&self, why: &str) -> bool {
-        self.flag == "!" && self.summary.starts_with("[rejected]") && self.summary.contains(why)
+    /// Whether this end turned the ref down — `[rejected]` only: the far
+    /// side's `[remote rejected]` can carry the same words
+    /// (`receive.denyNonFastForwards` answers `non-fast-forward`) and is no
+    /// reading of ours a fetch would put right.
+    fn rejected(&self) -> bool {
+        self.flag == "!" && self.summary.starts_with(relied_messages::REJECTED.text())
+    }
+
+    /// [`Self::rejected`], with `why` in its summary.
+    fn rejected_for(&self, why: Words) -> bool {
+        self.rejected() && why.found_in(self.summary)
     }
 
     /// Whether this end turned the ref down because the remote holds
@@ -225,13 +241,7 @@ impl RefLine<'_> {
     /// `push.useForceIfIncludes`). The other refusal a fetch answers,
     /// `stale info`, is a lease's and read apart ([`refusal`]).
     fn would_drop(&self) -> bool {
-        [
-            "(fetch first)",
-            "(non-fast-forward)",
-            "(remote ref updated since checkout)",
-        ]
-        .iter()
-        .any(|why| self.rejected_for(why))
+        self.rejected() && relied_messages::WOULD_DROP.found_in(self.summary)
     }
 }
 
@@ -290,7 +300,7 @@ mod tests {
             !line(REFUSED_STALE_LEASE).would_drop(),
             "a lease the remote left says the ref moved, not that commits would go"
         );
-        assert!(line(REFUSED_STALE_LEASE).rejected_for("(stale info)"));
+        assert!(line(REFUSED_STALE_LEASE).rejected_for(relied_messages::STALE_INFO));
         assert!(is_taken(REFUSED_TAG_TAKEN, "refs/tags/v1"));
         assert!(sent_line(REFUSED_TAG_TAKEN, MAIN).is_none());
     }
@@ -301,7 +311,10 @@ mod tests {
     fn the_far_sides_refusal_is_not_read_as_this_ends() {
         let far = line(FAR_SIDE_NON_FAST_FORWARD);
         assert!(!far.would_drop());
-        assert!(far.summary.starts_with(REMOTE_REJECTED));
+        assert!(
+            far.summary
+                .starts_with(relied_messages::REMOTE_REJECTED.text())
+        );
     }
 
     #[test]
@@ -309,7 +322,7 @@ mod tests {
         for landed in [FORCED_UPDATE, UP_TO_DATE, NEW_BRANCH] {
             let landed = line(landed);
             assert!(!landed.would_drop());
-            assert!(!landed.rejected_for("(stale info)"));
+            assert!(!landed.rejected_for(relied_messages::STALE_INFO));
         }
     }
 

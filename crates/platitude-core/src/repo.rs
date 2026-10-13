@@ -62,7 +62,7 @@ pub async fn open(
         let stderr = out.stderr_utf8().trim().to_string();
         // A folder owned by someone else is a kind of its own: git's words
         // carry the line that allows it, and the screen heads them.
-        if stderr.contains(DUBIOUS_OWNERSHIP) {
+        if crate::relied_messages::DUBIOUS_OWNERSHIP.found_in(&stderr) {
             return Err(GitError::UntrustedOwner {
                 path: path.to_path_buf(),
                 stderr,
@@ -82,7 +82,7 @@ pub async fn open(
         // Anything else git turned the folder down for — one it cannot
         // read, say — is git's words to explain, not "not a repository".
         let bare = is_bare(executor, path, cancel).await;
-        if !bare && !stderr.contains(NOT_A_REPOSITORY) {
+        if !bare && !crate::relied_messages::NOT_A_REPOSITORY.found_in(&stderr) {
             return Err(GitError::Failed {
                 command: described.to_string(),
                 code: out.code,
@@ -108,6 +108,7 @@ pub async fn open(
     };
 
     let object_format = match format.trim() {
+        // not git's words: `--show-object-format`'s answer
         "sha1" => ObjectFormat::Sha1,
         "sha256" => ObjectFormat::Sha256,
         other => {
@@ -139,16 +140,6 @@ pub(crate) fn git_dir_of(workdir: &Path) -> Option<PathBuf> {
     let text = std::fs::read_to_string(&dot_git).ok()?;
     Some(workdir.join(text.trim().strip_prefix("gitdir:")?.trim()))
 }
-
-/// What git says of a folder in no repository, whichever way it looked
-/// (`LC_ALL=C`; setup.c, every form at the minimum and 2.55).
-const NOT_A_REPOSITORY: &str = "not a git repository";
-
-/// What git says of a repository another account owns that
-/// `safe.directory` does not name (`LC_ALL=C`; setup.c `ensure_valid_ownership`,
-/// 2.37.1 to 2.55 and the maintenance releases beside it, 2.30.5 to 2.36.2
-/// — 2.37.0 said `unsafe repository`, under the minimum).
-const DUBIOUS_OWNERSHIP: &str = "detected dubious ownership";
 
 /// Whether `path` is a bare repository. Only asked once [`open`] has
 /// failed. `false` for no repository at all and for a question git could

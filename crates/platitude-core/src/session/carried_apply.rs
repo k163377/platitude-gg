@@ -103,7 +103,7 @@ async fn apply_work(
     let cmd = GitCommand::new()
         .cwd(&repo.workdir)
         .answers_by_code(1)
-        .except_when_it_says(&report::CARRIED_TURNED_DOWN)
+        .except_when_it_says(crate::relied_messages::CARRIED_TURNED_DOWN)
         .args(["stash", "apply", "--no-index"])
         .arg(stash.commit.to_hex());
     let command = cmd.describe();
