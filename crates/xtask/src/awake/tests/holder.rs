@@ -125,8 +125,14 @@ pub(super) fn end_the_holder(dir: &Path, unwinding: bool) {
         holder_pid(dir)
     };
     // A holder that quit clears its name; a pid named by one that died may
-    // be another process's by now.
-    let Some(pid) = pid.filter(|pid| running_as(*pid, "powershell.exe")) else {
+    // be another process's by now — a powershell too, another test's holder
+    // — and that one started after the name was last written. A name gone
+    // since it was read was the holder's own, cleared as it quits.
+    let named_it = |pid: u32| {
+        let named = modified(&holder_path(dir)).unwrap_or_else(std::time::SystemTime::now);
+        started(pid).is_some_and(|started| started <= named)
+    };
+    let Some(pid) = pid.filter(|pid| running_as(*pid, "powershell.exe") && named_it(*pid)) else {
         return;
     };
     end_tree(pid);
@@ -221,6 +227,54 @@ fn listed(pid: u32, filter: &[&str]) -> bool {
         .args(["/NH", "/FO", "CSV"])
         .output()
         .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\"")))
+}
+
+/// When `pid` started, on the system's clock; None for one gone, or one
+/// that cannot be asked.
+#[expect(
+    unsafe_code,
+    reason = "Windows tells a process's start only through a handle to it"
+)]
+fn started(pid: u32) -> Option<std::time::SystemTime> {
+    use std::ffi::c_void;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, id: u32) -> *mut c_void;
+        fn GetProcessTimes(
+            process: *mut c_void,
+            created: *mut u64,
+            exited: *mut u64,
+            kernel: *mut u64,
+            user: *mut u64,
+        ) -> i32;
+        fn CloseHandle(handle: *mut c_void) -> i32;
+    }
+    const QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    /// 1970-01-01 as a FILETIME: 100 ns ticks since 1601-01-01.
+    const UNIX_EPOCH_TICKS: u64 = 116_444_736_000_000_000;
+    // SAFETY: OpenProcess takes plain values and answers null when it fails.
+    let process = unsafe { OpenProcess(QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process.is_null() {
+        return None;
+    }
+    let (mut created, mut exited, mut kernel, mut user) = (0_u64, 0_u64, 0_u64, 0_u64);
+    // SAFETY: the handle is live, and each out-pointer is a writable u64,
+    // a FILETIME's size, aligned past its need.
+    let asked = unsafe {
+        GetProcessTimes(
+            process,
+            &raw mut created,
+            &raw mut exited,
+            &raw mut kernel,
+            &raw mut user,
+        )
+    };
+    // SAFETY: the handle came from OpenProcess above and is closed once.
+    unsafe { CloseHandle(process) };
+    let ticks = (asked != 0)
+        .then_some(created)?
+        .checked_sub(UNIX_EPOCH_TICKS)?;
+    Some(std::time::UNIX_EPOCH + std::time::Duration::from_nanos(ticks.checked_mul(100)?))
 }
 
 fn modified(path: &Path) -> Option<std::time::SystemTime> {
@@ -953,5 +1007,47 @@ fn an_installed_holder_handles_unicode_and_quotes_and_removes_its_script() {
             name.starts_with("holder-") && name.ends_with(".ps1")
         }),
         "a normally finished holder left its script"
+    );
+}
+
+/// A name left by a process that has ended — a probe of the holder's
+/// script names itself and ends — gives a pid Windows hands on: a holder
+/// another test started a moment later can run under it. Taking a test's
+/// directory down ends no process started after its name was last
+/// written.
+#[test]
+fn a_name_left_by_an_ended_process_ends_no_later_one() {
+    let dir = scratch("reused-pid");
+    let mut later = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "$null = [Console]::In.ReadLine()",
+        ])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .expect("a powershell under the pid");
+    let pid = later.id();
+    crate::wait::until(
+        "the powershell to be listed",
+        || running_as(pid, "powershell.exe"),
+        |running| *running,
+    );
+    let name = std::fs::File::create(holder_path(&dir)).expect("the name");
+    (&name)
+        .write_all(pid.to_string().as_bytes())
+        .expect("the pid");
+    name.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60))
+        .expect("the name written before the powershell started");
+    drop(name);
+    end_the_holder(&dir, false);
+    let still = later.try_wait().expect("its state").is_none();
+    end_tree(pid);
+    let _ = later.wait();
+    assert!(
+        still,
+        "a process started after the name was written was ended"
     );
 }
