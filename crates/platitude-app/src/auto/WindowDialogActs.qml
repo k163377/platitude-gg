@@ -129,10 +129,11 @@ Item {
                           + " name=" + cloneDialog.wantedName)
     }
 
-    // PGG_AUTO_ACT=open-not-a-repo / open-bare and the two ways back out. The picker is the platform's own window, so
-    // the run enters where its answer lands — the path it accepted.
+    // PGG_AUTO_ACT=open-not-a-repo / open-bare / open-unreadable and the two ways back out. The picker is the
+    // platform's own window, so the run enters where its answer lands — the path it accepted.
     readonly property bool pickAct: Harness.autoAct === "open-not-a-repo"
                                     || Harness.autoAct === "open-bare"
+                                    || Harness.autoAct === "open-unreadable"
                                     || Harness.autoAct === "open-not-a-repo-retry"
                                     || Harness.autoAct === "open-not-a-repo-cancel"
                                     || Harness.autoAct === "open-dialog-sweep"
@@ -186,12 +187,14 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=open-fail-tab / -bare / -log / open-fail-sweep: the road that keeps its tab. Nothing checks the
-    // folder first, so the page says what failed (`kind=`). `-log` then opens the command log as the `>_` there does.
+    // PGG_AUTO_ACT=open-fail-tab / -bare / -unreadable / -log / open-fail-sweep: the road that keeps its tab. Nothing
+    // checks the folder first, so the page says what failed (`kind=`). `-log` then opens the command log as the `>_`
+    // there does.
     SampleTimer {
         id: failTabActTimer
         running: Harness.autoAct === "open-fail-tab"
                  || Harness.autoAct === "open-fail-tab-bare"
+                 || Harness.autoAct === "open-fail-tab-unreadable"
                  || Harness.autoAct === "open-fail-tab-log"
                  || Harness.autoAct === "open-fail-sweep"
         onTriggered: {
@@ -230,7 +233,7 @@ Item {
             failTabTimer.stop()
             if (Harness.autoAct === "open-fail-sweep") {
                 // The log's seat is here but the folder is not, and a reader pastes it into a shell
-                // (規約 §右のペインの字は掴める). `kind=`: two of the four screens have a line from git.
+                // (規約 §右のペインの字は掴める). `kind=`: three of the five screens have a line from git.
                 Harness.report("open_fail_sweep "
                     + window.curPage.openFailedHand.sweepAir(7, "kind=" + window.curPage.pageTab.errorKind))
                 window.finishAutoAct()

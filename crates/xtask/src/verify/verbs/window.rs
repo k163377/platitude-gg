@@ -642,4 +642,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(Arg::Is("worktree"), "picker beside_worktree=false")],
         plain: "picker beside_worktree=true",
     },
+    // A configuration file git cannot open, by both roads in: the folder is a
+    // repository, so a wrong kind here would put "Not a git repository" over
+    // it. The picker's never becomes a tab (`tabs=1` is the run's own).
+    Verb {
+        name: "open-unreadable",
+        when: &[],
+        plain: "open_failed kind=config dialog=true tabs=1",
+    },
+    Verb {
+        name: "open-fail-tab-unreadable",
+        when: &[],
+        plain: "state=error kind=config",
+    },
 ];

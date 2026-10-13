@@ -273,7 +273,7 @@ QtObject {
                 "open-fetches",
                 "open-picker", "commands-clear", "fetch-recover", "fetch-recover-held",
                 "clone-dialog", "clone-go", "clone-refused",
-                "open-not-a-repo", "open-bare", "open-not-a-repo-retry",
+                "open-not-a-repo", "open-bare", "open-unreadable", "open-fail-tab-unreadable", "open-not-a-repo-retry",
                 "open-not-a-repo-cancel", "open-dialog-sweep", "open-fail-tab",
                 // Deferred though both commit: `quit-waits` photographs before the held write's answer, and
                 // `quit-locked` waits the landing out in its own sampler.

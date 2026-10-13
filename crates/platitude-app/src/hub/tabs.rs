@@ -43,6 +43,10 @@ impl Hub {
                         platitude_core::GitError::UntrustedOwner { stderr, .. } => {
                             ("untrusted", stderr.clone())
                         }
+                        // git's words name the file to put right.
+                        platitude_core::GitError::ConfigUnreadable { stderr, .. } => {
+                            ("config", stderr.clone())
+                        }
                         _ => ("other", e.to_string()),
                     };
                     OpenMsg::Refused {

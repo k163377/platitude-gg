@@ -148,7 +148,9 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       The open-refused verbs (open-not-a-repo, open-bare, the -retry /
       -cancel ways out, and open-fail-tab for the road that keeps its
       tab) make their own folder when no argument names one: what they
-      are about is a folder no repository can be.
+      are about is a folder no repository can be. open-unreadable and
+      open-fail-tab-unreadable make a repository whose own configuration
+      git cannot open.
       The verb `tab-widths` makes its own repositories too, named at a
       spread of lengths, because a strip of equally-named tabs cannot
       show which of them gave way and which were left at their own

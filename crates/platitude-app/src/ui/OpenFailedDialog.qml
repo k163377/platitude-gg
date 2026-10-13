@@ -10,7 +10,8 @@ AppDialog {
 
     /// What was picked, and what git made of it: `plain` (no repository here or in any folder above), `bare` (one with
     /// no working tree), `untrusted` (one another account owns — `message` is git's answer, with the line that allows
-    /// it), or `other` (git had trouble of its own — `message` is its answer).
+    /// it), `config` (a configuration file git could not open — `message` is its answer, naming the file), or `other`
+    /// (git had trouble of its own — `message` is its answer).
     property string path: ""
     property string kind: ""
     property string message: ""
@@ -58,6 +59,12 @@ AppDialog {
             Layout.fillWidth: true
             color: Theme.textSecondary
             text: openFailedDialog.path
+        }
+        // The reader's own step, in this application's words and colour (`Words.openFailureNext`).
+        CardText {
+            Layout.fillWidth: true
+            visible: text !== ""
+            text: Words.openFailureNext(openFailedDialog.kind)
         }
         // git's words, and the only red here: the gate that reports a git it cannot use draws the line the same way
         // (Main.qml).

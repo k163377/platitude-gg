@@ -106,6 +106,10 @@ impl SessionSink for BridgeSink {
                     platitude_core::GitError::UntrustedOwner { stderr, .. } => {
                         ("untrusted", stderr.clone())
                     }
+                    // git's words name the file to put right.
+                    platitude_core::GitError::ConfigUnreadable { stderr, .. } => {
+                        ("config", stderr.clone())
+                    }
                     _ => ("other", error.to_string()),
                 };
                 self.feeds.tab.push(TabMsg::OpenFailed {

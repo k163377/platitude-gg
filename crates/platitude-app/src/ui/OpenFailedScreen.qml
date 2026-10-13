@@ -8,8 +8,8 @@ import platitude.ui
 Item {
     id: screen
 
-    /// core's answer (`errorKind`): `plain` / `bare` / `untrusted` / `other` (`message` is git's own words, which only
-    /// the last two have — `Words.openFailureQuotesGit`).
+    /// core's answer (`errorKind`): `plain` / `bare` / `untrusted` / `config` / `other` (`message` is git's own words,
+    /// which only the last three have — `Words.openFailureQuotesGit`).
     required property string kind
     required property string path
     required property string message
@@ -50,6 +50,13 @@ Item {
         CardText {
             text: screen.path
             color: Theme.textSecondary
+            horizontalAlignment: Text.AlignHCenter
+            width: parent.width
+        }
+        // The reader's own step, in this application's words and colour (`Words.openFailureNext`).
+        CardText {
+            visible: text !== ""
+            text: Words.openFailureNext(screen.kind)
             horizontalAlignment: Text.AlignHCenter
             width: parent.width
         }

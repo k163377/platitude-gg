@@ -301,6 +301,30 @@ pub(super) fn folder_for(
             }
             Ok(dir.display().to_string())
         }
+        // A repository whose own configuration git cannot open, on the
+        // second run as on the first: a folder where the file goes on
+        // Windows, a link to itself elsewhere — the container runs as root,
+        // which reads past any permission.
+        "open-unreadable" | "open-fail-tab-unreadable" => {
+            let dir = made.join("locked");
+            std::fs::create_dir_all(&made).map_err(|e| e.to_string())?;
+            let status = Command::new("git")
+                .args(["init", "--quiet"])
+                .arg(&dir)
+                .env("PATH", path)
+                .status()
+                .map_err(|e| format!("failed to run git: {e}"))?;
+            if !status.success() {
+                return Err("git init failed".into());
+            }
+            let config = dir.join(".git").join("config");
+            std::fs::remove_file(&config).map_err(|e| e.to_string())?;
+            #[cfg(windows)]
+            std::fs::create_dir(&config).map_err(|e| e.to_string())?;
+            #[cfg(unix)]
+            std::os::unix::fs::symlink("config", &config).map_err(|e| e.to_string())?;
+            Ok(dir.display().to_string())
+        }
         // The thirteenth off the ladder, to arrive among the twelve. Built
         // here because [`for_run`]'s list is opened at startup.
         "tab-open-go" | "tab-open-moved-on" => {

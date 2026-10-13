@@ -272,23 +272,33 @@ QtObject {
         return name !== "" ? name : qsTr("the incoming side")
     }
 
-    /// Why a folder would not open, from the kind core answered with (`plain` / `bare` / `untrusted` / `other`), for
-    /// both the picker's dialog and a tab's failed screen (デザイン規約 §リポジトリを開く). `untrusted` is a folder
-    /// another account owns (`safe.directory`), whose heading is this application's and whose way out — the
-    /// `git config --global --add safe.directory` line — is in git's own words underneath. `other` says only that
-    /// much: what happened is git's to say, quoted underneath.
+    /// Why a folder would not open, from the kind core answered with (`plain` / `bare` / `untrusted` / `config` /
+    /// `other`), for both the picker's dialog and a tab's failed screen (デザイン規約 §リポジトリを開く). `untrusted`
+    /// is a folder another account owns (`safe.directory`), whose heading is this application's and whose way out —
+    /// the `git config --global --add safe.directory` line — is in git's own words underneath. `config` is a
+    /// configuration file git could not open, named in git's words underneath. `other` says only that much: what
+    /// happened is git's to say, quoted underneath.
     function openFailure(kind) {
         switch (kind) {
         case "bare": return qsTr("A bare repository has nothing to show")
         case "untrusted": return qsTr("git does not trust this folder's owner")
+        case "config": return qsTr("git could not read its configuration")
         case "other": return qsTr("Could not open this folder")
         default: return qsTr("Not a git repository")
         }
     }
 
+    /// What to do before the folder can open, where the kind has a step of the reader's own; empty for the rest. It
+    /// stands between the path and git's words, which name the file.
+    function openFailureNext(kind) {
+        if (kind !== "config")
+            return ""
+        return qsTr("Fix what keeps git from reading the file named below, then open the folder again")
+    }
+
     /// Whether the folder's failure comes with git's own words to show under the heading (`openFailure`).
     function openFailureQuotesGit(kind) {
-        return kind === "other" || kind === "untrusted"
+        return kind === "other" || kind === "untrusted" || kind === "config"
     }
 
     /// What kept a remote out of reach, from the word core answered with (`remote::Unreached`) — the command log's
