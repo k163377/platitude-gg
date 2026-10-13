@@ -1,5 +1,6 @@
-//! Git supplies the hook wrapper's sh on Windows too, so the cloud
-//! guard needs neither Cargo nor Claude's hook-specific Git Bash.
+//! The hook wrapper, `.claude/hooks/runner.sh`. Git supplies its sh on
+//! Windows too, so the cloud guard needs neither Cargo nor Claude's
+//! hook-specific Git Bash.
 
 use std::fs;
 use std::path::Path;
@@ -89,6 +90,68 @@ fn every_hook_skips_cargo_only_in_the_cloud_and_preserves_local_io() {
             assert_local(&output, &hooks[0][3], "", 23);
         }
     }
+}
+
+/// git hands a shell alias run in a linked worktree `GIT_DIR` for that
+/// tree, and every `git -C <tree>` under it answers for the tree the alias
+/// ran in: a hook run from one seat would judge another seat's claim by its
+/// own lock. Cargo gets none of the variables that point git at a
+/// repository, so each tree is found from its path.
+#[test]
+fn a_hook_run_in_a_linked_worktree_finds_each_tree_from_its_path() {
+    let yard = crate::yard::Yard::new("runner-git-dir");
+    let bin = yard.join("bin");
+    let repo = yard.join("repo");
+    let seat = yard.join("seat");
+    fs::create_dir_all(&bin).unwrap();
+    fs::create_dir_all(repo.join(".claude/hooks")).unwrap();
+    let runner = repo.join(".claude/hooks/runner.sh");
+    fs::write(
+        &runner,
+        include_bytes!("../../../../.claude/hooks/runner.sh"),
+    )
+    .unwrap();
+    let cargo = bin.join("cargo");
+    fs::write(
+        &cargo,
+        "#!/bin/sh\nprintf '%s\\n' \"${GIT_DIR-unset}\"\ngit -C \"$RUNNER_TEST_PRIMARY\" rev-parse --absolute-git-dir\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&runner, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let git = |args: &[&str]| {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "git {args:?}: {output:?}");
+    };
+    git(&["init", "-q"]);
+    git(&["add", ".claude"]);
+    git(&["commit", "-q", "-m", "runner"]);
+    git(&["worktree", "add", "-q", &seat.to_string_lossy(), "HEAD"]);
+    fs::write(yard.join("stdin"), "payload\n").unwrap();
+
+    let mut child = Command::new("git");
+    child
+        .args(&configured_hooks()[0])
+        .env("RUNNER_TEST_PRIMARY", &repo);
+    let output = run_command(child, &yard, &seat, None, 0);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let mut lines = stdout.lines();
+    assert_eq!(lines.next(), Some("unset"), "{stdout}");
+    let asked = lines.next().unwrap_or_default();
+    assert!(
+        crate::seats::same_tree(asked, &repo.join(".git").to_string_lossy()),
+        "the primary's git directory, not the seat's: {stdout}"
+    );
 }
 
 fn configured_hooks() -> Vec<Vec<String>> {
