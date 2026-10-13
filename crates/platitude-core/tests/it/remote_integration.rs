@@ -868,15 +868,18 @@ fn origin_that_moved_on(bare: &TestRepo, file: &str, message: &str) -> TestRepo 
 }
 
 /// The row is offered only where the branch is behind, so a branch that
-/// diverged since the last read is refused whole, `pull.rebase` or not:
-/// nothing merges, nothing rebases, nothing is left standing.
+/// diverged since the last read is refused whole, `pull.rebase` set either
+/// way or not at all: nothing merges, nothing rebases, nothing is left
+/// standing, and git is never left to ask how to reconcile.
 #[tokio::test]
 async fn a_diverged_pull_is_refused_whatever_pull_rebase_says() {
-    for reconcile in ["false", "true"] {
+    for reconcile in [None, Some("false"), Some("true")] {
         let (bare, mut work) = origin_and_clone();
         let (exec, cancel) = env();
         work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
-        work.git(&["config", "pull.rebase", reconcile]);
+        if let Some(reconcile) = reconcile {
+            work.git(&["config", "pull.rebase", reconcile]);
+        }
         let _far = origin_that_moved_on(&bare, "a.txt", "their line");
         work.commit_file("b.txt", "our line\n", "ours");
 
@@ -886,7 +889,7 @@ async fn a_diverged_pull_is_refused_whatever_pull_rebase_says() {
         assert!(
             matches!(err, GitError::Failed { code: 128, .. })
                 && err.to_string().contains("Not possible to fast-forward"),
-            "pull.rebase={reconcile}: {err}"
+            "pull.rebase={reconcile:?}: {err}"
         );
         for marker in ["MERGE_HEAD", "rebase-merge"] {
             assert!(
@@ -1192,35 +1195,6 @@ mod periodic {
             work.git(&["config", "--default", "", "--get", "branch.main.remote"]),
             "",
             "and a push that never landed recorded no upstream"
-        );
-    }
-
-    /// With `pull.rebase` and `pull.ff` unset, git refuses a divergence with
-    /// exit 128 and nothing started; its own words, which name the setting,
-    /// reach the reader (デザイン規約 §git が言ったことを読む場所).
-    #[tokio::test]
-    #[ignore = "git's own refusal text and exit code: not worth the pre-merge run"]
-    async fn a_divergence_git_has_no_orders_for_is_a_failure() {
-        let (bare, mut work) = origin_and_clone();
-        let (exec, cancel) = env();
-        work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
-        let _far = origin_that_moved_on(&bare, "a.txt", "their line");
-        work.commit_file("a.txt", "our line\n", "ours");
-
-        let err = remote::pull(&exec, &work.path, NET, &cancel)
-            .await
-            .expect_err("git will not choose between merging and rebasing");
-        let GitError::Failed { code, stderr, .. } = &err else {
-            panic!("the refusal is git's own: {err}");
-        };
-        assert_eq!(*code, 128);
-        assert!(
-            stderr.contains("divergent branches"),
-            "git says what it needs: {stderr}"
-        );
-        assert!(
-            !work.path.join(".git").join("MERGE_HEAD").exists(),
-            "and nothing was started, so this is the failure it reads as"
         );
     }
 
