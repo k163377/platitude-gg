@@ -84,26 +84,9 @@ fn app_made(tree: &str) -> Option<(Option<PathBuf>, String)> {
 /// config directory's `projects/`: one per place a session started, named
 /// after that place.
 fn started_at(session: &str) -> Option<String> {
-    // The id becomes a file name.
-    if session.is_empty()
-        || !session
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-    {
-        return None;
-    }
-    let config = std::env::var_os("CLAUDE_CONFIG_DIR")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
-                .map(|home| PathBuf::from(home).join(".claude"))
-        })?;
-    let transcript = format!("{session}.jsonl");
-    std::fs::read_dir(config.join("projects"))
-        .ok()?
-        .flatten()
-        .find(|place| place.path().join(&transcript).is_file())
-        .map(|place| place.file_name().to_string_lossy().into_owned())
+    let transcripts = super::transcripts::transcripts(session);
+    let place = transcripts.first()?.parent()?.file_name()?;
+    Some(place.to_string_lossy().into_owned())
 }
 
 /// Whether the tree at `path` is the place a project directory is named

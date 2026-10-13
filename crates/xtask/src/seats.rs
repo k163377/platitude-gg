@@ -13,6 +13,7 @@ pub(crate) mod commands;
 pub(crate) mod entry;
 pub(crate) mod start;
 mod survey;
+mod transcripts;
 
 pub(crate) use claim::{
     Held, Identity, Standing, is_a_seat_claim, lock_reason, standing, take_seat, unlock_seat, whose,
