@@ -149,6 +149,10 @@ Item {
                 // waits(measured): printed beside the window it is read against, and judged by nothing
                 + " wait=" + (Date.now() - acts.reclickGraphAt)
                 + " window=" + Application.styleHints.mouseDoubleClickInterval)
+                // The hand leaves the chip it rested on: the wait over, the row's card would come up on its rest
+                // after the report, and whether the picture and the census caught it would be the machine's pace.
+                if (reclickGraphTimer.points)
+                    item.pointerRowX = -1
                 if (reclickGraphTimer.name === "") {
                     driver.complete()
                     return
