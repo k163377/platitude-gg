@@ -684,6 +684,102 @@ fn a_notice_starts_a_turn_held_until_its_stop() {
     );
 }
 
+/// A background task's notice, queued at `ms` and not taken yet.
+fn queued(ms: u64) -> String {
+    format!(
+        r#"{{"type":"queue-operation","operation":"enqueue","timestamp":"{}","content":"<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n</task-notification>"}}"#,
+        stamped(ms)
+    )
+}
+
+/// The queue's head taken to start a turn.
+const TAKEN: &str = r#"{"type":"queue-operation","operation":"dequeue"}"#;
+
+/// Claude Code's record that a turn's Stop hooks have run, written at `ms`.
+fn summary(ms: u64) -> String {
+    format!(
+        r#"{{"type":"system","subtype":"stop_hook_summary","timestamp":"{}"}}"#,
+        stamped(ms)
+    )
+}
+
+/// A turn is not over at its Stop: Claude Code runs every Stop hook first,
+/// records that they have run, and only then takes what was queued for the
+/// next turn — a notice queued however late. The stopped claim counts until
+/// that record is written after its Stop, and a notice's entry takes over
+/// from there. One whose record never comes — a prompt a hook turned down,
+/// an API error — counts for [`STOPPING`] at most; a transcript with no
+/// such record at all is one Claude Code keeps none in, and its Stop lets
+/// go at once (the other tests' transcripts).
+#[test]
+fn a_stopped_session_counts_until_its_stop_hooks_have_run() {
+    let dir = scratch("stopping");
+    let claude = FakeClaude::start(&dir);
+    let earlier = crate::awake::now_ms() - 5_000;
+    let path = transcript(&dir.join("s.jsonl"), &[REPLY, &summary(earlier)]);
+    apply(
+        &dir,
+        &claim_file("s"),
+        &claude.hook_with(&path),
+        Mark::Prompt,
+    )
+    .expect("claimed");
+    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    assert_eq!(
+        next_reading(&dir),
+        holding(),
+        "the turn let go before its Stop hooks had run"
+    );
+    append(&path, &[&summary(crate::awake::now_ms())]);
+    assert_eq!(
+        next_reading(&dir),
+        released(),
+        "the turn held the machine once its Stop hooks had run"
+    );
+
+    apply(
+        &dir,
+        &claim_file("s"),
+        &claude.hook_with(&path),
+        Mark::Prompt,
+    )
+    .expect("the next turn");
+    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    assert_eq!(next_reading(&dir), holding());
+    let ran = crate::awake::now_ms();
+    append(&path, &[&queued(ran), &summary(ran)]);
+    assert_eq!(
+        next_reading(&dir),
+        holding(),
+        "a notice queued during the Stop hooks let go before it was taken"
+    );
+    append(&path, &[TAKEN, &notice(ran + 1), REPLY]);
+    assert_eq!(
+        next_reading(&dir),
+        holding(),
+        "the turn a notice queued during the Stop hooks began ran unheld"
+    );
+
+    let bound = scratch("stopping-bound");
+    let claude = FakeClaude::start(&bound);
+    let stopping = u64::try_from(crate::awake::STOPPING.as_millis()).expect("ms");
+    let stopped_at = crate::awake::now_ms() - stopping - 5_000;
+    let path = transcript(
+        &bound.join("s.jsonl"),
+        &[REPLY, &summary(stopped_at - 10_000)],
+    );
+    let stopped = Writer {
+        now_ms: stopped_at,
+        ..claude.hook_with(&path)
+    };
+    apply(&bound, &claim_file("s"), &stopped, Mark::Idle).expect("stopped");
+    assert_eq!(
+        next_reading(&bound),
+        released(),
+        "a Stop whose hooks' end was never recorded held the machine past its bound"
+    );
+}
+
 /// A notice written while one of the session's calls is still open — on a
 /// permission prompt, here — is no turn of its own: the wait on the person
 /// goes on, unheld.

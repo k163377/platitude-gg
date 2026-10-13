@@ -1,12 +1,13 @@
 # Windows のスリープ保持: 実測
 
-2026-10-13。holder revision 19、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
+2026-10-13。holder revision 22、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
 デスクトップアプリのログによる補助と実スリープ試験の記録は [ログ補助](../../internal-docs/awake-ログ補助.md)。
 
 ## 判定
 
 保持・解除の Windows API 呼び出し、互換ビルドの holder が共有する activity、読取りと hook の競合、
-保持中の読取りの間引き、判定の履歴、消えた保持の出し直し、書き手の無い subagent の扱いを確かめた。
+保持中の読取りの間引き、判定の履歴、消えた保持の出し直し、書き手の無い subagent の扱い、ターン終了と同時に
+積まれた通知の扱いを確かめた。
 要望全体の完了ではない。Claude から通知されない許可・入力待ちは
 [P3 の未達](../../internal-docs/P3-確認事項.md#開発環境スリープ止め-cargo-xtask-awake)に残る。
 ここのテストは、実際の Claude の許可画面からのイベント配信を証明しない。
@@ -14,8 +15,8 @@
 ## 実 API 試験
 
 `awake::tests::holder::coordination::compatible_holders_apply_and_clear_real_windows_requests_together`。
-テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r19)と、
-同じスクリプトで holder 名だけ r20 にした互換ビルドを同時に動かす。OS API は置き換えない。
+テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r22)と、
+同じスクリプトで holder 名だけ r23 にした互換ビルドを同時に動かす。OS API は置き換えない。
 session / hook の入力は fixture で、Claude 本体ではない。
 
 `SetThreadExecutionState` の非 0 の戻り値は、成功とそのスレッドの直前の状態を示す
@@ -23,12 +24,12 @@ session / hook の入力は fixture で、Claude 本体ではない。
 両 holder とも保持時の戻り値は `0x80000000`、解除時は `0x80000001` —— system の継続要求を設定・解除でき、
 display の継続要求は加えていない。
 
-| 遷移 | r19(WMI 起動) | r20(互換ビルド) |
+| 遷移 | r22(WMI 起動) | r23(互換ビルド) |
 | --- | ---: | ---: |
-| 最初の Prompt → 保持 | 1438 ms | 1066 ms |
-| s が Stop、t は質問待ち → 解除 | 54 ms | 16 ms |
-| t の質問への回答 → 保持 | 20 ms | 60 ms |
-| t も Stop → 解除 | 85 ms | 38 ms |
+| 最初の Prompt → 保持 | 1313 ms | 926 ms |
+| s が Stop、t は質問待ち → 解除 | 12 ms | 36 ms |
+| t の質問への回答 → 保持 | 16 ms | 43 ms |
+| t も Stop → 解除 | 69 ms | 33 ms |
 
 質問待ちになる前から s が作業中なら、t の質問だけでは解除しないことも同じテストで確かめる。
 数値は単発の観測値で、遅延の上限ではない。最初の保持は
@@ -40,7 +41,7 @@ hook の印(`hooks-r<n>`)を 10 分より前に戻し、hook が動いている�
 プロセスごと終わり、claim は残り、互換ビルドが保持を続けた。降りる判定そのものは、holder 本体を 1 回だけ読ませる
 試験で場合分けする(使用中の別ビルドがある / 1 本だけ / 全部静か / 相手の心拍が古い)。
 
-awake の Windows テストは **110 passed / 0 failed / 3 ignored**(65.66 秒。律速は tick 待ちを含むテストで、
+awake の Windows テストは **112 passed / 0 failed / 3 ignored**(65.04 秒。律速は tick 待ちを含むテストで、
 他席の負荷で揺れる)。
 ignored は、親テストが専用環境で呼ぶ子プロセスの入口 2 本と、手動の実スリープ試験 1 本。子コマンドの背景実行、
 質問・許可待ち、複数セッション、subagent、通知、所有者の終了、読取りの妨害、同時起動、hook のパイプの解放、
@@ -102,6 +103,50 @@ Agent ツールの subagent は、`.meta.json` を最初の記録の約 0.25 秒
 どちらも、この扱いを外した台本では赤になる。
 呼び出しの前は数える(SubagentStart の直後、`.meta.json` が書かれる前の Agent ツールの subagent を外さないため)。
 holder を起こし直すと覚えは消え、書き直された claim は呼び出しが無ければ最後の hook から 1 時間数える。
+
+## Stop hook が走り終わるまでのターン
+
+2026-10-13 10:14 の本番(holder r19)。席 b のセッションのターンが終わる間際に、背景コマンドの完了通知が
+キューに積まれた:
+
+| 時刻(JST) | 出来事 |
+| --- | --- |
+| 10:13:59.681 | モデルの最後の応答 |
+| 10:14:02.490 | 通知の `queue-operation` `enqueue`(`<task-notification>`) |
+| 10:14:02 | Stop hook が claim を idle に書き、その読取りで holder が解除。同じ秒にスリープ開始(Kernel-Power 42 は System Idle、就寝時刻 10:14:02.89) |
+| 10:14:04.212 | Stop hook の記録(`stop_hook_summary`)。7 ms 後に `dequeue`、その 3 ms 後に通知の user 行 |
+| 10:14:04 | holder が通知の行を読んで保持し直す(就寝は既に始まっていた) |
+
+Stop の読取りから通知の行が書かれるまでの間、数えるものが無かった。無操作タイマーが切れていれば、解除の瞬間に
+眠る。
+
+Claude Code は、Stop hook(このリポジトリの物とユーザーの物)を全部走らせて `stop_hook_summary` を書き、
+その後でキューに積まれた物を次のターンに取る。このプロジェクトの 2026-10-01 以降の transcript で:
+
+- 応答で終わったターン 1,583 回のうち 1,577 回の後に `stop_hook_summary` があった。残り 6 回は、その前に
+  次の発話(人 3・通知 1・不明 2)が書かれていた。応答の最後の行から記録までは中央値 3.5 秒、90% 点 9.6 秒、
+  99% 点 20 秒、最長 199 秒
+- 通知が積まれる時機は決まっていない。最後の応答を書いている途中(その後に応答の行が続く)、Stop hook が
+  走っている途中、溜まった通知を 1 件ずつ取る間のどれも、記録の後に取り出される。最後の応答より後に積まれ
+  取り出されないまま Stop した 19 回は、どれも記録から 14 ms 以内に取り出された(9 月以前の版には、数分〜
+  数時間取り出されない例がある)。Stop hook の途中に積まれた例では、記録から取り出しまで 453 ms あった
+  (席 f、10/12 22:11:05)
+- API エラー(使用量の上限など)で止まったターン 75 回(9/15 以降)には記録が無い。hook に止められた発話
+  (ターンが始まらない)で走る Stop にも無い
+- 今ある idle の claim で、こちらの Stop hook が claim を書いた時刻から記録までは 1.3〜1.7 秒
+
+holder(r22〜)は、止まった(idle の)セッションを、transcript がその Stop より後の `stop_hook_summary` を
+持つまで `turn:` として数える。上限は Stop から 60 秒(`awake::STOPPING`。記録の来ない Stop がそこで解ける)。
+transcript の末尾 256 KB に記録が 1 つも無いセッションは、記録を書かない版の物として、この待ちに掛けない。
+記録の後も、最後の発話より後の `queue-operation` が `enqueue` で終わっている(積まれてまだ取り出されていない)
+間は数える(積まれてから 60 秒まで)。通知の行が書かれれば、通知でターンが始まる規則が引き継ぐ
+(`a_stopped_session_counts_until_its_stop_hooks_have_run`。どちらの扱いも、外した台本では赤になる)。
+キューを「enqueue で +1、dequeue・remove で −1」と数える読み方は使わない: ターンの途中の通知は取り出しの
+記録無しに添付で届くので、数えが空にならない。
+
+残る窓: 記録から通知の行が書かれるまで(最後の応答の途中に積まれた物は記録から、Stop hook の途中に積まれた
+物は取り出しから。実測で十数 ms 以内)に読取りが当たると、その読取りは解除する。次の読取り(最長で 1 tick)で
+保持し直す。
 
 ## holder の負荷
 
@@ -169,7 +214,8 @@ holder(revision 5 以降)の判定は `.awake/history` に残る。全 revision 
 ```
 
 左から、時刻(ミリ秒)、書いた holder の revision と pid、判定、理由。理由は整列済みのカンマ区切りで、
-`turn:<session>`(応答か呼び出しが数えられている。subagent の分も session に寄せる)、
+`turn:<session>`(応答か呼び出しが数えられている。止まったターンの Stop hook が走り終わっていない。subagent の
+分も session に寄せる)、
 `process:<session>`(シェル呼び出しのプロセスが走っていて、その session の `turn` が数えられていない)、
 `wake:<session>`(予約した再開が先にある)。`holding -` は、読取りの途中で claim が変わったので保持を続けた、の意。
 `lost thread:<16 進>,system:<16 進>,after:<16 進>`(r19〜)は、読取りが保持の消失(または立てたばかりの保持が
@@ -187,6 +233,9 @@ holder(revision 5 以降)の判定は `.awake/history` に残る。全 revision 
   立て直す
 - 要求が数えられなくなる仕組みは確かめていない(API からのスリープを挟んだ 1 例だけ)。強制スリープと復帰を
   制御して挟む試験は、作業中のセッションを止めるので行っていない
+- Stop hook の記録を待つ規則は、記録の来ない Stop(API エラー、hook に止められた発話)でも 60 秒保持する。
+  Stop hook が 60 秒より長く走って、その後に通知が取り出されるターンは、上限の後に解除しうる(応答から記録まで
+  の最長は 199 秒)
 - 書き手の無い subagent の判定は、Claude Code の置き場(`<session>/subagents/agent-<id>.jsonl` と
   `.meta.json`)に何も無いことを根拠にする。置き場が変わると、Agent ツールの subagent も最初の呼び出しで
   止まった扱いになり、背景の subagent の MCP・fetch・思考の間を保持しない。置き場の実測は、このプロジェクトの

@@ -814,10 +814,12 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       a reading finds it. A notice (a
       background task's end, another session's message) written into a
       session's transcript since its last hook starts a turn: the holder
-      marks the claim working from it, until the turn's Stop. An MCP
-      server's pending request for input holds up one of the session's
-      running calls on that server, and its answer frees that one
-      request alone.
+      marks the claim working from it, until the turn's Stop. A turn
+      counts past its Stop until Claude Code records that the Stop hooks
+      have run, when it takes what was queued for the next turn (a
+      minute at most). An MCP server's pending request for input holds
+      up one of the session's running calls on that server, and its
+      answer frees that one request alone.
       No hook says when a person lets a call through, nor when a tool
       the desktop app runs asks a person itself: each holder reads
       those, best-effort, off the desktop app's own log

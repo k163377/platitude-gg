@@ -177,6 +177,7 @@ pub(super) fn shipped(dir: &std::path::Path, revision: u32, during_query: &str) 
         .replace("@DELEGATED@", "'Agent', 'Task'")
         .replace("@STARTS_PROCESSES@", "'Bash', 'PowerShell', 'Monitor'")
         .replace("@TTL@", "3600")
+        .replace("@STOPPING@", &crate::awake::STOPPING.as_secs().to_string())
         .replace(
             "@RETIRE@",
             &crate::awake::RETIRE_AFTER.as_secs().to_string(),

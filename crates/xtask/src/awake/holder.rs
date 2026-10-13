@@ -108,7 +108,8 @@ const DELEGATED: &str = "'Agent', 'Task'";
 /// the claims it holds for do — `<ms> r<revision> <pid> holding
 /// <reasons>`, `… released -`, and `… quit -` as it ends, whichever way.
 /// The reasons are sorted and set apart by commas: `turn:<session>` (a
-/// reply or a call of the session's or of a subagent's counts),
+/// reply or a call of the session's or of a subagent's counts, or a
+/// stopped turn's Stop hooks have not been recorded as run),
 /// `process:<session>` (a shell call's process runs and no `turn` of that
 /// session counts — past its stop, or let through a prompt) and
 /// `wake:<session>` (a wake-up scheduled); `-` stands for a hold kept
@@ -194,6 +195,22 @@ const DELEGATED: &str = "'Agent', 'Task'";
 /// the claim works already moves only its time. A subagent's transcript is
 /// not read for an interruption: what a subagent does after one is not
 /// known, and it may reply on.
+///
+/// A turn is not over at its Stop: Claude Code runs every Stop hook — this
+/// repository's, the user's — records that they have run (a `system`
+/// entry, `stop_hook_summary`), and only then takes what was queued for
+/// the next turn: a background task's notice, another session's message,
+/// a prompt typed meanwhile, queued however late, its entry written then
+/// (measured). The Stop's own reading comes before all that, so a stopped
+/// session's claim counts until its transcript records the Stop hooks'
+/// end after the claim's Stop — for [`STOPPING`](super::STOPPING) at most,
+/// since a Stop with no reply behind it gets no record — and, past the
+/// record, while something queued (a `queue-operation` `enqueue`) after
+/// the last entry waits to be taken, as long at most from its queuing: one
+/// queued while the Stop hooks run can be taken a while after their
+/// record. A notice's entry takes over from there. A transcript whose tail
+/// holds no such record is taken for one Claude Code keeps none in, and
+/// its Stop lets go at once unless something waits in its queue.
 // waits(paced): the lock's retry — `FileStream.Lock` has no blocking form — and a held machine's readings, spaced by `PACE` on a clock that only runs forward
 #[cfg(windows)]
 pub(super) const SCRIPT: &str = r#"$ErrorActionPreference = 'Stop'
@@ -312,7 +329,7 @@ function Get-Stamp($line) {
   return [int64]0
 }
 function Read-Tail($path, $earlier) {
-  $tail = @{ Mark = ''; Lines = @(); Ended = @{}; Notice = [int64]0; Last = '' }
+  $tail = @{ Mark = ''; Lines = @(); Ended = @{}; Notice = [int64]0; Summary = [int64]0; Queued = [int64]0; Last = '' }
   if ((-not $path) -or ($path -eq '-') -or -not (Test-Path -LiteralPath $path)) { return $tail }
   $stream = [IO.File]::Open($path, 'Open', 'Read', 'ReadWrite, Delete')
   try {
@@ -325,7 +342,13 @@ function Read-Tail($path, $earlier) {
     $tail.Lines = [Text.Encoding]::UTF8.GetString($bytes, 0, $stream.Read($bytes, 0, $take)) -split "`n"
   } finally { $stream.Dispose() }
   foreach ($line in $tail.Lines) {
-    if ($line -match '"type":"(user|assistant)"') { $tail.Last = $line }
+    if ($line -match '"subtype":"stop_hook_summary"') { $tail.Summary = Get-Stamp $line; continue }
+    if ($line -match '"type":"queue-operation"') {
+      $tail.Queued = [int64]0
+      if ($line -match '"operation":"enqueue"') { $tail.Queued = Get-Stamp $line }
+      continue
+    }
+    if ($line -match '"type":"(user|assistant)"') { $tail.Last = $line; $tail.Queued = [int64]0 }
     if ($line -notmatch '"type":"user"') { continue }
     if ($line -match $notice) { $tail.Notice = Get-Stamp $line }
     $found = [regex]::Matches($line, '"tool_use_id":"([^"]+)"')
@@ -575,6 +598,13 @@ try {
         foreach ($entry in $counted) {
           $claim, $text, $word, $session, $who, $tail = $entry
           if ([int64]$word[4] -gt $now) { $keep = $true; $why["wake:$(Get-Whose $session)"] = $true }
+          $stoppedAt = [int64]$word[2]
+          $hooksRunning = ($tail.Summary -gt 0) -and ($tail.Summary -lt $stoppedAt) -and (($nowms - $stoppedAt) -lt @STOPPING@ * 1000)
+          $queued = ($tail.Queued -gt 0) -and (($nowms - $tail.Queued) -lt @STOPPING@ * 1000)
+          if (($who -eq '-') -and ($word[0] -eq 'idle') -and ($hooksRunning -or $queued)) {
+            $keep = $true
+            $why["turn:$(Get-Whose $session)"] = $true
+          }
           if ($word[0] -ne 'working') { continue }
           if (($who -eq '-') -and ($tail.Last -match $interrupted)) { continue }
           $open = @()
@@ -730,6 +760,7 @@ pub(super) fn script(dir: &Path, reserved: u32) -> String {
         .replace("@HOLD@", &HOLD.to_string())
         .replace("@LET_GO@", &LET_GO.to_string())
         .replace("@TTL@", &super::WORKING_TTL.as_secs().to_string())
+        .replace("@STOPPING@", &super::STOPPING.as_secs().to_string())
         .replace("@RETIRE@", &super::RETIRE_AFTER.as_secs().to_string())
         .replace("@STALE@", &super::HOLDER_STALE.as_secs().to_string())
         .replace("@TICK@", &TICK.as_secs().to_string())

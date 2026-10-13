@@ -37,7 +37,7 @@ debug は実行コマンド・質問・応答などの payload もローカル�
 ## 共有 holder の役割
 
 native hook が prompt、tool 開始・終了、Stop、Interrupt、SessionEnd、子agentの活動を記録する。
-Claude の `r1` と Codex の `c1` は activity protocol 1、holder revision 19 を共有する。
+Claude の `r1` と Codex の `c1` は activity protocol 1、holder revision 22 を共有する。
 `PermissionRequest` は権限判断より前の通知なので、人待ちにしない。自動審査中は保持を続ける。
 hook は実行の許可・拒否や席の lock を変更しない。
 
@@ -72,7 +72,7 @@ native 判定を残し、診断へ示す。欠損で作業中の保持を解除�
 ## 診断と手動 fallback
 
 <!--cmd:awake.status-->`cargo xtask awake` は activity、holder の保持判定・heartbeat・history と、
-`codex-log-r19` の状態を表示する。
+`codex-log-r22` の状態を表示する。
 
 - `watching debug=observed age-ms=...` は読めた debug 行の新しさ。古い debug 行だけで設定反映済みとは判断しない。
 - `overlay` は対応付けた item、`pending` は入力待ちの MCP server、`unmatched` / `ambiguous` は

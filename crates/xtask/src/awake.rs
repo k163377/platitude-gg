@@ -36,6 +36,10 @@
 //! turn that no hook of this repository is sure to hear begin: the holder
 //! rewrites the claim `working` as of the notice, and it counts as any
 //! working claim does — replies and calls alike — until the turn's Stop.
+//! A turn is not over at its Stop: what was queued for the next turn — a
+//! notice queued however late — is taken once Claude Code has recorded
+//! that the Stop hooks have run, so a stopped claim counts until that
+//! record ([`STOPPING`] at most).
 //!
 //! An MCP server's pending request for a person's input names neither a
 //! call nor a subagent, only its server: each holds up one of the
@@ -182,7 +186,7 @@ const AGENT: char = '~';
 /// The holder implementation, independent of the activity protocol.
 /// A script change raises this; compatible builds still update the same
 /// claims, so a Stop or a question reaches every holder reading them.
-const REVISION: u32 = 19;
+const REVISION: u32 = 22;
 /// A Codex handoff requires a holder that accounts for its independent
 /// child agents. An older holder can count delegated work twice.
 #[cfg(windows)]
@@ -201,6 +205,14 @@ const CLAIM_FORMAT: u32 = 1;
 /// its result, or its subagent's end is written.
 #[cfg(windows)]
 const WORKING_TTL: Duration = Duration::from_secs(60 * 60);
+/// How long a stopped session counts from its Stop while Claude Code has
+/// not recorded that its Stop hooks have run (`stop_hook_summary`): the
+/// record follows every reply's Stop, past the slowest Stop hooks this
+/// repository and the user run (ci/baseline/awake-control-windows-x64.md);
+/// a Stop with no reply behind it — a prompt a hook turned down, an API
+/// error — gets none, and goes at this bound.
+#[cfg(windows)]
+const STOPPING: Duration = Duration::from_secs(60);
 /// A heartbeat older than this is a holder that died without clearing
 /// its name; the next claim written starts another.
 const HOLDER_STALE: Duration = Duration::from_secs(3 * 15);
