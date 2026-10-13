@@ -277,7 +277,8 @@ QtObject {
     /// is a folder another account owns (`safe.directory`), whose heading is this application's and whose way out —
     /// the `git config --global --add safe.directory` line — is in git's own words underneath. `config` is a
     /// configuration file git could not open, named in git's words underneath. `other` says only that much: what
-    /// happened is git's to say, quoted underneath.
+    /// happened is git's to say, quoted underneath. `plain`'s heading is git's own words for it (setup.c `not a git
+    /// repository`, as 2.43.0 to 2.56.0 write them).
     function openFailure(kind) {
         switch (kind) {
         case "bare": return qsTr("A bare repository has nothing to show")
@@ -477,7 +478,8 @@ QtObject {
         case "pre-rebase":
             return qsTr("The pre-rebase hook turned it down — see %1").arg(Words.commandsTitle)
         // git's first checkout would write over files it does not track; its words list them. Said as the other tools
-        // say it, by what would be lost.
+        // say it, by what would be lost — and in git's words for it (unpack-trees.c `untracked working tree files would
+        // be overwritten by checkout`, as 2.43.0 to 2.56.0 write them).
         //: %1 is the command log's own title.
         case "rewrite-untracked":
             return qsTr("Untracked files would be overwritten — see %1").arg(Words.commandsTitle)
@@ -497,7 +499,7 @@ QtObject {
             return qsTr("It is no longer in the stash list.")
         // A lock file another git held at that moment, or one a crashed git left behind — git's own words leave both
         // open, and so does this line: trying again is the answer to the first, and the log's line names the file for
-        // the second.
+        // the second. The words are git's (lockfile.c `unable_to_lock_message`, as 2.43.0 to 2.56.0 write them).
         //: %1 is the command log's own title.
         case "rename-locked":
         case "commit-locked":
@@ -553,7 +555,8 @@ QtObject {
             return qsTr("The folder is not empty.")
         // git's own words list the files and end in advice to the terminal; the log keeps them. What stood in the way
         // is this worktree's own work: a file changed here that they change too, or one standing where they put a
-        // file — said as the other tools say it, by what would have been lost.
+        // file — said as the other tools say it, by what would have been lost, in git's `would be overwritten`
+        // (unpack-trees.c, as 2.43.0 to 2.56.0 write it).
         case "carried-in-the-way":
             return qsTr("Uncommitted changes in this worktree would be overwritten.")
         // Turned down before git: a file here — committed or not — stands where one of their untracked files goes.
@@ -615,6 +618,7 @@ QtObject {
         //: %1 is a remote, %2 the command log's own title.
         case "shallow":
             return qsTr("%1 does not take pushes from a shallow clone — see %2").arg(remote).arg(Words.commandsTitle)
+        // The far side's git said its lock was taken: the words of `rename-locked` and the rest above.
         //: %1 is a remote, %2 the command log's own title.
         case "locked":
             return qsTr("Another git process seems to be running on %1 — see %2").arg(remote)
