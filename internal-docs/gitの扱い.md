@@ -20,6 +20,7 @@
 | 最低版で使えない形式・同梱レシピ | `version.rs` 末尾のコメント |
 | 実際に発行する引数・環境変数 | 各操作の `GitCommand` 構築と `process/executor.rs` の共通設定(§発行前の釘付け) |
 | 失敗の類型と出し先 | 本文書 §類型 と `report.rs` の `ReportKind` |
+| git の文言から読む語と、全リリースでのその行(版の境目) | [`relied_messages.rs`](../crates/platitude-core/src/relied_messages.rs) と [`relied-messages.txt`](../crates/xtask/relied-messages.txt)(§git の文言に依存する判定) |
 | 対応範囲・確認方法・追加時の手順・扱いの基準 | 本文書 |
 
 UI・エラー文言は `version.rs` の `minimum_string()`、対応判定は `GitVersion::supported()` を使う。
@@ -67,6 +68,44 @@ submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §14 
 4. 最低版そのものを変える場合は、同じ定義の選定理由・確認記録とコンテナの整合を見直す。
    版変更の検証範囲は [反映前テストの機械化.md](反映前テストの機械化.md) に従う。
 
+### git の文言に依存する判定
+
+**git も Git for Windows も、文言を版・OS で揃える約束をしていない。** git(1) は最低版から `master` まで、
+Porcelain の入出力を「利用者の体験のために変わりうる」とする(安定を目指すのは plumbing だけ)。保守版も文言を
+変え(下の記録の `INDEX_UNWRITTEN`)、Git for Windows は独自の文を持つ(同 `GPG_UNSIGNED`)。**だから最低版と
+最新版の両端だけでは裏取りにならない。**
+
+| 物 | 置き場 | 役 |
+|---|---|---|
+| 語の表 | [`relied_messages.rs`](../crates/platitude-core/src/relied_messages.rs) | 製品が git の文言から読む物の全部: 分類器が判定に使う語と、git の文から切り出して画面の文に埋める区切り(worktree のロック理由)。**2 種類で書く** —— **形**(`Words`)は 1 つの行の文で、git のどのファイルのどの文から来るか(`- git:` / `- openssh:`)と、実 git にそれを言わせるテスト(`- witness:`。無ければ `none` と理由)を持つ。照合・記録・週次はこの単位。**メッセージ**(`Relied`)は同じことを言う形の束で、どれかが見つかれば当たり(`LOCK_TAKEN.found_in(said)`)。形は表の中でしか作れない(型のコンストラクタが表のモジュールの外から見えない)。**分類器は表の判定を呼び、自前の文字列を書かない**(機械化済み: `cargo xtask structure` —— git の文を読む関数(`said` / `stderr` / `stderr_utf8` / `failure_message` を名指す関数。git の文はこの名で受ける)の中で、文字列リテラル・その `format!`・そのファイルの文字列定数を照合に使う行を止める。`#[cfg(test)]` の項目は読まない。git の文でない物 = 機械形式の答え・アプリ自身の印は、その行か直前のコメントに `// not git's words: <何か>`) |
+| 版の差の吸収 | 同上 | **動いている git の版で分岐しない**(ユーザー決定 2026-10-13)。版ごとの形はすべてメッセージの束に並べ、どれかに当たれば良い。版の番号は文言の鍵にならない —— 同じ番号でも Git for Windows(2.43〜2.46 の gpg の文)・Apple Git(本家と 73 ファイル違う 2.50.1)・ディストリの取り込み(Ubuntu の 2.43.0 に 2.43.4 の dubious ownership)で文が違い、撃つ git も設定と PATH への切り替えで変わる。**分ける時は、同じ形が版で別の意味になった時だけ、印は git が言ったこと(文・記録)** |
+| 照合の記録 | [`relied-messages.txt`](../crates/xtask/relied-messages.txt)(生成物) | 読んだ木と、各語の行を「同じ行を持つ木」ごとに分けた時代 = 版の境目。行として持つのは**その行が呼ぶ関数(`die` と `error` の別 = 終了コード)と文字列だけ** —— 変数名・コメントの書き換えは変化に数えない。読む木は、最低版以降の本家の全リリース(rc は除く)と `master`、Git for Windows の全リリースと `main`、最低版以降を元にした Apple Git(macOS の Command Line Tools)、[最低版コンテナ](../ci/linux/Dockerfile)の Ubuntu のパッチ済みの木、OpenSSH(git が文をそのまま運ぶ 2 語)。**系列ごとに全タグを並べるので、並行する保守版も 1 本ずつ載る**(v2.43.7 は v2.50.0 より後に出た) |
+| 足す・変える時の網 | gate の常時ステップ <!--call:relied-messages.check-->`relied-messages check`(オフライン) | 表と記録が食い違えば赤 —— <!--cmd:relied-messages.audit-->`cargo xtask relied-messages audit`(全木を取り直して記録を書き直す)を撃って commit するまで通らない。証人の完全名は、統合スイートの `relied_witnesses` がそのテストバイナリの `--list` と突き合わせる(表を変えると gate がそのテストを選ぶ) |
+| 週次 | [`relied-messages.yml`](../.github/workflows/relied-messages.yml) | `watch`: 本家 `master`・Git for Windows の `main` と、記録に無いリリース(Apple の新しいタグ・動いた Ubuntu の枝を含む)を記録と比べ、**語の行が変わった時だけ赤**(変わった行と、その行を持つ木 = どのリリースまで入ったかを出す)。**保守版・セキュリティ版のタグはどれも `master` の祖先**なので、どのリリースの変化も `master` に現れる。`master`: 本家 `master` を組み、表の証人をその git で回す。**登録した証人が全部走って通らなければ赤**(`--exact` は無い名前を何も選ばずに通すので、実行の報告で数える) —— 行に出ない経路の変化(同じ場面で先に別の `die()` に当たる)を、証人の在る場面で捕まえる |
+
+語を足す・変える時:
+
+1. 使い捨てリポジトリで再現して `tests/it` に固定する(rules-refs/core.md「書き込みの失敗の分類を足す・変える前に」)。
+   そのテストを表の `- witness:` に名指す
+2. 表に形を足す: 出所の git のファイルと、その行の文(大小は問わない)。**同じ語を書く所が多い語(`already exists` 等)は、
+   自分の場面の文を出すファイルだけを名指す** —— 木全体で拾うと、無関係な行の変化で週次が赤になる。同じことを言う
+   別の形(別の版・別の経路の文)が在れば、その形も足してメッセージの束に並べる
+3. <!--cmd:relied-messages.audit-->`cargo xtask relied-messages audit` を撃ち、`relied-messages.txt` の差分でその語の行の時代を読む。時代が 2 つ以上ある語は、
+   変わった版でも分類が正しいかを確かめ、終了コード・stream が変わる境目は分類器のコメントに書く
+4. commit する(gate の <!--call:relied-messages.check-->`relied-messages check` が表と記録の一致を見る)
+
+照合が見ない物:
+
+- **語の行は変わらず、同じ場面で先に別の文を言うようになった変化のうち、証人の無い場面** —— 週次の `master` の
+  テストが捕まえるのは証人の在る場面だけ
+- **git の外の文**: C ライブラリの `strerror`(`File exists`)、forge が名付ける拒否の理由(`protected branch hook
+  declined`)
+- **表の外**: 機械形式(`--porcelain` / `-z` / `--format` / trace2)、生のまま出すと決めた git の文(コマンドログ・
+  ヘッダの 1 行・開けなかった画面)、データとして読む人向けの出力(mergetool の一覧・reflog の件名・stash の名前・
+  `git version`)。どれも管理の範囲外(ユーザー決定 2026-10-13)
+- **git の文を写した固定の UI 文言**(`Another git process seems to be running` 等)は追従しない(ユーザー決定
+  2026-10-13)。写した所のコメントに、どの版のどのファイルの文かを書く
+
 ## 異常時の扱いの基準(ユーザー決定 2026-10-12)
 
 失敗の扱いは 0 から作る想定で、次の基準で決める。**「対処」には、PGG の UI 操作からそれが起きないよう
@@ -83,8 +122,8 @@ submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §14 
 4. **発行前の段階・低コストな手段(釘付け・ゲート)で起きなくできる物は積極的にそうし、その失敗を
    「稀」に分類する**(§発行前の釘付け)。
 5. **日常性能への悪影響が大きい対処は、意図的にサポート外にすることも検討する**(§日常性能への代金)。
-6. **「現状が正しい」とは思い込まない** —— 判定はプラットフォームの公式ドキュメント(git の最低版と最新版の
-   マニュアル・ソース、GitHub / GitLab の docs)と実測で裏を取る。使い捨てリポジトリで再現し、
+6. **「現状が正しい」とは思い込まない** —— 判定はプラットフォームの公式ドキュメント(git のマニュアル、
+   GitHub / GitLab の docs)、git の全リリースのソース(§git の文言に依存する判定)と実測で裏を取る。使い捨てリポジトリで再現し、
    `tests/it` に固定してから分類器を書く(rules-refs/core.md「書き込みの失敗の分類を足す・変える前に」)。
 
 ### 出し先は 4 つ
@@ -113,7 +152,7 @@ submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §14 
 | 色・パスの引用・署名表示・index の自動 refresh・任意ロック | `-c color.ui=false` `core.quotepath=false` `log.showSignature=false` `diff.autoRefreshIndex=false` `--no-optional-locks` | `process::executor` `FIXED_ARGS` | `--format` の記録に色・gpg 出力・`"..."` の引用が混ざる / ポーリングの diff が `index.lock` を取って commit を落とす |
 | コミット文の文字コード(読み・書き) | `-c i18n.logOutputEncoding=utf-8` `i18n.commitEncoding=utf-8` | `FIXED_ARGS` | 端末向けに Shift_JIS 等を設定した機械で `log` の文が変換されて化ける / アプリが書く UTF-8 の文に別の文字コードの `encoding` ヘッダが付く(ユーザー決定 2026-10-12) |
 | ロケール・資格情報の対話・任意ロック・エディタ | `LC_ALL=C` `GIT_TERMINAL_PROMPT=0` `GIT_OPTIONAL_LOCKS=0` `GIT_EDITOR=true` | `FIXED_ENV` | 分類器が読む語が翻訳される / 資格情報の入力で止まる / エディタで止まる |
-| 起動元から継いだリポジトリの所在と diff・pathspec の形 | `GIT_DIR` `GIT_WORK_TREE` `GIT_INDEX_FILE` `GIT_OBJECT_DIRECTORY` `GIT_COMMON_DIR` 等 git 自身の `local_repo_env`(environment.c、2.43〜2.55)+ `GIT_EXTERNAL_DIFF` `GIT_DIFF_OPTS` と pathspec magic の 4 変数、`GIT_NAMESPACE`(ref の名前空間)と `GIT_REFLOG_ACTION`(reflog の文 —— `session::leaving` が読む)を**毎 spawn で消す**(コマンド自身の `env` は後から載る) | `INHERITED_ENV_DROPPED` | フック・git alias・IDE の実行構成から起動されたアプリの全コマンドが別のリポジトリを指す / パーサが読まない diff の形 |
+| 起動元から継いだリポジトリの所在と diff・pathspec の形 | `GIT_DIR` `GIT_WORK_TREE` `GIT_INDEX_FILE` `GIT_OBJECT_DIRECTORY` `GIT_COMMON_DIR` 等 git 自身の `local_repo_env`(environment.c、2.43〜2.55)+ `GIT_EXTERNAL_DIFF` `GIT_DIFF_OPTS` と pathspec magic の 4 変数、`GIT_NAMESPACE`(ref の名前空間)と `GIT_REFLOG_ACTION`(reflog の文 —— `discards::read` が読む)を**毎 spawn で消す**(コマンド自身の `env` は後から載る) | `INHERITED_ENV_DROPPED` | フック・git alias・IDE の実行構成から起動されたアプリの全コマンドが別のリポジトリを指す / パーサが読まない diff の形 |
 | diff の形(prefix・文脈行・submodule の表示・外部 diff) | `-c diff.noprefix=false` `diff.mnemonicPrefix=false` `diff.srcPrefix=a/` `diff.dstPrefix=b/`(2.45+ のキー。最低版は無視)`diff.context=3` `diff.submodule=short` `diff.external=` と各 diff の `--no-ext-diff` | `details::DIFF_SHAPE_ARGS` | `a/` `b/` を剥がすヘッダのパースが壊れる / `diff.context=0` の hunk は `git apply` が当てられず部分ステージが常に断られる / gitlink が `diff --git` 無しの形で出る |
 | push の送る ref | 明示の refspec + `--no-follow-tags` | `remote::push::porcelain_push` | `push.followTags` で頼んでいないタグが一緒に出る |
 | rebase・merge・pull の autostash、駆動 rebase の merge 形 | 3 つとも `--no-autostash`、駆動形だけ `--no-rebase-merges` | `integrate::rebase_command` / `integrate::merge` / `remote::pull` | `rebase.autoStash` / `merge.autoStash` の git が先に自分で退けて素の `apply` で戻し(staged が unstaged に落ちる)、止まった時の作業が `rebase-merge/autostash` / `MERGE_AUTOSTASH` に入って stash list の外へ行く / `label onto` が todo に入る |
@@ -181,7 +220,7 @@ merge 中の amend・unmerged)。残る失敗は常に外が断った物。
 | 類型 | 答え | 場面・頻度 | 出し先 |
 |---|---|---|---|
 | 撃つ前に断る 7 種 | — | merge を跨ぐ / 今のブランチが見ない / 最初のコミットの畳み先 / 全部 drop / 取得されていない親 / 先端が動いた / 操作が立っている | 報せ `Withheld`(`RewriteAcrossMerge` 〜 `RewriteWhileStanding`) |
-| `pre-rebase` | 2.55 `error:` exit 1 / 2.43 `fatal:` 128 | 日常(フック) | 報せ `RewritePreRebase` |
+| `pre-rebase` | 2.47+ `error:` exit 1 / 2.43〜2.46 `fatal:` 128 | 日常(フック) | 報せ `RewritePreRebase` |
 | 置き直すコミットのフック・署名・ロック | 文 + 止まり、または trace2 | 日常(husky・署名) | `rebase --abort` で戻してから報せ `RewriteCommitHook` / `RewriteUnsigned` / `RewriteLocked` |
 | 最初の checkout が untracked を上書き | `untracked working tree files would be overwritten by checkout` exit 1 | ある(git の前に推さない —— carry が先に退ける) | 報せ `RewriteUntrackedInTheWay` |
 | conflict・`edit`・空になった pick の停止 | exit 1 + `rebase-merge` | 日常 | 停止(帯と出口カード) |
@@ -220,7 +259,7 @@ rebase / bisect が持つブランチ・OS が許さないフォルダ名・空�
 | フォルダを消し切れない(Windows の使用中・長いパス) | 255 | **ある(Windows)** | 報せ `WorktreeHalfRemoved` |
 | 作る前にフォルダが埋まっている / 記録だけ残る場所 / `-b` のブランチが残った / 他の拒否 | — / 128 / 255 | 押す前に言える衝突が押した後に起きた | 報せ `WorktreeFolderTaken`(`Withheld`)/ `WorktreePlaceTaken` / `WorktreeBranchLeft` / `WorktreeNotAdded` |
 | `post-checkout` が失敗(git-lfs 無し) | フックの終了コード、worktree は残る | ある(LFS) | 報せ `WorktreeHookFailed`(trace2) |
-| 別の worktree の変更を当てられない | `would be overwritten` / `could not write index` / 無言 | ある | 報せ `CarriedInTheWay / CarriedFileInTheWay / CarriedUnread / CarriedRefused / CarriedLocked` |
+| 別の worktree の変更を当てられない | `would be overwritten` / `could not write index` / 無言(他の git の index ロックを名指すのは 2.51+。2.43.2〜2.50 は `could not write index` だけ、2.43.0〜2.43.1 は無言。断りの終了コードは 2.55 まで 1、2.56 から 128) | ある | 報せ `CarriedInTheWay / CarriedFileInTheWay / CarriedUnread / CarriedRefused / CarriedLocked` |
 | 同、ファイルとフォルダの入れ替わり・大小を区別しないディスク越しの 3 つの形(追跡分が当たった後に untracked を置けない 2 つ、`d/f` → untracked `d` を git の前に断り過ぎる 1 つ) | `checkout-index` 128 / — | 稀(手で作る形) | **据え置き**(ユーザー決定 2026-10-12): 追跡分は当たったまま git の文がログへ。詳細は P3-確認事項 §別の worktree の未コミット行 |
 
 ### merge・pull・switch・cherry-pick・revert
@@ -259,11 +298,10 @@ git は設定ファイルを `<file>.lock` に書いて rename で置き換え�
   (`rev-parse` / `log` / `status` 等と、`config --get*` / `stash list` / `worktree list` / 値も `-d` も無い `symbolic-ref` 等)。
   書き込みは書いた後で落ちうるので撃ち直さない。警告だけの形は `git config` の読みに限る —— 他のファイルが
   ずっと読めないリポジトリで、毎回の `status` を 2 本にしない。流し読みは 1 バイトも渡していない時だけ。同じ実行枠・同じログの行のまま撃ち直し、行は最後の答えを言う
-- **文言の根拠**: 3 つの文は git 本家 2.43.0〜2.56.0 と Git for Windows 2.43.0.windows.1〜2.56.0.windows.2 の
-  全リリースで同じ(config.c `repo_read_config` の die、wrapper.c の `warn_on_fopen_errors` と `access_or_die`、
-  die は 128)。落ちる行は 2.20 から同じ。executor は `LC_ALL=C` で起こすので翻訳されない。将来の版で文が
-  変われば、その版では撃ち直さずに 1 回目の答えのまま失敗する(実 git を回す統合テスト `config_unread` が
-  文を釘付けしているので、変わった版では赤になる)
+- **文言の根拠**: 3 つの文(config.c `repo_read_config` の die、wrapper.c の `warn_on_fopen_errors` と
+  `access_or_die`、die は 128)は語の表の `CONFIG_UNREAD` / `FILE_UNOPENED` で、読んだ全リリースでの行は
+  [照合の記録](../crates/xtask/relied-messages.txt)が持つ。executor は `LC_ALL=C` で起こすので翻訳されない。将来の版で
+  文が変われば、その版では撃ち直さずに 1 回目の答えのまま失敗する(週次の照合が赤になる)
 - **効き目**(git 2.55、グローバル設定を書き換え続ける横で読む): 開きの `rev-parse` と `config --get-regexp` を
   計 1,200 回 —— 撃ち直し無しで `rev-parse` が 13 回落ち、撃ち直し有りで 0 回(撃ち直し 18 回)
 - **2 回目も落ちれば、それはずっと読めない形**: 開きでは専用の画面(上の表)、それ以外の読みは今までどおり

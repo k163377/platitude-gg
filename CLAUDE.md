@@ -56,7 +56,7 @@
 
 - **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**。残作業と要判断は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読む**。配布準備期の検証項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 - 性能は起動・スクロールが予算内、**メモリ(net)と操作応答は縁**。数値は [実測記録](ci/baseline/perf-windows-x64.md)、増分の調査と残件は P3-確認事項 §性能
-- CI は **push = mac の Push check** / **版を動かした land のタグ・PR・週 1・手動 = 3OS の Whole test** / **手動 = mac の Snapshot**。構成と runner の上の事実は P5-確認事項 §3.5 / §3.6。mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ(mac の絵は verify-ui スキル mac.md)、実機検証は Phase 5 ゲート
+- CI は **push = mac の Push check** / **版を動かした land のタグ・PR・週 1・手動 = 3OS の Whole test** / **手動 = mac の Snapshot** / **週 1 = git の文言**。構成と runner の上の事実は P5-確認事項 §3.5 / §3.6。mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ(mac の絵は verify-ui スキル mac.md)、実機検証は Phase 5 ゲート
 
 ## 規約の置き場所と本ファイルの運用
 
