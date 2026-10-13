@@ -185,12 +185,18 @@ fn seat_state(entry: &SeatEntry, now: SystemTime) -> SeatState {
 /// after the directory the tree was first created as, so
 /// `.git/worktrees/<seat>/index` can miss.
 fn index_age(dir: &str, now: SystemTime) -> Option<Duration> {
+    let written = index_written(dir)?;
+    Some(now.duration_since(written).unwrap_or(Duration::ZERO))
+}
+
+/// When git last wrote the index of the tree at `dir`: its last commit,
+/// checkout, stage or landing.
+pub(super) fn index_written(dir: &str) -> Option<SystemTime> {
     let index = crate::subprocess::git_query(
         dir,
         &["rev-parse", "--path-format=absolute", "--git-path", "index"],
     )?;
-    let written = std::fs::metadata(index).ok()?.modified().ok()?;
-    Some(now.duration_since(written).unwrap_or(Duration::ZERO))
+    std::fs::metadata(index).ok()?.modified().ok()
 }
 
 /// The reading, one line, the way CLAUDE.md ビルド・テスト has it.

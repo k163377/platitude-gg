@@ -721,8 +721,10 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       asked of a letter before it is handed to somebody, and the session
       in the tree is not somebody, so its own work stays where it is,
       branch and pictures alike, whether the claim came off by landing or
-      by a release. A letter somebody else's claim is on is passed over
-      either way. Asking twice gives the same seat. It prints the path
+      by a release. Asked from the checkout, the letter the session's
+      transcript last put it in is asked for first, and the other free
+      letters go quietest first. A letter somebody else's claim is on is
+      passed over either way. Asking twice gives the same seat. It prints the path
       EnterWorktree wants, and that is the only path the entry hook will
       let through, because the claim behind it is this session's. When
       every letter is held or carries work it fails, names what stands in

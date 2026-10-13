@@ -6,11 +6,10 @@
 //! the greeting cannot drift apart. The greeting's snapshot goes stale;
 //! the command is the live answer.
 
-use std::time::SystemTime;
-
 mod claim;
 pub(crate) mod commands;
 pub(crate) mod entry;
+mod offer;
 pub(crate) mod start;
 mod survey;
 mod transcripts;
@@ -436,7 +435,9 @@ fn grow_back(
 
 /// The seat this session holds, taking one if it holds none: a letter
 /// from the roster comes empty at main's tip, and the tree the session
-/// stands in comes as it left it (`claim_where_it_stands`).
+/// stands in comes as it left it (`claim_where_it_stands`). Asked from
+/// the checkout, the letter its transcript last put it in is asked for
+/// first.
 pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
     me.require_session()?;
     let (primary, trees) = primary_checkout(cwd)?;
@@ -460,7 +461,11 @@ pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
     }
     // A letter that refused the claim above is somebody else's.
     let asked = standing_in.map(|entry| entry.seat);
-    for name in spread_order()
+    let sat_in = here
+        .is_none()
+        .then(|| transcript_seat(&primary, me))
+        .flatten();
+    for name in offer::offer_order(&primary, &entries, sat_in)
         .into_iter()
         .filter(|name| Some(*name) != asked)
     {
@@ -482,6 +487,17 @@ pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
         commands::TAKEOVER.line(),
         survey::in_the_way(&primary)
     ))
+}
+
+/// The letter of this repository `me`'s conversation last stood in, by
+/// its transcript: `cd <checkout> && cargo xtask seat` runs in the
+/// checkout while the session sits on in its seat after a landing. Only
+/// asked for first, as any letter is (`claim_existing`): a tree carrying
+/// work under no claim is not this session's, whose edits claim it back.
+fn transcript_seat(primary: &str, me: &Identity) -> Option<&'static str> {
+    let cwd = transcripts::stand_of(&me.session)?.cwd.replace('\\', "/");
+    let (repository, letter) = seat_in_repository(&cwd)?;
+    same_tree(&repository, primary).then_some(letter)
 }
 
 /// Whether the claim the listing shows on a letter is this session's.
@@ -687,16 +703,6 @@ fn create_seat(
         note: ", newly created — the roster had not made this letter yet".to_string(),
         held: false,
     })
-}
-
-/// The letters to try, in an order that differs run to run. The lock is
-/// what actually decides, so this only keeps sessions started in one
-/// burst from queueing on one letter and paying a refusal each.
-fn spread_order() -> [&'static str; SEATS.len()] {
-    let offset = SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |since| since.subsec_nanos() as usize);
-    std::array::from_fn(|index| SEATS[(index + offset) % SEATS.len()])
 }
 
 /// Uncommitted changes in `dir`, untracked files included. --no-optional-

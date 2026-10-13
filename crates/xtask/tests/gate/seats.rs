@@ -141,8 +141,8 @@ fn letter_carrying_work(sb: &Sandbox, name: &str) -> PathBuf {
     path
 }
 
-/// Every roster letter but `spare` made unavailable, as the walk's order
-/// differs run to run (`seats::spread_order`). `a` is taken already: the
+/// Every roster letter but `spare` made unavailable, so the walk's order
+/// (`seats::offer`) decides nothing. `a` is taken already: the
 /// sandbox's own seat has `worktree-a` checked out.
 fn only_letter_free(sb: &Sandbox, spare: &str) {
     for name in ["b", "c", "d", "e", "f"] {
@@ -892,4 +892,91 @@ fn a_claim_with_no_app_session_is_named_by_its_session() {
     assert_eq!(lock_on(&sb, "b"), "claude-seat s1 pid 4242 host local_s");
     let (ok, text) = seat_in_app(&sb, "s1-after-an-edit", "local_s");
     assert!(ok && letter_of(&text) == "b", "{text}");
+}
+
+/// A transcript as Claude Code keeps one under the sandbox's config
+/// directory, whose last event put `session` in `cwd` at `at`.
+fn transcript(sb: &Sandbox, session: &str, cwd: &Path, at: &str) {
+    let dir = sb.claude_config().join("projects").join("repo");
+    std::fs::create_dir_all(&dir).expect("a transcript directory");
+    let line = format!(
+        r#"{{"type":"user","cwd":"{}","timestamp":"{at}","sessionId":"{session}"}}"#,
+        slashed(cwd)
+    );
+    std::fs::write(dir.join(format!("{session}.jsonl")), line + "\n").expect("a transcript");
+}
+
+/// Marks `name`'s tree as last written by git long ago, `hours` before a
+/// fixed moment years back — its index is what the roster reads
+/// (`seats::offer`), and only the order of the times counts.
+fn quiet_for(sb: &Sandbox, name: &str, hours: u64) {
+    let index = sb.repo.join(".git/worktrees").join(name).join("index");
+    let when = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000 - hours * 3600);
+    std::fs::File::options()
+        .write(true)
+        .open(&index)
+        .and_then(|file| file.set_modified(when))
+        .expect("the index's time set");
+}
+
+/// A landing hands the letter back while its session sits on in the tree
+/// (`land::release_claim`): asked again from the checkout, where `cd
+/// <checkout> && cargo xtask seat` runs, the session gets the tree its
+/// transcript last put it in, before any quieter one. Only as any letter
+/// is handed out: a tree carrying work under no claim is not that
+/// session's (its edits would have claimed it back), and stays as it is.
+#[test]
+fn the_tree_a_session_sits_in_comes_back_to_it_from_the_checkout() {
+    let sb = Sandbox::new("seat-sits-in");
+    for name in ["b", "c", "d"] {
+        letter(&sb, name);
+    }
+    quiet_for(&sb, "b", 5);
+    quiet_for(&sb, "d", 4);
+    transcript(
+        &sb,
+        "s1",
+        &letter_path(&sb, "c").join("crates"),
+        "2026-10-13T10:00:00.000Z",
+    );
+
+    let (ok, text) = seat(&sb, &[], "s1");
+    assert!(ok, "{text}");
+    assert_eq!(letter_of(&text), "c", "{text}");
+
+    let left = letter_carrying_work(&sb, "e");
+    let carried = sb.head(&left);
+    transcript(&sb, "s2", &left, "2026-10-13T11:00:00.000Z");
+    let (ok, text) = seat(&sb, &[], "s2");
+    assert!(ok, "{text}");
+    assert_ne!(letter_of(&text), "e", "{text}");
+    assert_eq!(lock_on(&sb, "e"), "", "{text}");
+    assert_eq!(sb.head(&left), carried, "{text}");
+}
+
+/// The letter quiet the longest is offered first, and a tree whose last
+/// word, by any conversation's transcript, came after its last write is
+/// heard from then: a newcomer stays out of a tree somebody is still at.
+#[test]
+fn free_letters_are_offered_quietest_first() {
+    let sb = Sandbox::new("seat-quietest-first");
+    for name in ["b", "c", "d"] {
+        letter(&sb, name);
+    }
+    quiet_for(&sb, "b", 3);
+    quiet_for(&sb, "c", 5);
+    quiet_for(&sb, "d", 4);
+    transcript(
+        &sb,
+        "sitter",
+        &letter_path(&sb, "c"),
+        "2026-10-13T10:00:00.000Z",
+    );
+
+    let (ok, text) = seat(&sb, &[], "newcomer");
+    assert!(ok, "{text}");
+    assert_eq!(letter_of(&text), "d", "{text}");
+    let (ok, text) = seat(&sb, &[], "another");
+    assert!(ok, "{text}");
+    assert_eq!(letter_of(&text), "b", "{text}");
 }
