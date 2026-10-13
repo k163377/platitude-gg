@@ -31,6 +31,13 @@ Rectangle {
             id: faceHover
         }
     }
+    // Every press on the card, its content's included (`Hand.acted`): the window's watcher never hears a press inside a
+    // popup. The content is a sibling above this face, and a press it took still reaches the handlers below it — after
+    // it (`tests/qml/tst_reclickaway.qml`).
+    PointHandler {
+        acceptedButtons: Qt.AllButtons
+        onActiveChanged: if (active) Hand.acted()
+    }
     /// The selection hand, named so a run can reach it (`<card>.background.pad`).
     property alias pad: sweepHand
     // In the ground, so only a press nothing else took reaches it.

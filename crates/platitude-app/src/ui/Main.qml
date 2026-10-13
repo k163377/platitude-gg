@@ -125,10 +125,13 @@ ApplicationWindow {
     /// real return.
     property bool everAway: false
     onActiveChanged: {
-        if (!root.active)
+        if (!root.active) {
             root.everAway = true
-        else if (root.everAway)
+            // A press in another window is one this one never hears (`Hand.acted`).
+            Hand.acted()
+        } else if (root.everAway) {
             root.focusEpoch++
+        }
     }
 
     // Drives the periodic re-read.
@@ -156,6 +159,7 @@ ApplicationWindow {
     /// A press landed, whatever it was on; a run enters the same road. What the window put up for the reader stands
     /// until their next press (デザイン規約 §hover のツールチップ).
     function pressLandedAnywhere() {
+        Hand.acted()
         MiddleHand.pressLanded()
         body.topBar.pressLanded()
         if (root.curPage !== null)

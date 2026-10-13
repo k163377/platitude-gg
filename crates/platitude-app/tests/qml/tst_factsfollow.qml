@@ -16,9 +16,13 @@ Item {
     property int presses: 0
     property int doubles: 0
 
-    /// The three calls the part makes of its row.
+    /// The five calls the part makes of its row.
     Item {
         id: stubRow
+        function takePress() {
+        }
+        function endPress() {
+        }
         function followFact(to) {
             root.followed = root.followed.concat([to.key])
         }

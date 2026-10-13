@@ -166,6 +166,11 @@ Rectangle {
     }
     function rowDoubled(button) {
     }
+    /// No second gesture here, so a press on it is one elsewhere (`NavItemDelegate.takePress` / `endPress`).
+    function takePress() {
+    }
+    function endPress() {
+    }
     /// A facts line pressed, answered as the row's (`NavItemDelegate.followFact`).
     function followFact(to) {
         if (headPin.gestures !== null)

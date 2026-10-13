@@ -3103,6 +3103,9 @@ FocusScope {
     /// `atRow`: the row, for callers that already know it (a click does); -1 asks the model (`GraphModel.rowOf`),
     /// which a landing named only by its commit has to do.
     function activateRow(oidHex, atRow) {
+        // The history moved — by the arrows, the search, a menu or a click: a rename's second click is not one across
+        // it (`Hand.acted`; a click's own landing is taken by its target). `jumpToRef` is the other road.
+        Hand.acted()
         page.rewordRow = -1
         page.pendingHeadSelect = false
         page.pendingHeadAsked = false
@@ -3803,6 +3806,8 @@ FocusScope {
     readonly property bool refusalShown: splitWatch.shown
 
     function jumpToRef(oidHex) {
+        // The history moved, as in `activateRow` (`Hand.acted`).
+        Hand.acted()
         // Under a plan the selection has two halves meant to be one commit — this page's and the model's row — so a
         // commit the plan holds is taken as the row click takes it, model first, and anything past the base is refused
         // in silence (rules-refs/app-ui.md — the `RepoPage.jumpToRef` line).

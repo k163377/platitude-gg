@@ -424,6 +424,12 @@ Item {
                 id: groundHover
                 onHoveredChanged: shared.groundPointed = groundHover.hovered
             }
+            // Every press on the tip, its words' included, as on a card's face (`AppCardFace`): the window's watcher
+            // never hears a press inside a popup (`Hand.acted`).
+            PointHandler {
+                acceptedButtons: Qt.AllButtons
+                onActiveChanged: if (active) Hand.acted()
+            }
             // Under the words, so it gets only the presses they did not take (規約 §hover のツールチップ).
             SweepPad {
                 id: tipPad

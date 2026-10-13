@@ -196,6 +196,8 @@ Item {
         facts.pressFrom = Qt.point(x, y)
         if (button !== Qt.LeftButton)
             return
+        if (facts.row !== null)
+            facts.row.takePress()
         pad.pressAt(x, y)
     }
     function handMoved(x, y) {
@@ -203,6 +205,8 @@ Item {
     }
     function handReleased() {
         pad.releaseNow()
+        if (facts.row !== null)
+            facts.row.endPress()
     }
     function handClicked(button, modifiers) {
         if (facts.swept || facts.row === null)

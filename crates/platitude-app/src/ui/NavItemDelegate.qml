@@ -518,6 +518,7 @@ Item {
     function linePressed(button, x, y) {
         if (button !== Qt.LeftButton)
             return
+        navRow.takePress()
         itemMouse.pressFrom = Qt.point(x, y)
         itemMouse.pressing = true
         itemMouse.handedOn = false
@@ -527,6 +528,18 @@ Item {
             navRow.factsItem.dropSweep()
         if (navRow.nameField !== null)
             navRow.nameField.deselect()
+    }
+    /// A left press on this row and its end, its open lines' included (`NavRowFacts`). The row answers at the click —
+    /// the release — so the gesture is told at the press that the press is the row's (`ReclickGesture.take`), and at
+    /// the release that it ended (`hear`): unless the click follows in that release, the press was no click — a sweep
+    /// of the name, one let go off the row or taken away — and it came between two clicks all the same.
+    function takePress() {
+        if (navRow.reclick)
+            navRow.reclick.take()
+    }
+    function endPress() {
+        if (navRow.reclick)
+            navRow.reclick.hear()
     }
     function lineDragged(x, y) {
         if (!navRow.expands || !itemMouse.pressing)
@@ -552,6 +565,7 @@ Item {
     }
     function lineReleased() {
         itemMouse.pressing = false
+        navRow.endPress()
     }
     /// **A drag that took some of the name is not a click**: the reader was copying, and a second click would open a
     /// name box (`NavRowFacts.handClicked` tests the same).
