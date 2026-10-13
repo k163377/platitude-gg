@@ -17,20 +17,22 @@
 //!   the baseline follows it down; it may not grow.
 //! * **neither** — the backstop applies as written.
 //!
-//! Five other questions of how the tree is divided are counted here too:
+//! Six other questions of how the tree is divided are counted here too:
 //! the product's QML may not name a harness type ([`modules`]), the app's
 //! Rust may not look a `PGG_*` variable up outside the module that owns
 //! them ([`env`]), the product's QML closes no popup but its own
 //! ([`popups`]), QML asks the graph, not a row's id, which row is this
-//! window's worktree ([`wiprow`]), and every text box the product
-//! declares hands its right-click and its menu key to the product's menu
-//! ([`textboxes`]).
+//! window's worktree ([`wiprow`]), every text box the product declares
+//! hands its right-click and its menu key to the product's menu
+//! ([`textboxes`]), and the core matches git's words only against the
+//! messages of its table ([`relied_messages`]).
 //!
 //! The fn half of the same § is left to clippy's `too_many_lines`.
 
 mod env;
 mod modules;
 mod popups;
+mod relied_messages;
 mod textboxes;
 mod wiprow;
 
@@ -119,14 +121,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (closed_for, product_files) = popups::check(&root)?;
     let (asked_the_id, qml_files) = wiprow::check(&root)?;
     let (styled_boxes, text_boxes) = textboxes::check(&root)?;
+    let (stray_messages, word_readers) = relied_messages::check(&root)?;
     let boundary_broken = crossed.len() + looked_up.len();
     let closing_for_others = closed_for.len();
     let menus_kept = styled_boxes.len();
+    let messages_strayed = stray_messages.len();
     failures.extend(crossed);
     failures.extend(looked_up);
     failures.extend(closed_for);
     failures.extend(asked_the_id);
     failures.extend(styled_boxes);
+    failures.extend(stray_messages);
 
     for failure in &failures {
         println!("structure: {failure}");
@@ -141,7 +146,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
              {app_files} app files off the environment, \
              {product_files} product files closing nothing but their own, \
              {qml_files} QML files asking the graph which row is this window's, \
-             {text_boxes} text boxes handing their menu and their key to the product's — PASS",
+             {text_boxes} text boxes handing their menu and their key to the product's, \
+             {word_readers} core functions reading git's words through the table — PASS",
             counted.len(),
             comment_share(physical, code),
             ledgered.len()
@@ -156,6 +162,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Err(format!(
             "{closing_for_others} line(s) closing a popup that is not theirs to close \
              (.claude/rules-refs/app-ui.md「メニューを閉じるのは自分」)"
+        ))
+    } else if messages_strayed == failures.len() {
+        Err(format!(
+            "{messages_strayed} line(s) matching git's words against a literal outside the \
+             table (internal-docs/gitの扱い.md §git の文言に依存する判定)"
         ))
     } else if menus_kept == failures.len() {
         Err(format!(
