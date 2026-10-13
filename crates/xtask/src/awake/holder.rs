@@ -8,6 +8,14 @@ use std::path::Path;
 #[cfg(windows)]
 pub(super) const TICK: std::time::Duration = std::time::Duration::from_secs(15);
 
+/// The share of one processor, in percent, past which the counted
+/// processes there at two readings — a [`TICK`] of time awake apart at
+/// least — are something happening for [`QUIET`](super::QUIET): a build
+/// or a test run takes cores, a shell waiting takes next to none (a loop
+/// that polls starts processes, which is something happening of its own).
+#[cfg(windows)]
+pub(super) const BUSY: u32 = 10;
+
 /// While the machine is held, how far apart the readings an event asks for
 /// — a claim rewritten, the desktop app's log written — begin, once the
 /// allowance of [`BURST`] is spent. A reading then can only let go, and
@@ -119,9 +127,26 @@ const DELEGATED: &str = "'Agent', 'Task'";
 /// longer counted, or a hold just set that it did not count, and asked for
 /// again: what the holder's thread asked for, what the system counted, and
 /// what it counted after — a line a loss, however many readings find it,
-/// after the verdict's line of its reading. A line that could not be written
-/// is written at the next reading. The file is cut back to its newer half
-/// at [`HISTORY_BYTES`].
+/// after the verdict's line of its reading. `… released quiet:<minutes>m`
+/// is a hold let go for nothing having happened that long (below). A line
+/// that could not be written is written at the next reading. The file is
+/// cut back to its newer half at [`HISTORY_BYTES`].
+///
+/// A hold the holder keeps for a slip of its own reading — a call whose
+/// end never comes, a wait taken for work — has nothing to end it, so a
+/// held machine is let go once nothing has happened for
+/// [`QUIET`](super::QUIET) of time awake (`QueryUnbiasedInterruptTime`: a
+/// sleep is no quiet). Something happens when a reading finds, against the
+/// one before: a build's `hooks-r<n>` stamp or a standing claim's
+/// transcript written again; a counted process — under a running shell
+/// call's children, one of them or below — that was not there; or the
+/// counted processes there both times taking [`BUSY`] percent of a
+/// processor or more, judged over a [`TICK`] at least. A claim that
+/// changes under a reading is something happening too. The next thing
+/// that happens holds the machine again, if anything counts; until then
+/// what still counts is left unheld, and the power plan decides the sleep.
+/// A call whose end never comes counts every process the Claude process
+/// starts after it — a server started again — and those keep it going.
 ///
 /// A request once set can stop being counted, with nothing said: after a
 /// sleep started through the API, which no request stops, the request of a
@@ -246,6 +271,8 @@ public static class PggAwake {
   [DllImport("kernel32.dll")] static extern void GetSystemTimePreciseAsFileTime(out long time);
   public static long Now() { long time; GetSystemTimePreciseAsFileTime(out time); return (time - 116444736000000000L) / 10000; }
   public static long Ticks() { return System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 1000); }
+  [DllImport("kernel32.dll")] static extern bool QueryUnbiasedInterruptTime(out long time);
+  public static long Awake() { long time; QueryUnbiasedInterruptTime(out time); return time / 10000; }
 }
 '@
 $dir = '@DIR@'
@@ -265,6 +292,10 @@ $unsaid = ''
 $lost = $false
 $reflects = $true
 $unwritten = @{}
+$lastActive = [PggAwake]::Awake()
+$stampsSeen = @{}
+$workSeen = @{}
+$workJudged = [PggAwake]::Awake()
 $paced = [int64]0
 $script:tails = @{}
 @PROCESSES@
@@ -459,6 +490,8 @@ try {
     $why = @{}
     $seen = $null
     $minded = @{}
+    $work = @{}
+    $hushed = [int64]0
     $lock = Enter-Lock
     try {
       try {
@@ -560,6 +593,9 @@ try {
                 $until = [int64]::MaxValue
                 if ($closed -ne 0) { $until = $closed + @SLACK@ }
                 foreach ($started in Get-Children $owner) { if (($started -ge $from) -and ($started -le $until)) { $running = $true } }
+                if ($running) {
+                  foreach ($process in $script:spawned.Tree($owner, $from, $until).GetEnumerator()) { $work[$process.Key] = $process.Value }
+                }
               }
               if ($running) { $keep = $true; $why["process:$(Get-Whose $session)"] = $true }
               if ($running -or (([int64]$part[5] -eq 0) -and -not $answered)) { $kept += $call } else { $changed = $true }
@@ -647,6 +683,24 @@ try {
         foreach ($reason in @($why.Keys)) {
           if ($reason.StartsWith('process:') -and $why.ContainsKey("turn:$($reason.Substring(8))")) { $why.Remove($reason) }
         }
+        $stirred = $false
+        $stamps = @{}
+        foreach ($entry in $entries) { $stamps["transcript $($entry[2][7])"] = $entry[5].Mark }
+        foreach ($stamp in @(Get-ChildItem -LiteralPath $dir -Filter 'hooks-r*')) { $stamps["hooks $($stamp.Name)"] = "$($stamp.LastWriteTimeUtc.Ticks)" }
+        foreach ($key in $stamps.Keys) { if ($stampsSeen[$key] -ne $stamps[$key]) { $stirred = $true } }
+        $stampsSeen = $stamps
+        $awake = [PggAwake]::Awake()
+        if (($awake - $workJudged) -ge @BUSY_WINDOW@) {
+          $grown = [int64]0
+          foreach ($key in $work.Keys) {
+            if (-not $workSeen.ContainsKey($key)) { $stirred = $true; continue }
+            $grown += [Math]::Max([int64]0, [int64]$work[$key] - [int64]$workSeen[$key])
+          }
+          if (($grown * 100) -gt (@BUSY@ * ($awake - $workJudged))) { $stirred = $true }
+          $workSeen = $work
+          $workJudged = $awake
+        }
+        if ($stirred) { $lastActive = $awake }
         $readat = $readms
       } catch [IO.IOException], [UnauthorizedAccessException] {
         $seen = $null
@@ -666,7 +720,7 @@ try {
             $file, $was = $pair
             if ((-not (Test-Path -LiteralPath $file.FullName)) -or ((Read-Word $file.FullName) -ne $was)) { $unchanged = $false; break }
           }
-          if (-not $unchanged) { $keep = $true; $changes = @(); $readat = 0; $why = @{}; Undo-DesktopDecisions $desktop; Undo-CodexDecisions $codexLog }
+          if (-not $unchanged) { $keep = $true; $changes = @(); $readat = 0; $why = @{}; $lastActive = [PggAwake]::Awake(); Undo-DesktopDecisions $desktop; Undo-CodexDecisions $codexLog }
           $desktop.Decided = @()
           $codexLog.Decided = @()
           foreach ($change in $changes) {
@@ -676,6 +730,8 @@ try {
             }
           }
           if (($seen.Count -eq 0) -and ($current.Count -eq 0) -and (Remove-Word $name)) { break }
+          $quietFor = [PggAwake]::Awake() - $lastActive
+          if ($keep -and ($quietFor -ge @QUIET@ * 1000)) { $keep = $false; $hushed = [int64][Math]::Floor($quietFor / 60000) }
         }
         if ((Test-Retiring $nowms) -and (Remove-Word $name)) { break }
         if ($keep -ne $holding) {
@@ -710,6 +766,7 @@ try {
         if ($keep) { $verdict = 'holding' }
         $reasons = '-'
         if ($keep -and $why.Count) { $reasons = (@($why.Keys) | Sort-Object) -join ',' }
+        elseif ($hushed) { $reasons = "quiet:$($hushed)m" }
         if ((($keep -ne $told) -or ($keep -and $why.Count -and ($reasons -ne $toldWhy))) -and (Add-History $verdict $reasons)) {
           $told = $keep
           $toldWhy = $reasons
@@ -761,6 +818,9 @@ pub(super) fn script(dir: &Path, reserved: u32) -> String {
         .replace("@LET_GO@", &LET_GO.to_string())
         .replace("@TTL@", &super::WORKING_TTL.as_secs().to_string())
         .replace("@STOPPING@", &super::STOPPING.as_secs().to_string())
+        .replace("@QUIET@", &super::QUIET.as_secs().to_string())
+        .replace("@BUSY@", &BUSY.to_string())
+        .replace("@BUSY_WINDOW@", &TICK.as_millis().to_string())
         .replace("@RETIRE@", &super::RETIRE_AFTER.as_secs().to_string())
         .replace("@STALE@", &super::HOLDER_STALE.as_secs().to_string())
         .replace("@TICK@", &TICK.as_secs().to_string())

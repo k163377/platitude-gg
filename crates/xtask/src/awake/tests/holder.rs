@@ -45,10 +45,35 @@ impl FakeClaude {
     /// Starts a child that runs until it is ended — a tool, a background
     /// task, a server — and answers its pid.
     fn run(&mut self) -> u32 {
+        self.start_child(b"start /b ping -n 600 127.0.0.1\r\n")
+    }
+
+    /// Starts a child whose own child takes a processor whole — a build, a
+    /// test run — and answers the child's pid. It ends with this test
+    /// process, or after two minutes, whichever comes first.
+    fn run_busy(&mut self) -> u32 {
+        let command = format!(
+            "start /b cmd /d /c powershell -NoProfile -NonInteractive -Command \"$s = [Diagnostics.Stopwatch]::StartNew(); \
+             while ((Get-Process -Id {} -ErrorAction SilentlyContinue) -and ($s.Elapsed.TotalMinutes -lt 2)) {{ }}\"\r\n",
+            std::process::id()
+        );
+        self.start_child(command.as_bytes())
+    }
+
+    /// Starts a child that starts a short process every second for two
+    /// minutes, each living two — a loop waiting on something, polling, with
+    /// one started a second ago always running — and answers its pid.
+    fn run_polling(&mut self) -> u32 {
+        self.start_child(
+            b"start /b cmd /d /c \"for /l %i in (1,1,120) do (start /b ping -n 3 127.0.0.1 >nul & ping -n 2 127.0.0.1 >nul)\"\r\n",
+        )
+    }
+
+    fn start_child(&mut self, command: &[u8]) -> u32 {
         let before = self.tasks();
         let stdin = self.0.stdin.as_mut().expect("the stand-in's input");
         stdin
-            .write_all(b"start /b ping -n 600 127.0.0.1\r\n")
+            .write_all(command)
             .expect("the command reaches the stand-in");
         stdin.flush().expect("the command reaches the stand-in");
         let tasks = crate::wait::until(
@@ -770,7 +795,7 @@ fn the_holder_s_script_is_pinned_to_its_revision() {
             crate::awake::REVISION,
             digest(&crate::awake::holder::script(Path::new(r"C:\pgg"), 0))
         ),
-        (22, "7b029a9df2eca0f8".to_string()),
+        (25, "c40764ebf0bac5fc".to_string()),
         "the holder's script changed: raise REVISION, then pin the new digest here"
     );
 }
@@ -990,6 +1015,7 @@ mod coordination;
 mod counting;
 mod desktop;
 mod physical;
+mod quiet;
 
 #[test]
 fn an_installed_holder_handles_unicode_and_quotes_and_removes_its_script() {

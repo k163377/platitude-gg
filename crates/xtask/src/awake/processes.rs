@@ -12,6 +12,14 @@
 //! (`holder::SCRIPT`). A start is the kernel's creation time, in the
 //! milliseconds the hooks stamp a call's span in. One that cannot be read
 //! — the process went between the listing and the question — is 0.
+//!
+//! A call's processes (`Tree`) are the children of an owner started within
+//! the call's span — the console host aside, as for `Children` — and every
+//! process under them, still running: a table from `<pid>/<start>` to the
+//! processor time each has taken, in milliseconds. A shell call's own
+//! process mostly waits on what it started. A process under another counts
+//! only when it started no earlier than its parent: a pid the listing
+//! names as a parent may be a dead one's, handed on.
 
 #[cfg(windows)]
 pub(super) const SCRIPT: &str = r#"
@@ -63,6 +71,48 @@ public sealed class PggProcesses {
       if (at != 0) born.Add(at);
     }
     return born.ToArray();
+  }
+  Dictionary<uint, List<Entry>> kids;
+  static bool Times(uint id, out long born, out long work) {
+    born = 0; work = 0;
+    IntPtr process = OpenProcess(0x1000, false, id);
+    if (process == IntPtr.Zero) return false;
+    try {
+      long created, exited, kernel, user;
+      if (!GetProcessTimes(process, out created, out exited, out kernel, out user)) return false;
+      born = (created - 116444736000000000L) / 10000;
+      work = (kernel + user) / 10000;
+      return true;
+    } finally { CloseHandle(process); }
+  }
+  public Dictionary<string, long> Tree(uint parent, long from, long until) {
+    if (kids == null) {
+      kids = new Dictionary<uint, List<Entry>>();
+      foreach (Entry entry in all) {
+        List<Entry> list;
+        if (!kids.TryGetValue(entry.Parent, out list)) { list = new List<Entry>(); kids[entry.Parent] = list; }
+        list.Add(entry);
+      }
+    }
+    Dictionary<string, long> found = new Dictionary<string, long>();
+    HashSet<uint> seen = new HashSet<uint>();
+    Queue<KeyValuePair<uint, long>> next = new Queue<KeyValuePair<uint, long>>();
+    next.Enqueue(new KeyValuePair<uint, long>(parent, -1));
+    while (next.Count > 0) {
+      KeyValuePair<uint, long> at = next.Dequeue();
+      List<Entry> under;
+      if (!kids.TryGetValue(at.Key, out under)) continue;
+      foreach (Entry entry in under) {
+        bool child = at.Value < 0;
+        if (child && string.Equals(entry.Image, "conhost.exe", StringComparison.OrdinalIgnoreCase)) continue;
+        long born, work;
+        if (!seen.Add(entry.Id) || !Times(entry.Id, out born, out work)) continue;
+        if (child ? (born < from || born > until) : born < at.Value) continue;
+        found[entry.Id + "/" + born] = work;
+        next.Enqueue(new KeyValuePair<uint, long>(entry.Id, born));
+      }
+    }
+    return found;
   }
 }
 '@

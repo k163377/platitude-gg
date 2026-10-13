@@ -75,7 +75,8 @@
 //! `ES_SYSTEM_REQUIRED` — never the display, which the power plan turns off
 //! as usual — while any counts, asks again whenever a reading finds the
 //! request no longer counted (one set once can stop counting, unsaid),
-//! lets go while none does, and quits once no compatible claim is left.
+//! lets go while none does — and, whatever counts, once nothing has
+//! happened for [`QUIET`] — and quits once no compatible claim is left.
 //! The claims are every build's, so a holder also steps down once the
 //! hooks of its own build have been quiet for
 //! [`RETIRE_AFTER`] while a holder of another build stands whose hooks
@@ -186,7 +187,7 @@ const AGENT: char = '~';
 /// The holder implementation, independent of the activity protocol.
 /// A script change raises this; compatible builds still update the same
 /// claims, so a Stop or a question reaches every holder reading them.
-const REVISION: u32 = 22;
+const REVISION: u32 = 25;
 /// A Codex handoff requires a holder that accounts for its independent
 /// child agents. An older holder can count delegated work twice.
 #[cfg(windows)]
@@ -213,6 +214,19 @@ const WORKING_TTL: Duration = Duration::from_secs(60 * 60);
 /// error — gets none, and goes at this bound.
 #[cfg(windows)]
 const STOPPING: Duration = Duration::from_secs(60);
+/// How long of time awake the machine stays held with nothing happening:
+/// no hook of any session, no transcript of a claim written, no counted
+/// process at work or started. Past it the holder lets go — whatever still
+/// counts is taken for a slip of this repository's reading, which nothing
+/// will end — until something happens again; the power plan then decides
+/// the sleep. The holds at work seen quiet the longest were commands alone
+/// — a test run, which takes processors, and loops waiting on another
+/// seat, which start processes — so it is no bound on them
+/// (ci/baseline/awake-control-windows-x64.md). It stays past the longest
+/// wake-up a session schedules — an hour, as the runtime clamps it, and
+/// [`WAKE_GRACE`] — which a hook sets, so a wake-up's hold ends before it.
+#[cfg(windows)]
+const QUIET: Duration = Duration::from_secs(2 * 60 * 60);
 /// A heartbeat older than this is a holder that died without clearing
 /// its name; the next claim written starts another.
 const HOLDER_STALE: Duration = Duration::from_secs(3 * 15);

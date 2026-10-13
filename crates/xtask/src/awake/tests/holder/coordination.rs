@@ -178,6 +178,12 @@ pub(super) fn shipped(dir: &std::path::Path, revision: u32, during_query: &str) 
         .replace("@STARTS_PROCESSES@", "'Bash', 'PowerShell', 'Monitor'")
         .replace("@TTL@", "3600")
         .replace("@STOPPING@", &crate::awake::STOPPING.as_secs().to_string())
+        .replace("@QUIET@", &crate::awake::QUIET.as_secs().to_string())
+        .replace("@BUSY@", &crate::awake::holder::BUSY.to_string())
+        .replace(
+            "@BUSY_WINDOW@",
+            &crate::awake::holder::TICK.as_millis().to_string(),
+        )
         .replace(
             "@RETIRE@",
             &crate::awake::RETIRE_AFTER.as_secs().to_string(),
@@ -199,9 +205,11 @@ pub(super) fn shipped(dir: &std::path::Path, revision: u32, during_query: &str) 
 }
 
 /// The system's clocks, for the holder's own type in a probe: the time of
-/// day, and the one that only runs forward.
+/// day, the one that only runs forward, and the one that counts the time
+/// awake (the forward one in a probe, which sleeps through nothing).
 pub(super) const REAL_CLOCK: &str = "public static long Now() { return System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); } \
-     public static long Ticks() { return System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 1000); }";
+     public static long Ticks() { return System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 1000); } \
+     public static long Awake() { return Ticks(); }";
 
 /// Runs `body` — the shipped holder — as the holder of `revision` in
 /// `dir`, with the OS request recorded in place of asked (`Last`, the last
@@ -289,7 +297,8 @@ fn stream(dir: &std::path::Path, held: bool, events: usize) -> Vec<u64> {
     // does.
     let clock = "public static long Clock=1700000000000; \
                  public static long Now() { return Clock; } \
-                 public static long Ticks() { return Clock; }";
+                 public static long Ticks() { return Clock; } \
+                 public static long Awake() { return Clock; }";
     let said = probe(dir, crate::awake::REVISION, clock, &stubs, &body);
     let mut waits = Vec::new();
     for line in said.lines() {

@@ -864,8 +864,13 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       started during another tool's call, is no work. A holder whose
       build's hooks have been quiet for ten minutes steps down while a
       holder of a build in use — or, when every build is quiet, of a
-      higher revision — stands; the last one standing never does. The
-      directory's lock is held for its files alone. The holders keep
+      higher revision — stands; the last one standing never does. A
+      holder lets go, whatever still counts, once nothing has happened
+      for two hours awake — no hook, no claim's transcript written, no
+      counted process started or taking more than a tenth of a processor
+      — and holds again at the next thing that does (released
+      quiet:<minutes>m in the history). The directory's lock is held for
+      its files alone. The holders keep
       what each asked for, when, and on whose account in .awake/history
       — a line each time a verdict or the claims it stands on change,
       and one for each hold found no longer counted (lost) — for a
