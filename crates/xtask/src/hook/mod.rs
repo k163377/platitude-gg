@@ -12,8 +12,6 @@ pub(crate) mod approval;
 mod attribution;
 mod awake;
 mod chips;
-#[cfg(test)]
-mod cloud;
 mod codex;
 mod commit;
 mod contact;
@@ -27,6 +25,8 @@ pub(crate) mod permit;
 mod python;
 mod repeat;
 mod review;
+#[cfg(test)]
+mod runner;
 mod seat;
 mod shell;
 mod still;
