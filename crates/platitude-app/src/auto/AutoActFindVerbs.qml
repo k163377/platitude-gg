@@ -338,11 +338,17 @@ Item {
             page.settingsDialogRequested()
         }
     }
-    // The picture is read off disk asynchronously, a beat after the write.
+    // The picture is read off disk asynchronously, a beat after the write. The badge's sentence too (`avatar-tip`): the
+    // hand is on the face from the start, the sentence comes up a rest after the face can take a picture (the author's
+    // address), and a write that lands inside that rest would end the run before it. Read off the shared instance as
+    // `avatar-tip` reads it: nothing else in this run asks for a tip.
     SampleTimer {
         id: avatarReportTimer
         onTriggered: {
-            if (detailsModel.avatarUrl === "" && AppBackend.avatarErrorKind === "")
+            if (!Awaited.all("avatar", {
+                    "picture": detailsModel.avatarUrl !== "" || AppBackend.avatarErrorKind !== "",
+                    "tip": page.ToolTip.toolTip.visible
+                }))
                 return
             avatarReportTimer.stop()
             Harness.report(

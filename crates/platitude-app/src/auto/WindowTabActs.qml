@@ -853,7 +853,14 @@ Item {
                 tabProbe.pointAtTab(pointed)
                 return
             }
-            if (tabProbe.tabMarks() === tabMarkActTimer.beforeMarks)
+            // The marks, and the pointed tab's path, which comes up a rest after the hand (`TabItemDelegate`): ended
+            // before it, the picture holds the box or not by the machine's pace. The box is the shared one, so it is
+            // read as that tab's by its target.
+            const tip = mainUi.ToolTip.toolTip
+            if (!Awaited.all("tab_marks", {
+                    "marks": tabProbe.tabMarks() !== tabMarkActTimer.beforeMarks,
+                    "tip": tip.visible && tip.parent === tabProbe.view.itemAtIndex(pointed)
+                }))
                 return
             stop()
             Harness.report(

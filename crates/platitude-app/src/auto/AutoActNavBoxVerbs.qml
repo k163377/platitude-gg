@@ -545,6 +545,14 @@ Item {
         function said() {
             return " section=" + followTimer.kind + " row=" + followTimer.row + " line=" + followTimer.line
         }
+        /// The open row's supplement is up, where it keeps one (a WORKTREES row's path, `NavRowFacts.says`): it comes
+        /// up a rest after the lines, and every end below waits it out, or the picture holds the box or not by the
+        /// machine's pace. Said through `Awaited`, so a run stalled here names it.
+        function tipRested() {
+            const lines = sidebarPane.openFactsItem()
+            return Awaited.all(followTimer.lit ? "nav_follow_lit" : "nav_follow",
+                               { "tip": lines === null || lines.says === "" || lines.tipShown })
+        }
         onTriggered: {
             // A filter, once: the way a leaf under a folded folder is brought into the list.
             if (followTimer.step === 0) {
@@ -572,8 +580,10 @@ Item {
                 followTimer.line = navProbe.factsFirstGoing()
                 followTimer.to = navProbe.factsGoesTo(followTimer.line)
                 if (followTimer.to === null) {
-                    // Lines that go nowhere are this row's answer — waiting on would spend the ceiling and take no
-                    // picture.
+                    // Lines that go nowhere are this row's answer — waiting on for a landing would spend the ceiling
+                    // and take no picture.
+                    if (!followTimer.tipRested())
+                        return
                     followTimer.stop()
                     Harness.report((followTimer.lit ? "nav_follow_lit" : "nav_follow") + followTimer.said()
                                       + " followed=false name=" + followTimer.name)
@@ -588,6 +598,8 @@ Item {
                 return
             }
             if (followTimer.lit) {
+                if (!followTimer.tipRested())
+                    return
                 followTimer.stop()
                 // `aimed=` is the band as drawn, `hand=` the cursor the area took — two parts, so either alone splits.
                 Harness.report("nav_follow_lit" + followTimer.said()
@@ -606,6 +618,8 @@ Item {
             const at = graphModel.rowOf(want)
             const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
             if (at >= 0 && !item)
+                return
+            if (!followTimer.tipRested())
                 return
             followTimer.stop()
             Harness.report("nav_follow" + followTimer.said()
