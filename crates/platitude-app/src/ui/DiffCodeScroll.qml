@@ -17,9 +17,13 @@ Item {
     /// How wide the code is and how much of it fits — the pane's numbers.
     required property real codeWidth
     required property real roomWidth
-    /// Whether the pointer is anywhere in the pane (the pane's own handler): the bar is out only then (デザイン規約
-    /// §diff を横へ送る), and dims by it too, having no view to ask (`AutoScrollBar.inArea`).
-    required property bool paneHovered
+    /// The pane's own handler: whether the pointer is anywhere in the pane — the bar is out only then (デザイン規約
+    /// §diff を横へ送る), and dims by it too, having no view to ask (`AutoScrollBar.inArea`) — and where, which tells the
+    /// hand on the bar (`AutoScrollBar.rangeHover`).
+    required property HoverHandler paneHand
+    /// Read through a guard: a handler taken down before this component (it is declared earlier in the pane) leaves
+    /// the typed property null, and says so.
+    readonly property bool paneHovered: codeScroll.paneHand !== null && codeScroll.paneHand.hovered
     /// The file on screen: a different one starts at its left edge, the same one read again keeps its place, as the
     /// vertical place is kept (`DiffScrollPlace`).
     required property string file
@@ -75,6 +79,7 @@ Item {
         AutoScrollBar {
             id: bar
             inArea: codeScroll.paneHovered
+            rangeHover: codeScroll.paneHand
             visible: codeScroll.canPan && (codeScroll.paneHovered || pressed || hand.scrolling)
             policy: ScrollBar.AlwaysOn
             orientation: Qt.Horizontal

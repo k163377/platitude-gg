@@ -6,8 +6,8 @@ import platitude.ui
 // The arrows at the two ends of an upright bar (デザイン規約 §スクロールバーの矢印): how much of the bar they take on a
 // box of any height, what a press, a hold and a slide off do, that a real press reaches them, that on a surface gliding
 // its wheel (a message box, the left menu) a step rides that glide, and that in a message box the grip leaves the down
-// arrow its whole end and taking the bar takes the box over. Each check waits for the view to have moved; no clock is
-// read.
+// arrow its whole end and taking the bar takes the box over. And that a bar under the hand lights, arrows and all — the
+// diff's sideways bar too. Each check waits for the view to have moved; no clock is read.
 Item {
     id: root
     width: 640
@@ -24,6 +24,8 @@ Item {
         delegate: Item {
             width: 150
             height: 24
+            readonly property alias pointed: rowHover.hovered
+            HoverHandler { id: rowHover }
         }
     }
     AppListView {
@@ -71,6 +73,29 @@ Item {
         width: 150
         height: 150
         sectionModel: navRows
+    }
+    // The diff's sideways bar: no view, its pane's handler handed in, and the bar in a frame of its own in the pane.
+    Item {
+        id: diffPane
+        x: 330
+        y: 120
+        width: 300
+        height: 200
+        HoverHandler { id: diffPaneHand }
+        ListView {
+            id: diffRows
+            width: parent.width
+            height: 150
+        }
+        DiffCodeScroll {
+            id: codeScroll
+            anchors.fill: parent
+            view: diffRows
+            codeWidth: 1000
+            roomWidth: 300
+            paneHand: diffPaneHand
+            file: "a.txt"
+        }
     }
 
     TestCase {
@@ -261,6 +286,55 @@ Item {
                     verify(Qt.colorEqual(a.ink, lit), "an arrow wears " + a.ink + " with the thumb in the hand")
                 mouseRelease(bar, bar.width / 2, mid)
             }
+        }
+
+        /// The hand on a bar lights it, arrows and all, and the bar goes back down once the hand is off it in the
+        /// rows. The view's handler tells it, so the row under the bar keeps its own hover. A see-through bar's arrows
+        /// are drawn inside it, so its opacity is theirs; a slab names its arrows' ink.
+        function test_the_hand_on_the_bar_lights_it_and_its_arrows() {
+            for (const bar of [floatBar, paneBar, navBar, desc.bar]) {
+                const slab = bar.slabColor !== undefined
+                const arrows = bar.children.filter(c => c.down !== undefined)
+                compare(arrows.length, 2)
+                const lit = () => slab ? Qt.colorEqual(bar.slabColor, Theme.borderDefault) : bar.opacity === 1
+                const idle = () => slab ? Qt.colorEqual(bar.slabColor, bar.idleColor) : bar.opacity < 1
+                const atRows = bar.mapToItem(root, -20, bar.height / 2)
+                // Out first: a reset that moved the view while the hand was in it left the bar lit until it leaves.
+                mouseMove(root, root.width - 1, 300)
+                tryVerify(() => !bar.inArea)
+                mouseMove(root, atRows.x, atRows.y)
+                tryVerify(() => bar.inArea && !bar.bright && idle(), undefined, "in the rows, the bar rests")
+                mouseMove(bar, bar.width / 2, bar.height / 2)
+                tryVerify(() => bar.underHand, undefined, "the hand is on the bar")
+                verify(lit(), "the bar is lit")
+                for (const a of arrows)
+                    verify(slab ? Qt.colorEqual(a.ink, Theme.borderDefault) : a.parent === bar,
+                           "an arrow wears " + a.ink + " under the hand")
+                if (bar === floatBar) {
+                    const row = floatList.itemAt(bar.x + bar.width / 2, floatList.contentY + bar.height / 2)
+                    verify(row.pointed, "the row under the bar keeps its hover")
+                }
+                mouseMove(root, atRows.x, atRows.y)
+                tryVerify(() => !bar.underHand && bar.inArea, undefined, "back in the rows")
+                verify(!bar.bright)
+                tryVerify(idle, undefined, "and the bar back down")
+            }
+            mouseMove(root, root.width - 1, 300)
+        }
+
+        /// A sideways bar has no view to ask: it is handed its pane's handler, and reads the hand across from the frame
+        /// it stands in to the pane the handler is on.
+        function test_the_hand_on_a_sideways_bar_lights_it() {
+            const bar = codeScroll.children[0].children.filter(c => c.orientation === Qt.Horizontal)[0]
+            mouseMove(diffPane, 20, 20)
+            tryVerify(() => bar.visible && bar.inArea && !bar.bright, undefined, "in the pane, the bar rests")
+            const at = bar.mapToItem(root, bar.width / 2, bar.height / 2)
+            mouseMove(root, at.x, at.y)
+            tryVerify(() => bar.underHand, undefined, "the hand is on the bar")
+            compare(bar.opacity, 1)
+            mouseMove(diffPane, 20, 20)
+            tryVerify(() => !bar.underHand && bar.opacity < 1, undefined, "off it, the bar goes back down")
+            mouseMove(root, root.width - 1, 300)
         }
 
         /// A press on an arrow and a wheel notch straight after it make one movement: the step glides on the box's own

@@ -554,7 +554,7 @@ Rectangle {
         id: codeScroll
         anchors.fill: parent
         view: diffList
-        paneHovered: panePointer.hovered
+        paneHand: panePointer
         file: diffPane.diffModel.title
         // The reach, plus the pane's own gap past the longest line's last character.
         codeWidth: reachTally.width > 0 ? reachTally.width + Theme.spaceSm : 0

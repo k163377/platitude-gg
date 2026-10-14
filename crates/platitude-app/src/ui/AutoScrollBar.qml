@@ -271,6 +271,13 @@ ScrollBar {
         id: viewHover
         parent: bar.view
     }
+    /// The handler that hears the hand over the range: the view's own. The two sideways bars are handed their pane's.
+    property HoverHandler rangeHover: bar.view ? viewHover : null
+    /// Whether the bar is under the hand, ready to be taken: it lights while it is, arrows and all (デザイン規約
+    /// §QML 実装ルール のバーの明るさ). Measured where the range's handler heard the hand, not by a handler on the bar:
+    /// one there takes the hover, over the bar's width, from the view's own handler (`inArea`) and the row underneath.
+    readonly property bool underHand: !Hand.away && bar.visible && bar.rangeHover !== null && bar.rangeHover.hovered
+        && bar.contains(bar.mapFromItem(bar.rangeHover.parent, bar.rangeHover.point.position))
 
     /// Whether the bar is in the hand: the thumb, an arrow, or the track.
     readonly property bool held: bar.pressed || bar.arrowHeld !== 0 || bar.trackHeld !== 0
@@ -314,8 +321,8 @@ ScrollBar {
             bar.lit = true
     }
 
-    /// What the bar is painting: full ink while it is being used, a step down once it is not.
-    readonly property bool bright: bar.lit || bar.held
+    /// What the bar is painting: full ink while it is being used or the hand is on it, a step down once neither.
+    readonly property bool bright: bar.lit || bar.held || bar.underHand
 
     /// Hover is left to the view. Taking it breaks two ways: a `Flickable` drops its own handler's hover over a
     /// hover-taking child (a hole in `inArea` the width of the bar), and the bar's `hovered` latches after a press.

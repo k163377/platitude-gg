@@ -617,6 +617,7 @@ Rectangle {
         z: 2
         columns: metrics
         pointerInside: graphArea.pointerInside
+        rangeHover: paneHand
     }
     // What stands in the middle while there is no history to draw.
     GraphEmptyState {
