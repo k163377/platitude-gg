@@ -17,7 +17,7 @@ cargo xtask <command>
 commands:
   gate [--host-only] [--whole] [--fresh] [--keep-going] [--dry-run]
        [--verb <line>]... [--jobs <n>] [--dir <tree>] [--main <ref>]
-      The pre-merge tests, chosen by machine (CLAUDE.md 確認は 3 段;
+      The pre-merge tests, chosen by machine (gate skill 確認は 3 段;
       internal-docs/反映前テストの機械化.md). Reads the branch's diff
       against main, follows every file that reads a changed file — a
       `use` path, a re-export, a string naming the file, a QML type
@@ -486,7 +486,7 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
         --cache <s>      warm (default), first (--runs 1), or cold
         --cold-prepare <exe>  explicit cache preparation; receives repo and binary
         --compare <rev>  ABBA against --at; --runs counts blocks (two samples each)
-                          See ci/baseline/perf-local.md for contracts and OS baselines.
+                          See internal-docs/性能.md §計測 for contracts and OS baselines.
         --no-diff         select and show details without opening a diff
         --output <path>   new directory for metadata and raw per-run logs
         --trace-frames    diagnostic app-clock frame series in app.log;

@@ -52,7 +52,7 @@
 - **宣言は実装モジュールの中**(`crates/xtask/src/command.rs` の `Command` を `pub(crate) static` で置き、そのモジュールの `COMMANDS` に並べる)。`crates/xtask/src/commands.rs` は所有者の索引だけ — 1 コマンドの構文・用途・実行場所・前提条件・許可の参照先が 1 箇所
 - **許可は参照** — `Permission::Escape` は hook の const(`hook::APPROVAL_FLAGS`)をそのまま持ち、`Permission::Permit` は `hook::permit` の判断を指すだけ。走ってよいかは常に hook がその場で判断する
 - **id は操作の名前** — verb の改名・モジュール移動・用途の書き換えを越えて同じ。1 id は 1 操作。台帳は `crates/xtask/command-ids.txt`(`--sync` が書く。id が消えれば diff の削除行 + 赤)
-- **文書側の記法は 3 段**: 実行形(escape 付き・verb の後に語がある)は `` `<!--cmd:<id>-->` `` を直前に置き、続く inline code を `--sync` が書く / **`cargo xtask` を省く節**(CLAUDE.md ビルド・テストが宣言済み)は `` `<!--call:<id>-->` `` で call だけを書かせる — **escape 付きのコマンドに省略形は無い**(flag が落ちると許可が見えなくなるので拒む)/ 単なる名指し(`cargo xtask <verb>` だけ)は素のまま — verb が実在するかだけ見る。**id には実行方法が必ず並ぶ**
+- **文書側の記法は 3 段**: 実行形(escape 付き・verb の後に語がある)は `` `<!--cmd:<id>-->` `` を直前に置き、続く inline code を `--sync` が書く / **`cargo xtask` を省く節**(gate スキルの冒頭のように、省略を宣言した節)は `` `<!--call:<id>-->` `` で call だけを書かせる — **escape 付きのコマンドに省略形は無い**(flag が落ちると許可が見えなくなるので拒む)/ 単なる名指し(`cargo xtask <verb>` だけ)は素のまま — verb が実在するかだけ見る。**id には実行方法が必ず並ぶ**
 - **Rust 側は型付きの参照**(`crate::gui::KILL.line()` / `.instruction()`)。deny 文・エラー文も同じ参照で綴る
 - **どのファイルを読むかは `docs/commands.rs` の `ROOTS` / `LOOSE` / `USAGE` / `DISPATCH` が持つ**。理由が要る側だけここに書く — コメント行と `#[cfg(test)]` 以降と `crates/xtask/tests/` を除くのは、コメントは生成できず、テストの行は judge への入力そのものだから。`ci/baseline` は起きた run の記録、`ci` / `packaging` は変数で組むシェル
 - **限界**(明示): 宣言に無い option の組み合わせは「例」として verb しか見ない・前置き無しの 1 語は常に対象外(英語と区別できない)・fence の中は書き換えない(複合シェル行に marker は置けない)

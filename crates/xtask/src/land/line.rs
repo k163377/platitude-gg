@@ -38,8 +38,9 @@ const UNREADABLE: Duration = Duration::from_secs(60);
 /// What the head's landing may change that stops the next seat's
 /// preparation unread: the rules every landing is held to, and the skills
 /// a landing runs by.
-const STOPS_PREPARATION: [&str; 4] = [
+const STOPS_PREPARATION: [&str; 5] = [
     "CLAUDE.md",
+    ".claude/skills/gate/SKILL.md",
     ".claude/skills/land/SKILL.md",
     ".claude/skills/review-points/SKILL.md",
     ".claude/skills/verify-ui/SKILL.md",

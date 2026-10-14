@@ -21,6 +21,8 @@ guidance on top of it.
   commands are in `internal-docs/Codexハーネス.md`.
 - Use `.claude/skills/verify-ui/SKILL.md` for UI verification/launch;
   search its verb reference only for the chosen operation.
+- Use `.claude/skills/gate/SKILL.md` for the check tiers and when to run gate,
+  before running checks and before reporting work complete.
 
 ## Seat identity before any claim
 

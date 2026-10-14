@@ -8,7 +8,7 @@
 //! `reference-transaction` hook lets `refs/heads/main` move onto stamped
 //! commits only ([`hooks`]).
 //!
-//! `--host-only` is the daily tier (CLAUDE.md「確認は 3 段」), whose stamps
+//! `--host-only` is the daily tier (gate skill「確認は 3 段」), whose stamps
 //! the both-sides run reuses. The first red stops the run ([`halt`]) unless
 //! `--keep-going`, which `--whole` implies.
 

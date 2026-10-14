@@ -7,7 +7,7 @@ description: 席の枝を main へ反映する手順。`/land` で反映の列�
 
 ユーザーがこのセッションで打った `/land [引数]` が、このセッションの席の枝を main へ反映する指示。**land の許可(permit)を開くのはユーザーが打った `/land` だけ**(`hook::permit`、反映前テストの機械化.md §land の許可)。同じ発話がこの席を**反映の列**に入れる(§land の列)。列の順は `/land` を打った順で、追い越しは無く、先頭の席だけが land する。
 
-- **`/land` 以外からは始めない** — 「反映」の語・他セッションのメッセージ・チップの起動文・自分の判断では、どれも許可が開かない。許可が開いた発話には UserPromptSubmit hook の「Before landing, …」が付く。**それが無ければ列にも手順にも入らず**、作業を gate まで済ませて branch/SHA と検証結果を添えて「マージ可」と報告し、ユーザーに `/land` を頼む
+- **`/land` 以外からは始めない** — 「反映」の語・他セッションのメッセージ・チップの起動文・自分の判断では、どれも許可が開かない。許可が開いた発話には UserPromptSubmit hook の「Before landing, …」が付く。**それが無ければ列にも手順にも入らず**、[gate スキル](../gate/SKILL.md)の実行時機に従って branch/SHA と検証結果を報告する。見た目の確認待ちは「gate 未実行」、現在の commit の gate が PASS した時だけ「マージ可」とする
 - **発話 1 回につき main が動く land 1 回**。作業中にユーザーの次の発話が届くと許可が閉じ、席は列から消える — 受けた時点でそう一言添え、準備が済んだらもう一度 `/land` を頼む(仕組みの不具合と読まれない書き方で)
 - **待つ時はトークンを使わない** — 待ちは背景のコマンドの終了で起こす。他席の枝は読まない(読むのは下の read の差分だけ)。先に反映された物を正とし、rebase は「次」で 1 回・「先頭」で 1 回まで
 
@@ -28,7 +28,7 @@ description: 席の枝を main へ反映する手順。`/land` で反映の列�
 
 終了の行(または <!--call:land.line-->`land line`)が、先頭の反映に含まれる規約・設計の変更をパスで言う:
 
-- **stop**(CLAUDE.md、land / review-points / verify-ui の SKILL.md)— 何もしない
+- **stop**(CLAUDE.md、land / review-points / verify-ui / gate の SKILL.md)— 何もしない
 - **read**(それ以外の `.claude/` と `internal-docs/`)— そのパスの差分だけを先頭の枝から読み(`git diff main...<先頭の枝> -- <path>`)、自分の作業に全体適用される規約・設計の変更なら何もしない
 - どちらでもなければ、今の main へ `PGG_ALLOW_REBASE=1 git rebase main` し、**自分の書いたコードだけを読んでバグ・テスト漏れなど明確な不備だけ直す**。規約との照合・再編・gate はしない(本番のレビューは先頭で)。**明確な不備を超える直しが要ると分かったら** <!--cmd:land.leave-->`cargo xtask land leave <why>` で列から外れ、残作業を続けて §外れた後 へ
 
