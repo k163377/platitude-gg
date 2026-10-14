@@ -9,6 +9,13 @@
 //! fitted: at 1:1 the picture beside the first is off the edge. The rail
 //! stays narrow so the fitted row gets the width.
 //!
+//! A caption wraps at the width of its picture, and the pictures of a row
+//! start below the tallest caption: a caption wider than its picture
+//! pushes the next one along, and one taller than its neighbours drops
+//! its picture below theirs — either way the row no longer lines up.
+//! The bar above cuts the captions' list before the label — one line,
+//! cut from its end — and never the ratio: a 1px call is read off that.
+//!
 //! The seat filter shows the whole roster, empty seats disabled, so no
 //! chip moves between readings. The choice rides in the fragment: F5
 //! (`window.rs`) carries nothing else over. The arrows walk every view in
@@ -46,25 +53,24 @@ const STYLE: &str = r#"
  #bar{height:34px;flex:none;display:flex;gap:12px;align-items:center;padding:0 12px;
   background:#111a33;border-bottom:1px solid #24305a;user-select:none;white-space:nowrap}
  #bar #barseat{font-size:12px;padding:1px 7px}
- #bar b{color:#e6ecff;overflow:hidden;text-overflow:ellipsis}
+ #bar b{color:#e6ecff}
  #bar span{color:#7d8cb8}
+ #title{min-width:0;overflow:hidden;text-overflow:ellipsis}
+ #from{margin-left:12px}
+ #zoom,#keys{flex:none}
  #keys{margin-left:auto}
  kbd{background:#1b2547;border:1px solid #2e3c6e;border-radius:3px;padding:1px 5px;color:#a8b6e0}
  #stage{flex:1;position:relative;overflow:hidden;cursor:grab}
  #stage.drag{cursor:grabbing}
- #imgs{position:absolute;transform-origin:0 0;display:flex;gap:24px;align-items:flex-start;
-  image-rendering:pixelated}
- #imgs figure{margin:0}
- #imgs figcaption{height:28px;font:600 19px/28px "Segoe UI",system-ui,sans-serif;
-  color:#8494c0;letter-spacing:.04em;white-space:nowrap}
+ #imgs{position:absolute;transform-origin:0 0;display:grid;grid-auto-flow:column;
+  grid-template-rows:auto auto;grid-auto-columns:min-content;column-gap:24px;
+  align-items:start;image-rendering:pixelated}
+ #imgs figure{display:contents}
+ #imgs figcaption{font:600 19px/28px "Segoe UI",system-ui,sans-serif;
+  color:#8494c0;letter-spacing:.04em;overflow-wrap:anywhere}
  #imgs img{display:block;background:#000}
  #empty{position:absolute;inset:0;display:grid;place-items:center;color:#5c6a99}
 "#;
-
-/// The `#imgs` gap and `figcaption` height in the style above: the view
-/// is sized before a single picture has loaded.
-const GAP: u32 = 24;
-const CAP: u32 = 28;
 
 const SCRIPT: &str = r#"
 const INK={a:'#7aa2ff',b:'#5ecf9a',c:'#e0a35c',d:'#d47ba8',e:'#8f7ae0',f:'#4fc3d1',main:'#8b97bd'};
@@ -74,10 +80,7 @@ const ink=s=>INK[s]||'#8b97bd';
 // halves of a before/after together.
 const FLAT=[];
 RUNS.forEach(function(r,ri){
- const view=(parts,si)=>({parts:parts,
-  w:parts.reduce((n,p)=>n+p.w,0)+GAP*(parts.length-1),
-  h:Math.max.apply(null,parts.map(p=>p.h))+(parts.some(p=>p.cap)?CAP:0),
-  label:r.label,verb:r.verb,seat:r.seat,ri:ri,si:si});
+ const view=(parts,si)=>({parts:parts,label:r.label,verb:r.verb,seat:r.seat,ri:ri,si:si});
  if(r.abreast)FLAT.push(view(r.shots,0));
  else r.shots.forEach((s,si)=>FLAT.push(view([s],si)))});
 const side=document.getElementById('side'),imgs=document.getElementById('imgs'),
@@ -157,10 +160,12 @@ function draw(){imgs.style.transform='translate('+x+'px,'+y+'px) scale('+z+')';
   (exact()?'':'≈')+(z*100).toFixed(0)+'%'+(exact()?'':' smoothed')}
 // Centred while the view holds it, against the top-left corner once it
 // does not: a picture read past the window's edges is read from the
-// corner the app's own furniture starts at.
-function place(){const s=FLAT[i];if(!s)return;
- x=s.w*z<=stage.clientWidth?(stage.clientWidth-s.w*z)/2:0;
- y=s.h*z<=stage.clientHeight?(stage.clientHeight-s.h*z)/2:0;draw()}
+// corner the app's own furniture starts at. The view's size is read off
+// the laid-out row, untransformed: how many lines a caption takes is the
+// layout's to say.
+function place(){if(!FLAT.length)return;const w=imgs.offsetWidth,h=imgs.offsetHeight;
+ x=w*z<=stage.clientWidth?(stage.clientWidth-w*z)/2:0;
+ y=h*z<=stage.clientHeight?(stage.clientHeight-h*z)/2:0;draw()}
 // What a view of one picture opens at: one image pixel on one screen
 // pixel, whatever it costs in panning — a shrink is the one ratio a
 // 1px call cannot be read off. Named `oneToOne`:
@@ -173,8 +178,8 @@ function oneToOne(){z=1;place()}
 // opening of a row that holds more than one picture. Magnifies as well,
 // held to a whole ratio so a view smaller than the window fills it
 // without going soft.
-function fit(){const s=FLAT[i];if(!s)return;
- const raw=Math.min(stage.clientWidth/s.w,stage.clientHeight/s.h);
+function fit(){if(!FLAT.length)return;
+ const raw=Math.min(stage.clientWidth/imgs.offsetWidth,stage.clientHeight/imgs.offsetHeight);
  z=raw>=1?Math.floor(raw):raw;place()}
 // What a view opens at. One picture at 1:1; a row of them at the ratio
 // `0` gives, because at 1:1 the picture beside the first stands off the
@@ -185,8 +190,10 @@ function show(n){if(!FLAT.length)return;i=(n+FLAT.length)%FLAT.length;const s=FL
  // The width and height are written on every picture, so the row is
  // laid out to its real size before any of them has loaded: otherwise
  // the first fit() of a view measures nothing and centres it wrongly.
+ // Every picture gets a caption, empty or not: the grid places them in
+ // caption-then-picture pairs.
  s.parts.forEach(function(p){const fig=document.createElement('figure');
-  if(p.cap){const c=document.createElement('figcaption');c.textContent=p.cap;fig.append(c)}
+  const c=document.createElement('figcaption');c.textContent=p.cap;fig.append(c);
   const im=new Image();im.src=p.file;im.width=p.w;im.height=p.h;fig.append(im);imgs.append(fig)});
  barseat.textContent=s.seat;barseat.style.background=ink(s.seat);
  barseat.className='seat';barseat.title='taken in seat '+s.seat;
@@ -222,7 +229,7 @@ else{imgs.style.display='none'}
 const BODY: &str = r#"<div id="wrap"><div id="side"><div id="head">
  <h2>shots &mdash; read top down</h2><div id="filter"></div></div></div>
  <div id="main"><div id="bar"><span class="seat" id="barseat"></span>
-  <b id="name"></b><span id="from"></span><b id="zoom"></b>
+  <span id="title"><b id="name"></b><span id="from"></span></span><b id="zoom"></b>
   <span id="keys"><kbd>wheel</kbd> zoom <kbd>drag</kbd> pan <kbd>0</kbd> fit
   <kbd>1</kbd><kbd>2</kbd><kbd>4</kbd><kbd>8</kbd> exact
   <kbd>&larr;</kbd><kbd>&rarr;</kbd> next <kbd>F5</kbd> reload</span></div>
@@ -239,7 +246,7 @@ pub(super) fn render(runs: &[Run]) -> String {
     out.push_str(BODY);
     out.push_str("<script>const RUNS=");
     out.push_str(&data(runs));
-    out.push_str(&format!(",GAP={GAP},CAP={CAP};"));
+    out.push(';');
     out.push_str(SCRIPT);
     out.push_str("</script></body></html>\n");
     out
@@ -391,9 +398,42 @@ mod tests {
         assert!(page.contains("abreast:true"));
         assert!(page.contains("cap:\"before\""));
         assert!(page.contains("cap:\"after\""));
-        // The script sizes the row from these.
-        assert!(page.contains("GAP=24"));
-        assert!(page.contains("CAP=28"));
+        // Sized off the row as laid out, captions and all.
+        assert!(page.contains("const w=imgs.offsetWidth,h=imgs.offsetHeight;"));
+        assert!(page.contains(
+            "Math.min(stage.clientWidth/imgs.offsetWidth,stage.clientHeight/imgs.offsetHeight)"
+        ));
+    }
+
+    /// A caption never sets its column's width: one wider than its picture
+    /// would push the next picture along, and the row would not line up.
+    #[test]
+    fn a_caption_wraps_at_the_width_of_its_picture() {
+        let page = render(&[run("a", "chip padding")]);
+        // A column is as wide as its picture: `anywhere` lets the caption
+        // break down to a character, so it never sets the width.
+        assert!(page.contains("grid-auto-columns:min-content"));
+        assert!(page.contains("letter-spacing:.04em;overflow-wrap:anywhere}"));
+        // One row of captions over one row of pictures: the pictures start
+        // below the tallest caption, all at the same height.
+        assert!(page.contains("grid-template-rows:auto auto"));
+        assert!(page.contains("#imgs figure{display:contents}"));
+        // So every picture needs a caption, or the pairs fall out of step.
+        assert!(page.contains("c.textContent=p.cap;fig.append(c);"));
+    }
+
+    /// However long the captions' list, the ratio stays in the bar, and the
+    /// list is cut before the label.
+    #[test]
+    fn the_bar_keeps_the_ratio_whatever_the_captions_say() {
+        let page = render(&[run("a", "chip padding")]);
+        assert!(page.contains("#zoom,#keys{flex:none}"));
+        // One line cut from its end: flex shrinks every item in proportion,
+        // so a label beside the list would lose its last letter too.
+        assert!(
+            page.contains("<span id=\"title\"><b id=\"name\"></b><span id=\"from\"></span></span>")
+        );
+        assert!(page.contains("#title{min-width:0;overflow:hidden;text-overflow:ellipsis}"));
     }
 
     #[test]
@@ -411,7 +451,7 @@ mod tests {
         assert!(page.contains("addEventListener('resize',place)"));
         // No 100% ceiling on the fit: `0` may magnify a small picture as
         // well as shrink.
-        assert!(!page.contains("stage.clientHeight/s.h,1)"));
+        assert!(!page.contains("stage.clientHeight/imgs.offsetHeight,1)"));
     }
 
     #[test]
