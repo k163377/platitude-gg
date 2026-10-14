@@ -85,8 +85,8 @@ pub enum PlanAnswer {
 
 /// Reads what a plan from `from` (a full commit id) would be made of.
 ///
-/// Serial spawns are what the interaction budget goes on (CLAUDE.md
-/// §性能予算): the merge answer rides the range read's `%P`, and the onto
+/// Serial spawns are what the interaction budget goes on (internal-docs/性能.md
+/// §予算): the merge answer rides the range read's `%P`, and the onto
 /// row, its branch name and the published count run side by side.
 pub async fn preview(
     executor: &GitExecutor,

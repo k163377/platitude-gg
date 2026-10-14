@@ -18,7 +18,7 @@ use crate::oid::Oid;
 /// The commits remote-tracking branches point at, sorted for lookup.
 ///
 /// Built once per pass and searched per row: the walk runs across awaits
-/// and cannot hold the label index's lock (CLAUDE.md §性能予算).
+/// and cannot hold the label index's lock (internal-docs/性能.md §設計規則).
 #[derive(Debug, Default, Clone)]
 pub(super) struct RemoteTips {
     oids: Vec<Oid>,

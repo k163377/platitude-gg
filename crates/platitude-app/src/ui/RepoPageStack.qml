@@ -7,7 +7,7 @@ import platitude.ui
 
 // The repository pages: one row per tab, and a page only for the tab in front. A tab that leaves the front is taken
 // down with its models and state, and its session let go of (`RepoPage.leaveFront`); coming back reads the repository
-// again — the price of the memory budget (CLAUDE.md §性能予算).
+// again — the price of the memory budget (internal-docs/性能.md §予算).
 //
 // The root is the `StackLayout` itself, so its `Layout.*` stay where they are read (rules-refs/structure.md §分割の各論).
 StackLayout {

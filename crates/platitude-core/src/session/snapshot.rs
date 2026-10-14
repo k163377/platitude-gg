@@ -7,7 +7,7 @@ use super::*;
 ///
 /// Keyed by name as well as listed: the lookups ([`Self::local_named`] and
 /// the two beside it) answer a menu as it opens, where a walk over every
-/// row per question is what the budget rules out (CLAUDE.md 性能予算).
+/// row per question is what the budget rules out (internal-docs/性能.md §設計規則).
 /// Branches are sorted by name; tags are sorted newest first and carry a
 /// second order for the lookup.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -296,7 +296,7 @@ fn folded_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 
 /// Positions of `names` in their order with letter case set aside: what
 /// [`name_clash`] searches, so a keystroke costs a few binary searches
-/// whatever the number of refs (CLAUDE.md 性能予算).
+/// whatever the number of refs (internal-docs/性能.md §設計規則).
 /// `names` are the positions to index and the names at them. Each name is
 /// folded once: a comparator folding both sides on every step would fold
 /// tens of thousands of tags many times over, on every read of the refs.

@@ -10,7 +10,7 @@
 
 - `perf none|details|diff|scroll|scroll-none|font-walk --preset perf`: 性能ドライバーの表示契約。未選択、詳細、diff、diffを閉じて表示グラフをスクロール、未選択スクロールの5通りは `perf_complete` の状態とPNGで判定する。性能値は `cargo xtask perf` の実測。空コミットを持つ `deep` はdiff要求を失敗させるため、変更ファイル付きの専用presetを使う。 `font-walk` は `cargo xtask perf` の較正 run の形で、判定は `perf_font_walk_settled` の行。歩きの代金の実測は `perf` の `font walk` 行(rules-refs/app-ui.md) — offscreen の FreeType DB にはフォントが無い。
 
-- `perf colour|diff-scroll|sequence --preset perf-sequence`: 固定Kotlin diffの最終色付け、可視diffスクロール、2 OIDを2周する表示契約。順に `perf_colour_frame`、`perf_diff_scroll_frame visible=true`、`perf_operations count=4` とPNGで判定。実測のケース一覧は `ci/baseline/perf-local.md`。
+- `perf colour|diff-scroll|sequence --preset perf-sequence`: 固定Kotlin diffの最終色付け、可視diffスクロール、2 OIDを2周する表示契約。順に `perf_colour_frame`、`perf_diff_scroll_frame visible=true`、`perf_operations count=4` とPNGで判定。実測のケース一覧の書き方は internal-docs/性能.md §ケース。
 
 - `commit`(引数はメッセージ。**省略時は `chore: commit from the headless run`**。報告は答えの瞬間・完了はその書き込みの status の後(`commit_answered` の `empty=` は写真では答えられない側なので報告のまま))
 - `amend`(同じく引数はメッセージだが、**省略時は `--no-edit`**。完了は `commit` と同じ。**`--preset marker`** = HEAD が `--allow-empty` の印のコミットで、文言だけの amend が `--allow-empty` 付きで着地する側)

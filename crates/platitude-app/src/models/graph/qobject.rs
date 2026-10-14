@@ -288,7 +288,7 @@ impl GraphModel {
     /// The ids of the rows between two places, ends included, in walk
     /// order — what a Shift click reaches. One crossing: a range can be the
     /// whole window, and asking per row would put a walk of the history on
-    /// a click (CLAUDE.md §性能予算).
+    /// a click (internal-docs/性能.md §設計規則).
     #[qslot]
     fn oids_between(&self, from: i32, to: i32) -> Vec<String> {
         let (lo, hi) = if from <= to { (from, to) } else { (to, from) };

@@ -2,7 +2,7 @@
 //! evidence of the modes either side of a run, and as what the run is
 //! placed against — the window is pinned onto one named screen
 //! (`--screen`), whose nominal Hz the delivered frames are read against
-//! (rules-refs/app-ui.md「窓は名前の付いた画面へ固定する」).
+//! (internal-docs/性能.md「窓は名前の付いた画面へ固定する」).
 use std::path::Path;
 
 /// One screen, as both the OS mode table and the virtual desktop see it.

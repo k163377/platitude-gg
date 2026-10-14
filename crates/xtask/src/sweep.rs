@@ -314,7 +314,7 @@ pub(crate) struct Tail {
     pub whatever_the_key_says: bool,
     /// The container's build volume is this run's to ask as well. False
     /// for a tier that started no container: the daily one promises not
-    /// to (CLAUDE.md「確認は 3 段」), and the volume waits for the next
+    /// to (gate skill「確認は 3 段」), and the volume waits for the next
     /// run that has a Linux side.
     pub the_volume_too: bool,
 }

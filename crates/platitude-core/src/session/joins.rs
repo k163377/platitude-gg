@@ -4,7 +4,7 @@
 use super::*;
 
 /// The per-listing lookups the two ref joins share, built once so neither
-/// of them scans the listing from inside a loop (CLAUDE.md §性能予算;
+/// of them scans the listing from inside a loop (internal-docs/性能.md §設計規則;
 /// the cost otherwise is in ci/baseline/refs-join-windows-x64.md).
 pub(super) struct RefJoins<'a> {
     remotes: refs::RemoteBranches<'a>,

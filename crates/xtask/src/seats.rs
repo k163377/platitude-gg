@@ -870,7 +870,7 @@ pub(crate) fn worktree_root(cwd: &str) -> Option<String> {
 }
 
 /// The measurement rig: the one tree under the roster's directory that is
-/// no seat (`perf::rig`; rules-refs/app-ui.md「計測は計測台(rig)で撃つ」).
+/// no seat (`perf::rig`; internal-docs/性能.md「計測は計測台(rig)で撃つ」).
 /// The entry and write hooks refuse it (hook/seat.rs).
 pub(crate) const RIG: &str = "rig";
 

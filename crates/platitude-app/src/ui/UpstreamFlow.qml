@@ -36,7 +36,7 @@ Item {
     /// asks again (a binding does not follow a slot call).
     ///
     /// Only while the question stands: the binding re-runs on every refs read, and the list costs the number of refs
-    /// (CLAUDE.md §性能予算). Landing a frame after the bar is fine (`AppCombo.wanted`).
+    /// (internal-docs/性能.md §設計規則). Landing a frame after the bar is fine (`AppCombo.wanted`).
     readonly property var branches: {
         upstreamFlow.remotesModel.total
         return upstreamFlow.asking

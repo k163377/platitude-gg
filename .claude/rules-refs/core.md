@@ -123,7 +123,7 @@
 - **読みの並びの後の判断は純関数に割る**。先例は `remote::push::decide_push`。**統合テストに残すのは「読みが git の持ち物を持って返るか」**(scope・正規表現になる名前・実 push の代表例)と、`config_reads::planning_a_push_answers_by_code`
 - **同じ割り方の 2 例目・3 例目**: `identity::local::keys_to_write`(組合せ全件が単体、実 git に残すのは**発行されたコマンドがその判断どおりであること**)/ `sequencer::plan::decide_edit`(**拒否の順**は単体。実 git に残すのは shallow clone の縁が縁として返ること)。**割る前に測る対象は「その判断 1 通りあたり何プロセス・何リポジトリか」** —— 純関数を足しただけで元の統合テストを全部残すのは未完了
 
-- **メモリの内訳は `cargo xtask perf --breakdown` で出す**。実測記録は [ci/baseline/perf-windows-x64.md](../../ci/baseline/perf-windows-x64.md)
+- **メモリの内訳は `cargo xtask perf --breakdown` で出す**。撃ち方と記録の置き方は [internal-docs/性能.md](../../internal-docs/性能.md)、実測記録は [ci/baseline/perf-windows-x64.md](../../ci/baseline/perf-windows-x64.md)
 - **refs に比例する名前は `crate::Name`(`compact_str`)で持つ** — 24 バイトまで inline。**`Footprint` は `SmallVec` に明示 impl が要る** — 無いと `[T]` へ deref して溢れたバッファを数え落とす
 - **バイト数より確保の個数が効く帯がある** — 個数の削減は計数より WorkingSet に大きく出る(差はヒープ管理領域。計数アロケータには見えない)。`classes=` の**件数**を必ず見る
 - **mimalloc は不採用** — WorkingSet が増え(環境変数で抑えても private が増える)、起動・応答に差なし。数字は [perf-windows-x64.md](../../ci/baseline/perf-windows-x64.md) §アロケータと確保の個数

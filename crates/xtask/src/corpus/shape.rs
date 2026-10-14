@@ -1,5 +1,5 @@
 //! The dimensions the benchmark corpus is built to, and the strings that
-//! fill them: `JetBrains/kotlin` class (CLAUDE.md §性能予算), rounded so a
+//! fill them: `JetBrains/kotlin` class (internal-docs/性能.md §予算), rounded so a
 //! re-take measures the same corpus. The reference repository is named
 //! in `ci/baseline/perf-windows-x64.md` §計測条件.
 //!

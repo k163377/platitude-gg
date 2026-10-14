@@ -63,7 +63,7 @@ pub(in crate::perf) fn wait_for_quiet(
 ///
 /// `ES_DISPLAY_REQUIRED` alone does not wake a screen already dark, so this
 /// injects a zero-pixel mouse move, which moves no cursor
-/// (rules-refs/app-ui.md「画面は invocation の間ずっと起こしておく」).
+/// (internal-docs/性能.md「画面は invocation の間ずっと起こしておく」).
 ///
 /// A software run needs no display, so its helper injects nothing and asks
 /// only `ES_SYSTEM_REQUIRED`, leaving the screen to whoever drives it.

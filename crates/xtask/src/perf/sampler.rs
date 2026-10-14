@@ -42,7 +42,7 @@ pub(super) struct Sample {
     pub(super) private: u64,
     /// The OS device name of the screen the window was on, empty while
     /// there is no window yet — not Qt's friendly name
-    /// (rules-refs/app-ui.md「性能計測の画面対応」).
+    /// (internal-docs/性能.md「性能計測の画面対応」).
     pub(super) display: String,
     /// Whether the window in front belonged to the measured process.
     /// Evidence only: a window not in front is still composited, and the
@@ -354,7 +354,7 @@ impl Default for Limits {
             // A parallel build, not a desktop in use: an editor, a browser
             // and a container runtime sitting open must not trip it, or
             // every run anybody could take is refused (the numbers:
-            // rules-refs/app-ui.md「性能計測は機械の状態も測って、駄目な run は落として撮り直す」).
+            // internal-docs/性能.md「性能計測は機械の状態も測って、駄目な run は落として撮り直す」).
             foreign_percent: 35.0,
             peak_foreign_percent: 75.0,
             quiet_percent: 30.0,

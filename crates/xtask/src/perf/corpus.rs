@@ -1,6 +1,6 @@
 //! What the benchmark repository *is*, as one token that changes whenever
 //! the measurement would: taken over the whole ref listing, not `HEAD`
-//! (rules-refs/app-ui.md「ベンチマークリポジトリは `HEAD` では固定できない」),
+//! (internal-docs/性能.md「ベンチマークリポジトリは `HEAD` では固定できない」),
 //! and printed beside the parts that made it so a mismatch says what
 //! moved.
 

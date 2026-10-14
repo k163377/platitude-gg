@@ -2892,7 +2892,7 @@ FocusScope {
     }
     /// Every commit row between two places, ends included — what a Shift click reaches, **the rows scrolled past
     /// too**. Asked of the model in one crossing (`GraphModel.oidsBetween`): a call per row would put a walk of the
-    /// history on a click (CLAUDE.md §性能予算).
+    /// history on a click (internal-docs/性能.md §設計規則).
     function chooseRange(from, to) {
         if (from < 0 || to < 0)
             return

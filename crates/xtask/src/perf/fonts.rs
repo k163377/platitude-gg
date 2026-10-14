@@ -1,6 +1,6 @@
 //! The font database's population, weighed on its own: once per process,
 //! nothing the product can decline, and what the budget line is read net
-//! of (rules-refs/app-ui.md「perf の判定行は net で読む」). The corpus asks
+//! of (internal-docs/性能.md「perf の判定行は net で読む」). The corpus asks
 //! during the scroll, where the walk's bytes and the bench's arrive in the
 //! same ticks, so the calibration run asks before `perf_done` instead,
 //! idle either side, and says when ([`mark`]).

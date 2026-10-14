@@ -193,7 +193,7 @@ fn resolve_git(runtime: &tokio::runtime::Runtime, git_path: &str) -> GitChoice {
     if git_path.is_empty() {
         return GitChoice::on_path();
     }
-    // Startup time (CLAUDE.md §性能予算): one `git --version`, only when
+    // Startup time (internal-docs/性能.md §予算): one `git --version`, only when
     // the settings name a git.
     let cancel = tokio_util::sync::CancellationToken::new();
     let probe = runtime.block_on(platitude_core::version::probe(git_path, &cancel));

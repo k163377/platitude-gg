@@ -1,7 +1,7 @@
 # 性能実測記録(Windows x64)
 
 複数ケース・diffスクロール・最終色付け・OSのpeak・cache/A-Bの追加計測は
-[perf-local.md](perf-local.md)。以下は通常計測の値。
+[性能.md](../../internal-docs/性能.md) §計測。以下は通常計測の値。
 
 **§判定 / §メモリの段 / §峰と settled / §常駐の内訳 / §Rust ヒープ /
 §出荷ビルドとの差 / §表示に依らない計測 / §操作 1 点の内訳 は、全部同じ木で同じ Qt** —
@@ -21,7 +21,7 @@ PGG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印
 
 段ごとの表は 2 行目にフラグを足しただけで、**撃ち方は各節が持つ**。この記録を撃ち直すなら
 `--at` は冒頭の 2 つの木を持つ commit で、**全節が同じ commit**。既定で最初に較正 run
-(`run-font-walk`)が走り、report の `font walk` / `net` 行になる(rules-refs/app-ui.md
+(`run-font-walk`)が走り、report の `font walk` / `net` 行になる(internal-docs/性能.md
 「perf の判定行は net で読む」)。
 
 - 対象: **`cargo xtask corpus` が生成する合成リポジトリ**。**corpus token
@@ -72,7 +72,7 @@ PGG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印
 | 起動→グラフ初回表示 3s | 1249–1308–1324ms | ✅ |
 | 操作応答 100ms | **84.3–95.5–109.0ms** | ❌ **max で 9.0ms 超過**(5 run 中 1 本。下の注) |
 | スクロール 60fps | 177.5–177.8–177.9fps | ✅ |
-| メモリ 300MB | gross 337.4–343.2–344.8MB / **net 287.4–293.3–294.9MB** | ✅ **net で読む**(net は max で 5.1MB 余す。gross は max で 44.8MB 超過。規則は rules-refs/app-ui.md) |
+| メモリ 300MB | gross 337.4–343.2–344.8MB / **net 287.4–293.3–294.9MB** | ✅ **net で読む**(net は max で 5.1MB 余す。gross は max で 44.8MB 超過。規則は internal-docs/性能.md §計測の各論) |
 
 - **較正 run が量った歩きは WorkingSet +49.9MB / private +21.3MB**で、
   それを引いた net は 5 run とも予算の内側。**どの段で出るかは §メモリの段**(出るのは
@@ -150,7 +150,7 @@ diff 61–61–71 / 93–97–103 / 94.4–109.5–115.1。
   描いた行のグリフ texture も持たない — その分だけ軽く出る。**歩き(font walk)は同じ大きさ**で、
   フォント DB の populate は scene graph に依らない
 - **表示を消した座りはこの木では撮っていない**。software の経路は表示の状態で変わらない
-  (rules-refs/app-ui.md「表示に依らず測るのは `perf --software`」)
+  (internal-docs/性能.md「表示に依らず測るのは `perf --software`」)
 - **使い道は 2 つ**: 同じ renderer どうしで A/B を撮る(表示は付け消ししてよい —
   `--software --at <対照>` と `--software --at <変更>`)、歩きの帰属を撮る。**§判定 の撮り直しは
   できない** — 予算行は点灯した D3D の値で、それには表示が要る
