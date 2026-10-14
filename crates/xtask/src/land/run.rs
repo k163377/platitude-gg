@@ -1,13 +1,7 @@
-//! `cargo xtask land [<branch>]` — the one way a branch reaches main
-//! (steps: internal-docs/反映前テストの機械化.md §land).
-//!
-//! A merge typed in the primary checkout inherits whatever HEAD is there:
-//! a detached HEAD or a stray branch fast-forwards the wrong thing or
-//! strands the commits. This verb reads where main actually is and picks
-//! the safe move. Its fast-forward is what spends the permit
-//! (hook/permit.rs).
+//! The landing itself: what stands ahead of the turn in the landings'
+//! queue, the turn, and everything past it up to the fast-forward and
+//! the clearing after (the module's doc says why this is the one way).
 
-use crate::command::{self, Permission, Where};
 use crate::gate::Gated;
 use crate::seats::{
     Held, Identity, Standing, WorktreeBlock, is_a_seat_claim, same_tree, standing, whose,
@@ -15,23 +9,8 @@ use crate::seats::{
 };
 use crate::subprocess::git_query;
 
-mod approval;
-mod leftovers;
-mod record;
-mod tags;
-mod versions;
-use record::Phases;
-
-pub(crate) static LAND: command::Command = command::Command {
-    id: "land.branch",
-    call: "land <branch>",
-    purpose: "rebase, gate and fast-forward main onto a branch — the one sanctioned way",
-    run_in: Where::Seat,
-    needs: &["the branch checked out in a seat, with nothing uncommitted"],
-    permission: Permission::Permit,
-};
-
-pub(crate) static COMMANDS: &[&command::Command] = &[&LAND];
+use super::record::Phases;
+use super::{approval, leftovers, tags};
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut phases = Phases::start();
@@ -209,7 +188,7 @@ fn prepare_gate(root: &std::path::Path, seat: &str) -> Result<(), String> {
 
 /// A duration to the second, the way the gate says the wall clock a
 /// landing's phases are compared against.
-fn clock(took: std::time::Duration) -> String {
+pub(super) fn clock(took: std::time::Duration) -> String {
     let secs = took.as_secs();
     format!("{}m{:02}s", secs / 60, secs % 60)
 }
