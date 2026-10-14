@@ -37,23 +37,39 @@ AutoScrollBar {
         radius: Theme.radiusSm
         topRightRadius: 0
         bottomRightRadius: 0
-        // Up at once, down over 400ms (規約 §QML 実装ルール のバーの明るさ).
+        // Up at once when put to use, over 200ms under a hand alone, down over 400ms — the timing of `AutoScrollBar`'s
+        // own states (規約 §QML 実装ルール のバーの明るさ).
         color: paneBar.idleColor
         states: [
             State { name: "gone"; when: !paneBar.visible },
             State {
                 name: "lit"
-                when: paneBar.bright
+                when: paneBar.used
                 PropertyChanges {
                     slab.color: paneBar.pressed ? Theme.borderStrong : Theme.borderDefault
                     paneBar.arrowInk: Theme.borderDefault
                 }
+            },
+            State {
+                name: "underHand"
+                when: paneBar.underHand
+                PropertyChanges {
+                    slab.color: Theme.borderDefault
+                    paneBar.arrowInk: Theme.borderDefault
+                }
             }
         ]
-        transitions: Transition {
-            from: "lit"
-            to: ""
-            ColorAnimation { duration: 400 }
-        }
+        transitions: [
+            Transition {
+                from: "lit,underHand"
+                to: ""
+                ColorAnimation { duration: 400 }
+            },
+            Transition {
+                from: ",gone"
+                to: "underHand"
+                ColorAnimation { duration: 200 }
+            }
+        ]
     }
 }

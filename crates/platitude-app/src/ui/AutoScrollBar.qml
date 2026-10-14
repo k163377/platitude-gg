@@ -321,8 +321,9 @@ ScrollBar {
             bar.lit = true
     }
 
-    /// What the bar is painting: full ink while it is being used or the hand is on it, a step down once neither.
-    readonly property bool bright: bar.lit || bar.held || bar.underHand
+    /// Whether the bar is in use: sent since the reader arrived, or held. Full ink while it is or the bar is under the
+    /// hand, a step down once neither (the states below).
+    readonly property bool used: bar.lit || bar.held
 
     /// Hover is left to the view. Taking it breaks two ways: a `Flickable` drops its own handler's hover over a
     /// hover-taking child (a hole in `inArea` the width of the bar), and the bar's `hovered` latches after a press.
@@ -344,20 +345,34 @@ ScrollBar {
 
     /// The idle share and the timing: 規約 §スクロールバー / §QML 実装ルール のバーの明るさ.
     ///
-    /// `gone` stands first and the transition names its `to`: a sideways bar hidden part way down would otherwise
-    /// come back mid-fall and finish it in view. Only leaving `lit` on screen is animated.
+    /// `gone` stands first and the transitions name their ends: a sideways bar hidden part way down would otherwise
+    /// come back mid-fall and finish it in view. On screen, the fall from full ink is animated, and so is the rise
+    /// under a hand alone, a bar coming up under the hand included (`from` the default state and `gone`) — at once, a
+    /// hand passing over reads as a flash. A bar put to use is lit at once, from any state.
     opacity: bar.dimsItself ? 0.3 : 1
     states: [
         State { name: "gone"; when: !bar.visible },
         State {
             name: "lit"
-            when: bar.bright
+            when: bar.used
+            PropertyChanges { bar.opacity: 1 }
+        },
+        State {
+            name: "underHand"
+            when: bar.underHand
             PropertyChanges { bar.opacity: 1 }
         }
     ]
-    transitions: Transition {
-        from: "lit"
-        to: ""
-        NumberAnimation { target: bar; property: "opacity"; duration: 400 }
-    }
+    transitions: [
+        Transition {
+            from: "lit,underHand"
+            to: ""
+            NumberAnimation { target: bar; property: "opacity"; duration: 400 }
+        },
+        Transition {
+            from: ",gone"
+            to: "underHand"
+            NumberAnimation { target: bar; property: "opacity"; duration: 200 }
+        }
+    ]
 }

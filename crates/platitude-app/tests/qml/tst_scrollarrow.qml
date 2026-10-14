@@ -303,10 +303,12 @@ Item {
                 mouseMove(root, root.width - 1, 300)
                 tryVerify(() => !bar.inArea)
                 mouseMove(root, atRows.x, atRows.y)
-                tryVerify(() => bar.inArea && !bar.bright && idle(), undefined, "in the rows, the bar rests")
+                tryVerify(() => bar.inArea && !bar.used && idle(), undefined, "in the rows, the bar rests")
                 mouseMove(bar, bar.width / 2, bar.height / 2)
                 tryVerify(() => bar.underHand, undefined, "the hand is on the bar")
-                verify(lit(), "the bar is lit")
+                // Eased in, not at once: a hand passing over the bar would otherwise flash it.
+                verify(!lit(), "the bar rises under the hand, not at once")
+                tryVerify(lit, undefined, "the bar is lit")
                 for (const a of arrows)
                     verify(slab ? Qt.colorEqual(a.ink, Theme.borderDefault) : a.parent === bar,
                            "an arrow wears " + a.ink + " under the hand")
@@ -316,24 +318,53 @@ Item {
                 }
                 mouseMove(root, atRows.x, atRows.y)
                 tryVerify(() => !bar.underHand && bar.inArea, undefined, "back in the rows")
-                verify(!bar.bright)
+                verify(!bar.used)
+                verify(!idle(), "the bar falls, not at once")
                 tryVerify(idle, undefined, "and the bar back down")
             }
             mouseMove(root, root.width - 1, 300)
         }
 
+        /// A bar put to use is lit at once, even part way up under a hand: the slab at the held step, a see-through bar
+        /// at full ink.
+        function test_a_press_under_the_hand_lights_at_once() {
+            for (const bar of [paneBar, floatBar]) {
+                const slab = bar === paneBar
+                const rest = () => slab ? Qt.colorEqual(bar.slabColor, bar.idleColor)
+                                        : Math.abs(bar.opacity - 0.3) < 0.001
+                mouseMove(root, root.width - 1, 300)
+                tryVerify(() => !bar.inArea && rest(), undefined, "down to rest, not part way through a fall")
+                const mid = bar.contentItem.y + bar.contentItem.height / 2
+                mouseMove(bar, bar.width / 2, mid)
+                tryVerify(() => bar.underHand)
+                verify(slab ? !Qt.colorEqual(bar.slabColor, Theme.borderDefault) : bar.opacity < 1, "still rising")
+                mousePress(bar, bar.width / 2, mid)
+                verify(slab ? Qt.colorEqual(bar.slabColor, Theme.borderStrong) : bar.opacity === 1,
+                       "held, and lit at once")
+                mouseRelease(bar, bar.width / 2, mid)
+            }
+            mouseMove(root, root.width - 1, 300)
+        }
+
         /// A sideways bar has no view to ask: it is handed its pane's handler, and reads the hand across from the frame
-        /// it stands in to the pane the handler is on.
+        /// it stands in to the pane the handler is on. Out only while the hand is in the pane, it can come up under the
+        /// hand, and rises from there the same way.
         function test_the_hand_on_a_sideways_bar_lights_it() {
             const bar = codeScroll.children[0].children.filter(c => c.orientation === Qt.Horizontal)[0]
             mouseMove(diffPane, 20, 20)
-            tryVerify(() => bar.visible && bar.inArea && !bar.bright, undefined, "in the pane, the bar rests")
+            tryVerify(() => bar.visible && bar.inArea && !bar.used, undefined, "in the pane, the bar rests")
             const at = bar.mapToItem(root, bar.width / 2, bar.height / 2)
             mouseMove(root, at.x, at.y)
             tryVerify(() => bar.underHand, undefined, "the hand is on the bar")
-            compare(bar.opacity, 1)
+            verify(bar.opacity < 1, "rising, not at once")
+            tryCompare(bar, "opacity", 1)
             mouseMove(diffPane, 20, 20)
             tryVerify(() => !bar.underHand && bar.opacity < 1, undefined, "off it, the bar goes back down")
+            mouseMove(root, root.width - 1, 300)
+            tryVerify(() => !bar.visible, undefined, "out of the pane, the bar goes")
+            mouseMove(root, at.x, at.y)
+            tryVerify(() => bar.underHand, undefined, "the bar came up under the hand")
+            verify(bar.opacity < 1, "and rises, not at once")
             mouseMove(root, root.width - 1, 300)
         }
 
