@@ -682,5 +682,17 @@ fn stands_in_for_a_hook_that_claims_working() {
     .expect("claimed, and the holder started");
 }
 
+#[test]
+fn the_last_quiet_release_is_read_off_the_history_by_its_time() {
+    let history = "1791938599051 r25 67544 released -\n\
+                   1791938668034 r25 67544 holding turn:abc\n\
+                   1791945000000 r25 67544 released quiet:121m\n\
+                   1791945100000 r25 67544 lost thread:1,system:0,after:1\n\
+                   1791946000000 r26 70000 holding turn:def\n";
+    assert_eq!(super::quiet_release_in(history), Some(1_791_945_000_000));
+    assert_eq!(super::quiet_release_in("1 r25 1 released -\n"), None);
+    assert_eq!(super::quiet_release_in(""), None);
+}
+
 #[cfg(windows)]
 mod holder;

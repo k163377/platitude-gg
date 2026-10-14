@@ -659,13 +659,26 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       reference-transaction hook checks the stamp on the way. History
       stays linear and a landed seat stands at main's tip. Refuses a
       branch checked out nowhere, a dirty seat, a seat that holds main,
-      and — before anything moves, and again just before main does — a
-      seat that put runs on the board after the user's latest message
-      (the one the session's permit records): the landing takes them
-      off, and what went up after the ask is UI the user has not
+      a seat that is not the head of the line of landings (`land line`
+      below), and — before anything moves, and again just before main
+      does — a seat that put runs on the board after the user's latest
+      message (the one the session's permit records): the landing takes
+      them off, and what went up after the ask is UI the user has not
       approved, so the session asks for that approval and lands on the
       next /land. The landing that found them leaves the permit waiting
       for that message, so taking them off the board approves nothing.
+      Reads the permit again before the rebase and just before main
+      moves: a landing run in the background outlives the user's next
+      message, and that message closes the permit, so the landing stops
+      there with nothing moved. A landing that stops once it has taken
+      its turn — a rebase that stopped, a red gate, runs awaiting
+      approval found after the gate, a closed permit, a refused
+      fast-forward — leaves the line of landings: the user's next /land
+      puts the seat back at the end; so does a branch with nothing to
+      land, whose /land ends there with the permit unspent. A refusal
+      ahead of the turn (a dirty seat, a branch checked out nowhere, a
+      seat behind the head) is the session's to put right and land
+      again.
       Bare `land` from a seat lands the seat's own branch. Once main
       has moved it clears what the session running it made: the
       branches its git created (the reference-transaction hook writes
@@ -686,6 +699,50 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       was: the tree is empty at main's tip, so the letter is free for
       whoever asks next, and a session that goes on working there
       claims it back at its next edit. A lock written by hand stays.
+
+  land line
+      The line of landings and this session's place in it. The prompt
+      hook puts a seat in the line when the user's message is /land
+      (`.permits/<session>.line` beside the permit) and takes it out on
+      any other message; a seat stands in the line while its permit is
+      open, it has not left, and no other conversation's claim is on
+      its seat (its own is known by session id or by the desktop app's
+      session; a seat nobody claims contradicts nothing). A conversation
+      that goes on under a new session id (an interrupted prompt edited,
+      /clear) takes its old id's place away at its first message, and
+      `seat release` ends the place with the claim. Oldest /land first,
+      to the millisecond, never overtaken: the head lands, the next
+      prepares, and the rest wait. For the next, says what the head's
+      landing changes among the rule and design documents — a stop
+      (CLAUDE.md, the land / review-points / verify-ui SKILL.md: prepare
+      nothing), paths to read under .claude/ and internal-docs/, or that
+      the diff could not be read — as the land skill's stages go. Every
+      write of an entry, and a reading that dates or lets go the head,
+      holds `.permits/lock`; files are replaced whole.
+
+  land wait next
+  land wait head
+      Wait until this seat is next in the line (or already the head), or
+      until it is the head, then say the place and what that stage does.
+      Spends nothing meanwhile — a look at the line every few seconds —
+      so the session runs it in the background and ends its turn; the
+      process's end is the wake-up. Ends with an error the moment the
+      seat is not in the line: its permit closed, it left, or its /land
+      was typed outside a seat; a line it cannot read (git not
+      answering) is read again for a minute before that ends it too. A
+      head that the awake holder found
+      nothing happening for, for two hours after the seat reached the
+      head, is let go by whoever reads the line next.
+
+  land leave <why>
+      This seat leaves the line of landings, for what stopped it: a
+      landing it found it cannot make without the user's word, at any
+      stage — the next seat's own code needing more than plain fixes,
+      the head's review raising a question, a red unrelated to the
+      diff, pictures awaiting approval — before the user is asked. A
+      landing that stops past its turn, or has nothing to land, leaves
+      on its own. The user's next /land puts the seat back at the end;
+      nothing else does.
 
   kill
       Reap this tree's app processes — the ones holding this tree's exe

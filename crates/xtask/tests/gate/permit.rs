@@ -391,3 +391,75 @@ fn a_sessions_own_git_does_not_write_main_on_any_flag() {
     // A merge in the seat lands on the seat's own branch.
     assert_eq!(shell(&sb, &sb.seat, "git merge --ff-only some-branch"), "");
 }
+
+/// A /land with nothing to land ends the seat's place in the line on its
+/// own, the permit unspent, and the seat queued behind it goes on to
+/// land.
+#[test]
+fn a_landing_with_nothing_to_land_ends_the_seats_place_and_the_next_goes_on() {
+    let sb = Sandbox::new("permit-nothing");
+    assert!(says(&sb, "/land").contains("Before landing"));
+    // A second session, queued behind in seat b with something to land.
+    let seat_b = sb.roster_tree("b", "worktree-b");
+    sb.write_refs(&seat_b, 31);
+    sb.commit_all(&seat_b, "feat(core): thirty-one", &[]);
+    hook(
+        &sb,
+        "prompt-submit",
+        &format!(
+            "{{\"session_id\":\"other\",\"cwd\":\"{}\",\
+             \"hook_event_name\":\"UserPromptSubmit\",\"prompt\":\"/land\"}}",
+            forward(&seat_b)
+        ),
+    );
+    let (ok, text) = sb.land_as("worktree-b", "other");
+    assert!(!ok && text.contains("next in the line"), "{text}");
+
+    let entry = sb.repo.join(".permits").join(format!("{SESSION}.line"));
+    let (ok, text) = sb.land_as("worktree-a", SESSION);
+    assert!(ok && text.contains("nothing to land"), "{text}");
+    let left = std::fs::read_to_string(&entry).expect("entry");
+    assert!(left.contains("nothing to land"), "{left}");
+    assert_eq!(lands(&sb), "", "the permit is unspent");
+
+    let (ok, text) = sb.land_as("worktree-b", "other");
+    assert!(ok && text.contains("landed worktree-b"), "{text}");
+}
+
+/// The user's next message, whatever it says, takes the seat out of the
+/// line with the permit it closes.
+#[test]
+fn any_other_message_takes_the_seat_out_of_the_line() {
+    let sb = Sandbox::new("permit-line-clear");
+    assert!(says(&sb, "/land").contains("Before landing"));
+    let entry = sb.repo.join(".permits").join(format!("{SESSION}.line"));
+    assert!(entry.exists(), "the /land put the seat in the line");
+    assert_eq!(says(&sb, "見た"), "");
+    assert!(!entry.exists(), "the next message took it out");
+}
+
+/// A landing that goes red past its turn leaves the line on its own,
+/// with the permit unspent, and the seat does not land again on it.
+#[test]
+fn a_landing_that_stops_past_its_turn_leaves_the_line() {
+    let sb = Sandbox::new("permit-line-red");
+    sb.write_refs(&sb.seat, 33);
+    sb.commit_all(&sb.seat, "feat(core): thirty-three", &[]);
+    assert!(says(&sb, "/land").contains("Before landing"));
+    let before = sb.main_sha();
+    let (ok, text) = sb.land_as_with(
+        "worktree-a",
+        SESSION,
+        &[("PGG_GATE_FAKE_FAIL", "test platitude-core 1")],
+    );
+    assert!(!ok && text.contains("gate failed"), "{text}");
+    assert!(text.contains("left the line of landings"), "{text}");
+    assert_eq!(sb.main_sha(), before);
+    let entry = sb.repo.join(".permits").join(format!("{SESSION}.line"));
+    let left = std::fs::read_to_string(&entry).expect("entry");
+    assert!(left.contains("gate failed"), "{left}");
+    assert_eq!(lands(&sb), "", "the permit is unspent");
+    let (ok, text) = sb.land_as("worktree-a", SESSION);
+    assert!(!ok && text.contains("left the line"), "{text}");
+    assert_eq!(sb.main_sha(), before);
+}

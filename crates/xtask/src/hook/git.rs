@@ -263,11 +263,25 @@ impl Offence {
     }
 }
 
+/// Whether every `land` the line invokes only tends the line of landings
+/// — `land line`, `land wait …`, `land leave …` move nothing
+/// (`land::line`). One landing among them is a landing.
+fn only_tends_the_line(lands: &[Option<&str>]) -> bool {
+    !lands.is_empty()
+        && lands.iter().all(|next| {
+            matches!(
+                next.map(|word| word.trim_end_matches(';')),
+                Some("line" | "wait" | "leave")
+            )
+        })
+}
+
 /// The first guarded git invocation in `command`, if any. Git that names
 /// main as a source (`git log main`, `git switch main`) only reads it.
 fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
     let tokens: Vec<&str> = command.split_whitespace().collect();
-    if xtask_verb(&tokens, "land") {
+    let lands = xtask_verb_args(&tokens, "land");
+    if !lands.is_empty() && !only_tends_the_line(&lands) {
         return Some(GuardedGit {
             dir: None,
             offence: Offence::Landing,
@@ -381,25 +395,42 @@ pub(super) fn unquote(token: &str) -> &str {
 /// land` names a test filter, and a quoted mention keeps its quote on the
 /// token; neither matches.
 pub(super) fn xtask_verb(tokens: &[&str], verb: &str) -> bool {
-    tokens
+    !xtask_verb_args(tokens, verb).is_empty()
+}
+
+/// Every invocation of `cargo xtask <verb>` in the line ([`xtask_verb`]),
+/// each as the token that follows the verb — None where the verb ends its
+/// command. A line chaining two invocations answers for both.
+pub(super) fn xtask_verb_args<'a>(tokens: &[&'a str], verb: &str) -> Vec<Option<&'a str>> {
+    let mut found = Vec::new();
+    for (at, _) in tokens
         .iter()
         .enumerate()
         .filter(|(_, token)| **token == "xtask")
-        .any(|(at, _)| {
-            let before = &tokens[..at];
-            let mut after = tokens[at + 1..].iter();
-            let first = if before.last() == Some(&"cargo") {
-                after.find(|token| !token.starts_with('-'))
-            } else if before.contains(&"run") {
-                after
-                    .by_ref()
-                    .find(|token| **token == "--")
-                    .and_then(|_| after.next())
-            } else {
-                None
-            };
-            first.is_some_and(|token| *token == verb)
-        })
+    {
+        let before = &tokens[..at];
+        let mut after = tokens[at + 1..].iter().copied();
+        let first = if before.last() == Some(&"cargo") {
+            after.find(|token| !token.starts_with('-'))
+        } else if before.contains(&"run") {
+            after
+                .by_ref()
+                .find(|token| *token == "--")
+                .and_then(|_| after.next())
+        } else {
+            None
+        };
+        // `land;` ends its command on the verb itself.
+        let (word, ends_there) = match first.and_then(|token| token.strip_suffix(';')) {
+            Some(word) => (Some(word), true),
+            None => (first, false),
+        };
+        if word == Some(verb) {
+            let next = if ends_there { None } else { after.next() };
+            found.push(next.filter(|next| !matches!(*next, "&&" | "||" | ";" | "|")));
+        }
+    }
+    found
 }
 
 #[cfg(test)]
@@ -559,6 +590,10 @@ mod tests {
             "PGG_ALLOW_MAIN=1 cargo xtask land worktree-a",
             "cargo run --quiet -p xtask -- land worktree-a",
             "cargo build -p xtask && cargo xtask land worktree-a",
+            // A landing chained with a line verb is a landing.
+            "cargo xtask land worktree-b && cargo xtask land line",
+            "cargo xtask land line && cargo xtask land worktree-b",
+            "cargo xtask land; cargo xtask land wait head",
         ] {
             assert_eq!(
                 guarded_call(command).map(|r| r.offence),
@@ -569,6 +604,10 @@ mod tests {
         for command in [
             "cargo xtask seats",
             "cargo xtask launch",
+            "cargo xtask land line",
+            "cargo xtask land wait next",
+            "cargo run --quiet -p xtask -- land wait head",
+            "cargo xtask land leave the review found a design question",
             "cargo test -p xtask land",
             "cargo test -p xtask -- land",
             "git commit -m \"xtask land notes\"",

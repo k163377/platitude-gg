@@ -26,6 +26,10 @@ gate.verdict
 gate.whole
 hook.event
 land.branch
+land.leave
+land.line
+land.wait-head
+land.wait-next
 linux.bare
 linux.run
 linux.runner

@@ -10,9 +10,15 @@ use crate::seats::{
 use crate::subprocess::git_query;
 
 use super::record::Phases;
-use super::{approval, leftovers, tags};
+use super::{approval, leftovers, line, tags};
 
 pub fn run(args: &[String]) -> Result<(), String> {
+    if matches!(
+        args.first().map(String::as_str),
+        Some("line" | "wait" | "leave")
+    ) {
+        return line::run(args);
+    }
     let mut phases = Phases::start();
     let result = land(args, &mut phases);
     phases.finish(&result);
@@ -39,20 +45,67 @@ fn named(args: &[String]) -> Result<(std::path::PathBuf, Option<String>), String
     Ok((root, branch))
 }
 
+/// A landing that stops once it has taken its turn — a rebase that
+/// stopped, a red gate, runs awaiting approval, a closed permit, a refused
+/// fast-forward — leaves the line of landings: what stopped it is the
+/// user's to settle, and their next `/land` puts the seat back at the end
+/// (`line::leave`). A refusal ahead of the turn — a dirty seat, a branch
+/// checked out nowhere — is the session's to put right and land again;
+/// a branch with nothing to land ends its place too (`landing`).
 fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     let (root, branch) = named(args)?;
     phases.target(&root, "");
     let here = root.to_string_lossy().replace('\\', "/");
+    let me = Identity::current(None);
+    let Some(ready) = preflight(&root, &here, branch, &me, phases)? else {
+        return Ok(());
+    };
+    through(&root, &here, &ready, &me, phases).map_err(|why| {
+        if line::leave(&here, &me.session, &why) {
+            format!(
+                "{why}\n— this seat left the line of landings; the user's next {} puts it back \
+                 at the end.",
+                crate::hook::permit::COMMAND
+            )
+        } else {
+            why
+        }
+    })
+}
+
+/// A landing that has taken its turn: the branch, the trees as listed
+/// (the primary first), which of them has the branch out, and the turn
+/// itself — held until the landing is over.
+struct Ready {
+    branch: String,
+    listing: String,
+    trees: Vec<WorktreeBlock>,
+    seat_at: usize,
+    ahead: u32,
+    _turn: crate::budget::Admitted,
+}
+
+/// Everything ahead of the turn. A refusal here — a dirty seat, a branch
+/// checked out nowhere, a seat behind the head — is the session's to put
+/// right and land again. None is a branch with nothing to land: its place
+/// in the line ends there, with the permit unspent.
+fn preflight(
+    root: &std::path::Path,
+    here: &str,
+    branch: Option<String>,
+    me: &Identity,
+    phases: &mut Phases,
+) -> Result<Option<Ready>, String> {
     let branch = match branch {
         Some(name) => name,
-        None => current_branch(&here)?,
+        None => current_branch(here)?,
     };
-    phases.target(&root, &branch);
+    phases.target(root, &branch);
     if branch == "main" {
         return Err("land moves a branch onto main; main itself is not one".into());
     }
     git_query(
-        &here,
+        here,
         &[
             "rev-parse",
             "--verify",
@@ -61,13 +114,15 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
         ],
     )
     .ok_or_else(|| format!("no local branch named {branch:?}"))?;
-    let ahead = crate::seats::commits_in(&here, &format!("main..{branch}"))
+    let ahead = crate::seats::commits_in(here, &format!("main..{branch}"))
         .ok_or("git could not count main..branch — is main a local branch here?")?;
     if ahead == 0 {
-        return release_already_landed(&here, &branch);
+        line::leave(here, &me.session, "nothing to land");
+        release_already_landed(here, &branch, me)?;
+        return Ok(None);
     }
     let listing =
-        git_query(&here, &["worktree", "list", "--porcelain"]).ok_or("git worktree list failed")?;
+        git_query(here, &["worktree", "list", "--porcelain"]).ok_or("git worktree list failed")?;
     let trees = worktree_blocks(&listing);
     let Some(primary) = trees.first() else {
         return Err("git worktree list answered with no trees at all".into());
@@ -83,57 +138,92 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
             tree.path
         ));
     }
-    let Some(seat) = trees.iter().find(|tree| tree.branch == branch) else {
+    let Some(seat_at) = trees.iter().position(|tree| tree.branch == branch) else {
         return Err(format!(
             "{branch} is checked out nowhere — the gate runs in the branch's own worktree. \
              Check it out in a seat and land again."
         ));
     };
-    let seat_dir = std::path::Path::new(&seat.path);
+    let seat_dir = std::path::Path::new(&trees[seat_at].path);
     phases.target(seat_dir, &branch);
     // Ahead of the census commit below: a landing that waits moves nothing.
-    approval::awaited(&here, &listing, &branch)?;
-    settle_the_tree(&seat.path, &branch)?;
+    approval::awaited(here, &listing, &branch)?;
+    // The line of landings: only its head lands (`line`) — ahead of the
+    // census commit too, which is the head's to make.
+    line::must_be_head(here, me)?;
+    settle_the_tree(&trees[seat_at].path, &branch)?;
     // The landings' queue (`budget::Pool::turn`), held to the end. Taken
     // before the seat's tree, its gate and the machine's budget, so a
     // landing standing in line stands in nobody's way.
-    let pool = crate::budget::Pool::of(&root, crate::budget::default_jobs())?;
+    let pool = crate::budget::Pool::of(root, crate::budget::default_jobs())?;
     phases.mark("preflight");
     let turn = pool.turn(&crate::seats::slashed(seat_dir), &format!("land {branch}"));
     phases.mark("queue");
-    let _turn = turn?;
-    prepare_gate(&root, &seat.path)?;
+    Ok(Some(Ready {
+        branch,
+        listing,
+        trees,
+        seat_at,
+        ahead,
+        _turn: turn?,
+    }))
+}
+
+/// From the turn on. What stops here leaves the line of landings
+/// (`land`): what stopped it is the user's to settle.
+fn through(
+    root: &std::path::Path,
+    here: &str,
+    ready: &Ready,
+    me: &Identity,
+    phases: &mut Phases,
+) -> Result<(), String> {
+    let Ready {
+        branch,
+        listing,
+        trees,
+        seat_at,
+        ahead,
+        ..
+    } = ready;
+    let (seat, primary) = (&trees[*seat_at], &trees[0]);
+    let seat_dir = std::path::Path::new(&seat.path);
+    permit_still_open(here, me)?;
+    prepare_gate(root, &seat.path)?;
     phases.mark("prepare");
     // What the branch held before any rebase: a copy taken from it before
     // its history was rewritten holds nothing this does not (`leftovers`).
-    let unrebased = git_query(&here, &["rev-parse", &format!("refs/heads/{branch}")]);
-    if git_query(&here, &["merge-base", "--is-ancestor", "main", &branch]).is_none() {
+    let unrebased = git_query(here, &["rev-parse", &format!("refs/heads/{branch}")]);
+    if git_query(here, &["merge-base", "--is-ancestor", "main", branch]).is_none() {
         println!("{branch} is behind main — rebasing it in {}", seat.path);
         rebase(&seat.path)?;
     }
     phases.mark("rebase");
-    gate_in_the_seat(seat_dir, &branch)?;
+    gate_in_the_seat(seat_dir, branch)?;
     phases.mark("gate");
     // Again, for a run that went up while the gate ran (a verify-ui left in
     // the background): once main moves, the board is cleared of it unseen.
-    approval::awaited(&here, &listing, &branch)?;
-    let ahead = crate::seats::commits_in(&here, &format!("main..{branch}")).unwrap_or(ahead);
-    let before = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
+    approval::awaited(here, listing, branch)?;
+    // And the permit: a landing in the background outlives the user's next
+    // message, which closes it — nothing moves on a closed permit.
+    permit_still_open(here, me)?;
+    let ahead = crate::seats::commits_in(here, &format!("main..{branch}")).unwrap_or(*ahead);
+    let before = git_query(here, &["rev-parse", "--short", "main"]).unwrap_or_default();
     if primary.branch == "main" {
-        forward_in(&primary.path, &branch)?;
+        forward_in(&primary.path, branch)?;
     } else {
-        forward_ref(&here, primary, &branch)?;
+        forward_ref(here, primary, branch)?;
     }
     phases.mark("fast-forward (verdict included)");
-    let after = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
+    let after = git_query(here, &["rev-parse", "--short", "main"]).unwrap_or_default();
     // The permit is spent only here: a landing that stopped before this
     // line moved nothing.
-    crate::hook::permit::landed(&here, &Identity::current(None).session);
+    crate::hook::permit::landed(here, &me.session);
     // Again, now that main moved: git runs a copy of the hook script, and
     // a landing that changed the script would leave the old copy answering.
-    println!("{}", crate::gate::hooks::install(&root)?);
+    println!("{}", crate::gate::hooks::install(root)?);
     println!("landed {branch}: main {before} -> {after} ({ahead} commit(s)).");
-    if tags::bracket(&here, &before, &after, ahead) {
+    if tags::bracket(here, &before, &after, ahead) {
         phases.mark("version tags");
     }
     // While the claim still stands, so nothing else is building here: the
@@ -141,14 +231,36 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     crate::sweep::at_a_tail(seat_dir, &crate::sweep::Tail::after_a_landing());
     phases.mark("sweep");
     // Still in the landings' queue, so no other landing sweeps beside it.
-    leftovers::clear(&here, unrebased.as_deref(), &seat.path);
+    leftovers::clear(here, unrebased.as_deref(), &seat.path);
     phases.mark("leftovers");
     // The claim comes off last: once it does, another session may take the
     // letter, and clearing the board after that would clear its runs.
-    clear_the_board(&listing, &branch);
-    release_claim(&here, &trees, &branch);
+    clear_the_board(listing, branch);
+    release_claim(here, trees, branch, me);
     phases.mark("hook, board and claim");
     Ok(())
+}
+
+/// The permit read again: a landing that runs in the background outlives
+/// the user's next message, and that message closes the permit. A session
+/// with no permit on record — a hand run — is not asked.
+fn permit_still_open(here: &str, me: &Identity) -> Result<(), String> {
+    if me.session.is_empty() {
+        return Ok(());
+    }
+    let Some(asked) = crate::hook::permit::asked(here, &me.session) else {
+        return Ok(());
+    };
+    if crate::hook::permit::is_open(here, &me.session) {
+        return Ok(());
+    }
+    Err(format!(
+        "the permit is no longer open, so this landing moves nothing: the user's latest message \
+         is {}, and main moves once on their own {} — their next {} lands the branch",
+        asked.said(),
+        crate::hook::permit::COMMAND,
+        crate::hook::permit::COMMAND
+    ))
 }
 
 /// What would land is what stands committed, so the seat must be clean —
@@ -434,15 +546,11 @@ fn clear_the_board(listing: &str, branch: &str) {
 /// work is done, and a claim whose session is gone would never be handed
 /// back (`seats::claim`). A session going on here takes the seat back at
 /// its next edit; a picture takes nothing (`seats::may_picture`).
-fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str) {
+fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str, me: &Identity) {
     let Some(tree) = landed_claim(trees, branch) else {
         return;
     };
-    let was = match standing(
-        Some(tree.reason.clone()),
-        &Identity::current(None),
-        Held::BySession,
-    ) {
+    let was = match standing(Some(tree.reason.clone()), me, Held::BySession) {
         Standing::Ours => "this session's own".to_string(),
         _ => whose(&tree.reason),
     };
@@ -458,14 +566,14 @@ fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str) {
     );
 }
 
-fn release_already_landed(here: &str, branch: &str) -> Result<(), String> {
+fn release_already_landed(here: &str, branch: &str, me: &Identity) -> Result<(), String> {
     println!("{branch} has nothing main does not already have — nothing to land.");
     let listing =
         git_query(here, &["worktree", "list", "--porcelain"]).ok_or("git worktree list failed")?;
     let trees = worktree_blocks(&listing);
     if let Some(tree) = landed_claim(&trees, branch) {
         if crate::seats::dirty_lines(&tree.path) == Some(0) {
-            release_claim(here, &trees, branch);
+            release_claim(here, &trees, branch, me);
         } else {
             println!(
                 "the seat claim stays: {} is dirty or could not be inspected",
@@ -565,8 +673,39 @@ fn reattach(primary: &WorktreeBlock) {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_slot_tree, clock, landed_claim};
-    use crate::seats::worktree_blocks;
+    use super::{build_slot_tree, clock, landed_claim, permit_still_open};
+    use crate::seats::{Identity, worktree_blocks};
+
+    #[test]
+    fn the_permit_is_read_again_and_only_an_open_one_lets_the_landing_on() {
+        let yard = crate::yard::Yard::new("land-permit");
+        let repo = crate::seats::slashed(&yard);
+        assert!(crate::subprocess::git_query(&repo, &["init", "-q", "-b", "main"]).is_some());
+        let me = |session: &str| Identity {
+            session: session.into(),
+            pid: None,
+            host: None,
+        };
+        assert!(permit_still_open(&repo, &me("")).is_ok(), "a hand run");
+        assert!(
+            permit_still_open(&repo, &me("s")).is_ok(),
+            "no permit on record"
+        );
+        let permits = yard.join(".permits");
+        std::fs::create_dir_all(&permits).expect("permits");
+        std::fs::write(permits.join("s.land"), "open\t1\t/land\n").expect("permit");
+        assert!(permit_still_open(&repo, &me("s")).is_ok());
+        for standing in ["closed\t2\t見た", "spent\t1\t/land", "waiting\t1\t/land"] {
+            std::fs::write(permits.join("s.land"), format!("{standing}\n")).expect("permit");
+            let refused = permit_still_open(&repo, &me("s")).expect_err(standing);
+            assert!(refused.contains("no longer open"), "{refused}");
+        }
+        assert!(
+            permit_still_open(&repo, &me("s"))
+                .expect_err("waiting")
+                .contains("「/land」")
+        );
+    }
 
     /// A tree root spelled the way the running system spells one.
     fn tree() -> &'static str {

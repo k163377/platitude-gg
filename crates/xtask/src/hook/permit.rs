@@ -12,7 +12,7 @@ use super::payload::{deny, string_field};
 
 /// The user's command for putting a branch on main: the land skill
 /// (`.claude/skills/land`), typed at the head of their message.
-pub(super) const COMMAND: &str = "/land";
+pub(crate) const COMMAND: &str = "/land";
 
 /// The user's word for landing in their own prose. Said without the
 /// command it opens nothing, and the session is told where the permit
@@ -93,11 +93,23 @@ pub(super) fn prompt_submit(input: &str, prompt: &str) {
         excerpt: excerpt(words),
     };
     store(&path, &permit);
+    // The line of landings follows the permit: `/land` takes a place in
+    // it, any other message gives the place up (`land::line`).
+    let host = string_field(input, "session_id")
+        .and_then(|session| crate::seats::Identity::current(Some(&session)).host);
+    if invoked {
+        let cwd = string_field(input, "cwd").unwrap_or_default();
+        crate::land::line::enter(&path, &cwd, host.as_deref(), crate::land::line::now());
+    } else {
+        crate::land::line::clear(&path, host.as_deref());
+    }
     if invoked {
         println!(
             "Before landing, complete and commit the requested work under CLAUDE.md §Git 運用. \
              The permit authorizes one landing; completion is the session's to check. \
-             Land runs the final gate."
+             Land runs the final gate. `{}` says this seat's place in the line of landings, \
+             and the land skill says what each place does.",
+            crate::land::LINE.line()
         );
     } else if words.contains(WORD) {
         println!(
@@ -128,6 +140,19 @@ pub(crate) fn landed(dir: &str, session: &str) {
     if let Some(path) = permit_file(dir, session) {
         spend(&path);
     }
+}
+
+/// Whether this session's permit stands open now — read again by a
+/// landing before it moves anything, and by the line of landings for every
+/// place in it (`land::line`).
+pub(crate) fn is_open(dir: &str, session: &str) -> bool {
+    permit_file(dir, session).is_some_and(|path| open_at(&path))
+}
+
+/// The same, at a permit file already named (`land::line` reads a whole
+/// directory of them).
+pub(crate) fn open_at(permit: &Path) -> bool {
+    load(permit).is_some_and(|permit| permit.standing == Standing::Open)
 }
 
 /// The user's latest message as the permit recorded it: when it was read,
@@ -201,10 +226,15 @@ pub(super) fn unmet(input: &str) -> Option<String> {
     Some(match permit.standing {
         Standing::Open => format!(
             "permit: the user's message 「{}」 ({}) asked for main ({COMMAND}), and this turn \
-             ends without a landing having moved it — {remaining} remain in {cwd}.{}",
+             ends without a landing having moved it — {remaining} remain in {cwd}.{}{}",
             permit.excerpt,
             ago(permit.asked_at),
-            awaiting_approval(&cwd, permit.asked_at)
+            awaiting_approval(&cwd, permit.asked_at),
+            // The place in the line, read only for a permit still open.
+            string_field(input, "session_id")
+                .and_then(|session| crate::land::line::standing_for(&cwd, &session))
+                .map(|said| format!(" {said}"))
+                .unwrap_or_default()
         ),
         Standing::Waiting => format!(
             "permit: the user's message 「{}」 ({}) asked for main ({COMMAND}), and the landing \
@@ -372,7 +402,7 @@ fn permit_file(dir: &str, session: &str) -> Option<PathBuf> {
 /// `.permits/<session>.<kind>` beside the primary checkout's `.git`, so a
 /// landing in the seat reads what the prompt hook wrote wherever the
 /// session sat.
-fn kept_file(dir: &str, session: &str, kind: &str) -> Option<PathBuf> {
+pub(crate) fn kept_file(dir: &str, session: &str, kind: &str) -> Option<PathBuf> {
     let session: String = session
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
@@ -422,12 +452,6 @@ fn parse(line: &str) -> Option<Permit> {
 /// Writes the permit. One that cannot be written reads as absent, and an
 /// absent permit refuses.
 fn store(path: &Path, permit: &Permit) {
-    let Some(dir) = path.parent() else {
-        return;
-    };
-    if std::fs::create_dir_all(dir).is_err() {
-        return;
-    }
     let word = match permit.standing {
         Standing::Open => "open",
         Standing::Waiting => "waiting",
@@ -435,9 +459,32 @@ fn store(path: &Path, permit: &Permit) {
         Standing::Closed => "closed",
     };
     let line = format!("{word}{SEP}{}{SEP}{}\n", permit.asked_at, permit.excerpt);
-    if let Err(_unheard) = std::fs::write(path, line) {
+    if let Err(_unheard) = write_whole(path, &line) {
         // Nobody to tell from inside a hook.
     }
+}
+
+/// Writes `text` to `path` whole: to a sibling first, renamed into place,
+/// so a reader sees the old text or the new and never the empty file
+/// `fs::write` leaves while it truncates. A rename refused — Windows,
+/// while a reader holds the file open — is tried again, then the text is
+/// written in place. The line of landings writes its entries this way too.
+pub(crate) fn write_whole(path: &Path, text: &str) -> std::io::Result<()> {
+    let dir = path.parent().ok_or(std::io::ErrorKind::InvalidInput)?;
+    std::fs::create_dir_all(dir)?;
+    let name = path
+        .file_name()
+        .ok_or(std::io::ErrorKind::InvalidInput)?
+        .to_string_lossy();
+    let aside = dir.join(format!("{name}.{}.tmp", std::process::id()));
+    std::fs::write(&aside, text)?;
+    for _again in 0..3 {
+        if std::fs::rename(&aside, path).is_ok() {
+            return Ok(());
+        }
+    }
+    let _gone = std::fs::remove_file(&aside);
+    std::fs::write(path, text)
 }
 
 fn now() -> u64 {
@@ -448,14 +495,19 @@ fn now() -> u64 {
 }
 
 /// How long ago `secs` was, coarsely.
-fn ago(secs: u64) -> String {
+pub(crate) fn ago(secs: u64) -> String {
+    format!("{} ago", elapsed(secs))
+}
+
+/// How long since `secs` (since the epoch), coarsely.
+pub(crate) fn elapsed(secs: u64) -> String {
     let elapsed = now().saturating_sub(secs);
     if elapsed < 60 {
-        format!("{elapsed}s ago")
+        format!("{elapsed}s")
     } else if elapsed < 3600 {
-        format!("{}m ago", elapsed / 60)
+        format!("{}m", elapsed / 60)
     } else {
-        format!("{}h{}m ago", elapsed / 3600, (elapsed % 3600) / 60)
+        format!("{}h{}m", elapsed / 3600, (elapsed % 3600) / 60)
     }
 }
 

@@ -225,8 +225,7 @@ const STOPPING: Duration = Duration::from_secs(60);
 /// (ci/baseline/awake-control-windows-x64.md). It stays past the longest
 /// wake-up a session schedules — an hour, as the runtime clamps it, and
 /// [`WAKE_GRACE`] — which a hook sets, so a wake-up's hold ends before it.
-#[cfg(windows)]
-const QUIET: Duration = Duration::from_secs(2 * 60 * 60);
+pub(crate) const QUIET: Duration = Duration::from_secs(2 * 60 * 60);
 /// A heartbeat older than this is a holder that died without clearing
 /// its name; the next claim written starts another.
 const HOLDER_STALE: Duration = Duration::from_secs(3 * 15);
@@ -703,6 +702,25 @@ fn last_told(dir: &Path, revision: &str, pid: &str) -> Option<(u64, String)> {
         let (at, rest) = line.split_once(' ')?;
         let said = rest.strip_prefix(&writer)?;
         Some((at.parse().ok()?, said.to_string()))
+    })
+}
+
+/// When a holder last let the machine go for nothing having happened for
+/// [`QUIET`] (`released quiet:<minutes>m`), in milliseconds since the
+/// epoch — the line of landings judges a hung head by it (`land::line`).
+/// `primary` is the primary checkout. None without a history or a release.
+pub(crate) fn last_quiet_release(primary: &Path) -> Option<u64> {
+    let text = std::fs::read_to_string(primary.join(DIR).join(HISTORY)).ok()?;
+    quiet_release_in(&text)
+}
+
+/// The newest `released quiet:` line of a history, by its time.
+fn quiet_release_in(history: &str) -> Option<u64> {
+    history.lines().rev().find_map(|line| {
+        let words: Vec<&str> = line.split(' ').collect();
+        let quiet = words.get(3) == Some(&"released")
+            && words.get(4).is_some_and(|why| why.starts_with("quiet:"));
+        quiet.then(|| words[0].parse().ok()).flatten()
     })
 }
 

@@ -195,6 +195,9 @@ fn release(root: &str, me: &Identity, letter: Option<&str>) -> Result<(), String
             held.seat, held.tree.path
         ));
     }
+    // A seat handed back lands nothing: its place in the line of landings
+    // ends with the claim.
+    crate::land::line::leave(&primary, &me.session, "the seat was released");
     println!(
         "seat {} released{}",
         held.seat,

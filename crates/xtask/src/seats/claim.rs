@@ -94,7 +94,7 @@ impl Identity {
 
     /// Whether `holder` is this conversation: the same session id, or the
     /// same app session under another one.
-    fn is(&self, holder: &Identity) -> bool {
+    pub(crate) fn is(&self, holder: &Identity) -> bool {
         (!self.session.is_empty() && holder.session == self.session)
             || self.host.is_some() && holder.host == self.host
     }
