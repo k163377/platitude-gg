@@ -68,17 +68,16 @@ cargo xtask shots <command>
       stretch of work. The board outlives a session
       (shots/sweep.rs).
 
-  open [--again]
-      Put the board in front of the reader, in one window and only one:
-      the page is rewritten at a fixed path, so a window already open
-      is one F5 away from the board as it stands, and this says so.
-      The page is read top down in the order the runs went up, so
-      the newest is at the bottom. That holds across seats and
-      sessions — the board is shared, and six windows of it are six
-      answers to \"which one is current\".
-      --again is the reader's own word that they closed it, and the
-      only way past: nothing here can see a closed window
-      (shots/window.rs).
+  open
+      Put the board in front of the reader, in a window of its own: the
+      board window already standing is closed and a fresh one opened,
+      every time, whichever seat or session asks — so there is one. The
+      page is rewritten at a fixed path, so an open window is one F5
+      away from the board as it stands; this is for when the reader
+      asks for the window. The page is read top down in the order the
+      runs went up, so the newest is at the bottom. Nothing is written
+      down about the window: it is found by the browser profile it runs
+      on, which is the board's own (shots/window.rs).
 
   list        One line per run: when, seat, count, label.
   path        Where the page is.
@@ -120,14 +119,19 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// The one-window rule is in `window::show`.
+/// The restart is in `window::restart`.
 fn open(args: &[String]) -> Result<(), String> {
-    let mut again = false;
-    for arg in args {
-        match arg.as_str() {
-            "--again" => again = true,
-            other => return Err(format!("shots open: unknown argument {other}")),
+    match args.first().map(String::as_str) {
+        None => {}
+        // Named, so whoever reaches for it learns there is nothing to get
+        // past.
+        Some("--again") => {
+            return Err(format!(
+                "shots open: --again is gone — `{}` always closes the board window and opens it afresh",
+                super::OPEN.line()
+            ));
         }
+        Some(other) => return Err(format!("shots open: unknown argument {other}")),
     }
     let board = board::board_dir()?;
     let page = board.join("index.html");
@@ -137,7 +141,7 @@ fn open(args: &[String]) -> Result<(), String> {
             board::shown(&page)
         ));
     }
-    window::show(&board, &page, again)
+    window::restart(&board, &page)
 }
 
 fn add(args: &[String]) -> Result<(), String> {
@@ -174,7 +178,7 @@ fn add(args: &[String]) -> Result<(), String> {
             "--open" => {
                 return Err(format!(
                     "shots add: --open is gone — the board is read in one window, \
-                     already open or opened once with `{}`",
+                     F5 there, and `{}` opens it afresh when the reader asks for it",
                     super::OPEN.line()
                 ));
             }
@@ -206,11 +210,9 @@ fn add(args: &[String]) -> Result<(), String> {
         board::seat_here(),
         label
     );
-    // Said, not opened: a second window leaves nobody sure which one is
-    // the board as it stands.
-    if let Some(board) = page.parent() {
-        println!("board: {}", window::how_to_see_it(board));
-    }
+    // Said, not opened: a window opened on every run would take the
+    // reader's screen each time.
+    println!("board: {}", window::how_to_see_it());
     Ok(())
 }
 

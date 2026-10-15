@@ -826,7 +826,7 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       carries — work nothing can reach until a takeover grows the tree
       back. Ends with how to read the columns.
 
-  shots <add|crop|prune|open [--again]|list|path>
+  shots <add|crop|prune|open|list|path>
       The shot board: pictures land on a page that opens in a window of
       its own at 1:1, magnifies to exact whole ratios without smoothing,
       and is still there after it is closed. A chat pane fits a picture to
@@ -840,14 +840,13 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       also why `prune` reaches this seat's runs and no others unless it
       is told to.
 
-      One window, and it is `open` that hands it out: the page sits at a
-      fixed path and is rewritten in place, so the window already showing
-      the board is one F5 away from the run just taken. `open` says so
-      whichever seat or session asks, and
-      `--again` is the reader's own word that they closed theirs. Six
-      windows of one board are six answers to which one is current, so
-      the count is kept in the board itself
-      (shots/window.rs).
+      One window: the page sits at a fixed path and is rewritten in
+      place, so the window already showing the board is one F5 away from
+      the run just taken. `open` restarts it — the board window standing
+      is closed and a fresh one opened, whichever seat or session asks.
+      Nothing is written down about the window, which a browser leaves
+      no way to watch; it is found by the browser profile of the board's
+      own it runs on (shots/window.rs).
 
       `crop <png> --at <x>:<y>:<width>:<height> [--scale <n>]` cuts a
       region out and magnifies it a whole number of times (three by

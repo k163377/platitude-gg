@@ -9,7 +9,8 @@
 //! `.git`, and each run names the seat that took it — a picture from
 //! another seat's tree says nothing about this one. It is read in one
 //! window: the page is rewritten in place, so an open window is one F5
-//! from the latest (`window.rs`).
+//! from the latest, and `open` closes the one standing and opens it
+//! afresh (`window.rs`).
 //!
 //! Runs are read top down in the order they were put up (verify-ui
 //! SKILL.md「board は上から下へ、載せた順に読む」).
@@ -30,7 +31,7 @@ use crate::command::{self, Permission, Where};
 pub(crate) static OPEN: command::Command = command::Command {
     id: "shots.open",
     call: "shots open",
-    purpose: "the board's one window — already open, it is one F5 from the latest run",
+    purpose: "the board's one window — closes the one standing and opens it afresh",
     run_in: Where::Either,
     needs: &[],
     permission: Permission::Plain,

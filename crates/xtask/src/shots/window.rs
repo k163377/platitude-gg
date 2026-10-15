@@ -1,279 +1,433 @@
 //! The one window the board is read in.
 //!
 //! The page lives at a fixed path and is rewritten in place, so a window
-//! already showing the board is one F5 from the run just taken; a second
-//! window only leaves the reader unsure which one is current. So `open`
-//! hands out a window only while none stands, whoever asks and from
-//! whichever seat, and `--again` is the one way past it — for the case
-//! the board cannot see, the reader having closed theirs.
+//! already showing the board is one F5 from the run just taken. `open`
+//! restarts it: whatever board window stands is closed and a fresh one
+//! opened, every time it is asked, whoever asks and from whichever seat.
 //!
-//! What stands is remembered beside the page, because every seat reads
-//! one board (`board_dir`): a marker kept per session would let each open
-//! a window of its own.
+//! Nothing is written down about a window between commands. A browser
+//! handed a page passes it to the process already running and leaves no
+//! child to watch, so a note saying "open" outlives the window it was
+//! written for, and the reader who closed theirs is sent to press F5 in
+//! nothing. The window is found instead, at the moment it is to be
+//! closed, by the browser profile it runs on ([`profile`]).
 
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::process::Command;
+use std::time::Duration;
 
-use super::board::{seat_here, shown};
+use super::board::shown;
+use crate::subprocess::{Answer, bounded};
+use crate::wait::{Budget, Wait};
 
-/// Where the board remembers the window it handed out: beside the page,
-/// out of the sweeps' reach (`runs/`, `img/`), since a window outlives
-/// the run, session and seat that opened it.
-fn marker(board: &Path) -> PathBuf {
-    board.join("window")
+/// The board's own browser profile, beside the page and out of the
+/// sweeps' reach (`runs/`, `img/`). Every process of the board's browser
+/// names it on its command line and nothing else on the machine does, so
+/// it is how `open` finds the window — the reader's own browser, on its
+/// own profile, is never touched.
+fn profile(board: &Path) -> PathBuf {
+    board.join("browser")
 }
 
-/// A window handed out earlier and still standing.
-pub(super) struct Standing {
-    /// Milliseconds since the epoch.
-    at: u128,
-    /// The tree it was opened from.
-    seat: String,
-}
+/// How long the board's browser, ended, is given to be gone from the
+/// listing: a new window on the same profile while it still stands would
+/// be handed to it and go with it.
+const ENDING: Duration = Duration::from_secs(10);
 
-/// The window the board believes is open, if it believes in one.
-pub(super) fn standing(board: &Path) -> Option<Standing> {
-    read_standing(&std::fs::read_to_string(marker(board)).ok()?)
-}
+/// Between looks: each one is a listing of the machine's processes.
+const PACE: Duration = Duration::from_millis(250);
 
-/// Puts the board in front of the reader; while a window stands, says
-/// where and opens nothing. `again` is the reader's own word that they
-/// closed it — nothing else can know, since the browser may hand the
-/// window to an already-running process and leave no child to watch.
-pub(super) fn show(board: &Path, page: &Path, again: bool) -> Result<(), String> {
-    if !again && let Some(open) = standing(board) {
-        println!(
-            "board: a window is already open (seat {}, opened {}) — press F5 there \
-             and read from the top down",
-            open.named_seat(),
-            ago(open.at),
-        );
-        println!("board: closed it? `cargo xtask shots open --again` opens one more");
-        return Ok(());
+/// How long one listing may take: a CIM query can wedge under a gate's
+/// load while its process stays alive (`footprint`).
+const ASKING: Duration = Duration::from_secs(30);
+
+/// Puts the board in front of the reader, in a window of its own: the
+/// board window already standing is closed first, so there is one.
+pub(super) fn restart(board: &Path, page: &Path) -> Result<(), String> {
+    let profile = profile(board);
+    if close(board, &profile)? {
+        println!("board: closed the window that was open");
     }
-    let program = spawn(page)?;
-    println!(
-        "board: opened {} with {program} — F5 in that window from now on",
-        shown(page)
-    );
-    // The window is open regardless: a marker that will not write is
-    // reported, not an error.
-    if let Err(message) = remember(board) {
+    let opened = spawn(page, &profile)?;
+    if opened.own_profile {
         println!(
-            "board: could not write down the window ({message}) — the next `open` will open another"
+            "board: opened {} with {} — F5 in that window from now on",
+            shown(page),
+            opened.program
+        );
+    } else {
+        println!(
+            "board: opened {} in the default browser, which the next `open` cannot close — \
+             close it by hand before then",
+            shown(page)
         );
     }
     Ok(())
 }
 
-impl Standing {
-    /// The seat, or `?` for a marker written without one.
-    fn named_seat(&self) -> &str {
-        if self.seat.is_empty() {
-            "?"
-        } else {
-            &self.seat
-        }
-    }
-}
-
 /// Where the pictures just put on the board are read — said right after
-/// a run, the moment a second window would otherwise get opened.
-pub(super) fn how_to_see_it(board: &Path) -> String {
-    match standing(board) {
-        Some(open) => format!(
-            "a window is open (seat {}) — F5 there and read from the top down",
-            open.named_seat()
-        ),
-        None => format!(
-            "no window open yet — `{}` opens the one",
-            super::OPEN.line()
-        ),
+/// a run.
+pub(super) fn how_to_see_it() -> String {
+    format!(
+        "F5 in the board's window — closed, or never opened, `{}` opens it afresh",
+        super::OPEN.line()
+    )
+}
+
+/// Ends the board's browser and waits until it is gone; answers whether
+/// one stood.
+///
+/// Ended outright, not asked to close: a browser asked answers in its own
+/// time, and a wait run out on it could only fail. What it had open is not
+/// offered back at the next start (`--hide-crash-restore-bubble`).
+fn close(board: &Path, profile: &Path) -> Result<bool, String> {
+    let standing = browsers_on(board, profile)?;
+    if standing.is_empty() {
+        return Ok(false);
     }
-}
-
-fn remember(board: &Path) -> Result<(), String> {
-    let at = now().ok_or("the clock is before the epoch")?;
-    let text = format!("at\t{at}\nseat\t{}\n", seat_here());
-    let path = marker(board);
-    std::fs::write(&path, text).map_err(|e| format!("could not write {}: {e}", shown(&path)))
-}
-
-/// The inverse of `remember`. An unreadable marker is no window, which
-/// errs towards opening one.
-fn read_standing(text: &str) -> Option<Standing> {
-    let mut at = 0;
-    let mut seat = String::new();
-    for line in text.lines() {
-        let mut parts = line.split('\t');
-        match parts.next() {
-            Some("at") => {
-                at = parts
-                    .next()
-                    .and_then(|value| value.parse().ok())
-                    .unwrap_or(0)
-            }
-            Some("seat") => seat = parts.next().unwrap_or_default().to_string(),
-            _ => {}
+    for pid in &standing {
+        end(*pid);
+    }
+    let mut wait = Wait::new("shots open", Budget::whole(ENDING), PACE);
+    loop {
+        let left = browsers_on(board, profile)?;
+        if left.is_empty() {
+            return Ok(true);
         }
+        let left: Vec<String> = left.iter().map(u32::to_string).collect();
+        wait.saw(format!("pid {}", left.join(", ")));
+        wait.look_again("the board's browser to end")
+            .map_err(|expired| format!("{expired} — close the board window by hand"))?;
     }
-    (at > 0).then_some(Standing { at, seat })
 }
 
-fn now() -> Option<u128> {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .ok()
-        .map(|since| since.as_millis())
+/// The browser processes started on `profile`: the ones that own its
+/// windows. Its helpers name the profile too, and go with it.
+fn browsers_on(board: &Path, profile: &Path) -> Result<Vec<u32>, String> {
+    Ok(started_on(&listing(board)?, &profile.to_string_lossy()))
 }
 
-/// How old the standing window is, in words: the age is how a reader
-/// judges whether it was closed, which this command cannot see.
-fn ago(at: u128) -> String {
-    let Some(now) = now() else {
-        return "at a time this clock cannot read".to_string();
+/// [`browsers_on`] over a listing of `<pid> <command line>` lines. Slashes
+/// and case are not compared: the command line holds the profile as the
+/// browser was handed it, and one board is reached by more than one
+/// spelling of its path.
+fn started_on(listing: &str, profile: &str) -> Vec<u32> {
+    let flag = folded(&format!("--user-data-dir={profile}"));
+    listing
+        .lines()
+        .filter_map(|line| {
+            let (pid, command) = line.trim().split_once(char::is_whitespace)?;
+            let command = folded(command);
+            (names(&command, &flag) && !command.contains("--type=")).then(|| pid.parse().ok())?
+        })
+        .collect()
+}
+
+/// Whether `command` holds `flag` whole: a profile whose name only begins
+/// like the board's is another browser's.
+fn names(command: &str, flag: &str) -> bool {
+    command.match_indices(flag).any(|(at, _)| {
+        command[at + flag.len()..]
+            .chars()
+            .next()
+            .is_none_or(|next| next.is_whitespace() || next == '"')
+    })
+}
+
+fn folded(text: &str) -> String {
+    text.replace('\\', "/").to_lowercase()
+}
+
+/// Every process of the browsers [`browsers`] starts on a profile, with
+/// its command line. PowerShell is the one stock tool that answers with
+/// the command line, in the console's code page unless told otherwise —
+/// a path outside ASCII would not match. The matching stays in Rust where
+/// quoting cannot bend it.
+#[cfg(windows)]
+fn listing(board: &Path) -> Result<String, String> {
+    const LISTING: &str = "[Console]::OutputEncoding = New-Object Text.UTF8Encoding $false
+Get-CimInstance Win32_Process -Filter \"Name='chrome.exe' OR Name='msedge.exe'\" | \
+ ForEach-Object { \"$($_.ProcessId) $($_.CommandLine)\" }";
+    let mut command = Command::new("powershell");
+    command.args(["-NoProfile", "-NonInteractive", "-Command", LISTING]);
+    said(board, command)
+}
+
+/// One `-o` per field: the two `ps` this runs under read a comma-joined
+/// list with empty headings differently.
+#[cfg(not(windows))]
+fn listing(board: &Path) -> Result<String, String> {
+    let mut command = Command::new("ps");
+    command.args(["-A", "-o", "pid=", "-o", "args="]);
+    said(board, command)
+}
+
+/// What `listing` wrote, under [`ASKING`]. The file is this process's
+/// own, so two `open`s at once do not read each other's.
+fn said(board: &Path, listing: Command) -> Result<String, String> {
+    let file = board.join(format!("listing.{}.txt", std::process::id()));
+    let answer = bounded("a listing of processes", listing, ASKING, Some(&file));
+    // Read already, or never written.
+    let _ = std::fs::remove_file(&file);
+    match answer {
+        Answer::Ended { status, stdout } if status.success() => Ok(stdout),
+        Answer::Ended { status, .. } => Err(format!(
+            "could not list the board's browser: the listing exited {status}"
+        )),
+        Answer::OutOfTime { after, .. } => Err(format!(
+            "could not list the board's browser: no answer within {:.0}s",
+            after.as_secs_f32()
+        )),
+        Answer::Unstarted(why) => Err(why),
+    }
+}
+
+/// Ends the browser outright — on Windows with the tree under it; on unix
+/// its helpers follow it out. The number was read off the listing a
+/// moment ago together with the board's profile, so it is not one handed
+/// on to a stranger.
+fn end(pid: u32) {
+    let mut command = if cfg!(windows) {
+        let mut c = Command::new("taskkill");
+        c.args(["/F", "/T", "/PID", &pid.to_string()]);
+        c
+    } else {
+        let mut c = Command::new("kill");
+        c.args(["-9", &pid.to_string()]);
+        c
     };
-    words(now.saturating_sub(at))
+    // The status is not read: a browser gone since the listing makes it
+    // fail, and the wait after this is what says whether it went.
+    let _ = crate::subprocess::run_captured(&mut command);
 }
 
-/// A span of milliseconds as the coarsest true thing that can be said
-/// about it.
-fn words(since: u128) -> String {
-    let minutes = since / 60_000;
-    let plural = |n: u128, unit: &str| format!("{n} {unit}{} ago", if n == 1 { "" } else { "s" });
-    match minutes {
-        0 => "a moment ago".to_string(),
-        1..=59 => plural(minutes, "minute"),
-        60..=1439 => plural(minutes / 60, "hour"),
-        _ => plural(minutes / 1440, "day"),
-    }
+/// One way to open the board.
+struct Browser {
+    program: String,
+    args: Vec<String>,
+    /// Started on the board's profile, so the next `open` finds it.
+    own_profile: bool,
 }
 
-/// Opens the board in a window of its own (a browser in `--app` mode),
-/// answering what opened it. System image viewers are no candidate: they
-/// smooth what they magnify.
-fn spawn(page: &Path) -> Result<&'static str, String> {
+/// Opens the board in a window of its own (a browser in `--app` mode, on
+/// the board's profile), answering what opened it. System image viewers
+/// are no candidate: they smooth what they magnify.
+fn spawn(page: &Path, profile: &Path) -> Result<Browser, String> {
     let url = format!("file:///{}", page.display().to_string().replace('\\', "/"));
-    let app = format!("--app={url}");
-    for (program, args) in browsers(&app, &url) {
-        if std::process::Command::new(program)
-            .args(&args)
-            .spawn()
-            .is_ok()
-        {
-            return Ok(program);
-        }
-    }
-    Err(format!(
-        "found no browser to open {}: open it by hand",
-        page.display()
-    ))
+    browsers(&url, profile)
+        .into_iter()
+        .find(|browser| start(&browser.program, &browser.args))
+        .ok_or_else(|| {
+            format!(
+                "found no browser to open {}: open it by hand",
+                page.display()
+            )
+        })
 }
 
-/// Candidates in order of preference, per OS.
-fn browsers(app: &str, url: &str) -> Vec<(&'static str, Vec<String>)> {
+/// Starts `program` handing it nothing of this process: the browser stays
+/// for as long as the window does, and a pipe it inherited from the
+/// caller would stay open with it — the caller reading it would wait on
+/// the window.
+///
+/// Windows hands a child every handle of the parent's marked inheritable,
+/// whatever its stdio is set to, and the stdout `cargo` hands this process
+/// is one. `Start-Process` given only a program and its arguments goes
+/// through ShellExecuteEx, which hands on none; `-NoNewWindow`, a redirect
+/// or a credential would make it a CreateProcess that inherits again.
+#[cfg(windows)]
+fn start(program: &str, args: &[String]) -> bool {
+    crate::subprocess::run_captured(Command::new("powershell").args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        &shell_start(program, args),
+    ]))
+    .is_ok_and(|out| out.status.success())
+}
+
+/// On unix the child's stdio replaces the parent's in place, and nothing
+/// else this process holds is left open across the start.
+#[cfg(not(windows))]
+fn start(program: &str, args: &[String]) -> bool {
+    Command::new(program)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .is_ok()
+}
+
+/// The PowerShell line that starts `program` with `args`. Each argument
+/// holding a space is quoted whole, as the browser splits its command
+/// line; the line is then one single-quoted PowerShell string. No
+/// arguments, no `-ArgumentList`: it refuses an empty one.
+#[cfg(any(windows, test))]
+fn shell_start(program: &str, args: &[String]) -> String {
+    let literal = |text: &str| format!("'{}'", text.replace('\'', "''"));
+    let mut line = format!("Start-Process -FilePath {}", literal(program));
+    if !args.is_empty() {
+        let quoted: Vec<String> = args
+            .iter()
+            .map(|arg| {
+                if arg.contains(char::is_whitespace) {
+                    format!("\"{arg}\"")
+                } else {
+                    arg.clone()
+                }
+            })
+            .collect();
+        line.push_str(&format!(" -ArgumentList {}", literal(&quoted.join(" "))));
+    }
+    line
+}
+
+/// Candidates in order of preference, per OS: the browsers that run on a
+/// profile of the board's own, then the default browser. The first-run,
+/// default-browser and restore screens are turned off: the board's
+/// profile is new to the browser once, and its browser is ended outright
+/// ([`close`]).
+fn browsers(url: &str, profile: &Path) -> Vec<Browser> {
+    let on_profile = vec![
+        format!("--user-data-dir={}", profile.display()),
+        "--no-first-run".to_string(),
+        "--no-default-browser-check".to_string(),
+        "--hide-crash-restore-bubble".to_string(),
+        format!("--app={url}"),
+    ];
+    let own = |program: &str, args: Vec<String>| Browser {
+        program: program.to_string(),
+        args,
+        own_profile: true,
+    };
+    let default = |program: &str, args: Vec<String>| Browser {
+        program: program.to_string(),
+        args,
+        own_profile: false,
+    };
     if cfg!(windows) {
         vec![
-            (
+            own(
                 r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-                vec![app.to_string()],
+                on_profile.clone(),
             ),
-            (
+            own(
                 r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-                vec![app.to_string()],
+                on_profile,
             ),
-            (
-                "cmd",
-                vec![
-                    "/c".to_string(),
-                    "start".to_string(),
-                    String::new(),
-                    url.to_string(),
-                ],
-            ),
+            // ShellExecuteEx opens a URL in the default browser.
+            default(url, Vec::new()),
         ]
     } else if cfg!(target_os = "macos") {
-        vec![
-            (
-                "open",
-                vec![
-                    "-na".to_string(),
-                    "Google Chrome".to_string(),
-                    "--args".to_string(),
-                    app.to_string(),
-                ],
-            ),
-            ("open", vec![url.to_string()]),
-        ]
+        let mut chrome = vec![
+            "-na".to_string(),
+            "Google Chrome".to_string(),
+            "--args".to_string(),
+        ];
+        chrome.extend(on_profile);
+        vec![own("open", chrome), default("open", vec![url.to_string()])]
     } else {
         vec![
-            ("google-chrome", vec![app.to_string()]),
-            ("chromium", vec![app.to_string()]),
-            ("xdg-open", vec![url.to_string()]),
+            own("google-chrome", on_profile.clone()),
+            own("chromium", on_profile),
+            default("xdg-open", vec![url.to_string()]),
         ]
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{browsers, read_standing, remember, standing, words};
+    use std::path::Path;
+
+    use super::{browsers, shell_start, started_on};
 
     #[test]
-    fn a_window_written_down_is_the_one_the_next_command_finds() {
-        let board = crate::yard::Yard::new("shots-window");
-        assert!(
-            standing(&board).is_none(),
-            "a board nobody has opened stands no window"
+    fn the_shell_is_handed_each_argument_whole() {
+        let line = shell_start(
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            &[
+                r"--user-data-dir=C:\Users\A B\it's\browser".to_string(),
+                "--no-first-run".to_string(),
+            ],
         );
-        remember(&board).expect("the window is written down");
-        let open = standing(&board).expect("and read back by whoever asks next");
-        assert!(
-            !open.named_seat().is_empty(),
-            "it says which tree opened it"
+        assert_eq!(
+            line,
+            "Start-Process -FilePath 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' \
+             -ArgumentList '\"--user-data-dir=C:\\Users\\A B\\it''s\\browser\" --no-first-run'"
         );
-    }
-
-    #[test]
-    fn a_standing_window_survives_the_round_trip() {
-        let open = read_standing("at\t1700000000000\nseat\tc\n").expect("a whole marker reads");
-        assert_eq!(open.at, 1_700_000_000_000);
-        assert_eq!(open.named_seat(), "c");
-    }
-
-    /// Errs towards no window: a reader sent to a window that is not
-    /// there has nowhere to press F5, where an extra one can be closed.
-    #[test]
-    fn a_marker_that_says_nothing_stands_for_no_window() {
-        assert!(read_standing("").is_none());
-        assert!(read_standing("seat\tc\n").is_none());
-        assert!(read_standing("at\tnot a number\n").is_none());
-        assert!(read_standing("at\t0\nseat\tc\n").is_none());
-        // A window opened by hand, outside any seat, is still a window.
-        let open = read_standing("at\t1700000000000\n").expect("a time is a window");
-        assert_eq!(open.named_seat(), "?");
-    }
-
-    #[test]
-    fn an_age_reads_as_one() {
-        assert_eq!(words(0), "a moment ago");
-        assert_eq!(words(59_000), "a moment ago");
-        assert_eq!(words(60_000), "1 minute ago");
-        assert_eq!(words(25 * 60_000), "25 minutes ago");
-        assert_eq!(words(60 * 60_000), "1 hour ago");
-        assert_eq!(words(5 * 60 * 60_000), "5 hours ago");
-        assert_eq!(words(24 * 60 * 60_000), "1 day ago");
-        assert_eq!(words(9 * 24 * 60 * 60_000), "9 days ago");
+        assert_eq!(
+            shell_start("file:///C:/b/index.html", &[]),
+            "Start-Process -FilePath 'file:///C:/b/index.html'"
+        );
     }
 
     #[test]
     fn every_candidate_is_handed_the_board() {
-        let candidates = browsers("--app=file:///b/index.html", "file:///b/index.html");
-        assert!(!candidates.is_empty());
-        for (_, args) in candidates {
+        let candidates = browsers("file:///b/index.html", Path::new("/b/browser"));
+        assert!(candidates.iter().any(|browser| browser.own_profile));
+        assert!(
+            candidates
+                .last()
+                .is_some_and(|browser| !browser.own_profile),
+            "the default browser is the last resort"
+        );
+        for browser in candidates {
+            let mut said = browser.args.clone();
+            said.push(browser.program.clone());
             assert!(
-                args.iter().any(|a| a.contains("file:///b/index.html")),
-                "a candidate was handed no board: {args:?}"
+                said.iter().any(|a| a.contains("file:///b/index.html")),
+                "a candidate was handed no board: {said:?}"
+            );
+            assert_eq!(
+                browser.own_profile,
+                browser
+                    .args
+                    .iter()
+                    .any(|a| a == "--user-data-dir=/b/browser"),
+                "a candidate says it runs on the board's profile and does not, or the reverse: {said:?}"
             );
         }
+    }
+
+    /// The browser on the board's profile, and nothing else: not its
+    /// helpers, not the reader's own browser, not a profile whose name
+    /// only begins like the board's.
+    #[test]
+    fn the_board_window_is_the_browser_on_the_boards_profile() {
+        let listing = "\
+            100 \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" \
+                --user-data-dir=C:\\x\\platitude-gg\\.shots\\browser --no-first-run \
+                --app=file:///C:/x/platitude-gg/.shots/index.html\r\n\
+            200 \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=renderer \
+                --user-data-dir=C:\\x\\platitude-gg\\.shots\\browser\r\n\
+            300 \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\"\r\n\
+            400 \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" \
+                --user-data-dir=C:\\x\\platitude-gg\\.shots\\browser-old\r\n\
+            not a line\r\n";
+        assert_eq!(
+            started_on(listing, "C:/x/platitude-gg/.shots/browser"),
+            vec![100]
+        );
+    }
+
+    /// A profile path with a space in it reaches the command line quoted
+    /// whole, flag and all.
+    #[test]
+    fn a_quoted_profile_is_still_the_boards() {
+        let listing = "7 chrome.exe \"--user-data-dir=C:\\Users\\A B\\.shots\\browser\" --app=x\n";
+        assert_eq!(
+            started_on(listing, "C:\\Users\\A B\\.shots\\browser"),
+            vec![7]
+        );
+    }
+
+    /// The primary checkout reads its board's path off the working
+    /// directory's spelling and a seat off its `.git` file, so one board
+    /// comes in more than one case.
+    #[test]
+    fn a_profile_spelt_in_another_case_is_still_the_boards() {
+        let listing = "9 chrome.exe --user-data-dir=C:\\Users\\Me\\.shots\\browser --app=x\n";
+        assert_eq!(started_on(listing, "c:/users/me/.shots/browser"), vec![9]);
     }
 }
