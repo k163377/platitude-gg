@@ -138,6 +138,8 @@ Rectangle {
                 }
                 markup: headingWord.markRoom > 0
                         ? Words.roomInSentence(bar.label, headingWord.markAt, headingWord.markRoom) : ""
+                roomAt: headingWord.markRoom > 0 ? headingWord.markAt : -1
+                roomLength: headingWord.markRoom
                 color: Theme.textPrimary
                 pixelSize: Theme.fontMd
                 weight: Theme.fontWeightStrong

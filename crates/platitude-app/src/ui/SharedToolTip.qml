@@ -464,6 +464,8 @@ Item {
                     ? Words.roomInSentence(shared.sharedTip.text, tipWords.markAt, tipWords.markRoom)
                     : Words.placeInSentence(shared.sharedTip.text, shared.tipPlace, shared.tipHref,
                                             pointedLink !== "" ? Theme.textSecondary : Theme.textMuted)
+            roomAt: shared.tipMarkWord !== "" && tipWords.markRoom > 0 ? tipWords.markAt : -1
+            roomLength: shared.tipMarkWord !== "" ? tipWords.markRoom : 0
             onLinkAsked: href => shared.linkAsked(href)
             pixelSize: Theme.fontMd
             color: Theme.textPrimary

@@ -44,6 +44,11 @@ Item {
     property int capRows: 0
     /// The mark's ground, opaque over the line it cuts (`AppCardFace` paints `bgElevated`).
     property color ground: Theme.bgElevated
+    /// The run of spaces the markup opens for a mark drawn over the line (`Words.roomInSentence`): where it starts in
+    /// the field's characters, and how long it is. A copy leaves it out — the words go out as `text` reads them, and
+    /// the mark as nothing (デザイン規約 §アイコンの席「コピー」).
+    property int roomAt: -1
+    property int roomLength: 0
 
     /// The pointer is on the words. The card ORs this into its `pointerInside` (`AppCard.contentPointed` —
     /// rules-refs/app-ui.md「hover で開くものの 5 つの罠」の (2)).
@@ -96,6 +101,12 @@ Item {
     }
     function deselect() {
         field.deselect()
+    }
+    /// The selection as copied: `text` over the same span, the room taken out.
+    function copiedText() {
+        const plain = pos => cardText.roomAt < 0 || pos <= cardText.roomAt ? pos
+                           : Math.max(cardText.roomAt, pos - cardText.roomLength)
+        return cardText.text.substring(plain(field.selectionStart), plain(field.selectionEnd))
     }
 
     // ---- driven from outside ----------------------------------------
@@ -183,6 +194,19 @@ Item {
         HoverHandler {
             id: wordHover
         }
+        // Copied here where the line holds a room: the field's own copy would carry its spaces out.
+        Keys.onPressed: event => {
+            if (copier.item && event.matches(StandardKey.Copy) && field.selectedText !== "") {
+                copier.item.copy(cardText.copiedText())
+                event.accepted = true
+            }
+        }
+    }
+    // Built only on a line that holds a room: a helper is a second field, and most lines copy as they are.
+    Loader {
+        id: copier
+        active: cardText.roomAt >= 0 && cardText.roomLength > 0
+        sourceComponent: ClipboardHelper {}
     }
 
     // The cut mark, on the tail of the last kept line, over the card's ground so the line under it does not show
