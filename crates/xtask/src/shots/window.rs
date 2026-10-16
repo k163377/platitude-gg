@@ -1,9 +1,5 @@
-//! The one window the board is read in.
-//!
-//! The page lives at a fixed path and is rewritten in place, so a window
-//! already showing the board is one F5 from the run just taken. `open`
-//! restarts it: whatever board window stands is closed and a fresh one
-//! opened, every time it is asked, whoever asks and from whichever seat.
+//! The one window the board is read in: `open` closes the board window
+//! standing and opens a fresh one.
 //!
 //! Nothing is written down about a window between commands. A browser
 //! handed a page passes it to the process already running and leaves no
@@ -50,11 +46,7 @@ pub(super) fn restart(board: &Path, page: &Path) -> Result<(), String> {
     }
     let opened = spawn(page, &profile)?;
     if opened.own_profile {
-        println!(
-            "board: opened {} with {} — F5 in that window from now on",
-            shown(page),
-            opened.program
-        );
+        println!("board: opened {} with {}", shown(page), opened.program);
     } else {
         println!(
             "board: opened {} in the default browser, which the next `open` cannot close — \
@@ -63,15 +55,6 @@ pub(super) fn restart(board: &Path, page: &Path) -> Result<(), String> {
         );
     }
     Ok(())
-}
-
-/// Where the pictures just put on the board are read — said right after
-/// a run.
-pub(super) fn how_to_see_it() -> String {
-    format!(
-        "F5 in the board's window — closed, or never opened, `{}` opens it afresh",
-        super::OPEN.line()
-    )
 }
 
 /// Ends the board's browser and waits until it is gone; answers whether

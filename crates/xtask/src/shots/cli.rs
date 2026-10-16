@@ -69,15 +69,8 @@ cargo xtask shots <command>
       (shots/sweep.rs).
 
   open
-      Put the board in front of the reader, in a window of its own: the
-      board window already standing is closed and a fresh one opened,
-      every time, whichever seat or session asks — so there is one. The
-      page is rewritten at a fixed path, so an open window is one F5
-      away from the board as it stands; this is for when the reader
-      asks for the window. The page is read top down in the order the
-      runs went up, so the newest is at the bottom. Nothing is written
-      down about the window: it is found by the browser profile it runs
-      on, which is the board's own (shots/window.rs).
+      Put the board in a window of its own, closing the one standing.
+      Only when the user asks for it (hook/board.rs).
 
   list        One line per run: when, seat, count, label.
   path        Where the page is.
@@ -119,19 +112,20 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// The restart is in `window::restart`.
+/// The restart is in `window::restart`; whether a session may ask for it
+/// is `hook::board`'s.
 fn open(args: &[String]) -> Result<(), String> {
-    match args.first().map(String::as_str) {
-        None => {}
-        // Named, so whoever reaches for it learns there is nothing to get
-        // past.
-        Some("--again") => {
-            return Err(format!(
-                "shots open: --again is gone — `{}` always closes the board window and opens it afresh",
-                super::OPEN.line()
-            ));
-        }
-        Some(other) => return Err(format!("shots open: unknown argument {other}")),
+    if let Some(other) = args.first() {
+        return Err(format!("shots open: unknown argument {other}"));
+    }
+    // A shell of the user's own carries no session: theirs to open.
+    let session = crate::seats::Identity::current(None).session;
+    let here = std::env::current_dir()
+        .map_err(|e| format!("shots open: no working directory: {e}"))?
+        .to_string_lossy()
+        .into_owned();
+    if !session.is_empty() {
+        crate::hook::board::may_open(&here, &session)?;
     }
     let board = board::board_dir()?;
     let page = board.join("index.html");
@@ -141,7 +135,11 @@ fn open(args: &[String]) -> Result<(), String> {
             board::shown(&page)
         ));
     }
-    window::restart(&board, &page)
+    window::restart(&board, &page)?;
+    if !session.is_empty() {
+        crate::hook::board::opened(&here, &session);
+    }
+    Ok(())
 }
 
 fn add(args: &[String]) -> Result<(), String> {
@@ -173,15 +171,6 @@ fn add(args: &[String]) -> Result<(), String> {
                     );
                 }
             },
-            // Named, so whoever reaches for it is told where the board
-            // is read.
-            "--open" => {
-                return Err(format!(
-                    "shots add: --open is gone — the board is read in one window, \
-                     F5 there, and `{}` opens it afresh when the reader asks for it",
-                    super::OPEN.line()
-                ));
-            }
             other if other.starts_with("--") => {
                 return Err(format!("shots add: unknown flag {other}"));
             }
@@ -210,9 +199,6 @@ fn add(args: &[String]) -> Result<(), String> {
         board::seat_here(),
         label
     );
-    // Said, not opened: a window opened on every run would take the
-    // reader's screen each time.
-    println!("board: {}", window::how_to_see_it());
     Ok(())
 }
 

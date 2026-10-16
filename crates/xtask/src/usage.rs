@@ -840,13 +840,8 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       also why `prune` reaches this seat's runs and no others unless it
       is told to.
 
-      One window: the page sits at a fixed path and is rewritten in
-      place, so the window already showing the board is one F5 away from
-      the run just taken. `open` restarts it — the board window standing
-      is closed and a fresh one opened, whichever seat or session asks.
-      Nothing is written down about the window, which a browser leaves
-      no way to watch; it is found by the browser profile of the board's
-      own it runs on (shots/window.rs).
+      `open` puts the board in a window, only when the user asks for it
+      (hook/board.rs).
 
       `crop <png> --at <x>:<y>:<width>:<height> [--scale <n>]` cuts a
       region out and magnifies it a whole number of times (three by

@@ -349,7 +349,7 @@ fn refusal(what: &str, permit: Option<&Permit>) -> String {
         }) => format!(
             "{what} waits for the user's approval: a landing found pictures put up on the board \
              after their message 「{excerpt}」 ({}), and taking them off the board approves \
-             nothing. {report}; tell the user the board holds them (F5) — their next {COMMAND} \
+             nothing. {report}; tell the user the board holds them — their next {COMMAND} \
              lands the branch.",
             ago(*asked_at)
         ),

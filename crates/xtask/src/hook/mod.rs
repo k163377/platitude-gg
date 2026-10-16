@@ -1,7 +1,8 @@
 //! Claude Code hook handlers (`cargo xtask hook <event>`), wired from
-//! .claude/settings.json: the git, launches, kills, seats, chips and other
-//! sessions a session touches only when the user asks. Main moves on the
-//! permit the user's own `/land` opens (`permit`), and on that alone.
+//! .claude/settings.json: the git, launches, kills, seats, chips, board
+//! window and other sessions a session touches only when the user asks.
+//! Main moves on the permit the user's own `/land` opens (`permit`), and
+//! on that alone.
 //!
 //! Each handler reads the hook's JSON payload from stdin and answers on
 //! stdout; printing nothing means "no objection".
@@ -11,6 +12,7 @@ use std::io::Read;
 pub(crate) mod approval;
 mod attribution;
 mod awake;
+pub(crate) mod board;
 mod chips;
 mod codex;
 mod commit;
@@ -90,9 +92,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
 }
 
 /// PreToolUse, of any tool: the guards on tools no matcher names — the
-/// other sessions (`contact`) and the chips. One decision per call.
+/// other sessions (`contact`), the board (`board`) and the chips. One
+/// decision per call.
 fn pre_tool(input: &str) -> Result<(), String> {
-    if contact::pre_tool(input) {
+    if contact::pre_tool(input) || board::pre_tool(input) {
         return Ok(());
     }
     chips::pre_spawn(input)
@@ -108,6 +111,7 @@ fn prompt_submit(input: &str) -> Result<(), String> {
         awake::stopped(input);
         return Ok(());
     }
+    board::prompt_submit(input, &prompt);
     review::prompt_submit(input)
 }
 

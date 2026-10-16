@@ -52,7 +52,7 @@ fn refusal(seat: &str, asked: &str, unseen: &[String]) -> String {
     format!(
         "{found}. A landing takes the seat's runs off the board, so they would go unseen — and a \
          picture put up after the ask shows UI the user has not approved. Nothing has moved: \
-         tell the user the board holds them (F5) and ask for their approval; the user's next \
+         tell the user the board holds them and ask for their approval; the user's next \
          /land lands the branch, and putting them up again after a landing is no substitute \
          (CLAUDE.md §Git 運用)."
     )
