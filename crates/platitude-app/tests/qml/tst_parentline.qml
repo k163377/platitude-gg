@@ -1,14 +1,20 @@
 import QtQuick
+import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
 // How the parent line fits the room its row leaves it (デザイン規約 §右のペインの親): every parent cut evenly from
 // whole down to three digits and the mark, then the tail given to `+N`, and two standing whatever the room. The room
 // is set by hand here; where it comes from is the row's (`details-parents`).
-Item {
+//
+// A control, to hand the plate the window's font as `Main` does: the count and the commas are priced in the face their
+// labels draw in, and a default face with other figures lays the line out a pixel off its price.
+Control {
     id: root
     width: 800
     height: 200
+    font.family: Theme.uiFamily
+    font.pixelSize: Theme.fontMd
 
     property string visited: ""
 

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
@@ -8,10 +9,15 @@ import platitude.ui
 //
 // Nothing here recomputes a cap or a floor: the numbers come off the group, and a second `BandStateMetrics` outside
 // it witnesses that the floor it reports is a real measurement.
-Item {
+//
+// A control, to hand the badges the window's font as `Main` does: the box is cut against `Theme.uiFamily`'s capitals,
+// and words drawn in a default face with another ascent stand a pixel off the band's line.
+Control {
     id: root
     width: 600
     height: 100
+    font.family: Theme.uiFamily
+    font.pixelSize: Theme.fontMd
 
     /// A stopped merge with conflicts: two badges, in the page's shape the group reads (`curPage.pageWorktree` / …).
     /// The identity and old-git badges read `AppBackend`, staged empty for these runs (`xtask::qmltest`), so they

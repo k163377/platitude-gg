@@ -295,15 +295,19 @@ fn runner(
     // Relative paths from the workspace root: `-o <file>,txt` splits its
     // argument on a comma, and an absolute Windows path gives it more to
     // get wrong.
-    let mut child = Command::new("qmltestrunner")
-        .args(["-platform", "offscreen"])
+    let mut cmd = Command::new("qmltestrunner");
+    cmd.args(["-platform", "offscreen"])
         .args(["-input", input])
         .arg("-import")
         .arg(import)
         .args(["-o", &format!("{log},txt")])
         .current_dir(root)
         .env("PATH", path)
-        .stdin(Stdio::null())
+        .stdin(Stdio::null());
+    // The fonts the app's pictures are drawn in: a test that sets a mark
+    // against letters reads the face the shots show.
+    crate::qt::offscreen_fonts(&mut cmd);
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to run qmltestrunner (it ships in Qt's bin): {e}"))?;
     let mut wait = Wait::new(

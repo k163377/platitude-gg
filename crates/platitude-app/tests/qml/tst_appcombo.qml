@@ -7,10 +7,15 @@ import platitude.ui
 //
 // Only a laid-out field can answer: the overlap is the input's right inset against the chevron's seat, and a
 // one-pixel overlap is not something a headless PNG can be trusted to show.
-Item {
+//
+// A control, to hand the fields the window's font as `Main` does: the field cuts with its own font's ellipsis, and a
+// default face without one cuts with three dots.
+Control {
     id: root
     width: 400
     height: 200
+    font.family: Theme.uiFamily
+    font.pixelSize: Theme.fontMd
 
     readonly property string longName: "origin/feature/a-name-far-too-long-for-this-box"
 

@@ -79,6 +79,16 @@ pub fn path_with_qt_if_any() -> Result<Option<OsString>, String> {
     chosen()?.map(|qt| qt.path()).transpose()
 }
 
+/// Points an offscreen Qt (`-platform offscreen`, `QT_QPA_PLATFORM`) at the
+/// system's fonts: on Windows it discovers none by itself, and every glyph
+/// is a box (verify-ui skill). Elsewhere the platform finds them (fontconfig
+/// on Linux, Core Text on macOS).
+pub fn offscreen_fonts(cmd: &mut Command) {
+    if cfg!(windows) {
+        cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
+    }
+}
+
 /// This tree's Qt, or why there is none.
 pub(crate) fn this_tree() -> Result<Qt, String> {
     chosen()?.ok_or_else(|| not_found(pinned_here().as_deref()))

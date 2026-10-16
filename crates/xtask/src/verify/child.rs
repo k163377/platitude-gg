@@ -274,11 +274,7 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         .env("PGG_AUTO_ACT_ARG", arg)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    if cfg!(windows) {
-        // Offscreen Qt does not discover system fonts on Windows; without
-        // this every glyph is a box (verify-ui skill).
-        cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
-    }
+    crate::qt::offscreen_fonts(&mut cmd);
     // Per build, so its runs share one compiled cache while a person's own
     // window and other seats' builds keep theirs (`platitude-app` qrc.rs).
     cmd.env("QML_DISK_CACHE_PATH", exe.with_file_name("qmlcache"));

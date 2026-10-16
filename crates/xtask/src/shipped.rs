@@ -137,9 +137,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         .env("PGG_LOG", "info")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    if cfg!(windows) {
-        cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
-    }
+    crate::qt::offscreen_fonts(&mut cmd);
     // Apart from the cache the person's own windows use (`verify::child`).
     cmd.env("QML_DISK_CACHE_PATH", exe.with_file_name("qmlcache"));
     println!("running the shipped build offscreen: {}", config.display());
