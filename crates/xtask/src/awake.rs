@@ -187,7 +187,7 @@ const AGENT: char = '~';
 /// The holder implementation, independent of the activity protocol.
 /// A script change raises this; compatible builds still update the same
 /// claims, so a Stop or a question reaches every holder reading them.
-const REVISION: u32 = 26;
+const REVISION: u32 = 27;
 /// A Codex handoff requires a holder that accounts for its independent
 /// child agents. An older holder can count delegated work twice.
 #[cfg(windows)]
@@ -211,7 +211,9 @@ const WORKING_TTL: Duration = Duration::from_secs(60 * 60);
 /// record follows every reply's Stop, past the slowest Stop hooks this
 /// repository and the user run (ci/baseline/awake-control-windows-x64.md);
 /// a Stop with no reply behind it — a prompt a hook turned down, an API
-/// error — gets none, and goes at this bound.
+/// error — gets none, and goes at this bound. It bounds the wait on what
+/// was queued past the record too, from the later of its queuing and the
+/// Stop.
 #[cfg(windows)]
 const STOPPING: Duration = Duration::from_secs(60);
 /// How long of time awake the machine stays held with nothing happening:

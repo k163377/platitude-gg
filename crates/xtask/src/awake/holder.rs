@@ -230,14 +230,23 @@ const DELEGATED: &str = "'Agent', 'Task'";
 /// session's claim counts until its transcript records the Stop hooks'
 /// end after the claim's Stop — for [`STOPPING`](super::STOPPING) at most,
 /// since a Stop with no reply behind it gets no record — and, past the
-/// record, while something queued (a `queue-operation` `enqueue`) after
-/// the last entry waits to be taken, as long at most from its queuing: one
-/// queued while the Stop hooks run can be taken a while after their
-/// record. A notice's entry takes over from there. The tail read holds no
-/// record at all for about one Stop in three — a turn's calls and results
-/// write past it, and a first turn has none before it — which tells
-/// nothing of whether Claude Code keeps them: only a session with no
-/// transcript lets go at its Stop.
+/// record, while something queued (a `queue-operation` `enqueue`) waits to
+/// be taken, as long at most from the later of its queuing and the Stop.
+/// Every item queued is taken by an entry of its own (measured): into the
+/// turn running, a `queued_command` attachment or a `remove`; into the
+/// next, a `dequeue` and then its user entry. A notice's entry hands over
+/// to the notice's rule; a person's prompt, to its UserPromptSubmit hook,
+/// which writes the claim a beat after the entry. A reply and a call's
+/// result take nothing: one queued while the last reply is written waits
+/// on the Stop hooks, its `dequeue` and its entry in turn. Only the last
+/// item queued is followed — whether anything else still waits is not
+/// read off the queue's entries, one item taken can be both attached and
+/// removed — so of several queued, those after the first taken count from
+/// their own `dequeue`, not from the record a few ms before it. The tail
+/// read holds no record at all for about one Stop in three — a turn's
+/// calls and results write past it, and a first turn has none before it —
+/// which tells nothing of whether Claude Code keeps them: only a session
+/// with no transcript lets go at its Stop.
 // waits(paced): the lock's retry — `FileStream.Lock` has no blocking form — and a held machine's readings, spaced by `PACE` on a clock that only runs forward
 #[cfg(windows)]
 pub(super) const SCRIPT: &str = r#"$ErrorActionPreference = 'Stop'
@@ -377,12 +386,15 @@ function Read-Tail($path, $earlier) {
   foreach ($line in $tail.Lines) {
     if ($line -match '"subtype":"stop_hook_summary"') { $tail.Summary = Get-Stamp $line; continue }
     if ($line -match '"type":"queue-operation"') {
-      $tail.Queued = [int64]0
       if ($line -match '"operation":"enqueue"') { $tail.Queued = Get-Stamp $line }
+      elseif ($line -match '"operation":"dequeue"') { if ($tail.Queued -eq 0) { $tail.Queued = Get-Stamp $line } }
+      else { $tail.Queued = [int64]0 }
       continue
     }
-    if ($line -match '"type":"(user|assistant)"') { $tail.Last = $line; $tail.Queued = [int64]0 }
+    if ($line -match '"attachment":\{"type":"queued_command"') { $tail.Queued = [int64]0; continue }
+    if ($line -match '"type":"(user|assistant)"') { $tail.Last = $line }
     if ($line -notmatch '"type":"user"') { continue }
+    if ($line -notmatch '"type":"tool_result"') { $tail.Queued = [int64]0 }
     if ($line -match $notice) { $tail.Notice = Get-Stamp $line }
     $found = [regex]::Matches($line, '"tool_use_id":"([^"]+)"')
     if ($found.Count -eq 0) { continue }
@@ -638,7 +650,7 @@ try {
           if ([int64]$word[4] -gt $now) { $keep = $true; $why["wake:$(Get-Whose $session)"] = $true }
           $stoppedAt = [int64]$word[2]
           $hooksRunning = ($tail.Mark -ne '') -and ($tail.Summary -lt $stoppedAt) -and (($nowms - $stoppedAt) -lt @STOPPING@ * 1000)
-          $queued = ($tail.Queued -gt 0) -and (($nowms - $tail.Queued) -lt @STOPPING@ * 1000)
+          $queued = ($tail.Queued -gt 0) -and (($nowms - [Math]::Max($tail.Queued, $stoppedAt)) -lt @STOPPING@ * 1000)
           if (($who -eq '-') -and ($word[0] -eq 'idle') -and ($hooksRunning -or $queued)) {
             $keep = $true
             $why["turn:$(Get-Whose $session)"] = $true

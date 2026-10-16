@@ -1,6 +1,6 @@
 # Windows のスリープ保持: 実測
 
-2026-10-16。holder revision 26、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
+2026-10-16。holder revision 27、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
 デスクトップアプリのログによる補助と実スリープ試験の記録は [ログ補助](../../internal-docs/awake-ログ補助.md)。
 
 ## 判定
@@ -15,8 +15,8 @@
 ## 実 API 試験
 
 `awake::tests::holder::coordination::compatible_holders_apply_and_clear_real_windows_requests_together`。
-テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r26)と、
-同じスクリプトで holder 名だけ r27 にした互換ビルドを同時に動かす。OS API は置き換えない。
+テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r27)と、
+同じスクリプトで holder 名だけ r28 にした互換ビルドを同時に動かす。OS API は置き換えない。
 session / hook の入力は fixture で、Claude 本体ではない。
 
 `SetThreadExecutionState` の非 0 の戻り値は、成功とそのスレッドの直前の状態を示す
@@ -24,12 +24,12 @@ session / hook の入力は fixture で、Claude 本体ではない。
 両 holder とも保持時の戻り値は `0x80000000`、解除時は `0x80000001` —— system の継続要求を設定・解除でき、
 display の継続要求は加えていない。
 
-| 遷移 | r26(WMI 起動) | r27(互換ビルド) |
+| 遷移 | r27(WMI 起動) | r28(互換ビルド) |
 | --- | ---: | ---: |
-| 最初の Prompt → 保持 | 3380 ms | 885 ms |
-| s が Stop、t は質問待ち → 解除 | 46 ms | 12 ms |
-| t の質問への回答 → 保持 | 40 ms | 15 ms |
-| t も Stop → 解除 | 49 ms | 11 ms |
+| 最初の Prompt → 保持 | 2683 ms | 1317 ms |
+| s が Stop、t は質問待ち → 解除 | 49 ms | 15 ms |
+| t の質問への回答 → 保持 | 17 ms | 37 ms |
+| t も Stop → 解除 | 51 ms | 13 ms |
 
 質問待ちになる前から s が作業中なら、t の質問だけでは解除しないことも同じテストで確かめる。
 数値は単発の観測値で、遅延の上限ではない。最初の保持は
@@ -41,7 +41,7 @@ hook の印(`hooks-r<n>`)を 10 分より前に戻し、hook が動いている�
 プロセスごと終わり、claim は残り、互換ビルドが保持を続けた。降りる判定そのものは、holder 本体を 1 回だけ読ませる
 試験で場合分けする(使用中の別ビルドがある / 1 本だけ / 全部静か / 相手の心拍が古い)。
 
-awake の Windows テストは **116 passed / 0 failed / 3 ignored**(55.29 秒。律速は tick 待ちを含むテストで、
+awake の Windows テストは **122 passed / 0 failed / 3 ignored**(55.26 秒。律速は tick 待ちを含むテストで、
 他席の負荷で揺れる)。
 ignored は、親テストが専用環境で呼ぶ子プロセスの入口 2 本と、手動の実スリープ試験 1 本。子コマンドの背景実行、
 質問・許可待ち、複数セッション、subagent、通知、所有者の終了、読取りの妨害、同時起動、hook のパイプの解放、
@@ -137,22 +137,36 @@ Claude Code は、Stop hook(このリポジトリの物とユーザーの物)を
 
 holder(r22〜)は、止まった(idle の)セッションを、transcript がその Stop より後の `stop_hook_summary` を
 持つまで `turn:` として数える。上限は Stop から 60 秒(`awake::STOPPING`。記録の来ない Stop がそこで解ける)。
-この待ちに掛けないのは transcript の無いセッション(Codex など)だけ(r26〜)。holder が読むのは transcript の
+この待ちに掛けないのは transcript の無いセッション(Codex など)だけ(r27〜)。holder が読むのは transcript の
 末尾 256 KB で、そこに記録が無いことは記録を書かない版の印にならない: 1 ターンの呼び出しと結果がその幅を
 越え、最初のターンの前には記録が無い。このプロジェクトの 10/13 以降の transcript で、Stop 404 回のうち 125 回は
 直前の記録が末尾 256 KB の外にあった(最長 10 MB)。2026-10-16 04:17 の本番(r25)がこの形 — 前の記録から
 1.0 MB 書いた 2 時間のターンの最後の応答の途中に gate の完了通知が積まれ、Stop の読取りで解除した時刻
 (04:17:20.823)が、そのまま就寝の時刻(Power-Troubleshooter の Sleep Time)になり、3.5 時間止まった。
-記録の後も、最後の発話より後の `queue-operation` が `enqueue` で終わっている(積まれてまだ取り出されていない)
-間は数える(積まれてから 60 秒まで)。通知の行が書かれれば、通知でターンが始まる規則が引き継ぐ
-(`a_stopped_session_counts_until_its_stop_hooks_have_run`・`a_stop_counts_until_its_record_with_none_in_sight`。
+記録の後も、積まれた物が取り出されるまで数える(積まれた時刻と Stop の遅い方から 60 秒まで)。積まれた物は、
+どれも取り出しの記録で終わる。このプロジェクトの transcript(8 月以降)の `enqueue` 5,976 件は全部、次のどれかで
+終わっていた: 次のターンへの `dequeue`(3,766 件。続いて人の発話・通知の user 行)、ターンの途中への
+`queued_command` の添付(1,844 件)か `remove`(313 件)、`dequeue` を伴わない user 行(53 件)。応答の行と
+呼び出しの結果の行で取り出された物は無い(結果の後に取られた 2,122 件も、添付 1,832・`remove` 283・user 行 6・
+`dequeue` 1 で取られた)。holder(r27〜)は、最後の `enqueue` から、`queued_command` の添付・`remove`・呼び出しの
+結果ではない user 行のどれかが書かれるまでを「待ち」とする。`dequeue` は待ちを消さない(取り出しから user 行
+までを埋める)。
+2026-10-16 04:17 の並び(`enqueue` → 最後の応答 → 記録 → `dequeue` → 通知の行)は、記録の直後も `dequeue` の
+直後も数える。ターンの途中で添付・`remove` された物は、Stop の記録の後は数えない。通知の行が書かれれば、
+通知でターンが始まる規則が引き継ぐ(`a_stopped_session_counts_until_its_stop_hooks_have_run`・
+`a_stop_counts_until_its_record_with_none_in_sight`・`a_notice_queued_during_the_last_reply_holds_until_it_is_taken`。
 どの扱いも、外した台本では赤になる)。
-キューを「enqueue で +1、dequeue・remove で −1」と数える読み方は使わない: ターンの途中の通知は取り出しの
-記録無しに添付で届くので、数えが空にならない。
+キューを「enqueue で +1、dequeue・remove で −1」と数える読み方は使わない: ターンの途中の物は queue の取り出しの
+記録無しに `queued_command` の添付で届き、1 件が添付と `remove` の両方で取られる例もあるので、数えが合わない。
+holder が見るのは、最後の `enqueue` の後に取り出しが書かれたかだけ。
 
-残る窓: 記録から通知の行が書かれるまで(最後の応答の途中に積まれた物は記録から、Stop hook の途中に積まれた
-物は取り出しから。実測で十数 ms 以内)に読取りが当たると、その読取りは解除する。次の読取り(最長で 1 tick)で
-保持し直す。
+残る窓(どちらも、当たった読取りが解除し、次の読取り — 最長で 1 tick — で保持し直す):
+
+- **複数積まれた物の 2 件目から**: 最後の `enqueue` だけを追うので、1 件が取られた後に残る物は自分の `dequeue`
+  から数える。その前の記録から `dequeue` までの数 ms が数えられない(10/11 席 f で積まれた通知を 1 件ずつ取った
+  各 Stop で 6〜14 ms、10/13 席 e で 8 ms)
+- **人の発話**: 積まれた発話の user 行が待ちを消し、claim を作業中にするのはその UserPromptSubmit hook で、行から
+  hook の記録まで百数十 ms(10/13 席 e で 161 ms。claim はその間に書かれる)。通知の規則は人の発話に当てない
 
 ## 静かな保持の上限
 

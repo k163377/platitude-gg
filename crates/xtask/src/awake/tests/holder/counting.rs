@@ -696,8 +696,20 @@ fn queued(ms: u64) -> String {
     )
 }
 
-/// The queue's head taken to start a turn.
-const TAKEN: &str = r#"{"type":"queue-operation","operation":"dequeue"}"#;
+/// The queue's head taken at `ms` to start a turn.
+fn taken(ms: u64) -> String {
+    format!(
+        r#"{{"type":"queue-operation","operation":"dequeue","timestamp":"{}"}}"#,
+        stamped(ms)
+    )
+}
+
+/// What was queued, taken into the turn running: attached to its next
+/// request, after a call's result.
+const ATTACHED: &str = r#"{"attachment":{"type":"queued_command","prompt":"<task-notification>\n<task-id>b1</task-id>\n</task-notification>","commandMode":"task-notification"},"type":"attachment"}"#;
+
+/// What was queued, taken off the queue into the turn running.
+const REMOVED: &str = r#"{"type":"queue-operation","operation":"remove"}"#;
 
 /// A turn is not over at its Stop: Claude Code runs every Stop hook first,
 /// records that they have run, and only then takes what was queued for the
@@ -747,7 +759,7 @@ fn a_stopped_session_counts_until_its_stop_hooks_have_run() {
         holding(),
         "a notice queued during the Stop hooks let go before it was taken"
     );
-    append(&path, &[TAKEN, &notice(ran + 1), REPLY]);
+    append(&path, &[&taken(ran + 1), &notice(ran + 1), REPLY]);
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -838,6 +850,155 @@ fn a_stop_counts_until_its_record_with_none_in_sight() {
         next_reading(&first),
         released(),
         "a first turn held the machine once its Stop hooks had run"
+    );
+}
+
+/// A notice queued while the last reply is written — after the turn's last
+/// request, so no request takes it in — waits for the next turn: once the
+/// Stop hooks have run, Claude Code writes their record, takes the notice
+/// off the queue and writes its entry, and the stopped claim counts through
+/// each step until the notice's turn takes over. A reply takes nothing in.
+/// One the turn did take in — attached to a request after a call's result,
+/// or removed from the queue — waits on nothing past the Stop's record.
+#[test]
+fn a_notice_queued_during_the_last_reply_holds_until_it_is_taken() {
+    let dir = scratch("queued-taken");
+    let claude = FakeClaude::start(&dir);
+    let earlier = crate::awake::now_ms() - 5_000;
+    let path = transcript(&dir.join("s.jsonl"), &[REPLY, &summary(earlier)]);
+    apply(
+        &dir,
+        &claim_file("s"),
+        &claude.hook_with(&path),
+        Mark::Prompt,
+    )
+    .expect("claimed");
+    append(&path, &[&queued(crate::awake::now_ms()), REPLY]);
+    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    assert_eq!(next_reading(&dir), holding());
+    stop_hooks_ran(&path);
+    assert_eq!(
+        next_reading(&dir),
+        holding(),
+        "a notice queued during the last reply let go once the Stop hooks had run"
+    );
+    append(&path, &[&taken(crate::awake::now_ms())]);
+    assert_eq!(
+        next_reading(&dir),
+        holding(),
+        "a notice queued during the last reply let go once it was taken off the queue"
+    );
+    append(&path, &[&notice(crate::awake::now_ms()), REPLY]);
+    assert_eq!(
+        next_reading(&dir),
+        holding(),
+        "the turn the notice began ran unheld"
+    );
+    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("its turn stops");
+    stop_hooks_ran(&path);
+    assert_eq!(
+        next_reading(&dir),
+        released(),
+        "the notice's turn held the machine after its Stop"
+    );
+
+    for (taken, how) in [(ATTACHED, "attached"), (REMOVED, "removed")] {
+        apply(
+            &dir,
+            &claim_file("s"),
+            &claude.hook_with(&path),
+            Mark::Prompt,
+        )
+        .expect("a turn");
+        append(
+            &path,
+            &[
+                &queued(crate::awake::now_ms()),
+                &calling("Bash", "toolu_c"),
+                &result("toolu_c"),
+                taken,
+                REPLY,
+            ],
+        );
+        apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("it stops");
+        stop_hooks_ran(&path);
+        assert_eq!(
+            next_reading(&dir),
+            released(),
+            "a notice the turn took in ({how}) held the machine past the Stop"
+        );
+    }
+}
+
+/// What the holder makes of a turn that wrote `during` and stopped, once
+/// its Stop hooks' record and then `after` are written.
+fn past_the_record(stem: &str, during: &[&str], after: &[&str]) -> Option<String> {
+    let dir = scratch(stem);
+    let claude = FakeClaude::start(&dir);
+    let earlier = crate::awake::now_ms() - 5_000;
+    let path = transcript(&dir.join("s.jsonl"), &[REPLY, &summary(earlier)]);
+    apply(
+        &dir,
+        &claim_file("s"),
+        &claude.hook_with(&path),
+        Mark::Prompt,
+    )
+    .expect("claimed");
+    append(&path, during);
+    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    stop_hooks_ran(&path);
+    append(&path, after);
+    next_reading(&dir)
+}
+
+/// A call's result takes nothing off the queue: a notice queued before it
+/// and attached to no request waits past the Stop's record.
+#[test]
+fn a_call_s_result_takes_nothing_queued() {
+    let at = crate::awake::now_ms();
+    assert_eq!(
+        past_the_record(
+            "queued-result",
+            &[
+                &queued(at),
+                &calling("Bash", "toolu_q"),
+                &result("toolu_q"),
+                REPLY
+            ],
+            &[],
+        ),
+        holding(),
+        "a call's result took the notice queued before it"
+    );
+}
+
+/// A notice queued early in a long last reply waits on the Stop as long as
+/// one queued at its end: the bound runs from the Stop.
+#[test]
+fn what_was_queued_long_before_the_stop_waits_on_it() {
+    let stopping = u64::try_from(crate::awake::STOPPING.as_millis()).expect("ms");
+    let long_ago = crate::awake::now_ms() - stopping - 5_000;
+    assert_eq!(
+        past_the_record("queued-early", &[&queued(long_ago), REPLY], &[]),
+        holding(),
+        "a notice queued past the bound before the Stop let go at its record"
+    );
+}
+
+/// A `dequeue` starts a turn whether or not what it takes is in sight —
+/// one of several queued, the others taken before it: the stopped claim
+/// counts from it until the turn's entry.
+#[test]
+fn a_dequeue_with_nothing_seen_queued_counts_until_its_entry() {
+    let at = crate::awake::now_ms();
+    assert_eq!(
+        past_the_record(
+            "queued-several",
+            &[&queued(at), &queued(at), &taken(at), &notice(at), REPLY],
+            &[&taken(crate::awake::now_ms())],
+        ),
+        holding(),
+        "the second of two notices let go once it was taken off the queue"
     );
 }
 
