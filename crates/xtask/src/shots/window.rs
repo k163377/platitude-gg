@@ -38,7 +38,9 @@ const PACE: Duration = Duration::from_millis(250);
 const ASKING: Duration = Duration::from_secs(30);
 
 /// Puts the board in front of the reader, in a window of its own: the
-/// board window already standing is closed first, so there is one.
+/// board window already standing is closed first, so there is one. A
+/// board opened in the default browser runs on no profile of the
+/// board's, so no later `open` finds it to close.
 pub(super) fn restart(board: &Path, page: &Path) -> Result<(), String> {
     let profile = profile(board);
     if close(board, &profile)? {
@@ -48,11 +50,7 @@ pub(super) fn restart(board: &Path, page: &Path) -> Result<(), String> {
     if opened.own_profile {
         println!("board: opened {} with {}", shown(page), opened.program);
     } else {
-        println!(
-            "board: opened {} in the default browser, which the next `open` cannot close — \
-             close it by hand before then",
-            shown(page)
-        );
+        println!("board: opened {} in the default browser", shown(page));
     }
     Ok(())
 }
