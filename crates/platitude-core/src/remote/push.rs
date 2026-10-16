@@ -248,17 +248,19 @@ pub async fn push_track(
     Ok(parse_push_track(branch, &out.stdout))
 }
 
-/// [`push_track`] for the branches here `wanted` names, in one
-/// `for-each-ref` over all of them — the counts the menu of a branch the
-/// worktree is not on reads (`session::RefsSnapshot::branch_push`). Only
-/// the ones with something to count against, in branch name order.
+/// [`push_track`] for every branch here, in one `for-each-ref` — the counts
+/// the menu of a branch the worktree is not on reads
+/// (`session::RefsSnapshot::branch_push`). Only the ones with something to
+/// count against, in branch name order; the caller keeps the branches a
+/// mark sends elsewhere (patterns would put every name on the command
+/// line).
 ///
-/// Every branch is listed and the rest dropped here: patterns would put
-/// every wanted name on the command line.
+/// The session tests mock this (`mock_push_tracks`); mry copies what a mock
+/// matches on, so the borrowed arguments are skipped.
+#[mry::mry(skip_args(GitExecutor, Path, CancellationToken))]
 pub async fn push_tracks(
     executor: &GitExecutor,
     workdir: &Path,
-    wanted: impl Fn(&str) -> bool,
     cancel: &CancellationToken,
 ) -> Result<Vec<(String, PushTrack)>, GitError> {
     let cmd = GitCommand::new().cwd(workdir).args([
@@ -269,19 +271,16 @@ pub async fn push_tracks(
         "refs/heads",
     ]);
     let out = executor.run(cmd, cancel).await?;
-    Ok(parse_push_tracks(&out.stdout, wanted))
+    Ok(parse_push_tracks(&out.stdout))
 }
 
 /// [`push_tracks`]'s lines: `<branch>\0` ahead of a [`push_track`] line.
-fn parse_push_tracks(bytes: &[u8], wanted: impl Fn(&str) -> bool) -> Vec<(String, PushTrack)> {
+fn parse_push_tracks(bytes: &[u8]) -> Vec<(String, PushTrack)> {
     let mut tracks: Vec<(String, PushTrack)> = bytes
         .split(|b| *b == b'\n')
         .filter_map(|line| {
             let cut = line.iter().position(|b| *b == 0)?;
             let branch = std::str::from_utf8(&line[..cut]).ok()?;
-            if !wanted(branch) {
-                return None;
-            }
             let track = track_of(branch, &line[cut + 1..]);
             (!track.tracking.is_empty()).then(|| (branch.to_string(), track))
         })
@@ -495,12 +494,12 @@ mod tests {
     /// git 2.55's `push_tracks` lines: each branch's name ahead of its
     /// `push_track` fields.
     #[test]
-    fn push_tracks_keep_the_wanted_branches_that_have_something_to_count_against() {
+    fn push_tracks_keep_the_branches_that_have_something_to_count_against() {
         let bytes = b"feature/x\0refs/remotes/fork/feature/x\0\0[behind 2]\n\
               lone\0refs/remotes/fork/lone\0\0[gone]\n\
               main\0refs/remotes/fork/main\0\0[ahead 1, behind 1]\n\
-              topic\0refs/remotes/fork/topic\0\0[ahead 3]\n";
-        let tracks = parse_push_tracks(bytes, |branch| branch != "topic");
+              wip\0\0\0\n";
+        let tracks = parse_push_tracks(bytes);
         assert_eq!(
             tracks,
             [
@@ -521,7 +520,7 @@ mod tests {
                     }
                 ),
             ],
-            "`lone` was never fetched, `topic` was not asked for"
+            "`lone` was never fetched, and no fetch refspec takes `wip` in"
         );
     }
 

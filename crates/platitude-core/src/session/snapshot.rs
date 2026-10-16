@@ -54,14 +54,16 @@ pub struct RefsSnapshot {
     /// The remote `checkout.defaultRemote` names — the other key marking a
     /// remote as origin ([`crate::remote::OriginMarks`]). `None` where unset.
     pub checkout_default: Option<String>,
-    /// Every branch's own push mark (`branch.<branch>.pushRemote`), in
+    /// Every branch's own push mark (`branch.<branch>.pushRemote`) but the
+    /// one HEAD is on — whose mark the status tick reads and keeps — in
     /// branch name order. A run of its own, as `tag_drifts` is: marks are
     /// rare.
     pub branch_push_remotes: Vec<crate::remote::BranchPushRemote>,
     /// The branches a mark sends to another remote than their upstream's,
     /// counted against the tracking ref of where they go
-    /// ([`crate::remote::push_tracks`]), in branch name order. Only those
-    /// with such a ref here; read only where some branch goes elsewhere.
+    /// ([`crate::remote::push_tracks`]), in branch name order — but the one
+    /// HEAD is on, counted by the status tick. Only those with such a ref
+    /// here; read only where some branch goes elsewhere.
     pub push_tracks: Vec<(String, crate::remote::PushTrack)>,
 }
 
@@ -73,17 +75,18 @@ pub struct BranchPushFacts {
     pub standing: crate::remote::PushStanding,
     /// Where the push goes, `<remote>/<branch>` as the toolbar names it.
     pub target: String,
-    /// The remote branch the counts are against — the upstream, or the
-    /// tracking ref of where a mark sends the push — and the commit it
-    /// stands on, which an overwrite is leased to. Empty / `None` where
-    /// nothing is counted against.
-    pub measured: String,
+    /// The commit the remote branch the counts are against stands on — the
+    /// upstream, or the tracking ref of where a mark sends the push —, which
+    /// an overwrite is leased to. `None` where nothing is counted against.
     pub lease: Option<Oid>,
-    pub ahead: i32,
-    pub behind: i32,
     /// The upstream the branch is configured for, here or not — where a
     /// first push's question opens (デザイン規約 §はじめてリモートへ送る).
     pub upstream: String,
+    /// Measured against another branch here (`branch.<n>.remote = .`)
+    /// that is listed, and marked to no remote: nowhere to send it, and a
+    /// first push's answer would replace that upstream with a remote one.
+    /// The row stands out and says why; every other field is its default.
+    pub upstream_here: bool,
 }
 
 impl RefsSnapshot {
@@ -233,26 +236,21 @@ impl RefsSnapshot {
     /// mark and the counts of where that mark sends it. `fallback` is the
     /// remote a branch that tracks nothing, marked nowhere, goes to.
     ///
-    /// For a branch the worktree is not on: the one it is on is read off
-    /// the status tick, which re-reads its marks every tick. A branch
-    /// measured against another branch here (`branch.<n>.remote = .`)
-    /// answers nothing to send: its first push's answer would replace that
-    /// upstream with a remote one.
+    /// For a branch the worktree is not on: the one HEAD is on answers
+    /// nothing here — its push is the toolbar's, off the status tick, and
+    /// this snapshot keeps none of its marks or counts. A branch measured
+    /// against another branch here (`branch.<n>.remote = .`) that is listed
+    /// answers only that ([`BranchPushFacts::upstream_here`]) — unless a
+    /// mark sends it to a remote, where it stands on the counts there
+    /// (`remote::marked_standing`). One whose branch here is gone asks
+    /// where it goes, as git's `[gone]` does anywhere.
     pub fn branch_push(&self, short: &str, fallback: &str) -> BranchPushFacts {
         let Some(branch) = self.local_named(short) else {
             return BranchPushFacts::default();
         };
-        // An upstream with a commit and no reading among the remote
-        // branches is a branch here (`RefJoins::upstream_commit`).
-        if branch.upstream.is_empty() && branch.upstream_oid.is_some() {
+        if branch.is_head {
             return BranchPushFacts::default();
         }
-        let tracked = !branch.upstream.is_empty();
-        let upstream = if tracked {
-            branch.upstream.as_str()
-        } else {
-            branch.upstream_gone.as_str()
-        };
         let push_remote = self
             .branch_push_remotes
             .binary_search_by(|mark| mark.branch.as_str().cmp(short))
@@ -261,38 +259,70 @@ impl RefsSnapshot {
             .push_default
             .as_ref()
             .map_or("", |marked| marked.remote.as_str());
+        let marked = if push_remote.is_empty() {
+            push_default
+        } else {
+            push_remote
+        };
+        // An upstream with a commit and no reading among the remote
+        // branches is a branch here (`RefJoins::upstream_commit`): only a
+        // mark sends such a branch to a remote, under its own name, and the
+        // push leaves the upstream be (`remote::plan_push`).
+        let upstream_here = branch.upstream.is_empty() && branch.upstream_oid.is_some();
+        if upstream_here && marked.is_empty() {
+            return BranchPushFacts {
+                upstream_here: true,
+                ..BranchPushFacts::default()
+            };
+        }
+        let tracked = !branch.upstream.is_empty();
+        let upstream = if tracked {
+            branch.upstream.as_str()
+        } else {
+            branch.upstream_gone.as_str()
+        };
         let remotes = || self.remote_names.iter().map(String::as_str);
+        // Only counts against where the marks send the branch now: a read
+        // that could not tell repeats counts taken before a mark moved.
         let track = self
             .push_tracks
             .binary_search_by(|(name, _)| name.as_str().cmp(short))
-            .map(|at| self.push_tracks[at].1.clone())
+            .ok()
+            .map(|at| &self.push_tracks[at].1)
+            .filter(|track| {
+                crate::refs::split_remote_ref(&track.tracking, remotes())
+                    .is_some_and(|(on, _)| on == marked)
+            })
+            .cloned()
             .unwrap_or_default();
         let counted = |count: u32| i32::try_from(count).unwrap_or(i32::MAX);
-        let elsewhere =
-            crate::remote::pushes_elsewhere(upstream, push_remote, push_default, remotes());
-        let (ahead, behind, measured) = if elsewhere {
-            (track.ahead, track.behind, track.tracking.as_str())
+        let elsewhere = upstream_here
+            || crate::remote::pushes_elsewhere(upstream, push_remote, push_default, remotes());
+        let measured = if elsewhere {
+            track.tracking.as_str()
+        } else if tracked {
+            upstream
         } else {
-            (
-                counted(branch.ahead),
-                counted(branch.behind),
-                if tracked { upstream } else { "" },
-            )
+            ""
         };
         BranchPushFacts {
-            standing: crate::remote::push_standing(
-                false,
-                false,
-                short,
-                upstream,
-                tracked,
-                counted(branch.ahead),
-                counted(branch.behind),
-                push_remote,
-                push_default,
-                remotes(),
-                &track,
-            ),
+            standing: if upstream_here {
+                crate::remote::marked_standing(&track)
+            } else {
+                crate::remote::push_standing(
+                    false,
+                    false,
+                    short,
+                    upstream,
+                    tracked,
+                    counted(branch.ahead),
+                    counted(branch.behind),
+                    push_remote,
+                    push_default,
+                    remotes(),
+                    &track,
+                )
+            },
             target: crate::remote::push_target(
                 short,
                 upstream,
@@ -301,11 +331,9 @@ impl RefsSnapshot {
                 fallback,
                 remotes(),
             ),
-            measured: measured.to_string(),
             lease: self.remote_named(measured).map(|remote| remote.oid),
-            ahead,
-            behind,
             upstream: upstream.to_string(),
+            upstream_here: false,
         }
     }
 

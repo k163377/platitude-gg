@@ -90,11 +90,9 @@ fn a_tracked_branch_stands_against_its_upstream_as_the_toolbar_would() {
         BranchPushFacts {
             standing: PushStanding::Ready,
             target: "origin/ahead".to_string(),
-            measured: "origin/ahead".to_string(),
             lease: Some(oid(b'a')),
-            ahead: 2,
-            behind: 0,
             upstream: "origin/ahead".to_string(),
+            upstream_here: false,
         }
     );
     assert_eq!(
@@ -142,11 +140,66 @@ fn a_branch_with_nothing_to_count_against_asks_where_it_goes() {
     );
 }
 
-/// `remote = .`: the upstream is a branch here, which a first push's
-/// answer would replace with a remote one.
+/// The branch HEAD is on is the toolbar's to push, off the status tick: the
+/// snapshot keeps none of its marks or counts, so it answers nothing.
 #[test]
-fn a_branch_measured_against_one_here_has_nothing_to_send() {
+fn the_branch_head_is_on_answers_nothing_here() {
     let at = snapshot(
+        vec![BranchItem {
+            is_head: true,
+            ..tracking("main", "origin/main", 2, 0)
+        }],
+        &[("origin/main", b'a')],
+    );
+    assert_eq!(at.branch_push("main", "origin"), BranchPushFacts::default());
+}
+
+/// `remote = .`: an upstream that is a branch here, listed, is all the row
+/// answers — a first push's answer would replace it with a remote one.
+/// Gone, it reads as git's `[gone]` anywhere: the row asks where the
+/// branch goes.
+#[test]
+fn a_branch_measured_against_one_here_sends_only_once_that_one_is_gone() {
+    let at = snapshot(
+        vec![
+            branch("main", b'1'),
+            BranchItem {
+                upstream_oid: Some(oid(b'1')),
+                ahead: 1,
+                ..branch("topic", b'2')
+            },
+            BranchItem {
+                upstream_gone: "deleted".into(),
+                ..branch("orphan", b'3')
+            },
+        ],
+        &[],
+    );
+    assert_eq!(
+        at.branch_push("topic", "origin"),
+        BranchPushFacts {
+            upstream_here: true,
+            ..BranchPushFacts::default()
+        }
+    );
+    let orphan = at.branch_push("orphan", "origin");
+    assert_eq!(
+        (
+            orphan.standing,
+            orphan.upstream.as_str(),
+            orphan.upstream_here
+        ),
+        (PushStanding::Publish, "deleted", false),
+        "the question opens on the gone name, which names no remote"
+    );
+}
+
+/// A mark sends a branch measured against one here to a remote all the
+/// same — the push names the branch there and leaves the upstream be
+/// (`remote::plan_push`) —, so its row is the toolbar's form, not out.
+#[test]
+fn a_mark_sends_a_branch_measured_against_one_here_where_it_says() {
+    let mut at = snapshot(
         vec![
             branch("main", b'1'),
             BranchItem {
@@ -157,9 +210,28 @@ fn a_branch_measured_against_one_here_has_nothing_to_send() {
         ],
         &[],
     );
+    at.branch_push_remotes = vec![marked("topic", "origin")];
+    let own = at.branch_push("topic", "origin");
     assert_eq!(
-        at.branch_push("topic", "origin").standing,
-        PushStanding::Closed
+        (own.upstream_here, own.standing, own.target.as_str()),
+        (false, PushStanding::Elsewhere, "origin/topic"),
+        "the branch's own mark"
+    );
+
+    at.branch_push_remotes.clear();
+    at.push_default = Some(PushDefault {
+        remote: "fork".to_string(),
+        local: true,
+    });
+    let repository = at.branch_push("topic", "origin");
+    assert_eq!(
+        (
+            repository.upstream_here,
+            repository.standing,
+            repository.target.as_str()
+        ),
+        (false, PushStanding::Elsewhere, "fork/topic"),
+        "the repository's mark"
     );
 }
 
@@ -198,23 +270,17 @@ fn a_mark_sends_the_branch_elsewhere_and_its_counts_go_with_it() {
         BranchPushFacts {
             standing: PushStanding::Diverged,
             target: "fork/counted".to_string(),
-            measured: "fork/counted".to_string(),
             lease: Some(oid(b'e')),
-            ahead: 1,
-            behind: 2,
             upstream: "origin/counted".to_string(),
+            upstream_here: false,
         },
-        "ready against the upstream, diverged where the push goes"
+        "ready against the upstream, diverged where the push goes, leased to the tip there"
     );
     let unfetched = at.branch_push("unfetched", "origin");
     assert_eq!(unfetched.standing, PushStanding::Elsewhere);
     assert_eq!(
-        (
-            unfetched.target.as_str(),
-            unfetched.measured.as_str(),
-            unfetched.lease
-        ),
-        ("fork/unfetched", "", None)
+        (unfetched.target.as_str(), unfetched.lease),
+        ("fork/unfetched", None)
     );
     assert_eq!(
         at.branch_push("home", "origin").standing,
@@ -231,5 +297,36 @@ fn a_mark_sends_the_branch_elsewhere_and_its_counts_go_with_it() {
         at.branch_push("home", "origin").standing,
         PushStanding::Elsewhere,
         "the repository's mark sends every branch there"
+    );
+}
+
+/// Counts read before a mark moved — repeated by a read that could not
+/// tell — are about where the branch no longer goes: nothing speaks.
+#[test]
+fn counts_against_where_a_mark_used_to_send_the_branch_speak_for_nothing() {
+    let mut at = snapshot(
+        vec![tracking("counted", "origin/counted", 1, 0)],
+        &[("origin/counted", b'a'), ("fork/counted", b'e')],
+    );
+    at.remote_names.push("mirror".to_string());
+    at.branch_push_remotes = vec![marked("counted", "mirror")];
+    at.push_tracks = vec![(
+        "counted".to_string(),
+        PushTrack {
+            tracking: "fork/counted".to_string(),
+            ahead: 1,
+            behind: 2,
+        },
+    )];
+    assert_eq!(
+        at.branch_push("counted", "origin"),
+        BranchPushFacts {
+            standing: PushStanding::Elsewhere,
+            target: "mirror/counted".to_string(),
+            lease: None,
+            upstream: "origin/counted".to_string(),
+            upstream_here: false,
+        },
+        "not an overwrite of mirror leased to fork's tip"
     );
 }

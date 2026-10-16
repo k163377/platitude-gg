@@ -592,20 +592,14 @@ async fn a_branch_aside_is_counted_and_sent_where_its_mark_says() {
         (
             facts.standing,
             facts.target.as_str(),
-            facts.measured.as_str(),
             facts.lease.map(|oid| oid.to_hex()),
-            facts.ahead,
-            facts.behind,
         ),
         (
             remote::PushStanding::Diverged,
             "fork/main",
-            "fork/main",
             Some(fork_tip.trim().to_string()),
-            1,
-            1,
         ),
-        "only ahead of the upstream, diverged from where the push goes"
+        "only ahead of the upstream, diverged from where the push goes, leased to its tip there"
     );
 
     let plain = session
@@ -635,6 +629,137 @@ async fn a_branch_aside_is_counted_and_sent_where_its_mark_says() {
         repo.git(&["symbolic-ref", "--short", "HEAD"]),
         "aside",
         "the worktree stays where it was"
+    );
+    session.close_and_wait().await;
+}
+
+/// A branch measured against one here (`remote = .`) that its own mark
+/// sends to a remote: counted against the tracking ref there, and sent
+/// there under its own name, its upstream left as it was.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_branch_measured_against_one_here_goes_where_its_mark_says() {
+    let (_origin, fork, mut repo) = origin_fork_and_clone();
+    repo.git(&["switch", "--track", "-c", "stacked", "main"]);
+    repo.git(&["push", "fork", "stacked"]);
+    repo.commit_file("b.txt", "two\n", "stacked work");
+    repo.git(&["switch", "main"]);
+    repo.git(&["config", "branch.stacked.pushRemote", "fork"]);
+    let (sink, session) = opened(&repo).await;
+
+    let facts = sink
+        .wait_for("stacked's counts where its mark sends it", |evs| {
+            evs.iter().rev().find_map(|e| match e {
+                SessionEvent::RefsLoaded { snapshot, .. } => {
+                    Some(snapshot.branch_push("stacked", "origin"))
+                }
+                _ => None,
+            })
+        })
+        .await;
+    let fork_tip = repo.git(&["rev-parse", "refs/remotes/fork/stacked"]);
+    assert_eq!(
+        (
+            facts.upstream_here,
+            facts.standing,
+            facts.target.as_str(),
+            facts.lease.map(|oid| oid.to_hex()),
+        ),
+        (
+            false,
+            remote::PushStanding::Ready,
+            "fork/stacked",
+            Some(fork_tip.trim().to_string()),
+        ),
+        "ahead of where the push goes, leased to its tip there"
+    );
+
+    let plain = session
+        .push_named("stacked".into(), "origin".into(), PushForce::None)
+        .expect("the write is accepted");
+    assert_eq!(write_answer(&sink, plain).await, None);
+    let fork_path = fork.path.clone();
+    assert_eq!(
+        repo.git_in(&fork_path, &["rev-parse", "stacked"]),
+        repo.git(&["rev-parse", "stacked"]),
+        "the fork now holds stacked"
+    );
+    assert_eq!(
+        repo.git(&["config", "branch.stacked.remote"]).trim(),
+        ".",
+        "the upstream is left as it was"
+    );
+    session.close_and_wait().await;
+}
+
+/// A read of those counts that cannot tell repeats the last answer, as the
+/// status tick's does: the diverged row stays the held overwrite instead of
+/// falling to a plain push git would turn down. The read answers once and
+/// then fails (`remote::mock_push_tracks` — on this thread's runtime, the
+/// one the session's reads run on: the mock is the thread's).
+#[tokio::test]
+#[mry::lock(remote::push_tracks)]
+async fn a_count_read_that_cannot_tell_repeats_the_last_answer() {
+    let reads = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = std::sync::Arc::clone(&reads);
+    remote::mock_push_tracks().returns_with(move || {
+        if counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+            Ok(vec![(
+                "main".to_string(),
+                remote::PushTrack {
+                    tracking: "fork/main".to_string(),
+                    ahead: 1,
+                    behind: 1,
+                },
+            )])
+        } else {
+            Err(GitError::UnexpectedOutput {
+                command: "git for-each-ref".to_string(),
+                message: "made to fail".to_string(),
+            })
+        }
+    });
+    let (_origin, _fork, mut repo) = fork_diverged();
+    repo.git(&["config", "--unset", "remote.pushDefault"]);
+    repo.git(&["config", "branch.main.pushRemote", "fork"]);
+    repo.git(&["switch", "-c", "aside"]);
+    let (sink, session) = opened(&repo).await;
+    // The standing of `main` in the last snapshot that lists `branch`.
+    let main_beside = |branch: &'static str| {
+        sink.wait_for("a snapshot listing the branch", move |evs| {
+            evs.iter().rev().find_map(|e| match e {
+                SessionEvent::RefsLoaded { snapshot, .. }
+                    if snapshot.local_named(branch).is_some() =>
+                {
+                    Some(snapshot.branch_push("main", "origin"))
+                }
+                _ => None,
+            })
+        })
+    };
+    assert_eq!(
+        main_beside("aside").await.standing,
+        remote::PushStanding::Diverged
+    );
+
+    // A ref moved: the snapshot is built again, and this read fails.
+    repo.git(&["branch", "later"]);
+    let polled = bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
+    assert!(
+        matches!(polled, RefreshOutcome::Changed | RefreshOutcome::Unchanged),
+        "the poll ran: {polled:?}"
+    );
+    let facts = main_beside("later").await;
+    let fork_tip = repo.git(&["rev-parse", "refs/remotes/fork/main"]);
+    assert_eq!(
+        (facts.standing, facts.lease.map(|oid| oid.to_hex())),
+        (
+            remote::PushStanding::Diverged,
+            Some(fork_tip.trim().to_string())
+        )
+    );
+    assert!(
+        reads.load(std::sync::atomic::Ordering::SeqCst) >= 2,
+        "the second snapshot asked again and was not told"
     );
     session.close_and_wait().await;
 }

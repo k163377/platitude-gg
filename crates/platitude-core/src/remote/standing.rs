@@ -172,16 +172,26 @@ pub fn push_standing<'a>(
     if upstream.is_empty() || !upstream_tracked {
         return PushStanding::Publish;
     }
-    let (ahead, behind) = if pushes_elsewhere(upstream, push_remote, push_default, remotes) {
-        // git refuses the push by the destination's ref (`[rejected]
-        // (non-fast-forward)`), so only that ref's counts say how it goes.
-        if push_track.tracking.is_empty() {
-            return PushStanding::Elsewhere;
-        }
-        (push_track.ahead, push_track.behind)
-    } else {
-        (ahead, behind)
-    };
+    if pushes_elsewhere(upstream, push_remote, push_default, remotes) {
+        return marked_standing(push_track);
+    }
+    counted(ahead, behind)
+}
+
+/// The standing where a mark alone says where the push goes — to another
+/// remote than the upstream's, or at all, the upstream being a branch
+/// here. git refuses the push by the destination's ref (`[rejected]
+/// (non-fast-forward)`), so only that ref's counts say how it goes, and
+/// before that ref is fetched none do.
+pub fn marked_standing(push_track: &PushTrack) -> PushStanding {
+    if push_track.tracking.is_empty() {
+        return PushStanding::Elsewhere;
+    }
+    counted(push_track.ahead, push_track.behind)
+}
+
+/// The table of counts.
+fn counted(ahead: i32, behind: i32) -> PushStanding {
     if behind > 0 {
         return if ahead > 0 {
             PushStanding::Diverged

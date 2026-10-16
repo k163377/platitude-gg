@@ -277,12 +277,26 @@ impl Footprint for crate::session::RefsSnapshot {
             + self.remote_urls.heap_bytes()
             + self.push_default.heap_bytes()
             + self.checkout_default.heap_bytes()
+            + self.branch_push_remotes.heap_bytes()
+            + self.push_tracks.heap_bytes()
     }
 }
 
 impl Footprint for crate::remote::PushDefault {
     fn heap_bytes(&self) -> usize {
         self.remote.heap_bytes()
+    }
+}
+
+impl Footprint for crate::remote::BranchPushRemote {
+    fn heap_bytes(&self) -> usize {
+        self.branch.heap_bytes() + self.remote.heap_bytes()
+    }
+}
+
+impl Footprint for crate::remote::PushTrack {
+    fn heap_bytes(&self) -> usize {
+        self.tracking.heap_bytes()
     }
 }
 
