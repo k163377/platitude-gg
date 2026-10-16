@@ -44,9 +44,9 @@ cargo xtask shots <command>
   crop <png> --at <x>:<y>:<width>:<height> [--scale <n>] [--out <png>]
       Cut a region out of a picture and magnify it a whole number of
       times without smoothing (three, unless --scale says otherwise).
-      The board magnifies the same way in a window, which is how a
-      person reads a shot; this is for reading the file itself, where
-      there is no window to zoom. Whole ratios and nearest neighbour
+      The board magnifies the same way, which is how a person reads a
+      shot; this is for reading the file itself, where there is nothing
+      to zoom with. Whole ratios and nearest neighbour
       both matter: what a crop is read for is a pixel, and interpolating
       invents the edge the question was about. The crop lands beside the
       picture it came from, named for its region, unless --out says
@@ -65,13 +65,10 @@ cargo xtask shots <command>
       Most runs need none of this: a retake replaces the picture it was
       taken to replace, and a seat's runs go when its work does — the
       branch landing on main, or the seat being handed to a fresh
-      stretch of work. The board outlives a session
+      stretch of work. A session ending removes none of the runs
       (shots/sweep.rs).
 
-  open
-      Put the board in a window of its own, closing the one standing.
-      Only when the user asks for it (hook/board.rs).
-
+  open        Show the board.
   list        One line per run: when, seat, count, label.
   path        Where the page is.
 ";

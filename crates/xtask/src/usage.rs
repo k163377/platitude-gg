@@ -827,9 +827,8 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       back. Ends with how to read the columns.
 
   shots <add|crop|prune|open|list|path>
-      The shot board: pictures land on a page that opens in a window of
-      its own at 1:1, magnifies to exact whole ratios without smoothing,
-      and is still there after it is closed. A chat pane fits a picture to
+      The shot board: pictures land on a page that magnifies them to
+      exact whole ratios without smoothing. A chat pane fits a picture to
       its width and cannot zoom it, so a 1440x900 window is unreadable
       there and shooting it larger changes nothing. `verify-ui` puts its
       own pair on the board as it goes, so the usual reason to reach for
@@ -840,13 +839,10 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       also why `prune` reaches this seat's runs and no others unless it
       is told to.
 
-      `open` puts the board in a window, only when the user asks for it
-      (hook/board.rs).
-
       `crop <png> --at <x>:<y>:<width>:<height> [--scale <n>]` cuts a
       region out and magnifies it a whole number of times (three by
       default) without smoothing, beside the picture it came from. The
-      window does this for a person; this is for reading the file
+      board does this for a person; this is for reading the file
       itself, where there is nothing to zoom with. Both halves matter:
       a fractional ratio has to interpolate, and what a crop is read for
       is a pixel.
@@ -860,9 +856,9 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       rules that do it are in shots/sweep.rs: a picture retaken replaces
       the one before it, and a seat's runs go when its work does (its
       branch lands, or the seat is handed to fresh work). A session
-      ending leaves the board standing. `prune` is what
-      reaches the rest — an approach abandoned under a name nobody
-      retakes (--label), or a seat whose session is long gone.
+      ending removes none of the runs. `prune` is what reaches the rest
+      — an approach abandoned under a name nobody retakes (--label), or
+      a seat whose session is long gone.
 
   awake [log on|off]
       Which Claude and Codex sessions keep this machine from idle-sleeping (Windows
