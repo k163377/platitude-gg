@@ -36,6 +36,9 @@ Rectangle {
     readonly property bool showsRows: header.expanded && !header.empty
     /// Whether the band answers a click — for the pointer and the smoke hook alike (`tap`).
     readonly property bool takesClick: header.foldable && !header.empty
+    /// How far the caption moves up to stand its capitals on the band's middle (`WordFace.capitalDrop`); its marks
+    /// follow it.
+    readonly property real capsLift: -WordFace.capitalDrop(captionLabel)
 
     /// A click landed on the band; PGG_AUTO_ACT=nav-close comes in here too, so it meets the same refusal.
     function tap() {
@@ -71,18 +74,22 @@ Rectangle {
         anchors.leftMargin: Theme.spaceXs
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
-        // An `iconMd` chevron in an `iconSm` seat: the ink grows a step over a row's fold arrow (`NameCell`), the
-        // caption does not move, and the strokes still fit the seat (デザイン規約 §左メニューの所作「畳みの山形は 2 階級ある」).
+        // The heading's marks, a step over its capitals and on their middle (デザイン規約 §アイコンの席 の文頭記号の
+        // 見出し): each box is the caption's line. The chevron in an `iconSm` seat grows a step over a row's fold arrow
+        // (`NameCell`) and the caption does not move (デザイン規約 §左メニューの所作「畳みの山形は 2 階級ある」).
         Item {
             visible: header.foldable
             Layout.preferredWidth: Theme.iconSm
-            Layout.preferredHeight: Theme.iconSm
+            Layout.preferredHeight: captionLabel.implicitHeight
             NavIcon {
-                anchors.centerIn: parent
+                anchors.horizontalCenter: parent.horizontalCenter
                 width: Theme.iconMd
-                height: Theme.iconMd
+                height: parent.height
                 kind: "chevron"
-                rotation: header.showsRows ? 90 : 0
+                set: "head"
+                size: captionLabel.font.pixelSize
+                wordBase: captionLabel.baselineOffset + header.capsLift
+                turn: header.showsRows ? 90 : 0
                 tint: header.empty ? Theme.textMuted : Theme.textSecondary
             }
         }
@@ -90,10 +97,19 @@ Rectangle {
             kind: header.iconKind
             // Unavailable greys the mark with the words (規約 §無効); `*Dim` would say something about the kind.
             tint: header.empty ? Theme.textMuted : header.iconTint
+            set: "head"
+            size: captionLabel.font.pixelSize
+            wordBase: captionLabel.baselineOffset + header.capsLift
+            Layout.preferredWidth: Theme.iconMd
+            Layout.preferredHeight: captionLabel.implicitHeight
             width: Theme.iconMd
-            height: Theme.iconMd
+            height: captionLabel.implicitHeight
         }
+        // An all-capitals heading is centred on its capitals, not on its line box: the box keeps the descenders'
+        // room under the baseline, which a caption in capitals never uses, and the words would sit low in the band.
         Label {
+            id: captionLabel
+            transform: Translate { y: header.capsLift }
             text: header.caption
             color: header.empty ? Theme.textMuted : Theme.textSecondary
             font.pixelSize: Theme.fontMd
@@ -102,6 +118,7 @@ Rectangle {
         // At the caption's own step, in its own label: what says it is a count is the weight and the colour
         // (デザイン規約 §タイポグラフィ).
         Label {
+            transform: Translate { y: header.capsLift }
             text: "(" + header.count + ")"
             color: Theme.textMuted
             font.pixelSize: Theme.fontMd
@@ -115,7 +132,9 @@ Rectangle {
             visible: header.showTagToggle && !header.empty
             checkable: true
             checked: header.tagsShown
-            padding: 0
+            // The band end's one seat: the mark a step down in the `iconLg` seat, as the `+` beside it
+            // (デザイン規約 §アイコンの席「④ の席」).
+            padding: (Theme.iconLg - Theme.iconMd) / 2
             implicitWidth: Theme.iconLg
             implicitHeight: Theme.iconLg
             contentItem: NavIcon {

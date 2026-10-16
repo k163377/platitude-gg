@@ -4,7 +4,7 @@ import platitude.ui
 // The mark every confirmed control wears (デザイン規約 §回数押し), on NavIcon's 16px grid: a disc split into one sector
 // per press by gaps of one width from the centre out, the sectors still to press at `dimFade`. Pressing sweeps the
 // disc in clockwise from 12 o'clock, across the gaps it reaches — the last press makes it whole.
-// Its own component because it repaints every frame of a step, where NavIcon repaints only on a kind or tint change.
+// Its own component because it repaints every frame of a step, where NavIcon repaints only when what it draws changes.
 InkCanvas {
     id: holdIcon
 
@@ -28,8 +28,16 @@ InkCanvas {
                                : Qt.colorEqual(holdIcon.hue, Theme.accent) ? Theme.accentDim
                                : Theme.textMuted
 
-    width: Theme.iconSm
-    height: Theme.iconSm
+    /// The pixel size of the words it heads; zero for none. Set, the disc is as tall as their capitals
+    /// (デザイン規約 §アイコンの席「顔と回数押しの印」— the head of a row, or a letter of a button's phrase) — the box
+    /// round it a 16-grid whose disc spans 12.5 — and a caller stands its middle on theirs (`WordFace.capitalDrop`).
+    property real size: 0
+
+    /// The disc's width: 12.5 of the grid's 16, the rest the box's own air either side.
+    readonly property real inkWidth: holdIcon.width * 12.5 / 16
+
+    width: holdIcon.size > 0 ? Math.round(WordFace.capital * holdIcon.size * 16 / 12.5) : Theme.iconSm
+    height: holdIcon.width
     onProgressChanged: requestPaint()
     onPressesChanged: requestPaint()
     onInkChanged: requestPaint()
@@ -69,7 +77,7 @@ InkCanvas {
     onPaint: {
         const ctx = getContext("2d")
         const s = width / 16
-        // Out to the outer edge of NavIcon's round marks (`no`, `clock`: a 5.5 ring in `iconStroke`), so it stands as
+        // Out to the outer edge of NavIcon's round marks (`no`: a 5.5 ring in `iconStroke`), so it stands as
         // large as they do.
         const r = (5.5 + Metrics.iconStroke / 2) * s
         // Half the gap: one pixel of the 16 grid either side of the radius.

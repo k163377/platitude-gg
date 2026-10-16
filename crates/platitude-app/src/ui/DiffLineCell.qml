@@ -129,16 +129,19 @@ Item {
     Loader {
         id: noEolMark
         active: cell.noNewline
-        // Seated by its ink, not its square (デザイン規約 §余白).
-        x: noEolMark.item
-           ? codeLine.x + codeLine.implicitWidth + Theme.spaceXs - (noEolMark.item.width - noEolMark.item.inkWidth) / 2
-           : 0
-        anchors.verticalCenter: parent.verticalCenter
+        // Its cell straight after the code, its box the code's line: the sign's own room is the gap.
+        x: codeLine.x + codeLine.implicitWidth
+        y: codeLine.y
+        // A sign after the line's code (デザイン規約 §アイコンの席 の修飾): the capitals' scale, on the face's own `+`'s
+        // middle, in its cell.
         sourceComponent: NavIcon {
+            id: noEolSign
             kind: "no-entry"
-            width: Theme.iconSm
-            height: Theme.iconSm
-            stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
+            set: "sign"
+            size: codeLine.font.pixelSize
+            wordBase: codeLine.baselineOffset
+            width: noEolSign.wordCell
+            height: codeLine.height
             tint: Theme.danger
             /// On its own line, never over the lines either side; rightward, past the line's end and off its code
             /// (`SharedToolTip.tipRowSide`).

@@ -90,12 +90,15 @@ Item {
         }
     }
 
-    // At the row's own left edge, overhanging the seat the words leave for it, as a menu row's mark (`AppMenuItem`).
-    // Centred on the first line's band.
+    // In the seat the words leave for it at the row's left edge, centred there as a menu row's mark is
+    // (`AppMenuItem`). The head of the row's words: as tall as the sentence's capitals and on their middle, its
+    // first line's (デザイン規約 §アイコンの席 の文頭記号).
     HoldIcon {
         id: holdMark
-        anchors.left: parent.left
-        y: (Theme.rowHeight - holdMark.height) / 2 + Metrics.opticalDrop
+        x: Math.round((opRow.holdIndent - holdMark.width) / 2)
+        y: Math.round(opWords.y + rowLabel.y + rowLabel.baselineOffset
+                      - WordFace.capitalMiddle(holdMark.size) - holdMark.height / 2)
+        size: rowLabel.font.pixelSize
         progress: opRow.holdProgress
         presses: opRow.armedPresses
         tint: opRow.holdInk
@@ -104,17 +107,17 @@ Item {
     }
     // The ring the row's work turns in the mark's seat once the floor has passed (デザイン規約 §回数押し).
     SpinnerIcon {
-        x: holdMark.x
-        y: holdMark.y
-        width: Theme.iconSm
-        height: Theme.iconSm
+        x: holdMark.x + Math.round((holdMark.width - width) / 2)
+        y: holdMark.y + Math.round((holdMark.height - height) / 2)
+        wordSize: holdMark.size
         tint: opRow.wordColor
         spinning: holdDrive.loading
     }
 
     // `AppMenuItem`'s padding, so the card's rows and a menu's read alike. Hung from the top with the first line
-    // centred in a menu row's band, so a one-line row stands where it always did.
+    // centred in a menu row's band, so a one-line row stands where a menu row's words do.
     RowLayout {
+        id: opWords
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
@@ -123,6 +126,7 @@ Item {
         anchors.topMargin: (Theme.rowHeight - opRow.firstBand) / 2
         spacing: Theme.spaceSm
         Item {
+            id: codeSeat
             Layout.alignment: Qt.AlignTop
             Layout.topMargin: (opRow.firstBand - codeLabel.implicitHeight) / 2
             implicitWidth: Math.max(opRow.codeColW, codeLabel.implicitWidth)

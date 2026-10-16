@@ -443,11 +443,11 @@ Item {
         CardText {
             id: tipWords
             text: shared.sharedTip.text
-            /// How many spaces the mark's ink takes. The sentence's own space before the word is the gap; these are
-            /// for the ink alone.
+            /// How many spaces the mark takes: its cell, a sign on its word
+            /// (デザイン規約 §アイコンの席 の修飾). The sentence's own space before the word stays the gap.
             readonly property int markRoom:
                 shared.tipMarkWord === "" || spaceRuler.advanceWidth <= 0
-                ? 0 : Math.ceil(tipMark.inkWidth / spaceRuler.advanceWidth)
+                ? 0 : Math.ceil(tipMark.width / spaceRuler.advanceWidth)
             /// Where the name stands: a tip names it last, after its conclusion (`Words.markSeatIn`).
             readonly property int markAt: Words.markSeatIn(shared.sharedTip.text, shared.tipMarkWord, true)
             /// Where that gap came out (empty when none). One binding over its inputs, since `charRect` is a call
@@ -477,25 +477,23 @@ Item {
                 font.pixelSize: tipWords.pixelSize
                 text: " "
             }
-            /// Set against the word, so mark and name read as one (規約 §ref の種別「名前の印」): the ink ends where
-            /// the word begins.
+            /// Against the word, so mark and name read as one (規約 §ref の種別「名前の印」): the box ends where the word
+            /// begins.
+            // A sign on the name (デザイン規約 §アイコンの席 の修飾), set against the word's baseline
+            // (`CardText.baselineAt`), a step of the box under it for a stem that runs past it.
             NavIcon {
                 id: tipMark
                 visible: tipWords.markSeat.width > 0 || tipWords.markSeat.height > 0
                 kind: shared.tipMarkKind
+                set: "sign"
+                size: tipWords.pixelSize
                 tint: Theme.textSecondary
-                width: Theme.iconSm
-                height: Theme.iconSm
-                x: tipWords.markSeat.x - (Theme.iconSm + tipMark.inkWidth) / 2
-                // The line's middle; the house goes down onto the line's baseline (`NavIcon.standOn`).
-                y: tipWords.markSeat.y + (tipWords.markSeat.height - Theme.iconSm) / 2
-                   + tipMark.standOn(tipFace.ascent, tipWords.markSeat.height)
-            }
-            /// The field's face, whose ascent is where a line's baseline stands below its top.
-            FontMetrics {
-                id: tipFace
-                font.family: Theme.uiFamily
-                font.pixelSize: tipWords.pixelSize
+                // A step of the box under the baseline, for a stem that runs past it.
+                wordBase: Math.ceil(tipMark.size)
+                width: tipMark.wordCell
+                height: tipMark.wordBase + Theme.spaceXs
+                x: Math.round(tipWords.markSeat.x - tipMark.width)
+                y: Math.round(tipWords.baselineAt(tipWords.markSeat)) - tipMark.wordBase
             }
         }
     }

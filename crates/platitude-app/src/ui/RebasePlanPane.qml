@@ -181,10 +181,16 @@ Rectangle {
                         Layout.preferredWidth: Theme.iconMd
                         Layout.preferredHeight: Theme.iconMd
                         Layout.alignment: Qt.AlignVCenter
+                        // A picture heading the subject, on its capitals' middle (デザイン規約 §アイコンの席).
+                        transform: Translate {
+                            y: WordFace.capitalDropOf(ontoSubjectCut.baselineOffset, ontoSubjectCut.pixelSize,
+                                                      ontoSubjectCut.height)
+                        }
                         code: planPane.planModel.ontoAvatar
                         imageUrl: planPane.planModel.ontoAvatarUrl
                     }
                     CutName {
+                        id: ontoSubjectCut
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
                         cutAt: "end"

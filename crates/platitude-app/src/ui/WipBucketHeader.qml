@@ -23,6 +23,9 @@ Rectangle {
     /// An external merge tool holds the write queue until it is closed.
     readonly property bool waitingForTool: bucketHeader.section === "conflicts"
         && bucketHeader.repoTab.busyOp === "mergetool"
+    /// How far the caption moves up to stand its capitals on the band's middle (`WordFace.capitalDrop`; デザイン規約
+    /// §アイコンの席「大文字だけの見出しの語」); its count goes with it.
+    readonly property real capsLift: -WordFace.capitalDrop(bucketCaption)
 
     /// Automation: presses the whole-bucket button. Answers whether it went — a disabled one asks for no write, and a
     /// run counting it as a press would wait for one.
@@ -41,6 +44,8 @@ Rectangle {
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         Label {
+            id: bucketCaption
+            transform: Translate { y: bucketHeader.capsLift }
             text: bucketHeader.section === "staged"
                   ? qsTr("STAGED FILES")
                   : bucketHeader.section === "unstaged"
@@ -54,6 +59,7 @@ Rectangle {
         // none — its rows are the number.
         Label {
             visible: bucketHeader.section !== "conflicts"
+            transform: Translate { y: bucketHeader.capsLift }
             text: "(" + bucketHeader.count + ")"
             font.pixelSize: Theme.fontMd
             color: Theme.textMuted
@@ -61,15 +67,20 @@ Rectangle {
         Item { Layout.fillWidth: true }
         // The tool's wait, in the whole-bucket button's seat (規約 §conflict を外部ツールへ渡す).
         Label {
+            id: waitWord
             visible: bucketHeader.waitingForTool
             text: qsTr("Waiting for %1").arg(bucketHeader.worktree.mergeTool)
             font.pixelSize: Theme.fontMd
             color: Theme.textSecondary
         }
+        // A sign after the words, turning about its middle on the face's own `+`'s (デザイン規約 §アイコンの席 の修飾).
         SpinnerIcon {
+            id: toolWait
+            transform: Translate { y: WordFace.signDrop(waitWord) }
             spinning: bucketHeader.waitingForTool
-            Layout.preferredWidth: Theme.iconSm
-            Layout.preferredHeight: Theme.iconSm
+            wordSize: waitWord.font.pixelSize
+            Layout.preferredWidth: toolWait.width
+            Layout.preferredHeight: toolWait.height
         }
         HoverToolButton {
             id: moveAllButton

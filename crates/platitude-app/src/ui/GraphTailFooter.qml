@@ -136,13 +136,15 @@ Item {
         color: tailMouse.containsMouse && tail.canLoadMore ? Theme.textSecondary : Theme.borderStrong
     }
     // The wait ring where the words end (デザイン規約 §進行中・回数押しの定数), placed off their ink — a reserved seat
-    // would push the words out of the subject column.
+    // would push the words out of the subject column. A sign after the words: its middle on the face's own `+`'s, on
+    // their first line (デザイン規約 §アイコンの席 の修飾).
     SpinnerIcon {
         id: tailWait
-        x: tailMessage.x + tailMessage.leftPadding + tailMessage.contentWidth + Theme.spaceSm
-        y: (tail.height - height) / 2
-        width: Theme.iconSm
-        height: Theme.iconSm
+        // A word's step after the words, as every ring after words (デザイン規約 §アイコンの席 の修飾).
+        x: tailMessage.x + tailMessage.leftPadding + tailMessage.contentWidth + Theme.spaceXs
+        y: Math.round(tailMessage.y + tailMessage.baselineOffset - WordFace.signMiddle(tailMessage.font.pixelSize)
+                      - tailWait.height / 2)
+        wordSize: tailMessage.font.pixelSize
         spinning: tail.graphModel.growing
     }
     // Last, over everything here; in a wide graph the lane strip over this takes its own presses (`GraphLanePan`).

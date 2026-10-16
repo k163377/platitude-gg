@@ -1,137 +1,213 @@
 import QtQuick
 import platitude.ui
 
-// Hand-drawn 16px-grid icons, scaled by the item size, in one stroke colour; `home` alone is filled.
+// Hand-drawn 16px-grid icons, scaled by the item size, or for a mark set beside words by their capitals (`set`),
+// in one stroke colour; `home` alone is filled.
 InkCanvas {
     id: icon
     property string kind: "branch"
     property color tint: Theme.textSecondary
-    /// Line weight. The coordinates scale with the size and this does not (デザイン規約 §進行中・回数押しの定数「座標だけ縮めて
-    /// 線を縮めない」). Beside a word at `iconSm` it would outweigh the letters by 4/3, so those callers pass the grid
-    /// ratio in, the way `HoldIcon` scales.
+    /// Line weight of a mark drawn to its box (`set` empty — ④ and ⑤ of デザイン規約 §アイコンの席): the coordinates
+    /// scale with the size and this does not. A mark set beside words ignores it and draws the words' stem (`pen`).
     property real stroke: Metrics.iconStroke
-    /// How much of the 16-grid this mark's ink spans sideways, for callers that seat it by its ink (デザイン規約 §余白).
-    /// It differs per kind, so no one number can be subtracted for all. Kinds not listed fill their box.
-    readonly property real inkGrid: {
+    /// Where each kind's ink can reach, in the 16-grid as it is drawn below: `[x, y, reach]`, `reach` being how many
+    /// half lines the ink runs past the point in every direction — 0 on a filled edge, 1 on a round end or a stroked
+    /// edge, √2 on a mitred corner turned 45° (`tag`, `pen`). The ink is the box round these, and every mark is drawn
+    /// moved so that box stands in the middle of its own (デザイン規約 §アイコンの席) — across only for a mark set beside
+    /// words, which stands against the words down (`shiftY`). A box centred on a line puts the ink on that line's
+    /// middle, at every size and every line weight, with nothing for the caller to add.
+    /// `tst_iconink.qml` holds each list to the pixels drawn.
+    readonly property var reaches: {
         switch (icon.kind) {
-        case "bang": return 2
-        case "arrow": return 8
-        // The crown, 4 to 12.
-        case "tree": return 8
-        // The body, 3.5 to 12.5; the shackle stands inside it.
-        case "lock": return 9
-        // The house, 2.5 to 13.5 — filled, which at `iconSm` matches the padlock's 9 plus its stroke. The seat caps
-        // it at 11. Filled, so `inkWidth` adds no stroke to it.
-        case "home": return 11
-        case "plus":
-        case "minus":
-        case "copyicon": return 9
-        // Diagonals across 4.5..11.5; a tab seats its `✕` off this.
-        case "close": return 7
-        // The tick, 3.5 to 12.5.
-        case "check": return 9
-        // Turned 45°, so this is the diagonal of body and point.
-        case "pen": return 10
-        // Chevron and cursor, 3 to 13.
-        case "terminal": return 10
-        // The rings' outer edges, 2.8 to 13.2.
-        case "pr": return 10.4
-        // The lobes, 1.7 to 14.6 — off centre, hence `inkRightGrid` too.
-        case "remote": return 12.9
-        // The rings' outer edges, 3.2 to 12.8.
-        case "branch": return 9.6
-        // 6 to 10 across, pointing right. A quarter turn reads `inkTallGrid` instead.
-        case "chevron": return 4
-        // The 7.2 square turned 45°: its diagonal.
-        case "tag": return 10.18
-        // The ring, 2.5 to 13.5; the bar stays inside it.
-        case "no-entry": return 11
-        // The ring, 2.5 to 13.5; the barb stays inside its ink.
-        case "history": return 11
-        // The frame, 2.5 to 13.5.
-        case "app-window": return 11
-        // The frame, 3 to 13.
+        case "branch": return [[3.2, 3.5, 1], [12.8, 5, 1], [5, 1.7, 1], [5, 14.3, 1]]
+        case "remote": return [[1.7, 10, 1], [14.6, 9.5, 1], [8.05, 3.1, 1], [8, 12.9, 1]]
+        case "tag": return [[8, 3.41, 1.41], [8, 13.59, 1.41], [2.91, 8.5, 1.41], [13.09, 8.5, 1.41]]
+        case "stash": return [[3, 4, 1], [13, 4, 1], [4, 13, 1], [12, 13, 1]]
+        // As tall as `branch`, ring and stem (`lettered`).
+        case "tree": return [[3.5, 6, 1], [12.5, 6, 1], [8, 1.5, 1], [8, 14.1, 1]]
+        // The body's four corners turned 45°, and the filled point.
+        case "pen": return [[11.25, 2.77, 1.41], [13.23, 4.75, 1.41], [5.24, 8.78, 1.41], [7.22, 10.76, 1.41],
+                            [4.11, 11.89, 0]]
+        case "plus": return [[3.5, 8, 1], [12.5, 8, 1], [8, 3.5, 1], [8, 12.5, 1]]
+        case "minus": return [[3.5, 8, 1], [12.5, 8, 1]]
+        case "window-minimize": return [[3, 8, 1], [13, 8, 1]]
+        case "arrow": return [[3.5, 8, 1], [11.5, 8, 1], [8.8, 5.2, 1], [8.8, 10.8, 1]]
+        case "fetch": return [[8, 2.5, 1], [3.5, 13, 1], [12.5, 13, 1], [4.8, 6.8, 1], [11.2, 6.8, 1]]
+        // The barbs meet the point in a mitred right angle.
+        case "push": return [[8, 2.5, 1.41], [3.5, 13, 1], [12.5, 13, 1], [4.8, 5.7, 1], [11.2, 5.7, 1]]
+        case "spinner": return [[3, 8, 1], [13, 8, 1], [8, 3, 1], [8, 13, 1]]
+        // The ring from the barb round to just under the left, and the filled barb.
+        case "history": return [[8, 2.5, 1], [13.5, 8, 1], [8, 13.5, 1], [2.53, 8.57, 1], [3.63, 4.66, 1],
+                                [2.02, 3.4, 0], [2.02, 6.48, 0], [5.12, 6.48, 0]]
+        case "copyicon": return [[3.5, 9, 1], [12.5, 7, 1], [9, 3.5, 1], [7, 12.5, 1]]
+        // The stroke above, the filled dot below.
+        case "bang": return [[8, 3.5, 1], [8, 10, 1], [7, 12.8, 0], [9, 12.8, 0], [8, 13.8, 0]]
+        case "hier": return [[3, 3, 1], [13, 6.5, 1], [13, 13.5, 1], [10, 13.5, 1]]
+        // The filled dots stand out past the lines' ends.
+        case "list": return [[2.5, 4.5, 0], [3.4, 3.6, 0], [3.4, 12.4, 0], [13, 4.5, 1], [13, 11.5, 1], [5.5, 4.5, 1],
+                             [5.5, 11.5, 1]]
+        case "pr": return [[2.8, 3.8, 1], [2.8, 12.2, 1], [13.2, 12.2, 1], [4.5, 2.1, 1], [4.5, 13.9, 1],
+                           [11.5, 13.9, 1], [8.8, 2.5, 1]]
+        // The tick's corner is a mitred join, its point a half line and more below the corner.
+        case "check": return [[3.5, 8.5, 1], [6.8, 11.8, 1.41], [12.5, 4.5, 1]]
+        case "lock": return [[3.5, 8.2, 1], [12.5, 13.5, 1], [8, 4.4, 1]]
+        // Filled throughout.
+        case "home": return [[2.5, 6.5, 0], [8, 2.3, 0], [13.5, 13.7, 0], [2.5, 13.7, 0]]
+        case "folder": return [[2.5, 4.5, 1], [13.5, 12.5, 1], [2.5, 12.5, 1]]
+        case "chevron": return [[6, 4, 1], [10, 8, 1], [6, 12, 1]]
+        case "chevrons": return [[4, 4, 1], [13, 8, 1], [4, 12, 1]]
+        case "terminal": return [[3, 4, 1], [7, 8, 1], [3, 12, 1], [13, 12, 1]]
+        // A resize corner hangs off the box's lower right and is not centred (`centred`).
+        case "grip": return [[6, 12, 1], [12, 6, 1], [10, 12, 1], [12, 10, 1]]
+        case "menu": return [[3, 4.5, 1], [13, 11.5, 1]]
+        case "close": return [[4.5, 4.5, 1], [11.5, 11.5, 1]]
+        // The teeth's outer corners on the axes.
+        case "gear": return [[2.03, 8, 1], [13.97, 8, 1], [8, 2.03, 1], [8, 13.97, 1]]
+        case "window-maximize":
+        case "window-restore": return [[3.5, 3.5, 1], [12.5, 12.5, 1]]
+        case "app-window": return [[2.5, 3.5, 1], [13.5, 12.5, 1]]
         case "unified":
-        case "split": return 10
-        // Lens edge to handle end, 2.8 to 13.2 — the same both ways.
-        case "search": return 10.4
-        default: return 16
+        case "split": return [[3, 4, 1], [13, 12, 1]]
+        // The lens's two curves meet at a mitred point at each end.
+        case "eye": return [[2.5, 8, 1.36], [13.5, 8, 1.36], [8, 5, 1], [8, 11, 1]]
+        case "eye-off": return [[2.5, 8, 1.36], [13.5, 8, 1.36], [3, 13, 1], [13, 3, 1]]
+        case "no":
+        case "no-entry": return [[2.5, 8, 1], [13.5, 8, 1], [8, 2.5, 1], [8, 13.5, 1]]
+        case "search": return [[2.8, 7, 1], [7, 2.8, 1], [13.2, 13.2, 1]]
+        default: return []
         }
     }
-    /// The same span down the other axis, for a turned mark (`rotation`) and for `OpsPicker.markMiddle`. Only kinds
-    /// one of those asks about have an entry.
-    readonly property real inkTallGrid: {
-        switch (icon.kind) {
-        // The barbs, 5.2 to 10.8.
-        case "arrow": return 5.6
-        // 4 to 12 down.
-        case "chevron": return 8
-        // The rings, 1.7 to 14.3.
-        case "branch": return 12.6
-        // Apex to foot, 2.3 to 13.7.
-        case "home": return 11.4
-        // The dome's top to the flat base, 3.1 to 12.9.
-        case "remote": return 9.8
-        default: return icon.inkGrid
+    /// Whether the drawing is moved to stand its ink in the middle of the box. Only the resize corner is not.
+    readonly property bool centred: icon.kind !== "grip"
+    /// Set beside words (デザイン規約 §アイコンの席): the mark is drawn as a letter of the words' face rather than to its
+    /// box — its size, its line and where it stands all come off the words. Empty for a mark that stands alone, drawn
+    /// to the middle of its box as above.
+    ///   - "name": a letter of the words, a state after a name included — the capitals' scale, on their middle; its
+    ///     cell the ink, with the row's step to the words kept by the caller, or the seat of the column it stands in
+    ///   - "lead": the head of a row or a phrase — as "name", in the seat it is given
+    ///   - "head": the head of a heading — a step over the capitals (`Metrics.markHead`), on their middle
+    ///   - "sign": a sign on the words — the capitals' scale, on the face's own `+`'s middle and never under the
+    ///     baseline, in the face's own room round its ink and a stem more
+    property string set: ""
+    /// The words' pixel size: what each measure of a set mark is a share of.
+    property real size: Theme.fontMd
+    /// Where the words' baseline runs, in this item's y.
+    property real wordBase: icon.height
+    /// Quarter turns, clockwise, of a set mark's drawing — not `rotation`, which would turn its place against the
+    /// words with it.
+    property int turn: 0
+    /// `reaches`, turned with the drawing about the grid's middle.
+    readonly property var points: icon.turn % 360 === 0 ? icon.reaches
+        : icon.reaches.map(p => icon.turn === 90 || icon.turn === -270 ? [16 - p[1], p[0], p[2]]
+                              : icon.turn === -90 || icon.turn === 270 ? [p[1], 16 - p[0], p[2]]
+                              : [16 - p[0], 16 - p[1], p[2]])
+    /// Whether a set mark stands among the letters in every class, a sign's included: `tree` is drawn as tall as
+    /// `branch` and stands where it does, on the capitals' middle — past them a little either way, its stem's foot
+    /// under the baseline with the branch's — never on a sign's middle or stopped at the baseline, which would drop
+    /// its ring under the names' tall letters or stand its foot on the line (デザイン規約 §アイコンの席).
+    readonly property bool lettered: icon.kind === "tree"
+    /// What a set mark is drawn against: `height`, the capitals' (a step over them for a heading), and `middle`, where
+    /// the marks' middles stand from the baseline — the capitals' middle for a mark among the words, the face's own
+    /// `+`'s for a sign (`sign`).
+    readonly property var target: {
+        if (icon.set === "")
+            return null
+        const step = icon.set === "head" ? Metrics.markHead : 1
+        const sign = icon.set === "sign" && !icon.lettered
+        return { height: WordFace.capital * icon.size * step,
+                 middle: sign ? (WordFace.plus.y + WordFace.plus.height / 2) * icon.size
+                              : -WordFace.capital * icon.size / 2,
+                 sign: sign }
+    }
+    /// The line: the stroke given, or for a set mark the words' stem. Not `line`, as `wordCell` is not `cell`: an
+    /// instance built in a component of its own (a `Loader`'s, a delegate's) looks its own properties up before the
+    /// ids of the file around that component, so a property of an id's name hides it (`NavFactLine`'s `line`).
+    readonly property real pen: icon.set === "" ? icon.stroke
+                                 : Metrics.markStem * icon.size * (icon.set === "head" ? Metrics.markHead : 1)
+    /// Pixels to a square of the 16-grid: the box's sixteenth, or for a set mark one scale for every kind, as a face
+    /// has one em for every letter — the grid's own proportions between the marks are the drawing (a tall branch, a
+    /// squat stash), and fitting each to one height would thin the one and fatten the other. 11.5 squares, line ends
+    /// to line ends, are the capitals' height.
+    readonly property real unit: icon.set === "" ? icon.width / 16
+                                 : Math.max(0, icon.target.height - icon.pen) / 11.5
+    /// The ink's box in the 16-grid, line included, before any move: `[left, top, right, bottom]`. A grid square is
+    /// `unit` pixels and the line keeps its pixels, so the half line is worth more of the grid on a small mark.
+    readonly property var inkBox: icon.inkAt(icon.unit)
+    /// How far the drawing moves, in grid squares: to stand its ink in the middle of the box, or for a set mark to its
+    /// place against the words — the middle across; down, on the capitals' middle, or for a sign the face's own `+`'s
+    /// middle, stopped at the baseline.
+    readonly property real shiftX: {
+        if (!icon.centred)
+            return 0
+        if (icon.set === "")
+            return 8 - (icon.inkBox[0] + icon.inkBox[2]) / 2
+        return Math.round((icon.width - icon.inkAcross) / 2) / icon.unit - icon.inkBox[0]
+    }
+    readonly property real shiftY: {
+        if (!icon.centred)
+            return 0
+        if (icon.set === "")
+            return 8 - (icon.inkBox[1] + icon.inkBox[3]) / 2
+        // Every other mark on its middle line, whatever its height: a squat mark stood on the baseline reads as
+        // dropped, a tall one centred runs past the capitals both ways. A sign never goes under the baseline — that
+        // band is the descenders', and a sign hanging in it reads as dropped.
+        const middle = Math.round(icon.wordBase + icon.target.middle - icon.inkDown / 2)
+        const top = icon.target.sign ? Math.min(middle, Math.round(icon.wordBase) - icon.inkDown) : middle
+        return top / icon.unit - icon.inkBox[1]
+    }
+    /// The ink's span in the item's pixels, line included, across and down the mark as drawn (`turn` included,
+    /// `rotation` not).
+    readonly property real inkAcross: (icon.inkBox[2] - icon.inkBox[0]) * icon.unit
+    readonly property real inkDown: (icon.inkBox[3] - icon.inkBox[1]) * (icon.set === "" ? icon.height / 16 : icon.unit)
+    /// The span along the item's own axes: a quarter turn (`rotation`) swaps the two.
+    readonly property real inkWidth: icon.rotation % 180 === 0 ? icon.inkAcross : icon.inkDown
+    readonly property real inkHeight: icon.rotation % 180 === 0 ? icon.inkDown : icon.inkAcross
+    /// The ink's right edge and top edge in the item's pixels, before any `rotation`: `width - inkRight` is the air the
+    /// box holds on that side, which is the same on the other (デザイン規約 §アイコンの席).
+    readonly property real inkRight: (icon.inkBox[2] + icon.shiftX) * icon.unit
+    readonly property real inkTop: (icon.inkBox[1] + icon.shiftY) * (icon.set === "" ? icon.height / 16 : icon.unit)
+    /// The width a set mark takes in its run of words: for a sign, the face's own room round a `+` either side of the
+    /// ink and a stem more, so it stands off its word by a hair rather than touching it; for any other, the ink alone.
+    readonly property real wordCell: Math.round(icon.set === "sign"
+                                                ? icon.inkAcross + 2 * (WordFace.signSide * icon.size + icon.pen)
+                                                : icon.inkAcross)
+
+    /// The ink's box at `u` pixels to the grid square, the line keeping its pixels.
+    function inkAt(u) {
+        const half = u > 0 ? icon.pen / 2 / u : 0
+        let box = [16, 16, 0, 0]
+        for (const p of icon.points) {
+            const out = p[2] * half
+            box = [Math.min(box[0], p[0] - out), Math.min(box[1], p[1] - out),
+                   Math.max(box[2], p[0] + out), Math.max(box[3], p[1] + out)]
         }
+        return icon.reaches.length > 0 ? box : [0, 0, 16, 16]
     }
-    /// Where that ink stands in the grid — its right edge here, its top in `inkTopGrid` — for a mark set against an
-    /// edge or a corner (`SignatureMark`, a card's arrow).
-    readonly property real inkRightGrid: {
-        switch (icon.kind) {
-        // The tick's high end; `bang`'s dot, 8 plus its radius.
-        case "check": return 12.5
-        case "bang": return 9
-        // Square in its box: `inkGrid`'s far end.
-        case "close": return 11.5
-        // The far ring and the far lobe: both stand in a chip's badge slot, set against its right.
-        case "pr": return 13.2
-        case "remote": return 14.6
-        // The cursor's far end.
-        case "terminal": return 13
-        // The point, unturned: a card's arrow ends there (`AppMenuItem.arrow`).
-        case "chevron": return 10
-        default: return 16
-        }
-    }
-    readonly property real inkTopGrid: {
-        switch (icon.kind) {
-        case "check": return 4.5
-        case "bang": return 3.5
-        // The long stroke's upper end.
-        case "grip": return 6
-        default: return 0
-        }
-    }
-    /// The ink's top edge in the item's pixels, half a stroke included. Of the unturned mark.
-    readonly property real inkTop: icon.inkTopGrid / 16 * icon.height - icon.stroke / 2
-    /// The ink span in the item's pixels, stroke included — none on the filled house. A quarter turn reads the
-    /// other axis.
-    readonly property real inkWidth:
-        (icon.rotation % 180 === 0 ? icon.inkGrid : icon.inkTallGrid)
-        / 16 * icon.width + (icon.kind === "home" ? 0 : icon.stroke)
-    /// The ink's right edge in the item's pixels, half a stroke included: `width - inkRight` is the air the box
-    /// holds on that side (デザイン規約 §余白). Of the unturned mark.
-    readonly property real inkRight: icon.inkRightGrid / 16 * icon.width + icon.stroke / 2
-    /// How far below the middle of a line this mark's centre goes to stand its ink on the baseline of the word beside
-    /// it, the two set in the same middle: `base` is that word's baseline from its own top, `tall` its height
-    /// (デザイン規約 §操作パネル「印は字と同じくベースラインに立てる」). Only the house moves: centred, its flat foot
-    /// floats over the letters, where a line-drawn mark's open ends do not.
-    function standOn(base, tall) {
-        return icon.kind !== "home" ? 0 : base - tall / 2 - icon.inkTallGrid / 16 * icon.height / 2
-    }
+
     width: Theme.iconMd
     height: Theme.iconMd
     onKindChanged: requestPaint()
     onTintChanged: requestPaint()
-    onStrokeChanged: requestPaint()
+    onPenChanged: requestPaint()
+    onTurnChanged: requestPaint()
+    onShiftXChanged: requestPaint()
+    onShiftYChanged: requestPaint()
+    onUnitChanged: requestPaint()
     onPaint: {
         const ctx = getContext("2d")
-        const s = width / 16
+        const s = icon.unit
+        // The context keeps its transform from paint to paint, so the move below starts from nothing each time.
+        ctx.setTransform(1, 0, 0, 1, 0, 0)
         ctx.clearRect(0, 0, width, height)
+        ctx.translate(icon.shiftX * s, icon.shiftY * s)
+        if (icon.turn % 360 !== 0) {
+            ctx.translate(8 * s, 8 * s)
+            ctx.rotate(icon.turn * Math.PI / 180)
+            ctx.translate(-8 * s, -8 * s)
+        }
         ctx.strokeStyle = icon.tint
         ctx.fillStyle = icon.tint
-        ctx.lineWidth = icon.stroke
+        ctx.lineWidth = icon.pen
         ctx.lineCap = "round"
         // Reset every paint: the context outlives a `kind`, and a round join set below would carry to the next mark.
         ctx.lineJoin = "miter"
@@ -180,18 +256,17 @@ InkCanvas {
             ctx.lineTo(9.5 * s, 9.5 * s)
             ctx.stroke()
         } else if (icon.kind === "tree") {
+            // The ring and the stem as tall as `branch` (`lettered`).
             ctx.beginPath()
-            ctx.arc(8 * s, 6.5 * s, 4 * s, 0, 2 * Math.PI)
+            ctx.arc(8 * s, 6 * s, 4.5 * s, 0, 2 * Math.PI)
             ctx.stroke()
             ctx.beginPath()
             ctx.moveTo(8 * s, 10.5 * s)
-            ctx.lineTo(8 * s, 14 * s)
+            ctx.lineTo(8 * s, 14.1 * s)
             ctx.stroke()
         } else if (icon.kind === "pen") {
             ctx.save()
-            // Recentred before the turn: turned 45°, the body's far corner lands at 5.23 and the tip at 3.89, so the
-            // ink sits 0.67 of a grid high, plus a quarter-line for the stroked (not filled) body end.
-            ctx.translate(8 * s, 8 * s + 0.67 * s + ctx.lineWidth / 4)
+            ctx.translate(8 * s, 8 * s)
             ctx.rotate(Math.PI / 4)
             ctx.strokeRect(-1.4 * s, -6 * s, 2.8 * s, 8.5 * s)
             ctx.beginPath()
@@ -330,16 +405,6 @@ InkCanvas {
             ctx.lineTo(6.8 * s, 11.8 * s)
             ctx.lineTo(12.5 * s, 4.5 * s)
             ctx.stroke()
-        } else if (icon.kind === "pin") {
-            // Map pin: "you are here".
-            ctx.beginPath()
-            ctx.arc(8 * s, 6.2 * s, 3.4 * s, Math.PI * 0.75, Math.PI * 0.25)
-            ctx.lineTo(8 * s, 13.5 * s)
-            ctx.closePath()
-            ctx.stroke()
-            ctx.beginPath()
-            ctx.arc(8 * s, 6.2 * s, 1.2 * s, 0, 2 * Math.PI)
-            ctx.fill()
         } else if (icon.kind === "lock") {
             // Drawn, since no family in the font chain has U+1F512. The shackle keeps its legs: an arc landing on
             // the body's top edge merges with it and reads as a lidded box.
@@ -534,16 +599,6 @@ InkCanvas {
             ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)
             ctx.moveTo(5.5 * s, 8 * s)
             ctx.lineTo(10.5 * s, 8 * s)
-            ctx.stroke()
-        } else if (icon.kind === "clock") {
-            ctx.beginPath()
-            ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)
-            ctx.stroke()
-            ctx.beginPath()
-            ctx.moveTo(8 * s, 8 * s)
-            ctx.lineTo(8 * s, 4.8 * s)
-            ctx.moveTo(8 * s, 8 * s)
-            ctx.lineTo(10.4 * s, 8 * s)
             ctx.stroke()
         } else if (icon.kind === "search") {
             // The handle starts on the lens's circle, as `branch`'s lines do: started outside it, the two part at

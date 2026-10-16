@@ -8,7 +8,16 @@ NavIcon {
 
     /// Something is out and being waited on.
     property bool spinning: false
+    /// The pixel size of the words it turns beside; zero for none. Set, the ring is as tall as their capitals and
+    /// drawn in their stem, as a mark set among them is (デザイン規約 §アイコンの席): its box a 16-grid whose ring
+    /// spans 10, centred where the caller stands it — the capitals' middle, or the `+`'s after the words.
+    property real wordSize: 0
+    /// The box away from words.
+    property real box: Theme.iconMd
 
+    width: ring.wordSize > 0 ? Math.round((WordFace.capital - Metrics.markStem) * ring.wordSize * 16 / 10) : ring.box
+    height: ring.width
+    stroke: ring.wordSize > 0 ? Metrics.markStem * ring.wordSize : Metrics.iconStroke
     kind: "spinner"
     tint: Theme.textSecondary
     visible: ring.spinning

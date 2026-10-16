@@ -117,6 +117,10 @@ Item {
             Layout.preferredWidth: Theme.iconMd
             Layout.preferredHeight: Theme.iconMd
             Layout.alignment: Qt.AlignVCenter
+            // A picture heading the subject, on its capitals' middle (デザイン規約 §アイコンの席).
+            transform: Translate {
+                y: WordFace.capitalDropOf(subjectCut.baselineOffset, subjectCut.pixelSize, subjectCut.height)
+            }
             code: planRow.avatar
             imageUrl: planRow.avatar_url
         }

@@ -22,8 +22,7 @@ RowLayout {
     /// whichever is drawn answers.
     baselineOffset: track.ahead > 0 ? aheadLeg.y + aheadLeg.baselineOffset : behindLeg.y + behindLeg.baselineOffset
 
-    /// One arrow and its count, cut like the graph row's tally (`WipTallyRow.Tally`): no step between them, and a
-    /// seat drawn to the ink.
+    /// One arrow and its count, cut like the graph row's tally (`WipTallyRow.Tally`): no step between them.
     component Leg: RowLayout {
         id: leg
         required property int turn
@@ -31,25 +30,23 @@ RowLayout {
         required property color hue
         spacing: 0
         baselineOffset: countWord.y + countWord.baselineOffset
-        Item {
-            Layout.preferredWidth: legMark.inkWidth
-            Layout.preferredHeight: Theme.iconXs
-            NavIcon {
-                id: legMark
-                anchors.centerIn: parent
-                kind: "arrow"
-                rotation: leg.turn
-                tint: leg.hue
-                /// A step under `iconSm`: a mark paired with a digit (規約 §寸法).
-                width: Theme.iconXs
-                height: Theme.iconXs
-                /// Line scaled with the grid (rules-refs/app-ui.md「語の隣に立つ印は `iconSm`」).
-                stroke: Metrics.iconStroke * Theme.iconXs / Theme.iconMd
-            }
+        // A sign before the count, as `+` stands before a number (デザイン規約 §アイコンの席 の修飾): its box is the
+        // count's line, its cell the face's own room round it.
+        NavIcon {
+            id: legMark
+            Layout.preferredWidth: legMark.wordCell
+            Layout.preferredHeight: countWord.implicitHeight
+            kind: "arrow"
+            set: "sign"
+            size: countWord.font.pixelSize
+            wordBase: countWord.baselineOffset
+            turn: leg.turn
+            tint: leg.hue
+            width: legMark.wordCell
+            height: countWord.implicitHeight
         }
         Label {
             id: countWord
-            leftPadding: Theme.spaceXs / 2
             text: leg.count
             color: leg.hue
             font.pixelSize: Theme.fontSm

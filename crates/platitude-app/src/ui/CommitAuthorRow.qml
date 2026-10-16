@@ -191,7 +191,6 @@ Item {
             name: authorLabel.mapToItem(null, 0, authorLabel.baselineOffset).y,
             hash: plate.hash,
             date: detailsDate.mapToItem(null, 0, detailsDate.baselineOffset).y,
-            dateText: detailsDate.text,
             dateSize: detailsDate.pixelSize,
             face: coBlock.faceMiddle(null),
             mate: mates.name,
@@ -404,15 +403,17 @@ Item {
                         onHoveredChanged: authorRow.showAuthor(authorHover.hovered)
                     }
                 }
-                // On the name's shoulder like every `!` in the app: top-aligned, pulled half a gap in, both distances
-                // measured to the ink, which differs per mark (rules-refs/app-ui.md「署名の印は名前の右肩」).
+                // On the name's shoulder like every `!` on a word's right (デザイン規約 §アイコンの席 の右肩): top-aligned,
+                // pulled half a gap in, both distances measured to the ink, which differs per mark
+                // (rules-refs/app-ui.md「署名の印は名前の右肩」).
                 SignatureMark {
                     id: sigMark
                     kind: authorRow.signatureKind
                     code: authorRow.signatureCode
                     signer: authorRow.signatureSigner
                     pointedAt: authorRow.signaturePointedAt
-                    // A mark beside a word carries the letters' weight (`NavIcon.stroke`).
+                    // A shoulder mark on a word: the `iconSm` box's line, the grid's ratio of `iconStroke`
+                    // (デザイン規約 §アイコンの席 の右肩).
                     stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
                     Layout.alignment: Qt.AlignTop
                     Layout.leftMargin: -(Theme.spaceXs / 2 + sigMark.inkAirLeft)

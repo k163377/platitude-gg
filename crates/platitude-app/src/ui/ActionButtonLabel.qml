@@ -102,7 +102,7 @@ Item {
     /// The parts that never give, each with its following gap — per part, since a `Row` charges a gap only for a
     /// visible child.
     readonly property real phraseFixed:
-        (btnLabel.phraseHoldPresses > 0 ? Theme.iconSm + phraseRow.spacing : 0)
+        (btnLabel.phraseHoldPresses > 0 ? phraseHoldSeat.width + phraseRow.spacing : 0)
         + (phraseAlert.visible ? phraseAlert.width + phraseRow.spacing : 0)
         + headChip.implicitWidth + phraseRow.spacing
         + (countWord.visible ? countWord.implicitWidth + phraseRow.spacing : 0)
@@ -132,6 +132,9 @@ Item {
     function wordBase(item) {
         return headText.mapToItem(item, 0, headText.baselineOffset).y
     }
+    /// The word's baseline in this label's y, as a property so a binding follows it: the seat beside the word stands
+    /// its mark on it (`ActionButtonSeat.wordBase`).
+    readonly property real headBase: headText.y + headText.baselineOffset
 
     implicitWidth: btnLabel.phrased ? phraseRow.implicitWidth
                    : btnLabel.folded ? 0
@@ -198,26 +201,42 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.spaceXs
-        HoldIcon {
+        // The hold mark is a letter of the phrase (デザイン規約 §アイコンの席 の名指し): as tall as the plain words'
+        // capitals and on their middle (`lineRef`, centred in the row as each word is). Its seat is its disc, and the
+        // row's step parts it from the next word — from the ground of a command's chip, which hangs half a step before
+        // its letters, too.
+        Item {
+            id: phraseHoldSeat
             visible: btnLabel.phraseHoldPresses > 0
-            progress: btnLabel.phraseHoldProgress
-            presses: btnLabel.phraseHoldPresses
-            tint: btnLabel.phraseHoldTint
-            off: btnLabel.phraseHoldOff
+            width: Math.round(phraseHold.inkWidth)
+                   + (headChip.word !== "" && !btnLabel.alert ? Theme.spaceXs / 2 : 0)
+            height: phraseHold.height
             anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: Metrics.opticalDrop
+            anchors.verticalCenterOffset: WordFace.capitalDrop(lineRef)
+            HoldIcon {
+                id: phraseHold
+                x: -Math.round((phraseHold.width - phraseHold.inkWidth) / 2)
+                size: btnLabel.fontSize
+                progress: btnLabel.phraseHoldProgress
+                presses: btnLabel.phraseHoldPresses
+                tint: btnLabel.phraseHoldTint
+                off: btnLabel.phraseHoldOff
+            }
         }
         // A phrase's `!` stands at its left end as the button's icon: inside, it would split the sentence, and the
         // right end is the face's corner, where the signature mark stands (デザイン規約 §git 用語のコード表記「`!` の席」).
+        // It heads the words (デザイン規約 §アイコンの席 の文頭記号), on the plain words' line.
         NavIcon {
             id: phraseAlert
             visible: btnLabel.alert
             kind: "bang"
+            set: "lead"
+            size: btnLabel.fontSize
+            wordBase: lineRef.baselineOffset
             tint: btnLabel.alertTone
-            width: Theme.iconMd
-            height: Theme.iconMd
+            width: Theme.iconSm
+            height: lineRef.height
             anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: Metrics.opticalDrop
         }
         CodeChip {
             id: headChip
@@ -290,7 +309,9 @@ Item {
             badgeRightOut: Theme.spaceXs - Theme.borderWidth
             width: Theme.iconLg
             height: Theme.iconLg
+            // A picture beside words, on their capitals' middle (デザイン規約 §アイコンの席).
             anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: WordFace.capitalDrop(lineRef)
         }
         Label {
             id: mateCount

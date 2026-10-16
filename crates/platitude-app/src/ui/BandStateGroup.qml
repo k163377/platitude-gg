@@ -376,9 +376,10 @@ Item {
             border.color: stateGroup.tint
             radius: Theme.radiusSm
         }
-        // On the band's line, as the words it stands for (規約 §操作パネル「印は字と同じくベースラインに立てる」):
-        // the frame is cut round the words' capitals from that line, and a centred line puts the dots wherever the
-        // face's descent leaves them. The face's own report of the dots' ink is no help — Noto Sans JP's spans 7px.
+        // On the band's line, as the words it stands for (規約 §ウィンドウの縁「畳んだ `…` の箱」— a glyph, on the
+        // line's one baseline): the frame is cut round the words' capitals from that line, and a centred line puts the
+        // dots wherever the face's descent leaves them. The face's own report of the dots' ink is no help —
+        // Noto Sans JP's spans 7px.
         Label {
             id: stateMark
             anchors.horizontalCenter: markFrame.horizontalCenter

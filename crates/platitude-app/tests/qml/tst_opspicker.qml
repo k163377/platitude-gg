@@ -5,10 +5,15 @@ import platitude.ui
 
 // The operation panel's name as a box of two lines, name and counts over the upstream (rules-refs/app-ui.md
 // 「操作パネルの名前(`OpsPicker`)は 2 行で 1 つの箱」). The arithmetic is the picker's own, so it is asked with no window.
-Item {
+//
+// A control, to hand the pickers the window's font as `Main` does: the names are priced in `Theme.uiFamily` and drawn
+// in the face they inherit, and a default face lays a name out wider than its price — cut where it fits.
+Control {
     id: root
     width: 1200
-    height: 200
+    height: 260
+    font.family: Theme.uiFamily
+    font.pixelSize: Theme.fontMd
 
     component Branch: OpsPicker {
         kind: "branch"
@@ -40,6 +45,15 @@ Item {
         id: bare
         y: 120
         name: "topic"
+    }
+    // A name standing in a linked worktree (`trail`), its line the longer: the run gives before the name.
+    Branch {
+        id: inTree
+        y: 180
+        name: "feature/topic-that-runs-long"
+        trail: "a-worktree-folder-with-a-long-name"
+        note: "origin/topic"
+        ahead: 1
     }
 
     // A name with its card hung off it, as `TopBar` hangs both (rules-refs/app-ui.md「名前から落とすカードは名前にぶら下げる」).
@@ -84,6 +98,7 @@ Item {
         function init() {
             shortName.given = 0
             longName.given = 0
+            inTree.given = 0
             shortName.endAir = Qt.binding(() => shortName.gap)
             shortName.opened = false
             hung.card.close()
@@ -104,7 +119,7 @@ Item {
         /// Each line's own want fits the room its sum gives, and both lines' words start on one x. A step laid out but
         /// left out of the sum is not cut for: the column grows past the box and the line walks out under what follows.
         function test_each_line_fits_its_sum_and_both_start_on_one_x() {
-            for (const picker of [shortName, longName]) {
+            for (const picker of [shortName, longName, inTree]) {
                 // contentItem: the chevron's slot, then the two lines' column; each line: its mark's slot, then its
                 // first run.
                 const stack = picker.contentItem.children[1]
@@ -141,6 +156,24 @@ Item {
             compare(longName.noteGiven, 4)
             // The counts never give: still a word's step after what is left of the name.
             tryCompare(longName, "trackPlace", "after")
+        }
+
+        /// The worktree's run gives before the name (規約 §操作パネル の譲る順), and what is left of it is laid out
+        /// at the width its line was priced at: the counts still follow it at their own step.
+        function test_the_worktree_s_run_gives_before_the_name() {
+            verify(inTree.lineOneWhole > inTree.lineTwoWhole, "the name and its run are the longer line")
+            verify(inTree.trailSlack > 4 && inTree.nameSlack > 4, "both the run and the name can give")
+            const nameLine = inTree.contentItem.children[1].children[0]
+            for (const given of [0, inTree.trailSlack - 1, inTree.trailSlack + 3]) {
+                inTree.given = given
+                compare(inTree.trailGiven, Math.min(given, inTree.trailSlack), given + ": the run gives first")
+                compare(inTree.nameGiven, Math.max(0, given - inTree.trailSlack), given + ": then the name")
+                tryVerify(() => nameLine.implicitWidth <= inTree.textRoom, undefined,
+                          given + ": the name's line fits its sum")
+                tryCompare(inTree, "trackPlace", "after")
+                tryCompare(inTree, "nameCut", given > inTree.trailSlack, undefined,
+                           given + ": the name is cut only past the run")
+            }
         }
 
         /// A line is also cut no further than the other line's floor: past that, cutting frees nothing.

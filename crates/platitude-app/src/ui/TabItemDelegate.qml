@@ -201,7 +201,7 @@ Rectangle {
         width: tabItem.treeW
         visible: tabItem.treeW > 0
         name: tabItem.worktree_name
-        metrics: tabItem.metrics
+        gap: tabItem.metrics.treeRunGap
         minNameW: tabItem.titleMinW
     }
     // The name going quiet where the mark stands over it (デザイン規約 §タブの所作), in the tab's own ground with the
@@ -246,6 +246,8 @@ Rectangle {
         // and eat its hover. The height stays `iconLg` so a hand coming down the strip lands on it, and the wash is
         // inset back to the ink (§当たり判定, as `TabStrip`'s `+`).
         implicitWidth: tabItem.metrics.markSeat
+        // Drawn at the seat it is measured at (`TabMetrics.closeMark`): a step above the other closing marks.
+        markSize: tabItem.metrics.markSeat
         topInset: (Theme.iconLg - tabItem.metrics.markSeat) / 2
         bottomInset: closeMark.topInset
         // Written out: the shared button binds `leftInset: topInset`, which here would narrow the wash below the ink.

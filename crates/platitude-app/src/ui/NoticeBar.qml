@@ -116,10 +116,12 @@ Rectangle {
                 id: headingWord
                 Layout.fillWidth: true
                 text: bar.label
-                /// How many spaces the mark's ink takes; the sentence's own space before the word is the gap.
+                /// How many spaces the mark takes: its ink and the row's step to its word, a letter the heading
+                /// names it with (デザイン規約 §アイコンの席 の名指し). The sentence's own space before the word stays
+                /// where it is; at the heading's start the ink starts where the lines under it do.
                 readonly property int markRoom:
-                    bar.markWord === "" || spaceRuler.advanceWidth <= 0
-                    ? 0 : Math.ceil(headMark.inkWidth / spaceRuler.advanceWidth)
+                    bar.markWord === "" || spaceRuler.advanceWidth <= 0 ? 0
+                    : Math.ceil((headMark.width + Theme.spaceXs) / spaceRuler.advanceWidth)
                 /// Where the name stands in the heading: the seat its sentence gives it, checked against the word, else
                 /// the heading's start (`Words.markSeatIn`) — a heading that does not hold it there stays plain.
                 readonly property int markAt: bar.markWordAt < 0 ? Words.markSeatIn(bar.label, bar.markWord, false)
@@ -147,25 +149,22 @@ Rectangle {
                     font.weight: Theme.fontWeightStrong
                     text: " "
                 }
-                /// Set against the word, so mark and name read as one: the ink ends where the word begins.
+                /// The heading's letter naming what the name is (デザイン規約 §アイコンの席 の名指し): its ink a step
+                /// short of the word — at the heading's start, starting the line — against the word's baseline
+                /// (`CardText.baselineAt`), a step of the box under it for a stem that runs past it.
                 NavIcon {
                     id: headMark
                     visible: headingWord.markSeat.width > 0 || headingWord.markSeat.height > 0
                     kind: bar.markKind
+                    set: "name"
+                    size: headingWord.pixelSize
                     tint: Theme.textSecondary
-                    width: Theme.iconSm
-                    height: Theme.iconSm
-                    x: headingWord.markSeat.x - (Theme.iconSm + headMark.inkWidth) / 2
-                    // The line's middle; the house goes down onto the line's baseline (`NavIcon.standOn`).
-                    y: headingWord.markSeat.y + (headingWord.markSeat.height - Theme.iconSm) / 2
-                       + headMark.standOn(headFace.ascent, headingWord.markSeat.height)
-                }
-                /// The heading's face, whose ascent is where a line's baseline stands below its top.
-                FontMetrics {
-                    id: headFace
-                    font.family: Theme.uiFamily
-                    font.pixelSize: Theme.fontMd
-                    font.weight: Theme.fontWeightStrong
+                    wordBase: Math.ceil(headMark.size)
+                    width: headMark.wordCell
+                    height: headMark.wordBase + Theme.spaceXs
+                    x: headingWord.markAt === 0 ? 0
+                       : Math.round(headingWord.markSeat.x - Theme.spaceXs - headMark.width)
+                    y: Math.round(headingWord.baselineAt(headingWord.markSeat)) - headMark.wordBase
                 }
             }
             // Wrapped, never cut: nothing caps the height (デザイン規約 §答えの要らない報せ). Plain text: a lock's reason

@@ -123,10 +123,12 @@ ComboBox {
 
     indicator: Item {
         id: seat
-        x: combo.width - width - Theme.spaceSm
+        // The field's inner step from the frame, as the words keep on the left; the mark a step down so its own air
+        // does not stack on that step (デザイン規約 §余白「印の側も同じ刻み」).
+        x: combo.width - width - Theme.spaceXs
         y: (combo.height - height) / 2
-        width: Theme.iconMd
-        height: Theme.iconMd
+        width: Theme.iconSm
+        height: Theme.iconSm
         // Nothing to open, nothing to point at (see `hasList`).
         visible: combo.hasList
         // One ring at a time: here while the card is shut, inside it once it is up.
@@ -290,6 +292,7 @@ ComboBox {
         }
         contentItem: Item {
             Label {
+                id: rowWord
                 anchors.fill: parent
                 anchors.rightMargin: mark.visible ? mark.width + mark.anchors.rightMargin : 0
                 text: row.modelData
@@ -298,11 +301,15 @@ ComboBox {
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
             }
-            // The left menu's push mark for that remote, at its step and colour.
+            // The left menu's push mark for that remote, at its colour: a state after the name, as the left menu sets
+            // it (デザイン規約 §アイコンの席「名前の後の状態」).
             NavIcon {
                 id: mark
                 visible: !row.acts && row.modelData !== "" && row.modelData === combo.markedRow
                 kind: "push"
+                set: "name"
+                size: rowWord.font.pixelSize
+                wordBase: rowWord.y + rowWord.baselineOffset - mark.y
                 tint: Theme.accent
                 width: Theme.iconSm
                 height: Theme.iconSm

@@ -619,7 +619,8 @@ Item {
         anchors.rightMargin: Theme.spaceXs
         // The row's own line, not a row grown by open facts: the mark sits alike in both lists.
         anchors.verticalCenter: rowLayout.verticalCenter
-        padding: 0
+        // The mark a step down in the `iconLg` seat, as the sidebar band's `+` (デザイン規約 §アイコンの席「④ の席」).
+        padding: (Theme.iconLg - Theme.iconMd) / 2
         implicitWidth: Theme.iconLg
         implicitHeight: Theme.iconLg
         // Told to the list, so the rows that go with this one put their marks out too.

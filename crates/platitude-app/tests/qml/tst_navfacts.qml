@@ -592,7 +592,8 @@ Item {
             compare(track.behind, data.behind)
             compare(track.hue, data.hue, "the pair is one expression, so one colour covers it")
             // A leg with nothing to count is not drawn, so no drawn number is a zero.
-            const legs = root.drawn(track, "turn").filter(leg => leg.visible)
+            // A leg is what holds a count: the arrow in it has a `turn` of its own.
+            const legs = root.drawn(track, "count").filter(leg => leg.visible)
             compare(legs.length, data.legs.length, "the legs a reader can see")
             for (let i = 0; i < legs.length; i++) {
                 const ink = root.drawn(legs[i], "text")

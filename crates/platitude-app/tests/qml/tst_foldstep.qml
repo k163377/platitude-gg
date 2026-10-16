@@ -7,8 +7,8 @@ import platitude.ui
 // How far a fold steps a row in, and how far a name stands from its mark, read off the marks themselves in every
 // list that folds (デザイン規約 §余白): one depth down, a chevron's box starts under the middle of the chevron above
 // it; a change mark's box ends where a chevron's does; and a name starts as far past its mark's box in the file
-// lists as in the sidebar. The lists draw their marks on different grids, so a step or a placement written per list
-// would agree with itself in one and drift in another.
+// lists as in the sidebar. The lists draw different marks in the seat (fold arrow, change code), so a step or a
+// placement written per list would agree with itself in one and drift in another.
 Item {
     id: root
     width: 400
@@ -219,7 +219,7 @@ Item {
             verify(fold !== null, "the folder row shows its chevron")
             const inside = markOf(row.inside(), row.mark)
             verify(inside !== null, "the row inside it shows its mark")
-            // Whatever grid the mark is drawn on, its box ends where a chevron's one fold down would: a box as wide
+            // Whichever mark the row draws, its box ends where a chevron's one fold down would: a box as wide
             // as the chevron's, starting under the middle of the chevron above.
             compare(rightOf(inside) - fold.width, middleOf(fold),
                     "a chevron's box ending where the mark one fold down ends starts under the chevron's middle")
@@ -230,8 +230,7 @@ Item {
             compare(rightOf(beside), rightOf(fold), "at one depth, a change mark's box ends where a chevron's does")
         }
 
-        // Each grid leaves the same air on the right of its box, so one distance from the box to the name is one
-        // distance from the ink to the name.
+        // Every list's seat is one width (`NameCell.seatSize`), so a name starts as far past its seat in each.
         function test_a_name_starts_as_far_past_its_mark_in_every_list() {
             tryVerify(() => changedList.itemAtIndex(2) !== null, undefined, "the rows are built")
             const sidebar = nameGap(refFolder, "chevron", "team")

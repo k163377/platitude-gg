@@ -39,20 +39,6 @@ QtObject {
     readonly property int labelMinChars: 3
     readonly property real chipNameMinW: Math.ceil(chipCutInk.advanceWidth
         + labelMinChars * chipLetterInk.advanceWidth)
-    /// The locked-worktree mark, only to be priced: a seat is the mark's ink (規約 §余白), which only the icon knows
-    /// (`NavIcon.inkGrid`). Never drawn — `inkWidth` is arithmetic and answers with no scene around it.
-    readonly property NavIcon chipLockMark: NavIcon {
-        kind: "lock"
-        width: Theme.iconSm
-        height: Theme.iconSm
-    }
-    /// The badge at the chip's other end, priced the same way. The cloud: it shares one slot with the PR mark
-    /// (`RefChip.hasBadge`) and is the wider of the two.
-    readonly property NavIcon chipBadgeMark: NavIcon {
-        kind: "remote"
-        width: Theme.iconSm
-        height: Theme.iconSm
-    }
     /// The fan of sheets behind the card, asked of the stack itself (its own arithmetic). Draws nothing.
     readonly property RefChipStack chipFan: RefChipStack {}
     /// The `+N` count (`RefChip`) at the widest the floor prices it: two digits, where real repositories stop. Measured
@@ -64,14 +50,27 @@ QtObject {
         font.family: Theme.uiFamily
         font.pixelSize: Theme.fontSm
     }
-    /// Everything a chip spends on what is not the name: fan, count, badge and padlock, each with its half gap
-    /// (`RefChip`'s row spacing), plus the frame's padding either side. Every mark counts though it comes and goes —
-    /// the column must fit the worst-dressed chip (rules-refs/app-ui.md「チップ列の狭める床」). The tree mark shares the
-    /// padlock's seat (`RefChip.hasTree`) and is narrower, so it is not a term.
+    /// The widest marks a chip draws round its name, at the chip's letters, priced as `RefChip` seats them: the house
+    /// before the name (the padlock and the tree share its seat and are narrower — `RefChip.markCell`), the cloud
+    /// after it (the pull request's is narrower — `RefChip.badgeCell`). Never drawn.
+    readonly property NavIcon chipMarkInk: NavIcon {
+        visible: false
+        kind: "home"
+        set: "sign"
+        size: Theme.fontChip
+    }
+    readonly property NavIcon chipBadgeInk: NavIcon {
+        visible: false
+        kind: "remote"
+        set: "name"
+        size: Theme.fontChip
+    }
+    /// Everything a chip spends on what is not the name: fan, count with its half gap (`RefChip`'s row spacing), the
+    /// badge's cell and its half gap, the mark's cell, plus the frame's padding either side. Every mark counts though
+    /// it comes and goes — the column must fit the worst-dressed chip (rules-refs/app-ui.md「チップ列の狭める床」).
     readonly property real chipFurnitureW: chipFan.fanMaxW
         + chipCountInk.implicitWidth + Theme.spaceXs / 2
-        + chipBadgeMark.inkWidth + Theme.spaceXs / 2
-        + chipLockMark.inkWidth + Theme.spaceXs / 2
+        + chipBadgeInk.wordCell + Theme.spaceXs + Theme.spaceXs / 2 + chipMarkInk.wordCell
         + 2 * Theme.spaceXs
     // The chip column's floor — name, furniture, and the `spaceSm` `GraphRowChips` keeps in front of the chip; move
     // any of those and this moves too — and its ceiling, where the next two columns can still say something

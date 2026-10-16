@@ -19,6 +19,9 @@ Item {
     property bool badged: false
     /// The kind over the cloud: taken here and on a remote at once.
     property bool paired: false
+    /// The pixel size of the words the mark heads: a lone mark is drawn to their letters, the box's middle their
+    /// capitals' middle (デザイン規約 §アイコンの席 の文頭記号) — the caller stands the box's middle there.
+    property real size: Theme.fontMd
     /// How much wider the pair stands than one mark: what a row moves its name over by.
     readonly property int pairSpread: Theme.iconSm - Theme.spaceXs
 
@@ -30,6 +33,9 @@ Item {
         width: Theme.iconSm
         height: Theme.iconSm
         anchors.verticalCenter: parent.verticalCenter
+        set: "lead"
+        size: mark.size
+        wordBase: Theme.iconSm / 2 + WordFace.capitalMiddle(mark.size)
         kind: mark.kind
         tint: mark.tint
         ShoulderBadge {

@@ -118,15 +118,24 @@ Rectangle {
             anchors.fill: parent
             spacing: Theme.spaceXs
             RecoverToggle {
+                id: bandToggle
                 Layout.fillHeight: true
                 captioned: true
                 ruled: false
                 curPage: pane.curPage
             }
-            // Read again over the entries already up: the ring beside the heading (`WipBucketHeader`).
+            // Read again over the entries already up: the ring beside the heading (`WipBucketHeader`), a sign after
+            // its words — as tall as their capitals, turning about their own `+`'s middle (デザイン規約 §アイコンの席
+            // の修飾). Centred in the band as the toggle is, then moved onto that middle.
             SpinnerIcon {
-                Layout.preferredWidth: Theme.iconSm
-                Layout.preferredHeight: Theme.iconSm
+                id: rereadRing
+                wordSize: bandToggle.captionSize
+                transform: Translate { y: Math.round(bandToggle.captionSignMiddle - bandToggle.height / 2) }
+                // A word's step after the caption: the toggle ends a step past it already, so the row's own step is
+                // taken back.
+                Layout.leftMargin: -Theme.spaceXs
+                Layout.preferredWidth: rereadRing.width
+                Layout.preferredHeight: rereadRing.height
                 spinning: pane.reading && pane.entries.length > 0
             }
             Item { Layout.fillWidth: true }
@@ -310,8 +319,11 @@ Rectangle {
         // menu's tint for that kind (`RecoverEntries.tintOf`).
         RecoverMark {
             id: entryMark
-            x: Theme.spaceXs
-            anchors.verticalCenter: parent.verticalCenter
+            // A lone mark's box centred on the seat as `NameCell` centres its own; a pair starts the seat.
+            x: Theme.spaceXs - (row.entry.paired ? 0 : (Theme.iconSm - Theme.iconXs) / 2)
+            // The head of the row's name, on its capitals' middle (デザイン規約 §アイコンの席 の文頭記号).
+            y: Math.round(title.y + title.nameBase - WordFace.capitalMiddle(entryMark.size) - entryMark.height / 2)
+            size: title.nameInk.pixelSize
             kind: row.entry.mark
             tint: row.entry.tint
             badged: row.entry.badged

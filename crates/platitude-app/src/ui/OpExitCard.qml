@@ -74,16 +74,19 @@ Rectangle {
             Layout.bottomMargin: Theme.spaceXs
             spacing: Theme.spaceXs
             Label {
+                id: opName
                 text: opExitCard.worktree.opText
                 font.pixelSize: Theme.fontMd
                 font.weight: Theme.fontWeightStrong
                 color: Theme.warning
             }
-            // Bisect, when it is running alongside. The mark between the two names is drawn (規約 §余白).
+            // Bisect, when it is running alongside. The mark between the two names is drawn (規約 §余白): a sign
+            // between words, on the face's own `+`'s middle (デザイン規約 §アイコンの席 の修飾).
             DotMark {
                 visible: opExitCard.worktree.opAlso !== ""
                 tint: Theme.warning
-                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredHeight: opName.implicitHeight
+                middle: opName.baselineOffset - WordFace.signMiddle(opName.font.pixelSize)
             }
             Label {
                 visible: opExitCard.worktree.opAlso !== ""

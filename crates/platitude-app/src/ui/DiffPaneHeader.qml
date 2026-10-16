@@ -64,8 +64,11 @@ Rectangle {
     RowLayout {
         id: headerRow
         anchors.fill: parent
+        // The centre pane's step on the left, where the notices under it start their words (`DiffFileNotices`); the
+        // pane's inner step on the right, as every band's: the toggle and the `✕` then end where the other bands' end
+        // marks do (デザイン規約 §アイコンの席「④ の席」— the band's end tools stand inside its padding).
         anchors.leftMargin: Theme.spaceSm
-        anchors.rightMargin: Theme.spaceSm
+        anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceSm
         // Caption and path with no separator between them; the band's one separator is the dash before the worktree.
         RowLayout {
@@ -119,20 +122,19 @@ Rectangle {
                 Layout.fillWidth: false
                 Layout.maximumWidth: header.width / 4
                 spacing: 0
-                Item {
-                    Layout.preferredWidth: worktreeMark.inkWidth
-                    Layout.preferredHeight: Theme.iconSm
-                    Layout.alignment: Qt.AlignVCenter
-                    NavIcon {
-                        id: worktreeMark
-                        anchors.centerIn: parent
-                        anchors.verticalCenterOffset: worktreeMark.standOn(worktreeNameCut.wordBase,
-                                                                           worktreeNameCut.height)
-                        kind: header.worktreeHome ? "home" : "tree"
-                        tint: Theme.textSecondary
-                        width: Theme.iconSm
-                        height: Theme.iconSm
-                    }
+                // A sign on the name, no step after it (デザイン規約 §アイコンの席 の修飾): its box is the name's
+                // seat, so the two share a baseline.
+                NavIcon {
+                    id: worktreeMark
+                    Layout.preferredWidth: worktreeMark.wordCell
+                    Layout.preferredHeight: Theme.rowHeight
+                    kind: header.worktreeHome ? "home" : "tree"
+                    set: "sign"
+                    size: worktreeNameCut.pixelSize
+                    wordBase: worktreeNameCut.baselineOffset
+                    tint: Theme.textSecondary
+                    width: worktreeMark.wordCell
+                    height: Theme.rowHeight
                 }
                 CutName {
                     id: worktreeNameCut

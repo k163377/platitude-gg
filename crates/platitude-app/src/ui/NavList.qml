@@ -49,9 +49,8 @@ AppListView {
     /// Where a row's ink begins and how far each fold steps it in, so names begin in the band's mark column
     /// (デザイン規約 §余白 の左メニューの行の項): the band's seat is `iconSm`, a row's `iconXs`. The stand-in reads these too.
     readonly property int rowInset: Theme.spaceXs + Theme.iconSm - Theme.iconXs
-    /// A fold steps in to its chevron's middle: the chevron's box starts where the row's seat does
-    /// (`NameCell.seatNudge`) and the chevron is drawn about the box's centre, so the mark box one depth down starts
-    /// under that middle.
+    /// A fold steps in to its chevron's middle: the chevron stands centred on the row's seat (`NameCell`), its box
+    /// hanging out of the seat by a pixel either side, so the mark box one depth down starts under that middle.
     readonly property int nestStep: Theme.iconSm / 2
 
     signal refActivated(string oidHex)

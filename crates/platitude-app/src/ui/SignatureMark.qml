@@ -16,8 +16,8 @@ Item {
     property bool pointedAt: false
     /// The ink of the mark itself. A smaller face hands in a smaller ink (デザイン規約 §アバターを与える).
     property int ink: Theme.iconSm
-    /// Line weight: the seat beside a name hands in the letters' weight (`NavIcon.stroke`, 規約 §署名の表示); the
-    /// badge on a face keeps the default.
+    /// Line weight: the seat on a name's shoulder hands in the `iconSm` box's line, the grid's ratio of `iconStroke`
+    /// (デザイン規約 §アイコンの席 の右肩, 規約 §署名の表示); the badge on a face keeps the default.
     property real stroke: Metrics.iconStroke
 
     /// The tooltip is up, read off the ToolTip's own visible — the output side, so a cut binding cannot read as green.
@@ -27,11 +27,10 @@ Item {
     readonly property bool pointed: signatureHover.hovered || signatureMark.pointedAt
 
     /// The air this mark's square holds past its ink on each side, for the caller to take off its seat — the seat is
-    /// the ink (規約 §余白). Per kind (`NavIcon.inkGrid` / `inkRightGrid` / `inkTopGrid`). No stroke is added, unlike
-    /// `inkWidth`: no stroke here runs along the axis being measured.
-    readonly property real inkAirLeft: (mark.inkRightGrid - mark.inkGrid) / 16 * signatureMark.ink
-    readonly property real inkAirRight: (16 - mark.inkRightGrid) / 16 * signatureMark.ink
-    readonly property real inkAirTop: mark.inkTopGrid / 16 * signatureMark.ink
+    /// the ink (規約 §余白). The ink stands in the middle of the square (`NavIcon.reaches`), so left and right are one.
+    readonly property real inkAirLeft: mark.inkRight - mark.inkWidth
+    readonly property real inkAirRight: mark.width - mark.inkRight
+    readonly property real inkAirTop: mark.inkTop
 
     readonly property bool broken: signatureMark.kind === "bad"
     readonly property color tone: signatureMark.kind === "verified" ? Theme.success

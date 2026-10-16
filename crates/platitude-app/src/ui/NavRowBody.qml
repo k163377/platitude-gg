@@ -145,12 +145,15 @@ RowLayout {
                         && (body.row.has_remote || body.row.has_pr))
                     || ((body.row.kindHint === "remote" || body.row.kindHint === "worktree") && body.row.has_pr))
         visible: remoteSeat.active
-        // The graph chips' size for the same badge (デザイン規約 §寸法).
+        // The row-end column's seat (デザイン規約 §アイコンの席 の名指し): an `iconSm` box, the badge drawn to the
+        // name's letters in its middle.
         Layout.preferredWidth: Theme.iconSm
         Layout.preferredHeight: Theme.iconSm
         sourceComponent: GoneBadge {
             pullRequest: body.row.has_pr
             gone: remoteSeat.gone
+            size: nameCell.nameInk.pixelSize
+            wordBase: nameCell.y + nameCell.nameBase - remoteSeat.y
         }
     }
     // On the remote pushes go to: the toolbar's push mark in the badge's seat, in `accent` as the one in effect
@@ -161,8 +164,12 @@ RowLayout {
         visible: pushSeat.active
         Layout.preferredWidth: Theme.iconSm
         Layout.preferredHeight: Theme.iconSm
+        // A state after the name, as the badge is (デザイン規約 §アイコンの席「名前の後の状態」).
         sourceComponent: NavIcon {
             kind: "push"
+            set: "name"
+            size: nameCell.nameInk.pixelSize
+            wordBase: nameCell.y + nameCell.nameBase - pushSeat.y
             tint: Theme.accent
             width: Theme.iconSm
             height: Theme.iconSm

@@ -26,6 +26,11 @@ Rectangle {
     /// Where the mark stands and the name begins: a section's row without the fold arrow's column.
     readonly property real markX: Theme.spaceXs
     readonly property real captionX: toggle.markX + Theme.iconMd + Theme.spaceXs
+    /// The caption's pixel size, and where its own `+` has its middle in the toggle's y: what a sign after the
+    /// caption is drawn to and stands on (`RecoverPane`'s ring).
+    readonly property real captionSize: recoverName.font.pixelSize
+    readonly property real captionSignMiddle: recoverName.y + recoverName.baselineOffset
+                                              - WordFace.signMiddle(recoverName.font.pixelSize)
 
     visible: toggle.curPage !== null
     // No count beside the name: it would grow with the record and take the band's room from the name.
@@ -46,10 +51,15 @@ Rectangle {
         height: Theme.borderWidth
         color: Theme.borderSubtle
     }
+    // Captioned, the heading's mark: a step over its capitals, its box the caption's line so the two share a baseline
+    // (デザイン規約 §アイコンの席 の文頭記号の見出し). On the folded rail it stands alone in its cell.
     NavIcon {
         kind: "history"
+        set: toggle.captioned ? "head" : ""
+        size: recoverName.font.pixelSize
+        wordBase: recoverName.baselineOffset + recoverName.anchors.verticalCenterOffset
         width: toggle.markSize
-        height: toggle.markSize
+        height: toggle.captioned ? recoverName.height : toggle.markSize
         x: toggle.captioned ? toggle.markX + (Theme.iconMd - toggle.markSize) / 2
                             : (Theme.railWidth - toggle.markSize) / 2
         anchors.verticalCenter: parent.verticalCenter
@@ -60,6 +70,8 @@ Rectangle {
         visible: toggle.captioned
         x: toggle.captionX
         anchors.verticalCenter: parent.verticalCenter
+        // Centred on its capitals, not on its line box (`NavHeader.capsLift`).
+        anchors.verticalCenterOffset: -WordFace.capitalDrop(recoverName)
         // Plural, as the sections' names are: the things thrown away, one entry each.
         text: qsTr("DISCARDS")
         font.pixelSize: Theme.fontMd

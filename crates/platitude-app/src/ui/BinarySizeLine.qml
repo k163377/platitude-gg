@@ -24,30 +24,33 @@ RowLayout {
         elide: Text.ElideRight
         color: Theme.textMuted
     }
+    // Signs between the words (デザイン規約 §アイコンの席 の修飾): each box the words' line, so they stand where the
+    // face's own `+` would.
     DotMark {
         visible: binaryLine.sized
         tint: Theme.textMuted
+        Layout.preferredHeight: sizeWord.implicitHeight
+        middle: sizeWord.baselineOffset - WordFace.signMiddle(sizeWord.font.pixelSize)
     }
     Label {
+        id: sizeWord
         visible: binaryLine.sized
         text: binaryLine.removed ? qsTr("was %1").arg(binaryLine.oldSize)
               : binaryLine.bothSides ? binaryLine.oldSize : binaryLine.newSize
         color: Theme.textMuted
     }
-    Item {
+    NavIcon {
+        id: sizeMark
         visible: binaryLine.bothSides
-        Layout.preferredWidth: sizeMark.inkWidth
-        Layout.preferredHeight: Theme.iconSm
-        Layout.alignment: Qt.AlignVCenter
-        NavIcon {
-            id: sizeMark
-            anchors.centerIn: parent
-            kind: "arrow"
-            width: Theme.iconSm
-            height: Theme.iconSm
-            stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
-            tint: Theme.textMuted
-        }
+        Layout.preferredWidth: sizeMark.wordCell
+        Layout.preferredHeight: sizeWord.implicitHeight
+        width: sizeMark.wordCell
+        height: sizeWord.implicitHeight
+        kind: "arrow"
+        set: "sign"
+        size: sizeWord.font.pixelSize
+        wordBase: sizeWord.baselineOffset
+        tint: Theme.textMuted
     }
     Label {
         visible: binaryLine.bothSides

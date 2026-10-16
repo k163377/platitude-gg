@@ -80,10 +80,10 @@ HoverToolButton {
     /// Stands in for the pointer on that tick, so its one line can be photographed — hover cannot be injected.
     property bool phraseSignaturePointedAt: false
     readonly property bool phraseSignatureTipShown: btnLabel.phraseSignatureTipShown
-    /// The icon is a mark beside the word: `iconSm` rather than `iconMd` (デザイン規約 §寸法「段は役割で選ぶ」), and the
-    /// seat shrinks to the icon — the wide seat holds the icon and the hold mark side by side, a pairing a click-only
-    /// button cannot have (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」). The toolbar keeps the
-    /// wide seat: its buttons can pair.
+    /// The icon is a mark beside the word: drawn to its letters (`ActionButtonSeat.wordSize`, デザイン規約 §アイコンの席
+    /// の文頭記号) in an `iconSm` box rather than `iconMd`, and the seat shrinks to the icon — the wide seat holds the
+    /// icon and the hold mark side by side, a pairing a click-only button cannot have (デザイン規約 §回数押し). The
+    /// toolbar keeps the wide seat: its buttons can pair.
     property bool besideWord: false
     /// The wording the label's box is measured for, and whether it is a command (the two families measure
     /// differently), so a button whose wording changes with its state does not move its neighbours.
@@ -383,6 +383,10 @@ HoverToolButton {
                 // (規約 §回数押し「警告の色は枠と印が持つ」).
                 cornerAlert: actionBtn.folded && actionBtn.alert
                 cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
+                // Beside its word, the head of it (デザイン規約 §アイコンの席 の文頭記号); folded, it stands alone.
+                wordSize: actionBtn.folded || btnLabel.phrased || btnLabel.head === "" ? 0 : btnLabel.fontSize
+                wordBase: btnLabel.y + btnLabel.headBase - seat.y
+                wordHang: btnLabel.code ? Theme.spaceXs / 2 : 0
                 Layout.alignment: Qt.AlignVCenter
             }
             ActionButtonLabel {
@@ -438,9 +442,6 @@ HoverToolButton {
             // draw its mark at a height of its own.
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
-            // The seat carries air its ink never uses (`ActionButtonSeat.implicitHeight`) while the word is ink from
-            // its first row, so centred by their boxes the pair reads high.
-            anchors.verticalCenterOffset: Metrics.opticalDrop
             // No spacing: the word's descent and the seat's step over its ink are already air between the lines, and
             // more puts the mark further from the word than the word is from the frame.
             spacing: 0
@@ -472,13 +473,6 @@ HoverToolButton {
                 // Folded, on the button's middle: held to the top it would sit in the upper half of a two-line box.
                 Layout.alignment: actionBtn.folded ? Qt.AlignHCenter | Qt.AlignVCenter
                                                    : Qt.AlignHCenter | Qt.AlignTop
-                // A step up: the seat's air is uneven about its ink, so a mark at the seat's middle rests low. The two
-                // margins cancel, so the cell keeps its depth.
-                Layout.topMargin: actionBtn.folded ? 0 : -Metrics.opticalDrop
-                Layout.bottomMargin: actionBtn.folded ? 0 : Metrics.opticalDrop
-                // The fraction's ink is even about its box, so it gives back the lifts made for a lone mark's uneven
-                // air: the seat's above, and folded, the column's (`stackCol`).
-                pairDrop: actionBtn.folded ? -Metrics.opticalDrop : Metrics.opticalDrop
                 kind: actionBtn.kind
                 holdPresses: actionBtn.armedPresses
                 // Folded, the mark grows into the word's room.

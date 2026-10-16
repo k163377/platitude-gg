@@ -28,9 +28,9 @@ AppCard {
     /// How wide this card may stand; what is over it wraps. A popup clamps its position to the window, never its
     /// width, so without a cap a long address runs off the edge. The owner measures it (`DetailsAuthorCards.takeRoom`).
     property real maxWidth: 0
-    /// What is left of it for a row's own words, once the frame's padding and the blocks' inset are out.
+    /// What is left of it for a row's own words, once the frame's padding is out.
     readonly property real rowCap: authorCard.maxWidth > 0
-        ? authorCard.maxWidth - 2 * authorCard.padding - 2 * Theme.spaceSm : Number.MAX_VALUE
+        ? authorCard.maxWidth - 2 * authorCard.padding : Number.MAX_VALUE
 
     /// Either difference names both acts, even in the same second (デザイン規約 §author の hover).
     readonly property bool actsShown: authorCard.committerDiffers || authorCard.timeDiffers
@@ -83,17 +83,18 @@ AppCard {
 
         readonly property bool hasAddress: block.address !== ""
         readonly property bool hasAct: block.acts.length > 0
-        readonly property real textLeft: Theme.spaceSm + Theme.iconMd + Theme.spaceXs
+        readonly property real textLeft: Theme.iconMd + Theme.spaceXs
         readonly property real textCap: block.cap - Theme.iconMd - Theme.spaceXs
         /// Over a row where a long name wrapped — it wraps: this card is where a name the pane cut is read in full
         /// (規約 §hover のツールチップ).
         readonly property real headHeight: Math.max(Theme.rowHeight, rowContent.implicitHeight)
 
         // Only what is drawn is measured: a hidden line still has a width, and would widen an ordinary card.
+        // No inset of its own: the card's padding is the face's air on the left, as the step to the name is on its
+        // right (デザイン規約 §アイコンの席「④ の席」— a face's seat is `spaceXs` | face | `spaceXs`).
         implicitWidth: Math.max(rowContent.implicitWidth,
-                                block.hasAddress ? address.x - Theme.spaceSm + address.width : 0,
-                                block.hasAct ? actLines.x - Theme.spaceSm + actLines.width : 0)
-                       + 2 * Theme.spaceSm
+                                block.hasAddress ? address.x + address.width : 0,
+                                block.hasAct ? actLines.x + actLines.width : 0)
         // A block ends `spaceXs` under its own last line — what follows it is another person.
         implicitHeight: block.headHeight
                         + (block.hasAddress ? address.height : 0)
@@ -103,7 +104,6 @@ AppCard {
 
         RowLayout {
             id: rowContent
-            x: Theme.spaceSm
             y: (block.headHeight - height) / 2
             spacing: Theme.spaceXs
             IdentIcon {
@@ -112,8 +112,13 @@ AppCard {
                 width: Theme.iconMd
                 height: Theme.iconMd
                 Layout.alignment: Qt.AlignVCenter
+                // A picture heading the name, on its first line's capitals' middle (デザイン規約 §アイコンの席).
+                transform: Translate {
+                    y: WordFace.capitalDropOf(personName.baselineOffset, personName.pixelSize, personName.height)
+                }
             }
             CardText {
+                id: personName
                 text: block.name
                 color: Theme.textPrimary
                 pixelSize: Theme.fontMd

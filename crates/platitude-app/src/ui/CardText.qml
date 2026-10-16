@@ -130,11 +130,21 @@ Item {
     implicitHeight: cardText.capLines > 0
                     ? Math.min(field.implicitHeight, cardText.capLines * cardText.lineHeight)
                     : field.implicitHeight
+    /// The baseline of the line a character stands on (`charRect`): what a mark set in the sentence is drawn against
+    /// (`NavIcon.wordBase`). The field files the face's leading under each line (`QTextDocumentLayout`), so the
+    /// line's top is `ascent` over its baseline, as a `Text`'s is.
+    function baselineAt(rect) {
+        return rect.y + face.ascent
+    }
     /// The first line's, so a row can stand the sentence on another item's baseline (`Qt.AlignBaseline`), as
     /// `LineText`'s.
     baselineOffset: field.y + field.baselineOffset
     clip: cardText.clipped
 
+    FontMetrics {
+        id: face
+        font: field.font
+    }
     Text {
         id: ruler
         visible: false

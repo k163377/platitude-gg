@@ -105,20 +105,10 @@ Item {
     readonly property real nameBase: names.visible ? names.y + names.baselineOffset
                                                    : (row.height - names.implicitHeight) / 2 + names.baselineOffset
     baselineOffset: line.nameBase
-    /// The figures' ink — the date's, the count's, a capital's height — whose middle the face's middle is put on, so it
-    /// stands as far over the letters as under them (規約 §co-author の表示). The line box keeps the descenders' room
-    /// under the letters, so the box's middle is above theirs.
-    readonly property TextMetrics figureInk: TextMetrics {
-        font.family: Theme.uiFamily
-        font.pixelSize: Theme.fontSm
-        text: "0"
-    }
-    /// Where the face's top goes, in the row's y: whole pixels by the box, the rest drawn (`IdentIcon.drop`).
-    readonly property real faceTop: line.nameBase + line.figureInk.tightBoundingRect.y
-        + line.figureInk.tightBoundingRect.height / 2 - Theme.iconMd / 2
-    /// Automation: the drawn face's middle in `item`'s y (-1 for none), for a run to hold against the letters' ink.
+    /// Automation: the drawn face's middle in `item`'s y (-1 for none), for a run to hold against the date's
+    /// capitals' middle.
     function faceMiddle(item) {
-        return line.visible && face.visible ? face.mapToItem(item, 0, face.drop + Theme.iconMd / 2).y : -1
+        return line.visible && face.visible ? face.mapToItem(item, 0, Theme.iconMd / 2).y : -1
     }
 
     // What is drawn, and all the rule and the hover reach: folded, only the face and the count.
@@ -136,11 +126,10 @@ Item {
                 code: line.faceAt(0)
                 width: Theme.iconMd
                 height: Theme.iconMd
-                drop: line.faceTop - Math.floor(line.faceTop)
+                // A picture heading the names, on their capitals' middle (デザイン規約 §アイコンの席).
                 Layout.alignment: Qt.AlignVCenter
-                // Off the line box's middle onto the letters' (`faceTop`); a shift, so the row is not laid out again.
                 transform: Translate {
-                    y: Math.floor(line.faceTop) - face.y
+                    y: WordFace.capitalDropOf(names.baselineOffset, names.pixelSize, names.height)
                 }
             }
             // A field, so the name can be taken away (規約 §右のペインの字は掴める).

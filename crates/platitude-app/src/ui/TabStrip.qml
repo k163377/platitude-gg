@@ -374,7 +374,7 @@ Item {
             TabTreeMark {
                 id: treeMeasure
                 name: measured.worktree_name
-                metrics: tabMetrics
+                gap: tabMetrics.treeRunGap
             }
         }
     }

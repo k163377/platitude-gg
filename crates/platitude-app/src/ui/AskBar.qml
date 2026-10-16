@@ -321,20 +321,32 @@ Rectangle {
                 id: acceptRow
                 anchors.centerIn: parent
                 spacing: Theme.spaceXs
-                // Ahead of the word: how the pill is answered before what answering does (デザイン規約 §回数押し).
-                HoldIcon {
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.verticalCenterOffset: Metrics.opticalDrop
+                // Ahead of the word: how the pill is answered before what answering does (デザイン規約 §回数押し). A
+                // letter of the pill's words (デザイン規約 §アイコンの席 の名指し): as tall as their capitals and on their
+                // middle, its seat its disc, and the row's step to the word — to a chip's ground, which hangs half a
+                // step before its letters, too.
+                Item {
                     visible: bar.armedPresses > 0
-                    progress: bar.holdProgress
-                    presses: bar.armedPresses
-                    off: bar.holdOff
-                    tint: bar.holdOff ? bar.tone : acceptPill.wordInk
+                    width: Math.round(acceptHold.inkWidth) + (bar.code !== "" ? Theme.spaceXs / 2 : 0)
+                    height: wordSeat.implicitHeight
+                    HoldIcon {
+                        id: acceptHold
+                        x: -Math.round((acceptHold.width - acceptHold.inkWidth) / 2)
+                        y: Math.round(wordSeat.y + wordSeat.base - WordFace.capitalMiddle(acceptHold.size)
+                                      - acceptHold.height / 2)
+                        size: Theme.fontMd
+                        progress: bar.holdProgress
+                        presses: bar.armedPresses
+                        off: bar.holdOff
+                        tint: bar.holdOff ? bar.tone : acceptPill.wordInk
+                    }
                 }
                 // The chip or the word (`code` decides). Only the word takes room in the row: the `!` hangs off the end
                 // of its advance into the pill's padding, as the toolbar sets the same pair (デザイン規約 §git 用語のコード表記).
                 Item {
                     id: wordSeat
+                    /// The word's baseline, in this seat's y: what the hold mark heads.
+                    readonly property real base: bar.code !== "" ? acceptCode.baselineOffset : acceptWord.baselineOffset
                     anchors.verticalCenter: parent.verticalCenter
                     implicitWidth: bar.code !== "" ? acceptCode.implicitWidth : acceptWord.implicitWidth
                     implicitHeight: bar.code !== "" ? acceptCode.implicitHeight : acceptWord.implicitHeight

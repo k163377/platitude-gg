@@ -9,7 +9,11 @@ CheckBox {
     id: appCheck
     font.pixelSize: Theme.fontMd
     implicitHeight: Theme.controlHeight
-    spacing: Theme.spaceSm
+    // The box's seat: whatever holds the box keeps its step on the left, and the same step comes before the words —
+    // the style's own 6 on the left would stack on it (デザイン規約 §アイコンの席「④ の席」— the box's seat is
+    // `spaceXs` | mark | `spaceXs`).
+    leftPadding: 0
+    spacing: Theme.spaceXs
     indicator: Rectangle {
         implicitWidth: Theme.iconMd
         implicitHeight: Theme.iconMd

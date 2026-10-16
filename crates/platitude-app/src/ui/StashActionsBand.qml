@@ -19,6 +19,9 @@ Rectangle {
     /// One box for both words, the two answers to one question: each sized to its own word, the shorter would be the
     /// visibly smaller target (デザイン規約 §余白). Measured off the chips, which are what is drawn.
     readonly property real actBox: Math.max(applyChip.implicitWidth, popChip.implicitWidth)
+    /// How far the caption moves up to stand its capitals on the band's middle (`WordFace.capitalDrop`; デザイン規約
+    /// §アイコンの席「大文字だけの見出しの語」); its mark goes with it.
+    readonly property real capsLift: -WordFace.capitalDrop(stashCaption)
 
     visible: band.stashRef !== ""
     implicitHeight: Theme.headerHeight
@@ -29,13 +32,22 @@ Rectangle {
         anchors.leftMargin: Theme.spaceXs
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
+        // The heading's mark: a step over its capitals, its box the caption's line so the two share a baseline
+        // (デザイン規約 §アイコンの席 の文頭記号の見出し).
         NavIcon {
             kind: "stash"
             tint: Theme.textSecondary
+            set: "head"
+            size: stashCaption.font.pixelSize
+            wordBase: stashCaption.baselineOffset + band.capsLift
+            Layout.preferredWidth: Theme.iconMd
+            Layout.preferredHeight: stashCaption.implicitHeight
             width: Theme.iconMd
-            height: Theme.iconMd
+            height: stashCaption.implicitHeight
         }
         Label {
+            id: stashCaption
+            transform: Translate { y: band.capsLift }
             text: qsTr("STASH")
             font.pixelSize: Theme.fontMd
             font.weight: Theme.fontWeightStrong

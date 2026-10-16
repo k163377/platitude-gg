@@ -123,7 +123,8 @@ AppDialog {
             }
             Label {
                 Layout.fillWidth: true
-                leftPadding: Theme.spaceXl
+                // Under the box's words: past the box and its step (`AppCheckBox`).
+                leftPadding: Theme.iconMd + Theme.spaceXs
                 wrapMode: Text.Wrap
                 font.pixelSize: Theme.fontSm
                 color: markBox.enabled ? Theme.textSecondary : Theme.warning

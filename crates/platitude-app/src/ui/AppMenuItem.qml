@@ -56,13 +56,18 @@ MenuItem {
     property bool headed: true
     readonly property bool titled: menuItem.heads && menuItem.headed
     /// Whether this row's menu keeps the left menu's seat on every row (`AppMenu.seatWorn`), so every name on the card
-    /// begins on one x as in `NameCell`; a mark about the row stands in it at `iconSm`.
+    /// begins on one x as in `NameCell`; a mark about the row stands in it, drawn as the head of the row's words
+    /// (`set: "lead"`).
     readonly property bool seated:
         menuItem.menu !== null && menuItem.menu.seatWorn !== undefined && menuItem.menu.seatWorn === true
     readonly property bool wearsSeat: menuItem.heads && !menuItem.headed
     readonly property real seatX: menuItem.padding + menuItem.holdIndent
-    /// Read by `AppMenu.headingSeat` to line a card's headings up.
-    readonly property real headInk: menuItem.titled ? rowMark.inkWidth : 0
+    /// The room a heading's mark takes, zero on any other row: read by `AppMenu.headingSeat` to line a card's headings
+    /// up.
+    readonly property real headingRoom: menuItem.titled ? menuItem.headSeat : 0
+    /// How wide a heading's mark seat is: as wide as the widest heading mark's ink (11 squares of its grid and its
+    /// line), so the words start one step past any of them.
+    readonly property real headSeat: Math.ceil(rowMark.unit * 11 + rowMark.pen)
     /// The step every heading on such a card starts its words at, marked or not; zero on any other card.
     readonly property real headingSeat:
         menuItem.subMenu !== null && menuItem.menu !== null && menuItem.menu.headingSeat !== undefined
@@ -89,10 +94,13 @@ MenuItem {
     /// A fact about the row in the left menu's far column — the branch a worktree has out
     /// (`NavRowBody.branchSeat`). Empty draws none.
     property string sideName: ""
-    /// The step in front of `nameMark`: a mark inside a word is a letter (デザイン規約 §余白), so a word's step less the
-    /// air its box already holds — and nothing between the mark and its name.
-    readonly property real markWordGap:
-        Theme.spaceXs - (Theme.iconSm - nameMarkIcon.inkWidth) / 2
+    /// The step in front of `nameMark`: a word's. The mark is a sign on its name, so nothing stands between
+    /// it and the name but its cell's own air (デザイン規約 §アイコンの席 の修飾).
+    readonly property real markWordGap: Theme.spaceXs
+    /// Where the row's words stand, in the row's y: every mark ahead of them takes their line for its box
+    /// (デザイン規約 §アイコンの席 の文頭記号). Read off the label, since the layout and an anchor round a half pixel
+    /// apart.
+    readonly property real wordsTop: menuItem.contentItem ? menuItem.contentItem.y + itemLabel.y : 0
 
     /// The width this row asks of the menu's shared chip column: its chip's glyphs, even where the chip ends the row —
     /// the column has to clear the widest command (デザイン規約 §git 用語のコード表記).
@@ -199,17 +207,18 @@ MenuItem {
     // §メニュー). The card's own `spaceXs` outside it only keeps a highlight off the rounded corners.
     padding: Theme.spaceXs
 
-    /// Where a heading's mark ink starts: the x other rows start their words at — or, where the menu has a hold / `!`
-    /// seat, that seat's own x at the row's edge (デザイン規約 §メニュー「印の始まりは文字に合わせ」).
-    readonly property real markX: menuItem.holdIndent > 0 ? 0 : menuItem.padding
+    /// Where a heading's mark box stands: its ink then starts where the other rows start their words (the row's
+    /// padding), so the card's left edge reads as one column (デザイン規約 §メニュー) — or, where the menu has a hold /
+    /// `!` seat, the box is centred on that seat as the `!` is.
+    readonly property real markX: menuItem.holdIndent > 0 ? (menuItem.holdIndent - Theme.iconMd) / 2
+                                  : menuItem.padding - Math.round((Theme.iconMd - rowMark.inkAcross) / 2)
 
-    // A heading's words sit `spaceXs` past the mark's ink, not its box
-    // (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」). On a card that keeps the seat, every row's
-    // words start past it, marked or not (`NameCell`'s spacing).
-    leftPadding: menuItem.headingSeat > 0 ? menuItem.markX + menuItem.headingSeat
-               : menuItem.titled ? menuItem.markX + rowMark.inkWidth + Theme.spaceXs
-               : menuItem.seated ? menuItem.seatX + Theme.iconXs + Theme.spaceXs
-               : menuItem.heads ? menuItem.markX + rowMark.inkWidth + Theme.spaceXs
+    // On a card that keeps the heading seat, every row's words start past it, marked or not (`NameCell`'s spacing).
+    leftPadding: menuItem.headingSeat > 0 ? menuItem.padding + menuItem.headingSeat
+               : menuItem.seated && !menuItem.titled ? menuItem.seatX + Theme.iconXs + Theme.spaceXs
+               : menuItem.heads
+                 ? (menuItem.holdIndent > 0 ? menuItem.padding + menuItem.holdIndent
+                    : menuItem.padding + menuItem.headSeat + Theme.spaceXs)
                : menuItem.padding + menuItem.holdIndent
     topPadding: 0
     bottomPadding: 0
@@ -225,7 +234,7 @@ MenuItem {
                    // The marked name is data: it bids at most `labelColW` and elides past it (デザイン規約 §メニュー).
                    + (menuItem.namesMark
                       ? menuItem.markWordGap
-                        + Math.ceil(Theme.iconSm + Math.min(markNameLabel.implicitWidth, Metrics.labelColW)) : 0)
+                        + Math.ceil(nameMarkIcon.width + Math.min(markNameLabel.implicitWidth, Metrics.labelColW)) : 0)
                    + (menuItem.note !== "" ? noteLabel.implicitWidth + Theme.spaceSm : 0)
                    // Everything drawn after the words bids too, or the row that sets the menu's width cuts its own
                    // name. Asked of what the row holds, not `visible`: a closed card's rows answer false, and the
@@ -233,7 +242,7 @@ MenuItem {
                    + (menuItem.sideName !== "" ? sideLabel.implicitWidth + Theme.spaceLg : 0)
                    + (menuItem.ahead > 0 || menuItem.behind > 0 ? rowTrack.implicitWidth + Theme.spaceSm : 0)
                    + (menuItem.badged ? Theme.iconSm + Theme.spaceXs : 0)
-                   + (menuItem.trail !== "" ? Theme.spaceXs + Theme.iconXs + trailLabel.implicitWidth : 0)
+                   + trailRun.naturalWidth
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
     Accessible.description: menuItem.holdPresses > 0 ? Words.pressToActivate(menuItem.holdPresses) : ""
@@ -282,58 +291,62 @@ MenuItem {
                 : [menuItem.code, menuItem.text, menuItem.namesMark ? menuItem.markName : ""]
                   .filter(words => words !== "").join(" ")
 
-    // The press mark, in the seat `holdIndent` leaves on every row (デザイン規約 §回数押し).
+    // The press mark, in the seat `holdIndent` leaves on every row (デザイン規約 §回数押し): the head of the row's words,
+    // as tall as their capitals and on their middle (デザイン規約 §アイコンの席 の文頭記号).
     HoldIcon {
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: Metrics.opticalDrop
+        id: rowHold
+        // Centred on the seat, where the `!` and a heading's mark stand.
+        x: Math.round((menuItem.holdIndent - rowHold.width) / 2)
+        y: Math.round(menuItem.wordsTop + itemLabel.baselineOffset - WordFace.capitalMiddle(rowHold.size)
+                      - rowHold.height / 2)
+        size: itemLabel.font.pixelSize
         progress: menuItem.holdProgress
         presses: menuItem.armedPresses
         tint: menuItem.holdInk
         off: menuItem.holdOff
         visible: menuItem.armedPresses > 0
     }
-    // The `!` of a row that asks, sharing the hold mark's seat — a row is one or the other (`asks`). Ahead of the word,
-    // so it is the seat's icon (デザイン規約 §git 用語のコード表記「`!` の席」): the step a menu's icons take, centred
-    // where the hold mark is — at the mark's step a stroke this thin reads as punctuation.
+    // The `!` of a row that asks, sharing the hold mark's seat — a row is one or the other (`asks`). Ahead of the words
+    // it heads them (デザイン規約 §アイコンの席 の文頭記号): drawn to their letters and centred on their capitals'
+    // middle, its box their line (`wordsTop`).
     NavIcon {
-        x: (Theme.iconSm - width) / 2
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: Metrics.opticalDrop
+        x: 0
+        y: menuItem.wordsTop
         kind: "bang"
+        set: "lead"
+        size: itemLabel.font.pixelSize
+        wordBase: itemLabel.baselineOffset
         tint: Theme.warning
-        width: Theme.iconMd
-        height: Theme.iconMd
+        width: Theme.iconSm
+        height: itemLabel.height
         // Only on a row that can be pressed; a blocked row says `blockedWhy` instead.
         visible: menuItem.asks && menuItem.armedPresses <= 0 && !menuItem.blocked
     }
-    // A heading's mark. Its ink, not its box, stands at `markX`: the box's air hangs either side into the card's
-    // padding and the word's gap, which would otherwise be spent twice.
+    // A heading's mark, its box at `markX`: a step over the heading's capitals.
     NavIcon {
         id: rowMark
-        x: menuItem.markX - (rowMark.width - rowMark.inkWidth) / 2
-        anchors.verticalCenter: parent.verticalCenter
-        // The house stands on the row's words (`NavIcon.standOn`).
-        anchors.verticalCenterOffset: rowMark.kind === "home"
-                                      ? rowMark.standOn(itemLabel.baselineOffset, itemLabel.height)
-                                      : Metrics.opticalDrop
+        x: menuItem.markX
+        y: menuItem.wordsTop
+        set: "head"
+        size: itemLabel.font.pixelSize
+        wordBase: itemLabel.baselineOffset
         width: Theme.iconMd
-        height: Theme.iconMd
+        height: itemLabel.height
         visible: menuItem.heads && (menuItem.titled || !menuItem.seated)
         kind: menuItem.heads ? menuItem.markKind : "branch"
         tint: menuItem.markTint
     }
-    // A mark about the row, in the left menu's seat and drawn the way that seat draws it (`NameCell.seatNudge`):
-    // `iconSm`, its box hanging past the seat into the step after it. `iconMd` would stand taller than the left menu's.
+    // A mark about the row, in the left menu's seat and drawn the way that seat draws it (`NameCell`), centred on the
+    // seat.
     NavIcon {
         id: seatMark
-        x: menuItem.seatX
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: seatMark.kind === "home"
-                                      ? seatMark.standOn(itemLabel.baselineOffset, itemLabel.height)
-                                      : Metrics.opticalDrop
+        x: menuItem.seatX - (Theme.iconSm - Theme.iconXs) / 2
+        y: menuItem.wordsTop
+        set: "lead"
+        size: itemLabel.font.pixelSize
+        wordBase: itemLabel.baselineOffset
         width: Theme.iconSm
-        height: Theme.iconSm
+        height: itemLabel.height
         visible: menuItem.heads && !menuItem.titled && menuItem.seated
         kind: menuItem.heads ? menuItem.markKind : "branch"
         tint: !menuItem.enabled || menuItem.blocked ? Theme.textMuted : menuItem.markTint
@@ -430,6 +443,9 @@ MenuItem {
         }
         // …and the badge after it, as the left menu's row ends (`NavRowBody`'s `remoteSeat`).
         GoneBadge {
+            id: rowBadge
+            size: itemLabel.font.pixelSize
+            wordBase: itemLabel.y + itemLabel.baselineOffset - rowBadge.y
             visible: menuItem.badged
             Layout.leftMargin: Theme.spaceXs
             Layout.alignment: Qt.AlignVCenter
@@ -438,31 +454,26 @@ MenuItem {
             pullRequest: menuItem.badgePr
             gone: menuItem.badgeGone
         }
-        // `nameMark` + `markName`, the mark set as a letter of the word (`markWordGap`).
+        // `nameMark` + `markName`, the mark a sign on the name (`markWordGap`).
         RowLayout {
             visible: menuItem.namesMark
             Layout.fillWidth: menuItem.namesMark
             Layout.leftMargin: menuItem.namesMark ? menuItem.markWordGap : 0
             spacing: 0
-            Item {
-                Layout.preferredWidth: Theme.iconSm
-                Layout.preferredHeight: Theme.iconSm
-                Layout.alignment: Qt.AlignVCenter
-                NavIcon {
-                    id: nameMarkIcon
-                    anchors.centerIn: parent
-                    anchors.verticalCenterOffset: nameMarkIcon.standOn(markNameLabel.baselineOffset,
-                                                                       markNameLabel.height)
-                    width: Theme.iconSm
-                    height: Theme.iconSm
-                    // The 16-grid scales with the seat and the line does not; unscaled, the mark outweighs the letters
-                    // beside it (`NavIcon.stroke`).
-                    stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
-                    // `NavIcon` paints on a kind it is given; an empty one would be a shape nobody asked for.
-                    kind: menuItem.namesMark ? menuItem.nameMark : "tree"
-                    tint: menuItem.blocked || !menuItem.enabled || menuItem.armedPresses > 0
-                          ? menuItem.wordColor : menuItem.nameMarkTint
-                }
+            // A sign on the name, its box the name's line (デザイン規約 §アイコンの席 の修飾).
+            NavIcon {
+                id: nameMarkIcon
+                Layout.preferredWidth: nameMarkIcon.wordCell
+                Layout.preferredHeight: markNameLabel.implicitHeight
+                width: nameMarkIcon.wordCell
+                height: markNameLabel.implicitHeight
+                set: "sign"
+                size: markNameLabel.font.pixelSize
+                wordBase: markNameLabel.baselineOffset
+                // `NavIcon` paints on a kind it is given; an empty one would be a shape nobody asked for.
+                kind: menuItem.namesMark ? menuItem.nameMark : "tree"
+                tint: menuItem.blocked || !menuItem.enabled || menuItem.armedPresses > 0
+                      ? menuItem.wordColor : menuItem.nameMarkTint
             }
             Label {
                 id: markNameLabel
@@ -475,25 +486,15 @@ MenuItem {
                 color: menuItem.wordColor
             }
         }
-        // `trail`: the tree mark and folder as one run, the way the tab draws it (`TabTreeMark` / `OpsPicker.trail`).
-        NavIcon {
+        // `trail`: the tree mark and folder as one run, the tab's own (`TabTreeMark`) — the mark a sign on the
+        // folder's name (デザイン規約 §アイコンの席 の修飾).
+        TabTreeMark {
+            id: trailRun
             visible: menuItem.trail !== ""
-            Layout.leftMargin: Theme.spaceXs
-            Layout.alignment: Qt.AlignVCenter
-            Layout.preferredWidth: Theme.iconXs
-            Layout.preferredHeight: Theme.iconXs
-            kind: "tree"
-            stroke: Metrics.iconStroke * Theme.iconXs / Theme.iconMd
-            tint: Theme.textSecondary
-        }
-        Label {
-            id: trailLabel
-            visible: menuItem.trail !== ""
-            text: menuItem.trail
-            verticalAlignment: Text.AlignVCenter
-            color: Theme.textSecondary
-            font.family: Theme.uiFamily
-            font.pixelSize: Theme.fontSm
+            Layout.preferredWidth: trailRun.naturalWidth
+            Layout.preferredHeight: trailRun.implicitHeight
+            name: menuItem.trail
+            gap: Theme.spaceXs
         }
         Label {
             id: noteLabel
@@ -525,7 +526,6 @@ MenuItem {
             active: menuItem.subMenu !== null
             x: parent.width - (arrowSeat.item ? arrowSeat.item.inkRight : 0)
             anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: Metrics.opticalDrop
             sourceComponent: NavIcon {
                 width: Theme.iconSm
                 height: Theme.iconSm

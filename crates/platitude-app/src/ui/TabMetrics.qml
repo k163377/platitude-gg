@@ -30,13 +30,6 @@ QtObject {
     readonly property real markRoomFull: 2 * tabMetrics.markGap + tabMetrics.markSeat
     readonly property real markRoomMin: tabMetrics.tabPadL
 
-    /// The seat of the mark naming the worktree a tab stands in: the step of the word it is set in, `fontSm`
-    /// (デザイン規約 §寸法). At `iconSm` the crown stands taller than a `fontSm` capital (9.75 against 8.6px in
-    /// Yu Gothic UI) and reads as a picture dropped into the word; `iconXs` comes out at 8.13.
-    ///
-    /// Nothing is spent either side of it: it is set in the run as a letter is, not stood in a row
-    /// (デザイン規約 §余白 / §タブの所作).
-    readonly property int treeSeat: Theme.iconXs
     /// The step between the repository's name and the run's mark — a row's step, since the two runs are two things
     /// the tab says (デザイン規約 §余白).
     readonly property real treeRunGap: Theme.spaceXs

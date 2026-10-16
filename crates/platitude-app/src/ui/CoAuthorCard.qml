@@ -16,7 +16,7 @@ AppCard {
     /// `DetailsAuthorCards.takeRoom`).
     property real maxWidth: 0
     readonly property real rowCap: mateCard.maxWidth > 0
-        ? mateCard.maxWidth - 2 * mateCard.padding - 2 * Theme.spaceSm : Number.MAX_VALUE
+        ? mateCard.maxWidth - 2 * mateCard.padding : Number.MAX_VALUE
 
     padding: Theme.spaceXs
     // Against the underlined stretch, so the pointer walks down into it without leaving both.
@@ -43,16 +43,14 @@ AppCard {
                 // from under the hand and shut the card. On a second line, since height is what this card has to
                 // spare. Both wrap: this is where they are read in full (規約 §hover のツールチップ).
                 readonly property real headHeight: Math.max(Theme.rowHeight, rowContent.implicitHeight)
-                implicitWidth: Math.max(rowContent.implicitWidth,
-                                        address.x - Theme.spaceSm + address.width)
-                               + 2 * Theme.spaceSm
+                // No inset of its own, as the author's card (`AuthorCard`).
+                implicitWidth: Math.max(rowContent.implicitWidth, address.x + address.width)
                 implicitHeight: mateRow.headHeight + (mateRow.hasAddress ? address.height : 0)
                 width: implicitWidth
                 height: implicitHeight
 
                 RowLayout {
                     id: rowContent
-                    x: Theme.spaceSm
                     y: (mateRow.headHeight - height) / 2
                     spacing: Theme.spaceXs
                     IdentIcon {
@@ -60,8 +58,13 @@ AppCard {
                         width: Theme.iconMd
                         height: Theme.iconMd
                         Layout.alignment: Qt.AlignVCenter
+                        // A picture heading the name, on its first line's capitals' middle (デザイン規約 §アイコンの席).
+                        transform: Translate {
+                            y: WordFace.capitalDropOf(mateName.baselineOffset, mateName.pixelSize, mateName.height)
+                        }
                     }
                     CardText {
+                        id: mateName
                         text: mateRow.modelData.name
                         color: Theme.textPrimary
                         pixelSize: Theme.fontMd
@@ -74,7 +77,7 @@ AppCard {
                     visible: mateRow.hasAddress
                     width: Math.min(implicitWidth, mateCard.rowCap - Theme.iconMd - Theme.spaceXs)
                     // Under the name, indented past the face so the two read as one person.
-                    x: Theme.spaceSm + Theme.iconMd + Theme.spaceXs
+                    x: Theme.iconMd + Theme.spaceXs
                     y: mateRow.headHeight - Theme.spaceXs
                     text: mateRow.modelData.email
                     color: Theme.textSecondary

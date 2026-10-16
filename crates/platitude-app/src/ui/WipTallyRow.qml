@@ -24,26 +24,22 @@ RowLayout {
         required property string code
         required property int count
         visible: tally.count > 0
-        // No gap: the seat below is the ink's width, so the mark's own air is the gap (デザイン規約 §余白).
+        // No gap: the mark is a sign before the count, as `+` stands before a number, its cell the face's own room
+        // round it (デザイン規約 §アイコンの席 の修飾). Its box is the count's line, so the two share a baseline.
         spacing: 0
-        // The seat is the ink (デザイン規約 §未コミット行が名乗るもの).
-        Item {
-            Layout.preferredWidth: tallyMark.inkWidth
-            Layout.preferredHeight: Theme.iconXs
-            ChangeIcon {
-                id: tallyMark
-                anchors.centerIn: parent
-                change: tally.code
-                // A step under `iconSm`: paired with a digit into one unit (規約 §寸法).
-                width: Theme.iconXs
-                height: Theme.iconXs
-                // The stroke shrinks with the grid, or the mark outweighs the digit beside it
-                // (rules-refs/app-ui.md「語の隣に立つ印は `iconSm`、席はインクに引く」).
-                stroke: Metrics.iconStroke * Theme.iconXs / Theme.iconMd
-            }
+        ChangeIcon {
+            id: tallyMark
+            Layout.preferredWidth: tallyMark.wordCell
+            Layout.preferredHeight: tallyCount.implicitHeight
+            change: tally.code
+            set: "sign"
+            size: tallyCount.font.pixelSize
+            wordBase: tallyCount.baselineOffset
+            width: tallyMark.wordCell
+            height: tallyCount.implicitHeight
         }
         Label {
-            leftPadding: Theme.spaceXs / 2
+            id: tallyCount
             text: tally.count
             color: tallyMark.tint
             font.pixelSize: Theme.fontSm

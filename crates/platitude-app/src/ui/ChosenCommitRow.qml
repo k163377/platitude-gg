@@ -77,6 +77,9 @@ Item {
             id: face
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
+            // A picture heading the subject, on its capitals' middle (デザイン規約 §アイコンの席).
+            anchors.verticalCenterOffset: WordFace.capitalDropOf(subjectLine.baselineOffset, subjectLine.pixelSize,
+                                                                 subjectLine.height)
             code: commitRow.modelData.avatar
             imageUrl: commitRow.modelData.avatarUrl
         }
@@ -95,7 +98,9 @@ Item {
         LineText {
             id: subjectLine
             anchors.left: face.right
-            anchors.leftMargin: Theme.spaceSm
+            // The face's air on its right, as the row's inner step on its left (デザイン規約 §アイコンの席「④ の席」—
+            // a face's seat is `spaceXs` | face | `spaceXs`).
+            anchors.leftMargin: Theme.spaceXs
             anchors.right: plate.left
             anchors.rightMargin: Theme.spaceSm
             anchors.verticalCenter: parent.verticalCenter

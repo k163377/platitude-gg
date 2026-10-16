@@ -39,9 +39,6 @@ Item {
     /// Where the ink ends — the whole column once there is a cut in the name, the name's own width while there is not.
     /// What a mark on the name's shoulder is placed against.
     readonly property real inkWidth: cut.cutting ? cut.width : headLabel.implicitWidth
-    /// The name's baseline from this item's top, wherever the box it was handed centres it — what a mark beside the
-    /// name stands on (`NavIcon.standOn`). Not `baselineOffset`, which would seat this item in a baseline layout.
-    readonly property real wordBase: headLabel.baselineOffset
 
     function relayout() {
         const whole = cut.text
@@ -152,6 +149,8 @@ Item {
     // Rounded up once here for every caller (rules-refs/app-ui.md「自然幅の上限は切り上げる」).
     implicitWidth: Math.ceil(measure.advanceWidth)
     implicitHeight: markLabel.implicitHeight
+    // The label's own, its centring in the box included: a mark set beside the name stands on it (`NavIcon.wordBase`).
+    baselineOffset: headLabel.baselineOffset
     onTextChanged: cut.relayout()
     onWidthChanged: cut.relayout()
     Component.onCompleted: cut.relayout()

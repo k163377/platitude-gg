@@ -40,10 +40,21 @@ AppDialog {
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceSm
+            // The head of the words, turning about its middle on their capitals' middle (デザイン規約 §アイコンの席
+            // の文頭記号) — the words' top is the row's.
             SpinnerIcon {
+                id: quitRing
+                wordSize: quitWords.pixelSize
+                Layout.preferredWidth: quitRing.width
+                Layout.preferredHeight: quitRing.height
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: Math.round(quitWords.baselineOffset
+                                             - WordFace.capitalMiddle(quitWords.pixelSize) - quitRing.height / 2)
                 spinning: quitWaitDialog.opened
             }
             CardText {
+                id: quitWords
+                Layout.alignment: Qt.AlignTop
                 Layout.fillWidth: true
                 pixelSize: Theme.fontXl
                 weight: Theme.fontWeightStrong

@@ -16,6 +16,10 @@ Rectangle {
 
     signal chosen(bool tree)
 
+    /// How far the caption moves up to stand its capitals on the band's middle (`WordFace.capitalDrop`; デザイン規約
+    /// §アイコンの席「大文字だけの見出しの語」); its count goes with it.
+    readonly property real capsLift: -WordFace.capitalDrop(changesCaption)
+
     implicitHeight: Theme.headerHeight
     color: Theme.bgElevated
     RowLayout {
@@ -24,6 +28,8 @@ Rectangle {
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         Label {
+            id: changesCaption
+            transform: Translate { y: changesBand.capsLift }
             text: changesBand.caption
             font.pixelSize: Theme.fontMd
             font.weight: Theme.fontWeightStrong
@@ -31,6 +37,7 @@ Rectangle {
         }
         // The caption's size; weight and colour mark it as a count (規約 §タイポグラフィ).
         Label {
+            transform: Translate { y: changesBand.capsLift }
             text: "(" + changesBand.count + ")"
             font.pixelSize: Theme.fontMd
             color: Theme.textMuted

@@ -12,8 +12,12 @@ Item {
     property bool gone: false
     /// The row's height — the air over the badge the `!` may lift into (see `y` below).
     property real rowHeight: Theme.rowHeight
+    /// The pixel size of the name the badge follows, and where its baseline runs in the badge's y: a state after the
+    /// name, drawn to its letters and on their capitals' middle (デザイン規約 §アイコンの席 の名指し).
+    property real size: Theme.fontMd
+    property real wordBase: 0
 
-    // The size the graph's chips wear it at (デザイン規約 §寸法).
+    // The row-end column's seat (デザイン規約 §アイコンの席 の名指し); the mark is drawn to the name's letters.
     implicitWidth: Theme.iconSm
     implicitHeight: Theme.iconSm
 
@@ -22,6 +26,9 @@ Item {
         // a shot waiting on it runs to the ceiling.
         width: Theme.iconSm
         height: Theme.iconSm
+        set: "name"
+        size: badge.size
+        wordBase: badge.wordBase
         kind: badge.pullRequest ? "pr" : "remote"
         // The quiet row-mark colour (デザイン規約 §ref の種別); warning when gone, which is a state (§状態).
         tint: badge.gone ? Theme.warning : Theme.textSecondary
@@ -35,7 +42,7 @@ Item {
         tint: Theme.warning
         width: Theme.iconXs
         height: Theme.iconXs
-        // Seated by its ink, not its box: the ink sits left in its box (`NavIcon.inkGrid`), so aligning boxes puts the
+        // Seated by its ink, not its box: the ink is a sliver in the middle of its box, so aligning boxes puts the
         // stroke on the badge. The box overhangs into the gutter the row already keeps (デザイン規約 §余白).
         x: Theme.iconSm - (goneMark.inkRight - goneMark.inkWidth)
         // Up to the row's own air over the badge — any higher draws on the row above, and nothing clips it.

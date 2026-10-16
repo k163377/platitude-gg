@@ -468,19 +468,13 @@ Item {
     }
     /// The author row's two lines, each read as one (デザイン規約 §右のペインの親): the name and the commit's hash on one
     /// baseline (`line1`), the date, the credit and the parents on the next (`line2`), and the two counts of one size
-    /// (`sizes`), and the credit's face as far over the date's letters as under them (`face`, 規約 §co-author の表示 —
-    /// the letters' ink is the date's own, measured here, not the figure the line centres on). A pixel off is what the
-    /// eye catches and a picture cannot be asked, so the row says it. Each value after the claims is that word's
-    /// baseline less its line's first word's (the name's, the date's), and the face's middle less the ink's; `-` is a
-    /// word not drawn.
+    /// (`sizes`), and the credit's face on the middle of the date line's capitals (`face`, デザイン規約 §アイコンの席 — read
+    /// off the window's face, `WordFace`, not off the row). A pixel off is what the eye catches and a picture cannot be
+    /// asked, so the row says it. Each value after the claims is that word's baseline less its line's first word's (the
+    /// name's, the date's), and the face's middle less the capitals'; `-` is a word not drawn.
     SampleTimer {
         id: detailsAlignTimer
         property string lastGeom: ""
-        /// The date's letters as drawn: their ink's middle is what the face is held against.
-        readonly property TextMetrics dateInk: TextMetrics {
-            font.family: Theme.uiFamily
-            font.pixelSize: Theme.fontSm
-        }
         onTriggered: {
             const row = detailsPane.valueRow
             if (!driver.cardSettled || detailsPane.width <= 0)
@@ -492,11 +486,8 @@ Item {
                 return
             }
             detailsAlignTimer.stop()
-            const ink = detailsAlignTimer.dateInk
-            ink.font.pixelSize = b.dateSize
-            ink.text = b.dateText
-            const inkMiddle = b.date + ink.tightBoundingRect.y + ink.tightBoundingRect.height / 2
-            const faceOff = b.face < 0 ? 0 : b.face - inkMiddle
+            const capitalsMiddle = b.date - WordFace.capitalMiddle(b.dateSize)
+            const faceOff = b.face < 0 ? 0 : b.face - capitalsMiddle
             const off = (v, ref) => v < 0 ? "-" : (Math.round((v - ref) * 10) / 10).toString()
             const level = (v, ref) => v < 0 || Math.abs(v - ref) < 0.5
             const line2 = level(b.mate, b.date) && level(b.mateCount, b.date) && level(b.parent, b.date)
@@ -505,7 +496,8 @@ Item {
             Harness.report("details_align line1=" + level(b.hash, b.name) + " line2=" + line2
                               + " sizes=" + (b.mateCountSize === b.parentCountSize)
                               + " apart=" + (b.apart >= Theme.spaceXs)
-                              + " face=" + (Math.abs(faceOff) < 0.25)
+                              // Whole pixels both: a line of an odd height has its middle on a half.
+                              + " face=" + (Math.abs(faceOff) <= 0.5)
                               + " hash=" + off(b.hash, b.name)
                               + " mate=" + off(b.mate, b.date) + " mateCount=" + off(b.mateCount, b.date)
                               + " parent=" + off(b.parent, b.date) + " comma=" + off(b.comma, b.date)

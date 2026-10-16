@@ -81,15 +81,6 @@ HoverToolButton {
     /// Both lines' height **whatever is written now**, read off the faces — the panel's buttons are drawn this deep
     /// even for a one-line branch or a page still loading.
     readonly property real pairHeight: nameMetrics.height + noteMetrics.height
-    /// Top offset for a mark set among letters: on the baseline, centred on the capitals where it is taller than them
-    /// (デザイン規約 §操作パネル). Measured on the mark's ink (`NavIcon.inkTallGrid`), in the face it stands in.
-    function markMiddle(seat, metrics, mark) {
-        const ink = mark.inkTallGrid / 16 * mark.height + mark.stroke
-        const stands = Math.min(Math.max(ink, metrics.xHeight), metrics.capitalHeight)
-        return Math.max(0, Math.round(metrics.ascent - stands / 2 - seat / 2))
-    }
-    readonly property real kindDrop: picker.markMiddle(picker.kindSize, nameMetrics, kindMark)
-    readonly property real noteMarkDrop: picker.markMiddle(picker.noteSeat, noteMetrics, noteMark)
 
     readonly property bool saying: picker.name !== ""
     readonly property string shown: picker.saying ? picker.name : picker.blank
@@ -99,7 +90,7 @@ HoverToolButton {
     /// The column the kind mark stands in at the head of each line, and the step after it.
     readonly property real kindColumn: picker.kind === "" ? 0 : picker.markColumn + picker.kindGap
     readonly property real trailWidth:
-        picker.trail === "" ? 0 : picker.gap + picker.trailSeat + Math.ceil(trailRuler.advanceWidth)
+        picker.trail === "" ? 0 : trailRun.fixedWidth + Math.ceil(trailRuler.advanceWidth)
     /// Counts beside the name, and what they cost. The step is a word's, not a letter's (規約 §操作パネル).
     readonly property bool tracked: picker.ahead > 0 || picker.behind > 0
     property int trackGap: Theme.spaceSm
@@ -121,16 +112,14 @@ HoverToolButton {
     readonly property real foldWidth: picker.bareBox + Math.max(picker.lineOneFloor, picker.lineTwoFloor)
     /// What lies between the two — the most this picker can give.
     readonly property real slack: picker.wholeWidth - picker.foldWidth
-    /// The two runs' marks, each at its own words' step (規約 §寸法「語の中に組む印は、その語の段に従う」).
-    readonly property int trailSeat: Theme.iconXs
+    /// The second line's mark, at its words' step (規約 §寸法「語の中に組む印は、その語の段に従う」).
     readonly property int noteSeat: Theme.iconSm
     /// The one column both lines' marks stand in, as wide as the wider mark, so the words after them start on one x.
     readonly property int markColumn: Math.max(picker.kindSize, picker.noteSeat)
     /// The air the chevron keeps inside its square on each side, **measured at rest** — measured turned, the steps
     /// would change as the card opens and the names would move under the hand. From the middle out: the ink is centred
     /// in its square.
-    readonly property real markAir:
-        (picker.markSeat - (mark.inkGrid / 16 * mark.width + mark.stroke)) / 2
+    readonly property real markAir: (picker.markSeat - mark.inkAcross) / 2
     /// The air between the box's leading edge and the chevron's ink.
     readonly property real leadAir: picker.leftPadding + picker.markAir
     readonly property real kindAir: picker.kind === "" ? 0 : (kindMark.width - kindMark.inkWidth) / 2
@@ -148,7 +137,7 @@ HoverToolButton {
     readonly property string trackPlace: {
         if (!picker.tracked)
             return "none"
-        const step = trackSeat.x - (trailCell.visible ? trailCell.x + trailCell.width : nameCell.x + nameCell.width)
+        const step = trackSeat.x - (trailRun.visible ? trailRun.x + trailRun.width : nameCell.x + nameCell.width)
         const past = nameLine.width - (trackSeat.x + trackSeat.width)
         if (Math.abs(step - picker.trackGap) < 0.5)
             return "after"
@@ -256,9 +245,9 @@ HoverToolButton {
 
                 Item {
                     id: kindSlot
-                    // On the letters, not the line box (`markMiddle`).
-                    Layout.alignment: Qt.AlignTop
-                    Layout.topMargin: picker.kindDrop
+                    // On the line's middle: the operation panel's own placement (デザイン規約 §アイコンの席 の ⑥ /
+                    // §操作パネル).
+                    Layout.alignment: Qt.AlignVCenter
                     Layout.preferredWidth: picker.markColumn
                     Layout.preferredHeight: picker.kindSize
                     visible: picker.kind !== ""
@@ -288,29 +277,16 @@ HoverToolButton {
                          : picker.saying ? picker.tone
                          : Theme.textMuted
                 }
-                // The worktree's run (`trail`): one step before the mark, none after it.
-                NavIcon {
-                    id: trailMark
-                    Layout.leftMargin: picker.gap
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: picker.trailSeat
-                    Layout.preferredHeight: picker.trailSeat
-                    visible: picker.trail !== ""
-                    kind: "tree"
-                    // Scaled as `kindMark`'s.
-                    stroke: Metrics.iconStroke * picker.trailSeat / Theme.iconMd
-                    // The run's own ink, as `TabTreeMark` — the section's colour would split the run in two.
-                    tint: Theme.textSecondary
-                }
-                CutName {
-                    id: trailCell
-                    Layout.preferredWidth: Math.ceil(trailRuler.advanceWidth) - picker.trailGiven
-                    Layout.preferredHeight: trailRuler.height
+                // The worktree's run (`trail`): the tab's own run (`TabTreeMark`) — a step before the mark, the
+                // mark a sign on the folder's name (デザイン規約 §アイコンの席 の修飾), cut to what it is left.
+                TabTreeMark {
+                    id: trailRun
+                    Layout.preferredWidth: picker.trailWidth - picker.trailGiven
+                    Layout.preferredHeight: trailRun.implicitHeight
                     Layout.alignment: Qt.AlignVCenter
                     visible: picker.trail !== ""
-                    text: picker.trail
-                    pixelSize: Theme.fontSm
-                    color: Theme.textSecondary
+                    name: picker.trail
+                    gap: picker.gap
                 }
                 // The counts end the longer line: `trackGap` at least, grown by what the second line has over the
                 // first (規約 §操作パネル).
@@ -340,9 +316,8 @@ HoverToolButton {
 
                 Item {
                     id: noteSlot
-                    // The same, on its own line's letters (`markMiddle`).
-                    Layout.alignment: Qt.AlignTop
-                    Layout.topMargin: picker.noteMarkDrop
+                    // The same, on its own line.
+                    Layout.alignment: Qt.AlignVCenter
                     Layout.preferredWidth: picker.markColumn
                     Layout.preferredHeight: picker.noteSeat
                     NavIcon {

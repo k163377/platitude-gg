@@ -685,7 +685,7 @@ Rectangle {
                 // takes the state's colour on mark and word alike.
                 kind: "branch"
                 kindTint: topBar.detachedHead ? Theme.warning : Theme.accent
-                // **The size the left list draws the same mark at** (`NavHeader`, 規約 §操作パネル).
+                // **`iconMd`, the panel's own step** (デザイン規約 §アイコンの席 の ⑥ / §操作パネル).
                 kindSize: Theme.iconMd
                 // **A mark standing in the row, not a letter of the name** (規約 §操作パネル): the row's step, the
                 // mark's own air counting towards it. At zero the gap is a letter's, and the mark reads as the name's

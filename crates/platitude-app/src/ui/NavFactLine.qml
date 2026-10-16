@@ -56,7 +56,7 @@ RowLayout {
         enabled: line.noted
     }
 
-    // The row's own seat, to the pixel (`NameCell.seatSize` / `seatNudge`), so the words begin
+    // The row's own seat, to the pixel (`NameCell.seatSize`, the mark centred on it), so the words begin
     // where the row's name does; sized by the mark instead, they land right of it. A TAGS row has no seat
     // (`NavRowBody.seated`): its lines' cloud stands under the name's head and the words one seat in.
     Item {
@@ -67,16 +67,18 @@ RowLayout {
         Loader {
             id: markSeat
             active: line.mark !== ""
-            anchors.centerIn: parent
-            anchors.horizontalCenterOffset: (Theme.iconSm - Theme.iconXs) / 2
-            // The house stands on the words (`NavIcon.standOn`), which sit on the line's baseline, not its middle.
-            anchors.verticalCenterOffset: markSeat.item
-                ? markSeat.item.standOn(words.y + words.baselineOffset - seatBox.y, seatBox.height) : 0
+            anchors.horizontalCenter: parent.horizontalCenter
+            // The head of the line's words (デザイン規約 §アイコンの席 の文頭記号): drawn to their letters, against
+            // their baseline — a step above the box's foot, for a stem that runs past it.
+            y: Math.round(words.y + words.baselineOffset - seatBox.y) - Theme.iconSm
             sourceComponent: NavIcon {
                 kind: line.mark
+                set: "lead"
+                size: words.pixelSize
+                wordBase: Theme.iconSm
                 tint: line.markTint
                 width: Theme.iconSm
-                height: Theme.iconSm
+                height: Theme.iconSm + Theme.spaceXs
             }
         }
     }

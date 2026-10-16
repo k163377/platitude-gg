@@ -59,9 +59,9 @@ Rectangle {
     readonly property int nameLines: chip.wrapped ? Math.max(1, nameLabel.lineCount) : 1
     /// Everything in the chip but the name, each with its gap, counted only while drawn: room not taken would cut the
     /// name short of the frame.
-    readonly property real furnitureW: (chip.hasBadge ? chip.badgeInk + Theme.spaceXs / 2 : 0)
+    readonly property real furnitureW: (chip.hasBadge ? chip.badgeCell + Theme.spaceXs / 2 : 0)
                                        + (chip.hasCount ? chip.countW + Theme.spaceXs / 2 : 0)
-                                       + (chip.hasMark ? chip.markInk + Theme.spaceXs / 2 : 0)
+                                       + (chip.hasMark ? chip.markCell : 0)
     /// What the contents come to; `width` clamps this to `maxWidth` and the frame clips the rest, so [`furnitureW`]
     /// must leave the name exactly its room (`tst_refstack.qml` holds it).
     readonly property real contentW: chipContent.implicitWidth
@@ -76,11 +76,14 @@ Rectangle {
     /// The count's seat, measured off the label that draws it: a seat priced for one digit lets the frame clip a
     /// `+41` to `+4`, a wrong number.
     readonly property real countW: countLabel.implicitWidth
-    /// What each mark's ink spans (`NavIcon.inkWidth`). Both marks are seated to their ink: the air in their box
-    /// counts as the gap beside them (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
-    readonly property real markInk: nameMark.inkWidth
-    /// The cloud's ink starts 1.7 of its sixteen in; seated on its box, that air would add to the row's spacing.
-    readonly property real badgeInk: badgeMark.inkWidth
+    /// The padlock's or the tree's cell: a sign on the name (デザイン規約 §アイコンの席 の修飾).
+    readonly property real markCell: nameMark.wordCell
+    /// Its seat in the row: the cell less the row's half gap, which the cell's own air stands in for — a sign keeps
+    /// only its cell's air before the name it stands on.
+    readonly property real markSeat: chip.markCell - Theme.spaceXs / 2
+    /// The cloud's or the pull request's cell: a state after the name (デザイン規約 §アイコンの席 の名指し), its ink
+    /// and half a step either side, so with the row's half step it stands a step off the name and off the count.
+    readonly property real badgeCell: badgeMark.wordCell + Theme.spaceXs
     /// Where the badge and the count stand, read off the laid-out items: swapping them changes no width, so only
     /// these can say the drawn order (`tst_refstack.qml`).
     readonly property real badgeX: badgeSeat.x
@@ -235,27 +238,23 @@ Rectangle {
         // stood as far from its name as the name from the frame.
         spacing: Theme.spaceXs / 2
         // The padlock or the tree ([`hasMark`]). Unlike the sidebar row's, the seat comes and goes: held open, it
-        // would push every name on the graph one mark right. Seated to its ink ([`markInk`]).
+        // would push every name on the graph one mark right. Its box runs into the half gap after it ([`markSeat`]).
+        // Its box is the name's, so the two stand on one baseline (the first line's, on a wrapped chip).
         Item {
             id: markBox
             visible: chip.hasMark
-            // Asked of the mark, not a number: the padlock and the tree span different ink.
-            width: chip.markInk
-            height: Theme.iconSm
-            // On the first line's box, for the reason the badge at the other end is.
-            y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconSm) / 2)
+            width: chip.markSeat
+            height: nameLabel.height
+            y: nameLabel.y
             NavIcon {
                 id: nameMark
-                anchors.verticalCenter: parent.verticalCenter
-                // The house stands on the name's baseline (`NavIcon.standOn`).
-                anchors.verticalCenterOffset: nameMark.standOn(nameLabel.y + nameLabel.baselineOffset - markBox.y,
-                                                               markBox.height)
-                anchors.left: parent.left
-                anchors.leftMargin: -(Theme.iconSm - nameMark.inkWidth) / 2
                 kind: chip.hasLock ? "lock" : chip.recHome ? "home" : "tree"
+                set: "sign"
+                size: nameLabel.font.pixelSize
+                wordBase: nameLabel.baselineOffset
                 tint: Theme.textSecondary
-                width: Theme.iconSm
-                height: Theme.iconSm
+                width: nameMark.wordCell
+                height: markBox.height
             }
         }
         Label {
@@ -271,25 +270,24 @@ Rectangle {
             // Also when wrapped: handed its whole room, every chip in a list would be as wide as the widest name.
             width: Math.min(implicitWidth, chip.nameRoom)
         }
-        // Remote / PR badge: its width is reserved in `furnitureW`, so it survives any elision. Seated to its ink
-        // ([`badgeInk`]).
+        // Remote / PR badge: its width is reserved in `furnitureW`, so it survives any elision. A state after the name,
+        // on the name's first line: centred on a wrapped chip, it would leave its name.
         Item {
             id: badgeSeat
             visible: chip.hasBadge
-            width: chip.badgeInk
-            height: Theme.iconSm
-            // On the first line's box: centred on a wrapped chip, it would leave its name.
-            y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconSm) / 2)
+            width: chip.badgeCell
+            height: nameLabel.height
+            y: nameLabel.y
             NavIcon {
                 id: badgeMark
-                anchors.verticalCenter: parent.verticalCenter
-                // The ink's right edge on the seat's; the air left of the ink overhangs into the row's spacing.
-                anchors.right: parent.right
-                anchors.rightMargin: -(badgeMark.width - badgeMark.inkRight)
+                x: Theme.spaceXs / 2
                 kind: chip.recPr ? "pr" : "remote"
+                set: "name"
+                size: nameLabel.font.pixelSize
+                wordBase: nameLabel.baselineOffset
                 tint: Theme.textSecondary
-                width: Theme.iconSm
-                height: Theme.iconSm
+                width: badgeMark.wordCell
+                height: badgeSeat.height
             }
         }
         // How many more names: row meta, in the meta colour (author, date).
@@ -314,18 +312,21 @@ Rectangle {
         // The panel's whole gap (`NavFactLine`), not the first line's half: this mark sits on its box, whose air
         // would eat a half gap.
         spacing: Theme.spaceXs
-        // The panel's mark seat (`NavFactLine`), on its line's box like the badge.
+        // The panel's mark seat (`NavFactLine`), the head of the line's words: its box their first line, so it is set
+        // against their baseline and centred on their capitals' middle (デザイン規約 §アイコンの席 の文頭記号).
         Item {
             width: Theme.iconXs
-            height: Theme.iconXs
-            y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconXs) / 2)
+            height: mateText.height
+            y: mateText.y
             NavIcon {
-                anchors.centerIn: parent
-                anchors.horizontalCenterOffset: (Theme.iconSm - Theme.iconXs) / 2
+                anchors.horizontalCenter: parent.horizontalCenter
                 kind: chip.mate ? chip.mate.mark : ""
+                set: "lead"
+                size: mateText.font.pixelSize
+                wordBase: mateText.baselineOffset
                 tint: chip.mate ? chip.mate.markTint : Theme.textSecondary
                 width: Theme.iconSm
-                height: Theme.iconSm
+                height: parent.height
             }
         }
         // Seated to its ink (`inkY`): centred on the box, a `fontSm` line hangs low.

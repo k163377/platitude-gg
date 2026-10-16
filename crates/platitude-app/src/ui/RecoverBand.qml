@@ -84,9 +84,15 @@ Rectangle {
                     required property int index
                     Layout.fillWidth: true
                     spacing: Theme.spaceXs
+                    // The head of the line's words, on their capitals' middle (デザイン規約 §アイコンの席 の文頭記号) —
+                    // the words' top is the row's (they are its tallest item).
                     RecoverMark {
                         Layout.preferredWidth: implicitWidth
                         Layout.preferredHeight: implicitHeight
+                        Layout.alignment: Qt.AlignTop
+                        Layout.topMargin: Math.round(partText.baselineOffset
+                                                     - WordFace.capitalMiddle(partText.pixelSize) - implicitHeight / 2)
+                        size: partText.pixelSize
                         kind: partLine.modelData.mark
                         tint: partLine.modelData.tint
                         badged: partLine.modelData.badged

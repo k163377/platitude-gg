@@ -226,7 +226,8 @@ Item {
         rowItem.width - rowItem.labelsW - (ListView.view ? ListView.view.graphColWidth : 0)
         - 2 * Theme.spaceSm - 2 * Theme.borderWidth - 5 * Theme.spaceXs - tallySeat.implicitWidth
     /// What is left of that for the worktree's name. **The dash and the mark are measured where they are drawn**
-    /// (`furnitureW`), never written down: the dash's width is the font's, the mark's seat its ink (規約 §余白).
+    /// (`furnitureW`), never written down: the dash's width is the font's, the mark's seat its `wordCell` (デザイン規約
+    /// §アイコンの席 の修飾).
     /// **The words never cut**, so the whole overrun is the name's (規約 §未コミット行が名乗るもの).
     readonly property real carriedNameMax:
         rowItem.wipRoom - wordsCut.implicitWidth
@@ -334,7 +335,7 @@ Item {
                     spacing: Theme.spaceXs
                     /// The dash and the mark, for `carriedNameMax`.
                     readonly property real furnitureW:
-                        carriedDash.implicitWidth + Theme.spaceXs + carriedMark.inkWidth
+                        carriedDash.implicitWidth + Theme.spaceXs + carriedMark.width
                     // The dash stays a character — it draws the same length in the same place on both OSes
                     // (規約 §寸法「字で出ていた記号は 5 種」).
                     Label {
@@ -344,27 +345,24 @@ Item {
                         color: Theme.textSecondary
                         Layout.alignment: Qt.AlignVCenter
                     }
-                    // The mark and the name are one word, seated on the mark's ink
-                    // (規約 §余白「印が自分で持っている余白は、隣の詰めに数える」). A nested layout fills by default;
-                    // this pair is only as wide as what it holds.
+                    // The mark is a sign on the name (デザイン規約 §アイコンの席 の修飾), with no step after it
+                    // (規約 §別の worktree を読む). Its box is the name's line, so the two share a baseline. A nested
+                    // layout fills by default; this pair is only as wide as what it holds.
                     RowLayout {
                         Layout.fillWidth: false
                         spacing: 0
-                        Item {
-                            Layout.preferredWidth: carriedMark.inkWidth
-                            Layout.preferredHeight: Theme.iconSm
-                            Layout.alignment: Qt.AlignVCenter
-                            NavIcon {
-                                id: carriedMark
-                                anchors.centerIn: parent
-                                anchors.verticalCenterOffset: carriedMark.standOn(carriedNameCut.wordBase,
-                                                                                  carriedNameCut.height)
-                                kind: rowItem.carriedHome ? "home" : "tree"
-                                // The ink every mark takes: what a mark says is its shape (規約 §ref の種別).
-                                tint: Theme.textSecondary
-                                width: Theme.iconSm
-                                height: Theme.iconSm
-                            }
+                        NavIcon {
+                            id: carriedMark
+                            Layout.preferredWidth: carriedMark.wordCell
+                            Layout.preferredHeight: carriedNameCut.implicitHeight
+                            kind: rowItem.carriedHome ? "home" : "tree"
+                            set: "sign"
+                            size: carriedNameCut.pixelSize
+                            wordBase: carriedNameCut.baselineOffset
+                            // The ink every mark takes: what a mark says is its shape (規約 §ref の種別).
+                            tint: Theme.textSecondary
+                            width: carriedMark.wordCell
+                            height: carriedNameCut.implicitHeight
                         }
                         // Cut in the middle, as this worktree's name is everywhere (規約 §別の worktree を読む).
                         CutName {

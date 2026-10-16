@@ -60,11 +60,16 @@ Rectangle {
         height: Theme.borderWidth
         color: Theme.borderSubtle
     }
+    // Captioned, the heading's mark: a step over its capitals, its box the caption's line so the two share a baseline
+    // (デザイン規約 §アイコンの席 の文頭記号の見出し). On the folded rail it stands alone in its cell.
     NavIcon {
         id: commandsMark
         kind: "terminal"
+        set: toggle.captioned ? "head" : ""
+        size: commandsName.font.pixelSize
+        wordBase: commandsName.baselineOffset + commandsName.anchors.verticalCenterOffset
         width: toggle.markSize
-        height: toggle.markSize
+        height: toggle.captioned ? commandsName.height : toggle.markSize
         x: toggle.captioned ? toggle.markX + (Theme.iconMd - toggle.markSize) / 2
                             : (Theme.railWidth - toggle.markSize) / 2
         anchors.verticalCenter: parent.verticalCenter
@@ -79,6 +84,8 @@ Rectangle {
         visible: toggle.captioned
         x: toggle.captionX
         anchors.verticalCenter: parent.verticalCenter
+        // Centred on its capitals, not on its line box (`NavHeader.capsLift`).
+        anchors.verticalCenterOffset: -WordFace.capitalDrop(commandsName)
         text: Words.commandsTitle
         font.pixelSize: Theme.fontMd
         font.weight: Theme.fontWeightStrong
@@ -90,6 +97,7 @@ Rectangle {
         visible: toggle.captioned && toggle.counted
         x: toggle.captionX + commandsName.implicitWidth + Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: commandsName.anchors.verticalCenterOffset
         text: "(" + toggle.count + ")"
         font.pixelSize: Theme.fontMd
         color: Theme.textMuted

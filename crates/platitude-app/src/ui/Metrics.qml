@@ -13,6 +13,13 @@ QtObject {
 
     // ---- 1. 基礎: how a gesture is answered, anywhere it is made ----
     readonly property real iconStroke: 1.5
+    // A mark set beside words is drawn as a letter of their face (デザイン規約 §アイコンの席), in shares of the words'
+    // pixel size. Its line is the face's stem: a regular-weight upright, measured off Noto Sans JP at 14px (1.3px),
+    // so a mark weighs what the letters beside it weigh.
+    readonly property real markStem: 0.093
+    // A heading's mark a step over its capitals: it opens the section the way the capitals name it, and is centred on
+    // their middle, as every head is.
+    readonly property real markHead: 1.25
     readonly property int spinMs: 1000
     // Presses that confirm a control that takes something away (デザイン規約 §回数押し): one to start, two more to mean it.
     // Danger asks no more than warning — the colour says what is lost, the count only that it was meant.
@@ -29,7 +36,6 @@ QtObject {
     readonly property int holdResetMs: 4000
     readonly property int holdFillMin: Theme.spaceXs
     readonly property int holdBackMs: 150
-    readonly property int opticalDrop: 1
     // The one opacity anything is dimmed to — the 45% the `*Dim` colours are (デザイン規約 §暗く落とした段).
     readonly property real dimFade: 0.45
     // How much of a round wash's radius is its rim, over which the paint falls to `dimFade` (デザイン規約 §当たり判定).

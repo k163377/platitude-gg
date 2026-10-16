@@ -146,7 +146,7 @@ Rectangle {
         width: tabPin.treeW
         visible: tabPin.treeW > 0
         name: tabPin.treeName
-        metrics: tabPin.metrics
+        gap: tabPin.metrics.treeRunGap
         minNameW: tabPin.titleMinW
     }
     // As in the rows; the ground behind the name is always this tab's own.
@@ -176,6 +176,7 @@ Rectangle {
         anchors.rightMargin: tabPin.metrics.markGap
         anchors.verticalCenter: parent.verticalCenter
         implicitWidth: tabPin.metrics.markSeat
+        markSize: tabPin.metrics.markSeat
         topInset: (Theme.iconLg - tabPin.metrics.markSeat) / 2
         bottomInset: pinMark.topInset
         // Nothing sideways, for the reason the rows' mark carries.

@@ -8,10 +8,6 @@ Item {
     property int code: 0
     /// A `file:` URL from the store, empty for the generated pattern.
     property string imageUrl: ""
-    /// How far under the box's top the face is drawn, less than a pixel: a holder centring the face on something a
-    /// whole pixel cannot centre it on (`CoAuthorLine`) moves the box by whole pixels and hands the rest here, drawn
-    /// by the painter rather than by shifting the texture, which would blur every row. The canvas runs past the box.
-    property real drop: 0
 
     /// The picture has loaded (the canvas reads it asynchronously), so a shot can wait on it. A function: a binding on
     /// the `isImageLoaded` call would never re-evaluate.
@@ -25,7 +21,7 @@ Item {
     InkCanvas {
         id: pattern
         width: ident.width
-        height: ident.height + Math.ceil(ident.drop)
+        height: ident.height
         onImageLoaded: requestPaint()
         onPaint: {
             const ctx = getContext("2d")
@@ -33,7 +29,6 @@ Item {
             const r = d / 2
             ctx.setTransform(1, 0, 0, 1, 0, 0)
             ctx.clearRect(0, 0, width, height)
-            ctx.translate(0, ident.drop)
             ctx.save()
             ctx.beginPath()
             ctx.arc(r, r, r, 0, 2 * Math.PI)
@@ -77,7 +72,6 @@ Item {
     Connections {
         target: ident
         function onCodeChanged() { pattern.requestPaint() }
-        function onDropChanged() { pattern.requestPaint() }
         function onImageUrlChanged() {
             if (ident.imageUrl !== "")
                 pattern.loadImage(ident.imageUrl)

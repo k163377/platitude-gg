@@ -256,12 +256,17 @@ AppDialog {
                         color: categoryRow.current
                                ? Theme.bgSelected
                                : categoryHover.hovered ? Theme.bgHover : "transparent"
+                        // The head of the row's words, a category named as a heading is (デザイン規約 §アイコンの席 の
+                        // 文頭記号の見出し): a step over their capitals and on their middle, its box their line.
                         NavIcon {
                             id: categoryMark
                             anchors.verticalCenter: parent.verticalCenter
                             x: Theme.spaceSm
                             width: Theme.iconMd
-                            height: Theme.iconMd
+                            height: categoryWord.height
+                            set: "head"
+                            size: categoryWord.font.pixelSize
+                            wordBase: categoryWord.baselineOffset
                             kind: categoryRow.modelData.icon
                             tint: categoryRow.enabled ? Theme.textPrimary : Theme.textMuted
                         }

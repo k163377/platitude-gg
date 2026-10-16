@@ -25,6 +25,20 @@ Item {
     /// raise and half gap it keeps from a word (デザイン規約 §ウィンドウの縁).
     property bool cornerAlert: false
     property color cornerAlertTone: seat.tint
+    /// The pixel size of the word the seat heads on its line; zero where it heads none (stacked under the word,
+    /// folded alone, or a phrase that carries its own marks). Set, the marks are drawn to its letters and stand on
+    /// their capitals' middle: the icon and the ring head the word (デザイン規約 §アイコンの席 の文頭記号), and the hold
+    /// mark alone is a letter of it (の名指し).
+    property real wordSize: 0
+    /// Where that word's baseline runs, in the seat's y.
+    property real wordBase: 0
+    /// How far that word's ground reaches before its letters: a code word's chip hangs half a step (`CodeChip`).
+    property real wordHang: 0
+    /// Whether the seat heads a word.
+    readonly property bool leads: seat.wordSize > 0
+    /// Where the word's capitals' middle stands, in the seat's y: what a round mark (the hold mark, the ring) centres
+    /// on.
+    readonly property real capitalsMiddle: seat.wordBase - WordFace.capitalMiddle(seat.wordSize)
 
     readonly property bool paired: seat.kind !== "" && seat.holdPresses > 0
     /// How much wider than one half the seat is (`implicitWidth`): the two halves' ink stands inside it.
@@ -37,9 +51,6 @@ Item {
     /// `ActionButton.stackStep`), so a frame held to the word over the mark (`ActionButton.stackDepth`, which macOS's
     /// short lines make the frame's depth) keeps air under the ring.
     readonly property int pairDown: Theme.iconLg - Theme.iconSm
-    /// How far the pair stands under the seat's centre. A caller that lifts the seat for a lone mark's uneven air
-    /// gives the lift back here: the fraction's ink is even about its box.
-    property int pairDrop: 0
     /// The slash's length, end to end: as far as a `fontMd` `/` reaches.
     readonly property real slashReach: Theme.iconSm + Theme.spaceXs / 2
     /// The grid's stroke scaled to the halves' step, lighter than the push mark's (`NavIcon` keeps its stroke whole at
@@ -50,7 +61,8 @@ Item {
     property int step: seat.besideWord && seat.holdPresses <= 0 ? Theme.iconSm : Theme.iconMd
     /// The air inside the mark's box, given back so the padding and the row's spacing land on the ink; the icon
     /// overflows the seat by this much either side (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
-    /// One number for the family, from its widest mark (8–10px of ink in the 12px box).
+    /// One number for the family, not each mark's own ink, so every mark at this step takes one seat; a wide mark's
+    /// ink runs a little past it.
     readonly property int markAir: seat.step === Theme.iconSm ? Theme.spaceXs / 2 : 0
 
     /// How deep the seat is at a step: the mark and the air the seat carries round it. Asked by a button that holds
@@ -65,13 +77,23 @@ Item {
                      ? (seat.step === Theme.iconSm
                         ? Theme.iconSm - 2 * seat.markAir
                         : Math.max(Theme.iconMd, Theme.iconSm + seat.spread))
+                     // Heading a word, the hold mark alone is a letter of the phrase (デザイン規約 §アイコンの席 の
+                     // 名指し): the seat is its ink, and the row's step parts it from the word — from a code word's
+                     // ground, which hangs half a step before its letters, too.
+                     : seat.leads ? Math.round(loneHold.inkWidth) + seat.wordHang
                      : Theme.iconSm
     implicitHeight: seat.depthAt(seat.step)
+    // Heading a word, its box runs a gap past the seat either way: the word's capitals stand where they stand, and the
+    // canvas draws only inside its box.
     NavIcon {
         width: seat.step
-        height: seat.step
-        anchors.centerIn: parent
+        height: seat.leads ? seat.height + 2 * Theme.spaceXs : seat.step
+        x: Math.round((seat.width - width) / 2)
+        y: seat.leads ? -Theme.spaceXs : Math.round((seat.height - height) / 2)
         kind: seat.kind
+        set: seat.leads ? "lead" : ""
+        size: seat.wordSize
+        wordBase: seat.wordBase + Theme.spaceXs
         tint: seat.tint
         // Whole at `iconMd`, and the grid ratio under it.
         stroke: Metrics.iconStroke * seat.step / 16
@@ -79,11 +101,13 @@ Item {
     }
     // At the seat's step so the width holds, swapping with the hold mark
     // (デザイン規約 §進行中・回数押しの定数「回るリングと回数押しの印は同じ席で入れ替わる」). Its own item: an animator
-    // leaves the angle where it stopped, and the icon has to come back upright.
+    // leaves the angle where it stopped, and the icon has to come back upright — so it turns about its own middle, which
+    // stands on the word's capitals' middle.
     SpinnerIcon {
-        width: seat.step
-        height: seat.step
-        anchors.centerIn: parent
+        box: seat.step
+        wordSize: seat.leads ? seat.wordSize : 0
+        x: Math.round((seat.width - width) / 2)
+        y: seat.leads ? Math.round(seat.capitalsMiddle - height / 2) : Math.round((seat.height - height) / 2)
         tint: seat.tint
         spinning: seat.busy
     }
@@ -98,11 +122,14 @@ Item {
         x: (pair.visible ? pair.x + pair.width : parent.width) - width + Theme.spaceXs / 2
         y: (pair.visible ? pair.y : 0) - Theme.spaceXs
     }
-    // A held button with no icon wears only the hold mark, at the row's start (デザイン規約 §回数押し).
+    // A held button with no icon wears only the hold mark, at the row's start (デザイン規約 §回数押し) — heading a word,
+    // as tall as its capitals and on their middle, its disc on the seat's start and its box's air past it.
     HoldIcon {
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: Metrics.opticalDrop
+        id: loneHold
+        x: seat.leads ? -Math.round((loneHold.width - loneHold.inkWidth) / 2) : 0
+        y: seat.leads ? Math.round(seat.capitalsMiddle - loneHold.height / 2)
+                      : Math.round((seat.height - loneHold.height) / 2)
+        size: seat.wordSize
         progress: seat.holdProgress
         presses: seat.holdPresses
         tint: seat.holdTint
@@ -117,7 +144,6 @@ Item {
         width: Theme.iconSm + seat.pairAlong
         height: Theme.iconSm + seat.pairDown
         anchors.centerIn: parent
-        anchors.verticalCenterOffset: seat.pairDrop
         visible: seat.paired && !seat.busy
         NavIcon {
             kind: seat.kind

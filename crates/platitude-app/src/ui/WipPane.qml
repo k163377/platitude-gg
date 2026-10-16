@@ -635,6 +635,9 @@ ColumnLayout {
 
     Rectangle {
         id: headerBand
+        /// How far the caption moves up to stand its capitals on the band's middle (`WordFace.capitalDrop`; デザイン規約
+        /// §アイコンの席「大文字だけの見出しの語」); its count goes with it.
+        readonly property real capsLift: -WordFace.capitalDrop(wipCaption)
         Layout.fillWidth: true
         implicitHeight: Theme.headerHeight
         color: Theme.bgElevated
@@ -645,6 +648,8 @@ ColumnLayout {
             anchors.rightMargin: Theme.spaceXs
             spacing: Theme.spaceXs
             Label {
+                id: wipCaption
+                transform: Translate { y: headerBand.capsLift }
                 text: qsTr("UNCOMMITTED CHANGES")
                 font.pixelSize: Theme.fontMd
                 font.weight: Theme.fontWeightStrong
@@ -652,6 +657,7 @@ ColumnLayout {
             }
             // The count stands at the caption's own step, as in every heading band (see DetailsChangesBand's).
             Label {
+                transform: Translate { y: headerBand.capsLift }
                 text: "(" + wipPane.unstagedModel.total + ")"
                 font.pixelSize: Theme.fontMd
                 color: Theme.textMuted

@@ -59,11 +59,9 @@ ColumnLayout {
         text: ", "
     }
     readonly property real commaWidth: Math.ceil(plate.commaInk.advanceWidth)
-    /// Line scaled with the grid (rules-refs/app-ui.md「語の隣に立つ印は `iconSm`」).
-    readonly property real backStroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
-    /// The line's head before the first hash: the arrow, set among the hashes as one more character — its box, and
-    /// no step of the row's beside it (デザイン規約 §余白「語の列の中に組む印」).
-    readonly property real leadWidth: Theme.iconSm
+    /// The line's head before the first hash: the arrow, a sign on the hashes (デザイン規約 §アイコンの席 の修飾) —
+    /// its cell, and no step of the row's beside it.
+    readonly property real leadWidth: parentBack.wordCell
     /// One parent's digits: whole, or `digits` of them and the mark, which `LineText` lays over the next one. Every
     /// piece is priced at the whole pixel the layout hands it, which is the one above.
     function hashWidth(digits) {
@@ -359,7 +357,10 @@ ColumnLayout {
                     id: copyMark
                     anchors.centerIn: parent
                     kind: "copyicon"
-                    tint: hashCopy.lit ? Theme.textPrimary : Theme.textSecondary
+                    // Beside white words the mark keeps its own quieter ink; beside grey ones it takes theirs
+                    // (デザイン規約 §アイコンの席).
+                    tint: hashCopy.lit ? Theme.textPrimary
+                          : Qt.colorEqual(plate.shaColor, Theme.textPrimary) ? Theme.textSecondary : plate.shaColor
                 }
             }
         }
@@ -403,24 +404,28 @@ ColumnLayout {
                                                - plate.hashWidth(plate.wholeDigits))
             Layout.preferredHeight: 1
         }
-        // Drawn rather than `←` (デザイン規約 §寸法「印は描いて出す」), and set inline: its box is its seat, and what air
-        // it has is the box's own (`leadWidth`). A mark, not a target: each hash is its own way to its parent, and the
-        // arrow stays outside the card the count opens (デザイン規約 §右のペインの親).
+        // Drawn rather than `←` (デザイン規約 §寸法「印は描いて出す」), and set inline: its cell is its seat
+        // (`leadWidth`). A mark, not a target: each hash is its own way to its parent, and the arrow stays outside the
+        // card the count opens (デザイン規約 §右のペインの親).
+        // A sign ahead of the hashes (デザイン規約 §アイコンの席 の修飾): the capitals' scale, on the face's own `+`'s
+        // middle; its box is the line's (`lineRef`).
         Item {
             id: arrowSeat
             Layout.preferredWidth: plate.leadWidth
-            Layout.preferredHeight: Theme.iconSm
+            Layout.preferredHeight: lineRef.implicitHeight
             Layout.alignment: Qt.AlignVCenter
             NavIcon {
                 id: parentBack
-                anchors.centerIn: parent
+                anchors.horizontalCenter: parent.horizontalCenter
                 kind: "arrow"
+                set: "sign"
+                size: lineRef.pixelSize
+                wordBase: lineRef.baselineOffset
                 // The family draws it leaving; turned to point back.
-                rotation: 180
+                turn: 180
                 tint: Theme.textLink
-                width: Theme.iconSm
-                height: Theme.iconSm
-                stroke: plate.backStroke
+                width: plate.leadWidth
+                height: arrowSeat.height
             }
         }
         Repeater {

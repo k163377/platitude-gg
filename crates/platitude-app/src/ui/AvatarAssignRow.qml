@@ -42,6 +42,10 @@ RowLayout {
         height: Theme.iconLg
         Layout.preferredWidth: Theme.iconLg
         Layout.preferredHeight: Theme.iconLg
+        // A picture heading the name, on its capitals' middle (デザイン規約 §アイコンの席).
+        transform: Translate {
+            y: WordFace.capitalDropOf(nameLabel.baselineOffset, nameLabel.pixelSize, nameLabel.height)
+        }
     }
     /// The width this row asks of the shared name column — its own glyphs only.
     readonly property real nameSeat: nameLabel.implicitWidth

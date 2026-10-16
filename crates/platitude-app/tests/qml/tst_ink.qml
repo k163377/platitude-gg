@@ -250,7 +250,8 @@ Item {
             const cloudOf = made => marksOf(made.chip, []).find(mark => mark.kind === "remote")
             const row = builtInTheBackground(lateChip, cloudOf)
             const cloud = cloudOf(row)
-            compare(cloud.width, Theme.iconSm)
+            verify(cloud.wordCell > 0)
+            compare(cloud.width, cloud.wordCell, "the cell a letter of the name takes")
             row.records = [root.onRemote("sample")]
             const atOnce = createTemporaryObject(chipAtOnce, root, { "records": row.records })
             tryVerify(() => marksOf(atOnce, []).filter(mark => mark.visible).every(mark => mark.inked))

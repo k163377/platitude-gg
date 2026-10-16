@@ -35,13 +35,21 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.spaceSm
 
+        // Each half's mark heads its words: a step over their capitals, its box their line so the two share a baseline
+        // (デザイン規約 §アイコンの席 の文頭記号の見出し).
         NavIcon {
             Layout.preferredWidth: Theme.iconLg
-            Layout.preferredHeight: Theme.iconLg
+            Layout.preferredHeight: titleWord.implicitHeight
+            width: Theme.iconLg
+            height: titleWord.implicitHeight
             kind: "gear"
+            set: "head"
+            size: titleWord.font.pixelSize
+            wordBase: titleWord.baselineOffset
             tint: Theme.textPrimary
         }
         Label {
+            id: titleWord
             text: qsTr("Settings")
             font.pixelSize: Theme.fontXl
             font.weight: Theme.fontWeightStrong
@@ -56,11 +64,17 @@ Item {
         }
         NavIcon {
             Layout.preferredWidth: Theme.iconLg
-            Layout.preferredHeight: Theme.iconLg
+            Layout.preferredHeight: categoryWord.implicitHeight
+            width: Theme.iconLg
+            height: categoryWord.implicitHeight
             kind: head.categoryIcon
+            set: "head"
+            size: categoryWord.font.pixelSize
+            wordBase: categoryWord.baselineOffset
             tint: Theme.textSecondary
         }
         Label {
+            id: categoryWord
             text: head.word
             font.pixelSize: Theme.fontXl
             color: Theme.textSecondary

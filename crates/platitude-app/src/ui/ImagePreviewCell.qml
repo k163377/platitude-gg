@@ -38,11 +38,17 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: Theme.spaceXs
         Label {
+            id: captionWord
             text: previewCell.caption
             font.pixelSize: Theme.fontSm
             color: Theme.textSecondary
         }
-        DotMark { tint: Theme.textSecondary }
+        // A sign between the words, on the face's own `+`'s middle (デザイン規約 §アイコンの席 の修飾).
+        DotMark {
+            tint: Theme.textSecondary
+            Layout.preferredHeight: captionWord.implicitHeight
+            middle: captionWord.baselineOffset - WordFace.signMiddle(captionWord.font.pixelSize)
+        }
         Label {
             Layout.fillWidth: true
             text: previewCell.sizeText

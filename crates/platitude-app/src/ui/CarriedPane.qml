@@ -83,24 +83,22 @@ ColumnLayout {
                 font.pixelSize: Theme.fontMd
                 color: Theme.textSecondary
             }
-            // The mark and the name are one word (規約 §別の worktree を読む): the seat is the mark's own ink, so its
-            // box's spare air does not read as a gap.
+            // The mark is a sign on the name (デザイン規約 §アイコンの席 の修飾), with no step after it
+            // (規約 §別の worktree を読む). Its box is the name's seat, so the two share a baseline.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 0
-                Item {
-                    Layout.preferredWidth: nameMark.inkWidth
-                    Layout.preferredHeight: Theme.iconSm
-                    Layout.alignment: Qt.AlignVCenter
-                    NavIcon {
-                        id: nameMark
-                        anchors.centerIn: parent
-                        anchors.verticalCenterOffset: nameMark.standOn(nameLabel.wordBase, nameLabel.height)
-                        kind: carriedPane.worktreeHome ? "home" : "tree"
-                        tint: Theme.textSecondary
-                        width: Theme.iconSm
-                        height: Theme.iconSm
-                    }
+                NavIcon {
+                    id: nameMark
+                    Layout.preferredWidth: nameMark.wordCell
+                    Layout.preferredHeight: Theme.rowHeight
+                    kind: carriedPane.worktreeHome ? "home" : "tree"
+                    set: "sign"
+                    size: nameLabel.pixelSize
+                    wordBase: nameLabel.baselineOffset
+                    tint: Theme.textSecondary
+                    width: nameMark.wordCell
+                    height: Theme.rowHeight
                 }
                 // Cut in the middle, whole on the hover (規約 §別の worktree を読む) — the only place the whole name
                 // is, so the seat takes a pointer.

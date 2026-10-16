@@ -49,8 +49,8 @@ Menu {
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
-            if (row && row.present && row.headInk !== undefined && row.headInk > 0)
-                widest = Math.max(widest, row.headInk + Theme.spaceXs)
+            if (row && row.present && row.headingRoom !== undefined && row.headingRoom > 0)
+                widest = Math.max(widest, row.headingRoom + Theme.spaceXs)
         }
         return widest
     }
@@ -179,7 +179,8 @@ Menu {
 
     // The hold mark's seat, left by every row once any row on offer carries the mark, so words start on one x
     // (デザイン規約 §回数押し); 0 otherwise. Extra left padding, not a layout seat, which would also pay the layout's gap.
-    // The mark's box: it stands at the row's edge, and the row's own padding is the step from it to the words.
+    // The seat (`iconSm`) the hold mark and the `!` stand in: it stands at the row's edge, and the row's own padding is
+    // the step from it to the words.
     readonly property real holdIndent: {
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
