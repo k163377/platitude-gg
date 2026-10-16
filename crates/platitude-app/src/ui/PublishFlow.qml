@@ -73,20 +73,25 @@ Item {
                                                                 : publishFlow.worktree.behind
     readonly property string pushMeasured: publishFlow.pushElsewhere ? publishFlow.worktree.pushTracking
                                                                      : publishFlow.worktree.upstream
+    /// Nothing this window asked git for is out — from the press, not from when the queue starts it (`settling` rises
+    /// at the ask, `busyCount` only once the write runs). A push is answered by its one owner (`RepoTab.pushAnswer`),
+    /// so the doors that send one beside another — the toolbar's button, the question's pill — wait on this, and only
+    /// one is ever out.
+    readonly property bool pushDoorsOpen: publishFlow.repoTab.busyCount === 0 && !publishFlow.repoTab.settling
     readonly property bool canPush: (publishFlow.pushState === "publish"
                                      || publishFlow.pushState === "elsewhere"
                                      || publishFlow.pushState === "ready")
-                                    && publishFlow.repoTab.busyCount === 0
+                                    && publishFlow.pushDoorsOpen
     /// `behind` too: the far side has commits this branch lacks, so only an overwrite reaches, and both states have a
     /// tracking ref to lease against.
     readonly property bool canForcePush: (publishFlow.pushState === "ready"
                                           || publishFlow.pushState === "behind"
                                           || publishFlow.pushState === "diverged")
-                                         && publishFlow.repoTab.busyCount === 0
+                                         && publishFlow.pushDoorsOpen
     /// What git said to the last refused push of each branch, by branch — a refusal is about that branch's standing, so
-    /// whichever door sent it (the toolbar, the branch's row) it is that branch's, until a push of it lands
-    /// (デザイン規約 §リモートへ送る). A `Map`, so no branch name is taken for something an object already has, and
-    /// replaced whole: a binding does not see a key change.
+    /// whichever door sent it (the toolbar, the branch's row) it is that branch's, until a push of it lands or the
+    /// branch is gone (`forgetUnlisted`) (デザイン規約 §リモートへ送る). A `Map`, so no branch name is taken for
+    /// something an object already has, and replaced whole: a binding does not see a key change.
     property var pushFails: new Map()
     readonly property bool pushFailed: publishFlow.pushFails.has(publishFlow.worktree.branch)
     readonly property string pushFailReason:
@@ -126,6 +131,17 @@ Item {
             // Landed: that branch's last refusal goes.
             fails.delete(sent)
         publishFlow.pushFails = fails
+    }
+    /// The refs moved: a branch the listing no longer holds takes its refusal with it, so one made again under the
+    /// name does not wear the old one's `!`. `listed(name)` answers whether the listing holds that branch.
+    function forgetUnlisted(listed) {
+        const kept = new Map()
+        for (const [branch, why] of publishFlow.pushFails) {
+            if (listed(branch))
+                kept.set(branch, why)
+        }
+        if (kept.size !== publishFlow.pushFails.size)
+            publishFlow.pushFails = kept
     }
 
     // ---- the first push: where does this branch go? -----------------
@@ -168,7 +184,8 @@ Item {
 
     readonly property string publishTarget: publishFlow.publishRemote + "/" + publishFlow.publishBranch
     readonly property bool publishFilled: publishFlow.publishBranch !== "" && publishFlow.publishRemote !== ""
-    /// The pair the remote's last answer is about; nothing while a read is out. **`remoteBranchRevision` is read on
+    /// What the remote's last answer is about — the remote, the name, and the branch here it was weighed against;
+    /// nothing while a read is out. **`remoteBranchRevision` is read on
     /// purpose**: a binding does not follow a slot call, so the revision that moves with every answer re-asks. A slot
     /// because a Qt property cannot hold nothing (`encode::Optional`).
     readonly property var remoteBranchAsked: {
@@ -215,13 +232,12 @@ Item {
     // Bindings, because the question changes while it stands. **`RestoreNone`**: `publishAsking` drops while the bar
     // is still retracting on screen, and a restore would flash its frame `warning`; `GraphPane.startAsking` rewrites
     // all of these for the next question anyway.
-    // Shut while a write runs, as the toolbar's button is (`canPush`): a push is answered by its one owner
-    // (`RepoTab.pushAnswer`), so only one is ever out — a question raised from a branch's row can stand while the
-    // toolbar sends another.
+    // Shut while a write is out, as the toolbar's button is (`pushDoorsOpen`): a question raised from a branch's row
+    // can stand while the toolbar sends another.
     Binding {
         target: publishFlow.graphPane
         property: "askAnswerable"
-        value: publishFlow.publishFilled && publishFlow.publishChecked && publishFlow.repoTab.busyCount === 0
+        value: publishFlow.publishFilled && publishFlow.publishChecked && publishFlow.pushDoorsOpen
         when: publishFlow.publishAsking
         restoreMode: Binding.RestoreNone
     }

@@ -43,7 +43,7 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("remoteNames", Member = remote_names, Notify = changed);
-    // The pair itself is `remoteBranchAsked()` (an `Optional` cannot be a
+    // What it answers is `remoteBranchAsked()` (an `Optional` cannot be a
     // property); bindings follow the revision.
     qproperty!(
         "remoteBranchRevision",

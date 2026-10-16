@@ -361,8 +361,10 @@ Item {
             if (!page.pushFailed || repoTab.busyCount !== 0)
                 return
             pushRetryTimer.stop()
+            // `branch=` is every branch a refusal is remembered against — the record itself, not the branch
+            // `refused=` was asked about.
             Harness.report("push_retry refused=" + page.pushFailed
-                              + " branch=" + worktree.branch)
+                              + " branch=" + Array.from(publishFlow.pushFails.keys()).join(","))
             driver.pressWrite("force-push", () => {
                 page.forcePush()
                 return true

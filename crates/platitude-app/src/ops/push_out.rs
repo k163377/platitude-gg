@@ -7,9 +7,9 @@ use super::Press;
 /// branch it was about, until git's answer to that press and no other.
 ///
 /// One at a time: the doors to a push that stand beside one in flight —
-/// the toolbar's button, the question's pill, a menu raised under it —
-/// are shut while a write runs, so a second press never overwrites one
-/// still out.
+/// the toolbar's button, the question's pill (`PublishFlow.pushDoorsOpen`),
+/// a menu raised under it — are shut from the press until what the write
+/// left is read, so a second press never overwrites one still out.
 ///
 /// By id alone: a remote branch's replace and delete answer under the same
 /// label, and the fetch running behind a press comes back in the same

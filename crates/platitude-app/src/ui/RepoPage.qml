@@ -776,11 +776,13 @@ FocusScope {
         }
     }
     // The pushed count moves with the remote-tracking refs (fetch runs under the freeze, 規約 §フル interactive rebase),
-    // so it is asked again on `refsMoved` — the every-tick `refsSettled` would spawn a rev-list at the status rate.
+    // so it is asked again on `refsMoved` — the every-tick `refsSettled` would spawn a rev-list at the status rate. A
+    // branch's refusal goes with the branch on the same news.
     Connections {
         target: branchesModel
         function onRefsMoved() {
             planModel.refreshPushed()
+            publishFlow.forgetUnlisted(name => branchesModel.oidOfName(name) !== "")
         }
     }
     Connections {
