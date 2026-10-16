@@ -5,7 +5,7 @@
 
 use super::{
     FakeClaude, REPLY, alive, append, claim_file, ended, holding, next_reading, notice, planted,
-    released, scratch, session, stamped, told, transcript,
+    released, scratch, session, stamped, stop_hooks_ran, summary, told, transcript,
 };
 use crate::awake::claim::{State, Writer, digest};
 use crate::awake::{Mark, apply};
@@ -189,6 +189,7 @@ fn sessions_and_a_subagent_hold_while_any_works() {
     let hook = || stopped_one.hook_with(&other);
     apply(&dir, &claim_file("t"), &hook(), Mark::ToolEnd("toolu_b")).expect("to the background");
     apply(&dir, &claim_file("t"), &hook(), Mark::Idle).expect("it stops");
+    stop_hooks_ran(&other);
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -361,6 +362,7 @@ fn the_command_a_person_lets_through_holds_the_machine() {
     )
     .expect("its end");
     apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle).expect("stopped");
+    stop_hooks_ran(&path);
     assert_eq!(next_reading(&dir), released());
 }
 
@@ -653,6 +655,7 @@ fn a_notice_starts_a_turn_held_until_its_stop() {
     )
     .expect("claimed");
     apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    stop_hooks_ran(&path);
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -677,6 +680,7 @@ fn a_notice_starts_a_turn_held_until_its_stop() {
     );
 
     apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("the turn stops");
+    stop_hooks_ran(&path);
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -695,22 +699,12 @@ fn queued(ms: u64) -> String {
 /// The queue's head taken to start a turn.
 const TAKEN: &str = r#"{"type":"queue-operation","operation":"dequeue"}"#;
 
-/// Claude Code's record that a turn's Stop hooks have run, written at `ms`.
-fn summary(ms: u64) -> String {
-    format!(
-        r#"{{"type":"system","subtype":"stop_hook_summary","timestamp":"{}"}}"#,
-        stamped(ms)
-    )
-}
-
 /// A turn is not over at its Stop: Claude Code runs every Stop hook first,
 /// records that they have run, and only then takes what was queued for the
 /// next turn — a notice queued however late. The stopped claim counts until
 /// that record is written after its Stop, and a notice's entry takes over
 /// from there. One whose record never comes — a prompt a hook turned down,
-/// an API error — counts for [`STOPPING`] at most; a transcript with no
-/// such record at all is one Claude Code keeps none in, and its Stop lets
-/// go at once (the other tests' transcripts).
+/// an API error — counts for [`STOPPING`] at most.
 #[test]
 fn a_stopped_session_counts_until_its_stop_hooks_have_run() {
     let dir = scratch("stopping");
@@ -777,6 +771,73 @@ fn a_stopped_session_counts_until_its_stop_hooks_have_run() {
         next_reading(&bound),
         released(),
         "a Stop whose hooks' end was never recorded held the machine past its bound"
+    );
+}
+
+/// The holder reads only a transcript's end, and a turn writes past it —
+/// a long run of calls, one large result — so the previous turn's record
+/// is out of sight at the Stop, as it is in a first turn's transcript. The
+/// stopped claim counts until its own record all the same.
+#[test]
+fn a_stop_counts_until_its_record_with_none_in_sight() {
+    let dir = scratch("stopping-unseen");
+    let claude = FakeClaude::start(&dir);
+    let earlier = crate::awake::now_ms() - 5_000;
+    let large = format!(
+        r#"{{"type":"user","message":{{"role":"user","content":[{{"tool_use_id":"toolu_l","type":"tool_result","content":"{}"}}]}}}}"#,
+        "x".repeat(1 << 20)
+    );
+    let path = transcript(
+        &dir.join("s.jsonl"),
+        &[REPLY, &summary(earlier), &large, REPLY],
+    );
+    apply(
+        &dir,
+        &claim_file("s"),
+        &claude.hook_with(&path),
+        Mark::Prompt,
+    )
+    .expect("claimed");
+    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    assert_eq!(
+        next_reading(&dir),
+        holding(),
+        "a turn whose previous record was out of sight let go at its Stop"
+    );
+    stop_hooks_ran(&path);
+    assert_eq!(
+        next_reading(&dir),
+        released(),
+        "a turn whose previous record was out of sight held the machine past its own"
+    );
+
+    let first = scratch("stopping-first");
+    let claude = FakeClaude::start(&first);
+    let path = transcript(&first.join("s.jsonl"), &[REPLY]);
+    apply(
+        &first,
+        &claim_file("s"),
+        &claude.hook_with(&path),
+        Mark::Prompt,
+    )
+    .expect("claimed");
+    apply(
+        &first,
+        &claim_file("s"),
+        &claude.hook_with(&path),
+        Mark::Idle,
+    )
+    .expect("stopped");
+    assert_eq!(
+        next_reading(&first),
+        holding(),
+        "a first turn let go before its Stop hooks had run"
+    );
+    append(&path, &[&summary(crate::awake::now_ms())]);
+    assert_eq!(
+        next_reading(&first),
+        released(),
+        "a first turn held the machine once its Stop hooks had run"
     );
 }
 

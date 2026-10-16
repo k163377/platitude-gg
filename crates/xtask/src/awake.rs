@@ -187,7 +187,7 @@ const AGENT: char = '~';
 /// The holder implementation, independent of the activity protocol.
 /// A script change raises this; compatible builds still update the same
 /// claims, so a Stop or a question reaches every holder reading them.
-const REVISION: u32 = 25;
+const REVISION: u32 = 26;
 /// A Codex handoff requires a holder that accounts for its independent
 /// child agents. An older holder can count delegated work twice.
 #[cfg(windows)]

@@ -438,6 +438,20 @@ fn append(path: &Path, lines: &[&str]) {
     }
 }
 
+/// Claude Code's record that a turn's Stop hooks have run, written at `ms`.
+fn summary(ms: u64) -> String {
+    format!(
+        r#"{{"type":"system","subtype":"stop_hook_summary","timestamp":"{}"}}"#,
+        stamped(ms)
+    )
+}
+
+/// What Claude Code writes into the transcript at `path` after a reply's
+/// Stop, once every Stop hook has run: until then the stopped turn counts.
+fn stop_hooks_ran(path: &Path) {
+    append(path, &[&summary(crate::awake::now_ms())]);
+}
+
 /// The holder's script runs, takes the lock the hooks take, and — with no
 /// claim to read — clears its name and exits.
 #[test]
@@ -614,6 +628,7 @@ fn a_reader_holding_its_name_costs_the_holder_a_beat_not_its_run() {
     .expect("claimed")
     .expect("a holder started");
     apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    stop_hooks_ran(&path);
     assert_eq!(next_reading(&dir), released());
 
     let reader = std::fs::OpenOptions::new()
@@ -795,7 +810,7 @@ fn the_holder_s_script_is_pinned_to_its_revision() {
             crate::awake::REVISION,
             digest(&crate::awake::holder::script(Path::new(r"C:\pgg"), 0))
         ),
-        (25, "c40764ebf0bac5fc".to_string()),
+        (26, "f48ab1a96f5ad1be".to_string()),
         "the holder's script changed: raise REVISION, then pin the new digest here"
     );
 }

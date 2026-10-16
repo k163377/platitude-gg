@@ -5,7 +5,7 @@
 use super::{
     FakeClaude, INTERRUPTED, REPLY, TURNED_DOWN, append, asked, calling, claim_file, ended,
     holding, launched, long_ago, next_reading, planted, released, result, scratch, session, start,
-    stopped, subagent_transcript, transcript,
+    stop_hooks_ran, stopped, subagent_transcript, transcript,
 };
 use crate::awake::claim::State;
 use crate::awake::{Mark, apply};
@@ -38,6 +38,7 @@ fn a_subagent_s_call_runs_until_its_stop_is_written() {
     )
     .expect("claimed");
     apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("the session stops");
+    stop_hooks_ran(&path);
     let agent = || long_ago(claude.agent_hook_with("a1", &own));
     apply(&dir, &claim_file("s~a1"), &agent(), Mark::Working).expect("a subagent");
     apply(
@@ -57,6 +58,7 @@ fn a_subagent_s_call_runs_until_its_stop_is_written() {
     // holder reads.
     append(&path, &[&stopped("a1", crate::awake::now_ms())]);
     apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("the turn stops");
+    stop_hooks_ran(&path);
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -125,6 +127,7 @@ fn a_foreground_subagent_stops_with_the_result_of_its_call() {
     )
     .expect("its call");
     apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("the session stops");
+    stop_hooks_ran(&path);
     append(
         &path,
         &[&launched("toolu_ag", "a1", crate::awake::now_ms())],
@@ -166,6 +169,7 @@ fn a_subagent_that_writes_nothing_of_its_own_stops_at_its_call() {
     )
     .expect("claimed");
     apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("the session stops");
+    stop_hooks_ran(&path);
     let unwritten = dir.join("s").join("subagents").join("agent-a9.jsonl");
     let agent = || claude.agent_hook_with("a9", &unwritten);
     apply(&dir, &claim_file("s~a9"), &agent(), Mark::Working).expect("its start");

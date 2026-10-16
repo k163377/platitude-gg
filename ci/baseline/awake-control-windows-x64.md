@@ -1,6 +1,6 @@
 # Windows のスリープ保持: 実測
 
-2026-10-14。holder revision 25、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
+2026-10-16。holder revision 26、activity protocol 1(`cargo xtask awake`、`crates/xtask/src/awake`)。
 デスクトップアプリのログによる補助と実スリープ試験の記録は [ログ補助](../../internal-docs/awake-ログ補助.md)。
 
 ## 判定
@@ -15,8 +15,8 @@
 ## 実 API 試験
 
 `awake::tests::holder::coordination::compatible_holders_apply_and_clear_real_windows_requests_together`。
-テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r25)と、
-同じスクリプトで holder 名だけ r26 にした互換ビルドを同時に動かす。OS API は置き換えない。
+テスト専用の一時ディレクトリと Claude 役のプロセスを使い、通常の `apply` から WMI で起動する holder(r26)と、
+同じスクリプトで holder 名だけ r27 にした互換ビルドを同時に動かす。OS API は置き換えない。
 session / hook の入力は fixture で、Claude 本体ではない。
 
 `SetThreadExecutionState` の非 0 の戻り値は、成功とそのスレッドの直前の状態を示す
@@ -24,12 +24,12 @@ session / hook の入力は fixture で、Claude 本体ではない。
 両 holder とも保持時の戻り値は `0x80000000`、解除時は `0x80000001` —— system の継続要求を設定・解除でき、
 display の継続要求は加えていない。
 
-| 遷移 | r25(WMI 起動) | r26(互換ビルド) |
+| 遷移 | r26(WMI 起動) | r27(互換ビルド) |
 | --- | ---: | ---: |
-| 最初の Prompt → 保持 | 1242 ms | 960 ms |
-| s が Stop、t は質問待ち → 解除 | 51 ms | 14 ms |
-| t の質問への回答 → 保持 | 57 ms | 16 ms |
-| t も Stop → 解除 | 13 ms | 72 ms |
+| 最初の Prompt → 保持 | 3380 ms | 885 ms |
+| s が Stop、t は質問待ち → 解除 | 46 ms | 12 ms |
+| t の質問への回答 → 保持 | 40 ms | 15 ms |
+| t も Stop → 解除 | 49 ms | 11 ms |
 
 質問待ちになる前から s が作業中なら、t の質問だけでは解除しないことも同じテストで確かめる。
 数値は単発の観測値で、遅延の上限ではない。最初の保持は
@@ -137,10 +137,16 @@ Claude Code は、Stop hook(このリポジトリの物とユーザーの物)を
 
 holder(r22〜)は、止まった(idle の)セッションを、transcript がその Stop より後の `stop_hook_summary` を
 持つまで `turn:` として数える。上限は Stop から 60 秒(`awake::STOPPING`。記録の来ない Stop がそこで解ける)。
-transcript の末尾 256 KB に記録が 1 つも無いセッションは、記録を書かない版の物として、この待ちに掛けない。
+この待ちに掛けないのは transcript の無いセッション(Codex など)だけ(r26〜)。holder が読むのは transcript の
+末尾 256 KB で、そこに記録が無いことは記録を書かない版の印にならない: 1 ターンの呼び出しと結果がその幅を
+越え、最初のターンの前には記録が無い。このプロジェクトの 10/13 以降の transcript で、Stop 404 回のうち 125 回は
+直前の記録が末尾 256 KB の外にあった(最長 10 MB)。2026-10-16 04:17 の本番(r25)がこの形 — 前の記録から
+1.0 MB 書いた 2 時間のターンの最後の応答の途中に gate の完了通知が積まれ、Stop の読取りで解除した時刻
+(04:17:20.823)が、そのまま就寝の時刻(Power-Troubleshooter の Sleep Time)になり、3.5 時間止まった。
 記録の後も、最後の発話より後の `queue-operation` が `enqueue` で終わっている(積まれてまだ取り出されていない)
 間は数える(積まれてから 60 秒まで)。通知の行が書かれれば、通知でターンが始まる規則が引き継ぐ
-(`a_stopped_session_counts_until_its_stop_hooks_have_run`。どちらの扱いも、外した台本では赤になる)。
+(`a_stopped_session_counts_until_its_stop_hooks_have_run`・`a_stop_counts_until_its_record_with_none_in_sight`。
+どの扱いも、外した台本では赤になる)。
 キューを「enqueue で +1、dequeue・remove で −1」と数える読み方は使わない: ターンの途中の通知は取り出しの
 記録無しに添付で届くので、数えが空にならない。
 

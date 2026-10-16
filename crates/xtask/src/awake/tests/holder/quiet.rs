@@ -111,14 +111,18 @@ fn once_the_processes(owner: u32, start: u64, changed: &str) -> String {
 /// A stopped session whose command still runs, owned by `claude`, its
 /// transcript at `<dir>/s.jsonl`: the hold stands on the process alone.
 fn running_command(dir: &std::path::Path, claude: &FakeClaude, start: u64) {
+    let stopped = crate::awake::now_ms();
     let transcript = dir.join("s.jsonl");
-    std::fs::write(&transcript, format!("{}\n", super::REPLY)).expect("a transcript");
+    std::fs::write(
+        &transcript,
+        format!("{}\n{}\n", super::REPLY, super::summary(stopped)),
+    )
+    .expect("a transcript");
     std::fs::write(
         dir.join(claim_file("s")),
         format!(
-            "r1 idle {} {} a 0 -:toolu_b:Bash:x:{start}:0:0 - {}",
+            "r1 idle {} {stopped} a 0 -:toolu_b:Bash:x:{start}:0:0 - {}",
             claude.pid(),
-            crate::awake::now_ms(),
             transcript.display()
         ),
     )

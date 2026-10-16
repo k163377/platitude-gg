@@ -233,9 +233,11 @@ const DELEGATED: &str = "'Agent', 'Task'";
 /// record, while something queued (a `queue-operation` `enqueue`) after
 /// the last entry waits to be taken, as long at most from its queuing: one
 /// queued while the Stop hooks run can be taken a while after their
-/// record. A notice's entry takes over from there. A transcript whose tail
-/// holds no such record is taken for one Claude Code keeps none in, and
-/// its Stop lets go at once unless something waits in its queue.
+/// record. A notice's entry takes over from there. The tail read holds no
+/// record at all for about one Stop in three — a turn's calls and results
+/// write past it, and a first turn has none before it — which tells
+/// nothing of whether Claude Code keeps them: only a session with no
+/// transcript lets go at its Stop.
 // waits(paced): the lock's retry — `FileStream.Lock` has no blocking form — and a held machine's readings, spaced by `PACE` on a clock that only runs forward
 #[cfg(windows)]
 pub(super) const SCRIPT: &str = r#"$ErrorActionPreference = 'Stop'
@@ -635,7 +637,7 @@ try {
           $claim, $text, $word, $session, $who, $tail = $entry
           if ([int64]$word[4] -gt $now) { $keep = $true; $why["wake:$(Get-Whose $session)"] = $true }
           $stoppedAt = [int64]$word[2]
-          $hooksRunning = ($tail.Summary -gt 0) -and ($tail.Summary -lt $stoppedAt) -and (($nowms - $stoppedAt) -lt @STOPPING@ * 1000)
+          $hooksRunning = ($tail.Mark -ne '') -and ($tail.Summary -lt $stoppedAt) -and (($nowms - $stoppedAt) -lt @STOPPING@ * 1000)
           $queued = ($tail.Queued -gt 0) -and (($nowms - $tail.Queued) -lt @STOPPING@ * 1000)
           if (($who -eq '-') -and ($word[0] -eq 'idle') -and ($hooksRunning -or $queued)) {
             $keep = $true
