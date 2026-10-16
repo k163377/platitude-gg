@@ -43,19 +43,8 @@ pub struct PushSpec {
     pub force: PushForce,
 }
 
-/// Works out where the branch that is checked out should be pushed.
-///
-/// git's order (git-config(5)): the branch's `pushRemote`, then
-/// `remote.pushDefault`, then what the branch tracks, and only then
-/// `fallback_remote`. Reading only the last sends a fork workflow's pushes
-/// to the repository it forked from.
-///
-/// The branch goes under its own name wherever it is not going to the
-/// remote it tracks, as git's triangular-push refspec does. A detached
-/// HEAD is an error.
-///
-/// The upstream is read from configuration: `origin/main` cannot be split
-/// reliably (remote names and branch names may both hold slashes).
+/// Works out where the branch that is checked out should be pushed
+/// ([`plan_push`]). A detached HEAD is an error.
 pub async fn plan_current_push(
     executor: &GitExecutor,
     workdir: &Path,
@@ -64,12 +53,35 @@ pub async fn plan_current_push(
     cancel: &CancellationToken,
 ) -> Result<PushSpec, GitError> {
     let branch = current_branch(executor, workdir, cancel).await?;
+    plan_push(executor, workdir, &branch, fallback_remote, force, cancel).await
+}
+
+/// Works out where `branch` should be pushed, checked out or not.
+///
+/// git's order (git-config(5)): the branch's `pushRemote`, then
+/// `remote.pushDefault`, then what the branch tracks, and only then
+/// `fallback_remote`. Reading only the last sends a fork workflow's pushes
+/// to the repository it forked from.
+///
+/// The branch goes under its own name wherever it is not going to the
+/// remote it tracks, as git's triangular-push refspec does.
+///
+/// The upstream is read from configuration: `origin/main` cannot be split
+/// reliably (remote names and branch names may both hold slashes).
+pub async fn plan_push(
+    executor: &GitExecutor,
+    workdir: &Path,
+    branch: &str,
+    fallback_remote: &str,
+    force: PushForce,
+    cancel: &CancellationToken,
+) -> Result<PushSpec, GitError> {
     // Read fresh, all four keys in one process: they can move in a
     // terminal between two of this application's reads. The same read as
     // the status tick, so the two cannot drift apart.
-    let marks = push_marks(executor, workdir, &branch, cancel).await?;
+    let marks = push_marks(executor, workdir, branch, cancel).await?;
 
-    decide_push(&branch, marks, fallback_remote, force)
+    decide_push(branch, marks, fallback_remote, force)
 }
 
 /// What the keys read above come to: the destination, the name the
@@ -124,26 +136,19 @@ fn decide_push(
     })
 }
 
-/// Where the branch that is checked out should go when the user has just
-/// said so.
+/// Where `branch` should go when the user has just said so — the branch
+/// the question named, checked out or not: HEAD may have moved in a
+/// terminal while the question stood.
 ///
 /// `expect` is the commit the question showed as being over there. Empty
 /// pushes fast-forward only; a commit makes it a lease pinned to what was
 /// on screen, so a remote that moved since is refused
 /// (デザイン規約 §相手の履歴を置き換える).
-pub async fn plan_publish(
-    executor: &GitExecutor,
-    workdir: &Path,
-    remote: &str,
-    remote_branch: &str,
-    expect: &str,
-    cancel: &CancellationToken,
-) -> Result<PushSpec, GitError> {
-    let branch = current_branch(executor, workdir, cancel).await?;
-    Ok(PushSpec {
+pub fn publish_spec(branch: &str, remote: &str, remote_branch: &str, expect: &str) -> PushSpec {
+    PushSpec {
         remote: remote.to_string(),
         remote_branch: remote_branch.to_string(),
-        local: branch,
+        local: branch.to_string(),
         set_upstream: true,
         force: if expect.is_empty() {
             PushForce::None
@@ -152,7 +157,7 @@ pub async fn plan_publish(
                 expect: Some(expect.to_string()),
             }
         },
-    })
+    }
 }
 
 /// The head of every push this application sends, before its options
@@ -221,7 +226,7 @@ pub async fn push(
 /// against it (`%(push:track)`).
 ///
 /// Asked as `push.default=current`, the branch under its own name — the
-/// refspec [`plan_current_push`] sends there. The default `simple` names
+/// refspec [`plan_push`] sends there. The default `simple` names
 /// no destination that is not the upstream (`@{push}`: `cannot resolve
 /// 'simple' push to a single destination`).
 pub async fn push_track(
@@ -243,10 +248,59 @@ pub async fn push_track(
     Ok(parse_push_track(branch, &out.stdout))
 }
 
-/// One [`push_track`] line: `<ref>\0<remote ref>\0<track>`. Every way of
-/// having nothing to count against answers the empty [`PushTrack`].
+/// [`push_track`] for the branches here `wanted` names, in one
+/// `for-each-ref` over all of them — the counts the menu of a branch the
+/// worktree is not on reads (`session::RefsSnapshot::branch_push`). Only
+/// the ones with something to count against, in branch name order.
+///
+/// Every branch is listed and the rest dropped here: patterns would put
+/// every wanted name on the command line.
+pub async fn push_tracks(
+    executor: &GitExecutor,
+    workdir: &Path,
+    wanted: impl Fn(&str) -> bool,
+    cancel: &CancellationToken,
+) -> Result<Vec<(String, PushTrack)>, GitError> {
+    let cmd = GitCommand::new().cwd(workdir).args([
+        "-c",
+        "push.default=current",
+        "for-each-ref",
+        "--format=%(refname:lstrip=2)%00%(push)%00%(push:remoteref)%00%(push:track)",
+        "refs/heads",
+    ]);
+    let out = executor.run(cmd, cancel).await?;
+    Ok(parse_push_tracks(&out.stdout, wanted))
+}
+
+/// [`push_tracks`]'s lines: `<branch>\0` ahead of a [`push_track`] line.
+fn parse_push_tracks(bytes: &[u8], wanted: impl Fn(&str) -> bool) -> Vec<(String, PushTrack)> {
+    let mut tracks: Vec<(String, PushTrack)> = bytes
+        .split(|b| *b == b'\n')
+        .filter_map(|line| {
+            let cut = line.iter().position(|b| *b == 0)?;
+            let branch = std::str::from_utf8(&line[..cut]).ok()?;
+            if !wanted(branch) {
+                return None;
+            }
+            let track = track_of(branch, &line[cut + 1..]);
+            (!track.tracking.is_empty()).then(|| (branch.to_string(), track))
+        })
+        .collect();
+    tracks.sort_by(|a, b| a.0.cmp(&b.0));
+    tracks
+}
+
+/// One [`push_track`] answer, its first line.
 fn parse_push_track(branch: &str, bytes: &[u8]) -> PushTrack {
-    let line = bytes.split(|b| *b == b'\n').next().unwrap_or_default();
+    track_of(
+        branch,
+        bytes.split(|b| *b == b'\n').next().unwrap_or_default(),
+    )
+}
+
+/// One line: `<ref>\0<remote ref>\0<track>`. Every way of having nothing
+/// to count against answers the empty [`PushTrack`].
+fn track_of(branch: &str, line: &[u8]) -> PushTrack {
     let mut fields = line.split(|b| *b == 0);
     let (Some(tracking), Some(remote_ref), Some(track)) =
         (fields.next(), fields.next(), fields.next())
@@ -436,6 +490,39 @@ mod tests {
         ] {
             assert_eq!(track(line), PushTrack::default(), "{why}");
         }
+    }
+
+    /// git 2.55's `push_tracks` lines: each branch's name ahead of its
+    /// `push_track` fields.
+    #[test]
+    fn push_tracks_keep_the_wanted_branches_that_have_something_to_count_against() {
+        let bytes = b"feature/x\0refs/remotes/fork/feature/x\0\0[behind 2]\n\
+              lone\0refs/remotes/fork/lone\0\0[gone]\n\
+              main\0refs/remotes/fork/main\0\0[ahead 1, behind 1]\n\
+              topic\0refs/remotes/fork/topic\0\0[ahead 3]\n";
+        let tracks = parse_push_tracks(bytes, |branch| branch != "topic");
+        assert_eq!(
+            tracks,
+            [
+                (
+                    "feature/x".to_string(),
+                    PushTrack {
+                        tracking: "fork/feature/x".to_string(),
+                        ahead: 0,
+                        behind: 2,
+                    }
+                ),
+                (
+                    "main".to_string(),
+                    PushTrack {
+                        tracking: "fork/main".to_string(),
+                        ahead: 1,
+                        behind: 1,
+                    }
+                ),
+            ],
+            "`lone` was never fetched, `topic` was not asked for"
+        );
     }
 
     /// The toolbar label ([`push_target`], from the snapshot) and the send

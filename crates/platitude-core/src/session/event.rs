@@ -231,11 +231,13 @@ pub enum SessionEvent {
         settled: bool,
     },
     /// Answer to [`RepoSession::check_remote_branch`]: whether the remote
-    /// already carries that exact name. The question is echoed back: the
-    /// asking box may have moved on to another name.
+    /// already carries that exact name. The question is echoed back — the
+    /// asking box may have moved on to another name, or the question to
+    /// another branch (`local`, whose history the tip was weighed against).
     RemoteBranchChecked {
         remote: String,
         branch: String,
+        local: String,
         state: remote::RemoteBranchState,
         /// The commit the remote advertised (hex; empty where none) —
         /// what an overwrite leases against.

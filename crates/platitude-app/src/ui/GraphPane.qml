@@ -232,9 +232,9 @@ Rectangle {
     /// box). `code` is the git command, said at the head of the question and on the pill where the act has one word of
     /// its own (デザイン規約 §git 用語のコード表記); `accept` carries the wording otherwise. `refName` is the ref the
     /// question names, and **`label` then comes with the name's seat still in it (`%1`)**: the name is drawn in its own
-    /// colour, so the sentence is cut at the seat (`AskBar.labelSentence`).
+    /// colour, `refTint`, so the sentence is cut at the seat (`AskBar.labelSentence`).
     function startAsking(oidHex, label, detail, accept, danger, hold = false, tip = "", form = null, code = "",
-                         refName = "") {
+                         refName = "", refTint = Theme.textLink) {
         graphArea.stopNaming()
         // Down before the new one goes in, or the last question's typing comes back under these words (`AskBar.form`).
         askBar.form = null
@@ -245,6 +245,7 @@ Rectangle {
         askBar.plainWords = false
         askBar.labelSentence = refName === "" ? "" : label
         askBar.labelRef = refName
+        askBar.labelRefTint = refTint
         askBar.label = refName === "" ? label : label.arg(refName)
         askBar.detail = detail
         askBar.accept = accept

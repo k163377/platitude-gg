@@ -10,7 +10,7 @@ use crate::config;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-use super::marks::{OriginMarks, PushDefault, origin_marks};
+use super::marks::{BranchPushRemote, KeptMarks, OriginMarks, PushDefault, kept_marks};
 
 /// A configured remote.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -21,14 +21,16 @@ pub struct Remote {
     pub push_url: String,
 }
 
-/// The configured remotes and the origin marks ([`OriginMarks`]), read
-/// together because one stat of the one config file drops both
+/// The configured remotes and the marks ([`KeptMarks`]), read together
+/// because one stat of the one config file drops both
 /// (`RepoSession::remotes`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Remotes {
     pub list: Vec<Remote>,
     pub push_default: Option<PushDefault>,
     pub checkout_default: Option<String>,
+    /// Every branch's own push mark, in branch name order.
+    pub branch_push_remotes: Vec<BranchPushRemote>,
 }
 
 /// Both reads at once — what the session keeps.
@@ -38,14 +40,18 @@ pub async fn read(
     cancel: &CancellationToken,
 ) -> Result<Remotes, GitError> {
     let list = list(executor, workdir, cancel).await?;
-    let OriginMarks {
-        push_default,
-        checkout_default,
-    } = origin_marks(executor, workdir, cancel).await?;
+    let KeptMarks {
+        origin: OriginMarks {
+            push_default,
+            checkout_default,
+        },
+        branch_push_remotes,
+    } = kept_marks(executor, workdir, cancel).await?;
     Ok(Remotes {
         list,
         push_default,
         checkout_default,
+        branch_push_remotes,
     })
 }
 

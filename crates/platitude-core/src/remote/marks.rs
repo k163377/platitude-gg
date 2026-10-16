@@ -52,33 +52,55 @@ pub struct OriginMarks {
     pub checkout_default: Option<String>,
 }
 
-/// Reads both [`OriginMarks`] keys with one `--get-regexp`, and which
-/// level set the push's.
+/// One branch's own push mark, `branch.<branch>.pushRemote`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BranchPushRemote {
+    pub branch: String,
+    pub remote: String,
+}
+
+/// The marks the remotes read keeps (`super::Remotes`): the
+/// [`OriginMarks`], and every branch's own push mark, in branch name order
+/// — what a menu on a branch the worktree is not on weighs where its push
+/// goes by (`session::RefsSnapshot::branch_push`). The branch the worktree
+/// is on is read fresh on every status tick instead ([`push_marks`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KeptMarks {
+    pub origin: OriginMarks,
+    pub branch_push_remotes: Vec<BranchPushRemote>,
+}
+
+/// Reads every [`KeptMarks`] key with one `--get-regexp`, and which level
+/// set the push's.
 ///
 /// A key with no remote name behind it (`remote.pushDefault=`) answers
 /// `None`: there is nothing to point at, and git refuses the push itself.
-pub async fn origin_marks(
+pub async fn kept_marks(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
-) -> Result<OriginMarks, GitError> {
+) -> Result<KeptMarks, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        // Exit 1: neither key is set.
+        // Exit 1: no key is set.
         .answers_by_code(1)
         .args([
             "config",
             "-z",
             "--show-scope",
             "--get-regexp",
-            r"^(remote\.pushdefault|checkout\.defaultremote)$",
+            r"^(remote\.pushdefault|checkout\.defaultremote|branch\..+\.pushremote)$",
         ]);
     let out = executor.run_unchecked(cmd, cancel).await?;
     match out.code {
-        0 => Ok(parse_origin_marks(&out.stdout)),
-        1 => Ok(OriginMarks::default()),
+        0 => Ok(KeptMarks {
+            origin: parse_origin_marks(&out.stdout),
+            branch_push_remotes: parse_branch_push_remotes(&out.stdout),
+        }),
+        1 => Ok(KeptMarks::default()),
         code => Err(GitError::Failed {
-            command: "git config --get-regexp remote.pushDefault checkout.defaultRemote"
+            command: "git config --get-regexp remote.pushDefault checkout.defaultRemote \
+                      branch.*.pushRemote"
                 .to_string(),
             code,
             stderr: out.failure_message(),
@@ -96,6 +118,32 @@ fn parse_origin_marks(bytes: &[u8]) -> OriginMarks {
         _ => {}
     });
     marks
+}
+
+/// The `branch.<branch>.pushremote` records of a [`kept_marks`] answer, the
+/// last per branch (a bare or empty one unsets it), in branch name order.
+/// The key keeps the branch name as written, dots and all: the variable is
+/// the last segment.
+fn parse_branch_push_remotes(bytes: &[u8]) -> Vec<BranchPushRemote> {
+    let mut by_branch = std::collections::BTreeMap::new();
+    each_scoped_record(bytes, |_, key, value| {
+        if let Some(branch) = key
+            .strip_prefix("branch.")
+            .and_then(|rest| rest.strip_suffix(".pushremote"))
+            .filter(|branch| !branch.is_empty())
+        {
+            by_branch.insert(branch.to_string(), value.map(str::to_string));
+        }
+    });
+    by_branch
+        .into_iter()
+        .filter_map(|(branch, remote)| {
+            Some(BranchPushRemote {
+                branch,
+                remote: remote?,
+            })
+        })
+        .collect()
 }
 
 /// Walks a `-z --show-scope --get-regexp` answer: `<scope>\0<key>\n<value>\0`
@@ -127,14 +175,15 @@ fn each_scoped_record(bytes: &[u8], mut each: impl FnMut(&str, &str, Option<&str
 /// `branch.<branch>.pushRemote`, the repository's [`PushDefault`] beside
 /// it, and what the branch tracks (`branch.<branch>.remote` / `.merge`).
 ///
-/// The one reader of the branch keys, shared by
-/// [`super::plan_current_push`] and the status tick: a second spelling lets
-/// the label name a remote the push never goes to
-/// (rules-refs/core.md「push の印の読みは `remote::push_marks` 1 本だけ」).
+/// The one reader of one branch's keys, shared by [`super::plan_push`] and
+/// the status tick: a second spelling lets the label name a remote the
+/// push never goes to (rules-refs/core.md「push の印の読みは
+/// `remote::push_marks` 1 本だけ」). Every branch's own mark at once is
+/// [`kept_marks`]'s.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PushMarks {
     /// The branch's own mark, which beats every other (order:
-    /// [`super::plan_current_push`]). `None` where unset.
+    /// [`super::plan_push`]). `None` where unset.
     pub push_remote: Option<String>,
     /// The repository's mark, with the level that set it.
     pub push_default: Option<PushDefault>,
@@ -408,5 +457,46 @@ mod tests {
         );
         assert_eq!(marks.push_default.expect("a mark").remote, "fork\nx");
         assert_eq!(marks.push_remote.as_deref(), Some("origin"));
+    }
+
+    fn mark(branch: &str, remote: &str) -> BranchPushRemote {
+        BranchPushRemote {
+            branch: branch.to_string(),
+            remote: remote.to_string(),
+        }
+    }
+
+    /// Fixture recorded from git 2.55: the origin keys and the branches'
+    /// own marks come in one answer, the branch name kept as written.
+    #[test]
+    fn every_branchs_own_mark_comes_with_the_origin_marks() {
+        let bytes: &[u8] = b"local\0remote.pushdefault\nfork\0\
+              local\0branch.wip.v2.pushremote\nmirror\0\
+              local\0branch.Topic.pushremote\nfork\0";
+        assert_eq!(
+            parse_origin_marks(bytes)
+                .push_default
+                .expect("a mark")
+                .remote,
+            "fork"
+        );
+        assert_eq!(
+            parse_branch_push_remotes(bytes),
+            [mark("Topic", "fork"), mark("wip.v2", "mirror")],
+            "in name order, dots inside the name kept"
+        );
+    }
+
+    #[test]
+    fn a_branchs_last_mark_wins_and_an_empty_one_unsets_it() {
+        let bytes: &[u8] = b"global\0branch.main.pushremote\nfork\0\
+              local\0branch.main.pushremote\norigin\0\
+              global\0branch.topic.pushremote\nfork\0\
+              local\0branch.topic.pushremote\n\0";
+        assert_eq!(parse_branch_push_remotes(bytes), [mark("main", "origin")]);
+        assert!(
+            parse_branch_push_remotes(b"local\0branch.main.remote\norigin\0").is_empty(),
+            "what a branch tracks is no mark"
+        );
     }
 }

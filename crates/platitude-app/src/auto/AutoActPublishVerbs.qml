@@ -362,7 +362,7 @@ Item {
                 return
             pushRetryTimer.stop()
             Harness.report("push_retry refused=" + page.pushFailed
-                              + " branch=" + publishFlow.pushFailBranch)
+                              + " branch=" + worktree.branch)
             driver.pressWrite("force-push", () => {
                 page.forcePush()
                 return true

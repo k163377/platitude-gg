@@ -386,6 +386,7 @@ fn a_changed_remote_url_moves_the_join_key() {
         }],
         push_default: None,
         checkout_default: None,
+        branch_push_remotes: Vec::new(),
     };
     assert_ne!(
         joins::join_key(1, 0, 0, &remotes("https://old.example/repo")),
@@ -401,10 +402,28 @@ fn a_moved_checkout_mark_moves_the_join_key() {
         list: Vec::new(),
         push_default: None,
         checkout_default: checkout.map(str::to_string),
+        branch_push_remotes: Vec::new(),
     };
     assert_ne!(
         joins::join_key(1, 0, 0, &remotes(None)),
         joins::join_key(1, 0, 0, &remotes(Some("fork"))),
+    );
+}
+
+/// A branch's own push mark moves no ref, and the menu of that branch
+/// reads where its push goes off the snapshot.
+#[test]
+fn a_moved_branch_push_mark_moves_the_join_key() {
+    let remotes = |remote: &str| crate::remote::Remotes {
+        branch_push_remotes: vec![crate::remote::BranchPushRemote {
+            branch: "topic".to_string(),
+            remote: remote.to_string(),
+        }],
+        ..crate::remote::Remotes::default()
+    };
+    assert_ne!(
+        joins::join_key(1, 0, 0, &remotes("origin")),
+        joins::join_key(1, 0, 0, &remotes("fork")),
     );
 }
 

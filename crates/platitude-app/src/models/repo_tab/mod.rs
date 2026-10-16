@@ -11,11 +11,13 @@ use crate::urlpath::picker_folder_url;
 
 use super::qml_register;
 
-/// The name a remote was asked about (`checkRemoteBranch`).
+/// The name a remote was asked about (`checkRemoteBranch`), and the branch
+/// here whose history the answer weighed it against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteBranch {
     pub remote: String,
     pub branch: String,
+    pub local: String,
 }
 
 impl Record for RemoteBranch {
@@ -23,6 +25,7 @@ impl Record for RemoteBranch {
         Fields::new()
             .put("remote", &self.remote)
             .put("branch", &self.branch)
+            .put("local", &self.local)
             .done()
     }
 
@@ -30,6 +33,7 @@ impl Record for RemoteBranch {
         Ok(Self {
             remote: field(map, "remote")?,
             branch: field(map, "branch")?,
+            local: field(map, "local")?,
         })
     }
 }
@@ -372,20 +376,21 @@ pub struct RepoTab {
     /// Where that press's own answer stands in `write_answers`, or -1
     /// where this notify carried none.
     stash_answer: i32,
-    /// The toolbar's push — plain, leased, or the question's first push —
-    /// waiting for its own answer, with the branch it was sent for
-    /// (`ops::PushOut`). A remote branch's replace and delete answer as
-    /// `push` too, beside a fetch in the same drain; only the id says
-    /// whose it was.
+    /// A branch's push — plain, leased, or the question's first push, from
+    /// the toolbar or the branch's row — waiting for its own answer, with
+    /// the branch it was sent for (`ops::PushOut`). A remote branch's
+    /// replace and delete answer as `push` too, beside a fetch in the same
+    /// drain; only the id says whose it was.
     push_out: crate::ops::PushOut,
     /// Where that press's own answer stands in `write_answers`, or -1
     /// where this notify carried none, and the branch a refusal is
     /// remembered against (デザイン規約 §リモートへ送る).
     push_answer: i32,
     push_answer_branch: String,
-    /// The pushes a ref row sends — the two `push --delete`s, the replace
-    /// git has no command for, and the two pairs that reach over there
-    /// after doing something here. Owned for the toolbar's reason: in the
+    /// The pushes a ref row sends that are no branch's push — the two
+    /// `push --delete`s, the replace git has no command for, and the two
+    /// pairs that reach over there after doing something here (a branch
+    /// row's own push is `push_out`'s). Owned for the toolbar's reason: in the
     /// group, a fetch in the same drain would take the refusal over
     /// (`drain::fold_into_group`).
     ref_push_out: crate::ops::PushOut,

@@ -186,9 +186,9 @@ impl RepoTab {
     // answered. Its other wait — the tree itself — is asked for
     // (`takeStashLanding`).
     qproperty!("stashAnswer", Member = stash_answer, Notify = changed);
-    // …and where the toolbar's push answered, with the branch it was sent
-    // for: refusals are remembered per branch and an answer does not name
-    // it (`ops::PushOut`).
+    // …and where a branch's push answered — the toolbar's or the branch
+    // row's — with the branch it was sent for: refusals are remembered per
+    // branch and an answer does not name it (`ops::PushOut`).
     qproperty!("pushAnswer", Member = push_answer, Notify = changed);
     qproperty!(
         "pushAnswerBranch",
@@ -1156,12 +1156,12 @@ impl RepoTab {
             .asked(asked.map(platitude_core::OperationId::as_u64), branch);
     }
 
-    /// The first push of a branch, to the remote and name the question
-    /// just took. Records the answer as the upstream, so the branch never
-    /// asks again. `branch` is the one being published, written down the
-    /// way `pushCurrent` writes its own.
+    /// The first push of `branch` — the one the question named, checked
+    /// out or not — to the remote and name the question just took. Records
+    /// the answer as the upstream, so the branch never asks again. Written
+    /// down the way `pushCurrent` writes its own.
     #[qslot]
-    fn publish_current(
+    fn publish_branch(
         &mut self,
         branch: String,
         remote: String,
@@ -1169,7 +1169,12 @@ impl RepoTab {
         expect: String,
     ) {
         let asked = self.ask_session(|s| {
-            s.publish_current(remote.clone(), remote_branch.clone(), expect.clone())
+            s.publish(
+                branch.clone(),
+                remote.clone(),
+                remote_branch.clone(),
+                expect.clone(),
+            )
         });
         self.push_out
             .asked(asked.map(platitude_core::OperationId::as_u64), branch);
@@ -1209,18 +1214,19 @@ impl RepoTab {
         self.ask_session(|s| s.set_remote_url(name.clone(), url.clone()));
     }
 
-    /// Asks what a push under this branch name would meet on that remote.
-    /// Reaches the network, so it is asked while the question stands.
-    /// The answer arrives as `remoteBranchAsked()` on the next
+    /// Asks what a push of `local` under this branch name would meet on
+    /// that remote. Reaches the network, so it is asked while the question
+    /// stands. The answer arrives as `remoteBranchAsked()` on the next
     /// `remoteBranchRevision`, with `remoteBranchState`.
     #[qslot]
-    fn check_remote_branch(&mut self, remote: String, branch: String) {
-        self.look_up_remote_branch(remote, branch)
+    fn check_remote_branch(&mut self, remote: String, branch: String, local: String) {
+        self.look_up_remote_branch(remote, branch, local)
     }
 
-    /// The pair the last answer is about — what `checkRemoteBranch` was
-    /// asked for — and nothing from the moment a question goes out until
-    /// its answer lands. Read on `remoteBranchRevision`.
+    /// What the last answer is about — what `checkRemoteBranch` was asked
+    /// for, the branch here included — and nothing from the moment a
+    /// question goes out until its answer lands. Read on
+    /// `remoteBranchRevision`.
     #[qslot]
     fn remote_branch_asked(&self) -> Optional<RemoteBranch> {
         self.remote_branch_asked.clone()
@@ -1240,26 +1246,12 @@ impl RepoTab {
         self.look_up_branch_delete(branch)
     }
 
-    /// `git push`. `force` is `""` / `"lease"` / `"force"`; `lease_expect`
-    /// pins the remote commit the user saw (empty = bare lease).
+    /// The push of a branch row's menu: `branch`, checked out or not, to
+    /// wherever its marks and upstream send it. `force` is `""` /
+    /// `"lease"`; `lease_expect` pins the remote commit the row showed.
     #[qslot]
-    fn push_branch(
-        &mut self,
-        remote: String,
-        local: String,
-        remote_branch: String,
-        set_upstream: bool,
-        force: String,
-        lease_expect: String,
-    ) {
-        self.branch_push(
-            remote,
-            local,
-            remote_branch,
-            set_upstream,
-            force,
-            lease_expect,
-        )
+    fn push_named(&mut self, branch: String, force: String, lease_expect: String) {
+        self.named_push(branch, force, lease_expect)
     }
 
     /// Points a branch at a remote branch and sends it there, in that

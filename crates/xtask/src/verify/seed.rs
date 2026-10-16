@@ -56,7 +56,7 @@ pub(super) fn config(
     // interval). `outrun` is "the remote moved and this end has not
     // looked": fetched, it is `demo::remote::diverged` and the toolbar
     // offers `push -f`. `unpublished`'s `outsider` is a name never fetched
-    // here (`RemoteBranchState::Unknown`, from `is_in_head_history`
+    // here (`RemoteBranchState::Unknown`, from `commit::is_in_history`
     // failing); fetched, the comparison answers `refused`.
     // `publish-unreachable`'s origin is nowhere: an opening fetch would
     // fail first and stand its own failure where the publish's ask is to

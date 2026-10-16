@@ -19,8 +19,9 @@ Item {
     /// Holds the bar this question stands in and dresses (`RepoPage.startRowAsk` raises it).
     required property GraphPane graphPane
 
-    /// Raise the standing question with this form — the page owns the bar.
-    signal askRequested(string label, var run, var form, string code, string refName)
+    /// Raise the standing question with this form — the page owns the bar —, marked on the row `oidHex` ("" for none),
+    /// naming `refName` in its own colour `refTint`.
+    signal askRequested(string oidHex, string label, var run, var form, string code, string refName, color refTint)
 
     /// The add-remote dialog, which the automation types into.
     readonly property alias dialog: remoteDialog
@@ -82,17 +83,19 @@ Item {
                                           || publishFlow.pushState === "behind"
                                           || publishFlow.pushState === "diverged")
                                          && publishFlow.repoTab.busyCount === 0
-    /// The branch whose last push git turned down, and what it said — per branch, since a refusal is about that
-    /// branch's standing (デザイン規約 §リモートへ送る).
-    property string pushFailBranch: ""
-    property string pushFailReason: ""
-    readonly property bool pushFailed:
-        publishFlow.pushFailBranch !== "" && publishFlow.pushFailBranch === publishFlow.worktree.branch
+    /// What git said to the last refused push of each branch, by branch — a refusal is about that branch's standing, so
+    /// whichever door sent it (the toolbar, the branch's row) it is that branch's, until a push of it lands
+    /// (デザイン規約 §リモートへ送る). A `Map`, so no branch name is taken for something an object already has, and
+    /// replaced whole: a binding does not see a key change.
+    property var pushFails: new Map()
+    readonly property bool pushFailed: publishFlow.pushFails.has(publishFlow.worktree.branch)
+    readonly property string pushFailReason:
+        publishFlow.pushFailed ? publishFlow.pushFails.get(publishFlow.worktree.branch) : ""
     /// The branch travels with the press: the tab keeps it beside the push's id and hands it back with the answer
     /// (`RepoTab.pushAnswer` / `pushAnswerBranch`) — nothing here holds it across the round trip.
     function pushNow() {
         if (publishFlow.pushState === "publish") {
-            publishFlow.startPublishAsk()
+            publishFlow.startPublishAsk(publishFlow.worktree.branch, publishFlow.worktree.upstream, "")
             return
         }
         publishFlow.repoTab.pushCurrent(publishFlow.worktree.branch, "", "")
@@ -108,27 +111,30 @@ Item {
                ? publishFlow.remotesModel.oidOfName(publishFlow.pushMeasured)
                : ""
     }
-    /// A push this button sent has come back, found by its id (`RepoTab.pushAnswer`, -1 when this notify carries
-    /// none; the page calls this once per notify). Reads that answer's own words
+    /// A branch's push has come back — the toolbar's or a branch row's —, found by its id (`RepoTab.pushAnswer`, -1
+    /// when this notify carries none; the page calls this once per notify). Reads that answer's own words
     /// (rules-refs/app-ui.md「ツールバーの push の答えは id で受け取る」).
     function noteWriteAnswer() {
         const at = publishFlow.repoTab.pushAnswer
         if (at < 0)
             return
         const sent = publishFlow.repoTab.pushAnswerBranch
-        if (publishFlow.repoTab.writeAnswerFailed(at)) {
-            publishFlow.pushFailBranch = sent
-            publishFlow.pushFailReason = publishFlow.repoTab.writeAnswerError(at)
-        } else if (publishFlow.pushFailBranch === sent) {
-            // Landed: drop the last refusal.
-            publishFlow.pushFailBranch = ""
-            publishFlow.pushFailReason = ""
-        }
+        const fails = new Map(publishFlow.pushFails)
+        if (publishFlow.repoTab.writeAnswerFailed(at))
+            fails.set(sent, publishFlow.repoTab.writeAnswerError(at))
+        else
+            // Landed: that branch's last refusal goes.
+            fails.delete(sent)
+        publishFlow.pushFails = fails
     }
 
     // ---- the first push: where does this branch go? -----------------
-    // (デザイン規約 §はじめてリモートへ送る). Raised by the push button, in the bar every question shares.
+    // (デザイン規約 §はじめてリモートへ送る). Raised by the push button and a branch row's push, in the bar every
+    // question shares.
     property bool publishAsking: false
+    /// The branch the question is about: the one the door that raised it names — the toolbar's is the worktree's, a
+    /// row's is its own (§はじめてリモートへ送る「対象は呼んだ所が決め」).
+    property string publishLocal: ""
     /// The remote the answer picks.
     property string publishRemote: ""
     /// What the branch is to be called over there.
@@ -169,10 +175,12 @@ Item {
         publishFlow.repoTab.remoteBranchRevision
         return publishFlow.repoTab.remoteBranchAsked()
     }
-    /// The remote has answered for exactly what is typed now.
+    /// The remote has answered for exactly what is typed now, weighed against the branch this question is about — an
+    /// answer for the last question's branch can land under this one.
     readonly property bool publishChecked: {
         const asked = publishFlow.remoteBranchAsked
         return asked ? asked.remote === publishFlow.publishRemote && asked.branch === publishFlow.publishBranch
+                       && asked.local === publishFlow.publishLocal
                      : false
     }
     /// …and what a push under this name would meet (`platitude_core::remote::RemoteBranchState`); empty until the
@@ -196,7 +204,8 @@ Item {
         interval: 350
         onTriggered: {
             if (publishFlow.publishAsking && publishFlow.publishRemote !== "" && publishFlow.publishBranch !== "")
-                publishFlow.repoTab.checkRemoteBranch(publishFlow.publishRemote, publishFlow.publishBranch)
+                publishFlow.repoTab.checkRemoteBranch(publishFlow.publishRemote, publishFlow.publishBranch,
+                                                      publishFlow.publishLocal)
         }
     }
     function refreshPublishCheck() {
@@ -206,10 +215,13 @@ Item {
     // Bindings, because the question changes while it stands. **`RestoreNone`**: `publishAsking` drops while the bar
     // is still retracting on screen, and a restore would flash its frame `warning`; `GraphPane.startAsking` rewrites
     // all of these for the next question anyway.
+    // Shut while a write runs, as the toolbar's button is (`canPush`): a push is answered by its one owner
+    // (`RepoTab.pushAnswer`), so only one is ever out — a question raised from a branch's row can stand while the
+    // toolbar sends another.
     Binding {
         target: publishFlow.graphPane
         property: "askAnswerable"
-        value: publishFlow.publishFilled && publishFlow.publishChecked
+        value: publishFlow.publishFilled && publishFlow.publishChecked && publishFlow.repoTab.busyCount === 0
         when: publishFlow.publishAsking
         restoreMode: Binding.RestoreNone
     }
@@ -287,22 +299,25 @@ Item {
         restoreMode: Binding.RestoreNone
     }
 
-    function startPublishAsk() {
+    /// Asks where `branch` goes, opening on `upstream` — the one it is configured for, here or not — and marking the
+    /// row `oidHex` ("" for none: the toolbar's is the worktree's own).
+    function startPublishAsk(branch, upstream, oidHex) {
         // Open on the upstream where there is one, even with no tracking ref (デザイン規約 §ブランチが測られる相手を決める)
         // — but only on a remote still configured: `remoteOfRef` cuts a lost name at the first slash, and the chooser
         // cannot pick back a row it does not hold.
-        const upstream = publishFlow.worktree.upstream
         const on = upstream !== ""
                  ? GitFacts.remoteOfRef(upstream, publishFlow.repoTab.remoteNames) : ""
         const tracked = on !== "" && publishFlow.publishRemotes.indexOf(on) >= 0
+        publishFlow.publishLocal = branch
         publishFlow.publishRemote = tracked ? on : publishFlow.repoTab.defaultRemote
         publishFlow.publishBranch = tracked
             ? GitFacts.branchOfRef(upstream, publishFlow.repoTab.remoteNames)
-            : publishFlow.worktree.branch
-        // `push` untranslated (the command's spelling); `%1` is left for the bar to draw the name in its ref colour
-        // (デザイン規約 §ref の種別).
+            : branch
+        // `push` untranslated (the command's spelling); `%1` is left for the bar to draw the name in its ref colour —
+        // the worktree's own branch's blue, any other's plain ink (デザイン規約 §ref の種別).
         publishFlow.askRequested(
-            qsTr("%1 where?"), publishFlow.answerPublish, publishForm, "push", publishFlow.worktree.branch)
+            oidHex, qsTr("%1 where?"), publishFlow.answerPublish, publishForm, "push", branch,
+            branch === publishFlow.worktree.branch ? Theme.textLink : Theme.textPrimary)
         // After the bar is up: raising it resets what the bindings above own, and an unchanged binding does not push
         // back.
         publishFlow.publishAsking = true
@@ -356,12 +371,12 @@ Item {
     }
 
     function answerPublish() {
-        // The same owner a plain push writes to: a refused first push is still this button's news
+        // The same owner a plain push writes to: a refused first push is still news about that branch
         // (デザイン規約 §リモートへ送る).
-        publishFlow.repoTab.publishCurrent(publishFlow.worktree.branch,
-                                           publishFlow.publishRemote,
-                                           publishFlow.publishBranch,
-                                           publishFlow.publishLease)
+        publishFlow.repoTab.publishBranch(publishFlow.publishLocal,
+                                          publishFlow.publishRemote,
+                                          publishFlow.publishBranch,
+                                          publishFlow.publishLease)
     }
 
     RemoteDialog {

@@ -168,13 +168,43 @@ impl RepoSession {
         )
     }
 
-    /// The first push of a branch, to the target the user just named.
+    /// Pushes `branch` to wherever it belongs, checked out or not — the
+    /// push of a branch row's menu ([`remote::plan_push`]). Resolved inside
+    /// the write, as [`Self::push_current`] is.
+    pub fn push_named(
+        self: &Arc<Self>,
+        branch: String,
+        fallback_remote: String,
+        force: remote::PushForce,
+    ) -> Option<OperationId> {
+        let timeout = self.network_timeout();
+        let s = Arc::clone(self);
+        self.write(
+            OperationKind::Push,
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                let spec = remote::plan_push(
+                    &exec,
+                    &repo.workdir,
+                    &branch,
+                    &fallback_remote,
+                    force,
+                    &cancel,
+                )
+                .await?;
+                s.push_recorded(&exec, &repo, &spec, timeout, &cancel).await
+            },
+        )
+    }
+
+    /// The first push of `branch`, to the target the user just named.
     ///
-    /// Apart from [`Self::push_current`] because nothing local knows where
+    /// Apart from [`Self::push_named`] because nothing local knows where
     /// this goes; the answer becomes the upstream, so it is asked once per
     /// branch.
-    pub fn publish_current(
+    pub fn publish(
         self: &Arc<Self>,
+        branch: String,
         remote_name: String,
         remote_branch: String,
         expect: String,
@@ -185,15 +215,7 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let spec = remote::plan_publish(
-                    &exec,
-                    &repo.workdir,
-                    &remote_name,
-                    &remote_branch,
-                    &expect,
-                    &cancel,
-                )
-                .await?;
+                let spec = remote::publish_spec(&branch, &remote_name, &remote_branch, &expect);
                 s.push_recorded(&exec, &repo, &spec, timeout, &cancel).await
             },
         )
@@ -250,22 +272,30 @@ impl RepoSession {
     }
 
     /// Asks whether a remote already carries a branch name, so a first push
-    /// can tell "this creates a branch" from "this advances one somebody
-    /// else made". Reaches the network, so it is only asked while that
-    /// question is on screen.
+    /// of `local` can tell "this creates a branch" from "this advances one
+    /// somebody else made". Reaches the network, so it is only asked while
+    /// that question is on screen.
     ///
     /// One at a time (`session::latest`): the name is asked as it is typed,
     /// a new ask cancels the last one's round trip, and a cancelled ask
     /// answers nothing.
-    pub fn check_remote_branch(self: &Arc<Self>, remote_name: String, branch: String) {
+    pub fn check_remote_branch(
+        self: &Arc<Self>,
+        remote_name: String,
+        branch: String,
+        local: String,
+    ) {
         let Some(workdir) = self.workdir() else {
             return;
         };
         let timeout = self.network_timeout();
         let cancel = self.remote_branch_read.begin(&self.root_cancel);
+        // What the push would send: the history the far tip has to be in for
+        // the push to fast-forward it.
+        let tip = format!("refs/heads/{local}");
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            let mut tip = String::new();
+            let mut far_tip = String::new();
             let mut theirs = 0;
             let state = match remote::branch_tip(
                 &s.executor,
@@ -282,8 +312,8 @@ impl RepoSession {
                 // contains the remote's tip. A tip never fetched here leaves
                 // neither answer ours to give.
                 Ok(Some(over_there)) => {
-                    tip = over_there.to_hex();
-                    match commit::is_in_head_history(&s.executor, &workdir, &over_there, &cancel)
+                    far_tip = over_there.to_hex();
+                    match commit::is_in_history(&s.executor, &workdir, &over_there, &tip, &cancel)
                         .await
                     {
                         Ok(true) => remote::RemoteBranchState::FastForward,
@@ -293,10 +323,11 @@ impl RepoSession {
                         // trusted under `Refused`, so a failed walk is
                         // `Unknown`.
                         Ok(false) => {
-                            match commit::count_beyond_head(
+                            match commit::count_beyond(
                                 &s.executor,
                                 &workdir,
                                 &over_there,
+                                &tip,
                                 &cancel,
                             )
                             .await
@@ -324,8 +355,9 @@ impl RepoSession {
             s.sink.event(SessionEvent::RemoteBranchChecked {
                 remote: remote_name,
                 branch,
+                local,
                 state,
-                tip,
+                tip: far_tip,
                 theirs,
             });
         });

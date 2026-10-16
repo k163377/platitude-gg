@@ -1,10 +1,15 @@
-//! The toolbar's push, from the press to the answer that is its own.
+//! A branch's push, from the press to the answer that is its own.
 
 use super::Press;
 
-/// One push the toolbar's button sent — the plain push, the leased
-/// overwrite, the first push the question just took — and the branch it
-/// was about, until git's answer to that press and no other.
+/// One push of a branch — the toolbar's or the branch row's plain push,
+/// the leased overwrite, the first push the question just took — and the
+/// branch it was about, until git's answer to that press and no other.
+///
+/// One at a time: the doors to a push that stand beside one in flight —
+/// the toolbar's button, the question's pill, a menu raised under it —
+/// are shut while a write runs, so a second press never overwrites one
+/// still out.
 ///
 /// By id alone: a remote branch's replace and delete answer under the same
 /// label, and the fetch running behind a press comes back in the same

@@ -28,10 +28,13 @@ pub use self::clone::{clone, folder_name_for};
 pub use self::fetch::fetch;
 pub use self::list::{Remote, Remotes, add, list, read, set_url};
 pub use self::marks::{
-    OriginMarks, PushDefault, PushMarks, clear_origin, mark_origin, origin_marks, push_marks,
+    BranchPushRemote, KeptMarks, OriginMarks, PushDefault, PushMarks, clear_origin, kept_marks,
+    mark_origin, push_marks,
 };
 pub use self::pull::{fast_forward, pull};
-pub use self::push::{PushForce, PushSpec, plan_current_push, plan_publish, push, push_track};
+pub use self::push::{
+    PushForce, PushSpec, plan_current_push, plan_push, publish_spec, push, push_track, push_tracks,
+};
 pub use self::standing::{PushStanding, PushTrack, push_standing, push_target, pushes_elsewhere};
 pub use self::tags::{
     HeldTag, RemoteTag, delete_remote_tag, list_tags, parse_ls_remote_tags, push_tag,

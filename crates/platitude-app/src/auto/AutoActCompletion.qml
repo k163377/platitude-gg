@@ -43,7 +43,7 @@ QtObject {
                 "stage-line", "keep-place", "code-shrink", "discard-hunk-go", "line-back", "diff-follow",
                 "line-run",
                 "stage-all", "unstage-all", "resolve-all",
-                "push", "push-outdated", "tag-refused",
+                "push", "push-outdated", "tag-refused", "push-branch-go",
                 "force-push", "push-retry", "fetch", "fetch-ref-list",
                 "commands", "commands-select", "commands-copy", "commands-sweep",
                 "commands-fail", "commands-clear",
@@ -130,6 +130,9 @@ QtObject {
                 // there — so the barrier is behind the wait.
                 "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both", "tag-refused",
                 "tag-chip-menu", "tag-line-menu",
+                // The card goes up once nothing is out, and the press goes from there; what ends them is the question
+                // the row raised, or the branch's row read level after git's answer (`AutoActBranchPushVerbs`).
+                "push-branch-menu", "push-branch-ask", "push-branch-go",
                 // The menu and its WORKTREE card open from a sampler once the row is laid out; the pressing ones click
                 // from there and wait for the list the worktree leaves, or for the bar git's refusal comes down in.
                 "worktree-menu", "worktree-remove", "worktree-remove-refused", "worktree-graph", "worktree-held",

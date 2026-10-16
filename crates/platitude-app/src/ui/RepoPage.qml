@@ -504,8 +504,8 @@ FocusScope {
         }
         page.openRepositoryPathRequested(repoTab.worktreeAnswerPath)
     }
-    /// The answer to the toolbar's push — its own answer (`RepoTab.pushAnswer`, -1 for none). Only a refusal is the
-    /// page's; the button's mark is `PublishFlow.noteWriteAnswer`'s.
+    /// The answer to a branch's push, the toolbar's or the branch row's — its own answer (`RepoTab.pushAnswer`, -1 for
+    /// none). Only a refusal is the page's; the button's mark is `PublishFlow.noteWriteAnswer`'s.
     function absorbPushAnswer() {
         const answer = repoTab.pushAnswer
         if (answer < 0 || !repoTab.writeAnswerFailed(answer))
@@ -820,7 +820,7 @@ FocusScope {
 
     property var rowAskRun: null
     function startRowAsk(oidHex, label, detail, danger, acceptText, run,
-                         hold = false, tip = "", form = null, code = "", refName = "") {
+                         hold = false, tip = "", form = null, code = "", refName = "", refTint = Theme.textLink) {
         // Whoever was dressing the bar lets go first, or that flow would think it still stands and its check timer
         // go on firing round trips at a remote. `startAsking`'s assignments beat a live `Binding` outright; the flow
         // raising this one turns its own back on afterwards.
@@ -828,7 +828,7 @@ FocusScope {
         upstreamFlow.asking = false
         renameCarryFlow.asking = false
         page.rowAskRun = run
-        graphPane.startAsking(oidHex, label, detail, acceptText, danger, hold, tip, form, code, refName)
+        graphPane.startAsking(oidHex, label, detail, acceptText, danger, hold, tip, form, code, refName, refTint)
     }
     function stopRowAsk() {
         page.rowAskRun = null
@@ -908,8 +908,8 @@ FocusScope {
         remotesModel: remotesModel
         graphPane: graphPane
         // The first push asks where the branch goes, in the one question bar.
-        onAskRequested: (label, run, form, code, refName) =>
-            page.startRowAsk("", label, "", false, "", run, false, "", form, code, refName)
+        onAskRequested: (oidHex, label, run, form, code, refName, refTint) =>
+            page.startRowAsk(oidHex, label, "", false, "", run, false, "", form, code, refName, refTint)
     }
     /// What the window's toolbar reads off the page it is showing: the button lives up there, and the state machine
     /// behind it down here (`TopBar`).
@@ -926,6 +926,11 @@ FocusScope {
     }
     function forcePush() {
         publishFlow.forcePush()
+    }
+    /// The branch card's push row on a branch never sent, from either menu it is carried by: the question names that
+    /// branch and is marked on its own row (デザイン規約 §はじめてリモートへ送る「対象は呼んだ所が決め」).
+    function startPublishAskFor(branch, upstream) {
+        publishFlow.startPublishAsk(branch, upstream, branchesModel.oidOfName(branch))
     }
 
     /// Where the standing right-click menu was raised — `sidebar` (the left panel's rows), `refList` (the rows of a
@@ -981,6 +986,7 @@ FocusScope {
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onDropStashRequested: selector => page.dropStashNow(selector)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
+            onPublishRequested: (branch, upstream) => page.startPublishAskFor(branch, upstream)
             onRemoveWorktreeRequested: (path, name, holds) => repoTab.removeWorktree(path, name, holds)
         }
     }
@@ -1466,6 +1472,8 @@ FocusScope {
             // The branch card's own rows, answered where the ref menu's are.
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
+            onPushBranchRequested: (branch, force, lease) => repoTab.pushNamed(branch, force, lease)
+            onPublishRequested: (branch, upstream) => page.startPublishAskFor(branch, upstream)
             onRemoveWorktreeRequested: (path, name, holds) => repoTab.removeWorktree(path, name, holds)
             // The remote-ref deletes go through `CommitMenuState`, beside the lookups their cards read.
             onCherryPickRequested: oidHex => repoTab.cherryPick(oidHex)

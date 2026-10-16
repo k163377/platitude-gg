@@ -442,6 +442,7 @@ impl SessionSink for BridgeSink {
             SessionEvent::RemoteBranchChecked {
                 remote,
                 branch,
+                local,
                 state,
                 tip,
                 theirs,
@@ -449,6 +450,7 @@ impl SessionSink for BridgeSink {
                 self.feeds.tab.push(TabMsg::RemoteBranch {
                     remote,
                     branch,
+                    local,
                     state: state.as_str().to_string(),
                     tip,
                     theirs: i32::try_from(theirs).unwrap_or(i32::MAX),

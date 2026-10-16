@@ -185,6 +185,8 @@ QtObject {
             "remoteCounterpartOid": counterpart === "" ? "" : menuState.branchesModel.upstreamOidOf(full),
             "remoteDrifted": drifted,
             "open": open,
+            "push": kind === "branch"
+                    ? menuState.branchesModel.branchPush(full, menuState.repoTab.defaultRemote) : undefined,
             "merged": !open || kind !== "branch" ? "" : menuState.graphModel.branchDeleteMerged(
                 oidHex, menuState.branchesModel.upstreamOidOf(full), menuState.tree.headOid),
             "offers": GitFacts.refMenuOffers(

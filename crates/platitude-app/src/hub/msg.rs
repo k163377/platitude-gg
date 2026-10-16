@@ -122,10 +122,12 @@ pub enum TabMsg {
         restored: Vec<platitude_core::discards::Restored>,
     },
     /// Whether a remote already carries a branch name. The question rides
-    /// along: the asking box may be on another name by now.
+    /// along: the asking box may be on another name by now, or the
+    /// question on another branch (`local`).
     RemoteBranch {
         remote: String,
         branch: String,
+        local: String,
         /// `platitude_core::remote::RemoteBranchState` by its wire name.
         state: String,
         /// The commit the remote advertised, hex; empty where it named none.

@@ -1,8 +1,8 @@
 import QtQuick
 import platitude.ui
 
-// The BRANCH card: set upstream and the delete table — local, remote, both (デザイン規約 §メニュー の入れ子).
-// Starting a branch stands on the level above with the other moves.
+// The BRANCH card: the branch sent to its remote, set upstream, and the delete table — local, remote, both
+// (デザイン規約 §メニュー の入れ子). Starting a branch stands on the level above with the other moves.
 //
 // **One card, two entrances** (`RefRowMenu` / `CommitMenuState`), so both offer the same thing. **It reads no model
 // and runs no write**: the entrance reads the facts (`branchFacts`), `standOn` freezes them as the menu opens, and
@@ -51,6 +51,12 @@ AppMenu {
     /// Set upstream: the page opens the question in the window's one question bar (`UpstreamFlow`), starting from
     /// `counterpart`, the remote branch this one already reads.
     signal upstreamRequested(string branch, string counterpart)
+    /// The branch sent where its marks and upstream say (`RepoTab.pushNamed`): `force` `""` or `"lease"`, `lease` the
+    /// commit the card showed the far side on.
+    signal pushRequested(string branch, string force, string lease)
+    /// Its first push: the page asks where it goes, in the window's one question bar (`PublishFlow.startPublishAsk`),
+    /// opening on `upstream`, where the branch already points.
+    signal publishRequested(string branch, string upstream)
     /// Requests to the carrying menu, which holds the tab (rules/app-ui.md の「配線」) and cuts a ref path into remote
     /// and branch against the configured remotes: the early `merged` check, the held `-D` after a refusal, the remote
     /// delete alone, and the pair.
@@ -64,6 +70,9 @@ AppMenu {
     readonly property alias deleteRemoteItem: refRemoteDeleteItem
     readonly property alias deleteBothItem: refBothDeleteItem
     readonly property alias upstreamItem: refUpstreamItem
+    readonly property alias pushItem: refPushItem
+    /// What the push row stands on (`NavSectionModel.branchPush`'s `state`), for the automation's report.
+    readonly property alias pushState: state.pushState
 
     /// Everything this card reads, set once by `standOn` and left alone while it stands.
     QtObject {
@@ -91,6 +100,13 @@ AppMenu {
         property bool deleteAnswered: false
         property bool deleteMerged: true
         property bool deleteAsked: false
+        /// The push row's standing — the toolbar's words (`PublishFlow.pushState`) —, where it goes, the commit an
+        /// overwrite is leased to, and the upstream the first push's question opens on. `pushState` is empty where
+        /// the row has no seat.
+        property string pushState: ""
+        property string pushTarget: ""
+        property string pushLease: ""
+        property string pushUpstream: ""
     }
 
     /// Freezes the card on that branch. `facts` is what the carrying menu read for it: `heldByWorktree` the other
@@ -98,8 +114,9 @@ AppMenu {
     /// repository's own, `remoteCounterpart` the reading a
     /// local branch speaks for, `remoteCounterpartOid` its commit and `remoteDrifted` whether that stands on another
     /// commit, `offers` core's words,
-    /// `open` whether the tab is, and `merged` what the drawn rows say about the plain delete (`yes` / `no`, empty
-    /// for a tip or a reference older than the window, whose answer only git has).
+    /// `open` whether the tab is, `merged` what the drawn rows say about the plain delete (`yes` / `no`, empty
+    /// for a tip or a reference older than the window, whose answer only git has), and `push` what the push row stands
+    /// on (`NavSectionModel.branchPush`: `state`, `target`, `lease`, `upstream`).
     function standOn(kind, name, full, oidHex, facts) {
         branchCard.forceDeleteBranch = ""
         state.kind = kind
@@ -109,6 +126,10 @@ AppMenu {
         state.deleteAnswered = false
         state.deleteMerged = true
         state.deleteAsked = false
+        state.pushState = ""
+        state.pushTarget = ""
+        state.pushLease = ""
+        state.pushUpstream = ""
         if (kind !== "branch" && kind !== "remote") {
             state.remoteCounterpart = ""
             state.remoteCounterpartOid = ""
@@ -134,6 +155,16 @@ AppMenu {
         state.canDeleteRemote = offers.includes("delete-remote")
         state.canSetUpstream = offers.includes("set-upstream")
         state.onCurrentBranch = offers.includes("current")
+        // A local branch the worktree is not on — the one it is on has the toolbar's own button (デザイン規約 §メニュー
+        // 「そこにしか入口が無いものだけ」) — and only where a push can go: nothing to send, or nothing to name, is no row.
+        const push = facts.push
+        if (kind === "branch" && facts.open && !state.onCurrentBranch && push !== undefined
+                && ["publish", "elsewhere", "ready", "behind", "diverged"].includes(push.state)) {
+            state.pushState = push.state
+            state.pushTarget = push.target
+            state.pushLease = push.lease
+            state.pushUpstream = push.upstream
+        }
         // Whether the plain delete would be refused, answered at open so the row wears `-D` from the start: the drawn
         // rows answer first (規約 §行が読む答えはどこから来るか), git only where they cannot (→ `checkedMerged`).
         if (facts.open && kind === "branch" && state.canDelete) {
@@ -172,6 +203,39 @@ AppMenu {
     title: qsTr("BRANCH")
     applies: state.kind === "branch" || state.kind === "remote"
 
+    // The toolbar's push for a branch the worktree is not on, in the toolbar's forms (デザイン規約 §リモートへ送る): a
+    // plain click where git would take it; the leased overwrite, held, where the far side has commits this branch
+    // lacks; and a first push that asks where it goes. The flag long, as every menu row's (§git 用語のコード表記).
+    AppMenuItem {
+        id: refPushItem
+        readonly property bool publishing: state.pushState === "publish"
+        readonly property bool overwrites: state.pushState === "behind" || state.pushState === "diverged"
+        // Off the running press's length, so the chip cannot change under a hand already on the row
+        // (`AppMenuItem.armedPresses`, デザイン規約 §回数押し).
+        code: refPushItem.armedPresses <= 0 ? "push" : "push --force"
+        // Where it goes in its kind's colour; the first push asks it, which the `…` says
+        // (デザイン規約 §はじめてリモートへ送る).
+        //: Follows the `push` chip: "push to origin/feature".
+        refSentence: refPushItem.publishing ? "" : qsTr("to %1")
+        refName: state.pushTarget
+        refTint: Theme.textSecondary
+        //: Follows the `push` chip: "push to…", where the branch goes being asked first.
+        text: refPushItem.publishing ? qsTr("to…") : refPushItem.refSentence.arg(refPushItem.refName)
+        offered: state.pushState !== ""
+        holdPresses: refPushItem.overwrites ? Metrics.holdPressesWarned : 0
+        // Reaching past this machine is the warning tone (デザイン規約 §状態).
+        holdTone: Theme.warning
+        onTriggered: {
+            if (refPushItem.publishing)
+                branchCard.publishRequested(state.refId, state.pushUpstream)
+            else
+                branchCard.pushRequested(state.refId, "", "")
+        }
+        onHeld: {
+            refPushItem.closeMenu()
+            branchCard.pushRequested(state.refId, "lease", state.pushLease)
+        }
+    }
     // Set upstream (デザイン規約 §ブランチが測られる相手を決める). Words and a `…`, no code: the flag's value is not
     // settled until the question is answered (§git 用語のコード表記). Only a local branch: a remote-tracking ref has
     // no upstream of its own.

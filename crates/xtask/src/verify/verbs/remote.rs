@@ -56,6 +56,53 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "push=true code=push held=false lease= ",
     },
+    // The BRANCH card's push row on a branch the worktree is not on, in the
+    // toolbar's forms off that branch's own counts (`--preset
+    // others-behind`: `feature/mine` ahead, `feature/split` both ways,
+    // `release` behind, `scratch` never sent) — and none on the one it is
+    // on, whose door is the toolbar's button. The chip's entrance carries
+    // the same card, so the same words; none of it is in the picture but
+    // the words.
+    Verb {
+        name: "push-branch-menu",
+        when: &[
+            (
+                Arg::Ends("feature/mine"),
+                "offered=true state=ready code=push held=false text=to origin/feature/mine",
+            ),
+            (
+                Arg::Ends("feature/split"),
+                "offered=true state=diverged code=push --force held=true \
+                 text=to origin/feature/split",
+            ),
+            (
+                Arg::Ends("release"),
+                "offered=true state=behind code=push --force held=true",
+            ),
+            (
+                Arg::Ends("scratch"),
+                "offered=true state=publish code=push held=false text=to…",
+            ),
+            (Arg::Ends("main"), "offered=false state= "),
+        ],
+        plain: "push_branch_menu where=",
+    },
+    // The question a never-sent branch's row raises names that branch, not
+    // the worktree's (`local=` against `head=`).
+    Verb {
+        name: "push-branch-ask",
+        when: &[],
+        plain: "push_branch_ask local=scratch head=main remote=origin branch=scratch far=free",
+    },
+    // Pressed through — held where the far side has commits the branch
+    // lacks, the question answered where it was never sent — and judged on
+    // the branch's own row: level with where it went, the worktree's
+    // branch where it was.
+    Verb {
+        name: "push-branch-go",
+        when: &[],
+        plain: "push_branch_landed refused=false state=clean head=main",
+    },
     // The two that run a delete, judged on the sidebar afterwards: the
     // rebuild answers after the write, so the barrier alone photographs
     // the deleted row. `was=` / `sides=` are the name's reading either

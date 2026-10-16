@@ -106,6 +106,7 @@ Item {
     readonly property alias deleteTagBothItem: tagMenu.deleteTagBothItem
     readonly property alias deleteItem: branchMenu.deleteItem
     readonly property alias upstreamItem: branchMenu.upstreamItem
+    readonly property alias pushBranchItem: branchMenu.pushItem
     readonly property alias removeWorktreeItem: worktreeMenu.removeWorktreeItem
     readonly property alias stashDropItem: refStashDropItem
     readonly property alias switchItem: refSwitchItem
@@ -134,6 +135,8 @@ Item {
     /// Which remote branch a local one is measured against — the branch card's row, answered in the page's one bar
     /// (`UpstreamFlow`).
     signal upstreamRequested(string branch, string counterpart)
+    /// Where a branch's first push goes — the branch card's push row, asked in the page's one bar (`PublishFlow`).
+    signal publishRequested(string branch, string upstream)
 
     anchors.fill: parent
 
@@ -158,6 +161,8 @@ Item {
             "remoteCounterpartOid": counterpart === "" ? "" : refRowMenu.branchesModel.upstreamOidOf(full),
             "remoteDrifted": drifted,
             "open": open,
+            "push": kind === "branch"
+                    ? refRowMenu.branchesModel.branchPush(full, refRowMenu.repoTab.defaultRemote) : undefined,
             "merged": !open || kind !== "branch" ? "" : refRowMenu.graphModel.branchDeleteMerged(
                 oidHex, refRowMenu.branchesModel.upstreamOidOf(full), refRowMenu.tree.headOid),
             "offers": GitFacts.refMenuOffers(
@@ -453,6 +458,8 @@ Item {
             checkedMerged: refRowMenu.repoTab.branchDeleteMerged
             onDeleteRequested: (kind, id, name, oidHex) => refRowMenu.deleteRequested(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => refRowMenu.upstreamRequested(branch, counterpart)
+            onPushRequested: (branch, force, lease) => refRowMenu.repoTab.pushNamed(branch, force, lease)
+            onPublishRequested: (branch, upstream) => refRowMenu.publishRequested(branch, upstream)
             onCheckDeleteRequested: branch => refRowMenu.repoTab.checkBranchDelete(branch)
             onForceDeleteRequested: branch => refRowMenu.repoTab.deleteBranch(branch, true)
             onDeleteRemoteRequested: (remoteRef, expect) => refRowMenu.deleteRemoteNow(remoteRef, expect)

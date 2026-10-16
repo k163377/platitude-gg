@@ -19,7 +19,7 @@ use std::path::Path;
 
 use crate::support::TestRepo;
 use crate::support::exec::{env, logged_global};
-use crate::support::session::{CaptureSink, opened};
+use crate::support::session::{CaptureSink, opened, write_answer};
 use crate::support::wait::bounded;
 use platitude_core::GitError;
 use platitude_core::process::GitExecutor;
@@ -114,10 +114,10 @@ async fn the_origin_mark_reads_back_with_both_keys() {
     let (exec, cancel) = env();
 
     assert_eq!(
-        remote::origin_marks(&exec, &repo.path, &cancel)
+        remote::kept_marks(&exec, &repo.path, &cancel)
             .await
             .expect("unset is an answer, not a failure"),
-        remote::OriginMarks::default()
+        remote::KeptMarks::default()
     );
 
     remote::mark_origin(&exec, &repo.path, "fork", &cancel)
@@ -129,9 +129,10 @@ async fn the_origin_mark_reads_back_with_both_keys() {
             .trim(),
         "fork"
     );
-    let marks = remote::origin_marks(&exec, &repo.path, &cancel)
+    let marks = remote::kept_marks(&exec, &repo.path, &cancel)
         .await
-        .expect("an answer");
+        .expect("an answer")
+        .origin;
     let marked = marks.push_default.expect("a push mark");
     assert_eq!(marked.remote, "fork");
     assert!(marked.local, "this repository's own config set it");
@@ -141,10 +142,10 @@ async fn the_origin_mark_reads_back_with_both_keys() {
         .await
         .expect("clear");
     assert_eq!(
-        remote::origin_marks(&exec, &repo.path, &cancel)
+        remote::kept_marks(&exec, &repo.path, &cancel)
             .await
             .expect("an answer"),
-        remote::OriginMarks::default()
+        remote::KeptMarks::default()
     );
     remote::clear_origin(&exec, &repo.path, &cancel)
         .await
@@ -565,6 +566,152 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
     session.close_and_wait().await;
 }
 
+/// A branch the worktree is not on: the refs read counts it against where
+/// its mark sends it, and a branch row's push goes there — refused plain,
+/// landed under a lease on the tip that read showed.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_branch_aside_is_counted_and_sent_where_its_mark_says() {
+    let (_origin, fork, mut repo) = fork_diverged();
+    repo.git(&["config", "--unset", "remote.pushDefault"]);
+    repo.git(&["config", "branch.main.pushRemote", "fork"]);
+    repo.git(&["switch", "-c", "aside"]);
+    let (sink, session) = opened(&repo).await;
+
+    let facts = sink
+        .wait_for("main's counts where its mark sends it", |evs| {
+            evs.iter().rev().find_map(|e| match e {
+                SessionEvent::RefsLoaded { snapshot, .. } => {
+                    Some(snapshot.branch_push("main", "origin"))
+                }
+                _ => None,
+            })
+        })
+        .await;
+    let fork_tip = repo.git(&["rev-parse", "refs/remotes/fork/main"]);
+    assert_eq!(
+        (
+            facts.standing,
+            facts.target.as_str(),
+            facts.measured.as_str(),
+            facts.lease.map(|oid| oid.to_hex()),
+            facts.ahead,
+            facts.behind,
+        ),
+        (
+            remote::PushStanding::Diverged,
+            "fork/main",
+            "fork/main",
+            Some(fork_tip.trim().to_string()),
+            1,
+            1,
+        ),
+        "only ahead of the upstream, diverged from where the push goes"
+    );
+
+    let plain = session
+        .push_named("main".into(), "origin".into(), PushForce::None)
+        .expect("the write is accepted");
+    assert!(
+        write_answer(&sink, plain).await.is_some(),
+        "git refuses by the fork's main"
+    );
+    let leased = session
+        .push_named(
+            "main".into(),
+            "origin".into(),
+            PushForce::WithLease {
+                expect: Some(fork_tip.trim().to_string()),
+            },
+        )
+        .expect("the write is accepted");
+    assert_eq!(write_answer(&sink, leased).await, None);
+    let fork_path = fork.path.clone();
+    assert_eq!(
+        repo.git_in(&fork_path, &["rev-parse", "main"]),
+        repo.git(&["rev-parse", "main"]),
+        "the fork now holds main"
+    );
+    assert_eq!(
+        repo.git(&["symbolic-ref", "--short", "HEAD"]),
+        "aside",
+        "the worktree stays where it was"
+    );
+    session.close_and_wait().await;
+}
+
+/// The refs read counts branches against where a mark sends them in the
+/// one arrangement those counts speak for — a mark on another remote than
+/// the upstream's — and spends no process on them anywhere else. The
+/// worktree is on a branch that tracks nothing, so the status tick reads
+/// no counts of its own.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_refs_read_counts_only_the_branches_a_mark_sends_elsewhere() {
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
+    repo.git(&["switch", "-c", "aside"]);
+    let (sink, session) = opened(&repo).await;
+    session.set_recording(Recording::WithBackground);
+    let counted = |sink: &CaptureSink| {
+        sink.events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|e| {
+                matches!(e, SessionEvent::CommandStarted { display, .. }
+                         if display.contains("%(push:track)"))
+            })
+            .count()
+    };
+    // The snapshot built on the mark `marked` names, and what it says of
+    // `main`: only a snapshot built after the mark moved carries it.
+    let main_under = |marked: &'static str| {
+        sink.wait_for("a snapshot built on the mark", move |evs| {
+            evs.iter().rev().find_map(|e| match e {
+                SessionEvent::RefsLoaded { snapshot, .. }
+                    if snapshot
+                        .push_default
+                        .as_ref()
+                        .is_some_and(|mark| mark.remote == marked) =>
+                {
+                    Some(snapshot.branch_push("main", "origin"))
+                }
+                _ => None,
+            })
+        })
+    };
+    let poll = || async {
+        let polled = bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
+        assert!(
+            matches!(polled, RefreshOutcome::Changed | RefreshOutcome::Unchanged),
+            "the poll ran: {polled:?}"
+        );
+    };
+
+    repo.git(&["config", "remote.pushDefault", "origin"]);
+    poll().await;
+    assert_eq!(
+        main_under("origin").await.standing,
+        remote::PushStanding::Clean
+    );
+    assert_eq!(
+        counted(&sink),
+        0,
+        "the mark is the upstream's own remote: nothing reads the counts"
+    );
+
+    repo.git(&["config", "remote.pushDefault", "fork"]);
+    poll().await;
+    assert_eq!(
+        main_under("fork").await.standing,
+        remote::PushStanding::Elsewhere,
+        "the fork was never fetched, so nothing here counts against it"
+    );
+    assert!(
+        counted(&sink) > 0,
+        "the answer above is of the command that read the counts"
+    );
+    session.close_and_wait().await;
+}
+
 /// What git does with the checkout key once it is written. Writing it and
 /// reading the two keys apart are held above and by `remote::marks`' own
 /// tests, so only the full gate runs these.
@@ -608,9 +755,10 @@ mod periodic {
             .expect("mark fork");
         repo.git(&["remote", "rename", "fork", "home"]);
 
-        let marks = remote::origin_marks(&exec, &repo.path, &cancel)
+        let marks = remote::kept_marks(&exec, &repo.path, &cancel)
             .await
-            .expect("an answer");
+            .expect("an answer")
+            .origin;
         assert_eq!(marks.push_default.expect("a push mark").remote, "home");
         assert_eq!(marks.checkout_default.as_deref(), Some("fork"));
     }

@@ -40,14 +40,14 @@ impl RepoTab {
             .asked(asked.map(platitude_core::OperationId::as_u64));
     }
 
-    pub(super) fn look_up_remote_branch(&mut self, remote: String, branch: String) {
+    pub(super) fn look_up_remote_branch(&mut self, remote: String, branch: String, local: String) {
         self.remote_branch_asked = Optional::none();
         self.remote_branch_revision = self.remote_branch_revision.wrapping_add(1);
         self.remote_branch_state = String::new();
         self.remote_branch_tip = String::new();
         self.remote_branch_theirs = 0;
         self.changed();
-        self.with_session(|s| s.check_remote_branch(remote.clone(), branch.clone()));
+        self.with_session(|s| s.check_remote_branch(remote.clone(), branch.clone(), local.clone()));
     }
 
     pub(super) fn look_up_branch_delete(&mut self, branch: String) {
@@ -57,29 +57,19 @@ impl RepoTab {
         self.with_session(|s| s.check_branch_delete(branch.clone()));
     }
 
-    /// `git push <remote> <local>:<remote_branch>`, keyed to a ref row.
-    /// Nothing in `ui/` calls `pushBranch` yet; it is answered by id anyway
-    /// (`ops::PushOut`), so a door added to it gets its own refusal.
-    pub(super) fn branch_push(
-        &mut self,
-        remote: String,
-        local: String,
-        remote_branch: String,
-        set_upstream: bool,
-        force: String,
-        lease_expect: String,
-    ) {
-        let row = format!("{remote}/{remote_branch}");
+    /// `branch` pushed from its row's menu, where its marks and upstream
+    /// send it (`RepoSession::push_named`, resolved inside the write as the
+    /// toolbar's is). Answered by id through the toolbar's own owner
+    /// (`ops::PushOut`): what git said is about that branch's standing, so a
+    /// refusal is remembered for the branch whichever door sent it
+    /// (デザイン規約 §リモートへ送る).
+    pub(super) fn named_push(&mut self, branch: String, force: String, lease_expect: String) {
+        let fallback = self.default_remote.clone();
         let force = Self::push_force(&force, &lease_expect);
-        let spec = platitude_core::remote::PushSpec {
-            remote,
-            local,
-            remote_branch,
-            set_upstream,
-            force,
-        };
-        let asked = self.ask_session(|s| s.push(spec.clone()));
-        self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
+        let asked =
+            self.ask_session(|s| s.push_named(branch.clone(), fallback.clone(), force.clone()));
+        self.push_out
+            .asked(asked.map(platitude_core::OperationId::as_u64), branch);
     }
 
     /// The commit asked about is written down first, so an answer for a

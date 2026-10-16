@@ -329,6 +329,7 @@ pub(super) fn join_key(
     // (rules-refs/core.md「remotes の名前・URL と印の全部」).
     remotes.push_default.hash(&mut hasher);
     remotes.checkout_default.hash(&mut hasher);
+    remotes.branch_push_remotes.hash(&mut hasher);
     for r in &remotes.list {
         r.name.hash(&mut hasher);
         r.fetch_url.hash(&mut hasher);

@@ -77,6 +77,32 @@ impl RepoSession {
         let remotes = self.remotes(&workdir, &cancel).await.unwrap_or_default();
         match (refs, head) {
             (Ok(refs), Ok(head)) => {
+                let keys = refs_keys(&refs, &head);
+                // The joins have a key of their own (`join_key`): an
+                // unmoved repository does not build them, since sorting
+                // every ref into a snapshot only to compare it equal is
+                // work on every quiet tick
+                // (ci/baseline/refs-join-windows-x64.md). The held
+                // snapshot still goes out, for a consumer that attached
+                // since; the sidebar reads it by pointer (`share_snapshot`).
+                let inputs = join_key(
+                    keys.listing,
+                    self.remote_tag_gen.load(Ordering::SeqCst),
+                    self.worktree_gen.load(Ordering::SeqCst),
+                    &remotes,
+                );
+                // What the menus' `push` rows count with goes into a rebuilt
+                // snapshot, and is read ahead of the fence below: past it
+                // nothing may wait, or a write ending meanwhile would see a
+                // reading from before it published.
+                let rebuilding =
+                    *relock(&self.join_key) != Some(inputs) || self.published_snapshot().is_none();
+                let push_tracks = if rebuilding {
+                    self.read_push_tracks(&workdir, &refs, &remotes, &cancel)
+                        .await
+                } else {
+                    None
+                };
                 // Fenced by a write that ended after this looked
                 // (`Standing::current`): read again, since an index-only
                 // write reads no refs behind itself. Stamped inside this
@@ -91,22 +117,8 @@ impl RepoSession {
                 // starts; it saves every rebuild after.
                 self.record_head_from_refs(looked, &refs, &head);
                 let remote_tags = self.remote_tag_index();
-                let keys = refs_keys(&refs, &head);
                 let key = keys.walk;
                 let previous = relock(&self.refs_key).replace(key);
-                // The joins have a key of their own (`join_key`): an
-                // unmoved repository does not build them, since sorting
-                // every ref into a snapshot only to compare it equal is
-                // work on every quiet tick
-                // (ci/baseline/refs-join-windows-x64.md). The held
-                // snapshot still goes out, for a consumer that attached
-                // since; the sidebar reads it by pointer (`share_snapshot`).
-                let inputs = join_key(
-                    keys.listing,
-                    self.remote_tag_gen.load(Ordering::SeqCst),
-                    self.worktree_gen.load(Ordering::SeqCst),
-                    &remotes,
-                );
                 let seen = relock(&self.join_key).replace(inputs);
                 if seen == Some(inputs)
                     && let Some(held) = self.published_snapshot()
@@ -128,6 +140,15 @@ impl RepoSession {
                     .unzip();
                 snapshot.push_default = remotes.push_default;
                 snapshot.checkout_default = remotes.checkout_default;
+                snapshot.branch_push_remotes = remotes.branch_push_remotes;
+                // A read that could not tell repeats the last answer, as the
+                // status tick's does (`Standing::push_track_of`): a diverged
+                // row falling to the plain push would lose its overwrite.
+                snapshot.push_tracks = push_tracks.unwrap_or_else(|| {
+                    self.published_snapshot()
+                        .map(|held| held.push_tracks.clone())
+                        .unwrap_or_default()
+                });
                 let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
                 self.sink.event(SessionEvent::RefsLoaded {
                     snapshot: self.share_snapshot(snapshot),
@@ -163,6 +184,64 @@ impl RepoSession {
             (Err(e), _) | (_, Err(e)) => {
                 self.fail(FollowUp::Refs.label(), e);
                 Reread::Failed
+            }
+        }
+    }
+
+    /// The counts of the branches a mark sends away from their upstream's
+    /// remote, against where it sends them ([`remote::push_tracks`]) — what
+    /// a menu's `push` row on such a branch weighs
+    /// ([`RefsSnapshot::branch_push`]). Asked only where the snapshot is to
+    /// be built, and only where some branch goes elsewhere: one process for
+    /// a repository with marks, none for one without. `None` where the read
+    /// could not tell.
+    async fn read_push_tracks(
+        &self,
+        workdir: &Path,
+        refs: &[RefEntry],
+        remotes: &remote::Remotes,
+        cancel: &CancellationToken,
+    ) -> Option<Vec<(String, remote::PushTrack)>> {
+        let push_default = remotes
+            .push_default
+            .as_ref()
+            .map_or("", |marked| marked.remote.as_str());
+        let mark_of = |branch: &str| {
+            remotes
+                .branch_push_remotes
+                .binary_search_by(|mark| mark.branch.as_str().cmp(branch))
+                .map_or("", |at| remotes.branch_push_remotes[at].remote.as_str())
+        };
+        let index = refs::RemoteBranches::index(refs);
+        // Only a branch git can count against its upstream: with none, the
+        // push asks where it goes and nothing is counted.
+        let elsewhere: std::collections::HashSet<&str> = refs
+            .iter()
+            .filter(|entry| entry.kind == RefKind::LocalBranch)
+            .filter(|local| {
+                index.spoken_for(local).is_some_and(|upstream| {
+                    remote::pushes_elsewhere(
+                        upstream.short.as_str(),
+                        mark_of(local.short.as_str()),
+                        push_default,
+                        remotes.list.iter().map(|r| r.name.as_str()),
+                    )
+                })
+            })
+            .map(|local| local.short.as_str())
+            .collect();
+        if elsewhere.is_empty() {
+            return Some(Vec::new());
+        }
+        let wanted = |branch: &str| elsewhere.contains(branch);
+        match remote::push_tracks(&self.executor, workdir, wanted, cancel).await {
+            Ok(tracks) => Some(tracks),
+            Err(error) => {
+                // A close cancels it, which says nothing about the repository.
+                if !error.is_cancelled() {
+                    tracing::warn!(%error, "the counts against where marks send pushes");
+                }
+                None
             }
         }
     }

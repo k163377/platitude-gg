@@ -97,9 +97,12 @@ Item {
     signal applyStashRequested(string selector)
     signal popStashRequested(string selector)
     signal dropStashRequested(string selector)
-    /// The branch card's two, passed straight up: the delete git may still refuse, and the upstream (`UpstreamFlow`).
+    /// The branch card's four, passed straight up: the delete git may still refuse, the upstream (`UpstreamFlow`), the
+    /// push, and the first push's question (`PublishFlow`).
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal upstreamRequested(string branch, string counterpart)
+    signal pushBranchRequested(string branch, string force, string lease)
+    signal publishRequested(string branch, string upstream)
     signal cherryPickRequested(string oidHex)
     signal revertRequested(string oidHex)
     signal mergeRequested(string ref)
@@ -437,6 +440,8 @@ Item {
             checkedMerged: rowMenu.checkedMerged
             onDeleteRequested: (kind, id, name, oidHex) => rowMenu.deleteRequested(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => rowMenu.upstreamRequested(branch, counterpart)
+            onPushRequested: (branch, force, lease) => rowMenu.pushBranchRequested(branch, force, lease)
+            onPublishRequested: (branch, upstream) => rowMenu.publishRequested(branch, upstream)
             onCheckDeleteRequested: branch => rowMenu.checkDeleteRequested(branch)
             onForceDeleteRequested: branch => rowMenu.forceDeleteRequested(branch)
             onDeleteRemoteRequested: (remoteRef, expect) => rowMenu.deleteRemoteRequested(remoteRef, expect)

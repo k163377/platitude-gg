@@ -693,6 +693,7 @@ Item {
     AutoActHandVerbs { id: handVerbs; driver: driver }
     AutoActWorktreeVerbs { id: worktreeVerbs; driver: driver }
     AutoActRecoverVerbs { id: recoverVerbs; driver: driver }
+    AutoActBranchPushVerbs { id: branchPushVerbs; driver: driver }
 
     function runAutoAct() {
         const act = Harness.autoAct
@@ -723,6 +724,7 @@ Item {
             || handVerbs.run(act, arg)
             || worktreeVerbs.run(act, arg)
             || recoverVerbs.run(act, arg)
+            || branchPushVerbs.run(act, arg)
         if (!known && !driver.completionDeferred && !driver.writeExpected) {
             // A misspelling: window verbs are in the completion ledger, so a verb known to neither is
             // nobody's. Left to the watchdog.

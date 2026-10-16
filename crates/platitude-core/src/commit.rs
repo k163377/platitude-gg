@@ -318,52 +318,55 @@ pub async fn head_oid(
     })
 }
 
-/// Whether HEAD can reach `oid` — the commit is HEAD itself or something
-/// it was built on; only this line of commits can be rewritten from where
-/// the worktree stands.
-pub async fn is_in_head_history(
+/// Whether `tip` (`HEAD`, or a branch's full ref) can reach `oid` — the
+/// commit is the tip itself or something it was built on: a push of that
+/// tip then fast-forwards a remote branch standing on `oid`.
+pub async fn is_in_history(
     executor: &GitExecutor,
     workdir: &Path,
     oid: &Oid,
+    tip: &str,
     cancel: &CancellationToken,
 ) -> Result<bool, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["merge-base", "--is-ancestor"])
         .arg(oid.to_hex())
-        .arg("HEAD")
+        .arg(tip)
         .answers_by_code(1);
     let out = executor.run_unchecked(cmd, cancel).await?;
     match out.code {
         0 => Ok(true),
         1 => Ok(false),
         code => Err(GitError::Failed {
-            command: format!("git merge-base --is-ancestor {} HEAD", oid.to_hex()),
+            command: format!("git merge-base --is-ancestor {} {tip}", oid.to_hex()),
             code,
             stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
         }),
     }
 }
 
-/// How many commits `oid` reaches that HEAD does not — what a force push
-/// would take off the far side. Only asked when the commit is here to walk
-/// (デザイン規約 §相手の履歴を置き換える).
-pub async fn count_beyond_head(
+/// How many commits `oid` reaches that `tip` does not — what a force push
+/// of `tip` would take off the far side. Only asked when the commit is here
+/// to walk (デザイン規約 §相手の履歴を置き換える).
+pub async fn count_beyond(
     executor: &GitExecutor,
     workdir: &Path,
     oid: &Oid,
+    tip: &str,
     cancel: &CancellationToken,
 ) -> Result<u32, GitError> {
+    let range = format!("{tip}..{}", oid.to_hex());
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["rev-list", "--count"])
-        .arg(format!("HEAD..{}", oid.to_hex()));
+        .arg(&range);
     let out = executor.run(cmd, cancel).await?;
     out.stdout_utf8()
         .trim()
         .parse()
         .map_err(|_| GitError::UnexpectedOutput {
-            command: format!("git rev-list --count HEAD..{}", oid.to_hex()),
+            command: format!("git rev-list --count {range}"),
             message: "a count was expected".to_string(),
         })
 }

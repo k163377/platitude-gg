@@ -15,6 +15,7 @@ use platitude_core::OperationKind;
 use platitude_core::commit;
 use platitude_core::remote::{self, PushForce, PushSpec};
 use platitude_core::report::{RemoteWhy, ReportKind};
+use platitude_core::session::SessionEvent;
 
 /// A `file://` remote answers instantly; the budget just has to exist.
 const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
@@ -385,9 +386,7 @@ async fn publishing_sends_the_branch_and_records_the_upstream() {
     work.git(&["switch", "-c", "topic"]);
     work.commit_file("b.txt", "b\n", "topic work");
 
-    let spec = remote::plan_publish(&exec, &work.path, "origin", "topic", "", &cancel)
-        .await
-        .expect("plan publish");
+    let spec = remote::publish_spec("topic", "origin", "topic", "");
     assert!(spec.set_upstream, "the answer is recorded, not re-asked");
     remote::push(&exec, &work.path, &spec, NET, &cancel)
         .await
@@ -413,9 +412,7 @@ async fn publishing_can_use_a_different_name_on_the_remote() {
     work.git(&["switch", "-c", "topic"]);
     work.commit_file("b.txt", "b\n", "topic work");
 
-    let spec = remote::plan_publish(&exec, &work.path, "origin", "feature/topic", "", &cancel)
-        .await
-        .expect("plan publish");
+    let spec = remote::publish_spec("topic", "origin", "feature/topic", "");
     remote::push(&exec, &work.path, &spec, NET, &cancel)
         .await
         .expect("publish");
@@ -429,6 +426,65 @@ async fn publishing_can_use_a_different_name_on_the_remote() {
         "refs/heads/feature/topic",
         "the upstream is the name over there"
     );
+}
+
+/// A branch row's menu publishes the branch it names, wherever HEAD is,
+/// and the remote's name is weighed against that branch's history.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_branch_the_worktree_is_not_on_is_published_and_weighed_as_itself() {
+    let (mut bare, mut work) = origin_and_clone();
+    // `shared` is over there one commit behind `topic`; `main` has neither.
+    work.git(&["switch", "-c", "topic"]);
+    work.commit_file("b.txt", "b\n", "theirs");
+    work.git(&["push", "origin", "topic:shared"]);
+    work.commit_file("b.txt", "b2\n", "ours");
+    work.git(&["switch", "main"]);
+    let (sink, session) = opened(&work).await;
+
+    session.check_remote_branch("origin".into(), "shared".into(), "topic".into());
+    let (state, local) = sink
+        .wait_for("the remote's answer", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::RemoteBranchChecked { state, local, .. } => {
+                    Some((*state, local.clone()))
+                }
+                _ => None,
+            })
+        })
+        .await;
+    assert_eq!(
+        state,
+        remote::RemoteBranchState::FastForward,
+        "their commit is one of topic's, though not one of HEAD's"
+    );
+    assert_eq!(
+        local, "topic",
+        "the answer says whose history it weighed, so a question about another branch cannot take it"
+    );
+
+    let id = session
+        .publish(
+            "topic".into(),
+            "origin".into(),
+            "shared".into(),
+            String::new(),
+        )
+        .expect("the write is accepted");
+    assert_eq!(write_answer(&sink, id).await, None);
+    assert_eq!(
+        bare.git(&["rev-parse", "shared"]),
+        work.git(&["rev-parse", "topic"])
+    );
+    assert_eq!(
+        work.git(&["config", "branch.topic.merge"]),
+        "refs/heads/shared"
+    );
+    assert_eq!(
+        work.git(&["symbolic-ref", "--short", "HEAD"]),
+        "main",
+        "the worktree stays where it was"
+    );
+    session.close_and_wait().await;
 }
 
 /// Why the UI asks before a first push onto a taken name: git does not
@@ -452,15 +508,13 @@ async fn a_first_push_onto_a_taken_name_is_not_refused_when_it_fast_forwards() {
         .expect("ask")
         .expect("the question the UI puts to the remote before it pushes");
     assert!(
-        commit::is_in_head_history(&exec, &work.path, &tip, &cancel)
+        commit::is_in_history(&exec, &work.path, &tip, "HEAD", &cancel)
             .await
             .expect("compare"),
         "what makes this the fast-forward case: their commit is one of ours"
     );
 
-    let spec = remote::plan_publish(&exec, &work.path, "origin", "shared", "", &cancel)
-        .await
-        .expect("plan publish");
+    let spec = remote::publish_spec("shared", "origin", "shared", "");
     remote::push(&exec, &work.path, &spec, NET, &cancel)
         .await
         .expect("git takes it — this is the hole the question covers");
@@ -524,15 +578,13 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
         .expect("ask")
         .expect("the name is taken");
     assert!(
-        !commit::is_in_head_history(&exec, &work.path, &tip, &cancel)
+        !commit::is_in_history(&exec, &work.path, &tip, "HEAD", &cancel)
             .await
             .expect("compare"),
         "their commit is not one of ours, which is what makes this refusable"
     );
 
-    let spec = remote::plan_publish(&exec, &work.path, "origin", "theirs", "", &cancel)
-        .await
-        .expect("plan publish");
+    let spec = remote::publish_spec("ours", "origin", "theirs", "");
     let sent = remote::push(&exec, &work.path, &spec, NET, &cancel).await;
     assert!(
         sent.as_ref().is_err_and(GitError::is_outdated),
@@ -546,16 +598,7 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
 
     // Only a leased overwrite can land here; a lease on a commit that is no
     // longer there is refused.
-    let stale = remote::plan_publish(
-        &exec,
-        &work.path,
-        "origin",
-        "theirs",
-        &"0".repeat(40),
-        &cancel,
-    )
-    .await
-    .expect("plan a leased publish");
+    let stale = remote::publish_spec("ours", "origin", "theirs", &"0".repeat(40));
     assert!(
         remote::push(&exec, &work.path, &stale, NET, &cancel)
             .await
@@ -564,9 +607,7 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
     );
     assert_eq!(bare.git(&["rev-parse", "theirs"]), theirs);
 
-    let leased = remote::plan_publish(&exec, &work.path, "origin", "theirs", &theirs, &cancel)
-        .await
-        .expect("plan a leased publish");
+    let leased = remote::publish_spec("ours", "origin", "theirs", &theirs);
     remote::push(&exec, &work.path, &leased, NET, &cancel)
         .await
         .expect("the overwrite the question offers, pinned to what it showed");
@@ -1156,9 +1197,7 @@ mod periodic {
             .expect("correct the URL");
         assert_eq!(work.git(&["remote", "get-url", "fork"]), bare.file_url());
 
-        let spec = remote::plan_publish(&exec, &work.path, "fork", "main", "", &cancel)
-            .await
-            .expect("plan publish");
+        let spec = remote::publish_spec("main", "fork", "main", "");
         remote::push(&exec, &work.path, &spec, NET, &cancel)
             .await
             .expect("push to the corrected remote");
@@ -1176,9 +1215,7 @@ mod periodic {
         remote::add(&exec, &work.path, "fork", nowhere, &cancel)
             .await
             .expect("add");
-        let spec = remote::plan_publish(&exec, &work.path, "fork", "main", "", &cancel)
-            .await
-            .expect("plan publish");
+        let spec = remote::publish_spec("main", "fork", "main", "");
         let error = remote::push(&exec, &work.path, &spec, NET, &cancel)
             .await
             .expect_err("nothing answers there");

@@ -176,6 +176,15 @@ impl Source {
         }
     }
 
+    /// What a menu's `push` row on local branch `name` stands on
+    /// (`RefsSnapshot::branch_push`); `closed` in every other section.
+    pub(super) fn branch_push(&self, name: &str, fallback: &str) -> BranchPush {
+        match self {
+            Self::Locals(snapshot) => snapshot.branch_push(name, fallback).into(),
+            _ => platitude_core::session::BranchPushFacts::default().into(),
+        }
+    }
+
     /// The one remote a chip of tag `name` at `commit` draws the reading
     /// of (`RefsSnapshot::tag_aim_at`); empty where none.
     pub(super) fn tag_aim_at(&self, name: &str, commit: platitude_core::Oid) -> String {

@@ -102,6 +102,8 @@ mod repo_session;
 mod rows;
 mod shown_discard;
 mod snapshot;
+#[cfg(test)]
+mod snapshot_push_tests;
 mod standing;
 mod stash_round;
 mod state;
@@ -145,7 +147,8 @@ pub use remote_tags::RemoteTagIndex;
 pub use repo_session::{CloseError, RepoSession};
 pub use shown_discard::ShownDiscard;
 pub use snapshot::{
-    BranchItem, NameClash, RefsSnapshot, TagDeleteHeld, TagDrift, TagItem, TagMenuFacts,
+    BranchItem, BranchPushFacts, NameClash, RefsSnapshot, TagDeleteHeld, TagDrift, TagItem,
+    TagMenuFacts,
 };
 use standing::{HeadHold, HeadOffer, HeadPublished, Standing};
 pub use state::AutoFetchTicker;

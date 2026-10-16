@@ -531,6 +531,17 @@ impl NavSectionModel {
         One::new(self.all.tag_menu(&name, &against, &aim))
     }
 
+    /// What a menu's `push` row on this branch stands on, read as the menu
+    /// opens (`RefsSnapshot::branch_push`): the toolbar's table for a
+    /// branch the worktree is not on, where the push goes and what an
+    /// overwrite is leased to. `fallback` is where a branch marked nowhere
+    /// and tracking nothing goes (`RepoTab.defaultRemote`). Asked of the
+    /// branches section.
+    #[qslot]
+    pub(super) fn branch_push(&self, name: String, fallback: String) -> One<BranchPush> {
+        One::new(self.all.branch_push(&name, &fallback))
+    }
+
     /// The one remote a chip of this tag at `oid` (hex) draws the reading
     /// of — so a menu opened on that chip names it on its own. Empty for
     /// the copy here, for a reading several remotes share, and for an

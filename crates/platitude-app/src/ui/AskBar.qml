@@ -14,13 +14,16 @@ Rectangle {
     /// The question's words; they stay set while the bar goes back up (`open`).
     property string label: ""
     /// A ref name inside the question's words, and the sentence with the name's seat left in it ("%1 where?"). The
-    /// name keeps the `textLink` it wears wherever it appears (デザイン規約 §ref の種別「名前が出る場所すべてで textLink」).
-    /// Both empty for a question that names nothing; `label` then carries the whole of it.
+    /// name keeps the colour it wears wherever it appears, `labelRefTint` (デザイン規約 §ref の種別). Both empty for a
+    /// question that names nothing; `label` then carries the whole of it.
     property string labelSentence: ""
     property string labelRef: ""
-    /// The name's own blue only on a neutral bar: a state colour takes the whole heading (the rule
+    /// That name's own colour: `textLink` for the branch the worktree is on, `textPrimary` for one it is not
+    /// (§ref の種別「名前の色 = 在処」).
+    property color labelRefTint: Theme.textLink
+    /// The name's own colour only on a neutral bar: a state colour takes the whole heading (the rule
     /// `AppMenuItem.refColor` carries).
-    readonly property color labelTint: bar.neutral ? Theme.textLink : bar.tone
+    readonly property color labelTint: bar.neutral ? bar.labelRefTint : bar.tone
     readonly property string labelWords: bar.labelSentence === ""
                                          ? "" : Words.nameInSentence(bar.labelSentence, bar.labelRef, bar.labelTint)
     /// What answering costs, in the one line §用語 allows for it.

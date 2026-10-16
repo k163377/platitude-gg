@@ -5,12 +5,14 @@
 //! the same destination or the toolbar names a remote the send never goes
 //! to.
 
-/// What a push of the current branch can do, read off the last status
-/// and the marked remote. The counts come from the last fetch, so a push
-/// they say fits may still be refused (デザイン規約 §リモートへ送る).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What a push of a branch can do, read off the last status (the branch
+/// the worktree is on) or refs listing (any other) and the marked remote.
+/// The counts come from the last fetch, so a push they say fits may still
+/// be refused (デザイン規約 §リモートへ送る).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum PushStanding {
     /// No branch here to send: detached, or nothing checked out.
+    #[default]
     Closed,
     /// No commits yet: git refuses the send (`src refspec <branch> does
     /// not match any`).
@@ -50,8 +52,9 @@ impl PushStanding {
 
 /// Where a mark sends the push to another remote than the upstream's
 /// ([`pushes_elsewhere`]): the tracking ref of the branch over there, and
-/// the branch's counts against it ([`super::push_track`], on the status
-/// tick). The upstream's counts are about the other remote.
+/// the branch's counts against it ([`super::push_track`] on the status
+/// tick, [`super::push_tracks`] on the refs read for the other branches).
+/// The upstream's counts are about the other remote.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PushTrack {
     /// The tracking ref as the remote branches are listed (`fork/main`).
@@ -64,7 +67,7 @@ pub struct PushTrack {
 
 /// Which remote the marks send this branch to, empty where neither is
 /// set. The branch's own mark beats the repository's (git's order, as in
-/// [`super::plan_current_push`]).
+/// [`super::plan_push`]).
 fn marked_remote<'a>(push_remote: &'a str, push_default: &'a str) -> &'a str {
     if push_remote.is_empty() {
         push_default
@@ -94,13 +97,12 @@ fn upstream_is_on<'a>(
     }
 }
 
-/// Where the button would send this branch, spelled `<remote>/<branch>`
-/// as the toolbar shows it. Empty where there is no branch to send, or
-/// nowhere at all to send it.
+/// Where a push would send this branch, spelled `<remote>/<branch>` as
+/// the toolbar and the branch's row show it. Empty where there is no
+/// branch to send, or nowhere at all to send it.
 ///
-/// The pure half of [`super::plan_current_push`]'s destination, off
-/// configuration the snapshot already carries — same order, same naming
-/// rule.
+/// The pure half of [`super::plan_push`]'s destination, off configuration
+/// the snapshot already carries — same order, same naming rule.
 pub fn push_target<'a>(
     branch: &str,
     upstream: &'a str,
@@ -439,7 +441,7 @@ mod tests {
         );
     }
 
-    /// Every arm of `plan_current_push`'s destination.
+    /// Every arm of `plan_push`'s destination.
     #[test]
     fn a_push_target_follows_gits_own_order() {
         assert_eq!(target_of("origin/main", "", ""), "origin/main");

@@ -173,6 +173,52 @@ impl From<platitude_core::session::TagMenuFacts> for TagMenu {
     }
 }
 
+/// What a menu's `push` row on one branch stands on, read as the menu opens
+/// (`RefsSnapshot::branch_push`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BranchPush {
+    /// `PushStanding`'s word (`publish` / `ready` / `behind` …); `closed`
+    /// for a name this section does not hold.
+    pub state: String,
+    pub target: String,
+    /// The commit (hex) the remote branch the counts are against stands on
+    /// — an overwrite's lease. Empty where nothing is counted against.
+    pub lease: String,
+    /// The upstream the branch is configured for, here or not.
+    pub upstream: String,
+}
+
+impl Record for BranchPush {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("state", &self.state)
+            .put("target", &self.target)
+            .put("lease", &self.lease)
+            .put("upstream", &self.upstream)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            state: field(map, "state")?,
+            target: field(map, "target")?,
+            lease: field(map, "lease")?,
+            upstream: field(map, "upstream")?,
+        })
+    }
+}
+
+impl From<platitude_core::session::BranchPushFacts> for BranchPush {
+    fn from(facts: platitude_core::session::BranchPushFacts) -> Self {
+        Self {
+            state: facts.standing.as_str().to_string(),
+            target: facts.target,
+            lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),
+            upstream: facts.upstream,
+        }
+    }
+}
+
 mod attach;
 mod card;
 mod drain;

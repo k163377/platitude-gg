@@ -34,15 +34,18 @@ Item {
         onDeleteRemoteRequested: (remoteRef, expect) => root.asked = "delete-remote " + remoteRef + " " + expect
         onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
             root.asked = "delete-both " + branch + " " + remoteRef + " " + forced + " " + expect
+        onPushRequested: (branch, force, lease) => root.asked = "push " + branch + " " + force + " " + lease
+        onPublishRequested: (branch, upstream) => root.asked = "publish " + branch + " " + upstream
     }
 
     /// `merged` is what the drawn rows already say (`yes` / `no`, empty when only git can answer). The row stands on
-    /// `abc123` and its reading on `def456`, so a press says which commit it leased.
+    /// `abc123` and its reading on `def456`, so a press says which commit it leased. `push` is the push row's answer
+    /// (`NavSectionModel.branchPush`), none by default.
     function standOn(fields) {
         const all = { "kind": "branch", "name": "feature/topic-a", "full": "feature/topic-a",
                       "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
                       "remoteCounterpartOid": "def456", "remoteDrifted": false, "open": true, "merged": "yes",
-                      "offers": root.free }
+                      "offers": root.free, "push": undefined }
         for (const key in fields)
             all[key] = fields[key]
         root.asked = ""
@@ -54,8 +57,14 @@ Item {
             "remoteDrifted": all.remoteDrifted,
             "open": all.open,
             "merged": all.merged,
-            "offers": all.offers
+            "offers": all.offers,
+            "push": all.push
         })
+    }
+    /// A push row's answer in `state`, going to `origin/feature/topic-a` and leased to `fed789` where it counts.
+    function pushing(state) {
+        return { "state": state, "target": "origin/feature/topic-a", "lease": "fed789",
+                 "upstream": "origin/feature/topic-a" }
     }
 
     TestCase {
@@ -134,6 +143,65 @@ Item {
             verify(!card.deleteRemoteItem.offered, "a reading has no reading of its own")
             verify(!card.deleteBothItem.offered)
             verify(!card.upstreamItem.offered, "and no setting of its own either")
+        }
+
+        /// The toolbar's forms for a branch the worktree is not on (デザイン規約 §リモートへ送る): a click where git takes
+        /// it, the held leased overwrite where only that reaches, a question where nothing says where it goes.
+        function test_the_push_row_takes_the_toolbars_form_data() {
+            return [
+                { tag: "ready", state: "ready", code: "push", presses: 0, words: "to origin/feature/topic-a" },
+                { tag: "elsewhere", state: "elsewhere", code: "push", presses: 0,
+                  words: "to origin/feature/topic-a" },
+                { tag: "behind", state: "behind", code: "push --force", presses: Metrics.holdPressesWarned,
+                  words: "to origin/feature/topic-a" },
+                { tag: "diverged", state: "diverged", code: "push --force", presses: Metrics.holdPressesWarned,
+                  words: "to origin/feature/topic-a" },
+                { tag: "never sent", state: "publish", code: "push", presses: 0, words: "to…" },
+            ]
+        }
+
+        function test_the_push_row_takes_the_toolbars_form(data) {
+            root.standOn({ push: root.pushing(data.state) })
+            verify(card.pushItem.offered)
+            compare(card.pushItem.code, data.code)
+            compare(card.pushItem.holdPresses, data.presses)
+            compare(card.pushItem.text, data.words)
+            compare(card.pushItem.holdTone, Theme.warning, "an overwrite reaches past this machine")
+        }
+
+        /// Nothing to send, nothing to name, or a door of its own: no seat (デザイン規約 §メニュー).
+        function test_the_push_row_has_no_seat_where_it_could_do_nothing_here_data() {
+            return [
+                { tag: "the remote has it all", fields: { push: root.pushing("clean") } },
+                { tag: "no answer read", fields: {} },
+                { tag: "the branch the tree is on: the toolbar's button",
+                  fields: { offers: root.current, push: root.pushing("ready") } },
+                { tag: "a closed tab", fields: { open: false, push: root.pushing("ready") } },
+                { tag: "a remote-tracking row sends nothing",
+                  fields: { kind: "remote", name: "origin/main", full: "origin/main", remoteCounterpart: "",
+                            offers: ["delete"], push: root.pushing("ready") } },
+            ]
+        }
+
+        function test_the_push_row_has_no_seat_where_it_could_do_nothing_here(data) {
+            root.standOn(data.fields)
+            verify(!card.pushItem.offered)
+        }
+
+        function test_the_push_row_asks_for_the_push_its_form_says() {
+            root.standOn({ push: root.pushing("ready") })
+            card.pushItem.triggered()
+            compare(root.asked, "push feature/topic-a  ", "a plain push, nothing leased")
+
+            // Leased to the commit the card showed the far side on.
+            root.standOn({ push: root.pushing("diverged") })
+            card.pushItem.held()
+            compare(root.asked, "push feature/topic-a lease fed789")
+
+            // The question opens where the branch already points.
+            root.standOn({ push: root.pushing("publish") })
+            card.pushItem.triggered()
+            compare(root.asked, "publish feature/topic-a origin/feature/topic-a")
         }
 
         function test_a_row_that_names_no_branch_has_no_card() {
