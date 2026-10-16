@@ -79,11 +79,12 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   it is turned down
         behind    remote has commits fetch would bring in
         diverged  the same, fetched, with a commit of our own on top
-        others-behind  branches beside the checked-out one, each tracking
-                  origin, fetched: release behind, feature/mine ahead,
-                  feature/split both, scratch tracking nothing — the pull
-                  of a branch the tree is not on (pull-menu release,
-                  pull-blocked feature/mine, pull-branch-go release)
+        others-behind  branches beside the checked-out one, fetched:
+                  release behind origin, feature/mine ahead, feature/split
+                  both, scratch tracking nothing, stacked tracking main
+                  here — the pull and push of a branch the tree is not on
+                  (pull-menu release, pull-blocked feature/mine,
+                  pull-branch-go release, push-branch-menu stacked)
         outrun    the same, NOT fetched, with a commit of our own on top:
                   a plain push git will not send until the remote has been
                   read again (push-outdated)

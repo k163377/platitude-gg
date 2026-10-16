@@ -186,6 +186,9 @@ pub struct BranchPush {
     pub lease: String,
     /// The upstream the branch is configured for, here or not.
     pub upstream: String,
+    /// Measured against another branch here that is listed: the row stands
+    /// out and says why (`BranchPushFacts::upstream_here`).
+    pub upstream_here: bool,
 }
 
 impl Record for BranchPush {
@@ -195,6 +198,7 @@ impl Record for BranchPush {
             .put("target", &self.target)
             .put("lease", &self.lease)
             .put("upstream", &self.upstream)
+            .put("upstreamHere", &self.upstream_here)
             .done()
     }
 
@@ -204,6 +208,7 @@ impl Record for BranchPush {
             target: field(map, "target")?,
             lease: field(map, "lease")?,
             upstream: field(map, "upstream")?,
+            upstream_here: field(map, "upstreamHere")?,
         })
     }
 }
@@ -215,6 +220,7 @@ impl From<platitude_core::session::BranchPushFacts> for BranchPush {
             target: facts.target,
             lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),
             upstream: facts.upstream,
+            upstream_here: facts.upstream_here,
         }
     }
 }

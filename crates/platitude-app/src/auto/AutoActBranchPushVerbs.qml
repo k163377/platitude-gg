@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+// For the attached `ToolTip` alone (rules-refs/app-ui.md「attached 型は宣言元モジュールを import しないと」).
+import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
@@ -64,8 +66,9 @@ Item {
         driver.menuGoing.close()
     }
 
-    // The card goes up once nothing is out (a card raised under a write greys its rows), and the row is read off it in
-    // the same turn: its whole shape — seat, chip, presses, sentence — is fixed as it opens (デザイン規約 §メニュー).
+    // The card goes up once nothing is out (a card raised under a write greys its rows), and the row is read off it
+    // from the next beat: its whole shape — seat, chip, presses, sentence, reason — is fixed as it opens
+    // (デザイン規約 §メニュー).
     SampleTimer {
         id: cardTimer
         onTriggered: {
@@ -74,15 +77,29 @@ Item {
                 return
             cardTimer.stop()
             acts.card = acts.standCard()
+            rowTimer.start()
+        }
+    }
+    // A row that stands out says why under a hand (デザイン規約 §リモートへ送る): its line waits for that tip, up beside
+    // the row — forced, since no pointer can be put on a row from here (verify-ui §hover の絵の撮り方).
+    SampleTimer {
+        id: rowTimer
+        onTriggered: {
             const row = acts.card.pushItem
+            if (!driver.rowTipStood(row, row.blocked))
+                return
+            rowTimer.stop()
             // The free words last: a claim is one substring.
             Harness.report("push_branch_menu where=" + (acts.onChip ? "chip" : "row")
                               + " offered=" + row.offered
                               + " state=" + acts.card.pushState
                               + " code=" + row.code
                               + " held=" + (row.holdPresses > 0)
-                              + " text=" + row.text)
-            if (acts.after === "menu" || !row.offered) {
+                              + " blocked=" + row.blocked
+                              + " tip=" + row.ToolTip.visible
+                              + " text=" + row.text
+                              + (row.blocked ? " says=" + row.blockedReason : ""))
+            if (acts.after === "menu" || !row.offered || row.blocked) {
                 driver.complete()
                 return
             }
@@ -124,7 +141,8 @@ Item {
                 driver.complete()
                 return
             }
-            // The gesture a person is given: a hold is not answered by a click (`AutoActPublishVerbs.publishAnswerTimer`).
+            // The gesture a person is given: a hold is not answered by a click
+            // (`AutoActPublishVerbs.publishAnswerTimer`).
             if (publishFlow.publishRefused)
                 driver.holdToEnd(graphPane)
             else

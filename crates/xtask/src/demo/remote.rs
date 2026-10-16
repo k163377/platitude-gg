@@ -217,9 +217,11 @@ pub(super) fn diverged(repo: &mut DemoRepo) -> Result<(), String> {
 /// `origin` and standing differently against it once the fetch at the end
 /// has read the far side: `release` behind (two commits pushed from another
 /// clone), `feature/mine` ahead with a commit of its own, `feature/split`
-/// both, and `scratch` tracking nothing. The `pull` of a branch the tree is
-/// not on (デザイン規約 §取り込んで合流させる): `release` takes it, the two
-/// with commits of their own grey it, `scratch` has no row.
+/// both, `scratch` tracking nothing, and `stacked` tracking `main` here
+/// (`remote = .`). The `pull` of a branch the tree is not on (デザイン規約
+/// §取り込んで合流させる): `release` takes it, the two with commits of
+/// their own grey it, `scratch` and `stacked` have no row. Their `push`
+/// (§リモートへ送る): `scratch` asks where it goes, `stacked`'s is out.
 pub(super) fn others_behind(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
@@ -230,6 +232,7 @@ pub(super) fn others_behind(repo: &mut DemoRepo) -> Result<(), String> {
         repo.git(&["push", "--set-upstream", "origin", name])?;
     }
     repo.git(&["branch", "scratch"])?;
+    repo.git(&["branch", "--track", "stacked", "main"])?;
 
     let seeder = repo.seeder("origin.git")?;
     for (branch, file, message) in [

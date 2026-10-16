@@ -64,8 +64,11 @@ Item {
     /// A push row's answer in `state`, going to `origin/feature/topic-a` and leased to `fed789` where it counts.
     function pushing(state) {
         return { "state": state, "target": "origin/feature/topic-a", "lease": "fed789",
-                 "upstream": "origin/feature/topic-a" }
+                 "upstream": "origin/feature/topic-a", "upstreamHere": false }
     }
+    /// …and on a branch measured against another branch here (`remote = .`): that alone, every other field empty.
+    readonly property var pushingHere: ({ "state": "closed", "target": "", "lease": "", "upstream": "",
+                                          "upstreamHere": true })
 
     TestCase {
         name: "BranchCard"
@@ -176,6 +179,8 @@ Item {
                 { tag: "no answer read", fields: {} },
                 { tag: "the branch the tree is on: the toolbar's button",
                   fields: { offers: root.current, push: root.pushing("ready") } },
+                { tag: "the branch the tree is on, against one here: still the toolbar's",
+                  fields: { offers: root.current, push: root.pushingHere } },
                 { tag: "a closed tab", fields: { open: false, push: root.pushing("ready") } },
                 { tag: "a remote-tracking row sends nothing",
                   fields: { kind: "remote", name: "origin/main", full: "origin/main", remoteCounterpart: "",
@@ -186,6 +191,22 @@ Item {
         function test_the_push_row_has_no_seat_where_it_could_do_nothing_here(data) {
             root.standOn(data.fields)
             verify(!card.pushItem.offered)
+        }
+
+        /// Measured against a branch here: no remote to send to, so the row stands out in the first push's words and
+        /// says why (デザイン規約 §リモートへ送る).
+        function test_the_push_row_stands_out_on_an_upstream_here() {
+            root.standOn({ push: root.pushingHere })
+            verify(card.pushItem.offered)
+            verify(card.pushItem.blocked)
+            compare(card.pushItem.code, "push")
+            compare(card.pushItem.text, "to…")
+            compare(card.pushItem.holdPresses, 0)
+            compare(card.pushItem.blockedReason, "Cannot push — its upstream is a local branch")
+
+            // The next card on a branch that can be sent drops it.
+            root.standOn({ push: root.pushing("ready") })
+            verify(!card.pushItem.blocked)
         }
 
         function test_the_push_row_asks_for_the_push_its_form_says() {

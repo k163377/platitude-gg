@@ -59,29 +59,37 @@ pub(super) const TABLE: &[Verb] = &[
     // The BRANCH card's push row on a branch the worktree is not on, in the
     // toolbar's forms off that branch's own counts (`--preset
     // others-behind`: `feature/mine` ahead, `feature/split` both ways,
-    // `release` behind, `scratch` never sent) — and none on the one it is
-    // on, whose door is the toolbar's button. The chip's entrance carries
-    // the same card, so the same words; none of it is in the picture but
-    // the words.
+    // `release` behind, `scratch` never sent, `stacked` measured against
+    // `main` here, whose row is out and says why under the pointer) — and
+    // none on the one it is on, whose door is the toolbar's button. The
+    // chip's entrance carries the same card, so the same words; none of it
+    // is in the picture but the words.
     Verb {
         name: "push-branch-menu",
         when: &[
             (
                 Arg::Ends("feature/mine"),
-                "offered=true state=ready code=push held=false text=to origin/feature/mine",
+                "offered=true state=ready code=push held=false blocked=false tip=false \
+                 text=to origin/feature/mine",
             ),
             (
                 Arg::Ends("feature/split"),
-                "offered=true state=diverged code=push --force held=true \
-                 text=to origin/feature/split",
+                "offered=true state=diverged code=push --force held=true blocked=false \
+                 tip=false text=to origin/feature/split",
             ),
             (
                 Arg::Ends("release"),
-                "offered=true state=behind code=push --force held=true",
+                "offered=true state=behind code=push --force held=true blocked=false",
             ),
             (
                 Arg::Ends("scratch"),
-                "offered=true state=publish code=push held=false text=to…",
+                "offered=true state=publish code=push held=false blocked=false tip=false \
+                 text=to…",
+            ),
+            (
+                Arg::Ends("stacked"),
+                "offered=true state= code=push held=false blocked=true tip=true text=to… \
+                 says=Cannot push — its upstream is a local branch",
             ),
             (Arg::Ends("main"), "offered=false state= "),
         ],
