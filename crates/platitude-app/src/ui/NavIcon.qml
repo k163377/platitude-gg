@@ -84,7 +84,8 @@ InkCanvas {
     /// to the middle of its box as above.
     ///   - "name": a letter of the words, a state after a name included — the capitals' scale, on their middle; its
     ///     cell the ink, with the row's step to the words kept by the caller, or the seat of the column it stands in
-    ///   - "lead": the head of a row or a phrase — as "name", in the seat it is given
+    ///   - "lead": in a head's seat — a list's column of marks down its rows, or a thing's own mark seat — as
+    ///     "name", in the seat it is given; a mark at a head with no seat is a "name" or a "sign"
     ///   - "head": the head of a heading — a step over the capitals (`Metrics.markHead`), on their middle
     ///   - "sign": a sign on the words — the capitals' scale, on the face's own `+`'s middle and never under the
     ///     baseline, in the face's own room round its ink and a stem more
