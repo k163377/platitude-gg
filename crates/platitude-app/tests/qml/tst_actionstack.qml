@@ -46,6 +46,8 @@ Item {
         widestCode: true
         holdPresses: Metrics.holdPressesWarned
         tone: root.ink
+        // The fill's colour is the press mark's (デザイン規約 §回数押しの色); the frame stays grey, apart from the ink.
+        holdTone: root.ink
         faceColor: root.face
         height: stackDepth
     }

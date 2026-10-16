@@ -468,9 +468,11 @@ Rectangle {
                 visible: !diffRow.staged
                 text: qsTr("Discard hunk")
                 font.pixelSize: Theme.fontSm
-                // Asleep until the pointer is on this heading (デザイン規約 §diff の中のステージ); the press mark still says
-                // it takes several.
+                // Asleep until the pointer is on this heading (デザイン規約 §diff の中のステージ), the press mark with it —
+                // the one grey hold mark (§回数押しの色): the heading is one grey line. Its shape still says it takes
+                // several.
                 tone: diffRow.underPointer ? discardHunkButton.discardTone : Theme.textSecondary
+                holdHue: discardHunkButton.tone
                 holdTone: discardHunkButton.discardTone
                 holdPresses: diffRow.discardUnrecorded ? Metrics.holdPressesWarned : Metrics.holdPressesPlain
                 enabled: !diffRow.busy

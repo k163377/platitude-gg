@@ -2,10 +2,11 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// The colours a confirmed control's mark and fill are drawn in (デザイン規約 §回数押しの色). The mark wears the colour
-// its words wear — the lift over the fill, an asleep heading's grey, a warning — but a white delete keeps the plain ink
-// for its words alone: its mark and fill carry the warning. A control that cannot be pressed greys its words, and its
-// mark keeps the hue it wears when it can, a step down; a mark with no hue to keep greys with the words (§無効).
+// The colours a confirmed control's mark and fill are drawn in (デザイン規約 §回数押しの色). The mark wears what pressing
+// through costs — a warning, a danger, the lift over the fill — beside grey words too; a white delete keeps the plain
+// ink for its words alone: its mark and fill carry the warning. The one grey mark is the asleep hunk heading's. A
+// control that cannot be pressed greys its words, and its mark keeps the hue it wears when it can, a step down; a mark
+// with no hue to keep greys with the words (§無効).
 Item {
     id: root
     width: 400
@@ -40,6 +41,21 @@ Item {
         text: "Discard hunk"
         holdPresses: Metrics.holdPressesPlain
         holdTone: Theme.textPrimary
+    }
+    // The hunk heading's `Discard hunk` off the pointer (`DiffRowDelegate`): the mark named into its words' grey.
+    ActionButton {
+        id: asleepButton
+        text: "Discard hunk"
+        holdPresses: Metrics.holdPressesPlain
+        tone: Theme.textSecondary
+        holdHue: asleepButton.tone
+        holdTone: Theme.textPrimary
+    }
+    AvatarAssignRow {
+        id: avatarRow
+        width: 400
+        modelData: ({ email: "someone@example.com", name: "Someone", url: "" })
+        index: 0
     }
     AskBar {
         id: ask
@@ -138,16 +154,17 @@ Item {
             compareMarks(exitRow, Theme.dangerDim, "off")
             exitRow.enabled = true
         }
-        // The hunk heading's `Discard hunk`: awake under the pointer, asleep in the heading's grey off it
-        // (デザイン規約 §diff の中のステージ). Off, it keeps whichever it wore; the words grey either way.
+        // A button's mark wears its fill's colour whatever its words wear: the hunk heading's `Discard hunk` under the
+        // pointer, and grey words at rest beside a red mark (the avatar's `Remove` — §アバターを与える). Off, it keeps
+        // that hue a step down; the words grey either way.
         function test_button_data() {
             return [
                 { tag: "awake", tone: Theme.textPrimary, hold: Theme.textPrimary,
                   live: Theme.warning, off: Theme.warningDim },
                 { tag: "awake, unrecorded", tone: Theme.danger, hold: Theme.danger,
                   live: Theme.danger, off: Theme.dangerDim },
-                { tag: "asleep", tone: Theme.textSecondary, hold: Theme.textPrimary,
-                  live: Theme.textSecondary, off: Theme.textMuted }
+                { tag: "grey words", tone: Theme.textSecondary, hold: Theme.danger,
+                  live: Theme.danger, off: Theme.dangerDim }
             ]
         }
         function test_button(given) {
@@ -159,6 +176,21 @@ Item {
             verify(Qt.colorEqual(button.fg, Theme.textMuted), given.tag + " words: " + button.fg)
             compareMarks(button, given.off, given.tag + " off")
             button.enabled = true
+        }
+        // The one grey mark: the hunk heading asleep (§diff の中のステージ), which greys to `textMuted` when off.
+        function test_asleep_heading() {
+            compareMarks(asleepButton, Theme.textSecondary, "live")
+            asleepButton.enabled = false
+            compareMarks(asleepButton, Theme.textMuted, "off")
+            asleepButton.enabled = true
+        }
+        // The avatar's `Remove` as the settings list builds it: red at rest beside its grey word, and under the hand.
+        function test_avatar_remove() {
+            avatarRow.pointedAtRow = -1
+            compareMarks(avatarRow, Theme.danger, "at rest")
+            avatarRow.pointedAtRow = 0
+            compareMarks(avatarRow, Theme.danger, "under the hand")
+            avatarRow.pointedAtRow = -1
         }
         function test_ask_pill() {
             compareMarks(ask, Theme.warning, "live")

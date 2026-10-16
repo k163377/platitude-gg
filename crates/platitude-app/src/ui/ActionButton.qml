@@ -44,6 +44,9 @@ HoverToolButton {
     /// The fill's colour — the frame's by default. A bare button names its own and fills edge to edge like a confirmed
     /// menu row (the hunk heading's `Discard hunk` — デザイン規約 §回数押し).
     property color holdTone: actionBtn.frameColor
+    /// The hold mark's colour while it is not over the fill or waiting: what pressing through costs, the fill's, beside
+    /// grey words too (デザイン規約 §回数押しの色). The hunk heading's asleep `Discard hunk` names its grey words' instead.
+    property color holdHue: actionBtn.holdTone
     readonly property bool framed: actionBtn.frameColor.a > 0
     /// The whole label is a git command in git's own spelling and wears the code chip (デザイン規約 §git 用語のコード表記);
     /// `text` is then left untranslated.
@@ -164,12 +167,15 @@ HoverToolButton {
     /// wait says which button waits.
     readonly property color markFg: holdProgress > 0 ? Theme.textOnAccent
                                     : actionBtn.busy ? actionBtn.toneDim : actionBtn.fg
-    /// Off (not busy — a wait has its own step down), the hold mark keeps the colour the words wear when the button can
-    /// be pressed, a step down, while the words and an icon beside them grey: the grey says it cannot be pressed, the
-    /// mark what pressing it would cost (`AppMenuItem.holdOff`). An asleep button's grey stays grey (`HoldIcon.ink`).
+    /// Off (not busy — a wait has its own step down), the hold mark keeps the colour it wears when the button can be
+    /// pressed ([`holdHue`]), a step down, while the words and an icon beside them grey: the grey says it cannot be
+    /// pressed, the mark what pressing it would cost (`AppMenuItem.holdOff`). An asleep heading's grey mark stays grey
+    /// (`HoldIcon.ink`).
     readonly property bool holdOff: !actionBtn.enabled && !actionBtn.busy && actionBtn.holdProgress <= 0
-    /// The hold mark's colour in a seat: the marks', or while [`holdOff`] the live words' (`HoldIcon.off` dims it).
-    readonly property color holdInk: actionBtn.holdOff ? actionBtn.tone : actionBtn.markFg
+    /// Neither over the fill nor waiting: the hold mark wears [`holdHue`], which [`holdOff`] dims (`HoldIcon.off`).
+    readonly property bool holdResting: actionBtn.holdProgress <= 0 && !actionBtn.busy
+    /// The hold mark's colour in a seat: at rest [`holdHue`], else the marks'.
+    readonly property color holdInk: actionBtn.holdResting ? actionBtn.holdHue : actionBtn.markFg
     /// A press lands only with git off the network for this button.
     readonly property bool live: actionBtn.enabled && !actionBtn.busy
 
@@ -413,7 +419,7 @@ HoverToolButton {
                 phraseHead: actionBtn.phraseHead
                 phraseHoldPresses: actionBtn.armedPresses
                 phraseHoldProgress: actionBtn.holdProgress
-                phraseHoldTint: actionBtn.holdOff ? actionBtn.tone : actionBtn.fg
+                phraseHoldTint: actionBtn.holdResting ? actionBtn.holdHue : actionBtn.fg
                 phraseHoldOff: actionBtn.holdOff
                 phraseCount: actionBtn.phraseCount
                 phraseTail: actionBtn.phraseTail

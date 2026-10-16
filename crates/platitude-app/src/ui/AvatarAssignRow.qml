@@ -67,7 +67,8 @@ RowLayout {
         pixelSize: Theme.fontSm
         ground: Theme.bgElevated
     }
-    // Held, red only under the hand, framed at rest, and always laid out (デザイン規約 §アバターを与える).
+    // Held, its word and frame red only under the hand, framed at rest, and always laid out; the press mark wears the
+    // fill's red at rest too (デザイン規約 §アバターを与える).
     ActionButton {
         id: unsetButton
         text: qsTr("Remove")

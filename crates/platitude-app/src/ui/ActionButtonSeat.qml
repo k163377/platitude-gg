@@ -18,7 +18,8 @@ Item {
     property bool busy: false
     /// The button's own `markFg`.
     property color tint: Theme.textPrimary
-    /// The hold mark's own colour (`ActionButton.holdInk`): the seat's, but off the live words', a step down.
+    /// The hold mark's own colour (`ActionButton.holdInk`): at rest what pressing through costs — a step down while
+    /// [`holdOff`] — and the seat's over the fill and while waiting.
     property color holdTint: seat.tint
     property bool holdOff: false
     /// The failure mark for a button with no word left (`ActionButton.folded`), at the icon's upper corner with the

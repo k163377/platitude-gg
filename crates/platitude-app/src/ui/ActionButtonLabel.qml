@@ -78,7 +78,8 @@ Item {
     /// far from a centred phrase.
     property int phraseHoldPresses: 0
     property real phraseHoldProgress: 0
-    /// The words', but off the colour they wear when the button can be pressed, a step down (`ActionButton.holdOff`).
+    /// At rest what pressing through costs (`ActionButton.holdHue`), a step down while [`phraseHoldOff`]; the words'
+    /// over the fill and while waiting.
     property color phraseHoldTint: btnLabel.tint
     property bool phraseHoldOff: false
     /// The face the action is attributed to, at the phrase's end (`… by <face>`); -1 draws none
