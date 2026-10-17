@@ -11,7 +11,7 @@ ColumnLayout {
 
     required property var details
     /// The commits a choice holds (`GraphModel.chosenRows` — one record per row: `oid`, `sha8`, `subject`, `body`,
-    /// `author`, `atime`, `avatar`, `avatarUrl`, `mates`); empty while one commit is being read
+    /// `author`, `authorTime`, `avatar`, `avatarUrl`, `mates`); empty while one commit is being read
     /// (デザイン規約 §複数のコミットを選ぶ).
     property var chosenCommits: []
     /// The commit whose card is out, so its row keeps its band (the page's: `RowHoverHost.rowCardOid`).

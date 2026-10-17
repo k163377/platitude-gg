@@ -20,7 +20,7 @@ pub struct GraphRowItem {
     /// The address the picture is filed under (mailmapped and folded by
     /// the log parser), kept so re-reading the assignments needs no git.
     pub(super) author_email: String,
-    pub(super) atime: i64,
+    pub(super) author_time: i64,
     pub(super) subject: String,
     pub(super) node_lane: i32,
     pub(super) node_color: i32,
@@ -82,7 +82,7 @@ pub(super) fn to_row_item(
         oid_hex: row.oid_hex.clone(),
         author: row.author.clone(),
         author_email: row.author_email.clone(),
-        atime: row.time,
+        author_time: row.time,
         subject: row.subject.clone(),
         node_lane: i32::from(row.node_lane),
         node_color: i32::from(row.node_color),
@@ -108,7 +108,7 @@ pub struct ChosenRow {
     pub subject: String,
     pub body: String,
     pub author: String,
-    pub atime: i64,
+    pub author_time: i64,
     pub avatar: i32,
     pub avatar_url: String,
     pub mates: Mates,
@@ -171,7 +171,7 @@ impl ChosenRow {
             subject: row.subject.clone(),
             body: row.body.clone(),
             author: row.author.clone(),
-            atime: row.atime,
+            author_time: row.author_time,
             avatar: row.avatar,
             avatar_url: row.avatar_url.clone(),
             mates: row.co_authors.clone(),
@@ -187,7 +187,7 @@ impl Record for ChosenRow {
             .put("subject", &self.subject)
             .put("body", &self.body)
             .put("author", &self.author)
-            .put("atime", &self.atime)
+            .put("authorTime", &self.author_time)
             .put("avatar", &self.avatar)
             .put("avatarUrl", &self.avatar_url)
             .put("mates", &self.mates)
@@ -201,7 +201,7 @@ impl Record for ChosenRow {
             subject: field(map, "subject")?,
             body: field(map, "body")?,
             author: field(map, "author")?,
-            atime: field(map, "atime")?,
+            author_time: field(map, "authorTime")?,
             avatar: field(map, "avatar")?,
             avatar_url: field(map, "avatarUrl")?,
             mates: field(map, "mates")?,
@@ -265,7 +265,7 @@ mod tests {
             subject: "the subject".into(),
             body: "the body".into(),
             author: "Ada".into(),
-            atime: 1_700_000_000,
+            author_time: 1_700_000_000,
             avatar: 42,
             avatar_url: "file:///a.png".into(),
             co_authors: crate::encode::mates_of(&[platitude_core::details::CoAuthor {

@@ -89,7 +89,7 @@ Item {
         rowCard.subject = row.subject
         rowCard.body = row.body
         rowCard.author = row.author
-        rowCard.atime = row.atime
+        rowCard.authorTime = row.author_time
         rowCard.mates = row.co_authors
         // Under the pointer: a row is pane-wide.
         const at = row.mapToItem(host, row.pointerX, row.height)

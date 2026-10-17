@@ -8,7 +8,7 @@ import platitude.ui
 Item {
     id: commitRow
 
-    /// One row as `GraphModel.chosenRows` names it (`oid`, `sha8`, `subject`, `body`, `author`, `atime`, `avatar`,
+    /// One row as `GraphModel.chosenRows` names it (`oid`, `sha8`, `subject`, `body`, `author`, `authorTime`, `avatar`,
     /// `avatarUrl`, `mates`).
     required property var modelData
     /// The commit whose card is out; its row keeps its band while the card stands over it.
@@ -19,7 +19,7 @@ Item {
     readonly property string subject: commitRow.modelData.subject
     readonly property string body: commitRow.modelData.body
     readonly property string author: commitRow.modelData.author
-    readonly property double atime: commitRow.modelData.atime
+    readonly property double author_time: commitRow.modelData.authorTime
     readonly property var co_authors: commitRow.modelData.mates
     /// Always -1: the index a card carries is a graph row, and this list's own numbering would pick a commit at random
     /// (`RepoPage.activateRow` looks the commit up when given -1).

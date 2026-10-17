@@ -13,7 +13,7 @@ Item {
     required property int index
     required property string oid_hex
     required property string author
-    required property double atime
+    required property double author_time
     required property string subject
     /// Everything after the subject, minus the co-author trailers. Only the hover card reads it, but an undeclared role
     /// arrives as `undefined` and stops whatever reads it mid-way.

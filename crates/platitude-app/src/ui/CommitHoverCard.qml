@@ -21,7 +21,7 @@ AppCard {
     property string subject: ""
     property string body: ""
     property string author: ""
-    property double atime: 0
+    property double authorTime: 0
     /// The co-author records for the line beside the date (`encode::Mates`).
     property var mates: []
     /// How wide the message may run before it wraps: a share of the pane the card opens over, set by the owner (so
@@ -150,7 +150,7 @@ AppCard {
             Layout.fillWidth: true
             spacing: Theme.spaceSm
             LineText {
-                text: Words.stamp(hoverCard.atime)
+                text: Words.stamp(hoverCard.authorTime)
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
                 ground: Theme.bgElevated

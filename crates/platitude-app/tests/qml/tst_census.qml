@@ -196,7 +196,7 @@ Item {
         }
 
         function test_a_shown_row_with_an_action_index_is_still_counted() {
-            chosen.model = [{oid: "a", sha8: "a", subject: "Chosen", body: "", author: "A", atime: 0,
+            chosen.model = [{oid: "a", sha8: "a", subject: "Chosen", body: "", author: "A", authorTime: 0,
                              avatar: 0, avatarUrl: "", mates: []}]
             chosen.forceLayout()
             verify(waitForRendering(chosen))
