@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex の席取得"
+  short_description: "Claim a worktree seat with Codex identity and write access"
+  default_prompt: "Use $platitude-seat to acquire or resume this Codex chat seat."

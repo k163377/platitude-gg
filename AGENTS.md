@@ -1,3 +1,5 @@
+claudeはこの資料を無視して
+
 # Codex 向けの補足規約
 
 開発の主環境は Claude。`CLAUDE.md` が共有規約の正本なので、プロジェクトの作業前に一度読む。
@@ -9,6 +11,7 @@
   プロジェクト・worktree・更新日時で探し、最後のユーザー依頼とアシスタントの本文を取り出す。
   最初は 1 セッションの限られた抜粋から始め、判断に必要な情報が足りない時だけ広げる。
   過去の報告は現在の Git の状態と照合する。
+  Claude Cloud session の本文を読めなかった場合は、その事実を返信で人間へ報告する。
 - 編集前に `git status --short --branch` と対象範囲の差分を読む。同じ作業中に読んだ情報は再利用し、
   元の情報が変わった時に読み直す。
 - `crates/**` では `.claude/rules/code.md` と `structure.md`、`crates/platitude-core/**` では
@@ -25,24 +28,11 @@
   Codex 向けスキルは `.agents/skills`、Claude 向けスキルは `.claude/skills` で分けて管理する。
   共有規約は既存の正本を参照する。
 
-## 席を取得する前に会話の識別情報を確認する
+## 席と作業状態
 
-`xtask` はフックのセッション ID、`CLAUDE_CODE_SESSION_ID`、`CODEX_THREAD_ID` の順で読む。
-古い worktree の実行系にも対応するため、新しい PowerShell 呼び出しでは次の橋渡しを残す。
-
-```powershell
-if ([string]::IsNullOrWhiteSpace($env:CODEX_THREAD_ID)) {
-    throw 'Codex のタスク ID がありません。所有者なしで seat を実行しないこと'
-}
-$env:CLAUDE_CODE_SESSION_ID = $env:CODEX_THREAD_ID
-cargo xtask seat
-```
-
-識別情報は現在のタスク ID だけ。`CLAUDE_PID` と `CLAUDECODE` は未設定のままにする
-(シェルや Desktop の PID では別の所有者を指してしまう)。シェルが持つ
-`CLAUDE_CODE_HOST_SESSION_ID` はタスクの席の識別には使われない。
+席の取得・継続・返却には `.agents/skills/platitude-seat/SKILL.md` を使う。
+席の所有者は現在の `CODEX_THREAD_ID`。`xtask` はこの値を直接読む。
 席の文字・ブランチ・絶対パスを直ちに報告し、割り当てられたツリーだけで作業する。
-<!--call:seat.release-->`seat release` にも同じ識別情報の橋渡しを行う。
 返却・rebase・GUI 起動・land の許可は `CLAUDE.md` に従う。
 席の返却を報告する前に、解除結果と worktree のロック状態を確認する。
 席の保持を解くのは land・返却・ユーザーが指示した乗っ取り
@@ -50,6 +40,7 @@ cargo xtask seat
 Claude の会話と同じく、このチャットでの返信・依頼の完了・ユーザーの入力待ち・再開をまたいで席を保つ。
 ユーザーが返却を指示した時だけ返し、land では共有の手順が返す。同じ席で作業を続ける。
 rebase はその場でのユーザー指示がある時だけ行う。
+作業中の変更は新しいコミットに積み、コミットログの squash / amend は land 時の再編で行う。
 
 席での作業中は共有スリープ保持機構を使う。信頼済みのネイティブ活動フックが Codex の活動を記録し、
 Desktop の debug ログで実際の承認・質問の要求と回答の観測を補う。
@@ -66,12 +57,6 @@ Desktop の `Settings > Hooks`(CLI は `/hooks`)で確認する。
 ログの補助が使えない、または要求を対応付けられない場合は、ネイティブフックの活動判定を保ち、
 `cargo xtask` の <!--call:awake.status-->`awake` で診断を確認する。
 人待ちを推測したり、スリープを可能にするために席を返したりしない。
-
-割り当てに失敗したら原因を調べる。識別情報、`cargo xtask seats`、
-`git worktree list --porcelain` を読み取りだけで確認する。Git メタデータへの書き込みが
-sandbox に拒否された場合は、同じ識別情報を設定した同じコマンドの権限昇格を求める。
-所有者が不明な `claude-seat` ロックを自分の物だと判断しない。
-片付ける前に所有者を確定し、確定できなければユーザーへ報告する。
 
 ## 根拠を小さく、欠けなく読む
 
