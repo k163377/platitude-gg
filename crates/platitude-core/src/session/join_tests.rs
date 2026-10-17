@@ -175,6 +175,7 @@ fn a_branch_keeps_the_name_of_an_upstream_that_is_not_here() {
     );
     assert!(!snapshot.locals[0].has_remote);
     assert_eq!(snapshot.locals[0].upstream_gone, "origin/release-1.2");
+    assert_eq!(snapshot.locals[0].upstream_local, "");
 
     let mut tracks_a_branch_here = branch("topic", oid(1));
     tracks_a_branch_here.upstream = Some(crate::Name::from("refs/heads/main"));
@@ -185,6 +186,20 @@ fn a_branch_keeps_the_name_of_an_upstream_that_is_not_here() {
         snapshot.locals[1].upstream_gone, "",
         "the ref it names is a branch in this listing"
     );
+    assert_eq!(
+        snapshot.locals[1].upstream_local, "main",
+        "and it is named, as the other two name theirs"
+    );
+    assert_eq!(snapshot.locals[1].upstream, "", "no reading to speak for");
+
+    // The branch here deleted: gone, by its short name.
+    let mut lost = branch("topic", oid(1));
+    lost.upstream = Some(crate::Name::from("refs/heads/base"));
+    let alone = vec![lost];
+    let joins = RefJoins::new(&alone, &held);
+    let snapshot = build_snapshot(&alone, &head_at(oid(1)), &remote_tags, &joins);
+    assert_eq!(snapshot.locals[0].upstream_gone, "base");
+    assert_eq!(snapshot.locals[0].upstream_local, "");
 }
 
 /// The cloud is on a chip exactly while its remote is folded into it

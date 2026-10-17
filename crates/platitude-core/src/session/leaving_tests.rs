@@ -143,6 +143,7 @@ fn branch(short: &str, upstream: &str, drifted: bool) -> BranchItem {
         is_head: false,
         upstream: upstream.into(),
         upstream_gone: crate::Name::default(),
+        upstream_local: crate::Name::default(),
         upstream_here: false,
         upstream_oid: None,
         upstream_drifted: drifted,

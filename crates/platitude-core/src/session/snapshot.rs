@@ -521,6 +521,11 @@ pub struct BranchItem {
     /// listing answers to the name (git's `[gone]`), by short name. Never
     /// filled together with [`Self::upstream`].
     pub upstream_gone: crate::Name,
+    /// The branch here this one is configured against (`remote = .`)
+    /// while the listing has it, by short name. With [`Self::upstream`]
+    /// and [`Self::upstream_gone`], at most one of the three is filled —
+    /// which one is where the configured upstream stands.
+    pub upstream_local: crate::Name,
     /// The configured upstream is a branch here (`branch.<n>.remote = .`),
     /// listed or gone ([`crate::refs::RefEntry::upstream_is_here`]). The
     /// short names above cannot say so: a branch here may be called

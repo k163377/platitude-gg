@@ -110,6 +110,18 @@ impl<'a> RefJoins<'a> {
         crate::Name::from(short)
     }
 
+    /// The branch here this one is configured against while the listing
+    /// has it (`BranchItem::upstream_local`); empty otherwise.
+    fn upstream_local(&self, r: &RefEntry) -> crate::Name {
+        let Some(up) = r.upstream.as_deref() else {
+            return crate::Name::default();
+        };
+        if !r.upstream_is_here() || !self.local_commit.contains_key(up) {
+            return crate::Name::default();
+        }
+        crate::Name::from(up.strip_prefix("refs/heads/").unwrap_or(up))
+    }
+
     /// The local branch configured against this remote-tracking ref (the
     /// far side of [`refs::RemoteBranches::spoken_for`]), whose counts the
     /// reading is measured by.
@@ -367,6 +379,7 @@ pub(super) fn build_snapshot(
                     is_head: r.is_head,
                     upstream: spoken.map(|u| u.short.clone()).unwrap_or_default(),
                     upstream_gone: joins.upstream_gone(r),
+                    upstream_local: joins.upstream_local(r),
                     upstream_here: r.upstream_is_here(),
                     upstream_oid: joins.upstream_commit(r),
                     upstream_drifted: spoken.is_some_and(|u| u.commit_oid() != r.commit_oid()),
@@ -387,6 +400,7 @@ pub(super) fn build_snapshot(
                 is_head: false,
                 upstream: crate::Name::default(),
                 upstream_gone: crate::Name::default(),
+                upstream_local: crate::Name::default(),
                 upstream_here: false,
                 upstream_oid: None,
                 upstream_drifted: false,

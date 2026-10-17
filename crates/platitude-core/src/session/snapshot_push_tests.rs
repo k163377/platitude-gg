@@ -19,6 +19,7 @@ fn branch(short: &str, at: u8) -> BranchItem {
         is_head: false,
         upstream: "".into(),
         upstream_gone: "".into(),
+        upstream_local: "".into(),
         upstream_here: false,
         upstream_oid: None,
         upstream_drifted: false,
@@ -119,6 +120,7 @@ fn a_branch_with_nothing_to_count_against_asks_where_it_goes() {
             branch("fresh", b'1'),
             BranchItem {
                 upstream_gone: "origin/gone".into(),
+                upstream_local: "".into(),
                 ..branch("pruned", b'2')
             },
         ],
@@ -161,6 +163,7 @@ fn against_here(short: &str, upstream: &str, ahead: u32, listed: bool) -> Branch
         upstream_here: true,
         upstream_oid: listed.then(|| oid(b'1')),
         upstream_gone: if listed { "" } else { upstream }.into(),
+        upstream_local: "".into(),
         ahead,
         ..branch(short, b'2')
     }
