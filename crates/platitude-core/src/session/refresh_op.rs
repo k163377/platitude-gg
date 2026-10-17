@@ -126,6 +126,32 @@ impl RepoSession {
         }
     }
 
+    /// What a status carries about the push of its branch: the branch's own
+    /// mark, and the counts against where a mark sends it
+    /// ([`Self::read_push_track`]). Read every tick so a mark moved from a
+    /// terminal shows on the next one; a detached HEAD has nothing to push,
+    /// and a read that fails says nothing. The repository's mark rides the
+    /// refs snapshot instead, so a moved default sends the refs out again
+    /// ([`RepoSession::note_push_default`]).
+    async fn read_status_push(
+        self: &Arc<Self>,
+        workdir: &std::path::Path,
+        status: &WorktreeStatus,
+        cancel: &CancellationToken,
+    ) -> (String, remote::PushTrack) {
+        let Some(branch) = &status.branch_head else {
+            return Default::default();
+        };
+        let Ok(marks) = remote::push_marks(&self.executor, workdir, branch, cancel).await else {
+            return Default::default();
+        };
+        self.note_push_default(&marks.push_default);
+        let track = self
+            .read_push_track(workdir, branch, status, &marks, cancel)
+            .await;
+        (marks.push_remote.unwrap_or_default(), track)
+    }
+
     /// [`remote::pushes_elsewhere`] for a status whose upstream git can
     /// compare against — with none the push asks where it goes, and no
     /// count is read. The remote names are the kept ones, not read for
@@ -210,26 +236,8 @@ impl RepoSession {
                     // open would watch its value vanish on the next tick.
                     self.standing.merge_tool()
                 };
-                // Where a push goes, read every tick so a mark moved from a
-                // terminal shows on the next one; a detached HEAD has
-                // nothing to push. The branch's mark rides this event, the
-                // repository's the refs snapshot, so a moved default sends
-                // the refs out again ([`RepoSession::note_push_default`]).
-                let (push_remote, push_track) = match &status.branch_head {
-                    Some(branch) => {
-                        match remote::push_marks(&self.executor, &workdir, branch, &cancel).await {
-                            Ok(marks) => {
-                                self.note_push_default(&marks.push_default);
-                                let track = self
-                                    .read_push_track(&workdir, branch, &status, &marks, &cancel)
-                                    .await;
-                                (marks.push_remote.unwrap_or_default(), track)
-                            }
-                            Err(_) => Default::default(),
-                        }
-                    }
-                    None => Default::default(),
-                };
+                let (push_remote, push_track) =
+                    self.read_status_push(&workdir, &status, &cancel).await;
                 if !self.standing.current(looked) {
                     self.read_status_from(self.status_read.stamp());
                     return Reread::Same;
