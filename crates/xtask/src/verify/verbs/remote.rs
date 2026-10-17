@@ -468,17 +468,21 @@ pub(super) const TABLE: &[Verb] = &[
     // it off, held as the plain delete's two presses; on one without
     // (`scratch`, as it opens and emptied) it stays the `Set` question — the
     // pair again, against a bar that turns everywhere and one that never does.
+    // The `scratch` pair also reads the bar's line: emptied, it asks for a
+    // name; opened, it names the branch the name makes.
     Verb {
         name: "set-upstream",
         when: &[
             (Arg::Ends(":missing"), "there=false answerable=true"),
             (
                 Arg::Is("scratch"),
-                "name=scratch there=false answerable=true unsetting=false pill=Set presses=0",
+                "name=scratch there=false answerable=true unsetting=false pill=Set presses=0 \
+                 says=origin/scratch has not been fetched here; a push sends this branch there.",
             ),
             (
                 Arg::Is("scratch:"),
-                "name= there=false answerable=false unsetting=false pill=Set presses=0",
+                "name= there=false answerable=false unsetting=false pill=Set presses=0 \
+                 says=Enter the upstream.",
             ),
             (
                 Arg::Ends(":"),

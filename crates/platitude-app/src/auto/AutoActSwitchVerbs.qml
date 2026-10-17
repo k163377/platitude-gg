@@ -466,17 +466,19 @@ Item {
             // `there=` is whether the answered name exists here — it drives the bar's line, not the pill (a name not
             // here is an answer: デザイン規約 §ブランチが測られる相手を決める). `unsetting=` / `pill=`: an emptied name
             // turns the question into taking the upstream off, the pill read off the bar itself. `rows=` / `open=`: an
-            // empty list and an unplumbed one frame alike.
+            // empty list and an unplumbed one frame alike. `says=`: the bar's line, read off the bar too — last, being
+            // words.
             Harness.report("upstream branch=" + upstreamFlow.branch
                               + " remote=" + upstreamFlow.remote
+                              + " rows=" + upstreamFlow.branches.length
+                              + " open=" + upstreamFlow.branchesOpen()
                               + " name=" + upstreamFlow.branchName
                               + " there=" + upstreamFlow.targetIsThere
                               + " answerable=" + graphPane.askAnswerable
                               + " unsetting=" + upstreamFlow.unsetting
                               + " pill=" + graphPane.askCard.accept
                               + " presses=" + graphPane.askCard.holdPresses
-                              + " rows=" + upstreamFlow.branches.length
-                              + " open=" + upstreamFlow.branchesOpen())
+                              + " says=" + graphPane.askCard.detail)
             if (!upstreamAskTimer.answers) {
                 driver.complete()
                 return
