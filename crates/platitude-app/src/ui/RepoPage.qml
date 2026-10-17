@@ -2725,8 +2725,7 @@ FocusScope {
     /// What the window reads off the page it shows: the floor (`Main.floorWidth` / `floorHeight`) and the two panes'
     /// own overflow, which the floor's verb asks about.
     readonly property real floorWidth: pageLayout.floorWidth
-    /// …and the floor with the list open either way — what the band's actions time their giving way against
-    /// (`PageLayout.openFloorWidth`).
+    /// …and the floor with the list open either way (`PageLayout.openFloorWidth`).
     readonly property real openFloorWidth: pageLayout.openFloorWidth
     readonly property real floorHeight: pageLayout.floorHeight
     readonly property bool wipBlockScrolls: pageLayout.wipBlockScrolls

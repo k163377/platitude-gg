@@ -23,7 +23,7 @@ Item {
     property color holdTint: seat.tint
     property bool holdOff: false
     /// The failure mark for a button with no word left (`ActionButton.folded`), at the icon's upper corner with the
-    /// raise and half gap it keeps from a word (デザイン規約 §ウィンドウの縁).
+    /// raise and half gap it keeps from a word (デザイン規約 §操作パネル).
     property bool cornerAlert: false
     property color cornerAlertTone: seat.tint
     /// The pixel size of the word the seat heads on its line; zero where it heads none (stacked under the word,

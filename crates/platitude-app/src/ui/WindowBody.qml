@@ -33,8 +33,7 @@ Item {
     readonly property var floorPage: mainUi.curPage !== null ? mainUi.curPage : blankPage.item
     readonly property real floorWidth:
         Math.max(topBar.floorWidth, mainUi.floorPage !== null ? mainUi.floorPage.floorWidth : 0)
-    /// The floor as if the left list were open — where the band's actions finish giving up their words
-    /// (`TopBar.actionCap`). Read off the real floor, folding the list would put the words back (規約 §窓の床).
+    /// The floor as if the left list were open, for the panel's runs to report (`openW=`).
     readonly property real openFloorWidth:
         Math.max(topBar.floorWidth, mainUi.floorPage !== null ? mainUi.floorPage.openFloorWidth : 0)
     readonly property real floorHeight:

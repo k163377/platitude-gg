@@ -385,8 +385,8 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=band-actions*: the band's three actions giving their words up as the window narrows (規約 §ウィンドウの縁).
-    // The run asks for a *shape* and the band's own arithmetic names its width — which pixel is which shape depends on
+    // PGG_AUTO_ACT=band-actions*: the panel's four buttons giving their words up as the window narrows (規約 §操作パネル).
+    // The run asks for a *shape* and the panel's own arithmetic names its width — which pixel is which shape depends on
     // the installed fonts.
     SampleTimer {
         id: actionsActTimer

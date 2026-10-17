@@ -85,8 +85,8 @@ QtObject {
     readonly property real floorWidth:
         (layout.page.sidebarCollapsed ? Theme.railWidth : layout.sidebarPane.minOpenWidth)
         + Theme.splitterWidth + layout.centreMinWidth + Theme.splitterWidth + layout.rightMinWidth
-    /// The same floor with the list open, whether or not it is — what `TopBar.actionCap` schedules the band's words
-    /// off, so folding the list does not bring them back (規約 §窓の床「誰も頼んでいないものが画面上で動く」).
+    /// The same floor with the list open, whether or not it is — reported beside the floor by the panel's runs
+    /// (`openW=`).
     readonly property real openFloorWidth:
         layout.sidebarPane.minOpenWidth
         + Theme.splitterWidth + layout.centreMinWidth + Theme.splitterWidth + layout.rightMinWidth

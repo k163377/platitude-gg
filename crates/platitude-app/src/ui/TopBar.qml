@@ -200,7 +200,7 @@ Rectangle {
                  topBar.picksFloor + Theme.spaceLg + topBar.actionsFoldedWidth
                  + topBar.opsRightAir)
     /// What the three actions and the find come to once every one is a mark in an end cell — the panel's half of the
-    /// floor above (規約 §窓の床「fetch / push / stash も畳んだ姿で数える」).
+    /// floor above (規約 §窓の床 のパネルの床).
     readonly property real actionsFoldedWidth:
         topBar.actionCells * Theme.railWidth
         + (actionSeat.children.length - 1) * actionSeat.spacing

@@ -245,7 +245,7 @@ Item {
             + " menu=" + acts.menuHeld + " menuEnd=" + acts.menuEnd + " menuRoom=" + acts.menuRoom
             + " floorW=" + floorW + " floorH=" + floorH
             // `floorW` is the larger of these two plus the edge's two columns (`Main.floorWidth`). Folding lowers
-            // `pageW` only — where, on an OS whose band carries the window buttons, the two change places.
+            // `pageW` only.
             + " bandW=" + Math.ceil(topBar.floorWidth)
             + " pageW=" + (window.floorPage !== null
                            ? Math.ceil(window.floorPage.floorWidth) : 0)

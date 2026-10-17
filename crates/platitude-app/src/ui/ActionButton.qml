@@ -140,7 +140,7 @@ HoverToolButton {
     /// Framed only: on a bare button the floor stretches the wash and the fill past the word. Not for a phrase: its
     /// cell asks for no width (`ActionButtonLabel.phraseRoom`), so the floor would charge the padding a whole
     /// `buttonMinWidth` out of the room the phrase elides into. Not once folded: a box round a mark takes the mark's
-    /// size (規約 §ウィンドウの縁「枠を着ていても `buttonMinWidth` の外」).
+    /// size (規約 §寸法 の `buttonMinWidth`).
     readonly property real floorSlack:
         actionBtn.framed && !btnLabel.phrased && !actionBtn.folded
         ? Theme.buttonMinWidth - btnRow.implicitWidth - 2 * actionBtn.padding : 0

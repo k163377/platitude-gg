@@ -20,8 +20,8 @@ Item {
     /// The wording the box is measured for, and whether it is a command (the two families measure differently).
     property string widestText: ""
     property bool widestCode: false
-    /// The button is down to its mark (`ActionButton.folded`). The cell keeps its height: the state group beside it
-    /// borrows this box (規約 §ウィンドウの縁).
+    /// The button is down to its mark (`ActionButton.folded`). The cell keeps its height: folding gives up the width
+    /// alone (規約 §操作パネル「畳んで変わるのは幅だけ」).
     property bool folded: false
     readonly property int wordCeiling: 240
     /// The whole wording's width, off a hidden label with typed dashes — what a band-laid button folds against
