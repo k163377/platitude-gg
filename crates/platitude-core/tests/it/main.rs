@@ -24,6 +24,7 @@ mod logparse;
 mod preview_integration;
 mod push_default_integration;
 mod push_refusals;
+mod push_source_integration;
 mod reachable_integration;
 mod refs_integration;
 mod relied_witnesses;

@@ -152,6 +152,10 @@ pub async fn set_url(
 }
 
 /// Short name of the checked-out branch; an error when HEAD is detached.
+///
+/// Read in full and cut here, as `refs::head_state` does: beside a tag of
+/// the same name `--short` answers `heads/x`, which a push would take for
+/// another branch.
 pub(super) async fn current_branch(
     executor: &GitExecutor,
     workdir: &Path,
@@ -161,12 +165,17 @@ pub(super) async fn current_branch(
         .cwd(workdir)
         // Exit 1: detached, reported by the error below.
         .answers_by_code(1)
-        .args(["symbolic-ref", "-q", "--short", "HEAD"]);
+        .args(["symbolic-ref", "-q", "HEAD"]);
     let out = executor.run_unchecked(cmd, cancel).await?;
-    let name = out.stdout_utf8().trim().to_string();
+    let full = out.stdout_utf8();
+    let name = full
+        .trim()
+        .strip_prefix("refs/heads/")
+        .unwrap_or_default()
+        .to_string();
     if out.code != 0 || name.is_empty() {
         return Err(GitError::UnexpectedOutput {
-            command: "git symbolic-ref --short HEAD".to_string(),
+            command: "git symbolic-ref HEAD".to_string(),
             message: "HEAD is detached, so there is no branch to push".to_string(),
         });
     }

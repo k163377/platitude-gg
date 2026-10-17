@@ -34,7 +34,10 @@ pub enum PushForce {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PushSpec {
     pub remote: String,
-    /// Local ref to push (a branch name, or `HEAD`).
+    /// What is sent, as git is to read it: a branch here goes by its full
+    /// name (`refs/heads/<branch>` — beside a tag of the same name the
+    /// bare one is ambiguous, which git refuses), and a remote-tracking
+    /// ref by its own (`remote::replace_remote_branch`). Sent as written.
     pub local: String,
     /// Branch name on the remote side.
     pub remote_branch: String,
@@ -129,7 +132,7 @@ fn decide_push(
 
     Ok(PushSpec {
         remote,
-        local: branch.to_string(),
+        local: format!("refs/heads/{branch}"),
         remote_branch,
         set_upstream,
         force,
@@ -148,7 +151,7 @@ pub fn publish_spec(branch: &str, remote: &str, remote_branch: &str, expect: &st
     PushSpec {
         remote: remote.to_string(),
         remote_branch: remote_branch.to_string(),
-        local: branch.to_string(),
+        local: format!("refs/heads/{branch}"),
         set_upstream: true,
         force: if expect.is_empty() {
             PushForce::None
@@ -434,6 +437,21 @@ mod tests {
         assert!(
             !decide("main", "origin", "refs/heads/main", "fork", "").set_upstream,
             "a branch that tracks origin must go on tracking it"
+        );
+    }
+
+    /// Beside a tag of the same name the bare name matches both, and git
+    /// refuses the send; the plan and the first push's answer both name
+    /// the branch in full.
+    #[test]
+    fn a_branch_here_is_sent_by_its_full_name() {
+        assert_eq!(
+            decide("topic", "origin", "refs/heads/topic", "", "").local,
+            "refs/heads/topic"
+        );
+        assert_eq!(
+            publish_spec("topic", "origin", "elsewhere", "").local,
+            "refs/heads/topic"
         );
     }
 
