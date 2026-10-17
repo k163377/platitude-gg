@@ -26,6 +26,48 @@ async fn unstage_works_on_an_unborn_branch() {
     assert_eq!(untracked, vec!["first.txt"], "file is back to untracked");
 }
 
+/// Edited again after `add`, before the first commit: the index holds
+/// neither what HEAD has (nothing) nor what the disk does, which `git rm
+/// --cached` refuses without `--force`. Both doors take it, the edit stays
+/// on disk, and a file nobody chose keeps what is staged.
+#[tokio::test]
+async fn unstage_takes_a_file_edited_after_add_on_an_unborn_branch() {
+    let mut repo = TestRepo::init();
+    repo.write_file("first.txt", "hello\n");
+    repo.write_file("second.txt", "kept\n");
+    repo.git(&["add", "--", "first.txt", "second.txt"]);
+    repo.write_file("first.txt", "hello again\n");
+    repo.write_file("second.txt", "kept, edited\n");
+    let (exec, cancel) = env();
+
+    stage::unstage_paths(&exec, &repo.path, &["first.txt".into()], &cancel)
+        .await
+        .expect("unstage one path on unborn HEAD");
+    let (staged, _, untracked) = buckets(&repo).await;
+    assert_eq!(
+        staged,
+        vec!["second.txt"],
+        "the file not chosen stays staged"
+    );
+    assert_eq!(untracked, vec!["first.txt"]);
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("first.txt")).unwrap(),
+        "hello again\n",
+        "the edit after add stays on disk"
+    );
+
+    stage::unstage_all(&exec, &repo.path, &cancel)
+        .await
+        .expect("unstage everything on unborn HEAD");
+    let (staged, _, untracked) = buckets(&repo).await;
+    assert!(staged.is_empty(), "{staged:?}");
+    assert_eq!(untracked, vec!["first.txt", "second.txt"]);
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("second.txt")).unwrap(),
+        "kept, edited\n"
+    );
+}
+
 #[tokio::test]
 async fn discard_to_head_works_on_an_unborn_branch() {
     let mut repo = TestRepo::init();

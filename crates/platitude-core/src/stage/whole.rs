@@ -72,6 +72,22 @@ pub async fn stage_all(
         .map_err(locked_out(ReportKind::StageLocked))
 }
 
+/// What unstages before the first commit, ahead of its pathspecs: the
+/// entries leave the index, the disk is left alone (`--cached`).
+/// `--force` because a file edited again after `add` has staged content
+/// that is neither HEAD's nor the disk's, which `rm` refuses to drop
+/// unforced — the same staged bytes `restore --staged` drops where there
+/// is a HEAD.
+const UNBORN_UNSTAGE: [&str; 7] = [
+    "rm",
+    "--cached",
+    "--force",
+    "-r",
+    "--ignore-unmatch",
+    "--quiet",
+    "--",
+];
+
 /// Empties the index back to HEAD, leaving the working tree alone.
 pub async fn unstage_all(
     executor: &GitExecutor,
@@ -82,15 +98,10 @@ pub async fn unstage_all(
         // No HEAD to reset to; drop every entry instead. `--ignore-unmatch`:
         // `git rm` calls an empty index matching nothing fatal, but
         // "unstage nothing" has succeeded.
-        GitCommand::new().cwd(workdir).args([
-            "rm",
-            "--cached",
-            "-r",
-            "--ignore-unmatch",
-            "--quiet",
-            "--",
-            ":(literal).",
-        ])
+        GitCommand::new()
+            .cwd(workdir)
+            .args(UNBORN_UNSTAGE)
+            .arg(":(literal).")
     } else {
         GitCommand::new().cwd(workdir).args(["reset", "--quiet"])
     };
@@ -115,11 +126,9 @@ pub async fn unstage_paths(
         return Ok(());
     }
     let cmd = if head_is_unborn(executor, workdir, cancel).await? {
-        GitCommand::new()
-            .cwd(workdir)
-            // `--ignore-unmatch` as in unstage_all: a path that is not in
-            // the index is already unstaged.
-            .args(["rm", "--cached", "-r", "--ignore-unmatch", "--quiet", "--"])
+        // `--ignore-unmatch` as in unstage_all: a path that is not in the
+        // index is already unstaged.
+        GitCommand::new().cwd(workdir).args(UNBORN_UNSTAGE)
     } else {
         GitCommand::new()
             .cwd(workdir)
