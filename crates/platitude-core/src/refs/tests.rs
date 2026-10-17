@@ -100,6 +100,20 @@ fn skips_malformed_lines_but_keeps_the_rest() {
 }
 
 #[test]
+fn a_ref_requires_exactly_eight_fields_including_an_empty_last_one() {
+    let fields = ["refs/heads/main", "commit", SHA_A, "", "", "", "1", ""];
+    let valid = fields.join("\0");
+    assert!(parse_line(valid.as_bytes()).unwrap().is_some());
+
+    for malformed in [fields[..7].join("\0"), format!("{valid}\0")] {
+        assert_eq!(
+            parse_line(malformed.as_bytes()),
+            Err(RefsParseError(malformed)),
+        );
+    }
+}
+
+#[test]
 fn branch_with_slash_in_name_keeps_full_short_name() {
     let bytes = line([
         "refs/heads/feature/deep/name",

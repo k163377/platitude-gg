@@ -281,6 +281,9 @@ mod tests {
         assert_eq!(added.path(), "added.txt");
         assert_eq!(added.hunks[0].lines[0].new_no, Some(1));
         assert_eq!(added.hunks[0].lines[1].kind, DiffLineKind::NoNewline);
+        assert_eq!(added.hunks[0].lines[1].old_no, None);
+        assert_eq!(added.hunks[0].lines[1].new_no, None);
+        assert_eq!(added.hunks[0].lines[1].text, "\\ No newline at end of file");
 
         let binary = &files[2];
         assert!(binary.is_binary);
@@ -332,7 +335,9 @@ diff --git a/has space.txt b/has space.txt
         let lines = &files[0].hunks[0].lines;
         assert_eq!(lines[1].kind, DiffLineKind::Context);
         assert_eq!(lines[1].text, "");
+        assert_eq!((lines[1].old_no, lines[1].new_no), (Some(2), Some(2)));
         assert_eq!(lines[2].old_no, Some(3), "empty context advanced both");
+        assert_eq!(lines[3].new_no, Some(3), "empty context advanced both");
     }
 
     #[test]

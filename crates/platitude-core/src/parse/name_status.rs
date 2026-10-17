@@ -25,15 +25,15 @@ pub fn parse_name_status(bytes: &[u8]) -> Result<Vec<FileChange>, NameStatusPars
     let mut tokens = bytes
         .split(|b| *b == 0)
         .filter(|t| !t.is_empty())
-        .map(|t| String::from_utf8_lossy(t).into_owned());
+        .map(String::from_utf8_lossy);
 
     while let Some(status_tok) = tokens.next() {
         let mut chars = status_tok.chars();
         let status = chars
             .next()
-            .ok_or_else(|| NameStatusParseError(status_tok.clone()))?;
+            .ok_or_else(|| NameStatusParseError(status_tok.to_string()))?;
         if !status.is_ascii_uppercase() {
-            return Err(NameStatusParseError(status_tok.clone()));
+            return Err(NameStatusParseError(status_tok.to_string()));
         }
         let score: Option<u8> = {
             let digits = chars.as_str();
@@ -43,31 +43,27 @@ pub fn parse_name_status(bytes: &[u8]) -> Result<Vec<FileChange>, NameStatusPars
                 Some(
                     digits
                         .parse()
-                        .map_err(|_| NameStatusParseError(status_tok.clone()))?,
+                        .map_err(|_| NameStatusParseError(status_tok.to_string()))?,
                 )
             }
         };
         let first = tokens
             .next()
-            .ok_or_else(|| NameStatusParseError(status_tok.clone()))?;
-        if matches!(status, 'R' | 'C') {
+            .ok_or_else(|| NameStatusParseError(status_tok.to_string()))?;
+        let (path, orig_path) = if matches!(status, 'R' | 'C') {
             let dest = tokens
                 .next()
-                .ok_or_else(|| NameStatusParseError(status_tok.clone()))?;
-            out.push(FileChange {
-                status,
-                score,
-                path: dest,
-                orig_path: Some(first),
-            });
+                .ok_or_else(|| NameStatusParseError(status_tok.to_string()))?;
+            (dest.into_owned(), Some(first.into_owned()))
         } else {
-            out.push(FileChange {
-                status,
-                score,
-                path: first,
-                orig_path: None,
-            });
-        }
+            (first.into_owned(), None)
+        };
+        out.push(FileChange {
+            status,
+            score,
+            path,
+            orig_path,
+        });
     }
     Ok(out)
 }
@@ -132,5 +128,35 @@ mod tests {
     fn garbage_status_is_an_error() {
         let bytes = z(&["zz", "path"]);
         assert!(parse_name_status(&bytes).is_err());
+    }
+
+    #[test]
+    fn empty_tokens_do_not_shift_the_status_and_paths() {
+        let bytes = z(&["", "R100", "", "old", "", "new", "", "M", "file", ""]);
+        assert_eq!(
+            parse_name_status(&bytes),
+            parse_name_status(&z(&["R100", "old", "new", "M", "file"])),
+        );
+    }
+
+    #[test]
+    fn invalid_utf8_is_lossy_in_both_paths_and_errors() {
+        let changes = parse_name_status(b"R100\0old\xff\0new\xfe\0").unwrap();
+        assert_eq!(changes[0].orig_path.as_deref(), Some("old\u{fffd}"));
+        assert_eq!(changes[0].path, "new\u{fffd}");
+        assert_eq!(
+            parse_name_status(b"R\xff\0old\0new\0"),
+            Err(NameStatusParseError("R\u{fffd}".to_string())),
+        );
+    }
+
+    #[test]
+    fn invalid_scores_report_the_whole_status_token() {
+        for status in ["R256", "R-1", "Rno"] {
+            assert_eq!(
+                parse_name_status(&z(&[status, "old", "new"])),
+                Err(NameStatusParseError(status.to_string())),
+            );
+        }
     }
 }

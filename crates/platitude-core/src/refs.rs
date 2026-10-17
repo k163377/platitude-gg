@@ -95,8 +95,12 @@ pub fn parse_refs(bytes: &[u8]) -> Vec<RefEntry> {
 
 fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
     let lossy = || String::from_utf8_lossy(line).into_owned();
-    let fields: Vec<&[u8]> = line.split(|b| *b == 0).collect();
-    if fields.len() != REFS_FIELDS {
+    let mut tokens = line.split(|b| *b == 0);
+    let mut fields = [&[][..]; REFS_FIELDS];
+    for field in &mut fields {
+        *field = tokens.next().ok_or_else(|| RefsParseError(lossy()))?;
+    }
+    if tokens.next().is_some() {
         return Err(RefsParseError(lossy()));
     }
     let name: crate::Name = String::from_utf8_lossy(fields[0]).into_owned().into();

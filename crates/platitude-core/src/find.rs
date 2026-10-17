@@ -25,27 +25,6 @@ pub struct Query {
     hex: bool,
 }
 
-/// The fields of one row a search can look at, all already in memory.
-///
-/// Prose and names are searched anywhere inside, identifiers only from
-/// their start.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Row<'a> {
-    /// Full object name in lowercase hex, as the row wears it. A row that
-    /// is not a commit (every worktree's row) wears git's all-zero id
-    /// and matches nothing at all.
-    pub oid_hex: &'a str,
-    /// The first line of the message; the description is not searched
-    /// (module note).
-    pub subject: &'a str,
-    /// The author, then whoever the message credits. Prose.
-    pub people: &'a [&'a str],
-    /// Their addresses. Identifiers.
-    pub addresses: &'a [&'a str],
-    /// Branches, tags and the HEAD marker — the row's chips. Names.
-    pub tokens: &'a [&'a str],
-}
-
 impl Query {
     /// Reads a typed line. `None` when there is nothing to search for:
     /// empty, or whitespace only — taken literally, whitespace would light
@@ -71,18 +50,28 @@ impl Query {
         self.hex && self.needle.len() < MIN_OID_PREFIX
     }
 
-    /// Whether this row is one of the answers.
-    pub fn matches(&self, row: &Row<'_>) -> bool {
-        // A worktree's row wears the all-zero id (`Row::oid_hex`),
-        // which would otherwise answer `0000`.
-        if Oid::hex_is_zero(row.oid_hex) {
+    /// Whether a row's displayed words answer the query. The subject,
+    /// people's names and ref tokens match anywhere; addresses match only
+    /// from their start. Iterators borrow the row's fields without copying
+    /// them into temporary lists, and stop at the first match.
+    pub fn matches<'a>(
+        &self,
+        oid_hex: &str,
+        subject: &str,
+        people: impl IntoIterator<Item = &'a str>,
+        addresses: impl IntoIterator<Item = &'a str>,
+        tokens: impl IntoIterator<Item = &'a str>,
+    ) -> bool {
+        // A worktree's row wears the all-zero id and matches nothing,
+        // including `0000` and its displayed subject.
+        if Oid::hex_is_zero(oid_hex) {
             return false;
         }
-        self.at_start_of(row.oid_hex)
-            || self.inside(row.subject)
-            || row.people.iter().any(|p| self.inside(p))
-            || row.addresses.iter().any(|a| self.starts(a))
-            || row.tokens.iter().any(|t| self.inside(t))
+        self.at_start_of(oid_hex)
+            || self.inside(subject)
+            || people.into_iter().any(|p| self.inside(p))
+            || addresses.into_iter().any(|a| self.starts(a))
+            || tokens.into_iter().any(|t| self.inside(t))
     }
 
     /// From the start, ignoring case.
@@ -130,6 +119,15 @@ mod tests {
 
     const OID: &str = "3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f40";
 
+    #[derive(Default)]
+    struct Row<'a> {
+        oid_hex: &'a str,
+        subject: &'a str,
+        people: &'a [&'a str],
+        addresses: &'a [&'a str],
+        tokens: &'a [&'a str],
+    }
+
     fn row<'a>(
         subject: &'a str,
         people: &'a [&'a str],
@@ -150,7 +148,44 @@ mod tests {
     }
 
     fn hits(query: &str, r: &Row<'_>) -> bool {
-        Query::new(query).is_some_and(|q| q.matches(r))
+        Query::new(query).is_some_and(|q| {
+            q.matches(
+                r.oid_hex,
+                r.subject,
+                r.people.iter().copied(),
+                r.addresses.iter().copied(),
+                r.tokens.iter().copied(),
+            )
+        })
+    }
+
+    #[test]
+    fn a_match_leaves_the_remaining_fields_unread() {
+        let unread = || std::iter::from_fn(|| -> Option<&str> { panic!("field was read") });
+        let query = Query::new("needle").expect("a query");
+        assert!(query.matches(OID, "needle", unread(), unread(), unread()));
+        assert!(query.matches(
+            OID,
+            "",
+            std::iter::once("needle").chain(unread()),
+            unread(),
+            unread(),
+        ));
+        assert!(query.matches(
+            OID,
+            "",
+            [],
+            std::iter::once("needle@example.com").chain(unread()),
+            unread(),
+        ));
+        assert!(query.matches(
+            OID,
+            "",
+            [],
+            [],
+            std::iter::once("topic/needle").chain(unread()),
+        ));
+        assert!(!query.matches(&"0".repeat(40), "needle", unread(), unread(), unread()));
     }
 
     #[test]

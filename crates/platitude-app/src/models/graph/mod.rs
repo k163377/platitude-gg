@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use platitude_core::Oid;
-use platitude_core::find::{Query, Row};
+use platitude_core::find::Query;
 use platitude_core::session::{LogRow, RelaidRow};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject, qobject};
 

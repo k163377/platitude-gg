@@ -8,21 +8,16 @@ impl GraphModel {
     /// never the marks beside them: an identicon code is a number, and
     /// searching the whole record would answer `12345` with somebody's face.
     pub(super) fn hits(query: &Query, item: &GraphRowItem) -> bool {
-        let mut people: Vec<&str> = vec![item.author.as_str()];
-        let mut addresses: Vec<&str> = vec![item.author_email.as_str()];
-        for mate in item.co_authors.iter() {
-            people.push(&mate.name);
-            addresses.push(&mate.email);
-        }
-        let tokens: Vec<&str> = item.labels.iter().map(|c| c.name.as_str()).collect();
         // `body` and `stash_ref` are withheld (`platitude-core::find`).
-        query.matches(&Row {
-            oid_hex: &item.oid_hex,
-            subject: &item.subject,
-            people: &people,
-            addresses: &addresses,
-            tokens: &tokens,
-        })
+        query.matches(
+            &item.oid_hex,
+            &item.subject,
+            std::iter::once(item.author.as_str())
+                .chain(item.co_authors.iter().map(|mate| mate.name.as_str())),
+            std::iter::once(item.author_email.as_str())
+                .chain(item.co_authors.iter().map(|mate| mate.email.as_str())),
+            item.labels.iter().map(|chip| chip.name.as_str()),
+        )
     }
 
     /// Sets `matched` on the rows already in the model and counts them,
@@ -85,6 +80,60 @@ mod tests {
 
     fn hits(text: &str, item: &GraphRowItem) -> bool {
         GraphModel::hits(&Query::new(text).expect("a query"), item)
+    }
+
+    #[test]
+    fn every_author_and_chip_is_searched_without_their_other_fields() {
+        use platitude_core::details::CoAuthor;
+        use platitude_core::session::{LabelKind, RefLabel};
+
+        let row = GraphRowItem {
+            oid_hex: "3f2a1b0cdeadbeef".into(),
+            author: "Ada Lovelace".into(),
+            author_email: "ada@example.com".into(),
+            avatar_url: "file:///hidden-picture.png".into(),
+            body: "hidden description".into(),
+            co_authors: crate::encode::mates_of(&[
+                CoAuthor {
+                    name: "Grace Hopper".into(),
+                    email: "grace@example.com".into(),
+                },
+                CoAuthor {
+                    name: "Margaret Hamilton".into(),
+                    email: "margaret@example.com".into(),
+                },
+            ]),
+            labels: crate::encode::chips_of(
+                &["topic/first", "topic/last"].map(|name| RefLabel {
+                    text: name.into(),
+                    kind: LabelKind::LocalBranch,
+                    has_remote: false,
+                    is_head: false,
+                    here: true,
+                    remote: "hidden-remote".into(),
+                    held_elsewhere: false,
+                    locked: false,
+                    main: false,
+                }),
+                &Default::default(),
+            ),
+            ..GraphRowItem::default()
+        };
+        for query in [
+            "lovelace",
+            "ada@",
+            "hopper",
+            "grace@",
+            "hamilton",
+            "margaret@",
+            "first",
+            "last",
+        ] {
+            assert!(hits(query, &row), "{query}");
+        }
+        for query in ["example.com", "hidden", "no match"] {
+            assert!(!hits(query, &row), "{query}");
+        }
     }
 
     #[test]
