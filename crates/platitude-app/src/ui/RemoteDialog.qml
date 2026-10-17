@@ -77,7 +77,7 @@ AppDialog {
             wrapMode: Text.Wrap
             color: Theme.textSecondary
             // Shared by the add and correction forms (デザイン規約 §リモートを書き留める).
-            text: qsTr("Paste the URL of the repository on your host.")
+            text: qsTr("Enter the URL of the repository on your host.")
         }
 
         // A corrected remote keeps its name: renaming belongs to the left menu.

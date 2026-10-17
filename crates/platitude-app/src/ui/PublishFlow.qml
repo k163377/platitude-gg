@@ -284,7 +284,7 @@ Item {
     Binding {
         target: publishFlow.graphPane
         property: "askDetail"
-        value: !publishFlow.publishFilled ? qsTr("Pick where it goes.")
+        value: !publishFlow.publishFilled ? qsTr("Enter where it goes.")
                : !publishFlow.publishChecked
                  ? qsTr("Asking %1 what it has…").arg(publishFlow.publishRemote)
                  // Any failure of the ask, an answer of a refusal included: git's words are in the log.

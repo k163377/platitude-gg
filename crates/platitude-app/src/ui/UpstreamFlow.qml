@@ -196,10 +196,12 @@ Item {
     Binding {
         target: upstreamFlow.graphPane
         property: "askDetail"
-        // The unset question says it all in its heading: what an upstream decides goes with the word.
+        // The unset question says it all in its heading: what an upstream decides goes with the word. Empty, `Enter`:
+        // the name is typed, pasted or picked from the box's list alike (デザイン規約 §欄への指図).
         value: upstreamFlow.unsetting ? ""
                : !upstreamFlow.filled
-               ? qsTr("Pick the upstream.")
+               //: The name box is empty; a name typed, pasted or picked from its list answers.
+               ? qsTr("Enter the upstream.")
                : !upstreamFlow.targetIsThere
                  //: %1 is a remote branch, e.g. origin/main.
                  ? qsTr("%1 has not been fetched here; a push sends this branch there.")
