@@ -18,16 +18,46 @@ pub fn literal_pathspec(path: &str) -> String {
 
 /// Quotes an argument the way a POSIX shell would need it, so a command
 /// read out of a log can be pasted back unchanged.
+///
+/// The result carries no control character: the command log draws a
+/// command as one row and copies it as one line, its columns cut by tabs
+/// (デザイン規約 §git が言ったことを読む場所). An argument holding one — a
+/// `-m` message of several paragraphs, a tab — is spelled in `$'…'` with
+/// the character escaped (POSIX.1-2024 dollar-single-quotes, which bash and
+/// zsh read); `'…'` would carry it raw.
 pub(super) fn shell_quote(arg: &str) -> std::borrow::Cow<'_, str> {
     let plain = !arg.is_empty()
         && arg.bytes().all(|b| {
             b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'/' | b'.' | b'=' | b':' | b'+')
         });
     if plain {
-        std::borrow::Cow::Borrowed(arg)
-    } else {
-        std::borrow::Cow::Owned(format!("'{}'", arg.replace('\'', r"'\''")))
+        return std::borrow::Cow::Borrowed(arg);
     }
+    if !arg.chars().any(char::is_control) {
+        return std::borrow::Cow::Owned(format!("'{}'", arg.replace('\'', r"'\''")));
+    }
+    let mut spelled = String::from("$'");
+    for c in arg.chars() {
+        match c {
+            '\n' => spelled.push_str(r"\n"),
+            '\t' => spelled.push_str(r"\t"),
+            '\r' => spelled.push_str(r"\r"),
+            '\\' | '\'' => {
+                spelled.push('\\');
+                spelled.push(c);
+            }
+            // Three octal digits a byte: a shorter escape would take a
+            // digit that follows it.
+            c if c.is_control() => {
+                for byte in c.encode_utf8(&mut [0; 4]).bytes() {
+                    spelled.push_str(&format!("\\{byte:03o}"));
+                }
+            }
+            c => spelled.push(c),
+        }
+    }
+    spelled.push('\'');
+    std::borrow::Cow::Owned(spelled)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

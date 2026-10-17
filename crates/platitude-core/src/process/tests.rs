@@ -82,6 +82,31 @@ fn describe_quotes_what_a_shell_would_split_or_read() {
 }
 
 #[test]
+fn a_message_of_several_paragraphs_stays_on_the_one_line_of_the_log() {
+    let command =
+        GitCommand::new().args(["stash", "push", "--message", "Two paragraphs\n\nin one row"]);
+    assert_eq!(
+        command.describe(),
+        r"git stash push --message $'Two paragraphs\n\nin one row'"
+    );
+}
+
+#[test]
+fn control_characters_are_escaped_and_so_is_what_dollar_quotes_read() {
+    // A tab is where the copied line cuts its columns.
+    assert_eq!(shell_quote("a\tb"), r"$'a\tb'");
+    assert_eq!(shell_quote("it's\r\n"), r"$'it\'s\r\n'");
+    assert_eq!(shell_quote("C:\\dir\n"), r"$'C:\\dir\n'");
+    // Three digits, so the `1` after the escape stays a character.
+    assert_eq!(shell_quote("\u{1b}1"), r"$'\0331'");
+    // A C1 control is two bytes, each escaped.
+    assert_eq!(shell_quote("a\u{85}b"), r"$'a\302\205b'");
+    assert_eq!(shell_quote("行\n"), r"$'行\n'");
+    // Without a control character the plain quotes stay.
+    assert_eq!(shell_quote("it's"), r"'it'\''s'");
+}
+
+#[test]
 fn the_full_form_spells_out_what_is_always_applied() {
     // `new()` may spell the program as a path; this is about the shape
     // around it.

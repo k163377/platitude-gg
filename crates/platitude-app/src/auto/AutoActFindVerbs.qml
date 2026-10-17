@@ -412,18 +412,33 @@ Item {
     // PGG_AUTO_ACT=commands-select / commands-copy: a drag from the head of the first row to the end of the last —
     // all three columns and more than one row — then, for `-copy`, Ctrl+C. **`perRow=` is the claim**: one clipboard
     // line per row. Tab-led lines are not counted: they are git's words under a failure, and which commands fail is
-    // not the run's (a container reading the tree's real worktree gets `not a git repository`).
+    // not the run's (a container reading the tree's real worktree gets `not a git repository`). One of the rows is a
+    // command whose argument spans lines — a stash message of two paragraphs — and it copies as one line like any
+    // other; that it is drawn as one is the picture's to show.
     //
-    // Behind the write barrier: the two writes that fill the log are still queued when this starts. Everything is
-    // read in the branch that acts (rules/app-ui.md §UI 自動化).
+    // Behind the write barrier, which holds the first write asked after it: the two writes that fill the log are
+    // still queued when this starts. The stash is pressed once their rows are in and nothing runs — the queue serves
+    // it after them — and the barrier armed for it holds it in turn. Everything is read in the branch that acts
+    // (rules/app-ui.md §UI 自動化).
     SampleTimer {
         id: commandsPickTimer
+        /// 0 = the stage and unstage are out; 1 = the stash is out.
+        property int step: 0
         onTriggered: {
+            Awaited.at("commands_pick", commandsPickTimer.step === 0 ? "log" : "stash")
             if (!driver.wroteAndSettled())
                 return
             // Two rows: the write barrier alone can let a tick through while an opening read is the only row.
             if (!page.commandsShown || page.pageCommands.running || page.pageCommands.rowsHeld() < 2)
                 return
+            if (commandsPickTimer.step === 0) {
+                if (driver.pressWrite("stash", () => {
+                    repoTab.pushStash("Two paragraphs\n\nin one row of the log")
+                    return true
+                }))
+                    commandsPickTimer.step = 1
+                return
+            }
             commandsPickTimer.stop()
             // The model's count: the panel's `(N)` is the view's, a frame behind in the tick a press lands in.
             const rows = page.pageCommands.rowsHeld()
