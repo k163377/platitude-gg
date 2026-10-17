@@ -14,7 +14,7 @@ use super::api::CAPTION_RUNS;
 mod frame;
 mod window;
 
-pub(super) use frame::{set_caption_strips, take_frame_hit_test};
+pub(super) use frame::{set_caption_strips, set_frame_yielded, take_frame_hit_test};
 pub(super) use window::{
     fit_to_work_area, keep_system_gestures, minimize, set_maximized, square_corners,
 };

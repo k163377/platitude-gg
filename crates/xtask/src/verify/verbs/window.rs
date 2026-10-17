@@ -239,9 +239,10 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "tab_open_moved_on travelled=false stood=true ask=false",
     },
-    // The ☰'s card, standing. `yield=true`: the band's empty run is the
-    // platform's caption, and while the card is up it has to stop being
-    // that or every press there is swallowed and the card never goes down.
+    // The ☰'s card, standing. `yield=true`: the band's empty runs and the
+    // window's edges are the platform's, and while the card is up they
+    // have to stop being that or every press there is swallowed and the
+    // card never goes down (`WindowChrome.frameYielded`).
     Verb {
         name: "app-menu",
         when: &[],
@@ -289,10 +290,10 @@ pub(super) const TABLE: &[Verb] = &[
     //
     // `lit=true turned=true` on every door: the name the card hangs off
     // stays washed with its chevron turned down while the card stands.
-    // `yield=true` is the band's grab runs handed back to the scene while
-    // the card stands (`WindowChrome.captionYielded`) — otherwise the
-    // platform takes a press on them and the card stands through the
-    // click meant to close it.
+    // `yield=true` is the window's frame handed back to the scene while
+    // the card stands (`WindowChrome.frameYielded`) — otherwise the
+    // platform takes a press on the grab runs or the edges and the card
+    // stands through the click meant to close it.
     Verb {
         name: "ops-stand",
         when: &[],
@@ -367,7 +368,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The mark pressed a second time: a card reopened by that press and one
     // never closed are the same photograph, so judged is the card down with
-    // the run back in the platform's hands.
+    // the frame back in the platform's hands.
     Verb {
         name: "app-menu-reclick",
         when: &[],

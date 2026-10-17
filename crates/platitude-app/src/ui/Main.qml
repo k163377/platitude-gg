@@ -129,6 +129,9 @@ ApplicationWindow {
             root.everAway = true
             // A press in another window is one this one never hears (`Hand.acted`).
             Hand.acted()
+            // Whatever took the window away — that press, the keyboard, another program — the menus go with it, as a
+            // platform menu does.
+            OutsidePress.closeAll()
         } else if (root.everAway) {
             root.focusEpoch++
         }

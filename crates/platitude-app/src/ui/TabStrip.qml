@@ -52,8 +52,7 @@ Item {
     /// Band the tabs may not grow into, and the run itself for `Main` to measure in scene coordinates.
     readonly property real grabRun: tabs.grabRun
     readonly property Item grabRunItem: grabArea
-    /// Whether the ☰'s card is open: the grab run stops being caption meanwhile, so a press on it reaches the scene and
-    /// closes the card (`WindowChrome.captionYielded`).
+    /// Whether the ☰'s card is open (`TopBar.appMenuOpen`).
     readonly property bool appMenuOpen: menuButton.menuOpen
 
     /// Automation (`tab-pin` / `tab-pin-go`): the stand-in's state, which a picture of a scrolled strip cannot tell
@@ -536,8 +535,8 @@ Item {
         text: "x"
         font.pixelSize: Theme.fontMd
     }
-    // The empty band past the last tab. `winframe::hit_test` answers HTCAPTION here, so presses never reach the scene;
-    // the scene only says where it is.
+    // The empty band past the last tab. `winframe::hit_test` answers HTCAPTION here, so presses never reach the scene
+    // unless a menu has the frame handed back (`WindowChrome.frameYielded`); the scene only says where it is.
     Item {
         id: grabArea
         x: plusButton.x + plusButton.width

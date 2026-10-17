@@ -291,11 +291,12 @@ pub(super) const TABLE: &[Verb] = &[
     // The card's avatar list, the one of its four verbs that wants a line:
     // the other three wait on the state itself. The list is a popup in
     // overlay.png, judged as `commit-menu` is. Three popups: the modal
-    // card's dimmer, the card, and the list inside it.
+    // card's dimmer, the card, and the list inside it — which a press
+    // outside closes, so the frame is the scene's (`yield=true`).
     Verb {
         name: "avatar-combo",
         when: &[],
-        plain: "overlay saved=true popups=3",
+        plain: "overlay saved=true popups=3 yield=true",
     },
     // The picture filed against the details' author: a refused one still
     // completes the run, with the identicon in the picture.

@@ -345,6 +345,13 @@ impl AppBackend {
         crate::winframe::set_caption_strips([(tabs_x0, tabs_x1), (gap_x0, gap_x1)], bottom);
     }
 
+    /// Hands the whole frame to the scene, edges and strips alike, while
+    /// a menu that a press outside closes stands (`winframe::set_frame_yielded`).
+    #[qslot]
+    fn set_frame_yielded(&self, yielded: bool) {
+        crate::winframe::set_frame_yielded(yielded);
+    }
+
     /// Maximises or restores through the platform: Qt maximises a
     /// frameless window by resizing it, leaving nothing to restore
     /// (`winframe::set_maximized`).

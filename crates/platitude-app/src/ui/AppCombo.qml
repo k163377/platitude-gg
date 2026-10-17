@@ -192,11 +192,16 @@ ComboBox {
     onHasListChanged: if (!combo.hasList) combo.popup.close()
 
     popup: Popup {
+        id: list
+        // Written in while it stands: some presses outside never reach the scene to close it (`OutsidePress`).
+        readonly property bool inOutsidePress: OutsidePress.counts(list.visible, list.closePolicy)
         y: combo.height
         width: combo.width
         padding: Theme.spaceXs
         // The default policy reads the field's own press as outside, so a second press could never close the list.
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        onInOutsidePressChanged: OutsidePress.stand(list, list.inOutsidePress)
+        Component.onDestruction: OutsidePress.stand(list, false)
         // As every popup base: a popup inherits no tip policy from the window (`Main.qml`).
         ToolTip.policy: ToolTip.Manual
         // Also reached by the control's own press. Picking only, the arrows start from the value; on an editable list

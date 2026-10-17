@@ -74,7 +74,8 @@ pub fn fit_to_work_area(screen: &str) -> bool {
 /// Takes `WM_NCHITTEST` away from Qt for the windows that are up: every
 /// point is client except the resize borders and the strips
 /// `set_caption_strips` describes, which get the platform's own caption
-/// behaviour (drag, snap, double-click, window menu).
+/// behaviour (drag, snap, double-click, window menu) — those too while
+/// `set_frame_yielded` holds.
 ///
 /// Qt's own answer (`QWindowsWindow::handleNonClientHitTest`, 6.10–6.12)
 /// synthesises presses into the scene from a `GetAsyncKeyState` poll; a
@@ -104,3 +105,15 @@ pub fn set_caption_strips(runs: [(f64, f64); CAPTION_RUNS], bottom: f64) {
 /// The band stretches answered as caption: the empty run past the last
 /// tab, and the seam before the window's own buttons.
 pub const CAPTION_RUNS: usize = 2;
+
+/// Answers every point as client while set — the resize borders and the
+/// caption strips too, whose presses the platform takes and the scene
+/// never hears. Set while a menu a press outside closes is standing, so
+/// a press there closes it; the window gives up its drag, snap and edge
+/// resizing for as long.
+pub fn set_frame_yielded(yielded: bool) {
+    #[cfg(windows)]
+    win32::set_frame_yielded(yielded);
+    #[cfg(not(windows))]
+    let _ = yielded;
+}

@@ -31,18 +31,18 @@ Item {
         else
             chrome.window.visibility = Window.Minimized
     }
-    /// Whether the grab-runs are handed back to the scene. A press on them goes to the platform (HTCAPTION) and the
-    /// scene hears nothing, so a card that closes on an outside press would survive clicks there; while one is up
-    /// the runs are client area, and the band gives up drag, snap and the double-click.
+    /// Whether the frame is handed back to the scene — the grab-runs and the resize edges. A press on them goes to the
+    /// platform (HTCAPTION, HTLEFT …) and the scene hears nothing, so a menu that closes on an outside press would
+    /// survive clicks there; while one stands every point is client area, and the window gives up drag, snap, the
+    /// double-click and edge resizing.
     ///
-    /// Only cards that close on an outside press (the ☰'s, `TopBar`'s `standMenu` / `branchMenu`) — a modal dialog
-    /// has nothing to close, and would only make the window undraggable.
-    readonly property bool captionYielded:
-        chrome.topBar.appMenuOpen || chrome.topBar.standMenuOpen || chrome.topBar.branchMenuOpen
-    onCaptionYieldedChanged: chrome.reportCaptionStrip()
+    /// Only the menus and lists that close on an outside press, which write themselves in (`OutsidePress`) — a modal
+    /// dialog has nothing to close, and would only make the window undraggable.
+    readonly property bool frameYielded: OutsidePress.any
+    onFrameYieldedChanged: AppBackend.setFrameYielded(chrome.frameYielded)
 
-    /// Automation (`PGG_AUTO_ACT=app-menu`): the run past the tabs as last sent, `none` while yielded — no screenshot
-    /// shows which side owns it. It stands for both runs, which move together.
+    /// Automation (`PGG_AUTO_ACT=app-menu`): the run past the tabs as last sent, `none` before the first — no
+    /// screenshot shows where the hit test was told it is. It stands for both runs, which move together.
     property string sentStrip: "none"
 
     /// Tells the hit test where the band's grab-runs are, in scene coordinates. Called on the strip's layout changes
@@ -51,13 +51,6 @@ Item {
     function reportCaptionStrip() {
         if (!chrome.window.captionMerged || chrome.topBar.grabRunItem === null)
             return
-        // Empty runs say "no caption": the hit test asks `x1 > x0` of each (`winframe::hit_test`). Both go, since
-        // the seam closes the card too.
-        if (chrome.captionYielded) {
-            chrome.sentStrip = "none"
-            AppBackend.setCaptionStrips(0, 0, 0, 0, 0)
-            return
-        }
         const run = chrome.topBar.grabRunItem
         const at = run.mapToItem(null, 0, 0)
         const gap = chrome.topBar.seamRunItem

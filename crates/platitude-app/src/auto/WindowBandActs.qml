@@ -271,8 +271,8 @@ Item {
                 + " tier=" + topBar.standDoor
                 + " lit=" + (branchDoor ? topBar.branchNameLit : topBar.repoNameLit)
                 + " turned=" + (branchDoor ? topBar.branchNameTurned : topBar.repoNameTurned)
-                // Grab runs handed back, so a press on them closes the card (`WindowChrome.captionYielded`).
-                + " yield=" + chrome.captionYielded
+                // The frame handed back, so a press on the grab runs closes the card (`WindowChrome.frameYielded`).
+                + " yield=" + chrome.frameYielded
                 + " folder=" + topBar.branchFolderOpen
                 + " repos=" + topBar.standRepoRows
                 // The worktrees the left menu shows — the other half of `worktrees=` under a filter.
@@ -284,8 +284,9 @@ Item {
     }
 
     // PGG_AUTO_ACT=app-menu / app-menu-reclick: the ☰ pressed once and left standing, or pressed twice. Numbers too:
-    // a reopened card frames like one never closed, and who owns the grab run is not drawn. `strip=none` is the run
-    // handed back to the scene (`WindowChrome.captionYielded`); with no merged title bar there is no strip either way.
+    // a reopened card frames like one never closed, and who owns the grab run is not drawn. `yield=true` is the frame
+    // handed back to the scene (`WindowChrome.frameYielded`); `strip=` is where the run stands for when it is not, `none`
+    // with no merged title bar.
     SampleTimer {
         id: appMenuActTimer
         running: Harness.autoAct === "app-menu" || Harness.autoAct === "app-menu-reclick"
@@ -314,7 +315,7 @@ Item {
             stop()
             Harness.report(
                 "app_menu open=" + topBar.appMenuOpen
-                + " yield=" + chrome.captionYielded
+                + " yield=" + chrome.frameYielded
                 + " strip=" + chrome.sentStrip
                 + " merged=" + window.captionMerged)
             window.finishAutoAct()

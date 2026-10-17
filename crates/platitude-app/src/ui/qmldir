@@ -8,6 +8,7 @@ singleton WordFace 1.0 WordFace.qml
 singleton Hand 1.0 Hand.qml
 singleton MiddleHand 1.0 MiddleHand.qml
 singleton KeyMenu 1.0 KeyMenu.qml
+singleton OutsidePress 1.0 OutsidePress.qml
 singleton NavFacts 1.0 NavFacts.qml
 ActionButton 1.0 ActionButton.qml
 ActionButtonLabel 1.0 ActionButtonLabel.qml

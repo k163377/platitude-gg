@@ -15,6 +15,8 @@ Item {
     property Loader sceneMirror
     property Item mainUi
     property Item gate
+    /// Whose frame the popups in the picture stand over: `yield=` on the overlay's line (`WindowChrome.frameYielded`).
+    property WindowChrome chrome
 
     property bool pageActClaimed: false
     property bool shotPending: false
@@ -143,16 +145,18 @@ Item {
     }
 
     /// The popups' picture from the refreshed texture. `popups=` counts what the overlay held, so a blank overlay.png
-    /// means nothing was open.
+    /// means nothing was open; `yield=` is whether those popups had the window's frame handed to the scene, so a press
+    /// on the band's grab runs or the edges would reach them — true for a menu or list a press outside closes.
     function grabOverlay() {
         if (!driver.overlayAsked || driver.overlayGrabbed)
             return
         driver.overlayGrabbed = true
         const mirror = overlayMirror.item
         const popups = mirror.sourceItem ? mirror.sourceItem.children.length : 0
+        const yielded = driver.chrome !== null && driver.chrome.frameYielded
         const overlayOk = mirror.grabToImage(function (res) {
             const saved = res.saveToFile(Harness.shotDir + "/overlay.png")
-            console.warn("overlay saved=" + saved + " popups=" + popups)
+            console.warn("overlay saved=" + saved + " popups=" + popups + " yield=" + yielded)
             driver.partDone()
         })
         if (!overlayOk) {

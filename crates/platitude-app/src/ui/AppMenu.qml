@@ -162,6 +162,11 @@ Menu {
         }
     }
 
+    // Written in while it stands: some presses outside never reach the scene to close it (`OutsidePress`).
+    readonly property bool inOutsidePress: OutsidePress.counts(appMenu.visible, appMenu.closePolicy)
+    onInOutsidePressChanged: OutsidePress.stand(appMenu, appMenu.inOutsidePress)
+    Component.onDestruction: OutsidePress.stand(appMenu, false)
+
     // The chips' shared column, as wide as the widest chip on offer, a chip that ends its row included
     // (デザイン規約 §git 用語のコード表記「メニュー内のチップは 1 本の列を共有する」). Settled as the menu opens, so a
     // chip that changes while the card stands (`branch -D`) moves no row's words.

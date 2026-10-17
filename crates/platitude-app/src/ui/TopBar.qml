@@ -188,8 +188,7 @@ Rectangle {
     /// The two runs themselves, for `Main` to measure in scene coordinates.
     readonly property Item grabRunItem: tabStrip.grabRunItem
     readonly property Item seamRunItem: seamRun
-    /// Whether the ☰'s card is standing (`TabStrip`). The runs are the parts of the band a press never reaches, so it
-    /// hands them back to the scene while the card is up (`WindowChrome.captionYielded`).
+    /// Whether the ☰'s card is standing (`TabStrip`), for automation (`PGG_AUTO_ACT=app-menu`).
     readonly property bool appMenuOpen: tabStrip.appMenuOpen
 
     /// The narrowest this chrome can be laid out at — one of the two numbers the window's floor is the larger of

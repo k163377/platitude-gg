@@ -71,15 +71,19 @@ pub(super) const TABLE: &[Verb] = &[
     // mirror refreshed over an empty overlay passes. Any verb whose
     // subject is a menu, dialog or tooltip can be judged this way.
     // `reset-menu` counts two: the submenu is a popup of its own.
+    // `yield=true`: the window's frame is the scene's while the menu
+    // stands (`WindowChrome.frameYielded`) — otherwise the platform takes
+    // a press on the band's grab runs or the edges, and the menu stands
+    // through the click meant to close it.
     Verb {
         name: "commit-menu",
         when: &[],
-        plain: "overlay saved=true popups=1",
+        plain: "overlay saved=true popups=1 yield=true",
     },
     Verb {
         name: "reset-menu",
         when: &[],
-        plain: "overlay saved=true popups=2",
+        plain: "overlay saved=true popups=2 yield=true",
     },
     // The menu's two nested cards (デザイン規約 §メニュー の入れ子),
     // judged as above. `branch-card` also proves a graph row offers what
@@ -88,12 +92,12 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "branch-card",
         when: &[],
-        plain: "overlay saved=true popups=2",
+        plain: "overlay saved=true popups=2 yield=true",
     },
     Verb {
         name: "tag-card",
         when: &[],
-        plain: "overlay saved=true popups=2",
+        plain: "overlay saved=true popups=2 yield=true",
     },
     // The graph row's menu raised while a commit is still out (デザイン規約
     // §メニュー). A row that went is a row nobody can tell from one the

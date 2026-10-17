@@ -59,10 +59,16 @@ thread_local! {
     /// client x0, so only the DPI scale is owed, taken fresh per hit test.
     static STRIPS: Cell<([(f64, f64); CAPTION_RUNS], f64)> =
         const { Cell::new(([(0.0, 0.0); CAPTION_RUNS], 0.0)) };
+    /// Every point is client while set (`set_frame_yielded`).
+    static YIELDED: Cell<bool> = const { Cell::new(false) };
 }
 
 pub(crate) fn set_caption_strips(runs: [(f64, f64); CAPTION_RUNS], bottom: f64) {
     STRIPS.set((runs, bottom));
+}
+
+pub(crate) fn set_frame_yielded(yielded: bool) {
+    YIELDED.set(yielded);
 }
 
 pub(crate) fn take_frame_hit_test() {
@@ -155,8 +161,12 @@ fn screen_point(lparam: isize) -> (i32, i32) {
 }
 
 /// The borders mirror what Qt would have answered: gone while
-/// maximised, at the window's own DPI otherwise.
+/// maximised, at the window's own DPI otherwise. Asked first whether
+/// the frame is yielded, which makes every point client.
 fn hit_test(window: *mut c_void, lparam: isize) -> isize {
+    if YIELDED.get() {
+        return HTCLIENT;
+    }
     let (x, y) = screen_point(lparam);
     let mut rect = Rect::default();
     // SAFETY: `window` is the live handle this message arrived on,
@@ -241,5 +251,17 @@ fn open_system_menu(window: *mut c_void, x: i32, y: i32) {
         if chosen != 0 {
             PostMessageW(window, WM_SYSCOMMAND, chosen as usize, 0);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Asked before the window is, so the answer needs no handle.
+    #[test]
+    fn a_yielded_frame_answers_every_point_as_client() {
+        set_frame_yielded(true);
+        assert_eq!(hit_test(std::ptr::null_mut(), 0), HTCLIENT);
     }
 }

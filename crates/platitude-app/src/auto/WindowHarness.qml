@@ -159,6 +159,7 @@ Item {
         sceneMirror: shotMirrors.sceneMirror
         mainUi: harness.mainUi
         gate: harness.gate
+        chrome: harness.chrome
         // `armed`: a run that ends there had its frame withheld.
         censusState: census.armed ? "armed" : census.waiting ? "waiting" : census.settled ? "settled" : "arriving"
         onAppPictured: census.report()

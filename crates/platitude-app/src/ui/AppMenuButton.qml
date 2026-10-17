@@ -12,8 +12,7 @@ ToolButton {
     /// The active tab's RepoPage; null while no tab is open.
     property var curPage: null
 
-    /// The card is standing: the band's grab run stops being the caption meanwhile, so a press there reaches the scene
-    /// and closes it (`WindowChrome.captionYielded`).
+    /// The card is standing.
     readonly property bool menuOpen: appMenu.opened
 
     signal openRepositoryRequested()
