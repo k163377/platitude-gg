@@ -296,10 +296,12 @@ pub async fn set_upstream(
 ///
 /// The keys by name, not `branch --unset-upstream <name>`: that resolves
 /// `HEAD` to the branch checked out, so a `[branch "HEAD"]` section would
-/// cost the current branch its upstream. `.merge` goes first: left alone,
-/// it is measured against the default remote, while `.remote` alone names
-/// no branch. `branch.<name>.pushRemote` stays: it names a remote, not a
-/// branch over there.
+/// cost the current branch its upstream. git counts an upstream only with
+/// both keys (`remote.c` `set_merge` drops a merge without a remote), so a
+/// stop between the two leaves none either way. A key not in this file is
+/// git's to refuse (`--unset-all` exits 5), and the write fails as it said.
+/// `branch.<name>.pushRemote` stays: it names a remote, not a branch over
+/// there.
 pub async fn unset_upstream(
     executor: &GitExecutor,
     workdir: &Path,
