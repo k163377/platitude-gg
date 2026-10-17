@@ -30,6 +30,7 @@ Item {
             width: 340
             code: "--continue"
             text: "Carry on with what is staged"
+            note: "conflicts stay"
         }
         OpExitRow {
             id: held
@@ -37,6 +38,7 @@ Item {
             width: 340
             code: "--abort"
             text: "Undo it all and go back"
+            note: "nothing in it"
             holdPresses: root.presses
         }
     }
@@ -59,6 +61,7 @@ Item {
         when: windowShown
 
         function init() {
+            held.waiting = false
             ancestor.enabled = true
             plain.enabled = true
             held.enabled = true
@@ -147,6 +150,45 @@ Item {
             keyClick(Qt.Key_Return)
             compare(plainPicks.count, 0)
             compare(heldPicks.count, 0)
+        }
+
+        /// The label inside `item` that paints `words`, or null.
+        function labelSaying(item, words) {
+            for (const child of item.children) {
+                if (child.text === words && child.color !== undefined)
+                    return child
+                const found = labelSaying(child, words)
+                if (found !== null)
+                    return found
+            }
+            return null
+        }
+        /// The colour a row's tag is painted in — the label's, not the property it is meant to read.
+        function tagInk(row) {
+            const label = labelSaying(row, row.note)
+            verify(label !== null, "a label painting " + row.note)
+            return label.color
+        }
+
+        /// The tag is one of the row's words: turned off, it greys with them (デザイン規約 §無効).
+        function test_a_row_turned_off_greys_its_tag() {
+            compare(tagInk(plain), Theme.textSecondary)
+            plain.enabled = false
+            compare(tagInk(plain), Theme.textMuted)
+        }
+
+        /// Off while its own work runs over the full fill, the row is not greyed: the words stay lifted, and the tag
+        /// keeps its own colour.
+        function test_a_row_off_over_its_own_fill_keeps_its_tag() {
+            // The work goes out at the last press and is still out: the full fill stands whatever the floor does.
+            held.waiting = true
+            held.forceActiveFocus()
+            for (let i = 0; i < root.presses; i++)
+                keyClick(Qt.Key_Space)
+            compare(heldPicks.count, 1)
+            held.enabled = false
+            tryVerify(() => held.lifted, undefined, "the full fill stands while its work runs")
+            compare(tagInk(held), Theme.textSecondary)
         }
 
         function test_a_row_turned_off_is_not_in_the_tab_order() {

@@ -27,6 +27,9 @@ MenuItem {
 
     /// A short warning tag after the row's words ("already pushed"); the row still runs on click.
     property string note: ""
+    /// That tag's colour: the warning, grey with the words on a row that cannot be chosen — it is one of the row's
+    /// words, and a lit tag in a grey row reads as the part that still works (デザイン規約 §無効).
+    readonly property color noteColor: menuItem.greyed ? Theme.textMuted : Theme.warning
 
     /// A second name after the row's own — the worktree a tab is in, drawn the way the tab draws it
     /// (デザイン規約 §タブの所作). Empty draws none.
@@ -249,7 +252,7 @@ MenuItem {
     font.pixelSize: Theme.fontMd
     Accessible.description: menuItem.holdPresses > 0 ? Words.pressToActivate(menuItem.holdPresses) : ""
 
-    // The one colour every word in the row follows, so the chip cannot disagree with its sentence. A held row wears
+    // The one colour the row's chip and sentence follow, so the chip cannot disagree with its sentence. A held row wears
     // its tone before it is touched at all (デザイン規約 §状態).
     readonly property color wordColor: menuItem.greyed ? Theme.textMuted
                                      : menuItem.holding ? Theme.textOnAccent
@@ -510,7 +513,7 @@ MenuItem {
             text: menuItem.note
             verticalAlignment: Text.AlignVCenter
             rightPadding: menuItem.subMenu && menuItem.arrow ? menuItem.arrow.width + Theme.spaceXs : 0
-            color: Theme.warning
+            color: menuItem.noteColor
             font.pixelSize: Theme.fontSm
         }
     }

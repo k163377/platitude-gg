@@ -116,6 +116,36 @@ Item {
             compare(card.deleteBothItem.blockedReason, "Differs from origin/feature/topic-a")
         }
 
+        /// The label inside `item` that paints `words`, or null.
+        function labelSaying(item, words) {
+            for (const child of item.children) {
+                if (child.text === words && child.color !== undefined)
+                    return child
+                const found = labelSaying(child, words)
+                if (found !== null)
+                    return found
+            }
+            return null
+        }
+        /// The colour a row's tag is painted in — the label's, not the property it is meant to read.
+        function tagInk(row) {
+            const label = labelSaying(row, row.note)
+            verify(label !== null, "a label painting " + row.note)
+            return label.color
+        }
+
+        /// A tag is one of the row's words: on the row out of reach it greys with them, and stays the warning on the
+        /// one that can still be pressed (デザイン規約 §無効).
+        function test_a_row_out_of_reach_greys_its_tag() {
+            root.standOn({ offers: root.drifted, remoteDrifted: true, merged: "no" })
+            verify(card.deleteBothItem.blocked)
+            compare(card.deleteBothItem.note, "not merged")
+            compare(tagInk(card.deleteBothItem), Theme.textMuted)
+            verify(!card.deleteItem.blocked)
+            compare(card.deleteItem.note, "not merged")
+            compare(tagInk(card.deleteItem), Theme.warning)
+        }
+
         function test_a_branch_nothing_holds_back_offers_all_three() {
             root.standOn({})
             for (const row of [card.deleteItem, card.deleteRemoteItem, card.deleteBothItem]) {

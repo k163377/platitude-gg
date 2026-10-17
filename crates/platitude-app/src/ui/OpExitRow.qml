@@ -66,13 +66,17 @@ Item {
     implicitHeight: opRow.visible ? Theme.rowHeight + rowLabel.implicitHeight - opRow.lineHeight : 0
     Accessible.description: opRow.holdPresses > 0 ? Words.pressToActivate(opRow.holdPresses) : ""
 
-    // One colour for every word, so the chip cannot disagree with its sentence; a confirmed row wears its cost before
-    // it is touched (デザイン規約 §状態). Over the fill the words lift, the wait included: the row goes off while its
-    // own work runs.
-    readonly property color wordColor: opRow.holding && (opRow.enabled || holdDrive.done) ? Theme.textOnAccent
+    /// Over the fill the words lift, the wait included: the row goes off while its own work runs.
+    readonly property bool lifted: opRow.holding && (opRow.enabled || holdDrive.done)
+    // One colour for the chip and the sentence, so the chip cannot disagree with its sentence; a confirmed row wears
+    // its cost before it is touched (デザイン規約 §状態).
+    readonly property color wordColor: opRow.lifted ? Theme.textOnAccent
                                      : !opRow.enabled ? Theme.textMuted
                                      : opRow.armedPresses > 0 ? opRow.holdTone
                                      : Theme.textPrimary
+    /// The tag after the words: `textSecondary`, grey where the words grey — a lit tag in a grey row reads as the part
+    /// that still works (デザイン規約 §無効).
+    readonly property color noteColor: !opRow.lifted && !opRow.enabled ? Theme.textMuted : Theme.textSecondary
     /// The row cannot be pressed: grey words, and the press mark keeps its tone a step down, as a menu row's does
     /// (`AppMenuItem.holdOff`, which says why a fill keeps it out).
     readonly property bool holdOff: !opRow.enabled && !opRow.holding
@@ -166,7 +170,7 @@ Item {
             Layout.topMargin: (opRow.firstBand - noteLabel.implicitHeight) / 2
             visible: opRow.note !== ""
             text: opRow.note
-            color: Theme.textSecondary
+            color: opRow.noteColor
             font.pixelSize: Theme.fontSm
         }
     }
