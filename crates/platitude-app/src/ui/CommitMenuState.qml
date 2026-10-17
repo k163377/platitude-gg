@@ -118,7 +118,7 @@ QtObject {
             menuState.tree.branch, menuState.tree.detached,
             menuState.tree.opText, menuState.tree.conflictCount,
             // No drift: the rows that reach a remote are the card's (`RefBranchMenu`).
-            held, "", false, menuState.repoTab.defaultRemote, "")
+            held, "", false, false, menuState.repoTab.defaultRemote, "")
         menuState.menuCanSwitch = offers.includes("switch")
         menuState.menuSwitchAsks = offers.includes("asks")
         // As its WORKTREES row names it (`NavSectionModel.worktreeCalled`).
@@ -176,12 +176,16 @@ QtObject {
             : menuState.worktreesModel.worktreeHolding(menuState.repoTab.localNameFor(full))
         const counterpart = kind === "branch" ? menuState.branchesModel.upstreamOf(full) : ""
         const drifted = kind === "branch" && menuState.branchesModel.upstreamDrifted(full)
+        // The one it is configured with, a gone one too, which names no reading.
+        const upstream = kind === "branch" ? menuState.branchesModel.upstreamNamed(full) : ""
         const open = menuState.repoTab.state === "open"
         return {
             "heldByWorktree": held,
             "holderLeaf": held === "" ? "" : menuState.worktreesModel.worktreeCalled(held),
             "holderHome": held !== "" && menuState.worktreesModel.worktreeHome(held),
             "remoteCounterpart": counterpart,
+            "upstream": upstream,
+            "upstreamWhere": upstream === "" ? "" : menuState.branchesModel.upstreamWhere(full, menuState.tree.branch),
             "remoteCounterpartOid": counterpart === "" ? "" : menuState.branchesModel.upstreamOidOf(full),
             "remoteDrifted": drifted,
             "open": open,
@@ -193,7 +197,7 @@ QtObject {
                 kind, full, oidHex, open,
                 menuState.tree.branch, menuState.tree.detached,
                 menuState.tree.opText, menuState.tree.conflictCount,
-                held, counterpart, drifted, menuState.repoTab.defaultRemote, "")
+                held, counterpart, drifted, upstream !== "", menuState.repoTab.defaultRemote, "")
         }
     }
 
@@ -218,7 +222,7 @@ QtObject {
                 menuState.repoTab.state === "open",
                 menuState.tree.branch, menuState.tree.detached,
                 menuState.tree.opText, menuState.tree.conflictCount,
-                "", "", menu.heldBack !== "", menu.pushRemote, sides)
+                "", "", menu.heldBack !== "", false, menu.pushRemote, sides)
         }
     }
 

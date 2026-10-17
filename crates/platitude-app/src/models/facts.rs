@@ -271,6 +271,7 @@ impl GitFacts {
         held_by_worktree: String,
         remote_counterpart: String,
         remote_drifted: bool,
+        tracked: bool,
         default_remote: String,
         tag_sides: String,
     ) -> Vec<String> {
@@ -289,6 +290,7 @@ impl GitFacts {
             &held_by_worktree,
             &remote_counterpart,
             remote_drifted,
+            tracked,
             &default_remote,
             &tag_sides,
         )

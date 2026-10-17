@@ -21,9 +21,9 @@ Rectangle {
     /// That name's own colour: `textLink` for the branch the worktree is on, `textPrimary` for one it is not
     /// (§ref の種別「名前の色 = 在処」).
     property color labelRefTint: Theme.textLink
-    /// The name's own colour only on a neutral bar: a state colour takes the whole heading (the rule
-    /// `AppMenuItem.refColor` carries).
-    readonly property color labelTint: bar.neutral ? bar.labelRefTint : bar.tone
+    /// The name's own colour only where the heading wears no state colour — a neutral bar, or one in the plain ink
+    /// (`plainWords`): a state colour takes the whole heading (the rule `AppMenuItem.refColor` carries).
+    readonly property color labelTint: bar.neutral || bar.plainWords ? bar.labelRefTint : bar.tone
     readonly property string labelWords: bar.labelSentence === ""
                                          ? "" : Words.nameInSentence(bar.labelSentence, bar.labelRef, bar.labelTint)
     /// What answering costs, in the one line §用語 allows for it.
@@ -55,6 +55,14 @@ Rectangle {
     /// Whether answering takes the warning's count of presses (デザイン規約 §回数押し). Such a pill answers only at its
     /// last press, and presses given up part way leave nothing behind.
     property bool hold: false
+    /// …and whether that hold is the plain delete's instead: two presses, the word in the plain ink while the mark and
+    /// the fill carry the warning (§回数押しの色) — on a bar of any tone, whose frame keeps it.
+    property bool plainHold: false
+    /// What the hold wears: the plain ink for the plain delete (`HoldIcon` / `HoldFill` lift it to the warning
+    /// themselves), the bar's tone otherwise.
+    readonly property color holdTone: bar.plainHold ? Theme.textPrimary : bar.tone
+    readonly property int holdPresses: !bar.hold ? 0 : bar.plainHold ? Metrics.holdPressesPlain
+                                                                     : Metrics.holdPressesWarned
     /// How far into its presses the pill has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
     /// The gesture the press under way was given (`HoldDriver.armedPresses`; the live one between presses). The mark
@@ -104,7 +112,7 @@ Rectangle {
     }
     HoldDriver {
         id: holdDrive
-        holdPresses: bar.hold ? Metrics.holdPressesWarned : 0
+        holdPresses: bar.holdPresses
         // At the last press, while the question is still the one pressed for. The owner lowers the bar as it answers;
         // the bar stays down for the floor regardless (`openHeight`).
         onFinished: bar.confirmed()
@@ -126,9 +134,10 @@ Rectangle {
     /// then raises it; `stopAsking` only lowers it).
     property bool open: false
     readonly property color tone: bar.danger ? Theme.danger : bar.neutral ? Theme.accent : Theme.warning
-    /// The heading in the plain ink instead of the bar's colour, for the one question whose colour follows the answer
+    /// The heading in the plain ink instead of the bar's colour, for the question whose colour follows the answer
     /// being picked in it (`RenameCarryFlow`): the frame and the pill already turn with the chooser, and a heading
-    /// turning too reads as the words themselves changing. Every other question says its cost in the heading
+    /// turning too reads as the words themselves changing. And for the plain delete's question (`UpstreamFlow`'s
+    /// unset), whose words are as plain as its pill's (`plainHold`). Every other question says its cost in the heading
     /// (デザイン規約 §状態), so this is off unless a flow asks — and put down as each question is dressed
     /// (`GraphPane.startAsking`).
     property bool plainWords: false
@@ -277,7 +286,7 @@ Rectangle {
             // (デザイン規約 §立っている質問は 1 か所で聞く).
             readonly property color wordInk:
                 !bar.answerable ? Theme.textMuted
-                : bar.holdProgress > 0 ? Theme.textOnAccent : bar.armedPresses > 0 ? bar.tone : Theme.textPrimary
+                : bar.holdProgress > 0 ? Theme.textOnAccent : bar.armedPresses > 0 ? bar.holdTone : Theme.textPrimary
             // Reachable without a pointer (デザイン規約 §回数押し). Closed, it leaves the tab order by going disabled: Qt
             // refuses to clear `activeFocusOnTab` on the item holding the focus, and warns. Disabling takes the focus
             // away first, and the pill draws its own colours, so it looks no different.
@@ -300,10 +309,10 @@ Rectangle {
             // A drawn pill has to name itself.
             Accessible.role: Accessible.Button
             Accessible.name: bar.code !== "" ? bar.code : bar.accept
-            Accessible.description: bar.hold ? Words.pressToActivate(Metrics.holdPressesWarned) : ""
+            Accessible.description: bar.hold ? Words.pressToActivate(bar.holdPresses) : ""
             HoldFill {
                 progress: bar.holdProgress
-                tone: bar.tone
+                tone: bar.holdTone
                 dimmed: holdDrive.dimmed
                 inset: Theme.borderWidth
             }
@@ -341,7 +350,7 @@ Rectangle {
                         progress: bar.holdProgress
                         presses: bar.armedPresses
                         off: bar.holdOff
-                        tint: bar.holdOff ? bar.tone : acceptPill.wordInk
+                        tint: bar.holdOff ? bar.holdTone : acceptPill.wordInk
                     }
                 }
                 // The chip or the word (`code` decides). Only the word takes room in the row: the `!` hangs off the end

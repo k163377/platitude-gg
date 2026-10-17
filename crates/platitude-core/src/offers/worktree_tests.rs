@@ -16,6 +16,7 @@ fn worktree_row(holder: &str) -> RefMenuOffers {
         holder,
         "",
         false,
+        false,
         "origin",
         "",
     )

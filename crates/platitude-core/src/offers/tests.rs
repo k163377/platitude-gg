@@ -4,7 +4,7 @@ use super::*;
 /// a time.
 fn offers_on(kind: RefKind, full: &str) -> RefMenuOffers {
     ref_menu(
-        kind, full, "abc123", true, "main", false, "", 0, "", "", false, "origin", "here",
+        kind, full, "abc123", true, "main", false, "", 0, "", "", false, false, "origin", "here",
     )
 }
 
@@ -22,6 +22,7 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
         "",
         "origin/feat",
         false,
+        true,
         "origin",
         "here",
     );
@@ -39,6 +40,7 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
             delete_remote_tag: false,
             delete_tag_everywhere: false,
             set_upstream: true,
+            unset_upstream: true,
             on_current_branch: false,
         }
     );
@@ -50,8 +52,95 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
             "integrate",
             "delete",
             "delete-remote",
-            "set-upstream"
+            "set-upstream",
+            "unset-upstream"
         ]
+    );
+}
+
+/// `tracked` alone decides it: a gone upstream leaves no reading to
+/// name, and one that is a branch here needs no remote.
+#[test]
+fn only_a_branch_with_an_upstream_has_one_to_take_off() {
+    let on = |kind, tracked, default_remote| {
+        ref_menu(
+            kind,
+            "feat",
+            "abc123",
+            true,
+            "main",
+            false,
+            "",
+            0,
+            "",
+            "",
+            false,
+            tracked,
+            default_remote,
+            "here",
+        )
+        .unset_upstream
+    };
+    assert!(on(RefKind::Branch, true, "origin"));
+    assert!(!on(RefKind::Branch, false, "origin"), "nothing to take off");
+    assert!(
+        on(RefKind::Branch, true, ""),
+        "an upstream here needs no remote"
+    );
+    for kind in [
+        RefKind::Remote,
+        RefKind::Tag,
+        RefKind::Stash,
+        RefKind::Worktree,
+    ] {
+        assert!(
+            !on(kind, true, "origin"),
+            "{kind:?} carries no upstream of its own"
+        );
+    }
+}
+
+#[test]
+fn the_current_branch_and_a_held_one_take_their_upstream_off_too() {
+    let current = ref_menu(
+        RefKind::Branch,
+        "main",
+        "abc123",
+        true,
+        "main",
+        false,
+        "",
+        0,
+        "",
+        "origin/main",
+        false,
+        true,
+        "origin",
+        "here",
+    );
+    assert!(
+        current.unset_upstream,
+        "this writes configuration, not the branch"
+    );
+    let held = ref_menu(
+        RefKind::Branch,
+        "feat",
+        "abc123",
+        true,
+        "main",
+        false,
+        "",
+        0,
+        "C:/work/topic",
+        "origin/feat",
+        false,
+        true,
+        "origin",
+        "here",
+    );
+    assert!(
+        held.unset_upstream,
+        "another worktree holding it changes nothing"
     );
 }
 
@@ -84,6 +173,7 @@ fn there_is_nothing_to_be_measured_against_without_a_remote() {
         "",
         "",
         false,
+        false,
         "",
         "here",
     );
@@ -114,6 +204,7 @@ fn a_branch_out_in_another_worktree_keeps_switch_and_asks_nothing() {
         "C:/work/other",
         "",
         false,
+        false,
         "origin",
         "here",
     );
@@ -134,7 +225,7 @@ fn a_branch_out_in_another_worktree_asks_nothing_while_an_operation_stands() {
             let asks = |held: &str| {
                 ref_menu(
                     kind, full, "abc123", true, "main", false, op, conflicts, held, "", false,
-                    "origin", "here",
+                    false, "origin", "here",
                 )
                 .switch_asks
             };
@@ -166,6 +257,7 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
         "C:/work/other",
         "",
         false,
+        false,
         "origin",
         "here",
     );
@@ -193,6 +285,7 @@ fn a_drifted_reading_keeps_the_local_delete_and_loses_the_remote_one() {
         "",
         "origin/feat",
         true,
+        false,
         "origin",
         "here",
     );
@@ -218,6 +311,7 @@ fn a_standing_operation_asks_and_holds_back_new_history_but_not_deletes() {
         "",
         "",
         false,
+        false,
         "origin",
         "here",
     );
@@ -241,6 +335,7 @@ fn conflicts_alone_make_the_move_ask() {
         "",
         "",
         false,
+        false,
         "origin",
         "here",
     );
@@ -262,6 +357,7 @@ fn detached_or_unborn_has_no_branch_to_integrate_into() {
         "",
         "",
         false,
+        false,
         "origin",
         "here",
     );
@@ -278,6 +374,7 @@ fn detached_or_unborn_has_no_branch_to_integrate_into() {
         0,
         "",
         "",
+        false,
         false,
         "origin",
         "here",
@@ -308,6 +405,7 @@ fn tag_offers(sides: &str, default_remote: &str) -> RefMenuOffers {
         "",
         "",
         false,
+        false,
         default_remote,
         sides,
     )
@@ -319,7 +417,8 @@ fn only_a_tag_is_pushed_from_this_menu_and_only_with_a_remote_to_send_it_to() {
     for kind in [RefKind::Branch, RefKind::Remote, RefKind::Stash] {
         assert!(
             !ref_menu(
-                kind, "feat", "abc123", true, "main", false, "", 0, "", "", false, "origin", "here"
+                kind, "feat", "abc123", true, "main", false, "", 0, "", "", false, false, "origin",
+                "here"
             )
             .push_tag,
             "a branch goes out through the toolbar; a stash goes nowhere"
@@ -387,6 +486,7 @@ fn a_tag_the_remote_has_elsewhere_loses_both_rows_that_reach_it() {
         "",
         "",
         true,
+        false,
         "origin",
         "both",
     );
@@ -432,6 +532,7 @@ fn a_stopped_operation_does_not_hold_a_tag_back() {
         3,
         "",
         "",
+        false,
         false,
         "origin",
         "both",

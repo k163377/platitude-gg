@@ -1,8 +1,8 @@
 import QtQuick
 import platitude.ui
 
-// The BRANCH card: the branch sent to its remote, set upstream, and the delete table — local, remote, both
-// (デザイン規約 §メニュー の入れ子). Starting a branch stands on the level above with the other moves.
+// The BRANCH card: the branch sent to its remote, its upstream set and taken off, and the delete table — local,
+// remote, both (デザイン規約 §メニュー の入れ子). Starting a branch stands on the level above with the other moves.
 //
 // **One card, two entrances** (`RefRowMenu` / `CommitMenuState`), so both offer the same thing. **It reads no model
 // and runs no write**: the entrance reads the facts (`branchFacts`), `standOn` freezes them as the menu opens, and
@@ -49,8 +49,11 @@ AppMenu {
     /// (`ops_delete`, デザイン規約 §消す操作は先に画面から消す).
     signal deleteRequested(string kind, string id, string name, string oidHex)
     /// Set upstream: the page opens the question in the window's one question bar (`UpstreamFlow`), starting from
-    /// `counterpart`, the remote branch this one already reads.
-    signal upstreamRequested(string branch, string counterpart)
+    /// `counterpart`, the remote branch this one already reads. `unsettable`: it has an upstream to take off, which an
+    /// emptied name asks to do.
+    signal upstreamRequested(string branch, string counterpart, bool unsettable)
+    /// The upstream taken off (`RepoTab.unsetUpstream`), for the carrying menu, which holds the tab.
+    signal unsetUpstreamRequested(string branch)
     /// The branch sent where its marks and upstream say (`RepoTab.pushNamed`): `force` `""` or `"lease"`, `lease` the
     /// commit the card showed the far side on.
     signal pushRequested(string branch, string force, string lease)
@@ -70,6 +73,7 @@ AppMenu {
     readonly property alias deleteRemoteItem: refRemoteDeleteItem
     readonly property alias deleteBothItem: refBothDeleteItem
     readonly property alias upstreamItem: refUpstreamItem
+    readonly property alias unsetUpstreamItem: refUnsetUpstreamItem
     readonly property alias pushItem: refPushItem
     /// What the push row stands on (`NavSectionModel.branchPush`'s `state`), for the automation's report.
     readonly property alias pushState: state.pushState
@@ -82,6 +86,10 @@ AppMenu {
         property string refName: ""
         property string refOid: ""
         property string remoteCounterpart: ""
+        /// The upstream the branch is configured with, listed or gone — what taking it off names —, and where that
+        /// name stands (`remote` / `local` / `current`), which is the colour it wears (デザイン規約 §ref の種別).
+        property string upstream: ""
+        property string upstreamWhere: ""
         /// The commit that reading showed as the menu opened: the lease of every delete that reaches it.
         property string remoteCounterpartOid: ""
         /// That reading stands on another commit, so the two rows that reach it say why.
@@ -94,6 +102,7 @@ AppMenu {
         property bool canDelete: false
         property bool canDeleteRemote: false
         property bool canSetUpstream: false
+        property bool canUnsetUpstream: false
         property bool onCurrentBranch: false
         /// The plain delete's merged check off the rows: whether answered, and whether the tip is reachable from the
         /// branch's reference point. Merged until answered, so a card still waiting on git wears the plain row.
@@ -116,7 +125,8 @@ AppMenu {
     /// worktree holding this row's local branch, `holderLeaf` the name it goes by and `holderHome` whether it is the
     /// repository's own, `remoteCounterpart` the reading a
     /// local branch speaks for, `remoteCounterpartOid` its commit and `remoteDrifted` whether that stands on another
-    /// commit, `offers` core's words,
+    /// commit, `upstream` the one it is configured with (a gone one too) and `upstreamWhere` where that name stands,
+    /// `offers` core's words,
     /// `open` whether the tab is, `merged` what the drawn rows say about the plain delete (`yes` / `no`, empty
     /// for a tip or a reference older than the window, whose answer only git has), and `push` what the push row stands
     /// on (`NavSectionModel.branchPush`: `state`, `target`, `lease`, `upstream`).
@@ -136,6 +146,8 @@ AppMenu {
         state.pushStaysHere = false
         if (kind !== "branch" && kind !== "remote") {
             state.remoteCounterpart = ""
+            state.upstream = ""
+            state.upstreamWhere = ""
             state.remoteCounterpartOid = ""
             state.remoteDrifted = false
             state.heldByWorktree = ""
@@ -144,6 +156,7 @@ AppMenu {
             state.canDelete = false
             state.canDeleteRemote = false
             state.canSetUpstream = false
+            state.canUnsetUpstream = false
             state.onCurrentBranch = false
             return
         }
@@ -151,6 +164,8 @@ AppMenu {
         state.holderLeaf = facts.holderLeaf
         state.holderHome = facts.holderHome === true
         state.remoteCounterpart = facts.remoteCounterpart
+        state.upstream = facts.upstream
+        state.upstreamWhere = facts.upstreamWhere
         state.remoteCounterpartOid = facts.remoteCounterpartOid
         state.remoteDrifted = facts.remoteDrifted
         // What the rows may offer is core's rule (`offers::ref_menu`).
@@ -158,6 +173,7 @@ AppMenu {
         state.canDelete = offers.includes("delete")
         state.canDeleteRemote = offers.includes("delete-remote")
         state.canSetUpstream = offers.includes("set-upstream")
+        state.canUnsetUpstream = offers.includes("unset-upstream")
         state.onCurrentBranch = offers.includes("current")
         // A local branch the worktree is not on — the one it is on has the toolbar's own button (デザイン規約 §メニュー
         // 「そこにしか入口が無いものだけ」) — and only where a push can go: nothing to send, or nothing to name, is no row.
@@ -256,7 +272,29 @@ AppMenu {
         id: refUpstreamItem
         text: qsTr("Set upstream…")
         offered: state.kind === "branch" && state.canSetUpstream
-        onTriggered: branchCard.upstreamRequested(state.refId, state.remoteCounterpart)
+        onTriggered: branchCard.upstreamRequested(state.refId, state.remoteCounterpart, state.canUnsetUpstream)
+    }
+    // The upstream taken off (デザイン規約 §ブランチが測られる相手を決める): words, the pair of `Set upstream…` — git's
+    // spelling is the card's longest chip and would push every row's words over, and a flag alone is no command. It
+    // names what goes, as the delete rows below do (§メニュー「例外は削除行だけ」). The plain delete's two presses in
+    // the plain ink: what goes is one setting, and `Set upstream…` puts it back (§回数押しの色).
+    AppMenuItem {
+        id: refUnsetUpstreamItem
+        //: Followed by the upstream it takes off: "Unset upstream origin/feature".
+        refSentence: qsTr("Unset upstream %1")
+        // In its own colour: a plain delete's words keep the ordinary rules (`AppMenuItem.inkTakesNames`).
+        refName: state.upstream
+        refTint: state.upstreamWhere === "current" ? Theme.textLink
+               : state.upstreamWhere === "local" ? Theme.textPrimary : Theme.textSecondary
+        // The name is data: it does not widen the menu (`growsForText`).
+        growsForText: false
+        offered: state.kind === "branch" && state.canUnsetUpstream
+        holdPresses: Metrics.holdPressesPlain
+        holdTone: Theme.textPrimary
+        onHeld: {
+            refUnsetUpstreamItem.closeMenu()
+            branchCard.unsetUpstreamRequested(state.refId)
+        }
     }
     AppMenuSeparator {}
     AppMenuItem {

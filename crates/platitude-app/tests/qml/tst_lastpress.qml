@@ -27,7 +27,8 @@ Item {
     /// later, as `checkedBranch` / `checkedMerged`.
     function standOn(name) {
         card.standOn("branch", name, name, "abc123", {
-            "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/" + name,
+            "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/" + name, "upstream": "origin/" + name,
+            "upstreamWhere": "remote",
             "remoteCounterpartOid": "def456", "remoteDrifted": false, "open": true, "merged": "",
             "offers": ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream"]
         })

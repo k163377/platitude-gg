@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::session::{
-    CaptureSink, TestSession, is_stream_event, open_unawaited, opened, scenario,
+    CaptureSink, TestSession, is_stream_event, open_unawaited, opened, scenario, write_answer,
+    write_settled,
 };
 use platitude_core::OperationKind;
 use platitude_core::session::{Recording, RefreshOutcome, SessionEvent};
@@ -551,6 +552,88 @@ async fn setting_an_upstream_rebuilds_what_the_rows_read() {
         "the rows read what the write said, not what they read before it"
     );
     session.close_and_wait().await;
+}
+
+/// Taking an upstream off rebuilds the rows as setting one does, wherever
+/// the upstream stands — a reading the listing shows, a branch here
+/// (`remote = .`), or gone (git's `[gone]`) — the three the menu offers
+/// it on (`offers::ref_menu`'s `unset_upstream`).
+#[tokio::test(flavor = "multi_thread")]
+async fn unsetting_an_upstream_rebuilds_what_the_rows_read() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("a.txt", "one\n", "root");
+
+    let mut work = TestRepo::init();
+    let url = origin.file_url();
+    work.git(&["remote", "add", "origin", &url]);
+    work.git(&["fetch", "origin"]);
+    work.git(&["checkout", "-b", "topic", "--track", "origin/main"]);
+    work.git(&["branch", "--track", "stacked", "topic"]);
+    work.git(&["branch", "stale"]);
+    work.git(&["config", "branch.stale.remote", "origin"]);
+    work.git(&["config", "branch.stale.merge", "refs/heads/nowhere"]);
+
+    let (sink, session) = opened(&work).await;
+    let opening = sink
+        .wait_for("the opening listing", |evs| evs.iter().find_map(tracking))
+        .await;
+    let reads =
+        |remote: &str, here: &str, gone: &str| Some([remote, here, gone].map(str::to_string));
+    assert_eq!(
+        opening,
+        [
+            reads("origin/main", "", ""),
+            reads("", "topic", ""),
+            reads("", "", "origin/nowhere"),
+        ]
+    );
+
+    for branch in UNSET {
+        let id = session.unset_upstream(branch.into()).expect("accepted");
+        assert_eq!(write_answer(&sink, id).await, None, "{branch}: git took it");
+        assert_eq!(write_settled(&sink, id).await, []);
+    }
+    // Settled is after the refs read the write asked for.
+    let left = sink
+        .wait_for("the listing after the writes", |evs| {
+            evs.iter().rev().find_map(tracking)
+        })
+        .await;
+    let nothing = reads("", "", "");
+    assert_eq!(
+        left,
+        [nothing.clone(), nothing.clone(), nothing],
+        "none tracks anything now"
+    );
+    for branch in UNSET {
+        for field in ["remote", "merge"] {
+            let key = format!("branch.{branch}.{field}");
+            assert!(!work.git_ok(&["config", "--get", &key]), "{key}");
+        }
+    }
+    session.close_and_wait().await;
+}
+
+/// The branches [`unsetting_an_upstream_rebuilds_what_the_rows_read`]
+/// takes the upstream off.
+const UNSET: [&str; 3] = ["topic", "stacked", "stale"];
+
+/// What each of [`UNSET`] is measured against in a listing: the reading
+/// the listing has, the branch here, and the gone name.
+fn tracking(event: &SessionEvent) -> Option<[Option<[String; 3]>; 3]> {
+    let SessionEvent::RefsLoaded { snapshot, .. } = event else {
+        return None;
+    };
+    Some(UNSET.map(|name| {
+        snapshot.local_named(name).map(|branch| {
+            [
+                &branch.upstream,
+                &branch.upstream_local,
+                &branch.upstream_gone,
+            ]
+            .map(|named| named.as_str().to_string())
+        })
+    }))
 }
 
 fn position_of(events: &[SessionEvent], kind: OperationKind) -> Option<usize> {

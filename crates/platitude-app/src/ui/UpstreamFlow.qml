@@ -30,6 +30,28 @@ Item {
     /// Whether that pair names a remote-tracking branch held here. Not a refusal (a name not here is one the next
     /// push makes) — it only picks the bar's line.
     property bool targetIsThere: false
+    /// Whether the branch has an upstream to take off — a remote reading, a branch here, or a gone one — which an
+    /// emptied name asks to do.
+    property bool unsettable: false
+    /// The branch the worktree is on: the one name the unset heading draws in `textLink` (デザイン規約 §ref の種別).
+    property string headBranch: ""
+    /// The name box emptied on a branch with an upstream: the question turns into taking it off — its heading and
+    /// pill change, and the line goes (デザイン規約 §ブランチが測られる相手を決める). The remote is only picked, so the
+    /// name is the half that can be emptied.
+    readonly property bool unsetting: upstreamFlow.unsettable && upstreamFlow.branchName === ""
+    /// The unset heading with the branch's seat left in it: a plain delete's words keep the ordinary rules, so the
+    /// branch wears its own colour there (`AskBar.labelSentence`, §回数押しの色).
+    //: %1 is a branch name. Asks whether it stops being measured against a remote branch.
+    readonly property string unsetSentence: qsTr("Unset the upstream of %1?")
+    readonly property string heading: upstreamFlow.unsetting
+        ? upstreamFlow.unsetSentence.arg(upstreamFlow.branch)
+        //: %1 is a branch name. Asks which remote branch it is measured against.
+        : qsTr("Upstream of %1?").arg(upstreamFlow.branch)
+    readonly property string pill: upstreamFlow.unsetting
+        //: The pill that answers the question above: takes the upstream off.
+        ? qsTr("Unset")
+        //: The pill that answers the question above: records the upstream just named.
+        : qsTr("Set")
 
     readonly property var remotes: upstreamFlow.repoTab.remoteNames
     /// What the chosen remote already carries here, the name box's suggestions. `total` is read so every refs read
@@ -49,8 +71,10 @@ Item {
     anchors.fill: parent
 
     /// Opens the question on this branch, at `counterpart` — the remote branch it already tracks, or empty.
-    function startAsk(branch, oidHex, counterpart) {
+    /// `unsettable`: it has an upstream an emptied name takes off.
+    function startAsk(branch, oidHex, counterpart, unsettable) {
         upstreamFlow.branch = branch
+        upstreamFlow.unsettable = unsettable
         // The cut is the configured remote name where one owns the ref — a remote's own name may contain `/`
         // (`GitFacts.remoteOfRef`).
         const from = counterpart !== ""
@@ -59,14 +83,7 @@ Item {
         upstreamFlow.branchName = from !== ""
             ? GitFacts.branchOfRef(counterpart, upstreamFlow.repoTab.remoteNames) : branch
         upstreamFlow.settleTarget()
-        upstreamFlow.askRequested(
-            oidHex,
-            //: %1 is a branch name. Asks which remote branch it is measured against.
-            qsTr("Upstream of %1?").arg(branch),
-            //: The pill that answers the question above: records the upstream just named.
-            qsTr("Set"),
-            upstreamFlow.answer,
-            upstreamForm)
+        upstreamFlow.askRequested(oidHex, upstreamFlow.heading, upstreamFlow.pill, upstreamFlow.answer, upstreamForm)
         // After the bar is up: raising it resets the properties the `asking` bindings below own, and a
         // binding whose value has not changed does not push back.
         upstreamFlow.asking = true
@@ -92,8 +109,10 @@ Item {
     }
 
     function answer() {
-        upstreamFlow.repoTab.setUpstream(
-            upstreamFlow.branch, upstreamFlow.remote, upstreamFlow.branchName)
+        if (upstreamFlow.unsetting)
+            upstreamFlow.repoTab.unsetUpstream(upstreamFlow.branch)
+        else
+            upstreamFlow.repoTab.setUpstream(upstreamFlow.branch, upstreamFlow.remote, upstreamFlow.branchName)
     }
 
     // Bindings, since the question changes while it stands. `RestoreNone`: letting go happens at the press that
@@ -101,21 +120,85 @@ Item {
     Binding {
         target: upstreamFlow.graphPane
         property: "askAnswerable"
-        value: upstreamFlow.filled
+        value: upstreamFlow.filled || upstreamFlow.unsetting
+        when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    // Taking it off is the plain delete's two presses, as the card's row is (デザイン規約 §回数押しの色); a held pill is
+    // answered by the pill alone, so Enter in the emptied box does nothing (`AskBar.answerFromForm`).
+    Binding {
+        target: upstreamFlow.graphPane
+        property: "askHold"
+        value: upstreamFlow.unsetting
         when: upstreamFlow.asking
         restoreMode: Binding.RestoreNone
     }
     Binding {
         target: upstreamFlow.graphPane
+        property: "askPlainHold"
+        value: upstreamFlow.unsetting
+        when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    Binding {
+        target: upstreamFlow.graphPane
+        property: "askLabel"
+        value: upstreamFlow.heading
+        when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    // The unset heading's branch in its own colour (`unsetSentence`); the set heading stays one run of words.
+    Binding {
+        target: upstreamFlow.graphPane
+        property: "askLabelSentence"
+        value: upstreamFlow.unsetting ? upstreamFlow.unsetSentence : ""
+        when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    Binding {
+        target: upstreamFlow.graphPane
+        property: "askLabelRef"
+        value: upstreamFlow.unsetting ? upstreamFlow.branch : ""
+        when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    Binding {
+        target: upstreamFlow.graphPane
+        property: "askLabelRefTint"
+        value: upstreamFlow.branch === upstreamFlow.headBranch ? Theme.textLink : Theme.textPrimary
+        when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    Binding {
+        target: upstreamFlow.graphPane
+        property: "askAccept"
+        value: upstreamFlow.pill
+        when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    // Asking for a name is the accent; taking the upstream off asks for nothing, so it is the plain delete's dress
+    // instead — the heading in the plain ink, the warning on the rule, the frame and the pill's mark
+    // (デザイン規約 §ブランチが測られる相手を決める, §回数押しの色).
+    Binding {
+        target: upstreamFlow.graphPane
         property: "askNeutral"
-        value: true
+        value: !upstreamFlow.unsetting
+        when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    Binding {
+        target: upstreamFlow.graphPane
+        property: "askPlainWords"
+        value: upstreamFlow.unsetting
         when: upstreamFlow.asking
         restoreMode: Binding.RestoreNone
     }
     Binding {
         target: upstreamFlow.graphPane
         property: "askDetail"
-        value: !upstreamFlow.filled
+        // The unset question says it all in its heading: what an upstream decides goes with the word.
+        value: upstreamFlow.unsetting ? ""
+               : !upstreamFlow.filled
                ? qsTr("Pick the upstream.")
                : !upstreamFlow.targetIsThere
                  //: %1 is a remote branch, e.g. origin/main.

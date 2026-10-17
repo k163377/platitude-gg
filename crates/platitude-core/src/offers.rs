@@ -133,6 +133,12 @@ pub struct RefMenuOffers {
     /// one another worktree holds take it too — this writes
     /// configuration, not the branch.
     pub set_upstream: bool,
+    /// The upstream taken off, leaving the branch measured against
+    /// nothing. Only a local branch that has one, listed or gone; like
+    /// [`Self::set_upstream`] it writes configuration, so the current
+    /// branch and one another worktree holds take it, and it needs no
+    /// remote — an upstream may be a branch here.
+    pub unset_upstream: bool,
     /// The row is the branch HEAD is on — what the delete rows' refusal
     /// names first.
     pub on_current_branch: bool,
@@ -172,6 +178,9 @@ impl RefMenuOffers {
         if self.set_upstream {
             words.push("set-upstream");
         }
+        if self.unset_upstream {
+            words.push("unset-upstream");
+        }
         if self.on_current_branch {
             words.push("current");
         }
@@ -190,7 +199,9 @@ impl RefMenuOffers {
 /// `remote_counterpart` is the remote reading a local branch carries;
 /// `remote_drifted` says that reading stands on another commit
 /// ([`crate::session::BranchItem::upstream_drifted`] /
-/// [`crate::session::RefsSnapshot::tag_drifts`]); `default_remote` is
+/// [`crate::session::RefsSnapshot::tag_drifts`]); `tracked` says a local
+/// branch has an upstream at all — the reading above, or one gone or
+/// here that leaves `remote_counterpart` empty; `default_remote` is
 /// where pushes go, empty with no remote; `tag_sides` is
 /// [`TagSides::from_word`]'s word (ignored for other kinds). The `pull`
 /// row is [`pull_row`]'s.
@@ -207,6 +218,7 @@ pub fn ref_menu(
     held_by_worktree: &str,
     remote_counterpart: &str,
     remote_drifted: bool,
+    tracked: bool,
     default_remote: &str,
     tag_sides: &str,
 ) -> RefMenuOffers {
@@ -251,6 +263,7 @@ pub fn ref_menu(
             && tag_here
             && !remote_drifted,
         set_upstream: kind == RefKind::Branch && !default_remote.is_empty(),
+        unset_upstream: kind == RefKind::Branch && tracked,
         on_current_branch,
     }
 }

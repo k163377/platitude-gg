@@ -133,8 +133,8 @@ Item {
     /// The WORKTREE card's `worktree remove`, which takes the worktree's row off the screen at the press (`RepoTab`).
     signal removeWorktreeRequested(string path, string name, string holds)
     /// Which remote branch a local one is measured against — the branch card's row, answered in the page's one bar
-    /// (`UpstreamFlow`).
-    signal upstreamRequested(string branch, string counterpart)
+    /// (`UpstreamFlow`). `unsettable`: it has one an emptied name takes off (`RefBranchMenu.upstreamRequested`).
+    signal upstreamRequested(string branch, string counterpart, bool unsettable)
     /// Where a branch's first push goes — the branch card's push row, asked in the page's one bar (`PublishFlow`).
     signal publishRequested(string branch, string upstream)
 
@@ -152,12 +152,17 @@ Item {
             : refRowMenu.worktreesModel.worktreeHolding(refRowMenu.repoTab.localNameFor(full))
         const counterpart = kind === "branch" ? refRowMenu.branchesModel.upstreamOf(full) : ""
         const drifted = kind === "branch" && refRowMenu.branchesModel.upstreamDrifted(full)
+        // The one it is configured with, a gone one too, which names no reading.
+        const upstream = kind === "branch" ? refRowMenu.branchesModel.upstreamNamed(full) : ""
         const open = refRowMenu.repoTab.state === "open"
         return {
             "heldByWorktree": held,
             "holderLeaf": held === "" ? "" : refRowMenu.worktreesModel.worktreeCalled(held),
             "holderHome": held !== "" && refRowMenu.worktreesModel.worktreeHome(held),
             "remoteCounterpart": counterpart,
+            "upstream": upstream,
+            "upstreamWhere": upstream === ""
+                             ? "" : refRowMenu.branchesModel.upstreamWhere(full, refRowMenu.tree.branch),
             "remoteCounterpartOid": counterpart === "" ? "" : refRowMenu.branchesModel.upstreamOidOf(full),
             "remoteDrifted": drifted,
             "open": open,
@@ -169,7 +174,7 @@ Item {
                 kind, full, oidHex, open,
                 refRowMenu.tree.branch, refRowMenu.tree.detached,
                 refRowMenu.tree.opText, refRowMenu.tree.conflictCount,
-                held, counterpart, drifted, refRowMenu.repoTab.defaultRemote, "")
+                held, counterpart, drifted, upstream !== "", refRowMenu.repoTab.defaultRemote, "")
         }
     }
 
@@ -214,7 +219,7 @@ Item {
                 refRowMenu.repoTab.state === "open",
                 refRowMenu.tree.branch, refRowMenu.tree.detached,
                 refRowMenu.tree.opText, refRowMenu.tree.conflictCount,
-                "", "", menu.heldBack !== "", menu.pushRemote, sides)
+                "", "", menu.heldBack !== "", false, menu.pushRemote, sides)
         }
     }
 
@@ -334,7 +339,7 @@ Item {
             refRowMenu.tree.branch, refRowMenu.tree.detached,
             refRowMenu.tree.opText, refRowMenu.tree.conflictCount,
             // No drift: the remote rows are the branch card's (`RefBranchMenu`).
-            held, "", false, refRowMenu.repoTab.defaultRemote, "")
+            held, "", false, false, refRowMenu.repoTab.defaultRemote, "")
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
         // As its WORKTREES row names it (`NavSectionModel.worktreeCalled`).
@@ -457,7 +462,9 @@ Item {
             checkedBranch: refRowMenu.repoTab.branchDeleteAsked
             checkedMerged: refRowMenu.repoTab.branchDeleteMerged
             onDeleteRequested: (kind, id, name, oidHex) => refRowMenu.deleteRequested(kind, id, name, oidHex)
-            onUpstreamRequested: (branch, counterpart) => refRowMenu.upstreamRequested(branch, counterpart)
+            onUpstreamRequested: (branch, counterpart, unsettable) =>
+                refRowMenu.upstreamRequested(branch, counterpart, unsettable)
+            onUnsetUpstreamRequested: branch => refRowMenu.repoTab.unsetUpstream(branch)
             onPushRequested: (branch, force, lease) => refRowMenu.repoTab.pushNamed(branch, force, lease)
             onPublishRequested: (branch, upstream) => refRowMenu.publishRequested(branch, upstream)
             onCheckDeleteRequested: branch => refRowMenu.repoTab.checkBranchDelete(branch)

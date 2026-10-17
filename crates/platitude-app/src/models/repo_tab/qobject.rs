@@ -914,6 +914,16 @@ impl RepoTab {
         self.ask_session(|s| s.set_upstream(branch.clone(), remote.clone(), remote_branch.clone()));
     }
 
+    /// Leaves `branch` measured against nothing (`branch::unset_upstream`).
+    /// Asked only where the listing shows it an upstream (`offers::ref_menu`).
+    #[qslot]
+    fn unset_upstream(&mut self, branch: String) {
+        if branch.is_empty() {
+            return;
+        }
+        self.ask_session(|s| s.unset_upstream(branch.clone()));
+    }
+
     /// Puts a lightweight tag on `commit` (HEAD when empty). Always
     /// plain: a name already taken is git's to refuse.
     #[qslot]

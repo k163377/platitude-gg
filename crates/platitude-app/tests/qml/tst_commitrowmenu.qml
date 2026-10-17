@@ -96,6 +96,7 @@ Item {
     function branchFacts() {
         return {
             "branch": { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
+                        "upstream": "origin/feature/topic-a", "upstreamWhere": "remote",
                         "remoteCounterpartOid": "abc123", "remoteDrifted": false, "open": true, "merged": "yes",
                         "offers": ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream"] },
             "tag": { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] },
@@ -396,9 +397,11 @@ Item {
         /// The other card comes up holding only what can still be made here.
         function test_each_card_is_aimed_only_at_a_name_of_its_own_kind_data() {
             const branchy = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
+                              "upstream": "origin/feature/topic-a", "upstreamWhere": "remote",
                               "remoteCounterpartOid": "abc123", "remoteDrifted": false, "open": true, "merged": "yes",
                               "offers": ["switch", "branch-here", "integrate", "delete", "set-upstream"] }
             const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
+                            "upstream": "", "upstreamWhere": "",
                             "remoteDrifted": false, "open": false, "merged": "", "offers": [] }
             // A tag standing here only, in core's words as `tst_tagcard.qml` spells them.
             const tagged = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "tagReach": "",
@@ -447,6 +450,7 @@ Item {
         /// branch sent with the remote one it is made off.
         function test_the_worktree_card_makes_worktrees_and_names_where_they_go() {
             const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
+                            "upstream": "", "upstreamWhere": "",
                             "remoteDrifted": false, "open": false, "merged": "", "offers": [] }
             const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
             const making = { "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/topic-a",
@@ -506,6 +510,7 @@ Item {
         /// reach git as `true`.
         function test_the_carried_cards_hand_their_leases_up_whole() {
             const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
+                            "upstream": "", "upstreamWhere": "",
                             "remoteDrifted": false, "open": false, "merged": "", "offers": [] }
             const drifted = { "pushRemote": "origin", "tagDriftOid": "deadbee", "tagOnlyThere": false,
                               "tagReach": "origin", "tagHeldBack": "drift", "tagCarriers": "origin", "tagHere": true,
@@ -524,6 +529,7 @@ Item {
             compare(root.asked, "delete-remote-tag origin v1.0 " + menu.oid)
 
             const reading = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "",
+                              "upstream": "", "upstreamWhere": "",
                               "remoteCounterpartOid": "", "remoteDrifted": false, "open": true, "merged": "",
                               "offers": ["delete"] }
             const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }

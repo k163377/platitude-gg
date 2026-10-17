@@ -252,6 +252,7 @@ Rectangle {
         askBar.code = code
         askBar.danger = danger
         askBar.hold = hold
+        askBar.plainHold = false
         askBar.tip = tip
         graphList.askDanger = danger
         graphList.askOid = oidHex === undefined ? "" : oidHex
@@ -265,6 +266,8 @@ Rectangle {
     /// under a publish question as the remote answers what the typed name means.
     property alias askNeutral: askBar.neutral
     property alias askHold: askBar.hold
+    /// That hold is the plain delete's two presses (`AskBar.plainHold`); put down as each question is dressed.
+    property alias askPlainHold: askBar.plainHold
     /// The word on the pill. **It may move while the question stands, and the gesture moves with it**
     /// (デザイン規約 §はじめてリモートへ送る: `push` becomes `push -f`, the click a hold). A publish question leaves it
     /// empty for `askCode`; one answered from a chooser writes the picked answer's word here (`RenameCarryFlow`).
@@ -273,9 +276,17 @@ Rectangle {
     /// question as the remote answers, because what would run depends on what is over there.
     property alias askCode: askBar.code
     property alias askAlert: askBar.alert
-    /// Whether the heading is in the plain ink — for the one question whose colour follows what is picked in it
-    /// (`AskBar.plainWords`).
+    /// Whether the heading is in the plain ink — for the question whose colour follows what is picked in it, and the
+    /// plain delete's (`AskBar.plainWords`).
     property alias askPlainWords: askBar.plainWords
+    /// The heading, for a question that turns into another while it stands (`UpstreamFlow`: an emptied name asks to
+    /// take the upstream off). Plain words only — a heading with a name in its own colour is `startAsking`'s.
+    property alias askLabel: askBar.label
+    /// …and a name in it in its own colour while it stands (`AskBar.labelSentence` / `labelRef` / `labelRefTint`);
+    /// `startAsking` dresses all three for each question.
+    property alias askLabelSentence: askBar.labelSentence
+    property alias askLabelRef: askBar.labelRef
+    property alias askLabelRefTint: askBar.labelRefTint
     property alias askDetail: askBar.detail
     property alias askTip: askBar.tip
     /// The live form, so its owner can read what was typed into it.

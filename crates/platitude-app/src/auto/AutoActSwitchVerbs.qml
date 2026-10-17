@@ -110,9 +110,10 @@ Item {
         } else if (act === "set-upstream" || act === "set-upstream-go" || act === "set-upstream-list"
                    || act === "set-upstream-enter") {
             // `<branch>[:<name to answer with>]` (`:` cannot be in a ref name); without a name the question stands
-            // as it opened.
+            // as it opened. A `:` with nothing after it empties the name box.
             const want = arg.split(":")
             const on = want[0]
+            upstreamAskTimer.types = want.length > 1
             upstreamAskTimer.wantName = want.length > 1 ? want[1] : ""
             upstreamAskTimer.answers = act === "set-upstream-go" || act === "set-upstream-enter"
             upstreamAskTimer.byKey = act === "set-upstream-enter"
@@ -124,6 +125,14 @@ Item {
             refMenu.openSub(refBranchCard)
             refUpstreamItem.triggered()
             upstreamAskTimer.start()
+        } else if (act === "unset-upstream" || act === "unset-upstream-go") {
+            // The BRANCH card's row that takes the upstream off. `[chip:]<branch>`: bare is the sidebar's entrance,
+            // `chip:` the graph row's — one card behind two doors, so only a run through each says both are wired.
+            unsetUpstreamTimer.onChip = arg.startsWith("chip:")
+            unsetUpstreamTimer.branch = unsetUpstreamTimer.onChip ? arg.slice("chip:".length) : arg
+            unsetUpstreamTimer.goes = act === "unset-upstream-go"
+            unsetUpstreamTimer.card = null
+            unsetUpstreamTimer.start()
         } else if (act === "switch-mark") {
             // The mark the `switch` row wears when its press would raise a question. Argument `<branch>:asks|plain`;
             // the report judges it — a 16px mark in a full window is not for the picture (verify-ui「目視は等倍以上で」).
@@ -429,12 +438,14 @@ Item {
         /// injected click reaches a popup offscreen.
         property bool lists: false
         property bool dropped: false
+        /// Whether the run writes a name into the box at all — `wantName` may be the empty one.
+        property bool types: false
         property string wantName: ""
         property bool typed: false
         onTriggered: {
             if (!graphPane.askCard.settled)
                 return
-            if (upstreamAskTimer.wantName !== "" && !upstreamAskTimer.typed) {
+            if (upstreamAskTimer.types && !upstreamAskTimer.typed) {
                 upstreamFlow.setBranchName(upstreamAskTimer.wantName)
                 upstreamAskTimer.typed = true
                 return
@@ -453,26 +464,106 @@ Item {
                 return
             upstreamAskTimer.stop()
             // `there=` is whether the answered name exists here — it drives the bar's line, not the pill (a name not
-            // here is an answer: デザイン規約 §ブランチが測られる相手を決める). `rows=` / `open=`: an empty list and
-            // an unplumbed one frame alike.
+            // here is an answer: デザイン規約 §ブランチが測られる相手を決める). `unsetting=` / `pill=`: an emptied name
+            // turns the question into taking the upstream off, the pill read off the bar itself. `rows=` / `open=`: an
+            // empty list and an unplumbed one frame alike.
             Harness.report("upstream branch=" + upstreamFlow.branch
                               + " remote=" + upstreamFlow.remote
                               + " name=" + upstreamFlow.branchName
                               + " there=" + upstreamFlow.targetIsThere
                               + " answerable=" + graphPane.askAnswerable
+                              + " unsetting=" + upstreamFlow.unsetting
+                              + " pill=" + graphPane.askCard.accept
+                              + " presses=" + graphPane.askCard.holdPresses
                               + " rows=" + upstreamFlow.branches.length
                               + " open=" + upstreamFlow.branchesOpen())
             if (!upstreamAskTimer.answers) {
                 driver.complete()
                 return
             }
-            driver.pressWrite("answer-ask", () => {
-                if (upstreamAskTimer.byKey)
-                    return upstreamFlow.enterBranch()
-                page.answerRowAsk()
-                return true
-            })
+            // The gesture a person is given: a held pill is not answered by a click, nor by a key (a run of `-enter`
+            // on one waits out the watchdog by rule).
+            if (graphPane.askHold && !upstreamAskTimer.byKey) {
+                driver.holdToEnd(graphPane)
+            } else {
+                driver.pressWrite("answer-ask", () => {
+                    if (upstreamAskTimer.byKey)
+                        return upstreamFlow.enterBranch()
+                    page.answerRowAsk()
+                    return true
+                })
+            }
+            upstreamShutTimer.start()
+        }
+    }
+    // The bar goes back up as the question is answered: the write barrier is waited from there, so the picture is not
+    // of the bar half way up (`AskBar.shut`).
+    SampleTimer {
+        id: upstreamShutTimer
+        onTriggered: {
+            if (!graphPane.askCard.shut)
+                return
+            upstreamShutTimer.stop()
             writeBarrier.start()
+        }
+    }
+    /// `unset-upstream[-go]`: the card goes up once nothing is out (a card raised under a write greys its rows), the
+    /// row is read off it, and `-go` presses it through to the listing the write's refresh publishes.
+    SampleTimer {
+        id: unsetUpstreamTimer
+        property string branch: ""
+        property bool onChip: false
+        property bool goes: false
+        /// The card the run stood up; null until then.
+        property var card: null
+        onTriggered: {
+            if (unsetUpstreamTimer.card === null) {
+                // The precondition is read here and nowhere else (app-ui.md §UI 自動化).
+                if (!driver.menusLive())
+                    return
+                const oid = branchesModel.oidOfName(unsetUpstreamTimer.branch)
+                if (unsetUpstreamTimer.onChip) {
+                    page.openRowMenu(oid, { "kind": "branch", "name": unsetUpstreamTimer.branch })
+                    driver.commitMenu.openSub(driver.commitBranchCard)
+                    unsetUpstreamTimer.card = driver.commitBranchCard
+                } else {
+                    page.openRefMenu("branch", unsetUpstreamTimer.branch, unsetUpstreamTimer.branch, oid)
+                    refMenu.openSub(refBranchCard)
+                    unsetUpstreamTimer.card = refBranchCard
+                }
+                return
+            }
+            unsetUpstreamTimer.stop()
+            const row = unsetUpstreamTimer.card.unsetUpstreamItem
+            // The shape is fixed as the card opens: seat, chip, what it names, the plain delete's presses and ink.
+            Harness.report("unset_upstream where=" + (unsetUpstreamTimer.onChip ? "chip" : "row")
+                              + " offered=" + row.offered
+                              + " code=" + row.code
+                              + " presses=" + row.holdPresses
+                              + " plain=" + (row.holdTone === Theme.textPrimary)
+                              + " text=" + row.text)
+            if (!unsetUpstreamTimer.goes || !row.offered) {
+                driver.complete()
+                return
+            }
+            // The row closes the card itself (`RefBranchMenu`'s `onHeld`).
+            driver.holdToEnd(row)
+            unsetLandedTimer.start()
+        }
+    }
+    // git's answer, judged on the branch's own row: the listing the write's refresh publishes names no upstream for it,
+    // listed or gone (`NavSectionModel.upstreamNamed`).
+    SampleTimer {
+        id: unsetLandedTimer
+        onTriggered: {
+            if (!driver.wroteAndSettled())
+                return
+            const left = branchesModel.upstreamNamed(unsetUpstreamTimer.branch)
+            if (left !== "" && !repoTab.writeRefused)
+                return
+            unsetLandedTimer.stop()
+            Harness.report("unset_upstream_landed refused=" + repoTab.writeRefused + " upstream=" + left)
+            driver.complete()
         }
     }
 }

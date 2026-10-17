@@ -720,3 +720,62 @@ fn a_branch_a_stopped_rebase_holds_is_held_by_that_worktree() {
     );
     assert_eq!(held("nobody"), None);
 }
+
+/// What the BRANCH card names, and in which colour, when the upstream
+/// comes off: wherever the configured upstream stands — a remote reading,
+/// a branch here (the one the worktree is on, or another), or gone
+/// (`upstream_named` / `upstream_where`, デザイン規約 §ref の種別).
+#[test]
+fn an_upstream_is_named_wherever_it_stands() {
+    let mut reads = local("reads", false);
+    reads.upstream = "origin/reads".into();
+    let here = |short: &str, on: &str| {
+        let mut branch = local(short, false);
+        branch.upstream_local = on.into();
+        branch.upstream_here = true;
+        branch
+    };
+    let mut lost = local("lost", false);
+    lost.upstream_gone = "origin/lost".into();
+    let mut lost_here = local("lost-here", false);
+    lost_here.upstream_gone = "base".into();
+    lost_here.upstream_here = true;
+    let mut list = vec![
+        reads,
+        here("stacked", "main"),
+        here("aside", "stacked"),
+        lost,
+        lost_here,
+        local("main", true),
+        local("plain", false),
+    ];
+    list.sort_by(|a, b| a.short.cmp(&b.short));
+    let mut model = section("branches", Source::Locals(locals(list)));
+    model.arrange();
+    let told = |name: &str| {
+        (
+            model.upstream_named(name.to_string()),
+            model.upstream_where(name.to_string(), "main".to_string()),
+        )
+    };
+    let pair = |named: &str, place: &str| (named.to_string(), place.to_string());
+    assert_eq!(told("reads"), pair("origin/reads", "remote"));
+    assert_eq!(
+        told("stacked"),
+        pair("main", "current"),
+        "the branch the worktree is on"
+    );
+    assert_eq!(told("aside"), pair("stacked", "local"));
+    assert_eq!(
+        told("lost"),
+        pair("origin/lost", "remote"),
+        "gone, named all the same"
+    );
+    assert_eq!(told("lost-here"), pair("base", "local"));
+    assert_eq!(told("plain"), pair("", ""), "nothing to take off");
+    assert_eq!(
+        told("nobody"),
+        pair("", ""),
+        "a name this section does not carry"
+    );
+}

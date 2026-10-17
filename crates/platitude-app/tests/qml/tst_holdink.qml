@@ -219,5 +219,26 @@ Item {
             compareMarks(ask, Theme.warningDim, "off")
             ask.answerable = true
         }
+        // The plain delete's question as `UpstreamFlow` dresses its unset: two presses, the words in the plain ink —
+        // the pill's, and a name in the heading in its own colour — and the warning on the mark alone, a step down
+        // where it cannot be pressed.
+        function test_plain_ask_pill() {
+            ask.plainHold = true
+            ask.plainWords = true
+            compare(ask.holdPresses, Metrics.holdPressesPlain)
+            for (const one of marksIn(ask))
+                compare(one.presses, Metrics.holdPressesPlain)
+            verify(Qt.colorEqual(ask.holdTone, Theme.textPrimary), "the pill's word once pressed: " + ask.holdTone)
+            ask.labelRefTint = Theme.textLink
+            verify(Qt.colorEqual(ask.labelTint, Theme.textLink), "the heading's name: " + ask.labelTint)
+            compareMarks(ask, Theme.warning, "live")
+            ask.answerable = false
+            compareMarks(ask, Theme.warningDim, "off")
+            ask.answerable = true
+            ask.plainWords = false
+            ask.plainHold = false
+            compare(ask.holdPresses, Metrics.holdPressesWarned)
+            verify(Qt.colorEqual(ask.labelTint, ask.tone), "a state colour takes the whole heading")
+        }
     }
 }

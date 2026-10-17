@@ -97,10 +97,11 @@ Item {
     signal applyStashRequested(string selector)
     signal popStashRequested(string selector)
     signal dropStashRequested(string selector)
-    /// The branch card's four, passed straight up: the delete git may still refuse, the upstream (`UpstreamFlow`), the
-    /// push, and the first push's question (`PublishFlow`).
+    /// The branch card's five, passed straight up: the delete git may still refuse, the upstream set (`UpstreamFlow`)
+    /// and taken off, the push, and the first push's question (`PublishFlow`).
     signal deleteRequested(string kind, string id, string name, string oidHex)
-    signal upstreamRequested(string branch, string counterpart)
+    signal upstreamRequested(string branch, string counterpart, bool unsettable)
+    signal unsetUpstreamRequested(string branch)
     signal pushBranchRequested(string branch, string force, string lease)
     signal publishRequested(string branch, string upstream)
     signal cherryPickRequested(string oidHex)
@@ -439,7 +440,9 @@ Item {
             checkedBranch: rowMenu.checkedBranch
             checkedMerged: rowMenu.checkedMerged
             onDeleteRequested: (kind, id, name, oidHex) => rowMenu.deleteRequested(kind, id, name, oidHex)
-            onUpstreamRequested: (branch, counterpart) => rowMenu.upstreamRequested(branch, counterpart)
+            onUpstreamRequested: (branch, counterpart, unsettable) =>
+                rowMenu.upstreamRequested(branch, counterpart, unsettable)
+            onUnsetUpstreamRequested: branch => rowMenu.unsetUpstreamRequested(branch)
             onPushRequested: (branch, force, lease) => rowMenu.pushBranchRequested(branch, force, lease)
             onPublishRequested: (branch, upstream) => rowMenu.publishRequested(branch, upstream)
             onCheckDeleteRequested: branch => rowMenu.checkDeleteRequested(branch)

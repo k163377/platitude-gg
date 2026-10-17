@@ -463,11 +463,60 @@ pub(super) const TABLE: &[Verb] = &[
     // types a name no demo repository carries, answerable all the same —
     // the next push makes it (デザイン規約 §ブランチが測られる相手を決める).
     // The pair: plain alone passes an implementation that reads nothing,
-    // `:missing` alone one that never looks at the refs.
+    // `:missing` alone one that never looks at the refs. A bare `:` empties
+    // the name: on a branch with an upstream the question turns into taking
+    // it off, held as the plain delete's two presses; on one without
+    // (`scratch`, as it opens and emptied) it stays the `Set` question — the
+    // pair again, against a bar that turns everywhere and one that never does.
     Verb {
         name: "set-upstream",
-        when: &[(Arg::Ends(":missing"), "there=false answerable=true")],
-        plain: "there=true answerable=true",
+        when: &[
+            (Arg::Ends(":missing"), "there=false answerable=true"),
+            (
+                Arg::Is("scratch"),
+                "name=scratch there=false answerable=true unsetting=false pill=Set presses=0",
+            ),
+            (
+                Arg::Is("scratch:"),
+                "name= there=false answerable=false unsetting=false pill=Set presses=0",
+            ),
+            (
+                Arg::Ends(":"),
+                "name= there=false answerable=true unsetting=true pill=Unset presses=2",
+            ),
+        ],
+        plain: "there=true answerable=true unsetting=false pill=Set presses=0",
+    },
+    // The BRANCH card's row that takes an upstream off, through each door
+    // (`chip:` is the graph row's), on a gone one (`--preset gone`), on a
+    // branch here (`stacked` tracks `main`, `remote = .` — the listing
+    // names it apart from a reading), and where there is none (`scratch`):
+    // the seat is core's answer, the words (no chip) name the upstream, and
+    // the gesture is the plain delete's.
+    Verb {
+        name: "unset-upstream",
+        when: &[
+            (Arg::Is("scratch"), "unset_upstream where=row offered=false"),
+            (
+                Arg::Is("stacked"),
+                "unset_upstream where=row offered=true code= presses=2 plain=true \
+                 text=Unset upstream main",
+            ),
+            (
+                Arg::Starts("chip:"),
+                "unset_upstream where=chip offered=true code= presses=2 plain=true \
+                 text=Unset upstream origin/",
+            ),
+        ],
+        plain: "unset_upstream where=row offered=true code= presses=2 plain=true \
+                text=Unset upstream origin/",
+    },
+    // Pressed through: the listing the write's refresh publishes names no
+    // upstream for the branch, listed or gone.
+    Verb {
+        name: "unset-upstream-go",
+        when: &[],
+        plain: "unset_upstream_landed refused=false upstream=",
     },
     // The name box's list: the box opens one only when it has rows
     // (`AppCombo.hasList`), so `open=true` is the list plumbed. What is in
@@ -482,8 +531,11 @@ pub(super) const TABLE: &[Verb] = &[
     // was answered.
     Verb {
         name: "set-upstream-go",
-        when: &[],
-        plain: "there=true answerable=true",
+        when: &[(
+            Arg::Ends(":"),
+            "answerable=true unsetting=true pill=Unset presses=2",
+        )],
+        plain: "there=true answerable=true unsetting=false pill=Set presses=0",
     },
     // The first push's question answered from its name box instead of the
     // pill (デザイン規約 §立っている質問は 1 か所で聞く), on `publish-go`'s

@@ -392,6 +392,56 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
+    /// The upstream this branch is configured with, wherever it stands —
+    /// a remote reading, a branch here, or gone (`BranchItem::upstream` /
+    /// `upstream_local` / `upstream_gone`). What the menu offers to take
+    /// off (`offers::ref_menu`'s `tracked`); empty where it has none, and
+    /// for every section but the branches.
+    #[qslot]
+    pub(super) fn upstream_named(&self, name: String) -> String {
+        self.all
+            .branch_named(&name)
+            .map(|branch| {
+                [
+                    &branch.upstream,
+                    &branch.upstream_local,
+                    &branch.upstream_gone,
+                ]
+                .into_iter()
+                .find(|named| !named.is_empty())
+                .map_or_else(String::new, |named| named.as_str().to_string())
+            })
+            .unwrap_or_default()
+    }
+
+    /// Where that upstream stands, which is the colour its name wears
+    /// (デザイン規約 §ref の種別「名前の色 = 在処」): `remote` for a remote
+    /// branch, listed or gone; `current` for the branch `current` names,
+    /// the one the worktree is on; `local` for any other branch here. Empty
+    /// where there is none, and for every section but the branches.
+    #[qslot]
+    pub(super) fn upstream_where(&self, name: String, current: String) -> String {
+        let Some(branch) = self.all.branch_named(&name) else {
+            return String::new();
+        };
+        let word = if !branch.upstream.is_empty() {
+            "remote"
+        } else if !branch.upstream_local.is_empty() {
+            if branch.upstream_local.as_str() == current {
+                "current"
+            } else {
+                "local"
+            }
+        } else if branch.upstream_gone.is_empty() {
+            ""
+        } else if branch.upstream_here {
+            "local"
+        } else {
+            "remote"
+        };
+        word.to_string()
+    }
+
     /// How far the branch of this name stands from what it reads, as of
     /// the last fetch — the pair its own row draws (`models::nav::field` の
     /// `Role::Ahead`). Zero where level, untracked, or not in this section.

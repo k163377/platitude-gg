@@ -17,18 +17,21 @@ Item {
     property string asked: ""
 
     /// Word lists as `offers::RefMenuOffers::words` answers them — data, not a rule.
-    readonly property var free: ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream"]
+    readonly property var free: ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream",
+                                 "unset-upstream"]
     /// The branch the worktree is on: no move, no delete, and the rows say so.
-    readonly property var current: ["branch-here", "integrate", "set-upstream", "current"]
+    readonly property var current: ["branch-here", "integrate", "set-upstream", "unset-upstream", "current"]
     /// One another worktree holds: `switch` stays and leads there without asking, the delete goes.
-    readonly property var held: ["switch", "branch-here", "integrate", "set-upstream"]
+    readonly property var held: ["switch", "branch-here", "integrate", "set-upstream", "unset-upstream"]
     /// A reading standing on another commit: the local delete stays, the one that reaches over there goes.
-    readonly property var drifted: ["switch", "branch-here", "integrate", "delete", "set-upstream"]
+    readonly property var drifted: ["switch", "branch-here", "integrate", "delete", "set-upstream", "unset-upstream"]
 
     RefBranchMenu {
         id: card
         onDeleteRequested: (kind, id, name, oidHex) => root.asked = "delete " + kind + " " + id
-        onUpstreamRequested: (branch, counterpart) => root.asked = "upstream " + branch + " " + counterpart
+        onUpstreamRequested: (branch, counterpart, unsettable) =>
+            root.asked = "upstream " + branch + " " + counterpart + " " + unsettable
+        onUnsetUpstreamRequested: branch => root.asked = "unset " + branch
         onCheckDeleteRequested: branch => root.asked = "check " + branch
         onForceDeleteRequested: branch => root.asked = "force " + branch
         onDeleteRemoteRequested: (remoteRef, expect) => root.asked = "delete-remote " + remoteRef + " " + expect
@@ -44,6 +47,7 @@ Item {
     function standOn(fields) {
         const all = { "kind": "branch", "name": "feature/topic-a", "full": "feature/topic-a",
                       "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
+                      "upstream": "origin/feature/topic-a", "upstreamWhere": "remote",
                       "remoteCounterpartOid": "def456", "remoteDrifted": false, "open": true, "merged": "yes",
                       "offers": root.free, "push": undefined }
         for (const key in fields)
@@ -53,6 +57,8 @@ Item {
             "heldByWorktree": all.heldByWorktree,
             "holderLeaf": all.holderLeaf,
             "remoteCounterpart": all.remoteCounterpart,
+            "upstream": all.upstream,
+            "upstreamWhere": all.upstreamWhere,
             "remoteCounterpartOid": all.remoteCounterpartOid,
             "remoteDrifted": all.remoteDrifted,
             "open": all.open,
@@ -134,6 +140,47 @@ Item {
             verify(card.upstreamItem.offered, "the branch the tree is on writes settings like any other")
         }
 
+        /// Taking the upstream off (デザイン規約 §ブランチが測られる相手を決める): seated by core's word, in words that pair
+        /// with `Set upstream…`, naming what goes, the plain delete's two presses in the plain ink.
+        function test_the_unset_row_names_the_upstream_it_takes_off() {
+            root.standOn({})
+            const row = card.unsetUpstreamItem
+            verify(row.offered)
+            compare(row.code, "", "words, no chip")
+            compare(row.text, "Unset upstream origin/feature/topic-a")
+            compare(row.refName, "origin/feature/topic-a")
+            compare(row.holdPresses, Metrics.holdPressesPlain)
+            compare(row.holdTone, Theme.textPrimary)
+            // A plain delete's words keep the ordinary rules, so the name wears where it stands (§回数押しの色).
+            verify(Qt.colorEqual(row.refColor, Theme.textSecondary), "a remote branch's own colour: " + row.refColor)
+            root.standOn({ remoteCounterpart: "", upstream: "release", upstreamWhere: "local" })
+            verify(Qt.colorEqual(row.refColor, Theme.textPrimary), "a branch here: " + row.refColor)
+            root.standOn({ remoteCounterpart: "", upstream: "main", upstreamWhere: "current" })
+            verify(Qt.colorEqual(row.refColor, Theme.textLink), "the branch the tree is on: " + row.refColor)
+
+            // A gone upstream names no reading, and is taken off all the same.
+            root.standOn({ remoteCounterpart: "", remoteCounterpartOid: "", upstream: "origin/gone" })
+            verify(row.offered)
+            compare(row.refName, "origin/gone")
+
+            root.standOn({ offers: root.current })
+            verify(row.offered, "the branch the tree is on takes it like any other setting")
+
+            root.standOn({ remoteCounterpart: "", upstream: "", offers: ["switch", "delete", "set-upstream"] })
+            verify(!row.offered, "nothing to take off")
+        }
+
+        /// The question an emptied name turns into is only offered where there is something to take off.
+        function test_the_upstream_question_is_told_whether_an_emptied_name_unsets() {
+            root.standOn({ remoteCounterpart: "", remoteCounterpartOid: "", upstream: "origin/gone" })
+            card.upstreamItem.triggered()
+            compare(root.asked, "upstream feature/topic-a  true", "opens at the default, and the gone one can go")
+
+            root.standOn({ remoteCounterpart: "", upstream: "", offers: ["switch", "delete", "set-upstream"] })
+            card.upstreamItem.triggered()
+            compare(root.asked, "upstream feature/topic-a  false", "nothing for it to take off")
+        }
+
         /// A remote-tracking row keeps the assembled rule; its own delete is the held one reaching past this machine.
         function test_a_remote_row_keeps_only_the_rows_it_can_name() {
             root.standOn({ kind: "remote", name: "origin/main", full: "origin/main",
@@ -146,6 +193,7 @@ Item {
             verify(!card.deleteRemoteItem.offered, "a reading has no reading of its own")
             verify(!card.deleteBothItem.offered)
             verify(!card.upstreamItem.offered, "and no setting of its own either")
+            verify(!card.unsetUpstreamItem.offered)
         }
 
         /// The toolbar's forms for a branch the worktree is not on (デザイン規約 §リモートへ送る): a click where git takes
@@ -286,7 +334,11 @@ Item {
 
             root.standOn({})
             card.upstreamItem.triggered()
-            compare(root.asked, "upstream feature/topic-a origin/feature/topic-a")
+            compare(root.asked, "upstream feature/topic-a origin/feature/topic-a true")
+
+            root.standOn({})
+            card.unsetUpstreamItem.held()
+            compare(root.asked, "unset feature/topic-a")
 
             // What reaches the remote is leased to the reading's own commit.
             root.standOn({})

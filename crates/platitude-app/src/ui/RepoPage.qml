@@ -864,12 +864,14 @@ FocusScope {
         repoTab: repoTab
         remotesModel: remotesModel
         graphPane: graphPane
+        headBranch: worktree.branch
         onAskRequested: (oidHex, label, accept, run, form) =>
             page.startRowAsk(oidHex, label, "", false, accept, run, false, "", form, "")
     }
     /// The branch card's row, from either menu it is carried by; the question is marked on that branch's own row.
-    function startUpstreamAsk(branch, counterpart) {
-        upstreamFlow.startAsk(branch, branchesModel.oidOfName(branch), counterpart)
+    /// `unsettable`: it has an upstream an emptied name takes off.
+    function startUpstreamAsk(branch, counterpart, unsettable) {
+        upstreamFlow.startAsk(branch, branchesModel.oidOfName(branch), counterpart, unsettable)
     }
 
     // ---- what a name changed here does to the remote ----------------
@@ -987,7 +989,8 @@ FocusScope {
                                         page.addWorktreeAt(path, mode, branch, start, name)
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onDropStashRequested: selector => page.dropStashNow(selector)
-            onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
+            onUpstreamRequested: (branch, counterpart, unsettable) =>
+                page.startUpstreamAsk(branch, counterpart, unsettable)
             onPublishRequested: (branch, upstream) => page.startPublishAskFor(branch, upstream)
             onRemoveWorktreeRequested: (path, name, holds) => repoTab.removeWorktree(path, name, holds)
         }
@@ -1473,7 +1476,9 @@ FocusScope {
             }
             // The branch card's own rows, answered where the ref menu's are.
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
-            onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
+            onUpstreamRequested: (branch, counterpart, unsettable) =>
+                page.startUpstreamAsk(branch, counterpart, unsettable)
+            onUnsetUpstreamRequested: branch => repoTab.unsetUpstream(branch)
             onPushBranchRequested: (branch, force, lease) => repoTab.pushNamed(branch, force, lease)
             onPublishRequested: (branch, upstream) => page.startPublishAskFor(branch, upstream)
             onRemoveWorktreeRequested: (path, name, holds) => repoTab.removeWorktree(path, name, holds)

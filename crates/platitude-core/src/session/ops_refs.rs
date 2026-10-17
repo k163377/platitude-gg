@@ -178,6 +178,21 @@ impl RepoSession {
         )
     }
 
+    /// Leaves a local branch measured against nothing
+    /// ([`branch::unset_upstream`]). Asked only of a branch the listing
+    /// shows with an upstream, whose keys `branch --set-upstream-to` and
+    /// this app write to the repository's own file. Queued and redrawn as
+    /// [`Self::set_upstream`] is.
+    pub fn unset_upstream(self: &Arc<Self>, branch: String) -> Option<OperationId> {
+        self.write(
+            OperationKind::Branch,
+            AfterWrite::Config,
+            move |exec, repo, cancel| async move {
+                branch::unset_upstream(&exec, &repo.workdir, &branch, &cancel).await
+            },
+        )
+    }
+
     pub fn rename_branch(
         self: &Arc<Self>,
         from: String,
