@@ -2,6 +2,7 @@
 //! refs, and the rows it lists them as.
 
 use super::*;
+use crate::remote::{PushStanding, Upstream};
 
 /// Sidebar-ready refs snapshot (sorted).
 ///
@@ -79,14 +80,11 @@ pub struct BranchPushFacts {
     /// upstream, or the tracking ref of where a mark sends the push —, which
     /// an overwrite is leased to. `None` where nothing is counted against.
     pub lease: Option<Oid>,
-    /// The upstream the branch is configured for, here or not — where a
-    /// first push's question opens (デザイン規約 §はじめてリモートへ送る).
+    /// The remote branch the branch is configured for, fetched or not —
+    /// where a first push's question opens (デザイン規約 §はじめてリモートへ
+    /// 送る). Empty for a branch here, which names no remote whatever its
+    /// name looks like.
     pub upstream: String,
-    /// Measured against another branch here (`branch.<n>.remote = .`)
-    /// that is listed, and marked to no remote: nowhere to send it, and a
-    /// first push's answer would replace that upstream with a remote one.
-    /// The row stands out and says why; every other field is its default.
-    pub upstream_here: bool,
 }
 
 impl RefsSnapshot {
@@ -240,10 +238,9 @@ impl RefsSnapshot {
     /// nothing here — its push is the toolbar's, off the status tick, and
     /// this snapshot keeps none of its marks or counts. A branch measured
     /// against another branch here (`branch.<n>.remote = .`) that is listed
-    /// answers only that ([`BranchPushFacts::upstream_here`]) — unless a
-    /// mark sends it to a remote, where it stands on the counts there
-    /// (`remote::marked_standing`). One whose branch here is gone asks
-    /// where it goes, as git's `[gone]` does anywhere.
+    /// stands as the toolbar's would (`PushStanding::StaysHere`, or a
+    /// mark's destination and its counts); one whose upstream, of either
+    /// kind, is gone asks where it goes, as git's `[gone]` does anywhere.
     pub fn branch_push(&self, short: &str, fallback: &str) -> BranchPushFacts {
         let Some(branch) = self.local_named(short) else {
             return BranchPushFacts::default();
@@ -264,22 +261,15 @@ impl RefsSnapshot {
         } else {
             push_remote
         };
-        // An upstream with a commit and no reading among the remote
-        // branches is a branch here (`RefJoins::upstream_commit`): only a
-        // mark sends such a branch to a remote, under its own name, and the
-        // push leaves the upstream be (`remote::plan_push`).
-        let upstream_here = branch.upstream.is_empty() && branch.upstream_oid.is_some();
-        if upstream_here && marked.is_empty() {
-            return BranchPushFacts {
-                upstream_here: true,
-                ..BranchPushFacts::default()
-            };
-        }
-        let tracked = !branch.upstream.is_empty();
-        let upstream = if tracked {
-            branch.upstream.as_str()
+        // With whether its ref is in the listing: a remote branch's reading
+        // fills `upstream`, a branch here's commit `upstream_oid`
+        // (`RefJoins::upstream_commit`).
+        let (upstream, tracked) = if branch.upstream_here {
+            (Upstream::Here, branch.upstream_oid.is_some())
+        } else if !branch.upstream.is_empty() {
+            (Upstream::Remote(branch.upstream.as_str()), true)
         } else {
-            branch.upstream_gone.as_str()
+            (Upstream::of(branch.upstream_gone.as_str(), false), false)
         };
         let remotes = || self.remote_names.iter().map(String::as_str);
         // Only counts against where the marks send the branch now: a read
@@ -296,33 +286,40 @@ impl RefsSnapshot {
             .cloned()
             .unwrap_or_default();
         let counted = |count: u32| i32::try_from(count).unwrap_or(i32::MAX);
-        let elsewhere = upstream_here
-            || crate::remote::pushes_elsewhere(upstream, push_remote, push_default, remotes());
-        let measured = if elsewhere {
-            track.tracking.as_str()
-        } else if tracked {
-            upstream
-        } else {
-            ""
+        let standing = crate::remote::push_standing(
+            false,
+            false,
+            short,
+            upstream,
+            tracked,
+            counted(branch.ahead),
+            counted(branch.behind),
+            push_remote,
+            push_default,
+            remotes(),
+            &track,
+        );
+        // The remote branch the counts are against: none where the push
+        // stays here; where a mark sends it elsewhere, its tracking ref
+        // there; else the upstream, when it is a remote's and fetched.
+        let measured = match standing {
+            PushStanding::StaysHere => "",
+            _ if crate::remote::pushes_elsewhere(
+                upstream,
+                push_remote,
+                push_default,
+                remotes(),
+            ) =>
+            {
+                track.tracking.as_str()
+            }
+            _ => match upstream {
+                Upstream::Remote(name) if tracked => name,
+                _ => "",
+            },
         };
         BranchPushFacts {
-            standing: if upstream_here {
-                crate::remote::marked_standing(&track)
-            } else {
-                crate::remote::push_standing(
-                    false,
-                    false,
-                    short,
-                    upstream,
-                    tracked,
-                    counted(branch.ahead),
-                    counted(branch.behind),
-                    push_remote,
-                    push_default,
-                    remotes(),
-                    &track,
-                )
-            },
+            standing,
             target: crate::remote::push_target(
                 short,
                 upstream,
@@ -332,8 +329,10 @@ impl RefsSnapshot {
                 remotes(),
             ),
             lease: self.remote_named(measured).map(|remote| remote.oid),
-            upstream: upstream.to_string(),
-            upstream_here: false,
+            upstream: match upstream {
+                Upstream::Remote(name) => name.to_string(),
+                Upstream::Here | Upstream::None => String::new(),
+            },
         }
     }
 
@@ -522,6 +521,11 @@ pub struct BranchItem {
     /// listing answers to the name (git's `[gone]`), by short name. Never
     /// filled together with [`Self::upstream`].
     pub upstream_gone: crate::Name,
+    /// The configured upstream is a branch here (`branch.<n>.remote = .`),
+    /// listed or gone ([`crate::refs::RefEntry::upstream_is_here`]). The
+    /// short names above cannot say so: a branch here may be called
+    /// `origin/main`.
+    pub upstream_here: bool,
     /// The commit the configured upstream stands on (under `remote = .` a
     /// branch here); `None` where there is none or it is not in the
     /// listing. The reference point `branch --delete` measures the tip

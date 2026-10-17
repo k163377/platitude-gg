@@ -391,9 +391,10 @@ Rectangle {
         topBar.curPage === null || !topBar.curPage.pageWorktree.headKnown ? ""
         : topBar.curPage.pageWorktree.detached ? qsTr("detached")
         : topBar.curPage.pageWorktree.branch
-    /// What this branch is measured against — **the whole ref as git names it** (`origin/main`), not the remote alone:
-    /// a branch can follow a remote one under another name, so `origin` would leave the reader guessing which. Empty
-    /// with no upstream.
+    /// What this branch is measured against — **the whole ref as the remote branches are listed** (`origin/main`, as
+    /// the status tick names it: `platitude_core::remote::PushMarks::upstream_name`), not the remote alone: a branch
+    /// can follow a remote one under another name, so `origin` would leave the reader guessing which. Empty with no
+    /// upstream.
     readonly property string branchUpstream:
         topBar.curPage === null ? "" : topBar.curPage.pageWorktree.upstream
     /// Whether that upstream has gone from the remote — git's own `[gone]`, read where the left panel reads it

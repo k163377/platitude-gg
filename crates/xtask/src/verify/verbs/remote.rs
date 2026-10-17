@@ -89,7 +89,14 @@ pub(super) const TABLE: &[Verb] = &[
             (
                 Arg::Ends("stacked"),
                 "offered=true state= code=push held=false blocked=true tip=true text=to… \
-                 says=Cannot push — its upstream is a local branch",
+                 says=Cannot push — its upstream is not supported",
+            ),
+            // `main` beside the worktree's `topic`, marked to this repository
+            // (`--preset localbase-dotmark`): out in the same words as `stacked`.
+            (
+                Arg::WithPreset("localbase-dotmark"),
+                "offered=true state= code=push held=false blocked=true tip=true text=to… \
+                 says=Cannot push — its upstream is not supported",
             ),
             (Arg::Ends("main"), "offered=false state= "),
         ],
@@ -308,6 +315,21 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::WithPreset("forkdiverged"),
                 "push_target label=fork/main state=diverged branch_mark=fork",
             ),
+            // Measured against the branch here called `origin/base`: the
+            // mark sends it to origin/topic, level with it — not to
+            // origin's `base`, which the status's name for it reads like.
+            (
+                Arg::WithPreset("localbase-marked"),
+                "push_target label=origin/topic state=clean branch_mark=origin",
+            ),
+            // Tracking origin's own `base` beside the branch here that took
+            // the short name: named as the send names it, not as git
+            // status shortens it (`remotes/origin/base`).
+            (
+                Arg::WithPreset("localbase-beside"),
+                "push_target label=origin/base state=ready branch_mark= repo_mark=origin \
+                 tracks=origin/base",
+            ),
         ],
         plain: "push_target label=origin/main state=ready branch_mark=",
     },
@@ -326,6 +348,16 @@ pub(super) const TABLE: &[Verb] = &[
             (
                 Arg::WithPreset("forkdiverged"),
                 "push_hover tip=true mode=diverged ahead=1 behind=1",
+            ),
+            // Measured against a branch here, marked to no remote — or marked
+            // to this repository itself: out, and the tip says why.
+            (
+                Arg::WithPreset("localbase"),
+                "push_hover tip=true mode=stays-here",
+            ),
+            (
+                Arg::WithPreset("localbase-dotmark"),
+                "push_hover tip=true mode=stays-here",
             ),
         ],
         plain: "push_hover tip=true mode=ready ahead=1 behind=0",

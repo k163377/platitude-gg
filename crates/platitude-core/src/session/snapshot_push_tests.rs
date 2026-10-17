@@ -19,6 +19,7 @@ fn branch(short: &str, at: u8) -> BranchItem {
         is_head: false,
         upstream: "".into(),
         upstream_gone: "".into(),
+        upstream_here: false,
         upstream_oid: None,
         upstream_drifted: false,
         held_elsewhere: false,
@@ -92,7 +93,6 @@ fn a_tracked_branch_stands_against_its_upstream_as_the_toolbar_would() {
             target: "origin/ahead".to_string(),
             lease: Some(oid(b'a')),
             upstream: "origin/ahead".to_string(),
-            upstream_here: false,
         }
     );
     assert_eq!(
@@ -154,43 +154,45 @@ fn the_branch_head_is_on_answers_nothing_here() {
     assert_eq!(at.branch_push("main", "origin"), BranchPushFacts::default());
 }
 
-/// `remote = .`: an upstream that is a branch here, listed, is all the row
-/// answers — a first push's answer would replace it with a remote one.
-/// Gone, it reads as git's `[gone]` anywhere: the row asks where the
-/// branch goes.
+/// `short` measured against the branch here called `upstream`, `ahead` of
+/// it; listed where `listed`, else gone (git's `[gone]`).
+fn against_here(short: &str, upstream: &str, ahead: u32, listed: bool) -> BranchItem {
+    BranchItem {
+        upstream_here: true,
+        upstream_oid: listed.then(|| oid(b'1')),
+        upstream_gone: if listed { "" } else { upstream }.into(),
+        ahead,
+        ..branch(short, b'2')
+    }
+}
+
+/// `remote = .` marked to no remote: nowhere to send it, so the row is the
+/// toolbar's `StaysHere` and nothing else — a first push's answer would
+/// replace that upstream with a remote one. Gone, it reads as git's
+/// `[gone]` anywhere, and the question opens on no remote: the gone name
+/// is a branch here's, whatever it looks like.
 #[test]
 fn a_branch_measured_against_one_here_sends_only_once_that_one_is_gone() {
     let at = snapshot(
         vec![
             branch("main", b'1'),
-            BranchItem {
-                upstream_oid: Some(oid(b'1')),
-                ahead: 1,
-                ..branch("topic", b'2')
-            },
-            BranchItem {
-                upstream_gone: "deleted".into(),
-                ..branch("orphan", b'3')
-            },
+            against_here("topic", "main", 1, true),
+            against_here("orphan", "origin/deleted", 0, false),
         ],
-        &[],
+        &[("origin/deleted", b'd')],
     );
     assert_eq!(
         at.branch_push("topic", "origin"),
         BranchPushFacts {
-            upstream_here: true,
+            standing: PushStanding::StaysHere,
             ..BranchPushFacts::default()
         }
     );
     let orphan = at.branch_push("orphan", "origin");
     assert_eq!(
-        (
-            orphan.standing,
-            orphan.upstream.as_str(),
-            orphan.upstream_here
-        ),
-        (PushStanding::Publish, "deleted", false),
-        "the question opens on the gone name, which names no remote"
+        (orphan.standing, orphan.upstream.as_str(), orphan.lease),
+        (PushStanding::Publish, "", None),
+        "not origin's `deleted`, which only shares the name"
     );
 }
 
@@ -200,21 +202,14 @@ fn a_branch_measured_against_one_here_sends_only_once_that_one_is_gone() {
 #[test]
 fn a_mark_sends_a_branch_measured_against_one_here_where_it_says() {
     let mut at = snapshot(
-        vec![
-            branch("main", b'1'),
-            BranchItem {
-                upstream_oid: Some(oid(b'1')),
-                ahead: 1,
-                ..branch("topic", b'2')
-            },
-        ],
+        vec![branch("main", b'1'), against_here("topic", "main", 1, true)],
         &[],
     );
     at.branch_push_remotes = vec![marked("topic", "origin")];
     let own = at.branch_push("topic", "origin");
     assert_eq!(
-        (own.upstream_here, own.standing, own.target.as_str()),
-        (false, PushStanding::Elsewhere, "origin/topic"),
+        (own.standing, own.target.as_str()),
+        (PushStanding::Elsewhere, "origin/topic"),
         "the branch's own mark"
     );
 
@@ -225,13 +220,50 @@ fn a_mark_sends_a_branch_measured_against_one_here_where_it_says() {
     });
     let repository = at.branch_push("topic", "origin");
     assert_eq!(
-        (
-            repository.upstream_here,
-            repository.standing,
-            repository.target.as_str()
-        ),
-        (false, PushStanding::Elsewhere, "fork/topic"),
+        (repository.standing, repository.target.as_str()),
+        (PushStanding::Elsewhere, "fork/topic"),
         "the repository's mark"
+    );
+}
+
+/// `topic` measured against the branch here called `origin/base`, two
+/// commits ahead of it, its own mark on origin: the destination is
+/// origin/topic, its counts and tip are what speak, and origin's own
+/// `base` — the same short name — plays no part.
+#[test]
+fn a_branch_here_named_like_a_remote_branch_is_still_a_branch_here() {
+    let mut at = snapshot(
+        vec![
+            branch("origin/base", b'1'),
+            against_here("topic", "origin/base", 2, true),
+        ],
+        &[("origin/base", b'b'), ("origin/topic", b'f')],
+    );
+    at.branch_push_remotes = vec![marked("topic", "origin")];
+    at.push_tracks = vec![(
+        "topic".to_string(),
+        PushTrack {
+            tracking: "origin/topic".to_string(),
+            ahead: 0,
+            behind: 0,
+        },
+    )];
+    assert_eq!(
+        at.branch_push("topic", "origin"),
+        BranchPushFacts {
+            standing: PushStanding::Clean,
+            target: "origin/topic".to_string(),
+            lease: Some(oid(b'f')),
+            upstream: String::new(),
+        },
+        "level with origin/topic: nothing to send, however far ahead of the branch here"
+    );
+
+    at.branch_push_remotes.clear();
+    assert_eq!(
+        at.branch_push("topic", "origin").standing,
+        PushStanding::StaysHere,
+        "unmarked, it does not go to origin for its upstream's name"
     );
 }
 
@@ -272,7 +304,6 @@ fn a_mark_sends_the_branch_elsewhere_and_its_counts_go_with_it() {
             target: "fork/counted".to_string(),
             lease: Some(oid(b'e')),
             upstream: "origin/counted".to_string(),
-            upstream_here: false,
         },
         "ready against the upstream, diverged where the push goes, leased to the tip there"
     );
@@ -325,7 +356,6 @@ fn counts_against_where_a_mark_used_to_send_the_branch_speak_for_nothing() {
             target: "mirror/counted".to_string(),
             lease: None,
             upstream: "origin/counted".to_string(),
-            upstream_here: false,
         },
         "not an overwrite of mirror leased to fork's tip"
     );

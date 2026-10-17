@@ -173,7 +173,8 @@ fn each_scoped_record(bytes: &[u8], mut each: impl FnMut(&str, &str, Option<&str
 
 /// Every key a push of the branch is resolved from: the branch's own
 /// `branch.<branch>.pushRemote`, the repository's [`PushDefault`] beside
-/// it, and what the branch tracks (`branch.<branch>.remote` / `.merge`).
+/// it, what the branch tracks (`branch.<branch>.remote` / `.merge`), and
+/// the fetch refspecs that name the tracking ref of that.
 ///
 /// The one reader of one branch's keys, shared by [`super::plan_push`] and
 /// the status tick: a second spelling lets the label name a remote the
@@ -190,7 +191,49 @@ pub struct PushMarks {
     /// `branch.<branch>.remote`: the remote the branch tracks.
     pub tracks: Option<String>,
     /// `branch.<branch>.merge`: the branch it tracks there, as a full ref.
+    /// The first of several, as git takes it (the rest are an octopus
+    /// pull's).
     pub merge: Option<String>,
+    /// Every remote's `remote.<name>.fetch` refspecs, by remote, in the
+    /// order git reads them: what maps `merge` to its tracking ref
+    /// ([`Self::upstream_name`]).
+    pub fetch: Vec<(String, String)>,
+}
+
+impl PushMarks {
+    /// Whether the branch is measured against a branch here
+    /// (`branch.<branch>.remote = .`, git's local repository) — which no
+    /// name tells: `git status` shortens a branch here called
+    /// `origin/main` to just that.
+    pub fn upstream_is_here(&self) -> bool {
+        self.tracks.as_deref() == Some(super::standing::THIS_REPOSITORY)
+    }
+
+    /// The upstream as the remote branches are listed — `merge` mapped
+    /// through the tracked remote's fetch refspecs as git maps it
+    /// (`origin/main`, or `origin/pr/12` for `refs/pull/12/head` under
+    /// `+refs/pull/*/head:refs/remotes/origin/pr/*`) — or a branch here by
+    /// its own name. `None` where the keys name none, where it maps outside
+    /// `refs/remotes/`, or where a branch here's merge is no branch: git's
+    /// own name for it stands there.
+    ///
+    /// Not `git status`'s name for it, which is shortened against what else
+    /// is here: beside a branch here called `origin/main`, origin's own
+    /// `main` comes out as `remotes/origin/main`.
+    pub fn upstream_name(&self) -> Option<String> {
+        let (tracks, merge) = (self.tracks.as_deref()?, self.merge.as_deref()?);
+        if self.upstream_is_here() {
+            return merge.strip_prefix("refs/heads/").map(str::to_string);
+        }
+        let refspecs = self
+            .fetch
+            .iter()
+            .filter(|(remote, _)| remote == tracks)
+            .map(|(_, refspec)| refspec.as_str());
+        super::refspec::fetched_into(refspecs, merge)?
+            .strip_prefix("refs/remotes/")
+            .map(str::to_string)
+    }
 }
 
 /// Reads every [`PushMarks`] key with one `--get-regexp` over the exact
@@ -201,7 +244,8 @@ pub struct PushMarks {
 /// as written. The branch name is escaped into the regex
 /// (`config::regexp_literal`): unescaped, `wip.v2+x` picks up
 /// `wipAv22x`'s keys. A key set at several levels answers with its last
-/// record, as `--get` does.
+/// record, as `--get` does — but for the multi-valued two, kept as git
+/// keeps them: every fetch refspec in order, and the first merge.
 pub async fn push_marks(
     executor: &GitExecutor,
     workdir: &Path,
@@ -209,7 +253,7 @@ pub async fn push_marks(
     cancel: &CancellationToken,
 ) -> Result<PushMarks, GitError> {
     let pattern = format!(
-        r"^(branch\.{}\.(pushremote|remote|merge)|remote\.pushdefault)$",
+        r"^(branch\.{}\.(pushremote|remote|merge)|remote\.pushdefault|remote\..+\.fetch)$",
         config::regexp_literal(branch)
     );
     let cmd = GitCommand::new()
@@ -225,7 +269,8 @@ pub async fn push_marks(
         // failure: a push planned on a misread "unset" rewrites upstreams.
         code => Err(GitError::Failed {
             command: format!(
-                "git config --get-regexp branch.{branch}.pushRemote/remote/merge remote.pushDefault"
+                "git config --get-regexp branch.{branch}.pushRemote/remote/merge \
+                 remote.pushDefault remote.*.fetch"
             ),
             code,
             stderr: out.failure_message(),
@@ -240,6 +285,15 @@ fn parse_push_marks(branch: &str, bytes: &[u8]) -> PushMarks {
             marks.push_default = value.map(|remote| PushDefault::at(scope, remote));
             return;
         }
+        if let Some(remote) = key
+            .strip_prefix("remote.")
+            .and_then(|rest| rest.strip_suffix(".fetch"))
+        {
+            if let Some(refspec) = value {
+                marks.fetch.push((remote.to_string(), refspec.to_string()));
+            }
+            return;
+        }
         let Some(variable) = key
             .strip_prefix("branch.")
             .and_then(|rest| rest.strip_prefix(branch))
@@ -250,6 +304,7 @@ fn parse_push_marks(branch: &str, bytes: &[u8]) -> PushMarks {
         let slot = match variable {
             "pushremote" => &mut marks.push_remote,
             "remote" => &mut marks.tracks,
+            "merge" if marks.merge.is_some() => return,
             "merge" => &mut marks.merge,
             _ => return,
         };
@@ -457,6 +512,98 @@ mod tests {
         );
         assert_eq!(marks.push_default.expect("a mark").remote, "fork\nx");
         assert_eq!(marks.push_remote.as_deref(), Some("origin"));
+    }
+
+    /// The tracking ref git names, by the tracked remote's own refspecs —
+    /// whatever its shortening for the status would make of it.
+    #[test]
+    fn the_upstream_is_named_through_the_remotes_refspecs() {
+        let fetch = |remote: &str, refspec: &str| (remote.to_string(), refspec.to_string());
+        let refspecs = vec![
+            fetch("origin", "+refs/heads/*:refs/remotes/origin/*"),
+            fetch("origin", "+refs/pull/*/head:refs/remotes/origin/pr/*"),
+            fetch("my/fork", "+refs/heads/*:refs/remotes/my/fork/*"),
+            fetch("mirror", "+refs/heads/*:refs/remotes/copy/*"),
+        ];
+        let named = |tracks: &str, merge: &str| {
+            let some = |value: &str| (!value.is_empty()).then(|| value.to_string());
+            PushMarks {
+                tracks: some(tracks),
+                merge: some(merge),
+                fetch: refspecs.clone(),
+                ..PushMarks::default()
+            }
+            .upstream_name()
+        };
+        assert_eq!(
+            named("origin", "refs/heads/base").as_deref(),
+            Some("origin/base")
+        );
+        assert_eq!(
+            named("my/fork", "refs/heads/feature/x").as_deref(),
+            Some("my/fork/feature/x")
+        );
+        assert_eq!(
+            named("origin", "refs/pull/12/head").as_deref(),
+            Some("origin/pr/12"),
+            "a pull request's head, under a refspec of its own"
+        );
+        assert_eq!(
+            named("mirror", "refs/heads/main").as_deref(),
+            Some("copy/main"),
+            "fetched into another name than the remote's"
+        );
+        assert_eq!(
+            named(".", "refs/heads/origin/base").as_deref(),
+            Some("origin/base"),
+            "a branch here, by its own name"
+        );
+        for (tracks, merge, why) in [
+            ("origin", "trunk", "no refspec takes a bare name in"),
+            ("gone", "refs/heads/base", "a remote with no refspecs"),
+            (
+                ".",
+                "refs/remotes/x/y",
+                "a branch here's merge that is no branch",
+            ),
+            ("origin", "", "half the keys"),
+            ("", "refs/heads/base", "the other half"),
+        ] {
+            assert_eq!(named(tracks, merge), None, "{why}: git's own name stands");
+        }
+    }
+
+    /// Fixture recorded from git 2.55: every fetch refspec in order, the
+    /// first merge of several.
+    #[test]
+    fn the_multi_valued_keys_are_kept_as_git_keeps_them() {
+        let marks = parse_push_marks(
+            "main",
+            b"local\0remote.origin.fetch\n+refs/heads/*:refs/remotes/origin/*\0\
+              local\0remote.origin.fetch\n+refs/pull/*/head:refs/remotes/origin/pr/*\0\
+              local\0remote.my.fork.fetch\n+refs/heads/*:refs/remotes/my/fork/*\0\
+              local\0branch.main.remote\norigin\0\
+              local\0branch.main.merge\nrefs/heads/main\0\
+              local\0branch.main.merge\nrefs/heads/other\0",
+        );
+        assert_eq!(marks.merge.as_deref(), Some("refs/heads/main"));
+        assert_eq!(
+            marks.fetch,
+            [
+                (
+                    "origin".to_string(),
+                    "+refs/heads/*:refs/remotes/origin/*".to_string()
+                ),
+                (
+                    "origin".to_string(),
+                    "+refs/pull/*/head:refs/remotes/origin/pr/*".to_string()
+                ),
+                (
+                    "my.fork".to_string(),
+                    "+refs/heads/*:refs/remotes/my/fork/*".to_string()
+                ),
+            ]
+        );
     }
 
     fn mark(branch: &str, remote: &str) -> BranchPushRemote {

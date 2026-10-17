@@ -107,8 +107,9 @@ AppMenu {
         property string pushTarget: ""
         property string pushLease: ""
         property string pushUpstream: ""
-        /// Measured against another branch here (`branch.<n>.remote = .`): the row stands out, and says why.
-        property bool pushUpstreamHere: false
+        /// The push would stay in this repository (`stays-here` — measured against another branch here and marked to no
+        /// remote, or marked to `.` itself): the row stands out, and says why.
+        property bool pushStaysHere: false
     }
 
     /// Freezes the card on that branch. `facts` is what the carrying menu read for it: `heldByWorktree` the other
@@ -132,7 +133,7 @@ AppMenu {
         state.pushTarget = ""
         state.pushLease = ""
         state.pushUpstream = ""
-        state.pushUpstreamHere = false
+        state.pushStaysHere = false
         if (kind !== "branch" && kind !== "remote") {
             state.remoteCounterpart = ""
             state.remoteCounterpartOid = ""
@@ -160,10 +161,10 @@ AppMenu {
         state.onCurrentBranch = offers.includes("current")
         // A local branch the worktree is not on — the one it is on has the toolbar's own button (デザイン規約 §メニュー
         // 「そこにしか入口が無いものだけ」) — and only where a push can go: nothing to send, or nothing to name, is no row.
-        // Measured against a branch here, it stands out instead (デザイン規約 §リモートへ送る).
+        // Where the push would stay in this repository, it stands out instead (デザイン規約 §リモートへ送る).
         const push = facts.push
         if (kind === "branch" && facts.open && !state.onCurrentBranch && push !== undefined) {
-            state.pushUpstreamHere = push.upstreamHere
+            state.pushStaysHere = push.state === "stays-here"
             if (["publish", "elsewhere", "ready", "behind", "diverged"].includes(push.state)) {
                 state.pushState = push.state
                 state.pushTarget = push.target
@@ -203,8 +204,8 @@ AppMenu {
     readonly property string deleteBlockedOnCurrent:
         qsTr("Switch away first — this is the branch you are on")
     readonly property string blockedByWorktree: Words.checkedOutElsewhere(state.holderLeaf)
-    /// …and the push row's, on a branch measured against another branch here.
-    readonly property string pushBlockedUpstreamHere: qsTr("Cannot push — its upstream is a local branch")
+    /// …and the push row's, where the push would stay in this repository — the toolbar's words for the same standing.
+    readonly property string pushBlockedStaysHere: qsTr("Cannot push — its upstream is not supported")
 
     titleKind: "branch"
     titleTint: Theme.accent
@@ -214,12 +215,12 @@ AppMenu {
     // The toolbar's push for a branch the worktree is not on, in the toolbar's forms (デザイン規約 §リモートへ送る): a
     // plain click where git would take it; the leased overwrite, held, where the far side has commits this branch
     // lacks; and a first push that asks where it goes. The flag long, as every menu row's (§git 用語のコード表記).
-    // Out, in the first push's words, on a branch measured against one here: there is no remote to send it to.
+    // Out, in the first push's words, where the push would stay here: there is no remote to send it to.
     AppMenuItem {
         id: refPushItem
         readonly property bool publishing: state.pushState === "publish"
         /// The first push's words: where it goes is asked — or, out, there is nowhere to name.
-        readonly property bool firstPushWords: refPushItem.publishing || state.pushUpstreamHere
+        readonly property bool firstPushWords: refPushItem.publishing || state.pushStaysHere
         readonly property bool overwrites: state.pushState === "behind" || state.pushState === "diverged"
         // Off the running press's length, so the chip cannot change under a hand already on the row
         // (`AppMenuItem.armedPresses`, デザイン規約 §回数押し).
@@ -232,8 +233,8 @@ AppMenu {
         refTint: Theme.textSecondary
         //: Follows the `push` chip: "push to…", where the branch goes being asked first.
         text: refPushItem.firstPushWords ? qsTr("to…") : refPushItem.refSentence.arg(refPushItem.refName)
-        offered: state.pushState !== "" || state.pushUpstreamHere
-        blockedReason: state.pushUpstreamHere ? branchCard.pushBlockedUpstreamHere : ""
+        offered: state.pushState !== "" || state.pushStaysHere
+        blockedReason: state.pushStaysHere ? branchCard.pushBlockedStaysHere : ""
         holdPresses: refPushItem.overwrites ? Metrics.holdPressesWarned : 0
         // Reaching past this machine is the warning tone (デザイン規約 §状態).
         holdTone: Theme.warning

@@ -68,6 +68,9 @@ ActionButton {
                      ? qsTr("No commits yet — git has no branch to send")
                    : pushButton.mode === "publish"
                      ? qsTr("This branch has not been sent anywhere yet — asks where it goes")
+                   // The push would stay in this repository, which is no send (デザイン規約 §リモートへ送る).
+                   : pushButton.mode === "stays-here"
+                     ? qsTr("Cannot push — its upstream is not supported")
                    // No count: nothing here tracks the branch over there (デザイン規約 §リモートへ送る).
                    : pushButton.mode === "elsewhere"
                      ? qsTr("Push to %1").arg(to)

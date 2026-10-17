@@ -63,12 +63,17 @@ pub struct WorktreeModel {
     /// standing is closed.
     counts_settled: bool,
     /// What the last status said of its branch's standing, shown through
-    /// the three below only while it is the branch HEAD is on (`settle`).
+    /// the ones below only while it is the branch HEAD is on (`settle`).
     status_upstream: String,
+    status_upstream_here: bool,
     status_upstream_tracked: bool,
     status_ahead: i32,
     status_behind: i32,
     upstream: String,
+    /// `upstream` is a branch here (`branch.<branch>.remote = .`), not a
+    /// remote's — which its short name cannot say: a branch here may be
+    /// called `origin/main` (`StatusMsg::upstream_here`).
+    upstream_here: bool,
     /// Whether `ahead` / `behind` mean anything: a branch whose upstream has
     /// no remote-tracking ref yet compares against nothing, and zeroes there
     /// would read as "already sent".
@@ -247,6 +252,7 @@ impl WorktreeModel {
     qproperty!("statusSeq", Member = status_seq, Notify = changed);
     qproperty!("countsSettled", Member = counts_settled, Notify = changed);
     qproperty!("upstream", Member = upstream, Notify = changed);
+    qproperty!("upstreamHere", Member = upstream_here, Notify = changed);
     qproperty!(
         "upstreamTracked",
         Member = upstream_tracked,
@@ -371,10 +377,12 @@ impl WorktreeModel {
         self.status_branch = String::new();
         self.counts_settled = false;
         self.status_upstream = String::new();
+        self.status_upstream_here = false;
         self.status_upstream_tracked = false;
         self.status_ahead = 0;
         self.status_behind = 0;
         self.upstream = String::new();
+        self.upstream_here = false;
         self.upstream_tracked = false;
         self.ahead = 0;
         self.behind = 0;
@@ -471,6 +479,7 @@ impl WorktreeModel {
             op_message,
             merge_tool,
             push_remote,
+            upstream_here,
             push_track,
             eol_marks,
             lfs_needed,
@@ -498,6 +507,7 @@ impl WorktreeModel {
         self.status_seq = i32::try_from(head_seq).unwrap_or(i32::MAX);
         self.status_branch = status.branch_head.clone().unwrap_or_default();
         self.status_upstream = status.upstream.clone().unwrap_or_default();
+        self.status_upstream_here = upstream_here;
         self.status_upstream_tracked = status.upstream_tracked;
         self.status_ahead = status.ahead;
         self.status_behind = status.behind;
@@ -571,6 +581,7 @@ impl WorktreeModel {
         self.counts_settled = self.loaded && self.status_branch == self.branch;
         if self.counts_settled {
             self.upstream.clone_from(&self.status_upstream);
+            self.upstream_here = self.status_upstream_here;
             self.upstream_tracked = self.status_upstream_tracked;
             self.ahead = self.status_ahead;
             self.behind = self.status_behind;
@@ -581,6 +592,7 @@ impl WorktreeModel {
             self.push_behind = self.status_push_track.behind;
         } else {
             self.upstream.clear();
+            self.upstream_here = false;
             self.upstream_tracked = false;
             self.ahead = 0;
             self.behind = 0;
@@ -718,6 +730,7 @@ mod tests {
             op_message: String::new(),
             merge_tool: String::new(),
             push_remote: String::new(),
+            upstream_here: false,
             push_track: platitude_core::remote::PushTrack::default(),
             eol_marks: Arc::new(Vec::new()),
             lfs_needed: 0,

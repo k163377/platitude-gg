@@ -145,6 +145,9 @@ pub enum SessionEvent {
         worktree: Option<String>,
     },
     StatusLoaded {
+        /// Its `upstream` named as the send names its destination
+        /// ([`crate::remote::PushMarks::upstream_name`]) wherever the
+        /// branch's keys were read — not as `git status` shortens it.
         status: WorktreeStatus,
         /// The [`HeadObserved::seq`](SessionEvent::HeadObserved) this
         /// status stands beside, taken after the read's own HEAD went into
@@ -179,6 +182,12 @@ pub enum SessionEvent {
         /// standing only — [`crate::remote::plan_current_push`] re-reads
         /// the keys to send.
         push_remote: String,
+        /// The status's upstream is a branch here
+        /// (`branch.<branch>.remote = .` —
+        /// [`crate::remote::PushMarks::upstream_is_here`]): the short name
+        /// git gives it can read like a remote branch's. Rides the status
+        /// for the reason `push_remote` does.
+        upstream_here: bool,
         /// The branch's counts against the tracking ref where a mark sends
         /// its push, when that is not the upstream's remote
         /// ([`crate::remote::pushes_elsewhere`]); empty everywhere else.

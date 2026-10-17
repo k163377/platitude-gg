@@ -16,6 +16,7 @@ mod list;
 mod marks;
 mod pull;
 mod push;
+mod refspec;
 mod refusal;
 mod standing;
 mod tags;
@@ -40,7 +41,7 @@ pub use self::push::{
     PushForce, PushSpec, plan_current_push, plan_push, publish_spec, push, push_track, push_tracks,
 };
 pub use self::standing::{
-    PushStanding, PushTrack, marked_standing, push_standing, push_target, pushes_elsewhere,
+    PushStanding, PushTrack, Upstream, push_standing, push_target, pushes_elsewhere,
 };
 pub use self::tags::{
     HeldTag, RemoteTag, delete_remote_tag, list_tags, parse_ls_remote_tags, push_tag,

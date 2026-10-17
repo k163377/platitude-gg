@@ -456,6 +456,10 @@ pub struct StatusMsg {
     /// (`branch.<branch>.pushRemote`), empty where it marks none. Rides the
     /// status because it is per-branch: read for the branch in `status`.
     pub push_remote: String,
+    /// The status's upstream is a branch here (`branch.<branch>.remote =
+    /// .`), whatever its short name looks like. Per-branch like
+    /// `push_remote`.
+    pub upstream_here: bool,
     /// The branch's counts against where a mark sends its push, when that
     /// is not the upstream's remote; empty everywhere else. Per-branch like
     /// `push_remote`.

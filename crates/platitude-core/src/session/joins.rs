@@ -367,6 +367,7 @@ pub(super) fn build_snapshot(
                     is_head: r.is_head,
                     upstream: spoken.map(|u| u.short.clone()).unwrap_or_default(),
                     upstream_gone: joins.upstream_gone(r),
+                    upstream_here: r.upstream_is_here(),
                     upstream_oid: joins.upstream_commit(r),
                     upstream_drifted: spoken.is_some_and(|u| u.commit_oid() != r.commit_oid()),
                     held_elsewhere: joins.held_elsewhere(r),
@@ -386,6 +387,7 @@ pub(super) fn build_snapshot(
                 is_head: false,
                 upstream: crate::Name::default(),
                 upstream_gone: crate::Name::default(),
+                upstream_here: false,
                 upstream_oid: None,
                 upstream_drifted: false,
                 // Nobody's checkout. Whether the branch a `switch` here

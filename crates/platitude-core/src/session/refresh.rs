@@ -234,22 +234,17 @@ impl RepoSession {
             .iter()
             .filter(|entry| entry.kind == RefKind::LocalBranch && !entry.is_head)
             .filter(|local| {
-                let mark = mark_of(local.short.as_str());
-                match index.spoken_for(local) {
-                    Some(upstream) => remote::pushes_elsewhere(
-                        upstream.short.as_str(),
-                        mark,
-                        push_default,
-                        remotes.list.iter().map(|r| r.name.as_str()),
-                    ),
-                    None => {
-                        local
-                            .upstream
-                            .as_deref()
-                            .is_some_and(|up| up.starts_with("refs/heads/"))
-                            && !(mark.is_empty() && push_default.is_empty())
-                    }
-                }
+                let upstream = match index.spoken_for(local) {
+                    Some(upstream) => remote::Upstream::Remote(upstream.short.as_str()),
+                    None if local.upstream_is_here() => remote::Upstream::Here,
+                    None => return false,
+                };
+                remote::pushes_elsewhere(
+                    upstream,
+                    mark_of(local.short.as_str()),
+                    push_default,
+                    remotes.list.iter().map(|r| r.name.as_str()),
+                )
             })
             .map(|local| local.short.as_str())
             .collect();

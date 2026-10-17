@@ -144,7 +144,7 @@ use crate::process::{GitCommand, GitExecutor};
 ///   `--absolute-git-dir`, `--show-object-format`, `--symbolic-full-name`,
 ///   `--show-prefix`, `--is-bare-repository`, `--end-of-options`,
 ///   `<rev>^{commit}`, `<rev>^{tree}`.
-/// - `rm`: `--cached`, `-r`, `-f`, `--quiet`, `--ignore-unmatch`.
+/// - `rm`: `--cached`, `-r`, `-f` / `--force`, `--quiet`, `--ignore-unmatch`.
 /// - `show`: `-z`, `-r`, `--name-status`, `--find-renames`,
 ///   `--diff-merges=first-parent` (2.31), `--format=`.
 /// - `stash`: `list -z --format=`, `push -m` / `--message`,
@@ -155,7 +155,7 @@ use crate::process::{GitCommand, GitExecutor};
 /// - `switch`: `--create`, `--force-create`, `--track`, `--no-track`.
 ///   `upstream_integration` checks `--no-track` plus `--force-create`;
 ///   the manual does not explicitly describe this combination.
-/// - `symbolic-ref`: `-q`, `--short`; `tag`: `--delete`,
+/// - `symbolic-ref`: `-q`; `tag`: `--delete`,
 ///   `--end-of-options`.
 /// - `update-index`: `--add`, `--cacheinfo <mode>,<object>,<path>` (2.0),
 ///   `--force-remove`, `--`; `update-ref`: `--create-reflog` (2.6), `-m`,

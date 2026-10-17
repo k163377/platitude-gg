@@ -39,6 +39,7 @@ mod stash_integration;
 mod status_integration;
 mod tag_integration;
 mod trace_record;
+mod upstream_here_integration;
 mod upstream_integration;
 mod worktree_add;
 mod worktree_move;

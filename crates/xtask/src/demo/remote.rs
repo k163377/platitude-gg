@@ -13,6 +13,10 @@ pub(super) fn build(preset: &str, repo: &mut DemoRepo) -> Option<Result<(), Stri
         "gone" => gone(repo),
         "forkmark" => forkmark(repo),
         "forkdiverged" => forkdiverged(repo),
+        "localbase" => localbase(repo),
+        "localbase-marked" => localbase_marked(repo),
+        "localbase-dotmark" => localbase_dotmark(repo),
+        "localbase-beside" => localbase_beside(repo),
         "protected" => protected(repo),
         "outrun" => outrun(repo),
         "hooked" => hooked(repo),
@@ -113,6 +117,76 @@ pub(super) fn forkdiverged(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git_at(&seeder.clone(), &["push"])?;
 
     repo.git(&["fetch", "fork"])?;
+    Ok(())
+}
+
+/// HEAD on `topic`, two commits ahead of the branch here it is measured
+/// against (`remote = .`), which is called `origin/base` beside origin's
+/// own `base`: `git status` names that upstream exactly as it would
+/// origin's, so only configuration says it is here. origin holds `topic`
+/// level with ours. Nothing marks a remote, so there is nowhere to send
+/// it and the push is out, saying why (`push-hover`, デザイン規約
+/// §リモートへ送る).
+pub(super) fn localbase(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    repo.git(&["push", "origin", "main:refs/heads/base"])?;
+    repo.git(&["branch", "origin/base", "main"])?;
+    repo.git(&[
+        "switch",
+        "--track",
+        "--create",
+        "topic",
+        "refs/heads/origin/base",
+    ])?;
+    repo.commit("src/topic.txt", "topic v1\n", "feat: start the topic")?;
+    repo.commit("src/topic.txt", "topic v2\n", "feat: finish the topic")?;
+    repo.git(&["push", "origin", "refs/heads/topic:refs/heads/topic"])?;
+    repo.git(&["fetch", "origin"])?;
+    Ok(())
+}
+
+/// [`localbase`] with `topic`'s own mark on origin: the push goes to
+/// `origin/topic` under the branch's own name and is counted there —
+/// level, so nothing to send, however far ahead of the branch here
+/// (`push-target`).
+pub(super) fn localbase_marked(repo: &mut DemoRepo) -> Result<(), String> {
+    localbase(repo)?;
+    repo.git(&["config", "branch.topic.pushRemote", "origin"])?;
+    Ok(())
+}
+
+/// [`localbase`] with `.` — git's name for this repository — as the mark
+/// of both branches: `topic`'s, measured against the branch here, and
+/// `main`'s, measured against origin's `main`. A send there would move
+/// `origin/base` up to `topic`, and push `main` onto itself; neither sends
+/// anything anywhere, so both pushes are out, saying their upstream is not
+/// supported (`push-hover`, `push-branch-menu main`).
+pub(super) fn localbase_dotmark(repo: &mut DemoRepo) -> Result<(), String> {
+    localbase(repo)?;
+    repo.git(&["config", "branch.topic.pushRemote", "."])?;
+    repo.git(&["config", "branch.main.pushRemote", "."])?;
+    Ok(())
+}
+
+/// [`localbase`] with HEAD on `beside`, a commit ahead of origin's own
+/// `base`, which it tracks, and origin marked as where every push goes:
+/// `git status` names that upstream `remotes/origin/base`, the short name
+/// being the branch here's. The toolbar names it as the send does —
+/// `origin/base`, the mark's own remote, so its counts speak
+/// (`push-target`).
+pub(super) fn localbase_beside(repo: &mut DemoRepo) -> Result<(), String> {
+    localbase(repo)?;
+    repo.git(&[
+        "switch",
+        "--create",
+        "beside",
+        "--track",
+        "refs/remotes/origin/base",
+    ])?;
+    repo.commit("src/beside.txt", "beside\n", "feat: work beside the base")?;
+    repo.git(&["config", "remote.pushDefault", "origin"])?;
     Ok(())
 }
 

@@ -15,7 +15,7 @@ use crate::process::{GitCommand, GitExecutor};
 use super::list::current_branch;
 use super::marks::{PushMarks, push_marks};
 use super::refusal::{Sent, refusal};
-use super::standing::PushTrack;
+use super::standing::{PushTrack, THIS_REPOSITORY};
 
 /// How hard a push may overwrite the remote.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,6 +69,16 @@ pub async fn plan_current_push(
 /// The branch goes under its own name wherever it is not going to the
 /// remote it tracks, as git's triangular-push refspec does.
 ///
+/// Wherever this comes to this repository (`.`, [`THIS_REPOSITORY`];
+/// `PushStanding::StaysHere`) it is an error rather than a `git push .`,
+/// whose refspec moves a branch here (exit 0; git's own plain push, under
+/// the default `push.default=simple`, refuses the differing name instead):
+/// a branch measured against a branch here (`branch.<name>.remote = .`)
+/// and marked to no remote, and a mark naming `.` itself — each with words
+/// of its own, saying which key to look at. A mark on a remote sends a
+/// branch measured against one here to that remote, its upstream left as
+/// it was.
+///
 /// The upstream is read from configuration: `origin/main` cannot be split
 /// reliably (remote names and branch names may both hold slashes).
 pub async fn plan_push(
@@ -103,8 +113,10 @@ fn decide_push(
         push_default,
         tracks,
         merge,
+        ..
     } = marks;
     let pushes_to = push_remote.or_else(|| push_default.map(|marked| marked.remote));
+    let marked = pushes_to.is_some();
 
     let remote = match pushes_to.or_else(|| tracks.clone()) {
         Some(remote) => remote,
@@ -116,6 +128,18 @@ fn decide_push(
         }
         None => fallback_remote.to_string(),
     };
+    if remote == THIS_REPOSITORY {
+        return Err(GitError::UnexpectedOutput {
+            command: "git push".to_string(),
+            message: if marked {
+                format!("{branch} is set to push to this repository (.), not a remote")
+            } else {
+                format!(
+                    "the upstream of {branch} is a local branch, and no remote is set to push it to"
+                )
+            },
+        });
+    }
 
     let remote_branch = match (&tracks, &merge) {
         (Some(tracks), Some(merge)) if *tracks == remote => merge
@@ -337,7 +361,7 @@ fn track_of(branch: &str, line: &[u8]) -> PushTrack {
 mod tests {
     use super::*;
     use crate::remote::marks::PushDefault;
-    use crate::remote::standing::push_target;
+    use crate::remote::standing::{Upstream, push_target};
 
     const REMOTES: [&str; 2] = ["fork", "origin"];
 
@@ -371,6 +395,7 @@ mod tests {
                 }),
                 tracks: some(tracks),
                 merge: some(merge),
+                fetch: Vec::new(),
             },
             fallback,
             PushForce::None,
@@ -542,9 +567,50 @@ mod tests {
         );
     }
 
+    /// Measured against a branch here (`remote = .`), only a mark sends the
+    /// branch anywhere — under its own name, the upstream kept. Marked to
+    /// none, there is no send: git's `.` would move the branch here.
+    #[test]
+    fn a_branch_measured_against_one_here_goes_where_a_mark_says_or_nowhere() {
+        let err = plan("topic", ".", "refs/heads/origin/base", "", "", "origin")
+            .expect_err("no remote is named");
+        assert!(err.to_string().contains("is a local branch"), "{err}");
+        // `.` named outright, by either key: git's push would move the
+        // branch here all the same — or, tracking a remote, onto itself.
+        for (tracks, merge, push_remote, push_default) in [
+            (".", "refs/heads/origin/base", ".", ""),
+            (".", "refs/heads/origin/base", "", "."),
+            ("origin", "refs/heads/topic", ".", ""),
+        ] {
+            let err = plan("topic", tracks, merge, push_remote, push_default, "origin")
+                .expect_err("this repository is no remote");
+            assert!(err.to_string().contains("this repository"), "{err}");
+        }
+
+        for (push_remote, push_default) in [("fork", ""), ("", "fork"), ("fork", "origin")] {
+            let spec = decide(
+                "topic",
+                ".",
+                "refs/heads/origin/base",
+                push_remote,
+                push_default,
+            );
+            assert_eq!(
+                (
+                    spec.remote.as_str(),
+                    spec.remote_branch.as_str(),
+                    spec.set_upstream
+                ),
+                ("fork", "topic", false),
+                "pushRemote={push_remote:?} pushDefault={push_default:?}"
+            );
+        }
+    }
+
     /// The toolbar label ([`push_target`], from the snapshot) and the send
     /// ([`decide_push`], from git's keys) spell one order twice, so this
-    /// walks every arrangement of the three keys against both.
+    /// walks every arrangement of the three keys against both. Where the
+    /// send has nowhere to go, the label names nothing.
     #[test]
     fn the_label_names_the_remote_the_send_uses() {
         // (branch.main.pushRemote, remote.pushDefault, what the branch tracks)
@@ -558,28 +624,39 @@ mod tests {
             ("", "", ""),
             ("", "fork", ""),
             ("fork", "", ""),
+            ("", "", "."),
+            ("", "fork", "."),
+            ("origin", "", "."),
+            ("origin", "fork", "."),
+            (".", "", "origin"),
+            ("", ".", "."),
+            ("fork", ".", "."),
         ] {
             let merge = if tracks.is_empty() {
                 ""
             } else {
                 "refs/heads/main"
             };
-            let spec = decide("main", tracks, merge, push_remote, push_default);
-            let upstream = if tracks.is_empty() {
-                String::new()
-            } else {
-                format!("{tracks}/main")
+            let sent = plan("main", tracks, merge, push_remote, push_default, "origin")
+                .map(|spec| format!("{}/{}", spec.remote, spec.remote_branch))
+                .unwrap_or_default();
+            // As the status shortens it: a branch here called `main` is
+            // `main`, and only the configuration says it is here.
+            let upstream = match tracks {
+                "" => String::new(),
+                "." => "main".to_string(),
+                remote => format!("{remote}/main"),
             };
             assert_eq!(
                 push_target(
                     "main",
-                    &upstream,
+                    Upstream::of(&upstream, tracks == "."),
                     push_remote,
                     push_default,
                     "origin",
                     REMOTES
                 ),
-                format!("{}/{}", spec.remote, spec.remote_branch),
+                sent,
                 "pushRemote={push_remote:?} pushDefault={push_default:?} tracks={tracks:?}: \
                  the label and the send disagree"
             );

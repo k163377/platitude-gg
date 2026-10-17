@@ -64,11 +64,11 @@ Item {
     /// A push row's answer in `state`, going to `origin/feature/topic-a` and leased to `fed789` where it counts.
     function pushing(state) {
         return { "state": state, "target": "origin/feature/topic-a", "lease": "fed789",
-                 "upstream": "origin/feature/topic-a", "upstreamHere": false }
+                 "upstream": "origin/feature/topic-a" }
     }
-    /// …and on a branch measured against another branch here (`remote = .`): that alone, every other field empty.
-    readonly property var pushingHere: ({ "state": "closed", "target": "", "lease": "", "upstream": "",
-                                          "upstreamHere": true })
+    /// …and where the push would stay in this repository (`stays-here` — measured against another branch here and
+    /// marked to no remote, or marked to `.`): that alone, every other field empty.
+    readonly property var pushingHere: ({ "state": "stays-here", "target": "", "lease": "", "upstream": "" })
 
     TestCase {
         name: "BranchCard"
@@ -193,16 +193,16 @@ Item {
             verify(!card.pushItem.offered)
         }
 
-        /// Measured against a branch here: no remote to send to, so the row stands out in the first push's words and
-        /// says why (デザイン規約 §リモートへ送る).
-        function test_the_push_row_stands_out_on_an_upstream_here() {
+        /// No remote to send to, so the row stands out in the first push's words and says why — the toolbar's words
+        /// for the same standing (デザイン規約 §リモートへ送る).
+        function test_the_push_row_stands_out_where_the_push_would_stay_here() {
             root.standOn({ push: root.pushingHere })
             verify(card.pushItem.offered)
             verify(card.pushItem.blocked)
             compare(card.pushItem.code, "push")
             compare(card.pushItem.text, "to…")
             compare(card.pushItem.holdPresses, 0)
-            compare(card.pushItem.blockedReason, "Cannot push — its upstream is a local branch")
+            compare(card.pushItem.blockedReason, "Cannot push — its upstream is not supported")
 
             // The next card on a branch that can be sent drops it.
             root.standOn({ push: root.pushing("ready") })

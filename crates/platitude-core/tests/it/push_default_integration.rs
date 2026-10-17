@@ -262,7 +262,7 @@ async fn a_global_mark_is_read_and_sent_alike() {
         .expect("a plan");
     let label = remote::push_target(
         "main",
-        "origin/main",
+        remote::Upstream::Remote("origin/main"),
         marks.push_remote.as_deref().unwrap_or(""),
         &marked.remote,
         "origin",
@@ -337,7 +337,10 @@ async fn standing_of(
         false,
         false,
         "main",
-        status.upstream.as_deref().unwrap_or_default(),
+        remote::Upstream::of(
+            status.upstream.as_deref().unwrap_or_default(),
+            marks.upstream_is_here(),
+        ),
         status.upstream_tracked,
         status.ahead,
         status.behind,
@@ -659,13 +662,11 @@ async fn a_branch_measured_against_one_here_goes_where_its_mark_says() {
     let fork_tip = repo.git(&["rev-parse", "refs/remotes/fork/stacked"]);
     assert_eq!(
         (
-            facts.upstream_here,
             facts.standing,
             facts.target.as_str(),
             facts.lease.map(|oid| oid.to_hex()),
         ),
         (
-            false,
             remote::PushStanding::Ready,
             "fork/stacked",
             Some(fork_tip.trim().to_string()),

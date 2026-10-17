@@ -177,18 +177,16 @@ impl From<platitude_core::session::TagMenuFacts> for TagMenu {
 /// (`RefsSnapshot::branch_push`).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BranchPush {
-    /// `PushStanding`'s word (`publish` / `ready` / `behind` …); `closed`
-    /// for a name this section does not hold.
+    /// `PushStanding`'s word (`publish` / `ready` / `behind` /
+    /// `stays-here` …); `closed` for a name this section does not hold.
     pub state: String,
     pub target: String,
     /// The commit (hex) the remote branch the counts are against stands on
     /// — an overwrite's lease. Empty where nothing is counted against.
     pub lease: String,
-    /// The upstream the branch is configured for, here or not.
+    /// The remote branch the branch is configured for, fetched or not;
+    /// empty for a branch here.
     pub upstream: String,
-    /// Measured against another branch here that is listed: the row stands
-    /// out and says why (`BranchPushFacts::upstream_here`).
-    pub upstream_here: bool,
 }
 
 impl Record for BranchPush {
@@ -198,7 +196,6 @@ impl Record for BranchPush {
             .put("target", &self.target)
             .put("lease", &self.lease)
             .put("upstream", &self.upstream)
-            .put("upstreamHere", &self.upstream_here)
             .done()
     }
 
@@ -208,7 +205,6 @@ impl Record for BranchPush {
             target: field(map, "target")?,
             lease: field(map, "lease")?,
             upstream: field(map, "upstream")?,
-            upstream_here: field(map, "upstreamHere")?,
         })
     }
 }
@@ -220,7 +216,6 @@ impl From<platitude_core::session::BranchPushFacts> for BranchPush {
             target: facts.target,
             lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),
             upstream: facts.upstream,
-            upstream_here: facts.upstream_here,
         }
     }
 }

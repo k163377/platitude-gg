@@ -97,6 +97,18 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         forkdiverged  the same, with the fork's main fetched and holding a
                   commit of its own: ahead of origin, diverged from the
                   fork the push goes to (push-target, force-push)
+        localbase  HEAD on topic, measured against the branch here called
+                  origin/base beside origin's own base, nothing marking a
+                  remote: the push is out and says why (push-hover)
+        localbase-marked  the same, topic's own mark on origin, which
+                  holds topic level with it: the push goes to origin/topic,
+                  with nothing to send (push-target)
+        localbase-dotmark  the same, topic and main both marked to `.`
+                  (this repository): both pushes are out, as their upstream
+                  is not supported (push-hover, push-branch-menu main)
+        localbase-beside  the same, HEAD on beside, which tracks origin's
+                  own base, origin marked: git status calls that upstream
+                  remotes/origin/base, the toolbar origin/base (push-target)
         protected an origin that keeps what it holds: every push to it is
                   turned away the way a forge turns one away from a
                   protected branch, and it holds a tag as well

@@ -57,6 +57,16 @@ impl RefEntry {
     pub fn commit_oid(&self) -> Oid {
         self.peeled.unwrap_or(self.target)
     }
+
+    /// The configured upstream is a branch here (`branch.<n>.remote = .`),
+    /// there or gone: git names it by its own full name, where a remote
+    /// branch's goes through the fetch refspec (`refs/remotes/…`). Told by
+    /// that name only — a branch here may be called `origin/main`.
+    pub fn upstream_is_here(&self) -> bool {
+        self.upstream
+            .as_deref()
+            .is_some_and(|up| up.starts_with("refs/heads/"))
+    }
 }
 
 /// Non-fatal: a malformed entry is skipped with a warning, the rest kept.

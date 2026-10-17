@@ -159,9 +159,11 @@ impl GitFacts {
 
     /// What a push of the current branch can do, in the word
     /// `PublishFlow.pushState` branches on. A closed tab is the caller's to
-    /// add: this answers for the repository alone. The `push_*` three are
-    /// the destination's own counts (`WorktreeModel.pushTracking`), read
-    /// where the push goes elsewhere.
+    /// add: this answers for the repository alone. `upstream_here` is
+    /// whether the upstream is a branch here (`WorktreeModel.upstreamHere`)
+    /// — never read off its name. The `push_*` three are the destination's
+    /// own counts (`WorktreeModel.pushTracking`), read where the push goes
+    /// elsewhere.
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn push_standing(
@@ -170,6 +172,7 @@ impl GitFacts {
         detached: bool,
         branch: String,
         upstream: String,
+        upstream_here: bool,
         upstream_tracked: bool,
         ahead: i32,
         behind: i32,
@@ -184,7 +187,7 @@ impl GitFacts {
             unborn,
             detached,
             &branch,
-            &upstream,
+            platitude_core::remote::Upstream::of(&upstream, upstream_here),
             upstream_tracked,
             ahead,
             behind,
@@ -210,12 +213,13 @@ impl GitFacts {
     fn push_goes_elsewhere(
         &self,
         upstream: String,
+        upstream_here: bool,
         push_remote: String,
         push_default: String,
         remote_names: Vec<String>,
     ) -> bool {
         platitude_core::remote::pushes_elsewhere(
-            &upstream,
+            platitude_core::remote::Upstream::of(&upstream, upstream_here),
             &push_remote,
             &push_default,
             names(&remote_names),
@@ -228,10 +232,12 @@ impl GitFacts {
     /// reads the same table: a second spelling in a binding lets the label
     /// name another remote than the push goes to.
     #[qslot]
+    #[expect(clippy::too_many_arguments)]
     fn push_target(
         &self,
         branch: String,
         upstream: String,
+        upstream_here: bool,
         push_remote: String,
         push_default: String,
         default_remote: String,
@@ -239,7 +245,7 @@ impl GitFacts {
     ) -> String {
         platitude_core::remote::push_target(
             &branch,
-            &upstream,
+            platitude_core::remote::Upstream::of(&upstream, upstream_here),
             &push_remote,
             &push_default,
             &default_remote,

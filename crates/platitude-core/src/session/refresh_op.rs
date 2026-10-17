@@ -1,8 +1,9 @@
 //! The status pass ([`RepoSession::publish_status`]) and what it reads
 //! beside `git status`: the stopped operation — what a merge is bringing
 //! in, why a rebase stopped, how far a stepped operation has got, and the
-//! two sides it is between — and, where a mark sends the push away from
-//! the upstream, the branch's counts against that destination.
+//! two sides it is between — and, for the push, the upstream's name as
+//! the send names it and, where a mark sends the push away from the
+//! upstream, the branch's counts against that destination.
 //!
 //! The stopped operation's reads are paid only while something is
 //! stopped, the push counts only while the push goes elsewhere.
@@ -127,36 +128,47 @@ impl RepoSession {
     }
 
     /// What a status carries about the push of its branch: the branch's own
-    /// mark, and the counts against where a mark sends it
-    /// ([`Self::read_push_track`]). Read every tick so a mark moved from a
+    /// mark, whether its upstream is a branch here
+    /// ([`remote::PushMarks::upstream_is_here`]), and the counts against
+    /// where a mark sends it ([`Self::read_push_track`]) — and the
+    /// upstream's name in `status`, put as the send names it
+    /// ([`remote::PushMarks::upstream_name`]) in place of git's shortening,
+    /// before anything weighs it. Read every tick so a mark moved from a
     /// terminal shows on the next one; a detached HEAD has nothing to push,
-    /// and a read that fails says nothing. The repository's mark rides the
-    /// refs snapshot instead, so a moved default sends the refs out again
-    /// ([`RepoSession::note_push_default`]).
+    /// and a read that fails says nothing and leaves git's name. The
+    /// repository's mark rides the refs snapshot instead, so a moved default
+    /// sends the refs out again ([`RepoSession::note_push_default`]).
     async fn read_status_push(
         self: &Arc<Self>,
         workdir: &std::path::Path,
-        status: &WorktreeStatus,
+        status: &mut WorktreeStatus,
         cancel: &CancellationToken,
-    ) -> (String, remote::PushTrack) {
-        let Some(branch) = &status.branch_head else {
+    ) -> (String, bool, remote::PushTrack) {
+        let Some(branch) = status.branch_head.clone() else {
             return Default::default();
         };
-        let Ok(marks) = remote::push_marks(&self.executor, workdir, branch, cancel).await else {
+        let Ok(marks) = remote::push_marks(&self.executor, workdir, &branch, cancel).await else {
             return Default::default();
         };
         self.note_push_default(&marks.push_default);
+        if status.upstream.is_some()
+            && let Some(named) = marks.upstream_name()
+        {
+            status.upstream = Some(named);
+        }
         let track = self
-            .read_push_track(workdir, branch, status, &marks, cancel)
+            .read_push_track(workdir, &branch, status, &marks, cancel)
             .await;
-        (marks.push_remote.unwrap_or_default(), track)
+        let here = marks.upstream_is_here();
+        (marks.push_remote.unwrap_or_default(), here, track)
     }
 
     /// [`remote::pushes_elsewhere`] for a status whose upstream git can
     /// compare against — with none the push asks where it goes, and no
-    /// count is read. The remote names are the kept ones, not read for
-    /// this; before the first listing the cut falls back to the mark's
-    /// exact prefix.
+    /// count is read. Whether that upstream is a branch here is the
+    /// configuration's to say, not the status's short name for it. The
+    /// remote names are the kept ones, not read for this; before the first
+    /// listing the cut falls back to the mark's exact prefix.
     fn push_goes_elsewhere(&self, status: &WorktreeStatus, marks: &remote::PushMarks) -> bool {
         let Some(upstream) = status
             .upstream
@@ -165,6 +177,7 @@ impl RepoSession {
         else {
             return false;
         };
+        let upstream = remote::Upstream::of(upstream, marks.upstream_is_here());
         let push_remote = marks.push_remote.as_deref().unwrap_or_default();
         let push_default = marks
             .push_default
@@ -201,7 +214,7 @@ impl RepoSession {
         let cancel = self.root_cancel.clone();
         let status = status::load(&self.executor, &workdir, &cancel).await;
         match status {
-            Ok(status) => {
+            Ok(mut status) => {
                 let op_state = opstate::detect_at(&git_dir);
                 // Fenced by a write that ended after this looked: read
                 // again, since the write re-reads the tree only where it
@@ -236,8 +249,8 @@ impl RepoSession {
                     // open would watch its value vanish on the next tick.
                     self.standing.merge_tool()
                 };
-                let (push_remote, push_track) =
-                    self.read_status_push(&workdir, &status, &cancel).await;
+                let (push_remote, upstream_here, push_track) =
+                    self.read_status_push(&workdir, &mut status, &cancel).await;
                 if !self.standing.current(looked) {
                     self.read_status_from(self.status_read.stamp());
                     return Reread::Same;
@@ -286,6 +299,7 @@ impl RepoSession {
                     op_message,
                     merge_tool,
                     push_remote,
+                    upstream_here,
                     push_track,
                     eol_marks,
                     lfs_needed: lfs.needed,
