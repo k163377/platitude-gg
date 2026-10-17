@@ -43,12 +43,21 @@ const APP_MODULE: &str = "platitude";
 /// mistake it is.
 const APP_STUB_TYPE: &str = "NotTheApplication.qml";
 
-/// The ceiling for one `qmltestrunner`, one file or all of them. QtTest
-/// bounds `tryCompare`, but not `when: windowShown` on a window that never
-/// comes up. One number for both roads: such a file waits forever on
-/// either, and costs the ceiling twice — together, then alone, which is
-/// the run that names it.
-const CEILING: Duration = Duration::from_secs(120);
+/// How long one `qmltestrunner`, one file or all of them, may write
+/// nothing. QtTest bounds `tryCompare`, but not `when: windowShown` on a
+/// window that never comes up, and such a file goes quiet. One number for
+/// both roads: it waits forever on either, and costs this twice —
+/// together, then alone, which is the run that names it. Silence rather
+/// than length, because the run of them all grows with every file; the
+/// log is flushed line by line (`QAbstractTestLogger::outputString`), so a
+/// run getting on renews it.
+const QUIET: Duration = Duration::from_secs(120);
+
+/// The whole of one run: the backstop for one that keeps writing and never
+/// ends. Under the gate step's own silence ceiling
+/// (`watched::QUIET_CEILING`), which hears nothing from this command until
+/// a run is over, so this fires first and names the runner.
+const WHOLE: Duration = Duration::from_secs(15 * 60);
 
 pub fn run(args: &[String]) -> Result<(), String> {
     if let Some(unknown) = args.first() {
@@ -281,7 +290,7 @@ fn run_one(
 }
 
 /// One `qmltestrunner` over `input` (a file, or the directory of them all)
-/// under the ceiling, answering with its log. The verdict is the exit code
+/// under [`QUIET`] and [`WHOLE`], answering with its log. The verdict is the exit code
 /// *and* the `FAIL!` lines: a logger that could not be written leaves a
 /// green exit with nothing behind it.
 fn runner(
@@ -312,19 +321,20 @@ fn runner(
         .map_err(|e| format!("failed to run qmltestrunner (it ships in Qt's bin): {e}"))?;
     let mut wait = Wait::new(
         format!("qmltestrunner on {input}"),
-        Budget::whole(CEILING),
+        Budget::of(QUIET, WHOLE),
         LOOK_AGAIN,
     );
     let status = loop {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
             break status;
         }
+        let len = std::fs::metadata(root.join(log)).map_or(0, |m| m.len());
+        wait.saw(format!("{len} bytes of log"));
         if let Err(expired) = wait.look_again("its exit") {
             let _ = child.kill();
             let _ = child.wait();
             return Err(format!(
-                "killed at the ceiling — {expired} (a TestCase whose `when` never came true \
-                 waits forever)"
+                "killed — {expired} (a TestCase whose `when` never came true waits forever)"
             ));
         }
     };
