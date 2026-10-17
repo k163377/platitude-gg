@@ -132,6 +132,8 @@ MenuItem {
         menuItem.withdrawn ? menuItem.withdrawnWhy
         : menuItem.blockedReason !== "" ? menuItem.blockedReason : menuItem.menuHeldReason
     readonly property bool blocked: menuItem.blockedWhy !== ""
+    /// The row cannot be chosen — turned off, or `blocked`: its words grey to the last letter (デザイン規約 §無効).
+    readonly property bool greyed: !menuItem.enabled || menuItem.blocked
     /// A worktree's folder inside the row's own reason (`blockedReason`); empty for none.
     property string reasonMarkWord: ""
     /// The mark that folder wears: the house for the repository's own worktree, else the tree.
@@ -189,7 +191,7 @@ MenuItem {
     /// Automation: every press at once without a hand behind them — on a row a hand could press. Answers whether
     /// they went in, so a run that met the row out of reach waits rather than counting presses nothing landed.
     function completeHold() {
-        if (!menuItem.present || menuItem.blocked || !menuItem.enabled)
+        if (!menuItem.present || menuItem.greyed)
             return false
         holdDrive.runOut()
         return true
@@ -249,19 +251,19 @@ MenuItem {
 
     // The one colour every word in the row follows, so the chip cannot disagree with its sentence. A held row wears
     // its tone before it is touched at all (デザイン規約 §状態).
-    readonly property color wordColor: !menuItem.enabled || menuItem.blocked ? Theme.textMuted
+    readonly property color wordColor: menuItem.greyed ? Theme.textMuted
                                      : menuItem.holding ? Theme.textOnAccent
                                      : menuItem.armedPresses > 0 ? menuItem.holdTone : Theme.textPrimary
     /// The row cannot be pressed: the grey words say it is off, and the press mark keeps the tone it wears when the row
     /// can be pressed, a step down — what pressing it would cost (デザイン規約 §回数押しの色). Not over a fill: there the
     /// mark lifts with the words, and a step down would sink into the fill's own dimmed step.
-    readonly property bool holdOff: (!menuItem.enabled || menuItem.blocked) && !menuItem.holding
+    readonly property bool holdOff: menuItem.greyed && !menuItem.holding
     /// The press mark's colour: the words', or while [`holdOff`] the row's tone (`HoldIcon.off` steps it down).
     readonly property color holdInk: menuItem.holdOff ? menuItem.holdTone : menuItem.wordColor
     /// Whether the row's colour takes the names in it and their marks too: greyed, under the fill, and on a held row
     /// that warns. **A plain delete's words keep the ordinary rules** — its warning is the press mark's alone
     /// (デザイン規約 §回数押しの色), so a name there wears its own colour.
-    readonly property bool inkTakesNames: !menuItem.enabled || menuItem.blocked || menuItem.holding
+    readonly property bool inkTakesNames: menuItem.greyed || menuItem.holding
                                           || (menuItem.armedPresses > 0
                                               && !Qt.colorEqual(menuItem.holdTone, Theme.textPrimary))
     /// The colour the name inside those words takes: its own only while the row has no colour of its own
@@ -354,7 +356,7 @@ MenuItem {
         height: itemLabel.height
         visible: menuItem.heads && !menuItem.titled && menuItem.seated
         kind: menuItem.heads ? menuItem.markKind : "branch"
-        tint: !menuItem.enabled || menuItem.blocked ? Theme.textMuted : menuItem.markTint
+        tint: menuItem.greyed ? Theme.textMuted : menuItem.markTint
     }
 
     contentItem: RowLayout {
@@ -435,7 +437,7 @@ MenuItem {
             textFormat: Text.PlainText
             font.family: Theme.uiFamily
             font.pixelSize: Theme.fontSm
-            color: !menuItem.enabled || menuItem.blocked ? menuItem.wordColor : Theme.textSecondary
+            color: menuItem.greyed ? menuItem.wordColor : Theme.textSecondary
         }
         // Ahead / behind, in the left menu's seat and order (`NavRowBody`'s `trackSeat`).
         HeadTrack {
@@ -534,7 +536,7 @@ MenuItem {
                 width: Theme.iconSm
                 height: Theme.iconSm
                 kind: "chevron"
-                tint: !menuItem.enabled || menuItem.blocked ? Theme.textMuted : Theme.textSecondary
+                tint: menuItem.greyed ? Theme.textMuted : Theme.textSecondary
             }
         }
     }
