@@ -1,0 +1,4 @@
+interface:
+  display_name: "規約・ハーネス文書の整理"
+  short_description: "Edit platitude-gg rules with clear scope and shared sources"
+  default_prompt: "Use $platitude-policy-edit to update the requested rules and their references with instructions that state the desired behavior."

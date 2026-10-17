@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claude向けレビュー"
+  short_description: "Review platitude-gg and prepare a concise Claude handoff"
+  default_prompt: "Use $platitude-claude-review to review the requested changes and return Claude-facing repair instructions."

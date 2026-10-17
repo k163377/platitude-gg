@@ -9,11 +9,12 @@ use crate::command::{Command, Permission};
 /// The markdown this reads — wider than the torn-block count's
 /// (`super::ROOTS`). What is left out and why: rules-refs/structure.md
 /// 「どのファイルを読むか」.
-const ROOTS: [&str; 4] = [
+const ROOTS: [&str; 5] = [
     "internal-docs",
     ".claude/rules",
     ".claude/rules-refs",
     ".claude/skills",
+    ".agents/skills",
 ];
 const LOOSE: [&str; 2] = ["CLAUDE.md", "AGENTS.md"];
 
@@ -665,6 +666,33 @@ mod tests {
 
     fn catalogue() -> Vec<&'static Command> {
         vec![&LAND, &LAUNCH]
+    }
+
+    #[test]
+    fn codex_skill_commands_and_references_reach_the_document_check() {
+        let yard = crate::yard::Yard::new("codex-skill-documents");
+        for root in super::ROOTS {
+            std::fs::create_dir_all(yard.join(root)).expect("document directory");
+        }
+        let paths = [
+            ".agents/skills/sample/SKILL.md",
+            ".agents/skills/sample/references/options.md",
+            "target/session-analysis/raw.md",
+        ];
+        for path in paths {
+            let file = yard.join(path);
+            std::fs::create_dir_all(file.parent().expect("a parent")).expect("skill directory");
+            std::fs::write(file, "<!--cmd:sample.launch-->`cargo xtask launch`\n")
+                .expect("a command document");
+        }
+        let found = super::documents(&yard).expect("the documents read by the command check");
+        for path in &paths[..2] {
+            assert!(
+                found.contains(&yard.join(path)),
+                "{path} was not read: {found:?}"
+            );
+        }
+        assert!(!found.contains(&yard.join(paths[2])), "{found:?}");
     }
 
     fn say(text: &str) -> &'static str {

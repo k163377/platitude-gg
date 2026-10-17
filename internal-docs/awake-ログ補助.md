@@ -2,7 +2,7 @@
 
 Windows の holder revision 25、activity protocol 1。実装は `crates/xtask/src/awake/desktop.rs`
 (holder のスクリプトに埋め込まれる)。Codex の native activity と Desktop ログも同じ holder が読むが、
-対応付けは別の観測器が担当する([Codex ハーネス](Codexハーネス.md))。
+対応付けは別の観測器が担当する([Codex ハーネス](codex/ハーネス.md))。
 
 hook が知らせない 2 つの区間を、デスクトップアプリの `main.log` の後追いで補う。
 正式な通知の代わりではなく、実行前の保持は保証しない(§保証の境界)。
