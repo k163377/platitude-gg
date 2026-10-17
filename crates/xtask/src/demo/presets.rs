@@ -16,10 +16,6 @@ use super::deep::{deep, deep_detached, deep_parked, perf, perf_sequence, replay}
 use super::discards::{discards, discards_deep};
 use super::lfs::{lfs, lfs_conflict};
 use super::pictures::{bigpicture, pictures};
-use super::remote::{
-    behind, diverged, forkdiverged, forkmark, gone, hooked, others_behind, outrun, protected,
-    slowhook, unpublished, unreachable,
-};
 use super::repo::DemoRepo;
 use super::scale::{
     coloured, edges, long, longpaths, manyhunks, spread, widechars, widelate, widelines,
@@ -134,6 +130,10 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         made?;
         return Ok(repo.work);
     }
+    if let Some(made) = super::remote::build(preset, &mut repo) {
+        made?;
+        return Ok(repo.work);
+    }
     match preset {
         "basic" => basic(&mut repo)?,
         "nested" => nested(&mut repo)?,
@@ -171,19 +171,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "octopus-mates" => octopus_mates(&mut repo)?,
         "one-commit" => one_commit(&mut repo)?,
         "shallow" => shallow(&mut repo)?,
-        "behind" => behind(&mut repo)?,
-        "diverged" => diverged(&mut repo)?,
-        "others-behind" => others_behind(&mut repo)?,
-        "unpublished" => unpublished(&mut repo)?,
-        "gone" => gone(&mut repo)?,
-        "forkmark" => forkmark(&mut repo)?,
-        "forkdiverged" => forkdiverged(&mut repo)?,
-        "protected" => protected(&mut repo)?,
-        "outrun" => outrun(&mut repo)?,
-        "hooked" => hooked(&mut repo)?,
-        "slowhook" => slowhook(&mut repo)?,
         "noremote" => noremote(&mut repo)?,
-        "unreachable" => unreachable(&mut repo)?,
         "plan" => plan(&mut repo)?,
         "mergetools" => mergetools(&mut repo)?,
         "signed" => signed(&mut repo)?,

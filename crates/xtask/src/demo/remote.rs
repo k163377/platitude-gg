@@ -2,6 +2,27 @@
 
 use super::repo::{DemoRepo, file_url};
 
+/// Builds `preset` if it is one of this module's; `None` for the rest
+/// (`super::presets::build`).
+pub(super) fn build(preset: &str, repo: &mut DemoRepo) -> Option<Result<(), String>> {
+    let made = match preset {
+        "behind" => behind(repo),
+        "diverged" => diverged(repo),
+        "others-behind" => others_behind(repo),
+        "unpublished" => unpublished(repo),
+        "gone" => gone(repo),
+        "forkmark" => forkmark(repo),
+        "forkdiverged" => forkdiverged(repo),
+        "protected" => protected(repo),
+        "outrun" => outrun(repo),
+        "hooked" => hooked(repo),
+        "slowhook" => slowhook(repo),
+        "unreachable" => unreachable(repo),
+        _ => return None,
+    };
+    Some(made)
+}
+
 /// A branch that has never been sent anywhere, in a repository with two
 /// remotes — so the first push's question has something to pick between.
 ///
