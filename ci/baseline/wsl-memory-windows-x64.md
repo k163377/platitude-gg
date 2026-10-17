@@ -1,6 +1,7 @@
 # Linux コンテナの VM のメモリ(Windows x64)
 
-`cargo xtask linux` のエンジンは WSL 3.0.1 の `wslc`。コンテナは全部 1 つのセッション(`wslc-cli-<ユーザー>`)の
+`cargo xtask linux` のエンジンは WSL 3 の `wslc`(この実測は WSL 3.0.1、共有とネットワークは既定値の virtiofs・consomme)。
+コンテナは全部 1 つのセッション(`wslc-cli-<ユーザー>`)の
 VM で走り、Windows 側ではその VM が **`vmmemwslc-cli-<ユーザー>`** というプロセスになる。設定は
 `%LOCALAPPDATA%\wslc\settings.yaml` で、**`.wslconfig` は効かない**(`memory=6GB` を書いたままで、既定の VM の
 MemTotal は 15563 MB)。計器は `cargo xtask footprint <コマンド>`(生の行は `target/footprint/<run>/`)。
