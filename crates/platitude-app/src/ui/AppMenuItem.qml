@@ -258,10 +258,15 @@ MenuItem {
     readonly property bool holdOff: (!menuItem.enabled || menuItem.blocked) && !menuItem.holding
     /// The press mark's colour: the words', or while [`holdOff`] the row's tone (`HoldIcon.off` steps it down).
     readonly property color holdInk: menuItem.holdOff ? menuItem.holdTone : menuItem.wordColor
+    /// Whether the row's colour takes the names in it and their marks too: greyed, under the fill, and on a held row
+    /// that warns. **A plain delete's words keep the ordinary rules** — its warning is the press mark's alone
+    /// (デザイン規約 §回数押しの色), so a name there wears its own colour.
+    readonly property bool inkTakesNames: !menuItem.enabled || menuItem.blocked || menuItem.holding
+                                          || (menuItem.armedPresses > 0
+                                              && !Qt.colorEqual(menuItem.holdTone, Theme.textPrimary))
     /// The colour the name inside those words takes: its own only while the row has no colour of its own
     /// (デザイン規約 §メニュー「文の中に入った名前も、色は名前のもの」).
-    readonly property color refColor: !menuItem.enabled || menuItem.blocked || menuItem.armedPresses > 0
-                                      ? menuItem.wordColor : menuItem.refTint
+    readonly property color refColor: menuItem.inkTakesNames ? menuItem.wordColor : menuItem.refTint
     /// Those words as `Text.StyledText` markup, in one label so the line elides, measures and hovers like any row's.
     /// Every piece is escaped: the name is the repository's (a branch called `<b>`), and spaces go as `&nbsp;` because
     /// rich text folds a run of them (`encode::markup`).
@@ -472,8 +477,7 @@ MenuItem {
                 wordBase: markNameLabel.baselineOffset
                 // `NavIcon` paints on a kind it is given; an empty one would be a shape nobody asked for.
                 kind: menuItem.namesMark ? menuItem.nameMark : "tree"
-                tint: menuItem.blocked || !menuItem.enabled || menuItem.armedPresses > 0
-                      ? menuItem.wordColor : menuItem.nameMarkTint
+                tint: menuItem.inkTakesNames ? menuItem.wordColor : menuItem.nameMarkTint
             }
             Label {
                 id: markNameLabel
