@@ -5,6 +5,81 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
+    // The find bar over the diff (デザイン規約 §diff の中を探す), on
+    // manyhunks' notes.txt: `reworded` stands on each of the 20 added
+    // lines. `at=1` is the first from the top of the view, `spans=1` the
+    // one row the standing hit covers, `focused=true` the caret in the box.
+    Verb {
+        name: "diff-find",
+        when: &[],
+        plain: "diff_find open=true matches=20 at=1 lines=1 spans=1 focused=true refused=false",
+    },
+    // Back from the first hit rounds to the last, which stands off screen:
+    // the view moves for it.
+    Verb {
+        name: "diff-find-step",
+        when: &[],
+        plain: "diff_find_step at=20 of=20 moved=true wrapped=true",
+    },
+    // Two typed lines (`down the file` then `0`) run over a line end: the
+    // added line into the context line after it, where its number starts
+    // with 0 — six of them — and the standing hit covers two rows.
+    Verb {
+        name: "diff-find-lines",
+        when: &[],
+        plain: "diff_find_lines open=true matches=6 at=1 lines=2 spans=2",
+    },
+    // The options, each read off the count: `Reworded` with its case
+    // finds nothing, `note` as a whole word finds nothing where `notes`
+    // stand (and finds them without), `re\w+ded` as a pattern finds the 20,
+    // and `(` is refused with regex's reason: the frame says so
+    // (`refused=true`), and the tip saying why is up (`tip=true`) — on
+    // the box's left edge, in `scene.png`. A press elsewhere then leaves
+    // the refused line standing as it leaves a typed one (`kept=true`).
+    Verb {
+        name: "diff-find-options",
+        when: &[],
+        plain: "diff_find_options case=0 word=0 regex=20 bad=true badMatches=0 error=Unclosed group refused=true \
+                tip=true kept=true",
+    },
+    // Two columns: the hits on added lines stand on the right side alone.
+    Verb {
+        name: "diff-find-split",
+        when: &[],
+        plain: "diff_find_split split=true matches=20 at=1 right=true left=false",
+    },
+    // A press elsewhere takes an empty box away and leaves a typed one
+    // standing.
+    Verb {
+        name: "diff-find-drop",
+        when: &[],
+        plain: "diff_find_drop act=diff-find-drop open=false searching=false matches=0",
+    },
+    Verb {
+        name: "diff-find-keep",
+        when: &[],
+        plain: "diff_find_drop act=diff-find-keep open=true searching=true matches=20",
+    },
+    // Escape: the marks come off and the rows take the keyboard back.
+    Verb {
+        name: "diff-find-close",
+        when: &[],
+        plain: "diff_find_close open=false searching=false matches=0 rowsFocus=true",
+    },
+    // Ctrl+F over a selection opens on the selected words.
+    Verb {
+        name: "diff-find-seed",
+        when: &[],
+        plain: "diff_find_seed open=true query=reworded seeded=true matches=20 focused=true",
+    },
+    // A line far wider than the box (a pattern, so it still finds the 20):
+    // the lines run past the box (`overflows=true`) and the box is sent
+    // sideways to keep the caret at their end in view (`scrolled=true`).
+    Verb {
+        name: "diff-find-long",
+        when: &[],
+        plain: "diff_find_long open=true matches=20 overflows=true scrolled=true focused=true",
+    },
     // The file list's arrows. Nothing here pressed the diff, so
     // `focused=true` says the list kept the keyboard when the diff
     // opened; `lit=true` is the row painted as the one being read, and

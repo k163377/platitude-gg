@@ -83,6 +83,8 @@ QtObject {
                 "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep",
                 "diff-band-sweep", "diff-bar", "diff-blank", "diff-escape",
                 "diff-split", "split-tools", "split-copy",
+                "diff-find", "diff-find-step", "diff-find-lines", "diff-find-options", "diff-find-split",
+                "diff-find-drop", "diff-find-keep", "diff-find-close", "diff-find-seed", "diff-find-long",
                 "preview", "preview-unstaged", "preview-staged", "preview-close",
                 // The write barrier is behind these: the stops land on the worktree's own row, which the graph
                 // pass after the write puts there, and `merge-commit` has to read the commit it just made.

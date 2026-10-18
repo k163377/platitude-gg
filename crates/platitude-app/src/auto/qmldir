@@ -4,6 +4,7 @@ AutoActCompletion 1.0 AutoActCompletion.qml
 AutoActBranchPushVerbs 1.0 AutoActBranchPushVerbs.qml
 AutoActWorktreeVerbs 1.0 AutoActWorktreeVerbs.qml
 AutoActDetailsVerbs 1.0 AutoActDetailsVerbs.qml
+AutoActDiffFindVerbs 1.0 AutoActDiffFindVerbs.qml
 AutoActDiffVerbs 1.0 AutoActDiffVerbs.qml
 AutoActFileRowVerbs 1.0 AutoActFileRowVerbs.qml
 AutoActFindVerbs 1.0 AutoActFindVerbs.qml

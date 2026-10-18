@@ -690,6 +690,7 @@ Item {
     AutoActFindVerbs { id: findVerbs; driver: driver }
     AutoActDiffVerbs { id: diffVerbs; driver: driver }
     AutoActSplitVerbs { id: splitVerbs; driver: driver }
+    AutoActDiffFindVerbs { id: diffFindVerbs; driver: driver }
     AutoActHandVerbs { id: handVerbs; driver: driver }
     AutoActWorktreeVerbs { id: worktreeVerbs; driver: driver }
     AutoActRecoverVerbs { id: recoverVerbs; driver: driver }
@@ -721,6 +722,7 @@ Item {
             || findVerbs.run(act, arg)
             || diffVerbs.run(act, arg)
             || splitVerbs.run(act, arg)
+            || diffFindVerbs.run(act, arg)
             || handVerbs.run(act, arg)
             || worktreeVerbs.run(act, arg)
             || recoverVerbs.run(act, arg)
