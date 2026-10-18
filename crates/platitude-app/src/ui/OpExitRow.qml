@@ -74,9 +74,10 @@ Item {
                                      : !opRow.enabled ? Theme.textMuted
                                      : opRow.armedPresses > 0 ? opRow.holdTone
                                      : Theme.textPrimary
-    /// The tag after the words: `textSecondary`, grey where the words grey — a lit tag in a grey row reads as the part
-    /// that still works (デザイン規約 §無効).
-    readonly property color noteColor: !opRow.lifted && !opRow.enabled ? Theme.textMuted : Theme.textSecondary
+    /// The tag after the words: `textSecondary`, and the words' colour where they have one of their own — lifted over
+    /// the fill, grey where they grey (a lit tag in a grey row reads as the part that still works, デザイン規約 §無効).
+    readonly property color noteColor: opRow.lifted ? Theme.textOnAccent
+                                     : !opRow.enabled ? Theme.textMuted : Theme.textSecondary
     /// The row cannot be pressed: grey words, and the press mark keeps its tone a step down, as a menu row's does
     /// (`AppMenuItem.holdOff`, which says why a fill keeps it out).
     readonly property bool holdOff: !opRow.enabled && !opRow.holding

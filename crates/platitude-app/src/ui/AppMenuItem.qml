@@ -27,9 +27,11 @@ MenuItem {
 
     /// A short warning tag after the row's words ("already pushed"); the row still runs on click.
     property string note: ""
-    /// That tag's colour: the warning, grey with the words on a row that cannot be chosen — it is one of the row's
-    /// words, and a lit tag in a grey row reads as the part that still works (デザイン規約 §無効).
-    readonly property color noteColor: menuItem.greyed ? Theme.textMuted : Theme.warning
+    /// That tag's colour: the warning, and the words' colour where they have one of their own — grey on a row that
+    /// cannot be chosen (a lit tag in a grey row reads as the part that still works, デザイン規約 §無効), lifted over
+    /// the fill (in the warning it would sink into it).
+    readonly property color noteColor: menuItem.greyed ? Theme.textMuted
+                                     : menuItem.holding ? Theme.textOnAccent : Theme.warning
 
     /// A second name after the row's own — the worktree a tab is in, drawn the way the tab draws it
     /// (デザイン規約 §タブの所作). Empty draws none.

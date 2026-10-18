@@ -73,6 +73,11 @@ HoverToolButton {
     /// (`ActionButtonLabel.phraseNote`).
     property string phraseNote: ""
     property color phraseNoteTint: Theme.warning
+    /// The colour that note is drawn in: its own, and the words' where they have one of their own — lifted over the
+    /// fill, grey while the button waits or cannot be pressed (a lit tag beside grey words reads as the part that still
+    /// works, デザイン規約 §無効).
+    readonly property color phraseNoteInk: actionBtn.holdResting && actionBtn.enabled ? actionBtn.phraseNoteTint
+                                                                                      : actionBtn.fg
     /// Whom the action will be attributed to, at the end of the phrase, and how many more it credits
     /// (`ActionButtonLabel.phraseFace`).
     property int phraseFace: -1
@@ -425,7 +430,7 @@ HoverToolButton {
                 phraseTail: actionBtn.phraseTail
                 phraseTailTint: actionBtn.phraseTailTint
                 phraseNote: actionBtn.phraseNote
-                phraseNoteTint: actionBtn.phraseNoteTint
+                phraseNoteTint: actionBtn.phraseNoteInk
                 phraseFace: actionBtn.phraseFace
                 phraseFaceUrl: actionBtn.phraseFaceUrl
                 phraseMates: actionBtn.phraseMates

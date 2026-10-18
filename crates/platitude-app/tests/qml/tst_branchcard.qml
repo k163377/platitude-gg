@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import "painted.js" as Painted
 
 // The real branch card (`RefBranchMenu`) standing on the answers a menu would hand it (`RefRowMenu.branchFacts`):
 // which rows it keeps, what each says, the gesture and colour each takes, and what a press asks for. Which rows a
@@ -80,6 +81,14 @@ Item {
         name: "BranchCard"
         when: windowShown
 
+        /// A card a test opened goes whatever the test said, so the next one finds its rows at rest.
+        function cleanup() {
+            if (!card.visible)
+                return
+            card.dismiss()
+            tryVerify(() => !card.visible)
+        }
+
         /// A branch's three delete forms are a fixed table whose rows stay and grey (デザイン規約 §メニュー).
         function test_why_each_row_of_a_branchs_table_is_out_data() {
             return [
@@ -116,22 +125,9 @@ Item {
             compare(card.deleteBothItem.blockedReason, "Differs from origin/feature/topic-a")
         }
 
-        /// The label inside `item` that paints `words`, or null.
-        function labelSaying(item, words) {
-            for (const child of item.children) {
-                if (child.text === words && child.color !== undefined)
-                    return child
-                const found = labelSaying(child, words)
-                if (found !== null)
-                    return found
-            }
-            return null
-        }
-        /// The colour a row's tag is painted in — the label's, not the property it is meant to read.
+        /// The colour a row's tag is painted in.
         function tagInk(row) {
-            const label = labelSaying(row, row.note)
-            verify(label !== null, "a label painting " + row.note)
-            return label.color
+            return Painted.inkOf(row, row.note)
         }
 
         /// A tag is one of the row's words: on the row out of reach it greys with them, and stays the warning on the
@@ -144,6 +140,20 @@ Item {
             verify(!card.deleteItem.blocked)
             compare(card.deleteItem.note, "not merged")
             compare(tagInk(card.deleteItem), Theme.warning)
+        }
+
+        /// Under the presses the tag lifts with the words over the fill: in the warning it would sink into it
+        /// (デザイン規約 §回数押しの色).
+        function test_a_row_being_pressed_lifts_its_tag() {
+            root.standOn({ merged: "no" })
+            compare(card.deleteItem.note, "not merged")
+            verify(card.offerHere(), "the card opens")
+            tryVerify(() => card.opened)
+            // The card lays its rows out after it stands: press once they are, not on the bare frame.
+            verify(waitForItemPolished(card.contentItem), "the rows are laid out")
+            mouseClick(card.deleteItem, 30, card.deleteItem.height / 2)
+            tryVerify(() => card.deleteItem.holding)
+            compare(tagInk(card.deleteItem), Theme.textOnAccent)
         }
 
         function test_a_branch_nothing_holds_back_offers_all_three() {

@@ -1,12 +1,14 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import "painted.js" as Painted
 
 // The colours a confirmed control's mark and fill are drawn in (デザイン規約 §回数押しの色). The mark wears what pressing
 // through costs — a warning, a danger, the lift over the fill — beside grey words too; a white delete keeps the plain
 // ink for its words alone: its mark and fill carry the warning. The one grey mark is the asleep hunk heading's. A
 // control that cannot be pressed greys its words, and its mark keeps the hue it wears when it can, a step down; a mark
-// with no hue to keep greys with the words (§無効).
+// with no hue to keep greys with the words (§無効). A tag after the words goes with them where they have a colour of
+// their own: lifted over the fill, grey where they grey.
 Item {
     id: root
     width: 400
@@ -64,6 +66,20 @@ Item {
         hold: true
         accept: "Replace"
     }
+    // Dressed as the plan's run button (`RebasePlanRunBar`): a tag after the phrase, held while a drop is in it.
+    ActionButton {
+        id: runButton
+        y: 160
+        width: 300
+        phraseHead: "rebase -i"
+        text: "2 commits"
+        phraseNote: "1 already pushed"
+        frameColor: Theme.warning
+        tone: runButton.armedPresses > 0 ? Theme.warning : Theme.textPrimary
+        holdPresses: Metrics.holdPressesWarned
+    }
+    /// Somewhere else for the focus to go: a count kept by a key goes at once with it.
+    Item { id: elsewhere }
 
     TestCase {
         name: "HoldInk"
@@ -239,6 +255,53 @@ Item {
             ask.plainHold = false
             compare(ask.holdPresses, Metrics.holdPressesWarned)
             verify(Qt.colorEqual(ask.labelTint, ask.tone), "a state colour takes the whole heading")
+        }
+    }
+
+    TestCase {
+        name: "TagInk"
+        when: windowShown
+
+        function init() {
+            runButton.holdPresses = Metrics.holdPressesWarned
+            runButton.enabled = true
+            runButton.busy = false
+            elsewhere.forceActiveFocus()
+            tryVerify(() => !runButton.gesturing)
+        }
+        function tagInk() {
+            return Painted.inkOf(runButton, runButton.phraseNote)
+        }
+
+        /// A button's tag keeps its warning while the button can be pressed, and greys with the words while it cannot
+        /// or waits (§無効) — the frame keeps the warning either way.
+        function test_a_button_out_of_reach_greys_its_tag() {
+            compare(tagInk(), Theme.warning)
+            runButton.enabled = false
+            compare(tagInk(), Theme.textMuted)
+            runButton.enabled = true
+            runButton.busy = true
+            compare(tagInk(), Theme.textMuted)
+        }
+        /// Under the presses the tag lifts with the words over the fill: in the warning it would sink into it.
+        function test_a_button_being_pressed_lifts_its_tag() {
+            runButton.forceActiveFocus()
+            keyClick(Qt.Key_Space)
+            tryVerify(() => runButton.holdProgress > 0)
+            compare(tagInk(), Theme.textOnAccent)
+        }
+        /// Beside words in the plain ink the tag keeps its warning — it follows the words only where they have a colour
+        /// of their own: the run button over pushed commits with nothing dropped (デザイン規約 §フル interactive
+        /// rebase), and a menu row whose words are not the warning's.
+        function test_a_tag_keeps_its_warning_beside_plain_words() {
+            runButton.holdPresses = 0
+            compare(runButton.fg, Theme.textPrimary)
+            compare(tagInk(), Theme.warning)
+            row.holdTone = Theme.textPrimary
+            row.note = "already pushed"
+            compare(row.wordColor, Theme.textPrimary)
+            compare(Painted.inkOf(row, row.note), Theme.warning)
+            row.note = ""
         }
     }
 }

@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import "painted.js" as Painted
 
 // A row of the stopped operation's card turned off (`enabled`, its own or an ancestor's) answers nothing: no key, no
 // press, and no count already under way lands after it. Turned back on, it answers as before.
@@ -152,22 +153,9 @@ Item {
             compare(heldPicks.count, 0)
         }
 
-        /// The label inside `item` that paints `words`, or null.
-        function labelSaying(item, words) {
-            for (const child of item.children) {
-                if (child.text === words && child.color !== undefined)
-                    return child
-                const found = labelSaying(child, words)
-                if (found !== null)
-                    return found
-            }
-            return null
-        }
-        /// The colour a row's tag is painted in — the label's, not the property it is meant to read.
+        /// The colour a row's tag is painted in.
         function tagInk(row) {
-            const label = labelSaying(row, row.note)
-            verify(label !== null, "a label painting " + row.note)
-            return label.color
+            return Painted.inkOf(row, row.note)
         }
 
         /// The tag is one of the row's words: turned off, it greys with them (デザイン規約 §無効).
@@ -177,9 +165,18 @@ Item {
             compare(tagInk(plain), Theme.textMuted)
         }
 
+        /// Under the presses the tag lifts with the words over the fill.
+        function test_a_row_being_pressed_lifts_its_tag() {
+            compare(tagInk(held), Theme.textSecondary)
+            held.forceActiveFocus()
+            keyClick(Qt.Key_Space)
+            tryVerify(() => held.holding)
+            compare(tagInk(held), Theme.textOnAccent)
+        }
+
         /// Off while its own work runs over the full fill, the row is not greyed: the words stay lifted, and the tag
-        /// keeps its own colour.
-        function test_a_row_off_over_its_own_fill_keeps_its_tag() {
+        /// with them — in its own colour it would sink into the fill (デザイン規約 §回数押しの色).
+        function test_a_row_off_over_its_own_fill_lifts_its_tag() {
             // The work goes out at the last press and is still out: the full fill stands whatever the floor does.
             held.waiting = true
             held.forceActiveFocus()
@@ -188,7 +185,7 @@ Item {
             compare(heldPicks.count, 1)
             held.enabled = false
             tryVerify(() => held.lifted, undefined, "the full fill stands while its work runs")
-            compare(tagInk(held), Theme.textSecondary)
+            compare(tagInk(held), Theme.textOnAccent)
         }
 
         function test_a_row_turned_off_is_not_in_the_tab_order() {
