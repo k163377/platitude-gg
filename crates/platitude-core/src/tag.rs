@@ -140,6 +140,34 @@ mod tests {
     use super::*;
     use crate::refusing;
 
+    /// `--end-of-options` ahead of the name on every tag command: a name
+    /// starting with a dash reaches git as a name, never as an option.
+    /// Git alone reads the marker, so the command line is where it is
+    /// pinned; its refusal of such a name is `tag_integration::periodic`'s.
+    #[tokio::test]
+    async fn every_tag_command_ends_its_options_before_the_name() {
+        let (exec, asked) = refusing::git();
+        let cancel = CancellationToken::new();
+        let nowhere = refusing::nowhere();
+        create(&exec, &nowhere, "-dash", "", &cancel)
+            .await
+            .expect_err("there is no git here to tag with");
+        create(&exec, &nowhere, "v1", "0123abcd", &cancel)
+            .await
+            .expect_err("there is no git here to tag with");
+        delete(&exec, &nowhere, "-dash", &cancel)
+            .await
+            .expect_err("there is no git here to delete with");
+        assert_eq!(
+            asked.displays(),
+            [
+                "git tag --end-of-options -dash",
+                "git tag --end-of-options v1 0123abcd",
+                "git tag --delete --end-of-options -dash",
+            ]
+        );
+    }
+
     /// The executor cannot run anything and the repository is not there,
     /// so a rename that reached for git would fail on the spawn rather
     /// than come back as this refusal.

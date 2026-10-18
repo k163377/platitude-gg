@@ -217,3 +217,29 @@ pub async fn set_merge_tool(
         .args(["config", "--global", "merge.guitool", tool]);
     executor.run(cmd, cancel).await.map(drop)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::mergetool_command;
+
+    /// The launch names the tool `--gui` resolved, asks no question on the
+    /// closed stdin and keeps the tool's scratch out of the working tree.
+    /// Git alone reads these, so the command line is where they are pinned;
+    /// what git does under them — the key `--gui` reaches, the scratch's
+    /// place, staging what the tool resolved — is `mergetool::periodic`'s.
+    #[test]
+    fn the_launch_names_the_gui_tool_and_keeps_its_scratch_out_of_the_tree() {
+        let described =
+            mergetool_command(Path::new("repo"), "pgguitool", &["f.txt".to_string()]).describe();
+        assert!(
+            described.contains("-c mergetool.writeToTemp=true"),
+            "{described}"
+        );
+        assert!(
+            described.contains("mergetool --gui --no-prompt --tool=pgguitool --"),
+            "{described}"
+        );
+    }
+}

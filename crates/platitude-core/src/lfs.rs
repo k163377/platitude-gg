@@ -136,8 +136,27 @@ pub async fn runs(
 
 #[cfg(test)]
 mod tests {
-    use super::stages_content;
+    use tokio_util::sync::CancellationToken;
+
+    use super::{required, stages_content};
     use crate::status::StatusItem;
+
+    /// `filter.lfs.required` is read as git reads a boolean (`--type=bool`),
+    /// so every spelling of false is false here. Git alone reads the type,
+    /// so the command line is where it is pinned; what it makes of each
+    /// spelling is `lfs_integration::periodic`'s.
+    #[tokio::test]
+    async fn the_required_flag_is_read_as_a_boolean() {
+        let (exec, asked) = crate::refusing::git();
+        let cancel = CancellationToken::new();
+        required(&exec, &crate::refusing::nowhere(), &cancel)
+            .await
+            .expect_err("there is no git here to read with");
+        assert_eq!(
+            asked.displays(),
+            ["git config --type=bool --get filter.lfs.required"]
+        );
+    }
 
     fn tracked(staged: char, unstaged: char) -> StatusItem {
         StatusItem::Tracked {

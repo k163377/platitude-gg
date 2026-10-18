@@ -78,3 +78,29 @@ pub async fn fast_forward(
         .paced_elsewhere();
     executor.run(cmd, cancel).await.map(|_| ())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use tokio_util::sync::CancellationToken;
+
+    use super::pull;
+
+    /// A pull only fast-forwards, never rebases, and pins `--no-autostash`
+    /// as `integrate::merge` does: the carry is the session's. Git alone
+    /// reads the flags, so the command line is where they are pinned.
+    #[tokio::test]
+    async fn a_pull_only_fast_forwards_and_pins_autostash_off() {
+        let (exec, asked) = crate::refusing::git();
+        let cancel = CancellationToken::new();
+        let timeout = Duration::from_secs(1);
+        pull(&exec, &crate::refusing::nowhere(), timeout, &cancel)
+            .await
+            .expect_err("there is no git here to pull with");
+        assert_eq!(
+            asked.displays(),
+            ["git pull --ff-only --no-rebase --no-autostash"]
+        );
+    }
+}

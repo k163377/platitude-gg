@@ -319,4 +319,19 @@ mod tests {
         let plain = rebase_command(Path::new("repo"), "upstream", &options, None).describe();
         assert!(!plain.contains("rebase-merges"), "{plain}");
     }
+
+    /// `--no-autostash` on both forms: the stash a dirty tree goes round
+    /// through is the session's (`session::build::carry_across`), and git's
+    /// own `rebase.autoStash` would put it back with a plain `apply`. Git
+    /// alone reads the flag, so the command line is where it is pinned;
+    /// what git does with its own autostash is `carry_rewrite::periodic`'s.
+    #[test]
+    fn every_rebase_pins_autostash_off() {
+        let options = RebaseOptions::default();
+        for editor in [Some("editor"), None] {
+            let described =
+                rebase_command(Path::new("repo"), "upstream", &options, editor).describe();
+            assert!(described.contains("--no-autostash"), "{described}");
+        }
+    }
 }

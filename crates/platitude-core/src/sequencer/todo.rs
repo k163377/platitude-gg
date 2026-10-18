@@ -280,3 +280,56 @@ pub fn parse_todo(text: &str) -> Vec<TodoLine> {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{TodoAction, TodoLine, render_todo};
+
+    fn line(action: TodoAction, oid: &str, subject: &str) -> TodoLine {
+        TodoLine::Command {
+            action,
+            oid: oid.to_string(),
+            subject: subject.to_string(),
+        }
+    }
+
+    /// A commit left out is written as a `drop` line, never left out of the
+    /// todo: a reader's `rebase.missingCommitsCheck` reads an omitted line
+    /// as a mistake and a `drop` as the plan (what git then does with the
+    /// setting is `integrate_integration::drop::periodic`'s). A reword is a
+    /// `pick` — the message travels another way.
+    #[test]
+    fn every_action_is_spelled_and_a_drop_is_a_line_of_its_own() {
+        let rendered = render_todo(&[
+            line(TodoAction::Pick, "1111111", "one"),
+            line(TodoAction::Drop, "2222222", "two"),
+            line(TodoAction::Reword, "3333333", "three"),
+            line(TodoAction::Squash, "4444444", "four"),
+            line(TodoAction::Fixup, "5555555", "five"),
+            line(TodoAction::Edit, "6666666", "six"),
+            TodoLine::Exec {
+                command: "true".to_string(),
+            },
+        ]);
+        assert_eq!(
+            rendered,
+            "pick 1111111 one\ndrop 2222222 two\npick 3333333 three\nsquash 4444444 four\n\
+             fixup 5555555 five\nedit 6666666 six\nexec true\n"
+        );
+    }
+
+    /// A newline in a subject or a command would forge a line of its own.
+    #[test]
+    fn a_subject_or_command_with_a_newline_stays_one_line() {
+        let rendered = render_todo(&[
+            line(TodoAction::Pick, "1111111", "one\ndrop 2222222 two"),
+            TodoLine::Exec {
+                command: "true\r\nfalse".to_string(),
+            },
+        ]);
+        assert_eq!(
+            rendered,
+            "pick 1111111 one drop 2222222 two\nexec true  false\n"
+        );
+    }
+}

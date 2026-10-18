@@ -3,6 +3,26 @@ use std::sync::Mutex;
 use super::*;
 use crate::process::literal_pathspec;
 
+/// What every invocation carries: a working-tree `diff` refreshes the index
+/// under `.git/index.lock` unless `diff.autoRefreshIndex=false` says not to
+/// (`--no-optional-locks` does not reach `diff`), and a poll's diff on that
+/// lock would kill a concurrent commit. Git alone reads the pair, so the
+/// command line is where it is pinned; what git leaves of the index behind
+/// it is `exec::periodic`'s.
+#[test]
+fn every_invocation_keeps_a_diff_off_the_index_lock() {
+    assert!(
+        FIXED_ARGS
+            .windows(2)
+            .any(|pair| pair == ["-c", "diff.autoRefreshIndex=false"]),
+        "{FIXED_ARGS:?}"
+    );
+    assert!(
+        FIXED_ARGS.contains(&"--no-optional-locks"),
+        "{FIXED_ARGS:?}"
+    );
+}
+
 /// Says `ready`, then sleeps: an observable start edge to cancel after.
 fn sleeper() -> Command {
     #[cfg(windows)]

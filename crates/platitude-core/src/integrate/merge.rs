@@ -126,3 +126,58 @@ async fn stopped_on_a_conflict(
         .await
         .is_ok_and(|state| state.merging)
 }
+
+#[cfg(test)]
+mod tests {
+    use tokio_util::sync::CancellationToken;
+
+    use super::{MergeOptions, merge, refused_over_work};
+    use crate::error::GitError;
+
+    /// `--no-autostash` on every merge: the stash a dirty tree goes round
+    /// through is the session's (`session::build::carry_across`), never
+    /// git's `MERGE_AUTOSTASH`. Git alone reads the flag, so the command
+    /// line is where it is pinned; what git does with its own autostash is
+    /// `carry_integrate::periodic`'s.
+    #[tokio::test]
+    async fn a_merge_pins_autostash_off_and_takes_no_editor() {
+        let (exec, asked) = crate::refusing::git();
+        let cancel = CancellationToken::new();
+        merge(
+            &exec,
+            &crate::refusing::nowhere(),
+            "topic",
+            &MergeOptions::default(),
+            &cancel,
+        )
+        .await
+        .expect_err("there is no git here to merge with");
+        assert_eq!(
+            asked.displays(),
+            ["git merge --no-edit --no-autostash -- topic"]
+        );
+    }
+
+    /// Only git naming work in the way is the refusal the session carries
+    /// work across; a name git cannot merge, unrelated histories or an
+    /// index not up to date are the failures they look like.
+    #[test]
+    fn a_failure_in_other_words_is_not_over_work() {
+        let failed = |stderr: &str| GitError::Failed {
+            command: "git merge".to_string(),
+            code: 1,
+            stderr: stderr.to_string(),
+        };
+        assert!(refused_over_work(&failed(
+            "error: Your local changes to the following files would be overwritten by merge:\n\ta.txt"
+        )));
+        for stderr in [
+            "merge: nope - not something we can merge",
+            "fatal: refusing to merge unrelated histories",
+            "error: Entry 'a.txt' not uptodate. Cannot merge.",
+            "",
+        ] {
+            assert!(!refused_over_work(&failed(stderr)), "{stderr}");
+        }
+    }
+}

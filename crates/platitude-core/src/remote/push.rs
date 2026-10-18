@@ -480,6 +480,21 @@ mod tests {
         );
     }
 
+    /// Every push is porcelain and follows no tags: a user's
+    /// `push.followTags` would add every annotated tag on the pushed
+    /// commits, and the far side turning one away fails a push whose
+    /// branch landed. Git alone reads the flag, so the command line is
+    /// where it is pinned; what git sends under `push.followTags` is
+    /// `remote_integration::periodic`'s.
+    #[test]
+    fn every_push_is_porcelain_and_follows_no_tags() {
+        let described = porcelain_push(Path::new("repo"), Duration::from_secs(1)).describe();
+        assert!(
+            described.contains("push --porcelain --no-follow-tags"),
+            "{described}"
+        );
+    }
+
     /// An error rather than a refspec against an empty name.
     #[test]
     fn a_repository_with_no_remote_has_nowhere_to_send() {
