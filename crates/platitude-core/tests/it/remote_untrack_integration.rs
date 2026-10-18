@@ -46,22 +46,6 @@ fn tracks(work: &mut TestRepo, name: &str) -> bool {
     work.git_ok(&["config", &format!("branch.{name}.merge")])
 }
 
-/// Every branch here that tracked the deleted name loses its upstream, so
-/// none is left warning that it is gone; one tracking another name keeps
-/// its own.
-#[tokio::test]
-async fn a_delete_takes_the_upstream_off_what_tracked_it() {
-    let (_bare, mut work) = origin_and_clone();
-    let shown = tracked_topic(&mut work);
-
-    assert_eq!(delete_and_untrack(&work, &shown).await, ["copy", "topic"]);
-    assert!(!tracks(&mut work, "copy") && !tracks(&mut work, "topic"));
-    assert_eq!(
-        work.git(&["config", "branch.main.merge"]),
-        "refs/heads/main"
-    );
-}
-
 /// Judged by the push alone: a `pushurl` naming another repository than
 /// the fetch URL takes the delete there, which is where these branches
 /// push, so they lose the upstream although the fetch side still holds

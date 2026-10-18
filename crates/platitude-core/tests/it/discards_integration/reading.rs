@@ -60,45 +60,6 @@ async fn each_move_off_a_tip_is_one_entry_with_what_only_it_held() {
     );
 }
 
-/// The rebase a pull runs is a rebase like any other, though git writes it
-/// behind the pull's own command line (`pull --no-edit (finish): …`).
-#[tokio::test]
-async fn the_rebase_a_pull_runs_is_listed() {
-    let (_bare, mut work) = crate::support::remote::origin_and_clone();
-    work.commit_file("t.txt", "theirs\n", "theirs");
-    work.git(&["push", "--set-upstream", "origin", "main"]);
-    work.git(&["reset", "--hard", "HEAD~1"]);
-    let mine = work.commit_file_id("m.txt", "mine\n", "mine");
-    work.git(&["-c", "pull.rebase=true", "pull", "--no-edit"]);
-
-    let found = read(&work).await;
-    let rebase = one(&found, DiscardKind::Rebase);
-    assert_eq!(
-        (rebase.name.as_str(), rebase.lost()),
-        ("main", vec![oid(&mine)])
-    );
-}
-
-/// What was done on a detached HEAD comes back under the detached name, not
-/// a branch named after the folder (§4).
-#[tokio::test]
-async fn a_move_made_detached_comes_back_under_the_detached_name() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "1\n", "c1");
-    repo.git(&["switch", "--detach", "HEAD"]);
-    let d1 = repo.commit_file_id("d.txt", "1\n", "d1");
-    repo.git(&["commit", "--amend", "-m", "d1 again"]);
-    repo.git(&["switch", "main"]);
-
-    let found = read(&repo).await;
-    let amend = one(&found, DiscardKind::Amend);
-    assert_eq!((amend.name.as_str(), amend.parts[0].tip), ("", oid(&d1)));
-    assert!(
-        matches!(&amend.parts[0].restore, Restore::Branch { name, .. } if name == "detached-pgg-restored"),
-        "{amend:#?}"
-    );
-}
-
 /// An older stash entry holds the commit it stood on as the newest does: a
 /// move off a tip one of them stands on took nothing.
 #[tokio::test]
@@ -204,29 +165,6 @@ async fn a_move_on_a_branch_deleted_since_is_read_off_heads_reflog() {
     );
 }
 
-/// The delete a JetBrains IDE writes into HEAD's reflog — HEAD's own
-/// value, with the name and the deleted tip in the message — is an entry
-/// holding what only that tip reached.
-#[tokio::test]
-async fn a_delete_another_tool_wrote_is_an_entry() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "1\n", "c1");
-    repo.git(&["switch", "-c", "spike"]);
-    let s1 = repo.commit_file_id("s.txt", "1\n", "s1");
-    repo.git(&["switch", "main"]);
-    repo.git(&["branch", "--delete", "--force", "spike"]);
-    let message = format!("delete_branch: spike origin/spike [{}]", s1.trim());
-    repo.git(&["update-ref", "-m", &message, "HEAD", "HEAD"]);
-
-    let found = read(&repo).await;
-    assert_eq!(found.len(), 1, "{found:#?}");
-    let deleted = one(&found, DiscardKind::Deleted);
-    assert_eq!(
-        (deleted.name.as_str(), deleted.lost()),
-        ("spike", vec![oid(&s1)])
-    );
-}
-
 /// Another worktree's HEAD is read from this one, and this one's from
 /// it: what it left detached is one entry, named for it where it is not
 /// the worktree read from — and the commit its detached HEAD stands on, which
@@ -271,4 +209,30 @@ async fn a_tip_another_ref_holds_is_no_entry() {
 
     let found = read(&repo).await;
     assert!(found.is_empty(), "keep still reaches c2: {found:#?}");
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// The rebase a pull runs is a rebase like any other, though git writes it
+    /// behind the pull's own command line (`pull --no-edit (finish): …`).
+    #[tokio::test]
+    #[ignore = "the reflog line git writes behind a pull's rebase: not worth the pre-merge run"]
+    async fn the_rebase_a_pull_runs_is_listed() {
+        let (_bare, mut work) = crate::support::remote::origin_and_clone();
+        work.commit_file("t.txt", "theirs\n", "theirs");
+        work.git(&["push", "--set-upstream", "origin", "main"]);
+        work.git(&["reset", "--hard", "HEAD~1"]);
+        let mine = work.commit_file_id("m.txt", "mine\n", "mine");
+        work.git(&["-c", "pull.rebase=true", "pull", "--no-edit"]);
+
+        let found = read(&work).await;
+        let rebase = one(&found, DiscardKind::Rebase);
+        assert_eq!(
+            (rebase.name.as_str(), rebase.lost()),
+            ("main", vec![oid(&mine)])
+        );
+    }
 }

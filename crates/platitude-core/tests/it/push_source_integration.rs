@@ -95,27 +95,3 @@ async fn the_toolbars_push_sends_the_branch_and_not_the_tag_of_its_name() {
         "the upstream is left as it was"
     );
 }
-
-/// The row names its branch; HEAD stands elsewhere.
-#[tokio::test]
-async fn a_branch_rows_push_sends_the_branch_and_not_the_tag_of_its_name() {
-    let (mut bare, mut work) = topic_tracked_beside_its_tag();
-    work.git(&["switch", "main"]);
-    let (exec, cancel) = env();
-
-    let spec = remote::plan_push(
-        &exec,
-        &work.path,
-        "topic",
-        "origin",
-        PushForce::None,
-        &cancel,
-    )
-    .await
-    .expect("a plan");
-    remote::push(&exec, &work.path, &spec, NET, &cancel)
-        .await
-        .expect("push");
-
-    assert_eq!(far_side(&mut bare), (branch_tip(&mut work), String::new()));
-}

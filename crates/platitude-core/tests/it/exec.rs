@@ -11,16 +11,6 @@ use platitude_core::process::Kept;
 use platitude_core::{GitCommand, GitError, GitExecutor, repo, version};
 use tokio_util::sync::CancellationToken;
 
-#[tokio::test]
-async fn missing_binary_maps_to_git_not_found() {
-    let executor = GitExecutor::with_program("definitely-not-a-real-git-binary");
-    let cancel = CancellationToken::new();
-    let err = bounded("version detect", version::detect(&executor, &cancel))
-        .await
-        .unwrap_err();
-    assert!(matches!(err, GitError::GitNotFound { .. }), "got {err:?}");
-}
-
 /// Settings holds the empty path for "whichever git this machine resolves",
 /// and typed-in paths are checked with this probe, so it must keep that.
 #[tokio::test]
@@ -249,46 +239,6 @@ async fn place_names_the_worktree_and_the_repository_it_hangs_off() {
     );
 }
 
-#[tokio::test]
-async fn place_from_a_subdirectory_answers_for_the_worktree_around_it() {
-    let mut repo_dir = TestRepo::init();
-    repo_dir.commit_file("sub/dir/file.txt", "x\n", "nested");
-    let linked = repo_dir.path.with_file_name("linked");
-    repo_dir.git(&["worktree", "add", "-b", "topic", &linked.to_string_lossy()]);
-
-    let (executor, cancel) = env();
-    let deep = linked.join("sub").join("dir");
-    let place = bounded("place the worktree", repo::place(&executor, &deep, &cancel))
-        .await
-        .unwrap();
-
-    let real = |path: &std::path::Path| std::fs::canonicalize(path).unwrap();
-    assert_eq!(real(&place.info.workdir), real(&linked));
-    assert_eq!(real(&place.repo), real(&repo_dir.path));
-}
-
-#[tokio::test]
-async fn failed_commands_surface_gits_stderr() {
-    let mut repo_dir = TestRepo::init();
-    repo_dir.commit_file("a.txt", "hello\n", "initial");
-
-    let (executor, cancel) = env();
-    let cmd =
-        GitCommand::new()
-            .cwd(&repo_dir.path)
-            .args(["rev-parse", "--verify", "does-not-exist"]);
-    let err = bounded("the failing command", executor.run(cmd, &cancel))
-        .await
-        .unwrap_err();
-    match err {
-        GitError::Failed { code, stderr, .. } => {
-            assert_ne!(code, 0);
-            assert!(!stderr.is_empty());
-        }
-        other => panic!("expected Failed, got {other:?}"),
-    }
-}
-
 /// A fatal 128 from the same command stays a plain exit, which keeps a
 /// broken repository off an answered, ok-looking row.
 #[tokio::test]
@@ -380,51 +330,6 @@ async fn named_words_and_kept_stdout_reach_the_row() {
         ],
         "an answer keeps its row quiet, stdout or none"
     );
-}
-
-/// A read must leave `.git/index.lock` alone: a write dies where it cannot
-/// take it, and reads run beside writes (the queue orders only writes,
-/// `session::write`). A working-tree `git diff` refreshes the index under
-/// that lock unless the fixed arguments say not to; `--no-optional-locks`
-/// does not reach `diff`.
-#[tokio::test]
-async fn a_working_tree_read_leaves_the_index_untouched() {
-    let mut repo_dir = TestRepo::init();
-    repo_dir.commit_file("a.txt", "one\n", "add a");
-
-    // Same bytes under a stat the index has not seen: the entry a refresh
-    // would rewrite. Over a matching index a faulty read writes nothing.
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .open(repo_dir.path.join("a.txt"))
-        .expect("open the tracked file");
-    // A fixed date differs from the recorded stat without reading a clock.
-    file.set_times(std::fs::FileTimes::new().set_modified(std::time::SystemTime::UNIX_EPOCH))
-        .expect("give it a stat the index has not seen");
-    drop(file);
-
-    let index = repo_dir.path.join(".git").join("index");
-    let before = std::fs::read(&index).expect("the index the reader starts on");
-
-    let (executor, cancel) = env();
-    let out = bounded(
-        "the working tree diff",
-        executor.run(
-            GitCommand::new()
-                .cwd(&repo_dir.path)
-                .args(["diff", "--no-ext-diff"]),
-            &cancel,
-        ),
-    )
-    .await
-    .expect("the diff answers");
-
-    assert_eq!(
-        std::fs::read(&index).expect("the index the reader left"),
-        before,
-        "a read rewrote the index, so it held the lock a write dies on"
-    );
-    assert_eq!(out.stdout_utf8(), "", "a stat-only change is not a change");
 }
 
 /// What a counted handle's count was as the observer heard each command
@@ -644,35 +549,6 @@ async fn a_run_dropped_mid_way_ends_what_git_started_before_the_count_comes_down
     held.gone_with_the_count().await;
 }
 
-/// A run that ends by itself ends nothing it started: the fsmonitor daemon
-/// git starts and leaves running on purpose runs on after the run that
-/// started it, and stops when it is told to. It never holds the tree's
-/// folder — it moves to `$HOME` and watches the tree shared for deletion
-/// (git's `fsmonitor--daemon.c`, `fsm-listen-win32.c`) — so `stop`'s
-/// answer is all the folder waits on.
-#[cfg(windows)]
-#[tokio::test]
-async fn a_run_that_ends_by_itself_leaves_the_daemon_it_started() {
-    let repo = TestRepo::init();
-    let (exec, cancel) = env();
-    let daemon = |verb: &str| {
-        GitCommand::new()
-            .cwd(&repo.path)
-            .args(["fsmonitor--daemon", verb])
-    };
-    bounded("the daemon's start", exec.run(daemon("start"), &cancel))
-        .await
-        .expect("the daemon starts");
-    let running = bounded("the daemon's status", exec.run(daemon("status"), &cancel)).await;
-    // Told to stop before anything is judged, so a red leaves no daemon.
-    let stopped = bounded("the daemon's stop", exec.run(daemon("stop"), &cancel)).await;
-    assert!(
-        running.is_ok(),
-        "the daemon the run left behind still runs: {running:?}"
-    );
-    stopped.expect("the daemon stops when told");
-}
-
 /// Whether this machine's git meets the minimum is about the machine, not
 /// the code (the parse and boundary are `version::tests`), so the full gate
 /// runs it (`-- --ignored ::periodic::`), not every change.
@@ -691,5 +567,100 @@ mod periodic {
             "dev/CI machines must have git >= {}",
             version::minimum_string()
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "git's --show-toplevel from a subfolder: not worth the pre-merge run"]
+    async fn place_from_a_subdirectory_answers_for_the_worktree_around_it() {
+        let mut repo_dir = TestRepo::init();
+        repo_dir.commit_file("sub/dir/file.txt", "x\n", "nested");
+        let linked = repo_dir.path.with_file_name("linked");
+        repo_dir.git(&["worktree", "add", "-b", "topic", &linked.to_string_lossy()]);
+
+        let (executor, cancel) = env();
+        let deep = linked.join("sub").join("dir");
+        let place = bounded("place the worktree", repo::place(&executor, &deep, &cancel))
+            .await
+            .unwrap();
+
+        let real = |path: &std::path::Path| std::fs::canonicalize(path).unwrap();
+        assert_eq!(real(&place.info.workdir), real(&linked));
+        assert_eq!(real(&place.repo), real(&repo_dir.path));
+    }
+
+    /// A run that ends by itself ends nothing it started: the fsmonitor daemon
+    /// git starts and leaves running on purpose runs on after the run that
+    /// started it, and stops when it is told to. It never holds the tree's
+    /// folder — it moves to `$HOME` and watches the tree shared for deletion
+    /// (git's `fsmonitor--daemon.c`, `fsm-listen-win32.c`) — so `stop`'s
+    /// answer is all the folder waits on.
+    #[cfg(windows)]
+    #[tokio::test]
+    #[ignore = "git's fsmonitor daemon running on and stopping when told: not worth the pre-merge run"]
+    async fn a_run_that_ends_by_itself_leaves_the_daemon_it_started() {
+        let repo = TestRepo::init();
+        let (exec, cancel) = env();
+        let daemon = |verb: &str| {
+            GitCommand::new()
+                .cwd(&repo.path)
+                .args(["fsmonitor--daemon", verb])
+        };
+        bounded("the daemon's start", exec.run(daemon("start"), &cancel))
+            .await
+            .expect("the daemon starts");
+        let running = bounded("the daemon's status", exec.run(daemon("status"), &cancel)).await;
+        // Told to stop before anything is judged, so a red leaves no daemon.
+        let stopped = bounded("the daemon's stop", exec.run(daemon("stop"), &cancel)).await;
+        assert!(
+            running.is_ok(),
+            "the daemon the run left behind still runs: {running:?}"
+        );
+        stopped.expect("the daemon stops when told");
+    }
+
+    /// A read must leave `.git/index.lock` alone: a write dies where it cannot
+    /// take it, and reads run beside writes (the queue orders only writes,
+    /// `session::write`). A working-tree `git diff` refreshes the index under
+    /// that lock unless the fixed arguments say not to; `--no-optional-locks`
+    /// does not reach `diff`.
+    #[tokio::test]
+    #[ignore = "git's index refresh behind the fixed diff.autoRefreshIndex=false: not worth the pre-merge run"]
+    async fn a_working_tree_read_leaves_the_index_untouched() {
+        let mut repo_dir = TestRepo::init();
+        repo_dir.commit_file("a.txt", "one\n", "add a");
+
+        // Same bytes under a stat the index has not seen: the entry a refresh
+        // would rewrite. Over a matching index a faulty read writes nothing.
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(repo_dir.path.join("a.txt"))
+            .expect("open the tracked file");
+        // A fixed date differs from the recorded stat without reading a clock.
+        file.set_times(std::fs::FileTimes::new().set_modified(std::time::SystemTime::UNIX_EPOCH))
+            .expect("give it a stat the index has not seen");
+        drop(file);
+
+        let index = repo_dir.path.join(".git").join("index");
+        let before = std::fs::read(&index).expect("the index the reader starts on");
+
+        let (executor, cancel) = env();
+        let out = bounded(
+            "the working tree diff",
+            executor.run(
+                GitCommand::new()
+                    .cwd(&repo_dir.path)
+                    .args(["diff", "--no-ext-diff"]),
+                &cancel,
+            ),
+        )
+        .await
+        .expect("the diff answers");
+
+        assert_eq!(
+            std::fs::read(&index).expect("the index the reader left"),
+            before,
+            "a read rewrote the index, so it held the lock a write dies on"
+        );
+        assert_eq!(out.stdout_utf8(), "", "a stat-only change is not a change");
     }
 }

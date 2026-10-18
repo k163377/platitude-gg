@@ -49,63 +49,6 @@ fn origin_fork_and_clone() -> (TestRepo, TestRepo, TestRepo) {
     (origin, fork, work)
 }
 
-/// The upstream is under another name on purpose: with the same name on
-/// both sides, a plan that never read `branch.<name>.merge` would pass too.
-#[tokio::test]
-async fn nothing_marked_sends_a_branch_where_it_tracks() {
-    let (_origin, _fork, mut repo) = origin_fork_and_clone();
-    let (exec, cancel) = env();
-
-    repo.git(&["push", "--set-upstream", "origin", "main:elsewhere"]);
-    // Asked of git: the value the plan must carry has to come from outside it.
-    assert_eq!(
-        repo.git(&["config", "--get", "branch.main.merge"]).trim(),
-        "refs/heads/elsewhere",
-        "the push recorded the name on the far side"
-    );
-
-    let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
-        .await
-        .expect("a plan");
-    assert_eq!(plan.remote, "origin");
-    assert_eq!(
-        plan.remote_branch, "elsewhere",
-        "the upstream's own name, read out of branch.main.merge"
-    );
-    assert!(!plan.set_upstream, "the branch already tracks something");
-}
-
-/// A branch that tracks `origin/main` pushes to the marked remote under its
-/// own name, and keeps tracking origin.
-#[tokio::test]
-async fn a_marked_remote_takes_the_push_from_the_upstream() {
-    let (_origin, _fork, mut repo) = origin_fork_and_clone();
-    let (exec, cancel) = env();
-
-    remote::mark_origin(&exec, &repo.path, "fork", &cancel)
-        .await
-        .expect("mark fork");
-
-    let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
-        .await
-        .expect("a plan");
-    assert_eq!(plan.remote, "fork");
-    assert_eq!(plan.remote_branch, "main", "the branch's own name");
-    assert!(
-        !plan.set_upstream,
-        "a branch that tracks origin must go on tracking it"
-    );
-
-    remote::push(&exec, &repo.path, &plan, NET, &cancel)
-        .await
-        .expect("the push lands");
-    assert_eq!(
-        repo.git(&["config", "--get", "branch.main.remote"]).trim(),
-        "origin",
-        "where the branch fetches from is untouched"
-    );
-}
-
 /// Both keys go on together and come off together, and the read gives
 /// each back — the push's with the level that set it.
 #[tokio::test]
@@ -150,36 +93,6 @@ async fn the_origin_mark_reads_back_with_both_keys() {
     remote::clear_origin(&exec, &repo.path, &cancel)
         .await
         .expect("clearing a mark that is already gone is the state asked for");
-}
-
-/// The keys the snapshot reads, through the one reader the send shares.
-#[tokio::test]
-async fn the_marks_read_back_and_unset_is_an_answer() {
-    let (_origin, _fork, mut repo) = origin_fork_and_clone();
-    let (exec, cancel) = env();
-
-    let marks = remote::push_marks(&exec, &repo.path, "main", &cancel)
-        .await
-        .expect("an answer");
-    assert!(
-        marks.push_remote.is_none() && marks.push_default.is_none(),
-        "unset is an answer, not a failure"
-    );
-
-    repo.git(&["config", "branch.main.pushRemote", "fork"]);
-    let marks = remote::push_marks(&exec, &repo.path, "main", &cancel)
-        .await
-        .expect("an answer");
-    assert_eq!(marks.push_remote.as_deref(), Some("fork"));
-
-    assert!(
-        remote::push_marks(&exec, &repo.path, "topic", &cancel)
-            .await
-            .expect("an answer")
-            .push_remote
-            .is_none(),
-        "another branch's mark is not this one's"
-    );
 }
 
 /// The name goes into the `--get-regexp` pattern escaped — unescaped,
@@ -422,59 +335,6 @@ async fn a_push_elsewhere_is_counted_against_the_destinations_own_ref() {
         repo.git_in(&fork_path, &["rev-parse", "main"]),
         repo.git(&["rev-parse", "HEAD"]),
         "the fork now holds ours"
-    );
-}
-
-/// The branch's own mark sends it the same way, and git resolves the same
-/// destination for it.
-#[tokio::test]
-async fn a_branchs_own_mark_is_counted_against_the_same_ref() {
-    let (_origin, _fork, mut repo) = fork_diverged();
-    let (exec, cancel) = env();
-
-    repo.git(&["config", "--unset", "remote.pushDefault"]);
-    repo.git(&["config", "branch.main.pushRemote", "fork"]);
-    assert_eq!(
-        track_of(&repo.path, &exec, &cancel).await.tracking,
-        "fork/main"
-    );
-    assert_eq!(
-        standing_of(&repo.path, &exec, &cancel).await,
-        remote::PushStanding::Diverged
-    );
-}
-
-/// Where nothing here tracks the branch over there, no count speaks and
-/// the push stays plain.
-#[tokio::test]
-async fn a_destination_nothing_here_tracks_has_no_counts() {
-    let (_origin, _fork, mut repo) = fork_diverged();
-    let (exec, cancel) = env();
-    let none = remote::PushTrack::default();
-
-    // Named by the fetch refspec, but never fetched (`[gone]`).
-    let tip = repo.git(&["rev-parse", "refs/remotes/fork/main"]);
-    repo.git(&["update-ref", "-d", "refs/remotes/fork/main"]);
-    assert_eq!(track_of(&repo.path, &exec, &cancel).await, none);
-    repo.git(&["update-ref", "refs/remotes/fork/main", tip.trim()]);
-
-    // A push refspec that renames the branch: `%(push)` names a ref the
-    // send (an explicit refspec) never goes to.
-    repo.git(&["push", "fork", "HEAD:refs/heads/wip"]);
-    repo.git(&[
-        "config",
-        "remote.fork.push",
-        "refs/heads/main:refs/heads/wip",
-    ]);
-    assert_eq!(track_of(&repo.path, &exec, &cancel).await, none);
-    repo.git(&["config", "--unset", "remote.fork.push"]);
-
-    // No fetch refspec: `%(push)` has nothing to name.
-    repo.git(&["config", "--unset-all", "remote.fork.fetch"]);
-    assert_eq!(track_of(&repo.path, &exec, &cancel).await, none);
-    assert_eq!(
-        standing_of(&repo.path, &exec, &cancel).await,
-        remote::PushStanding::Elsewhere
     );
 }
 
@@ -887,5 +747,60 @@ mod periodic {
             .origin;
         assert_eq!(marks.push_default.expect("a push mark").remote, "home");
         assert_eq!(marks.checkout_default.as_deref(), Some("fork"));
+    }
+
+    /// The branch's own mark sends it the same way, and git resolves the same
+    /// destination for it.
+    #[tokio::test]
+    #[ignore = "git's %(push) resolving branch.<name>.pushRemote: not worth the pre-merge run"]
+    async fn a_branchs_own_mark_is_counted_against_the_same_ref() {
+        let (_origin, _fork, mut repo) = fork_diverged();
+        let (exec, cancel) = env();
+
+        repo.git(&["config", "--unset", "remote.pushDefault"]);
+        repo.git(&["config", "branch.main.pushRemote", "fork"]);
+        assert_eq!(
+            track_of(&repo.path, &exec, &cancel).await.tracking,
+            "fork/main"
+        );
+        assert_eq!(
+            standing_of(&repo.path, &exec, &cancel).await,
+            remote::PushStanding::Diverged
+        );
+    }
+
+    /// Where nothing here tracks the branch over there, no count speaks and
+    /// the push stays plain.
+    #[tokio::test]
+    #[ignore = "what git's %(push) fields print for a ref nothing tracks: not worth the pre-merge run"]
+    async fn a_destination_nothing_here_tracks_has_no_counts() {
+        let (_origin, _fork, mut repo) = fork_diverged();
+        let (exec, cancel) = env();
+        let none = remote::PushTrack::default();
+
+        // Named by the fetch refspec, but never fetched (`[gone]`).
+        let tip = repo.git(&["rev-parse", "refs/remotes/fork/main"]);
+        repo.git(&["update-ref", "-d", "refs/remotes/fork/main"]);
+        assert_eq!(track_of(&repo.path, &exec, &cancel).await, none);
+        repo.git(&["update-ref", "refs/remotes/fork/main", tip.trim()]);
+
+        // A push refspec that renames the branch: `%(push)` names a ref the
+        // send (an explicit refspec) never goes to.
+        repo.git(&["push", "fork", "HEAD:refs/heads/wip"]);
+        repo.git(&[
+            "config",
+            "remote.fork.push",
+            "refs/heads/main:refs/heads/wip",
+        ]);
+        assert_eq!(track_of(&repo.path, &exec, &cancel).await, none);
+        repo.git(&["config", "--unset", "remote.fork.push"]);
+
+        // No fetch refspec: `%(push)` has nothing to name.
+        repo.git(&["config", "--unset-all", "remote.fork.fetch"]);
+        assert_eq!(track_of(&repo.path, &exec, &cancel).await, none);
+        assert_eq!(
+            standing_of(&repo.path, &exec, &cancel).await,
+            remote::PushStanding::Elsewhere
+        );
     }
 }

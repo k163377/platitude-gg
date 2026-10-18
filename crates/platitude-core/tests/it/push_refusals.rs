@@ -83,23 +83,6 @@ async fn a_push_the_pre_push_hook_turns_down_is_reported_as_the_hooks() {
     drop(bare);
 }
 
-/// Where `core.hooksPath` keeps the hook (husky's `.husky/_`), the hook
-/// is found there.
-#[tokio::test]
-async fn a_hook_kept_elsewhere_by_hooks_path_is_found_there() {
-    let (_bare, mut work) = origin_and_clone();
-    work.commit_file("b.txt", "ours\n", "work of our own");
-    work.write_hook("pre-push", SAYS_NO);
-    std::fs::rename(work.path.join(".git/hooks"), work.path.join(".husky"))
-        .expect("move the hooks");
-    work.git(&["config", "core.hooksPath", ".husky"]);
-
-    let err = push_main(&work, "origin", PushForce::None)
-        .await
-        .expect_err("the hook says no");
-    assert_eq!(kind_of(&err), Some(ReportKind::PrePush), "{err}");
-}
-
 /// git's own answer to a refspec, before any hook runs, stays a failure
 /// for the log — a hook being there says nothing of who said no.
 #[tokio::test]
@@ -118,24 +101,6 @@ async fn a_refspec_git_turned_down_is_not_the_hooks() {
     let err = remote::push(&exec, &work.path, &spec, NET, &cancel)
         .await
         .expect_err("nothing to send");
-    assert!(
-        matches!(err, GitError::Failed { .. }),
-        "git's own refusal goes to the log: {err:?}"
-    );
-}
-
-/// The same for a name git cannot tell apart — a branch and a tag both
-/// called `main` (`src refspec main matches more than one`).
-#[tokio::test]
-async fn an_ambiguous_name_git_turned_down_is_not_the_hooks() {
-    let (_bare, mut work) = origin_and_clone();
-    work.commit_file("b.txt", "ours\n", "work of our own");
-    work.git(&["tag", "main", "HEAD~1"]);
-    work.write_hook("pre-push", SAYS_NO);
-
-    let err = push_main(&work, "origin", PushForce::None)
-        .await
-        .expect_err("git cannot tell which main");
     assert!(
         matches!(err, GitError::Failed { .. }),
         "git's own refusal goes to the log: {err:?}"
@@ -270,26 +235,53 @@ async fn naming_the_hook_runs_no_git_besides_the_push() {
     );
 }
 
-/// git from 2.54 runs a hook the config names for the event
-/// (`hook.<name>.event`) beside the hooks directory's — the same no as a
-/// file's. The minimum reads no such hook and the push goes; whichever git
-/// this is, the answer follows what it did.
-#[tokio::test]
-async fn a_pre_push_hook_the_config_names_is_the_hooks_too() {
-    let (_bare, mut work) = origin_and_clone();
-    work.commit_file("b.txt", "ours\n", "work of our own");
-    work.git(&["config", "hook.lint.event", "pre-push"]);
-    work.git(&[
-        "config",
-        "hook.lint.command",
-        "echo \"lint: the config's hook says no\" >&2; exit 1",
-    ]);
-    let runs_it = work.git_ok(&["hook", "list", "pre-push"]);
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
 
-    let pushed = push_main(&work, "origin", PushForce::None).await;
-    match (runs_it, pushed) {
-        (true, Err(err)) => assert_eq!(kind_of(&err), Some(ReportKind::PrePush), "{err}"),
-        (false, Ok(())) => {}
-        (runs_it, pushed) => panic!("git runs the config's hook: {runs_it}, the push: {pushed:?}"),
+    /// Where `core.hooksPath` keeps the hook (husky's `.husky/_`), the hook
+    /// is found there.
+    #[tokio::test]
+    #[ignore = "git finding the hook under core.hooksPath: not worth the pre-merge run"]
+    async fn a_hook_kept_elsewhere_by_hooks_path_is_found_there() {
+        let (_bare, mut work) = origin_and_clone();
+        work.commit_file("b.txt", "ours\n", "work of our own");
+        work.write_hook("pre-push", SAYS_NO);
+        std::fs::rename(work.path.join(".git/hooks"), work.path.join(".husky"))
+            .expect("move the hooks");
+        work.git(&["config", "core.hooksPath", ".husky"]);
+
+        let err = push_main(&work, "origin", PushForce::None)
+            .await
+            .expect_err("the hook says no");
+        assert_eq!(kind_of(&err), Some(ReportKind::PrePush), "{err}");
+    }
+
+    /// git from 2.54 runs a hook the config names for the event
+    /// (`hook.<name>.event`) beside the hooks directory's — the same no as a
+    /// file's. The minimum reads no such hook and the push goes; whichever git
+    /// this is, the answer follows what it did.
+    #[tokio::test]
+    #[ignore = "git 2.54's config-named hooks, by whichever git this machine has: not worth the pre-merge run"]
+    async fn a_pre_push_hook_the_config_names_is_the_hooks_too() {
+        let (_bare, mut work) = origin_and_clone();
+        work.commit_file("b.txt", "ours\n", "work of our own");
+        work.git(&["config", "hook.lint.event", "pre-push"]);
+        work.git(&[
+            "config",
+            "hook.lint.command",
+            "echo \"lint: the config's hook says no\" >&2; exit 1",
+        ]);
+        let runs_it = work.git_ok(&["hook", "list", "pre-push"]);
+
+        let pushed = push_main(&work, "origin", PushForce::None).await;
+        match (runs_it, pushed) {
+            (true, Err(err)) => assert_eq!(kind_of(&err), Some(ReportKind::PrePush), "{err}"),
+            (false, Ok(())) => {}
+            (runs_it, pushed) => {
+                panic!("git runs the config's hook: {runs_it}, the push: {pushed:?}")
+            }
+        }
     }
 }

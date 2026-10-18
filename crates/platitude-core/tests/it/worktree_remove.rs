@@ -67,26 +67,6 @@ async fn a_clean_worktree_goes_with_its_ignored_files_and_leaves_its_branch() {
     );
 }
 
-/// A worktree whose folder is already gone: git drops the record.
-#[tokio::test]
-async fn a_worktree_whose_folder_is_gone_loses_its_record() {
-    let (mut repo, worktree) = with_worktree("gone");
-    std::fs::remove_dir_all(&worktree).unwrap();
-    let (exec, cancel) = env();
-
-    worktrees::remove(
-        &exec,
-        &repo.path,
-        &worktree.to_string_lossy(),
-        "gone",
-        &cancel,
-    )
-    .await
-    .expect("a missing folder is no refusal");
-
-    assert!(!listed(&mut repo, &worktree));
-}
-
 /// Uncommitted work keeps the worktree, and the screen writes the reason:
 /// git's own ends in advice to force it, which the screen does not offer.
 #[tokio::test]
@@ -213,4 +193,31 @@ async fn the_main_worktree_is_refused() {
         ReportKind::WorktreeRemoveRefused
     );
     assert!(repo.path.join("a.txt").exists());
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// A worktree whose folder is already gone: git drops the record.
+    #[tokio::test]
+    #[ignore = "git dropping the record of a listed worktree whose folder is gone: not worth the pre-merge run"]
+    async fn a_worktree_whose_folder_is_gone_loses_its_record() {
+        let (mut repo, worktree) = with_worktree("gone");
+        std::fs::remove_dir_all(&worktree).unwrap();
+        let (exec, cancel) = env();
+
+        worktrees::remove(
+            &exec,
+            &repo.path,
+            &worktree.to_string_lossy(),
+            "gone",
+            &cancel,
+        )
+        .await
+        .expect("a missing folder is no refusal");
+
+        assert!(!listed(&mut repo, &worktree));
+    }
 }

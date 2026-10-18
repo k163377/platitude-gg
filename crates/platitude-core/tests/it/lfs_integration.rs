@@ -88,18 +88,6 @@ async fn a_path_named_twice_is_found_once() {
     assert_eq!(filtered(&repo, &paths).await, ["a.psd".to_string()]);
 }
 
-/// `filter.lfs.required` read as git reads a boolean: unset is not
-/// required, and so is a false spelled any way git accepts.
-#[tokio::test]
-async fn whether_the_lfs_filter_is_required_is_the_config_read_as_a_boolean() {
-    let mut repo = TestRepo::init();
-    assert!(!required(&repo).await, "unset");
-    repo.git(&["config", "filter.lfs.required", "yes"]);
-    assert!(required(&repo).await, "a true spelled `yes`");
-    repo.git(&["config", "filter.lfs.required", "off"]);
-    assert!(!required(&repo).await, "a false spelled `off`");
-}
-
 /// Paths long enough that one command line cannot hold them all — several
 /// times Windows' 32767 characters — are all counted: each batch stays
 /// under the line, where one past it would not start at all.
@@ -113,28 +101,6 @@ async fn paths_past_one_command_line_are_all_counted() {
     assert!(paths.iter().map(|p| p.len() + 1).sum::<usize>() > 3 * 32_767);
 
     assert_eq!(filtered(&repo, &paths).await.len(), 600);
-}
-
-/// What `git lfs version` says on this machine, read by hand beside the
-/// app's reading: a desk with LFS and a container without it take the two
-/// ways through the exit code. No mock is set on this thread, so the real
-/// one answers.
-#[tokio::test]
-async fn whether_lfs_runs_is_what_git_lfs_version_says() {
-    let repo = TestRepo::init();
-    let witness = std::process::Command::new("git")
-        .args(["lfs", "version"])
-        .current_dir(&repo.path)
-        .output()
-        .expect("run git lfs version")
-        .status
-        .success();
-
-    let (executor, cancel) = env();
-    let runs = lfs::runs(&executor, &repo.path, &cancel)
-        .await
-        .expect("an answer either way");
-    assert_eq!(runs, witness);
 }
 
 // ---------------------------------------------------------------- session
@@ -386,4 +352,46 @@ async fn a_count_that_could_not_be_had_is_tried_on_the_next_tick() {
     poll(&session).await;
     counted(&sink, "the two files counted after all", 2).await;
     session.close_and_wait().await;
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// `filter.lfs.required` read as git reads a boolean: unset is not
+    /// required, and so is a false spelled any way git accepts.
+    #[tokio::test]
+    #[ignore = "what git's --type=bool makes of each spelling of false: not worth the pre-merge run"]
+    async fn whether_the_lfs_filter_is_required_is_the_config_read_as_a_boolean() {
+        let mut repo = TestRepo::init();
+        assert!(!required(&repo).await, "unset");
+        repo.git(&["config", "filter.lfs.required", "yes"]);
+        assert!(required(&repo).await, "a true spelled `yes`");
+        repo.git(&["config", "filter.lfs.required", "off"]);
+        assert!(!required(&repo).await, "a false spelled `off`");
+    }
+
+    /// What `git lfs version` says on this machine, read by hand beside the
+    /// app's reading: a desk with LFS and a container without it take the two
+    /// ways through the exit code. No mock is set on this thread, so the real
+    /// one answers.
+    #[tokio::test]
+    #[ignore = "this machine's git-lfs: not worth the pre-merge run"]
+    async fn whether_lfs_runs_is_what_git_lfs_version_says() {
+        let repo = TestRepo::init();
+        let witness = std::process::Command::new("git")
+            .args(["lfs", "version"])
+            .current_dir(&repo.path)
+            .output()
+            .expect("run git lfs version")
+            .status
+            .success();
+
+        let (executor, cancel) = env();
+        let runs = lfs::runs(&executor, &repo.path, &cancel)
+            .await
+            .expect("an answer either way");
+        assert_eq!(runs, witness);
+    }
 }

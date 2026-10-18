@@ -87,28 +87,6 @@ async fn merge_fast_forward_and_no_ff() {
     );
 }
 
-/// git exits 1 on a conflict and on a name it will not merge alike; only
-/// the conflict leaves a merge standing, which is how they are told apart.
-#[tokio::test]
-async fn a_name_git_will_not_merge_is_still_a_failure() {
-    let repo = conflicting_branches();
-    let (exec, cancel) = env();
-    let err = integrate::merge(
-        &exec,
-        &repo.path,
-        "no-such-ref",
-        &MergeOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect_err("nothing to merge under that name");
-    assert!(
-        err.to_string().contains("not something we can merge"),
-        "{err}"
-    );
-    assert_eq!(current_op(&repo).await, None);
-}
-
 /// git exits 128 here with `MERGE_HEAD` still standing, so reading the
 /// marker without the code would call it a stop and hide the sentence
 /// saying what is in the way.

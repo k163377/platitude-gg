@@ -21,34 +21,6 @@ use platitude_core::session::SessionEvent;
 const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 
 #[tokio::test]
-async fn lists_remotes_from_config() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    let (exec, cancel) = env();
-
-    assert!(
-        remote::list(&exec, &repo.path, &cancel)
-            .await
-            .expect("list")
-            .is_empty(),
-        "a fresh repository has no remotes"
-    );
-
-    repo.git(&["remote", "add", "origin", "file:///tmp/a"]);
-    repo.git(&["remote", "add", "upstream", "file:///tmp/b"]);
-    repo.git(&["remote", "set-url", "--push", "origin", "file:///tmp/push"]);
-
-    let remotes = remote::list(&exec, &repo.path, &cancel)
-        .await
-        .expect("list");
-    assert_eq!(remotes.len(), 2);
-    assert_eq!(remotes[0].name, "origin");
-    assert_eq!(remotes[0].fetch_url, "file:///tmp/a");
-    assert_eq!(remotes[0].push_url, "file:///tmp/push");
-    assert_eq!(remotes[1].name, "upstream");
-}
-
-#[tokio::test]
 async fn a_non_fast_forward_push_is_refused_until_forced() {
     let (mut bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
@@ -378,56 +350,6 @@ async fn delete_both_refused_by_the_lease_keeps_the_commit_under_the_remote_trac
     session.close_and_wait().await;
 }
 
-#[tokio::test]
-async fn publishing_sends_the_branch_and_records_the_upstream() {
-    let (mut bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-
-    work.git(&["switch", "-c", "topic"]);
-    work.commit_file("b.txt", "b\n", "topic work");
-
-    let spec = remote::publish_spec("topic", "origin", "topic", "");
-    assert!(spec.set_upstream, "the answer is recorded, not re-asked");
-    remote::push(&exec, &work.path, &spec, NET, &cancel)
-        .await
-        .expect("publish");
-
-    assert_eq!(
-        bare.git(&["rev-parse", "topic"]),
-        work.git(&["rev-parse", "topic"]),
-        "the branch exists over there, at our tip"
-    );
-    assert_eq!(
-        work.git(&["config", "branch.topic.merge"]),
-        "refs/heads/topic"
-    );
-    assert_eq!(work.git(&["config", "branch.topic.remote"]), "origin");
-}
-
-#[tokio::test]
-async fn publishing_can_use_a_different_name_on_the_remote() {
-    let (mut bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-
-    work.git(&["switch", "-c", "topic"]);
-    work.commit_file("b.txt", "b\n", "topic work");
-
-    let spec = remote::publish_spec("topic", "origin", "feature/topic", "");
-    remote::push(&exec, &work.path, &spec, NET, &cancel)
-        .await
-        .expect("publish");
-
-    assert_eq!(
-        bare.git(&["rev-parse", "feature/topic"]),
-        work.git(&["rev-parse", "topic"])
-    );
-    assert_eq!(
-        work.git(&["config", "branch.topic.merge"]),
-        "refs/heads/feature/topic",
-        "the upstream is the name over there"
-    );
-}
-
 /// A branch row's menu publishes the branch it names, wherever HEAD is,
 /// and the remote's name is weighed against that branch's history.
 #[tokio::test(flavor = "multi_thread")]
@@ -485,45 +407,6 @@ async fn a_branch_the_worktree_is_not_on_is_published_and_weighed_as_itself() {
         "the worktree stays where it was"
     );
     session.close_and_wait().await;
-}
-
-/// Why the UI asks before a first push onto a taken name: git does not
-/// refuse a fast-forward, so somebody else's branch quietly moves and we
-/// end up tracking it.
-#[tokio::test]
-async fn a_first_push_onto_a_taken_name_is_not_refused_when_it_fast_forwards() {
-    let (mut bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-
-    // `shared` exists on the remote already, one commit behind us, and
-    // nothing here records that it does.
-    work.git(&["switch", "-c", "shared"]);
-    work.commit_file("b.txt", "b\n", "theirs");
-    work.git(&["push", "origin", "shared"]);
-    let theirs = bare.git(&["rev-parse", "shared"]);
-    work.commit_file("b.txt", "b2\n", "ours");
-
-    let tip = remote::branch_tip(&exec, &work.path, "origin", "shared", NET, &cancel)
-        .await
-        .expect("ask")
-        .expect("the question the UI puts to the remote before it pushes");
-    assert!(
-        commit::is_in_history(&exec, &work.path, &tip, "HEAD", &cancel)
-            .await
-            .expect("compare"),
-        "what makes this the fast-forward case: their commit is one of ours"
-    );
-
-    let spec = remote::publish_spec("shared", "origin", "shared", "");
-    remote::push(&exec, &work.path, &spec, NET, &cancel)
-        .await
-        .expect("git takes it — this is the hole the question covers");
-
-    assert_ne!(
-        bare.git(&["rev-parse", "shared"]),
-        theirs,
-        "their branch moved to our commit without git objecting"
-    );
 }
 
 /// `ls-remote` matches a bare name against the tail of a ref, so the check
@@ -708,47 +591,6 @@ async fn a_push_the_far_side_turns_down_is_not_one_a_fetch_would_answer() {
     );
 }
 
-/// A user's `push.followTags` would send every annotated tag on the pushed
-/// commits beside the branch, and a far side turning those away fails the
-/// push with the branch landed (`[remote rejected]` on the tag's line,
-/// exit 1). Every push sends the one ref asked for.
-#[tokio::test]
-async fn a_push_sends_the_branch_alone_whatever_follow_tags_says() {
-    let (mut bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-    bare.write_hook(
-        "update",
-        "case \"$1\" in refs/tags/*) echo \"error: no tags here\" >&2; exit 1;; esac\n",
-    );
-    work.git(&["config", "push.followTags", "true"]);
-    work.commit_file("b.txt", "ours\n", "work of our own");
-    work.git(&["tag", "-a", "rel2", "-m", "release two"]);
-
-    remote::push(
-        &exec,
-        &work.path,
-        &PushSpec {
-            remote: "origin".into(),
-            local: "main".into(),
-            remote_branch: "main".into(),
-            set_upstream: false,
-            force: PushForce::None,
-        },
-        NET,
-        &cancel,
-    )
-    .await
-    .expect("the branch is all that goes, and it lands");
-    assert_eq!(
-        bare.git(&["rev-parse", "refs/heads/main"]),
-        work.git(&["rev-parse", "HEAD"])
-    );
-    assert!(
-        !bare.git_ok(&["rev-parse", "--verify", "--quiet", "refs/tags/rel2"]),
-        "the tag stays here"
-    );
-}
-
 /// A tag refusal is a report like a branch's (デザイン規約 §答えの要らない報せ).
 /// Both halves are checked: sending and deleting are different commands
 /// (`push` / `push --delete`), so one being classified says nothing of the other.
@@ -908,83 +750,6 @@ fn origin_that_moved_on(bare: &TestRepo, file: &str, message: &str) -> TestRepo 
     other
 }
 
-/// The row is offered only where the branch is behind, so a branch that
-/// diverged since the last read is refused whole, `pull.rebase` set either
-/// way or not at all: nothing merges, nothing rebases, nothing is left
-/// standing, and git is never left to ask how to reconcile.
-#[tokio::test]
-async fn a_diverged_pull_is_refused_whatever_pull_rebase_says() {
-    for reconcile in [None, Some("false"), Some("true")] {
-        let (bare, mut work) = origin_and_clone();
-        let (exec, cancel) = env();
-        work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
-        if let Some(reconcile) = reconcile {
-            work.git(&["config", "pull.rebase", reconcile]);
-        }
-        let _far = origin_that_moved_on(&bare, "a.txt", "their line");
-        work.commit_file("b.txt", "our line\n", "ours");
-
-        let err = remote::pull(&exec, &work.path, NET, &cancel)
-            .await
-            .expect_err("a diverged branch is no fast-forward");
-        assert!(
-            matches!(err, GitError::Failed { code: 128, .. })
-                && err.to_string().contains("Not possible to fast-forward"),
-            "pull.rebase={reconcile:?}: {err}"
-        );
-        for marker in ["MERGE_HEAD", "rebase-merge"] {
-            assert!(
-                !work.path.join(".git").join(marker).exists(),
-                "nothing was left standing: {marker}"
-            );
-        }
-        assert_eq!(work.git(&["log", "-1", "--format=%s"]), "ours");
-    }
-}
-
-/// `pull.rebase` would have git check the tree is clean before any
-/// fast-forward (`cannot pull with rebase: You have unstaged changes`);
-/// pinned off, a fast-forward goes through over work it does not touch.
-#[tokio::test]
-async fn a_pull_rebase_setting_does_not_keep_a_fast_forward_from_a_dirty_tree() {
-    let (bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-    work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
-    work.git(&["config", "pull.rebase", "true"]);
-    let _far = origin_that_moved_on(&bare, "b.txt", "over there");
-    work.write_file("a.txt", "mine\n");
-
-    remote::pull(&exec, &work.path, NET, &cancel)
-        .await
-        .expect("a fast-forward over work it does not touch");
-    assert_eq!(
-        work.git(&["log", "-1", "--format=%s", "main"]),
-        "over there"
-    );
-    assert_eq!(
-        std::fs::read_to_string(work.path.join("a.txt")).unwrap(),
-        "mine\n",
-        "the work stayed where it was"
-    );
-}
-
-/// A refusal stays a failure: no tracking information and a tree the pull
-/// would write over both exit 1 with nothing standing.
-#[tokio::test]
-async fn a_pull_with_nothing_to_pull_from_is_a_failure() {
-    let (_bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-    work.git(&["switch", "--create", "solo"]);
-
-    let err = remote::pull(&exec, &work.path, NET, &cancel)
-        .await
-        .expect_err("a branch with no tracking information has nowhere to go");
-    assert!(
-        matches!(err, GitError::Failed { code: 1, .. }),
-        "git spends 1 on it: {err}"
-    );
-}
-
 /// The fast-forward git refuses over work in the way exits 1 with nothing
 /// standing, and its row keeps git's list of the files (as a merge's does).
 #[tokio::test]
@@ -1007,28 +772,6 @@ async fn a_pull_refused_over_work_in_the_way_keeps_gits_words_in_the_log() {
     assert!(
         row.contains("a.txt") && row.contains("would be overwritten"),
         "the files in the way are under the row: {row}"
-    );
-}
-
-#[tokio::test]
-async fn a_pull_brings_the_upstream_in_and_moves_the_branch() {
-    let (bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-    work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
-    let _far = origin_that_moved_on(&bare, "b.txt", "over there");
-
-    remote::pull(&exec, &work.path, NET, &cancel)
-        .await
-        .expect("pull");
-    assert_eq!(
-        work.git(&["log", "-1", "--format=%s", "main"]),
-        "over there",
-        "the branch is on what the far side holds"
-    );
-    assert_eq!(
-        work.git(&["log", "-1", "--format=%s", "origin/main"]),
-        "over there",
-        "and the reading of the remote came down with it"
     );
 }
 
@@ -1250,6 +993,247 @@ mod periodic {
         assert!(
             !work.git_ok(&["rev-parse", "--verify", "-q", "MERGE_HEAD"]),
             "and it left nothing standing, so the words are the whole answer"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "what git lists behind a fixed --get-regexp, the pushurl key included: not worth the pre-merge run"]
+    async fn lists_remotes_from_config() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        let (exec, cancel) = env();
+
+        assert!(
+            remote::list(&exec, &repo.path, &cancel)
+                .await
+                .expect("list")
+                .is_empty(),
+            "a fresh repository has no remotes"
+        );
+
+        repo.git(&["remote", "add", "origin", "file:///tmp/a"]);
+        repo.git(&["remote", "add", "upstream", "file:///tmp/b"]);
+        repo.git(&["remote", "set-url", "--push", "origin", "file:///tmp/push"]);
+
+        let remotes = remote::list(&exec, &repo.path, &cancel)
+            .await
+            .expect("list");
+        assert_eq!(remotes.len(), 2);
+        assert_eq!(remotes[0].name, "origin");
+        assert_eq!(remotes[0].fetch_url, "file:///tmp/a");
+        assert_eq!(remotes[0].push_url, "file:///tmp/push");
+        assert_eq!(remotes[1].name, "upstream");
+    }
+
+    #[tokio::test]
+    #[ignore = "git writing both upstream keys behind --set-upstream: not worth the pre-merge run"]
+    async fn publishing_sends_the_branch_and_records_the_upstream() {
+        let (mut bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+
+        work.git(&["switch", "-c", "topic"]);
+        work.commit_file("b.txt", "b\n", "topic work");
+
+        let spec = remote::publish_spec("topic", "origin", "topic", "");
+        assert!(spec.set_upstream, "the answer is recorded, not re-asked");
+        remote::push(&exec, &work.path, &spec, NET, &cancel)
+            .await
+            .expect("publish");
+
+        assert_eq!(
+            bare.git(&["rev-parse", "topic"]),
+            work.git(&["rev-parse", "topic"]),
+            "the branch exists over there, at our tip"
+        );
+        assert_eq!(
+            work.git(&["config", "branch.topic.merge"]),
+            "refs/heads/topic"
+        );
+        assert_eq!(work.git(&["config", "branch.topic.remote"]), "origin");
+    }
+
+    /// Why the UI asks before a first push onto a taken name: git does not
+    /// refuse a fast-forward, so somebody else's branch quietly moves and we
+    /// end up tracking it.
+    #[tokio::test]
+    #[ignore = "git taking a first push that fast-forwards a taken name: not worth the pre-merge run"]
+    async fn a_first_push_onto_a_taken_name_is_not_refused_when_it_fast_forwards() {
+        let (mut bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+
+        // `shared` exists on the remote already, one commit behind us, and
+        // nothing here records that it does.
+        work.git(&["switch", "-c", "shared"]);
+        work.commit_file("b.txt", "b\n", "theirs");
+        work.git(&["push", "origin", "shared"]);
+        let theirs = bare.git(&["rev-parse", "shared"]);
+        work.commit_file("b.txt", "b2\n", "ours");
+
+        let tip = remote::branch_tip(&exec, &work.path, "origin", "shared", NET, &cancel)
+            .await
+            .expect("ask")
+            .expect("the question the UI puts to the remote before it pushes");
+        assert!(
+            commit::is_in_history(&exec, &work.path, &tip, "HEAD", &cancel)
+                .await
+                .expect("compare"),
+            "what makes this the fast-forward case: their commit is one of ours"
+        );
+
+        let spec = remote::publish_spec("shared", "origin", "shared", "");
+        remote::push(&exec, &work.path, &spec, NET, &cancel)
+            .await
+            .expect("git takes it — this is the hole the question covers");
+
+        assert_ne!(
+            bare.git(&["rev-parse", "shared"]),
+            theirs,
+            "their branch moved to our commit without git objecting"
+        );
+    }
+
+    /// The row is offered only where the branch is behind, so a branch that
+    /// diverged since the last read is refused whole, `pull.rebase` set either
+    /// way or not at all: nothing merges, nothing rebases, nothing is left
+    /// standing, and git is never left to ask how to reconcile.
+    #[tokio::test]
+    #[ignore = "git's --ff-only refusal whatever pull.rebase says: not worth the pre-merge run"]
+    async fn a_diverged_pull_is_refused_whatever_pull_rebase_says() {
+        for reconcile in [None, Some("false"), Some("true")] {
+            let (bare, mut work) = origin_and_clone();
+            let (exec, cancel) = env();
+            work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+            if let Some(reconcile) = reconcile {
+                work.git(&["config", "pull.rebase", reconcile]);
+            }
+            let _far = origin_that_moved_on(&bare, "a.txt", "their line");
+            work.commit_file("b.txt", "our line\n", "ours");
+
+            let err = remote::pull(&exec, &work.path, NET, &cancel)
+                .await
+                .expect_err("a diverged branch is no fast-forward");
+            assert!(
+                matches!(err, GitError::Failed { code: 128, .. })
+                    && err.to_string().contains("Not possible to fast-forward"),
+                "pull.rebase={reconcile:?}: {err}"
+            );
+            for marker in ["MERGE_HEAD", "rebase-merge"] {
+                assert!(
+                    !work.path.join(".git").join(marker).exists(),
+                    "nothing was left standing: {marker}"
+                );
+            }
+            assert_eq!(work.git(&["log", "-1", "--format=%s"]), "ours");
+        }
+    }
+
+    /// `pull.rebase` would have git check the tree is clean before any
+    /// fast-forward (`cannot pull with rebase: You have unstaged changes`);
+    /// pinned off, a fast-forward goes through over work it does not touch.
+    #[tokio::test]
+    #[ignore = "git's pull.rebase clean-tree check kept out by the fixed --no-rebase: not worth the pre-merge run"]
+    async fn a_pull_rebase_setting_does_not_keep_a_fast_forward_from_a_dirty_tree() {
+        let (bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+        work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+        work.git(&["config", "pull.rebase", "true"]);
+        let _far = origin_that_moved_on(&bare, "b.txt", "over there");
+        work.write_file("a.txt", "mine\n");
+
+        remote::pull(&exec, &work.path, NET, &cancel)
+            .await
+            .expect("a fast-forward over work it does not touch");
+        assert_eq!(
+            work.git(&["log", "-1", "--format=%s", "main"]),
+            "over there"
+        );
+        assert_eq!(
+            std::fs::read_to_string(work.path.join("a.txt")).unwrap(),
+            "mine\n",
+            "the work stayed where it was"
+        );
+    }
+
+    /// A refusal stays a failure: no tracking information and a tree the pull
+    /// would write over both exit 1 with nothing standing.
+    #[tokio::test]
+    #[ignore = "git's exit 1 for a branch with no tracking information: not worth the pre-merge run"]
+    async fn a_pull_with_nothing_to_pull_from_is_a_failure() {
+        let (_bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+        work.git(&["switch", "--create", "solo"]);
+
+        let err = remote::pull(&exec, &work.path, NET, &cancel)
+            .await
+            .expect_err("a branch with no tracking information has nowhere to go");
+        assert!(
+            matches!(err, GitError::Failed { code: 1, .. }),
+            "git spends 1 on it: {err}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "git bringing the remote-tracking ref down with a pull: not worth the pre-merge run"]
+    async fn a_pull_brings_the_upstream_in_and_moves_the_branch() {
+        let (bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+        work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+        let _far = origin_that_moved_on(&bare, "b.txt", "over there");
+
+        remote::pull(&exec, &work.path, NET, &cancel)
+            .await
+            .expect("pull");
+        assert_eq!(
+            work.git(&["log", "-1", "--format=%s", "main"]),
+            "over there",
+            "the branch is on what the far side holds"
+        );
+        assert_eq!(
+            work.git(&["log", "-1", "--format=%s", "origin/main"]),
+            "over there",
+            "and the reading of the remote came down with it"
+        );
+    }
+
+    /// A user's `push.followTags` would send every annotated tag on the pushed
+    /// commits beside the branch, and a far side turning those away fails the
+    /// push with the branch landed (`[remote rejected]` on the tag's line,
+    /// exit 1). Every push sends the one ref asked for.
+    #[tokio::test]
+    #[ignore = "git's push.followTags behind the fixed --no-follow-tags: not worth the pre-merge run"]
+    async fn a_push_sends_the_branch_alone_whatever_follow_tags_says() {
+        let (mut bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+        bare.write_hook(
+            "update",
+            "case \"$1\" in refs/tags/*) echo \"error: no tags here\" >&2; exit 1;; esac\n",
+        );
+        work.git(&["config", "push.followTags", "true"]);
+        work.commit_file("b.txt", "ours\n", "work of our own");
+        work.git(&["tag", "-a", "rel2", "-m", "release two"]);
+
+        remote::push(
+            &exec,
+            &work.path,
+            &PushSpec {
+                remote: "origin".into(),
+                local: "main".into(),
+                remote_branch: "main".into(),
+                set_upstream: false,
+                force: PushForce::None,
+            },
+            NET,
+            &cancel,
+        )
+        .await
+        .expect("the branch is all that goes, and it lands");
+        assert_eq!(
+            bare.git(&["rev-parse", "refs/heads/main"]),
+            work.git(&["rev-parse", "HEAD"])
+        );
+        assert!(
+            !bare.git_ok(&["rev-parse", "--verify", "--quiet", "refs/tags/rel2"]),
+            "the tag stays here"
         );
     }
 }

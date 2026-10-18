@@ -343,55 +343,6 @@ async fn a_branch_a_stopped_rebase_or_bisect_holds_is_named_by_the_listing() {
     assert!(repo.git_ok(&["branch", "-m", "plain", "plain-renamed"]));
 }
 
-/// What git does with a folder that holds something: it makes the `-b`
-/// branch and only then looks — the reason `worktrees::add` asks first.
-#[test]
-fn git_makes_the_branch_before_it_turns_the_folder_down() {
-    let (mut repo, _tip) = two_commits();
-    let worktree = beside(&repo, "occupied");
-    std::fs::create_dir_all(&worktree).unwrap();
-    std::fs::write(worktree.join("mine.txt"), "mine\n").unwrap();
-
-    repo.git_expect_failure(&[
-        "worktree",
-        "add",
-        "-b",
-        "occ",
-        "--",
-        &worktree.to_string_lossy(),
-    ]);
-
-    assert!(repo.git_ok(&["rev-parse", "--verify", "--quiet", "refs/heads/occ"]));
-}
-
-/// The same for a place git still lists, its folder taken away by hand:
-/// the branch is made, then the place turned down. The menus say this one
-/// before the press (`NavSectionModel.newWorktreeFor`'s `listed`).
-#[test]
-fn git_makes_the_branch_before_it_turns_a_listed_place_down() {
-    let (mut repo, _tip) = two_commits();
-    let worktree = beside(&repo, "gone");
-    repo.git(&[
-        "worktree",
-        "add",
-        "--detach",
-        "--",
-        &worktree.to_string_lossy(),
-    ]);
-    std::fs::remove_dir_all(&worktree).unwrap();
-
-    repo.git_expect_failure(&[
-        "worktree",
-        "add",
-        "-b",
-        "lst",
-        "--",
-        &worktree.to_string_lossy(),
-    ]);
-
-    assert!(repo.git_ok(&["rev-parse", "--verify", "--quiet", "refs/heads/lst"]));
-}
-
 /// So a folder that holds something is turned down before git: what is
 /// in it stays, and no branch is left behind.
 #[tokio::test]
@@ -425,34 +376,6 @@ async fn a_folder_holding_something_is_turned_down_before_git() {
         !repo.git_ok(&["rev-parse", "--verify", "--quiet", "refs/heads/occ"]),
         "no branch was left behind"
     );
-}
-
-/// What git does with a `-b` name opening with `-`: its own `git branch`
-/// gets the name with nothing to end the options before it, so the name
-/// runs as one — `-m` renames the branch out here to the start commit.
-#[test]
-fn git_hands_a_dash_led_name_to_its_branch_as_an_option() {
-    let (mut repo, _tip) = two_commits();
-    let root = repo.git(&["rev-parse", "HEAD~1"]);
-    let worktree = beside(&repo, "dashed");
-
-    repo.git_expect_failure(&[
-        "worktree",
-        "add",
-        "-b",
-        "-m",
-        "--",
-        &worktree.to_string_lossy(),
-        &root,
-    ]);
-
-    assert!(!repo.git_ok(&["rev-parse", "--verify", "--quiet", "refs/heads/main"]));
-    assert!(repo.git_ok(&[
-        "rev-parse",
-        "--verify",
-        "--quiet",
-        &format!("refs/heads/{root}")
-    ]));
 }
 
 /// So such a name never reaches git: the branch out here keeps its name,
@@ -581,4 +504,90 @@ async fn a_name_taken_since_is_not_a_branch_left_behind() {
         "nothing of git's own was left: {report:?}"
     );
     assert!(!listed(&mut repo, &worktree));
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// What git does with a folder that holds something: it makes the `-b`
+    /// branch and only then looks — the reason `worktrees::add` asks first.
+    #[test]
+    #[ignore = "git making the -b branch before it looks at the folder: not worth the pre-merge run"]
+    fn git_makes_the_branch_before_it_turns_the_folder_down() {
+        let (mut repo, _tip) = two_commits();
+        let worktree = beside(&repo, "occupied");
+        std::fs::create_dir_all(&worktree).unwrap();
+        std::fs::write(worktree.join("mine.txt"), "mine\n").unwrap();
+
+        repo.git_expect_failure(&[
+            "worktree",
+            "add",
+            "-b",
+            "occ",
+            "--",
+            &worktree.to_string_lossy(),
+        ]);
+
+        assert!(repo.git_ok(&["rev-parse", "--verify", "--quiet", "refs/heads/occ"]));
+    }
+
+    /// The same for a place git still lists, its folder taken away by hand:
+    /// the branch is made, then the place turned down. The menus say this one
+    /// before the press (`NavSectionModel.newWorktreeFor`'s `listed`).
+    #[test]
+    #[ignore = "git making the -b branch before it turns a listed place down: not worth the pre-merge run"]
+    fn git_makes_the_branch_before_it_turns_a_listed_place_down() {
+        let (mut repo, _tip) = two_commits();
+        let worktree = beside(&repo, "gone");
+        repo.git(&[
+            "worktree",
+            "add",
+            "--detach",
+            "--",
+            &worktree.to_string_lossy(),
+        ]);
+        std::fs::remove_dir_all(&worktree).unwrap();
+
+        repo.git_expect_failure(&[
+            "worktree",
+            "add",
+            "-b",
+            "lst",
+            "--",
+            &worktree.to_string_lossy(),
+        ]);
+
+        assert!(repo.git_ok(&["rev-parse", "--verify", "--quiet", "refs/heads/lst"]));
+    }
+
+    /// What git does with a `-b` name opening with `-`: its own `git branch`
+    /// gets the name with nothing to end the options before it, so the name
+    /// runs as one — `-m` renames the branch out here to the start commit.
+    #[test]
+    #[ignore = "git's own branch taking a dash-led -b name as an option: not worth the pre-merge run"]
+    fn git_hands_a_dash_led_name_to_its_branch_as_an_option() {
+        let (mut repo, _tip) = two_commits();
+        let root = repo.git(&["rev-parse", "HEAD~1"]);
+        let worktree = beside(&repo, "dashed");
+
+        repo.git_expect_failure(&[
+            "worktree",
+            "add",
+            "-b",
+            "-m",
+            "--",
+            &worktree.to_string_lossy(),
+            &root,
+        ]);
+
+        assert!(!repo.git_ok(&["rev-parse", "--verify", "--quiet", "refs/heads/main"]));
+        assert!(repo.git_ok(&[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{root}")
+        ]));
+    }
 }

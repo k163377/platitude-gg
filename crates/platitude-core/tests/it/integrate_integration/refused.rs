@@ -332,51 +332,6 @@ async fn a_rewrite_whose_first_checkout_would_overwrite_untracked_files_is_turne
     .expect("an ignored file is not in the way");
 }
 
-/// Which commit a replay's first checkout lands on is git's to work out: a
-/// reword's starts on the commit reworded, not the one under it
-/// (sequencer.c `skip_unnecessary_picks`). That commit deleted the file
-/// standing untracked here, so nothing writes over it and the reword goes
-/// through.
-#[tokio::test]
-async fn a_reword_whose_commit_let_go_of_an_untracked_file_goes_through() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("old.txt", "kept once\n", "root");
-    repo.git(&["rm", "-q", "--cached", "old.txt"]);
-    repo.commit_file("a.txt", "a\n", "stops tracking old");
-    let letting_go = repo.git(&["rev-parse", "HEAD"]);
-    repo.commit_file("b.txt", "b\n", "last");
-    assert_eq!(
-        std::fs::read_to_string(repo.path.join("old.txt")).expect("read"),
-        "kept once\n",
-        "the file stays, untracked"
-    );
-
-    let (exec, cancel) = observed_env(Arc::new(Said::default()), Kept::Asked);
-    let edit = sequencer::Edit::Reword("let old.txt go\n".to_string());
-    let plan = sequencer::plan_edit(&exec, &repo.path, &letting_go, edit, &cancel)
-        .await
-        .expect("plan");
-    sequencer::rebase_interactive(
-        &exec,
-        &info(&repo).await,
-        &plan.upstream,
-        &plan.steps,
-        &plan.options(),
-        &helper(),
-        &cancel,
-    )
-    .await
-    .expect("nothing writes over the file");
-    assert_eq!(
-        repo.git(&["log", "-1", "--format=%s", "HEAD~1"]),
-        "let old.txt go"
-    );
-    assert_eq!(
-        std::fs::read_to_string(repo.path.join("old.txt")).expect("read"),
-        "kept once\n"
-    );
-}
-
 /// The plain rebase meets the same file at its first checkout: git turns
 /// it down, and its row in the log is a failure with git's words under it.
 #[tokio::test]
@@ -405,4 +360,56 @@ async fn a_rebase_untracked_files_turn_down_leaves_gits_words_on_its_row() {
         failed_row(&said).contains("would be overwritten by checkout"),
         "git's words are under the failed row"
     );
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// Which commit a replay's first checkout lands on is git's to work out: a
+    /// reword's starts on the commit reworded, not the one under it
+    /// (sequencer.c `skip_unnecessary_picks`). That commit deleted the file
+    /// standing untracked here, so nothing writes over it and the reword goes
+    /// through.
+    #[tokio::test]
+    #[ignore = "git's skip_unnecessary_picks placing a reword's first checkout: not worth the pre-merge run"]
+    async fn a_reword_whose_commit_let_go_of_an_untracked_file_goes_through() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("old.txt", "kept once\n", "root");
+        repo.git(&["rm", "-q", "--cached", "old.txt"]);
+        repo.commit_file("a.txt", "a\n", "stops tracking old");
+        let letting_go = repo.git(&["rev-parse", "HEAD"]);
+        repo.commit_file("b.txt", "b\n", "last");
+        assert_eq!(
+            std::fs::read_to_string(repo.path.join("old.txt")).expect("read"),
+            "kept once\n",
+            "the file stays, untracked"
+        );
+
+        let (exec, cancel) = observed_env(Arc::new(Said::default()), Kept::Asked);
+        let edit = sequencer::Edit::Reword("let old.txt go\n".to_string());
+        let plan = sequencer::plan_edit(&exec, &repo.path, &letting_go, edit, &cancel)
+            .await
+            .expect("plan");
+        sequencer::rebase_interactive(
+            &exec,
+            &info(&repo).await,
+            &plan.upstream,
+            &plan.steps,
+            &plan.options(),
+            &helper(),
+            &cancel,
+        )
+        .await
+        .expect("nothing writes over the file");
+        assert_eq!(
+            repo.git(&["log", "-1", "--format=%s", "HEAD~1"]),
+            "let old.txt go"
+        );
+        assert_eq!(
+            std::fs::read_to_string(repo.path.join("old.txt")).expect("read"),
+            "kept once\n"
+        );
+    }
 }

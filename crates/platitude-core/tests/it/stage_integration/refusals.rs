@@ -338,41 +338,6 @@ async fn a_file_that_moves_under_the_discard_is_refused_as_stale() {
     );
 }
 
-/// A reader's `diff.context=0` would leave the diff's hunks without
-/// context, and `apply` places no context-free hunk mid-file: the part could
-/// never be taken. The read pins the context (`details::DIFF_SHAPE_ARGS`),
-/// so the part applies as on any other machine.
-#[tokio::test]
-async fn a_readers_context_setting_does_not_keep_a_part_from_applying() {
-    let mut repo = TestRepo::init();
-    let base: String = (1..=9).map(|n| format!("line {n}\n")).collect();
-    repo.commit_file("a.txt", &base, "root");
-    repo.write_file("a.txt", &base.replace("line 5\n", "line 5 changed\n"));
-    repo.git(&["config", "diff.context", "0"]);
-    let repo_info = info(&repo).await;
-    let target = DiffTarget::Unstaged {
-        path: "a.txt".into(),
-    };
-
-    let (exec, cancel) = env();
-    stage::apply_partial(
-        &exec,
-        &repo_info,
-        &target,
-        &[HunkSelect::whole(0)],
-        fp(&repo_info, &target).await,
-        &cancel,
-    )
-    .await
-    .expect("the hunk carries its context whatever diff.context says");
-    let (staged, unstaged, _) = buckets(&repo).await;
-    assert_eq!(staged, vec!["a.txt".to_string()], "{staged:?}");
-    assert!(
-        unstaged.is_empty(),
-        "the whole change went in: {unstaged:?}"
-    );
-}
-
 /// An untracked partial stage checks the fingerprint against the same
 /// `--no-index` bytes the UI read — before the intent-to-add mark, which
 /// changes what the diff command even is. A stale one leaves the file

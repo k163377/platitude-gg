@@ -6,66 +6,6 @@ use crate::support::integrate::{apply, current_op};
 use platitude_core::process::Kept;
 use platitude_core::sequencer;
 
-/// A reader's `rebase.missingCommitsCheck=error` stops a rebase on a commit
-/// whose line was taken out of the todo (rebase-interactive.c
-/// `todo_list_check`, the minimum to 2.55: exit 1, standing on
-/// `--edit-todo`). The plan writes a `drop` line instead, which the check
-/// counts as seen, so the drop lands under that setting with nothing
-/// pinned and nothing left standing — what keeps the todo writer from
-/// ever leaving a line out.
-#[tokio::test]
-async fn a_readers_missing_commits_check_never_sees_the_plans_drop_lines() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    let doomed = repo.commit_file_id("b.txt", "two\n", "the one to go");
-    repo.commit_file("c.txt", "three\n", "after it");
-    repo.git(&["config", "rebase.missingCommitsCheck", "error"]);
-    let (exec, cancel) = env();
-
-    let plan = sequencer::plan_edit(&exec, &repo.path, &doomed, sequencer::Edit::Drop, &cancel)
-        .await
-        .expect("plan");
-    apply(&repo, &plan).await;
-
-    assert_eq!(
-        current_op(&repo).await,
-        None,
-        "nothing is left standing on --edit-todo"
-    );
-    assert_eq!(
-        repo.git(&["log", "--format=%s"])
-            .lines()
-            .collect::<Vec<_>>(),
-        vec!["after it", "root"]
-    );
-}
-
-#[tokio::test]
-async fn dropping_a_commit_keeps_the_ones_after_it() {
-    let mut repo = TestRepo::init();
-    let kept = repo.commit_file_id("a.txt", "one\n", "root");
-    let doomed = repo.commit_file_id("b.txt", "two\n", "the one to go");
-    repo.commit_file("c.txt", "three\n", "after it");
-    let (exec, cancel) = env();
-
-    let plan = sequencer::plan_edit(&exec, &repo.path, &doomed, sequencer::Edit::Drop, &cancel)
-        .await
-        .expect("plan");
-    apply(&repo, &plan).await;
-
-    assert_eq!(
-        repo.git(&["log", "--format=%s"])
-            .lines()
-            .collect::<Vec<_>>(),
-        vec!["after it", "root"]
-    );
-    assert!(!repo.path.join("b.txt").exists());
-    assert!(repo.path.join("c.txt").exists());
-    // The dropped commit's parent is the upstream, so nothing below the
-    // gap is replayed.
-    assert_eq!(repo.git(&["rev-parse", "HEAD~1"]), kept);
-}
-
 /// The newest commit (nothing after it to replay) and the first (no parent
 /// to start the plan from).
 #[tokio::test]
@@ -186,4 +126,45 @@ async fn a_merge_under_the_dropped_commit_is_left_alone() {
     );
     assert!(!repo.path.join("c.txt").exists());
     assert!(repo.path.join("d.txt").exists());
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// A reader's `rebase.missingCommitsCheck=error` stops a rebase on a commit
+    /// whose line was taken out of the todo (rebase-interactive.c
+    /// `todo_list_check`, the minimum to 2.55: exit 1, standing on
+    /// `--edit-todo`). The plan writes a `drop` line instead, which the check
+    /// counts as seen, so the drop lands under that setting with nothing
+    /// pinned and nothing left standing — what keeps the todo writer from
+    /// ever leaving a line out.
+    #[tokio::test]
+    #[ignore = "git's rebase.missingCommitsCheck over a todo that spells every drop: not worth the pre-merge run"]
+    async fn a_readers_missing_commits_check_never_sees_the_plans_drop_lines() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        let doomed = repo.commit_file_id("b.txt", "two\n", "the one to go");
+        repo.commit_file("c.txt", "three\n", "after it");
+        repo.git(&["config", "rebase.missingCommitsCheck", "error"]);
+        let (exec, cancel) = env();
+
+        let plan = sequencer::plan_edit(&exec, &repo.path, &doomed, sequencer::Edit::Drop, &cancel)
+            .await
+            .expect("plan");
+        apply(&repo, &plan).await;
+
+        assert_eq!(
+            current_op(&repo).await,
+            None,
+            "nothing is left standing on --edit-todo"
+        );
+        assert_eq!(
+            repo.git(&["log", "--format=%s"])
+                .lines()
+                .collect::<Vec<_>>(),
+            vec!["after it", "root"]
+        );
+    }
 }

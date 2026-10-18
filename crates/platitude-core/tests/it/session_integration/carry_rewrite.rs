@@ -174,55 +174,6 @@ async fn a_rebase_onto_over_a_dirty_tree_carries_the_work_across() {
     session.close_and_wait().await;
 }
 
-/// A user's `rebase.autoStash` does not get there first: git's own stash
-/// would take the dirty tree before the refusal the carry starts from, and
-/// put it all back unstaged. Both the plain rebase and the driven one.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_users_autostash_leaves_the_carry_to_the_session() {
-    install_todo_editor();
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.git(&["switch", "-c", "topic"]);
-    repo.commit_file("t.txt", "topic\n", "topic one");
-    repo.commit_file("f.txt", "fold\n", "fold me in");
-    repo.git(&["switch", "main"]);
-    repo.commit_file("m.txt", "main\n", "main moved");
-    repo.git(&["switch", "topic"]);
-    repo.git(&["config", "rebase.autoStash", "true"]);
-    repo.write_file("a.txt", "staged edit\n");
-    repo.git(&["add", "--", "a.txt"]);
-    repo.write_file("t.txt", "unstaged edit\n");
-
-    let (sink, session) = opened(&repo).await;
-    session.rebase("main".into(), rebase_onto());
-    assert_eq!(write_result(&sink, OperationKind::Rebase).await, None);
-    let fold = repo.git(&["rev-parse", "HEAD"]);
-    session.squash_into_parent(fold);
-    assert_eq!(write_result(&sink, OperationKind::Squash).await, None);
-
-    assert_eq!(
-        rewrite_route(&sink),
-        vec![
-            "rebase",
-            "stash push",
-            "rebase",
-            "stash pop --index",
-            "rebase --interactive",
-            "stash push",
-            "rebase --interactive",
-            "stash pop --index",
-        ]
-    );
-    assert_eq!(
-        repo.git(&["diff", "--name-only", "--cached"]),
-        "a.txt",
-        "the staged half is still staged"
-    );
-    assert_eq!(repo.git(&["diff", "--name-only"]), "t.txt");
-    assert_eq!(repo.git(&["stash", "list"]), "");
-    session.close_and_wait().await;
-}
-
 /// When that rebase stops, the work waits in the stash as a stopped
 /// replay's does — the entry is the person's to pop, where `--autostash`
 /// would have restored it after `--continue` / `--abort`.
@@ -261,35 +212,6 @@ async fn a_rebase_onto_that_stops_leaves_the_work_in_the_stash() {
         std::fs::read_to_string(repo.path.join("keep.txt")).expect("read"),
         "keep\n",
         "the uncommitted edit is in the entry, not in the tree"
-    );
-    session.close_and_wait().await;
-}
-
-/// Untracked files are not in a replay's way, so no stash is taken for
-/// them. The route is the whole assertion: a needless stash would end with
-/// the same tree.
-#[tokio::test(flavor = "multi_thread")]
-async fn untracked_files_alone_are_replayed_straight_over() {
-    install_todo_editor();
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    let gone = repo.commit_file_id("b.txt", "two\n", "drop me");
-    repo.commit_file("c.txt", "three\n", "keep me");
-    repo.write_file("u.txt", "untracked\n");
-
-    let (sink, session) = opened(&repo).await;
-    session.drop_commit(gone);
-    assert_eq!(write_result(&sink, OperationKind::Drop).await, None);
-
-    assert_eq!(
-        rewrite_route(&sink),
-        vec!["rebase --interactive"],
-        "one command, no stash"
-    );
-    assert!(!repo.path.join("b.txt").exists(), "the commit went");
-    assert_eq!(
-        repo.git(&["ls-files", "--others", "--exclude-standard"]),
-        "u.txt"
     );
     session.close_and_wait().await;
 }
@@ -624,4 +546,90 @@ async fn a_commit_landing_inside_a_one_commit_edits_carry_is_refused() {
         "and so is the one that was not"
     );
     session.close_and_wait().await;
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// Untracked files are not in a replay's way, so no stash is taken for
+    /// them. The route is the whole assertion: a needless stash would end with
+    /// the same tree.
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "git replaying over untracked files itself: not worth the pre-merge run"]
+    async fn untracked_files_alone_are_replayed_straight_over() {
+        install_todo_editor();
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        let gone = repo.commit_file_id("b.txt", "two\n", "drop me");
+        repo.commit_file("c.txt", "three\n", "keep me");
+        repo.write_file("u.txt", "untracked\n");
+
+        let (sink, session) = opened(&repo).await;
+        session.drop_commit(gone);
+        assert_eq!(write_result(&sink, OperationKind::Drop).await, None);
+
+        assert_eq!(
+            rewrite_route(&sink),
+            vec!["rebase --interactive"],
+            "one command, no stash"
+        );
+        assert!(!repo.path.join("b.txt").exists(), "the commit went");
+        assert_eq!(
+            repo.git(&["ls-files", "--others", "--exclude-standard"]),
+            "u.txt"
+        );
+        session.close_and_wait().await;
+    }
+
+    /// A user's `rebase.autoStash` does not get there first: git's own stash
+    /// would take the dirty tree before the refusal the carry starts from, and
+    /// put it all back unstaged. Both the plain rebase and the driven one.
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "a user's rebase.autoStash behind --no-autostash: not worth the pre-merge run"]
+    async fn a_users_autostash_leaves_the_carry_to_the_session() {
+        install_todo_editor();
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        repo.git(&["switch", "-c", "topic"]);
+        repo.commit_file("t.txt", "topic\n", "topic one");
+        repo.commit_file("f.txt", "fold\n", "fold me in");
+        repo.git(&["switch", "main"]);
+        repo.commit_file("m.txt", "main\n", "main moved");
+        repo.git(&["switch", "topic"]);
+        repo.git(&["config", "rebase.autoStash", "true"]);
+        repo.write_file("a.txt", "staged edit\n");
+        repo.git(&["add", "--", "a.txt"]);
+        repo.write_file("t.txt", "unstaged edit\n");
+
+        let (sink, session) = opened(&repo).await;
+        session.rebase("main".into(), rebase_onto());
+        assert_eq!(write_result(&sink, OperationKind::Rebase).await, None);
+        let fold = repo.git(&["rev-parse", "HEAD"]);
+        session.squash_into_parent(fold);
+        assert_eq!(write_result(&sink, OperationKind::Squash).await, None);
+
+        assert_eq!(
+            rewrite_route(&sink),
+            vec![
+                "rebase",
+                "stash push",
+                "rebase",
+                "stash pop --index",
+                "rebase --interactive",
+                "stash push",
+                "rebase --interactive",
+                "stash pop --index",
+            ]
+        );
+        assert_eq!(
+            repo.git(&["diff", "--name-only", "--cached"]),
+            "a.txt",
+            "the staged half is still staged"
+        );
+        assert_eq!(repo.git(&["diff", "--name-only"]), "t.txt");
+        assert_eq!(repo.git(&["stash", "list"]), "");
+        session.close_and_wait().await;
+    }
 }

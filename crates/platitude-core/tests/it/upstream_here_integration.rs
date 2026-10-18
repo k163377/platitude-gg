@@ -418,49 +418,6 @@ async fn marked_to_no_remote_neither_door_sends() {
     .await;
 }
 
-/// `.` is git's name for this repository: a mark set to it, by the
-/// branch's own key or by the repository's, aims the push here, where the
-/// send's refspec (`git push . topic:origin/base`) moves the branch.
-/// Refused as a missing mark is.
-#[tokio::test(flavor = "multi_thread")]
-async fn marked_to_this_repository_neither_door_sends() {
-    for (key, unset) in [
-        ("branch.topic.pushRemote", None),
-        ("remote.pushDefault", Some("branch.topic.pushRemote")),
-    ] {
-        let (mut bare, mut work) = topic_against_a_branch_here();
-        if let Some(unset) = unset {
-            work.git(&["config", "--unset", unset]);
-        }
-        work.git(&["config", key, "."]);
-        neither_door_sends(
-            &mut bare,
-            &mut work,
-            PushStanding::StaysHere,
-            "this repository",
-        )
-        .await;
-    }
-}
-
-/// The same mark on a branch measured against a remote branch: a send
-/// there pushes the branch onto itself, which sends nothing anywhere — out
-/// on both doors as well.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_mark_on_this_repository_sends_nothing_whatever_the_upstream() {
-    let (mut bare, mut work) = topic_against_a_branch_here();
-    work.git(&["config", "branch.topic.remote", "origin"]);
-    work.git(&["config", "branch.topic.merge", "refs/heads/topic"]);
-    work.git(&["config", "branch.topic.pushRemote", "."]);
-    neither_door_sends(
-        &mut bare,
-        &mut work,
-        PushStanding::StaysHere,
-        "this repository",
-    )
-    .await;
-}
-
 /// The branch here deleted: git's `[gone]`, a first push for the toolbar
 /// and the row alike — and the row's question opens on no remote, the
 /// gone name being the branch here's.

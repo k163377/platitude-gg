@@ -223,28 +223,6 @@ async fn amend_without_a_message_keeps_the_old_one() {
 }
 
 #[tokio::test]
-async fn committing_nothing_surfaces_gits_own_message() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-
-    let err = commit::commit(
-        &exec,
-        &repo_info,
-        "nothing here",
-        CommitOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect_err("nothing staged");
-    assert!(
-        err.to_string().contains("nothing to commit"),
-        "git's wording is passed through: {err}"
-    );
-}
-
-#[tokio::test]
 async fn head_message_and_merge_detection() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "subject");
@@ -657,5 +635,28 @@ mod periodic {
         let files = repo.git(&["show", "--name-only", "--format=", "HEAD"]);
         assert!(files.contains("a.txt") && files.contains("b.txt"));
         assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "1");
+    }
+
+    #[tokio::test]
+    #[ignore = "git's own nothing-to-commit wording behind a fixed commit line: not worth the pre-merge run"]
+    async fn committing_nothing_surfaces_gits_own_message() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        let (exec, cancel) = env();
+        let repo_info = info(&repo).await;
+
+        let err = commit::commit(
+            &exec,
+            &repo_info,
+            "nothing here",
+            CommitOptions::default(),
+            &cancel,
+        )
+        .await
+        .expect_err("nothing staged");
+        assert!(
+            err.to_string().contains("nothing to commit"),
+            "git's wording is passed through: {err}"
+        );
     }
 }

@@ -17,47 +17,6 @@ async fn stopped_merge() -> TestRepo {
     repo
 }
 
-/// The two keys name different tools, so the mark in the file says which
-/// key `--gui` reached. `mergetool.writeToTemp` defaults to false, which
-/// puts `_LOCAL_` / `_REMOTE_` / `_BASE_` / `_BACKUP_` beside the file,
-/// untracked and in the pane, while the tool is open.
-#[tokio::test]
-async fn mergetool_launches_the_gui_tool_and_keeps_its_scratch_out_of_the_tree() {
-    let mut repo = stopped_merge().await;
-    for (name, mark) in [("pgguitool", "gui"), ("pgclitool", "cli")] {
-        let key = format!("mergetool.{name}.cmd");
-        let cmd = format!("ls > listing.txt; printf {mark} > \"$MERGED\"");
-        repo.git(&["config", &key, &cmd]);
-        // Left off, git compares mtimes instead of the exit code (`periodic`).
-        let trust = format!("mergetool.{name}.trustExitCode");
-        repo.git(&["config", &trust, "true"]);
-    }
-    repo.git(&["config", "merge.guitool", "pgguitool"]);
-    repo.git(&["config", "merge.tool", "pgclitool"]);
-
-    let (exec, cancel) = env();
-    conflict::mergetool(&exec, &repo.path, &["f.txt".into()], &cancel)
-        .await
-        .expect("run the tool");
-
-    assert_eq!(
-        std::fs::read_to_string(repo.path.join("f.txt")).unwrap(),
-        "gui",
-        "merge.guitool is the key --gui reaches"
-    );
-    let listing = std::fs::read_to_string(repo.path.join("listing.txt")).unwrap();
-    assert!(
-        !listing.contains("_LOCAL_") && !listing.contains("_BACKUP_"),
-        "scratch landed in the working tree: {listing}"
-    );
-
-    // git stages what the tool resolved, so the caller only has to refresh.
-    let s = status::load(&exec, &repo.path, &cancel)
-        .await
-        .expect("status");
-    assert!(conflict::conflicted(&s).is_empty());
-}
-
 #[tokio::test]
 async fn mergetool_refuses_when_no_tool_is_configured() {
     let repo = stopped_merge().await;
@@ -187,5 +146,47 @@ mod periodic {
             !names.iter().any(|n| n.starts_with("vimdiff")),
             "a terminal tool got offered: {names:?}"
         );
+    }
+
+    /// The two keys name different tools, so the mark in the file says which
+    /// key `--gui` reached. `mergetool.writeToTemp` defaults to false, which
+    /// puts `_LOCAL_` / `_REMOTE_` / `_BASE_` / `_BACKUP_` beside the file,
+    /// untracked and in the pane, while the tool is open.
+    #[tokio::test]
+    #[ignore = "git launching the tool --gui names, keeping its scratch under writeToTemp and staging what it resolved: not worth the pre-merge run"]
+    async fn mergetool_launches_the_gui_tool_and_keeps_its_scratch_out_of_the_tree() {
+        let mut repo = stopped_merge().await;
+        for (name, mark) in [("pgguitool", "gui"), ("pgclitool", "cli")] {
+            let key = format!("mergetool.{name}.cmd");
+            let cmd = format!("ls > listing.txt; printf {mark} > \"$MERGED\"");
+            repo.git(&["config", &key, &cmd]);
+            // Left off, git compares mtimes instead of the exit code (`periodic`).
+            let trust = format!("mergetool.{name}.trustExitCode");
+            repo.git(&["config", &trust, "true"]);
+        }
+        repo.git(&["config", "merge.guitool", "pgguitool"]);
+        repo.git(&["config", "merge.tool", "pgclitool"]);
+
+        let (exec, cancel) = env();
+        conflict::mergetool(&exec, &repo.path, &["f.txt".into()], &cancel)
+            .await
+            .expect("run the tool");
+
+        assert_eq!(
+            std::fs::read_to_string(repo.path.join("f.txt")).unwrap(),
+            "gui",
+            "merge.guitool is the key --gui reaches"
+        );
+        let listing = std::fs::read_to_string(repo.path.join("listing.txt")).unwrap();
+        assert!(
+            !listing.contains("_LOCAL_") && !listing.contains("_BACKUP_"),
+            "scratch landed in the working tree: {listing}"
+        );
+
+        // git stages what the tool resolved, so the caller only has to refresh.
+        let s = status::load(&exec, &repo.path, &cancel)
+            .await
+            .expect("status");
+        assert!(conflict::conflicted(&s).is_empty());
     }
 }

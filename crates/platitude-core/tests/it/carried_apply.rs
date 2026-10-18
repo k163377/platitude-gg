@@ -488,23 +488,30 @@ async fn a_write_accepted_there_first_is_done_before_the_work_is_read() {
     here.close_and_wait().await;
 }
 
-/// Why the untracked files are looked at before git runs: `git stash
-/// apply` puts the tracked changes in first, then refuses the untracked
-/// file in the way and leaves the rest applied — exit 1 up to 2.55, 128
-/// from 2.56 ([`a_failed_row`]'s reason).
-#[test]
-fn git_leaves_the_tracked_half_applied() {
-    let (mut repo, side) = two_trees();
-    write_in(&side, "a.txt", "1\n2\n3\n4\n5 side\n");
-    write_in(&side, "u.txt", "theirs\n");
-    repo.git_in(&side, &["stash", "push", "-u"]);
-    let stash = repo.git_in(&side, &["rev-parse", "stash@{0}"]);
-    repo.write_file("u.txt", "mine\n");
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
 
-    let here = repo.path.clone();
-    let out = repo.git_attempt(&here, &["stash", "apply", &stash]);
+    /// Why the untracked files are looked at before git runs: `git stash
+    /// apply` puts the tracked changes in first, then refuses the untracked
+    /// file in the way and leaves the rest applied — exit 1 up to 2.55, 128
+    /// from 2.56 ([`a_failed_row`]'s reason).
+    #[test]
+    #[ignore = "what git's stash apply leaves applied before an untracked file in the way: not worth the pre-merge run"]
+    fn git_leaves_the_tracked_half_applied() {
+        let (mut repo, side) = two_trees();
+        write_in(&side, "a.txt", "1\n2\n3\n4\n5 side\n");
+        write_in(&side, "u.txt", "theirs\n");
+        repo.git_in(&side, &["stash", "push", "-u"]);
+        let stash = repo.git_in(&side, &["rev-parse", "stash@{0}"]);
+        repo.write_file("u.txt", "mine\n");
 
-    assert!(!out.status.success(), "{:?}", out.status);
-    assert!(String::from_utf8_lossy(&out.stderr).contains("could not restore untracked files"));
-    assert_eq!(read_in(&repo.path, "a.txt"), "1\n2\n3\n4\n5 side\n");
+        let here = repo.path.clone();
+        let out = repo.git_attempt(&here, &["stash", "apply", &stash]);
+
+        assert!(!out.status.success(), "{:?}", out.status);
+        assert!(String::from_utf8_lossy(&out.stderr).contains("could not restore untracked files"));
+        assert_eq!(read_in(&repo.path, "a.txt"), "1\n2\n3\n4\n5 side\n");
+    }
 }

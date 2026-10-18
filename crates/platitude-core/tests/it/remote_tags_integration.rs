@@ -74,51 +74,6 @@ fn tag_scenario() -> (TestRepo, TestRepo, String, String) {
     (bare, work, root, head)
 }
 
-/// A plain push cannot move a name the remote has elsewhere — git refuses
-/// it — so the drifted row offers the leased overwrite
-/// (デザイン規約 §相手の履歴を置き換える).
-#[tokio::test]
-async fn a_tag_the_remote_has_not_got_goes_plainly_and_a_drifted_one_needs_the_lease() {
-    let (_bare, mut work, root, head) = tag_scenario();
-    let exec = crate::support::exec::isolated();
-    let cancel = CancellationToken::new();
-    let path = work.path.clone();
-
-    remote::push_tag(&exec, &path, "origin", "v-local", "", NET, &cancel)
-        .await
-        .expect("a name the remote has not got needs nothing");
-    assert_eq!(
-        at_origin(&mut work, "v-local"),
-        head,
-        "it is over there now"
-    );
-
-    let refused = remote::push_tag(&exec, &path, "origin", "v-drift", "", NET, &cancel).await;
-    assert_eq!(
-        refused
-            .as_ref()
-            .err()
-            .and_then(platitude_core::GitError::report)
-            .map(|report| report.kind),
-        Some(platitude_core::ReportKind::TagElsewhere),
-        "a plain push will not move a tag the remote has on another commit: {refused:?}"
-    );
-    assert_eq!(
-        at_origin(&mut work, "v-drift"),
-        root,
-        "and nothing over there moved"
-    );
-
-    remote::push_tag(&exec, &path, "origin", "v-drift", &root, NET, &cancel)
-        .await
-        .expect("the lease names the commit the remote is actually on");
-    assert_eq!(
-        at_origin(&mut work, "v-drift"),
-        head,
-        "the name follows this repository"
-    );
-}
-
 /// git refuses a plain push onto a name the remote holds as another object
 /// even on the same commit (`already exists` — a lightweight tag over there
 /// for the annotated one here). The screen shows one commit on both sides,
@@ -589,57 +544,6 @@ fn tag<'a>(snapshot: &'a RefsSnapshot, name: &str) -> &'a TagItem {
         .unwrap_or_else(|| panic!("{name} missing from {:?}", snapshot.tags))
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn the_fetch_is_what_tells_a_tag_whether_a_remote_has_it_too() {
-    let (_bare, work, _root, _head) = tag_scenario();
-    let (sink, session) = opened_recording(&work).await;
-
-    // No local ref records where a remote keeps its tags, so before the
-    // remote is asked every tag is this repository's alone.
-    let opening = sink
-        .wait_for("the first RefsLoaded", |evs| {
-            evs.iter().find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot, .. } if !snapshot.tags.is_empty() => {
-                    Some(snapshot.clone())
-                }
-                _ => None,
-            })
-        })
-        .await;
-    assert!(
-        opening.tags.iter().all(|t| !t.has_remote),
-        "a badge before asking would be a guess: {:?}",
-        opening.tags
-    );
-    assert!(
-        opening.tags.iter().all(|t| t.here),
-        "and nothing is listed that this repository does not hold"
-    );
-
-    session.fetch(Some("origin".into()));
-    let after = snapshot_after_the_fetch(&sink).await;
-
-    assert!(tag(&after, "v-both").has_remote);
-    assert!(tag(&after, "v-both").here);
-    assert!(
-        !tag(&after, "v-local").has_remote,
-        "made here and never pushed"
-    );
-    assert!(
-        tag(&after, "v-drift").has_remote,
-        "the remote has the name, just not where this one has it"
-    );
-
-    let only_there = tag(&after, "v-remote");
-    assert!(!only_there.here, "no local ref holds it");
-    assert!(only_there.has_remote);
-    assert_eq!(
-        only_there.created_unix, 0,
-        "an advertisement carries no date to sort by"
-    );
-    session.close_and_wait().await;
-}
-
 /// Asks for a tracked remote-tag read until one runs.
 ///
 /// A `Busy` is acked once the other read has let the slot go, so the next
@@ -977,5 +881,103 @@ mod periodic {
         })
         .await;
         session.close_and_wait().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "git's tag auto-following behind fetch --prune, state by state: not worth the pre-merge run"]
+    async fn the_fetch_is_what_tells_a_tag_whether_a_remote_has_it_too() {
+        let (_bare, work, _root, _head) = tag_scenario();
+        let (sink, session) = opened_recording(&work).await;
+
+        // No local ref records where a remote keeps its tags, so before the
+        // remote is asked every tag is this repository's alone.
+        let opening = sink
+            .wait_for("the first RefsLoaded", |evs| {
+                evs.iter().find_map(|e| match e {
+                    SessionEvent::RefsLoaded { snapshot, .. } if !snapshot.tags.is_empty() => {
+                        Some(snapshot.clone())
+                    }
+                    _ => None,
+                })
+            })
+            .await;
+        assert!(
+            opening.tags.iter().all(|t| !t.has_remote),
+            "a badge before asking would be a guess: {:?}",
+            opening.tags
+        );
+        assert!(
+            opening.tags.iter().all(|t| t.here),
+            "and nothing is listed that this repository does not hold"
+        );
+
+        session.fetch(Some("origin".into()));
+        let after = snapshot_after_the_fetch(&sink).await;
+
+        assert!(tag(&after, "v-both").has_remote);
+        assert!(tag(&after, "v-both").here);
+        assert!(
+            !tag(&after, "v-local").has_remote,
+            "made here and never pushed"
+        );
+        assert!(
+            tag(&after, "v-drift").has_remote,
+            "the remote has the name, just not where this one has it"
+        );
+
+        let only_there = tag(&after, "v-remote");
+        assert!(!only_there.here, "no local ref holds it");
+        assert!(only_there.has_remote);
+        assert_eq!(
+            only_there.created_unix, 0,
+            "an advertisement carries no date to sort by"
+        );
+        session.close_and_wait().await;
+    }
+
+    /// A plain push cannot move a name the remote has elsewhere — git refuses
+    /// it — so the drifted row offers the leased overwrite
+    /// (デザイン規約 §相手の履歴を置き換える).
+    #[tokio::test]
+    #[ignore = "git taking a plain tag push and the leased one behind our fixed lines, each half held by another test: not worth the pre-merge run"]
+    async fn a_tag_the_remote_has_not_got_goes_plainly_and_a_drifted_one_needs_the_lease() {
+        let (_bare, mut work, root, head) = tag_scenario();
+        let exec = crate::support::exec::isolated();
+        let cancel = CancellationToken::new();
+        let path = work.path.clone();
+
+        remote::push_tag(&exec, &path, "origin", "v-local", "", NET, &cancel)
+            .await
+            .expect("a name the remote has not got needs nothing");
+        assert_eq!(
+            at_origin(&mut work, "v-local"),
+            head,
+            "it is over there now"
+        );
+
+        let refused = remote::push_tag(&exec, &path, "origin", "v-drift", "", NET, &cancel).await;
+        assert_eq!(
+            refused
+                .as_ref()
+                .err()
+                .and_then(platitude_core::GitError::report)
+                .map(|report| report.kind),
+            Some(platitude_core::ReportKind::TagElsewhere),
+            "a plain push will not move a tag the remote has on another commit: {refused:?}"
+        );
+        assert_eq!(
+            at_origin(&mut work, "v-drift"),
+            root,
+            "and nothing over there moved"
+        );
+
+        remote::push_tag(&exec, &path, "origin", "v-drift", &root, NET, &cancel)
+            .await
+            .expect("the lease names the commit the remote is actually on");
+        assert_eq!(
+            at_origin(&mut work, "v-drift"),
+            head,
+            "the name follows this repository"
+        );
     }
 }

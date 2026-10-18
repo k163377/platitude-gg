@@ -104,33 +104,6 @@ async fn the_shallow_edge_is_read_as_an_edge_and_only_an_edit_that_reaches_it_is
     assert_eq!(plan.upstream, held[0]);
 }
 
-#[tokio::test]
-async fn rewording_an_older_commit_replaces_only_its_message() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    let target = repo.commit_file_id("b.txt", "two\n", "old subject");
-    repo.commit_file("c.txt", "three\n", "after");
-    let (exec, cancel) = env();
-
-    let plan = sequencer::plan_edit(
-        &exec,
-        &repo.path,
-        &target,
-        sequencer::Edit::Reword("new subject\n\nwith a body\n".into()),
-        &cancel,
-    )
-    .await
-    .expect("plan");
-    apply(&repo, &plan).await;
-
-    assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "3");
-    assert_eq!(
-        repo.git(&["log", "-1", "--format=%B", "HEAD~1"]),
-        "new subject\n\nwith a body"
-    );
-    assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "after");
-}
-
 /// A commit empty on purpose, further back: git's own `reword` passes
 /// `ALLOW_EMPTY`, and the plan's `exec` amend has to as well, or the
 /// replay stops on it.

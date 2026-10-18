@@ -204,29 +204,6 @@ async fn a_file_git_will_not_take_is_named_and_the_rest_copied() {
     assert_eq!(repo.git(&["show", &format!("{copy}:a.txt")]), "2");
 }
 
-/// The same filter not required: git takes the file whole where the filter
-/// fails, so it is copied and nothing is named — the line the screen draws
-/// between a discard brought back and one that is not (`lfs::required`).
-#[tokio::test]
-async fn a_failing_filter_that_is_not_required_is_copied_whole() {
-    let mut repo = TestRepo::init();
-    repo.commit_file(".gitattributes", "*.bin filter=absent\n", "attributes");
-    repo.git(&[
-        "config",
-        "filter.absent.clean",
-        "absent-filter-that-is-not-here",
-    ]);
-    repo.write_file("big.bin", "data\n");
-    let dir = git_dir(&repo);
-    let untracked = paths(&["big.bin"]);
-
-    assert!(copy_and_record(&discard_of(&repo, &dir, &[], &untracked)).await);
-
-    let found = read(&repo).await;
-    let part = &one(&found, DiscardKind::Discarded).parts[0];
-    assert_eq!((part.files, part.not_copied.clone()), (1, Vec::new()));
-}
-
 /// Work none of which git will take still goes on the record: a copy of
 /// nothing, the paths named (§2.1) — the record says what went.
 #[tokio::test]
@@ -595,4 +572,34 @@ async fn the_branches_one_rebase_moved_are_one_entry() {
     let rebase = one(&found, DiscardKind::Rebase);
     assert_eq!(rebase.parts.len(), 2);
     assert_eq!(rebase.lost(), vec![oid(&t1), oid(&b1)]);
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// The same filter not required: git takes the file whole where the filter
+    /// fails, so it is copied and nothing is named — the line the screen draws
+    /// between a discard brought back and one that is not (`lfs::required`).
+    #[tokio::test]
+    #[ignore = "git taking a file whole where a filter it does not require fails: not worth the pre-merge run"]
+    async fn a_failing_filter_that_is_not_required_is_copied_whole() {
+        let mut repo = TestRepo::init();
+        repo.commit_file(".gitattributes", "*.bin filter=absent\n", "attributes");
+        repo.git(&[
+            "config",
+            "filter.absent.clean",
+            "absent-filter-that-is-not-here",
+        ]);
+        repo.write_file("big.bin", "data\n");
+        let dir = git_dir(&repo);
+        let untracked = paths(&["big.bin"]);
+
+        assert!(copy_and_record(&discard_of(&repo, &dir, &[], &untracked)).await);
+
+        let found = read(&repo).await;
+        let part = &one(&found, DiscardKind::Discarded).parts[0];
+        assert_eq!((part.files, part.not_copied.clone()), (1, Vec::new()));
+    }
 }

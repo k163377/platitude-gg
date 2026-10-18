@@ -583,24 +583,6 @@ async fn one_rebase_of_both(repo: &TestRepo) {
     );
 }
 
-/// The branches a rebase moves together are one entry also where the
-/// user's own setting moved them (`rebase.updateRefs`), not the screen.
-#[tokio::test(flavor = "multi_thread")]
-async fn branches_the_setting_moves_together_are_one_entry() {
-    let mut repo = TestRepo::init();
-    stacked(&mut repo, false);
-    repo.git(&["config", "rebase.updateRefs", "true"]);
-    let (sink, session) = opened(&repo).await;
-
-    let id = session
-        .rebase("main".to_string(), RebaseOptions::default())
-        .expect("the rebase is accepted");
-    assert_eq!(write_answer(&sink, id).await, None);
-
-    one_rebase_of_both(&repo).await;
-    session.close_and_wait().await;
-}
-
 /// A rebase moving branches together that stops on a conflict moves them
 /// when it finishes: the continue that finishes it puts them on the record
 /// as one entry.
@@ -905,4 +887,29 @@ async fn a_tag_pushed_over_is_recorded_as_the_remote_held_it() {
         }
     );
     session.close_and_wait().await;
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// The branches a rebase moves together are one entry also where the
+    /// user's own setting moved them (`rebase.updateRefs`), not the screen.
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "a user's rebase.updateRefs moving branches git's way: not worth the pre-merge run"]
+    async fn branches_the_setting_moves_together_are_one_entry() {
+        let mut repo = TestRepo::init();
+        stacked(&mut repo, false);
+        repo.git(&["config", "rebase.updateRefs", "true"]);
+        let (sink, session) = opened(&repo).await;
+
+        let id = session
+            .rebase("main".to_string(), RebaseOptions::default())
+            .expect("the rebase is accepted");
+        assert_eq!(write_answer(&sink, id).await, None);
+
+        one_rebase_of_both(&repo).await;
+        session.close_and_wait().await;
+    }
 }

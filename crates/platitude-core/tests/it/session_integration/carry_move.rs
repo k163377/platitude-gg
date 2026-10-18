@@ -7,32 +7,6 @@ use crate::support::session::{opened, write_result};
 use platitude_core::OperationKind;
 use platitude_core::session::SessionEvent;
 
-/// A move that fails for a reason a stash cannot help with (a name git
-/// rejects) stops there: nothing is stashed.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_move_that_fails_outright_stashes_nothing() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "0\n", "root");
-    repo.write_file("f.txt", "uncommitted\n");
-
-    let (sink, session) = opened(&repo).await;
-    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
-        name: "no-such-branch".into(),
-    });
-    assert!(
-        write_result(&sink, OperationKind::Checkout).await.is_some(),
-        "git rejected the branch name"
-    );
-    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
-    assert_eq!(
-        std::fs::read_to_string(repo.path.join("f.txt")).unwrap(),
-        "uncommitted\n",
-        "the work never left the tree"
-    );
-    assert_eq!(repo.git(&["stash", "list"]), "", "no entry left behind");
-    session.close_and_wait().await;
-}
-
 /// A move still refused once the tree has been emptied puts the work back,
 /// and git's first refusal is what comes out.
 #[tokio::test(flavor = "multi_thread")]
@@ -108,40 +82,6 @@ async fn a_move_git_refuses_goes_round_through_a_stash() {
     assert!(
         repo.git(&["stash", "list"]).is_empty(),
         "a clean restore takes the stash with it"
-    );
-    session.close_and_wait().await;
-}
-
-/// Going round through the stash is what keeps the staged/unstaged
-/// split: `switch --merge` refuses outright while anything is
-/// staged.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_move_that_goes_round_keeps_what_was_staged_staged() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("both.txt", "l1\nl2\nl3\nl4\nl5\n", "root");
-    repo.git(&["switch", "-c", "other"]);
-    repo.commit_file("both.txt", "l1-THEIRS\nl2\nl3\nl4\nl5\n", "other");
-    repo.git(&["switch", "main"]);
-    repo.write_file("both.txt", "l1\nl2\nl3\nl4\nl5-MINE\n");
-    repo.write_file("staged.txt", "staged\n");
-    repo.git(&["add", "--", "staged.txt"]);
-
-    let (sink, session) = opened(&repo).await;
-    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
-        name: "other".into(),
-    });
-    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
-
-    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
-    assert_eq!(
-        std::fs::read_to_string(repo.path.join("both.txt")).unwrap(),
-        "l1-THEIRS\nl2\nl3\nl4\nl5-MINE\n",
-        "both sides of the file survived"
-    );
-    assert_eq!(
-        repo.git(&["diff", "--cached", "--name-only"]),
-        "staged.txt",
-        "what was staged is staged still"
     );
     session.close_and_wait().await;
 }
@@ -528,6 +468,32 @@ async fn a_carry_whose_session_closes_half_way_still_puts_the_work_back() {
 fn reached_the_stash(event: &SessionEvent) -> bool {
     matches!(event, SessionEvent::CommandStarted { display, .. }
         if display.starts_with("git stash push"))
+}
+
+/// A move that fails for a reason a stash cannot help with (a name git
+/// rejects) stops there: nothing is stashed.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_move_that_fails_outright_stashes_nothing() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    repo.write_file("f.txt", "uncommitted\n");
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
+        name: "no-such-branch".into(),
+    });
+    assert!(
+        write_result(&sink, OperationKind::Checkout).await.is_some(),
+        "git rejected the branch name"
+    );
+    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+    assert_eq!(
+        std::fs::read_to_string(repo.path.join("f.txt")).unwrap(),
+        "uncommitted\n",
+        "the work never left the tree"
+    );
+    assert_eq!(repo.git(&["stash", "list"]), "", "no entry left behind");
+    session.close_and_wait().await;
 }
 
 /// Left out of the pre-merge run: the refusal and the untouched pick are

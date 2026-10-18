@@ -150,39 +150,6 @@ async fn a_merge_that_stops_after_the_carry_leaves_the_work_in_the_stash() {
     session.close_and_wait().await;
 }
 
-/// A reader's `merge.autoStash=true` does not take the carry's place:
-/// `--no-autostash` is pinned, so the round is this end's and staged work
-/// comes back staged (git's own would restore with a plain `apply`).
-#[tokio::test(flavor = "multi_thread")]
-async fn a_readers_merge_autostash_leaves_the_carry_to_the_session() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", &six("1", "6"), "root");
-    repo.git(&["checkout", "-b", "side"]);
-    repo.commit_file("a.txt", &six("1", "six"), "side work");
-    repo.git(&["checkout", "main"]);
-    repo.git(&["config", "merge.autoStash", "true"]);
-    repo.write_file("a.txt", &six("one", "6"));
-    repo.write_file("staged.txt", "staged\n");
-    repo.git(&["add", "staged.txt"]);
-
-    let (sink, session) = opened(&repo).await;
-    session.merge("side".into(), MergeOptions::default());
-    assert_eq!(write_result(&sink, OperationKind::Merge).await, None);
-    assert_eq!(
-        route(&sink),
-        vec!["merge", "stash push", "merge", "stash pop --index"],
-        "git's own autostash did not run in the carry's place"
-    );
-    assert_eq!(
-        repo.git(&["diff", "--cached", "--name-only"]),
-        "staged.txt",
-        "the staged file came back staged"
-    );
-    assert_eq!(read(&repo, "a.txt"), six("one", "six"));
-    assert_eq!(repo.git(&["stash", "list"]), "", "the entry was put back");
-    session.close_and_wait().await;
-}
-
 /// A merge refused for any other reason stops there: nothing is stashed.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_merge_that_fails_outright_stashes_nothing() {
@@ -204,4 +171,44 @@ async fn a_merge_that_fails_outright_stashes_nothing() {
     );
     assert_eq!(repo.git(&["stash", "list"]), "", "no entry left behind");
     session.close_and_wait().await;
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// A reader's `merge.autoStash=true` does not take the carry's place:
+    /// `--no-autostash` is pinned, so the round is this end's and staged work
+    /// comes back staged (git's own would restore with a plain `apply`).
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "a reader's merge.autoStash behind --no-autostash: not worth the pre-merge run"]
+    async fn a_readers_merge_autostash_leaves_the_carry_to_the_session() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", &six("1", "6"), "root");
+        repo.git(&["checkout", "-b", "side"]);
+        repo.commit_file("a.txt", &six("1", "six"), "side work");
+        repo.git(&["checkout", "main"]);
+        repo.git(&["config", "merge.autoStash", "true"]);
+        repo.write_file("a.txt", &six("one", "6"));
+        repo.write_file("staged.txt", "staged\n");
+        repo.git(&["add", "staged.txt"]);
+
+        let (sink, session) = opened(&repo).await;
+        session.merge("side".into(), MergeOptions::default());
+        assert_eq!(write_result(&sink, OperationKind::Merge).await, None);
+        assert_eq!(
+            route(&sink),
+            vec!["merge", "stash push", "merge", "stash pop --index"],
+            "git's own autostash did not run in the carry's place"
+        );
+        assert_eq!(
+            repo.git(&["diff", "--cached", "--name-only"]),
+            "staged.txt",
+            "the staged file came back staged"
+        );
+        assert_eq!(read(&repo, "a.txt"), six("one", "six"));
+        assert_eq!(repo.git(&["stash", "list"]), "", "the entry was put back");
+        session.close_and_wait().await;
+    }
 }

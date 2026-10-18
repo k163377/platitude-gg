@@ -48,25 +48,6 @@ async fn no_commit_is_head() {
     assert_eq!(repo.git(&["rev-parse", "here"]), head);
 }
 
-/// `check-ref-format` takes a leading dash but `git tag` does not. The
-/// boxes turn it down first ([`tag::is_valid_name`]); this is git's
-/// refusal under them, should one get through.
-#[tokio::test]
-async fn a_leading_dash_reaches_git_as_a_name_and_git_refuses_it() {
-    let mut repo = TestRepo::init();
-    let head = repo.commit_file_id("a.txt", "a\n", "root");
-    let (exec, cancel) = env();
-
-    let refused = tag::create(&exec, &repo.path, "-dashed", &head, &cancel).await;
-
-    let message = format!("{:?}", refused.expect_err("git refuses the name"));
-    assert!(
-        message.contains("not a valid tag name"),
-        "git's own refusal, not an unrecognised option: {message}"
-    );
-    assert_eq!(repo.git(&["tag", "--list"]), "");
-}
-
 /// The first half of a rename: nothing has moved yet, so the refusal goes
 /// back under the box the name was typed into (デザイン規約 §答えの要らない報せ).
 /// The second half — new name made, old one still there — is
@@ -193,6 +174,26 @@ mod periodic {
         let refused = tag::create(&exec, &repo.path, "has space", "", &cancel).await;
 
         assert!(refused.is_err());
+        assert_eq!(repo.git(&["tag", "--list"]), "");
+    }
+
+    /// `check-ref-format` takes a leading dash but `git tag` does not. The
+    /// boxes turn it down first ([`tag::is_valid_name`]); this is git's
+    /// refusal under them, should one get through.
+    #[tokio::test]
+    #[ignore = "git's refusal of a dash-led tag name behind the fixed --end-of-options: not worth the pre-merge run"]
+    async fn a_leading_dash_reaches_git_as_a_name_and_git_refuses_it() {
+        let mut repo = TestRepo::init();
+        let head = repo.commit_file_id("a.txt", "a\n", "root");
+        let (exec, cancel) = env();
+
+        let refused = tag::create(&exec, &repo.path, "-dashed", &head, &cancel).await;
+
+        let message = format!("{:?}", refused.expect_err("git refuses the name"));
+        assert!(
+            message.contains("not a valid tag name"),
+            "git's own refusal, not an unrecognised option: {message}"
+        );
         assert_eq!(repo.git(&["tag", "--list"]), "");
     }
 }

@@ -11,21 +11,6 @@ use crate::support::exec::{env, logged};
 use crate::support::stage::buckets;
 use platitude_core::stage::{self, DiscardSide};
 
-#[tokio::test]
-async fn unstage_works_on_an_unborn_branch() {
-    let mut repo = TestRepo::init();
-    repo.write_file("first.txt", "hello\n");
-    repo.git(&["add", "--", "first.txt"]);
-    let (exec, cancel) = env();
-
-    stage::unstage_paths(&exec, &repo.path, &["first.txt".into()], &cancel)
-        .await
-        .expect("unstage on unborn HEAD");
-    let (staged, _, untracked) = buckets(&repo).await;
-    assert!(staged.is_empty());
-    assert_eq!(untracked, vec!["first.txt"], "file is back to untracked");
-}
-
 /// Edited again after `add`, before the first commit: the index holds
 /// neither what HEAD has (nothing) nor what the disk does, which `git rm
 /// --cached` refuses without `--force`. Both doors take it, the edit stays

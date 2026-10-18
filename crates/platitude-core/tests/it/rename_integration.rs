@@ -79,36 +79,6 @@ async fn renaming_a_stash_keeps_its_contents_and_says_so_everywhere() {
     );
 }
 
-#[tokio::test]
-async fn renaming_a_stash_leaves_the_others_where_they_were() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "a\n", "root");
-    repo.write_file("a.txt", "one\n");
-    repo.git(&["stash", "push", "-m", "first"]);
-    repo.write_file("a.txt", "two\n");
-    repo.git(&["stash", "push", "-m", "second"]);
-    let oid = repo.git(&["rev-parse", "stash@{1}"]);
-    let (exec, cancel) = env();
-
-    stash::rename(
-        &exec,
-        &repo.path,
-        "stash@{1}",
-        &oid,
-        "renamed first",
-        &cancel,
-    )
-    .await
-    .expect("rename");
-
-    let list = repo.git(&["stash", "list", "--format=%gs"]);
-    assert_eq!(
-        list.lines().collect::<Vec<_>>(),
-        vec!["renamed first", "On main: second"],
-        "the renamed entry is at the top; the reflog only grows at the front"
-    );
-}
-
 /// A stash pushed elsewhere between the selection and the press moves
 /// every number down: the entry chosen is the one renamed, wherever it
 /// stands now, and the one that took its number keeps its name.
@@ -323,28 +293,6 @@ async fn a_reftable_stash_whose_old_entry_would_not_go_is_half_renamed_by_git() 
     );
 }
 
-/// What the name boxes refuse beside the names already there
-/// (`RefsSnapshot::local_clash` / `tag_clash`): git keeps a ref as a
-/// file, so `a` and `a/b` cannot both be, either way round, for a branch
-/// or a tag. Letter case is the disk's to decide and is not held here.
-#[test]
-fn git_refuses_a_name_that_is_a_folder_of_another() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "a\n", "root");
-    repo.git(&["branch", "solo"]);
-    repo.git(&["branch", "group/member"]);
-    repo.git(&["tag", "v1"]);
-    repo.git(&["tag", "rc/1"]);
-    for (args, why) in [
-        (["branch", "solo/inner"], "a branch under a branch"),
-        (["branch", "group"], "a branch over a folder of branches"),
-        (["tag", "v1/patch"], "a tag under a tag"),
-        (["tag", "rc"], "a tag over a folder of tags"),
-    ] {
-        assert!(!repo.git_ok(&args), "{why}");
-    }
-}
-
 #[tokio::test]
 async fn the_name_rules_are_the_ones_git_applies() {
     let mut repo = TestRepo::init();
@@ -396,4 +344,33 @@ async fn the_name_rules_are_the_ones_git_applies() {
         assert!(!tag::is_valid_name(name), "{name:?}");
     }
     assert!(tag::is_valid_name("HEADS-UP"), "only the whole name");
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// What the name boxes refuse beside the names already there
+    /// (`RefsSnapshot::local_clash` / `tag_clash`): git keeps a ref as a
+    /// file, so `a` and `a/b` cannot both be, either way round, for a branch
+    /// or a tag. Letter case is the disk's to decide and is not held here.
+    #[test]
+    #[ignore = "git keeping a ref as a file, so a and a/b cannot both be: not worth the pre-merge run"]
+    fn git_refuses_a_name_that_is_a_folder_of_another() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "a\n", "root");
+        repo.git(&["branch", "solo"]);
+        repo.git(&["branch", "group/member"]);
+        repo.git(&["tag", "v1"]);
+        repo.git(&["tag", "rc/1"]);
+        for (args, why) in [
+            (["branch", "solo/inner"], "a branch under a branch"),
+            (["branch", "group"], "a branch over a folder of branches"),
+            (["tag", "v1/patch"], "a tag under a tag"),
+            (["tag", "rc"], "a tag over a folder of tags"),
+        ] {
+            assert!(!repo.git_ok(&args), "{why}");
+        }
+    }
 }

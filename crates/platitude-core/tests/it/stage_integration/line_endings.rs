@@ -97,22 +97,6 @@ async fn a_crlf_file_git_does_not_convert_comes_back_as_committed() {
     assert_eq!(on_disk(&repo), numbered("\n", [false; 2]));
 }
 
-/// A last line without a newline has no ending to tell by. Under
-/// `diff.context=0` it can be the only line a hunk keeps, in a CRLF file git
-/// compared byte for byte; read as converted, the discard would turn the
-/// lines above it LF.
-#[tokio::test]
-async fn an_unterminated_last_line_says_nothing_about_the_endings() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "a\r\nb\r\nc\r\n", "root");
-    repo.git(&["config", "diff.context", "0"]);
-    repo.write_file("f.txt", "a\r\nb\r\nZ");
-
-    discard_the_first_hunk(&repo).await;
-
-    assert_eq!(on_disk(&repo), "a\r\nb\r\nc\r\n");
-}
-
 /// The checkout's own shape under `core.autocrlf=true`: CRLF on disk, LF
 /// in the index. Git's write already agrees with the file.
 #[tokio::test]

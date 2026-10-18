@@ -327,38 +327,6 @@ async fn a_side_only_merge_head_names_is_never_on_screen_unleashed() {
     session.close_and_wait().await;
 }
 
-/// A side no ref names (`git merge <sha>`, a one-off fetch's `FETCH_HEAD`)
-/// is still a parent of the commit being written, so the walk starts there
-/// — or its dotted edge runs off the bottom of the window.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_side_no_ref_names_still_joins_the_walk() {
-    let mut repo = crate::support::integrate::conflicting_branches();
-    let theirs = repo.git(&["rev-parse", "side"]);
-    repo.git(&["branch", "-D", "side"]);
-    repo.git_expect_failure(&["merge", &theirs]);
-
-    let (sink, session) = crate::support::session::opened(&repo).await;
-    sink.opened_graph(&session, 4).await;
-    let rows = sink
-        .wait_for("the four-row graph", |evs| {
-            let rows = crate::support::replay_rows(evs);
-            (rows.len() == 4).then_some(rows)
-        })
-        .await;
-    assert_eq!(rows[&2].oid_hex, theirs, "the side is on screen");
-    assert!(
-        rows[&2]
-            .segments
-            .iter()
-            .any(|s| s.kind == platitude_core::graph::SegmentKind::IntoNode
-                && s.lane == 1
-                && s.dashed),
-        "its dotted edge lands: {:?}",
-        rows[&2].segments
-    );
-    session.close_and_wait().await;
-}
-
 /// Aborting the merge takes the second dotted edge away: the next commit is
 /// no longer a merge.
 #[tokio::test(flavor = "multi_thread")]

@@ -173,90 +173,6 @@ async fn a_lock_keeps_the_folder() {
     assert!(Path::new(&from).exists());
 }
 
-/// The repository's own worktree is never git's to move.
-#[tokio::test]
-async fn the_main_worktree_is_refused() {
-    let (mut repo, _loose) = with_loose_worktree("loose");
-    let main = repo.git(&["rev-parse", "--show-toplevel"]);
-    let to = worktrees::renamed_worktree_path(&main, "elsewhere");
-
-    let err = rename(&repo, &main, &to)
-        .await
-        .expect_err("git refuses the main worktree");
-
-    refused_by_git(&err, "is a main working tree");
-    assert!(repo.path.join("a.txt").exists());
-}
-
-/// A worktree whose folder is gone has nothing to rename, and a path git
-/// still lists for one is not free.
-#[tokio::test]
-async fn a_gone_folder_and_the_path_still_listed_for_one_are_gits_to_refuse() {
-    let (mut repo, from) = with_loose_worktree("here");
-    let gone_at = repo.path.with_file_name("gone");
-    repo.git(&["worktree", "add", "--detach", &gone_at.to_string_lossy()]);
-    let gone = listed_path(&mut repo, "gone").unwrap();
-    std::fs::remove_dir_all(&gone_at).unwrap();
-
-    let err = rename(
-        &repo,
-        &gone,
-        &worktrees::renamed_worktree_path(&gone, "back"),
-    )
-    .await
-    .expect_err("nothing there to move");
-    refused_by_git(&err, "does not exist");
-
-    let err = rename(&repo, &from, &gone)
-        .await
-        .expect_err("git still lists a worktree there");
-    refused_by_git(&err, "already registered worktree");
-    assert!(Path::new(&from).exists());
-}
-
-/// Submodules checked out in a worktree keep it where it is.
-#[tokio::test]
-async fn checked_out_submodules_keep_the_folder() {
-    let mut sub = TestRepo::init();
-    sub.commit_file("s.txt", "s\n", "sub root");
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "a\n", "root");
-    let url = sub.path.to_string_lossy().replace('\\', "/");
-    repo.git(&[
-        "-c",
-        "protocol.file.allow=always",
-        "submodule",
-        "add",
-        &url,
-        "sub",
-    ]);
-    repo.git(&["commit", "-m", "add sub"]);
-    let at = repo.path.with_file_name("with-sub");
-    repo.git(&["worktree", "add", "--detach", &at.to_string_lossy()]);
-    repo.git_in(
-        &at,
-        &[
-            "-c",
-            "protocol.file.allow=always",
-            "submodule",
-            "update",
-            "--init",
-        ],
-    );
-    let from = listed_path(&mut repo, "with-sub").unwrap();
-
-    let err = rename(
-        &repo,
-        &from,
-        &worktrees::renamed_worktree_path(&from, "moved"),
-    )
-    .await
-    .expect_err("git keeps a worktree with submodules");
-
-    refused_by_git(&err, "submodules");
-    assert!(at.exists());
-}
-
 /// The worktree a session stands in: the session stands down and git moves
 /// the folder from the repository's own directory. Nothing is read behind
 /// it: the tab stands in the new place on a session of its own.
@@ -311,4 +227,97 @@ async fn another_worktree_moves_and_the_listing_names_it_anew() {
     });
     assert!(named > 0, "a listing names the new folder");
     session.close_and_wait().await;
+}
+
+/// What git itself does behind the fixed command lines the tests above
+/// pass — left to the full gate (rules-refs/core.md `periodic`).
+mod periodic {
+    use super::*;
+
+    /// The repository's own worktree is never git's to move.
+    #[tokio::test]
+    #[ignore = "git's own refusal to move its main worktree: not worth the pre-merge run"]
+    async fn the_main_worktree_is_refused() {
+        let (mut repo, _loose) = with_loose_worktree("loose");
+        let main = repo.git(&["rev-parse", "--show-toplevel"]);
+        let to = worktrees::renamed_worktree_path(&main, "elsewhere");
+
+        let err = rename(&repo, &main, &to)
+            .await
+            .expect_err("git refuses the main worktree");
+
+        refused_by_git(&err, "is a main working tree");
+        assert!(repo.path.join("a.txt").exists());
+    }
+
+    /// A worktree whose folder is gone has nothing to rename, and a path git
+    /// still lists for one is not free.
+    #[tokio::test]
+    #[ignore = "git's refusals over a folder that is gone and a place it still lists: not worth the pre-merge run"]
+    async fn a_gone_folder_and_the_path_still_listed_for_one_are_gits_to_refuse() {
+        let (mut repo, from) = with_loose_worktree("here");
+        let gone_at = repo.path.with_file_name("gone");
+        repo.git(&["worktree", "add", "--detach", &gone_at.to_string_lossy()]);
+        let gone = listed_path(&mut repo, "gone").unwrap();
+        std::fs::remove_dir_all(&gone_at).unwrap();
+
+        let err = rename(
+            &repo,
+            &gone,
+            &worktrees::renamed_worktree_path(&gone, "back"),
+        )
+        .await
+        .expect_err("nothing there to move");
+        refused_by_git(&err, "does not exist");
+
+        let err = rename(&repo, &from, &gone)
+            .await
+            .expect_err("git still lists a worktree there");
+        refused_by_git(&err, "already registered worktree");
+        assert!(Path::new(&from).exists());
+    }
+
+    /// Submodules checked out in a worktree keep it where it is.
+    #[tokio::test]
+    #[ignore = "git's refusal to move a worktree with submodules checked out: not worth the pre-merge run"]
+    async fn checked_out_submodules_keep_the_folder() {
+        let mut sub = TestRepo::init();
+        sub.commit_file("s.txt", "s\n", "sub root");
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "a\n", "root");
+        let url = sub.path.to_string_lossy().replace('\\', "/");
+        repo.git(&[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            &url,
+            "sub",
+        ]);
+        repo.git(&["commit", "-m", "add sub"]);
+        let at = repo.path.with_file_name("with-sub");
+        repo.git(&["worktree", "add", "--detach", &at.to_string_lossy()]);
+        repo.git_in(
+            &at,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "update",
+                "--init",
+            ],
+        );
+        let from = listed_path(&mut repo, "with-sub").unwrap();
+
+        let err = rename(
+            &repo,
+            &from,
+            &worktrees::renamed_worktree_path(&from, "moved"),
+        )
+        .await
+        .expect_err("git keeps a worktree with submodules");
+
+        refused_by_git(&err, "submodules");
+        assert!(at.exists());
+    }
 }
