@@ -67,7 +67,17 @@ gate が何に時間を払っているかの実測。**出典は gate 自身の�
 |---|---|---|
 | host の動詞 398 行・コンテナの動詞 25 行(反映前テストの機械化.md §段ごとに何を回すか)・`test gate` 無し | 177s / 181s | 2.73s / 2.74s |
 
-- 段 3(`gate --whole`)は census の全行(569 行。twin は census に載らない)を両側で回す
+- **段分け表の現在**(`cargo xtask verbs`): 反映前に host で回る行 **556**、うちコンテナでも回る `fonts` 41、段 3 だけの `whole` 275、twin 49(census 840 行)。表の 1 行は壁時計 0.49s の傾き(反映前テストの機械化.md §1 行を消すと何が減るのか)
+- **反映前の gate の 2 本の律速**(席 6 つの台帳 150 本、2026-10-10〜10-18、他席と同居した run を含む。host 613 行・`qmltest` が鎖の先頭だった時): 壁時計 6〜8 分。**host の動詞**は 366〜485s に終わり、**checks 群の鎖**(`qmltest` 中央値 89.5s / p90 114s → clippy → test → `shipped`)は xtask / app を触った差分で 264〜330s、`test it` が入る差分と負荷下で 559〜619s に伸びて動詞を越える。動詞の行を減らして届く床は鎖の終わり(`qmltest` の中身は code-costs §テストとハーネス)
+- **`qmltest` を鎖の外の群へ**(`plan::Step::beside`)**の A/B** —— runner 2 本・同じ木・同じ commit(Main.qml のコメント 1 行 + xtask の差分 = 動詞 597・`test xtask` / `test gate` / `shipped` 入り)・他席の gate と同居しない窓、before → after → before → after:
+
+  | runner | 壁時計 | host の動詞の終わり | checks の鎖の終わり | Linux 側の終わり |
+  |---|---|---|---|---|
+  | before(`qmltest` が鎖の先頭) | 317s / 312s | 317 / 312 | 225 / 220 | 169 / 168 |
+  | after(`qmltest` は隣) | 310s | 310 | **122** | **115** |
+
+  鎖の床が 100s 下がり(`clippy xtask` が 101s → 3s 開始)、壁時計は動詞 556 行(290〜310s)が決めるので動かない。差が壁時計に出るのは鎖が律速の差分(`test it` 入り・負荷下)。席 a の gate と 519s 同居した after の 1 本は 546s(予算待ち 1575s)で、同居は比較に使えない
+- 段 3(`gate --whole`)は census の全行(twin は census に載らない)を両側で回す
 - `test gate` は gate 自身の道具に触れた時だけ選ばれる(反映前テストの機械化.md `graph::Carried`)。1 本は静かな機械で
   34〜36s、重なった gate を含む台帳(重い gate 120 本)では中央値 131s で、走っている間 host の動詞 1 本が中央値で
   1.89 倍になる

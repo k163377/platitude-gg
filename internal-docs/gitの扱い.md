@@ -224,7 +224,7 @@ merge 中の amend・unmerged)。残る失敗は常に外が断った物。
 | 置き直すコミットのフック・署名・ロック | 文 + 止まり、または trace2 | 日常(husky・署名) | `rebase --abort` で戻してから報せ `RewriteCommitHook` / `RewriteUnsigned` / `RewriteLocked` |
 | 最初の checkout が untracked を上書き | `untracked working tree files would be overwritten by checkout` exit 1 | ある(git の前に推さない —— carry が先に退ける) | 報せ `RewriteUntrackedInTheWay` |
 | conflict・`edit`・空になった pick の停止 | exit 1 + `rebase-merge` | 日常 | 停止(帯と出口カード) |
-| `rebase.missingCommitsCheck=error` | — | 起きない: 検査は todo から消えた行だけを数え(rebase-interactive.c `todo_list_check`)、プランは `drop` 行を書く(網 `drop::a_readers_missing_commits_check_never_sees_the_plans_drop_lines`) | — |
+| `rebase.missingCommitsCheck=error` | — | 起きない: 検査は todo から消えた行だけを数え(rebase-interactive.c `todo_list_check`)、プランは `drop` 行を書く(網 `sequencer::todo::tests::every_action_is_spelled_and_a_drop_is_a_line_of_its_own`、git の側は段 3 の `drop::periodic::a_readers_missing_commits_check_never_sees_the_plans_drop_lines`) | — |
 
 ### 改名(ブランチ / タグ / stash)・worktree のフォルダ名
 
