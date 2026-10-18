@@ -312,19 +312,48 @@ fn modified(path: &Path) -> Option<std::time::SystemTime> {
 /// one that sees every claim written and every process started or ended
 /// before it; None once the holder has quit. A claim's write wakes the
 /// holder at once; news no hook brings (a process, a transcript grown)
-/// waits for its tick — a hook's write would also start a holder that had
+/// would wait for its tick, so the reading is asked for ([`touched`]) —
+/// not through a hook's write, which would also start a holder that had
 /// quit, and hide one that should not have. A reading copies the claims
 /// under the lock and names itself under it again later, so a name
 /// written after this call may still be a reading copied before it: the
 /// name says when its reading copied the claims, on the same clock.
 fn next_reading(dir: &Path) -> Option<String> {
     let since = crate::awake::now_ms();
+    touched(dir);
     crate::wait::until(
         "the holder's next reading",
         || named(dir),
         |named| named.as_ref().is_none_or(|(_, _, read)| *read >= since),
     )
     .map(|(_, verdict, _)| verdict)
+}
+
+/// One claim of `dir` written again with its own bytes, under the lock: a
+/// `Changed` event for the holder's watcher (`*.claim`, LastWrite), which
+/// begins a reading, and nothing for the reading itself — the holder's
+/// write-back compares content. The tick (`TICK`) is the holder's floor for
+/// news no hook brings; the one test of it
+/// (`a_working_claim_holds_until_its_claude_process_is_gone`) does not call
+/// this, every other test asks. The claim written is the first by name; a
+/// directory with no claim yet, or whose first claim another process holds
+/// open (`a_claim_held_open_costs_the_holder_a_reading_not_its_run` writes
+/// claim `a`, which sorts first), is left to the tick.
+fn touched(dir: &Path) {
+    let _held = crate::awake::lock(dir).expect("the lock");
+    let claim = std::fs::read_dir(dir)
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "claim"))
+        .min();
+    if let Some(claim) = claim
+        && let Ok(bytes) = std::fs::read(&claim)
+    {
+        std::fs::write(&claim, bytes).expect("the claim written again");
+    }
 }
 
 /// The holder's next beat after this call, whatever its reading made of
@@ -639,6 +668,7 @@ fn a_reader_holding_its_name_costs_the_holder_a_beat_not_its_run() {
     // The holder rewrites the claim for the notice and writes its name in
     // the same reading, under the lock the claim is read under here.
     append(&path, &[&notice(crate::awake::now_ms())]);
+    touched(&dir);
     crate::wait::until(
         "the notice's turn",
         || session(&dir).state,
@@ -681,10 +711,12 @@ fn a_claim_held_open_costs_the_holder_a_reading_not_its_run() {
         .expect("the claim, held open");
     let held_at = crate::awake::now_ms();
     // A claim written wakes the holder. The first beat after it may be a
-    // reading that copied the claims before the hold; the second began
-    // after the first ended, and could copy nothing.
+    // reading that copied the claims before the hold; the second, asked
+    // for once the first has beaten, began after it ended, and could copy
+    // nothing.
     planted(&dir, &dir.join(claim_file("a")), &claim_of(SYSTEM));
     next_beat(&dir);
+    touched(&dir);
     next_beat(&dir);
     let (named_pid, verdict, read) = named(&dir).expect("the holder's name");
     assert_eq!(
@@ -882,6 +914,9 @@ fn a_holder_lets_the_pipes_of_its_hook_close() {
 /// A working claim holds the machine for as long as its Claude process
 /// lives; once the process is gone, the holder drops the claim within a
 /// tick — no file says a process ended — and, with no claim left, quits.
+/// Nothing asks the holder for that reading here ([`touched`] is not
+/// called): this is the one test of the tick itself, the floor the live
+/// holder has when a Claude exits with no hook behind it.
 #[test]
 fn a_working_claim_holds_until_its_claude_process_is_gone() {
     let dir = scratch("owner-gone");
