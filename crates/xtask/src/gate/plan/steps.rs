@@ -277,11 +277,12 @@ fn qmltest_steps(reach: &Reach, everything: bool) -> Vec<Step> {
     // The qmldir counts (it declares the singletons), and so does the
     // runner, whose staging a run resolves through — when its code moved,
     // not when the QML it stages did (`graph::Carried`); of the tests
-    // directory only the files the runner picks up by name.
+    // directory every file the tests read — their own and the helpers they
+    // import —, which is all of it but the prose.
     let reads = |(file, carried): (&String, &Carried)| {
         (file == QMLTEST && *carried == Carried::Whole)
             || under(file, &ui)
-            || (under(file, &tests) && file.ends_with(".qml") && stem_of(file).starts_with("tst_"))
+            || (under(file, &tests) && !file.ends_with(".md"))
     };
     if !everything && !reach.iter().any(reads) {
         return Vec::new();

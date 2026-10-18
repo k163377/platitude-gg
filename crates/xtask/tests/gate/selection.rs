@@ -424,6 +424,18 @@ fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
     let ran = without_always(&sb.ran());
     assert!(ran.is_empty(), "{ran:?}");
 
+    // A helper beside them is what the tests that import it read: it owes
+    // the runner as they do.
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/tests/qml/painted.js",
+        ".pragma library\nfunction ink() { return 1 }\n",
+    );
+    sb.commit_all(&sb.seat, "test(app-ui): a helper the tests share", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = without_always(&sb.ran());
+    assert_eq!(ran, set(&["qmltest", "qmltest-linux"]), "{ran:?}");
+
     // The staging is what a run resolves through; nothing else exercises
     // a change to the runner.
     sb.write(
