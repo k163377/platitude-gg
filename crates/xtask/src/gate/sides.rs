@@ -52,7 +52,7 @@ pub(super) fn run_sides(
     let started = std::time::Instant::now();
     println!(
         "gate: verbs {jobs} at a time per side, every unit of both sides out of the machine's \
-         one budget of {}{}; a side's checks run beside its verbs",
+         one budget of {}{}; a side's checks, its verbs and what reads no build directory run beside each other",
         crate::budget::demand(count),
         if landing {
             " (a landing's units go ahead of the other gates')"
@@ -188,21 +188,26 @@ pub(super) fn rank(landing: bool) -> crate::budget::Rank {
 }
 
 /// One side's steps from `from` on (the always-steps before it ran ahead
-/// of both sides in [`run_sides`]), as two groups that share no build
-/// directory and so run beside each other: the checks ([`in_order`]) and
-/// the built app ([`against_the_build`]), which alone read the release
-/// the first verb builds. Beside each other they slow each other, and the
-/// side still ends sooner than as a sum
-/// (internal-docs/反映前テストの機械化.md §実測).
+/// of both sides in [`run_sides`]), as three groups that share no build
+/// directory and so run beside each other: the checks ([`in_order`]) over
+/// cargo's directories, the built app ([`against_the_build`]), which alone
+/// reads the release the first verb builds, and the steps that read neither
+/// (`Step::beside`), each a chain of its own ([`in_order`]). Beside each
+/// other they slow each other, and the side still ends sooner than as a
+/// sum (internal-docs/反映前テストの機械化.md §実測).
 fn side(ground: &Ground<'_>, steps: &[&Required], from: usize, jobs: usize) -> Vec<String> {
-    let (built, checks): (Vec<_>, Vec<_>) = (from..steps.len())
+    let (built, rest): (Vec<_>, Vec<_>) = (from..steps.len())
         .map(|i| (i, steps[i]))
         .partition(|(_, r): &(usize, &Required)| r.step.release);
+    let (beside, checks): (Vec<_>, Vec<_>) = rest
+        .into_iter()
+        .partition(|(_, r): &(usize, &Required)| r.step.beside);
     std::thread::scope(|scope| {
         let checks = scope.spawn(|| in_order(ground, &checks));
+        let beside = scope.spawn(|| in_order(ground, &beside));
         let built = scope.spawn(|| against_the_build(ground, &built, jobs));
         let mut failures = Vec::new();
-        for handle in [checks, built] {
+        for handle in [checks, beside, built] {
             match handle.join() {
                 Ok(mut group) => failures.append(&mut group),
                 Err(_) => failures.push(format!("a group of the {} side panicked", ground.name)),
@@ -212,7 +217,8 @@ fn side(ground: &Ground<'_>, steps: &[&Required], from: usize, jobs: usize) -> V
     })
 }
 
-/// The checks group: one at a time, stopping at the first red.
+/// A chain — the checks group, or the steps beside both chains — one at a
+/// time, stopping at the first red.
 fn in_order(ground: &Ground<'_>, steps: &[(usize, &Required)]) -> Vec<String> {
     for (n, (index, required)) in steps.iter().enumerate() {
         if let Err(why) = run_one(ground, *index, required, false) {

@@ -492,6 +492,7 @@ mod tests {
                 always: false,
                 builds_app: false,
                 release: false,
+                beside: false,
                 command: words(&["cargo", "run", "--locked", "-p", "xtask", "--"])
                     .into_iter()
                     .chain(line.split_whitespace().map(String::from))

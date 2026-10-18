@@ -38,6 +38,7 @@ fn step<S: AsRef<str>>(
         always,
         builds_app: false,
         release: false,
+        beside: false,
         command,
         inputs: inputs.iter().map(|s| s.as_ref().to_string()).collect(),
     }
@@ -288,16 +289,19 @@ fn qmltest_steps(reach: &Reach, everything: bool) -> Vec<Step> {
     let inputs = [ui, tests, QMLTEST.to_string()];
     let mut linux_inputs = inputs.to_vec();
     linux_inputs.extend(IMAGE.map(String::from));
-    vec![
-        step("qmltest", Side::Host, false, xtask(&["qmltest"]), &inputs),
-        step(
-            "qmltest-linux",
-            Side::Linux,
-            false,
-            xtask(&["linux", "qmltest"]),
-            &linux_inputs,
-        ),
-    ]
+    let mut host = step("qmltest", Side::Host, false, xtask(&["qmltest"]), &inputs);
+    let mut linux = step(
+        "qmltest-linux",
+        Side::Linux,
+        false,
+        xtask(&["linux", "qmltest"]),
+        &linux_inputs,
+    );
+    // Qt's runner over a staging copy: no cargo directory and no release,
+    // so neither chain has to wait for it (`gate::sides::side`).
+    host.beside = true;
+    linux.beside = true;
+    vec![host, linux]
 }
 
 /// The files a stopped run's record passes through: what the app writes,
@@ -739,6 +743,23 @@ mod tests {
         assert_eq!(
             super::xtask(&["structure"]),
             ["cargo", "run", "--locked", "-p", "xtask", "--", "structure"]
+        );
+    }
+
+    /// Qt's runner reads neither cargo directory nor the release, so its
+    /// two steps run beside both chains (`gate::sides::side`); a step is
+    /// in neither group unless it says so, and the always-steps run ahead
+    /// of everything.
+    #[test]
+    fn the_qt_runner_runs_beside_both_chains() {
+        let qml = super::qmltest_steps(&Reach::default(), true);
+        let ids: Vec<&str> = qml.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, ["qmltest", "qmltest-linux"]);
+        assert!(qml.iter().all(|s| s.beside && !s.release), "{ids:?}");
+        assert!(
+            super::always_steps()
+                .iter()
+                .all(|s| !s.beside && !s.release)
         );
     }
 }

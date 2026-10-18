@@ -38,6 +38,11 @@ pub(crate) struct Step {
     /// Reads the release the side's verbs build (a verb, or `bare`), so
     /// runs in the side's built-app group (`gate::sides::side`).
     pub release: bool,
+    /// Shares no build directory with either group — neither cargo's
+    /// `target/debug` and `target/shipped` nor the verbs' release — so runs
+    /// beside both instead of in the checks' chain (`qmltest`: Qt's own
+    /// runner over a staging copy of the QML).
+    pub beside: bool,
     pub command: Vec<String>,
     /// What the step reads, as workspace paths (a directory covers
     /// everything under it): the cache key is their object ids.
