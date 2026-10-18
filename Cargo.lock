@@ -693,6 +693,7 @@ dependencies = [
  "insta",
  "mry",
  "png",
+ "regex",
  "smallvec",
  "syntect",
  "tempfile",

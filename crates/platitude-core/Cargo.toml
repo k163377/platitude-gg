@@ -63,6 +63,10 @@ tree-sitter-typescript = "0.23"
 tree-sitter-xml = "0.7"
 tree-sitter-yaml = "0.7"
 tree-sitter-zig = "1.1"
+# The find bar's patterns (`textfind`): a typed line, escaped or as a
+# regular expression, over a diff's lines. Already in the tree under
+# syntect's `regex-fancy`; linear in the input, no lookaround.
+regex = "1"
 # The regex fallback. `regex-fancy`: the default Oniguruma's Regex is not
 # Send, so it could not leave the UI's runtime.
 syntect = { version = "5.3", default-features = false, features = [

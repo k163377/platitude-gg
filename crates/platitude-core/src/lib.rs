@@ -60,6 +60,7 @@ mod status_tests;
 pub mod tag;
 #[cfg(test)]
 mod temp;
+pub mod textfind;
 pub mod trailers;
 pub mod version;
 #[cfg(test)]
