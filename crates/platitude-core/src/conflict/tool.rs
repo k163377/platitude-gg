@@ -40,21 +40,27 @@ pub async fn mergetool(
             message: "no merge tool is configured: set merge.guitool or merge.tool".to_string(),
         });
     };
-    let cmd = GitCommand::new()
+    executor
+        .run(mergetool_command(workdir, &tool, paths), cancel)
+        .await
+        .map(drop)
+}
+
+/// The launch itself, as a command: `--gui` makes git resolve the tool as
+/// [`configured_tool`] does (without it a lone `merge.guitool` is ignored).
+/// `--tool` too: `--no-prompt` does not cover git's guessing path, which
+/// asks on the closed stdin. Paced by the person in the tool
+/// (`process::Pace`).
+fn mergetool_command(workdir: &Path, tool: &str, paths: &[String]) -> GitCommand {
+    GitCommand::new()
         .cwd(workdir)
         .args(MERGETOOL_ARGS)
-        // `--gui` makes git resolve the tool as [`configured_tool`] does
-        // (without it a lone `merge.guitool` is ignored). `--tool` too:
-        // `--no-prompt` does not cover git's guessing path, which asks on
-        // the closed stdin.
         .args(["mergetool", "--gui", "--no-prompt"])
         .arg(format!("--tool={tool}"))
         .arg("--")
         .args(paths.iter().map(|p| literal_pathspec(p)))
         .no_timeout()
-        // Paced by the person in the tool (`process::Pace`).
-        .paced_elsewhere();
-    executor.run(cmd, cancel).await.map(drop)
+        .paced_elsewhere()
 }
 
 /// The merge tool git would launch (`merge.guitool`, else `merge.tool`).
