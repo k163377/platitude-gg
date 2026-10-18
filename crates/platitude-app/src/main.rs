@@ -160,6 +160,7 @@ fn main() {
     qrc::embed!("ui/CutName.qml");
     qrc::embed!("ui/DiffCodeScroll.qml");
     qrc::embed!("ui/DiffFileNotices.qml");
+    qrc::embed!("ui/DiffFindBar.qml");
     qrc::embed!("ui/DiffPane.qml");
     qrc::embed!("ui/DiffPaneHeader.qml");
     qrc::embed!("ui/DiffReach.qml");
@@ -177,6 +178,7 @@ fn main() {
     qrc::embed!("ui/FileRowMenu.qml");
     qrc::embed!("ui/FileRowWalk.qml");
     qrc::embed!("ui/FindBar.qml");
+    qrc::embed!("ui/FindOptionGlyph.qml");
     qrc::embed!("ui/FocusRelease.qml");
     qrc::embed!("ui/FoldBlock.qml");
     qrc::embed!("ui/FormField.qml");

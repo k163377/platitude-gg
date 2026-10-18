@@ -26,7 +26,7 @@ fn said(sel: &Optional<Washed>) -> String {
 const TAB: &str = "\t";
 
 /// The rows laid out by hand (`rows::line_items`) — no QObject side here.
-fn model(patch: &str, coloured: bool) -> DiffModel {
+pub(super) fn model(patch: &str, coloured: bool) -> DiffModel {
     let patches = parse_patch(patch.as_bytes());
     let colors = if coloured {
         platitude_core::highlight::colors(&patches, None)
@@ -274,7 +274,7 @@ fn the_moving_end_follows_the_hand_in_the_places_its_row_spells() {
 
 /// The rows laid out side by side (`encode::pair_rows`), coloured — a
 /// fence is the highlighter's to say (`highlight::LineColors.fence`).
-fn split_model(patch: &str) -> DiffModel {
+pub(super) fn split_model(patch: &str) -> DiffModel {
     let patches = parse_patch(patch.as_bytes());
     let colors = platitude_core::highlight::colors(&patches, None);
     DiffModel {

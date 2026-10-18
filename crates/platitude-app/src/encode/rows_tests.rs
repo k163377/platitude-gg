@@ -5,6 +5,8 @@ use platitude_core::highlight::DiffColors;
 use super::*;
 use platitude_core::parse::diff::parse_patch;
 
+use super::markup::{Run, Runs};
+
 #[test]
 fn rows_carry_the_markup_the_theme_gave_them() {
     let patch = "\
@@ -539,15 +541,21 @@ fn the_pairing_reads_runs_the_way_the_emphasis_does() {
 fn the_marks_round_trip_with_and_without_a_right_side() {
     use qtbridge::qtbridge_type_lib::{QString, QVariant};
 
+    // The find bar's runs differ side by side and key by key, so a swapped
+    // key or side is seen.
     let own = LineMarks {
         fence: true,
         no_newline: false,
         side: "ours".into(),
+        found: Runs::new(vec![Run { from: 1, len: 2 }, Run { from: 6, len: 1 }]),
+        found_now: Runs::new(vec![Run { from: 6, len: 1 }]),
     };
     let pair = LineMarks {
         fence: false,
         no_newline: true,
         side: String::new(),
+        found: Runs::new(vec![Run { from: 0, len: 3 }]),
+        found_now: Runs::default(),
     };
     let both = Marks {
         own: own.clone(),

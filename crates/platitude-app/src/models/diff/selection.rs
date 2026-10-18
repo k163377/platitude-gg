@@ -35,8 +35,8 @@ enum Wash {
 /// The rows a selection covers, first and last inclusive.
 type Span = (usize, usize);
 
-/// The new side of a split row.
-const RIGHT: i32 = 1;
+/// The new side of a split row (the find bar's marks read it too, `find`).
+pub(super) const RIGHT: i32 = 1;
 
 impl DiffModel {
     /// The source line (the file's own bytes) column `side` of row `row`

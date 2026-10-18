@@ -19,6 +19,9 @@ use crate::hub::{DiffMsg, Feed};
 
 use super::{impl_extend_notified, impl_notify_runs, push_run, qml_register};
 
+mod find;
+#[cfg(test)]
+mod find_tests;
 mod qobject;
 mod rows;
 mod selection;
@@ -189,6 +192,18 @@ pub struct DiffModel {
     /// stays false for a language with no rules. Nothing is drawn from it —
     /// it is what a headless run waits on (`colour-place`).
     coloured: bool,
+    /// The find bar's typed lines and how they are read, what they hit in
+    /// the rows, the hit the bar stands on (1-based, 0 for none) and its
+    /// row, how many there are, whether a query stands at all, and why one
+    /// could not be read (`find`).
+    find_text: String,
+    find_options: platitude_core::textfind::Options,
+    find_hits: Vec<platitude_core::textfind::Hit>,
+    find_at: i32,
+    find_row: i32,
+    find_count: i32,
+    find_searching: bool,
+    find_error: String,
     /// "" (text diff only) / "image" / "binary".
     preview_kind: String,
     /// `file:` URLs for the image sides ("" = no renderable image there):

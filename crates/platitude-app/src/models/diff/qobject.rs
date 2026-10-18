@@ -54,6 +54,11 @@ impl DiffModel {
     qproperty!("selActive", Member = sel_active, Notify = changed);
     qproperty!("selHasNew", Member = sel_has_new, Notify = changed);
     qproperty!("selRemoved", Member = sel_removed, Notify = changed);
+    // The find bar's answers (デザイン規約 §diff の中を探す): properties, so the count follows a re-lay nobody typed for.
+    qproperty!("findCount", Member = find_count, Notify = changed);
+    qproperty!("findAt", Member = find_at, Notify = changed);
+    qproperty!("findSearching", Member = find_searching, Notify = changed);
+    qproperty!("findError", Member = find_error, Notify = changed);
 
     #[qsignal]
     pub(super) fn changed(&mut self);
@@ -83,6 +88,47 @@ impl DiffModel {
         }
         self.relay_rows(split);
         self.changed();
+    }
+
+    /// The find bar's lines as typed, read as the options say, searched at
+    /// once over the rows that stand; empty text takes the marks off. The
+    /// bar then asks where to stand (`find_from`).
+    #[qslot]
+    fn set_find(&mut self, text: String, match_case: bool, whole_word: bool, regex: bool) {
+        self.set_find_query(
+            text,
+            platitude_core::textfind::Options {
+                match_case,
+                whole_word,
+                regex,
+            },
+        );
+        self.changed();
+    }
+
+    /// Stands on the first hit at or after `row`, round to the first; says
+    /// its row, -1 for none.
+    #[qslot]
+    fn find_from(&mut self, row: i32) -> i32 {
+        let at = self.find_from_row(row);
+        self.changed();
+        at
+    }
+
+    /// The next hit, round to the first past the last; its row, -1 for none.
+    #[qslot]
+    fn find_next(&mut self) -> i32 {
+        let at = self.find_step(1);
+        self.changed();
+        at
+    }
+
+    /// The previous hit, round to the last before the first; its row, -1 for none.
+    #[qslot]
+    fn find_previous(&mut self) -> i32 {
+        let at = self.find_step(-1);
+        self.changed();
+        at
     }
 
     /// How the split rows came out, for `diff-split` (a picture cannot say

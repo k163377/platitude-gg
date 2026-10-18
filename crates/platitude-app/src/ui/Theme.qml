@@ -151,6 +151,11 @@ QtObject {
     readonly property color diffRemovedFg: "#F87171"
     readonly property color diffRemovedBg: "#351515"
     readonly property color diffRemovedEmphBg: "#5B1E1F"
+    // The find bar's hits in the rows (デザイン規約 §diff の中を探す): `accent` at a quarter under every hit, so the
+    // row's own ground (added green, removed red, plain) and its ink read through; the hit the bar stands on wears
+    // `accentDim` at seven tenths — the same hue a step darker and denser, not another colour (§暗く落とした段).
+    readonly property color diffFindBg: "#403B82F6"
+    readonly property color diffFindCurrentBg: "#B31D4ED8"
     readonly property color diffHunkHeaderFg: "#94A3B8"
     readonly property color diffHunkHeaderBg: "#0F172A"
     readonly property color statusStaged: "#16A34A"

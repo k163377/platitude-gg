@@ -20,6 +20,9 @@ Item {
     /// The reader's selection on this line (`DiffModel.sel` — `{whole, runs}`), empty on every line `Copy` would not
     /// take: the wash is the answer (デザイン規約 §diff の中身をコピーする).
     required property var sel
+    /// The find bar's hits on this line, and the one it stands on, as runs over the drawn text (`LineMarks`).
+    required property var found
+    required property var foundNow
     /// One of git's conflict fences: the words drop their voice (デザイン規約 §シンタックスハイライト).
     required property bool fence
     /// This line ends the file without a newline (デザイン規約 §行末の改行が無いこと).
@@ -55,21 +58,33 @@ Item {
     /// keeps the previous row's wash. The handlers below say when to ask.
     property var emphRects: []
     property var selRects: []
+    property var foundRects: []
+    property var foundNowRects: []
     function settleEmph() {
         cell.emphRects = cell.ruler.rectsOf(cell.text, cell.codeBold, cell.emph)
     }
     function settleSel() {
         cell.selRects = !cell.sel || cell.sel.whole ? [] : cell.ruler.rectsOf(cell.text, cell.codeBold, cell.sel.runs)
     }
+    function settleFound() {
+        cell.foundRects = cell.ruler.rectsOf(cell.text, cell.codeBold, cell.found)
+    }
+    function settleFoundNow() {
+        cell.foundNowRects = cell.ruler.rectsOf(cell.text, cell.codeBold, cell.foundNow)
+    }
     function settleWashes() {
         cell.settleEmph()
         cell.settleSel()
+        cell.settleFound()
+        cell.settleFoundNow()
     }
     // A delegate reused for another row (`reuseItems`) arrives through these same handlers.
     onTextChanged: cell.settleWashes()
     onCodeBoldChanged: cell.settleWashes()
     onEmphChanged: cell.settleEmph()
     onSelChanged: cell.settleSel()
+    onFoundChanged: cell.settleFound()
+    onFoundNowChanged: cell.settleFoundNow()
     Component.onCompleted: cell.settleWashes()
 
     // The stronger wash under what changed (デザイン規約 §シンタックスハイライト), under the Label and sent with it.
@@ -95,6 +110,28 @@ Item {
             width: whole ? Math.max(codeLine.implicitWidth, cell.charW) : modelData.w
             height: parent.height
             color: Theme.bgSelected
+        }
+    }
+    // The find bar's hits, over the selection and under the text: every hit in the lighter wash, the one the bar
+    // stands on in the denser (デザイン規約 §diff の中を探す).
+    Repeater {
+        model: cell.foundRects
+        delegate: Rectangle {
+            required property var modelData
+            x: -cell.codeX + modelData.x
+            width: modelData.w
+            height: cell.height
+            color: Theme.diffFindBg
+        }
+    }
+    Repeater {
+        model: cell.foundNowRects
+        delegate: Rectangle {
+            required property var modelData
+            x: -cell.codeX + modelData.x
+            width: modelData.w
+            height: cell.height
+            color: Theme.diffFindCurrentBg
         }
     }
     Label {

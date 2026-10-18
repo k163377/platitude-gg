@@ -87,6 +87,8 @@ impl DiffModel {
         self.rows_gen = self.rows_gen.wrapping_add(1);
         self.commit_bands = patches.iter().filter(|p| !p.from_commit.is_empty()).count() as i32;
         self.extend_notified(rows);
+        // A query standing over the old rows stands over these.
+        self.refind();
         if crate::harness::memprobe::enabled() {
             crate::harness::memprobe::note("diff-lines", self.tab_id, &self.lines);
         }

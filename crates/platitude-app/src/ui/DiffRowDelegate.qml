@@ -108,9 +108,14 @@ Rectangle {
     readonly property bool noNewline: diffRow.ownMarks.noNewline
     /// "ours" / "theirs" / "" — which side of a conflict the line came from (`side_of_markers`).
     readonly property string side: diffRow.ownMarks.side
+    /// The find bar's hits on this line, and the one it stands on (デザイン規約 §diff の中を探す).
+    readonly property var found: diffRow.ownMarks.found
+    readonly property var foundNow: diffRow.ownMarks.foundNow
     readonly property bool pairFence: diffRow.pairMarks ? diffRow.pairMarks.fence : false
     readonly property bool pairNoNewline: diffRow.pairMarks ? diffRow.pairMarks.noNewline : false
     readonly property string pairSide: diffRow.pairMarks ? diffRow.pairMarks.side : ""
+    readonly property var pairFound: diffRow.pairMarks ? diffRow.pairMarks.found : []
+    readonly property var pairFoundNow: diffRow.pairMarks ? diffRow.pairMarks.foundNow : []
 
     width: diffRow.rowWidth
     height: Theme.rowHeight
@@ -280,6 +285,8 @@ Rectangle {
                 kind: diffRow.kind
                 emph: diffRow.emph
                 sel: diffRow.sel
+                found: diffRow.found
+                foundNow: diffRow.foundNow
                 fence: diffRow.fence
                 noNewline: diffRow.noNewline
                 codeBold: diffRow.codeBold
@@ -332,6 +339,8 @@ Rectangle {
                 required property string textHere
                 required property var emphHere
                 required property var selHere
+                required property var foundHere
+                required property var foundNowHere
                 required property bool fenceHere
                 required property bool noNewlineHere
                 required property bool boldHere
@@ -373,6 +382,8 @@ Rectangle {
                     kind: column.kindHere
                     emph: column.emphHere
                     sel: column.selHere
+                    found: column.foundHere
+                    foundNow: column.foundNowHere
                     fence: column.fenceHere
                     noNewline: column.noNewlineHere
                     codeBold: column.boldHere
@@ -405,6 +416,8 @@ Rectangle {
                 textHere: diffRow.text
                 emphHere: diffRow.emph
                 selHere: diffRow.sel
+                foundHere: diffRow.found
+                foundNowHere: diffRow.foundNow
                 fenceHere: diffRow.fence
                 noNewlineHere: diffRow.noNewline
                 boldHere: diffRow.codeBold
@@ -427,6 +440,8 @@ Rectangle {
                 textHere: diffRow.pair_text
                 emphHere: diffRow.pair_emph
                 selHere: diffRow.pair_sel
+                foundHere: diffRow.pairFound
+                foundNowHere: diffRow.pairFoundNow
                 fenceHere: diffRow.pairFence
                 noNewlineHere: diffRow.pairNoNewline
                 boldHere: diffRow.pairBold

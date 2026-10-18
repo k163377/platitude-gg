@@ -60,6 +60,11 @@ pub struct LineMarks {
     pub fence: bool,
     pub no_newline: bool,
     pub side: String,
+    /// The find bar's hits on this line, and among them the one the bar
+    /// stands on, laid the way the row draws them (デザイン規約 §diff の中を探す).
+    /// Written after the rows by `DiffModel::lay_found`; empty at birth.
+    pub found: crate::encode::markup::Runs,
+    pub found_now: crate::encode::markup::Runs,
 }
 
 impl LineMarks {
@@ -68,7 +73,14 @@ impl LineMarks {
             fence: row.fence,
             no_newline: row.no_newline,
             side: platitude_core::parse::diff::side_of_markers(&row.markers).to_string(),
+            found: Default::default(),
+            found_now: Default::default(),
         }
+    }
+
+    fn heap_bytes(&self) -> usize {
+        use platitude_core::mem::Footprint;
+        self.side.heap_bytes() + self.found.heap_bytes() + self.found_now.heap_bytes()
     }
 }
 
@@ -78,6 +90,8 @@ impl Record for LineMarks {
             .put("fence", &self.fence)
             .put("noNewline", &self.no_newline)
             .put("side", &self.side)
+            .put("found", &self.found)
+            .put("foundNow", &self.found_now)
             .done()
     }
 
@@ -86,6 +100,8 @@ impl Record for LineMarks {
             fence: field(map, "fence")?,
             no_newline: field(map, "noNewline")?,
             side: field(map, "side")?,
+            found: field(map, "found")?,
+            found_now: field(map, "foundNow")?,
         })
     }
 }
@@ -124,7 +140,7 @@ impl Record for Marks {
 
 impl platitude_core::mem::Footprint for Marks {
     fn heap_bytes(&self) -> usize {
-        self.own.side.heap_bytes() + self.pair.as_ref().map_or(0, |p| p.side.heap_bytes())
+        self.own.heap_bytes() + self.pair.as_ref().map_or(0, LineMarks::heap_bytes)
     }
 }
 

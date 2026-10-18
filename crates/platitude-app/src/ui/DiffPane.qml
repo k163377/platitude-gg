@@ -103,6 +103,58 @@ Rectangle {
     function stageLine(hunk, line) {
         diffPane.stageSelectionRequested(hunk, line)
     }
+
+    // ---- the find bar (デザイン規約 §diff の中を探す) --------------------------------------------------------------
+    /// Automation: the strip itself.
+    readonly property alias findBar: findBar
+    /// Ctrl+F while the diff is up (`RepoPage.startFind`): the strip comes up with the caret in it, the lines under
+    /// the hand's selection in the box where there is one.
+    function startFind() {
+        findBar.raise(diffPane.diffModel.selActive ? diffPane.diffModel.selectionText() : "")
+    }
+    /// A press landed elsewhere (`RepoPage.releasePressedAway`) at `scenePos`: an empty strip goes, one with a line
+    /// stays (the graph's rule, §コミットを探す). "Empty" is the model's answer: no query stands (`findSearching`)
+    /// and none was refused (`findError`) — a refused line is a typed one.
+    function dropEmptyFind(scenePos) {
+        if (!findBar.open || diffPane.diffModel.findSearching || diffPane.diffModel.findError !== ""
+                || findBar.holds(scenePos))
+            return
+        findBar.dropAway()
+    }
+    /// Searches again — the strip coming or going, every keystroke, every option — and goes to where it lands: the
+    /// first hit from the top of the view, the view moving only where that hit is off screen. Every keystroke walks
+    /// the rows in memory, no git.
+    function runFind() {
+        diffPane.diffModel.setFind(findBar.open ? findBar.query : "",
+                                   findBar.matchCase, findBar.wholeWord, findBar.regex)
+        diffPane.goToHit(diffPane.diffModel.findFrom(diffList.firstVisibleRow()))
+    }
+    function findNext() { diffPane.goToHit(diffPane.diffModel.findNext()) }
+    function findPrevious() { diffPane.goToHit(diffPane.diffModel.findPrevious()) }
+    /// Puts the view on `row` only when the row is off screen (§コミットを探す, the same rule).
+    function goToHit(row) {
+        if (row < 0 || diffList.rowOnScreen(row))
+            return
+        // A wheel notch still in flight was aimed elsewhere (`WheelGlide.halt`).
+        diffList.haltGlide()
+        diffList.positionViewAtIndex(row, ListView.Center)
+    }
+    // The rows were laid out again under a standing query (another file, one column or two): the model searched
+    // them already (`DiffModel::refind`); this end stands on the first hit without moving the view. The view has no
+    // rows yet to say which is its first (`firstVisibleRow` answers 0), and its own scroll restore is still to land.
+    // **A property, not a `Connections` on the model**: the model's every property notifies on its one `changed`,
+    // so a handler there runs on every search and, asking the model, calls itself without end (rules-refs/app-ui.md).
+    readonly property int rowsGen: diffPane.diffModel.rowsGen
+    onRowsGenChanged: {
+        if (findBar.open)
+            diffPane.diffModel.findFrom(diffList.firstVisibleRow())
+    }
+    // The pane went (the diff closed under the strip): the strip goes with it, and so do the marks. Qt keeps active
+    // focus on an invisible box otherwise.
+    onVisibleChanged: {
+        if (!diffPane.visible)
+            findBar.dropAway()
+    }
     /// Where the pointer is. **The pane works out which row it is over, not the rows** — a rebuilt row is not hovered
     /// until the mouse moves again (rules-refs の `settlePointedRow` の行). **On the pane**: laid over the rows, a
     /// `HoverHandler` takes their hover away.
@@ -414,6 +466,26 @@ Rectangle {
             onCloseRequested: diffPane.closeRequested()
             onSplitChosen: split => diffPane.splitChosen(split)
         }
+        // Under the band, over everything the pane says about the file: the rows step down for it.
+        DiffFindBar {
+            id: findBar
+            Layout.fillWidth: true
+            searching: diffPane.diffModel.findSearching
+            matches: diffPane.diffModel.findCount
+            atMatch: diffPane.diffModel.findAt
+            loaded: diffList.count
+            error: diffPane.diffModel.findError
+            // The model searches what the strip holds: its lines while it is up, nothing once it is down (the marks
+            // come off with it).
+            onOpenChanged: diffPane.runFind()
+            onQueryChanged: diffPane.runFind()
+            onOptionsChanged: diffPane.runFind()
+            onNextRequested: diffPane.findNext()
+            onPreviousRequested: diffPane.findPrevious()
+            // Closed by its `✕` or Escape: the keyboard goes back to the rows (the graph's rule, §矢印で履歴を辿る
+            // 「閉じる所作がグラフへ返している」).
+            onDismissed: rowWalk.handArrived()
+        }
         // What the pane says about the file itself, and the picture that stands in for one no rows can show.
         DiffFileNotices {
             id: fileNotices
@@ -463,6 +535,16 @@ Rectangle {
             /// Something else is moving the view: the notch in flight loses it (`WheelGlide.halt`).
             function haltGlide() {
                 wheelGlide.halt()
+            }
+            /// The row at the top of the view, and whether all of `row` is on screen (as `GraphList`'s): where a
+            /// search starts, and the one test of whether a hit needs the view moved.
+            function firstVisibleRow() {
+                const row = diffList.indexAt(0, diffList.contentY + 1)
+                return row >= 0 ? row : 0
+            }
+            function rowOnScreen(row) {
+                const bottom = diffList.indexAt(0, diffList.contentY + diffList.height - Theme.rowHeight)
+                return row >= diffList.firstVisibleRow() && (bottom < 0 || row <= bottom)
             }
             WheelGlide {
                 id: wheelGlide

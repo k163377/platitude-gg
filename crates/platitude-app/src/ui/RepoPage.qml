@@ -119,6 +119,7 @@ FocusScope {
     function releasePressedAway(scenePos) {
         sidebarPane.stopEdit()
         graphPane.dropEmptyBoxes(scenePos)
+        diffPane.dropEmptyFind(scenePos)
     }
     /// A press landed anywhere in the window (Main's `FocusRelease`): the first press after arriving takes down the
     /// mark that sent the reader here (デザイン規約 §hover のツールチップ).
@@ -705,12 +706,16 @@ FocusScope {
     // One bar over the graph (デザイン規約 §可否・警告の出し場所). Only questions about a ref reach it: taking one named
     // thing away is a hold (デザイン規約 §回数押し).
     /// Ctrl+F is quietly refused while a plan covers the graph, as a standing question refuses it
-    /// (`GraphPane.startFind`).
+    /// (`GraphPane.startFind`). While the diff stands where the graph was, it is the diff that is searched
+    /// (デザイン規約 §diff の中を探す): what is not on screen cannot be asked.
     function startFind() {
         page.dropWithheld()
         if (page.planShown)
             return
-        graphPane.startFind()
+        if (page.diffShown)
+            diffPane.startFind()
+        else
+            graphPane.startFind()
     }
 
     // ---- the interactive-rebase plan ---------------------------------
