@@ -516,10 +516,10 @@ async fn a_choice_stacks_the_patch_of_each_commit_that_touched_the_file() {
     .unwrap();
 
     // Oldest first, as a cherry-pick would apply them. Each names its
-    // commit, or the second reads as more of the first.
+    // commit by its whole id, or the second reads as more of the first.
     assert_eq!(patches.len(), 2);
-    assert!(patches[0].from_commit.ends_with("older chosen"));
-    assert!(patches[1].from_commit.ends_with("newer chosen"));
+    assert_eq!(patches[0].from_commit, format!("{older} older chosen"));
+    assert_eq!(patches[1].from_commit, format!("{newer} newer chosen"));
 
     let lines = |i: usize| -> Vec<(DiffLineKind, String)> {
         patches[i].hunks[0]

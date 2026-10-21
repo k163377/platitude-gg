@@ -198,6 +198,17 @@ new mode 100755
     assert_eq!(rows[1].text, "100644:100755");
 }
 
+/// git hands the band the whole id; it shows the eight digits the chosen
+/// list beside it shows (as markup, like every row's text).
+#[test]
+fn a_band_names_its_commit_at_eight_digits() {
+    let mut stacked = parse_patch(EDITED.as_bytes());
+    stacked[0].from_commit = format!("{} edit it", "0123456789abcdef".repeat(2) + "01234567");
+    let rows = flatten_patches(&stacked, true, &DiffColors::default(), None);
+    assert_eq!(rows[0].kind, "commit");
+    assert_eq!(rows[0].text, "01234567&nbsp;edit&nbsp;it");
+}
+
 #[test]
 fn a_file_that_existed_before_is_not_a_new_one() {
     assert!(!is_new_file(&parse_patch(EDITED.as_bytes())));

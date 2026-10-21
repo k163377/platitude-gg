@@ -126,7 +126,7 @@ pub struct FilePatch {
     /// Which commit this patch is of, as a line to put above it: filled
     /// only where several commits' patches of a file stand one after
     /// another (`DiffTarget::Choice`, デザイン規約 §複数のコミットを選ぶ),
-    /// empty otherwise.
+    /// empty otherwise. The commit's whole id, a space, its summary.
     pub from_commit: String,
     pub hunks: Vec<DiffHunk>,
 }

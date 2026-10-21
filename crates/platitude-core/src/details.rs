@@ -429,7 +429,9 @@ pub async fn file_diff_raw(
                     "--no-ext-diff",
                     "--find-renames",
                     "--diff-merges=first-parent",
-                    "--format=%x01%h %s",
+                    // The whole id: how short to show it is the lists' to say,
+                    // and git's `%h` grows with the repository.
+                    "--format=%x01%H %s",
                 ])
                 .args(oids.iter().rev().map(Oid::to_hex));
             for_paths(c, path, orig_path.as_deref())

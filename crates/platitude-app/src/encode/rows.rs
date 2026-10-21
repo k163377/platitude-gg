@@ -1,5 +1,6 @@
 //! Parsed patches flattened into the rows the diff pane draws.
 
+use platitude_core::Oid;
 use platitude_core::highlight::DiffColors;
 use platitude_core::intraline::IntraMarks;
 use platitude_core::parse::diff::{DiffLineKind, FilePatch};
@@ -220,6 +221,16 @@ fn spanning(kind: &'static str, text: &str, patch: i32) -> DiffRow {
     }
 }
 
+/// A stacked patch's band: its commit as the chosen list beside it names
+/// one — the short id at eight digits, then the summary.
+fn commit_band(from_commit: &str) -> String {
+    let (id, summary) = from_commit.split_once(' ').unwrap_or((from_commit, ""));
+    match Oid::from_hex_str(id) {
+        Ok(oid) => format!("{} {summary}", oid.short_hex(8)),
+        Err(_) => from_commit.to_string(),
+    }
+}
+
 /// Flattens parsed patches into rows (hunk headers inline).
 /// `binary_note` adds the "(binary file)" row — off where a preview
 /// covers the file. `marks` is `None` on the colour repaint, which keeps
@@ -237,7 +248,7 @@ pub fn flatten_patches(
         // binary note included.
         if !patch.from_commit.is_empty() {
             let at = i32::try_from(patch_index).unwrap_or(-1);
-            rows.push(spanning("commit", &patch.from_commit, at));
+            rows.push(spanning("commit", &commit_band(&patch.from_commit), at));
             // That commit's mode change, under its band: the two modes as
             // git prints them, a colon apart (markup keeps it as it is, as
             // it would not a space), worded by the pane (`Words.modeLineOf`).
