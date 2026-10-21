@@ -11,8 +11,8 @@ ColumnLayout {
 
     required property var details
     /// The commits a choice holds (`GraphModel.chosenRows` — one record per row: `oid`, `sha8`, `subject`, `body`,
-    /// `author`, `authorTime`, `avatar`, `avatarUrl`, `mates`); empty while one commit is being read
-    /// (デザイン規約 §複数のコミットを選ぶ).
+    /// `author`, `authorTime`, `avatar`, `avatarUrl`, `mates`, `laneAbove`, `laneBelow`); empty while one commit is being
+    /// read (デザイン規約 §複数のコミットを選ぶ).
     property var chosenCommits: []
     /// The commit whose card is out, so its row keeps its band (the page's: `RowHoverHost.rowCardOid`).
     property string rowCardOid: ""
@@ -318,18 +318,23 @@ ColumnLayout {
         Layout.fillWidth: true
         // Divided as the worktree's buckets are (規約 §バケツごとの一覧). This list's want is counted, not read
         // off its content: a view's content height is 0 for the frame its model is replaced in, which would flash the
-        // pane to the list below each time the choice changes. The top margin is counted too, or the view stands
-        // short of its own content and scrolls with nothing to reach.
+        // pane to the list below each time the choice changes. The margins are counted too, or the view stands short
+        // of its own content and scrolls with nothing to reach.
         Layout.preferredHeight: detailsPane.choosing
-            ? Math.min(chosenList.topMargin + detailsPane.chosenCommits.length * Theme.rowHeight,
+            ? Math.min(chosenList.topMargin + detailsPane.chosenCommits.length * Theme.graphRowHeight
+                       + chosenList.bottomMargin,
                        Math.max(detailsPane.listRoom / 2, detailsPane.listRoom - fileList.contentHeight))
             : 0
-        // A centred face's slack, so the first face stands as far under the band as the faces from each other
-        // (デザイン規約 §余白 — 行内の詰め).
-        topMargin: (Theme.rowHeight - Theme.iconLg) / 2
+        // `spaceXs` over the first face and under the last (デザイン規約 §複数のコミットを選ぶ). Each face stands in its
+        // row's middle moved down to its summary's capitals (`ChosenCommitRow`), so the two margins differ by that drop
+        // twice. The top one can go below zero: what it then hides is the first row's empty air, and the row's hover
+        // wash stops at the band.
+        topMargin: Theme.spaceXs - (Theme.graphRowHeight - Theme.iconLg) / 2 - detailsPane.chosenFaceDrop
+        bottomMargin: Theme.spaceXs - (Theme.graphRowHeight - Theme.iconLg) / 2 + detailsPane.chosenFaceDrop
         model: detailsPane.chosenCommits
         verticalBar: PaneScrollBar {}
         delegate: ChosenCommitRow {
+            faceDrop: detailsPane.chosenFaceDrop
             cardOid: detailsPane.rowCardOid
             onHoverRequested: (row, inside) => detailsPane.rowHoverRequested(row, inside)
             onCopyRequested: text => detailsPane.copyRequested(text)
@@ -343,10 +348,19 @@ ColumnLayout {
     /// Automation only: for a run that scrolls the list itself and reads where it went.
     readonly property alias chosenView: chosenList
     /// Automation only (verify-ui): the list has laid its rows out, and how far its content runs past the view,
-    /// margins counted — two pixels of scroll look like none in a picture.
+    /// margins counted — a few pixels of scroll look like none in a picture.
     readonly property bool chosenListDrawn: chosenList.visible && chosenList.contentHeight > 0
     readonly property real chosenListSpare: Math.max(
-        0, chosenList.topMargin + chosenList.contentHeight - chosenList.height)
+        0, chosenList.topMargin + chosenList.contentHeight + chosenList.bottomMargin - chosenList.height)
+    /// How far every listed face moves down to its summary's capitals (`ChosenCommitRow.faceDrop`), read once off a
+    /// word set as the rows set theirs.
+    readonly property real chosenFaceDrop: WordFace.capitalDropOf(faceDropProbe.baselineOffset,
+                                                                  faceDropProbe.pixelSize, faceDropProbe.height)
+    LineText {
+        id: faceDropProbe
+        visible: false
+        text: "X"
+    }
     DetailsMessageBlock {
         id: block
         visible: !detailsPane.choosing

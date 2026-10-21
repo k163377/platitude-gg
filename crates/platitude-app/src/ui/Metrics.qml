@@ -100,7 +100,8 @@ QtObject {
     readonly property int opProgressMs: 250
     // Wide enough that a press-count fill crossing it in steps reads as progress.
     readonly property int menuMinW: 160
-    // 1 on, 1 off — the dashes of a WIP or stash edge and a WIP node's outline.
+    // 1 on, 1 off — the dashes of a WIP or stash edge, a WIP node's outline, and the lane between two chosen commits
+    // with others between them.
     readonly property var laneDash: [1, 1]
 
     // ---- outside the tiers: nothing is drawn with this ----

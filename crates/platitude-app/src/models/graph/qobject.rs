@@ -324,13 +324,20 @@ impl GraphModel {
     /// rows with no git run. The order handed in is the order handed back
     /// — [`Self::present_oids`]'s walk order, whatever order the presses
     /// came in. One index lookup per id: filtering the loaded rows would
-    /// put a walk of the history on a click.
+    /// put a walk of the history on a click. Each row carries the lanes to
+    /// its neighbours in the list (`GraphModel::chosen_lanes`).
     #[qslot]
     fn chosen_rows(&self, ids: Vec<String>) -> ChosenRows {
+        let drawn: Vec<usize> = ids
+            .iter()
+            .filter_map(|hex| self.row_of_hex(hex))
+            .filter(|&row| row < self.rows.len())
+            .collect();
         ChosenRows::new(
-            ids.iter()
-                .filter_map(|hex| self.rows.get(self.row_of_hex(hex)?))
-                .map(ChosenRow::of)
+            drawn
+                .iter()
+                .zip(self.chosen_lanes(&drawn))
+                .filter_map(|(&row, lanes)| Some(ChosenRow::of(self.rows.get(row)?, lanes)))
                 .collect(),
         )
     }

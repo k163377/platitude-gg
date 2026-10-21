@@ -112,6 +112,11 @@ pub struct ChosenRow {
     pub avatar: i32,
     pub avatar_url: String,
     pub mates: Mates,
+    /// The lane to the row listed above and to the one below — "", "solid"
+    /// or "dashed" (`GraphModel::chosen_lanes`, デザイン規約
+    /// §複数のコミットを選ぶ).
+    pub lane_above: String,
+    pub lane_below: String,
 }
 
 pub type ChosenRows = Listed<ChosenRow>;
@@ -160,7 +165,9 @@ impl platitude_core::mem::Footprint for Tally {
 }
 
 impl ChosenRow {
-    pub(super) fn of(row: &GraphRowItem) -> Self {
+    /// `row` as the list shows it, with the lanes its neighbours in the
+    /// choice give it.
+    pub(super) fn of(row: &GraphRowItem, (lane_above, lane_below): (&str, &str)) -> Self {
         Self {
             oid_hex: row.oid_hex.clone(),
             sha8: row
@@ -175,6 +182,8 @@ impl ChosenRow {
             avatar: row.avatar,
             avatar_url: row.avatar_url.clone(),
             mates: row.co_authors.clone(),
+            lane_above: lane_above.to_string(),
+            lane_below: lane_below.to_string(),
         }
     }
 }
@@ -191,6 +200,8 @@ impl Record for ChosenRow {
             .put("avatar", &self.avatar)
             .put("avatarUrl", &self.avatar_url)
             .put("mates", &self.mates)
+            .put("laneAbove", &self.lane_above)
+            .put("laneBelow", &self.lane_below)
             .done()
     }
 
@@ -205,6 +216,8 @@ impl Record for ChosenRow {
             avatar: field(map, "avatar")?,
             avatar_url: field(map, "avatarUrl")?,
             mates: field(map, "mates")?,
+            lane_above: field(map, "laneAbove")?,
+            lane_below: field(map, "laneBelow")?,
         })
     }
 }
@@ -274,7 +287,7 @@ mod tests {
             }]),
             ..GraphRowItem::default()
         };
-        let chosen: ChosenRows = Listed::new(vec![ChosenRow::of(&row)]);
+        let chosen: ChosenRows = Listed::new(vec![ChosenRow::of(&row, ("solid", "dashed"))]);
         assert_eq!(chosen[0].sha8, "01234567");
         assert_eq!(chosen[0].mates[0].name, "Bob");
         assert_eq!(

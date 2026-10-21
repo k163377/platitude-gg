@@ -3,16 +3,21 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// One commit of a choice, as the right pane lists it: face, summary cut to one line, and the hash plate. The only press
-// the row takes is a Ctrl one, which drops the commit; its words are fields (デザイン規約 §複数のコミットを選ぶ).
+// One commit of a choice, as the right pane lists it: face on the graph's lane, summary cut to one line, and the hash
+// plate. The only press the row takes is a Ctrl one, which drops the commit; its words are fields
+// (デザイン規約 §複数のコミットを選ぶ).
 Item {
     id: commitRow
 
     /// One row as `GraphModel.chosenRows` names it (`oid`, `sha8`, `subject`, `body`, `author`, `authorTime`, `avatar`,
-    /// `avatarUrl`, `mates`).
+    /// `avatarUrl`, `mates`, and `laneAbove` / `laneBelow` — "", "solid" or "dashed", デザイン規約 §複数のコミットを選ぶ).
     required property var modelData
     /// The commit whose card is out; its row keeps its band while the card stands over it.
     property string cardOid: ""
+    /// How far the face moves down from the row's middle to its summary's capitals (デザイン規約 §アイコンの席). One
+    /// figure for the whole list (`DetailsPane.chosenFaceDrop`), read off the window's face: a summary set in a
+    /// fallback face has a box of its own, and a face following it would part the lane's dashes at that row's seams.
+    property real faceDrop: 0
 
     /// The names the card's opener reads off a row, whichever list it is in (`RowHoverHost.openRowCard`).
     readonly property string oid_hex: commitRow.modelData.oid
@@ -45,8 +50,11 @@ Item {
             commitRow.dropRequested(commitRow.oid_hex)
     }
 
+    // A reused row is handed another record, lanes and all.
+    onModelDataChanged: lane.requestPaint()
     width: ListView.view ? ListView.view.width : 0
-    height: Theme.rowHeight
+    // The graph's row, so the faces stand as far apart as its nodes and the lane between them is as long.
+    height: Theme.graphRowHeight
 
     /// The row is wearing the hover wash — under the pointer, or under the card it put out.
     readonly property bool lit: rowHover.hovered || commitRow.cardOid === commitRow.oid_hex
@@ -73,15 +81,71 @@ Item {
         // The scroll bar's gutter: the bar is opaque, and a row reaching under it would hide its hash.
         anchors.rightMargin: Theme.navBarGutter
 
+        // The graph's lane through the faces, at its weight and dash, under the face as the graph's is under its node.
+        // One colour, not the lanes': a choice mixes lanes, and the row carries none of them.
+        InkCanvas {
+            id: lane
+            /// A dashed link shows only in the gap between two faces, so its dashes are laid from that gap: as many
+            /// whole ones as fit, the air left over split between the two ends. Laid from anywhere else, the gap
+            /// catches a dash cut by a face, or a dash from each row meeting at the seam as one stroke. `top` is where
+            /// the gap starts in this row's frame (every row stands its face alike — `faceDrop` — so the gap is the
+            /// row less a face); the half drawn is `from`–`to`.
+            function dashes(ctx, top, from, to) {
+                const dash = Metrics.laneDash[0] * Metrics.laneStroke
+                const space = Metrics.laneDash[1] * Metrics.laneStroke
+                const gap = lane.height - face.height
+                const count = Math.floor((gap + space) / (dash + space))
+                const lead = Math.floor((gap - count * dash - (count - 1) * space) / 2)
+                for (let i = 0; i < count; i++) {
+                    const y0 = Math.max(from, top + lead + i * (dash + space))
+                    const y1 = Math.min(to, top + lead + i * (dash + space) + dash)
+                    if (y1 > y0)
+                        ctx.fillRect(lane.width / 2 - Metrics.laneStroke / 2, y0, Metrics.laneStroke, y1 - y0)
+                }
+            }
+            x: face.x + (face.width - lane.width) / 2
+            width: Metrics.nodeIcon
+            height: parent.height
+            onHeightChanged: lane.requestPaint()
+            onPaint: {
+                const ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+                const cx = width / 2
+                const cy = face.y + face.height / 2
+                // Whole pixels, so the dashes stand sharp wherever the face's capitals put it.
+                const gapTop = Math.round(cy + face.height / 2)
+                ctx.strokeStyle = Theme.textSecondary
+                ctx.fillStyle = Theme.textSecondary
+                ctx.lineWidth = Metrics.laneStroke
+                const above = commitRow.modelData.laneAbove
+                const below = commitRow.modelData.laneBelow
+                if (above === "solid") {
+                    ctx.beginPath()
+                    ctx.moveTo(cx, 0)
+                    ctx.lineTo(cx, cy)
+                    ctx.stroke()
+                } else if (above === "dashed") {
+                    lane.dashes(ctx, gapTop - height, 0, cy)
+                }
+                if (below === "solid") {
+                    ctx.beginPath()
+                    ctx.moveTo(cx, cy)
+                    ctx.lineTo(cx, height)
+                    ctx.stroke()
+                } else if (below === "dashed") {
+                    lane.dashes(ctx, gapTop, cy, height)
+                }
+            }
+        }
         IdentIcon {
             id: face
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             // A picture heading the subject, on its capitals' middle (デザイン規約 §アイコンの席).
-            anchors.verticalCenterOffset: WordFace.capitalDropOf(subjectLine.baselineOffset, subjectLine.pixelSize,
-                                                                 subjectLine.height)
+            anchors.verticalCenterOffset: commitRow.faceDrop
             code: commitRow.modelData.avatar
             imageUrl: commitRow.modelData.avatarUrl
+            onYChanged: lane.requestPaint()
         }
         // No parent row under the plate: that is a question for the pane that shows one commit.
         HashPlate {
