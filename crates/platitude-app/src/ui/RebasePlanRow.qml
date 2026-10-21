@@ -37,6 +37,22 @@ Item {
         visible: rowArea.containsMouse && !planRow.selected
     }
 
+    // The graph's lane through the faces, down to `onto`: as the history stands, each step is the parent of the one
+    // above it, so the lane is solid whatever verb a step wears (デザイン規約 §フル interactive rebase). Under the face,
+    // as the graph's is under its node.
+    Rectangle {
+        id: laneLine
+        /// The newest step's lane starts at its face; at the root the oldest one's ends there.
+        readonly property bool fromFace: planRow.index === 0
+        readonly property bool toFace: planRow.list !== null && planRow.list.rooted
+                                       && planRow.index === planRow.list.count - 1
+        x: (planRow.list !== null ? planRow.list.laneX : 0) - Metrics.laneStroke / 2
+        y: laneLine.fromFace ? planRow.height / 2 : 0
+        width: Metrics.laneStroke
+        height: (laneLine.toFace ? planRow.height / 2 : planRow.height) - laneLine.y
+        visible: laneLine.height > 0
+        color: Theme.textSecondary
+    }
     // Declared before the content so the verb chip's own press area sits on top of it.
     MouseArea {
         id: rowArea

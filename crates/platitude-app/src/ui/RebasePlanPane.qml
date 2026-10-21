@@ -128,6 +128,11 @@ Rectangle {
             /// What every row reads and calls (the delegate reaches the pane through its view).
             readonly property string selectedOid: planPane.selectedOid
             readonly property real verbColW: verbProbe.wantWidth
+            /// The plan starts at the root: no base under the oldest step for the lane to run on to.
+            readonly property bool rooted: planPane.planModel.root
+            /// The middle of the faces' column, where the lane runs: the row's step, the verb's column and the gap
+            /// after it — the same seats in every row and in `onto`'s.
+            readonly property real laneX: Theme.spaceMd + planList.verbColW + Theme.spaceSm + Theme.iconMd / 2
             function rowPicked(row, oidHex) {
                 planPane.planModel.selectRow(row)
                 planPane.rowPicked(oidHex)
@@ -161,6 +166,13 @@ Rectangle {
                     anchors.topMargin: Theme.spaceXs
                     height: Theme.borderWidth
                     color: Theme.borderSubtle
+                }
+                // The lane's foot, across the rule to the base's face: the oldest step's parent (`RebasePlanRow`).
+                Rectangle {
+                    x: planList.laneX - Metrics.laneStroke / 2
+                    width: Metrics.laneStroke
+                    height: footerRule.y + footerRule.height + Theme.graphRowHeight / 2
+                    color: Theme.textSecondary
                 }
                 RowLayout {
                     anchors.left: parent.left
