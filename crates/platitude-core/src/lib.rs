@@ -65,6 +65,7 @@ pub mod trailers;
 pub mod version;
 #[cfg(test)]
 mod wait;
+pub mod web_link;
 pub mod worktrees;
 
 // Declarations and re-exports only (.claude/rules/structure.md §分割「クレート root」).

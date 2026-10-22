@@ -1,4 +1,6 @@
-//! Whether commits about to be rewritten are already on a remote.
+//! What the remotes already have: whether commits about to be rewritten
+//! are on one, whether one commit reaches another, and which remotes hold
+//! a commit.
 //!
 //! This only answers; the warning and the decision are the UI's
 //! (デザイン規約「ローカルの履歴書き換えはクリック」).
@@ -6,11 +8,12 @@
 //! "Published" means reachable from some remote-tracking ref — only as
 //! fresh as the last fetch.
 //!
-//! [`state_of`] asks git (a process away); [`range_rewrites_published`]
-//! reads the rows the walk already marked (`session::published`), in the
-//! frame a menu opens in (デザイン規約 §行が読む答えはどこから来るか).
+//! [`state_of`] asks git (a process away); [`range_rewrites_published`],
+//! [`reaches`] and [`holders`] read the rows the walk already drew
+//! (`session::published`), in the frame a menu opens in
+//! (デザイン規約 §行が読む答えはどこから来るか).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
@@ -146,6 +149,43 @@ pub fn reaches<'a>(
         }
     }
     (from_drawn && to_drawn).then_some(false)
+}
+
+/// Which remotes already have `target`, off rows already on screen, so a
+/// menu offering a link on a remote can leave out the remotes without the
+/// commit as it opens (デザイン規約 §行が読む答えはどこから来るか). `tips`
+/// pairs each remote-tracking branch's commit with its remote — an index
+/// into the caller's list; bit `i` of the answer is remote `i` (one past
+/// the 64th counts as none).
+///
+/// `rows` in walk order, children before every parent, so one pass down
+/// to `target` settles it — every tip above it has been through (the same
+/// prefix property `session::published` rests on). Zero where `target` is
+/// on no row.
+pub fn holders<'a>(
+    rows: impl IntoIterator<Item = WalkedRow<'a>>,
+    target: Oid,
+    tips: &[(Oid, u32)],
+) -> u64 {
+    let mut pending: HashMap<Oid, u64> = HashMap::new();
+    for (oid, remote) in tips {
+        *pending.entry(*oid).or_default() |= 1u64.checked_shl(*remote).unwrap_or(0);
+    }
+    for row in rows {
+        let Some(mask) = pending.remove(&row.oid) else {
+            if row.oid == target {
+                return 0;
+            }
+            continue;
+        };
+        if row.oid == target {
+            return mask;
+        }
+        for parent in row.parents {
+            *pending.entry(*parent).or_default() |= mask;
+        }
+    }
+    0
 }
 
 /// Counts a revision range and the part of it no remote has.
@@ -396,5 +436,55 @@ mod tests {
             "the branch is older than the window"
         );
         assert_eq!(stretch.reaches(9, 4), None, "the reference is not drawn");
+    }
+
+    impl Window {
+        fn holders(&self, target: u8, tips: &[(u8, u32)]) -> u64 {
+            let rows: Vec<(Oid, Vec<Oid>)> = self
+                .0
+                .iter()
+                .map(|(id, parents, _)| (oid(*id), parents.iter().map(|p| oid(*p)).collect()))
+                .collect();
+            let tips: Vec<(Oid, u32)> = tips.iter().map(|(id, at)| (oid(*id), *at)).collect();
+            super::holders(
+                rows.iter().map(|(oid, parents)| WalkedRow {
+                    oid: *oid,
+                    parents,
+                    published: false,
+                }),
+                oid(target),
+                &tips,
+            )
+        }
+    }
+
+    #[test]
+    fn each_remote_holds_what_its_branches_reach() {
+        // Remote 0 stands on 6, remote 1 on the merge 5 — whose sides are
+        // 6 and 7 — and remote 2 on 7.
+        let merged = a_merged_side();
+        let tips = [(6, 0), (5, 1), (7, 2)];
+        assert_eq!(merged.holders(5, &tips), 0b010, "the merge itself");
+        assert_eq!(merged.holders(6, &tips), 0b011, "its first side");
+        assert_eq!(merged.holders(7, &tips), 0b110, "its second side");
+        assert_eq!(merged.holders(8, &tips), 0b111, "the base under both");
+    }
+
+    #[test]
+    fn a_commit_above_every_tip_or_off_the_window_is_held_by_none() {
+        let stretch = a_local_stretch();
+        assert_eq!(stretch.holders(1, &[(3, 0)]), 0, "above the tip");
+        assert_eq!(stretch.holders(9, &[(3, 0)]), 0, "on no row");
+        assert_eq!(stretch.holders(4, &[]), 0, "no remote at all");
+        assert_eq!(
+            stretch.holders(4, &[(3, 0), (3, 0)]),
+            1,
+            "two branches on one commit"
+        );
+        assert_eq!(
+            stretch.holders(4, &[(3, 64)]),
+            0,
+            "past the 64th remote counts as none"
+        );
     }
 }
