@@ -271,6 +271,7 @@ impl RepoTab {
     );
     qproperty!("moveAskLocal", Member = move_ask_local, Notify = changed);
     qproperty!("moveAskStart", Member = move_ask_start, Notify = changed);
+    qproperty!("moveAskLost", Member = move_ask_lost, Notify = changed);
     qproperty!("moveAskSeq", Member = move_ask_seq, Notify = changed);
     qproperty!(
         "autoFetchRunning",

@@ -194,9 +194,10 @@ impl RepoTab {
                         self.fetch_settled(&error, false);
                     }
                 }
-                TabMsg::MoveNeedsAsk { local, start } => {
+                TabMsg::MoveNeedsAsk { local, start, lost } => {
                     self.move_ask_local = local;
                     self.move_ask_start = start;
+                    self.move_ask_lost = lost;
                     self.move_ask_seq += 1;
                 }
                 TabMsg::DiscardsChanged { restored } => {

@@ -92,6 +92,7 @@ impl RepoTab {
         self.write_report_fact = String::new();
         self.move_ask_local = String::new();
         self.move_ask_start = String::new();
+        self.move_ask_lost = 0;
         self.paced_worktrees = Vec::new();
         self.auto_fetch_running = false;
         self.fetch_failures = 0;

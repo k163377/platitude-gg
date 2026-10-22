@@ -426,8 +426,12 @@ impl SessionSink for BridgeSink {
                 .feeds
                 .tab
                 .push(TabMsg::op_error(format!("{op}: {error}"))),
-            SessionEvent::MoveNeedsAsk { local, start } => {
-                self.feeds.tab.push(TabMsg::MoveNeedsAsk { local, start })
+            SessionEvent::MoveNeedsAsk { local, start, lost } => {
+                self.feeds.tab.push(TabMsg::MoveNeedsAsk {
+                    local,
+                    start,
+                    lost: i32::try_from(lost).unwrap_or(i32::MAX),
+                })
             }
             SessionEvent::DiscardsChanged { restored } => {
                 self.feeds.tab.push(TabMsg::DiscardsChanged { restored })

@@ -110,10 +110,12 @@ pub enum TabMsg {
     /// read the settle does not wait for — the tip's reach — may land
     /// after.
     ReadsDrained,
-    /// A branch move would leave commits unreachable and was not made.
+    /// A branch move would take `lost` commits off the branch and was not
+    /// made.
     MoveNeedsAsk {
         local: String,
         start: String,
+        lost: i32,
     },
     /// What the discard log lists changed under a write
     /// (`SessionEvent::DiscardsChanged`): `restored` is how each part a

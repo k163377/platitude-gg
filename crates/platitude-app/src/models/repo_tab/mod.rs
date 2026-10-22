@@ -430,10 +430,11 @@ pub struct RepoTab {
     write_report_remote: String,
     write_report_name: String,
     write_report_fact: String,
-    /// A branch move that would leave commits unreachable, waiting to be
-    /// asked about. Nothing has happened yet.
+    /// A branch move that would take commits off the branch, waiting to be
+    /// asked about, and how many it would take. Nothing has happened yet.
     move_ask_local: String,
     move_ask_start: String,
+    move_ask_lost: i32,
     move_ask_seq: i32,
     /// Auto fetch, reported apart from the shared busy/error
     /// surface, which an offline machine would set off every interval.

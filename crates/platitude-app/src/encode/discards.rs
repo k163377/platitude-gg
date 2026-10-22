@@ -18,6 +18,9 @@ pub struct DiscardRow {
     pub remote: String,
     /// The worktree it happened in when that is not this one.
     pub worktree: String,
+    /// Where that worktree is, for the page to name it as everything else
+    /// does (`NavSectionModel.worktreeCalled`); empty where `worktree` is.
+    pub worktree_path: String,
     /// When git or the record wrote the line, epoch seconds.
     pub at: i64,
     /// How many commits only it reaches — what the graph draws dashed.
@@ -52,6 +55,10 @@ pub struct DiscardPart {
     pub files: i32,
     /// How many paths were thrown away without a copy (§2.1).
     pub not_copied: i32,
+    /// For thrown-away work, where the worktree it goes back into is — the
+    /// folder `name` gives is not how the repository's own is named; empty
+    /// otherwise.
+    pub worktree_path: String,
 }
 
 pub type DiscardRows = Listed<DiscardRow>;
@@ -65,6 +72,7 @@ pub fn discard_rows(found: &[Discard]) -> DiscardRows {
                 name: discard.name.clone(),
                 remote: discard.remote.clone(),
                 worktree: discard.worktree.clone(),
+                worktree_path: discard.worktree_path.clone(),
                 at: discard.at,
                 lost: count(discard.lost().len()),
                 parts: Listed::new(discard.parts.iter().map(part_row).collect()),
@@ -75,7 +83,7 @@ pub fn discard_rows(found: &[Discard]) -> DiscardRows {
 }
 
 fn part_row(part: &Part) -> DiscardPart {
-    let (restore, name, with) = match &part.restore {
+    let (restore, name, with, worktree_path) = match &part.restore {
         Restore::Branch { name, upstream, .. } => (
             "branch",
             name.clone(),
@@ -83,13 +91,17 @@ fn part_row(part: &Part) -> DiscardPart {
                 .as_ref()
                 .map(|(remote, branch)| format!("{remote}/{branch}"))
                 .unwrap_or_default(),
+            String::new(),
         ),
-        Restore::Tag { name, .. } => ("tag", name.clone(), String::new()),
-        Restore::Worktree { path, branch, .. } => {
-            ("worktree", path.clone(), branch.clone().unwrap_or_default())
-        }
-        Restore::Stash { message, .. } => ("stash", message.clone(), String::new()),
-        Restore::Changes { path, .. } => ("changes", folder_of(path), String::new()),
+        Restore::Tag { name, .. } => ("tag", name.clone(), String::new(), String::new()),
+        Restore::Worktree { path, branch, .. } => (
+            "worktree",
+            path.clone(),
+            branch.clone().unwrap_or_default(),
+            String::new(),
+        ),
+        Restore::Stash { message, .. } => ("stash", message.clone(), String::new(), String::new()),
+        Restore::Changes { path, .. } => ("changes", folder_of(path), String::new(), path.clone()),
     };
     DiscardPart {
         restore: restore.to_string(),
@@ -101,6 +113,7 @@ fn part_row(part: &Part) -> DiscardPart {
         lost: count(part.lost.len()),
         files: i32::try_from(part.files).unwrap_or(i32::MAX),
         not_copied: count(part.not_copied.len()),
+        worktree_path,
     }
 }
 
@@ -166,6 +179,7 @@ impl Record for DiscardRow {
             .put("name", &self.name)
             .put("remote", &self.remote)
             .put("worktree", &self.worktree)
+            .put("worktreePath", &self.worktree_path)
             .put("at", &self.at)
             .put("lost", &self.lost)
             .put("parts", &self.parts)
@@ -179,6 +193,7 @@ impl Record for DiscardRow {
             name: field(map, "name")?,
             remote: field(map, "remote")?,
             worktree: field(map, "worktree")?,
+            worktree_path: field(map, "worktreePath")?,
             at: field(map, "at")?,
             lost: field(map, "lost")?,
             parts: field(map, "parts")?,
@@ -199,6 +214,7 @@ impl Record for DiscardPart {
             .put("lost", &self.lost)
             .put("files", &self.files)
             .put("notCopied", &self.not_copied)
+            .put("worktreePath", &self.worktree_path)
             .done()
     }
 
@@ -213,6 +229,7 @@ impl Record for DiscardPart {
             lost: field(map, "lost")?,
             files: field(map, "files")?,
             not_copied: field(map, "notCopied")?,
+            worktree_path: field(map, "worktreePath")?,
         })
     }
 }
