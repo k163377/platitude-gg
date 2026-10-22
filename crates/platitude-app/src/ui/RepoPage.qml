@@ -948,8 +948,9 @@ FocusScope {
     }
 
     /// Where the standing right-click menu was raised — `sidebar` (the left panel's rows), `refList` (the rows of a
-    /// chip's stacked list), `graph`, `files`, `diff` — or "" while none stands. What hover opened stays under a menu
-    /// raised on its own rows and goes behind any other (デザイン規約 §メニュー). One binding over the seats and the
+    /// chip's stacked list), `graph`, `files`, `changes` (a commit's changed files), `diff` — or "" while none stands.
+    /// What hover opened stays under a menu raised on its own rows and goes behind any other (デザイン規約 §メニュー).
+    /// One binding over the seats and the
     /// doors' marks, which are written before the menu shows: a reader that also read `menuStanding` could see the
     /// menu up before its origin.
     readonly property string menuRaisedOn:
@@ -957,6 +958,7 @@ FocusScope {
         : page.menuShowing(remoteMenuSeat) ? "sidebar"
         : page.menuShowing(commitMenuSeat) ? (page.rowMenuOnList ? "refList" : "graph")
         : page.menuShowing(fileMenuSeat) ? "files"
+        : page.menuShowing(commitFileMenuSeat) ? "changes"
         : page.menuShowing(diffMenuSeat) ? "diff" : ""
     /// One of this page's right-click menus is standing: nothing behind a menu is being hovered, so no card or tip may
     /// come out over the rows the hand is reading. A menu nobody has raised yet is not standing.
@@ -965,7 +967,7 @@ FocusScope {
         return seat.item !== null && seat.item.showing
     }
 
-    /// The five menu seats stand built from the start — written only by the harness (`PageHarness`), so its verbs can
+    /// The six menu seats stand built from the start — written only by the harness (`PageHarness`), so its verbs can
     /// read a menu's rows. The plan's face and the command log are not in this: their verbs raise them as a hand does.
     property bool keepBuilt: false
 
@@ -991,6 +993,8 @@ FocusScope {
             tagsModel: tagsModel
             remotesModel: remotesModel
             stashesModel: stashesModel
+            githubLinks: githubLinks
+            onCopyRequested: text => clipboard.copy(text)
             onSwitchRequested: (kind, name) => page.switchToRef(kind, name)
             onBranchHereRequested: oidHex => page.startBranchAt(oidHex)
             onTagHereRequested: oidHex => page.startTagAt(oidHex)
@@ -1015,7 +1019,9 @@ FocusScope {
             heldReason: page.doorsHeldWhy
             runningWhy: page.runningWhy
             repoTab: repoTab
+            githubLinks: githubLinks
             onUrlRequested: name => publishFlow.startEditRemote(name)
+            onCopyRequested: text => clipboard.copy(text)
         }
     }
     /// The one door into that menu. Says whether it opened.
@@ -1364,12 +1370,71 @@ FocusScope {
         }
     }
 
+    // ---- context menu on a commit's changed file ---------------------
+    /// The one door into that menu: a right-click on a row of a commit's changed files, and the menu key on the one
+    /// the arrows stand on. Its rows are GitHub's links alone, so with none to offer nothing opens and the row is left
+    /// as it was. Otherwise it acts on what is lit: the file is read first where it is not (デザイン規約 §メニュー).
+    /// Says whether it opened.
+    function openCommitFileMenu(path, origPath, change) {
+        // A right-click is a click: it walks away from a standing question, which may be about another row.
+        page.stopRowAsk()
+        const links = page.commitFileLinks(path, change)
+        if (links.length === 0 || links[0].holders.length === 0)
+            return false
+        if (page.diffKind !== "commit" || page.diffPath !== path)
+            page.openDiff("commit", path, origPath)
+        // Not read — a plan holds the centre (`openDiff`): the row is not lit, so no menu acts on it.
+        if (page.diffKind !== "commit" || page.diffPath !== path)
+            return false
+        commitFileMenuSeat.active = true
+        return commitFileMenuSeat.item.offerOn(links)
+    }
+    /// The link a commit's changed file offers on GitHub (デザイン規約 §GitHub のページへのリンク): the file as it stands
+    /// in the commit — or the newer of two compared —, and a file it deletes as it stood before. None for a stack of
+    /// several commits' changes, which name no one commit.
+    function commitFileLinks(path, change) {
+        if (detailsModel.selectionCount > 2)
+            return []
+        // A file the commit deletes is on the older side alone.
+        const side = page.diffSideAt(change !== "D")
+        return side === undefined ? [] : githubLinks.ofFile(side.held, side.at, path)
+    }
+    Loader {
+        id: commitFileMenuSeat
+        anchors.fill: parent
+        active: page.keepBuilt
+        sourceComponent: CommitFileMenu {
+            onCopyRequested: text => clipboard.copy(text)
+        }
+    }
+
     // ---- context menu on the diff's own text ------------------------
     /// The menu acts on the selection, settled before asking (`DiffTextSelect.askMenu`), so no row travels here.
     function openCodeMenu() {
         page.stopRowAsk()
         diffMenuSeat.active = true
+        diffMenuSeat.item.standGithub(page.diffLineLinks())
         diffMenuSeat.item.offer()
+    }
+    /// The link the selected lines offer on GitHub (デザイン規約 §GitHub のページへのリンク): the lines of a commit's file
+    /// — one commit's, or the newer of two compared — or of the file before it where only removed lines are selected.
+    /// None for a working tree's file, nor for a stack of several commits' patches, which name no one commit.
+    function diffLineLinks() {
+        if (!page.diffShown || page.diffKind !== "commit" || detailsModel.selectionCount > 2)
+            return []
+        const span = diffModel.selectionLines()
+        if (span === undefined)
+            return []
+        const side = page.diffSideAt(span.newer)
+        if (side === undefined)
+            return []
+        const path = span.newer || page.diffOrigPath === "" ? page.diffPath : page.diffOrigPath
+        return githubLinks.ofLines(side.held, side.at, path, span.first, span.last)
+    }
+    /// Where a link to one side of the commit card's diff points (`GitFacts.githubSideAt`), `undefined` for none.
+    function diffSideAt(newer) {
+        return GitFacts.githubSideAt(newer, detailsModel.comparing, detailsModel.shaHex, detailsModel.parentHex,
+                                     detailsModel.compareFrom, detailsModel.compareTo)
     }
     Loader {
         id: diffMenuSeat
@@ -1415,6 +1480,22 @@ FocusScope {
         menu.targetName = target
         commitMenuState.openRowMenu(oidHex)
     }
+    /// A right-click on a row inside a choice of two: the menu on the pair, which takes them in the order the right
+    /// pane compares them (`DetailsModel.compareFrom` / `compareTo`). Where it has nothing to offer, the press is any
+    /// other right-click's — the choice down to the row and the row's menu (デザイン規約 §複数のコミットを選ぶ).
+    function openChoiceMenu(oidHex, atRow, chip) {
+        // A right-click is a click: it walks away from a standing question, as the row's own press does.
+        page.stopRowAsk()
+        page.rowMenuOnList = false
+        commitMenuSeat.active = true
+        const menu = commitMenuSeat.item
+        menu.releaseShape()
+        if (detailsModel.comparing
+                && menu.offerChoice(githubLinks.ofPair(detailsModel.compareFrom, detailsModel.compareTo)))
+            return
+        page.pickRow(oidHex, atRow, Qt.NoModifier)
+        page.openRowMenu(oidHex, chip)
+    }
     /// The menu on another worktree's uncommitted row, which is no commit: its own (デザイン規約 §別の worktree を読む).
     function openCarriedMenu(path, name) {
         page.rowMenuOnList = false
@@ -1432,8 +1513,18 @@ FocusScope {
         branchesModel: branchesModel
         tagsModel: tagsModel
         remotesModel: remotesModel
+        githubLinks: githubLinks
         // Null until the menu is first raised; the one function that reads it is the door that raises it.
         menu: commitMenuSeat.item
+    }
+    /// What every GITHUB card stands on, asked as its menu opens (デザイン規約 §GitHub のページへのリンク).
+    GitHubLinks {
+        id: githubLinks
+        repoTab: repoTab
+        graphModel: graphModel
+        remotesModel: remotesModel
+        branchesModel: branchesModel
+        tagsModel: tagsModel
     }
 
     Loader {
@@ -1446,6 +1537,7 @@ FocusScope {
             heldReason: page.doorsHeldWhy
             runningWhy: page.runningWhy
             onWaitEnded: commitMenuState.standAgain()
+            onCopyRequested: text => clipboard.copy(text)
             branch: worktree.branch
             oid: commitMenuState.menuOid
             stashRef: commitMenuState.menuStashRef
@@ -1810,6 +1902,7 @@ FocusScope {
             diffMenuSeat: diffMenuSeat,
             commitMenuSeat: commitMenuSeat,
             remoteMenuSeat: remoteMenuSeat,
+            commitFileMenuSeat: commitFileMenuSeat,
             rowHost: rowHost,
             clipboard: clipboard,
             commitMenuState: commitMenuState,
@@ -3545,6 +3638,7 @@ FocusScope {
                                     page.activateRow(oidHex)
                             }
                             onRowMenuOpenRequested: (oidHex, chip) => page.openRowMenu(oidHex, chip)
+                            onChoiceMenuOpenRequested: (oidHex, atRow, chip) => page.openChoiceMenu(oidHex, atRow, chip)
                             onRowSwitchRequested: (oidHex, chip) => page.rowDoubleClicked(oidHex, chip)
                             // The same door the WORKTREES row opens: the tab stands in that worktree, where its
                             // changes can be staged.
@@ -3756,6 +3850,8 @@ FocusScope {
                         }
                         onFileActivated: (path, origPath) => page.toggleDiff("commit", path, origPath)
                         onFileWalked: (path, origPath) => page.openDiff("commit", path, origPath)
+                        onFileMenuRequested: (path, origPath, change) =>
+                            page.openCommitFileMenu(path, origPath, change)
                         onParentClicked: oidHex => page.jumpToRef(oidHex)
                         // The badge's press goes to the window, which owns the settings card.
                         onAvatarEditRequested: (name, email) => page.avatarSettingsRequested(name, email)

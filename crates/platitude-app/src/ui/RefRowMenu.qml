@@ -31,6 +31,8 @@ Item {
     /// (`standAgain`) — the stash off the listing, which holds every entry the graph's walk may not reach.
     required property NavSectionModel remotesModel
     required property NavSectionModel stashesModel
+    /// What the GITHUB card at the foot stands on.
+    required property GitHubLinks githubLinks
 
     /// Why every row is out while the window's write doors are held (`RepoPage.doorsHeldWhy`), handed down so this
     /// and the left pane read one answer. The rows grey (`AppMenu.heldReason`).
@@ -93,7 +95,8 @@ Item {
     /// `visible` read from another file comes back stale (`RefusalBadge`).
     readonly property bool showing: refMenu.visible
     readonly property bool opened: refMenu.opened
-    /// Every level of this menu: the menu and its three cards.
+    /// Every level of this menu: the menu and its three cards. The GITHUB card's rows never stand again (they start
+    /// nothing), so its shape is its own from the opening.
     readonly property var levels: [refMenu, branchMenu, worktreeMenu, tagMenu]
 
     /// Automation-only handles into these rows, like `GraphPane.view`.
@@ -116,6 +119,7 @@ Item {
     readonly property alias branchCard: branchMenu
     readonly property alias worktreeCard: worktreeMenu
     readonly property alias tagCard: tagMenu
+    readonly property alias githubCard: githubMenu
 
     /// What the page answers for: moving the worktree, the delete git may still refuse, and the stash drop that two
     /// menus share.
@@ -137,6 +141,8 @@ Item {
     signal upstreamRequested(string branch, string counterpart, bool unsettable)
     /// Where a branch's first push goes — the branch card's push row, asked in the page's one bar (`PublishFlow`).
     signal publishRequested(string branch, string upstream)
+    /// A link on its way to the clipboard (`GitHubMenu`); the page owns the clipboard.
+    signal copyRequested(string text)
 
     anchors.fill: parent
 
@@ -267,6 +273,9 @@ Item {
             refRowMenu.levels[i].releaseShape()
         refRowMenu.tree = refRowMenu.treeAtAsk !== null ? refRowMenu.treeAtAsk : refRowMenu.worktree
         refRowMenu.standOn(kind, name, full, oidHex, worktreePath, aim)
+        // The same links the graph row's menu offers on the commit the ref points at and its name; only as the menu
+        // opens, as there (`CommitRowMenu.standGithub`).
+        githubMenu.standOn(refRowMenu.githubLinks.ofRef(oidHex, kind, full))
         return refMenu.offer()
     }
 
@@ -505,6 +514,13 @@ Item {
                 refRowMenu.repoTab.deleteRemoteTag(remote, tag, onlyThere, expect)
             onDeleteTagEverywhereRequested: (tag, remote, expect) =>
                 refRowMenu.repoTab.deleteTagEverywhere(tag, remote, expect)
+        }
+        AppMenuSeparator {}
+        // The same card the graph row's menu carries, last for the same reason: it leaves the window
+        // (デザイン規約 §GitHub のページへのリンク).
+        GitHubMenu {
+            id: githubMenu
+            onCopyRequested: text => refRowMenu.copyRequested(text)
         }
     }
 }

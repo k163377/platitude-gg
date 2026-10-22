@@ -126,6 +126,8 @@ Item {
     /// The third menu's two: that worktree opened, by the road its row's double-click takes, and its work applied here.
     signal carriedOpenRequested(string path)
     signal carriedApplyRequested(string path)
+    /// A link on its way to the clipboard (`GitHubMenu`); the page owns the clipboard.
+    signal copyRequested(string text)
     /// The menu went away — and the stacked list it may have been standing on is the pointer's to answer for again.
     signal dismissed()
     /// A level of this menu waited for a git command and it has ended with the menu up: the page reads again what the
@@ -135,10 +137,14 @@ Item {
     /// Either menu is on screen — what the page reads to hide hover behind it. Read this, not `visible`, which comes
     /// back stale from another file (rules-refs/app-ui.md「メニューが立っている間、裏の hover は伏せる」).
     readonly property bool showing: commitMenu.visible || stashMenu.visible || carriedMenu.visible
+                                    || choiceMenu.visible
     /// Whether the one standing is the third, on another worktree's uncommitted row (`CommitMenuState.standAgain`).
     readonly property bool carriedShowing: carriedMenu.visible
-    /// Every level of this menu: the three menus, the reset card and the three cards at the foot.
-    readonly property var levels: [stashMenu, carriedMenu, commitMenu, resetMenu, branchCommitMenu,
+    /// …or the fourth, on a choice of two commits, which stands on nothing a command can take away.
+    readonly property bool choiceShowing: choiceMenu.visible
+    /// Every level of this menu: the four menus, the reset card and the cards at the foot. The GitHub cards' rows never
+    /// stand again (they start nothing), so their shape is theirs from the opening.
+    readonly property var levels: [stashMenu, carriedMenu, choiceMenu, commitMenu, resetMenu, branchCommitMenu,
                                    worktreeCommitMenu, tagCommitMenu]
 
     /// The automation's handles into these rows, an automation-only exposure the same as `GraphPane.view` is
@@ -161,6 +167,9 @@ Item {
     readonly property alias carriedRowMenu: carriedMenu
     readonly property alias carriedOpenItem: carriedOpenRow
     readonly property alias carriedApplyItem: carriedApplyRow
+    readonly property alias githubCard: githubCommitMenu
+    readonly property alias choiceLevel: choiceMenu
+    readonly property alias choiceGithubCard: githubChoiceMenu
 
     anchors.fill: parent
 
@@ -194,6 +203,17 @@ Item {
         rowMenu.standCards(facts)
         commitMenu.offer()
     }
+    /// The GITHUB card's half, before `offerCommit`: the links on the row's commit and its name
+    /// (`GitHubLinks.ofRef`). Only as the menu opens — the links do not change with a command it waits for.
+    function standGithub(links) {
+        githubCommitMenu.standOn(links)
+    }
+    /// The menu on a choice of two commits: the links that take both (`GitHubLinks.ofPair`). Says whether it
+    /// opened — with nothing to offer, the press falls to the one-commit menu (`RepoPage.openRowMenu`).
+    function offerChoice(links) {
+        githubChoiceMenu.standOn(links)
+        return choiceMenu.offer()
+    }
     /// The cards' half of `offerCommit`, for the menu standing again on a newer reading as well — where the BRANCH
     /// card's branch may point elsewhere by then, `branchAt` (`CommitMenuState.aimedAt`); left out, the row's commit.
     function standCards(facts, branchAt) {
@@ -207,7 +227,7 @@ Item {
         tagCommitMenu.standOn(tagged ? "tag" : "", tagged ? rowMenu.targetName : "", rowMenu.oid, facts.tag)
     }
     /// The commit, the stash or the other worktree's work the menu stands on is gone with the command it waited for:
-    /// nothing left to act on.
+    /// nothing left to act on. The pair's menu waits for nothing, so it is never withdrawn.
     function withdraw() {
         (stashMenu.visible ? stashMenu : carriedMenu.visible ? carriedMenu : commitMenu).dismiss()
     }
@@ -485,6 +505,25 @@ Item {
                 rowMenu.deleteRemoteTagRequested(remote, tag, onlyThere, expect)
             onDeleteTagEverywhereRequested: (tag, remote, expect) =>
                 rowMenu.deleteTagEverywhereRequested(tag, remote, expect)
+        }
+        AppMenuSeparator {}
+        // GitHub's pages for this commit and the name the chip draws, last: they leave the window, every card above
+        // acts in it (デザイン規約 §GitHub のページへのリンク).
+        GitHubMenu {
+            id: githubCommitMenu
+            onCopyRequested: text => rowMenu.copyRequested(text)
+        }
+    }
+
+    // A choice of two commits, right-clicked inside it: what takes the pair — every row above takes one commit, and a
+    // right-click outside the choice takes it down to that row (デザイン規約 §複数のコミットを選ぶ). Nothing here starts
+    // git, so it neither waits nor stands again.
+    AppMenu {
+        id: choiceMenu
+        onClosed: rowMenu.dismissed()
+        GitHubMenu {
+            id: githubChoiceMenu
+            onCopyRequested: text => rowMenu.copyRequested(text)
         }
     }
 }

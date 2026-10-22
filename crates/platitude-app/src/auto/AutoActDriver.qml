@@ -59,6 +59,8 @@ Item {
     /// What reached the clipboard, which the clipboard itself will not say (`ClipboardHelper.lastCopied`).
     property ClipboardHelper clipboard
     property CommitMenuState commitMenuState
+    /// The graph row's menus whole, for the cards the verbs below do not name one by one (`AutoActGithubVerbs`).
+    property CommitRowMenu commitRowMenu
     property AppMenu commitMenu
     property AppMenu stashMenu
     property AppMenuItem dropCommitItem
@@ -79,6 +81,10 @@ Item {
     property UpstreamFlow upstreamFlow
     property RemoteDialog remoteDialog
     property AppMenu remoteMenu
+    /// The REMOTES row's menu and the one on a commit's changed file whole, for their GITHUB cards
+    /// (`AutoActGithubVerbs`).
+    property RemoteRowMenu remoteRowMenu
+    property CommitFileMenu commitFileMenu
     /// The WORKTREE card in each of the two menus that carry it: the ref menu and the graph row's, on every row with a
     /// commit.
     property RefWorktreeMenu refWorktreeCard
@@ -695,6 +701,7 @@ Item {
     AutoActWorktreeVerbs { id: worktreeVerbs; driver: driver }
     AutoActRecoverVerbs { id: recoverVerbs; driver: driver }
     AutoActBranchPushVerbs { id: branchPushVerbs; driver: driver }
+    AutoActGithubVerbs { id: githubVerbs; driver: driver }
 
     function runAutoAct() {
         const act = Harness.autoAct
@@ -727,6 +734,7 @@ Item {
             || worktreeVerbs.run(act, arg)
             || recoverVerbs.run(act, arg)
             || branchPushVerbs.run(act, arg)
+            || githubVerbs.run(act, arg)
         if (!known && !driver.completionDeferred && !driver.writeExpected) {
             // A misspelling: window verbs are in the completion ledger, so a verb known to neither is
             // nobody's. Left to the watchdog.

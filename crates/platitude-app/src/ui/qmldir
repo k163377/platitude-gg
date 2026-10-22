@@ -53,6 +53,7 @@ CodeLine 1.0 CodeLine.qml
 ColumnDivider 1.0 ColumnDivider.qml
 CommitAuthorRow 1.0 CommitAuthorRow.qml
 CommitHoverCard 1.0 CommitHoverCard.qml
+CommitFileMenu 1.0 CommitFileMenu.qml
 CommitMenuState 1.0 CommitMenuState.qml
 CommitRowMenu 1.0 CommitRowMenu.qml
 EolHoverCard 1.0 EolHoverCard.qml
@@ -98,6 +99,8 @@ FindOptionGlyph 1.0 FindOptionGlyph.qml
 FocusRelease 1.0 FocusRelease.qml
 FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
+GitHubLinks 1.0 GitHubLinks.qml
+GitHubMenu 1.0 GitHubMenu.qml
 GitVersionCorner 1.0 GitVersionCorner.qml
 GoneBadge 1.0 GoneBadge.qml
 GraphColumnDividers 1.0 GraphColumnDividers.qml

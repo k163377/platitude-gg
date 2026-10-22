@@ -558,14 +558,22 @@ Item {
 
     /// A right-click on this row, and the menu key on it (`GraphRowWalk.menuFromKeys`).
     function askMenu() {
-        // **A right-click takes the choice down to this row**: the menu acts on one commit, and several left
-        // highlighted would offer to act on all of them (デザイン規約 §複数のコミットを選ぶ).
+        // **Inside a choice of two the choice stands**: its menu holds what takes the pair, and the page falls back to
+        // the one-commit menu where nothing does (デザイン規約 §複数のコミットを選ぶ). The keyboard still comes here.
+        const view = rowItem.ListView.view
+        if (rowItem.selected && view.chosenCount === 2) {
+            view.takeKeyboard()
+            view.currentIndex = rowItem.index
+            view.choiceMenuRequested(rowItem.oid_hex, rowItem.index, rowItem.nameChip)
+            return
+        }
+        // **Anywhere else a right-click takes the choice down to this row**: the menu acts on one commit, and several
+        // left highlighted would offer to act on all of them (デザイン規約 §複数のコミットを選ぶ).
         rowItem.claimRow(Qt.NoModifier)
         // Another worktree's uncommitted row has a menu of its own: its door and its work brought here
         // (デザイン規約 §別の worktree を読む). Asked of the model by row, as the double-click does — every uncommitted row
         // carries the same all-zero id.
         if (rowItem.carried) {
-            const view = rowItem.ListView.view
             const path = view.model.carriedPath(rowItem.index)
             if (path !== "")
                 view.carriedMenuRequested(path, rowItem.carriedName)
@@ -575,7 +583,7 @@ Item {
         // press landed**: its rows are about this commit, the cards at its foot about `nameChip`
         // (デザイン規約 §グラフ行の右クリック) — unlike a rest, a right-click has nothing to divide (`partAt`).
         if (!rowItem.isWip)
-            rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.nameChip)
+            view.rowMenuRequested(rowItem.oid_hex, rowItem.nameChip)
     }
 
     MouseArea {

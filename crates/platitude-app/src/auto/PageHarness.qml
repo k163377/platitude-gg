@@ -43,6 +43,7 @@ Item {
     required property var diffMenuSeat
     required property var commitMenuSeat
     required property var remoteMenuSeat
+    required property var commitFileMenuSeat
     required property var rowHost
     required property var clipboard
     required property var commitMenuState
@@ -58,10 +59,11 @@ Item {
     readonly property var diffRowMenu: harness.diffMenuSeat.item
     readonly property var commitRowMenu: harness.commitMenuSeat.item
     readonly property var remoteRowMenu: harness.remoteMenuSeat.item
+    readonly property var commitFileMenu: harness.commitFileMenuSeat.item
     readonly property var planPane: harness.planSeat.item
 
     Component.onCompleted: {
-        // Only when a verb will want them: five menus held ready are working set a measured run would carry.
+        // Only when a verb will want them: six menus held ready are working set a measured run would carry.
         harness.page.keepBuilt = Harness.autoAct !== ""
         harness.seatsUp = true
     }
@@ -126,6 +128,7 @@ Item {
             diffRowMenu: harness.diffRowMenu
             clipboard: harness.clipboard
             commitMenuState: harness.commitMenuState
+            commitRowMenu: harness.commitRowMenu
             commitMenu: harness.commitRowMenu.menu
             stashMenu: harness.commitRowMenu.stashLevel
             dropCommitItem: harness.commitRowMenu.dropItem
@@ -145,6 +148,8 @@ Item {
             upstreamFlow: harness.upstreamFlow
             remoteDialog: harness.publishFlow.dialog
             remoteMenu: harness.remoteRowMenu.menu
+            remoteRowMenu: harness.remoteRowMenu
+            commitFileMenu: harness.commitFileMenu
             refWorktreeCard: harness.refRowMenu.worktreeCard
             commitWorktreeCard: harness.commitRowMenu.worktreeCard
             refWorktreeHereItem: harness.refRowMenu.worktreeCard.worktreeHereItem

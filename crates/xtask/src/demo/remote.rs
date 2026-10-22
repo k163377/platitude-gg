@@ -22,6 +22,7 @@ pub(super) fn build(preset: &str, repo: &mut DemoRepo) -> Option<Result<(), Stri
         "hooked" => hooked(repo),
         "slowhook" => slowhook(repo),
         "unreachable" => unreachable(repo),
+        "github" => github(repo),
         _ => return None,
     };
     Some(made)
@@ -70,6 +71,55 @@ pub(super) fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
     // `carried`: sent from here under a second name, then left behind.
     repo.git(&["push", "origin", "HEAD:refs/heads/carried"])?;
     repo.commit("src/new.txt", "new v2\n", "feat: finish the new thing")?;
+    Ok(())
+}
+
+/// Two remotes whose URLs name repositories on GitHub — `origin` and
+/// `upstream` — and git sent to the bare repositories beside the worktree
+/// in their place (`url.<bare>.insteadOf`): the app reads
+/// `remote.<name>.url` as written, so its GitHub links stand while no
+/// fetch or push leaves the machine.
+///
+/// Rows, newest first: `main`, ahead of both and on neither; the two
+/// commits of `feature/login`, on origin alone; `upstream/main`, a fix
+/// only upstream has; `origin/main`; and the first commit, tagged `v1.0`
+/// on both remotes.
+pub(super) fn github(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.git(&["tag", "-a", "v1.0", "-m", "first release"])?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main", "v1.0"])?;
+
+    let upstream = repo.root.join("upstream.git");
+    std::fs::create_dir_all(&upstream).map_err(|e| e.to_string())?;
+    repo.git_at(&upstream.clone(), &["init", "--bare", "-b", "main"])?;
+    let upstream_url = file_url(&upstream);
+    repo.git(&["remote", "add", "upstream", &upstream_url])?;
+    repo.git(&["push", "upstream", "main", "v1.0"])?;
+
+    let seeder = repo.seeder("upstream.git")?;
+    std::fs::write(seeder.join("src/app.txt"), "app v1, fixed\n").map_err(|e| e.to_string())?;
+    repo.git_at(&seeder.clone(), &["add", "--", "src/app.txt"])?;
+    repo.git_at(&seeder.clone(), &["commit", "-m", "fix: an upstream fix"])?;
+    repo.git_at(&seeder.clone(), &["push"])?;
+    repo.git(&["fetch", "upstream"])?;
+
+    repo.git(&["switch", "--create", "feature/login"])?;
+    repo.commit("src/login.txt", "form\n", "feat: draw the login form")?;
+    repo.commit("src/login.txt", "form\ncheck\n", "feat: check the login")?;
+    repo.git(&["push", "--set-upstream", "origin", "feature/login"])?;
+    repo.git(&["switch", "main"])?;
+    repo.commit("src/app.txt", "app v2\n", "chore: not sent yet")?;
+
+    let origin_url = file_url(&repo.root.join("origin.git"));
+    for (name, bare, url) in [
+        ("origin", origin_url, "https://github.com/octo/demo.git"),
+        ("upstream", upstream_url, "git@github.com:octo-org/demo.git"),
+    ] {
+        repo.git(&["config", &format!("url.{bare}.insteadOf"), url])?;
+        repo.git(&["remote", "set-url", name, url])?;
+    }
     Ok(())
 }
 

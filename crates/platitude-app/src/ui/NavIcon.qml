@@ -53,6 +53,8 @@ InkCanvas {
         case "lock": return [[3.5, 8.2, 1], [12.5, 13.5, 1], [8, 4.4, 1]]
         // Filled throughout.
         case "home": return [[2.5, 6.5, 0], [8, 2.3, 0], [13.5, 13.7, 0], [2.5, 13.7, 0]]
+        // GitHub's mark (`githubMark`, 16 × 15.5 of its own grid) at `githubScale`, its box on the grid's middle.
+        case "github": return [[2, 2.19, 0], [14, 13.81, 0]]
         case "folder": return [[2.5, 4.5, 1], [13.5, 12.5, 1], [2.5, 12.5, 1]]
         case "chevron": return [[6, 4, 1], [10, 8, 1], [6, 12, 1]]
         case "chevrons": return [[4, 4, 1], [13, 8, 1], [4, 12, 1]]
@@ -79,6 +81,17 @@ InkCanvas {
     }
     /// Whether the drawing is moved to stand its ink in the middle of the box. Only the resize corner is not.
     readonly property bool centred: icon.kind !== "grip"
+    /// GitHub's mark as Octicons draws it (`mark-github-16`, MIT, © GitHub Inc. — used under GitHub's logo terms:
+    /// unaltered, in white or grey, to point at GitHub), and the share of its 16-grid it is drawn at here.
+    readonly property string githubMark: "M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188"
+        + "-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 "
+        + "1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 "
+        + "3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 "
+        + "3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25"
+        + "c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093"
+        + "-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265"
+        + ".47-.5.657-.656"
+    readonly property real githubScale: 0.75
     /// Set beside words (デザイン規約 §アイコンの席): the mark is drawn as a letter of the words' face rather than to its
     /// box — its size, its line and where it stands all come off the words. Empty for a mark that stands alone, drawn
     /// to the middle of its box as above.
@@ -433,6 +446,16 @@ InkCanvas {
             ctx.lineTo(10.4 * s, 8.2 * s)
             ctx.stroke()
             ctx.strokeRect(3.5 * s, 8.2 * s, 9 * s, 5.3 * s)
+        } else if (icon.kind === "github") {
+            // GitHub's own mark, filled and unaltered but for its size (GitHub's logo terms forbid redrawing it —
+            // デザイン規約 §出典とライセンス): as wide as the cloud, the squares it takes are its own grid's three
+            // quarters.
+            ctx.save()
+            ctx.translate(2 * s, (8 - 15.5 * icon.githubScale / 2) * s)
+            ctx.scale(icon.githubScale * s, icon.githubScale * s)
+            ctx.path = icon.githubMark
+            ctx.fill()
+            ctx.restore()
         } else if (icon.kind === "home") {
             // Filled, and proportioned off octicons / Feather (デザイン規約 §左メニューの所作「家の印だけは塗りで描く」).
             // The apex keeps the miter join: rounded, the slopes close into a dome.

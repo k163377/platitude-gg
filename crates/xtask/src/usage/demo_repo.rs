@@ -183,6 +183,11 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   (fetch-fail, fetch-resume) — and the only one where a
                   push is turned down by nothing being there at
                   all (push)
+        github    origin and upstream named by GitHub URLs, git sent to the
+                  bare repositories beside the worktree instead: a tag on
+                  both, a fix on upstream alone, a branch on origin alone,
+                  and main on neither (github-card, github-choice,
+                  diff-github, github-ref, github-remote, github-file)
         plan      a straight run of five commits, origin holding all but the
                   newest and a branch on the base: what the interactive-
                   rebase plan opens over (rebase-plan, rebase-plan-run,

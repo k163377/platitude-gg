@@ -135,6 +135,9 @@ AppListView {
     /// A row was right-clicked. `chip` is the name its chip draws (`encode::Chip`), null where it draws none
     /// (デザイン規約 §グラフ行の右クリック).
     signal rowMenuRequested(string oidHex, var chip)
+    /// …on a row inside a choice of two, which the press leaves standing: the page offers what takes the pair, and
+    /// where nothing does, takes the choice down to the row as any right-click does (`RepoPage.openChoiceMenu`).
+    signal choiceMenuRequested(string oidHex, int atRow, var chip)
     signal rowSwitchRequested(string oidHex, var chip)
     /// Another worktree's uncommitted row was opened: the repository's tab moves onto that worktree
     /// (`tabs::strip::landing_for`).

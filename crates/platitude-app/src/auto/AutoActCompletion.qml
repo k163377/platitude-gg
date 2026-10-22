@@ -205,6 +205,9 @@ QtObject {
                 // And the ones that go on into the list the choice puts up.
                 "graph-choose-said", "graph-choose-sweep", "graph-choose-diff", "graph-choose-dbl",
                 "graph-choose-drop",
+                // A fetch through, the choice, and the commit's file read, before the card they open
+                // (`AutoActGithubVerbs`).
+                "github-card", "github-choice", "diff-github", "github-ref", "github-remote", "github-file",
                 "signature", "signature-tip", "stash-tip", "path-tip", "tip-copy", "tip-sweep",
                 "row-card", "card-sweep", "menu-hover", "menu-list",
                 // The card opens after a rest, so the return waits until the sampler has seen it come up.

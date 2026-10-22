@@ -139,6 +139,7 @@ fn main() {
     qrc::embed!("ui/ColumnDivider.qml");
     qrc::embed!("ui/CommitAuthorRow.qml");
     qrc::embed!("ui/CommitHoverCard.qml");
+    qrc::embed!("ui/CommitFileMenu.qml");
     qrc::embed!("ui/CommitMenuState.qml");
     qrc::embed!("ui/CommitRowMenu.qml");
     qrc::embed!("ui/EolHoverCard.qml");
@@ -184,6 +185,8 @@ fn main() {
     qrc::embed!("ui/FocusRelease.qml");
     qrc::embed!("ui/FoldBlock.qml");
     qrc::embed!("ui/FormField.qml");
+    qrc::embed!("ui/GitHubLinks.qml");
+    qrc::embed!("ui/GitHubMenu.qml");
     qrc::embed!("ui/GitVersionCorner.qml");
     qrc::embed!("ui/GoneBadge.qml");
     qrc::embed!("ui/GraphColumnDividers.qml");
@@ -505,6 +508,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActDriver.qml");
     qrc::embed!("auto/AutoActFileRowVerbs.qml");
     qrc::embed!("auto/AutoActFindVerbs.qml");
+    qrc::embed!("auto/AutoActGithubVerbs.qml");
     qrc::embed!("auto/AutoActGraphReclickVerbs.qml");
     qrc::embed!("auto/AutoActGraphRowVerbs.qml");
     qrc::embed!("auto/AutoActHandVerbs.qml");

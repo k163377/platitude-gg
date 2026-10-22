@@ -55,6 +55,8 @@ Item {
 
     signal activated(string bucket, string path, string origPath)
     signal folderToggled(string key)
+    /// The menu on this file, asked of the list's owner — a list with none leaves it unanswered.
+    signal menuRequested(string path, string origPath, string change)
 
     /// A press on this row — a folder folds, a file is read. The handler below and a headless run both enter here
     /// (verify-ui §壊れない動詞の実装と反復).
@@ -63,6 +65,11 @@ Item {
             fileRow.folderToggled(fileRow.foldKey)
         else
             fileRow.activated(fileRow.bucket, fileRow.pathText, fileRow.origPathText)
+    }
+    /// A right-click on this row, and the menu key on it (`DetailsPane.menuFromKeys`). A folder has none.
+    function askMenu() {
+        if (!fileRow.isFolder)
+            fileRow.menuRequested(fileRow.pathText, fileRow.origPathText, fileRow.changeText)
     }
 
     width: listWidth
@@ -101,9 +108,15 @@ Item {
         id: fileMouse
         anchors.fill: parent
         hoverEnabled: true
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
         // Or a click with a tremor hands the grab to the list (rules-refs/app-ui.md「行は渡されたドラッグを手放さない」).
         preventStealing: true
-        onClicked: fileRow.press()
+        onClicked: mouse => {
+            if (mouse.button === Qt.RightButton)
+                fileRow.askMenu()
+            else
+                fileRow.press()
+        }
     }
     // Hover always says the path (デザイン規約 §hover のツールチップ), except behind a standing menu (デザイン規約 §メニュー).
     // Out of the list, never over the rows either side (`SharedToolTip.tipRowSide`).

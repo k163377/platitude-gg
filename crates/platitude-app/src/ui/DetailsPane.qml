@@ -88,6 +88,25 @@ ColumnLayout {
     /// Which changed file the middle pane is reading, so its row can say so (デザイン規約 §diff のファイル一覧).
     /// Empty while the graph is in the middle.
     property string readPath: ""
+    /// The menu key on the changed files (デザイン規約 §メニュー のキーボード): the menu of the file the arrows stand on,
+    /// standing under the left end of its row, which comes on screen first, as little as will do. Nothing read, nothing
+    /// opens; nor while the list does not hold the keyboard (`KeyMenu.answer` comes here from anything in the pane).
+    /// Says whether a row was asked.
+    function menuFromKeys() {
+        if (!fileList.activeFocus || fileWalk.atPath === "")
+            return false
+        const at = detailsPane.details.rowOfFileIn("", fileWalk.atPath)
+        if (at < 0)
+            return false
+        fileList.positionViewAtIndex(at, ListView.Contain)
+        // A row the move brought on is built at the next polish; the menu needs it now.
+        fileList.forceLayout()
+        const item = fileList.itemAtIndex(at)
+        if (!item)
+            return false
+        KeyMenu.ask(item.mapToItem(null, 0, Theme.rowHeight), () => item.askMenu())
+        return true
+    }
     function avatarClicked() {
         if (detailsPane.details.authorEmail !== "")
             detailsPane.avatarEditRequested(detailsPane.details.authorName, detailsPane.details.authorEmail)
@@ -105,6 +124,9 @@ ColumnLayout {
     }
 
     signal fileActivated(string path, string origPath)
+    /// A right-click on a changed file, or the menu key on the one the arrows stand on (`menuFromKeys`). `change` is
+    /// its status letter (`D` for a file the commit deletes).
+    signal fileMenuRequested(string path, string origPath, string change)
     /// The arrows walked onto another file. Not `fileActivated`: a click on the file already open closes the diff,
     /// and holding Down walks on (規約 §diff のファイル一覧).
     signal fileWalked(string path, string origPath)
@@ -426,6 +448,7 @@ ColumnLayout {
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1, event.isAutoRepeat)
         Keys.onDownPressed: event => event.accepted = fileWalk.stepFile(1, event.isAutoRepeat)
+        Keys.onMenuPressed: event => event.accepted = detailsPane.menuFromKeys()
         delegate: FileRowDelegate {
             listWidth: fileList.width
             pointedTipRow: detailsPane.pointedTipRow
@@ -438,6 +461,11 @@ ColumnLayout {
                 detailsPane.fileActivated(path, origPath)
             }
             onFolderToggled: key => detailsPane.details.toggleFolder(key)
+            // A right-click is a press: the keyboard comes here as it does with a file read.
+            onMenuRequested: (path, origPath, change) => {
+                fileList.forceActiveFocus()
+                detailsPane.fileMenuRequested(path, origPath, change)
+            }
         }
     }
 }

@@ -53,9 +53,18 @@ Item {
         property var remoteNames: ["origin", "fork"]
     }
 
+    /// No remote here is GitHub's: the menu's GITHUB card stays out (`GitHubLinks.ofRemote`).
+    QtObject {
+        id: noLinks
+        function ofRemote(name) {
+            return []
+        }
+    }
+
     RemoteRowMenu {
         id: remoteMenu
         repoTab: remoteTab
+        githubLinks: noLinks
     }
 
     SignalSpy {

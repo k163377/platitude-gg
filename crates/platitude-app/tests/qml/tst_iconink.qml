@@ -32,7 +32,7 @@ Item {
         readonly property var kinds: ["branch", "remote", "tag", "stash", "tree", "pen", "plus", "minus", "arrow",
             "fetch", "push", "spinner", "history", "copyicon", "bang", "hier", "list", "pr", "check", "lock", "home",
             "folder", "chevron", "chevrons", "terminal", "menu", "close", "gear", "window-minimize", "window-maximize",
-            "window-restore", "app-window", "unified", "split", "eye", "eye-off", "no", "no-entry", "search"]
+            "window-restore", "app-window", "unified", "split", "eye", "eye-off", "no", "no-entry", "search", "github"]
         /// Four times the grid, so a pixel's antialiasing is a quarter of one at the grid's own size: at the window's
         /// sizes a thin end — a round cap, a point — leaves less than a pixel of ink at the edge, and the reading leans.
         readonly property int large: Theme.iconMd * 4

@@ -29,6 +29,8 @@ QtObject {
     required property NavSectionModel tagsModel
     /// Where a remote branch the menu is aimed at points now (`aimedAt`).
     required property NavSectionModel remotesModel
+    /// What the GITHUB card at the foot stands on.
+    required property GitHubLinks githubLinks
     /// The menu these answers are handed to, and the one this opens.
     required property CommitRowMenu menu
 
@@ -270,10 +272,13 @@ QtObject {
         menuState.menu.releaseShape()
         menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree
         const facts = menuState.standRow(oidHex, oidHex)
-        if (facts === null)
+        if (facts === null) {
             menuState.menu.offerStash()
-        else
-            menuState.menu.offerCommit(facts)
+            return
+        }
+        menuState.menu.standGithub(
+            menuState.githubLinks.ofRef(oidHex, menuState.menu.targetKind, menuState.menu.targetName))
+        menuState.menu.offerCommit(facts)
     }
 
     /// The command the menu waited for has ended with the menu up: what it left is read again and the rows stand on

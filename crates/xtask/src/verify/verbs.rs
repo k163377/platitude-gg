@@ -10,6 +10,7 @@
 
 mod diff;
 mod fetch;
+mod github;
 mod graph;
 mod graph_walk;
 mod identity;
@@ -74,6 +75,7 @@ pub(super) struct Verb {
 const TABLES: &[&[Verb]] = &[
     diff::TABLE,
     fetch::TABLE,
+    github::TABLE,
     graph::TABLE,
     graph_walk::TABLE,
     identity::TABLE,

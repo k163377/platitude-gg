@@ -32,6 +32,8 @@ Rectangle {
     /// Right-click anywhere along a row. `chip` is the name its chip draws (`encode::Chip`), null when none — the menu
     /// is the row's either way, and that name is what its cards are about.
     signal rowMenuOpenRequested(string oidHex, var chip)
+    /// …on a row inside a choice of two (see `GraphList`).
+    signal choiceMenuOpenRequested(string oidHex, int atRow, var chip)
     /// A row was double-clicked. `chip` is the chip it shows; null when the row shows no branch at all.
     signal rowSwitchRequested(string oidHex, var chip)
     /// Another worktree's uncommitted row was opened (see `GraphList`).
@@ -462,6 +464,7 @@ Rectangle {
             event.accepted = graphArea.menuFromKeys()
         }
         onRowMenuRequested: (oidHex, chip) => graphArea.rowMenuOpenRequested(oidHex, chip)
+        onChoiceMenuRequested: (oidHex, atRow, chip) => graphArea.choiceMenuOpenRequested(oidHex, atRow, chip)
         onRowSelected: (oidHex, atRow, modifiers) => graphArea.rowActivated(oidHex, atRow, modifiers)
         onRowSwitchRequested: (oidHex, chip) => graphArea.rowSwitchRequested(oidHex, chip)
         onCarriedOpenRequested: path => graphArea.carriedOpenRequested(path)

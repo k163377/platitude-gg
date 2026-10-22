@@ -56,6 +56,9 @@ Menu {
         }
         return widest
     }
+    /// The hold seat of the menu this card hangs off (`holdIndent`), handed down by that menu's row for this card
+    /// (`delegate`); zero on a menu that hangs off none.
+    property real outerIndent: 0
     /// The narrowest width: a hold fills its row from the left and needs the travel to read as progress
     /// (デザイン規約 §進行中・回数押しの定数). A card with no held row may drop it to fit its rows.
     property real widthFloor: Metrics.menuMinW
@@ -154,9 +157,12 @@ Menu {
         return sub.offer()
     }
 
-    // Hands every divider its menu: a MenuSeparator has no `menu` of its own
-    // (rules-refs/app-ui.md「区切りは `AppMenuSeparator` が自分で決める」).
     Component.onCompleted: {
+        // Fusion's list clips for its scroll alone, and a row's hold fill reaches past its side out to the card's
+        // frame (`HoldFill.bleed`). So the list clips only while it scrolls.
+        appMenu.contentItem.clip = Qt.binding(() => appMenu.contentItem.interactive)
+        // Hands every divider its menu: a MenuSeparator has no `menu` of its own
+        // (rules-refs/app-ui.md「区切りは `AppMenuSeparator` が自分で決める」).
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
             if (row && row.inMenu !== undefined)
@@ -187,8 +193,11 @@ Menu {
     // The hold mark's seat, left by every row once any row on offer carries the mark, so words start on one x
     // (デザイン規約 §回数押し); 0 otherwise. Extra left padding, not a layout seat, which would also pay the layout's gap.
     // The seat (`iconSm`) the hold mark and the `!` stand in: it stands at the row's edge, and the row's own padding is
-    // the step from it to the words.
+    // the step from it to the words. **A card under a menu keeping the seat keeps it too** (`outerIndent`) — the levels
+    // of one menu start their words alike, a heading's mark in the seat.
     readonly property real holdIndent: {
+        if (appMenu.outerIndent > 0)
+            return Theme.iconSm
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
             if (!row || !row.present)
@@ -238,6 +247,12 @@ Menu {
         markTint: subMenu && subMenu.titleTint !== undefined ? subMenu.titleTint : Theme.textSecondary
         // A submenu with nothing to offer, by `applies` or by coming out empty, takes its title row with it.
         offered: !subMenu || (subMenu.applies !== false && (subMenu.offeredRows > 0 || subMenu.promises === true))
+        // The card keeps this menu's hold seat (`outerIndent`). Bound once Qt hands the row its card, which it does
+        // after the row is built.
+        onSubMenuChanged: {
+            if (subMenu !== null && subMenu.outerIndent !== undefined)
+                subMenu.outerIndent = Qt.binding(() => appMenu.holdIndent)
+        }
     }
 
     background: AppCardFace {}

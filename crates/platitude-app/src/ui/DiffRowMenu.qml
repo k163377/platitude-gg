@@ -27,6 +27,7 @@ Item {
 
     /// Automation: the rows themselves (the same exposure `GraphPane.view` is).
     readonly property alias menu: codeMenu
+    readonly property alias githubCard: githubLinesMenu
 
     anchors.fill: parent
 
@@ -39,6 +40,11 @@ Item {
         diffRowMenu.canCopy = diffRowMenu.diffModel.selHasNew
         diffRowMenu.removed = diffRowMenu.diffModel.selRemoved
         diffRowMenu.offered(codeMenu.offer())
+    }
+    /// The GITHUB card's half, before `offer()`: the link to the selected lines on each remote that has them
+    /// (`RepoPage.diffLineLinks`) — none for a working tree's file.
+    function standGithub(links) {
+        githubLinesMenu.standOn(links)
     }
 
     /// Named so a headless run enters where the row enters (verify-ui).
@@ -60,6 +66,12 @@ Item {
             text: diffRowMenu.removed > 1 ? qsTr("Copy removed lines") : qsTr("Copy removed line")
             offered: diffRowMenu.removed > 0
             onTriggered: diffRowMenu.copyRemovedNow()
+        }
+        AppMenuSeparator {}
+        // The same lines on GitHub (デザイン規約 §GitHub のページへのリンク).
+        GitHubMenu {
+            id: githubLinesMenu
+            onCopyRequested: text => diffRowMenu.copyRequested(text)
         }
     }
 }

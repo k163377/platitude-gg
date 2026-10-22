@@ -289,8 +289,10 @@ MenuItem {
 
     /// Where a heading's mark box stands: its ink then starts where the other rows start their words (the row's
     /// padding), so the card's left edge reads as one column (デザイン規約 §メニュー) — or, where the menu has a hold /
-    /// `!` seat, the box is centred on that seat as the `!` is.
-    readonly property real markX: menuItem.holdIndent > 0 ? (menuItem.holdIndent - Theme.iconMd) / 2
+    /// `!` seat, the box is centred on that seat as the `!` is. A mark wider than the seat (the cloud) starts its ink
+    /// at the row's side instead: centred, it would stand out past the row's wash.
+    readonly property real markX: menuItem.holdIndent > 0
+                                  ? Math.max((menuItem.holdIndent - Theme.iconMd) / 2, -rowMark.inkLeft)
                                   : menuItem.padding - Math.round((Theme.iconMd - rowMark.inkAcross) / 2)
 
     // On a card that keeps the heading seat, every row's words start past it, marked or not (`NameCell`'s spacing).
