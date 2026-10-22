@@ -70,6 +70,9 @@ Item {
     property string phraseCount: ""
     property string phraseTail: ""
     property color phraseTailTint: btnLabel.tint
+    /// The mark the tail's name wears in front of it, on the chip in the name's ink (デザイン規約 §ref の種別
+    /// 「名前の印」); empty for none.
+    property string phraseTailMark: ""
     /// A short warning after the phrase's words, in the note's step and colour (`AppMenuItem.note`). Inside the phrase:
     /// a line of its own above a pane-filling button reads as the pane's heading (デザイン規約 §フル interactive rebase).
     property string phraseNote: ""
@@ -276,11 +279,13 @@ Item {
             font.pixelSize: Theme.fontSm
             anchors.verticalCenter: parent.verticalCenter
         }
-        // Capped (`tailCap`): the one part of unbounded length — git takes a branch name of any length.
+        // Capped (`tailCap`): the one part of unbounded length — git takes a branch name of any length. The mark on the
+        // chip's own ground, so mark and name give way as one (`CodeChip.mark`).
         CodeChip {
             id: tailWord
             word: btnLabel.phraseTail
             tint: btnLabel.phraseTailTint
+            mark: btnLabel.phraseTailMark
             size: btnLabel.fontSize
             cap: btnLabel.tailCap
             anchors.verticalCenter: parent.verticalCenter
@@ -381,7 +386,7 @@ Item {
     }
     // The chip, as wide as the ink rather than the shared box, hanging half a gap off either end
     // (デザイン規約 §git 用語のコード表記).
-    Rectangle {
+    CodeGround {
         id: ground
         z: -1
         visible: btnLabel.code && !btnLabel.folded
@@ -389,11 +394,9 @@ Item {
         width: btnLabel.inkWidth + Theme.spaceXs
         // Off the word's step, not the mono line box, which differs per OS (@14px: Cascadia Mono 16, Noto Sans Mono
         // CJK JP 21; rules-refs/app-ui.md「チップの地の高さは語の段から採る」).
-        height: btnLabel.fontSize + Theme.spaceXs / 2
+        size: btnLabel.fontSize
         // The word's middle, not the cell's: a word moved onto a baseline (`headText`) would leave its ground behind.
         anchors.verticalCenter: headText.verticalCenter
-        radius: Theme.radiusSm
-        color: Theme.bgHover
     }
     // The failure mark, on the right shoulder of the word it is about: past the word's end, its ink half a gap over the
     // word's ground — pulled back wherever that would reach the frame (デザイン規約 §git 用語のコード表記「`!` の席」).

@@ -84,8 +84,7 @@ Item {
             kind === "branch"
                 //: The question a branch renamed here raises about the remote branch it was measured against.
                 ? qsTr("Change the upstream too?")
-                //: %1 is a remote. The question a tag renamed here raises about the remote's copy of it.
-                : qsTr("Change the tag on %1 too?").arg(remote),
+                : carryFlow.tagHeading(remote),
             carryFlow.pillWord(),
             carryFlow.answer,
             carryForm)
@@ -165,13 +164,41 @@ Item {
     Binding {
         target: carryFlow.graphPane
         property: "askTip"
-        value: !carryFlow.takesAway ? "" : carryFlow.kind === "branch"
-            ? qsTr("%1 to replace. %2 goes up first, then %3 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.")
-              .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(carryFlow.newSide).arg(carryFlow.oldSide)
-            : qsTr("%1 to replace. %2 goes up first, then %3 comes off — so a push the far side turns down leaves the old name where it is. Anything built from it stays with the name that goes.")
-              .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(carryFlow.newSide).arg(carryFlow.oldSide)
+        value: carryFlow.tipOf(carryFlow.newSide, carryFlow.oldSide)
         when: carryFlow.asking
         restoreMode: Binding.RestoreNone
+    }
+    /// A tag's heading, naming the remote — one spelling for the words and the seat of its mark.
+    function tagHeading(remote) {
+        //: %1 is a remote. The question a tag renamed here raises about the remote's copy of it.
+        return qsTr("Change the tag on %1 too?").arg(remote)
+    }
+    // The names the bar says, each behind its mark (デザイン規約 §ref の種別「名前の印」): the remote in a tag's heading,
+    // the two names in the tip — remote branches, or tags.
+    Binding {
+        target: carryFlow.graphPane
+        property: "askLabelMarks"
+        value: carryFlow.kind === "tag"
+               ? Words.marksOf(carryFlow.tagHeading, [[carryFlow.remote, "remote"]])
+               : []
+        when: carryFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    Binding {
+        target: carryFlow.graphPane
+        property: "askTipMarks"
+        value: Words.marksOf(carryFlow.tipOf, [[carryFlow.newSide, carryFlow.kind === "branch" ? "remote" : "tag"],
+                                               [carryFlow.oldSide, carryFlow.kind === "branch" ? "remote" : "tag"]])
+        when: carryFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    /// The hold's tip, with the name that comes and the name that goes.
+    function tipOf(comes, goes) {
+        return !carryFlow.takesAway ? "" : carryFlow.kind === "branch"
+            ? qsTr("%1 to replace. %2 goes up first, then %3 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.")
+              .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(comes).arg(goes)
+            : qsTr("%1 to replace. %2 goes up first, then %3 comes off — so a push the far side turns down leaves the old name where it is. Anything built from it stays with the name that goes.")
+              .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(comes).arg(goes)
     }
     /// Automation: the chooser's list, which no injected click can reach — the same door a press uses
     /// (`AppCombo.pressField`), so what answers is the wiring.

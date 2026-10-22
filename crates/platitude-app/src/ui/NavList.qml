@@ -504,6 +504,7 @@ AppListView {
         editRefused: navList.gestures ? navList.gestures.editRefused : false
         editRefusedWhy: navList.gestures ? navList.gestures.editRefusedWhy : ""
         editRefusedMark: navList.gestures ? navList.gestures.editRefusedMark : ""
+        editRefusedMarks: navList.gestures ? navList.gestures.editRefusedMarks : []
         onRefClicked: oidHex => navList.refActivated(oidHex)
         onFileClicked: (bucket, path, origPath) => navList.fileActivated(bucket, path, origPath)
         onFolderClicked: key => navList.sectionModel.toggleFolder(key)

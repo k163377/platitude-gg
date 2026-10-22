@@ -266,6 +266,13 @@ Item {
     /// property, so the box never opens on the previous rest's words.
     property string said: ""
     onSaysChanged: if (facts.says !== "") facts.said = facts.says
+    /// The remotes a tag's note names (`NavFacts.apartNote` — `Words.differsFrom`), each behind the cloud
+    /// (デザイン規約 §ref の種別「名前の印」, `SharedToolTip.tipMarks`).
+    readonly property var tipMarks: {
+        const lead = Words.differsFrom("")
+        return facts.said.startsWith(lead)
+               ? Words.listMarks(facts.said, facts.said.substring(lead.length), "remote") : []
+    }
     ToolTip.text: facts.said
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.visible: facts.says !== ""

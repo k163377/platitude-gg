@@ -111,6 +111,8 @@ Item {
     property string editRefusedWhy: ""
     /// A worktree's folder in that line, which the box's tip marks (`SidebarRowGestures.editRefusedMark`).
     property string editRefusedMark: ""
+    /// …and the branch, tag or remote in it (`SidebarRowGestures.editRefusedMarks`).
+    property var editRefusedMarks: []
     readonly property bool editing: navRow.editKey !== "" && navRow.editKey === navRow.rowKey
     /// The name git knows this row by.
     readonly property string fullName: navRow.full !== "" ? navRow.full : navRow.name
@@ -227,6 +229,7 @@ Item {
             refused: navRow.editRefused
             refusedWhy: navRow.editRefusedWhy
             refusedMark: navRow.editRefusedMark
+            refusedMarks: navRow.editRefusedMarks
             onTyped: text => navRow.editTyped(text)
             onSubmitted: text => navRow.editAccepted(text)
             onCancelled: navRow.editCancelled()

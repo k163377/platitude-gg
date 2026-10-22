@@ -116,36 +116,16 @@ Rectangle {
                 }
             }
             // A quarter of the band at most, so a long worktree name cannot push the path off; it cuts its own middle.
-            RowLayout {
+            // As code behind its mark (`NameRun`), a step down with the band's words (`Words.nameInk`).
+            NameRun {
                 visible: header.worktreeName !== ""
-                // A nested layout fills by default; the slack is the path's.
-                Layout.fillWidth: false
+                Layout.preferredHeight: Theme.rowHeight
                 Layout.maximumWidth: header.width / 4
-                spacing: 0
-                // A sign on the name, no step after it (デザイン規約 §アイコンの席 の修飾): its box is the name's
-                // seat, so the two share a baseline.
-                NavIcon {
-                    id: worktreeMark
-                    Layout.preferredWidth: worktreeMark.wordCell
-                    Layout.preferredHeight: Theme.rowHeight
-                    kind: header.worktreeHome ? "home" : "tree"
-                    set: "sign"
-                    size: worktreeNameCut.pixelSize
-                    wordBase: worktreeNameCut.baselineOffset
-                    tint: Theme.textSecondary
-                    width: worktreeMark.wordCell
-                    height: Theme.rowHeight
-                }
-                CutName {
-                    id: worktreeNameCut
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Theme.rowHeight
-                    text: header.worktreeName
-                    pixelSize: Theme.fontMd
-                    weight: Theme.fontWeightStrong
-                    // The band's colour, not a step quieter: the name is part of the phrase, not an aside.
-                    color: Theme.textSecondary
-                }
+                name: header.worktreeName
+                kind: header.worktreeHome ? "home" : "tree"
+                pixelSize: Theme.fontMd
+                weight: Theme.fontWeightStrong
+                color: Words.nameInk(Theme.textSecondary)
             }
         }
         // The band's spare room goes to this spacer: a layout with room nothing takes spreads it between its items.

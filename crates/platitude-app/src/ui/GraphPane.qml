@@ -198,6 +198,7 @@ Rectangle {
     property alias namingRefused: graphList.namingRefused
     property alias namingRefusedWhy: graphList.namingRefusedWhy
     property alias namingRefusedMark: graphList.namingRefusedMark
+    property alias namingRefusedMarks: graphList.namingRefusedMarks
 
     // ---- looking for a commit --------------------------------------
     /// The card itself — automation-only exposure, like `view`. A run types into its box, but the key that opens it
@@ -233,8 +234,11 @@ Rectangle {
     /// its own (デザイン規約 §git 用語のコード表記); `accept` carries the wording otherwise. `refName` is the ref the
     /// question names, and **`label` then comes with the name's seat still in it (`%1`)**: the name is drawn in its own
     /// colour, `refTint`, so the sentence is cut at the seat (`AskBar.labelSentence`).
+    /// `refMark` is the mark that name wears (デザイン規約 §ref の種別「名前の印」), and `marks` the names the words say
+    /// otherwise, each behind its mark — `{label, detail, tip}`, each as the field takes them (`Words.marksOf`,
+    /// `CardText.marks`).
     function startAsking(oidHex, label, detail, accept, danger, hold = false, tip = "", form = null, code = "",
-                         refName = "", refTint = Theme.textLink) {
+                         refName = "", refTint = Theme.textLink, refMark = "", marks = null) {
         graphArea.stopNaming()
         // Down before the new one goes in, or the last question's typing comes back under these words (`AskBar.form`).
         askBar.form = null
@@ -246,6 +250,10 @@ Rectangle {
         askBar.labelSentence = refName === "" ? "" : label
         askBar.labelRef = refName
         askBar.labelRefTint = refTint
+        askBar.labelRefMark = refMark
+        askBar.labelMarks = marks !== null && marks.label !== undefined ? marks.label : []
+        askBar.detailMarks = marks !== null && marks.detail !== undefined ? marks.detail : []
+        askBar.tipMarks = marks !== null && marks.tip !== undefined ? marks.tip : []
         askBar.label = refName === "" ? label : label.arg(refName)
         askBar.detail = detail
         askBar.accept = accept
@@ -287,8 +295,12 @@ Rectangle {
     property alias askLabelSentence: askBar.labelSentence
     property alias askLabelRef: askBar.labelRef
     property alias askLabelRefTint: askBar.labelRefTint
+    property alias askLabelRefMark: askBar.labelRefMark
+    property alias askLabelMarks: askBar.labelMarks
     property alias askDetail: askBar.detail
+    property alias askDetailMarks: askBar.detailMarks
     property alias askTip: askBar.tip
+    property alias askTipMarks: askBar.tipMarks
     /// The live form, so its owner can read what was typed into it.
     readonly property alias askForm: askBar.formItem
     /// The bar itself — automation-only exposure, like `view`.

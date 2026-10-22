@@ -284,47 +284,67 @@ Item {
     Binding {
         target: publishFlow.graphPane
         property: "askDetail"
-        value: !publishFlow.publishFilled ? qsTr("Enter where it goes.")
-               : !publishFlow.publishChecked
-                 ? qsTr("Asking %1 what it has…").arg(publishFlow.publishRemote)
-                 // Any failure of the ask, an answer of a refusal included: git's words are in the log.
-                 : publishFlow.publishState === "unreachable"
-                   ? qsTr("Asking %1 failed — it may already have that branch.")
-                     .arg(publishFlow.publishRemote)
-                   : publishFlow.publishState === "unknown"
-                     ? qsTr("%1 already exists, and what it holds is not here.")
-                       .arg(publishFlow.publishTarget)
-                     : publishFlow.publishRefused
-                       ? qsTr("Commits only %1 has stop being on it.")
-                         .arg(publishFlow.publishTarget)
-                       : publishFlow.publishState === "fast-forward"
-                         ? qsTr("%1 already exists — your commits go on top of it.")
-                           .arg(publishFlow.publishTarget)
-                         : qsTr("%1 does not exist yet; this makes it.")
-                           .arg(publishFlow.publishTarget)
+        value: publishFlow.detailOf(publishFlow.publishRemote, publishFlow.publishTarget)
+        when: publishFlow.publishAsking
+        restoreMode: Binding.RestoreNone
+    }
+    // The remote and the branch over there it names, each behind its mark (デザイン規約 §ref の種別「名前の印」).
+    Binding {
+        target: publishFlow.graphPane
+        property: "askDetailMarks"
+        value: Words.marksOf(publishFlow.detailOf, [[publishFlow.publishRemote, "remote"],
+                                                    [publishFlow.publishTarget, "remote"]])
         when: publishFlow.publishAsking
         restoreMode: Binding.RestoreNone
     }
     Binding {
         target: publishFlow.graphPane
         property: "askTip"
+        value: publishFlow.tipOf(publishFlow.publishRemote, publishFlow.publishTarget)
+        when: publishFlow.publishAsking
+        restoreMode: Binding.RestoreNone
+    }
+    Binding {
+        target: publishFlow.graphPane
+        property: "askTipMarks"
+        value: Words.marksOf(publishFlow.tipOf, [[publishFlow.publishRemote, "remote"],
+                                                 [publishFlow.publishTarget, "remote"]])
+        when: publishFlow.publishAsking
+        restoreMode: Binding.RestoreNone
+    }
+    /// The line under the question, with `remote` and `target` (the branch over there) where it names them.
+    function detailOf(remote, target) {
+        return !publishFlow.publishFilled ? qsTr("Enter where it goes.")
+               : !publishFlow.publishChecked
+                 ? qsTr("Asking %1 what it has…").arg(remote)
+                 // Any failure of the ask, an answer of a refusal included: git's words are in the log.
+                 : publishFlow.publishState === "unreachable"
+                   ? qsTr("Asking %1 failed — it may already have that branch.").arg(remote)
+                   : publishFlow.publishState === "unknown"
+                     ? qsTr("%1 already exists, and what it holds is not here.").arg(target)
+                     : publishFlow.publishRefused
+                       ? Words.losesCommits(target, publishFlow.repoTab.remoteBranchTheirs)
+                       : publishFlow.publishState === "fast-forward"
+                         ? qsTr("%1 already exists — your commits go on top of it.").arg(target)
+                         : qsTr("%1 does not exist yet; this makes it.").arg(target)
+    }
+    /// The pill's tip, the same way.
+    function tipOf(remote, target) {
         // A sentence for each count — `commit(s)` would reach the reader as written (デザイン規約 §タイポグラフィ).
-        value: publishFlow.publishRefused
+        return publishFlow.publishRefused
                ? (publishFlow.repoTab.remoteBranchTheirs === 1
                   ? qsTr("%1 to overwrite %2, dropping %n commit it has and yours does not. A remote that moved since is refused.",
                          "", publishFlow.repoTab.remoteBranchTheirs)
                   : qsTr("%1 to overwrite %2, dropping %n commits it has and yours does not. A remote that moved since is refused.",
                          "", publishFlow.repoTab.remoteBranchTheirs))
-                 .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(publishFlow.publishTarget)
+                 .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(target)
                : publishFlow.publishState === "unknown"
                  ? qsTr("%1 was never fetched here, so what it holds cannot be read — the push can only fast-forward it.")
-                   .arg(publishFlow.publishTarget)
+                   .arg(target)
                  : publishFlow.publishState === "unreachable"
                    ? qsTr("Asking %1 failed; the push can only fast-forward, and its answer will say what went wrong.")
-                     .arg(publishFlow.publishRemote)
+                     .arg(remote)
                    : ""
-        when: publishFlow.publishAsking
-        restoreMode: Binding.RestoreNone
     }
 
     /// Asks where `branch` goes, opening on `upstream` — the remote branch it is configured for, fetched or not; "" for

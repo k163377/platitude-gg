@@ -255,8 +255,7 @@ Item {
             //: or the branch the repository's own worktree has out.
             text: qsTr("Open")
             nameMark: rowMenu.carriedHome ? "home" : "tree"
-            nameMarkTint: Theme.success
-            markName: rowMenu.carriedName
+            codeName: rowMenu.carriedName
             onTriggered: rowMenu.carriedOpenRequested(rowMenu.carriedPath)
         }
         AppMenuSeparator {}
@@ -298,8 +297,7 @@ Item {
             //: the repository's own worktree has out.
             text: rowMenu.heldLeaf === "" ? "" : qsTr("Open")
             nameMark: rowMenu.heldLeaf === "" ? "" : rowMenu.heldHome ? "home" : "tree"
-            nameMarkTint: Theme.success
-            markName: rowMenu.heldLeaf
+            codeName: rowMenu.heldLeaf
             offered: rowMenu.canSwitch
             // Not greyed: where the move would ask first, `asks` marks the row before the press (as `RefRowMenu`).
             blockedReason: ""
@@ -358,6 +356,7 @@ Item {
             code: "merge"
             refSentence: Words.intoBranch
             refName: rowMenu.branch
+            refMark: "branch"
             offered: rowMenu.canIntegrate
             onTriggered: rowMenu.mergeRequested(rowMenu.integrateRef)
         }
@@ -366,6 +365,7 @@ Item {
             //: Follows the `rebase` chip: "rebase main onto it".
             refSentence: qsTr("%1 onto it")
             refName: rowMenu.branch
+            refMark: "branch"
             note: rowMenu.published ? Words.rewritesPushed : ""
             offered: rowMenu.canIntegrate
             onTriggered: rowMenu.rebaseRequested(rowMenu.integrateRef)
@@ -381,6 +381,7 @@ Item {
             // Never shown without a branch (`canMoveBranch`, offers::commit_menu); the fallback only keeps the
             // sentence whole.
             titleRef: rowMenu.branch !== "" ? rowMenu.branch : qsTr("the branch")
+            titleRefMark: rowMenu.branch !== "" ? "branch" : ""
             applies: rowMenu.canMoveBranch
             AppMenuItem {
                 code: "--soft"
@@ -421,10 +422,13 @@ Item {
             refSentence: Words.intoBranch
             refName: rowMenu.pullRuns === "aside" ? rowMenu.targetName : rowMenu.branch
             refTint: rowMenu.pullRuns === "aside" ? Theme.textPrimary : Theme.textLink
+            refMark: "branch"
             offered: rowMenu.pullRuns !== ""
             blockedReason: Words.pullOut(rowMenu.pullOut, rowMenu.heldLeaf, rowMenu.pullUpstream)
             reasonMarkWord: rowMenu.pullOut === "held" ? rowMenu.heldLeaf : ""
             reasonMarkKind: rowMenu.heldHome ? "home" : "tree"
+            reasonMarks: rowMenu.pullOut === "own"
+                         ? Words.listMarks(pullCommitItem.blockedReason, rowMenu.pullUpstream, "remote") : []
             onTriggered: rowMenu.pullRequested(rowMenu.pullRuns === "aside" ? rowMenu.targetName : "")
         }
         AppMenuSeparator {}

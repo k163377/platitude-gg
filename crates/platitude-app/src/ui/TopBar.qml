@@ -745,6 +745,7 @@ Rectangle {
                         required property string title
                         required property string worktree_name
                         text: repoRow.title
+                        textNames: true
                         trail: repoRow.worktree_name
                         offered: repoRow.index !== topBar.tabsModel.currentIndex
                         onTriggered: topBar.tabsModel.setCurrentIndex(repoRow.index)
@@ -789,8 +790,10 @@ Rectangle {
                         readonly property bool homeWorktree: worktreeRow.change === "MAIN"
                         // **Named the way the left menu names it** (`NavRowBody.name`): the repository's own worktree
                         // by the branch it has out — its folder is already the tab's name — every other by its folder.
-                        text: worktreeRow.homeWorktree && worktreeRow.branch !== "" ? worktreeRow.branch
-                                                                                    : worktreeRow.modelData.name
+                        // As code with no mark of its own: the card's title wears the tree (デザイン規約 §操作パネル).
+                        codeName: worktreeRow.homeWorktree && worktreeRow.branch !== "" ? worktreeRow.branch
+                                                                                        : worktreeRow.modelData.name
+                        textNames: true
                         // …wearing that row's own mark and colours (`NavRowBody.seatMark` / `seatTint`). A mark about
                         // the row is not a heading.
                         headed: false

@@ -59,7 +59,20 @@ ActionButton {
         // Said though disabled: nothing else on screen says the plan is what holds it down.
         if (pushButton.curPage.planShown)
             return qsTr("A rebase plan is being composed — it rewrites the very commits a push would send")
-        const to = pushButton.curPage.pushTargetLabel
+        const what = pushButton.sentenceTo(pushButton.curPage.pushTargetLabel)
+        // What git said, under what the button would do next (デザイン規約 §リモートへ送る).
+        const why = pushButton.curPage.pushFailReason
+        if (pushButton.failed && why !== "")
+            return what + "\n\n" + why
+        return what
+    }
+    /// Where that sentence names the branch it goes to, behind the remote's cloud (デザイン規約 §ref の種別「名前の印」,
+    /// `SharedToolTip.tipMarks`).
+    readonly property var tipMarks: pushButton.curPage === null || pushButton.curPage.planShown ? []
+        : Words.standSeats(pushButton.sentenceTo(Words.stand), pushButton.curPage.pushTargetLabel)
+              .map(at => [at, "remote", undefined, pushButton.curPage.pushTargetLabel.length])
+    /// What the button would do next, with `to` where it goes.
+    function sentenceTo(to) {
         // The counts the standing read: the destination's own where the push goes elsewhere.
         const ahead = pushButton.curPage.pushAhead
         const behind = pushButton.curPage.pushBehind
@@ -86,10 +99,6 @@ ActionButton {
                         : qsTr("%1 to overwrite %2, dropping %n commits it has (as of the last fetch)", "", behind))
                        .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(to)
                    : ""
-        // What git said, under what the button would do next (デザイン規約 §リモートへ送る).
-        const why = pushButton.curPage.pushFailReason
-        if (pushButton.failed && why !== "")
-            return what + "\n\n" + why
         return what
     }
     onActivated: pushButton.curPage.pushNow()

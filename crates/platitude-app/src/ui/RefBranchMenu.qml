@@ -241,12 +241,13 @@ AppMenu {
         // Off the running press's length, so the chip cannot change under a hand already on the row
         // (`AppMenuItem.armedPresses`, デザイン規約 §回数押し).
         code: refPushItem.armedPresses <= 0 ? "push" : "push --force"
-        // Where it goes in its kind's colour; the first push asks it, which the `…` says
+        // Where it goes, behind its kind's mark; the first push asks it, which the `…` says
         // (デザイン規約 §はじめてリモートへ送る).
         //: Follows the `push` chip: "push to origin/feature".
         refSentence: refPushItem.firstPushWords ? "" : qsTr("to %1")
         refName: state.pushTarget
-        refTint: Theme.textSecondary
+        refTint: Theme.textPrimary
+        refMark: "remote"
         //: Follows the `push` chip: "push to…", where the branch goes being asked first.
         text: refPushItem.firstPushWords ? qsTr("to…") : refPushItem.refSentence.arg(refPushItem.refName)
         offered: state.pushState !== "" || state.pushStaysHere
@@ -282,10 +283,10 @@ AppMenu {
         id: refUnsetUpstreamItem
         //: Followed by the upstream it takes off: "Unset upstream origin/feature".
         refSentence: qsTr("Unset upstream %1")
-        // In its own colour: a plain delete's words keep the ordinary rules (`AppMenuItem.inkTakesNames`).
+        // As code, in its own colour where it is the branch stood on (`Words.nameInk`).
         refName: state.upstream
-        refTint: state.upstreamWhere === "current" ? Theme.textLink
-               : state.upstreamWhere === "local" ? Theme.textPrimary : Theme.textSecondary
+        refTint: state.upstreamWhere === "current" ? Theme.textLink : Theme.textPrimary
+        refMark: state.upstreamWhere === "current" || state.upstreamWhere === "local" ? "branch" : "remote"
         // The name is data: it does not widen the menu (`growsForText`).
         growsForText: false
         offered: state.kind === "branch" && state.canUnsetUpstream
@@ -320,9 +321,10 @@ AppMenu {
         code: shownRefused ? "branch -D"
             : branchRow ? "branch --delete"
             : "push --delete"
-        // Data: untranslated, and it does not widen the menu (`growsForText`).
-        text: state.refId
-        growsForText: false
+        // Data: untranslated, and it does not widen the menu past `labelColW` (`codeName`) — behind its kind's mark
+        // (デザイン規約 §ref の種別「名前の印」).
+        nameMark: remoteRow ? "remote" : "branch"
+        codeName: state.refId
         note: shownRefused ? qsTr("not merged") : ""
         // On a branch the delete forms are a fixed table whose rows grey out rather than go
         // (デザイン規約 §メニュー「例外はブランチの削除の表」). The other kinds keep the assembled rule.
@@ -361,12 +363,13 @@ AppMenu {
     AppMenuItem {
         id: refRemoteDeleteItem
         code: "push --delete"
-        text: state.remoteCounterpart
-        growsForText: false
+        nameMark: "remote"
+        codeName: state.remoteCounterpart
         // Seated only while a remote reading exists; grey is "not now" — the reading stands on another commit
         // (デザイン規約 §左メニューの所作 の削除の表).
         offered: state.kind === "branch" && state.remoteCounterpart !== ""
         blockedReason: state.canDeleteRemote ? "" : Words.differsFrom(state.remoteCounterpart)
+        reasonMarks: Words.listMarks(refRemoteDeleteItem.blockedReason, state.remoteCounterpart, "remote")
         holdPresses: Metrics.holdPressesWarned
         holdTone: Theme.warning
         onHeld: {
@@ -402,6 +405,8 @@ AppMenu {
         // As on the local row.
         reasonMarkWord: refBothDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
         reasonMarkKind: state.holderHome ? "home" : "tree"
+        reasonMarks: refBothDeleteItem.blockedReason === Words.differsFrom(state.remoteCounterpart)
+                     ? Words.listMarks(refBothDeleteItem.blockedReason, state.remoteCounterpart, "remote") : []
         holdPresses: Metrics.holdPressesWarned
         // `warning` whether the local half runs as `-d` or `-D`: the commits only it reached come back from the discard
         // record with the name (デザイン規約 §回数押し の色の表).

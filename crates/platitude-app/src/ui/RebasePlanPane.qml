@@ -66,12 +66,24 @@ Rectangle {
                     font.pixelSize: Theme.fontMd
                     color: Theme.textPrimary
                 }
-                // The base, its branch name first and the id only as the fallback.
-                Label {
+                // The base, its branch name first — as code behind the branch's mark (デザイン規約 §ref の種別
+                // 「文の中の名前」) — and the id only as the fallback. Cut in the middle to the room the head leaves it,
+                // the pane being its ceiling (§寸法「名前の天井」), and whole on the hover where cut.
+                CodeChip {
+                    id: ontoChip
+                    /// The whole name behind its mark, for the tip (`SharedToolTip.tipMarks`).
+                    readonly property var tipMarks: [[0, "branch", undefined, ontoChip.word.length]]
                     visible: !planPane.waiting && !planPane.planModel.root && planPane.planModel.ontoRef !== ""
-                    text: planPane.planModel.ontoRef
-                    font.pixelSize: Theme.fontMd
-                    color: Theme.accentHover
+                    Layout.fillWidth: true
+                    Layout.maximumWidth: ontoChip.wantWidth
+                    cutToWidth: true
+                    word: planPane.planModel.ontoRef
+                    mark: "branch"
+                    size: Theme.fontMd
+                    ToolTip.visible: ontoChip.cut && ontoHover.hovered
+                    ToolTip.delay: Metrics.tipDelayMs
+                    ToolTip.text: ontoChip.word
+                    HoverHandler { id: ontoHover }
                 }
                 Label {
                     visible: !planPane.waiting && !planPane.planModel.root && planPane.planModel.ontoRef === ""

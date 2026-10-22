@@ -57,10 +57,10 @@ Rectangle {
     /// hand that never left it.
     property Item cardRow: null
 
-    /// The words an entry shows, which the filter reads: what it did, where, what it took, and when — as the row
-    /// writes its time and as its card does.
+    /// The words an entry shows, which the filter reads: what it did in the row's words and the card's, where, what it
+    /// took, and when — as the row writes its time and as its card does.
     function wordsOf(entry) {
-        const words = [entry.title, entry.worktree]
+        const words = [entry.listTitle, entry.title, entry.worktree]
         for (let i = 0; i < entry.parts.length; i++)
             words.push(entry.parts[i].text)
         words.push(pane.words.ago(entry.at, pane.now), pane.words.whenWords(entry.at, pane.now))
@@ -321,26 +321,28 @@ Rectangle {
             id: entryMark
             // A lone mark's box centred on the seat as `NameCell` centres its own; a pair starts the seat.
             x: Theme.spaceXs - (row.entry.paired ? 0 : (Theme.iconSm - Theme.iconXs) / 2)
-            // The head of the row's name, on its capitals' middle (デザイン規約 §アイコンの席 の文頭記号).
-            y: Math.round(title.y + title.nameBase - WordFace.capitalMiddle(entryMark.size) - entryMark.height / 2)
-            size: title.nameInk.pixelSize
+            // The head of the row's words, on their capitals' middle (デザイン規約 §アイコンの席 の文頭記号).
+            y: Math.round(title.y + title.baselineOffset - WordFace.capitalMiddle(entryMark.size)
+                          - entryMark.height / 2)
+            size: title.pixelSize
             kind: row.entry.mark
             tint: row.entry.tint
             badged: row.entry.badged
             paired: row.entry.paired
         }
-        // The seat and the name, as every left menu row opens, cut at the end: what was done stays readable, the
-        // name it was done to gives way. The whole of it is the card's and the band's. A pair of marks is wider than
-        // the seat, and that row's name moves over by the difference.
-        NameCell {
+        // What was done to what, after the seat every left menu row opens with (`NameCell.seatSize`), the names as
+        // code with no mark of their own (デザイン規約 §ref の種別「破棄記録は種類を語で言わない」), one line cut at the
+        // end (`CodeLine`). The whole of it is the card's and the band's. A pair of marks is wider than the seat, and
+        // that row's words move over by the difference.
+        CodeLine {
             id: title
-            x: Theme.spaceXs + (row.entry.paired ? entryMark.pairSpread : 0)
+            x: Theme.spaceXs + (row.entry.paired ? entryMark.pairSpread : 0) + Theme.iconXs + Theme.spaceXs
             y: 0
             width: whenLabel.x - Theme.spaceXs - title.x
             height: Theme.rowHeight
-            showChange: false
-            nameCutAt: "end"
-            name: row.entry.title
+            text: row.entry.listTitle
+            marks: row.entry.listMarks
+            pixelSize: Theme.fontMd
         }
         Label {
             id: whenLabel

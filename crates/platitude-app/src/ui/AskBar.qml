@@ -21,13 +21,29 @@ Rectangle {
     /// That name's own colour: `textLink` for the branch the worktree is on, `textPrimary` for one it is not
     /// (§ref の種別「名前の色 = 在処」).
     property color labelRefTint: Theme.textLink
-    /// The name's own colour only where the heading wears no state colour — a neutral bar, or one in the plain ink
-    /// (`plainWords`): a state colour takes the whole heading (the rule `AppMenuItem.refColor` carries).
-    readonly property color labelTint: bar.neutral || bar.plainWords ? bar.labelRefTint : bar.tone
-    readonly property string labelWords: bar.labelSentence === ""
-                                         ? "" : Words.nameInSentence(bar.labelSentence, bar.labelRef, bar.labelTint)
+    /// The heading's words' colour.
+    readonly property color headingInk: bar.plainWords ? Theme.textPrimary : bar.tone
+    /// The name's colour against those words (`Words.nameInk`, the rule `AppMenuItem.refColor` carries): its own
+    /// whatever the heading wears, a plain one plain. The field draws the name in it as code (`headingMarks`; the rule
+    /// taken again on its answer gives the same colour).
+    readonly property color labelTint: Words.nameInk(bar.headingInk, bar.labelRefTint)
+    /// The mark that name wears in front of it (デザイン規約 §ref の種別「名前の印」); empty for none.
+    property string labelRefMark: ""
+    /// The names of a heading in plain words (no `labelSentence`), as the field takes them (`CardText.marks`,
+    /// `Words.marksOf`).
+    property var labelMarks: []
+    /// The heading's names as the field takes them: the one `labelSentence` seats — behind its mark if it has one, in
+    /// its own colour and cut at the name ceiling either way (`CardText.holdsNames`) — or `labelMarks`.
+    readonly property var headingMarks: bar.labelSentence !== ""
+                                        ? [[bar.labelSentence.indexOf("%1"), bar.labelRefMark, bar.labelTint,
+                                            bar.labelRef.length]]
+                                        : bar.labelMarks
     /// What answering costs, in the one line §用語 allows for it.
     property string detail: ""
+    /// The names it says, each behind its mark — as `labelMarks`.
+    property var detailMarks: []
+    /// The names the pill's tip says, each behind its mark (`SharedToolTip.tipMarks`).
+    property var tipMarks: []
     /// The pill's word. Empty where the act is a git command and `code` says it instead.
     property string accept: ""
     /// The git command the question guards (デザイン規約 §git 用語のコード表記). The heading opens with it and the pill
@@ -232,13 +248,14 @@ Rectangle {
                     tint: bar.tone
                     weight: Theme.fontWeightStrong
                 }
-                // A field (the pad above), wrapped, never cut: the bar grows by the line (デザイン規約
-                // §立っている質問は 1 か所で聞く).
+                // A field (the pad above), wrapped, never cut but for a name past the name ceiling, given back whole
+                // under the hand: the bar grows by the line (デザイン規約 §立っている質問は 1 か所で聞く).
                 CardText {
                     id: askWord
                     text: bar.label
-                    markup: bar.labelWords
-                    color: bar.plainWords ? Theme.textPrimary : bar.tone
+                    marks: bar.headingMarks
+                    holdsNames: true
+                    color: bar.headingInk
                     pixelSize: Theme.fontMd
                     weight: Theme.fontWeightStrong
                     Layout.fillWidth: true
@@ -253,6 +270,7 @@ Rectangle {
             // the heading (`RenameCarryFlow`'s question); a layout skips what is not visible, spacing and all.
             CardText {
                 text: bar.detail
+                marks: bar.detailMarks
                 visible: bar.detail !== ""
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
@@ -271,6 +289,8 @@ Rectangle {
             id: acceptPill
             /// A hand on the pill, or its stand-in (`AskBar.pointedAt`).
             readonly property bool lit: acceptMouse.containsMouse || bar.pointedAt
+            /// The names its tip says, behind their marks (`SharedToolTip.tipMarks`).
+            readonly property var tipMarks: bar.tipMarks
             Layout.alignment: Qt.AlignVCenter
             implicitWidth: acceptRow.implicitWidth + 2 * Theme.spaceMd
             implicitHeight: Theme.controlHeight

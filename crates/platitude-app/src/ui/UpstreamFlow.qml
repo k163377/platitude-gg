@@ -33,20 +33,21 @@ Item {
     /// Whether the branch has an upstream to take off — a remote reading, a branch here, or a gone one — which an
     /// emptied name asks to do.
     property bool unsettable: false
-    /// The branch the worktree is on: the one name the unset heading draws in `textLink` (デザイン規約 §ref の種別).
+    /// The branch the worktree is on: the heading names the branch in `textLink` where it is this one (デザイン規約
+    /// §ref の種別).
     property string headBranch: ""
     /// The name box emptied on a branch with an upstream: the question turns into taking it off — its heading and
     /// pill change, and the line goes (デザイン規約 §ブランチが測られる相手を決める). The remote is only picked, so the
     /// name is the half that can be emptied.
     readonly property bool unsetting: upstreamFlow.unsettable && upstreamFlow.branchName === ""
-    /// The unset heading with the branch's seat left in it: a plain delete's words keep the ordinary rules, so the
-    /// branch wears its own colour there (`AskBar.labelSentence`, §回数押しの色).
-    //: %1 is a branch name. Asks whether it stops being measured against a remote branch.
-    readonly property string unsetSentence: qsTr("Unset the upstream of %1?")
-    readonly property string heading: upstreamFlow.unsetting
-        ? upstreamFlow.unsetSentence.arg(upstreamFlow.branch)
+    /// The heading with the branch's seat left in it, so the branch wears its own colour and mark there
+    /// (`AskBar.labelSentence`).
+    readonly property string sentence: upstreamFlow.unsetting
+        //: %1 is a branch name. Asks whether it stops being measured against a remote branch.
+        ? qsTr("Unset the upstream of %1?")
         //: %1 is a branch name. Asks which remote branch it is measured against.
-        : qsTr("Upstream of %1?").arg(upstreamFlow.branch)
+        : qsTr("Upstream of %1?")
+    readonly property string heading: upstreamFlow.sentence.arg(upstreamFlow.branch)
     readonly property string pill: upstreamFlow.unsetting
         //: The pill that answers the question above: takes the upstream off.
         ? qsTr("Unset")
@@ -147,18 +148,18 @@ Item {
         when: upstreamFlow.asking
         restoreMode: Binding.RestoreNone
     }
-    // The unset heading's branch in its own colour (`unsetSentence`); the set heading stays one run of words.
+    // The heading's branch in its own colour and behind its mark (`sentence`).
     Binding {
         target: upstreamFlow.graphPane
         property: "askLabelSentence"
-        value: upstreamFlow.unsetting ? upstreamFlow.unsetSentence : ""
+        value: upstreamFlow.sentence
         when: upstreamFlow.asking
         restoreMode: Binding.RestoreNone
     }
     Binding {
         target: upstreamFlow.graphPane
         property: "askLabelRef"
-        value: upstreamFlow.unsetting ? upstreamFlow.branch : ""
+        value: upstreamFlow.branch
         when: upstreamFlow.asking
         restoreMode: Binding.RestoreNone
     }
@@ -196,20 +197,39 @@ Item {
     Binding {
         target: upstreamFlow.graphPane
         property: "askDetail"
+        value: upstreamFlow.detailOf(upstreamFlow.target)
+        when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    // Every name the question says behind its mark (デザイン規約 §ref の種別「名前の印」): the branch in the heading,
+    // through its sentence, and the remote branch in the line.
+    Binding {
+        target: upstreamFlow.graphPane
+        property: "askLabelRefMark"
+        value: "branch"
+        when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    Binding {
+        target: upstreamFlow.graphPane
+        property: "askDetailMarks"
+        value: Words.marksOf(upstreamFlow.detailOf, [[upstreamFlow.target, "remote"]])
+        when: upstreamFlow.asking
+        restoreMode: Binding.RestoreNone
+    }
+    /// The line under the question, naming `target`.
+    function detailOf(target) {
         // The unset question says it all in its heading: what an upstream decides goes with the word. Empty, `Enter`:
         // the name is typed, pasted or picked from the box's list alike (デザイン規約 §欄への指図).
-        value: upstreamFlow.unsetting ? ""
+        return upstreamFlow.unsetting ? ""
                : !upstreamFlow.filled
                //: The name box is empty; a name typed, pasted or picked from its list answers.
                ? qsTr("Enter the upstream.")
                : !upstreamFlow.targetIsThere
                  //: %1 is a remote branch, e.g. origin/main.
-                 ? qsTr("%1 has not been fetched here; a push sends this branch there.")
-                   .arg(upstreamFlow.target)
+                 ? qsTr("%1 has not been fetched here; a push sends this branch there.").arg(target)
                  //: %1 is a remote branch, e.g. origin/main.
-                 : qsTr("Ahead and behind are counted against %1.").arg(upstreamFlow.target)
-        when: upstreamFlow.asking
-        restoreMode: Binding.RestoreNone
+                 : qsTr("Ahead and behind are counted against %1.").arg(target)
     }
 
     /// Automation: opens the name box's list (no injected click reaches it) through a press's door

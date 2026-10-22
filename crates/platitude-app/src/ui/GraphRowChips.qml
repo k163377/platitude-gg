@@ -39,6 +39,8 @@ Item {
     required property string namingRefusedWhy
     /// A worktree's folder in that line, empty for none (`RepoPage.graphNameRefusedMark`).
     required property string namingRefusedMark
+    /// The branch, tag or remote in that line, behind their marks (`RepoPage.graphNameRefusedMarks`).
+    required property var namingRefusedMarks
 
     /// The chip's card is standing on it (`GraphRowDelegate.listOnThisChip`): the sheets unstack so none peeks out
     /// from under the card.
@@ -140,6 +142,7 @@ Item {
             /// A worktree's folder in the refusal's line, which the shared tip stands the tree mark in front of
             /// (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別「名前の印」).
             readonly property string tipMarkWord: chipColumn.namingRefusedMark
+            readonly property var tipMarks: chipColumn.namingRefusedMarks
             /// The kind of ref being typed: the mode, or on a rename the kind it renames.
             readonly property string namesKind:
                 chipColumn.namingMode === "rename" ? chipColumn.namingKind : chipColumn.namingMode

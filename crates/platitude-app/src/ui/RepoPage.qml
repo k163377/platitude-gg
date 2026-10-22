@@ -686,17 +686,20 @@ FocusScope {
         return action !== ""
     }
 
-    // Landing on the remote branch moves the existing local one onto it — the one move here that can leave commits
-    // unreachable.
-    function askMoveBranchOnto(local, remoteRef) {
+    // Landing on the remote branch moves the existing local one onto it — the one move here that can take commits off
+    // a branch, `lost` of them.
+    function askMoveBranchOnto(local, remoteRef, lost) {
+        // The branch in the heading through its seat, so it takes the colour and the mark a name takes there
+        // (`AskBar.labelSentence`).
         page.startRowAsk(
             remotesModel.oidOfName(remoteRef),
-            qsTr("Move %1 here?").arg(local),
-            qsTr("Commits only %1 has stop being reachable.").arg(local),
+            qsTr("Move %1 here?"),
+            Words.losesCommits(local, lost),
             false,
             qsTr("Move"),
             function () { page.switchTo("force", local, local, remoteRef) },
-            true)
+            true, "", null, "", local, local === worktree.branch ? Theme.textLink : Theme.textPrimary, "branch",
+            { detail: Words.marksOf(name => Words.losesCommits(name, lost), [[local, "branch"]]) })
         page.moveBranchAsked(local)
     }
     /// Automation: the question above was raised, about `local` — the bar carries no name a run could read back.
@@ -827,7 +830,8 @@ FocusScope {
 
     property var rowAskRun: null
     function startRowAsk(oidHex, label, detail, danger, acceptText, run,
-                         hold = false, tip = "", form = null, code = "", refName = "", refTint = Theme.textLink) {
+                         hold = false, tip = "", form = null, code = "", refName = "", refTint = Theme.textLink,
+                         refMark = "", marks = null) {
         // Whoever was dressing the bar lets go first, or that flow would think it still stands and its check timer
         // go on firing round trips at a remote. `startAsking`'s assignments beat a live `Binding` outright; the flow
         // raising this one turns its own back on afterwards.
@@ -835,7 +839,8 @@ FocusScope {
         upstreamFlow.asking = false
         renameCarryFlow.asking = false
         page.rowAskRun = run
-        graphPane.startAsking(oidHex, label, detail, acceptText, danger, hold, tip, form, code, refName, refTint)
+        graphPane.startAsking(oidHex, label, detail, acceptText, danger, hold, tip, form, code, refName, refTint,
+                              refMark, marks)
     }
     function stopRowAsk() {
         page.rowAskRun = null
@@ -860,7 +865,7 @@ FocusScope {
         page.seenMoveAskSeq = repoTab.moveAskSeq
         // The move came back as a question: nothing is on its way to the screen, so the next press may go.
         page.moveLanding = ""
-        page.askMoveBranchOnto(repoTab.moveAskLocal, repoTab.moveAskStart)
+        page.askMoveBranchOnto(repoTab.moveAskLocal, repoTab.moveAskStart, repoTab.moveAskLost)
     }
 
     // ---- what a branch is measured against --------------------------
@@ -918,7 +923,7 @@ FocusScope {
         graphPane: graphPane
         // The first push asks where the branch goes, in the one question bar.
         onAskRequested: (oidHex, label, run, form, code, refName, refTint) =>
-            page.startRowAsk(oidHex, label, "", false, "", run, false, "", form, code, refName, refTint)
+            page.startRowAsk(oidHex, label, "", false, "", run, false, "", form, code, refName, refTint, "branch")
     }
     /// What the window's toolbar reads off the page it is showing: the button lives up there, and the state machine
     /// behind it down here (`TopBar`).
@@ -1219,16 +1224,28 @@ FocusScope {
         const shown = remotesModel.oidOfName(remoteRef)
         page.startRowAsk(
             shown,
-            //: %1 and %2 are remote branches, e.g. origin/main. The old name goes and the new one is made.
-            qsTr("Replace %1 with %2?").arg(remoteRef).arg(remote + "/" + name),
+            page.replaceQuestion(remoteRef, remote + "/" + name),
             qsTr("The old branch is deleted, not moved."),
             false,
             qsTr("Replace"),
             function () { repoTab.replaceRemoteBranch(remote, from, name, shown) },
             true,
-            qsTr("%1 to replace. %2 goes up first, then %3 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.")
-            .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(remote + "/" + name).arg(remoteRef))
+            page.replaceTip(remote + "/" + name, remoteRef),
+            null, "", "", Theme.textLink, "",
+            { label: Words.marksOf(page.replaceQuestion, [[remoteRef, "remote"], [remote + "/" + name, "remote"]]),
+              tip: Words.marksOf(page.replaceTip, [[remote + "/" + name, "remote"], [remoteRef, "remote"]]) })
         page.replaceRemoteAsked(remoteRef, name)
+    }
+    /// The replace question: the old remote branch `was`, the new one `comes` — one spelling for the words and the
+    /// seats of their marks.
+    function replaceQuestion(was, comes) {
+        //: %1 and %2 are remote branches, e.g. origin/main. The old name goes and the new one is made.
+        return qsTr("Replace %1 with %2?").arg(was).arg(comes)
+    }
+    /// The replace question's pill tip: the new remote branch `comes`, the old one `was`.
+    function replaceTip(comes, was) {
+        return qsTr("%1 to replace. %2 goes up first, then %3 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.")
+            .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(comes).arg(was)
     }
     /// Automation: the question above was raised, and the two names it is between.
     signal replaceRemoteAsked(string from, string to)
@@ -1590,6 +1607,19 @@ FocusScope {
           && !page.graphNameHeld.here
         ? worktreesModel.worktreeCalled(page.graphNameHeld.path)
         : Words.worktreeNameMark(page.graphNameRefusedWhy, page.graphWorktreePlace)
+    /// The branch, tag or remote that refusal names, behind its mark (`Words.refusalMarks`) — asked again of the clash
+    /// the line was written from.
+    readonly property var graphNameRefusedMarks: {
+        // Nothing refused, nothing to seat — and no clash asked of the model for it.
+        if (page.graphNameRefusedWhy === "")
+            return []
+        const tag = graphPane.namingMode === "tag"
+                    || (graphPane.namingMode === "rename" && graphPane.namingKind === "tag")
+        const clash = (tag ? tagsModel : branchesModel).nameClash(
+            graphPane.namingText.trim(), graphPane.namingMode === "rename" ? graphPane.namingId : "")
+        return Words.refusalMarks(page.graphNameRefusedWhy, clash, tag,
+                                  page.graphNameTaken ? page.graphRenameRemote : "")
+    }
     readonly property string graphNameRefusedWhy: {
         if (graphPane.namingOid === "")
             return ""
@@ -1625,7 +1655,7 @@ FocusScope {
         if (tag && name !== graphPane.namingId && name.toLowerCase() === graphPane.namingId.toLowerCase())
             return qsTr("Only the letter case differs — on this disk that deletes both names")
         if (page.graphNameTaken)
-            return qsTr("%1 already has a branch called that").arg(page.graphRenameRemote)
+            return Words.remoteHasBranch(page.graphRenameRemote)
         if (!(tag ? GitFacts.validTagName(name) : GitFacts.validBranchName(name)))
             return Words.notAName
         // A remote branch's rename asks the remote's names (`graphNameTaken`); a local ref's, the ones here, its own
@@ -1800,30 +1830,37 @@ FocusScope {
         // the branch it keeps (デザイン規約 §ref の種別「リポジトリ自身の worktree の呼び名」).
         const home = kind.startsWith("carried-") && page.appliedFromHome
         const shown = home ? page.appliedName : name
+        // Every name either line says wears its kind's mark (デザイン規約 §ref の種別「名前の印」): the worktree's tree
+        // or house, the branch's, the tag's, the remote's cloud.
+        const nameMark = names ? (home ? "home" : "tree")
+                       : Words.reportNamesRef(kind) ? page.refMarkOf(kind, name) : ""
         page.showNotice(Words.writeReported(kind, remote, shown),
                         Words.writeReportedWhy(kind, remote, shown, fact),
                         Words.reportTone(kind),
-                        names ? shown : "",
-                        names ? Words.reportNameSeat(kind, remote) : -1,
+                        Words.reportMarks(kind, remote, shown, nameMark),
                         Words.reportPlace(kind),
-                        home ? "home" : "tree")
+                        Words.reportWhyMarks(kind, remote, shown, fact, nameMark))
+    }
+    /// The mark a report's ref wears: the tag where the report is about one, or the repository holds a tag by that
+    /// name, else the branch.
+    function refMarkOf(kind, name) {
+        return kind === "tag-elsewhere" || tagsModel.tagSides(name) !== "" ? "tag" : "branch"
     }
     /// Automation only: git's answer to a write has been taken all the way — bar raised, mark down, standing questions
     /// cleared. What it was about rides the signal: a drain can bring several reports, so the tab holds none to read
     /// back.
     signal writeReported(string kind, string remote, string name)
-    /// `label` is what did not happen, `detail` the line under it, `tone` the state colour, if any; `markWord` the
-    /// worktree's name in `label` that wears its mark, left out for none (`NoticeBar.markWord`), and `markAt` where
-    /// the sentence put it, left out for the heading's start; `place` the word of `detail` that opens the command log,
-    /// left out for none (`NoticeBar.detailPlace`); `markKind` that name's mark, left out for the tree.
-    function showNotice(label, detail, tone, markWord, markAt, place, markKind) {
+    /// `label` is what did not happen, `detail` the line under it, `tone` the state colour, if any; `marks` the names
+    /// in `label` that wear their marks, left out for none (`NoticeBar.marks`); `place` the word of `detail` that opens
+    /// the command log, left out for none (`NoticeBar.detailPlace`); `detailMarks` the names in `detail` that wear
+    /// theirs.
+    function showNotice(label, detail, tone, marks, place, detailMarks) {
         // Dressed, then raised — so nothing is written on a bar the reader can see (`NoticeBar.open`).
         noticeBar.label = label
         noticeBar.detail = detail
         noticeBar.tone = tone
-        noticeBar.markWord = markWord === undefined ? "" : markWord
-        noticeBar.markWordAt = markAt === undefined ? -1 : markAt
-        noticeBar.markKind = markKind === "home" ? "home" : "tree"
+        noticeBar.marks = marks === undefined ? [] : marks
+        noticeBar.detailMarks = detailMarks === undefined ? [] : detailMarks
         noticeBar.detailPlace = place === undefined ? "" : place
         noticeBar.detailHref = noticeBar.detailPlace === "" ? "" : Words.commandsHref
         noticeBar.open = true
@@ -2257,6 +2294,8 @@ FocusScope {
     RecoverEntries {
         id: recoverShown
         rows: discardModel.rows
+        calledOf: path => ({ name: worktreesModel.worktreeCalled(path), home: worktreesModel.worktreeHome(path) })
+        homeBranch: worktreesModel.homeBranch
     }
     /// What the discard log draws, worded (`RecoverEntries`), and the words themselves — its times included, which
     /// the band over the graph writes too.
@@ -3516,6 +3555,7 @@ FocusScope {
                             namingRefused: page.graphNameRefusedWhy !== ""
                             namingRefusedWhy: page.graphNameRefusedWhy
                             namingRefusedMark: page.graphNameRefusedMark
+                            namingRefusedMarks: page.graphNameRefusedMarks
                             onChipExpandRequested: (oidHex, atRow, records, anchor) =>
                                 rowHost.openRefList(oidHex, atRow, records, anchor)
                             onChipCollapseRequested: anchor => rowHost.closeRefListUnlessEntered(anchor)
@@ -3545,6 +3585,7 @@ FocusScope {
                             // own two words the way its rows do (`WipBucketPane`).
                             sideOurs: page.wipWritable ? worktree.sideOurs : ""
                             sideTheirs: page.wipWritable ? worktree.sideTheirs : ""
+                            currentBranch: page.wipWritable ? worktree.branch : ""
                             sideColorOurs: page.sideColorOurs
                             sideColorTheirs: page.sideColorTheirs
                             busy: page.diffSettling

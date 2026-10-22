@@ -16,7 +16,7 @@ Item {
     required property var worktree
     /// A repository is open and has no commits yet — a screen apart from `blank`.
     readonly property bool unborn: !emptyState.blank && emptyState.worktree.unborn
-    /// The line under the heading, `%1` left open so the branch name takes its own colour (`Words.nameInSentence`).
+    /// The line under the heading, `%1` left open so the branch name takes its own colour (`CardText.marks`).
     readonly property string firstCommitLine: qsTr("The first commit will start %1")
 
     signal openRepositoryRequested()
@@ -45,9 +45,11 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
         }
         NoticeLine {
-            // Names the branch: with no HEAD row, no pin can.
+            // Names the branch: with no HEAD row, no pin can — behind its mark (デザイン規約 §ref の種別「名前の印」).
             text: emptyState.firstCommitLine.arg(emptyState.worktree.branch)
-            markup: Words.nameInSentence(emptyState.firstCommitLine, emptyState.worktree.branch, Theme.textLink)
+            // …in its own colour, the branch the worktree is on (`CardText.marks`).
+            marks: [[emptyState.firstCommitLine.indexOf("%1"), "branch", Theme.textLink,
+                     emptyState.worktree.branch.length]]
             color: Theme.textSecondary
             // Natural width while it fits, wrapped at the window's floor — unbounded it takes width from the panes
             // beside it (規約 §窓の床).

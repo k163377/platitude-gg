@@ -22,6 +22,9 @@ Rectangle {
     property string conflictChange: ""
     property string sideOurs: ""
     property string sideTheirs: ""
+    /// The branch this worktree stands on, which a side named after it says in its own colour (デザイン規約 §ref の種別
+    /// 「現在のブランチは、名前が出る場所すべてで textLink」); empty on none.
+    property string currentBranch: ""
     /// Each side's colour as an index into `Theme.graphLane` — the branch's own lane colour where it has one, and
     /// always two different ones (`encode::conflict_side_colors`).
     property int sideColorOurs: -1
@@ -408,9 +411,10 @@ Rectangle {
     function diffSettled() {
         const m = diffPane.diffModel
         // `embedded` never becomes rows: git will not open a nested repository, so the pane shows a line about it
-        // (`DiffFileNotices`); nor does a read of headers alone.
+        // (`DiffFileNotices`); nor does a read of headers alone, nor a conflict with one side left (git prints no
+        // patch, and the pane says what each side did).
         return !m.loading && (diffList.count > 0 || m.isBinary || m.previewKind !== "" || m.embedded
-                              || fileNotices.headersOnly)
+                              || fileNotices.headersOnly || m.unmerged)
     }
     /// Automation: a settled read is not yet a picture on screen — the decode is asynchronous
     /// (`DiffFileNotices.picturesSettled`).
@@ -497,6 +501,7 @@ Rectangle {
             conflictChange: diffPane.conflictChange
             sideOurs: diffPane.sideOurs
             sideTheirs: diffPane.sideTheirs
+            currentBranch: diffPane.currentBranch
             sidesTold: diffPane.sidesTold
             oursColor: diffPane.sideColor("ours")
             theirsColor: diffPane.sideColor("theirs")

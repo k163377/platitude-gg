@@ -62,7 +62,10 @@ Item {
 
         AppMenuItem {
             //: Opens the form that holds this remote's URL. Says the same words as the form's own heading.
-            text: qsTr("Where %1 is…").arg(remoteRowMenu.remote)
+            refSentence: qsTr("Where %1 is…")
+            refName: remoteRowMenu.remote
+            refTint: Theme.textPrimary
+            refMark: "remote"
             onTriggered: remoteRowMenu.urlRequested(remoteRowMenu.remote)
         }
         // No divider: both rows are one group. Gone on the remote both keys already name; a remote only one key

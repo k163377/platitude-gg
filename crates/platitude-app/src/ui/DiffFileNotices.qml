@@ -20,6 +20,8 @@ ColumnLayout {
     required property string conflictChange
     required property string sideOurs
     required property string sideTheirs
+    /// The branch stood on (`DiffPane.currentBranch`): a side that is it is said in the current branch's colour.
+    required property string currentBranch
     /// Whether the two sides are being told apart by colour, and the two colours themselves (`DiffPane.sidesTold`).
     required property bool sidesTold
     required property var oursColor
@@ -43,17 +45,28 @@ ColumnLayout {
     readonly property string fileLinesOrder: [modeLine, endingsLine, wholeLine].filter(line => line.visible)
                                              .sort((a, b) => a.y - b.y).map(line => line.objectName).join(",")
 
+    /// A side's own colour: the current branch's where it is the branch stood on, none for any other.
+    function sideTint(side) {
+        return side !== "" && side === notices.currentBranch ? Theme.textLink : undefined
+    }
+
     spacing: 0
 
     // -- a conflict with only one side left: git prints no patch (`* Unmerged path`), so say what each side did
     //    (デザイン規約 §conflict の種別).
-    Label {
+    // Each side's branch behind its mark (デザイン規約 §ref の種別「名前の印」), on one line whose names give way in the
+    // middle and never its words (`CodeLine`, `middle`). In the explaining words' colour, not the disabled one: its
+    // names a step down with them, and the branch stood on in its own (デザイン規約 §conflict の種別).
+    CodeLine {
         visible: notices.diffModel.unmerged
         Layout.margins: Theme.spaceSm
         Layout.fillWidth: true
-        elide: Text.ElideRight
+        cutAt: "middle"
         text: Words.conflict(notices.conflictChange, notices.sideOurs, notices.sideTheirs)
-        color: Theme.textMuted
+        marks: Words.marksOf((ours, theirs) => Words.conflict(notices.conflictChange, ours, theirs),
+                             [[notices.sideOurs, "branch", notices.sideTint(notices.sideOurs)],
+                              [notices.sideTheirs, "branch", notices.sideTint(notices.sideTheirs)]])
+        color: Theme.textSecondary
     }
     // -- which branch each colour is, only while the rows are told apart by colour. The rebase swap is already sorted
     //    by the model (デザイン規約 §conflict の ours / theirs).
@@ -66,6 +79,10 @@ ColumnLayout {
         Layout.fillWidth: true
         oursName: Words.ourSide(notices.sideOurs)
         theirsName: Words.theirSide(notices.sideTheirs)
+        oursIsBranch: notices.sideOurs !== ""
+        theirsIsBranch: notices.sideTheirs !== ""
+        oursTint: notices.sideTint(notices.sideOurs)
+        theirsTint: notices.sideTint(notices.sideTheirs)
         oursColor: notices.oursColor
         theirsColor: notices.theirsColor
         nameCap: notices.nameCap

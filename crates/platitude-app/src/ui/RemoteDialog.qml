@@ -28,6 +28,10 @@ AppDialog {
     /// The box was left changed. Its own signal: it writes config keys, not the remote.
     signal markChanged(string name, bool marked)
 
+    /// The heading while a remote is corrected, naming it — one spelling for the words and the seat of its mark.
+    function whereIs(name) {
+        return qsTr("Where %1 is").arg(name)
+    }
     function start(name, url, takenNames, marked, markLocal) {
         remoteDialog.editing = name
         remoteDialog.taken = takenNames
@@ -67,10 +71,18 @@ AppDialog {
     contentItem: ColumnLayout {
         spacing: Theme.spaceLg
 
-        Label {
-            text: remoteDialog.editing === "" ? qsTr("Add remote") : qsTr("Where %1 is").arg(remoteDialog.editing)
-            font.pixelSize: Theme.fontXl
-            font.weight: Theme.fontWeightStrong
+        // The remote it corrects behind the cloud, a sign on the name (デザイン規約 §ref の種別「名前の印」) — a field,
+        // since only one says where a name stands.
+        CardText {
+            Layout.fillWidth: true
+            text: remoteDialog.editing === "" ? qsTr("Add remote") : remoteDialog.whereIs(remoteDialog.editing)
+            marks: remoteDialog.editing === "" ? []
+                   : Words.marksOf(remoteDialog.whereIs, [[remoteDialog.editing, "remote"]])
+            // A heading: a long name is cut at the name ceiling, whole under the hand (デザイン規約 §寸法「名前の天井」).
+            holdsNames: true
+            pixelSize: Theme.fontXl
+            weight: Theme.fontWeightStrong
+            ground: Theme.bgElevated
         }
         Label {
             Layout.fillWidth: true

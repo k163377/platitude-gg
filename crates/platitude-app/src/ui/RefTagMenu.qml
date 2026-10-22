@@ -64,6 +64,11 @@ AppMenu {
         /// Why those rows stand greyed, in words (`Words.differsFrom` / `Words.severalRemotesHave`).
         readonly property string heldWhy: state.heldBack === "unnamed" ? Words.severalRemotesHave(state.tagCarriers)
                                         : state.heldBack === "drift" ? Words.differsFrom(state.reach) : ""
+        /// The remotes those words name, each behind the cloud (`AppMenuItem.reasonMarks`).
+        readonly property var heldMarks: state.heldBack === "unnamed"
+                                         ? Words.listMarks(state.heldWhy, state.tagCarriers, "remote")
+                                         : state.heldBack === "drift"
+                                           ? Words.listMarks(state.heldWhy, state.reach, "remote") : []
     }
 
     /// Stands the card on that row, off answers already in hand. `oidHex` is the row's commit, where a name would be
@@ -123,7 +128,11 @@ AppMenu {
         // (`AppMenuItem.armedPresses`, デザイン規約 §回数押し).
         code: refPushTagItem.armedPresses <= 0 ? "push" : "push --force"
         //: Follows the `push` chip: "push to origin".
-        text: qsTr("to %1").arg(state.pushRemote)
+        refSentence: qsTr("to %1")
+        refName: state.pushRemote
+        // As the branch's push row: where it goes, behind its mark.
+        refTint: Theme.textPrimary
+        refMark: "remote"
         offered: state.canPushTag
         holdPresses: state.tagDriftOid === "" ? 0 : Metrics.holdPressesWarned
         // Reaching past this machine is the warning tone (デザイン規約 §状態).
@@ -140,9 +149,10 @@ AppMenu {
     AppMenuItem {
         id: refTagDeleteItem
         code: "tag --delete"
-        // The name, readable under the hand during the hold (デザイン規約 §メニュー「例外は削除行だけ」).
-        text: state.refId
-        growsForText: false
+        // The name, readable under the hand during the hold (デザイン規約 §メニュー「例外は削除行だけ」), behind its
+        // kind's mark (デザイン規約 §ref の種別「名前の印」).
+        nameMark: "tag"
+        codeName: state.refId
         offered: state.kind === "tag" && state.canDelete
         holdPresses: Metrics.holdPressesWarned
         onHeld: {
@@ -155,12 +165,21 @@ AppMenu {
         code: "push --delete"
         // The name and the remote it goes from: the deletes need not reach where the pushes go (`state.reach`).
         //: Follows the `push --delete` chip: "push --delete v1.5 from origin".
-        text: state.reach !== "" ? qsTr("%1 from %2").arg(state.refId).arg(state.reach) : state.refId
+        refSentence: state.reach !== "" ? qsTr("%1 from %2") : ""
+        refName: state.refId
+        refTint: Theme.textPrimary
+        refMark: "tag"
+        refName2: state.reach
+        refMark2: "remote"
+        // No remote to name: the tag alone, behind its mark.
+        nameMark: state.reach !== "" ? "" : "tag"
+        codeName: state.reach !== "" ? "" : state.refId
         growsForText: false
         // A reading held back keeps its seat and greys; a side that does not exist is gone
         // (デザイン規約 §左メニューの所作 の削除の表).
         offered: state.kind === "tag" && (state.canDeleteRemoteTag || state.heldBack !== "")
         blockedReason: state.canDeleteRemoteTag ? "" : state.heldWhy
+        reasonMarks: state.canDeleteRemoteTag ? [] : state.heldMarks
         holdPresses: Metrics.holdPressesWarned
         // Warning: only a name goes, and the commit stays (デザイン規約 §タグを作る・送る).
         holdTone: Theme.warning
@@ -175,6 +194,7 @@ AppMenu {
         text: qsTr("Delete both")
         offered: state.kind === "tag" && (state.canDeleteTagEverywhere || (state.heldBack !== "" && state.tagHere))
         blockedReason: state.canDeleteTagEverywhere ? "" : state.heldWhy
+        reasonMarks: state.canDeleteTagEverywhere ? [] : state.heldMarks
         holdPresses: Metrics.holdPressesWarned
         // Only names go — git keeps the object — so never the danger of the branch's `-D`.
         holdTone: Theme.warning

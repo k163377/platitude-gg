@@ -168,7 +168,13 @@ Item {
         onWaitEnded: fileRowMenu.standAgain()
         // Named by branch — during a rebase `--ours` / `--theirs` swap over (デザイン規約 §conflict の ours / theirs).
         // Plain clicks: a conflicted file has no settled version to lose.
+        // Each side's branch behind its mark (デザイン規約 §ref の種別「名前の印」), plain — the branch stood on in its
+        // own (§ref の種別「現在のブランチは、名前が出る場所すべてで」).
         AppMenuItem {
+            refSentence: fileRowMenu.worktree.sideOurs !== "" ? qsTr("Keep %1's version") : ""
+            refName: fileRowMenu.worktree.sideOurs
+            refTint: fileRowMenu.worktree.sideOurs === fileRowMenu.worktree.branch ? Theme.textLink : Theme.textPrimary
+            refMark: "branch"
             text: fileRowMenu.worktree.sideOurs !== ""
                   ? qsTr("Keep %1's version").arg(fileRowMenu.worktree.sideOurs)
                   : qsTr("Keep this branch's version")
@@ -176,6 +182,11 @@ Item {
             onTriggered: fileRowMenu.takeSideNow("ours")
         }
         AppMenuItem {
+            refSentence: fileRowMenu.worktree.sideTheirs !== "" ? qsTr("Take %1's version") : ""
+            refName: fileRowMenu.worktree.sideTheirs
+            refTint: fileRowMenu.worktree.sideTheirs === fileRowMenu.worktree.branch ? Theme.textLink
+                                                                                  : Theme.textPrimary
+            refMark: "branch"
             text: fileRowMenu.worktree.sideTheirs !== ""
                   ? qsTr("Take %1's version").arg(fileRowMenu.worktree.sideTheirs)
                   : qsTr("Take the incoming version")

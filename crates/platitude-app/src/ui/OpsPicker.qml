@@ -41,15 +41,20 @@ HoverToolButton {
     /// 規約 §操作パネル の譲る順). Taken off the longer line only: cutting the shorter one frees nothing. Runs are cut,
     /// never dropped.
     property real given: 0
-    /// What each run can give up before its floor (both ends of a name and the `…`).
-    readonly property real trailSlack:
-        picker.trail === "" ? 0
-        : Math.max(0, Math.ceil(trailRuler.advanceWidth) - Math.ceil(trailFloorRuler.advanceWidth))
-    readonly property real nameSlack:
-        Math.max(0, Math.ceil(nameRuler.advanceWidth) - Math.ceil(floorRuler.advanceWidth))
-    readonly property real noteSlack:
-        picker.note === "" ? 0
-        : Math.max(0, Math.ceil(noteRuler.advanceWidth) - Math.ceil(noteFloorRuler.advanceWidth))
+    /// Each run whole, held under the name ceiling (`Theme.nameMaxChars`): the panel grows with its names and has no
+    /// width ceiling of its own.
+    readonly property real nameWhole: Math.min(Math.ceil(nameRuler.advanceWidth), Math.ceil(capRuler.advanceWidth))
+    /// The worktree's run is asked of itself: it draws its name as code (`TabTreeMark`).
+    readonly property real trailWhole: Math.min(trailRun.nameWhole, trailRun.capWidth)
+    readonly property real noteWhole: Math.min(Math.ceil(noteRuler.advanceWidth), Math.ceil(noteCapRuler.advanceWidth))
+    /// …and at its floor: both ends of a name and the `…`, or the whole run where that is shorter.
+    readonly property real nameFloor: Math.min(picker.nameWhole, Math.ceil(floorRuler.advanceWidth))
+    readonly property real trailFloor: Math.min(picker.trailWhole, trailRun.nameFloor)
+    readonly property real noteFloor: Math.min(picker.noteWhole, Math.ceil(noteFloorRuler.advanceWidth))
+    /// What each run can give up before its floor.
+    readonly property real trailSlack: picker.trail === "" ? 0 : picker.trailWhole - picker.trailFloor
+    readonly property real nameSlack: picker.nameWhole - picker.nameFloor
+    readonly property real noteSlack: picker.note === "" ? 0 : picker.noteWhole - picker.noteFloor
     /// The width the lines are cut to: the longer line less what was asked, never under the wider floor.
     readonly property real textRoom: picker.textWhole - Math.min(Math.max(0, picker.given), picker.slack)
     /// …and what that takes off each run: the first line gives the worktree's run before the name
@@ -90,20 +95,23 @@ HoverToolButton {
     /// The column the kind mark stands in at the head of each line, and the step after it.
     readonly property real kindColumn: picker.kind === "" ? 0 : picker.markColumn + picker.kindGap
     readonly property real trailWidth:
-        picker.trail === "" ? 0 : trailRun.fixedWidth + Math.ceil(trailRuler.advanceWidth)
+        picker.trail === "" ? 0 : trailRun.fixedWidth + picker.trailWhole
     /// Counts beside the name, and what they cost. The step is a word's, not a letter's (規約 §操作パネル).
     readonly property bool tracked: picker.ahead > 0 || picker.behind > 0
     property int trackGap: Theme.spaceSm
     readonly property real trackRun: picker.tracked ? picker.trackGap + Math.ceil(trackSeat.implicitWidth) : 0
     /// Each line measured on its own: the box is the longer of the two, never both end to end.
     readonly property real lineOneWhole:
-        picker.kindColumn + Math.ceil(nameRuler.advanceWidth) + picker.trailWidth + picker.trackRun
-    readonly property real lineTwoWhole:
-        picker.note === "" ? 0 : picker.kindColumn + Math.ceil(noteRuler.advanceWidth)
+        picker.kindColumn + picker.nameWhole + picker.trailWidth + picker.trackRun
+    readonly property real lineTwoWhole: picker.note === "" ? 0 : picker.kindColumn + picker.noteWhole
     readonly property real textWhole: Math.max(picker.lineOneWhole, picker.lineTwoWhole)
-    /// …and each at its floor: the runs and the name cut down as far as they go, the counts whole.
-    readonly property real lineOneFloor: picker.lineOneWhole - picker.trailSlack - picker.nameSlack
-    readonly property real lineTwoFloor: picker.lineTwoWhole - picker.noteSlack
+    /// …and each at its floor: the runs and the name cut down as far as they go, the counts whole. **Summed from the
+    /// floors, never the whole less the slack**: those two read one ruler and are answered in turn, and in between
+    /// their difference is a whole name — a floor the window is lifted to and kept at (`WindowShape.holdFloor`).
+    readonly property real lineOneFloor:
+        picker.kindColumn + picker.nameFloor
+        + (picker.trail === "" ? 0 : trailRun.fixedWidth + picker.trailFloor) + picker.trackRun
+    readonly property real lineTwoFloor: picker.note === "" ? 0 : picker.kindColumn + picker.noteFloor
     /// The width asked of the row before anything gives way. **Must not read `given`** — the row decides from this,
     /// and a figure that counted the answer closes the loop.
     readonly property real wholeWidth: picker.bareBox + picker.textWhole
@@ -131,6 +139,7 @@ HoverToolButton {
         picker.kind === "" ? 0 : Math.max(0, Math.ceil(picker.kindStep - picker.kindAir))
     /// Automation: whether the name was cut, and the chevron's turn — neither can be read off a picture.
     readonly property bool nameCut: nameCell.cutting
+    readonly property bool noteCut: noteCell.cutting
     readonly property real foldTurn: mark.rotation
     /// Automation: where the counts came out — `after` the name at `trackGap`, at the `end` of a longer second line,
     /// `off` both, or `none`. Read off the laid-out items, not the arithmetic.
@@ -159,8 +168,25 @@ HoverToolButton {
     // Square: the wash fills the panel's whole depth, and a wash reaching both edges is square
     // (`HoverToolButton.washRadius`).
     washRadius: 0
-    // The whole name, wherever the row could not draw it (規約 §hover のツールチップ).
-    tip: picker.nameGiven ? picker.shown : ""
+    // Every run whole, one a line, wherever the row cut one of them (規約 §hover のツールチップ): the name, the
+    // worktree's folder, the upstream.
+    tip: picker.nameCut || picker.noteCut || trailRun.cutting ? picker.tipLines.join("\n") : ""
+    /// …each behind its mark (`SharedToolTip.tipMarks`).
+    readonly property var tipLines: [picker.shown, picker.trail, picker.note].filter(line => line !== "")
+    readonly property var tipMarks: {
+        const marks = []
+        let at = 0
+        const kinds = [picker.kind, picker.trail === "" ? "" : "tree", picker.note === "" ? "" : "remote"]
+        const lines = [picker.shown, picker.trail, picker.note]
+        lines.forEach((line, i) => {
+            if (line === "")
+                return
+            if (kinds[i] !== "")
+                marks.push([at, kinds[i], undefined, line.length])
+            at += line.length + 1
+        })
+        return marks
+    }
     standing: picker.opened
 
     TextMetrics {
@@ -172,26 +198,26 @@ HoverToolButton {
     }
     // Each run measured in the face it is drawn in.
     TextMetrics {
-        id: trailRuler
-        font.family: Theme.uiFamily
-        font.pixelSize: Theme.fontSm
-        text: picker.trail
-    }
-    TextMetrics {
         id: noteRuler
         font.family: Theme.uiFamily
         font.pixelSize: picker.noteSize
         text: picker.note
     }
+    // The name ceiling, read in each run's own face.
+    TextMetrics {
+        id: capRuler
+        font: nameRuler.font
+        text: "n".repeat(Theme.nameMaxChars)
+    }
+    TextMetrics {
+        id: noteCapRuler
+        font: noteRuler.font
+        text: capRuler.text
+    }
     // The same reading a tab's floor is taken from (規約 §レイアウト初期値).
     TextMetrics {
         id: floorRuler
         font: nameRuler.font
-        text: "nnn…nnn"
-    }
-    TextMetrics {
-        id: trailFloorRuler
-        font: trailRuler.font
         text: "nnn…nnn"
     }
     // The upstream is cut at the end (`noteCell`), so its floor keeps the head.
@@ -268,7 +294,7 @@ HoverToolButton {
                     Layout.leftMargin: picker.kind === "" ? 0 : picker.kindGap
                     // Exactly what it was left, never filling: a filling cell would take its neighbour's turn
                     // (規約 §操作パネル の譲る順).
-                    Layout.preferredWidth: Math.ceil(nameRuler.advanceWidth) - picker.nameGiven
+                    Layout.preferredWidth: picker.nameWhole - picker.nameGiven
                     Layout.preferredHeight: nameRuler.height
                     text: picker.shown
                     pixelSize: picker.pixelSize
@@ -334,7 +360,7 @@ HoverToolButton {
                     id: noteCell
                     Layout.leftMargin: picker.kind === "" ? 0 : picker.kindGap
                     // Cut, not left to run on: kept whole, it walks out under the buttons beside it.
-                    Layout.preferredWidth: Math.ceil(noteRuler.advanceWidth) - picker.noteGiven
+                    Layout.preferredWidth: picker.noteWhole - picker.noteGiven
                     Layout.preferredHeight: noteRuler.height
                     Layout.alignment: Qt.AlignVCenter
                     // At the end: the remote's name at the head is what the run is read for

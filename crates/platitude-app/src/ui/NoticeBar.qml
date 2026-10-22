@@ -16,14 +16,15 @@ Rectangle {
     property string detail: ""
     /// Which state, if any, this report is in — `danger` / `warning` / empty (`Words.reportTone`).
     property string tone: ""
-    /// The word in the heading that is a worktree's name, which wears the tree mark in front of it (デザイン規約
-    /// §ref の種別「名前の印」); empty for none. Set in the heading's own text at the seat its sentence gives it
-    /// (`markWordAt`), so a translation that moves the name moves the mark with it (`Words.roomInSentence`).
-    property string markWord: ""
-    /// Where in the heading that name stands (`Words.reportNameSeat`); -1 for the heading's start.
-    property int markWordAt: -1
-    /// That name's mark: the house for the repository's own worktree, else the tree.
-    property string markKind: "tree"
+    /// The names in the heading that wear their kind's mark in front of them (デザイン規約 §ref の種別「名前の印」) —
+    /// a worktree's, a branch's, a tag's, the remote's — at the seat the heading's own sentence gives the name
+    /// (`Words.reportMarks`), so a translation that moves the name moves the mark with it (`CardText.marks`). Empty for
+    /// none.
+    property var marks: []
+    /// The same for the line under it.
+    property var detailMarks: []
+    /// Automation: whether the heading names a worktree — the report whose name is a folder's, not a ref's.
+    readonly property bool namesWorktree: bar.marks.some(mark => mark[1] === "tree" || mark[1] === "home")
     /// The one word of `detail` that is a place to go, and where (デザイン規約 §hover のツールチップ「2 行目の中の 1 語は
     /// 行き先にできる」, `Words.commandsHref`); empty for none.
     property string detailPlace: ""
@@ -34,7 +35,7 @@ Rectangle {
     /// a run cannot press (`Main.pressTipLink`). Answers whether there was one to press.
     function pressDetailLink() {
         // Only a line that drew its link has one to press: the place word missing from the sentence leaves it plain.
-        if (bar.detailPlace === "" || bar.detailHref === "" || !detailLink.visible || detailLink.markup === "")
+        if (bar.detailPlace === "" || bar.detailHref === "" || !detailLink.visible || detailLink.placeAt < 0)
             return false
         bar.linkAsked(bar.detailHref)
         return true
@@ -58,13 +59,14 @@ Rectangle {
     readonly property bool settled: bar.openHeight > 0 && bar.implicitHeight === bar.openHeight
     readonly property bool shut: !bar.open && bar.implicitHeight === 0
     /// Automation: whether either line lost its tail. **Read off the fields**: a wrapped bar and a cut one can be the
-    /// same height (`tests/qml/tst_reportdress.qml`). The heading is a `CardText`, which wraps and has no cap to cut at.
+    /// same height (`tests/qml/tst_reportdress.qml`). The heading is a `CardText` that wraps; only a name in it is cut,
+    /// at the name ceiling (`holdsNames`).
     readonly property bool wordsCut: detailWord.truncated
-    /// Automation: whether the heading's tree mark found its word, and where it stands against the heading.
-    readonly property alias markSeat: headingWord.markSeat
-    readonly property alias markShown: headMark.visible
-    /// …and how wide the mark's ink is — the room the name has to have been pushed by.
-    readonly property alias markInk: headMark.inkWidth
+    /// Automation: whether the heading's first mark found its word, and where that word stands against the heading.
+    readonly property alias markSeat: headingWord.firstMarkSeat
+    readonly property bool markShown: headingWord.firstMarkSeat.width > 0 || headingWord.firstMarkSeat.height > 0
+    /// …and the mark's cell — what the room in front of the name is, to within half a narrow space (`Words.roomFill`).
+    readonly property alias markCell: headingWord.firstMarkCell
     /// Automation: the one control, so a run can read where it stands — the middle of the bar, however many lines
     /// the words take.
     readonly property alias pill: okPill
@@ -109,88 +111,46 @@ Rectangle {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
-            // **Wrapped, never cut** (デザイン規約 §答えの要らない報せ): the heading names a branch and a remote. A
-            // `CardText`, since only a text field answers where a character stands — what the tree mark in front of a
-            // worktree's name is set against (as `SharedToolTip`).
+            // **Wrapped, never cut** (デザイン規約 §答えの要らない報せ): the heading names a branch and a remote — a name
+            // alone is cut at the name ceiling, given back whole under the hand (`holdsNames`). A `CardText`, since
+            // only a text field answers where a character stands — what the mark in front of each name is set against
+            // (as `SharedToolTip`). Each mark is a sign on its name, as everywhere a name stands (デザイン規約
+            // §アイコンの席 の修飾).
             CardText {
                 id: headingWord
                 Layout.fillWidth: true
                 text: bar.label
-                /// How many spaces the mark takes: its ink and the row's step to its word, a letter the heading
-                /// names it with (デザイン規約 §アイコンの席 の名指し). The sentence's own space before the word stays
-                /// where it is; at the heading's start the ink starts where the lines under it do.
-                readonly property int markRoom:
-                    bar.markWord === "" || spaceRuler.advanceWidth <= 0 ? 0
-                    : Math.ceil((headMark.width + Theme.spaceXs) / spaceRuler.advanceWidth)
-                /// Where the name stands in the heading: the seat its sentence gives it, checked against the word, else
-                /// the heading's start (`Words.markSeatIn`) — a heading that does not hold it there stays plain.
-                readonly property int markAt: bar.markWordAt < 0 ? Words.markSeatIn(bar.label, bar.markWord, false)
-                    : bar.markWord !== ""
-                      && bar.label.substring(bar.markWordAt, bar.markWordAt + bar.markWord.length) === bar.markWord
-                    ? bar.markWordAt : -1
-                /// Where that gap came out (empty when none). One binding over its inputs, since `charRect` is a call
-                /// (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
-                readonly property rect markSeat: {
-                    if (headingWord.markRoom <= 0 || headingWord.markAt < 0 || headingWord.markup === ""
-                            || headingWord.width <= 0 || headingWord.height <= 0)
-                        return Qt.rect(0, 0, 0, 0)
-                    return headingWord.charRect(headingWord.markAt + headingWord.markRoom)
-                }
-                markup: headingWord.markRoom > 0
-                        ? Words.roomInSentence(bar.label, headingWord.markAt, headingWord.markRoom) : ""
-                roomAt: headingWord.markRoom > 0 ? headingWord.markAt : -1
-                roomLength: headingWord.markRoom
+                marks: bar.marks
+                holdsNames: true
                 color: Theme.textPrimary
                 pixelSize: Theme.fontMd
                 weight: Theme.fontWeightStrong
-                /// A space in the heading's own font and weight, so a family with a wider space opens a wider gap.
-                TextMetrics {
-                    id: spaceRuler
-                    font.family: Theme.uiFamily
-                    font.pixelSize: Theme.fontMd
-                    font.weight: Theme.fontWeightStrong
-                    text: " "
-                }
-                /// The heading's letter naming what the name is (デザイン規約 §アイコンの席 の名指し): its ink a step
-                /// short of the word — at the heading's start, starting the line — against the word's baseline
-                /// (`CardText.baselineAt`), a step of the box under it for a stem that runs past it.
-                NavIcon {
-                    id: headMark
-                    visible: headingWord.markSeat.width > 0 || headingWord.markSeat.height > 0
-                    kind: bar.markKind
-                    set: "name"
-                    size: headingWord.pixelSize
-                    tint: Theme.textSecondary
-                    wordBase: Math.ceil(headMark.size)
-                    width: headMark.wordCell
-                    height: headMark.wordBase + Theme.spaceXs
-                    x: headingWord.markAt === 0 ? 0
-                       : Math.round(headingWord.markSeat.x - Theme.spaceXs - headMark.width)
-                    y: Math.round(headingWord.baselineAt(headingWord.markSeat)) - headMark.wordBase
-                }
             }
             // Wrapped, never cut: nothing caps the height (デザイン規約 §答えの要らない報せ). Plain text: a lock's reason
             // is somebody's own words, and a `<` in them is a character, not markup.
             Label {
                 id: detailWord
                 Layout.fillWidth: true
-                visible: bar.detailPlace === ""
+                visible: bar.detailPlace === "" && bar.detailMarks.length === 0
                 text: bar.detail
                 textFormat: Text.PlainText
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
                 wrapMode: Text.Wrap
             }
-            // A line naming a place to go: a `CardText`, the one field whose words can carry a link (as
-            // `SharedToolTip`), the place in the tip's dress — `textMuted`, `textSecondary` under the pointer, underlined.
+            // A line naming a place to go, or a name behind its mark: a `CardText`, the one field whose words can carry
+            // a link (as `SharedToolTip`) or say where a name stands, the place in the tip's dress — `textMuted`,
+            // `textSecondary` under the pointer, underlined.
             CardText {
                 id: detailLink
                 Layout.fillWidth: true
-                visible: bar.detailPlace !== ""
+                visible: bar.detailPlace !== "" || bar.detailMarks.length > 0
                 text: bar.detail
-                markup: bar.detailPlace === "" ? ""
-                        : Words.placeInSentence(bar.detail, bar.detailPlace, bar.detailHref,
-                                                detailLink.pointedLink !== "" ? Theme.textSecondary : Theme.textMuted)
+                marks: bar.detailMarks
+                // The field links it among the names it sets as code (`CardText.place`).
+                place: bar.detailPlace
+                placeHref: bar.detailHref
+                placeTint: detailLink.pointedLink !== "" ? Theme.textSecondary : Theme.textMuted
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
                 onLinkAsked: href => bar.linkAsked(href)

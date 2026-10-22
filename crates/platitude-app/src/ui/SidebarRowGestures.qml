@@ -174,12 +174,27 @@ QtObject {
           : gestures.editCaseOnly
             ? qsTr("Only the letter case differs — on this disk that deletes both names")
           : gestures.editTaken
-            ? qsTr("%1 already has a branch called that").arg(gestures.editRemote)
+            ? Words.remoteHasBranch(gestures.editRemote)
           : !gestures.editNameRuled
             ? (gestures.editMode === "rename" && gestures.editKind === "stash"
                ? qsTr("One line, and nothing invisible in it")
                : Words.notAName)
             : gestures.editClashWhy
+    /// The branch, tag or remote that line names, behind its mark (`Words.refusalMarks`) — asked again of the clash it
+    /// was written from (`editClashWhy`).
+    readonly property var editRefusedMarks: {
+        // Nothing refused, nothing to seat — and no clash asked of the model for it.
+        if (gestures.editRefusedWhy === "")
+            return []
+        const tag = gestures.editMode === "tag" || (gestures.editMode === "rename" && gestures.editKind === "tag")
+        // A new worktree's box names the branch it makes, refused against the branches (`editWorktreeWhy`).
+        const branch = gestures.editMode === "branch" || gestures.editMode === "worktree"
+                       || (gestures.editMode === "rename" && gestures.editKind === "branch")
+        const clash = !tag && !branch ? undefined
+            : (tag ? gestures.tagsModel : gestures.branchesModel).nameClash(
+                  gestures.editText.trim(), gestures.editMode === "rename" ? gestures.editId : "")
+        return Words.refusalMarks(gestures.editRefusedWhy, clash, tag, gestures.editTaken ? gestures.editRemote : "")
+    }
     /// The worktree's folder in that line, which the box's tip stands the tree mark in front of
     /// (`Words.worktreeNameMark`); empty where the line names none.
     readonly property string editRefusedMark: gestures.editKind === "worktreeFolder"

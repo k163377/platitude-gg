@@ -229,6 +229,8 @@ Flickable {
                 phraseHead: block.amending ? "commit --amend" : "commit"
                 phraseTail: block.commitTarget
                 phraseTailTint: commitButton.enabled ? Theme.accent : Theme.textMuted
+                // The branch behind its mark (デザイン規約 §ref の種別「名前の印」); a detached `HEAD` names no branch.
+                phraseTailMark: block.worktree.detached ? "" : "branch"
                 // Whom it is attributed to (デザイン規約 §アバターを与える), with `+N` for co-authors the message
                 // credits as it is typed.
                 phraseFace: block.repoTab.authorAvatar

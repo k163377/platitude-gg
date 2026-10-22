@@ -388,8 +388,7 @@ Item {
             //: the repository's own worktree has out.
             text: refRowMenu.heldLeaf === "" ? "" : qsTr("Open")
             nameMark: refRowMenu.heldLeaf === "" ? "" : refRowMenu.heldHome ? "home" : "tree"
-            nameMarkTint: Theme.success
-            markName: refRowMenu.heldLeaf
+            codeName: refRowMenu.heldLeaf
             offered: refRowMenu.canSwitch
             // Never greyed for its own reason: what stands in the move's way presses through to a question, marked by
             // `asks` (デザイン規約 §進行中の操作から出る). Held doors still hold it (`heldReason`) — a move mid-rewrite
@@ -405,6 +404,7 @@ Item {
             code: "merge"
             refSentence: Words.intoBranch
             refName: refRowMenu.worktree.branch
+            refMark: "branch"
             offered: refRowMenu.integrateOffered
             onTriggered: refRowMenu.repoTab.merge(refRowMenu.integrateRef, false, false, "")
         }
@@ -414,6 +414,7 @@ Item {
             //: Follows the `rebase` chip: "rebase main onto it".
             refSentence: qsTr("%1 onto it")
             refName: refRowMenu.worktree.branch
+            refMark: "branch"
             // A tag stays put under a rebase onto it: git peels it to its commit, and `--update-refs` carries
             // branches only (デザイン規約 §履歴を合流させる).
             offered: refRowMenu.integrateOffered
@@ -430,11 +431,14 @@ Item {
             refSentence: Words.intoBranch
             refName: refRowMenu.pullRuns === "aside" ? refRowMenu.refId : refRowMenu.worktree.branch
             refTint: refRowMenu.pullRuns === "aside" ? Theme.textPrimary : Theme.textLink
+            refMark: "branch"
             offered: refRowMenu.pullRuns !== ""
             // Greyed where git would turn the press down, saying where to go instead (デザイン規約 §取り込んで合流させる).
             blockedReason: Words.pullOut(refRowMenu.pullOut, refRowMenu.heldLeaf, refRowMenu.pullUpstream)
             reasonMarkWord: refRowMenu.pullOut === "held" ? refRowMenu.heldLeaf : ""
             reasonMarkKind: refRowMenu.heldHome ? "home" : "tree"
+            reasonMarks: refRowMenu.pullOut === "own"
+                         ? Words.listMarks(refPullItem.blockedReason, refRowMenu.pullUpstream, "remote") : []
             // `git pull` resolves the other end itself; the fast-forward is told the branch.
             onTriggered: refRowMenu.repoTab.pull(refRowMenu.pullRuns === "aside" ? refRowMenu.refId : "")
         }

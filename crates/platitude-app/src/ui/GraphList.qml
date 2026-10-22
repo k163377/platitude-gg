@@ -75,6 +75,8 @@ AppListView {
     property bool namingRefused: false
     property string namingRefusedWhy: ""
     property string namingRefusedMark: ""
+    /// …and the branch, tag or remote it names, behind their marks (`RepoPage.graphNameRefusedMarks`).
+    property var namingRefusedMarks: []
     // The two clicks the rows answer with one gesture (デザイン規約 §グラフ行のダブルクリック). One for the whole graph,
     // shared with the chip's card (via `GraphPane.noteRowClick`): a pooled delegate would drop or misplace the wait,
     // and the card opens on the chip's seat, so a second click landing on it must still count as the second.

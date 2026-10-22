@@ -20,13 +20,18 @@ AppCard {
     /// How wide the words may run before they wrap: a share of the window, set by the owner.
     property real textWidth: 0
     /// The lines under the title: what it took, then where, when that was another worktree.
+    /// `{text, marks}` each — the worktree behind its tree (デザイン規約 §ref の種別「名前の印」).
     readonly property var facts: {
         if (card.entry === null)
             return []
-        const lines = card.entry.parts.map(part => part.text)
+        const lines = card.entry.parts.map(part => ({ text: part.text, marks: [] }))
         if (card.entry.worktree !== "")
-            lines.push(qsTr("In %1").arg(card.entry.worktree))
+            lines.push({ text: card.inWords(card.entry.worktree),
+                         marks: Words.marksOf(card.inWords, [[card.entry.worktree, card.entry.worktreeMark]]) })
         return lines
+    }
+    function inWords(worktree) {
+        return qsTr("In %1").arg(worktree)
     }
 
     margins: Theme.spaceXs
@@ -46,6 +51,9 @@ AppCard {
             Layout.fillWidth: true
             Layout.maximumWidth: card.textWidth
             text: card.entry === null ? "" : card.entry.title
+            marks: card.entry === null ? [] : card.entry.titleMarks
+            // A heading: a long name is cut at the name ceiling, whole under the hand (デザイン規約 §寸法「名前の天井」).
+            holdsNames: true
             color: Theme.textPrimary
             pixelSize: Theme.fontMd
             weight: Theme.fontWeightStrong
@@ -53,10 +61,11 @@ AppCard {
         Repeater {
             model: card.facts
             delegate: CardText {
-                required property string modelData
+                required property var modelData
                 Layout.fillWidth: true
                 Layout.maximumWidth: card.textWidth
-                text: modelData
+                text: modelData.text
+                marks: modelData.marks
                 color: Theme.textSecondary
                 pixelSize: Theme.fontMd
             }

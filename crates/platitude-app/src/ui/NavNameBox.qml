@@ -29,6 +29,9 @@ SlimField {
     /// (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別「名前の印」).
     property string refusedMark: ""
     readonly property string tipMarkWord: box.refusedMark
+    /// The branch, tag or remote in `refusedWhy`, behind their marks (`SharedToolTip.tipMarks`).
+    property var refusedMarks: []
+    readonly property var tipMarks: box.refusedMarks
     /// The kind of name being typed — the mode, or the row's kind on a rename — which the frame and the placeholder
     /// say (`SlimField.focusTone` — §ref の種別: 枠 = 種別).
     property string namesKind: ""

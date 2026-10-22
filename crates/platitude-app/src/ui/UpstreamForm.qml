@@ -42,6 +42,7 @@ ColumnLayout {
         readonly property real remoteCeiling: Math.max(Metrics.askFieldMinW, askRow.room - askRow.nameWidth)
         AppCombo {
             id: remotePick
+            leadMark: "remote"
             pickOnly: true
             Layout.minimumWidth: Metrics.askFieldMinW
             Layout.maximumWidth: askRow.remoteCeiling
@@ -61,6 +62,7 @@ ColumnLayout {
         // (`AppCombo.wanted`), so a remote picked later swaps the list and leaves the name standing.
         AppCombo {
             id: upstreamBranchField
+            leadMark: "branch"
             Layout.minimumWidth: Metrics.askFieldMinW
             Layout.maximumWidth: Math.max(Metrics.askFieldMinW, askRow.room - Metrics.askFieldMinW)
             Layout.preferredWidth: askRow.nameWidth

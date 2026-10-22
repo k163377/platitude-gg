@@ -69,6 +69,8 @@ HoverToolButton {
     property string phraseCount: ""
     property string phraseTail: ""
     property color phraseTailTint: actionBtn.fg
+    /// The mark the tail's name wears (`ActionButtonLabel.phraseTailMark`); empty for none.
+    property string phraseTailMark: ""
     /// A short warning after the phrase's words — a menu row's tag brought inside the phrase
     /// (`ActionButtonLabel.phraseNote`).
     property string phraseNote: ""
@@ -429,6 +431,7 @@ HoverToolButton {
                 phraseCount: actionBtn.phraseCount
                 phraseTail: actionBtn.phraseTail
                 phraseTailTint: actionBtn.phraseTailTint
+                phraseTailMark: actionBtn.phraseTailMark
                 phraseNote: actionBtn.phraseNote
                 phraseNoteTint: actionBtn.phraseNoteInk
                 phraseFace: actionBtn.phraseFace

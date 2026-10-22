@@ -26,9 +26,6 @@ RowLayout {
     /// list, like `showChange`.
     property bool seated: true
     property string name: ""
-    /// Where a name too long for the column is cut (`CutName.cutAt`): the middle keeps a path's both ends, the end
-    /// keeps a sentence's verb. Not `cutAt` itself: that name is how a cut name is told from the cell around it.
-    property string nameCutAt: "middle"
     /// Where a renamed file came from, drawn ahead of the new name; empty otherwise. Already cut back the way the row
     /// writes names (`encode::rename_source`) — nothing here takes a path apart.
     property string origPath: ""
@@ -70,8 +67,8 @@ RowLayout {
     /// Where the name itself is drawn — the lines a row opens read their voice off it, and it knows whether the name
     /// was cut (`NavRowFacts`, rules/app-ui.md「測って押し出す値は…」).
     readonly property Item nameInk: newName
-    /// Where the name's baseline runs, in the cell's y: a mark heading the row from outside the cell is set against
-    /// it, centred on the capitals' middle (`RecoverPane`).
+    /// Where the name's baseline runs, in the cell's y: a mark set beside the name from outside the cell stands on
+    /// it (`NavRowBody`'s remote and push marks).
     readonly property real nameBase: nameRow.y + newName.y + newName.baselineOffset
     /// The same in the seat: every mark there is set against it, centred on the capitals' middle (デザイン規約
     /// §アイコンの席 の文頭記号).
@@ -181,7 +178,6 @@ RowLayout {
             id: newName
             Layout.fillWidth: true
             text: nameCell.name
-            cutAt: nameCell.nameCutAt
             pixelSize: Theme.fontMd
             weight: nameCell.weight
             color: nameCell.folder ? Theme.textSecondary : nameCell.tone

@@ -45,6 +45,15 @@ Rectangle {
     readonly property bool allInReach: band.parts.length > 0 && band.reach.length === band.parts.length
                                        && !band.outOfReach
 
+    /// The line under the title where the entry was another worktree's: when, then where.
+    function whereWords(when, worktree) {
+        return qsTr("%1 · in %2").arg(when).arg(worktree)
+    }
+    /// A part's line: what it took, then what the press makes of it.
+    function partWords(taken, restore) {
+        return qsTr("%1 — %2").arg(taken).arg(restore)
+    }
+
     implicitHeight: column.implicitHeight + 2 * Theme.spaceSm
     color: Theme.bgElevated
 
@@ -60,9 +69,13 @@ Rectangle {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
             // What was done, then when and where — the heading's two halves, as a commit's card gives subject and date.
+            // Every name behind its kind's mark (デザイン規約 §ref の種別「名前の印」, `RecoverEntries.titleMarksOf`).
             CardText {
                 Layout.fillWidth: true
                 text: band.entry === null ? "" : band.entry.title
+                marks: band.entry === null ? [] : band.entry.titleMarks
+                // A heading: a long name is cut at the name ceiling, whole under the hand (デザイン規約 §寸法「名前の天井」).
+                holdsNames: true
                 color: Theme.textPrimary
                 pixelSize: Theme.fontMd
                 weight: Theme.fontWeightStrong
@@ -70,7 +83,10 @@ Rectangle {
             CardText {
                 Layout.fillWidth: true
                 text: band.entry === null || band.entry.worktree === ""
-                      ? band.when : qsTr("%1 · in %2").arg(band.when).arg(band.entry.worktree)
+                      ? band.when : band.whereWords(band.when, band.entry.worktree)
+                marks: band.entry === null || band.entry.worktree === "" ? []
+                       : Words.marksOf(worktree => band.whereWords(band.when, worktree),
+                                       [[band.entry.worktree, band.entry.worktreeMark]])
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
             }
@@ -100,7 +116,15 @@ Rectangle {
                     CardText {
                         id: partText
                         Layout.fillWidth: true
-                        text: qsTr("%1 — %2").arg(partLine.modelData.text).arg(partLine.modelData.restore)
+                        text: band.partWords(partLine.modelData.text, partLine.modelData.restore)
+                        // The restore half's names, seated after what the part took.
+                        marks: {
+                            const lead = Words.standSeats(band.partWords(partLine.modelData.text, Words.stand),
+                                                          partLine.modelData.restore)
+                            return lead.length === 0 ? []
+                                 : partLine.modelData.restoreMarks
+                                       .map(mark => [mark[0] + lead[0], mark[1], mark[2], mark[3]])
+                        }
                         color: Theme.textPrimary
                         pixelSize: Theme.fontSm
                     }

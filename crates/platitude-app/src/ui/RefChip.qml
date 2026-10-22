@@ -252,7 +252,8 @@ Rectangle {
                 set: "sign"
                 size: nameLabel.font.pixelSize
                 wordBase: nameLabel.baselineOffset
-                tint: Theme.textSecondary
+                // Its kind's colour, as a name's mark is anywhere (`NavIcon.kindTint`; the padlock's grey).
+                tint: nameMark.kindTint
                 width: nameMark.wordCell
                 height: markBox.height
             }

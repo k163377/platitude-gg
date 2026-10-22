@@ -43,6 +43,7 @@ ColumnLayout {
         readonly property real remoteCeiling: Math.max(Metrics.askFieldMinW, askRow.room - askRow.nameWidth)
         AppCombo {
             id: remotePick
+            leadMark: "remote"
             pickOnly: true
             lastRowActs: true
             Layout.minimumWidth: Metrics.askFieldMinW
@@ -63,6 +64,7 @@ ColumnLayout {
         // Takes the slack; past its ceiling the text scrolls inside it.
         SlimField {
             id: publishBranchField
+            leadMark: "branch"
             Layout.minimumWidth: Metrics.askFieldMinW
             Layout.maximumWidth: Math.max(Metrics.askFieldMinW, askRow.room - Metrics.askFieldMinW)
             Layout.preferredWidth: askRow.nameWidth

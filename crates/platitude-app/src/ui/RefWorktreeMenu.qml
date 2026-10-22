@@ -103,7 +103,7 @@ AppMenu {
         id: refWorktreeAddItem
         code: "worktree add"
         nameMark: "tree"
-        markName: state.place
+        codeName: state.place
         growsForText: false
         offered: state.checkout !== ""
         blockedReason: Words.worktreePlaceTaken(state.taken, state.place)
@@ -122,7 +122,7 @@ AppMenu {
         // The name, readable where the row is (デザイン規約 §メニュー「例外は削除行だけ」), behind the tree mark every
         // worktree's name wears (デザイン規約 §ref の種別「名前の印」).
         nameMark: "tree"
-        markName: state.name
+        codeName: state.name
         growsForText: false
         offered: state.canRemove
         // Greyed, not gone: the reader asked why it cannot go, and this is where it says (デザイン規約 §メニュー の例外).

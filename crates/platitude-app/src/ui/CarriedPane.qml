@@ -38,7 +38,7 @@ ColumnLayout {
     readonly property alias view: fileList
     readonly property alias filesWalk: fileWalk
     /// Automation: whether the name was cut, and whether its hover is out (`carried-read <長い名前>`).
-    readonly property alias nameCut: nameLabel.cutting
+    readonly property alias nameCut: nameRun.cutting
     readonly property bool nameTipShown: nameSeat.ToolTip.visible
     /// Stands in for the pointer on the name, which headless cannot inject (verify-ui).
     property bool namePointedAt: false
@@ -83,43 +83,33 @@ ColumnLayout {
                 font.pixelSize: Theme.fontMd
                 color: Theme.textSecondary
             }
-            // The mark is a sign on the name (デザイン規約 §アイコンの席 の修飾), with no step after it
-            // (規約 §別の worktree を読む). Its box is the name's seat, so the two share a baseline.
-            RowLayout {
+            // The worktree as code behind its mark (`NameRun`), cut in the middle, whole on the hover
+            // (規約 §別の worktree を読む) — the only place the whole name is, so the seat takes a pointer. A step down
+            // with the band's words (`Words.nameInk`), the mark in its own colour.
+            Item {
+                id: nameSeat
                 Layout.fillWidth: true
-                spacing: 0
-                NavIcon {
-                    id: nameMark
-                    Layout.preferredWidth: nameMark.wordCell
-                    Layout.preferredHeight: Theme.rowHeight
-                    kind: carriedPane.worktreeHome ? "home" : "tree"
-                    set: "sign"
-                    size: nameLabel.pixelSize
-                    wordBase: nameLabel.baselineOffset
-                    tint: Theme.textSecondary
-                    width: nameMark.wordCell
+                Layout.preferredHeight: Theme.rowHeight
+                NameRun {
+                    id: nameRun
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(nameRun.implicitWidth, parent.width)
                     height: Theme.rowHeight
+                    name: carriedPane.worktreeName
+                    kind: carriedPane.worktreeHome ? "home" : "tree"
+                    pixelSize: Theme.fontMd
+                    weight: Theme.fontWeightStrong
+                    color: Words.nameInk(Theme.textSecondary)
                 }
-                // Cut in the middle, whole on the hover (規約 §別の worktree を読む) — the only place the whole name
-                // is, so the seat takes a pointer.
-                Item {
-                    id: nameSeat
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Theme.rowHeight
-                    CutName {
-                        id: nameLabel
-                        anchors.fill: parent
-                        text: carriedPane.worktreeName
-                        pixelSize: Theme.fontMd
-                        weight: Theme.fontWeightStrong
-                        // The caption's colour: the band is one phrase (規約 §別の worktree を読む).
-                        color: Theme.textSecondary
-                    }
-                    HoverHandler { id: nameHover }
-                    ToolTip.visible: (nameHover.hovered || carriedPane.namePointedAt) && nameLabel.cutting
-                    ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: carriedPane.worktreeName
-                }
+                HoverHandler { id: nameHover }
+                /// The whole name the hover gives back wears the band's own mark (`SharedToolTip.tipMarkWord`,
+                /// デザイン規約 §ref の種別「名前の印」).
+                readonly property string tipMarkWord: carriedPane.worktreeName
+                readonly property string tipMarkKind: carriedPane.worktreeHome ? "home" : "tree"
+                ToolTip.visible: (nameHover.hovered || carriedPane.namePointedAt) && nameRun.cutting
+                ToolTip.delay: Metrics.tipDelayMs
+                ToolTip.text: carriedPane.worktreeName
             }
         }
     }
