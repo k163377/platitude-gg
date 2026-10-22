@@ -2,10 +2,10 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// The escape that puts a ref name in a sentence (`Words.nameInSentence`), held against the rich-text engine that
-// draws it. It owes two opposite things: a run of spaces survives rich text's HTML fold, and a single space stays a
-// place the line may break (`NoticeLine` wraps, and a sentence pinned at every space breaks mid-word). Neither shows
-// in the markup, so both are read off laid-out lines.
+// The markup that sets a name in a sentence as code (`CardText.namedMarkup`), held against the rich-text
+// engine that draws it. It owes two opposite things: a run of spaces survives rich text's HTML fold, and a single space
+// stays a place the line may break (`NoticeLine` wraps, and a sentence pinned at every space breaks mid-word). Neither
+// shows in the markup, so both are read off laid-out lines.
 Item {
     id: root
     width: 400
@@ -13,6 +13,34 @@ Item {
 
     readonly property string sentence: "The first commit will start %1"
     readonly property string spaced: "The first  commit will start %1"
+    /// The name in the sentence in a colour of its own, with no mark (no room): the markup alone.
+    function named(sentence, name) {
+        return [[sentence.indexOf("%1"), "", Theme.textLink, name.length]]
+    }
+
+    CardText {
+        id: colouredLine
+        visible: false
+        text: root.sentence.arg("main")
+        marks: root.named(root.sentence, "main")
+    }
+    CardText {
+        id: spacedLine
+        visible: false
+        text: root.spaced.arg("main")
+        marks: root.named(root.spaced, "main")
+    }
+    CardText {
+        id: markupLike
+        visible: false
+        text: root.sentence.arg("<b>&x")
+        marks: root.named(root.sentence, "<b>&x")
+    }
+    CardText {
+        id: unnamed
+        visible: false
+        text: "nothing to name here"
+    }
 
     // Wide enough for most of the sentence, too narrow for all of it.
     TextEdit {
@@ -20,7 +48,7 @@ Item {
         width: 130
         wrapMode: Text.Wrap
         textFormat: TextEdit.RichText
-        text: Words.nameInSentence(root.sentence, "main", "#60A5FA")
+        text: colouredLine.namedMarkup
     }
     TextEdit {
         id: plain
@@ -29,18 +57,18 @@ Item {
         textFormat: TextEdit.PlainText
         text: root.sentence.arg("main")
     }
-    // Unwrapped: the escaped sentence with its two spaces, and the same markup unescaped, which folds them to one.
+    // Unwrapped: the markup with its two spaces, and the same markup unescaped, which folds them to one.
     TextEdit {
         id: runKept
         wrapMode: Text.NoWrap
         textFormat: TextEdit.RichText
-        text: Words.nameInSentence(root.spaced, "main", "#60A5FA")
+        text: spacedLine.namedMarkup
     }
     TextEdit {
         id: runFolded
         wrapMode: Text.NoWrap
         textFormat: TextEdit.RichText
-        text: "The first  commit will start <font color=\"#60A5FA\">main</font>"
+        text: "The first  commit will start " + Words.codeMarkup("main", Theme.textLink)
     }
 
     TestCase {
@@ -56,6 +84,7 @@ Item {
         // The line count is the machine's — the font database is not the window's (verify-ui windows.md
         // §Windows での実行・デバッグの罠) — so what is asked is where the break landed.
         function test_the_coloured_line_breaks_where_the_plain_one_does() {
+            verify(colouredLine.namedMarkup !== "", "the name is drawn apart")
             verify(coloured.lineCount > 1)
             compare(firstLineOf(coloured), firstLineOf(plain))
             verify(firstLineOf(coloured).endsWith(" "))
@@ -66,12 +95,11 @@ Item {
         }
 
         function test_a_name_that_looks_like_markup_stays_a_name() {
-            const words = Words.nameInSentence(root.sentence, "<b>&x", "#60A5FA")
-            verify(words.indexOf("&lt;b&gt;&amp;x") >= 0)
+            verify(markupLike.namedMarkup.indexOf("&lt;b&gt;&amp;x") >= 0, markupLike.namedMarkup)
         }
 
-        function test_a_sentence_with_no_seat_asks_for_no_markup() {
-            compare(Words.nameInSentence("nothing to name here", "main", "#60A5FA"), "")
+        function test_a_line_with_no_name_asks_for_no_markup() {
+            compare(unnamed.namedMarkup, "")
         }
 
         /// The numbers come with the kind (rules-refs/app-ui.md「Rust に文言を置かない」) and must land in the right

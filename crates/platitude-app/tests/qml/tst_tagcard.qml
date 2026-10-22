@@ -115,7 +115,8 @@ Item {
             verify(card.deleteTagBothItem.offered)
             compare(card.deleteRemoteTagItem.blockedReason, "Several remotes have it: fork, mirror")
             compare(card.deleteTagBothItem.blockedReason, "Several remotes have it: fork, mirror")
-            compare(card.deleteRemoteTagItem.text, "v1.0", "and names no remote it cannot reach")
+            compare(card.deleteRemoteTagItem.codeName, "v1.0", "and names no remote it cannot reach")
+            compare(card.deleteRemoteTagItem.nameMark, "tag", "behind its mark")
 
             root.standOn(["branch-here", "integrate"], "", false,
                          { "tagReach": "", "tagHeldBack": "unnamed", "tagCarriers": "fork, mirror", "tagHere": false })

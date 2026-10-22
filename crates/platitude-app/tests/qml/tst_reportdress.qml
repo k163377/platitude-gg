@@ -33,6 +33,15 @@ Item {
     }
     /// Somewhere else for the focus to go, since the bar hands the pill the focus as it opens.
     Item { id: elsewhere }
+    /// A narrow no-break space in the heading's face: a mark's room is its cell to within half of one
+    /// (`Words.roomFill`).
+    TextMetrics {
+        id: thin
+        font.family: Theme.uiFamily
+        font.pixelSize: Theme.fontMd
+        font.weight: Theme.fontWeightStrong
+        text: String.fromCharCode(0x202f)
+    }
 
     TestCase {
         name: "ReportDress"
@@ -54,8 +63,7 @@ Item {
             bar.label = Words.writeReported(kind, remote, name)
             bar.detail = Words.writeReportedWhy(kind, remote, name, fact)
             bar.tone = Words.reportTone(kind)
-            bar.markWord = Words.reportNamesWorktree(kind) ? name : ""
-            bar.markWordAt = Words.reportNamesWorktree(kind) ? Words.reportNameSeat(kind, remote) : -1
+            bar.marks = Words.reportMarks(kind, remote, name, Words.reportNamesWorktree(kind) ? "tree" : "")
             bar.detailPlace = Words.reportPlace(kind)
             bar.detailHref = bar.detailPlace === "" ? "" : Words.commandsHref
             bar.open = true
@@ -72,43 +80,37 @@ Item {
             compare(Words.writeReportedWhy("worktree-kept"), "It has uncommitted changes.")
             verify(!Words.reportNamesWorktree("rename"), "a branch's name wears no tree")
 
-            // One space of room, where this font needs two: pinned, or rich text drops it at the block's start.
-            compare(Words.roomInSentence("topic was not removed", 0, 1), "&nbsp;topic was not removed")
-
             dress("worktree-kept", "", "topic", "")
-            tryVerify(() => bar.settled && bar.markShown && bar.markInk > 0)
+            tryVerify(() => bar.settled && bar.markShown && bar.markCell > 0)
             // The name opens the sentence, where rich text drops a lone leading space: the room must still be there,
-            // as wide as the mark's ink, or the mark is drawn over the name's first letter.
-            verify(bar.markSeat.x >= bar.markInk, "the name was pushed by the whole mark: " + bar.markSeat.x
-                   + " < " + bar.markInk)
+            // the mark's cell wide, or the mark is drawn over the name's first letter.
+            fuzzyCompare(bar.markSeat.x, bar.markCell, thin.advanceWidth / 2, "the name was pushed by the whole mark")
 
             dress("update-rule", "origin", "main", "")
             tryVerify(() => bar.settled)
-            verify(!bar.markShown, "no worktree named, no mark")
+            compare(bar.marks.map(mark => mark[1]), ["remote"], "no worktree named, no tree: the remote's cloud alone")
         }
 
-        /// The mark goes in front of the name where the sentence says it — last in a tip, first in a heading — and
-        /// never into a word that only holds the same letters (`work` and `tree` in `worktree`).
+        /// The mark goes in front of the name where the sentence says it — last in a tip, at the seat a heading's own
+        /// sentence gives it — and never into a word that only holds the same letters (`work` and `tree` in
+        /// `worktree`).
         function test_the_tree_mark_stands_before_the_name_and_nowhere_else() {
-            compare(Words.markSeatIn("Checked out in another worktree — tree", "tree", true), 34)
-            compare(Words.markSeatIn("Checked out in another worktree — work", "work", true), 34)
-            compare(Words.markSeatIn("topic was not removed", "topic", false), 0)
-            compare(Words.markSeatIn("removed was not removed", "removed", false), 0, "a heading's name is its first")
-            compare(Words.markSeatIn("Checked out in another worktree — rework", "work", true), -1,
+            compare(Words.tipNameSeat("Checked out in another worktree — tree", "tree"), 34)
+            compare(Words.tipNameSeat("Checked out in another worktree — work", "work"), 34)
+            compare(Words.tipNameSeat("Checked out in another worktree — rework", "work"), -1,
                     "the letters, not the word")
-            compare(Words.markSeatIn("Den Ordner topic gibt es", "topic", true), -1,
-                    "a translation that moved it: none")
-            compare(Words.markSeatIn("Cannot rename — vaulted is locked", "vaulted", true), 16,
+            compare(Words.tipNameSeat("Den Ordner topic gibt es", "topic"), -1, "a translation that moved it: none")
+            compare(Words.tipNameSeat("Cannot rename — vaulted is locked", "vaulted"), 16,
                     "a tip may open what follows its conclusion with the name")
-            compare(Words.markSeatIn("Cannot rename — revaulted is locked", "vaulted", true), -1,
+            compare(Words.tipNameSeat("Cannot rename — revaulted is locked", "vaulted"), -1,
                     "the letters, not the word")
-            compare(Words.markSeatIn("vaulted — vaulted", "vaulted", false), 0, "a heading's seat is only its first")
-            compare(Words.markSeatIn("anything", "", true), -1)
-            compare(Words.roomInSentence("anything", -1, 2), "", "no seat, no room: drawn as it came")
-            // A heading's: the seat its own sentence gives the name, first or within.
-            compare(Words.reportNameSeat("worktree-kept", ""), 0)
-            compare(Words.reportNameSeat("carried-in-the-way", ""), 13)
-            compare(Words.reportNameSeat("rename", "origin"), 0)
+            compare(Words.tipNameSeat("anything", ""), -1)
+            // A heading's: the seat its own sentence gives the name, first or within, its length with it.
+            compare(Words.reportMarks("worktree-kept", "", "removed", "tree"), [[0, "tree", undefined, 7]],
+                    "a name that is also a word of the heading: its own seat")
+            compare(Words.reportMarks("carried-in-the-way", "", "topic", "tree")[0].slice(0, 2), [13, "tree"])
+            compare(Words.reportMarks("update-rule", "origin", "main", "")[0].slice(0, 2),
+                    [Words.writeReported("update-rule", "origin", "main").indexOf("origin"), "remote"])
         }
 
         /// Another worktree's changes not applied here: the worktree's yellow, its name behind the tree mark inside
@@ -125,7 +127,7 @@ Item {
             compare(Words.writeReportedWhy("carried-unread"), "Not all of its changes could be read.")
             compare(Words.writeReportedWhy("carried-refused"), "git did not apply them — see GIT COMMANDS")
             dress("carried-in-the-way", "", "topic", "")
-            tryVerify(() => bar.settled && bar.markShown && bar.markInk > 0)
+            tryVerify(() => bar.settled && bar.markShown && bar.markCell > 0)
         }
 
         /// A report whose line sends the reader to the command log names it as a place to go, pressed through to the
@@ -174,7 +176,7 @@ Item {
             compare(Words.writeReported("worktree-hook", "", "hotfix-patch"),
                     "hotfix-patch was opened in this tab, but its post-checkout hook failed")
             compare(Words.writeReportedWhy("worktree-hook", "", "", ""), "See GIT COMMANDS for what the hook said.")
-            compare(Words.reportNameSeat("worktree-hook", ""), 0)
+            compare(Words.reportMarks("worktree-hook", "", "hotfix-patch", "tree")[0].slice(0, 2), [0, "tree"])
             dress("worktree-branch-left", "", "hotfix-patch", "hotfix/patch")
             tryVerify(() => bar.settled && bar.markShown)
             compare(bar.detail, "The branch hotfix/patch was made anyway — see GIT COMMANDS")

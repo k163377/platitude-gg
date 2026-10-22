@@ -56,6 +56,24 @@ Control {
         ahead: 1
     }
 
+    // A name far past the name ceiling, over a short upstream.
+    Branch {
+        id: pastCeiling
+        y: 240
+        name: root.farName
+        note: "origin/past-the-ceiling"
+    }
+    TextMetrics {
+        id: capRuler
+        font.family: Theme.uiFamily
+        font.pixelSize: Theme.fontLg
+        font.weight: Theme.fontWeightStrong
+        text: "n".repeat(Theme.nameMaxChars)
+    }
+    readonly property string farName:
+        "bugfix/keep-the-long-branch-names-readable-in-every-menu-card-tooltip-question-bar-"
+        + "notice-and-the-commit-button-too"
+
     // A name with its card hung off it, as `TopBar` hangs both (rules-refs/app-ui.md「名前から落とすカードは名前にぶら下げる」).
     component Door: OpsPicker {
         id: door
@@ -105,6 +123,14 @@ Control {
             plain.card.close()
             tryCompare(hung.card, "visible", false)
             tryCompare(plain.card, "visible", false)
+        }
+
+        /// Held under the name ceiling and cut in the middle, the whole name in the tip.
+        function test_a_name_past_the_ceiling_is_held_under_it() {
+            const lineOne = pastCeiling.wholeWidth - pastCeiling.bareBox - pastCeiling.kindColumn
+            verify(lineOne <= Math.ceil(capRuler.advanceWidth), "held: " + lineOne + " > " + capRuler.advanceWidth)
+            tryVerify(() => pastCeiling.nameCut, undefined, "cut")
+            compare(pastCeiling.tip.split("\n")[0], root.farName, "the name first, each run on its own line")
         }
 
         function test_the_box_is_as_wide_as_the_longer_line() {
@@ -164,6 +190,11 @@ Control {
             verify(inTree.lineOneWhole > inTree.lineTwoWhole, "the name and its run are the longer line")
             verify(inTree.trailSlack > 4 && inTree.nameSlack > 4, "both the run and the name can give")
             const nameLine = inTree.contentItem.children[1].children[0]
+            let trailRun = null
+            for (const item of nameLine.children) {
+                if (item.cappedWidth !== undefined)
+                    trailRun = item
+            }
             for (const given of [0, inTree.trailSlack - 1, inTree.trailSlack + 3]) {
                 inTree.given = given
                 compare(inTree.trailGiven, Math.min(given, inTree.trailSlack), given + ": the run gives first")
@@ -173,6 +204,8 @@ Control {
                 tryCompare(inTree, "trackPlace", "after")
                 tryCompare(inTree, "nameCut", given > inTree.trailSlack, undefined,
                            given + ": the name is cut only past the run")
+                // Priced in the face it is drawn in, the run is whole until it gives.
+                tryCompare(trailRun, "cutting", given > 0, undefined, given + ": the run is cut only once it gives")
             }
         }
 

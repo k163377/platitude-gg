@@ -163,24 +163,20 @@ Item {
             compareMarks(row, given.off, given.tag + " off")
             row.enabled = true
         }
-        // Whether the row's colour takes the names in it and their marks (`AppMenuItem.inkTakesNames`): a white
-        // delete's words keep the ordinary rules (a name in its sentence, `worktree remove`'s tree mark); a warning
-        // or danger row, and a greyed one, take their names along.
+        // A name in a row's words is plain whatever tone the row wears (`AppMenuItem.refColor`, `Words.nameInk`), its
+        // mark its kind's; a greyed row takes both along (デザイン規約 §メニュー「黄・赤の回数押しの行でも名前は名前の色」).
         function test_menu_row_names_data() {
             return [
-                { tag: "white delete", tone: Theme.textPrimary, enabled: true, takes: false,
-                  name: Theme.textSecondary },
-                { tag: "warning", tone: Theme.warning, enabled: true, takes: true, name: Theme.warning },
-                { tag: "danger", tone: Theme.danger, enabled: true, takes: true, name: Theme.danger },
-                { tag: "white delete, greyed", tone: Theme.textPrimary, enabled: false, takes: true,
-                  name: Theme.textMuted }
+                { tag: "white delete", tone: Theme.textPrimary, enabled: true, name: Theme.textPrimary },
+                { tag: "warning", tone: Theme.warning, enabled: true, name: Theme.textPrimary },
+                { tag: "danger", tone: Theme.danger, enabled: true, name: Theme.textPrimary },
+                { tag: "white delete, greyed", tone: Theme.textPrimary, enabled: false, name: Theme.textMuted }
             ]
         }
         function test_menu_row_names(given) {
-            row.refTint = Theme.textSecondary
+            row.refTint = Theme.textPrimary
             row.holdTone = given.tone
             row.enabled = given.enabled
-            compare(row.inkTakesNames, given.takes)
             verify(Qt.colorEqual(row.refColor, given.name), given.tag + ": " + row.refColor)
             row.enabled = true
         }
@@ -254,7 +250,14 @@ Item {
             ask.plainWords = false
             ask.plainHold = false
             compare(ask.holdPresses, Metrics.holdPressesWarned)
-            verify(Qt.colorEqual(ask.labelTint, ask.tone), "a state colour takes the whole heading")
+            // A state colour stays the words': the name keeps its own, a plain one plain (§ref の種別「文の中の名前」).
+            verify(Qt.colorEqual(ask.labelTint, Theme.textLink), "the name under a state colour: " + ask.labelTint)
+            ask.labelRefTint = Theme.textPrimary
+            verify(Qt.colorEqual(ask.labelTint, Theme.textPrimary),
+                   "a plain name under a state colour: " + ask.labelTint)
+            ask.plainWords = true
+            verify(Qt.colorEqual(ask.labelTint, Theme.textPrimary), "a plain name in plain words: " + ask.labelTint)
+            ask.plainWords = false
         }
     }
 

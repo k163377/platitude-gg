@@ -54,8 +54,8 @@ Control {
             const words = under(row, child => child.text === "platitude-gg")
             const wordsEnd = words.mapToItem(row, words.width, 0).x
             verify(run.mapToItem(row, 0, 0).x >= wordsEnd, "the run starts past the words")
-            compare(under(menu.itemAt(1), child => child.floorWidth !== undefined).visible, false,
-                    "a row with no worktree draws no run")
+            compare(under(menu.itemAt(1), child => child.floorWidth !== undefined), null,
+                    "a row with no worktree builds no run")
             menu.dismiss()
         }
     }

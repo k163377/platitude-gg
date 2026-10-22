@@ -63,9 +63,10 @@ Item {
 
         /// Two minutes before the moment the list reads its times against.
         function entry(title) {
-            return { kind: "reset", mark: "branch", tint: Theme.accent, title: title, at: page.recoverNow - 120,
-                     worktree: "", parts: [{ mark: "branch", tint: Theme.accent, text: "2 commits",
-                                         restore: "as branch main-pgg-restored", look: "commit" }] }
+            return { kind: "reset", mark: "branch", tint: Theme.accent, title: title, titleMarks: [],
+                     listTitle: title, listMarks: [], at: page.recoverNow - 120, worktree: "", worktreeMark: "tree",
+                     parts: [{ mark: "branch", tint: Theme.accent, text: "2 commits",
+                               restore: "as main-pgg-restored", restoreMarks: [], look: "commit" }] }
         }
 
         function init() {
@@ -164,8 +165,9 @@ Item {
             page.recoverEntries = [entry("Rebased feature/a-branch-name-long-enough-to-be-cut-at-the-time")]
             page.recoverPick = 0
             verify(waitForRendering(pane))
-            const titles = found(pane, item => item.nameCutAt !== undefined)
-            compare(titles.length, 1, "one row, its name cut — never opened out in the list")
+            const titles = found(pane, item => item.pieces !== undefined && item.cutting !== undefined)
+            compare(titles.length, 1, "one row")
+            verify(titles[0].cutting, "its name cut — never opened out in the list")
             compare(found(pane, item => item.text === "2 min ago").length, 1, "the row's time stays")
             verify(pane.restOnShown(0))
             tryVerify(() => pane.cardOpen, undefined, "the card opened")

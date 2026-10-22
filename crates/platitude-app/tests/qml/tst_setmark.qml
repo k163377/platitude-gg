@@ -108,15 +108,19 @@ Item {
         /// A sign taller than the room under its middle stops with its foot on the baseline: the band under it is the
         /// descenders'.
         function test_a_tall_sign_stops_at_the_baseline() {
-            const ink = inks("sign", "branch", "H")
+            const ink = inks("sign", "pr", "H")
             fuzzyCompare(ink.mark.bottom, ink.words.bottom, 1, "the foot on the `H`'s foot")
         }
 
-        /// The tree stands where the branch does, a sign's middle or not.
-        function test_the_tree_stands_on_the_capitals_middle_as_a_sign_too() {
-            const ink = inks("sign", "tree", "H")
-            fuzzyCompare(middle(ink.mark), middle(ink.words), 1, "the tree against the `H`")
-            verify(ink.mark.bottom > ink.words.bottom + 1, "its stem runs under the baseline")
+        /// The tree and the branch, drawn as tall as each other, stand on the capitals' middle as signs too
+        /// (`NavIcon.lettered`).
+        function test_the_lettered_signs_stand_on_the_capitals_middle_data() {
+            return [{ tag: "tree", kind: "tree" }, { tag: "branch", kind: "branch" }]
+        }
+        function test_the_lettered_signs_stand_on_the_capitals_middle(data) {
+            const ink = inks("sign", data.kind, "H")
+            fuzzyCompare(middle(ink.mark), middle(ink.words), 1, data.kind + " against the `H`")
+            verify(ink.mark.bottom > ink.words.bottom + 1, data.kind + "'s stem runs under the baseline")
         }
 
         function test_a_heading_s_mark_is_a_step_larger_on_the_same_middle() {

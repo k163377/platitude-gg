@@ -163,14 +163,15 @@ Item {
             root.aimAt({ canSwitch: true, heldLeaf: "topic" })
             compare(menu.switchItem.code, "", "there is no git command for opening a worktree")
             compare(menu.switchItem.text, "Open")
-            compare(menu.switchItem.markName, "topic")
+            compare(menu.switchItem.codeName, "topic")
             compare(menu.switchItem.nameMark, "tree")
-            verify(menu.switchItem.namesMark)
+            verify(menu.switchItem.codesName)
             compare(menu.switchItem.ToolTip.text, "Open topic", "a cut folder comes back whole on the hover")
-            compare(menu.switchItem.tipMarkWord, "topic", "behind the mark it wears on the row")
+            compare(menu.switchItem.tipMarks, [["Open ".length, "tree", undefined, "topic".length]],
+                    "behind the mark it wears on the row")
             root.aimAt({ canSwitch: true })
             compare(menu.switchItem.code, "switch", "an ordinary move is the command it runs")
-            verify(!menu.switchItem.namesMark)
+            verify(!menu.switchItem.codesName)
             compare(menu.switchItem.tipMarkWord, "")
         }
 
@@ -346,7 +347,7 @@ Item {
             menu.runningWhy = ""
             compare(root.rowsOf(menu.carriedRowMenu).greyed, 0, "back the moment it ends")
             verify(waitEnded.count > 0, "which says so")
-            compare(menu.carriedOpenItem.markName, "topic")
+            compare(menu.carriedOpenItem.codeName, "topic")
 
             menu.holdShape()
             menu.carriedCanApply = false
@@ -470,11 +471,11 @@ Item {
             verify(add.offered)
             compare(add.code, "worktree add")
             compare(add.nameMark, "tree")
-            compare(add.markName, "feature-topic-a")
+            compare(add.codeName, "feature-topic-a")
             compare(add.blockedReason, "")
             // What the hover says once the folder is cut: the whole line, chip and folder, the folder behind its mark.
             compare(add.ToolTip.text, "worktree add feature-topic-a")
-            compare(add.tipMarkWord, "feature-topic-a")
+            compare(add.tipMarks, [["worktree add ".length, "tree", undefined, "feature-topic-a".length]])
             add.triggered()
             compare(root.asked,
                     "worktree-add branch feature/topic-a  C:/work/repo.worktrees/feature-topic-a feature-topic-a")

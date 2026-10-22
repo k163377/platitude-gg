@@ -191,10 +191,11 @@ Item {
             compare(row.refName, "origin/feature/topic-a")
             compare(row.holdPresses, Metrics.holdPressesPlain)
             compare(row.holdTone, Theme.textPrimary)
-            // A plain delete's words keep the ordinary rules, so the name wears where it stands (§回数押しの色).
-            verify(Qt.colorEqual(row.refColor, Theme.textSecondary), "a remote branch's own colour: " + row.refColor)
+            // A name is plain, a remote's as any other's: the code ground sets it apart (§ref の種別「文の中の名前」).
+            verify(Qt.colorEqual(row.refColor, Theme.textPrimary), "a remote branch: " + row.refColor)
             root.standOn({ remoteCounterpart: "", upstream: "release", upstreamWhere: "local" })
             verify(Qt.colorEqual(row.refColor, Theme.textPrimary), "a branch here: " + row.refColor)
+            // …but for the branch stood on, in its own colour wherever it is named.
             root.standOn({ remoteCounterpart: "", upstream: "main", upstreamWhere: "current" })
             verify(Qt.colorEqual(row.refColor, Theme.textLink), "the branch the tree is on: " + row.refColor)
 

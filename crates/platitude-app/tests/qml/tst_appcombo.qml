@@ -43,6 +43,17 @@ Control {
         wanted: root.longName
     }
 
+    /// The picking shape holding a remote (the first push's and the upstream's destination): its head is the remote.
+    AppCombo {
+        id: pickedRemote
+        pickOnly: true
+        leadMark: "remote"
+        width: 160
+        y: 160
+        model: ["origin", "upstream"]
+        wanted: root.longName
+    }
+
     /// A list with rows to walk, so Enter has both a row to land on and a name to finish.
     AppCombo {
         id: keys
@@ -118,6 +129,15 @@ Control {
                    "the head the reader looks for is still there: " + shown)
             verify(shown.endsWith(root.longName.slice(-4)), "and so is the tail: " + shown)
             compare(picked.wanted, root.longName, "while the value itself is untouched")
+        }
+
+        /// A remote's name gives way at its end, its head — the remote — kept (デザイン規約 §寸法「upstream 名だけは
+        /// 末尾で切る」).
+        function test_a_picked_remote_is_cut_at_its_end() {
+            const shown = pickedRemote.contentItem.text
+            verify(shown.endsWith("…"), "cut at the end: " + shown)
+            verify(root.longName.startsWith(shown.slice(0, -1)), "the head kept whole: " + shown)
+            compare(pickedRemote.wanted, root.longName, "while the value itself is untouched")
         }
 
         function test_a_picked_name_stops_inside_the_box() {
