@@ -218,8 +218,8 @@ impl RepoSession {
 
     /// Moves a local branch onto `start` and lands on it. A branch that
     /// fell behind is a fast-forward and simply moves; one holding commits
-    /// `start` does not stops with [`SessionEvent::MoveNeedsAsk`], nothing
-    /// touched.
+    /// `start` does not stops with [`SessionEvent::MoveNeedsAsk`] and how
+    /// many they are, nothing touched.
     ///
     /// `leaving` is [`checkout_leaving_operation`](Self::checkout_leaving_operation)'s
     /// agreement, spent **after** the check: a move that has to ask leaves
@@ -236,10 +236,15 @@ impl RepoSession {
             OperationKind::Checkout,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                if !branch::is_merged_into(&exec, &repo.workdir, &local, &start, &cancel).await? {
+                // The branch's own ref: a tag of the same name would answer
+                // first for the bare name.
+                let own = format!("refs/heads/{local}");
+                let lost =
+                    commit::count_beyond(&exec, &repo.workdir, &own, &start, &cancel).await?;
+                if lost > 0 {
                     session
                         .sink
-                        .event(SessionEvent::MoveNeedsAsk { local, start });
+                        .event(SessionEvent::MoveNeedsAsk { local, start, lost });
                     return Ok(());
                 }
                 if leaving {

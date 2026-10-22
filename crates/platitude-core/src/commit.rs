@@ -346,17 +346,18 @@ pub async fn is_in_history(
     }
 }
 
-/// How many commits `oid` reaches that `tip` does not — what a force push
-/// of `tip` would take off the far side. Only asked when the commit is here
-/// to walk (デザイン規約 §相手の履歴を置き換える).
+/// How many commits `rev` reaches that `tip` does not — what a force push
+/// of `tip` would take off the far side (デザイン規約 §相手の履歴を置き換える),
+/// or what a branch `rev` moved onto `tip` would lose. Only asked when
+/// `rev` is here to walk.
 pub async fn count_beyond(
     executor: &GitExecutor,
     workdir: &Path,
-    oid: &Oid,
+    rev: &str,
     tip: &str,
     cancel: &CancellationToken,
 ) -> Result<u32, GitError> {
-    let range = format!("{tip}..{}", oid.to_hex());
+    let range = format!("{tip}..{rev}");
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["rev-list", "--count"])

@@ -19,6 +19,8 @@ pub(super) struct Move {
     /// The branch it moved; empty for a move made on a detached HEAD.
     pub(super) name: String,
     pub(super) worktree: String,
+    /// Where that worktree is; empty where `worktree` is.
+    pub(super) worktree_path: String,
     pub(super) at: i64,
     pub(super) old: Oid,
     pub(super) new: Oid,
@@ -63,6 +65,7 @@ pub(super) fn branch_moves(branch: &str, lines: &[Line]) -> Vec<Move> {
                 kind,
                 name: branch.to_string(),
                 worktree: String::new(),
+                worktree_path: String::new(),
                 at: line.at,
                 old: before.new,
                 new: line.new,
@@ -86,10 +89,11 @@ pub(super) fn branch_moves(branch: &str, lines: &[Line]) -> Vec<Move> {
 /// `commit (amend)`): only the start is asked about (§1: what an operation
 /// did on its way is not listed). `folder` names the worktree for a detached
 /// HEAD left behind; `worktree` is how an entry names the worktree (empty for
-/// the one the session stands in).
+/// the one the session stands in) and `path` where it is (empty the same).
 pub(super) fn head_moves(
     folder: &str,
     worktree: &str,
+    path: &str,
     on: Option<&str>,
     lines: &[Line],
 ) -> Vec<Move> {
@@ -101,6 +105,7 @@ pub(super) fn head_moves(
             kind,
             name: name.to_string(),
             worktree: worktree.to_string(),
+            worktree_path: path.to_string(),
             at: line.at,
             old,
             new: line.new,
@@ -321,7 +326,7 @@ mod tests {
             line(C, 10, "checkout: moving from main to HEAD"),
             line(C, 5, "commit: w"),
         ];
-        let moves = head_moves("repo", "", Some("topic"), &lines);
+        let moves = head_moves("repo", "", "", Some("topic"), &lines);
         let seen: Vec<(DiscardKind, &str, i64)> = moves
             .iter()
             .map(|m| (m.kind, m.name.as_str(), m.at))
@@ -357,7 +362,7 @@ mod tests {
                 line(A, 60, &format!("{action} (start): checkout main")),
                 line(B, 50, "commit: y"),
             ];
-            let moves = head_moves("repo", "", Some("topic"), &lines);
+            let moves = head_moves("repo", "", "", Some("topic"), &lines);
             let seen: Vec<(DiscardKind, &str, i64)> = moves
                 .iter()
                 .map(|m| (m.kind, m.name.as_str(), m.at))
@@ -372,11 +377,16 @@ mod tests {
             line(B, 20, &format!("checkout: moving from {A} to main")),
             line(A, 10, "commit: d2"),
         ];
-        let leaves = head_moves("c", "c", Some("main"), &lines);
+        let leaves = head_moves("c", "c", "/w/c", Some("main"), &lines);
         assert_eq!(leaves.len(), 1);
         assert_eq!(
-            (leaves[0].kind, leaves[0].old, leaves[0].worktree.as_str()),
-            (DiscardKind::LeftDetached, oid(A), "c")
+            (
+                leaves[0].kind,
+                leaves[0].old,
+                leaves[0].worktree.as_str(),
+                leaves[0].worktree_path.as_str()
+            ),
+            (DiscardKind::LeftDetached, oid(A), "c", "/w/c")
         );
     }
 
@@ -386,7 +396,7 @@ mod tests {
             line(B, 20, "checkout: moving from topic to main"),
             line(A, 10, "commit: x"),
         ];
-        assert!(head_moves("c", "", Some("main"), &lines).is_empty());
+        assert!(head_moves("c", "", "", Some("main"), &lines).is_empty());
     }
 
     #[test]
@@ -395,7 +405,7 @@ mod tests {
             line(B, 20, &format!("delete_branch: 3.x FasterXML/3.x [{A}]")),
             line(B, 10, "commit: x"),
         ];
-        let deletes = head_moves("repo", "", Some("main"), &lines);
+        let deletes = head_moves("repo", "", "", Some("main"), &lines);
         assert_eq!(deletes.len(), 1);
         assert_eq!(
             (deletes[0].kind, deletes[0].name.as_str(), deletes[0].old),

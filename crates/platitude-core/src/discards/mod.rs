@@ -212,6 +212,8 @@ pub struct Discard {
     /// The worktree it happened in when that is not the one this
     /// session reads from; empty otherwise (a branch is every worktree's).
     pub worktree: String,
+    /// Where that worktree is; empty where `worktree` is.
+    pub worktree_path: String,
     /// When it happened, epoch seconds: the line git or the record wrote.
     pub at: i64,
     /// What it brings back, one part each; never empty. More than one for
@@ -309,6 +311,7 @@ mod tests {
             name: branches.join(", "),
             remote: String::new(),
             worktree: String::new(),
+            worktree_path: String::new(),
             at: 0,
             parts,
         }

@@ -412,12 +412,15 @@ pub enum SessionEvent {
         op: &'static str,
         error: GitError,
     },
-    /// A branch move would leave commits unreachable, so it was not made.
+    /// A branch move would take commits off the branch, so it was not made.
     /// Nothing changed; the UI asks before running it for real
     /// ([`RepoSession::checkout`] with [`CheckoutTarget::ForceCreate`]).
+    /// `lost` is how many commits `local` holds that `start` does not —
+    /// what the move takes off it, never 0.
     MoveNeedsAsk {
         local: String,
         start: String,
+        lost: u32,
     },
     /// The walk that put the discard log's entry on the graph, or took it
     /// off (`tip` `None`), has landed ([`RepoSession::show_discard`]): a

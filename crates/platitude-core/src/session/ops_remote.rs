@@ -326,7 +326,7 @@ impl RepoSession {
                             match commit::count_beyond(
                                 &s.executor,
                                 &workdir,
-                                &over_there,
+                                &over_there.to_hex(),
                                 &tip,
                                 &cancel,
                             )

@@ -63,6 +63,11 @@ pub async fn read_repo(
             by_head.extend(head_moves(
                 &worktree.folder,
                 &worktree.label,
+                if worktree.label.is_empty() {
+                    ""
+                } else {
+                    &worktree.path
+                },
                 worktree.on.as_deref(),
                 &lines,
             ));
@@ -370,6 +375,7 @@ mod tests {
             kind,
             name: name.to_string(),
             worktree: String::new(),
+            worktree_path: String::new(),
             at,
             old: oid(old),
             new: oid(new),

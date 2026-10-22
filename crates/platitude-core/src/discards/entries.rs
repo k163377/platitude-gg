@@ -61,6 +61,7 @@ pub(super) fn entries(moves: Vec<Settled>, lines: &[Line], here: &Here<'_>) -> V
             name: settled.found.name,
             remote: String::new(),
             worktree: settled.found.worktree,
+            worktree_path: settled.found.worktree_path,
             at: settled.found.at,
             parts: vec![part],
         });
@@ -77,6 +78,7 @@ fn from_line(line: &Line, moves: &mut [Option<Settled>], here: &Here<'_>) -> Opt
         name: String::new(),
         remote: line.get("Remote").to_string(),
         worktree: String::new(),
+        worktree_path: String::new(),
         at: line.at,
         parts: Vec::new(),
     };
@@ -154,12 +156,18 @@ impl Reading<'_> {
             .get(line.get("Worktree"))
             .map_or_else(|| line.get("Worktree-path").to_string(), Clone::clone);
         entry.worktree = worktree_label(&path, self.here);
+        entry.worktree_path = if entry.worktree.is_empty() {
+            String::new()
+        } else {
+            path.clone()
+        };
         let named: Vec<(&str, Oid, Oid)> =
             line.all("Moved").into_iter().filter_map(moved_of).collect();
         let reset = take_moves(moves, &named).into_iter().next();
         if let Some(reset) = reset {
             entry.name = reset.found.name.clone();
             entry.worktree = reset.found.worktree.clone();
+            entry.worktree_path = reset.found.worktree_path.clone();
             entry.parts.push(branch_part(&reset, names));
         }
         entry.parts.push(Part {
@@ -567,6 +575,7 @@ mod tests {
                 kind,
                 name: name.to_string(),
                 worktree: String::new(),
+                worktree_path: String::new(),
                 at: 90,
                 old: oid(old),
                 new: oid(new),
@@ -615,6 +624,53 @@ mod tests {
         assert!(
             matches!(restores[..], [Restore::Branch { name, .. }, Restore::Changes { .. }] if name == "main-pgg-restored"),
             "{restores:#?}"
+        );
+    }
+
+    /// Work thrown away in another worktree says where that worktree stands
+    /// now; joined to its reset, the reset's move says it.
+    #[test]
+    fn another_worktrees_copy_says_where_the_worktree_stands() {
+        let walked = Walked::default();
+        let taken = Taken::default();
+        let restored = HashSet::new();
+        let at = Here {
+            worktrees: [("side".to_string(), "/w/side".to_string())].into(),
+            ..here(&walked, &taken, &restored)
+        };
+        let moved = format!("main {} {}", oid(3).to_hex(), oid(9).to_hex());
+        let discard = line(
+            "discard",
+            7,
+            &[3],
+            &[("Branch", "main"), ("Worktree", "side")],
+        );
+        let reset = line(
+            "reset --hard",
+            8,
+            &[3, 6],
+            &[("Branch", "main"), ("Worktree", "side"), ("Moved", &moved)],
+        );
+        let mut on_side = settled(DiscardKind::Reset, "main", 3, 9);
+        on_side.found.worktree = "side".to_string();
+        on_side.found.worktree_path = "/w/side-at-the-reset".to_string();
+        let found = entries(vec![on_side], &[discard, reset], &at);
+        let seen: Vec<(DiscardKind, &str, &str)> = found
+            .iter()
+            .map(|entry| {
+                (
+                    entry.kind,
+                    entry.worktree.as_str(),
+                    entry.worktree_path.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            seen,
+            vec![
+                (DiscardKind::Discarded, "side", "/w/side"),
+                (DiscardKind::Reset, "side", "/w/side-at-the-reset"),
+            ]
         );
     }
 
