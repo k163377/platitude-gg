@@ -2,7 +2,7 @@
 //! left only the old tip holding, the name a restore would take, and that a
 //! move which left nothing behind is no entry.
 
-use super::{oid, one, read, read_at, restores};
+use super::{oid, one, read, read_at, restores, same_dir};
 use crate::support::TestRepo;
 use platitude_core::discards::{self, DiscardKind, Look, Restore};
 
@@ -166,9 +166,9 @@ async fn a_move_on_a_branch_deleted_since_is_read_off_heads_reflog() {
 }
 
 /// Another worktree's HEAD is read from this one, and this one's from
-/// it: what it left detached is one entry, named for it where it is not
-/// the worktree read from — and the commit its detached HEAD stands on, which
-/// no branch holds, is no one's loss.
+/// it: what it left detached is one entry, named for it — and saying where it
+/// stands — where it is not the worktree read from; and the commit its
+/// detached HEAD stands on, which no branch holds, is no one's loss.
 #[tokio::test]
 async fn another_worktrees_detached_head_is_read_from_either_worktree() {
     let mut repo = TestRepo::init();
@@ -186,7 +186,10 @@ async fn another_worktrees_detached_head_is_read_from_either_worktree() {
     let d2 = repo.git_in(&side, &["rev-parse", "HEAD"]);
     repo.git_in(&side, &["switch", "--detach", "HEAD~1"]);
 
-    for (from, named) in [(repo.path.clone(), "side"), (side.clone(), "")] {
+    for (from, named, at) in [
+        (repo.path.clone(), "side", Some(&side)),
+        (side.clone(), "", None),
+    ] {
         let found = read_at(&from).await;
         assert_eq!(found.len(), 1, "{found:#?}");
         let left = one(&found, DiscardKind::LeftDetached);
@@ -195,6 +198,10 @@ async fn another_worktrees_detached_head_is_read_from_either_worktree() {
             (named, vec![oid(&d2)]),
             "read from {from:?}: d1 is side's HEAD"
         );
+        let stands = at.map_or(left.worktree_path.is_empty(), |dir| {
+            same_dir(&left.worktree_path, dir)
+        });
+        assert!(stands, "read from {from:?}: {left:#?}");
     }
 }
 

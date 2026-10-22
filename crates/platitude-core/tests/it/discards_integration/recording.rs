@@ -2,7 +2,7 @@
 //! and read back as entries: the copy of thrown-away work in the shape of a
 //! stash, and the notes of everything git keeps no line for.
 
-use super::{begin, copy_and_record, finish, git_dir, oid, one, read, restores, same_dir};
+use super::{begin, copy_and_record, finish, git_dir, oid, one, read, read_at, restores, same_dir};
 use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::discards::{
@@ -126,6 +126,30 @@ async fn a_copy_holds_the_staged_the_unstaged_and_the_untracked_apart() {
                 && same_dir(path, &repo.path) && same_dir(dir, &git_dir(&repo))
         ),
         "{part:?}"
+    );
+}
+
+/// Work thrown away in the main worktree, read from a linked one, is named
+/// for the main worktree's folder and says where that worktree stands.
+#[tokio::test]
+async fn a_copy_from_the_main_worktree_names_it_read_from_a_linked_one() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "1\n", "c1");
+    let side = repo.path.with_file_name("side");
+    repo.git(&["worktree", "add", "--detach", &side.to_string_lossy()]);
+    repo.write_file("a.txt", "2\n");
+    let dir = git_dir(&repo);
+    let tracked = paths(&["a.txt"]);
+
+    assert!(copy_and_record(&discard_of(&repo, &dir, &tracked, &[])).await);
+
+    let found = read_at(&side).await;
+    let discarded = one(&found, DiscardKind::Discarded);
+    let folder = repo.path.file_name().expect("a folder").to_string_lossy();
+    assert_eq!(discarded.worktree, folder, "{discarded:#?}");
+    assert!(
+        same_dir(&discarded.worktree_path, &repo.path),
+        "{discarded:#?}"
     );
 }
 

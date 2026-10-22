@@ -420,6 +420,57 @@ async fn a_move_that_has_to_ask_leaves_the_operation_standing() {
     session.close_and_wait().await;
 }
 
+/// The question says how many commits the move takes off the branch — the
+/// branch's own, whatever a tag of the same name points at.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_move_that_has_to_ask_counts_what_the_branch_loses() {
+    let mut repo = colliding_branches();
+    repo.git(&["switch", "other"]);
+    repo.commit_file("more.txt", "more\n", "other again");
+    repo.git(&["switch", "main"]);
+    repo.git(&["tag", "other", "main"]);
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout_moving_branch("other".into(), "main".into(), false);
+    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
+    assert_eq!(
+        sink.count(|e| matches!(
+            e,
+            platitude_core::session::SessionEvent::MoveNeedsAsk { lost: 2, .. }
+        )),
+        1,
+        "the move came back as a question naming the two commits it would take off"
+    );
+    session.close_and_wait().await;
+}
+
+/// A branch that fell behind the start takes nothing off it: moved and
+/// landed on, nothing asked.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_move_that_takes_nothing_off_the_branch_lands_on_it() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "1\n", "root");
+    repo.git(&["branch", "behind"]);
+    let ahead = repo.commit_file_id("a.txt", "2\n", "ahead");
+
+    let (sink, session) = opened(&repo).await;
+    session.checkout_moving_branch("behind".into(), "main".into(), false);
+    assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
+    assert_eq!(
+        sink.count(|e| matches!(e, SessionEvent::MoveNeedsAsk { .. })),
+        0,
+        "nothing to ask about"
+    );
+    assert_eq!(
+        (
+            repo.git(&["rev-parse", "behind"]),
+            repo.git(&["rev-parse", "--abbrev-ref", "HEAD"])
+        ),
+        (ahead, "behind".to_string())
+    );
+    session.close_and_wait().await;
+}
+
 /// A carry whose session closes half-way finishes anyway, so the work it
 /// emptied the tree of is put back — read from the repository, since
 /// nobody is watching events (rules-refs/core.md「ローカル書き込みは走り切る」).
