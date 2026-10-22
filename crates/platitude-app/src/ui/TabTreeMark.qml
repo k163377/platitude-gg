@@ -27,40 +27,51 @@ Item {
     property real minNameW: 0
 
     /// This run at its own width: what a tab asks the strip for on top of its name, and the most it is ever drawn at.
-    readonly property real naturalWidth:
-        treeRun.name === "" ? 0 : treeRun.fixedWidth + Math.ceil(nameCut.implicitWidth)
+    readonly property real naturalWidth: treeRun.name === "" ? 0 : treeRun.fixedWidth + treeRun.nameWhole
+    /// The name alone, whole and at its floor — both ends and the `…` — in the face it is drawn in, for a holder that
+    /// prices the run (`OpsPicker`).
+    readonly property real nameWhole: Math.ceil(nameRun.nameWidth)
+    readonly property real nameFloor: Math.ceil(floorRuler.advanceWidth)
     /// Everything but the name: the gap before it and the mark's seat.
-    readonly property real fixedWidth: treeRun.gap + treeIcon.wordCell
+    readonly property real fixedWidth: treeRun.gap + nameRun.markCell
     /// The least this is drawn at: the fixed parts plus a readable name, or the whole run if shorter — a floor above
     /// the natural width would drop a run that fits.
     readonly property real floorWidth: Math.min(treeRun.naturalWidth, treeRun.fixedWidth + treeRun.minNameW)
+    /// Whether the name was cut to the width the run was given.
+    readonly property bool cutting: nameRun.cutting
+    /// The natural width with the name held under the name ceiling (`Theme.nameMaxChars`), for a holder with no width
+    /// ceiling of its own. The tab has one (its share of the strip) and asks for `naturalWidth`.
+    readonly property real cappedWidth: Math.min(treeRun.naturalWidth, treeRun.fixedWidth + treeRun.capWidth)
+    /// The name ceiling in the run's face, whole pixels.
+    readonly property real capWidth: Math.ceil(capRuler.advanceWidth)
 
     implicitWidth: treeRun.naturalWidth
-    implicitHeight: nameCut.implicitHeight
+    implicitHeight: nameRun.implicitHeight
 
-    // A sign on the name (デザイン規約 §アイコンの席 の修飾): its box is the name's line, so the two stand on one
-    // baseline, and its cell the face's own room round it.
-    NavIcon {
-        id: treeIcon
-        kind: "tree"
-        set: "sign"
-        size: nameCut.pixelSize
-        wordBase: nameCut.baselineOffset
+    TextMetrics {
+        id: capRuler
+        font.family: Theme.monoFamily
+        font.pixelSize: nameRun.pixelSize
+        text: "n".repeat(Theme.nameMaxChars)
+    }
+    // The same reading a tab's floor is taken from (規約 §レイアウト初期値).
+    TextMetrics {
+        id: floorRuler
+        font: capRuler.font
+        text: "nnn…nnn"
+    }
+
+    // The mark and the folder as one code chip (`NameRun`), a step under the tab's name in size and colour — the mark
+    // keeps its own (デザイン規約 §タイポグラフィ「読むだけの添え物」).
+    NameRun {
+        id: nameRun
         anchors.left: treeRun.left
         anchors.leftMargin: treeRun.gap
-        anchors.verticalCenter: treeRun.verticalCenter
-        width: treeIcon.wordCell
-        height: nameCut.height
-        tint: Theme.textSecondary
-    }
-    CutName {
-        id: nameCut
-        anchors.left: treeIcon.right
         anchors.right: treeRun.right
         anchors.verticalCenter: treeRun.verticalCenter
-        text: treeRun.name
-        color: Theme.textSecondary
-        // A step under the tab's name (デザイン規約 §タイポグラフィ「読むだけの添え物」).
+        height: nameRun.implicitHeight
+        name: treeRun.name
         pixelSize: Theme.fontSm
+        color: Words.nameInk(Theme.textSecondary)
     }
 }

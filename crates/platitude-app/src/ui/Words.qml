@@ -60,6 +60,28 @@ QtObject {
         }
     }
 
+    /// The branch or tag that sentence names, behind its mark (デザイン規約 §ref の種別「名前の印」, `marksOf`).
+    function clashMarks(clash, tag) {
+        if (clash === undefined || clash.with === undefined || clash.with === "")
+            return []
+        return Words.marksOf(name => Words.nameClashed({ kind: clash.kind, with: name }, tag),
+                             [[clash.with, tag ? "tag" : "branch"]])
+    }
+    /// A remote branch renamed to a name its remote already carries — both rename boxes' refusal.
+    function remoteHasBranch(remote) {
+        return qsTr("%1 already has a branch called that").arg(remote)
+    }
+    /// The names a rename or new-name box's refusal `why` says, behind their marks: the clash it was written from
+    /// (`nameClashed`, `tag` its noun), or the remote a remote branch's rename asks (`remoteHasBranch`). None for a
+    /// refusal that is neither.
+    function refusalMarks(why, clash, tag, remote) {
+        if (why === "")
+            return []
+        if (remote !== "" && why === Words.remoteHasBranch(remote))
+            return Words.marksOf(Words.remoteHasBranch, [[remote, "remote"]])
+        return why === Words.nameClashed(clash, tag) ? Words.clashMarks(clash, tag) : []
+    }
+
     /// Why the name typed into the new-worktree box cannot be taken — the box's tip in the graph and in the left
     /// menu alike, everything git would refuse that this end can see, said before the press. `clash` is what
     /// `NavSectionModel.nameClash` answered for it among the branches; `place` what `NavSectionModel.newWorktreeFor`
@@ -662,7 +684,7 @@ QtObject {
         return Words.writeReportedWhy(kind, "", "", "").indexOf(Words.commandsTitle) >= 0 ? Words.commandsTitle : ""
     }
 
-    /// Whether a report's heading names a worktree — the name then wears the tree mark (`NoticeBar.markWord`,
+    /// Whether a report's heading names a worktree — the name then wears the tree mark (`reportMarks`,
     /// デザイン規約 §ref の種別「名前の印」).
     function reportNamesWorktree(kind) {
         return kind.startsWith("worktree-") || kind.startsWith("carried-")
@@ -684,6 +706,14 @@ QtObject {
     function reportTone(kind) {
         return Words.renameStillOpen(kind) || kind === "half-rename" || kind === "rename-unfinished"
                || Words.reportNamesWorktree(kind) ? "warning" : "danger"
+    }
+
+    /// What a branch loses, said of the branch: the line under the question that moves it onto another
+    /// (`Move <branch> here?`) and under the first push that overwrites it (デザイン規約 §長さ「失うもの 1 行」).
+    /// A sentence for each count — `commit(s)` would reach the reader as written.
+    function losesCommits(name, count) {
+        return count === 1 ? qsTr("%1 loses %n commit.", "", count).arg(name)
+                           : qsTr("%1 loses %n commits.", "", count).arg(name)
     }
 
     /// What the two sides each did to a conflicted file, from git's two stage letters (デザイン規約 §conflict の種別).
@@ -782,21 +812,49 @@ QtObject {
         }
     }
 
-    /// A ref name inside a sentence, as rich-text markup: the name in `tint` (デザイン規約 §ref の種別
-    /// 「名前が出る場所すべてで」), the rest in the line's own colour. The name goes at the `%1` seat rather than being
-    /// searched for — a branch called `it` would be found in `into it`. `""` when the sentence has no seat; the caller
-    /// then uses its plain words. Every piece is escaped: a branch called `<b>` has to read as its name.
-    function nameInSentence(sentence, name, tint) {
-        const seat = sentence.indexOf("%1")
-        if (seat < 0)
-            return ""
-        return Words.inked(sentence.substring(0, seat))
-             + "<font color=\"" + tint + "\">" + Words.inked(name) + "</font>"
-             + Words.inked(sentence.substring(seat + 2))
+    /// The colour a name takes in words drawn in `prose` (デザイン規約 §ref の種別「文の中の名前」), `own` the name's
+    /// own where it has one: plain, whatever the words' colour — the name stands apart on its code ground, not by a
+    /// colour — but a step down in a line that is itself a step down (`textSecondary`, a heading's second line), in
+    /// its own where that says where the reader is (the current branch's `textLink`, the worktree stood in's
+    /// `textHereTree`), and in the words' on a line that cannot be pressed or under a fill, which take everything on
+    /// them.
+    function nameInk(prose, own) {
+        if (Qt.colorEqual(prose, Theme.textMuted) || Qt.colorEqual(prose, Theme.textOnAccent))
+            return prose
+        if (own !== undefined && (Qt.colorEqual(own, Theme.textLink) || Qt.colorEqual(own, Theme.textHereTree)))
+            return own
+        return Qt.colorEqual(prose, Theme.textSecondary) ? Theme.textSecondary : Theme.textPrimary
     }
-    /// The same shape with a link where the colour was: the one word a press can reach (`CardText.markup`), found
-    /// inside the already-spelled sentence that is measured and read back (`HoverToolButton.tip`). The tint rides
-    /// inside the anchor: a `TextEdit` takes its link colour from the markup only (`CardText`).
+    /// A room `cell` pixels wide out of no-break spaces `space` wide and narrow no-break spaces `thin` wide: the mix
+    /// whose width comes nearest the cell, so the gap before a mark is the sentence's own space and no more
+    /// (デザイン規約 §ref の種別「名前の印」). Whole spaces alone would leave up to a space's worth in front of it, a
+    /// different amount for each kind. Both hold the line: neither is a place to break it.
+    function roomFill(cell, space, thin) {
+        if (cell <= 0 || space <= 0)
+            return ""
+        const most = Math.ceil(cell / space)
+        let best = "\u00a0".repeat(most)
+        let off = most * space - cell
+        for (let n = 0; thin > 0 && n <= most; n++) {
+            for (let m = 0; n * space + m * thin <= cell + thin; m++) {
+                const miss = Math.abs(n * space + m * thin - cell)
+                if (n + m > 0 && miss < off - 0.01) {
+                    best = "\u00a0".repeat(n) + "\u202f".repeat(m)
+                    off = miss
+                }
+            }
+        }
+        return best
+    }
+    /// `name` as code in markup (デザイン規約 §ref の種別「文の中の名前」): the mono face, in `ink`. Its ground is drawn
+    /// under the words by whoever lays them out (`CardText`, `AppMenuItem`), measured off the ink.
+    function codeMarkup(name, ink) {
+        return "<span style=\"font-family:'" + Theme.monoFamily + "'; color:" + ink + "\">" + Words.inked(name)
+             + "</span>"
+    }
+    /// A sentence as rich-text markup with a link on its one word a press can reach (`CardText.markup`), found inside
+    /// the already-spelled sentence that is measured and read back (`HoverToolButton.tip`). Every piece is escaped. The
+    /// tint rides inside the anchor: a `TextEdit` takes its link colour from the markup only (`CardText`).
     function placeInSentence(sentence, place, href, tint) {
         const seat = sentence.indexOf(place)
         if (place === "" || seat < 0)
@@ -805,46 +863,99 @@ QtObject {
              + "<a href=\"" + href + "\"><font color=\"" + tint + "\">" + Words.inked(place) + "</font></a>"
              + Words.inked(sentence.substring(seat + place.length))
     }
-    /// Where `word` stands in `sentence` as the name a drawn mark goes in front of: a whole word at the sentence's end
-    /// (`atEnd` — a tooltip names it after its conclusion, `<conclusion> — <name>`, and a cut row's line ends in it,
-    /// or opens what follows the conclusion, `<conclusion> — <name> is locked`) or at its start (a report's heading,
-    /// `<name> was not removed`). -1 anywhere else — a translation that moved it, or the same letters inside another
-    /// word (`old` in `folder`) — so the sentence is drawn as it came, with no mark on the wrong word.
-    function markSeatIn(sentence, word, atEnd) {
+    /// Where a tip's sentence puts `word`, the name a drawn mark goes in front of (`SharedToolTip.tipMarkWord`): a
+    /// whole word at its end — a tip names it after its conclusion, `<conclusion> — <name>`, and a cut row's line ends
+    /// in it — or opening what follows the conclusion, `<conclusion> — <name> is locked`. -1 anywhere else — a
+    /// translation that moved it, or the same letters inside another word (`old` in `folder`) — so the sentence is
+    /// drawn as it came, with no mark on the wrong word.
+    function tipNameSeat(sentence, word) {
         if (word === "")
             return -1
-        const seat = atEnd ? sentence.length - word.length : 0
-        if (seat >= 0 && sentence.substring(seat, seat + word.length) === word) {
-            const beside = atEnd ? sentence.charAt(seat - 1) : sentence.charAt(word.length)
-            if (beside === "" || beside === " ")
+        const seat = sentence.length - word.length
+        if (seat >= 0 && sentence.substring(seat) === word) {
+            const before = sentence.charAt(seat - 1)
+            if (before === "" || before === " ")
                 return seat
         }
-        if (!atEnd)
-            return -1
         const after = sentence.indexOf(" — " + word + " ")
         return after < 0 ? -1 : after + 3
     }
-    /// Where a report's heading puts the worktree it names — first (`<name> was not removed`) or within
-    /// (`Changes from <name> were not applied`): the `%1` seat of its own sentence, never searched for, as
-    /// `nameInSentence` (a worktree called `from` would be found in `Changes from`). -1 for a heading with no seat.
-    function reportNameSeat(kind, remote) {
-        return Words.writeReported(kind, remote, "%1").indexOf("%1")
+    /// Where each name of a `, `-joined list stands in a sentence that ends in it (`severalRemotesHave`,
+    /// `differsFrom`, `pullOwnCommits`): `[at, kind, , length]` each, for the marks the names wear and the colour they
+    /// take (`CardText.marks`). None where the sentence does not end in the list — a translation that moved it is drawn
+    /// as it came.
+    function listMarks(sentence, list, kind) {
+        if (list === "" || !sentence.endsWith(list))
+            return []
+        let at = sentence.length - list.length
+        const marks = []
+        for (const name of list.split(", ")) {
+            marks.push([at, kind, undefined, name.length])
+            at += name.length + 2
+        }
+        return marks
     }
-    /// The same sentence with `spaces` of room opened at `seat` (`markSeatIn`), for a drawn mark to stand in
-    /// (`SharedToolTip`; where the gap lands is `CardText.charRect`'s to answer). `""` for no seat, so the caller draws
-    /// the sentence as it came. The room is pinned whole: rich text drops a lone space opening a block (a name that
-    /// starts the sentence, `NoticeBar`), and a breakable one would let a line end between the mark and its name.
-    function roomInSentence(sentence, seat, spaces) {
-        if (seat < 0 || spaces <= 0)
-            return ""
-        return Words.inked(sentence.substring(0, seat)) + "&nbsp;".repeat(spaces) + Words.inked(sentence.substring(seat))
+    /// A character no name holds, written into a sentence in a name's place to find where the sentence puts it
+    /// (`standSeats`).
+    readonly property string stand: "\uE000"
+    /// Where a sentence written with `stand` in one name's place puts that name — every time it says it — as seats in
+    /// the sentence with `word` written there instead: each counts the earlier ones at the word's own length. A
+    /// translation that moves the name moves the seat (`RepoPage.reportMarks`).
+    function standSeats(sentence, word) {
+        const seats = []
+        let at = sentence.indexOf(Words.stand)
+        while (at >= 0) {
+            seats.push(at + seats.length * (word.length - Words.stand.length))
+            at = sentence.indexOf(Words.stand, at + 1)
+        }
+        return seats
+    }
+    /// Where each name a sentence says stands in it, and the mark it wears (デザイン規約 §ref の種別「名前の印」):
+    /// `[at, kind, , length]` each, in the sentence's order (`CardText.marks`). `sentence` is the function that writes
+    /// it, called once per name with `stand` in that name's place; `names` is `[[name, kind], …]` in the order it takes
+    /// them — `[name, kind, own colour]` where the name says where the reader is. A name that is empty or wears no mark
+    /// is left out.
+    function marksOf(sentence, names) {
+        const real = names.map(name => name[0])
+        const marks = []
+        names.forEach((name, i) => {
+            if (name[0] === "" || name[1] === "")
+                return
+            const args = real.slice()
+            args[i] = Words.stand
+            Words.standSeats(sentence.apply(null, args), name[0])
+                 .forEach(at => marks.push([at, name[1], name[2], name[0].length]))
+        })
+        return marks.sort((a, b) => a[0] - b[0])
+    }
+    /// The names a report's heading says, each behind its mark (`NoticeBar.marks`): the remote's cloud, and `name`
+    /// behind `nameMark` (empty for none). Seated by the heading's own sentence, so a translation moves the marks with
+    /// the names (`marksOf`).
+    function reportMarks(kind, remote, name, nameMark) {
+        return Words.marksOf((r, n) => Words.writeReported(kind, r, n), [[remote, "remote"], [name, nameMark]])
+    }
+    /// The same for the line under it (`NoticeBar.detailMarks`), which may also name the branch `fact` is.
+    function reportWhyMarks(kind, remote, name, fact, nameMark) {
+        return Words.marksOf((r, n, f) => Words.writeReportedWhy(kind, r, n, f),
+                             [[remote, "remote"], [name, nameMark],
+                              [fact, kind === "worktree-branch-left" ? "branch" : ""]])
+    }
+    /// Whether a report's heading names a branch or a tag (`writeReported`): the far side's refusals, the pushes, the
+    /// renames.
+    function reportNamesRef(kind) {
+        return kind.startsWith("delete-") || kind.startsWith("update-")
+               || ["pre-push", "outdated", "moved", "tag-elsewhere", "pre-push-delete", "moved-delete", "rename",
+                   "rename-locked"].indexOf(kind) >= 0
     }
     /// Words as markup reads them. Rich text folds runs of spaces and newlines the way HTML does, so all but the last
     /// space of a run is pinned and a newline becomes `<br>`. Pin only those: `NoticeLine` wraps, and a sentence
-    /// pinned at every space breaks through a word (`tst_refwords`).
+    /// pinned at every space breaks through a word (`tst_refwords`). A mark's room (`roomFill`) goes through as
+    /// written: its no-break spaces as such, and its narrow ones kept from the fold, which takes them as plain space.
     function inked(words) {
         return words.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
                     .replace(/ (?= )/g, "&nbsp;")
+                    .replace(/\u00a0/g, "&nbsp;")
+                    .replace(/\u202f/g, "<span style=\"white-space:pre\">&#8239;</span>")
                     .replace(/\n/g, "<br>")
     }
 }

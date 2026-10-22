@@ -2,15 +2,16 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The dress a git command wears wherever the UI says one (デザイン規約 §git 用語のコード表記): the spelling in mono, on a
-// faint ground hanging half a gap off either end so the word keeps its place in the line.
+// The dress a git command or a name wears wherever the UI says one as code (デザイン規約 §git 用語のコード表記、§ref
+// の種別「文の中の名前」): the spelling in mono, on a faint ground hanging half a gap off either end so the word keeps
+// its place in the line — a name behind its kind's mark on the same ground.
 //
 // The toolbar's fetch / push and the menu rows draw their own: each carries machinery this has no business in (a box
 // for the longest wording of a pair, a drawn rule per dash, a column shared across a menu).
 Item {
     id: chip
 
-    /// The command, spelled the way git spells it — untranslated.
+    /// The command or the name, spelled the way git spells it — untranslated.
     property string word: ""
     /// The word's ink; the ground is the same everywhere.
     property color tint: Theme.textPrimary
@@ -20,6 +21,20 @@ Item {
     /// The widest this chip may be before its word gives way; 0 = no bound. A chip in something of fixed width (the
     /// commit button) hands in what is left, since a branch name has no length limit.
     property real cap: 0
+    /// The word gives way to the width a layout hands the chip instead — set once, never with a `cap`: a chip that
+    /// read its own width only while its cap was still 0 would close a ring through `implicitWidth` when the cap came.
+    property bool cutToWidth: false
+    /// A mark ahead of the word on the same ground — the ref's kind where the word is a ref's name (デザイン規約 §ref の種別
+    /// 「名前の印」), so mark and name read and give way as one; empty for none. A sign on the word (§アイコンの席 の修飾),
+    /// in its kind's colour — the word's where that is grey or on a fill (`NavIcon.inkBeside`).
+    property string mark: ""
+    property color markTint: wordMark.inkBeside(chip.tint)
+    /// The room the mark takes before the word: its own cell, or where chips stand in a column, the widest name mark's,
+    /// so the names start on one x (`AppMenuItem`'s code names — デザイン規約 §メニュー). The mark stands in the
+    /// room's middle, so a column's marks share one upright axis; the ground is measured off the mark's own ink.
+    property real markCell: wordMark.wordCell
+    /// The mark's cell, nothing without one.
+    readonly property real markRoom: chip.mark !== "" ? chip.markCell : 0
 
     /// Whether the word is a field a reader can drag over (規約 §右のペインの字は掴める). Off by default, and it has
     /// to be: a chip stands inside buttons as their `contentItem` (`ActionButtonLabel` / `StashActionsBand`), and a
@@ -27,28 +42,69 @@ Item {
     /// (`tests/qml/tst_hashplate.qml`). On only where the chip is the value (規約 §設定の画面).
     property bool grabbable: false
 
+    /// Where a word that will not fit gives way: `middle` — the tail tells two branch names apart — or `end`: a
+    /// remote's name, whose head is the remote (デザイン規約 §寸法「upstream 名だけは末尾で切る」), or a line cut at
+    /// the end (`CodeLine`).
+    property string cutAt: "middle"
+    /// Whether the word gave way (`cap`, `cutToWidth`): the hover gives it back.
+    readonly property bool cut: wordLabel.truncated
     /// What the whole word would take, cap or no cap — what a caller sharing out room asks for, since `implicitWidth`
     /// is already the answer to that sharing (reading it back closes a ring).
-    readonly property real wantWidth: wordLabel.implicitWidth
+    readonly property real wantWidth: chip.markRoom + wordLabel.implicitWidth
+    /// The word as drawn: cut where it gave way.
+    readonly property string shownWord: chip.cut ? wordShown.elidedText : chip.word
+    /// What the chip draws: the mark's room and the word as cut — short of the width it was given where the cut drops
+    /// a whole glyph, so what stands after it closes up to its ground (`CodeLine`). A cut is read off the cut text, not
+    /// `paintedWidth`: offscreen a cut label answered a pixel past the glyphs it kept (105 for 104, `Cascadia Mono`).
+    readonly property real drawnWidth: chip.markRoom
+                                       + (chip.cut ? wordFace.advanceWidth(chip.shownWord) : wordLabel.paintedWidth)
 
-    implicitWidth: chip.cap > 0 ? Math.min(wordLabel.paintedWidth, chip.cap) : wordLabel.implicitWidth
+    implicitWidth: chip.markRoom + (chip.cap > 0 ? Math.min(wordLabel.paintedWidth, chip.cap - chip.markRoom)
+                                                 : wordLabel.implicitWidth)
     implicitHeight: wordLabel.implicitHeight
-    /// The word's, so a row can stand a sentence beside the chip on its baseline (`AskBar`, `OpExitCard`). The label's: a
-    /// `grabbable` chip draws its word in a field instead, which stands its words by its own rule (`LineText`).
+    /// The word's, so a row can stand a sentence beside the chip on its baseline (`AskBar`, `OpExitCard`). The
+    /// label's: a `grabbable` chip draws its word in a field instead, which stands its words by its own rule
+    /// (`LineText`).
     baselineOffset: wordLabel.y + wordLabel.baselineOffset
 
-    Rectangle {
-        // Drawn to the ink (`paintedWidth`): an elided word paints narrower than its width, which would leave an empty
-        // tail of chip.
-        anchors.left: wordLabel.left
-        // Height from the word's size, not the label: the mono line box differs per OS (`ActionButtonLabel`).
+    CodeGround {
+        // A word alone: half a gap off either end of the drawn text, eating into the line's own air so the word
+        // starts where it would without the chip. A name behind its mark: half a gap off the ink at both ends — the
+        // mark's and the last glyph's the name is drawn with, the `…` of a cut at the end (`WordFace.groundStart` /
+        // `groundEnd`).
+        x: chip.mark !== "" ? WordFace.groundStart(wordMark.x + wordMark.inkLeft) : -Theme.spaceXs / 2
+        width: (chip.mark !== "" ? WordFace.groundEnd(wordFace, chip.shownWord, chip.drawnWidth)
+                                 : chip.drawnWidth + Theme.spaceXs / 2) - x
         anchors.verticalCenter: wordLabel.verticalCenter
-        height: chip.size + Theme.spaceXs / 2
-        // Half a gap either side, eating into the line's own air so the word starts where it would without the chip.
-        anchors.leftMargin: -Theme.spaceXs / 2
-        width: wordLabel.paintedWidth + Theme.spaceXs
-        radius: Theme.radiusSm
-        color: Theme.bgHover
+        size: chip.size
+    }
+    /// The word's face, for where its ink ends (`WordFace.groundEnd`).
+    FontMetrics {
+        id: wordFace
+        font: wordLabel.font
+    }
+    /// The word cut as the label cuts it (`shownWord`), laid out only where it was cut.
+    TextMetrics {
+        id: wordShown
+        font: wordLabel.font
+        elide: wordLabel.elide
+        elideWidth: wordLabel.width
+        text: chip.cut ? chip.word : ""
+    }
+    // The mark, its box the word's line, so the two stand on one baseline.
+    NavIcon {
+        id: wordMark
+        visible: chip.mark !== ""
+        // The ink's middle on the room's: the ink sits in its own box to a rounded pixel.
+        x: Math.round(chip.markRoom / 2 - wordMark.inkLeft - wordMark.inkWidth / 2)
+        y: wordLabel.y
+        width: wordMark.wordCell
+        height: wordLabel.height
+        kind: chip.mark !== "" ? chip.mark : "branch"
+        set: "sign"
+        size: chip.size
+        wordBase: wordLabel.baselineOffset
+        tint: chip.markTint
     }
     Label {
         id: wordLabel
@@ -56,10 +112,13 @@ Item {
         // this chip makes is read off it and a `Text` lays out while invisible.
         visible: !chip.grabbable
         anchors.left: parent.left
+        anchors.leftMargin: chip.markRoom
         anchors.verticalCenter: parent.verticalCenter
-        // A ref that will not fit gives way in the middle: the tail tells two branch names apart.
-        width: chip.cap > 0 ? Math.min(implicitWidth, chip.cap) : implicitWidth
-        elide: chip.cap > 0 ? Text.ElideMiddle : Text.ElideNone
+        // A word that will not fit gives way where `cutAt` says.
+        width: chip.cutToWidth ? Math.min(implicitWidth, chip.width - chip.markRoom)
+             : chip.cap > 0 ? Math.min(implicitWidth, chip.cap - chip.markRoom) : implicitWidth
+        elide: !chip.cutToWidth && chip.cap <= 0 ? Text.ElideNone
+             : chip.cutAt === "end" ? Text.ElideRight : Text.ElideMiddle
         text: chip.word
         color: chip.tint
         font.family: Theme.monoFamily

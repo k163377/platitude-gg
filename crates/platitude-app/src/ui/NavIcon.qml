@@ -102,11 +102,27 @@ InkCanvas {
         : icon.reaches.map(p => icon.turn === 90 || icon.turn === -270 ? [16 - p[1], p[0], p[2]]
                               : icon.turn === -90 || icon.turn === 270 ? [p[1], 16 - p[0], p[2]]
                               : [16 - p[0], 16 - p[1], p[2]])
-    /// Whether a set mark stands among the letters in every class, a sign's included: `tree` is drawn as tall as
-    /// `branch` and stands where it does, on the capitals' middle — past them a little either way, its stem's foot
-    /// under the baseline with the branch's — never on a sign's middle or stopped at the baseline, which would drop
-    /// its ring under the names' tall letters or stand its foot on the line (デザイン規約 §アイコンの席).
-    readonly property bool lettered: icon.kind === "tree"
+    /// Whether a set mark stands among the letters in every class, a sign's included: `tree` and `branch`, the pair
+    /// drawn as tall as each other, stand on the capitals' middle — past them a little either way, the stems' feet
+    /// under the baseline — never on a sign's middle or stopped at the baseline, which would drop the ring under the
+    /// names' tall letters or stand the feet on the line (デザイン規約 §アイコンの席).
+    readonly property bool lettered: icon.kind === "tree" || icon.kind === "branch"
+    /// The air a set mark keeps off the word it stands against: the face's own room round a `+` and a stem more — a
+    /// sign's side of its cell (`wordCell`), so a mark in front of a name stands off it by a hair whatever its class.
+    readonly property real wordAir: icon.set === "" ? 0 : WordFace.signSide * icon.size + icon.pen
+    /// The tint the left menu gives a name mark's kind (`NavRail.sections`): what the mark says, in the colour it says
+    /// it in everywhere else.
+    readonly property color kindTint: icon.kind === "branch" ? Theme.accent
+                                    : icon.kind === "tag" ? Theme.refTag
+                                    : icon.kind === "tree" || icon.kind === "home" ? Theme.success
+                                    : Theme.textSecondary
+    /// The colour a mark in front of a name wears (デザイン規約 §ref の種別「名前の印」): its kind's, whatever colour
+    /// the name is in — but on a row that cannot be pressed or under a fill, where the row's colour takes the name, the
+    /// mark goes with it.
+    function inkBeside(nameColor) {
+        const takenBy = Qt.colorEqual(nameColor, Theme.textMuted) || Qt.colorEqual(nameColor, Theme.textOnAccent)
+        return takenBy ? nameColor : icon.kindTint
+    }
     /// What a set mark is drawn against: `height`, the capitals' (a step over them for a heading), and `middle`, where
     /// the marks' middles stand from the baseline — the capitals' middle for a mark among the words, the face's own
     /// `+`'s for a sign (`sign`).
@@ -166,12 +182,13 @@ InkCanvas {
     /// The ink's right edge and top edge in the item's pixels, before any `rotation`: `width - inkRight` is the air the
     /// box holds on that side, which is the same on the other (デザイン規約 §アイコンの席).
     readonly property real inkRight: (icon.inkBox[2] + icon.shiftX) * icon.unit
+    /// The ink's left edge, the same way: where a ground under the mark measures its air from (`WordFace.groundStart`).
+    readonly property real inkLeft: (icon.inkBox[0] + icon.shiftX) * icon.unit
     readonly property real inkTop: (icon.inkBox[1] + icon.shiftY) * (icon.set === "" ? icon.height / 16 : icon.unit)
     /// The width a set mark takes in its run of words: for a sign, the face's own room round a `+` either side of the
     /// ink and a stem more, so it stands off its word by a hair rather than touching it; for any other, the ink alone.
-    readonly property real wordCell: Math.round(icon.set === "sign"
-                                                ? icon.inkAcross + 2 * (WordFace.signSide * icon.size + icon.pen)
-                                                : icon.inkAcross)
+    readonly property real wordCell:
+        Math.round(icon.set === "sign" ? icon.inkAcross + 2 * icon.wordAir : icon.inkAcross)
 
     /// The ink's box at `u` pixels to the grid square, the line keeping its pixels.
     function inkAt(u) {

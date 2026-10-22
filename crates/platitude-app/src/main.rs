@@ -134,6 +134,8 @@ fn main() {
     qrc::embed!("ui/CoAuthorLine.qml");
     qrc::embed!("ui/ChosenCommitRow.qml");
     qrc::embed!("ui/CodeChip.qml");
+    qrc::embed!("ui/CodeGround.qml");
+    qrc::embed!("ui/CodeLine.qml");
     qrc::embed!("ui/ColumnDivider.qml");
     qrc::embed!("ui/CommitAuthorRow.qml");
     qrc::embed!("ui/CommitHoverCard.qml");
@@ -221,6 +223,7 @@ fn main() {
     qrc::embed!("ui/MessageEditor.qml");
     qrc::embed!("ui/MiddleAutoScroll.qml");
     qrc::embed!("ui/NameCell.qml");
+    qrc::embed!("ui/NameRun.qml");
     qrc::embed!("ui/NavFactLine.qml");
     qrc::embed!("ui/NavFacts.qml");
     qrc::embed!("ui/NavHeader.qml");

@@ -23,6 +23,8 @@ Item {
     /// Letter spacing (the tab strip's tracking, `TabMetrics.titleTracking`). Set it here, not on the labels: the
     /// rulers measure through this font, so spacing set past them draws wider than it measured.
     property real letterSpacing: 0
+    /// Set in git's own family, as a name set as code is (`NameRun`, デザイン規約 §ref の種別「文の中の名前」).
+    property bool mono: false
     /// Where the mark falls: `middle` for a name (told apart by both of its ends), `end` for a sentence (read from the
     /// left, and nothing after the cut is worth keeping).
     property string cutAt: "middle"
@@ -47,6 +49,9 @@ Item {
         // text (a column drag) costs no layout.
         measure.font = headLabel.font
         measure.text = whole
+        // Both rulers take the face here too: a run from the label's `fontChanged` comes before a binding on that font
+        // has answered, and would cut for the face the label has just left (a menu's family arrives after its rows).
+        probe.font = headLabel.font
         // Read after that write: a caller sizing the box off `implicitWidth` (`TabItemDelegate`) re-enters this
         // function from those two lines, and a width read earlier would lay a cut for a column that is gone back over
         // the nested answer (rules-refs/app-ui.md「`CutName` の箱は定規へ書いた後で読む」).
@@ -65,8 +70,8 @@ Item {
             cut.cutting = false
             return
         }
-        // Start from the elide's answer: it fits, and it breaks only where text may break (never inside a surrogate
-        // pair or a cluster).
+        // Start from the elide's answer: it breaks only where text may break (never inside a surrogate pair or a
+        // cluster).
         probe.elideWidth = box
         probe.text = whole
         const elided = probe.elidedText
@@ -74,11 +79,22 @@ Item {
         const toEnd = cut.cutAt === "end"
         let head = at >= 0 ? at : 0
         let tail = !toEnd && at >= 0 ? elided.length - at - 1 : 0
-        // Fill the column, the tail first: a generated name is told apart by its end
-        // (規約 §git 用語のコード表記「ref の省略は中央」). A cut at the end grows only the head.
         const room = box - cut.inkOf("…")
         let headInk = cut.inkOf(whole.substring(0, head))
         let tailInk = cut.inkOf(whole.substring(whole.length - tail))
+        // …which can run past the column (a middle cut of a small face, by a few pixels): the tail would then be drawn
+        // over the mark. Taken back a character at a time from the longer half until it fits.
+        while (headInk + tailInk > room && head + tail > 0) {
+            if (head >= tail) {
+                head -= cut.stepBack(whole, head)
+                headInk = cut.inkOf(whole.substring(0, head))
+            } else {
+                tail -= cut.stepOn(whole, whole.length - tail)
+                tailInk = cut.inkOf(whole.substring(whole.length - tail))
+            }
+        }
+        // Fill the column, the tail first: a generated name is told apart by its end
+        // (規約 §git 用語のコード表記「ref の省略は中央」). A cut at the end grows only the head.
         for (;;) {
             let grew = false
             const back = toEnd ? 0 : cut.stepBack(whole, whole.length - tail)
@@ -155,14 +171,13 @@ Item {
     onWidthChanged: cut.relayout()
     Component.onCompleted: cut.relayout()
 
-    /// Two rulers, both written by `relayout()`: `measure` holds the whole name (the fit test and `implicitWidth`),
-    /// `probe` the pieces — set a dozen times per relayout, so nothing binds to it.
+    /// Two rulers, both written by `relayout()` — text and face: `measure` holds the whole name (the fit test and
+    /// `implicitWidth`), `probe` the pieces — set a dozen times per relayout, so nothing binds to it.
     TextMetrics {
         id: measure
     }
     TextMetrics {
         id: probe
-        font: headLabel.font
         elide: cut.cutAt === "end" ? Text.ElideRight : Text.ElideMiddle
     }
 
@@ -175,6 +190,7 @@ Item {
         verticalAlignment: Text.AlignVCenter
         text: cut.headText
         color: cut.color
+        font.family: cut.mono ? Theme.monoFamily : Theme.uiFamily
         font.pixelSize: cut.pixelSize
         font.weight: cut.weight
         font.letterSpacing: cut.letterSpacing

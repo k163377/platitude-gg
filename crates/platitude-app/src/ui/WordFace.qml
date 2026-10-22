@@ -33,6 +33,40 @@ QtObject {
     }
     /// The air the face's `+` holds either side of its ink: a sign's room in a run of words.
     readonly property real signSide: (face.plusInk.advanceWidth / 1000 - face.plus.width) / 2
+    /// The code face large, in the two weights a name is set in, for where a glyph's ink ends (`groundEnd`): a glyph's
+    /// box comes back rounded out to whole pixels where the face is FreeType's (offscreen, and Linux —
+    /// `QFontEngineFT::boundingBox`), up to a pixel past the ink at a name's size; here the rounding is a thousandth.
+    readonly property FontMetrics codeLarge: FontMetrics {
+        font.family: Theme.monoFamily
+        font.pixelSize: 1000
+    }
+    readonly property FontMetrics codeLargeStrong: FontMetrics {
+        font.family: Theme.monoFamily
+        font.pixelSize: 1000
+        font.weight: Theme.fontWeightStrong
+    }
+
+    /// Where a code ground starts in front of a name's mark (デザイン規約 §git 用語のコード表記): half a gap before the
+    /// mark's ink — the air it keeps after the name's last glyph too (`groundEnd`), whatever the glyph, so no ground
+    /// reaches into the next word further than a command's does. Not rounded: a ground drawn to a whole pixel moves
+    /// each end by up to half a pixel, a different amount name by name.
+    function groundStart(inkLeft) {
+        return inkLeft - Theme.spaceXs / 2
+    }
+    /// …and where it ends: half a gap past the ink of the name's last glyph. `advanceEnd` is where the name's
+    /// advance ends, laid out in `code`, the code face at the drawn size; the glyph's ink is the outline's, read off
+    /// the face large (`codeLarge`). Its font is read here so a binding calling this follows it (rules/app-ui.md
+    /// 「メソッドはバインディングが依存を取らない」).
+    function groundEnd(code, name, advanceEnd) {
+        const font_ = code.font
+        const last = name.slice(-1)
+        if (last === "")
+            return advanceEnd + Theme.spaceXs / 2
+        const large = code.font.weight === Theme.fontWeightStrong ? face.codeLargeStrong : face.codeLarge
+        const ink = large.tightBoundingRect(last)
+        const inkEnd = (ink.x + ink.width) * code.font.pixelSize / 1000
+        return advanceEnd - (code.advanceWidth(last) - inkEnd) + Theme.spaceXs / 2
+    }
 
     function share(rect) {
         return { y: rect.y / 1000, width: rect.width / 1000, height: rect.height / 1000 }

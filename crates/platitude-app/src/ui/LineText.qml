@@ -12,7 +12,8 @@ Item {
 
     /// The value in full — including whatever the width is hiding.
     property string text: ""
-    /// The line as rich-text markup where one word wears its own colour (`Words.nameInSentence`); empty otherwise.
+    /// The line as rich-text markup where one word wears its own colour, its pieces escaped (`Words.inked`); empty
+    /// otherwise.
     /// `text` stays the plain sentence either way — callers measure and read it back. Only the tail cut takes markup:
     /// a middle cut spells the head from `text`, which would come out in the wrong colour.
     property string markup: ""

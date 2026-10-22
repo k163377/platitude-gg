@@ -35,17 +35,22 @@ Item {
         const at = shared.sharedTip.parent
         return at !== null && at.tipHref !== undefined ? at.tipHref : ""
     }
-    /// The word the drawn tree mark stands in front of (a worktree's name, 規約 §ref の種別), read off the target
-    /// like the two above; the markup opens a gap for the mark (`Words.roomInSentence`).
+    /// The word a drawn name mark stands in front of (a worktree's, a branch's, a tag's … name — 規約 §ref の種別
+    /// 「名前の印」), read off the target like the two above; the field opens a room for the mark (`CardText.marks`).
     readonly property string tipMarkWord: {
         const at = shared.sharedTip.parent
         return at !== null && at.tipMarkWord !== undefined ? at.tipMarkWord : ""
     }
-    /// The mark itself: the house where that worktree is the repository's own, else the tree. A target that names
-    /// none means the tree.
+    /// The mark itself — the name's kind (`NavIcon`). A target that names none means the tree.
     readonly property string tipMarkKind: {
         const at = shared.sharedTip.parent
-        return at !== null && at.tipMarkKind !== undefined && at.tipMarkKind === "home" ? "home" : "tree"
+        return at !== null && at.tipMarkKind !== undefined && at.tipMarkKind !== "" ? at.tipMarkKind : "tree"
+    }
+    /// Names the target seats itself, as the field takes them (`CardText.marks`) — every name a menu row's whole line
+    /// says, a name opening a sentence, two names in one. Wins over `tipMarkWord`, which finds one name at the end.
+    readonly property var tipMarks: {
+        const at = shared.sharedTip.parent
+        return at !== null && at.tipMarks !== undefined && at.tipMarks !== null ? at.tipMarks : []
     }
     /// The place word was pressed; `Main` hands the href to the page that owns it.
     signal linkAsked(string href)
@@ -443,60 +448,25 @@ Item {
         CardText {
             id: tipWords
             text: shared.sharedTip.text
-            /// How many spaces the mark takes: its cell, a sign on its word
-            /// (デザイン規約 §アイコンの席 の修飾). The sentence's own space before the word stays the gap.
-            readonly property int markRoom:
-                shared.tipMarkWord === "" || spaceRuler.advanceWidth <= 0
-                ? 0 : Math.ceil(tipMark.width / spaceRuler.advanceWidth)
-            /// Where the name stands: a tip names it last, after its conclusion (`Words.markSeatIn`).
-            readonly property int markAt: Words.markSeatIn(shared.sharedTip.text, shared.tipMarkWord, true)
-            /// Where that gap came out (empty when none). One binding over its inputs, since `charRect` is a call
-            /// (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
-            readonly property rect markSeat: {
-                if (tipWords.markRoom <= 0 || tipWords.markAt < 0 || tipWords.markup === ""
-                        || tipWords.width <= 0 || tipWords.height <= 0)
-                    return Qt.rect(0, 0, 0, 0)
-                return tipWords.charRect(tipWords.markAt + tipWords.markRoom)
-            }
-            // Built here: the pointer step is a colour, which can only ride inside the markup. A tip carries a place
-            // or a mark, never both.
-            markup: shared.tipMarkWord !== ""
-                    ? Words.roomInSentence(shared.sharedTip.text, tipWords.markAt, tipWords.markRoom)
-                    : Words.placeInSentence(shared.sharedTip.text, shared.tipPlace, shared.tipHref,
-                                            pointedLink !== "" ? Theme.textSecondary : Theme.textMuted)
-            roomAt: shared.tipMarkWord !== "" && tipWords.markRoom > 0 ? tipWords.markAt : -1
-            roomLength: shared.tipMarkWord !== "" ? tipWords.markRoom : 0
+            /// Where the name stands: a tip names it last, after its conclusion (`Words.tipNameSeat`) — unless the
+            /// target seats its names itself (`tipMarks`).
+            readonly property int markAt: Words.tipNameSeat(shared.sharedTip.text, shared.tipMarkWord)
+            // Each a sign on its name (デザイン規約 §アイコンの席 の修飾), in a room the field opens; the sentence's own
+            // space before the word stays the gap.
+            marks: shared.tipMarks.length > 0 ? shared.tipMarks
+                 : tipWords.markAt >= 0
+                 ? [[tipWords.markAt, shared.tipMarkKind, undefined, shared.tipMarkWord.length]]
+                 : []
+            // The pointer step is a colour, which can only ride inside the field's markup (`CardText.place`).
+            place: shared.tipPlace
+            placeHref: shared.tipHref
+            placeTint: tipWords.pointedLink !== "" ? Theme.textSecondary : Theme.textMuted
             onLinkAsked: href => shared.linkAsked(href)
             pixelSize: Theme.fontMd
             color: Theme.textPrimary
             // Half the window, as a graph row's card: names are carried in full and wrap rather than cut.
             width: Math.min(implicitWidth, shared.host.width / 2)
             onPointedChanged: shared.wordPointed = pointed
-            /// A space in the field's own font, so a family with a wider space opens a wider gap.
-            TextMetrics {
-                id: spaceRuler
-                font.family: Theme.uiFamily
-                font.pixelSize: tipWords.pixelSize
-                text: " "
-            }
-            /// Against the word, so mark and name read as one (規約 §ref の種別「名前の印」): the box ends where the word
-            /// begins.
-            // A sign on the name (デザイン規約 §アイコンの席 の修飾), set against the word's baseline
-            // (`CardText.baselineAt`), a step of the box under it for a stem that runs past it.
-            NavIcon {
-                id: tipMark
-                visible: tipWords.markSeat.width > 0 || tipWords.markSeat.height > 0
-                kind: shared.tipMarkKind
-                set: "sign"
-                size: tipWords.pixelSize
-                tint: Theme.textSecondary
-                // A step of the box under the baseline, for a stem that runs past it.
-                wordBase: Math.ceil(tipMark.size)
-                width: tipMark.wordCell
-                height: tipMark.wordBase + Theme.spaceXs
-                x: Math.round(tipWords.markSeat.x - tipMark.width)
-                y: Math.round(tipWords.baselineAt(tipWords.markSeat)) - tipMark.wordBase
-            }
         }
     }
 }

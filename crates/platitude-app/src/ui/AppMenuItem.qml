@@ -40,15 +40,44 @@ MenuItem {
     /// A git term in git's own spelling, on a chip (デザイン規約 §git 用語のコード表記). It sits ahead of `text`, which
     /// carries whatever of the sentence is left ("this file"), often nothing.
     property string code: ""
-    /// A ref name inside the row's words, and the sentence with the name's seat left in it ("into %1"). The name wears
-    /// its kind's colour (`refTint`): `textLink` for the current branch, which is what these sentences mostly name
-    /// (デザイン規約 §ref の種別「現在のブランチは、名前が出る場所すべてで textLink」).
-    /// The seat is cut out of the sentence, not searched for in `text`: a branch `it` would be found in `into it`.
+    /// A ref name inside the row's words, and the sentence with the name's seat left in it ("into %1"). The name is set
+    /// as code (デザイン規約 §ref の種別「文の中の名前」), in its own colour where it says where the reader is
+    /// (`refTint`). The seat is cut out of the sentence, not searched for in `text`: a branch `it` would be found in
+    /// `into it`.
     property string refSentence: ""
     property string refName: ""
-    /// That name's own colour — `textPrimary` for a local branch the worktree is not on (`pull` into it).
+    /// That name's own colour: `textLink` for the current branch, which is what these sentences mostly name
+    /// (デザイン規約 §ref の種別「現在のブランチは、名前が出る場所すべてで textLink」); `textPrimary` for any other.
     property color refTint: Theme.textLink
-    text: menuItem.refSentence !== "" ? menuItem.refSentence.arg(menuItem.refName) : ""
+    /// The mark that name wears in front of it — its kind's `NavIcon` (デザイン規約 §ref の種別「名前の印」), a sign on
+    /// the name. Empty for none.
+    property string refMark: ""
+    /// The room the markup opens for that mark, the mark's cell wide (`Words.roomFill`): the sentence's own space
+    /// before the name stays the gap (as `CardText.marks`).
+    readonly property string refRoom1: menuItem.refMark === "" || menuItem.refSentence.indexOf("%1") < 0 ? ""
+                                       : Words.roomFill(menuItem.refCell1, refSpace.advanceWidth, refThin.advanceWidth)
+    /// That room's width: the mark's own cell, or a column's — the widest name mark's — where the name opens the row,
+    /// so a card's names start on one x (`columnCell`, as `codeNameSeat`). The mark stands in its middle, so a card's
+    /// marks share one upright axis.
+    readonly property real refCell1: menuItem.refSentence.indexOf("%1") === 0 ? menuItem.columnCell
+                                     : refInk.item !== null ? refInk.item.cell1 : 0
+    readonly property int refMarkRoom: menuItem.refRoom1.length
+    /// A second name in the same sentence, at its `%2` seat ("%1 from %2": a tag and the remote it goes from), with
+    /// its colour and mark as the first's. Empty for a sentence with one name.
+    property string refName2: ""
+    property color refTint2: Theme.textPrimary
+    property string refMark2: ""
+    readonly property string refRoom2: menuItem.refMark2 === "" || menuItem.refSentence.indexOf("%2") < 0 ? ""
+                                       : Words.roomFill(menuItem.refCell2, refSpace.advanceWidth, refThin.advanceWidth)
+    readonly property real refCell2: menuItem.refSentence.indexOf("%2") === 0 ? menuItem.columnCell
+                                     : refInk.item !== null ? refInk.item.cell2 : 0
+    readonly property int refMarkRoom2: menuItem.refRoom2.length
+    /// The widest name mark's cell (`columnSeat`), where a name opening the row stands its mark; 0 on a row that seats
+    /// no name.
+    readonly property real columnCell: columnSeat.item !== null ? columnSeat.item.wordCell : 0
+    text: menuItem.refSentence === "" ? ""
+        : menuItem.refSentence.indexOf("%2") < 0 ? menuItem.refSentence.arg(menuItem.refName)
+        : menuItem.refSentence.arg(menuItem.refName).arg(menuItem.refName2)
     /// The mark a row wears, and its colour. On a row that opens a card it is the `NavIcon` kind of what the card acts
     /// on (デザイン規約 §メニュー の入れ子), and the row becomes a heading: the sidebar's section band in a menu, its
     /// word out of the chip column. A row with `headed: false` wears a mark about itself instead.
@@ -87,21 +116,29 @@ MenuItem {
     property bool badgeGone: false
     readonly property bool badged: menuItem.remoteBadge || menuItem.badgePr || menuItem.badgeGone
 
-    /// A name ending the row's words, with its kind's mark against it — a worktree's folder behind the WORKTREES
-    /// mark (`RefRowMenu`'s `Open`). It always ends them: a mark is drawn, not written, so it cannot take a sentence's
-    /// seat the way a coloured name can (`refWords`).
+    /// A name ending the row's words, as code behind its kind's mark — a worktree's folder (`RefRowMenu`'s `Open`), the
+    /// branch a delete row deletes — or bare where the card's title wears the mark (`TopBar`'s `WORKTREE` card). Data,
+    /// not words: it bids at most `labelColW`, or the name ceiling where it is the row's one name (`textNames`), and
+    /// gives way past it — in the middle, or a remote's at its end (デザイン規約 §寸法「upstream 名だけは末尾で切る」).
     property string nameMark: ""
-    property string markName: ""
-    property color nameMarkTint: Theme.textSecondary
-    readonly property bool namesMark: menuItem.nameMark !== "" && menuItem.markName !== ""
-    /// Automation: whether that name lost its tail — a picture a pixel short and one whole read alike at a glance.
-    readonly property bool nameCut: menuItem.namesMark && markNameLabel.truncated
+    property string codeName: ""
+    readonly property bool codesName: menuItem.codeName !== ""
+    /// Automation: whether that name was cut — a picture a pixel short and one whole read alike at a glance.
+    readonly property bool nameCut: codeNameSeat.item !== null && codeNameSeat.item.cut
+    /// The worktree after the words was cut — at the name ceiling (`TabTreeMark.cappedWidth`) or by the window.
+    readonly property bool trailCut: trailSeat.item !== null && trailSeat.item.cutting
     /// A fact about the row in the left menu's far column — the branch a worktree has out
     /// (`NavRowBody.branchSeat`). Empty draws none.
     property string sideName: ""
-    /// The step in front of `nameMark`: a word's. The mark is a sign on its name, so nothing stands between
-    /// it and the name but its cell's own air (デザイン規約 §アイコンの席 の修飾).
-    readonly property real markWordGap: Theme.spaceXs
+    /// That name's width, held under the name ceiling (`Theme.nameMaxChars`), and whether it was cut — there or by the
+    /// window.
+    readonly property real sideWidth: sideSeat.item === null ? 0
+        : Math.min(sideSeat.item.wantWidth, sideSeat.item.markRoom + sideSeat.item.ceilingWidth)
+    readonly property bool sideCut: sideSeat.item !== null && sideSeat.item.cut
+    /// The step in front of `codeName`: a word's after the row's words; none where the name opens the row, so it starts
+    /// where the words would, as a name opening a sentence does. The mark is a sign on its name, so nothing stands
+    /// between it and the name but its cell's own air (デザイン規約 §アイコンの席 の修飾).
+    readonly property real markWordGap: menuItem.text !== "" ? Theme.spaceXs : 0
     /// Where the row's words stand, in the row's y: every mark ahead of them takes their line for its box
     /// (デザイン規約 §アイコンの席 の文頭記号). Read off the label, since the layout and an anchor round a half pixel
     /// apart.
@@ -111,10 +148,15 @@ MenuItem {
     /// the column has to clear the widest command (デザイン規約 §git 用語のコード表記).
     readonly property real codeColSeat: menuItem.code !== "" ? codeLabel.implicitWidth : 0
 
-    /// Whether the row's words bid their whole width. Off for a row whose text is data (the name a delete row
-    /// re-states): it bids at most `labelColW` and elides past that into the hover (デザイン規約 §メニュー). Not zero:
-    /// a sparse menu at `menuMinW` with a wide frozen chip column would leave the name no width.
+    /// Whether the row's words bid their whole width. Off for a row whose words carry data (`Unset upstream` and the
+    /// upstream it names): they bid at most `labelColW` and give way past that into the hover (デザイン規約 §メニュー).
+    /// Not zero: a sparse menu at `menuMinW` with a wide frozen chip column would leave the name no width. A name
+    /// behind its mark (`codeName`) bids the same of its own accord.
     property bool growsForText: true
+    /// The row is one name (a repository, a worktree) — its words, or its code name (`codeName`): it bids at most the
+    /// name ceiling (`Theme.nameMaxChars`) in the face it is drawn in and gives way in the middle, as a name in a
+    /// sentence does (`refCuts`).
+    property bool textNames: false
 
     /// Why this row cannot be chosen right now — and, by being non-empty, that it cannot. Greyed like a disabled row
     /// (§無効) but still hoverable, since the line is the point (デザイン規約 §メニュー の削除の表). Presses and holds
@@ -143,14 +185,45 @@ MenuItem {
     property string reasonMarkWord: ""
     /// The mark that folder wears: the house for the repository's own worktree, else the tree.
     property string reasonMarkKind: "tree"
+    /// The names in the row's own reason seated by the caller, where there are several or a ref's, as the tip's field
+    /// takes them (`Words.listMarks`, `SharedToolTip.tipMarks`). Wins over `reasonMarkWord`.
+    property var reasonMarks: []
     /// The word the shared tooltip stands the worktree's mark against (`SharedToolTip.tipMarkWord`, デザイン規約
-    /// §ref の種別「ツールチップだけは字の中」): the folder in the reason, or the folder this row names behind its mark,
-    /// which the hover gives back whole when it is cut.
-    readonly property string tipMarkWord: menuItem.blocked ? menuItem.reasonMarkWord
-                                        : menuItem.nameMark === "tree" || menuItem.nameMark === "home"
-                                          ? menuItem.markName : ""
+    /// §ref の種別「ツールチップだけは字の中」): the folder in a turned-down row's reason. A row's own names, the folder
+    /// among them, are `tipMarks`.
+    readonly property string tipMarkWord: menuItem.blocked ? menuItem.reasonMarkWord : ""
     /// …and which mark (`SharedToolTip.tipMarkKind`).
-    readonly property string tipMarkKind: menuItem.blocked ? menuItem.reasonMarkKind : menuItem.nameMark
+    readonly property string tipMarkKind: menuItem.blocked ? menuItem.reasonMarkKind : ""
+    /// The names the hover's whole line says (`ToolTip.text`), each behind its mark, seated part by part as that line
+    /// joins them — the sentence's (`refSentence`), the code name, the worktree after the words, the far column's
+    /// branch (`SharedToolTip.tipMarks`).
+    readonly property var tipMarks: {
+        if (menuItem.blocked)
+            return menuItem.blockedWhy === menuItem.blockedReason ? menuItem.reasonMarks : []
+        const marks = []
+        let at = menuItem.code !== "" ? menuItem.code.length + 1 : 0
+        if (menuItem.text !== "") {
+            let shift = 0
+            for (const seat of menuItem.refSeats) {
+                const mark = seat.key === 1 ? menuItem.refMark : menuItem.refMark2
+                const name = seat.key === 1 ? menuItem.refName : menuItem.refName2
+                if (mark !== "")
+                    marks.push([at + seat.at + shift, mark, seat.key === 1 ? menuItem.refTint : menuItem.refTint2,
+                                name.length])
+                shift += name.length - 2
+            }
+            at += menuItem.text.length + 1
+        }
+        const runs = [[menuItem.codesName ? menuItem.codeName : "", menuItem.nameMark],
+                      [menuItem.trail, "tree"], [menuItem.sideName, "branch"]]
+        for (const run of runs) {
+            if (run[0] === "")
+                continue
+            marks.push([at, run[1], undefined, run[0].length])
+            at += run[0].length + 1
+        }
+        return marks
+    }
 
     /// Automation: show the tooltip with no pointer behind it, through the binding the hover drives
     /// (verify-ui §hover の絵の撮り方).
@@ -232,26 +305,37 @@ MenuItem {
     // A row this menu is not showing takes no room: the list lays rows out by height, so an invisible row that keeps
     // one leaves a hole.
     implicitHeight: menuItem.present ? Theme.rowHeight : 0
-    // The chip and the marked name are bid in whole pixels, as the layout hands them out: the row's `RowLayout` rounds
-    // each of those up, and a sum rounded once comes up the fractions short — the marked name, laid out last, elides
-    // (a Linux font's `worktree remove` + folder).
-    implicitWidth: (codeChip.visible ? Math.ceil(codeChip.implicitWidth) + Theme.spaceSm : 0)
-                   + (menuItem.growsForText
-                      ? itemLabel.implicitWidth : Math.min(itemLabel.implicitWidth, Metrics.labelColW))
-                   // The marked name is data: it bids at most `labelColW` and elides past it (デザイン規約 §メニュー).
-                   + (menuItem.namesMark
+    implicitWidth: (!menuItem.growsForText ? Math.min(menuItem.wordsWant, Metrics.labelColW)
+                    : menuItem.textNames
+                    ? Math.min(menuItem.wordsWant, Math.ceil(nameCapRuler.advanceWidth) + itemLabel.rightPadding)
+                    : menuItem.wordsWant)
+                   + menuItem.besideWords
+    /// Everything the row bids beside its words. The words' room is the row less this (`refRoom`) — read off the
+    /// bids, never off the words' own label: that one's width answers its text, which the room cuts, and the loop
+    /// closes wherever the layout answers in the same pass. The chip and the code name are bid in whole pixels, as
+    /// the layout hands them out: the row's `RowLayout` rounds each of those up, and a sum rounded once comes up the
+    /// fractions short — the code name, laid out last, elides (a Linux font's `worktree remove` + folder).
+    readonly property real besideWords: (codeChip.visible ? Math.ceil(codeChip.implicitWidth) + Theme.spaceSm : 0)
+                   // The code name is data: it bids at most `labelColW` and elides past it (デザイン規約 §メニュー) —
+                   // the name ceiling where it is the row's one name.
+                   + (codeNameSeat.item !== null
                       ? menuItem.markWordGap
-                        + Math.ceil(nameMarkIcon.width + Math.min(markNameLabel.implicitWidth, Metrics.labelColW)) : 0)
+                        + Math.ceil(codeNameSeat.item.markRoom
+                                    + Math.min(codeNameSeat.item.wantWidth - codeNameSeat.item.markRoom,
+                                               menuItem.textNames ? Math.ceil(codeCapRuler.advanceWidth)
+                                                                  : Metrics.labelColW)) : 0)
                    + (menuItem.note !== "" ? noteLabel.implicitWidth + Theme.spaceSm : 0)
                    // Everything drawn after the words bids too, or the row that sets the menu's width cuts its own
                    // name. Asked of what the row holds, not `visible`: a closed card's rows answer false, and the
                    // card is measured before it opens.
-                   + (menuItem.sideName !== "" ? sideLabel.implicitWidth + Theme.spaceLg : 0)
+                   + (menuItem.sideName !== "" ? menuItem.sideWidth + Theme.spaceLg : 0)
                    + (menuItem.ahead > 0 || menuItem.behind > 0 ? rowTrack.implicitWidth + Theme.spaceSm : 0)
                    + (menuItem.badged ? Theme.iconSm + Theme.spaceXs : 0)
-                   + trailRun.naturalWidth
+                   + (trailSeat.item !== null ? trailSeat.item.cappedWidth : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
+    // A row that is one code name says it, as the words would.
+    Accessible.name: menuItem.text !== "" ? menuItem.text : menuItem.codeName
     Accessible.description: menuItem.holdPresses > 0 ? Words.pressToActivate(menuItem.holdPresses) : ""
 
     // The one colour the row's chip and sentence follow, so the chip cannot disagree with its sentence. A held row wears
@@ -265,25 +349,105 @@ MenuItem {
     readonly property bool holdOff: menuItem.greyed && !menuItem.holding
     /// The press mark's colour: the words', or while [`holdOff`] the row's tone (`HoldIcon.off` steps it down).
     readonly property color holdInk: menuItem.holdOff ? menuItem.holdTone : menuItem.wordColor
-    /// Whether the row's colour takes the names in it and their marks too: greyed, under the fill, and on a held row
-    /// that warns. **A plain delete's words keep the ordinary rules** — its warning is the press mark's alone
-    /// (デザイン規約 §回数押しの色), so a name there wears its own colour.
-    readonly property bool inkTakesNames: menuItem.greyed || menuItem.holding
-                                          || (menuItem.armedPresses > 0
-                                              && !Qt.colorEqual(menuItem.holdTone, Theme.textPrimary))
-    /// The colour the name inside those words takes: its own only while the row has no colour of its own
-    /// (デザイン規約 §メニュー「文の中に入った名前も、色は名前のもの」).
-    readonly property color refColor: menuItem.inkTakesNames ? menuItem.wordColor : menuItem.refTint
-    /// Those words as `Text.StyledText` markup, in one label so the line elides, measures and hovers like any row's.
-    /// Every piece is escaped: the name is the repository's (a branch called `<b>`), and spaces go as `&nbsp;` because
-    /// rich text folds a run of them (`encode::markup`).
+    /// The colour each name in the row takes (`Words.nameInk`): plain, or its own where it says where the reader is —
+    /// on a held row's tone too, which the name's ground keeps it apart from — and the row's on a greyed row or under
+    /// the fill, which take everything on them (デザイン規約 §メニュー「文の中に入った名前も、色は名前のもの」).
+    readonly property color refColor: Words.nameInk(menuItem.wordColor, menuItem.refTint)
+    readonly property color refColor2: Words.nameInk(menuItem.wordColor, menuItem.refTint2)
+    readonly property color codeNameColor: Words.nameInk(menuItem.wordColor, undefined)
+    /// The room the sentence is drawn in: where it is narrower than the sentence, its names give way — in the middle,
+    /// a remote's at its end (デザイン規約 §寸法「upstream 名だけは末尾で切る」) — never the words round them (a
+    /// `from ☁origin` cut off reads as nothing), and never with a cut mark in another colour than the name it cuts. -1
+    /// while the row has not been laid out.
+    readonly property real refRoom: menuItem.width > 0
+                                    ? menuItem.width - menuItem.besideWords - itemLabel.rightPadding - 1 : -1
+    /// What the sentence asks for whole, names uncut but for the name ceiling — what the row bids, so a cut never
+    /// shrinks the menu that caused it. Whether there are seats is the sentence's to say, not `refSeats`', which
+    /// carry the names as cut.
+    readonly property real wordsWant: menuItem.refSentence.indexOf("%1") >= 0 || menuItem.refSentence.indexOf("%2") >= 0
+                                      ? menuItem.refWant + itemLabel.rightPadding : itemLabel.implicitWidth
+    readonly property real refWant: Math.ceil(refFixedRuler.advanceWidth
+                                              + (menuItem.refSentence.indexOf("%1") >= 0 ? menuItem.refHeld(1) : 0)
+                                              + (menuItem.refSentence.indexOf("%2") >= 0 ? menuItem.refHeld(2) : 0))
+                                    + 1
+    /// A name's width held under the name ceiling (`Theme.nameMaxChars`): a menu grows with its words, and its own
+    /// ceiling (the window's edge) is far past where a name stops being read.
+    function refHeld(which) {
+        return Math.min((which === 1 ? refName1Whole : refName2Whole).advanceWidth, codeCapRuler.advanceWidth)
+    }
+    /// How wide each name is cut to (-1: whole): held under the ceiling, then, where the room is short, the longer
+    /// gives way first, down to an even share.
+    readonly property var refCuts: {
+        const has1 = menuItem.refSentence.indexOf("%1") >= 0
+        const has2 = menuItem.refSentence.indexOf("%2") >= 0
+        if (!has1 && !has2)
+            return [-1, -1]
+        let w1 = has1 ? menuItem.refHeld(1) : 0
+        let w2 = has2 ? menuItem.refHeld(2) : 0
+        const room = menuItem.refRoom < 0 ? Number.MAX_VALUE
+                   : Math.max(0, menuItem.refRoom - refFixedRuler.advanceWidth)
+        if (w1 + w2 > room) {
+            const small = Math.min(w1, w2)
+            if (!has1 || !has2) {
+                w1 = has1 ? room : 0
+                w2 = has2 ? room : 0
+            } else if (2 * small <= room) {
+                if (w1 > w2)
+                    w1 = room - w2
+                else
+                    w2 = room - w1
+            } else {
+                w1 = room / 2
+                w2 = room / 2
+            }
+        }
+        return [has1 && w1 < refName1Whole.advanceWidth ? w1 : -1, has2 && w2 < refName2Whole.advanceWidth ? w2 : -1]
+    }
+    readonly property string refShown: menuItem.refCuts[0] < 0 ? menuItem.refName : refName1Ruler.elidedText
+    readonly property string refShown2: menuItem.refCuts[1] < 0 ? menuItem.refName2 : refName2Ruler.elidedText
+    /// A name was cut: the hover gives the whole line back.
+    readonly property bool refCut: menuItem.refCuts[0] >= 0 || menuItem.refCuts[1] >= 0
+    /// The sentence's name seats in its own order — a translation may put `%2` first: `{at, name, tint, room, key}`,
+    /// `room` the mark's (`refRoom1` / `refRoom2`).
+    readonly property var refSeats: {
+        const seats = []
+        const first = menuItem.refSentence.indexOf("%1")
+        if (first >= 0)
+            seats.push({ at: first, name: menuItem.refShown, tint: menuItem.refColor, room: menuItem.refRoom1, key: 1 })
+        const second = menuItem.refSentence.indexOf("%2")
+        if (second >= 0)
+            seats.push({ at: second, name: menuItem.refShown2, tint: menuItem.refColor2, room: menuItem.refRoom2,
+                         key: 2 })
+        return seats.sort((a, b) => a.at - b.at)
+    }
+    /// Those words as rich-text markup, in one label so the line measures and hovers like any row's: the words in the
+    /// row's face, each name as code behind its mark's room (`Words.codeMarkup`, `Words.inked`). Rich text, as a name's
+    /// face is not one styled text can set — it cannot elide, so the names give way first (`refCuts`). Every piece is
+    /// escaped: the name is the repository's (a branch called `<b>`), and spaces go as `&nbsp;` because rich text folds
+    /// a run of them (`encode::markup`).
     readonly property string refWords: {
-        const seat = menuItem.refSentence.indexOf("%1")
-        if (seat < 0)
+        if (menuItem.refSeats.length === 0)
             return ""
-        return menuItem.inked(menuItem.refSentence.substring(0, seat))
-             + "<font color=\"" + menuItem.refColor + "\">" + menuItem.inked(menuItem.refName) + "</font>"
-             + menuItem.inked(menuItem.refSentence.substring(seat + 2))
+        let out = ""
+        let from = 0
+        for (const seat of menuItem.refSeats) {
+            out += menuItem.inked(menuItem.refSentence.substring(from, seat.at)) + Words.inked(seat.room)
+                 + Words.codeMarkup(seat.name, seat.tint)
+            from = seat.at + 2
+        }
+        return out + menuItem.inked(menuItem.refSentence.substring(from))
+    }
+    /// Where each name begins in the label, its room before it: the words and rooms ahead of it in the row's face, a
+    /// name ahead of it in the code face — as the markup lays them (`refHead` / `refBetween`, `refShown1Code` /
+    /// `refShown2Code`).
+    readonly property real refLead1: menuItem.leadOf(1)
+    readonly property real refLead2: menuItem.leadOf(2)
+    function leadOf(key) {
+        const seats = menuItem.refSeats
+        if (seats.length === 0 || seats[0].key === key)
+            return refHead.advanceWidth
+        const first = seats[0].key === 1 ? refShown1Code : refShown2Code
+        return seats.length > 1 ? refHead.advanceWidth + first.advanceWidth + refBetween.advanceWidth : 0
     }
     function inked(words) {
         return words.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;")
@@ -294,13 +458,14 @@ MenuItem {
     readonly property string tipRowSide: "right"
     // A blocked row's line comes before the elision's: one tooltip, one delay.
     ToolTip.visible: (menuItem.hovered || menuItem.tipForced)
-                     && (menuItem.blocked || itemLabel.truncated
-                         || (menuItem.namesMark && markNameLabel.truncated))
+                     && (menuItem.blocked || itemLabel.truncated || menuItem.refCut || menuItem.trailCut
+                         || menuItem.sideCut || menuItem.nameCut)
     ToolTip.delay: Metrics.tipDelayMs
-    // The whole line, marked name included — a cut name is what the hover is there to give back, behind a chip too
+    // The whole line, code name included — a cut name is what the hover is there to give back, behind a chip too
     // (`worktree remove`).
     ToolTip.text: menuItem.blocked ? menuItem.blockedWhy
-                : [menuItem.code, menuItem.text, menuItem.namesMark ? menuItem.markName : ""]
+                : [menuItem.code, menuItem.text, menuItem.codesName ? menuItem.codeName : "", menuItem.trail,
+                   menuItem.sideName]
                   .filter(words => words !== "").join(" ")
 
     // The press mark, in the seat `holdIndent` leaves on every row (デザイン規約 §回数押し): the head of the row's words,
@@ -365,7 +530,7 @@ MenuItem {
     }
 
     contentItem: RowLayout {
-        // Steps are written on the items: the marked name takes a word's step (`markWordGap`), not the `spaceSm`
+        // Steps are written on the items: the code name takes a word's step (`markWordGap`), not the `spaceSm`
         // between two things the row says, and a shared spacing could not tell them apart.
         spacing: 0
         // The chip takes the menu's shared chip column (never less than its glyphs), so every row's words start on one
@@ -383,19 +548,17 @@ MenuItem {
                 return col !== undefined ? Math.max(col, own) : own
             }
             implicitHeight: codeLabel.implicitHeight
-            Rectangle {
+            CodeGround {
                 anchors.left: codeLabel.left
                 anchors.right: codeLabel.right
                 // Height off the glyph size, not the label: the mono line box differs per OS and stands taller than
                 // the UI-family sentence (デザイン規約 §git 用語のコード表記).
                 anchors.verticalCenter: codeLabel.verticalCenter
-                height: codeLabel.font.pixelSize + Theme.spaceXs / 2
+                size: codeLabel.font.pixelSize
                 // Half a gap, no more: a chip after the hold mark would otherwise reach back against it and the two
                 // would read as one run of ink.
                 anchors.leftMargin: -Theme.spaceXs / 2
                 anchors.rightMargin: -Theme.spaceXs / 2
-                radius: Theme.radiusSm
-                color: Theme.bgHover
             }
             Label {
                 id: codeLabel
@@ -411,8 +574,11 @@ MenuItem {
         }
         Label {
             id: itemLabel
-            // The width goes to the marked name where there is one; these words are the fixed part before it.
-            Layout.fillWidth: !menuItem.namesMark
+            // The width goes to the code name where there is one; these words are the fixed part before it.
+            Layout.fillWidth: !menuItem.codesName
+            // A name for words is drawn no further than the name ceiling, however wide another row makes the card.
+            Layout.maximumWidth: menuItem.textNames ? Math.ceil(nameCapRuler.advanceWidth) + itemLabel.rightPadding
+                                                    : Number.POSITIVE_INFINITY
             // `text` stays the plain sentence either way: the tooltip and accessibility read that.
             text: menuItem.refWords !== "" ? menuItem.refWords : menuItem.text
             // Written out: a group `font:` assignment and `font.weight` on one Label fail to load ("already assigned").
@@ -420,8 +586,8 @@ MenuItem {
             font.pixelSize: menuItem.font.pixelSize
             // Pinned: rows carry text nobody here chose (a branch called `<b>`), and AutoText guesses at markup. The
             // one markup line is `refWords`, escaped on the way in.
-            textFormat: menuItem.refWords !== "" ? Text.StyledText : Text.PlainText
-            elide: Text.ElideRight
+            textFormat: menuItem.refWords !== "" ? Text.RichText : Text.PlainText
+            elide: menuItem.textNames ? Text.ElideMiddle : Text.ElideRight
             verticalAlignment: Text.AlignVCenter
             // Clear of the card's arrow (`arrow`) at the right edge (the note, when there is one, sits last instead).
             rightPadding: !noteLabel.visible && menuItem.subMenu && menuItem.arrow
@@ -430,19 +596,246 @@ MenuItem {
             // never drawn darker than the rows beside it (デザイン規約 §メニュー の入れ子).
             font.weight: menuItem.titled ? Theme.fontWeightStrong : menuItem.font.weight
             color: menuItem.wordColor
+            /// The markup ahead of the names in the row's face (`leadOf`): the words and room before the first, and the
+            /// words and room between it and the second.
+            TextMetrics {
+                id: refHead
+                font: itemLabel.font
+                text: menuItem.refSeats.length > 0
+                      ? menuItem.refSentence.substring(0, menuItem.refSeats[0].at) + menuItem.refSeats[0].room : ""
+            }
+            TextMetrics {
+                id: refBetween
+                font: itemLabel.font
+                text: menuItem.refSeats.length > 1
+                      ? menuItem.refSentence.substring(menuItem.refSeats[0].at + 2, menuItem.refSeats[1].at)
+                        + menuItem.refSeats[1].room : ""
+            }
+            TextMetrics {
+                id: refSpace
+                font: itemLabel.font
+                text: "\u00a0"
+            }
+            /// A narrow no-break space, the room's finer step (`Words.roomFill`).
+            TextMetrics {
+                id: refThin
+                font: itemLabel.font
+                text: "\u202f"
+            }
+            // The name ceiling: in the row's face for words that are one name (`textNames`), in the code face for the
+            // names set as code — each laid out only on a row that reads it.
+            TextMetrics {
+                id: nameCapRuler
+                font: itemLabel.font
+                text: menuItem.textNames ? "n".repeat(Theme.nameMaxChars) : ""
+            }
+            /// The code face at the row's size (`WordFace.groundEnd`).
+            FontMetrics {
+                id: codeFace
+                font.family: Theme.monoFamily
+                font.pixelSize: itemLabel.font.pixelSize
+            }
+            TextMetrics {
+                id: codeCapRuler
+                font.family: Theme.monoFamily
+                font.pixelSize: itemLabel.font.pixelSize
+                text: menuItem.refSentence !== "" || menuItem.codesName ? "n".repeat(Theme.nameMaxChars) : ""
+            }
+            // The names in the code face: whole, as cut (`refCuts`), and as drawn (`leadOf`, the grounds); and the
+            // sentence without them, rooms and all. **Whole and cut on two rulers**: a `TextMetrics` signals one change
+            // for all it answers, so a cut read back off the ruler it writes reads its own answer and loops.
+            TextMetrics {
+                id: refName1Whole
+                font.family: Theme.monoFamily
+                font.pixelSize: itemLabel.font.pixelSize
+                text: menuItem.refName
+            }
+            TextMetrics {
+                id: refName2Whole
+                font.family: Theme.monoFamily
+                font.pixelSize: itemLabel.font.pixelSize
+                text: menuItem.refName2
+            }
+            TextMetrics {
+                id: refName1Ruler
+                font.family: Theme.monoFamily
+                font.pixelSize: itemLabel.font.pixelSize
+                text: menuItem.refName
+                elide: menuItem.refMark === "remote" ? Text.ElideRight : Text.ElideMiddle
+                elideWidth: Math.max(0, menuItem.refCuts[0])
+            }
+            TextMetrics {
+                id: refName2Ruler
+                font.family: Theme.monoFamily
+                font.pixelSize: itemLabel.font.pixelSize
+                text: menuItem.refName2
+                elide: menuItem.refMark2 === "remote" ? Text.ElideRight : Text.ElideMiddle
+                elideWidth: Math.max(0, menuItem.refCuts[1])
+            }
+            TextMetrics {
+                id: refShown1Code
+                font.family: Theme.monoFamily
+                font.pixelSize: itemLabel.font.pixelSize
+                text: menuItem.refShown
+            }
+            TextMetrics {
+                id: refShown2Code
+                font.family: Theme.monoFamily
+                font.pixelSize: itemLabel.font.pixelSize
+                text: menuItem.refShown2
+            }
+            TextMetrics {
+                id: refFixedRuler
+                font: itemLabel.font
+                text: menuItem.refSentence.replace("%1", menuItem.refRoom1).replace("%2", menuItem.refRoom2)
+            }
+            // The names' marks and code grounds, built on a row whose words hold a name (`refSentence`). Under the
+            // words: a ground lies beneath the name it holds, and a mark stands in a room the words leave it.
+            Loader {
+                id: refInk
+                anchors.fill: parent
+                z: -1
+                active: menuItem.refSentence !== ""
+                sourceComponent: Item {
+                    /// Each mark's own cell (`refCell1` / `refCell2`).
+                    readonly property real cell1: refMarkIcon.wordCell
+                    readonly property real cell2: refMarkIcon2.wordCell
+                    // Each name's code ground: from its mark's ink — or its start, behind no mark — to its end, half a
+                    // gap off the ink at both ends (`WordFace.groundStart` / `groundEnd`). Gone where the words are cut
+                    // before the name.
+                    CodeGround {
+                        visible: menuItem.refSentence.indexOf("%1") >= 0 && menuItem.refShown !== ""
+                                 && menuItem.refLead1 < itemLabel.width - itemLabel.rightPadding
+                        x: menuItem.refMarkRoom > 0 ? WordFace.groundStart(refMarkIcon.x + refMarkIcon.inkLeft)
+                                                    : menuItem.refLead1 - Theme.spaceXs / 2
+                        width: (menuItem.refMarkRoom > 0
+                                ? WordFace.groundEnd(codeFace, menuItem.refShown,
+                                                     menuItem.refLead1 + refShown1Code.advanceWidth)
+                                : menuItem.refLead1 + refShown1Code.advanceWidth + Theme.spaceXs / 2) - x
+                        anchors.verticalCenter: parent.verticalCenter
+                        size: itemLabel.font.pixelSize
+                    }
+                    CodeGround {
+                        visible: menuItem.refSentence.indexOf("%2") >= 0 && menuItem.refShown2 !== ""
+                                 && menuItem.refLead2 < itemLabel.width - itemLabel.rightPadding
+                        x: menuItem.refMarkRoom2 > 0 ? WordFace.groundStart(refMarkIcon2.x + refMarkIcon2.inkLeft)
+                                                     : menuItem.refLead2 - Theme.spaceXs / 2
+                        width: (menuItem.refMarkRoom2 > 0
+                                ? WordFace.groundEnd(codeFace, menuItem.refShown2,
+                                                     menuItem.refLead2 + refShown2Code.advanceWidth)
+                                : menuItem.refLead2 + refShown2Code.advanceWidth + Theme.spaceXs / 2) - x
+                        anchors.verticalCenter: parent.verticalCenter
+                        size: itemLabel.font.pixelSize
+                    }
+                    // `refMark`, in the middle of the room the markup opened in front of the name: a sign on the name,
+                    // its box the words' line (デザイン規約 §アイコンの席 の修飾). Gone where the words are cut before
+                    // the name.
+                    NavIcon {
+                        id: refMarkIcon
+                        visible: menuItem.refMarkRoom > 0
+                                 && menuItem.refLead1 < itemLabel.width - itemLabel.rightPadding
+                        // The ink's middle on the room's (as `CodeChip`'s mark).
+                        x: Math.round(menuItem.refLead1 - menuItem.refCell1 / 2 - refMarkIcon.inkLeft
+                                      - refMarkIcon.inkWidth / 2)
+                        y: 0
+                        width: refMarkIcon.wordCell
+                        height: itemLabel.height
+                        set: "sign"
+                        size: itemLabel.font.pixelSize
+                        wordBase: itemLabel.baselineOffset
+                        kind: menuItem.refMark !== "" ? menuItem.refMark : "branch"
+                        tint: refMarkIcon.inkBeside(menuItem.refColor)
+                    }
+                    NavIcon {
+                        id: refMarkIcon2
+                        visible: menuItem.refMarkRoom2 > 0
+                                 && menuItem.refLead2 < itemLabel.width - itemLabel.rightPadding
+                        x: Math.round(menuItem.refLead2 - menuItem.refCell2 / 2 - refMarkIcon2.inkLeft
+                                      - refMarkIcon2.inkWidth / 2)
+                        y: 0
+                        width: refMarkIcon2.wordCell
+                        height: itemLabel.height
+                        set: "sign"
+                        size: itemLabel.font.pixelSize
+                        wordBase: itemLabel.baselineOffset
+                        kind: menuItem.refMark2 !== "" ? menuItem.refMark2 : "remote"
+                        tint: refMarkIcon2.inkBeside(menuItem.refColor2)
+                    }
+                }
+            }
+            // The widest name mark, unseen: the cell a name opening the row stands its mark in, so the names of a card
+            // start on one x whatever their kind (`columnCell` — デザイン規約 §メニュー). Built on a row that seats a
+            // name.
+            Loader {
+                id: columnSeat
+                active: menuItem.refSentence !== "" || menuItem.codesName
+                sourceComponent: NavIcon {
+                    visible: false
+                    kind: "remote"
+                    set: "sign"
+                    size: itemLabel.font.pixelSize
+                }
+            }
         }
-        // `sideName`, pushed to the right end by the words taking the rest, a column's step off them: at a word's
-        // step the two read as one run.
-        Label {
-            id: sideLabel
+        // `nameMark` + `codeName`: the name as code, its mark on the same ground in the middle of the column's cell,
+        // so a card's names start on one x and its marks stand on one axis whatever their kind (デザイン規約 §メニュー);
+        // with no mark, the name alone. A word's step after the row's words; with none, where the words would start
+        // (`markWordGap`). Built on a row that ends in one.
+        Loader {
+            id: codeNameSeat
+            active: menuItem.codesName
+            visible: menuItem.codesName
+            Layout.fillWidth: menuItem.codesName
+            Layout.leftMargin: menuItem.codesName ? menuItem.markWordGap : 0
+            // Bid at `labelColW` — the name ceiling where it is the row's one name (`besideWords`) — drawn as far as
+            // the card lets it, up to the name ceiling, and cut to what it is given.
+            Layout.maximumWidth: codeNameSeat.item !== null
+                                 ? codeNameSeat.item.markRoom + Math.ceil(codeCapRuler.advanceWidth) : 0
+            Layout.preferredHeight: codeNameSeat.implicitHeight
+            sourceComponent: CodeChip {
+                cutToWidth: true
+                word: menuItem.codeName
+                mark: menuItem.nameMark
+                markCell: menuItem.columnCell
+                cutAt: menuItem.nameMark === "remote" ? "end" : "middle"
+                size: menuItem.font.pixelSize
+                tint: menuItem.codeNameColor
+            }
+        }
+        // The run's spare width, at its end: a row with room past the name's ceiling hands none of it out in front of
+        // the name.
+        Item {
+            visible: menuItem.codesName
+            Layout.fillWidth: true
+        }
+        // `sideName`, pushed to the right end by the words — or the code name's spare width — taking the rest, a
+        // column's step off them: at a word's step the two read as one run. A branch, so as code behind the branch mark
+        // (デザイン規約 §ref の種別「文の中の名前」), a step down with the column (`Words.nameInk`); held under the
+        // name ceiling and cut in the middle past it (`sideCut`). Built on a row that has one.
+        Loader {
+            id: sideSeat
+            active: menuItem.sideName !== ""
             visible: menuItem.sideName !== ""
             Layout.leftMargin: Theme.spaceLg
             Layout.alignment: Qt.AlignVCenter
-            text: menuItem.sideName
-            textFormat: Text.PlainText
-            font.family: Theme.uiFamily
-            font.pixelSize: Theme.fontSm
-            color: menuItem.greyed ? menuItem.wordColor : Theme.textSecondary
+            Layout.preferredWidth: menuItem.sideWidth
+            Layout.preferredHeight: sideSeat.implicitHeight
+            sourceComponent: CodeChip {
+                id: sideChip
+                /// The name ceiling in the chip's face (`sideWidth`).
+                readonly property real ceilingWidth: Math.ceil(sideCapRuler.advanceWidth)
+                cutToWidth: true
+                word: menuItem.sideName
+                mark: "branch"
+                size: Theme.fontSm
+                tint: Words.nameInk(menuItem.greyed ? menuItem.wordColor : Theme.textSecondary)
+                TextMetrics {
+                    id: sideCapRuler
+                    font.family: Theme.monoFamily
+                    font.pixelSize: sideChip.size
+                    text: "n".repeat(Theme.nameMaxChars)
+                }
+            }
         }
         // Ahead / behind, in the left menu's seat and order (`NavRowBody`'s `trackSeat`).
         HeadTrack {
@@ -466,46 +859,18 @@ MenuItem {
             pullRequest: menuItem.badgePr
             gone: menuItem.badgeGone
         }
-        // `nameMark` + `markName`, the mark a sign on the name (`markWordGap`).
-        RowLayout {
-            visible: menuItem.namesMark
-            Layout.fillWidth: menuItem.namesMark
-            Layout.leftMargin: menuItem.namesMark ? menuItem.markWordGap : 0
-            spacing: 0
-            // A sign on the name, its box the name's line (デザイン規約 §アイコンの席 の修飾).
-            NavIcon {
-                id: nameMarkIcon
-                Layout.preferredWidth: nameMarkIcon.wordCell
-                Layout.preferredHeight: markNameLabel.implicitHeight
-                width: nameMarkIcon.wordCell
-                height: markNameLabel.implicitHeight
-                set: "sign"
-                size: markNameLabel.font.pixelSize
-                wordBase: markNameLabel.baselineOffset
-                // `NavIcon` paints on a kind it is given; an empty one would be a shape nobody asked for.
-                kind: menuItem.namesMark ? menuItem.nameMark : "tree"
-                tint: menuItem.inkTakesNames ? menuItem.wordColor : menuItem.nameMarkTint
-            }
-            Label {
-                id: markNameLabel
-                Layout.fillWidth: true
-                text: menuItem.markName
-                font.family: Theme.uiFamily
-                font.pixelSize: menuItem.font.pixelSize
-                elide: Text.ElideRight
-                verticalAlignment: Text.AlignVCenter
-                color: menuItem.wordColor
-            }
-        }
         // `trail`: the tree mark and folder as one run, the tab's own (`TabTreeMark`) — the mark a sign on the
-        // folder's name (デザイン規約 §アイコンの席 の修飾).
-        TabTreeMark {
-            id: trailRun
+        // folder's name (デザイン規約 §アイコンの席 の修飾). Built on a row that has one.
+        Loader {
+            id: trailSeat
+            active: menuItem.trail !== ""
             visible: menuItem.trail !== ""
-            Layout.preferredWidth: trailRun.naturalWidth
-            Layout.preferredHeight: trailRun.implicitHeight
-            name: menuItem.trail
-            gap: Theme.spaceXs
+            Layout.preferredWidth: trailSeat.item !== null ? trailSeat.item.cappedWidth : 0
+            Layout.preferredHeight: trailSeat.implicitHeight
+            sourceComponent: TabTreeMark {
+                name: menuItem.trail
+                gap: Theme.spaceXs
+            }
         }
         Label {
             id: noteLabel

@@ -48,6 +48,8 @@ CoAuthorCard 1.0 CoAuthorCard.qml
 CoAuthorLine 1.0 CoAuthorLine.qml
 ChosenCommitRow 1.0 ChosenCommitRow.qml
 CodeChip 1.0 CodeChip.qml
+CodeGround 1.0 CodeGround.qml
+CodeLine 1.0 CodeLine.qml
 ColumnDivider 1.0 ColumnDivider.qml
 CommitAuthorRow 1.0 CommitAuthorRow.qml
 CommitHoverCard 1.0 CommitHoverCard.qml
@@ -135,6 +137,7 @@ MessageActionsRow 1.0 MessageActionsRow.qml
 MessageEditor 1.0 MessageEditor.qml
 MiddleAutoScroll 1.0 MiddleAutoScroll.qml
 NameCell 1.0 NameCell.qml
+NameRun 1.0 NameRun.qml
 NavFactLine 1.0 NavFactLine.qml
 NavHeader 1.0 NavHeader.qml
 NavIcon 1.0 NavIcon.qml

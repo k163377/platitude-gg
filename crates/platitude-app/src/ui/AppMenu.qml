@@ -17,6 +17,8 @@ Menu {
     /// the title is made from them. A title with no name sets `title` instead.
     property string titleSentence: ""
     property string titleRef: ""
+    /// The mark that name wears in front of it (`AppMenuItem.refMark`); empty for none.
+    property string titleRefMark: ""
     title: appMenu.titleSentence !== "" ? appMenu.titleSentence.arg(appMenu.titleRef) : ""
 
     /// The title row's mark instead of a chip, for a submenu of one ref kind: its `NavIcon` kind and colour
@@ -231,6 +233,7 @@ Menu {
         // The title's name, drawn in its ref colour.
         refSentence: subMenu && subMenu.titleSentence !== undefined ? subMenu.titleSentence : ""
         refName: subMenu && subMenu.titleRef !== undefined ? subMenu.titleRef : ""
+        refMark: subMenu && subMenu.titleRefMark !== undefined ? subMenu.titleRefMark : ""
         markKind: subMenu && subMenu.titleKind !== undefined ? subMenu.titleKind : ""
         markTint: subMenu && subMenu.titleTint !== undefined ? subMenu.titleTint : Theme.textSecondary
         // A submenu with nothing to offer, by `applies` or by coming out empty, takes its title row with it.

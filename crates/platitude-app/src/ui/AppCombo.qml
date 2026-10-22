@@ -33,6 +33,11 @@ ComboBox {
     /// The row that wears the push mark; empty marks none (デザイン規約 §リモートを書き留める).
     property string markedRow: ""
 
+    /// The kind of name the field holds, as a mark at its left edge that is no part of the value — it cannot be typed
+    /// over, selected or pressed (デザイン規約 §ref の種別「名前の印」): the cloud of a remote, the branch of a branch's
+    /// name. Empty for none.
+    property string leadMark: ""
+
     /// The value; `editText` follows it. A model arriving snaps `currentIndex` to the first row and drags the text
     /// along, so the text is held here and put back once the swap settles. Only a person moves it — a picked row, or
     /// `textEdited` (not emitted for text set in code) (rules-refs/app-ui.md「マージツール候補の `AppCombo`」).
@@ -67,14 +72,16 @@ ComboBox {
         /// answer, which cuts a name that fits by a fraction too; `wantedWidth` reads the same pair.
         readonly property real room: input.width - input.leftPadding - input.rightPadding
         readonly property real fitWidth: whole.advanceWidth
-        // Picking only, the value is the owner's (ComboBox keeps `editText` only when editable), cut in the middle: a
+        // Picking only, the value is the owner's (ComboBox keeps `editText` only when editable), cut in the middle — a
+        // remote's at its end, its head being the remote (デザイン規約 §寸法「upstream 名だけは末尾で切る」): a
         // read-only `TextInput` too narrow scrolls to the caret and loses the name's head unmarked. The elide's own
         // arithmetic, not `CutName`: a lone field has no column edge to line up.
         text: combo.pickOnly ? (input.fitWidth > input.room ? fit.elidedText : combo.wanted) : combo.editText
         color: combo.enabled ? Theme.textPrimary : Theme.textMuted
         font: combo.font
-        // The plain boxes' inset (`SlimField`), which this field stands beside in the question bar.
-        leftPadding: Theme.spaceXs
+        // The plain boxes' inset (`SlimField`), which this field stands beside in the question bar — and the kind's
+        // mark after it, a sign on the value (`leadMark`).
+        leftPadding: Theme.spaceXs + (combo.leadMark !== "" ? leadIcon.wordCell : 0)
         // Stops the word short of the arrow; no list, the plain inset (rules-refs/app-ui.md「打つ欄の右で字を止めるのは山」).
         rightPadding: combo.hasList ? Theme.spaceSm + Theme.spaceXs : Theme.spaceXs
         verticalAlignment: Text.AlignVCenter
@@ -84,11 +91,13 @@ ComboBox {
         selectedTextColor: Theme.textPrimary
         onTextChanged: if (!combo.pickOnly) combo.editText = text
         onTextEdited: combo.wanted = text
+        // A typed value longer than the box scrolls to the caret, and unclipped its head is drawn out past the frame.
+        clip: true
         TextMetrics {
             id: fit
             font: input.font
             text: combo.wanted
-            elide: Text.ElideMiddle
+            elide: combo.leadMark === "remote" ? Text.ElideRight : Text.ElideMiddle
             elideWidth: Math.max(0, input.width - input.leftPadding - input.rightPadding)
         }
         // The whole name's width, from a ruler with no cut: `fit` answers about what it drew, so a field sized from it
@@ -97,6 +106,34 @@ ComboBox {
             id: whole
             font: input.font
             text: combo.wanted
+        }
+        // The inset's own ground inside the frame and clear of its rounded corners, so a scrolled value's head passes
+        // under the mark, not through it. A picked value is cut to its room and never scrolls.
+        Rectangle {
+            id: leadGround
+            readonly property real inX: Math.max(0, Theme.borderWidth - input.x)
+            readonly property real inY: Math.max(0, Theme.radiusSm - input.y)
+            visible: combo.leadMark !== "" && !combo.pickOnly
+            x: leadGround.inX
+            y: leadGround.inY
+            width: input.leftPadding - leadGround.inX
+            height: Math.min(input.height, combo.height - Theme.radiusSm - input.y) - leadGround.inY
+            color: Theme.bgBase
+        }
+        // In the inset, on the value's line: drawn, not written, so the value starts after it and none of it is text.
+        NavIcon {
+            id: leadIcon
+            visible: combo.leadMark !== ""
+            x: Theme.spaceXs
+            y: 0
+            width: leadIcon.wordCell
+            height: input.height
+            kind: combo.leadMark !== "" ? combo.leadMark : "branch"
+            set: "sign"
+            size: input.font.pixelSize
+            wordBase: input.baselineOffset
+            // Its kind's colour, as a name's mark is anywhere (`NavIcon.inkBeside`); grey with the box.
+            tint: leadIcon.inkBeside(combo.enabled ? Theme.textPrimary : Theme.textMuted)
         }
         // A read-only input still takes the press, so the control would never see the click that opens its list.
         MouseArea {

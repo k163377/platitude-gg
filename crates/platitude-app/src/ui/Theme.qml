@@ -195,6 +195,10 @@ QtObject {
     // `fontMdLine` × 5 + `spaceSm`, a resting height and a ceiling (デザイン規約 §寸法): git puts no ceiling on a
     // message, and a box that grows with it pushes the file list out of the pane.
     readonly property int messageMaxHeight: 108
+    // The most of a name said in a part that grows with its words, in `n`s of the name's own face, as a tab's floor is
+    // (デザイン規約 §寸法「名前の天井」): git puts no ceiling on a name either. A part with a width ceiling of its own
+    // keeps that one instead.
+    readonly property int nameMaxChars: 64
 
     // ================================================================
     // 3. 個別(特別な画面 1 枚ごと — 名指しした画面だけが読む)
