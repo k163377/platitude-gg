@@ -28,11 +28,13 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "switch_twice held=true",
     },
     // Judged on the held pill and the absent chip: a bar with no words in
-    // it frames like one with words.
+    // it frames like one with words. `says=` is the count core read, on
+    // its way through to the bar — `--preset diverged`'s main holds one
+    // commit origin/main does not.
     Verb {
         name: "move-ask",
         when: &[],
-        plain: "move_ask hold=true code= branch=main",
+        plain: "move_ask hold=true code= branch=main says=main loses 1 commit.",
     },
     // The question with a report already standing under it. Two enabled
     // `StandardKey.Cancel` shortcuts in one window fire neither

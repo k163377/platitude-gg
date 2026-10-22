@@ -21,6 +21,8 @@ Item {
     property bool pageActClaimed: false
     property bool shotPending: false
     property bool shotTaken: false
+    /// The overlay mirror stood when the picture was called for, so its picture is a part.
+    property bool overlayWanted: false
     // A non-live mirror also refreshes once when built, with the same signal; only the asked-for one is the shot.
     property bool overlayAsked: false
     property bool overlayGrabbed: false
@@ -172,13 +174,18 @@ Item {
         const holding = overlayMirror.item && overlayMirror.item.sourceItem
                         ? overlayMirror.item.sourceItem.children.length : 0
         driver.sceneWanted = holding > 0 && driver.sceneMirror !== null && driver.sceneMirror.item !== null
-        driver.shotParts = 1 + (overlayMirror.item ? 1 : 0) + (driver.sceneWanted ? 1 : 0)
+        driver.overlayWanted = overlayMirror.item !== null
+        driver.shotParts = 1 + (driver.overlayWanted ? 1 : 0) + (driver.sceneWanted ? 1 : 0)
                            + (driver.waitsForCensus ? 1 : 0)
-        if (overlayMirror.item) {
+        driver.grabApp()
+    }
+    /// The popups' texture, refreshed once app.png is saved, as the composite is: a popup's marks are owed like the
+    /// window's (`Ink`), and a texture refreshed before they paint holds their rooms with nothing in them.
+    function refreshOverlay() {
+        if (driver.overlayWanted && !driver.overlayAsked) {
             driver.overlayAsked = true
             overlayMirror.item.scheduleUpdate()
         }
-        driver.grabApp()
     }
 
     /// The composite, asked for only once app.png is saved — refreshed earlier, it could miss the ink (`grabApp`).
@@ -221,6 +228,7 @@ Item {
             const saved = res.saveToFile(path)
             console.warn("screenshot saved=" + saved + " ink=" + driver.inkWaited + " path=" + path)
             driver.appPictured()
+            driver.refreshOverlay()
             if (driver.sceneWanted && !driver.sceneAsked) {
                 driver.sceneAsked = true
                 driver.sceneMirror.item.refresh()
@@ -232,6 +240,7 @@ Item {
             driver.appGrabbing = false
             driver.appSaved = true
             driver.appPictured()
+            driver.refreshOverlay()
             driver.partDone()
         }
     }

@@ -54,7 +54,8 @@ Item {
         return "tag_reach reach=" + card.reach
             + " offered=" + row.offered + " blocked=" + (row.offered && row.blocked)
             + " push=" + card.pushTagItem.text
-            + " del=" + row.text + " why=" + row.blockedReason
+            + " del=" + [row.text, row.codeName].filter(words => words !== "").join(" ")
+            + " why=" + row.blockedReason
     }
 
     /// Runs `act` if it is one of this family's, and says whether it was.

@@ -537,9 +537,9 @@ Item {
                + (withPlan === true ? " plan=" + page.planActive : "")
                // The heading, a sentence: after it only what follows from it.
                + " said=" + page.noticeCard.label
-               // …for a heading that names a worktree: whether the tree mark found the name (`NoticeBar.markWord`).
-               // Absent elsewhere, so no other line moves.
-               + (page.noticeCard.markWord !== "" ? " mark=" + page.noticeCard.markShown : "")
+               // …for a heading that names a worktree: whether its first mark found the name
+               // (`NoticeBar.namesWorktree`). Absent elsewhere, so no other line moves.
+               + (page.noticeCard.namesWorktree ? " mark=" + page.noticeCard.markShown : "")
                // The second line, ours always, and the word of it that goes to the log (`NoticeBar.detailPlace`).
                + " place=" + page.noticeCard.detailPlace
                + " says=" + page.noticeCard.detail

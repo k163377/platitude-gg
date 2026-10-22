@@ -548,7 +548,7 @@ Item {
                     Harness.report("carried_menu open=" + driver.carriedOpenItem.visible
                                       + " apply=" + driver.carriedApplyItem.visible
                                       + " held=" + driver.carriedApplyItem.blocked
-                                      + " name=" + driver.carriedOpenItem.markName)
+                                      + " name=" + driver.carriedOpenItem.codeName)
                     driver.complete()
                     return
                 }

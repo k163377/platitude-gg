@@ -116,10 +116,16 @@ Item {
             return worktreeTimer.onGraph ? acts.driver.commitWorktreeAddItem : acts.driver.refWorktreeAddItem
         }
         /// The word the shared tip stands the tree mark in front of, read off the target it stands on as the tip
-        /// reads it (`SharedToolTip.tipMarkWord`). Empty while it is down.
+        /// reads it (`SharedToolTip.tipMarkWord`, else the folder among `tipMarks`). Empty while it is down.
         function tipMark(tip) {
             const at = tip.visible ? tip.parent : null
-            return at !== null && at.tipMarkWord !== undefined ? at.tipMarkWord : ""
+            if (at === null || at.tipMarkWord === undefined)
+                return ""
+            if (at.tipMarkWord !== "" || at.tipMarks === undefined)
+                return at.tipMarkWord
+            // A row that is not turned down names its folder in its whole line, among the line's names (`tipMarks`).
+            const folder = at.tipMarks.find(mark => mark[1] === "tree" || mark[1] === "home")
+            return folder === undefined ? "" : String(at.ToolTip.text).substr(folder[0], folder[3])
         }
 
         function begin(arg, mode) {
@@ -213,7 +219,7 @@ Item {
                 worktreeTimer.say("worktree_add_menu card=" + worktreeTimer.card().opened
                               + " here=" + here.offered
                               + " add=" + add.offered
-                              + " folder=" + add.markName
+                              + " folder=" + add.codeName
                               + " blocked=" + add.blocked
                               + " tip=" + add.ToolTip.visible
                               + " aside=" + acts.driver.tipAside(tip)

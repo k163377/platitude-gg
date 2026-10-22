@@ -156,9 +156,11 @@ Item {
                 return
             moveAskTimer.stop()
             // `code=` empty is part of the claim: git has no single word for this move (規約 §git 用語のコード表記).
+            // `says=`: the bar's line as it stands — the count core read, judged where it lands; last, being words.
             Harness.report("move_ask hold=" + graphPane.askHold
                               + " code=" + graphPane.askCode
-                              + " branch=" + worktree.branch)
+                              + " branch=" + worktree.branch
+                              + " says=" + graphPane.askDetail)
             driver.complete()
         }
     }
