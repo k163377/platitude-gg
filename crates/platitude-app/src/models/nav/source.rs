@@ -90,25 +90,45 @@ impl Source {
     /// prefix run also holds remote `my/fork`'s `my/fork/main`
     /// ([`platitude_core::refs::split_remote_ref`]).
     pub(super) fn branches_on<'a>(&'a self, remote: &str, remotes: &[&'a str]) -> Vec<&'a str> {
-        let Self::Remotes(snapshot) = self else {
-            return Vec::new();
+        self.remote_rows(remote, remotes)
+            .map(|(_, name)| name)
+            .collect()
+    }
+
+    /// The commits `remote`'s branches stand on, cut the same way — what a
+    /// menu asks which remotes have a commit with
+    /// (`GraphModel.remotesHolding`).
+    pub(super) fn tips_on(&self, remote: &str, remotes: &[&str]) -> Vec<platitude_core::Oid> {
+        self.remote_rows(remote, remotes)
+            .map(|(branch, _)| branch.oid)
+            .collect()
+    }
+
+    /// `remote`'s branches with the name half of each, cut against the
+    /// configured `remotes` — a remote named `a` is not `a/b`'s.
+    fn remote_rows<'a>(
+        &'a self,
+        remote: &str,
+        remotes: &[&'a str],
+    ) -> impl Iterator<Item = (&'a platitude_core::session::BranchItem, &'a str)> {
+        let rows: &'a [platitude_core::session::BranchItem] = match self {
+            Self::Remotes(snapshot) => &snapshot.remotes,
+            _ => &[],
         };
         let prefix = format!("{remote}/");
-        let from = snapshot
-            .remotes
-            .partition_point(|branch| branch.short.as_str() < prefix.as_str());
-        snapshot.remotes[from..]
+        let from = rows.partition_point(|branch| branch.short.as_str() < prefix.as_str());
+        let remote = remote.to_string();
+        rows[from..]
             .iter()
-            .take_while(|branch| branch.short.as_str().starts_with(&prefix))
-            .filter_map(|branch| {
+            .take_while(move |branch| branch.short.as_str().starts_with(&prefix))
+            .filter_map(move |branch| {
                 platitude_core::refs::split_remote_ref(
                     branch.short.as_str(),
                     remotes.iter().copied(),
                 )
                 .filter(|(on, _)| *on == remote)
-                .map(|(_, name)| name)
+                .map(|(_, name)| (branch, name))
             })
-            .collect()
     }
 
     /// Why git would not take `name` beside this section's branches or

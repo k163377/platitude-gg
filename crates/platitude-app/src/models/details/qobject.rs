@@ -299,6 +299,18 @@ impl DetailsModel {
         )
     }
 
+    /// The row the changed file `path` is shown at, -1 for a path not
+    /// shown (a closed folder over it) — what a caller holding a path puts
+    /// on screen. The bucket is empty here, as for `step_file`.
+    #[qslot]
+    pub(super) fn row_of_file_in(&self, _bucket: String, path: String) -> i32 {
+        self.files
+            .iter()
+            .position(|f| !f.folder && f.path == path)
+            .and_then(|at| i32::try_from(at).ok())
+            .unwrap_or(-1)
+    }
+
     /// Where a renamed file came from, whole (a rename's diff names both
     /// sides) — for callers holding a path rather than a row.
     #[qslot]

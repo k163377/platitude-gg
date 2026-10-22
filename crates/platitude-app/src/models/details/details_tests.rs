@@ -86,6 +86,45 @@ fn the_arrows_step_over_a_folder_row() {
     );
 }
 
+/// The menu key puts the file the arrows stand on on screen by its row:
+/// the row it is drawn at, folder rows counted.
+#[test]
+fn a_file_is_found_at_the_row_it_is_drawn_at() {
+    let model = commit(&["one/x.txt", "two/y.txt"]);
+
+    assert_eq!(
+        model.row_of_file_in(String::new(), "two/y.txt".to_string()),
+        3
+    );
+    assert_eq!(
+        model.row_of_file_in(String::new(), "two".to_string()),
+        -1,
+        "a folder's row is no file's"
+    );
+    assert_eq!(
+        model.row_of_file_in(String::new(), "no.txt".to_string()),
+        -1
+    );
+}
+
+/// A file under a closed folder has no row to put on screen.
+#[test]
+fn a_file_under_a_closed_folder_is_at_no_row() {
+    let mut model = commit(&["one/x.txt", "two/y.txt"]);
+    model.folder_overrides.insert("one".to_string(), false);
+    model.rebuild_rows();
+
+    assert_eq!(
+        model.row_of_file_in(String::new(), "one/x.txt".to_string()),
+        -1
+    );
+    assert_eq!(
+        model.row_of_file_in(String::new(), "two/y.txt".to_string()),
+        2,
+        "the rows below move up past it"
+    );
+}
+
 /// The walk hands the diff a rename's source, so git reads both ends.
 #[test]
 fn a_renamed_file_gives_up_its_source_by_path() {

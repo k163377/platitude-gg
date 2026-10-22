@@ -234,6 +234,8 @@ mod qobject;
 mod role;
 mod source;
 #[cfg(test)]
+mod source_tests;
+#[cfg(test)]
 mod testkit;
 mod tree;
 mod view;

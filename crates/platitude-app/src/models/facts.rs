@@ -3,9 +3,10 @@
 //! reads state has no place here.
 
 use qtbridge::qobject;
+use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::qml_register;
-use crate::encode::{Chips, Mates};
+use crate::encode::{Chips, Fields, Mates, Optional, Record, field};
 
 /// The singleton every QML file can ask a rule of without wiring a model
 /// through.
@@ -432,6 +433,151 @@ impl GitFacts {
         platitude_core::remote::folder_name_for(&url)
     }
 
+    /// The repository's page on GitHub for a remote URL that names one,
+    /// `""` for any other (`web_link::github_repo`) — what decides whether a
+    /// remote's links are offered at all.
+    #[qslot]
+    fn github_repo(&self, url: String) -> String {
+        platitude_core::web_link::github_repo(&url).unwrap_or_default()
+    }
+
+    /// A commit's page in that repository; `""` for an id that is none.
+    #[qslot]
+    fn github_commit_link(&self, repo: String, oid: String) -> String {
+        platitude_core::Oid::from_hex_str(oid.trim())
+            .map(|oid| platitude_core::web_link::commit(&repo, &oid))
+            .unwrap_or_default()
+    }
+
+    /// A branch's page, by the name it has on that remote.
+    #[qslot]
+    fn github_branch_link(&self, repo: String, name: String) -> String {
+        platitude_core::web_link::branch(&repo, &name)
+    }
+
+    #[qslot]
+    fn github_tag_link(&self, repo: String, name: String) -> String {
+        platitude_core::web_link::tag(&repo, &name)
+    }
+
+    /// The comparison `git diff <from> <to>` makes; `""` unless both are
+    /// ids.
+    #[qslot]
+    fn github_compare_link(&self, repo: String, from: String, to: String) -> String {
+        match (
+            platitude_core::Oid::from_hex_str(from.trim()),
+            platitude_core::Oid::from_hex_str(to.trim()),
+        ) {
+            (Ok(from), Ok(to)) => platitude_core::web_link::compare(&repo, &from, &to),
+            _ => String::new(),
+        }
+    }
+
+    /// `path` as it stands in commit `oid`; `""` for an id that is none.
+    #[qslot]
+    fn github_file_link(&self, repo: String, oid: String, path: String) -> String {
+        platitude_core::Oid::from_hex_str(oid.trim())
+            .map(|oid| platitude_core::web_link::file(&repo, &oid, &path))
+            .unwrap_or_default()
+    }
+
+    /// Lines `first..=last` of `path` in commit `oid`; `""` for an id that
+    /// is none or a line that is not one (numbered from 1).
+    #[qslot]
+    fn github_lines_link(
+        &self,
+        repo: String,
+        oid: String,
+        path: String,
+        first: i32,
+        last: i32,
+    ) -> String {
+        let (Ok(oid), Ok(first), Ok(last)) = (
+            platitude_core::Oid::from_hex_str(oid.trim()),
+            u32::try_from(first),
+            u32::try_from(last),
+        ) else {
+            return String::new();
+        };
+        if first == 0 {
+            return String::new();
+        }
+        platitude_core::web_link::lines(&repo, &oid, &path, first, last.max(first))
+    }
+
+    /// Which of the remotes holding something a menu leads with — the
+    /// preferred one where it holds it, else the first by name
+    /// (`web_link::lead`); `""` where none does.
+    #[qslot]
+    fn link_lead(&self, preferred: String, holders: Vec<String>) -> String {
+        platitude_core::web_link::lead(&preferred, &holders)
+            .unwrap_or_default()
+            .to_string()
+    }
+
+    /// Where a link to one side of the diff the commit card shows points
+    /// (`web_link::side_at`): commit `sha` against `parent`, or —
+    /// `comparing` — `from` against `to`. `undefined` where that side has
+    /// no commit (a root commit's before) or an id is none.
+    #[qslot]
+    fn github_side_at(
+        &self,
+        newer: bool,
+        comparing: bool,
+        sha: String,
+        parent: String,
+        from: String,
+        to: String,
+    ) -> Optional<LinkAt> {
+        use platitude_core::web_link::{DiffOf, side_at};
+        let id = |hex: &str| platitude_core::Oid::from_hex_str(hex.trim()).ok();
+        let diff = if comparing {
+            id(&from)
+                .zip(id(&to))
+                .map(|(from, to)| DiffOf::Pair { from, to })
+        } else {
+            id(&sha).map(|commit| DiffOf::Commit {
+                commit,
+                parent: id(&parent),
+            })
+        };
+        Optional::new(
+            diff.and_then(|diff| side_at(diff, newer))
+                .map(|side| LinkAt {
+                    held: side.held.to_hex(),
+                    at: side.at.to_hex(),
+                }),
+        )
+    }
+
+    /// The name branch `name` goes by on `remote`, for its page there
+    /// (`web_link::branch_name_on`): a local branch (`kind` `branch`) by the
+    /// name of the remote branch it is measured against (`upstream`) on
+    /// that one's remote, else by its own; a remote branch (`kind` `remote`,
+    /// `name` whole, as `upstream/main`) by its name on its own remote.
+    #[qslot]
+    fn github_branch_name(
+        &self,
+        kind: String,
+        name: String,
+        upstream: String,
+        remote: String,
+        remote_names: Vec<String>,
+    ) -> String {
+        let measured = if kind == "remote" { &name } else { &upstream };
+        let cut = if measured.is_empty() {
+            None
+        } else {
+            platitude_core::refs::split_remote_ref_or_first_slash(measured, names(&remote_names))
+        };
+        let own = if kind == "remote" {
+            cut.map_or("", |(_, branch)| branch)
+        } else {
+            name.as_str()
+        };
+        platitude_core::web_link::branch_name_on(own, cut, &remote).to_string()
+    }
+
     /// The folder a path sits in, as a `file:` URL for a chooser to start
     /// in; empty where there is no folder above it. The reverse of
     /// [`Self::picked_path`]: separators, drive letters and percent-encoding
@@ -529,6 +675,31 @@ impl GitFacts {
 
 fn names(remote_names: &[String]) -> impl Iterator<Item = &str> {
     remote_names.iter().map(String::as_str)
+}
+
+/// Where a link to one side of a diff points (`GitFacts.githubSideAt`):
+/// the commit whose file it is (`at`) and the commit a remote has to have
+/// for the page to be there (`held`).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct LinkAt {
+    pub held: String,
+    pub at: String,
+}
+
+impl Record for LinkAt {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("held", &self.held)
+            .put("at", &self.at)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            held: field(map, "held")?,
+            at: field(map, "at")?,
+        })
+    }
 }
 
 qml_register!(GitFacts, "GitFacts", singleton = true);

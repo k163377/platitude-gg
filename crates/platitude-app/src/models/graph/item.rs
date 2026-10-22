@@ -158,6 +158,30 @@ impl Record for Tally {
     }
 }
 
+/// A remote-tracking branch's tip and the remote it belongs to, as an index
+/// into the asker's list (`GraphModel.remotesHolding`).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RemoteTip {
+    pub oid: String,
+    pub owner: i32,
+}
+
+impl Record for RemoteTip {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("oid", &self.oid)
+            .put("owner", &self.owner)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            oid: field(map, "oid")?,
+            owner: field(map, "owner")?,
+        })
+    }
+}
+
 impl platitude_core::mem::Footprint for Tally {
     fn heap_bytes(&self) -> usize {
         0

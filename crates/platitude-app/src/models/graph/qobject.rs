@@ -431,6 +431,30 @@ impl GraphModel {
         self.row_at(&oid).is_some_and(|row| self.published_row(row))
     }
 
+    /// Which remotes already have this commit, off the rows on screen
+    /// (`publish::holders`) — what a link to its page on a remote is
+    /// offered on, so the menu has it in its opening frame. `tips` are the
+    /// commits remote-tracking branches stand on, each with the remote it
+    /// belongs to as an index into the asker's list; the answer is those
+    /// indices, each once, in order. Empty for a commit no tip reaches.
+    #[qslot]
+    fn remotes_holding(&self, oid_hex: String, tips: Listed<RemoteTip>) -> Vec<i32> {
+        let Ok(oid) = Oid::from_hex_str(oid_hex.trim()) else {
+            return Vec::new();
+        };
+        let tips: Vec<(Oid, u32)> = tips
+            .iter()
+            .filter_map(|tip| {
+                Some((
+                    Oid::from_hex_str(tip.oid.trim()).ok()?,
+                    u32::try_from(tip.owner).ok()?,
+                ))
+            })
+            .collect();
+        let held = platitude_core::publish::holders(self.walked_rows(), oid, &tips);
+        (0..64).filter(|at| held & (1u64 << at) != 0).collect()
+    }
+
     /// Whether rebasing HEAD onto this commit would rewrite one a remote
     /// already has — the `rewrites pushed commits` note the ref menu's
     /// `rebase` row wears. `<ref>..HEAD` is a set no single mark answers,

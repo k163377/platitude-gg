@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use platitude_core::parse::diff::parse_patch;
 
-use super::{DiffModel, Washed};
+use super::{DiffModel, LineSpan, Washed};
 use crate::encode::Optional;
 
 /// One side's wash the way the tests read it: `""` for none, `*` for
@@ -472,4 +472,91 @@ index 1111111,2222222..0000000
     );
     assert_eq!(model.side_count("ours".into()), 1);
     assert_eq!(model.side_count("theirs".into()), 1);
+}
+
+// ---- the lines a link points at -----------------------------------------
+
+/// The old file's lines 10–12 against the new file's 12–14, so a number
+/// read off the wrong side is a different number: hunk / ctx / del / add /
+/// ctx on rows 0..4, or hunk / ctx / del+add / ctx on rows 0..3 split.
+const NUMBERED: &str = "\
+--- a/f
++++ b/f
+@@ -10,3 +12,3 @@
+ fn main() {
+-    let a = 1;
++    let a = 2;
+ }
+";
+
+fn span(newer: bool, first: i32, last: i32) -> Option<LineSpan> {
+    Some(LineSpan { newer, first, last })
+}
+
+#[test]
+fn a_link_points_at_the_lines_the_copy_takes() {
+    let mut model = model(NUMBERED, false);
+    model.start_select(0, 1, 0);
+    model.drag_select(0, 4, 1);
+    assert_eq!(
+        model.line_span(),
+        span(true, 12, 14),
+        "the new file's three lines"
+    );
+    model.select_whole_row(0, 2);
+    assert_eq!(
+        model.line_span(),
+        span(false, 11, 11),
+        "a removed line alone is the old file's"
+    );
+    model.select_whole_row(0, 0);
+    assert_eq!(model.line_span(), None, "a heading is no line");
+    model.drop_selection();
+    assert_eq!(model.line_span(), None);
+}
+
+#[test]
+fn a_link_from_a_split_diff_is_of_the_column_dragged_down() {
+    let mut model = split_model(NUMBERED);
+    model.start_select(0, 1, 0);
+    model.drag_select(0, 3, 1);
+    assert_eq!(
+        model.line_span(),
+        span(false, 10, 12),
+        "the old column is the old file"
+    );
+    model.select_whole_row(1, 2);
+    assert_eq!(
+        model.line_span(),
+        span(true, 13, 13),
+        "the new column the new one"
+    );
+}
+
+/// A drag that ends at the head of the next row, or starts at the end of
+/// the row above, copies that line break and none of that line.
+#[test]
+fn a_row_the_selection_only_touches_the_edge_of_is_not_linked() {
+    let mut model = model(NUMBERED, false);
+    model.start_select(0, 1, 0);
+    model.drag_select(0, 3, 0);
+    assert_eq!(
+        model.line_span(),
+        span(true, 12, 12),
+        "the added row only reached at its head"
+    );
+    model.start_select(0, 2, 0);
+    model.drag_select(0, 3, 0);
+    assert_eq!(
+        model.line_span(),
+        span(false, 11, 11),
+        "with no line of the new file left, the removed one it reaches over"
+    );
+    model.start_select(0, 1, 99);
+    model.drag_select(0, 4, 1);
+    assert_eq!(
+        model.line_span(),
+        span(true, 13, 14),
+        "the row above only reached at its end"
+    );
 }

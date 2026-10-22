@@ -135,6 +135,34 @@ impl Record for Washed {
     }
 }
 
+/// The lines a link to the selection points at (`DiffModel.selectionLines`):
+/// the first and last line numbers of the new file (`newer`) or of the old
+/// one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LineSpan {
+    pub newer: bool,
+    pub first: i32,
+    pub last: i32,
+}
+
+impl Record for LineSpan {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("newer", &self.newer)
+            .put("first", &self.first)
+            .put("last", &self.last)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            newer: field(map, "newer")?,
+            first: field(map, "first")?,
+            last: field(map, "last")?,
+        })
+    }
+}
+
 impl platitude_core::mem::Footprint for Washed {
     fn heap_bytes(&self) -> usize {
         self.runs.heap_bytes()

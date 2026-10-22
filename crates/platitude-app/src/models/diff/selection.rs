@@ -388,6 +388,52 @@ impl DiffModel {
         out
     }
 
+    /// Which file's lines the selection is of and the first and last of
+    /// them, for a link to those lines; `None` where it holds no line. The
+    /// lines the plain `Copy` takes where it takes any — the new file's,
+    /// or the old one's in a split diff's left column — else the removed
+    /// lines it reaches over, which are the old file's. An end row the
+    /// selection only touches the edge of holds no line of it.
+    pub(super) fn line_span(&self) -> Option<LineSpan> {
+        let (first, last) = self.span()?;
+        let old_column = self.split && self.sel_side != RIGHT;
+        let mut taken = (i32::MAX, 0);
+        let mut removed = (i32::MAX, 0);
+        for row in first..=last {
+            let Some(item) = self.lines.get(row) else {
+                continue;
+            };
+            if self.wash_of(self.sel_side, row) != Wash::None && !self.edge_only(row) {
+                let no = if old_column { item.old_no } else { item.new_no };
+                if no > 0 {
+                    taken = (taken.0.min(no), taken.1.max(no));
+                }
+            }
+            if self.kind_of(0, row) == "del" && item.old_no > 0 {
+                removed = (removed.0.min(item.old_no), removed.1.max(item.old_no));
+            }
+        }
+        let (newer, (first, last)) = if taken.1 > 0 {
+            (!old_column, taken)
+        } else if removed.1 > 0 {
+            (false, removed)
+        } else {
+            return None;
+        };
+        Some(LineSpan { newer, first, last })
+    }
+
+    /// Whether the selection only touches the edge of this end row — ends
+    /// at the head of its last row, or starts at the end of a first row
+    /// with text: the copy takes the line break there, and none of the line.
+    fn edge_only(&self, row: usize) -> bool {
+        let Some((first_row, first_at, last_row, last_at)) = self.taken() else {
+            return false;
+        };
+        let len = self.source_line(self.sel_side, row).map_or(0, str::len);
+        (row == last_row && last_at == 0) || (row == first_row && len > 0 && first_at >= len)
+    }
+
     /// The removed lines the selection reaches over, whole — they carry no
     /// wash to say which part was meant (デザイン規約 §diff の中身をコピーする).
     /// Nothing where the plain `Copy` already takes them

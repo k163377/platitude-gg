@@ -367,6 +367,13 @@ impl DiffModel {
         self.copied_removed()
     }
 
+    /// The file and the first and last line numbers a link to the selected
+    /// lines points at (`line_span`), `undefined` for none.
+    #[qslot]
+    fn selection_lines(&self) -> Optional<LineSpan> {
+        Optional::new(self.line_span())
+    }
+
     #[qslot]
     fn clear(&mut self) {
         self.current_key = String::new();

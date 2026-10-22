@@ -276,6 +276,20 @@ impl NavSectionModel {
             .collect()
     }
 
+    /// The commits `remote`'s branches stand on here, as hex — what a menu
+    /// asks which remotes have a commit with (`GraphModel.remotesHolding`).
+    /// Empty for every section but the remotes; `remote_names` as
+    /// `branches_on` takes them.
+    #[qslot]
+    pub(super) fn tips_on(&self, remote: String, remote_names: Vec<String>) -> Vec<String> {
+        let names: Vec<&str> = remote_names.iter().map(String::as_str).collect();
+        self.all
+            .tips_on(&remote, &names)
+            .iter()
+            .map(platitude_core::Oid::to_hex)
+            .collect()
+    }
+
     /// One card of the operation panel's branch nest: the rows filed
     /// directly under `path`, the top for an empty one (`level_rows`). Read
     /// as each card opens (デザイン規約 §メニュー).
