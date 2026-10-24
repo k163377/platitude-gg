@@ -42,8 +42,12 @@ pub(super) struct HeadHold {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum HeadOffer {
     /// The read looked before a write ended, or before a read that has
-    /// already reported; changes nothing.
+    /// already reported HEAD somewhere else; changes nothing.
     Stale,
+    /// The read looked before one that has already reported, and HEAD is
+    /// where that one saw it: nothing to report, but what the read listed
+    /// still speaks for the tip.
+    Overtaken,
     /// The same HEAD as the one standing, and nothing was waiting to hear
     /// it again.
     Same,
@@ -181,8 +185,15 @@ impl Standing {
     /// the consumer is sent takes a number.
     pub(super) fn offer_head(&self, at: u64, head: &HeadState) -> HeadOffer {
         let mut inner = self.lock();
-        if at < inner.fence || at < inner.head_at {
+        if at < inner.fence {
             return HeadOffer::Stale;
+        }
+        if at < inner.head_at {
+            return if inner.head.as_ref() == Some(head) {
+                HeadOffer::Overtaken
+            } else {
+                HeadOffer::Stale
+            };
         }
         inner.head_at = at;
         let settling = std::mem::take(&mut inner.fenced);
@@ -379,6 +390,34 @@ mod tests {
         );
         assert!(standing.current(earlier), "no write ended behind it");
         assert!(standing.current(later));
+    }
+
+    /// Overtaken is not moved past: a read whose HEAD report lost to a later
+    /// one that saw HEAD in the same place still speaks for what it listed
+    /// (the refs read's hold) — not where HEAD moved, nor once a write has
+    /// ended behind it, and it moves nothing either way.
+    #[test]
+    fn a_read_overtaken_on_the_same_head_is_not_stale() {
+        let standing = Standing::default();
+        let earlier = standing.stamp();
+        let later = standing.stamp();
+        number(standing.offer_head(later, &on("main", 1)));
+        assert_eq!(
+            standing.offer_head(earlier, &on("main", 1)),
+            HeadOffer::Overtaken
+        );
+        assert_eq!(
+            standing.offer_head(earlier, &on("main", 2)),
+            HeadOffer::Stale,
+            "HEAD moved past it"
+        );
+        assert_eq!(standing.head(), Some(on("main", 1)));
+        let _ = standing.fence();
+        assert_eq!(
+            standing.offer_head(earlier, &on("main", 1)),
+            HeadOffer::Stale,
+            "a write ended behind it"
+        );
     }
 
     /// A poll begun before a write ended is stale however late it lands,

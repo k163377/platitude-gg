@@ -35,7 +35,10 @@ impl RepoSession {
     pub(super) fn record_head_from_refs(&self, looked: u64, refs: &[RefEntry], head: &HeadState) {
         // Offered first: a listing a later read has moved past says
         // nothing about the tip, and a hold from it would walk the reach
-        // from where HEAD no longer is.
+        // from where HEAD no longer is. One the later read only overtook
+        // (`HeadOffer::Overtaken` — the status read's HEAD often lands
+        // first) still does: left without a hold, the reach answers as for
+        // an unborn branch.
         let offer = self.standing.offer_head(looked, head);
         if offer == HeadOffer::Stale {
             return;
