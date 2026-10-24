@@ -4,8 +4,9 @@
 //! long a claim with no word counts.
 
 use super::{
-    FakeClaude, REPLY, alive, append, claim_file, ended, holding, marked, next_reading, notice,
-    planted, released, scratch, session, stamped, stop_hooks_ran, summary, told, transcript,
+    FakeClaude, REPLY, alive, append, claim_file, claim_of, ended, holding, marked, next_reading,
+    notice, planted, released, scratch, session, stamped, stop_hooks_ran, summary, told,
+    transcript,
 };
 use crate::awake::claim::{State, Writer, digest};
 use crate::awake::{Mark, apply};

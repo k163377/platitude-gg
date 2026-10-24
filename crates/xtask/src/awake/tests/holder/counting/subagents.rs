@@ -3,9 +3,9 @@
 //! session's turn.
 
 use super::{
-    FakeClaude, INTERRUPTED, REPLY, TURNED_DOWN, append, asked, calling, claim_file, ended,
-    holding, launched, long_ago, marked, next_reading, planted, released, result, scratch, session,
-    start, stop_hooks_ran, stopped, subagent_transcript, transcript,
+    FakeClaude, INTERRUPTED, REPLY, TURNED_DOWN, append, asked, calling, claim_file, claim_of,
+    ended, holding, launched, long_ago, marked, next_reading, planted, released, result, scratch,
+    session, start, stop_hooks_ran, stopped, subagent_transcript, transcript,
 };
 use crate::awake::claim::State;
 use crate::awake::{Mark, apply};
@@ -210,15 +210,7 @@ fn an_idle_subagent_of_a_compatible_build_takes_its_call_off_this_holder() {
     );
 
     let elsewhere = dir.join(claim_file("s~a1"));
-    planted(
-        &dir,
-        &elsewhere,
-        &format!(
-            "r1 idle {} {} a 0 - - -",
-            claude.pid(),
-            crate::awake::now_ms()
-        ),
-    );
+    planted(&dir, &elsewhere, &claim_of(State::Idle, claude.pid()));
     assert_eq!(
         next_reading(&dir),
         released(),

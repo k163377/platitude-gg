@@ -2,7 +2,8 @@
 //! request replaced by a recorder; the tests that start a holder process
 //! of their own exercise the real API, as the normal holder tests do.
 
-use super::{FakeClaude, claim_file, marked, scratch};
+use super::{FakeClaude, claim_file, claim_of, marked, scratch};
+use crate::awake::claim::State;
 
 /// A holder process a test started itself, ended with the test.
 struct StartedHolder(std::process::Child);
@@ -341,11 +342,7 @@ fn a_held_machine_s_readings_are_paced_past_a_burst() {
     let claude = FakeClaude::start(&free);
     std::fs::write(
         free.join(claim_file("s")),
-        format!(
-            "r1 idle {} {} a 0 - - -",
-            claude.pid(),
-            crate::awake::now_ms()
-        ),
+        claim_of(State::Idle, claude.pid()),
     )
     .expect("the idle claim");
     let waits = stream(&free, false, events);
@@ -504,17 +501,7 @@ fn a_reading_cannot_release_work_updated_during_its_process_query() {
 
 #[test]
 fn a_new_holder_build_reads_the_existing_activity_protocol() {
-    let dir = scratch("compatible-build");
-    let claude = FakeClaude::start(&dir);
-    std::fs::write(
-        dir.join(claim_file("s")),
-        format!(
-            "r1 working {} {} a 0 - - -",
-            claude.pid(),
-            crate::awake::now_ms()
-        ),
-    )
-    .expect("the existing activity");
+    let (dir, claude) = working("compatible-build");
     // Sessions run both builds.
     heard(&dir, crate::awake::REVISION, crate::awake::now_ms());
     heard(&dir, crate::awake::REVISION + 1, crate::awake::now_ms());
@@ -525,11 +512,7 @@ fn a_new_holder_build_reads_the_existing_activity_protocol() {
     );
     std::fs::write(
         dir.join(claim_file("s")),
-        format!(
-            "r1 idle {} {} a 0 - - -",
-            claude.pid(),
-            crate::awake::now_ms()
-        ),
+        claim_of(State::Idle, claude.pid()),
     )
     .expect("the new build's Stop uses the same protocol");
     let observed = once(&dir, crate::awake::REVISION, "");
@@ -756,11 +739,7 @@ fn a_real_request_let_go_of_behind_the_holder_is_asked_again() {
     super::planted(
         &dir,
         &dir.join(claim_file("s")),
-        &format!(
-            "r1 working {} {} a 0 - - -",
-            claude.pid(),
-            crate::awake::now_ms()
-        ),
+        &claim_of(State::Working, claude.pid()),
     );
     let asked = crate::wait::until(
         "the thread's request set again",
@@ -829,11 +808,7 @@ fn working(stem: &str) -> (super::super::Scratch, FakeClaude) {
     let claude = FakeClaude::start(&dir);
     std::fs::write(
         dir.join(claim_file("s")),
-        format!(
-            "r1 working {} {} a 0 - - -",
-            claude.pid(),
-            crate::awake::now_ms()
-        ),
+        claim_of(State::Working, claude.pid()),
     )
     .expect("the working claim");
     (dir, claude)
@@ -988,11 +963,7 @@ fn a_started_holder_of_a_quiet_build_quits() {
         heard(&dir, revision, long_ago());
         std::fs::write(
             dir.join(claim_file("t")),
-            format!(
-                "r1 working {} {} a 0 - - -",
-                claude.pid(),
-                crate::awake::now_ms()
-            ),
+            claim_of(State::Working, claude.pid()),
         )
         .expect("the other session's claim");
     }

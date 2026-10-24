@@ -393,11 +393,12 @@ fn ended(pid: u32) {
 /// The System process's pid: always running, and no Claude's.
 const SYSTEM: u32 = 4;
 
-/// A claim of this revision owned by `pid`, working as of now.
-fn claim_of(pid: u32) -> String {
+/// A claim of this revision owned by `pid`, `state` as of now.
+fn claim_of(state: State, pid: u32) -> String {
     format!(
-        "r{} working {pid} {} a 0 - - -",
+        "r{} {} {pid} {} a 0 - - -",
         crate::awake::CLAIM_FORMAT,
+        state.word(),
         crate::awake::now_ms()
     )
 }
@@ -702,7 +703,11 @@ fn a_claim_held_open_costs_the_holder_a_reading_not_its_run() {
     // reading that copied the claims before the hold; the second, asked
     // for once the first has beaten, began after it ended, and could copy
     // nothing.
-    planted(&dir, &dir.join(claim_file("a")), &claim_of(SYSTEM));
+    planted(
+        &dir,
+        &dir.join(claim_file("a")),
+        &claim_of(State::Working, SYSTEM),
+    );
     next_beat(&dir);
     touched(&dir);
     next_beat(&dir);
@@ -735,7 +740,7 @@ fn a_claim_whose_owner_is_no_claude_is_taken_down() {
     assert_eq!(next_reading(&dir), released());
 
     let stray = dir.join(claim_file("t"));
-    planted(&dir, &stray, &claim_of(SYSTEM));
+    planted(&dir, &stray, &claim_of(State::Working, SYSTEM));
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -768,7 +773,7 @@ fn a_holder_that_cannot_clear_its_name_stays_until_it_can() {
     {
         let _held = crate::awake::lock(&dir).expect("the lock");
         std::fs::remove_file(dir.join(claim_file("s"))).expect("the claim goes");
-        std::fs::write(&stray, claim_of(SYSTEM)).expect("a stray claim");
+        std::fs::write(&stray, claim_of(State::Working, SYSTEM)).expect("a stray claim");
     }
     crate::wait::until(
         "the stray claim's removal",
@@ -778,7 +783,7 @@ fn a_holder_that_cannot_clear_its_name_stays_until_it_can() {
     drop(crate::awake::lock(&dir).expect("the lock, once that reading is done"));
     drop(reader);
 
-    planted(&dir, &stray, &claim_of(SYSTEM));
+    planted(&dir, &stray, &claim_of(State::Working, SYSTEM));
     quit(pid);
     assert!(
         !holder_path(&dir).exists(),
