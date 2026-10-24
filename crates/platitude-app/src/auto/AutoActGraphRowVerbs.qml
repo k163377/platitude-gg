@@ -26,7 +26,13 @@ Item {
     readonly property var rowHost: driver.rowHost
     readonly property var detailsPane: driver.detailsPane
     readonly property var diffPane: driver.diffPane
+    readonly property var renderedBarrier: driver.barrierRendered
 
+    /// `graph-choose`'s rows, `:`-separated; `fallback` when fewer than two are named.
+    function rowsArg(arg, fallback) {
+        const named = arg === "" ? [] : arg.split(":").map(Number)
+        return named.length >= 2 ? named : fallback
+    }
     /// How many rows draw themselves chosen, counted to a little past `last` (the last row pressed or stood on) so a
     /// row lit that should not be is counted too.
     function litRowsTo(last) {
@@ -179,55 +185,27 @@ Item {
             // Toggling a row out of the choice and back in, quickly, arrives as a double-click, modifier and all
             // (`tst_moddblclick`), and the plain double-click is `switch` (デザイン規約 §複数のコミットを選ぶ). The
             // argument is the rows, as `graph-choose` takes them.
-            const dblRows = arg === "" ? [] : arg.split(":").map(Number)
-            chooseTimer.sweeps = false
-            chooseTimer.rows = dblRows.length >= 2 ? dblRows : [1, 3, 5]
-            chooseTimer.step = 0
-            chooseTimer.readOid = ""
-            chooseTimer.after = "dbl"
-            chooseTimer.start()
+            chooseTimer.begin(acts.rowsArg(arg, [1, 3, 5]), false, "dbl")
         } else if (act === "graph-choose-diff") {
             // A row of the merged file list opens each chosen commit's own patch of it, stacked
             // (デザイン規約 §複数のコミットを選ぶ). The argument is the path; the rows are fixed at three of
             // `--preset basic`, two of which touch `src/topic.txt`.
-            chooseTimer.sweeps = false
-            chooseTimer.rows = [3, 5, 6]
-            chooseTimer.step = 0
-            chooseTimer.readOid = ""
-            chooseTimer.after = "diff"
             chooseTimer.diffPath = arg === "" ? "src/topic.txt" : arg
-            chooseTimer.start()
+            chooseTimer.begin([3, 5, 6], false, "diff")
         } else if (act === "graph-choose-drop") {
             // A commit taken back out of the chosen list with Ctrl (デザイン規約 §複数のコミットを選ぶ). The argument
             // is the rows, as `graph-choose` takes them.
-            const kept = arg === "" ? [] : arg.split(":").map(Number)
-            chooseTimer.sweeps = false
-            chooseTimer.rows = kept.length >= 2 ? kept : [1, 3, 5]
-            chooseTimer.step = 0
-            chooseTimer.readOid = ""
-            chooseTimer.after = "drop"
-            chooseTimer.start()
+            chooseTimer.begin(acts.rowsArg(arg, [1, 3, 5]), false, "drop")
         } else if (act === "graph-choose-said" || act === "graph-choose-sweep") {
             // A row of the chosen list: its card saying the whole message (`said`), or its words dragged away
             // (`sweep`). The argument is the rows, as `graph-choose` takes them.
-            const held = arg === "" ? [] : arg.split(":").map(Number)
-            chooseTimer.sweeps = false
-            chooseTimer.rows = held.length >= 2 ? held : [1, 3, 5]
-            chooseTimer.step = 0
-            chooseTimer.readOid = ""
-            chooseTimer.after = act === "graph-choose-said" ? "said" : "sweep"
-            chooseTimer.start()
+            chooseTimer.begin(acts.rowsArg(arg, [1, 3, 5]), false, act === "graph-choose-said" ? "said" : "sweep")
         } else if (act === "graph-choose" || act === "graph-choose-range") {
             // The first press is plain; the held ones after it move only the choice (デザイン規約 §複数のコミットを選ぶ).
             // The argument is the rows, `:`-separated — Ctrl one at a time, or `-range`'s one Shift press from the
             // first to the last, so that one wants exactly two.
-            const picked = arg === "" ? [] : arg.split(":").map(Number)
-            chooseTimer.sweeps = act === "graph-choose-range"
-            chooseTimer.rows = picked.length >= 2 ? picked : (chooseTimer.sweeps ? [1, 5] : [1, 3, 5])
-            chooseTimer.step = 0
-            chooseTimer.readOid = ""
-            chooseTimer.after = ""
-            chooseTimer.start()
+            const sweeps = act === "graph-choose-range"
+            chooseTimer.begin(acts.rowsArg(arg, sweeps ? [1, 5] : [1, 3, 5]), sweeps, "")
         } else {
             return false
         }
@@ -247,6 +225,14 @@ Item {
         /// stops at the choice itself.
         property string after: ""
         property string diffPath: ""
+        function begin(rows, sweeps, after) {
+            chooseTimer.rows = rows
+            chooseTimer.sweeps = sweeps
+            chooseTimer.after = after
+            chooseTimer.step = 0
+            chooseTimer.readOid = ""
+            chooseTimer.start()
+        }
         /// How many commits the presses should end up holding.
         function wanted() {
             if (!chooseTimer.sweeps)
@@ -254,10 +240,7 @@ Item {
             return Math.abs(chooseTimer.rows[chooseTimer.rows.length - 1] - chooseTimer.rows[0]) + 1
         }
         function litRows() {
-            let last = 0
-            for (const row of chooseTimer.rows)
-                last = Math.max(last, row)
-            return acts.litRowsTo(last)
+            return acts.litRowsTo(Math.max(0, ...chooseTimer.rows))
         }
         onTriggered: {
             if (chooseTimer.step < chooseTimer.rows.length) {
