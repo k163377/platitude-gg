@@ -452,13 +452,6 @@ pub struct RepoTab {
     feed: Option<Arc<Feed<TabMsg>>>,
 }
 
-/// Whether anybody asked for a write of this kind, or it is one of the
-/// page's own fetches (the interval's, an opening's). Named in core
-/// (`OperationKind::asked_for`) so this side and the queue agree.
-pub(super) fn asked_for(kind: OperationKind) -> bool {
-    kind.asked_for()
-}
-
 /// One write's answer as it arrived, for the readers that wait on a
 /// particular one (`RepoTab::write_answers`), its meanings named on this
 /// side of the bridge as `settle_write` names them for the group. `id` is

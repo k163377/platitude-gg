@@ -382,11 +382,12 @@ impl RepoTab {
     }
 
     /// Whether anybody pressed for that one, or it is a fetch the page
-    /// made on its own (`asked_for`, the set the write ids move by).
+    /// made on its own — the interval's, an opening's
+    /// (`OperationKind::asked_for`, the set the write ids move by).
     #[qslot]
     fn write_answer_asked(&self, index: i32) -> bool {
         self.write_answer_at(index)
-            .is_some_and(|a| super::asked_for(a.kind))
+            .is_some_and(|a| a.kind.asked_for())
     }
 
     /// The next write this tab is asked to make is the one to wait for
