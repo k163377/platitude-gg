@@ -361,7 +361,7 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
     }
     sb.gate_ok(&sb.seat, &["--jobs", "2"]);
     let again = without_always(&sb.ran());
-    assert_eq!(again, set(&[red]), "{again:?}");
+    assert_eq!(again, set(&[red]));
 }
 
 /// A verb stamped by another tree while this one queued built nothing

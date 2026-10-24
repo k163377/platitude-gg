@@ -113,8 +113,7 @@ fn a_leaf_core_change_stays_narrow() {
             "test it 1",
             "test it 1 linux",
             "bare",
-        ]),
-        "{ran:?}"
+        ])
     );
 }
 
@@ -134,8 +133,7 @@ fn a_qml_change_owes_the_verbs_whose_census_names_it_and_no_rust_test() {
             "verify stash --preset basic",
             "verify-linux stash --preset basic",
             "bare"
-        ]),
-        "{ran:?}"
+        ])
     );
 }
 
@@ -171,8 +169,7 @@ fn a_qml_leaf_keeps_reached_verbs_and_reports_the_shadow_selection() {
             "verify-linux stash --preset basic",
             "verify window --preset basic",
             "bare"
-        ]),
-        "{ran:?}"
+        ])
     );
 }
 
@@ -301,7 +298,7 @@ fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
     sb.gate_ok(&sb.seat, &[]);
     // A runner of its own: no census owes it a verb and nothing is built.
     let ran = without_always(&sb.ran());
-    assert_eq!(ran, set(&["qmltest", "qmltest-linux"]), "{ran:?}");
+    assert_eq!(ran, set(&["qmltest", "qmltest-linux"]));
 
     // The qmldir declares the singletons the tests resolve through. The
     // file above goes, so only this stands against main.
@@ -314,7 +311,7 @@ fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
     sb.commit_all(&sb.seat, "chore(app-ui): declare X", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
-    assert_eq!(ran, set(&["qmltest", "qmltest-linux"]), "{ran:?}");
+    assert_eq!(ran, set(&["qmltest", "qmltest-linux"]));
 
     // The runner does not read their README: nothing is owed.
     sb.write(
@@ -343,7 +340,7 @@ fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
     sb.commit_all(&sb.seat, "test(app-ui): a helper the tests share", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
-    assert_eq!(ran, set(&["qmltest", "qmltest-linux"]), "{ran:?}");
+    assert_eq!(ran, set(&["qmltest", "qmltest-linux"]));
 
     // The staging is what a run resolves through; nothing else exercises
     // a change to the runner.
@@ -481,8 +478,7 @@ fn an_xtask_change_leaves_the_app_alone_and_runs_on_both_sides() {
             "clippy-linux xtask",
             "test xtask 1",
             "test xtask 1 linux",
-        ]),
-        "{ran:?}"
+        ])
     );
 }
 
@@ -584,8 +580,7 @@ fn a_test_taken_out_of_its_binary_owes_that_binary_and_nothing_else() {
             "clippy-linux platitude-core",
             "test it (all)",
             "test it (all) linux",
-        ]),
-        "{ran:?}"
+        ])
     );
 }
 
@@ -650,8 +645,7 @@ fn the_tier_table_says_which_lines_each_gate_owes_and_where() {
             "verify stash --preset basic",
             "verify-linux stash --preset basic",
             "verify stash-open --preset basic",
-        ]),
-        "{verbs:?}"
+        ])
     );
     let whole = sb.gate_ok(&sb.seat, &["--whole", "--dry-run"]);
     for owed in [
@@ -766,8 +760,7 @@ fn a_qtest_change_reaches_the_harness_as_data_and_owes_no_verb() {
             "qmltest-linux",
             "test xtask 1",
             "test xtask 1 linux",
-        ]),
-        "{ran:?}"
+        ])
     );
 
     sb.write(
