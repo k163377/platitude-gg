@@ -68,7 +68,6 @@ impl Default for RepoTab {
             pending_paths: Vec::new(),
             discard_count: 0,
             discard_only: String::new(),
-            remotes: Vec::new(),
             remote_urls: Vec::new(),
             remote_count: 0,
             default_remote: String::new(),

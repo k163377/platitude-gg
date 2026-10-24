@@ -148,8 +148,7 @@ impl RepoTab {
                         String::new()
                     };
                     self.remote_count = names.len() as i32;
-                    self.remote_names = names.clone();
-                    self.remotes = names;
+                    self.remote_names = names;
                     self.remote_urls = urls;
                 }
                 TabMsg::RemoteBranch {

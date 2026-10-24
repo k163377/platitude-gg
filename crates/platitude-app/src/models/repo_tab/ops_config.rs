@@ -19,17 +19,9 @@ impl RepoTab {
         self.changed();
     }
 
-    pub(super) fn remote_name_at(&self, index: i32) -> String {
-        usize::try_from(index)
-            .ok()
-            .and_then(|i| self.remotes.get(i))
-            .cloned()
-            .unwrap_or_default()
-    }
-
     pub(super) fn local_name_of(&self, remote_ref: String) -> String {
         let mut best: Option<&str> = None;
-        for remote in &self.remotes {
+        for remote in &self.remote_names {
             let Some(rest) = remote_ref.strip_prefix(&format!("{remote}/")) else {
                 continue;
             };

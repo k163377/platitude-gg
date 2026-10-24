@@ -328,13 +328,6 @@ impl RepoTab {
         }
     }
 
-    /// Name of one remote (a list property would need a model of its own
-    /// for three strings).
-    #[qslot]
-    fn remote_at(&self, index: i32) -> String {
-        self.remote_name_at(index)
-    }
-
     /// How many write answers this notify carried
     /// (`RepoTab::write_answers`), read one field at a time by the slots
     /// below (rules/app-ui.md「QML は表示とインタラクションだけ」).
@@ -1189,7 +1182,7 @@ impl RepoTab {
     /// repository does not have.
     #[qslot]
     fn remote_url(&self, name: String) -> String {
-        self.remotes
+        self.remote_names
             .iter()
             .position(|r| *r == name)
             .and_then(|at| self.remote_urls.get(at))

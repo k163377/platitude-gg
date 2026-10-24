@@ -122,7 +122,7 @@ pub struct RepoTab {
     /// seconds, so the field says so while it runs.
     merge_tools_loading: bool,
     /// Configured remote names as one property, for the publish question
-    /// to bind to (`remoteAt` is a slot).
+    /// to bind to and the `GitFacts` rules that split a ref by them.
     remote_names: Vec<String>,
     /// The name the last answer to `checkRemoteBranch` was about; none
     /// while a read is out. Readers check it — the box may have moved on.
@@ -231,11 +231,10 @@ pub struct RepoTab {
     /// (デザイン規約 §その他の操作).
     discard_count: i32,
     discard_only: String,
-    /// Configured remote names, and their fetch URLs in the same order
-    /// (what the form that corrects one opens with).
-    remotes: Vec<String>,
+    /// The fetch URLs of `remote_names`, in the same order (what the form
+    /// that corrects one opens with).
     remote_urls: Vec<String>,
-    /// Derived from `remotes` on arrival, for bindings.
+    /// Derived from `remote_names` on arrival, for bindings.
     remote_count: i32,
     default_remote: String,
     /// `remote.pushDefault` (empty where unset), and whether it is this
